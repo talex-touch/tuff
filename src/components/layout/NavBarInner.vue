@@ -1,0 +1,323 @@
+<template>
+  <div class="NavBarInner-Container">
+    <ul class="NavBar-Controller">
+      <li class="close"></li>
+      <li class="minimize"></li>
+    </ul>
+
+    <div class="NavBarInner-Main">
+      <ul class="NavBar-Home" @click="changeActivePlugin('')">
+        <IconButton direct="/home" icon="home-3" display="popover"></IconButton>
+        <IconButton direct="/plugin" icon="plug-2" display="popover"></IconButton>
+        <IconButton icon="quill-pen" display="popover"></IconButton>
+        <IconButton icon="settings-6" display="popover"></IconButton>
+      </ul>
+
+<!--      <p class="NavBar-Title">-->
+<!--        ADDON-->
+<!--      </p>-->
+
+      <ul class="NavBar-Programs">
+<!--        TODO CUSTOMIZE PIN ICONS-->
+        <IconButton display="popover" :select="activePluginName === plugin.pluginInfo.name" @click="changeActivePlugin(plugin.pluginInfo.name)" v-for="plugin in plugins">
+          <template #icon>
+            <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
+          </template>
+        </IconButton>
+        <IconButton icon="qq" display="popover"></IconButton>
+<!--        <IconButton icon="netease-cloud-music" display="popover"></IconButton>-->
+        <IconButton icon="device" display="popover"></IconButton>
+        <IconButton icon="add" display="popover"></IconButton>
+      </ul>
+    </div>
+
+    <div class="NavBar-Logo">
+      <img src="src/assets/TalexTouchChat-Small.png" alt="logo">
+    </div>
+
+    <teleport to="body">
+      <div class="Blur-Container" :class="{ blur: options.blur, display: activePluginName.length }">
+
+      </div>
+    </teleport>
+  </div>
+</template>
+
+<script>
+import RemixIcon from '@comp/icon/RemixIcon.vue'
+import IconButton from '@comp/button/IconButton.vue'
+
+export default {
+  name: "NavBarInner",
+  components: { IconButton, RemixIcon }
+}
+</script>
+
+<<<<<<< HEAD
+<script setup>
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { pluginManager } from '@modules/samples/node-api'
+import PluginIcon from '@comp/plugin/PluginIcon.vue'
+import { forDialogMention } from '@modules/mention/dialog-mention'
+import { sleep } from '@modules/utils'
+
+import Logo from '@assets/TalexTouchChat-Small.png'
+
+const controller = reactive({
+  comp: null,
+  list: {
+    'MacOS': () => import('@comp/customize/controller/MacOSController.vue'),
+    'Windows': () => import('@comp/customize/controller/WindowsController.vue')
+  }
+})
+
+const plugins = computed(() => Object.values(pluginManager.getPluginList()))
+
+const activePluginName = ref("")
+
+const options = window.$storage.themeStyle
+
+function changeActivePlugin(name) {
+  pluginManager.changeActivePlugin(activePluginName.value = (activePluginName.value === name ? "" : name))
+}
+
+async function loadModule(module) {
+  const m = module instanceof Function ? await module() : await module
+  return m.default
+}
+
+onMounted(async () => {
+  const config = window.$storage.paintCustom
+
+  watch(config, async () => {
+
+    controller.comp = await loadModule(controller.list[config[1]] || controller.list.MacOS)
+
+  }, {
+    deep: true,
+    immediate: true
+  })
+
+})
+
+
+function openDevTools() {
+  window.$nodeApi.openDevTools()
+}
+
+function minimizeWindow() {
+  window.$nodeApi.minimize()
+}
+
+function closeWindow() {
+  window.$nodeApi.close()
+}
+</script>
+
+=======
+>>>>>>> parent of a8d59a2 (@initial 1.22)
+<style lang="scss" scoped>
+.Blur-Container {
+  &:before {
+    z-index: -1;
+    content: "";
+    position: absolute;
+
+    left: 0;
+    top: 0;
+
+    height: 100%;
+    width: 100%;
+
+    opacity: 1;
+    background-color: var(--el-bg-color);
+  }
+  &.display {
+    opacity: 1;
+    pointer-events: unset;
+  }
+  z-index: 1000;
+  position: absolute;
+
+  top: 0;
+  left: 70px;
+
+  width: calc(100% - 70px);
+  height: 100%;
+
+  opacity: 0;
+  pointer-events: none;
+  transition: .25s;
+  border-radius: 0 8px 8px 0;
+  //backdrop-filter: blur(18px);
+}
+
+html.blur .Blur-Container {
+  &:before {
+    opacity: .5;
+  }
+  backdrop-filter: blur(18px);
+}
+
+html.coloring .Blur-Container {
+  top: 2px;
+
+  height: calc(100% - 4px);
+  width: calc(100% - 72px);
+}
+
+.NavBarInner-Main {
+  ul {
+    * {
+      //position: relative;
+      //display: inline;
+      ////padding: 10px 0;
+      //
+      //float: left;
+      //
+      //left: 0;
+      //
+      //height: 20px;
+      //width: 100%;
+      //
+      //list-style: none;
+      //
+      //cursor: pointer;
+      //transition: all 0.2s ease-in-out;
+      //
+      //overflow: hidden;
+      -webkit-app-region: no-drag;
+      //&:hover {
+      //  background-color: var(--el-fill-color-light);
+      //}
+    }
+    position: relative;
+    padding: 0;
+    margin: 0;
+
+    width: 100%;
+  }
+  position: relative;
+  padding: 10px 0;
+  display: flex;
+
+  flex-direction: column;
+  justify-content: space-between;
+
+  height: calc(94% - 40px);
+
+  box-sizing: border-box;
+}
+
+.NavBar-Home {
+  position: relative;
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+
+  justify-content: space-between;
+
+  width: 100%;
+  height: 50%;
+
+  box-sizing: border-box;
+}
+
+.NavBar-Programs {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+
+  justify-content: space-evenly;
+
+  width: 100%;
+  height: 45%;
+
+  box-sizing: border-box;
+  border-radius: 8px;
+  background-color: var(--el-fill-color-dark);
+
+  :deep(.IconButton-Container) {
+    transform: scale(.75);
+  }
+}
+
+.NavBar-Logo {
+  &:hover {
+    clip-path: circle(200% at 0% 0%);
+    box-shadow: var(--el-box-shadow);
+    background-color: var(--el-fill-color);
+  }
+  img {
+    position: absolute;
+
+    left: 5px;
+    bottom: 5px;
+
+    width: 32px;
+
+  }
+  z-index: 1;
+  position: absolute;
+
+  left: calc(10% + 5px);
+
+  min-width: 400px;
+  min-height: 400px;
+
+  //width: 105%;
+
+  bottom: 10px;
+
+  border-radius: 8px;
+
+  user-select: none;
+  -webkit-app-region: no-drag;
+  clip-path: circle(50px at 0% 100%);
+  filter: drop-shadow(0 0 5px var(--el-fill-color-darker));
+
+  transition: all 0.2s ease-in-out;
+}
+
+.NavBarInner-Container {
+  position: relative;
+  padding: 10px;
+
+  height: 100%;
+  width: 100%;
+
+  box-sizing: border-box;
+}
+
+.NavBar-Controller {
+  position: relative;
+  padding: 10px 0;
+  margin: 0;
+
+  display: flex;
+
+  justify-content: flex-start;
+
+  width: 100%;
+  height: 5%;
+
+  list-style: none;
+  box-sizing: border-box;
+  -webkit-app-region: no-drag;
+  li {
+    width: 10px;
+    height: 10px;
+
+    margin-left: 10px;
+    border-radius: 50%;
+
+    background-color: #fff;
+    &:first-child {
+      background-color: #ff5f56;
+    }
+    &:nth-child(2) {
+      background-color: #ffbd2e;
+    }
+  }
+}
+</style>

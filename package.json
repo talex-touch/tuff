@@ -1,0 +1,78 @@
+{
+  "name": "talex-touch",
+  "version": "1.0.0-SNAPSHOT",
+  "main": "dist/electron/main/index.js",
+  "description": "A strong adaptation platform more im chat program.",
+  "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "dev": "chcp 65001 && vite",
+<<<<<<< HEAD
+    "install-build": "electron-builder install-app-deps",
+=======
+    "pre-build": "cd service/touch-im-bridge && npm run prd",
+>>>>>>> parent of a8d59a2 (@initial 1.22)
+    "build": "vue-tsc --noEmit && vite build && electron-builder"
+  },
+  "engines": {
+    "node": "^14.18.0 || >=16.0.0"
+  },
+  "devDependencies": {
+    "@intlify/vite-plugin-vue-i18n": "^6.0.3",
+    "@types/node": "^18.7.23",
+    "@vitejs/plugin-vue": "^3.0.1",
+    "electron": "^20.0.2",
+    "electron-builder": "^23.3.3",
+    "typescript": "^4.7.4",
+    "unplugin-auto-import": "^0.11.2",
+    "unplugin-vue-components": "^0.22.7",
+    "vite": "^3.0.8",
+    "vite-plugin-electron": "^0.9.3",
+    "vite-plugin-top-level-await": "^1.1.1",
+    "vue": "^3.2.37",
+    "vue-tsc": "^0.40.1"
+  },
+  "debug": {
+    "env": {
+      "VITE_DEV_SERVER_HOSTNAME": "127.0.0.1",
+      "VITE_DEV_SERVER_PORT": 3344,
+      "VITE_DEV_SERVER_URL": "http://127.0.0.1:3344"
+    }
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/state": "^6.2.0",
+    "@element-plus/icons-vue": "^2.0.9",
+<<<<<<< HEAD
+    "@floating-ui/dom": "^1.1.0",
+    "@floating-ui/vue": "^0.2.0",
+    "@vitejs/plugin-vue-jsx": "^3.0.0",
+=======
+    "@koishijs/plugin-adapter-onebot": "^5.1.4",
+    "@koishijs/plugin-echo": "^2.0.5",
+    "@satorijs/satori": "^1.1.9",
+>>>>>>> parent of a8d59a2 (@initial 1.22)
+    "axios": "^0.27.2",
+    "child_process": "^1.0.2",
+    "codemirror": "^6.0.1",
+    "element-plus": "^2.2.17",
+    "fs-extra": "^10.1.0",
+<<<<<<< HEAD
+    "graceful-fs": "^4.2.10",
+    "jsonfile": "^6.1.0",
+=======
+    "koishi": "^4.9.3",
+>>>>>>> parent of a8d59a2 (@initial 1.22)
+    "lottie-web": "^5.9.6",
+    "pinia": "^2.0.22",
+    "remixicon": "^2.5.0",
+    "sass": "^1.55.0",
+    "v-wave": "^1.5.0",
+    "vue-i18n": "^9.2.2",
+    "vue-profile-avatar": "^1.2.0",
+    "vue-router": "^4.1.5",
+    "xterm": "^5.1.0",
+    "xterm-addon-fit": "^0.7.0"
+  }
+}

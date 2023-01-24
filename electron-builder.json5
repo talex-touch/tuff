@@ -1,0 +1,45 @@
+/**
+ * @see https://www.electron.build/configuration/configuration
+ */
+{
+<<<<<<< HEAD
+  "appId": "talex-touch",
+=======
+  "appId": "talex-touch-ima",
+>>>>>>> parent of a8d59a2 (@initial 1.22)
+  "asar": true,
+  "directories": {
+    "output": "release/${version}"
+  },
+  "mac": {
+    "artifactName": "${productName}_${version}.${ext}",
+    "target": [
+      "dmg"
+    ]
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "${productName}_${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": true,
+    "installerIcon": "./public/favicon.ico",
+    "uninstallerIcon": "./public/favicon.ico",
+    "installerHeaderIcon": "./public/favicon.ico",
+<<<<<<< HEAD
+    "shortcutName": "TalexTouch"
+=======
+    "shortcutName": "TalexTouchIM"
+>>>>>>> parent of a8d59a2 (@initial 1.22)
+  }
+}
