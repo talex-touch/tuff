@@ -8,11 +8,7 @@
   "private": false,
   "scripts": {
     "dev": "chcp 65001 && vite",
-<<<<<<< HEAD
     "install-build": "electron-builder install-app-deps",
-=======
-    "pre-build": "cd service/touch-im-bridge && npm run prd",
->>>>>>> parent of a8d59a2 (@initial 1.22)
     "build": "vue-tsc --noEmit && vite build && electron-builder"
   },
   "engines": {
@@ -44,26 +40,16 @@
     "@codemirror/lang-json": "^6.0.1",
     "@codemirror/state": "^6.2.0",
     "@element-plus/icons-vue": "^2.0.9",
-<<<<<<< HEAD
     "@floating-ui/dom": "^1.1.0",
     "@floating-ui/vue": "^0.2.0",
     "@vitejs/plugin-vue-jsx": "^3.0.0",
-=======
-    "@koishijs/plugin-adapter-onebot": "^5.1.4",
-    "@koishijs/plugin-echo": "^2.0.5",
-    "@satorijs/satori": "^1.1.9",
->>>>>>> parent of a8d59a2 (@initial 1.22)
     "axios": "^0.27.2",
     "child_process": "^1.0.2",
     "codemirror": "^6.0.1",
     "element-plus": "^2.2.17",
     "fs-extra": "^10.1.0",
-<<<<<<< HEAD
     "graceful-fs": "^4.2.10",
     "jsonfile": "^6.1.0",
-=======
-    "koishi": "^4.9.3",
->>>>>>> parent of a8d59a2 (@initial 1.22)
     "lottie-web": "^5.9.6",
     "pinia": "^2.0.22",
     "remixicon": "^2.5.0",

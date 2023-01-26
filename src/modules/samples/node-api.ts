@@ -172,14 +172,7 @@ export function registerTypeProcess(type: string, callback: Function) {
 }
 
 lstat(cwd()).then(async stats => {
-  ipcRenderer.send('win-done')
-
-  console.log('attempt to get plugin list')
-
-  console.log( pluginManager.getPluginList() )
-
-  console.log("async action: ", await asyncMainProcessMessage('test-async'))
-
+  console.log(stats, cwd())
 }).catch(err => {
   console.error(err)
 })
@@ -243,7 +236,6 @@ class PluginManager {
 
 }
 
-<<<<<<< HEAD
 export const pluginManager = new PluginManager()
 
 export class BaseNodeApi {
@@ -325,6 +317,3 @@ export function genBaseNodeApi() {
 
   return new BaseNodeApi()
 }
-=======
-export const pluginManager = new PluginManager()
->>>>>>> parent of a8d59a2 (@initial 1.22)

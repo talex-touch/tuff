@@ -48,8 +48,6 @@ import TTabHeader from '@comp/tabs/TTabHeader.vue'
 import PaintCustom from '~/views/settings/PaintCustom.vue'
 import ThemeStyle from '~/views/settings/ThemeStyle.vue'
 import HomeGear from '~/views/settings/HomeGear.vue'
-import TSelect from '@comp/select/TSelect.vue'
-import TSelectItem from '@comp/select/TSelectItem.vue'
 import AppSettings from '~/views/settings/AppSettings.vue'
 import { ref } from 'vue'
 

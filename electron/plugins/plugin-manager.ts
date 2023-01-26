@@ -4,7 +4,7 @@ import path from 'path'
 import { registerPluginTypeProcess, registerTypeProcess, sendMainProcessMessage } from '../main/processor'
 import process from 'process'
 import { getConfig } from '../storage'
-import { checkDirWithCreate, rootPath, touchPath } from '../main/processor'
+import { rootPath, touchPath } from '../main/processor'
 
 export class PluginIcon {
 
@@ -310,16 +310,12 @@ export class Plugin {
 
 }
 
-<<<<<<< HEAD
 async function sleep(time: number) {
     return new Promise(resolve => setTimeout(() => resolve(time), time))
 }
 
-=======
->>>>>>> parent of a8d59a2 (@initial 1.22)
 export class PluginManager {
 
-    readonly #rootPath
     win
     #plugins = {}
 
@@ -334,20 +330,11 @@ export class PluginManager {
 
     constructor() {
 
-<<<<<<< HEAD
         this.pluginsPath = path.join(touchPath, 'plugins')
-=======
-        this.#rootPath = process.cwd()
-
-        this.#pluginsPath = path.join(this.#rootPath, 'talex-touch/plugins')
->>>>>>> parent of a8d59a2 (@initial 1.22)
 
     }
 
     async initial(win: BrowserWindow) {
-
-        await this.checkDirWithCreate('talex-touch')
-        await this.checkDirWithCreate('talex-touch/plugins')
 
         this.win = win
 
@@ -373,7 +360,6 @@ export class PluginManager {
 
         })
 
-<<<<<<< HEAD
         registerTypeProcess('change-active-plugin', ({ reply, data }) => {
 
             reply(this.changeActivePlugin(data))
@@ -382,17 +368,11 @@ export class PluginManager {
 
         registerTypeProcess('plugin-action', async ({ reply, data }) => {
 
-            const action = data.action
-            if( !action ) return reply('no action')
-=======
-        registerTypeProcess('test-async', async ({ reply }) => {
->>>>>>> parent of a8d59a2 (@initial 1.22)
+            const { action, pluginName } = data
+            if ( !action ) return reply('no action')
 
-            setTimeout(() => {
+            if ( action === 'reload ' ) {
 
-                reply("HELLO")
-
-<<<<<<< HEAD
                 await this.disablePlugin(pluginName)
 
                 reply(this.enablePlugin(pluginName))
@@ -406,19 +386,16 @@ export class PluginManager {
                 reply(await this.enablePlugin(pluginName))
 
             }
-=======
-            }, 2000)
->>>>>>> parent of a8d59a2 (@initial 1.22)
 
         })
 
         registerPluginTypeProcess('process-declare', ({ reply, plugin, data }) => {
             const plug = this.#plugins[plugin]
-            if( !plug ) return
+            if ( !plug ) return
 
             plug.process.push(data)
 
-            console.log(`[Plugin] [ChildProcess-Declare] ${plugin} <-- ${data}`)
+            console.log(`[Plugin] [ChildProcess-Declare] ${ plugin } <-- ${ data }`)
         })
 
         registerPluginTypeProcess('crash', async ({ reply, data, plugin }) => {
@@ -447,9 +424,9 @@ export class PluginManager {
         // if( !pluginManager.active ) return
 
         const activePlugin = this.activePlugin
-        if( !activePlugin || !activePlugin.window ) return
+        if ( !activePlugin || !activePlugin.window ) return
 
-        const [x, y] = this.win.getPosition()
+        const [ x, y ] = this.win.getPosition()
 
         activePlugin.window.setPosition(x + 70, y)
 
@@ -460,15 +437,15 @@ export class PluginManager {
 
         const window = this.activePlugin?.window
 
-        if( !window ) return
+        if ( !window ) return
 
-        if( pluginName.length ) {
+        if ( pluginName.length ) {
 
             const plugin = this.plugins[pluginName]
 
-            if( !plugin ) return "plugin none exist"
+            if ( !plugin ) return "plugin none exist"
 
-            if( !plugin.window ) return "plugin window none created"
+            if ( !plugin.window ) return "plugin window none created"
 
             this.activePlugin = plugin
 
@@ -486,7 +463,7 @@ export class PluginManager {
             window.webContents.executeJavaScript(`
                 
                 global.$config = {
-                    themeStyle: ${JSON.stringify(themeStyle)}
+                    themeStyle: ${ JSON.stringify(themeStyle) }
                 }
 
                 global.$config.themeStyle['dark'] ? clsL.add('dark') : clsL.remove('dark')
@@ -501,7 +478,7 @@ export class PluginManager {
 
             this.fixActivePluginWindow()
 
-            if( !window.webContents.isDevToolsOpened() ) {
+            if ( !window.webContents.isDevToolsOpened() ) {
 
                 plugin.window.webContents.openDevTools({
                     mode: 'detach',
@@ -533,23 +510,14 @@ export class PluginManager {
 
         const fileInfo = fse.readFileSync(path.join(fileP, 'init.json'))
 
-<<<<<<< HEAD
         // TODO init config validation
         const plugin = new Plugin(new PluginInfo(JSON.parse(fileInfo.toString()), fileP), fileInfo.toString())
 
-        if(name !== plugin.pluginInfo.name) {
+        if ( name !== plugin.pluginInfo.name ) {
             throw new Error('Plugin name not match')
         }
-=======
-        const plugin = new Plugin(new PluginInfo(JSON.parse(fileInfo.toString())), fileInfo.toString())
 
-        plugin.logs.push({
-            type: 'install',
-            data: '插件正在装配...'
-        })
->>>>>>> parent of a8d59a2 (@initial 1.22)
-
-        if(  this.#plugins[plugin.pluginInfo.name] ) {
+        if ( this.#plugins[plugin.pluginInfo.name] ) {
 
             throw new Error('Repeat plugin: ' + JSON.stringify(plugin) + " | " + JSON.stringify(this.#plugins))
 
@@ -584,40 +552,54 @@ export class PluginManager {
 
         const dev = plugin.pluginInfo.pluginSubInfo.dev?.enable
 
-        if( dev )
+        if ( dev )
             console.log("[Plugin] Plugin is now dev-mode: " + plugin.pluginInfo.name)
 
         const indexHtml = dev ? plugin.pluginInfo.pluginSubInfo.dev?.address : path.resolve(fileP, 'index.html')
 
-        // TODO unable to load notification （error）
-        plugin.window.webContents.loadURL(indexHtml).then(() => {
-            console.log(`[Plugin] ${plugin.pluginInfo.name} # Window loaded!`)
+        try {
 
-            plugin.insertCSS()
+            // TODO unable to load notification （error）
+            plugin.window.webContents.loadURL(indexHtml).then(() => {
+                console.log(`[Plugin] ${ plugin.pluginInfo.name } # Window loaded!`)
 
-            plugin.injectJavaScript()
+                plugin.insertCSS()
 
-            // plugin.view.webContents.openDevTools()
+                plugin.injectJavaScript()
 
-            // setTimeout(() => plugin.window.webContents.send('@plugin-loaded'), 3000)
+                // plugin.view.webContents.openDevTools()
 
-            window.once('ready-to-show', () => {
+                // setTimeout(() => plugin.window.webContents.send('@plugin-loaded'), 3000)
 
-                plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
+                window.once('ready-to-show', () => {
+
+                    plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
+
+                })
+
+                window.on('ready-to-show', () => {
+
+                    // plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
+
+                    plugin.window.webContents.send('@window-show')
+
+                    // window.hide()
+
+                })
 
             })
 
-            window.on('ready-to-show', () => {
+        } catch (e) {
 
-                // plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
-
-                plugin.window.webContents.send('@window-show')
-
-                // window.hide()
-
+            sendMainProcessMessage('plugin-crashed', {
+                plugin,
+                data: {
+                    name: "无法正常运行插件",
+                    description: `${e.message} \n 请检查插件是否正确编写!`
+                }
             })
 
-        })
+        }
 
         // plugin.view.webContents.loadURL('https://www.baidu.com')
         // plugin.view.webContents.loadURL(path.resolve(fileP, 'index.html'))
@@ -627,7 +609,6 @@ export class PluginManager {
         this.#plugins[plugin.pluginInfo.name] = plugin
         this.activePlugin = plugin
 
-<<<<<<< HEAD
         this.fixActivePluginWindow()
 
         return plugin
@@ -636,20 +617,7 @@ export class PluginManager {
 
     async disablePlugin(name) {
         const plugin = this.#plugins[name]
-        if(  !plugin ) {
-=======
-        child.on('error', (error) => {
-            console.error(`An error occurred in the child process: ${error}`);
-        });
-
-        child.on('message', message => {
-            console.log("message from " + plugin.pluginInfo.name, message)
-        })
-    }
-
-    disablePlugin(name) {
-        if(  !this.#plugins[name] ) {
->>>>>>> parent of a8d59a2 (@initial 1.22)
+        if ( !plugin ) {
 
             throw new Error('Unknown plugin: ' + name + " | " + JSON.stringify(this.#plugins))
 
@@ -660,9 +628,8 @@ export class PluginManager {
         const that = this
 
         function closed() {
-<<<<<<< HEAD
 
-            for (const pid of plugin.process) {
+            for ( const pid of plugin.process ) {
 
                 try {
 
@@ -670,7 +637,7 @@ export class PluginManager {
 
                     process.kill(pid)
 
-                } catch (e) {
+                } catch ( e ) {
 
                     console.warn("[WARN] [Plugin] Plugin child-process is none exist. (" + e.name + " with " + pid + ")")
 
@@ -679,9 +646,6 @@ export class PluginManager {
             }
 
             plugin.window.close()
-=======
-            plugin.child.close()
->>>>>>> parent of a8d59a2 (@initial 1.22)
 
             delete that.#plugins[name]
 
@@ -708,32 +672,6 @@ export class PluginManager {
 
     }
 
-
-<<<<<<< HEAD
-export const pluginManager = new PluginManager()
-
-=======
-    async checkDirWithCreate(url) {
-
-        const p = path.join(this.#rootPath, url)
-
-        if( !fse.existsSync(p) ) {
-
-            return fse.mkdirSync(p)
-
-        }
-
-        return true
-
-    }
-
 }
 
 export const pluginManager = new PluginManager()
-
-export default (app: App) => {
-
-
-
-}
->>>>>>> parent of a8d59a2 (@initial 1.22)

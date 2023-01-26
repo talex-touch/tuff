@@ -28,14 +28,13 @@ declare module '@vue/runtime-core' {
     RemixIcon: typeof import('./src/components/icon/RemixIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    TBlockLine: typeof import('./src/components/group/TBlockLine.vue')['default']
+    TBlockSelect: typeof import('./src/components/select/TBlockSelect.vue')['default']
     TBlockSwitch: typeof import('./src/components/switch/TBlockSwitch.vue')['default']
-<<<<<<< HEAD
     TDialogMention: typeof import('./src/components/dialog/TDialogMention.vue')['default']
     TGroupBlock: typeof import('./src/components/group/TGroupBlock.vue')['default']
     TSelect: typeof import('./src/components/select/TSelect.vue')['default']
     TSelectItem: typeof import('./src/components/select/TSelectItem.vue')['default']
-=======
->>>>>>> parent of a8d59a2 (@initial 1.22)
     TSwitch: typeof import('./src/components/switch/TSwitch.vue')['default']
     TTabHeader: typeof import('./src/components/tabs/TTabHeader.vue')['default']
     TTabItem: typeof import('./src/components/tabs/TTabItem.vue')['default']

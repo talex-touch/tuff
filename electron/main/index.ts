@@ -10,12 +10,10 @@
 // │ ├── ...other-static-files-from-public
 // │
 import './processor'
-<<<<<<< HEAD
 import { pluginManager } from '../plugins/plugin-manager'
 import { saveAllConfig } from '../storage'
 import installBaseProcessor from './base-processor'
-=======
->>>>>>> parent of a8d59a2 (@initial 1.22)
+import BackgroundBlur from '../addon/background-blur'
 
 process.env.DIST = join(__dirname, '../..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : join(process.env.DIST, '../public')
@@ -48,7 +46,7 @@ const indexHtml = join(process.env.DIST, 'index.html')
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'TalexTouchIM',
+    title: 'TalexTouch',
     icon: join(process.env.PUBLIC, 'favicon.ico'),
     frame: false,
     minWidth: 1080,
@@ -97,6 +95,8 @@ async function createWindow() {
     console.error(e)
 
   }
+
+  BackgroundBlur()
 }
 
 app.whenReady().then(createWindow)
@@ -128,6 +128,8 @@ app.on('before-quit', async (event) => {
       }
 
       console.log("All plugins were closed!")
+
+      saveAllConfig()
 
       app.quit()
 

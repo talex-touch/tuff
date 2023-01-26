@@ -11,12 +11,8 @@
         <li @click="selectPlugin(index)"
             :class="{ 'select': select === index }" class="plugin-item"
             :key="plugin.pluginInfo.name" v-for="(plugin, index) in plugins">
-<<<<<<< HEAD
           <PluginIcon :alt="plugin.pluginInfo.name" :icon="plugin.pluginInfo.icon" />
 <!--          <img :alt="plugin.pluginInfo.name" src="@assets/TalexTouchChat-Small.png" />-->
-=======
-          <img :alt="plugin.pluginInfo.name" src="src/assets/TalexTouchChat-Small.png" />
->>>>>>> parent of a8d59a2 (@initial 1.22)
 
           <span class="plugin-version">{{ plugin.pluginInfo.version }}</span>
 
@@ -251,6 +247,7 @@ function selectPlugin(index) {
 
   border-radius: 8px;
   box-shadow: var(--el-box-shadow);
+  background-color: var(--el-bg-color);
   //border-bottom: 1px solid var(--el-border-color-light);
 
   cursor: pointer;
@@ -272,6 +269,7 @@ function selectPlugin(index) {
 .Plugin-Info {
   flex: 1;
 
+  background-color: var(--el-fill-color-light);
   transition: all .15s ease-in-out;
 }
 

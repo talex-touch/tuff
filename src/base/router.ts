@@ -19,7 +19,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 const routes: any = [
     {
         path: "/",
-        redirect: "/index"
+        redirect: "/home"
     },
     {
       path: "/home",
@@ -28,13 +28,14 @@ const routes: any = [
     },
     {
         path: "/plugin",
-        name: "插件系统",
+        name: "插件",
         component: () => import("../views/base/Plugin.vue")
     },
-    // {
-    //     path: "/:pathMatch(.*)*",
-    //     redirect: '/index'
-    // }
+    {
+        path: "/setting",
+        name: "设置",
+        component: () => import("../views/base/Setting.vue")
+    },
 ]
 
 const router = createRouter({

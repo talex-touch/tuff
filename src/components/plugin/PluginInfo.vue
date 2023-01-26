@@ -2,12 +2,8 @@
   <div class="PluginInfo-Container">
     <div class="PluginInfo-Header">
       <div class="plugin-main">
-<<<<<<< HEAD
         <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
 <!--        <img :alt="plugin.pluginInfo.name" src="@assets/TalexTouchChat-Small.png" />-->
-=======
-        <img :alt="plugin.pluginInfo.name" src="src/assets/TalexTouchChat-Small.png" />
->>>>>>> parent of a8d59a2 (@initial 1.22)
 
         <div class="plugin-wrapper">
           <p class="plugin-name">
@@ -35,6 +31,7 @@
             <el-radio-button label="启用" />
             <el-radio-button label="禁用" />
             <el-radio-button label="卸载" />
+            <el-radio-button @click="reloadPlugin" label="重载" />
           </el-radio-group>
         </div>
 
@@ -64,7 +61,7 @@
                 </div>
 
                 <div class="Author-Content">
-                  <icon-button display="popover" v-for="item in icons" :icon="item.icon" @click="item.click(author[item.property])" />
+                  <icon-button plain small display="popover" v-for="item in icons" :icon="item.icon" @click="item.click(author[item.property])" />
                 </div>
               </div>
             </div>
@@ -114,7 +111,6 @@ const props = defineProps({
   }
 })
 
-<<<<<<< HEAD
 async function reloadPlugin() {
   console.log( await pluginManager.reloadPlugin(props.plugin.pluginInfo.name)
       .then(() => {
@@ -126,8 +122,6 @@ async function reloadPlugin() {
       }))
 }
 
-=======
->>>>>>> parent of a8d59a2 (@initial 1.22)
 const codeRef = ref()
 
 onMounted(() => {
@@ -321,16 +315,16 @@ const pluginState = ref("启用")
   }
 
   .Author-Content {
-    :deep(.IconButton-Container) {
-
-      width: 24px;
-      height: 24px;
-      line-height: 24px;
-
-      box-shadow: none;
-      background-color: transparent;
-      border-radius: 4px 4px 0 0;
-    }
+    //:deep(.IconButton-Container) {
+    //
+    //  width: 24px;
+    //  height: 24px;
+    //  line-height: 24px;
+    //
+    //  box-shadow: none;
+    //  background-color: transparent;
+    //  border-radius: 4px 4px 0 0;
+    //}
     position: relative;
     display: flex;
     padding: 2px 8px;

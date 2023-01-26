@@ -1,8 +1,7 @@
 <template>
   <div class="NavBarInner-Container">
     <ul class="NavBar-Controller">
-      <li class="close"></li>
-      <li class="minimize"></li>
+      <component :closeWindow="closeWindow" :minimizeWindow="minimizeWindow" v-if="controller.comp" :is="controller.comp" />
     </ul>
 
     <div class="NavBarInner-Main">
@@ -10,29 +9,32 @@
         <IconButton direct="/home" icon="home-3" display="popover"></IconButton>
         <IconButton direct="/plugin" icon="plug-2" display="popover"></IconButton>
         <IconButton icon="quill-pen" display="popover"></IconButton>
-        <IconButton icon="settings-6" display="popover"></IconButton>
+        <IconButton direct="/setting" icon="settings-6" display="popover"></IconButton>
       </ul>
 
-<!--      <p class="NavBar-Title">-->
-<!--        ADDON-->
-<!--      </p>-->
+      <!--      <p class="NavBar-Title">-->
+      <!--        ADDON-->
+      <!--      </p>-->
 
-      <ul class="NavBar-Programs">
-<!--        TODO CUSTOMIZE PIN ICONS-->
+      <ul class="NavBar-Programs fake-background">
         <IconButton display="popover" :select="activePluginName === plugin.pluginInfo.name" @click="changeActivePlugin(plugin.pluginInfo.name)" v-for="plugin in plugins">
           <template #icon>
             <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
           </template>
         </IconButton>
         <IconButton icon="qq" display="popover"></IconButton>
-<!--        <IconButton icon="netease-cloud-music" display="popover"></IconButton>-->
         <IconButton icon="device" display="popover"></IconButton>
         <IconButton icon="add" display="popover"></IconButton>
       </ul>
     </div>
 
     <div class="NavBar-Logo">
-      <img src="src/assets/TalexTouchChat-Small.png" alt="logo">
+      <div class="NavBar-Logo-Footer">
+        <el-tooltip content="打开调试工具">
+          <icon-button @click="openDevTools" small plain icon="code-s-slash" display="popover"></icon-button>
+        </el-tooltip>
+      </div>
+      <img src="@assets/TalexTouchChat-Small.png" alt="logo">
     </div>
 
     <teleport to="body">
@@ -53,7 +55,6 @@ export default {
 }
 </script>
 
-<<<<<<< HEAD
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { pluginManager } from '@modules/samples/node-api'
@@ -97,7 +98,6 @@ onMounted(async () => {
     deep: true,
     immediate: true
   })
-
 })
 
 
@@ -114,8 +114,6 @@ function closeWindow() {
 }
 </script>
 
-=======
->>>>>>> parent of a8d59a2 (@initial 1.22)
 <style lang="scss" scoped>
 .Blur-Container {
   &:before {
@@ -235,7 +233,9 @@ html.coloring .Blur-Container {
 
   box-sizing: border-box;
   border-radius: 8px;
-  background-color: var(--el-fill-color-dark);
+  --fake-color: var(--el-fill-color-light);
+  --fake-radius: 8px;
+  --fake-opacity: .35;
 
   :deep(.IconButton-Container) {
     transform: scale(.75);
@@ -243,10 +243,33 @@ html.coloring .Blur-Container {
 }
 
 .NavBar-Logo {
+  .NavBar-Logo-Footer {
+    position: absolute;
+    padding: 0 2%;
+
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 45px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+
+    background-color: var(--el-fill-color-dark);
+    border-radius: 0 0 8px 8px;
+    opacity: 0;
+    transform: translateY(100%);
+    box-sizing: border-box;
+    transition: all .25s ease-in-out;
+  }
   &:hover {
     clip-path: circle(200% at 0% 0%);
     box-shadow: var(--el-box-shadow);
     background-color: var(--el-fill-color);
+    .NavBar-Logo-Footer {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   img {
     position: absolute;
@@ -291,7 +314,7 @@ html.coloring .Blur-Container {
 
 .NavBar-Controller {
   position: relative;
-  padding: 10px 0;
+  padding: 3px 0;
   margin: 0;
 
   display: flex;
@@ -304,20 +327,5 @@ html.coloring .Blur-Container {
   list-style: none;
   box-sizing: border-box;
   -webkit-app-region: no-drag;
-  li {
-    width: 10px;
-    height: 10px;
-
-    margin-left: 10px;
-    border-radius: 50%;
-
-    background-color: #fff;
-    &:first-child {
-      background-color: #ff5f56;
-    }
-    &:nth-child(2) {
-      background-color: #ffbd2e;
-    }
-  }
 }
 </style>

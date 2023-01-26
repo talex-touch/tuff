@@ -1,16 +1,16 @@
 <template>
-  <div class="TTabItem-Container fake-background" :class="{ active, disabled }">
-    <div class="TTabs-Tab-Icon">
-      <remix-icon :non-style="nonStyle" :name="icon" />
+  <div class="TvTabItem-Container" :class="{ active, disabled }">
+    <div class="TvTabs-Tab-Icon">
+      <remix-icon  :name="icon" />
     </div>
 <!--    :style="select(type) ? 'fill' : 'line'"-->
-    <div class="TTabs-Tab-Name">{{ name }}</div>
+    <div class="TvTabs-Tab-Name">{{ name }}</div>
   </div>
 </template>
 
 <script>
 export default {
-  name: "TTabItem"
+  name: "TvTabItem"
 }
 </script>
 
@@ -33,9 +33,6 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
-  },
-  nonStyle: {
-    type: Boolean
   }
 })
 
@@ -49,9 +46,10 @@ watchEffect(() => {
 </script>
 
 <style lang="scss" scoped>
-.TTabItem-Container {
+.TvTabItem-Container {
   &.active {
-    --fake-color: var(--el-fill-color-dark) !important;
+    background-color: var(--el-color-primary-light-5) !important;
+    border: 1px solid var(--el-color-primary);
   }
   .TTabs-Tab-Icon {
     position: relative;
@@ -60,34 +58,33 @@ watchEffect(() => {
     bottom: -0.125em;
   }
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    background-color: var(--el-color-primary-light-9);
   }
   &.disabled {
     cursor: not-allowed;
-    opacity: .5;
-    --fake-color: transparent;
+    opacity: .85;
+    &:hover {
+      background-color: transparent;
+    }
   }
-  z-index: 0;
   position: relative;
   display: flex;
-  margin: 5px;
   padding: 6px 8px;
+  margin-right: 5px;
 
+  //height: 100%;
+
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  flex-shrink: 0;
   cursor: pointer;
   user-select: none;
   border-radius: 4px;
   text-indent: 5px;
   transition: all .25s;
   box-sizing: border-box;
-
-  --fake-color: transparent;
-  --fake-radius: 4px;
-}
-
-.blur .TTabItem-Container {
-  &.active {
-    --fake-color: var(--el-fill-color-lighter) !important;
-  }
-  --fake-opacity: .25;
+  border: 1px solid var(--el-border-color);
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="TBlockLine-Container" :class="{ link }">
+  <div class="TBlockLine-Container fake-background index-fix" :class="{ link }">
     <span class="TBlockLine-Title">
       {{ title }}
     </span>
@@ -41,8 +41,7 @@ const props = defineProps(['title', 'description', 'link'])
     display: flex;
     align-items: center;
 
-    margin-top: -2px;
-    padding: 3px 12px;
+    padding: 1px 12px;
 
     font-size: 12px;
     color: var(--el-color-primary-dark-2);
@@ -67,6 +66,7 @@ const props = defineProps(['title', 'description', 'link'])
 
   height: 24px;
 
-  background-color: var(--el-fill-color-light);
+  --fake-color: var(--el-fill-color);
+  --fake-opacity: .45;
 }
 </style>

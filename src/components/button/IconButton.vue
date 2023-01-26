@@ -1,5 +1,7 @@
 <template>
-  <div @click="handleClick" @mouseenter="hover = true" @mouseleave="hover = false" role="button" class="IconButton-Container">
+  <div @click="handleClick" @mouseenter="hover = true"
+       :class="{ plain, small, select }"
+       @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
     <div class="IconButton-Icon">
       <remix-icon :name="icon" :style="select || hover ? 'fill' : 'line'" v-if="icon" />
       <slot v-else name="icon" :hover="hover" :select="select"></slot>
@@ -36,7 +38,6 @@ const props = defineProps({
   direct: {
     type: String,
     required: false
-<<<<<<< HEAD
   },
   plain: {
     type: Boolean
@@ -46,8 +47,6 @@ const props = defineProps({
   },
   select: {
     type: Boolean
-=======
->>>>>>> parent of a8d59a2 (@initial 1.22)
   }
 })
 
@@ -68,9 +67,27 @@ function handleClick() {
 </script>
 
 <style lang="scss" scoped>
+
 .IconButton-Container {
+  &.plain {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  &.small {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    .IconButton-Icon {
+      line-height: 24px;
+      font-size: 14px;
+    }
+  }
+  &.select {
+    box-shadow: var(--el-box-shadow-lighter);
+  }
   &:hover {
-    background-color: var(--el-fill-color-lighter);
+    --fake-color: var(--el-fill-color-lighter);
   }
   .IconButton-Icon {
     &:hover {
@@ -95,6 +112,8 @@ function handleClick() {
   cursor: pointer;
   border-radius: 8px;
   box-shadow: var(--el-box-shadow);
-  background-color: var(--el-fill-color);
+  --fake-color: var(--el-fill-color);
+  --fake-radius: 8px;
+  --fake-opacity: .5;
 }
 </style>

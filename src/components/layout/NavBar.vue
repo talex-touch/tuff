@@ -1,9 +1,9 @@
 <template>
   <div class="NavBar-Wrapper">
-    <div class="NavBar-Container">
+    <div class="NavBar-Container fake-background">
       <NavBarInner />
     </div>
-    <div class="NavBar-View">
+    <div class="NavBar-View fake-background">
       <router-view></router-view>
     </div>
 
@@ -20,24 +20,41 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+.blur .NavBar-Wrapper {
+  .NavBar-Container {
+    --fake-opacity: .6;
+    backdrop-filter: saturate(180%) blur(80px);
+  }
+
+  .NavBar-View {
+    --fake-opacity: .75;
+    backdrop-filter: saturate(180%) blur(100px);
+  }
+}
+
 .NavBar-Wrapper {
   .NavBar-Container {
+    z-index: 1;
     position: relative;
 
     width: 70px;
     height: 100%;
 
+    --fake-radius: 0;
     -webkit-app-region: drag;
-    background-color: var(--el-fill-color-light);
+    --fake-color: var(--el-fill-color-lighter);
   }
   .NavBar-View {
+    z-index: 0;
     position: relative;
     //padding: 10px;
 
-    width: calc(100% - 80px);
+    width: calc(100% - 70px);
     height: 100%;
 
     box-sizing: border-box;
+    --fake-radius: 0;
+    --fake-color: var(--el-fill-color-lighter);
   }
   position: relative;
   display: flex;

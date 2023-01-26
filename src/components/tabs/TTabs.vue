@@ -144,16 +144,16 @@ export default {
       // console.log( tabHeader )
 
       function getSlotContent(vnode) {
-        // const content = h(ElScrollbar, {}, activeNode.value.children.default())
-        //
-        // return (tabHeader ? [ h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), content ]
-        //     : content)
-
         const def = h('div', { class: 'TTabs-ContentWrapper' }, activeNode.value.children.default())
-        const content = (tabHeader ? [ h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), def ]
-            : def)
+        const content = h(ElScrollbar, {}, def)
+        //
+        return (tabHeader ? [ h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), content ]
+            : content)
 
-        return h(ElScrollbar, {}, content)
+        // const content = (tabHeader ? [ h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), def ]
+        //     : def)
+        //
+        // return h(ElScrollbar, {}, content)
       }
 
       return slotWrapper.value = h('div', { class: 'TTabs-SelectSlot animated' },
@@ -192,6 +192,12 @@ export default {
 .TTabs-ContentWrapper {
   margin-bottom: 15px;
   padding: 15px 10px 0 10px;
+  //position: relative;
+
+  //height: 100%;
+  //width: 100%;
+
+  //box-sizing: border-box;
 }
 
 .TTabs-SelectSlot {
@@ -245,27 +251,73 @@ export default {
   font-size: 18px;
 }
 
+.blur .TTabs-TabGroup {
+  .TTabs-TabGroup-Name {
+    &:before {
+      opacity: .4;
+    }
+    //backdrop-filter: saturate(180%) blur(10px) brightness(95%);
+  }
+  &:before {
+    opacity: .4;
+  }
+}
+
 .TTabs-TabGroup {
   .TTabs-TabGroup-Name {
-    //z-index: 1;
+    &:before {
+      z-index: -1;
+      content: "";
+      position: absolute;
+
+      left: 0;
+      top: 0;
+
+      width: 100%;
+      height: 100%;
+
+      border-radius: 8px 8px 0 0;
+      background-color: var(--el-fill-color-dark);
+    }
+    z-index: 0;
     position: absolute;
     padding: 4px 12px;
 
-    left: 10px;
-    top: -18px;
+    left: 0;
+    top: -30px;
+
+    width: calc(100% - 24px);
+    height: 25px;
+    line-height: 25px;
 
     font-weight: 600;
     border-radius: 8px 8px 0 0;
-    background-color: var(--el-fill-color-lighter);
-    //background-color: var(--el-fill-color);
+  }
+  &:before {
+    content: "";
+    position: absolute;
+
+    width: 100%;
+    height: 100%;
+
+    left: 0;
+    top: 0;
+
+    border-radius: 0 0 8px 8px;
+    background-color: var(--el-fill-color);
   }
   position: relative;
-  padding-top: 5px;
-  margin: 10px 0;
+  padding-top: 10px;
+  margin-top: 30px;
+  margin-bottom: 10px;
 
-  border-radius: 8px;
-  border: 2px solid var(--el-fill-color-light);
-  //background-color: var(--el-fill-color-light);
+  //border: 2px solid var(--el-border-color);
+}
+
+.blur .TTabs-Container {
+  &:before {
+    opacity: 0;
+  }
 }
 
 .TTabs-Container {
@@ -277,9 +329,21 @@ export default {
     position: relative;
     flex: 1;
 
-    padding: 2px;
+    //padding: 2px;
 
     box-sizing: border-box;
+  }
+  &:before {
+    content: "";
+    position: absolute;
+
+    width: 100%;
+    height: 100%;
+
+    top: 0;
+    left: 0;
+
+    background-color: var(--el-fill-color-light);
   }
   position: relative;
   display: flex;
@@ -288,6 +352,5 @@ export default {
   height: 100%;
 
   box-sizing: border-box;
-  background-color: var(--el-fill-color-lighter);
 }
 </style>
