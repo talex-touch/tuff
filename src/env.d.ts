@@ -15,7 +15,6 @@ declare global {
   export interface Window {
     $nodeApi: BaseNodeApi
     $storage: StorageManager
-
     $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
   }
 }
