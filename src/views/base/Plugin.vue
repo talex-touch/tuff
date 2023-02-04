@@ -269,7 +269,7 @@ function selectPlugin(index) {
 .Plugin-Info {
   flex: 1;
 
-  background-color: var(--el-fill-color-light);
+  //background-color: var(--el-fill-color-light);
   transition: all .15s ease-in-out;
 }
 
@@ -295,7 +295,7 @@ function selectPlugin(index) {
   min-width: 220px;
   max-width: 300px;
 
-  background-color: var(--el-fill-color-lighter);
+  //background-color: var(--el-fill-color-lighter);
   border-right: 1px solid var(--el-border-color);
   overflow: hidden;
 }

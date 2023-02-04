@@ -182,8 +182,10 @@ class PluginManager {
   constructor() {
 
     registerTypeProcess('plugin-crashed', async ({ reply, data }) => {
+      
+      console.log( data )
 
-      await forDialogMention( data.name, data.message, data.plugin.pluginInfo.icon, [
+      await forDialogMention( data.name, data.description, data.plugin.pluginInfo.icon, [
         {
           content: "卸载插件",
           type: 'info',

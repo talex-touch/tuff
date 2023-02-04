@@ -371,7 +371,7 @@ export class PluginManager {
             const { action, pluginName } = data
             if ( !action ) return reply('no action')
 
-            if ( action === 'reload ' ) {
+            if ( action === 'reload' ) {
 
                 await this.disablePlugin(pluginName)
 
@@ -452,8 +452,6 @@ export class PluginManager {
             // plugin.window.show()
             // if( window.isl)
 
-            this.active = true
-
             const themeStyle = getConfig('theme-style.ini')
 
             plugin.insertCSS()
@@ -473,6 +471,7 @@ export class PluginManager {
 
             // window.webContents.send('@window-show')
 
+            window.restore()
             window.show()
             // this.activePlugin.window.setSize(1010, 600)
 
@@ -486,9 +485,9 @@ export class PluginManager {
 
             }
 
-        } else {
+            this.active = true
 
-            this.active = false
+        } else {
 
             const appSetting = getConfig('app-setting.ini')
 
@@ -496,6 +495,8 @@ export class PluginManager {
             autoCloseDev && window.webContents.closeDevTools()
 
             window.hide()
+
+            this.active = false
             // this.activePlugin.window.move(1000, 1000)
             // this.activePlugin.window.setSize(0, 0)
 
@@ -504,7 +505,6 @@ export class PluginManager {
         return "done"
 
     }
-
     enablePlugin(name) {
         const fileP = path.join(this.pluginsPath, name)
 
@@ -540,7 +540,7 @@ export class PluginManager {
                 preload: fse.existsSync(preload) ? preload : undefined,
                 nodeIntegration: true,
                 contextIsolation: false,
-                webSecurity: false
+                webSecurity: false,
             }
         })
 
@@ -557,49 +557,56 @@ export class PluginManager {
 
         const indexHtml = dev ? plugin.pluginInfo.pluginSubInfo.dev?.address : path.resolve(fileP, 'index.html')
 
-        try {
+        plugin.window.webContents.on('did-fail-load', (e) => {
+            console.log("[WARN] [Plugin] Plugin page load failed!")
+            console.error(e)
 
-            // TODO unable to load notification （error）
-            plugin.window.webContents.loadURL(indexHtml).then(() => {
-                console.log(`[Plugin] ${ plugin.pluginInfo.name } # Window loaded!`)
+            plugin.window.webContents.reload()
+        })
 
-                plugin.insertCSS()
+        // TODO unable to load notification （error）
+        plugin.window.webContents.loadURL(indexHtml).then(() => {
+            console.log(`[Plugin] ${ plugin.pluginInfo.name } # Window loaded!`)
 
-                plugin.injectJavaScript()
+            plugin.insertCSS()
 
-                // plugin.view.webContents.openDevTools()
+            plugin.injectJavaScript()
 
-                // setTimeout(() => plugin.window.webContents.send('@plugin-loaded'), 3000)
+            // plugin.view.webContents.openDevTools()
 
-                window.once('ready-to-show', () => {
+            // setTimeout(() => plugin.window.webContents.send('@plugin-loaded'), 3000)
 
-                    plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
+            window.once('ready-to-show', () => {
 
-                })
+                // plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
 
-                window.on('ready-to-show', () => {
+                // plugin.window.webContents.send('@window-show')
 
-                    // plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
+                plugin.window.webContents.send('@plugin-loaded', plugin.pluginInfo.name)
 
-                    plugin.window.webContents.send('@window-show')
-
-                    // window.hide()
-
-                })
+                window.show()
 
             })
 
-        } catch (e) {
+            window.webContents.on('crashed', (e) => {
+                console.log("[WARN] [Plugin] Plugin window crashed!")
+
+                throw e
+            })
+
+        }).catch(e => {
+
+            // this.disablePlugin(plugin.pluginInfo.name)
 
             sendMainProcessMessage('plugin-crashed', {
-                plugin,
+                plugin,//: plugin.pluginInfo.name,
                 data: {
                     name: "无法正常运行插件",
-                    description: `${e.message} \n 请检查插件是否正确编写!`
+                    description: `${ e.message } \n 请检查插件是否正确编写!`
                 }
-            })
+            }).then(r => console.log("done", r)).catch(e => console.log(e))
 
-        }
+        })
 
         // plugin.view.webContents.loadURL('https://www.baidu.com')
         // plugin.view.webContents.loadURL(path.resolve(fileP, 'index.html'))

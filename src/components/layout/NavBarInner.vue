@@ -22,7 +22,7 @@
             <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
           </template>
         </IconButton>
-        <IconButton icon="qq" display="popover"></IconButton>
+<!--        <IconButton icon="qq" display="popover"></IconButton>-->
         <IconButton icon="device" display="popover"></IconButton>
         <IconButton icon="add" display="popover"></IconButton>
       </ul>

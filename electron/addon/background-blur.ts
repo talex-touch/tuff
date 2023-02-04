@@ -39,6 +39,10 @@ export default () => {
 
             } catch (e) {
 
+                if( e.message.indexOf('EBUSY') !== -1 ) {
+                    return
+                }
+
                 console.log("[Background-Blur] Error: " + e.message, e)
 
             }
