@@ -20,7 +20,7 @@ Touch(TalexTouch) 是 TalexTouchQ(TouchQ) 的后作，将原本的项目进行�
 
 ## 使用协议
 
-本项目使用 [Apacha License 2.0](./LICENSE) 协议开源
+本项目使用 [Mozilla Public License 2.0](./LICENSE) 协议开源
 
 ## 食用方式
 
