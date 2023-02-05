@@ -39,5 +39,5 @@ jobs:
           git config user.email "${{ secrets.GIT_EMAIL }}"
           git add -A
           git commit -m 'deploy github-pages automatically'
-          git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch.git master:gh-pages
+          git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch/talex-touch.git master:gh-pages
           cd -
