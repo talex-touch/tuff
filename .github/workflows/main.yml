@@ -25,12 +25,12 @@ jobs:
       - name: Install dependencies
         run: npm install
     
-      - name: Build VuePress
+      - name: Build VitePress
         run: npm run docs:build
       
       - name: Deploy to Pages
         run: |
-          cd docs/.vitepress/dist 
+          cd docs/dist 
           git init
           git config user.name "TalexDreamSoul"
           git config user.email "${{ secrets.GIT_EMAIL }}"
