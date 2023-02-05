@@ -8,6 +8,10 @@ import fse from 'fs-extra'
 export const rootPath = process.cwd()
 export const touchPath = path.join(rootPath, 'talex-touch')
 
+export async function sleep(time: number) {
+    return new Promise(resolve => setTimeout(() => resolve(time), time))
+}
+
 export async function checkDirWithCreate(url) {
 
     const p = path.join(rootPath, url)

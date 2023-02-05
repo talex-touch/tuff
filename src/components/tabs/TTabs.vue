@@ -13,16 +13,11 @@ const slotWrapper = ref()
 
 export default {
   name: "TTabs",
-  props: {
-    modelValue: String
-  },
+  props: ['modelValue'],
   render() {
     const that = this
-    const slots = this.$slots.default()
-
-    const children = slots.filter((slot) => {
-      return slot.type.name && qualifiedName.includes(slot.type.name)
-    })
+    let tabHeader = null
+    const pointer = h('div', { class: 'TTabs-Pointer' })
 
     async function fixPointer(vnode) {
       const pointerEl = pointer.el
@@ -81,14 +76,11 @@ export default {
 
     }
 
-    let tabHeader = null
-
     function getTabs() {
 
       function getTab(vnode) {
         const tab = h(TTabItem, {
-          active: () => activeNode.value?.props.name === vnode.props.name,
-          ...vnode.props,
+          active: () => activeNode.value?.props.name === vnode.props.name, ...vnode.props,
           onClick: () => {
             if( vnode.props.hasOwnProperty('disabled') ) return
 
@@ -97,7 +89,9 @@ export default {
 
             clsL.remove('zoomInUp')
 
-            that.$emit('update:modelValue', activeNode.value = vnode)
+            activeNode.value = vnode
+
+            that.$emit('update:modelValue', vnode.props.name)
 
             fixPointer(tab)
 
@@ -118,27 +112,16 @@ export default {
         return tab
       }
 
-      return children.map(child => {
-        return child.type.name === "TTabHeader" ? (() => {
-          tabHeader = child
-          return null
-        })() : (child.type.name === "TTabItemGroup" ?
-            h('div', {
-              class: 'TTabs-TabGroup'
-            }, [
-              h('div', {
-                class: 'TTabs-TabGroup-Name'
-              }, child.props.name),
-              child.children.default()?.map(getTab)
-            ])
-            : getTab(child))
-      })
+      return that.$slots.default().filter(slot => slot.type.name && qualifiedName.includes(slot.type.name))
+          .map(child => child.type.name === "TTabHeader" ? (() => {
+            tabHeader = child
+            return null
+          })() : (child.type.name === "TTabItemGroup" ?
+              h('div', { class: 'TTabs-TabGroup' },
+                  [ h('div', { class: 'TTabs-TabGroup-Name' }, child.props.name), child.children.default()?.map(getTab) ])
+              : getTab(child)))
 
     }
-
-    const pointer = h('div', {
-      class: 'TTabs-Pointer'
-    })
 
     function getSelectSlotContent() {
       // console.log( tabHeader )
@@ -164,15 +147,8 @@ export default {
 
     }
 
-    return h('div', {
-      class: 'TTabs-Container'
-    }, [
-      h('div', {
-        class: 'TTabs-Header'
-      }, getTabs()),
-      h('div', {
-        class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '')
-      }, getSelectSlotContent() ),
+    return h('div', { class: 'TTabs-Container' }, [ h('div', { class: 'TTabs-Header' }, getTabs()),
+      h('div', { class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '') }, getSelectSlotContent() ),
       pointer
     ])
 
@@ -288,7 +264,7 @@ export default {
 
     width: calc(100% - 24px);
     height: 25px;
-    line-height: 25px;
+    line-height: 24px;
 
     font-weight: 600;
     border-radius: 8px 8px 0 0;

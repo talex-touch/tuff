@@ -9,7 +9,10 @@
   "scripts": {
     "dev": "chcp 65001 && vite",
     "install-build": "electron-builder install-app-deps",
-    "build": "vue-tsc --noEmit && vite build && electron-builder"
+    "build": "vue-tsc --noEmit && vite build && electron-builder",
+    "docs:dev": "vitepress dev docs --port 8989",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "engines": {
     "node": "^14.18.0 || >=16.0.0"
@@ -57,6 +60,7 @@
     "remixicon": "^2.5.0",
     "sass": "^1.55.0",
     "v-wave": "^1.5.0",
+    "vitepress": "1.0.0-alpha.45",
     "vue-i18n": "^9.2.2",
     "vue-profile-avatar": "^1.2.0",
     "vue-router": "^4.1.5",

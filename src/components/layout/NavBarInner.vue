@@ -56,7 +56,7 @@ export default {
 </script>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, shallowReactive, watch } from 'vue'
 import { pluginManager } from '@modules/samples/node-api'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import { forDialogMention } from '@modules/mention/dialog-mention'
@@ -64,7 +64,7 @@ import { sleep } from '@modules/utils'
 
 import Logo from '@assets/TalexTouchChat-Small.png'
 
-const controller = reactive({
+const controller = shallowReactive({
   comp: null,
   list: {
     'MacOS': () => import('@comp/customize/controller/MacOSController.vue'),

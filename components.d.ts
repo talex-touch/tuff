@@ -25,6 +25,7 @@ declare module '@vue/runtime-core' {
     NavBarInner: typeof import('./src/components/layout/NavBarInner.vue')['default']
     PluginIcon: typeof import('./src/components/plugin/PluginIcon.vue')['default']
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
+    PluginItem: typeof import('./src/components/plugin/PluginItem.vue')['default']
     RemixIcon: typeof import('./src/components/icon/RemixIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
