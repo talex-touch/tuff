@@ -8,6 +8,8 @@ import { genStorageManager } from '@modules/storage'
 import ElementPlus from '@modules/element-plus'
 import Lang from '@modules/lang'
 
+import VWave from 'v-wave'
+
 import '@modules/theme-manager'
 
 window.$nodeApi = genBaseNodeApi()
@@ -18,7 +20,9 @@ const app = createApp(App)
     .use(ElementPlus)
     .use(Lang)
     // .use(ModuleManager)
-    .mount('#app')
+    .use(VWave)
+
+app .mount('#app')
     .$nextTick(() => {
 
         postMessage({ payload: 'removeLoading' }, '*')

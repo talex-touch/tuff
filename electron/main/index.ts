@@ -49,8 +49,8 @@ async function createWindow() {
     title: 'TalexTouch',
     icon: join(process.env.PUBLIC, 'favicon.ico'),
     frame: false,
-    minWidth: 1080,
-    minHeight: 600,
+    width: 1080,
+    height: 600,
     resizable: false,
     webPreferences: {
       preload,

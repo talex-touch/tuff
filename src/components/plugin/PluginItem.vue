@@ -18,11 +18,41 @@ import PluginIcon from '@comp/plugin/PluginIcon.vue'
 export default {
   name: "PluginItem",
   components: { PluginIcon },
-  props: ['plugin', 'select']
+  props: ['plugin', 'select'],
+  mounted() {
+    const { status } = this.plugin
+
+    // disable
+    if ( status <= 1 ) {
+      this.$el.classList.add('disable')
+    } else if ( status > 4 ) { // loading
+      this.$el.classList.add('loading')
+    } else if ( status === 2 ) { // crashed
+      this.$el.classList.add('crashed')
+    } else if ( status === 3 ) { // enabled
+      this.$el.classList.add('enable')
+    } else if ( status === 4 ) { // active
+      this.$el.classList.add('active')
+    }
+
+  }
 }
 </script>
 
 <style lang="scss" scoped>
+.blur .PluginItem-Container {
+  opacity: 0.75;
+}
+
+.PluginItem-Container {
+  &.disable {
+    opacity: .5;
+  }
+  &.enable {
+    filter: drop-shadow(0 0 2px var(--el-color-primary-light-3));
+  }
+}
+
 .PluginItem-Container {
   &.new-version {
     &:before {
@@ -58,7 +88,6 @@ export default {
     transition: all 0.2s ease-in-out;
   }
   &:hover {
-
     .plugin-version {
       background-color: var(--el-fill-color-dark);
     }

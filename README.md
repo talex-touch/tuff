@@ -8,11 +8,11 @@
 
 设计参考 TDesignS
 
-[![GitHub forks](https://img.shields.io/github/forks/TalexDreamSoul/touchq?style=flat-square)](https://github.com/TalexDreamSoul/touchq/network)
-[![GitHub stars](https://img.shields.io/github/stars/TalexDreamSoul/touchq?style=flat-square)](https://github.com/TalexDreamSoul/touchq/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/TalexDreamSoul/touchq?style=flat-square)](https://github.com/TalexDreamSoul/touchq/issues)
-[![GitHub license](https://img.shields.io/github/license/TalexDreamSoul/touchq?style=flat-square)](https://github.com/TalexDreamSoul/touchq/blob/main/LICENSE)
-[![GitHub release](https://img.shields.io/badge/release-2.0.0-Lite--beta-1b7cb9?style=flat-square)](https://github.com/TalexDreamSoul/touchq/releases)
+[![GitHub forks](https://img.shields.io/github/forks/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/network)
+[![GitHub stars](https://img.shields.io/github/stars/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
+[![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/badge/release-2.0.0-Lite--beta-1b7cb9?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
 
 </div>
 
@@ -29,13 +29,13 @@ Touch(TalexTouch) 是 TalexTouchQ(TouchQ) 的后作，将原本的项目进行�
 ``` bash
 
 # 进入目录后安装依赖
-npm install
+pnpm install
 
 # 打开测试环境 (localhost:5173)
-npm run dev
+pnpm run dev
 
 # 打包生成
-npm run build
+pnpm run build
 
 ```
 

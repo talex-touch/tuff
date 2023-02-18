@@ -131,7 +131,18 @@ export class Plugin {
 
     process = []
 
-    status = PluginStatus.DISABLED
+    _status = PluginStatus.DISABLED
+
+    get status() { return this._status }
+
+    set status(value) {
+        this._status = value
+
+        sendMainProcessMessage('plugin-status-updated', {
+            plugin: this.pluginInfo.name,
+            status: this._status
+        }, {})
+    }
 
     constructor(pluginInfo: PluginInfo, sourceConfig: string) {
 
@@ -336,7 +347,7 @@ export class Plugin {
     }
 
     _enabled(parentWindow: BrowserWindow, fileP: string) {
-        if ( this.status !== PluginStatus.DISABLED ) return
+        if ( this.status !== PluginStatus.DISABLED && this.status !== PluginStatus.LOADED && this.status !== PluginStatus.CRASHED ) return
         this.status = PluginStatus.LOADING
 
         const window = new BrowserWindow({
@@ -388,7 +399,8 @@ export class Plugin {
 
             this.injectJavaScript()
 
-            this.status = PluginStatus.LOADED
+            this.status = PluginStatus.ENABLED
+            // this.status = PluginStatus.LOADED
 
             window.once('ready-to-show', () => {
 
@@ -396,7 +408,7 @@ export class Plugin {
 
                 window.show()
 
-                this.status = PluginStatus.ENABLED
+                this.status = PluginStatus.ACTIVE
 
             })
 
@@ -417,7 +429,7 @@ export class Plugin {
 
     }
 
-    async _disabled(callback: Function) {
+    async _disabled() {
 
         this.status = PluginStatus.DISABLING
         const that = this
@@ -434,17 +446,20 @@ export class Plugin {
 
                 } catch ( e ) {
 
-                    console.warn("[WARN] [Plugin] Plugin child-process is none exist. (" + e.name + " with " + pid + ")")
+                    console.warn("[WARN] [Plugin] Plugin child-process is none exist. (" + e?.name + " with " + pid + ")")
 
                 }
 
             }
 
-            that.window.close()
+            const window: BrowserWindow = that.window
 
-            callback() // delete
+            window.once('closed', () => that.status = PluginStatus.DISABLED)
+            window.close()
 
-            console.log("[Plugin] Plugin " + name + " is disabled.")
+            // callback() // delete
+
+            console.log("[Plugin] Plugin " + that.pluginInfo.name + " is disabled.")
 
             return true
 

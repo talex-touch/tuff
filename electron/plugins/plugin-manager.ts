@@ -76,6 +76,10 @@ export class PluginManager {
 
                 reply(await this.enablePlugin(pluginName))
 
+            } else if ( action === 'status' ) {
+
+                reply(await this.#plugins[pluginName])
+
             }
 
         })
@@ -126,17 +130,26 @@ export class PluginManager {
     /* for "" to hide */
     changeActivePlugin(pluginName): string {
 
-        const window = this.activePlugin?.window
+        // if ( !window ) return
 
-        if ( !window ) return
+        if ( pluginName?.length ) {
 
-        if ( pluginName.length ) {
+            if( this.active )
+                this.changeActivePlugin("")
+
+            console.log("[Plugin] ActivePlugin: " + pluginName)
 
             const plugin: Plugin = this.plugins[pluginName]
 
             if ( !plugin ) return "plugin none exist"
 
             if ( !plugin.window ) return "plugin window none created"
+
+            // if ( !plugin.window.isDestroyed() ) return "plugin window destroyed"
+
+            if ( plugin.status !== PluginStatus.ENABLED ) return "plugin not enabled"
+
+            const window = plugin.window
 
             this.activePlugin = plugin
 
@@ -177,6 +190,9 @@ export class PluginManager {
 
             const appSetting = getConfig('app-setting.ini')
 
+            const window = this.activePlugin?.window
+            if( !window || window.isDestroyed() ) return
+
             const autoCloseDev = appSetting.dev?.autoCloseDev ?? true
             autoCloseDev && window.webContents.closeDevTools()
 
@@ -192,7 +208,6 @@ export class PluginManager {
         return "done"
 
     }
-
     loadPlugin(name) {
         const fileP = path.join(this.pluginsPath, name)
 
@@ -200,6 +215,8 @@ export class PluginManager {
 
         // TODO init config validation
         const plugin = new Plugin(new PluginInfo(JSON.parse(fileInfo.toString()), fileP), fileInfo.toString())
+
+        plugin.status = PluginStatus.LOADING
 
         if ( name !== plugin.pluginInfo.name ) {
             throw new Error('Plugin name not match')
@@ -211,11 +228,14 @@ export class PluginManager {
 
         }
 
+        plugin.status = PluginStatus.LOADED
+
         return this.#plugins[plugin.pluginInfo.name] = plugin
     }
 
     enablePlugin(name) {
         const plugin: Plugin = this.#plugins[name]
+        if ( !plugin ) throw new Error('Unknown plugin: ' + name + " | " + JSON.stringify(this.#plugins))
 
         const fileP = path.join(this.pluginsPath, name)
 
@@ -235,7 +255,7 @@ export class PluginManager {
 
         console.log("[Plugin] Disabling plugin " + name)
 
-        return plugin._disabled(() => delete this.#plugins[name])
+        return plugin._disabled()
 
         // reply?.status === 1 ? closed() : setTimeout(closed, reply?.status === 2 ? 10000 : 3000)
 

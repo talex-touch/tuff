@@ -8,8 +8,6 @@ export {}
 declare module '@vue/runtime-core' {
   export interface GlobalComponents {
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
-    ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
-    ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElRate: typeof import('element-plus/es')['ElRate']
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
@@ -26,6 +24,7 @@ declare module '@vue/runtime-core' {
     PluginIcon: typeof import('./src/components/plugin/PluginIcon.vue')['default']
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
     PluginItem: typeof import('./src/components/plugin/PluginItem.vue')['default']
+    PluginStatus: typeof import('./src/components/plugin/action/PluginStatus.vue')['default']
     RemixIcon: typeof import('./src/components/icon/RemixIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

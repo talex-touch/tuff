@@ -122,12 +122,12 @@
 
     <t-group-block name="应用规格 (Touch)" icon="apps">
       <t-block-line title="版本" :description="versionStr"></t-block-line>
-      <t-block-line title="规格" description="23H1"></t-block-line>
+      <t-block-line title="规格" description="23H2"></t-block-line>
       <t-block-line title="Electron" :description="p.versions?.electron"></t-block-line>
       <t-block-line title="V8-Engine" :description="p.versions?.v8"></t-block-line>
       <t-block-line title="操作系统" :description="os.version()"></t-block-line>
       <t-block-line title="操作平台" :description="`${p.platform} (${os.arch()})`"></t-block-line>
-      <t-block-line title="体验" description="Touch Feature Experience Pack 2023.01.26"></t-block-line>
+      <t-block-line title="体验" description="Touch Feature Experience Pack 2023.02.18"></t-block-line>
       <t-block-line title="TalexTouch 服务协议" :link="true"></t-block-line>
       <t-block-line title="TalexTouch 软件许可条款" :link="true"></t-block-line>
 

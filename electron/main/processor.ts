@@ -183,11 +183,17 @@ export function registerTypeProcess(type: string, callback: Function) {
 
     typeMap.get(type).push(callback)
 
+    return () => {
+
+        typeMap.get(type).splice(typeMap.get(type).indexOf(callback), 1)
+
+    }
+
 }
 
 const syncMap = new Map<string, Function>()
 
-export async function sendMainProcessMessage(type: string, data: any = null, options = { timeout: 10000 }) {
+export async function sendMainProcessMessage(type: string, data: any = null, options: any = { timeout: 10000 }) {
     const onlyID = new Date().getTime() + "#" + type + "@" + Math.random().toString(12)
 
     let timer

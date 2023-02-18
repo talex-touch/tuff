@@ -1,5 +1,7 @@
 <template>
   <div class="PluginInfo-Container">
+    <plugin-status :pluginName="plugin.pluginInfo.name" :status="status" />
+
     <div class="PluginInfo-Header">
       <div class="plugin-main">
         <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
@@ -26,14 +28,14 @@
           </p>
         </div>
 
-        <div class="plugin-action">
-          <el-radio-group v-model="pluginState">
-            <el-radio-button label="启用" />
-            <el-radio-button label="禁用" />
-            <el-radio-button label="卸载" />
-            <el-radio-button @click="reloadPlugin" label="重载" />
-          </el-radio-group>
-        </div>
+<!--        <div class="plugin-action">-->
+<!--          <el-radio-group v-model="pluginState">-->
+<!--            <el-radio-button label="启用" />-->
+<!--            <el-radio-button label="禁用" />-->
+<!--            <el-radio-button label="卸载" />-->
+<!--            <el-radio-button @click="reloadPlugin" label="重载" />-->
+<!--          </el-radio-group>-->
+<!--        </div>-->
 
       </div>
     </div>
@@ -91,17 +93,17 @@ export default {
 </script>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import ProfileAvatar from 'vue-profile-avatar'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import LogTerminal from '@comp/terminal/LogTerminal.vue'
 import { ElMessage } from 'element-plus'
 import IconButton from '@comp/button/IconButton.vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState, Facet } from '@codemirror/state'
 import { json } from '@codemirror/lang-json'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
-import { pluginManager } from '@modules/samples/node-api'
+import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
+import { registerTypeProcess } from '@modules/samples/node-api'
 
 const tabs = ref("overview")
 const props = defineProps({
@@ -111,20 +113,17 @@ const props = defineProps({
   }
 })
 
-async function reloadPlugin() {
-  console.log( await pluginManager.reloadPlugin(props.plugin.pluginInfo.name)
-      .then(() => {
-        ElMessage.success("重载成功")
-      })
-      .catch((e) => {
-        console.error(e)
-        ElMessage.error("重载失败")
-      }))
-}
+const _PluginStatus = [ 'DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED' ]
 
+const status = ref('DISABLED')
 const codeRef = ref()
 
+watchEffect(() => {
+  status.value = _PluginStatus[props.plugin._status]
+})
+
 onMounted(() => {
+
   const editor = new EditorView({
     parent: codeRef.value,
     state: EditorState.create({
@@ -188,7 +187,6 @@ const icons = [
 ]
 
 const rate = ref(0)
-const pluginState = ref("启用")
 
 </script>
 
@@ -197,7 +195,9 @@ const pluginState = ref("启用")
 .ConfigSource-Editor {
   :deep(.cm-editor) {
     .cm-gutters {
-      background-color: var(--el-fill-color-lighter) !important;
+      opacity: .75;
+      background: transparent;
+      //background-color: var(--el-fill-color-lighter) !important;
     }
     .cm-scroller {
       font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
@@ -414,6 +414,7 @@ const pluginState = ref("启用")
   flex-direction: column;
 
   height: 100%;
+  overflow: hidden;
   .PluginInfo-Header {
     position: relative;
     padding: 0 2%;
@@ -447,7 +448,7 @@ const pluginState = ref("启用")
       margin-bottom: 0;
     }
   }
-  padding: 5px 0;
+  padding-bottom: 5px;
 
   box-sizing: border-box;
 }

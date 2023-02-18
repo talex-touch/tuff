@@ -211,6 +211,7 @@ export default {
   //height: 3.5%;
   width: 3px;
 
+  opacity: 0;
   transition: all .25s;
   border-radius: 50px;
   background-color: var(--el-color-primary);

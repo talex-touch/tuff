@@ -169,6 +169,8 @@ export function registerTypeProcess(type: string, callback: Function) {
 
     typeMap.get(type).push(callback)
 
+  return () => typeMap.get(type).splice(typeMap.get(type).indexOf(callback), 1)
+
 }
 
 lstat(cwd()).then(async stats => {
@@ -182,23 +184,19 @@ class PluginManager {
   constructor() {
 
     registerTypeProcess('plugin-crashed', async ({ reply, data }) => {
-      
+
       console.log( data )
 
-      await forDialogMention( data.name, data.description, data.plugin.pluginInfo.icon, [
+      await forDialogMention( data.data.name, data.data.description, data.plugin.pluginInfo.icon, [
         {
-          content: "卸载插件",
+          content: "忽略加载",
           type: 'info',
-          onClick: async () => {
-
-            return this.disablePlugin(data.plugin.pluginInfo.name)
-
-          }
+          onClick: () => true
         },
         {
           content: "重启插件",
           type: 'warning',
-          onClick: async () => this.reloadPlugin(data.plugin.pluginInfo.name)
+          onClick: () => this.reloadPlugin(data.plugin.pluginInfo.name) && true
         }
       ] )
 
@@ -228,6 +226,9 @@ class PluginManager {
     return this._pluginAsync('disable', name)
   }
 
+  async getPluginStatus(name) {
+    return this._pluginAsync('status', name)
+  }
   getPluginList() {
     return postMainProcessMessage('plugin-list')
   }

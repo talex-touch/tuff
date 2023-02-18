@@ -1,13 +1,13 @@
 <template>
   <div class="Plugin-Container">
     <el-scrollbar>
-      <ul class="Plugin-List">
+      <ul class="Plugin-List" v-if="plugins">
         <plugin-item :select="select === index" :plugin="plugin"
                      @click="selectPlugin(index)" :key="plugin.pluginInfo.name" v-for="(plugin, index) in plugins" />
       </ul>
     </el-scrollbar>
 
-    <div class="Plugin-Info" ref="pluginInfoRef">
+    <div class="Plugin-Info" ref="pluginInfoRef" v-if="plugins">
       <PluginInfo v-if="plugins[select]" :plugin="plugins[select]" />
       <el-empty v-else description="暂未选中任何插件." />
     </div>
@@ -21,55 +21,68 @@ export default {
 </script>
 
 <script setup>
-import { pluginManager } from '@modules/samples/node-api'
-import { onMounted, reactive, ref } from 'vue'
+import { pluginManager, registerTypeProcess } from '@modules/samples/node-api'
+import { onMounted, reactive, ref, onBeforeUnmount } from 'vue'
 import PluginItem from '@comp/plugin/PluginItem.vue'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
+import { sleep } from '@modules/utils'
 
-const plugins = reactive({})
+const plugins = ref()
 const pluginInfoRef = ref()
 const select = ref()
 
 onMounted(() => {
-  const _plugins = pluginManager.getPluginList()
+  plugins.value = pluginManager.getPluginList()
 
-  console.log( plugins )
+  // Object.assign(plugins, _plugins)
 
-  Object.assign(plugins, _plugins)
+  const logout = registerTypeProcess('plugin-status-updated', ({ data }) => {
+
+    plugins.value[data.plugin]._status = data.status
+
+  })
+
+  onBeforeUnmount(logout)
 
 })
 
-function selectPlugin(index) {
+async function selectPlugin(index) {
   if( index === select.value ) return
   const style = pluginInfoRef.value.style
 
+  style.transform = 'scale(.9)'
+
+  await sleep(50)
+
   style.opacity = '0'
-  style.transform = 'scale(.8)'
 
   if ( index > select.value ) {
-    style.transform = 'scale(.8) translateY(-100%)'
-    setTimeout(() => {
-      style.transform = 'scale(.8) translateY(100%)'
-    }, 150)
+    style.transform = 'scale(.9) translateY(-50%)'
+
+    await sleep(100)
+
+    style.transform = 'scale(.9) translateY(50%)'
   } else {
-    style.transform = 'scale(.8) translateY(100%)'
-    setTimeout(() => {
-      style.transform = 'scale(.8) translateY(-100%)'
-    }, 150)
+    style.transform = 'scale(.9) translateY(50%)'
+
+    await sleep(100)
+
+    style.transform = 'scale(.9) translateY(-50%)'
   }
 
   select.value = index
+  style.opacity = '1'
 
-  setTimeout(() => {
-    style.transform = 'scale(1) translateY(0)'
-    style.opacity = '1'
-  }, 300)
+  await sleep(50)
+
+  style.transform = 'scale(1) translateY(0)'
+
 }
 </script>
 
 <style lang="scss" scoped>
 .Plugin-Container {
-  :deep(.el-scrollbar) {
+  & > :deep(.el-scrollbar) {
     position: relative;
     margin: 0;
     padding: 0;
