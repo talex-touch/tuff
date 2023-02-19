@@ -12,12 +12,15 @@
           <PaintCustom />
         </t-tab-item>
       </t-tab-item-group>
-      <t-tab-item-group name="存储">
-        <t-tab-item icon="folder-5" name="存储概览" disabled>GOOD,TOUCH</t-tab-item>
-        <t-tab-item icon="folder-5" name="插件占用" disabled>GOOD,TOUCH</t-tab-item>
-        <t-tab-item icon="folder-5" name="网络缓存" disabled></t-tab-item>
-      </t-tab-item-group>
+<!--      <t-tab-item-group v-if="!dev" name="存储">-->
+<!--        <t-tab-item icon="folder-5" name="存储概览" disabled>GOOD,TOUCH</t-tab-item>-->
+<!--        <t-tab-item icon="folder-5" name="插件占用" disabled>GOOD,TOUCH</t-tab-item>-->
+<!--        <t-tab-item icon="folder-5" name="网络缓存" disabled></t-tab-item>-->
+<!--      </t-tab-item-group>-->
       <t-tab-item-group name="其它">
+        <t-tab-item icon="share" name="也享">
+          <AlsoShare />
+        </t-tab-item>
         <t-tab-item :non-style="true" icon="node-tree" name="依赖树" disabled>GOOD,TOUCH</t-tab-item>
       </t-tab-item-group>
       <t-tab-item-group name="应用">
@@ -42,6 +45,7 @@ export default {
 </script>
 
 <script setup>
+import TTabs from '@comp/tabs/TTabs.vue'
 import TTabItem from '@comp/tabs/TTabItem.vue'
 import TTabItemGroup from '@comp/tabs/TTabItemGroup.vue'
 import TTabHeader from '@comp/tabs/TTabHeader.vue'
@@ -49,9 +53,15 @@ import PaintCustom from '~/views/settings/PaintCustom.vue'
 import ThemeStyle from '~/views/settings/ThemeStyle.vue'
 import HomeGear from '~/views/settings/HomeGear.vue'
 import AppSettings from '~/views/settings/AppSettings.vue'
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import AlsoShare from '~/views/settings/AlsoShare.vue'
 
+const dev = ref(false)
 const tabSelection = ref("应用设置")
+
+onMounted(() => {
+  dev.value = process.env.NODE_ENV === 'development'
+})
 </script>
 
 <style lang="scss" scoped>

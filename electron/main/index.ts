@@ -14,6 +14,7 @@ import { pluginManager } from '../plugins/plugin-manager'
 import { saveAllConfig } from '../storage'
 import installBaseProcessor from './base-processor'
 import BackgroundBlur from '../addon/background-blur'
+import DeviceBlueTooth from '../addon/device/blue-tooth'
 
 process.env.DIST = join(__dirname, '../..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : join(process.env.DIST, '../public')
@@ -97,6 +98,7 @@ async function createWindow() {
   }
 
   BackgroundBlur()
+  DeviceBlueTooth()
 }
 
 app.whenReady().then(createWindow)
@@ -131,7 +133,10 @@ app.on('before-quit', async (event) => {
 
       saveAllConfig()
 
-      app.quit()
+      console.log("All configs were saved!")
+
+      win?.close()
+      // app.quit()
 
     })
 

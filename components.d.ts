@@ -7,6 +7,7 @@ export {}
 
 declare module '@vue/runtime-core' {
   export interface GlobalComponents {
+    DeviceFigure: typeof import('./src/components/device/DeviceFigure.vue')['default']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElRate: typeof import('element-plus/es')['ElRate']
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']

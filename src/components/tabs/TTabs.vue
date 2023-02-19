@@ -79,6 +79,9 @@ export default {
     function getTabs() {
 
       function getTab(vnode) {
+
+        console.log( vnode )
+
         const tab = h(TTabItem, {
           active: () => activeNode.value?.props.name === vnode.props.name, ...vnode.props,
           onClick: () => {
@@ -158,9 +161,13 @@ export default {
 
 <style lang="scss" scoped>
 .el-scrollbar {
+  :deep(.el-scrollbar__view) {
+    height: 100%;
+  }
   //padding: 0 10px;
 
   width: 100%;
+  height: 100%;
 
   //box-sizing: border-box;
 }
@@ -170,10 +177,10 @@ export default {
   padding: 15px 10px 0 10px;
   //position: relative;
 
-  //height: 100%;
+  height: 100%;
   //width: 100%;
 
-  //box-sizing: border-box;
+  box-sizing: border-box;
 }
 
 .TTabs-SelectSlot {

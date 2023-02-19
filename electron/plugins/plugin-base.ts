@@ -454,8 +454,8 @@ export class Plugin {
 
             const window: BrowserWindow = that.window
 
-            window.once('closed', () => that.status = PluginStatus.DISABLED)
-            window.close()
+            window?.once('closed', () => that.status = PluginStatus.DISABLED)
+            window?.close()
 
             // callback() // delete
 

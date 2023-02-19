@@ -1,5 +1,5 @@
 <template>
-  <div class="PaintCustom-Container">
+  <div class="HomeGear-Container">
     <tv-tabs v-model="activeNodes">
       <tv-tab-item-group name="控制栏">
         <tv-tab-item icon="finder" name="MacOS">
@@ -50,7 +50,7 @@ function fakeFunc() {}
 </script>
 
 <style lang="scss" scoped>
-.PaintCustom-Container {
+.HomeGear-Container {
   position: relative;
 
   width: 100%;

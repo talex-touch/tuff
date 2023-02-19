@@ -112,6 +112,14 @@ export class PluginManager {
 
         })
 
+        registerPluginTypeProcess('update-title', ({ reply, data }) => {
+
+            this.win.setTitle(data.title)
+
+            reply("success")
+
+        })
+
     }
 
     fixActivePluginWindow() {
