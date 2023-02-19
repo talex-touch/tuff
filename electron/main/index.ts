@@ -14,7 +14,7 @@ import { pluginManager } from '../plugins/plugin-manager'
 import { saveAllConfig } from '../storage'
 import installBaseProcessor from './base-processor'
 import BackgroundBlur from '../addon/background-blur'
-import DeviceBlueTooth from '../addon/device/blue-tooth'
+// import DeviceBlueTooth from '../addon/device/blue-tooth'
 
 process.env.DIST = join(__dirname, '../..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : join(process.env.DIST, '../public')
@@ -98,7 +98,7 @@ async function createWindow() {
   }
 
   BackgroundBlur()
-  DeviceBlueTooth()
+  // DeviceBlueTooth()
 }
 
 app.whenReady().then(createWindow)
