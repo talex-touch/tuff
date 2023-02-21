@@ -1,0 +1,207 @@
+{
+  "app": {
+    "description": "An easily accessible all-in-one application"
+  },
+  "nav": {
+    "footer-tool": {
+      "open-devtool": "Open DevTools"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": {
+      "name": "Appearance",
+      "home-gear": {
+        "name": "Home Gear"
+      },
+      "paint-custom": {
+        "name": "Paint Custom",
+        "controller": "Controller",
+        "aside": {
+          "name": "Sidebar",
+          "leaf": "Light",
+          "plant": "Rich",
+          "blaze": "Effects"
+        },
+        "icon": {
+          "name": "Icon",
+          "exchange": "Follow plugin",
+          "remixicon": "Fixed icon"
+        },
+        "more": "More settings"
+      },
+      "theme-style": {
+        "name": "Theme Style",
+        "options": {
+          "name": "Personalized",
+          "description": "The image background blur may be affected by plugin changes.",
+          "personalized": {
+            "name": "Personalized",
+            "description": "Map a dark style to the entire application",
+            "dark": {
+              "description": "Enable the application dark mode.",
+              "auto": {
+                "name": "Auto",
+                "description": "Follow the system to switch dark mode."
+              }
+            },
+            "transparent-engine": {
+              "name": "Transparent engine",
+              "description": "Map the entire application to a blurry transparent style. Background blur is only supported on Windows."
+            }
+          },
+          "emphasis": {
+            "name": "Emphasis",
+            "description": "Different emphasis modes are suitable for different people. If the coloring is clear, it is not recommended to enable.",
+            "coloring": {
+              "name": "Main color coloring",
+              "description": "Color the main colors of the plugin window."
+            },
+            "contrast": {
+              "name": "High contrast",
+              "description": "Suitable for high-contrast mode of weak vision and light sensitivity."
+            }
+          },
+          "help": {
+            "name": "Theme help",
+            "description": "Find theme help on official Github Discussions."
+          }
+        }
+      },
+      "children": [
+        "Paint Custom"
+      ]
+    },
+    "application": {
+      "name": "Application",
+      "list-settings": {
+        "name": "Application Settings",
+        "account": {
+          "description": "Login and manage your touch account here",
+          "unavailable": "Account is currently unavailable"
+        },
+        "conventional": {
+          "name": "Conventional",
+          "description": "Application Conventional Settings",
+          "open-on-start": {
+            "name": "Open on start",
+            "description": "Open the application when the system starts"
+          },
+          "default-app": {
+            "name": "Default application",
+            "description": "Open related links with the application"
+          }
+        },
+        "language": {
+          "name": "Language",
+          "description": "Application language settings",
+          "select": {
+            "name": "Select an language",
+            "description": "Select an language to use"
+          },
+          "system": "System default",
+          "zh-cn": "Simplified Chinese",
+          "zh-tw": "Traditional Chinese",
+          "en-us": "English",
+          "ja-jp": "Japanese"
+        },
+        "develop": {
+          "name": "Develop",
+          "description": "Developer options",
+          "auto": {
+            "name": "Close with deactivation",
+            "description": "Close debugging tools when plugin window is deactivated"
+          }
+        },
+        "hot-key": {
+          "name": "Hot Keys",
+          "description": "Set functions for all registered key bindings",
+          "spawn-window": {
+            "name": "Summon window",
+            "description": "Summon the application main window"
+          },
+          "change-index": {
+            "name": "Switch homepage",
+            "description": "Automatically activate if window is not active"
+          },
+          "change-plugins": {
+            "name": "Switch plugins",
+            "description": "Automatically activate if window is not active"
+          },
+          "change-settings": {
+            "name": "Switch settings",
+            "description": "Automatically activate if window is not active"
+          }
+        },
+        "specifications": {
+          "name": "Application Specifications",
+          "time": "Start Cost",
+          "version": "Version",
+          "build": "Build",
+          "specifications": "Specifications",
+          "os": "OS",
+          "arch": "Architecture",
+          "platform": "Platform",
+          "experience": "Experience"
+        }
+      },
+      "tools": {
+        "name": "Advanced Tools"
+      }
+    },
+    "others": {
+      "name": "Others"
+    }
+  },
+  "base": {
+    "enable": "Enable",
+    "disable": "Disable",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "open": "Open",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "refresh": "Refresh",
+    "update": "Update",
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "download": "Download",
+    "status-close": "Closed",
+    "status-open": "Opened",
+    "global": "Global",
+    "account": "Account",
+    "none-account": "No bound account",
+    "add-account": "Add count",
+    "empty-select": "No selected.",
+    "qq": "QQ account"
+  },
+  "protocol": {
+    "service": "Service Agreement",
+    "privacy": "Privacy Policy",
+    "software": "Software License Agreement",
+  },
+  "version": {
+    "dev": "Development Version",
+    "beta": "Beta Version",
+    "stable": "Stable Version",
+    "latest": "Latest Version",
+    "snapshot": "Snapshot Version",
+    "official": "Official Version",
+    "current": "Current Version",
+    "latest-version": "Latest Version",
+    "current-version": "Current Version",
+    "update": "Update",
+    "update-available": "Update Available",
+    "update-not-available": "No Updates Available",
+    "update-checking": "Checking for Updates",
+    "update-checking-failed": "Update Check Failed",
+    "update-checking-failed-description": "Update check failed. Please check your network connection and try again.",
+    "update-checking-failed-description-2": "Update check failed. Please try again later.",
+    "update-checking-failed-description-3": "Update check failed. Please check your network connection.",
+    "update-checking-failed-description-4": "Update check failed."
+  }
+}

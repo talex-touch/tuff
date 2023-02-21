@@ -2,6 +2,7 @@
 import { h, reactive, ref } from 'vue'
 import TvTabItem from '@comp/tabs/vertical/TvTabItem.vue'
 import { ElScrollbar } from 'element-plus'
+import { $t } from '@modules/lang'
 
 const qualifiedName = ['TvTabItem', 'TvTabItemGroup']
 const activeNodes = reactive({})
@@ -76,7 +77,7 @@ export default {
           lastActive.value ? lastActive.value.children.default()
               : h('div', {
             class: 'TTabs-SelectSlot-Empty'
-          }, '请选择一个选项!')
+          }, $t('base.empty-select'))
       )
 
     }

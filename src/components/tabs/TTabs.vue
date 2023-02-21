@@ -4,6 +4,7 @@ import TTabItem from '@comp/tabs/TTabItem.vue'
 import { sleep } from '@modules/utils'
 import TTabHeader from '@comp/tabs/TTabHeader.vue'
 import { ElScrollbar } from 'element-plus'
+import { $t } from '@modules/lang'
 
 const qualifiedName = ['TTabItem', 'TTabItemGroup', 'TTabHeader']
 const activeNode = ref()
@@ -80,7 +81,7 @@ export default {
 
       function getTab(vnode) {
 
-        console.log( vnode )
+        // console.log( vnode )
 
         const tab = h(TTabItem, {
           active: () => activeNode.value?.props.name === vnode.props.name, ...vnode.props,
@@ -145,7 +146,7 @@ export default {
       return slotWrapper.value = h('div', { class: 'TTabs-SelectSlot animated' },
           activeNode.value ? getSlotContent(activeNode.value) : h('div', {
             class: 'TTabs-SelectSlot-Empty'
-          }, '请选择一个选项!')
+          }, $t('base.empty-select'))
       )
 
     }

@@ -2,6 +2,7 @@ import { registerTypeProcess } from './processor'
 import { getConfig, reloadConfig, saveConfig } from '../storage'
 
 import packageJson from './../../package.json'
+import { startTime } from './index'
 
 export default function install(app, mainWin) {
 
@@ -52,5 +53,7 @@ export default function install(app, mainWin) {
         } else reply(getConfig(action))
 
     })
+
+    registerTypeProcess('get-start-time', ({ reply }) => reply(startTime))
 
 }

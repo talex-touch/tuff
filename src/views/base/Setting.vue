@@ -1,14 +1,14 @@
 <template>
   <div class="Setting-Container">
     <t-tabs v-model="tabSelection">
-      <t-tab-item-group name="外观">
-        <t-tab-item icon="home-gear" name="启动页面">
+      <t-tab-item-group :name="$t('settings.appearance.name')">
+        <t-tab-item disabled icon="home-gear" :name="$t('settings.appearance.home-gear.name')">
           <HomeGear />
         </t-tab-item>
-        <t-tab-item icon="mark-pen" name="主题风格">
+        <t-tab-item icon="mark-pen" :name="$t('settings.appearance.theme-style.name')">
           <ThemeStyle />
         </t-tab-item>
-        <t-tab-item icon="paint" name="个性定制">
+        <t-tab-item icon="paint" :name="$t('settings.appearance.paint-custom.name')">
           <PaintCustom />
         </t-tab-item>
       </t-tab-item-group>
@@ -17,17 +17,17 @@
 <!--        <t-tab-item icon="folder-5" name="插件占用" disabled>GOOD,TOUCH</t-tab-item>-->
 <!--        <t-tab-item icon="folder-5" name="网络缓存" disabled></t-tab-item>-->
 <!--      </t-tab-item-group>-->
-      <t-tab-item-group name="其它">
+      <t-tab-item-group :name="$t('settings.others.name')">
         <t-tab-item icon="share" name="也享">
           <AlsoShare />
         </t-tab-item>
         <t-tab-item :non-style="true" icon="node-tree" name="依赖树" disabled>GOOD,TOUCH</t-tab-item>
       </t-tab-item-group>
-      <t-tab-item-group name="应用">
-        <t-tab-item icon="list-settings" name="应用设置">
+      <t-tab-item-group :name="$t('settings.application.name')">
+        <t-tab-item icon="list-settings" :name="$t('settings.application.list-settings.name')">
           <AppSettings />
         </t-tab-item>
-        <t-tab-item icon="tools" name="高级设置" disabled>HELLO, WORLD!</t-tab-item>
+        <t-tab-item icon="tools" :name="$t('settings.application.tools.name')" disabled>HELLO, WORLD!</t-tab-item>
       </t-tab-item-group>
       <t-tab-header>
         <template #default="{ node }">
@@ -55,6 +55,7 @@ import HomeGear from '~/views/settings/HomeGear.vue'
 import AppSettings from '~/views/settings/AppSettings.vue'
 import { onMounted, ref } from 'vue'
 import AlsoShare from '~/views/settings/AlsoShare.vue'
+import { $t } from '@modules/lang'
 
 const dev = ref(false)
 const tabSelection = ref("应用设置")

@@ -6,32 +6,28 @@
 
     <div class="NavBarInner-Main">
       <ul class="NavBar-Home" @click="changeActivePlugin('')">
-        <IconButton direct="/home" icon="home-3" display="popover"></IconButton>
-        <IconButton direct="/plugin" icon="plug-2" display="popover"></IconButton>
-        <IconButton icon="quill-pen" display="popover"></IconButton>
-        <IconButton direct="/setting" icon="settings-6" display="popover"></IconButton>
+        <IconButton direct="/home" icon="home-3" />
+        <IconButton direct="/plugin" icon="plug-2" />
+        <IconButton icon="quill-pen"></IconButton>
+        <IconButton direct="/setting" icon="settings-6"></IconButton>
       </ul>
 
-      <!--      <p class="NavBar-Title">-->
-      <!--        ADDON-->
-      <!--      </p>-->
-
       <ul class="NavBar-Programs fake-background">
-        <IconButton display="popover" :select="activePluginName === plugin.pluginInfo.name" @click="changeActivePlugin(plugin.pluginInfo.name)" v-for="plugin in plugins">
-          <template #icon>
+        <IconButton :select="activePluginName === plugin.pluginInfo.name" @click="changeActivePlugin(plugin.pluginInfo.name)" v-for="plugin in plugins">
+          <el-tooltip placement="right" :content="plugin.pluginInfo.name">
             <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
-          </template>
+          </el-tooltip>
         </IconButton>
-<!--        <IconButton icon="qq" display="popover"></IconButton>-->
-        <IconButton icon="device" display="popover"></IconButton>
-        <IconButton icon="add" display="popover"></IconButton>
+<!--        <IconButton icon="qq"></IconButton>-->
+<!--        <IconButton icon="device"></IconButton>-->
+        <IconButton direct="/market" icon="add"></IconButton>
       </ul>
     </div>
 
     <div class="NavBar-Logo">
       <div class="NavBar-Logo-Footer">
-        <el-tooltip content="打开调试工具">
-          <icon-button @click="openDevTools" small plain icon="code-s-slash" display="popover"></icon-button>
+        <el-tooltip :content="$t('nav.footer-tool.open-devtool')">
+          <icon-button @click="openDevTools" small plain icon="code-s-slash"></icon-button>
         </el-tooltip>
       </div>
       <img src="@assets/TalexTouchChat-Small.png" alt="logo">
@@ -59,10 +55,7 @@ export default {
 import { computed, onMounted, reactive, ref, shallowReactive, watch } from 'vue'
 import { pluginManager } from '@modules/samples/node-api'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
-import { forDialogMention } from '@modules/mention/dialog-mention'
-import { sleep } from '@modules/utils'
-
-import Logo from '@assets/TalexTouchChat-Small.png'
+import { $t } from '@modules/lang'
 
 const controller = shallowReactive({
   comp: null,
@@ -200,7 +193,7 @@ html.coloring .Blur-Container {
   display: flex;
 
   flex-direction: column;
-  justify-content: space-between;
+  //justify-content: space-between;
 
   height: calc(94% - 40px);
 
@@ -226,10 +219,11 @@ html.coloring .Blur-Container {
   display: flex;
   flex-direction: column;
 
-  justify-content: space-evenly;
+  //justify-content: space-evenly;
+  top: 20px;
 
   width: 100%;
-  height: 45%;
+  //height: 45%;
 
   box-sizing: border-box;
   border-radius: 8px;

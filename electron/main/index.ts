@@ -16,6 +16,7 @@ import installBaseProcessor from './base-processor'
 import BackgroundBlur from '../addon/background-blur'
 // import DeviceBlueTooth from '../addon/device/blue-tooth'
 
+export const startTime = new Date().getTime()
 process.env.DIST = join(__dirname, '../..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : join(process.env.DIST, '../public')
 
@@ -65,6 +66,12 @@ async function createWindow() {
 
   if (app.isPackaged) {
     win.loadFile(indexHtml)
+
+    if ( process.env.TALEX_DEV ) {
+
+      win.webContents.openDevTools({ mode: "undocked", activate: true })
+
+    }
   } else {
     win.loadURL(url)
     // Open devTool if the app is not packaged

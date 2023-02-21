@@ -70,7 +70,7 @@ export default {
           let height = 0
 
           slots.forEach((slot, index) => {
-            console.log( slot )
+
             if( slot.props?.hasOwnProperty('disabled') ) {
 
               slot.el.style.cursor = 'not-allowed'

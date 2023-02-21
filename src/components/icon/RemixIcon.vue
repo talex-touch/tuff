@@ -1,7 +1,4 @@
 <template>
-<!--  <svg class="remix">-->
-<!--    <use :xlink:href="`#remix-${name}`"></use>-->
-<!--  </svg>-->
   <i class="remix" :class="`ri-${name}-${style || 'line'}`"></i>
 </template>
 

@@ -12,6 +12,7 @@ import VWave from 'v-wave'
 
 import '@modules/theme-manager'
 
+window.$i18n = Lang
 window.$nodeApi = genBaseNodeApi()
 window.$storage = genStorageManager()
 
@@ -24,6 +25,7 @@ const app = createApp(App)
 
 app .mount('#app')
     .$nextTick(() => {
+        window['_initialTime'] = Date.now()
 
         postMessage({ payload: 'removeLoading' }, '*')
     })

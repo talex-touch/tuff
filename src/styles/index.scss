@@ -72,3 +72,10 @@ html.coloring {
   }
   position: relative; // make sure background adapt to parent
 }
+
+span.tag {
+  padding: 2px 4px;
+
+  border-radius: 4px;
+  background-color: var(--el-fill-color);
+}

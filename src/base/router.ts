@@ -36,6 +36,11 @@ const routes: any = [
         name: "设置",
         component: () => import("../views/base/Setting.vue")
     },
+    {
+        path: "/market",
+        name: "市场",
+        component: () => import("../views/base/Market.vue")
+    },
 ]
 
 const router = createRouter({

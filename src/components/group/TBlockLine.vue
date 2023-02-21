@@ -5,7 +5,9 @@
     </span>
 
     <div v-if="!link" class="TBlockLine-Description">
-      {{ description }}
+      <slot name="description">
+        {{ description }}
+      </slot>
     </div>
   </div>
 </template>
@@ -30,13 +32,15 @@ const props = defineProps(['title', 'description', 'link'])
       position: relative;
       padding: 2px 6px;
 
-      left: 25px;
+      left: 32px;
+
+      font-size: 13px;
 
       cursor: pointer;
       width: max-content;
       border-radius: 4px;
       text-indent: 0;
-      transform: scale(.9);
+      //transform: scale(.9);
     }
     display: flex;
     align-items: center;
@@ -58,7 +62,7 @@ const props = defineProps(['title', 'description', 'link'])
     left: 120px;
 
     opacity: .5;
-    font-size: 14px;
+    font-size: 13px;
   }
   position: relative;
   padding: 6px 18px 2px 18px;

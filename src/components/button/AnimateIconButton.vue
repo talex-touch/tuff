@@ -3,27 +3,32 @@
        :class="{ plain, small, select }"
        @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
     <div class="IconButton-Icon">
-      <slot :hover="hover" :select="select" :style="select || hover ? 'fill' : 'line'">
-        <remix-icon :name="icon" :style="select || hover ? 'fill' : 'line'" />
-      </slot>
+      <remix-animate-icon v-if="icon" :category="category" :from="from" :style="select || hover ? 'fill' : 'line'"  />
+      <slot v-else name="icon" :hover="hover" :select="select"></slot>
     </div>
+
   </div>
 </template>
 
 <script>
 export default {
-  name: "IconButton"
+  name: "AnimateIconButton"
 }
 </script>
 
 <script setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { ref, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import RemixAnimateIcon from '@comp/icon/RemixAnimateIcon.vue'
 
 const props = defineProps({
-  icon: {
-    type: String
+  category: {
+    type: String,
+    required: true
+  },
+  from: {
+    type: String,
+    required: true
   },
   direct: {
     type: String,
@@ -57,7 +62,6 @@ function handleClick() {
 </script>
 
 <style lang="scss" scoped>
-
 .IconButton-Container {
   &.plain {
     background-color: transparent;

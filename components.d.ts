@@ -7,6 +7,7 @@ export {}
 
 declare module '@vue/runtime-core' {
   export interface GlobalComponents {
+    AnimateIconButton: typeof import('./src/components/button/AnimateIconButton.vue')['default']
     DeviceFigure: typeof import('./src/components/device/DeviceFigure.vue')['default']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElRate: typeof import('element-plus/es')['ElRate']
@@ -26,6 +27,7 @@ declare module '@vue/runtime-core' {
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
     PluginItem: typeof import('./src/components/plugin/PluginItem.vue')['default']
     PluginStatus: typeof import('./src/components/plugin/action/PluginStatus.vue')['default']
+    RemixAnimateIcon: typeof import('./src/components/icon/RemixAnimateIcon.vue')['default']
     RemixIcon: typeof import('./src/components/icon/RemixIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

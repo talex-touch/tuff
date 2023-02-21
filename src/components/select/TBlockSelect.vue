@@ -104,17 +104,17 @@ watch(() => value, () => emits('change', value))
       > h3 {
         margin: 0;
 
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 500;
       }
 
       > p {
         margin: 0;
 
-        font-size: 14px;
+        font-size: 12px;
         font-weight: 400;
 
-        opacity: .85;
+        opacity: .5;
       }
     }
   }

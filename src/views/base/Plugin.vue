@@ -9,7 +9,7 @@
 
     <div class="Plugin-Info" ref="pluginInfoRef" v-if="plugins">
       <PluginInfo v-if="plugins[select]" :plugin="plugins[select]" />
-      <el-empty v-else description="暂未选中任何插件." />
+      <el-empty v-else :description="$t('base.empty-select')" />
     </div>
   </div>
 </template>
@@ -26,6 +26,7 @@ import { onMounted, reactive, ref, onBeforeUnmount } from 'vue'
 import PluginItem from '@comp/plugin/PluginItem.vue'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import { sleep } from '@modules/utils'
+import { $t } from '@modules/lang'
 
 const plugins = ref()
 const pluginInfoRef = ref()

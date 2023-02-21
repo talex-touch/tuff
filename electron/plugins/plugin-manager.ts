@@ -23,6 +23,9 @@ export class PluginManager {
 
         this.pluginsPath = path.join(touchPath, 'plugins')
 
+        if ( !fse.existsSync(this.pluginsPath) )
+            fse.mkdirSync(this.pluginsPath)
+
     }
 
     async initial(win: BrowserWindow) {

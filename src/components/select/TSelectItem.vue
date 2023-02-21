@@ -1,5 +1,5 @@
 <template>
-  <div class="TSelectItem-Container">
+  <div class="TSelectItem-Container" :class="{ ignore }">
     <slot />
   </div>
 </template>
@@ -11,6 +11,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+
 .TSelectItem-Container {
   &:hover {
     background-color: var(--el-fill-color-darker);

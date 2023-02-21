@@ -8,7 +8,7 @@
       </div>
     </div>
     <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
-      <span>{{ value ? '开' : '关' }}</span>
+      <span style="transition: .2s" ref="mention"></span>
 <!--      样式同步透明 不额外设定disabled-->
       <t-switch v-model="value" />
     </div>
@@ -27,8 +27,9 @@ export default {
 <script setup>
 import TSwitch from '@comp/switch/TSwitch.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { useModelWrapper } from '@modules/utils'
-import { watch } from 'vue'
+import { sleep, useModelWrapper } from '@modules/utils'
+import { nextTick, ref, watch } from 'vue'
+import { $t } from '@modules/lang'
 
 const props = defineProps({
   title: {
@@ -58,9 +59,42 @@ const props = defineProps({
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
+const mention = ref()
 const value = useModelWrapper(props, emits)
 
-watch(() => value, () => emits('change', value))
+watch(() => value.value, (v) => {
+  emits('change', value)
+
+  refresh(v)
+
+}, { immediate: true })
+
+watch(() => value.value ? $t('base.status-open') : $t('base.status-close'), (v) => refresh(v))
+
+function refresh(v) {
+  nextTick(async () => {
+    const _text = v ? $t('base.status-open') : $t('base.status-close')
+
+    const el = mention.value
+
+    Object.assign(el.style, {
+      opacity: 0,
+      transform: 'translateX(5px)'
+    })
+
+    await sleep(200)
+
+    el.innerHTML = _text
+
+    Object.assign(el.style, {
+      opacity: 1,
+      transform: 'translateX(0)'
+    })
+
+    await sleep(200)
+
+  })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -111,17 +145,17 @@ watch(() => value, () => emits('change', value))
       > h3 {
         margin: 0;
 
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 500;
       }
 
       > p {
         margin: 0;
 
-        font-size: 14px;
+        font-size: 12px;
         font-weight: 400;
 
-        opacity: .85;
+        opacity: .5;
       }
     }
   }

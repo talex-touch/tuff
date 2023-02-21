@@ -1,4 +1,5 @@
 import { reactive, watch } from 'vue'
+import { languages } from '@modules/lang'
 
 export class StorageManager {
 
@@ -42,9 +43,16 @@ export class StorageManager {
         })
         watch(this.appSetting, async () => {
 
+            if ( this.appSetting['lang']['followSystem'] )
+                // @ts-ignore
+                window.$i18n.global.locale.value = languages[navigator.language.toLowerCase()]
+            else
+                // @ts-ignore
+                window.$i18n.global.locale.value = languages[this.appSetting['lang']['locale']]['key']
+
             await this._save('app-setting.ini', this.appSetting)
 
-        }, { deep: true })
+        }, { immediate: true, deep: true })
 
         this.themeStyle = reactive(window.$nodeApi.getConfig('theme-style.ini'))
         if( !this.themeStyle.hasOwnProperty('dark') ) this.themeStyle = reactive({

@@ -294,6 +294,9 @@ export class BaseNodeApi {
     return this._appSync('get-package')
   }
 
+  getStartTime() {
+    return postMainProcessMessage('get-start-time')
+  }
   async getPath(name: string) {
     return (await this._app('get-path', { name }))['data']
   }

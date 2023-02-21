@@ -1,10 +1,16 @@
 import fse from 'fs-extra'
 import path from 'path'
 import { touchPath } from '../main/processor'
+import { win } from '../main/index'
 
 const basePath = path.resolve(touchPath, 'config')
 
 if( !fse.existsSync(basePath) ) fse.mkdirSync(basePath)
+
+if( fse.existsSync(path.resolve(basePath, 'dev.talex')) ) {
+    console.log("[Config] Dev mode enabled")
+    process.env.TALEX_DEV = "true"
+}
 
 const configs = {}
 

@@ -16,7 +16,7 @@
         <text x="0" y="70%"> TalexTouch </text>
       </svg>
 
-      <p>一款触手可及的全应用</p>
+      <p>{{ $t('app.description') }}</p>
     </div>
 
     <ul class="Home-Footer">
@@ -47,6 +47,8 @@ export default {
 </script>
 
 <script setup>
+import { $t } from '@modules/lang'
+
 const packageJson = window.$nodeApi.getPackageJSON()
 
 </script>

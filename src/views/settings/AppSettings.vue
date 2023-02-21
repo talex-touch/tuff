@@ -23,7 +23,7 @@
             'alpha': packageJson.version.indexOf('alpha') !== -1,
            }">{{ packageJson.version }}</span>
 
-          <p>一款触手可及的全应用</p>
+          <p>{{ $t('app.description') }}</p>
         </div>
 
         <ul class="About-Footer">
@@ -44,94 +44,99 @@
 
     </div>
 
-    <t-group-block name="账号" icon="account-box" description="在这里登录并管理你的touch账号">
-      <t-block-switch title="暂无账号" icon="account-circle" disabled description="账号目前不可用" />
+    <t-group-block :name="$t('base.account')" icon="account-box" :description="$t('settings.application.list-settings.account.description')">
+      <t-block-switch :title="$t('base.none-account')" icon="account-circle" disabled :description="$t('settings.application.list-settings.account.unavailable')" />
     </t-group-block>
 
-    <t-group-block name="常规" icon="global" description="应用常规设置">
-      <t-block-switch disabled v-model="options.autoStart" title="开机启动" icon="exchange" description="当电脑运行时自动启动软件" />
-      <t-block-select disabled v-model="options.defaultApp" title="默认应用" icon="command" description="当运行相关软件时关联启动">
-        <t-select-item>关闭</t-select-item>
-        <t-select-item>全局</t-select-item>
+    <t-group-block :name="$t('settings.application.list-settings.conventional.name')" icon="global" :description="$t('settings.application.list-settings.conventional.description')">
+      <t-block-switch disabled v-model="options.autoStart" :title="$t('settings.application.list-settings.conventional.open-on-start.name')" icon="exchange" :description="$t('settings.application.list-settings.conventional.open-on-start.description')" />
+      <t-block-select disabled v-model="options.defaultApp" :title="$t('settings.application.list-settings.conventional.default-app.name')" icon="command" :description="$t('settings.application.list-settings.conventional.default-app.description')">
+        <t-select-item>{{ $t('base.close') }}</t-select-item>
+        <t-select-item>{{ $t('base.global') }}</t-select-item>
         <t-select-item>跟随插件</t-select-item>
         <t-select-item>跟随配置</t-select-item>
       </t-block-select>
 
     </t-group-block>
 
-    <t-group-block name="语言" icon="earth" description="应用语言设置">
-      <t-block-switch v-model="options.lang.followSystem" title="跟随系统" icon="exchange" description="语言自动跟随系统切换" />
-      <t-block-select :disabled="options.lang?.followSystem" v-model="options.lang.locale" title="选择语言" icon="goblet" description="当前应用语言">
-        <t-select-item>简体中文</t-select-item>
-        <t-select-item disabled>繁体中文</t-select-item>
-        <t-select-item disabled>English</t-select-item>
-        <t-select-item disabled>日本語</t-select-item>
+    <t-group-block :name="$t('settings.application.list-settings.language.name')" icon="earth" :description="$t('settings.application.list-settings.language.description')">
+      <t-block-switch v-model="options.lang.followSystem" :title="$t('settings.application.list-settings.language.system')" icon="exchange" :description="$t('settings.application.list-settings.language.description')" />
+      <t-block-select :disabled="options.lang?.followSystem" v-model="options.lang.locale" :title="$t('settings.application.list-settings.language.select.name')" icon="goblet" :description="$t('settings.application.list-settings.language.select.description')">
+        <t-select-item v-for="lang in languages">{{ lang.name }}</t-select-item>
       </t-block-select>
 
     </t-group-block>
 
-    <t-group-block name="开发" icon="code-s-slash" description="开发状态时相应的设置">
-      <t-block-switch v-model="options.dev.autoCloseDev" title="跟随关闭" icon="exchange" description="插件窗口取消激活时随带关闭调试工具" />
+    <t-group-block :name="$t('settings.application.list-settings.develop.name')" icon="code-s-slash" :description="$t('settings.application.list-settings.develop.description')">
+      <t-block-switch v-model="options.dev.autoCloseDev" :title="$t('settings.application.list-settings.develop.auto.name')" icon="exchange" :description="$t('settings.application.list-settings.develop.auto.description')" />
 
     </t-group-block>
 
-    <t-group-block name="热键" icon="keyboard" description="所有注册的按键绑定功能设置">
-      <t-block-select v-model="options.keyBind.summon" title="召唤窗口" icon="space-ship" description="召唤应用主窗口" >
+    <t-group-block :name="$t('settings.application.list-settings.hot-key.name')" icon="keyboard" :description="$t('settings.application.list-settings.hot-key.description')">
+      <t-block-select v-model="options.keyBind.summon" :title="$t('settings.application.list-settings.hot-key.spawn-window.name')" icon="space-ship" :description="$t('settings.application.list-settings.hot-key.spawn-window.description')" >
         <t-select-item>Ctrl + Space</t-select-item>
         <t-select-item disabled>自定义</t-select-item>
       </t-block-select>
 
-      <t-block-select v-model="options.keyBind.home" title="切换为主页" icon="home-3" description="如果窗口未激活将自动激活" >
+      <t-block-select v-model="options.keyBind.home" :title="$t('settings.application.list-settings.hot-key.change-index.name')" icon="home-3" :description="$t('settings.application.list-settings.hot-key.change-index.description')" >
         <t-select-item>Alt + Home</t-select-item>
         <t-select-item disabled>自定义</t-select-item>
       </t-block-select>
 
-      <t-block-select v-model="options.keyBind.plugins" title="切换为插件" icon="plug-2" description="如果窗口未激活将自动激活" >
+      <t-block-select v-model="options.keyBind.plugins" :title="$t('settings.application.list-settings.hot-key.change-plugins.name')" icon="plug-2" :description="$t('settings.application.list-settings.hot-key.change-plugins.description')" >
         <t-select-item>Alt + P</t-select-item>
         <t-select-item disabled>自定义</t-select-item>
       </t-block-select>
 
-      <t-block-select v-model="options.keyBind.settings" title="切换为设置" icon="settings-6" description="如果窗口未激活将自动激活" >
+      <t-block-select v-model="options.keyBind.settings" :title="$t('settings.application.list-settings.hot-key.change-settings.name')" icon="settings-6" :description="$t('settings.application.list-settings.hot-key.change-settings.description')" >
         <t-select-item>Alt + S</t-select-item>
         <t-select-item disabled>自定义</t-select-item>
       </t-block-select>
     </t-group-block>
 
-    <t-group-block name="共享" icon="share-box" description="跨设备数据共享">
-      <t-group-block :shrink="true"  name="插件同步" icon="plug-2" description="插件跨设备同步">
-        <t-block-select v-model="options.plugin.sync" title="插件同步" icon="plug-2" description="同步插件数据">
-          <t-select-item>永不同步</t-select-item>
-          <t-select-item>黑名单模式</t-select-item>
-          <t-select-item>白名单模式</t-select-item>
-        </t-block-select>
-        <t-block-switch title="保持最新" icon="refresh" v-model="options.plugin.syncLatest" description="保持各个设备插件均为最新" />
-        <t-block-switch title="数据同步" icon="refresh" v-model="options.plugin.dataSync" description="若相关插件未适配，不同设备间数据可能会冲突" />
-      </t-group-block>
-      <t-group-block :shrink="true" name="剪贴板同步" icon="clipboard" description="剪贴板跨设备同步">
-        <t-block-select v-model="options.plugin.sync" title="剪贴板同步" icon="clipboard" description="同步剪贴板数据">
-          <t-select-item>永不同步</t-select-item>
-          <t-select-item>黑名单模式</t-select-item>
-          <t-select-item>白名单模式</t-select-item>
-        </t-block-select>
-        <t-block-switch title="自动转换" icon="refresh" v-model="options.plugin.syncLatest" description="自动转换剪贴板数据以适配不同设备" />
-      </t-group-block>
-      
-      <t-block-switch title="隐私" icon="shield" guidance description="获取数据保护和隐私保护的有关信息" />
-
-    </t-group-block>
-
-    <t-group-block name="应用规格 (Touch)" icon="apps">
-      <t-block-line title="版本" :description="versionStr"></t-block-line>
-      <t-block-line title="规格" description="23H2"></t-block-line>
+    <t-group-block :name="`${$t('settings.application.list-settings.specifications.name')} (Touch)`" icon="apps">
+      <t-block-line :title="$t('settings.application.list-settings.specifications.version')" :description="versionStr"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H2 T5"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.time')">
+        <template #description>
+          {{ startCosts }}s
+          <span class="tag" style="color: var(--el-color-success)" v-if="startCosts < 0.1">
+            完美
+          </span>
+          <span class="tag" style="color: var(--el-color-warning)" v-else-if="startCosts < 0.5">
+            启动较慢
+          </span>
+          <span class="tag" style="color: var(--el-color-error)" v-else-if="startCosts < 1">
+            启动缓慢
+          </span>
+          <span class="tag" style="color: var(--el-color-error); font-weight: 600" v-else>
+            启动滞后
+          </span>
+        </template>
+      </t-block-line>
       <t-block-line title="Electron" :description="p.versions?.electron"></t-block-line>
       <t-block-line title="V8-Engine" :description="p.versions?.v8"></t-block-line>
-      <t-block-line title="操作系统" :description="os.version()"></t-block-line>
-      <t-block-line title="操作平台" :description="`${p.platform} (${os.arch()})`"></t-block-line>
-      <t-block-line title="体验" description="Touch Feature Experience Pack 2023.02.18"></t-block-line>
-      <t-block-line title="TalexTouch 服务协议" :link="true"></t-block-line>
-      <t-block-line title="TalexTouch 软件许可条款" :link="true"></t-block-line>
-
+      <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="os.version()"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${p.platform} (${os.arch()})`"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.02.21"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
+        <template #description>
+          <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
+          </span>
+        </template>
+      </t-block-line>
+<!--      <t-block-line :title="$t('settings.application.list-settings.specifications.gpu-usage')" description="Touch Feature Experience Pack 2023.02.21"></t-block-line>-->
+      <t-block-line :title="$t('settings.application.list-settings.specifications.memory-usage')">
+        <template #description>
+          <span :data-text="`${Math.round((memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-primary);--percent: ${(memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 100}%`">
+          </span>
+        </template>
+      </t-block-line>
+      <t-block-line :title="`TalexTouch ${$t('protocol.service')}`" :link="true"></t-block-line>
+      <t-block-line :title="`TalexTouch ${$t('protocol.software')}`" :link="true"></t-block-line>
     </t-group-block>
+
+    <div style="height: .1px" class="temp-placeholder" />
   </div>
 </template>
 
@@ -148,8 +153,11 @@ export default {
 </script>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { $t, languages } from '@modules/lang'
 import os from 'os'
+import TBlockLine from '@comp/group/TBlockLine.vue'
+import { useCPUUsage, useMemoryUsage } from '@modules/hooks/os-hooks'
 
 const p = ref({})
 const dev = ref(false)
@@ -158,16 +166,61 @@ const packageJson = window.$nodeApi.getPackageJSON()
 
 const options = window.$storage.appSetting
 
-const versionStr = computed(() => `TalexTouch ${dev.value ? '开发版' : '正式版'} ${packageJson.version}`)
+const versionStr = computed(() => `TalexTouch ${dev.value ? $t('version.dev') : 'version.official'} ${packageJson.version}`)
+const startCosts = ref('')
+
+const cpuUsage = useCPUUsage()
+const memoryUsage = useMemoryUsage()
 
 onMounted(() => {
   p.value = process
   dev.value = process.env.NODE_ENV === 'development'
-  // console.log( process.env.NODE_ENV === 'development' )
+
+  startCosts.value = (window['_initialTime'] - window.$nodeApi.getStartTime()) / 1000
+
+})
+
+onBeforeUnmount(() => {
+  cpuUsage[1]()
+  memoryUsage[1]()
 })
 </script>
 
 <style lang="scss" scoped>
+.Usage {
+  &:before {
+    content: "";
+    position: absolute;
+
+    left: 0;
+    top: 0;
+
+    width: var(--percent, 100%);
+    max-width: 100%;
+    height: 100%;
+
+    background-color: var(--color, var(--el-color-info));
+    border-radius: 2px;
+    transition: 1s linear;
+  }
+  &:after {
+    content: attr(data-text);
+    position: absolute;
+
+    left: 80%;
+  }
+  position: relative;
+  display: inline-block;
+
+  //margin-left: 32px;
+
+  width: 120px;
+  height: 20px;
+
+  border-radius: 4px;
+  border: 1px solid var(--el-border-color);
+}
+
 .AboutApplication {
   .About-Content {
     .About-Footer {
