@@ -61,12 +61,12 @@ const forClose = ref(async () => {
 
   style.transform = 'translate(-50%, -50%) scale(1.15)'
 
-  await sleep(150)
+  await sleep(100)
 
   style.transform = 'translate(-50%, -50%) scale(.35)'
   style.opacity = '0'
 
-  await sleep(300)
+  await sleep(200)
 
   props.close()
 
@@ -217,13 +217,13 @@ export default {
   align-items: center;
   justify-content: center;
 
-  top: 70px;
+  top: 60px;
 
   width: 80%;
   height: calc(100% - 130px);
 
   opacity: 0;
-  animation: slideIn .35s 1s forwards linear;
+  animation: slideIn .25s 1s forwards linear;
 }
 
 .TDialogTip-Container {
@@ -247,7 +247,7 @@ export default {
     position: absolute;
     margin: 0;
 
-    top: 30px;
+    top: 10px;
 
     width: max-content;
     height: 32px;
@@ -257,7 +257,7 @@ export default {
     font-size: 18px;
     font-weight: bold;
     opacity: 0;
-    animation: slideIn .35s 1s forwards linear;
+    animation: slideIn .25s 1s forwards linear;
   }
   .TDialogTip-Btn {
     position: absolute;
@@ -279,7 +279,7 @@ export default {
     cursor: pointer;
     user-select: none;
     opacity: 0;
-    animation: slideIn .35s 1.15s forwards linear;
+    animation: slideIn .25s 1.1s forwards linear;
     .TDialogTip-Btn-Item {
 
       padding: 0 24px;
@@ -293,7 +293,7 @@ export default {
   top: 50%;
 
   min-width: 380px;
-  min-height: 220px;
+  min-height: 240px;
   line-height: 30px;
 
   color: var(--theme-color, var(--el-text-color-primary));

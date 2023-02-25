@@ -375,21 +375,21 @@ export class Plugin {
             writable: false
         })
 
-        this.window.webContents.on('did-fail-load', (e) => {
-            this.status = PluginStatus.CRASHED
-            console.log("[WARN] [Plugin] Plugin page load failed!")
-            console.error(e)
-
-            this.window.loadURL('about:blank')
-            sendMainProcessMessage('plugin-crashed', {
-                plugin: this,//: plugin.pluginInfo.name,
-                data: {
-                    name: "无法正常加载插件",
-                    description: `${ e.message } \n 请检查插件是否正确编写!`
-                }
-            }).then(r => console.log("done", r)).catch(e => console.log(e))
-            // this.window.webContents.reload()
-        })
+        // this.window.webContents.on('did-fail-load', (e) => {
+        //     this.status = PluginStatus.CRASHED
+        //     console.log("[WARN] [Plugin] Plugin page load failed!")
+        //     console.error(e)
+        //
+        //     this.window.loadURL('about:blank')
+        //     sendMainProcessMessage('plugin-crashed', {
+        //         plugin: this,//: plugin.pluginInfo.name,
+        //         data: {
+        //             name: "插件加载失败",
+        //             description: `${ e } \n 请检查插件是否正确编写!`
+        //         }
+        //     }).then(r => console.log("done", r)).catch(e => console.log(e))
+        //     // this.window.webContents.reload()
+        // })
 
         // TODO unable to load notification （error）
         this.window.webContents.loadURL(this.__index(fileP)).then(() => {
@@ -415,6 +415,7 @@ export class Plugin {
         }).catch(e => {
 
             this.status = PluginStatus.CRASHED
+            console.log("[WARN] [Plugin] Plugin page load failed!")
             // this.disablePlugin(plugin.pluginInfo.name)
 
             sendMainProcessMessage('plugin-crashed', {

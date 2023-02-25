@@ -163,7 +163,7 @@ export default {
 <style lang="scss" scoped>
 .el-scrollbar {
   :deep(.el-scrollbar__view) {
-    height: 100%;
+    min-height: 100%;
   }
   //padding: 0 10px;
 

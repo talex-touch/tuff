@@ -136,7 +136,6 @@
       <t-block-line :title="`TalexTouch ${$t('protocol.software')}`" :link="true"></t-block-line>
     </t-group-block>
 
-    <div style="height: .1px" class="temp-placeholder" />
   </div>
 </template>
 

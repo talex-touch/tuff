@@ -34,6 +34,7 @@ declare module '@vue/runtime-core' {
     TBlockLine: typeof import('./src/components/group/TBlockLine.vue')['default']
     TBlockSelect: typeof import('./src/components/select/TBlockSelect.vue')['default']
     TBlockSwitch: typeof import('./src/components/switch/TBlockSwitch.vue')['default']
+    TBottomDialog: typeof import('./src/components/dialog/TBottomDialog.vue')['default']
     TDialogMention: typeof import('./src/components/dialog/TDialogMention.vue')['default']
     TGroupBlock: typeof import('./src/components/group/TGroupBlock.vue')['default']
     TSelect: typeof import('./src/components/select/TSelect.vue')['default']

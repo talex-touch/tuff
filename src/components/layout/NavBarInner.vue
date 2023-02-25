@@ -56,6 +56,7 @@ import { computed, onMounted, reactive, ref, shallowReactive, watch } from 'vue'
 import { pluginManager } from '@modules/samples/node-api'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import { $t } from '@modules/lang'
+import { forApplyMention } from '@modules/mention/dialog-mention'
 
 const controller = shallowReactive({
   comp: null,
@@ -91,6 +92,32 @@ onMounted(async () => {
     deep: true,
     immediate: true
   })
+
+  await forApplyMention( "权限申请", "touch-music 请求获取您的 Touch账号", [
+    {
+      content: "同意",
+      onClick: async () => {
+        console.log( "同意" )
+        return true
+      }
+    },
+    {
+      content: "拒绝",
+      time: 18,
+      onClick: async () => {
+        console.log( "拒绝" )
+        return true
+      }
+    },
+    {
+      content: "仅在使用中允许",
+      type: 'info',
+      onClick: async () => {
+        console.log( "仅在使用中允许" )
+        return true
+      }
+    }
+  ] )
 })
 
 

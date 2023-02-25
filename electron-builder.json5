@@ -25,6 +25,7 @@
     "artifactName": "${productName}_${version}.${ext}"
   },
   "nsis": {
+    "guild": "com.talex.touch",
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
