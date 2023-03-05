@@ -5,23 +5,8 @@
     </ul>
 
     <div class="NavBarInner-Main">
-      <ul class="NavBar-Home" @click="changeActivePlugin('')">
-        <IconButton direct="/home" icon="home-3" />
-        <IconButton direct="/plugin" icon="plug-2" />
-        <IconButton icon="quill-pen"></IconButton>
-        <IconButton direct="/setting" icon="settings-6"></IconButton>
-      </ul>
-
-      <ul class="NavBar-Programs fake-background">
-        <IconButton :select="activePluginName === plugin.pluginInfo.name" @click="changeActivePlugin(plugin.pluginInfo.name)" v-for="plugin in plugins">
-          <el-tooltip placement="right" :content="plugin.pluginInfo.name">
-            <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
-          </el-tooltip>
-        </IconButton>
-<!--        <IconButton icon="qq"></IconButton>-->
-<!--        <IconButton icon="device"></IconButton>-->
-        <IconButton direct="/market" icon="add"></IconButton>
-      </ul>
+      <component v-model="activePluginName" v-if="navbar.comp" :is="navbar.comp" />
+<!--      <LeafNavBar v-model="activePluginName" />-->
     </div>
 
     <div class="NavBar-Logo">
@@ -57,6 +42,7 @@ import { pluginManager } from '@modules/samples/node-api'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import { $t } from '@modules/lang'
 import { forApplyMention } from '@modules/mention/dialog-mention'
+import LeafNavBar from '@comp/customize/navbar/LeafNavBar.vue'
 
 const controller = shallowReactive({
   comp: null,
@@ -66,15 +52,16 @@ const controller = shallowReactive({
   }
 })
 
-const plugins = computed(() => Object.values(pluginManager.getPluginList()))
-
-const activePluginName = ref("")
+const navbar = shallowReactive({
+  comp: null,
+  list: {
+    '轻盈': () => import('@comp/customize/navbar/LeafNavBar.vue'),
+    '丰富': () => import('@comp/customize/navbar/PlantNavBar.vue')
+  }
+})
 
 const options = window.$storage.themeStyle
-
-function changeActivePlugin(name) {
-  pluginManager.changeActivePlugin(activePluginName.value = (activePluginName.value === name ? "" : name))
-}
+const activePluginName = ref("")
 
 async function loadModule(module) {
   const m = module instanceof Function ? await module() : await module
@@ -87,39 +74,14 @@ onMounted(async () => {
   watch(config, async () => {
 
     controller.comp = await loadModule(controller.list[config[1]] || controller.list.MacOS)
+    navbar.comp = await loadModule(navbar.list[config[2]] || navbar.list.轻盈())
 
   }, {
     deep: true,
     immediate: true
   })
 
-  await forApplyMention( "权限申请", "touch-music 请求获取您的 Touch账号", [
-    {
-      content: "同意",
-      onClick: async () => {
-        console.log( "同意" )
-        return true
-      }
-    },
-    {
-      content: "拒绝",
-      time: 18,
-      onClick: async () => {
-        console.log( "拒绝" )
-        return true
-      }
-    },
-    {
-      content: "仅在使用中允许",
-      type: 'info',
-      onClick: async () => {
-        console.log( "仅在使用中允许" )
-        return true
-      }
-    }
-  ] )
 })
-
 
 function openDevTools() {
   window.$nodeApi.openDevTools()
@@ -180,87 +142,20 @@ html.blur .Blur-Container {
 html.coloring .Blur-Container {
   top: 2px;
 
-  height: calc(100% - 4px);
-  width: calc(100% - 72px);
+  height: calc(100% - 8px);
+  width: calc(100% - 68px);
 }
 
 .NavBarInner-Main {
-  ul {
-    * {
-      //position: relative;
-      //display: inline;
-      ////padding: 10px 0;
-      //
-      //float: left;
-      //
-      //left: 0;
-      //
-      //height: 20px;
-      //width: 100%;
-      //
-      //list-style: none;
-      //
-      //cursor: pointer;
-      //transition: all 0.2s ease-in-out;
-      //
-      //overflow: hidden;
-      -webkit-app-region: no-drag;
-      //&:hover {
-      //  background-color: var(--el-fill-color-light);
-      //}
-    }
-    position: relative;
-    padding: 0;
-    margin: 0;
-
-    width: 100%;
-  }
   position: relative;
   padding: 10px 0;
   display: flex;
 
   flex-direction: column;
-  //justify-content: space-between;
 
   height: calc(94% - 40px);
 
   box-sizing: border-box;
-}
-
-.NavBar-Home {
-  position: relative;
-  padding: 10px 0;
-  display: flex;
-  flex-direction: column;
-
-  justify-content: space-between;
-
-  width: 100%;
-  height: 50%;
-
-  box-sizing: border-box;
-}
-
-.NavBar-Programs {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-
-  //justify-content: space-evenly;
-  top: 20px;
-
-  width: 100%;
-  //height: 45%;
-
-  box-sizing: border-box;
-  border-radius: 8px;
-  --fake-color: var(--el-fill-color-light);
-  --fake-radius: 8px;
-  --fake-opacity: .35;
-
-  :deep(.IconButton-Container) {
-    transform: scale(.75);
-  }
 }
 
 .NavBar-Logo {
@@ -308,8 +203,6 @@ html.coloring .Blur-Container {
 
   min-width: 400px;
   min-height: 400px;
-
-  //width: 105%;
 
   bottom: 10px;
 

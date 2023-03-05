@@ -104,11 +104,11 @@ export default {
     position: absolute;
     padding: 2px 6px;
 
-    top: -18px;
+    top: -15px;
     left: 10px;
 
     border-radius: 4px;
-    background-color: var(--el-fill-color-lighter);
+    //background-color: var(--el-fill-color-lighter);
   }
   & :last-child {
     margin-right: 0;
@@ -124,7 +124,13 @@ export default {
   height: 100%;
 
   border-radius: 8px;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.25));
   border: 2px solid var(--el-border-color);
+  //background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+  //background-repeat: no-repeat;
+  //background-size: 6px 6px;
+  //-webkit-mask: linear-gradient(0, rgba(255, 255, 255, 0.1) 100%, rgba(255, 255, 255, 0) 100%);
+  //-webkit-mask-size: 6px 6px;
   box-sizing: border-box;
 
 }

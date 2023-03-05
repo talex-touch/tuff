@@ -1,9 +1,8 @@
 <template>
   <div ref="wholeDom" class="TBottomDialog-Container">
-    <p class="dialog-title">{{ title }}</p>
-    <div class="dialog-content">
-      {{ message }}
-    </div>
+    <p v-text="title" class="dialog-title" />
+    <div class="dialog-content" v-text="message" />
+
     <div class="dialog-btns">
       <span v-for="(btn, index) in btnArray" :key="index" v-wave
             @click="clickBtn(btn)" :class="{ 'info-tip': btn.value?.type === 'info',
@@ -45,7 +44,7 @@ const forClose = ref(async () => {
 
   const style = wholeDom.value?.style
 
-  style.transform = 'translate(-50%, -50%) scale(.8) translateY(100%)'
+  style.transform = 'translate(-50%, 0) scale(.8) translateY(100%)'
 
   await sleep(100)
 
@@ -234,14 +233,14 @@ onMounted(() => {
 }
 
 @keyframes enter {
-    0% {
-        opacity: 0;
-        transform: scale(.8) translateX(-50%) translateY(100%);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1) translateX(-50%) translateY(0);
-    }
+  0% {
+    opacity: 0;
+    transform: scale(.8) translateX(-50%) translateY(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(-50%) translateY(0);
+  }
 }
 
 .success-tip {

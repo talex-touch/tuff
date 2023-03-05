@@ -1,10 +1,12 @@
-import { registerTypeProcess } from './processor'
+import packageJson from './../../../package.json'
+import { regChannel } from '../../utils/channel-util'
+import { ProcessorVars } from '../initializer'
 import { getConfig, reloadConfig, saveConfig } from '../storage'
+import { win as mainWin } from '../../main/index'
 
-import packageJson from './../../package.json'
-import { startTime } from './index'
+import { app } from 'electron'
 
-export default function install(app, mainWin) {
+export default function install() {
 
     const typeMap = {
         'close': () => {
@@ -26,7 +28,7 @@ export default function install(app, mainWin) {
         }
     }
 
-    registerTypeProcess('main-window', ({ reply, data }) => {
+    regChannel('main-window', ({ reply, data }) => {
         const action = data.action
         if( !action ) return reply("No action")
 
@@ -34,7 +36,7 @@ export default function install(app, mainWin) {
 
     })
 
-    registerTypeProcess('app-action', ({ reply, data }) => {
+    regChannel('app-action', ({ reply, data }) => {
         const action = data.action
         if( !action ) return reply("No action")
 
@@ -42,7 +44,7 @@ export default function install(app, mainWin) {
 
     })
 
-    registerTypeProcess('app-storage', ({ reply, data }) => {
+    regChannel('app-storage', ({ reply, data }) => {
         const action = data.action
         if( !action ) return reply("No action")
 
@@ -54,6 +56,6 @@ export default function install(app, mainWin) {
 
     })
 
-    registerTypeProcess('get-start-time', ({ reply }) => reply(startTime))
+    regChannel('get-start-time', ({ reply }) => reply(ProcessorVars.startTime))
 
 }

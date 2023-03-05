@@ -1,32 +1,5 @@
 import { ipcMain } from 'electron'
-
-import { win } from './index'
-import process from 'process'
-import path from 'path'
-import fse from 'fs-extra'
-
-export const rootPath = process.cwd()
-export const touchPath = path.join(rootPath, 'talex-touch')
-
-export async function sleep(time: number) {
-    return new Promise(resolve => setTimeout(() => resolve(time), time))
-}
-
-export async function checkDirWithCreate(url) {
-
-    const p = path.join(rootPath, url)
-
-    if( !fse.existsSync(p) ) {
-
-        return fse.mkdirSync(p)
-
-    }
-
-    return true
-
-}
-
-checkDirWithCreate('talex-touch').then(() => {})
+import { win } from '../main'
 
 ipcMain.on('@plugin-process-message', (e, arg) => {
     const header = arg.header
@@ -117,19 +90,19 @@ ipcMain.on('@main-process-message', (e, arg) => {
                 if( sync ) {
 
                     e.sender.send('@main-process-message', {
-                            status: 'reply',
-                            timeStamp: new Date().getTime(),
-                            header: {
-                                type: {
-                                    _: mainType,
-                                    sync
-                                },
-                                options
+                        status: 'reply',
+                        timeStamp: new Date().getTime(),
+                        header: {
+                            type: {
+                                _: mainType,
+                                sync
                             },
-                            data: {
-                                _: data,
-                            }
-                        })
+                            options
+                        },
+                        data: {
+                            _: data,
+                        }
+                    })
 
                 } else {
 
@@ -165,7 +138,7 @@ ipcMain.on('@main-process-message', (e, arg) => {
 const pluginTypeMap = new Map()
 const typeMap = new Map()
 
-export function registerPluginTypeProcess(type: string, callback: Function) {
+export function regPluginChannel(type: string, callback: Function) {
 
     if ( !pluginTypeMap.has(type) ) {
         pluginTypeMap.set(type, [])
@@ -175,7 +148,7 @@ export function registerPluginTypeProcess(type: string, callback: Function) {
 
 }
 
-export function registerTypeProcess(type: string, callback: Function) {
+export function regChannel(type: string, callback: Function) {
 
     if ( !typeMap.has(type) ) {
         typeMap.set(type, [])
@@ -193,7 +166,7 @@ export function registerTypeProcess(type: string, callback: Function) {
 
 const syncMap = new Map<string, Function>()
 
-export async function sendMainProcessMessage(type: string, data: any = null, options: any = { timeout: 10000 }) {
+export async function sendMainChannelMsg(type: string, data: any = null, options: any = { timeout: 10000 }) {
     const onlyID = new Date().getTime() + "#" + type + "@" + Math.random().toString(12)
 
     let timer

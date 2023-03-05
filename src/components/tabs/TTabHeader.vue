@@ -26,7 +26,7 @@ const props = defineProps(['node'])
 
     left: 0;
 
-    background-color: var(--el-fill-color-lighter);
+    background-color: var(--el-fill-color-light);
   }
   z-index: 1;
   position: sticky;

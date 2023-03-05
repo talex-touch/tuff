@@ -1,13 +1,13 @@
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
-import path from 'path'
-import { registerPluginTypeProcess, registerTypeProcess, sendMainProcessMessage, touchPath } from '../main/processor'
+import _path from 'path'
 import { getConfig } from '../storage'
 import { Plugin, PluginInfo, PluginStatus } from './plugin-base'
+import { win as mainWin } from '../../main'
+import { regChannel, regPluginChannel, sendMainChannelMsg } from '../../utils/channel-util'
 
 export class PluginManager {
 
-    win
     #plugins = {}
 
     pluginsPath
@@ -19,48 +19,29 @@ export class PluginManager {
         return this.#plugins
     }
 
-    constructor() {
+    async initial( _p: string) {
 
-        this.pluginsPath = path.join(touchPath, 'plugins')
+        this.pluginsPath = _p //_path.join(ProcessorVars.touchPath, 'plugins')
 
-        if ( !fse.existsSync(this.pluginsPath) )
-            fse.mkdirSync(this.pluginsPath)
+        mainWin.on('move', this.fixActivePluginWindow.bind(this))
+        mainWin.on('focus', this.fixActivePluginWindow.bind(this))
+        
+        this._listenerInitial()
 
-    }
-
-    async initial(win: BrowserWindow) {
-
-        this.win = win
-
-        this.win.on('move', this.fixActivePluginWindow.bind(this))
-
-        this.win.on('focus', this.fixActivePluginWindow.bind(this))
+        this.changeActivePlugin("")
 
         const fileLists = fse.readdirSync(this.pluginsPath)
 
         fileLists.forEach(file => this.loadPlugin(file))
 
-        this._listenerInitial()
-
-        this.changeActivePlugin("")
-
     }
 
     _listenerInitial() {
 
-        registerTypeProcess('plugin-list', ({ reply }) => {
+        regChannel('plugin-list', ({ reply }) => reply(this.#plugins))
+        regChannel('change-active-plugin', ({ reply, data }) => reply(this.changeActivePlugin(data)))
 
-            reply(this.#plugins)
-
-        })
-
-        registerTypeProcess('change-active-plugin', ({ reply, data }) => {
-
-            reply(this.changeActivePlugin(data))
-
-        })
-
-        registerTypeProcess('plugin-action', async ({ reply, data }) => {
+        regChannel('plugin-action', async ({ reply, data }) => {
 
             const { action, pluginName } = data
             if ( !action ) return reply('no action')
@@ -83,11 +64,19 @@ export class PluginManager {
 
                 reply(await this.#plugins[pluginName])
 
+            } else if ( action === 'fullscreen' ) {
+
+                const plugin: Plugin = this.#plugins[pluginName]
+                if ( !plugin ) return reply('no plugin')
+
+                console.log("FullScreen: " + pluginName)
+                plugin.window.setFullScreen(true/*!plugin.window.isFullScreen()*/)
+
             }
 
         })
 
-        registerPluginTypeProcess('process-declare', ({ reply, plugin, data }) => {
+        regPluginChannel('process-declare', ({ reply, plugin, data }) => {
             const plug = this.#plugins[plugin]
             if ( !plug ) return
 
@@ -96,18 +85,18 @@ export class PluginManager {
             console.log(`[Plugin] [ChildProcess-Declare] ${ plugin } <-- ${ data }`)
         })
 
-        registerPluginTypeProcess('crash', async ({ reply, data, plugin }) => {
+        regPluginChannel('crash', async ({ reply, data, plugin }) => {
 
             this.changeActivePlugin("")
 
-            await sendMainProcessMessage('plugin-crashed', {
+            await sendMainChannelMsg('plugin-crashed', {
                 plugin: this.#plugins[plugin],
                 ...data
             })
 
         })
 
-        registerPluginTypeProcess('get-config', ({ reply, data }) => {
+        regPluginChannel('get-config', ({ reply, data }) => {
 
             // TODO permission dialog (application)
 
@@ -115,11 +104,25 @@ export class PluginManager {
 
         })
 
-        registerPluginTypeProcess('update-title', ({ reply, data }) => {
+        regPluginChannel('update-title', ({ reply, data }) => {
 
-            this.win.setTitle(data.title)
+            mainWin.setTitle(data.title)
 
             reply("success")
+
+        })
+
+        regPluginChannel('apply-for', async ({ reply, data, plugin }) => {
+
+            console.log("[Plugin] [Apply-For] " + plugin + " <-- " + data.action)
+
+            reply( await sendMainChannelMsg('plugin-apply-for', {
+                ...data,
+                args: [
+                    plugin,
+                    data.action,
+                ]
+            }) )
 
         })
 
@@ -132,7 +135,7 @@ export class PluginManager {
         const activePlugin = this.activePlugin
         if ( !activePlugin || !activePlugin.window ) return
 
-        const [ x, y ] = this.win.getPosition()
+        const [ x, y ] = mainWin.getPosition()
 
         activePlugin.window.setPosition(x + 70, y)
 
@@ -140,8 +143,6 @@ export class PluginManager {
 
     /* for "" to hide */
     changeActivePlugin(pluginName): string {
-
-        // if ( !window ) return
 
         if ( pluginName?.length ) {
 
@@ -156,8 +157,6 @@ export class PluginManager {
 
             if ( !plugin.window ) return "plugin window none created"
 
-            // if ( !plugin.window.isDestroyed() ) return "plugin window destroyed"
-
             if ( plugin.status !== PluginStatus.ENABLED ) return "plugin not enabled"
 
             const window = plugin.window
@@ -166,12 +165,12 @@ export class PluginManager {
 
             const themeStyle = getConfig('theme-style.ini')
 
-            plugin.insertCSS()
+            plugin.__injectStyles()
 
-            plugin.injectJavaScript()
+            plugin.__injectJs()
 
             window.webContents.executeJavaScript(`
-                
+
                 global.$config = {
                     themeStyle: ${ JSON.stringify(themeStyle) }
                 }
@@ -220,9 +219,9 @@ export class PluginManager {
 
     }
     loadPlugin(name) {
-        const fileP = path.join(this.pluginsPath, name)
+        const fileP = _path.join(this.pluginsPath, name)
 
-        const fileInfo = fse.readFileSync(path.join(fileP, 'init.json'))
+        const fileInfo = fse.readFileSync(_path.join(fileP, 'init.json'))
 
         // TODO init config validation
         const plugin = new Plugin(new PluginInfo(JSON.parse(fileInfo.toString()), fileP), fileInfo.toString())
@@ -248,9 +247,9 @@ export class PluginManager {
         const plugin: Plugin = this.#plugins[name]
         if ( !plugin ) throw new Error('Unknown plugin: ' + name + " | " + JSON.stringify(this.#plugins))
 
-        const fileP = path.join(this.pluginsPath, name)
+        const fileP = _path.join(this.pluginsPath, name)
 
-        plugin._enabled(this.win, fileP);
+        plugin._enabled(mainWin, fileP);
 
         // this.activePlugin = plugin
 

@@ -18,6 +18,7 @@
       "@modules/*": ["./src/modules/*"],
       "@styles/*": ["./src/styles/*"]
     },
+    "types": [ "vite/client" ],
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
   },

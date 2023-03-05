@@ -1,5 +1,5 @@
-import { win } from './../../main/index'
-import { registerTypeProcess } from '../../main/processor'
+import { regChannel } from '../../utils/channel-util'
+import { ProcessorVars } from '../initializer'
 
 export default () => {
 
@@ -7,13 +7,13 @@ export default () => {
 
     }
 
-    registerTypeProcess('bluetooth', ({ data , reply }) => {
+    regChannel('bluetooth', ({ data , reply }) => {
 
         reply(actions[data.type]?.(data))
 
     })
 
-    win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
+    ProcessorVars.mainWin.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
         event.preventDefault()
         console.log( event, deviceList )
 

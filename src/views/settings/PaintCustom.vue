@@ -1,4 +1,4 @@
-<template>
+<template xmlns="">
   <div class="PaintCustom-Container">
     <tv-tabs v-model="activeNodes">
       <tv-tab-item-group :name="$t('settings.appearance.paint-custom.controller')">
@@ -10,8 +10,12 @@
         </tv-tab-item>
       </tv-tab-item-group>
       <tv-tab-item-group :name="$t('settings.appearance.paint-custom.aside.name')">
-        <tv-tab-item icon="leaf" :name="$t('settings.appearance.paint-custom.aside.leaf')">GOOD,TOUCH</tv-tab-item>
-        <tv-tab-item icon="plant" :name="$t('settings.appearance.paint-custom.aside.plant')" disabled>GOOD,TOUCH</tv-tab-item>
+        <tv-tab-item icon="leaf" :name="$t('settings.appearance.paint-custom.aside.leaf')">
+          <LeafNavBar />
+        </tv-tab-item>
+        <tv-tab-item icon="plant" :name="$t('settings.appearance.paint-custom.aside.plant')">
+          <PlantNavBar />
+        </tv-tab-item>
         <tv-tab-item icon="blaze" :name="$t('settings.appearance.paint-custom.aside.blaze')" disabled></tv-tab-item>
       </tv-tab-item-group>
       <tv-tab-item-group :name="$t('settings.appearance.paint-custom.icon.name')">
@@ -37,6 +41,8 @@ import { reactive, ref, unref, watch } from 'vue'
 import MacOSController from '@comp/customize/controller/MacOSController.vue'
 import WindowsController from '@comp/customize/controller/WindowsController.vue'
 import { $t } from '@modules/lang'
+import LeafNavBar from '@comp/customize/navbar/LeafNavBar.vue'
+import PlantNavBar from '@comp/customize/navbar/PlantNavBar.vue'
 
 const activeNodes = ref(window.$storage.paintCustom)
 

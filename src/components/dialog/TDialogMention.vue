@@ -1,12 +1,8 @@
 <template>
   <div class="TDialogTip-Wrapper">
-    <div class="TDialogTip-Container" ref="wholeDom"
-         :class="{ 'info-tip': type === 'info',
-        'warn-tip': type === 'warning',
-        'error-tip': type === 'error',
-        'success-tip': type === 'success', 'loading-tip': loading }">
+    <div class="TDialogTip-Container" ref="wholeDom" :class="{ 'loading-tip': loading }">
       <div class="TDialogTip-Main-Wrapper">
-        <h1>{{ title }}</h1>
+        <h1 v-text="title"></h1>
         <span class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
 
         <div class="TDialogTip-Loading-Wrapper">

@@ -1,10 +1,10 @@
 <template>
   <div @click="handleClick" @mouseenter="hover = true"
-       :class="{ plain, small, select }"
+       :class="{ plain, small, select: _select }"
        @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
     <div class="IconButton-Icon">
-      <slot :hover="hover" :select="select" :style="select || hover ? 'fill' : 'line'">
-        <remix-icon :name="icon" :style="select || hover ? 'fill' : 'line'" />
+      <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
+        <remix-icon :name="icon" :style="_select || hover ? 'fill' : 'line'" />
       </slot>
     </div>
   </div>
@@ -44,11 +44,11 @@ const router = useRouter()
 const route = useRoute()
 
 const hover = ref(false)
-const select = ref(false)
+const _select = ref(false)
 
 watchEffect(() => {
-  if (props.direct) select.value = (route.path === props.direct)
-  if ( props.hasOwnProperty('select') ) select.value = props.select
+  if (props.direct) _select.value = (route.path === props.direct)
+  if ( props.hasOwnProperty('select') ) _select.value = props.select
 })
 
 function handleClick() {

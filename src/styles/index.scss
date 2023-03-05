@@ -22,10 +22,11 @@ html.coloring {
     top: 1px;
     left: 1px;
 
-    width: calc(100% - 2px);
-    height: calc(100% - 2px);
+    width: calc(100% - 4px);
+    height: calc(100% - 4px);
 
     border: 1px solid transparent;
+    border-radius: 8px;
     transition: border .25s;
     &:hover {
       border: 1px solid var(--el-color-primary);

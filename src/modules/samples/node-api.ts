@@ -1,8 +1,10 @@
 import { lstat } from 'fs/promises'
 import { cwd } from 'process'
-import { ipcRenderer } from 'electron'
+// import { ipcRenderer } from 'electron'
 import { forDialogMention } from '@modules/mention/dialog-mention'
-import Logo from '@assets/TalexTouchChat-Small.png'
+
+// @ts-ignore
+const { ipcRenderer } = require('electron')
 
 ipcRenderer.on('@main-process-message', (_event, arg) => {
 
@@ -224,6 +226,10 @@ class PluginManager {
 
   async disablePlugin(name) {
     return this._pluginAsync('disable', name)
+  }
+
+  async fullScreenPlugin(name) {
+    return this._pluginAsync('fullscreen', name)
   }
 
   async getPluginStatus(name) {

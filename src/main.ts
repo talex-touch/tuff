@@ -1,13 +1,12 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-// import './samples/node-api'
 
 import router from './base/router'
 import { genBaseNodeApi } from '@modules/samples/node-api'
 import { genStorageManager } from '@modules/storage'
 import ElementPlus from '@modules/element-plus'
 import Lang from '@modules/lang'
-
+import '@modules/samples/plugin-process'
 import VWave from 'v-wave'
 
 import '@modules/theme-manager'
@@ -21,7 +20,7 @@ const app = createApp(App)
     .use(ElementPlus)
     .use(Lang)
     // .use(ModuleManager)
-    .use(VWave)
+    // .use(VWave)
 
 app .mount('#app')
     .$nextTick(() => {
