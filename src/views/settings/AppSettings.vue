@@ -96,7 +96,7 @@
 
     <t-group-block :name="`${$t('settings.application.list-settings.specifications.name')} (Touch)`" icon="apps">
       <t-block-line :title="$t('settings.application.list-settings.specifications.version')" :description="versionStr"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H2 T5"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H3 T5"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.time')">
         <template #description>
           {{ startCosts }}s
@@ -116,9 +116,9 @@
       </t-block-line>
       <t-block-line title="Electron" :description="p.versions?.electron"></t-block-line>
       <t-block-line title="V8-Engine" :description="p.versions?.v8"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="os.version()"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${p.platform} (${os.arch()})`"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.02.21"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="os.version"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${p.platform} (${os.arch})`"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.03.12"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
         <template #description>
           <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
@@ -154,9 +154,11 @@ export default {
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { $t, languages } from '@modules/lang'
-import os from 'os'
 import TBlockLine from '@comp/group/TBlockLine.vue'
-import { useCPUUsage, useMemoryUsage } from '@modules/hooks/os-hooks'
+import { useCPUUsage, useMemoryUsage, useOS } from '@modules/hooks/os-hooks'
+import RemixIcon from '@comp/icon/RemixIcon.vue'
+
+const os = useOS()
 
 const p = ref({})
 const dev = ref(false)
@@ -175,7 +177,7 @@ onMounted(() => {
   p.value = process
   dev.value = process.env.NODE_ENV === 'development'
 
-  startCosts.value = (window['_initialTime'] - window.$nodeApi.getStartTime()) / 1000
+  startCosts.value = (window['_doneTimeDiff'] ?? 0) / 1000 //(window['_initialTime'] - window.$nodeApi.getStartTime()) / 1000
 
 })
 

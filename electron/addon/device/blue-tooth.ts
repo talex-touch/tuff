@@ -1,5 +1,6 @@
 import { regChannel } from '../../utils/channel-util'
 import { ProcessorVars } from '../initializer'
+import { win } from '../../main'
 
 export default () => {
 
@@ -13,7 +14,7 @@ export default () => {
 
     })
 
-    ProcessorVars.mainWin.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
+    win.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
         event.preventDefault()
         console.log( event, deviceList )
 

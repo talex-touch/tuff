@@ -57,7 +57,10 @@ async function createWindow() {
       // Consider using contextBridge.exposeInMainWorld
       // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
       nodeIntegration: true,
+      nodeIntegrationInSubFrames: true,
       contextIsolation: false,
+      sandbox: false,
+      webviewTag: true,
     },
   })
 
@@ -72,6 +75,12 @@ async function createWindow() {
     })
   }
 
+  const ts = new Date()
+
+  win.webContents.addListener('did-finish-load', () => {
+    win.webContents.executeJavaScript(`window._doneTimeDiff = ${new Date().getTime() - ts.getTime()}`)
+  })
+
   // Test actively push message to the Electron-Renderer
   // win.webContents.on('did-finish-load', () => {
   //   win?.webContents.send('@main-process-message', new Date().toLocaleString())
@@ -79,7 +88,7 @@ async function createWindow() {
 
   // Make all links open with the browser, not with the application
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https:')) shell.openExternal(url)
+    if ( !app.isPackaged || url.startsWith('https:') ) shell.openExternal(url)
     return { action: 'deny' }
   })
 

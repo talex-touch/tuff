@@ -48,9 +48,12 @@ export default () => {
             }
 
         })
+
+        updateWallPaperPos()
     }
 
-    refreshWallPaper()
+    // refreshWallPaper()
+    win.webContents.addListener('dom-ready', refreshWallPaper)
 
     function updateWallPaperPos() {
 
@@ -72,7 +75,5 @@ export default () => {
     }
 
     win.on('move', updateWallPaperPos)
-
-    updateWallPaperPos()
 
 }

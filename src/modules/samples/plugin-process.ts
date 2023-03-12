@@ -13,6 +13,8 @@ const actions = {
 
                     await pluginManager.fullScreenPlugin(plugin)
                     // await sendMainProcessMessage('full-screen-plugin', plugin)
+
+                    return true
                 }
             },
             {
@@ -21,6 +23,8 @@ const actions = {
                 time: 18,
                 onClick: async () => {
                     reply(false)
+
+                    return true
                 }
             }
         ] )

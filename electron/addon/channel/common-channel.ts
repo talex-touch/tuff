@@ -5,6 +5,7 @@ import { getConfig, reloadConfig, saveConfig } from '../storage'
 import { win as mainWin } from '../../main/index'
 
 import { app } from 'electron'
+import os from 'os'
 
 export default function install() {
 
@@ -58,4 +59,22 @@ export default function install() {
 
     regChannel('get-start-time', ({ reply }) => reply(ProcessorVars.startTime))
 
+    regChannel('get-os', ({ reply }) => reply({
+        arch: os.arch(),
+        cpus: os.cpus(),
+        endianness: os.endianness(),
+        freemem: os.freemem(),
+        homedir: os.homedir(),
+        hostname: os.hostname(),
+        loadavg: os.loadavg(),
+        networkInterfaces: os.networkInterfaces(),
+        platform: os.platform(),
+        release: os.release(),
+        tmpdir: os.tmpdir(),
+        totalmem: os.totalmem(),
+        type: os.type(),
+        uptime: os.uptime(),
+        userInfo: os.userInfo(),
+        version: os.version()
+    }))
 }

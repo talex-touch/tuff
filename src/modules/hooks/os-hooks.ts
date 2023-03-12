@@ -1,4 +1,11 @@
-import { ref, watch } from 'vue'
+// @ts-ignore
+import process from 'process'
+import { ref } from 'vue'
+import { postMainProcessMessage } from '@modules/samples/node-api'
+
+export function useOS() {
+    return postMainProcessMessage('get-os')
+}
 
 export function useCPUUsage() {
     const value = ref(process.getCPUUsage())

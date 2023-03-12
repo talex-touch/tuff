@@ -1,6 +1,7 @@
+// @ts-ignore
 import { lstat } from 'fs/promises'
+// @ts-ignore
 import { cwd } from 'process'
-// import { ipcRenderer } from 'electron'
 import { forDialogMention } from '@modules/mention/dialog-mention'
 
 // @ts-ignore
@@ -239,8 +240,8 @@ class PluginManager {
     return postMainProcessMessage('plugin-list')
   }
 
-  changeActivePlugin(name: string) {
-    return postMainProcessMessage('change-active-plugin', name)
+  changeActivePlugin(name: string = "") {
+    return postMainProcessMessage('change-active', name)
   }
 
 }

@@ -62,7 +62,7 @@ export async function forApplyMention(title: String, message: String, btns: Bott
 
     root.id = 'touch-bottom-dialog-tip-' + index;
 
-    root.style.zIndex = `${10000 + index}`
+    // root.children[0].style.zIndex = `${10000 + index}`
 
     const app = createApp(TBottomDialog, {
         message, index, title, btns,

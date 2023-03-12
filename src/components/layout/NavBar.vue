@@ -34,6 +34,10 @@ export default {
 
 .NavBar-Wrapper {
   .NavBar-Container {
+    .fullscreen & {
+      width: 0;
+      opacity: 0;
+    }
     z-index: 1;
     position: relative;
 
@@ -43,8 +47,12 @@ export default {
     --fake-radius: 0;
     -webkit-app-region: drag;
     --fake-color: var(--el-fill-color-lighter);
+    transition: .25s;
   }
   .NavBar-View {
+    .fullscreen & {
+      width: 100%;
+    }
     z-index: 0;
     position: relative;
     //padding: 10px;
@@ -55,6 +63,7 @@ export default {
     box-sizing: border-box;
     --fake-radius: 0;
     --fake-color: var(--el-fill-color-lighter);
+    transition: .25s;
   }
   position: relative;
   display: flex;

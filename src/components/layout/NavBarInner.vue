@@ -5,12 +5,15 @@
     </ul>
 
     <div class="NavBarInner-Main">
-      <component v-model="activePluginName" v-if="navbar.comp" :is="navbar.comp" />
+      <component v-model="activePlugin" v-if="navbar.comp" :is="navbar.comp" />
 <!--      <LeafNavBar v-model="activePluginName" />-->
     </div>
 
     <div class="NavBar-Logo">
+      <LottieFrame />
+
       <div class="NavBar-Logo-Footer">
+        {{ activePlugin }}
         <el-tooltip :content="$t('nav.footer-tool.open-devtool')">
           <icon-button @click="openDevTools" small plain icon="code-s-slash"></icon-button>
         </el-tooltip>
@@ -19,8 +22,8 @@
     </div>
 
     <teleport to="body">
-      <div class="Blur-Container" :class="{ blur: options.blur, display: activePluginName.length }">
-
+      <div class="Blur-Container" :class="{ blur: options.blur, display: activePlugin?.length }">
+        <PluginView />
       </div>
     </teleport>
   </div>
@@ -37,12 +40,14 @@ export default {
 </script>
 
 <script setup>
-import { computed, onMounted, reactive, ref, shallowReactive, watch } from 'vue'
-import { pluginManager } from '@modules/samples/node-api'
-import PluginIcon from '@comp/plugin/PluginIcon.vue'
+import { onMounted, ref, shallowReactive, watch } from 'vue'
 import { $t } from '@modules/lang'
-import { forApplyMention } from '@modules/mention/dialog-mention'
-import LeafNavBar from '@comp/customize/navbar/LeafNavBar.vue'
+import PluginView from '@comp/plugin/PluginView.vue'
+import { pluginManager } from '@modules/samples/node-api'
+import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
+
+const activePlugin = ref("")
+watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val))
 
 const controller = shallowReactive({
   comp: null,
@@ -61,7 +66,6 @@ const navbar = shallowReactive({
 })
 
 const options = window.$storage.themeStyle
-const activePluginName = ref("")
 
 async function loadModule(module) {
   const m = module instanceof Function ? await module() : await module
@@ -146,6 +150,14 @@ html.coloring .Blur-Container {
   width: calc(100% - 68px);
 }
 
+html.fullscreen .Blur-Container {
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+}
+
 .NavBarInner-Main {
   position: relative;
   padding: 10px 0;
@@ -196,7 +208,7 @@ html.coloring .Blur-Container {
     width: 32px;
 
   }
-  z-index: 1;
+  z-index: 10000;
   position: absolute;
 
   left: calc(10% + 5px);

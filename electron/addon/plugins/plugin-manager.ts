@@ -3,8 +3,9 @@ import fse from 'fs-extra'
 import _path from 'path'
 import { getConfig } from '../storage'
 import { Plugin, PluginInfo, PluginStatus } from './plugin-base'
-import { win as mainWin } from '../../main'
+import { win, win as mainWin } from '../../main'
 import { regChannel, regPluginChannel, sendMainChannelMsg } from '../../utils/channel-util'
+import { injectWebView } from '../../utils/plugin-injection'
 
 export class PluginManager {
 
@@ -12,8 +13,7 @@ export class PluginManager {
 
     pluginsPath
 
-    activePlugin: Plugin
-    active = false
+    active: string | null = null
 
     get plugins() {
         return this.#plugins
@@ -22,13 +22,8 @@ export class PluginManager {
     async initial( _p: string) {
 
         this.pluginsPath = _p //_path.join(ProcessorVars.touchPath, 'plugins')
-
-        mainWin.on('move', this.fixActivePluginWindow.bind(this))
-        mainWin.on('focus', this.fixActivePluginWindow.bind(this))
         
         this._listenerInitial()
-
-        this.changeActivePlugin("")
 
         const fileLists = fse.readdirSync(this.pluginsPath)
 
@@ -36,10 +31,43 @@ export class PluginManager {
 
     }
 
+    changeActivePlugin(name) {
+
+        if ( this.active ) {
+
+            const plugin: Plugin = this.#plugins[this.active]
+
+            if ( plugin ) {
+
+                plugin.status = PluginStatus.ENABLED
+
+            }
+
+        }
+
+        if ( name ) {
+
+            const plugin: Plugin = this.#plugins[name]
+            if ( !plugin ) return 'no plugin'
+
+            if ( plugin.status !== PluginStatus.ENABLED ) return 'plugin not enabled'
+
+            this.active = name
+
+            injectWebView(plugin)
+
+            plugin.status = PluginStatus.ACTIVE
+
+        }
+
+        return 'success'
+
+    }
+
     _listenerInitial() {
 
         regChannel('plugin-list', ({ reply }) => reply(this.#plugins))
-        regChannel('change-active-plugin', ({ reply, data }) => reply(this.changeActivePlugin(data)))
+        regChannel('change-active', ({ reply, data }) => reply(this.changeActivePlugin(data)))
 
         regChannel('plugin-action', async ({ reply, data }) => {
 
@@ -70,7 +98,13 @@ export class PluginManager {
                 if ( !plugin ) return reply('no plugin')
 
                 console.log("FullScreen: " + pluginName)
-                plugin.window.setFullScreen(true/*!plugin.window.isFullScreen()*/)
+
+                win.setFullScreen(true)
+                win.webContents.executeJavaScript(`
+                    document.body.parentElement.classList.add('fullscreen')
+                `)
+
+                // plugin.view.setFullScreen(true/*!plugin.window.isFullScreen()*/)
 
             }
 
@@ -86,8 +120,6 @@ export class PluginManager {
         })
 
         regPluginChannel('crash', async ({ reply, data, plugin }) => {
-
-            this.changeActivePlugin("")
 
             await sendMainChannelMsg('plugin-crashed', {
                 plugin: this.#plugins[plugin],
@@ -128,96 +160,6 @@ export class PluginManager {
 
     }
 
-    fixActivePluginWindow() {
-        // console.log(this.activePlugin, this.active)
-        // if( !pluginManager.active ) return
-
-        const activePlugin = this.activePlugin
-        if ( !activePlugin || !activePlugin.window ) return
-
-        const [ x, y ] = mainWin.getPosition()
-
-        activePlugin.window.setPosition(x + 70, y)
-
-    }
-
-    /* for "" to hide */
-    changeActivePlugin(pluginName): string {
-
-        if ( pluginName?.length ) {
-
-            if( this.active )
-                this.changeActivePlugin("")
-
-            console.log("[Plugin] ActivePlugin: " + pluginName)
-
-            const plugin: Plugin = this.plugins[pluginName]
-
-            if ( !plugin ) return "plugin none exist"
-
-            if ( !plugin.window ) return "plugin window none created"
-
-            if ( plugin.status !== PluginStatus.ENABLED ) return "plugin not enabled"
-
-            const window = plugin.window
-
-            this.activePlugin = plugin
-
-            const themeStyle = getConfig('theme-style.ini')
-
-            plugin.__injectStyles()
-
-            plugin.__injectJs()
-
-            window.webContents.executeJavaScript(`
-
-                global.$config = {
-                    themeStyle: ${ JSON.stringify(themeStyle) }
-                }
-
-                global.$config.themeStyle['dark'] ? clsL.add('dark') : clsL.remove('dark')
-                global.$config.themeStyle['blur'] ? clsL.add('blur') : clsL.remove('blur')
-                global.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
-            `)
-
-            window.restore()
-            window.show()
-
-            this.fixActivePluginWindow()
-
-            if ( !window.webContents.isDevToolsOpened() ) {
-
-                plugin.window.webContents.openDevTools({
-                    mode: 'detach',
-                })
-
-            }
-
-            plugin.status = PluginStatus.ACTIVE
-            this.active = true
-
-        } else {
-
-            const appSetting = getConfig('app-setting.ini')
-
-            const window = this.activePlugin?.window
-            if( !window || window.isDestroyed() ) return
-
-            const autoCloseDev = appSetting.dev?.autoCloseDev ?? true
-            autoCloseDev && window.webContents.closeDevTools()
-
-            window.hide()
-
-            if ( this.activePlugin ) this.activePlugin.status = PluginStatus.ENABLED
-            this.active = false
-            // this.activePlugin.window.move(1000, 1000)
-            // this.activePlugin.window.setSize(0, 0)
-
-        }
-
-        return "done"
-
-    }
     loadPlugin(name) {
         const fileP = _path.join(this.pluginsPath, name)
 
@@ -251,9 +193,29 @@ export class PluginManager {
 
         plugin._enabled(mainWin, fileP);
 
-        // this.activePlugin = plugin
-
-        this.fixActivePluginWindow()
+        // view.webContents.executeJavaScript(`
+        //
+        //         global.$config = {
+        //             themeStyle: ${ JSON.stringify(themeStyle) }
+        //         }
+        //
+        //         global.$config.themeStyle['dark'] ? clsL.add('dark') : clsL.remove('dark')
+        //         global.$config.themeStyle['blur'] ? clsL.add('blur') : clsL.remove('blur')
+        //         global.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
+        //     `)
+        //
+        // const appSetting = getConfig('app-setting.ini')
+        //
+        // const view = this.activePlugin?.view
+        // if( !view ) return
+        //
+        // const autoCloseDev = appSetting.dev?.autoCloseDev ?? true
+        // autoCloseDev && view.webContents.closeDevTools()
+        //
+        // view.hide()
+        //
+        // if ( this.activePlugin ) this.activePlugin.status = PluginStatus.ENABLED
+        // this.active = false
 
         return plugin
 

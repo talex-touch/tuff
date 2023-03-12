@@ -1,5 +1,5 @@
 <template>
-  <ul class="PlantNavBar-Home" @click="changeActivePlugin('')">
+  <ul class="PlantNavBar-Home"  @click="activePlugin = ''">
     <IconButton plain direct="/home" icon="home-3" />
     <IconButton plain direct="/plugin" icon="plug-2" />
     <IconButton plain icon="quill-pen"></IconButton>
@@ -7,7 +7,7 @@
   </ul>
 
   <ul class="NavBar-Programs fake-background">
-    <IconButton plain :select="activePluginName === plugin.pluginInfo.name" @click="changeActivePlugin(plugin.pluginInfo.name)" v-for="plugin in plugins">
+    <IconButton plain @click="activePlugin = plugin.pluginInfo.name " :select="activePlugin === plugin.pluginInfo.name" v-for="plugin in plugins">
       <el-tooltip placement="right" :content="plugin.pluginInfo.name">
         <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
       </el-tooltip>
@@ -35,13 +35,10 @@ import { useModelWrapper } from '@modules/utils'
 const props = defineProps(['modelValue'])
 const emits = defineEmits(['update:modelValue'])
 
-const activePluginName = useModelWrapper(props, emits)
+const activePlugin = useModelWrapper(props, emits)
 
 const plugins = computed(() => Object.values(pluginManager.getPluginList()))
 
-function changeActivePlugin(name) {
-  pluginManager.changeActivePlugin(activePluginName.value = (activePluginName.value === name ? "" : name))
-}
 </script>
 
 <style lang="scss" scoped>

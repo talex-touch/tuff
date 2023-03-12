@@ -20,7 +20,11 @@ const app = createApp(App)
     .use(ElementPlus)
     .use(Lang)
     // .use(ModuleManager)
-    // .use(VWave)
+    .use(VWave, {
+        color: 'currentColor',
+        duration: 0.5,
+        easing: 'ease-in-out',
+    })
 
 app .mount('#app')
     .$nextTick(() => {
