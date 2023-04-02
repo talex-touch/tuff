@@ -77,7 +77,7 @@ watchEffect(() => {
   user-select: none;
   border-radius: 4px;
   text-indent: 5px;
-  transition: all .25s;
+  //transition: all .25s;
   box-sizing: border-box;
 
   --fake-color: transparent;

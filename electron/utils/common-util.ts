@@ -19,3 +19,9 @@ export async function checkDirWithCreate(url) {
     return true
 
 }
+
+// return now time with hours and minutes and seconds
+export function nowTime() {
+    const now = new Date()
+    return `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`
+}

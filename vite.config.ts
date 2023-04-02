@@ -57,7 +57,7 @@ export default defineConfig({
           },
           // Will start Electron via VSCode Debug
           // plugins: [ process.env.VSCODE_DEBUG ? startup : null ],
-        },
+        }
         // preload: {
         //   input: {
         //     // You can configure multiple preload here
@@ -76,12 +76,17 @@ export default defineConfig({
         // renderer: {},
       }
       ,
-      // {
-      //   entry: 'electron/addon/home-gear/preload.ts',
-      //   onstart(options) {
-      //     options.reload()
-      //   }
-      // }
+      {
+        entry: 'electron/addon/home-gear/preload.ts',
+        vite: {
+          build: {
+            outDir: 'dist/electron/addon/home-gear',
+          }
+        },
+        onstart(options) {
+          options.reload()
+        }
+      }
     ]),
     AutoImport({
       resolvers: [ElementPlusResolver()],

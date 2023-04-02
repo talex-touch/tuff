@@ -4,12 +4,11 @@
       <div class="About-Image">
         <div class="Home-Logo-Bg">
           <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100px" height="100px">
-            <polygon class="g-polygon-wrap" points="50 0, 100 25, 100 75, 50 100, 0 75,  0 25, 50 0" />
-            <polygon class="g-polygon-move" points="50 0, 100 25, 100 75, 50 100, 0 75,  0 25, 50 0" />
+            <circle class="g-polygon-move" cx="50" cy="50" r="50" />
           </svg>
         </div>
 
-        <img src="@assets/TalexTouchChat-Small.png" alt="logo" />
+        <img src="@assets/logo.svg" alt="logo" />
       </div>
 
       <div class="About-Content">
@@ -17,27 +16,27 @@
           <svg>
             <text x="0" y="20%"> Talex-Touch </text>
           </svg>
-          <span class="version" :class="{
+          <span class="version" v-if="$env.packageJson" :class="{
             dev,
-            'snapshot': packageJson.version.indexOf('snapshot') !== -1,
-            'alpha': packageJson.version.indexOf('alpha') !== -1,
-           }">{{ packageJson.version }}</span>
+            'snapshot': $env.packageJson.version.indexOf('snapshot') !== -1,
+            'alpha': $env.packageJson.version.indexOf('alpha') !== -1,
+           }">{{ $env.packageJson.version }}</span>
 
           <p>{{ $t('app.description') }}</p>
         </div>
 
-        <ul class="About-Footer">
+        <ul class="About-Footer" v-if="$env.process">
           <li>
             <remix-icon name="npmjs" />
-            <span>{{ p.versions?.node }}</span>
+            <span>{{ $env.process.versions?.node }}</span>
           </li>
           <li>
             <remix-icon name="chrome" />
-            <span>{{ p.versions?.chrome }}</span>
+            <span>{{ $env.process.versions?.chrome }}</span>
           </li>
           <li>
             <remix-icon name="vuejs" />
-            <span>{{ String(packageJson.devDependencies?.vue).substring(1) }}</span>
+            <span>{{ String($env.packageJson?.devDependencies?.vue).substring(1) }}</span>
           </li>
         </ul>
       </div>
@@ -45,7 +44,17 @@
     </div>
 
     <t-group-block :name="$t('base.account')" icon="account-box" :description="$t('settings.application.list-settings.account.description')">
-      <t-block-switch :title="$t('base.none-account')" icon="account-circle" disabled :description="$t('settings.application.list-settings.account.unavailable')" />
+      <t-block-slot v-if="$env.account?.user" :title="$env.account?.user.username" icon="account-circle" disabled :description="$env.account?.user.email">
+        <FlatButton>
+          {{ $t('base.logout') }}
+        </FlatButton>
+      </t-block-slot>
+      <t-block-slot v-else :title="$t('base.none-account')" icon="account-circle" disabled :description="$t('settings.application.list-settings.account.unavailable')">
+        <FlatButton @click="login">
+          {{ $t('base.login') }}
+        </FlatButton>
+      </t-block-slot>
+      <!--      <t-block-switch :title="$t('base.none-account')" icon="account-circle" disabled :description="$t('settings.application.list-settings.account.unavailable')" />-->
     </t-group-block>
 
     <t-group-block :name="$t('settings.application.list-settings.conventional.name')" icon="global" :description="$t('settings.application.list-settings.conventional.description')">
@@ -114,18 +123,18 @@
           </span>
         </template>
       </t-block-line>
-      <t-block-line title="Electron" :description="p.versions?.electron"></t-block-line>
-      <t-block-line title="V8-Engine" :description="p.versions?.v8"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="os.version"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${p.platform} (${os.arch})`"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.03.12"></t-block-line>
+      <t-block-line title="Electron" :description="$env.process.versions?.electron"></t-block-line>
+      <t-block-line title="V8-Engine" :description="$env.process.versions?.v8"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="$env.os.version"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${$env.process.platform} (${$env.os.arch})`"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.03.19"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
         <template #description>
           <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
           </span>
         </template>
       </t-block-line>
-<!--      <t-block-line :title="$t('settings.application.list-settings.specifications.gpu-usage')" description="Touch Feature Experience Pack 2023.02.21"></t-block-line>-->
+      <!--      <t-block-line :title="$t('settings.application.list-settings.specifications.gpu-usage')" description="Touch Feature Experience Pack 2023.02.21"></t-block-line>-->
       <t-block-line :title="$t('settings.application.list-settings.specifications.memory-usage')">
         <template #description>
           <span :data-text="`${Math.round((memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-primary);--percent: ${(memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 100}%`">
@@ -152,39 +161,53 @@ export default {
 </script>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, reactive } from 'vue'
 import { $t, languages } from '@modules/lang'
 import TBlockLine from '@comp/group/TBlockLine.vue'
 import { useCPUUsage, useMemoryUsage, useOS } from '@modules/hooks/os-hooks'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
+import TBlockSlot from "@comp/group/TBlockSlot.vue";
+import FlatButton from "@comp/button/FlatButton.vue";
+import { useLogin } from "@modules/hooks/function-hooks";
 
-const os = useOS()
+const $env = reactive({
+  os: null,
+  process: null,
+  packageJson: null,
+  account: window.$storage.account
+})
 
-const p = ref({})
 const dev = ref(false)
-
-const packageJson = window.$nodeApi.getPackageJSON()
 
 const options = window.$storage.appSetting
 
-const versionStr = computed(() => `TalexTouch ${dev.value ? $t('version.dev') : 'version.official'} ${packageJson.version}`)
+const versionStr = computed(() => `TalexTouch ${dev.value ? $t('version.dev') : 'version.official'} ${$env.packageJson?.version}`)
 const startCosts = ref('')
 
 const cpuUsage = useCPUUsage()
 const memoryUsage = useMemoryUsage()
 
-onMounted(() => {
-  p.value = process
-  dev.value = process.env.NODE_ENV === 'development'
-
-  startCosts.value = (window['_doneTimeDiff'] ?? 0) / 1000 //(window['_initialTime'] - window.$nodeApi.getStartTime()) / 1000
-
-})
-
 onBeforeUnmount(() => {
   cpuUsage[1]()
   memoryUsage[1]()
 })
+
+// initially
+!(async () => {
+  const res = await Promise.all([
+    Promise.resolve(  dev.value = process.env.NODE_ENV === 'development' ),
+    Promise.resolve( $env.os = useOS() ),
+    Promise.resolve( $env.process = process ),
+    Promise.resolve( $env.packageJson = window.$nodeApi.getPackageJSON() ),
+    Promise.resolve( startCosts.value = (window['_doneTimeDiff'] ?? 0) / 1000 )
+  ])
+
+  console.log( res )
+})()
+
+function login() {
+  useLogin()
+}
 </script>
 
 <style lang="scss" scoped>
@@ -346,13 +369,12 @@ onBeforeUnmount(() => {
     .Home-Logo-Bg {
       svg {
         overflow: visible;
-        transform: scalex(.85);
       }
 
       .g-polygon-wrap,
       .g-polygon-move {
         fill: none;
-        stroke: var(--el-color-primary);
+        stroke: var(--el-color-primary-dark-2);
         stroke-width: 2;
         stroke-linejoin: round;
         stroke-linecap: round;
@@ -360,17 +382,17 @@ onBeforeUnmount(() => {
 
       .g-polygon-move {
         transform-origin: center center;
-        transform: scale(1.05);
+        //transform: scale(1.05);
         //stroke: linear-gradinet(180deg, red, transprent);
-        stroke-width: 1.5;
+        stroke-width: 2;
         stroke-dasharray: 280, 700;
-        stroke-dashoffset: 8;
-        animation: move 2.4s infinite linear;
+        stroke-dashoffset: 10;
+        animation: move .1s infinite linear;
       }
 
       @keyframes move {
         0% {
-          stroke-dashoffset: 8;
+          stroke-dashoffset: 0;
         }
         100% {
           stroke-dashoffset: -972;

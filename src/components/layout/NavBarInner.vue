@@ -14,11 +14,14 @@
 
       <div class="NavBar-Logo-Footer">
         {{ activePlugin }}
+        <span class="NavBar-Footer-LoginStatus">
+          {{ account.user.username }} 已登录
+        </span>
         <el-tooltip :content="$t('nav.footer-tool.open-devtool')">
           <icon-button @click="openDevTools" small plain icon="code-s-slash"></icon-button>
         </el-tooltip>
       </div>
-      <img src="@assets/TalexTouchChat-Small.png" alt="logo">
+      <img src="@assets/logo.svg" alt="logo">
     </div>
 
     <teleport to="body">
@@ -45,6 +48,8 @@ import { $t } from '@modules/lang'
 import PluginView from '@comp/plugin/PluginView.vue'
 import { pluginManager } from '@modules/samples/node-api'
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
+
+const account = window.$storage.account
 
 const activePlugin = ref("")
 watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val))
@@ -101,6 +106,17 @@ function closeWindow() {
 </script>
 
 <style lang="scss" scoped>
+.NavBar-Logo-Footer {
+  .NavBar-Footer-LoginStatus {
+    position: absolute;
+
+    left: 48px;
+
+    opacity: .8;
+    font-size: 12px;
+  }
+}
+
 .Blur-Container {
   &:before {
     z-index: -1;
@@ -133,14 +149,14 @@ function closeWindow() {
   pointer-events: none;
   transition: .25s;
   border-radius: 0 8px 8px 0;
-  //backdrop-filter: blur(18px);
+  //backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
 }
 
 html.blur .Blur-Container {
   &:before {
     opacity: .5;
   }
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
 }
 
 html.coloring .Blur-Container {

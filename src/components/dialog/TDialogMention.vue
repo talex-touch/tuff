@@ -9,7 +9,7 @@
           <Loading v-if="loading" />
         </div>
         <div class="TDialogTip-Btn">
-          <span v-for="(btn, index) in btnArray" :key="index"
+          <div v-for="(btn, index) in btnArray" :key="index" v-wave
                 @click="clickBtn(btn)" :class="{ 'info-tip': btn.value?.type === 'info',
             'warn-tip': btn.value?.type === 'warning',
             'error-tip': btn.value?.type === 'error',
@@ -19,13 +19,14 @@
               <Loading />
             </span>
             <span class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
-          </span>
+          </div>
         </div>
       </div>
 
 
       <div class="TDialogTip-Icon">
         <PluginIcon :icon="icon" v-if="icon instanceof Object" />
+        <RemixIcon :name="icon.substring(1)" v-if="icon.at(0) === '#'" />
         <img v-else-if="icon" :src="icon" :alt="title" />
         <span class="tip-icon" v-else v-text="`Tip`" />
       </div>
@@ -39,10 +40,11 @@ import Loading from './../icon/LoadingIcon.vue'
 import { defineProps, onMounted, ref, watchEffect } from 'vue'
 import { sleep } from '@modules/utils'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
+import RemixIcon from "@comp/icon/RemixIcon.vue";
 
 const props = defineProps({
   title: String, message: String, stay: Number, close: Function,
-  btns: Array, icon: String
+  btns: Array, icon: String, loading: Boolean
 })
 
 const btnArray = ref([])
@@ -105,7 +107,7 @@ const clickBtn = ref(async (btn) => {
 
   btn.value.loading = true
 
-  await sleep(400)
+  await sleep(200)
 
   if( await btn.value.onClick() ) {
 
@@ -135,8 +137,12 @@ onMounted(() => {
 </script>
 
 <script>
+import VWave from 'v-wave'
 export default {
-  name: "TDialogTip"
+  name: "TDialogTip",
+  directives: {
+    VWave
+  }
 }
 </script>
 
@@ -144,13 +150,17 @@ export default {
 .TDialogTip-Icon {
   .tip-icon {
     position: absolute;
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
 
     top: 50%;
     left: 50%;
 
     width: 72px;
     height: 72px;
-    line-height: 72px;
+    //line-height: 72px;
 
     opacity: .45;
 
@@ -213,10 +223,8 @@ export default {
   align-items: center;
   justify-content: center;
 
-  top: 60px;
-
   width: 80%;
-  height: calc(100% - 130px);
+  height: calc(100% - 30px);
 
   opacity: 0;
   animation: slideIn .25s 1s forwards linear;
@@ -240,10 +248,7 @@ export default {
     transition: .3s cubic-bezier(.25,.8,.25,1);
   }
   h1 {
-    position: absolute;
-    margin: 0;
-
-    top: 10px;
+    position: relative;
 
     width: max-content;
     height: 32px;
@@ -256,31 +261,20 @@ export default {
     animation: slideIn .25s 1s forwards linear;
   }
   .TDialogTip-Btn {
-    position: absolute;
+    position: relative;
     display: flex;
     justify-content: space-around;
     padding: 8px 0;
 
-    bottom: 0px;
-    left: 5%;
+    bottom: 5%;
 
-    width: 90%;
+    width: 80%;
     height: 28px;
 
-    color: var(--el-color-primary);
-
-    border-top: 1px solid var(--el-border-color);
-    font-weight: 400;
     text-align: center;
-    cursor: pointer;
     user-select: none;
     opacity: 0;
     animation: slideIn .25s 1.1s forwards linear;
-    .TDialogTip-Btn-Item {
-
-      padding: 0 24px;
-
-    }
   }
 
   position: absolute;
@@ -302,6 +296,9 @@ export default {
   clip-path: circle(50px at 50% 50%);
   animation: enter 1s ease-in-out forwards;
   overflow: hidden;
+
+  -webkit-app-region: no-drag;
+  backdrop-filter: blur(50px) saturate(180%) brightness(1.8);
 }
 
 @keyframes slideIn {
@@ -333,6 +330,7 @@ export default {
 
   100% {
     opacity: 1;
+    background: none;
   }
 
 }
@@ -384,8 +382,8 @@ export default {
 }
 
 .TDialogTip-Container-Btn-Item-Text {
-
   position: relative;
+  padding: 8px 24px;
 
   left: 0;
   top: 0;
@@ -394,6 +392,10 @@ export default {
   height: 180px;
 
   text-align: center;
+  border-radius: 4px;
+  background-color: var(--el-color-primary-light-5);
+
+  cursor: pointer;
 
   color: var(--theme-color, var(--el-text-color-regular));
   transition: .3s cubic-bezier(.25,.8,.25,1);
@@ -427,7 +429,10 @@ export default {
   position: absolute;
   display: flex;
 
+  flex-direction: column;
+
   justify-content: center;
+  align-items: center;
 
   width: 100%;
   height: 100%;
@@ -453,7 +458,7 @@ export default {
   left: 0;
 
   &:before {
-    z-index: 0;
+    z-index: -1;
     content: "";
     position: absolute;
 

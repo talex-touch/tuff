@@ -3,12 +3,11 @@
     <div class="Home-Logo">
       <div class="Home-Logo-Bg">
         <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300px" height="300px">
-          <polygon class="g-polygon-wrap" points="150 0, 300 75, 300 225, 150 300, 0 225,  0 75, 150 0" />
-          <polygon class="g-polygon-move" points="150 0, 300 75, 300 225, 150 300, 0 225,  0 75, 150 0" />
+          <circle class="g-polygon-move" cx="150" cy="150" r="150" fill="none" />
         </svg>
       </div>
 
-      <img src="@assets/TalexTouchChat-Small.png" alt="logo" />
+      <img src="@assets/logo.svg" alt="logo" />
     </div>
 
     <div class="Home-Text">
@@ -157,7 +156,6 @@ svg {
   .Home-Logo-Bg {
     svg {
       overflow: visible;
-      transform: scalex(.85);
     }
 
     .g-polygon-wrap,

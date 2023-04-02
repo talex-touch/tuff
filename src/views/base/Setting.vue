@@ -58,7 +58,7 @@ import AlsoShare from '~/views/settings/AlsoShare.vue'
 import { $t } from '@modules/lang'
 
 const dev = ref(false)
-const tabSelection = ref("应用设置")
+const tabSelection = ref($t('settings.application.list-settings.name'))
 
 onMounted(() => {
   dev.value = process.env.NODE_ENV === 'development'

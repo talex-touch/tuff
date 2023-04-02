@@ -16,10 +16,16 @@ export default {
 import { pluginManager } from '@modules/samples/node-api'
 import { toRefs, ref, watchEffect, onMounted } from 'vue'
 
-const props = defineProps(['pluginName', 'status'])
+const props = defineProps(['plugin'])
 const dom = ref()
 
+const _PluginStatus = [ 'DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED' ]
 const func = ref(() => {})
+const status = ref('DISABLED')
+
+watchEffect(() => {
+  status.value = _PluginStatus[props.plugin._status]
+})
 
 function refresh () {
 
@@ -74,6 +80,8 @@ onMounted(() => {
   watchEffect(() => {
 
     const ctx = {
+      status: status.value,
+      pluginName: props.plugin.pluginInfo.name,
       ...props,
       get $el() { return dom.value }
     }
@@ -92,7 +100,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: 1;
+  opacity: .75;
   color: #fff;
   background: var(--el-color-primary-light-3);
 }
@@ -101,7 +109,7 @@ onMounted(() => {
   height: 5px;
 
   pointer-events: none;
-  opacity: 1;
+  opacity: .75;
   background: var(--el-color-primary-light-3);
   animation: loading .5s infinite;
 }
@@ -110,7 +118,7 @@ onMounted(() => {
   height: 5px;
 
   cursor: not-allowed;
-  opacity: 1;
+  opacity: .75;
   pointer-events: none;
   color: var(--el-text-color-primary);
   background: var(--el-color-success);
@@ -121,7 +129,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: 1;
+  opacity: .75;
   color: var(--el-text-color-primary);
   background: var(--el-color-success);
 }
@@ -130,7 +138,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: 1;
+  opacity: .75;
   color: var(--el-color-warning-light-7);
   background: var(--el-color-danger);
 }
@@ -139,7 +147,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: 1;
+  opacity: .75;
   background: var(--el-color-info);
 }
 
@@ -147,7 +155,7 @@ onMounted(() => {
   height: 5px;
 
   pointer-events: none;
-  opacity: 1;
+  opacity: .75;
   background: var(--el-color-info-light-3);
   animation: loading .5s infinite;
 }

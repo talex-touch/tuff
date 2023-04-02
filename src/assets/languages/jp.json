@@ -177,7 +177,8 @@
     "none-account": "現在アカウントが登録されていません",
     "add-account": "アカウントを追加",
     "empty-select": "選択されていません。",
-    "qq": "QQアカウント"
+    "qq": "QQアカウント",
+    "details": "詳細"
   },
   "protocol": {
     "service": "利用規約",

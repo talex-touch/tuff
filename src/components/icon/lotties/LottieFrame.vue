@@ -13,23 +13,36 @@ export default {
 <script setup>
 import { defineProps, onMounted, ref, watchEffect } from 'vue'
 import Lottie from 'lottie-web'
-import animation from '@assets/lotties/lotties.json'
 
+const props = defineProps({
+  data: {
+    type: Object,
+    default: null
+  },
+  loop: {
+    type: Boolean,
+    default: true
+  }
+})
 const dom = ref()
 
 onMounted(() => {
   const el = dom.value
 
-  Lottie.loadAnimation({
+  const animation = Lottie.loadAnimation({
     container: el,
     renderer: 'svg',
-    loop: true,
+    loop: props.loop,
     autoplay: true,
-    animationData: animation //'https://assets3.lottiefiles.com/packages/lf20_6jxjxj.json'
+    animationData: props.data
   })
+
+  animation.resize()
+
+  el._lottieFrame = animation
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 
 </style>

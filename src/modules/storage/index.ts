@@ -1,5 +1,6 @@
 import { reactive, watch } from 'vue'
 import { languages } from '@modules/lang'
+import {AccountStorage} from "@modules/storage/accounter";
 
 export class StorageManager {
 
@@ -9,7 +10,11 @@ export class StorageManager {
 
     appSetting: object
 
+    account: AccountStorage
+
     constructor() {
+
+        this.account = reactive(new AccountStorage(window.$nodeApi.getConfig('account.ini')))
 
         this.paintCustom = reactive(window.$nodeApi.getConfig('paint-custom.ini'))
         if( !this.paintCustom[1] ) this.paintCustom = reactive({
@@ -89,13 +94,18 @@ export class StorageManager {
 
         return Promise.all([
             Promise.resolve(this._save('paint-custom.ini', this.paintCustom, true)),
-            Promise.resolve(this._save('theme-style.ini', this.themeStyle, true))
+            Promise.resolve(this._save('theme-style.ini', this.themeStyle, true)),
+            Promise.resolve(this._saveStr('account.ini', this.account.saveToStr(), true)),
         ])
 
     }
 
     async _save(name: string, data: object, clear: boolean = false) {
         return window.$nodeApi.saveConfig(name, JSON.stringify(data), clear)
+    }
+
+    async _saveStr(name: string, data: string, clear: boolean = false) {
+        return window.$nodeApi.saveConfig(name, data, clear)
     }
 
 }

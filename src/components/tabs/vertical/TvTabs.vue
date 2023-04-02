@@ -131,6 +131,9 @@ export default {
   //background-size: 6px 6px;
   //-webkit-mask: linear-gradient(0, rgba(255, 255, 255, 0.1) 100%, rgba(255, 255, 255, 0) 100%);
   //-webkit-mask-size: 6px 6px;
+  //-webkit-mask: linear-gradient(to bottom, transparent 0, red 30px, red 100%);
+  //-webkit-mask-size: 80%;
+  //-webkit-mask-position-x: 10%;
   box-sizing: border-box;
 
 }

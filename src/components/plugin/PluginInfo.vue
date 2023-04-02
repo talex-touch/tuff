@@ -1,43 +1,20 @@
 <template>
   <div class="PluginInfo-Container">
-    <plugin-status :pluginName="plugin.pluginInfo.name" :status="status" />
+    <plugin-status :plugin="plugin" />
 
     <div class="PluginInfo-Header">
-      <div class="plugin-main">
-        <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
-<!--        <img :alt="plugin.pluginInfo.name" src="@assets/TalexTouchChat-Small.png" />-->
+      <span class="plugin-tags" style="display: flex;gap: 8px">
+        <span class="plugin-version">{{ plugin.pluginInfo.version }}</span>
+        <span v-if="plugin.pluginInfo.pluginSubInfo?.dev?.enable" class="plugin-dev">{{ $t('version.dev') }}</span>
+      </span>
 
-        <div class="plugin-wrapper">
-          <p class="plugin-name">
-            {{ plugin.pluginInfo.name }}
-            <span class="plugin-version">{{ plugin.pluginInfo.version }}</span>
-          </p>
+      <p class="plugin-name">
+        {{ plugin.pluginInfo.name }}
+      </p>
 
-          <p class="plugin-info">
-            <span class="plugin-info-label">
-              <RemixIcon name="download-cloud-2" />
-              <span>3,101,537</span>
-            </span>
-            <span class="plugin-info-label">
-              <el-rate v-model="rate" />
-            </span>
-          </p>
-
-          <p class="plugin-description">
-            {{ plugin.pluginInfo.description }}
-          </p>
-        </div>
-
-<!--        <div class="plugin-action">-->
-<!--          <el-radio-group v-model="pluginState">-->
-<!--            <el-radio-button label="启用" />-->
-<!--            <el-radio-button label="禁用" />-->
-<!--            <el-radio-button label="卸载" />-->
-<!--            <el-radio-button @click="reloadPlugin" label="重载" />-->
-<!--          </el-radio-group>-->
-<!--        </div>-->
-
-      </div>
+      <FlatButton class="plugin-export" v-if="plugin.pluginInfo.pluginSubInfo?.dev?.enable">
+        打包
+      </FlatButton>
     </div>
 
     <el-tabs v-model="tabs">
@@ -82,6 +59,7 @@
           <div class="ConfigSource-Editor" ref="codeRef" />
         </el-scrollbar>
       </el-tab-pane>
+
     </el-tabs>
   </div>
 </template>
@@ -104,6 +82,7 @@ import { json } from '@codemirror/lang-json'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import { registerTypeProcess } from '@modules/samples/node-api'
+import FlatButton from "@comp/button/FlatButton.vue";
 
 const tabs = ref("overview")
 const props = defineProps({
@@ -113,14 +92,7 @@ const props = defineProps({
   }
 })
 
-const _PluginStatus = [ 'DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED' ]
-
-const status = ref('DISABLED')
 const codeRef = ref()
-
-watchEffect(() => {
-  status.value = _PluginStatus[props.plugin._status]
-})
 
 onMounted(() => {
 
@@ -344,67 +316,62 @@ const rate = ref(0)
 
 }
 
-.plugin-main {
+.PluginInfo-Header {
+  .plugin-version {
+    display: inline;
+    padding: 2px 4px;
+
+    width: max-content;
+    border-radius: 4px;
+
+    background: #FE9F0E;
+    color: #fff;
+    box-sizing: border-box;
+  }
+  .plugin-dev {
+    display: inline;
+    padding: 4px 8px;
+
+    width: max-content;
+
+    color: #eee;
+
+    box-sizing: border-box;
+    border-radius: 4px;
+    background-color: black;
+  }
+  .plugin-name {
+    margin: 15px 0;
+
+    width: max-content;
+
+    font-size: 24px;
+    font-weight: 600;
+
+    grid-column: 1;
+    grid-row: 2;
+
+    box-sizing: border-box;
+  }
+  .plugin-export {
+    position: absolute;
+
+    width: 120px;
+
+    right: 4%;
+  }
+  position: relative;
   display: flex;
-  align-items: center;
+  padding: 4%;
 
-  height: 120px;
-  .PluginIcon-Container {
-    margin-right: 15px;
-    padding: 8px;
+  flex-direction: column;
+  justify-content: center;
 
-    height: 72px;
-    width: 72px;
+  width: 100%;
 
-    aspect-ratio: 1 / 1;
-    :deep(.remix) {
-      font-size: 78px;
-    }
-  }
-  .plugin-wrapper {
-    .plugin-name {
-      .plugin-version {
-        padding: 4px 8px;
+  font-size: 12px;
 
-        color: var(--el-text-color-secondary);
-        font-size: 12px;
-        border-radius: 8px;
-        background-color: var(--el-fill-color);
-      }
-      margin: 0;
-
-      font-weight: 600;
-      font-size: 24px;
-      color: var(--el-color-primary);
-    }
-    .plugin-info {
-      margin: 0;
-
-      opacity: .85;
-      .plugin-info-label {
-        &:last-child {
-          border-right: none;
-        }
-        span {
-          position: relative;
-          margin-left: 5px;
-
-          top: -2px;
-        }
-        margin-right: 10px;
-        padding-right: 10px;
-
-        border-right: 1px solid var(--el-border-color-darker);
-        //vertical-align: middle;
-      }
-    }
-    .plugin-description {
-      margin: 0;
-
-      font-weight: 400;
-      font-size: 16px;
-    }
-  }
+  box-sizing: border-box;
 }
 
 .PluginInfo-Container {
@@ -414,16 +381,6 @@ const rate = ref(0)
   flex-direction: column;
 
   height: 100%;
-  overflow: hidden;
-  .PluginInfo-Header {
-    position: relative;
-    padding: 0 2%;
-
-    width: 100%;
-    height: 120px;
-
-    box-sizing: border-box;
-  }
   :deep(.el-tabs) {
     position: relative;
 
@@ -448,7 +405,6 @@ const rate = ref(0)
       margin-bottom: 0;
     }
   }
-  padding-bottom: 5px;
 
   box-sizing: border-box;
 }

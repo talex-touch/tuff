@@ -4,7 +4,9 @@
       <NavBarInner />
     </div>
     <div class="NavBar-View fake-background">
-      <router-view></router-view>
+      <keep-alive>
+        <router-view></router-view>
+      </keep-alive>
     </div>
 
   </div>
@@ -22,13 +24,13 @@ export default {
 <style lang="scss" scoped>
 .blur .NavBar-Wrapper {
   .NavBar-Container {
-    --fake-opacity: .6;
-    backdrop-filter: saturate(180%) blur(80px);
+    --fake-opacity: .65;
+    backdrop-filter: blur(100px) saturate(180%) brightness(1.8);
   }
 
   .NavBar-View {
     --fake-opacity: .75;
-    backdrop-filter: saturate(180%) blur(100px);
+    backdrop-filter: blur(100px) saturate(180%) brightness(1.5);
   }
 }
 

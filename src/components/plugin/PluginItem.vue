@@ -149,6 +149,7 @@ export default {
     padding-bottom: 2px;
     margin-left: 10px;
     display: flex;
+
     flex-direction: column;
     justify-content: space-around;
 
@@ -199,7 +200,7 @@ export default {
   }
 
   position: relative;
-  display: flex;
+  display: inline-flex;
   margin: 2% 0;
   padding: 5px;
 
@@ -207,8 +208,8 @@ export default {
 
   left: 2%;
 
-  width: 96%;
-  height: 70px;
+  //height: 96%;
+  //height: 70px;
 
   border-radius: 8px;
   box-shadow: var(--el-box-shadow);

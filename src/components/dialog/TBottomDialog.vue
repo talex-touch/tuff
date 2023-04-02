@@ -289,7 +289,7 @@ onMounted(() => {
   border-radius: 8px;
   box-shadow: var(--el-box-shadow-light);
   //background-color: var(--el-fill-color-light);
-  backdrop-filter: blur(30px);
+  backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
   transform: translateX(-50%);
   animation: enter .2s ease-in-out;
   overflow: hidden;

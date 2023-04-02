@@ -9,8 +9,8 @@
 // │ ├── index.html
 // │ ├── ...other-static-files-from-public
 // │
-
-import initializer, { beforeDestroy } from '../addon/initializer'
+import './polyfills'
+import initializer, {beforeDestroy, ProcessorVars} from '../addon/initializer'
 import { app, BrowserWindow, shell } from 'electron'
 import { release } from 'os'
 import _path from 'path'
@@ -52,7 +52,7 @@ async function createWindow() {
     height: 600,
     resizable: false,
     webPreferences: {
-      // preload,
+      preload: _path.join(__dirname, '../addon/home-gear/preload.js'),
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
       // Consider using contextBridge.exposeInMainWorld
       // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
@@ -79,6 +79,7 @@ async function createWindow() {
 
   win.webContents.addListener('did-finish-load', () => {
     win.webContents.executeJavaScript(`window._doneTimeDiff = ${new Date().getTime() - ts.getTime()}`)
+    win.webContents.executeJavaScript(`window._firstInit = ${ProcessorVars.options.first}`)
   })
 
   // Test actively push message to the Electron-Renderer

@@ -7,12 +7,12 @@
   "directories": {
     "output": "release/${version}"
   },
-  "mac": {
-    "artifactName": "${productName}_${version}.${ext}",
-    "target": [
-      "dmg"
-    ]
-  },
+//  "mac": {
+//    "artifactName": "${productName}_${version}.${ext}",
+//    "target": [
+//      "dmg"
+//    ]
+//  },
   "win": {
     "target": [
       {
@@ -25,7 +25,7 @@
     "artifactName": "${productName}_${version}.${ext}"
   },
   "nsis": {
-    "guild": "com.talex.touch",
+//    "guild": "com.talex.touch",
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,

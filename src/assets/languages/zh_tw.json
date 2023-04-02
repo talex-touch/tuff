@@ -178,7 +178,8 @@
     "none-account": "暫未綁定任何賬號",
     "add-account": "添加賬號",
     "empty-select": "暫未選中任何.",
-    "qq": "QQ賬號"
+    "qq": "QQ賬號",
+    "details": "詳情"
   },
   "protocol": {
     "service": "服務條款",

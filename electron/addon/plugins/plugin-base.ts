@@ -84,7 +84,6 @@ export class Plugin {
 
         this.status = PluginStatus.DISABLING
         const that = this
-
         function closed() {
 
             for ( const pid of that.process ) {
@@ -125,7 +124,7 @@ export class Plugin {
 
             // return closed()
 
-       /* } else return*/ closed()
+       /* } else return*/ return closed()
 
 
     }

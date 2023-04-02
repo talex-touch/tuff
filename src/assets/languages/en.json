@@ -177,7 +177,8 @@
     "none-account": "No bound account",
     "add-account": "Add count",
     "empty-select": "No selected.",
-    "qq": "QQ account"
+    "qq": "QQ account",
+    "details": "Detail"
   },
   "protocol": {
     "service": "Service Agreement",

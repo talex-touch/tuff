@@ -188,6 +188,6 @@ const expand = ref(!props.shrink)
 
   overflow: hidden;
   border-radius: 4px;
-  transition: .25s cubic-bezier(0.5,-0.02, 0.5, 1.11);
+  transition: max-height .25s cubic-bezier(0.5,-0.02, 0.5, 1.11);
 }
 </style>

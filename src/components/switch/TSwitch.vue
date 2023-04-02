@@ -41,7 +41,7 @@ watch(() => model, () => emits('change', model))
     left: 10%;
 
     border-radius: 50%;
-    background-color: var(--el-border-color);
+    background-color: var(--el-text-color-secondary);
     transition: all .25s ease-in-out;
   }
   &.select {
@@ -51,7 +51,10 @@ watch(() => model, () => emits('change', model))
 
       width: 30%;
       height: 70%;
+
+      filter: brightness(2);
     }
+    border-color: transparent;
     background-color: var(--el-color-primary);
   }
   position: relative;
@@ -61,7 +64,7 @@ watch(() => model, () => emits('change', model))
 
   cursor: pointer;
   border-radius: 20px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--el-text-color-secondary);
   transition: all .25s ease-in-out;
 }
 </style>

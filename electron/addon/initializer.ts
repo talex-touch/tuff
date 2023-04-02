@@ -10,9 +10,13 @@ import BackgroundBlur from '../addon/background-blur'
 import { saveAllConfig } from './storage'
 
 // import DeviceBlueTooth from '../addon/device/blue-tooth'
+import ClipBoardWatcher from '../addon/device/clipboard'
 
 export class ProcessorVars {
     static readonly startTime = new Date().getTime()
+    static readonly options = {
+        first: false
+    }
     static readonly rootPath = process.cwd()
     static readonly touchPath = path.join(ProcessorVars.rootPath, 'talex-touch')
     static readonly configPath = path.join(ProcessorVars.rootPath, 'talex-touch', 'config')
@@ -21,7 +25,9 @@ export class ProcessorVars {
 
     constructor() {
 
-        checkDirWithCreate(ProcessorVars.touchPath).then(() => {})
+        checkDirWithCreate(ProcessorVars.touchPath).then(() => {
+            ProcessorVars.options.first = true
+        })
         checkDirWithCreate(ProcessorVars.configPath).then(() => {})
         checkDirWithCreate(ProcessorVars.pluginPath).then(() => {})
 
@@ -46,10 +52,8 @@ export async function beforeDestroy(event) {
 
             for ( let key of keys ) {
 
-                const res = await pluginManager.disablePlugin( key )
-
-                if( !res ) {
-                    console.error('[Error] [Plugin] Feedbacks a error while disabling plugin ' + key + " | " + res)
+                if( ! (await pluginManager.disablePlugin( key )) ) {
+                    console.error('[Error] [Plugin] Feedbacks a error while disabling plugin ' + key + " | ")
                 }
 
             }
@@ -100,6 +104,7 @@ export default async () => {
 
     BackgroundBlur()
     // DeviceBlueTooth()
+    ClipBoardWatcher()
 
     if ( process.env.TALEX_DEV ) {
 

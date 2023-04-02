@@ -2,7 +2,7 @@
 
 <div align="center">
 
-  <img width="160" src="https://i.loli.net/2021/10/05/yP5d6Aw19jRNUc7.png" alt="logo">
+  <img width="160" src="https://files.catbox.moe/yq7lnl.png" alt="logo">
 
   <h1>TalexTouch</h1>
 
@@ -12,7 +12,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
 [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-[![GitHub release](https://img.shields.io/badge/release-2.0.0-Lite--beta-1b7cb9?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
+[![GitHub release](https://img.shields.io/badge/release-1.0.0--Snapshot-FDD835?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
 
 </div>
 
