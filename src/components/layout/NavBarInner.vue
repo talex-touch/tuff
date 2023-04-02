@@ -14,7 +14,7 @@
 
       <div class="NavBar-Logo-Footer">
         {{ activePlugin }}
-        <span class="NavBar-Footer-LoginStatus">
+        <span v-if="account.user" class="NavBar-Footer-LoginStatus">
           {{ account.user.username }} 已登录
         </span>
         <el-tooltip :content="$t('nav.footer-tool.open-devtool')">
@@ -24,11 +24,6 @@
       <img src="@assets/logo.svg" alt="logo">
     </div>
 
-    <teleport to="body">
-      <div class="Blur-Container" :class="{ blur: options.blur, display: activePlugin?.length }">
-        <PluginView />
-      </div>
-    </teleport>
   </div>
 </template>
 
@@ -43,16 +38,12 @@ export default {
 </script>
 
 <script setup>
-import { onMounted, ref, shallowReactive, watch } from 'vue'
+import { inject, onMounted, shallowReactive, watch } from 'vue'
 import { $t } from '@modules/lang'
-import PluginView from '@comp/plugin/PluginView.vue'
-import { pluginManager } from '@modules/samples/node-api'
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
 
 const account = window.$storage.account
-
-const activePlugin = ref("")
-watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val))
+const activePlugin = inject('activePlugin')
 
 const controller = shallowReactive({
   comp: null,
@@ -69,8 +60,6 @@ const navbar = shallowReactive({
     '丰富': () => import('@comp/customize/navbar/PlantNavBar.vue')
   }
 })
-
-const options = window.$storage.themeStyle
 
 async function loadModule(module) {
   const m = module instanceof Function ? await module() : await module
@@ -115,63 +104,6 @@ function closeWindow() {
     opacity: .8;
     font-size: 12px;
   }
-}
-
-.Blur-Container {
-  &:before {
-    z-index: -1;
-    content: "";
-    position: absolute;
-
-    left: 0;
-    top: 0;
-
-    height: 100%;
-    width: 100%;
-
-    opacity: 1;
-    background-color: var(--el-bg-color);
-  }
-  &.display {
-    opacity: 1;
-    pointer-events: unset;
-  }
-  z-index: 1000;
-  position: absolute;
-
-  top: 0;
-  left: 70px;
-
-  width: calc(100% - 70px);
-  height: 100%;
-
-  opacity: 0;
-  pointer-events: none;
-  transition: .25s;
-  border-radius: 0 8px 8px 0;
-  //backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
-}
-
-html.blur .Blur-Container {
-  &:before {
-    opacity: .5;
-  }
-  backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
-}
-
-html.coloring .Blur-Container {
-  top: 2px;
-
-  height: calc(100% - 8px);
-  width: calc(100% - 68px);
-}
-
-html.fullscreen .Blur-Container {
-  top: 0;
-  left: 0;
-
-  width: 100%;
-  height: 100%;
 }
 
 .NavBarInner-Main {
@@ -224,7 +156,7 @@ html.fullscreen .Blur-Container {
     width: 32px;
 
   }
-  z-index: 10000;
+  z-index: 100000;
   position: absolute;
 
   left: calc(10% + 5px);

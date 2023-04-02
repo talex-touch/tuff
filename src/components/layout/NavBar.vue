@@ -3,10 +3,16 @@
     <div class="NavBar-Container fake-background">
       <NavBarInner />
     </div>
-    <div class="NavBar-View fake-background">
+    <div id="NavBar-View" class="NavBar-View fake-background">
       <keep-alive>
         <router-view></router-view>
       </keep-alive>
+
+<!--      <teleport to=".NavBar-View">-->
+        <div class="Blur-Container fake-background" :class="{ blur: options.blur, display: activePlugin?.length }">
+          <PluginView />
+        </div>
+<!--      </teleport>-->
     </div>
 
   </div>
@@ -14,14 +20,69 @@
 
 <script>
 import NavBarInner from '@comp/layout/NavBarInner.vue'
+import PluginView from "@comp/plugin/PluginView.vue";
 
 export default {
   name: "NavBar",
-  components: { NavBarInner }
+  components: { PluginView, NavBarInner }
 }
 </script>
 
+<script setup>
+import { provide, ref, watch } from "vue";
+import { pluginManager } from "@modules/samples/node-api";
+
+const options = window.$storage.themeStyle
+
+const activePlugin = ref("")
+watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val))
+
+provide("activePlugin", activePlugin)
+</script>
+
 <style lang="scss" scoped>
+.Blur-Container {
+  &.display {
+    opacity: 1;
+    pointer-events: unset;
+  }
+  z-index: 1000;
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  opacity: 0;
+  pointer-events: none;
+  transition: .25s;
+  border-radius: 0 8px 8px 0;
+
+  --fake-opacity: .75;
+  //backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
+}
+
+html.blur .Blur-Container {
+  backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
+}
+
+html.coloring .Blur-Container {
+  top: 2px;
+
+  height: calc(100% - 8px);
+  width: calc(100% - 68px);
+}
+
+html.fullscreen .Blur-Container {
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+}
+
 .blur .NavBar-Wrapper {
   .NavBar-Container {
     --fake-opacity: .65;
@@ -40,7 +101,7 @@ export default {
       width: 0;
       opacity: 0;
     }
-    z-index: 1;
+    z-index: 1000;
     position: relative;
 
     width: 70px;

@@ -68,11 +68,18 @@ export class AccountStorage {
     }
 
     __save() {
-        window.$storage._saveStr('account.ini', this.saveToStr(), true)
+        const { user, eller, token } = this;
+
+        window.$storage._save('account.ini', { user, eller, token }, false)
     }
 
     saveToStr() {
         const { user, eller, token } = this;
+
+        console.log("Accounter", JSON.stringify({
+            user, eller, token
+        }))
+
         return JSON.stringify({
           user, eller, token
         })

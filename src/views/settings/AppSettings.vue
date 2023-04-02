@@ -105,7 +105,7 @@
 
     <t-group-block :name="`${$t('settings.application.list-settings.specifications.name')} (Touch)`" icon="apps">
       <t-block-line :title="$t('settings.application.list-settings.specifications.version')" :description="versionStr"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H3 T5"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H4 T1"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.time')">
         <template #description>
           {{ startCosts }}s
@@ -118,8 +118,11 @@
           <span class="tag" style="color: var(--el-color-error)" v-else-if="startCosts < 1">
             启动缓慢
           </span>
-          <span class="tag" style="color: var(--el-color-error); font-weight: 600" v-else>
+          <span class="tag" style="color: var(--el-color-error); font-weight: 600" v-else-if="startCosts < 10">
             启动滞后
+          </span>
+          <span class="tag" style="color: var(--el-color-error); font-weight: 600" v-else>
+            启动极慢
           </span>
         </template>
       </t-block-line>

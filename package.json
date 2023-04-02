@@ -49,6 +49,8 @@
     "chalk": "^5.2.0",
     "child_process": "^1.0.2",
     "codemirror": "^6.0.1",
+    "compressing": "^1.9.0",
+    "crypto-js": "^4.1.1",
     "dayjs": "^1.11.7",
     "element-plus": "^2.2.33",
     "fs-extra": "^11.1.0",
