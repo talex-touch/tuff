@@ -17,6 +17,9 @@
       "paint-custom": {
         "name": "个性定制",
         "controller": "控制器",
+        "layout": {
+          "name": "布局"
+        },
         "aside": {
           "name": "侧边栏",
           "leaf": "轻盈",

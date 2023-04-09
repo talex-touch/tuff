@@ -3,9 +3,6 @@
     <div class="AboutApplication activate">
       <div class="About-Image">
         <div class="Home-Logo-Bg">
-          <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100px" height="100px">
-            <circle class="g-polygon-move" cx="50" cy="50" r="50" />
-          </svg>
         </div>
 
         <img src="@assets/logo.svg" alt="logo" />
@@ -18,8 +15,8 @@
           </svg>
           <span class="version" v-if="$env.packageJson" :class="{
             dev,
-            'snapshot': $env.packageJson.version.indexOf('snapshot') !== -1,
-            'alpha': $env.packageJson.version.indexOf('alpha') !== -1,
+            'snapshot': $env.packageJson.version.indexOf('SNAPSHOT') !== -1,
+            'alpha': $env.packageJson.version.indexOf('Alpha') !== -1,
            }">{{ $env.packageJson.version }}</span>
 
           <p>{{ $t('app.description') }}</p>
@@ -369,38 +366,27 @@ function login() {
 
   }
   .About-Image {
-    .Home-Logo-Bg {
-      svg {
-        overflow: visible;
-      }
+    &:before, &:after {
+      content: "";
+      position: absolute;
 
-      .g-polygon-wrap,
-      .g-polygon-move {
-        fill: none;
-        stroke: var(--el-color-primary-dark-2);
-        stroke-width: 2;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-      }
+      left: 50%;
+      top: 50%;
 
-      .g-polygon-move {
-        transform-origin: center center;
-        //transform: scale(1.05);
-        //stroke: linear-gradinet(180deg, red, transprent);
-        stroke-width: 2;
-        stroke-dasharray: 280, 700;
-        stroke-dashoffset: 10;
-        animation: move .1s infinite linear;
-      }
+      width: 100%;
+      height: 100%;
 
-      @keyframes move {
-        0% {
-          stroke-dashoffset: 0;
-        }
-        100% {
-          stroke-dashoffset: -972;
-        }
-      }
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--el-fill-color-light);
+
+      animation: breathing 1s linear infinite;
+    }
+    &:after {
+      width: 125%;
+      height: 125%;
+
+      animation-delay: .5s;
     }
     position: absolute;
     display: flex;
@@ -411,16 +397,17 @@ function login() {
     right: 5%;
 
     height: 60%;
+    aspect-ratio: 1 / 1;
 
     img {
       position: absolute;
 
-      top: -2px;
-      left: -4px;
+      top: 0;
+      right: 0;
 
       height: 100%;
 
-      transform: scale(.85)
+      //transform: scale(.85)
     }
   }
 
@@ -467,6 +454,25 @@ function login() {
   filter: drop-shadow(0 0 4px var(--el-color-primary-light-7));
 
   animation: waving 10s infinite linear;
+}
+
+@keyframes breathing {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  30%, 50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: .8;
+    transform: translate(-50%, -50%) scale(.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
 }
 
 @keyframes waving {

@@ -3,7 +3,7 @@
     <t-tabs v-model="tabSelection">
       <t-tab-item-group :name="$t('settings.appearance.name')">
         <t-tab-item disabled icon="home-gear" :name="$t('settings.appearance.home-gear.name')">
-          <HomeGear />
+<!--          <HomeGear />-->
         </t-tab-item>
         <t-tab-item icon="mark-pen" :name="$t('settings.appearance.theme-style.name')">
           <ThemeStyle />
@@ -51,7 +51,6 @@ import TTabItemGroup from '@comp/tabs/TTabItemGroup.vue'
 import TTabHeader from '@comp/tabs/TTabHeader.vue'
 import PaintCustom from '~/views/settings/PaintCustom.vue'
 import ThemeStyle from '~/views/settings/ThemeStyle.vue'
-import HomeGear from '~/views/settings/HomeGear.vue'
 import AppSettings from '~/views/settings/AppSettings.vue'
 import { onMounted, ref } from 'vue'
 import AlsoShare from '~/views/settings/AlsoShare.vue'

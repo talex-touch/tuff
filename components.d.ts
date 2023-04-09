@@ -10,13 +10,13 @@ export {}
 declare module '@vue/runtime-core' {
   export interface GlobalComponents {
     AnimateIconButton: typeof import('./src/components/button/AnimateIconButton.vue')['default']
+    AppLayout: typeof import('./src/components/layout/AppLayout.vue')['default']
     DeviceFigure: typeof import('./src/components/device/DeviceFigure.vue')['default']
-    ElEmpty: typeof import('element-plus/es')['ElEmpty']
-    ElInput: typeof import('element-plus/es')['ElInput']
-    ElRate: typeof import('element-plus/es')['ElRate']
+    ElAside: typeof import('element-plus/es')['ElAside']
+    ElContainer: typeof import('element-plus/es')['ElContainer']
+    ElHeader: typeof import('element-plus/es')['ElHeader']
+    ElMain: typeof import('element-plus/es')['ElMain']
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
-    ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
-    ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
     ElSlider: typeof import('element-plus/es')['ElSlider']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
@@ -34,8 +34,9 @@ declare module '@vue/runtime-core' {
     LogTerminal: typeof import('./src/components/terminal/LogTerminal.vue')['default']
     LottieFrame: typeof import('./src/components/icon/lotties/LottieFrame.vue')['default']
     MacOSController: typeof import('./src/components/customize/controller/MacOSController.vue')['default']
-    NavBar: typeof import('./src/components/layout/NavBar.vue')['default']
-    NavBarInner: typeof import('./src/components/layout/NavBarInner.vue')['default']
+    MacOSLayout: typeof import('./src/components/layout/app/MacOSLayout.vue')['default']
+    NavBar: typeof import('./src/components/layout/AppLayout.vue')['default']
+    NavBarInner: typeof import('./src/components/layout/app/MacOSLayout.vue')['default']
     PlantNavBar: typeof import('./src/components/customize/navbar/PlantNavBar.vue')['default']
     PluginCard: typeof import('./src/components/plugin/layout/PluginCard.vue')['default']
     PluginCircling: typeof import('./src/components/plugin/layout/PluginCircling.vue')['default']
@@ -70,5 +71,6 @@ declare module '@vue/runtime-core' {
     TvTabItemGroup: typeof import('./src/components/tabs/vertical/TvTabItemGroup.vue')['default']
     TvTabs: typeof import('./src/components/tabs/vertical/TvTabs.vue')['default']
     WindowsController: typeof import('./src/components/customize/controller/WindowsController.vue')['default']
+    WindowsLayout: typeof import('./src/components/layout/app/WindowsLayout.vue')['default']
   }
 }

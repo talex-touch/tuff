@@ -1,6 +1,6 @@
 <template>
   <div @click="handleClick" @mouseenter="hover = true"
-       :class="{ plain, small, select: _select }"
+       :class="{ plain, small, select: _select, undot }"
        @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
     <div class="IconButton-Icon">
       <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
@@ -18,7 +18,7 @@ export default {
 
 <script setup>
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { ref, watchEffect } from 'vue'
+import { ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -37,6 +37,9 @@ const props = defineProps({
   },
   select: {
     type: Boolean
+  },
+  undot: {
+    type: Boolean
   }
 })
 
@@ -46,9 +49,14 @@ const route = useRoute()
 const hover = ref(false)
 const _select = ref(false)
 
-watchEffect(() => {
-  if (props.direct) _select.value = (route.path === props.direct)
+watch(() => route.path, () => {
   if ( props.hasOwnProperty('select') ) _select.value = props.select
+  if (props.direct) {
+    _select.value = (route.path === props.direct)
+
+    // if (  _select.value )
+    // console.log( route, props.direct, _select.value )
+  }
 })
 
 function handleClick() {
@@ -60,9 +68,40 @@ function handleClick() {
 
 .IconButton-Container {
   &.plain {
+    &:after {
+      content: '';
+      position: absolute;
+
+      top: 50%;
+      left: -10px;
+
+      width: 5px;
+      height: 10px;
+
+      border-radius: 5px;
+      background-color: var(--el-fill-color);
+      opacity: var(--fake-opacity);
+
+      transform: translateY(-50%);
+      transition: .25s;
+    }
+    &.select {
+      --fake-opacity: .75;
+      &:after {
+        height: 25px;
+
+        background-color: var(--el-color-primary);
+      }
+    }
+
+    --fake-opacity: .5;
+
     background-color: transparent;
     border: none;
     box-shadow: none;
+  }
+  &.undot {
+    &:after { display: none }
   }
   &.small {
     width: 24px;
@@ -88,6 +127,9 @@ function handleClick() {
     font-size: 20px;
   }
   &:active {
+    &:after {
+      transform: translate(-100%, -50%) scale(1.5) !important;
+    }
     transform: scale(.75)
   }
   display: flex;

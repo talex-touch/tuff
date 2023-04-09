@@ -66,3 +66,14 @@
     opacity: 1;
   }
 }
+
+@keyframes breathing {
+  from {
+    opacity: .75;
+    transform: scale(.8)
+  }
+  to {
+    opacity: 0;
+    transform: scale(var(--size, 2))
+  }
+}

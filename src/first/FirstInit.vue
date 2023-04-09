@@ -89,17 +89,6 @@ provide('nextComp', nextComp)
   }
 }
 
-@keyframes breathing {
-  from {
-    opacity: .75;
-    transform: scale(.8)
-  }
-  to {
-    opacity: 0;
-    transform: scale(var(--size, 2))
-  }
-}
-
 .FirstInit-Button {
   .remix {
     animation: arrowing 1s infinite ease-in;
@@ -157,7 +146,7 @@ provide('nextComp', nextComp)
 }
 
 .FirstInit-Container {
-  z-index: 1;
+  z-index: 1000;
   position: absolute;
 
   left: 0;

@@ -7,13 +7,13 @@
   </ul>
 
   <ul class="NavBar-Programs fake-background">
-    <IconButton plain @click="activePlugin = plugin.pluginInfo.name " :select="activePlugin === plugin.pluginInfo.name" v-for="plugin in plugins">
+    <IconButton undot plain @click="activePlugin = plugin.pluginInfo.name " :select="activePlugin === plugin.pluginInfo.name" v-for="plugin in plugins">
       <el-tooltip placement="right" :content="plugin.pluginInfo.name">
         <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
       </el-tooltip>
     </IconButton>
     <!--        <IconButton icon="device"></IconButton>-->
-    <IconButton plain direct="/market" icon="add"></IconButton>
+    <IconButton undot plain direct="/market" icon="add"></IconButton>
   </ul>
 </template>
 

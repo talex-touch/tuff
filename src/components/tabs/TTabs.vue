@@ -47,7 +47,7 @@ export default {
 
         await sleep(100)
 
-        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2)) + 'px'
+        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) - 40) + 'px'
         pointerStyle.height = (nodeRect.height * 0.6) + 'px'
 
       } else {
@@ -62,7 +62,7 @@ export default {
 
         await sleep(100)
         pointerStyle.transform = ''
-        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2)) + 'px'
+        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) - 40) + 'px'
 
         await sleep(100)
 

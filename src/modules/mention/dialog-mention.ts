@@ -10,7 +10,7 @@ export class DialogBtn {
 }
 
 export async function forDialogMention(title: String, message: String, icon: any = null, btns: DialogBtn[] = [ { content: "确定", type: 'info', onClick: async () => true } ]) {
-    return new Promise((resolve) => {
+    return new Promise<void>((resolve) => {
         const root: HTMLDivElement = document.createElement('div');
 
         let index: number = 0;
@@ -25,6 +25,7 @@ export async function forDialogMention(title: String, message: String, icon: any
 
         root.style.zIndex = `${10000 + index}`
 
+        // @ts-ignore
         const app = createApp(TDialogMention, {
             message, index, title, btns, icon, loading: false,
             close: async () => {

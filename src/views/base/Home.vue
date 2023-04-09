@@ -33,7 +33,6 @@
       </li>
     </ul>
   </div>
-  HELLO, TOUCHQ
 </template>
 
 <script>
