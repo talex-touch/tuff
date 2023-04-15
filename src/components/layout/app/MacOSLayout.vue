@@ -10,7 +10,11 @@
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <LeafNavBar v-model="activePlugin" />
+        <LeafNavBar v-model="activePlugin">
+          <template #plugin-nav>
+            <slot name="plugin-nav" />
+          </template>
+        </LeafNavBar>
 
         <slot name="icon" />
       </div>

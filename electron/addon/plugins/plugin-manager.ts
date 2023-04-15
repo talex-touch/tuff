@@ -54,7 +54,7 @@ export class PluginManager {
 
             this.active = name
 
-            injectWebView(plugin)
+            // injectWebView(plugin)
 
             plugin.status = PluginStatus.ACTIVE
 

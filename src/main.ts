@@ -23,7 +23,7 @@ const app = createApp(App)
     .use(VWave, {
         color: 'currentColor',
         duration: 0.5,
-        easing: 'ease-in-out',
+        easing: 'ease-adopters-out',
     })
 
 app .mount('#app')

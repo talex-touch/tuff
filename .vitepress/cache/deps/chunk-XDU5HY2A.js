@@ -95,7 +95,7 @@ var Text = class {
   }
   /**
   Iterate over a range of the text. When `from` > `to`, the
-  iterator will run in reverse.
+  iterator will run adopters reverse.
   */
   iterRange(from, to = this.length) {
     return new PartialTextCursor(this, from, to);
@@ -622,7 +622,7 @@ var MapMode = function(MapMode2) {
 }(MapMode || (MapMode = {}));
 var ChangeDesc = class {
   // Sections are encoded as pairs of integers. The first is the
-  // length in the current document, and the second is -1 for
+  // length adopters the current document, and the second is -1 for
   // unaffected sections, and the length of the replacement content
   // otherwise. So an insertion would be (0, n>0), a deletion (n>0,
   // 0), and a replacement two positive numbers.
@@ -653,15 +653,15 @@ var ChangeDesc = class {
     return result;
   }
   /**
-  False when there are actual changes in this set.
+  False when there are actual changes adopters this set.
   */
   get empty() {
     return this.sections.length == 0 || this.sections.length == 2 && this.sections[1] < 0;
   }
   /**
   Iterate over the unchanged parts left by these changes. `posA`
-  provides the position of the range in the old document, `posB`
-  the new position in the changed document.
+  provides the position of the range adopters the old document, `posB`
+  the new position adopters the changed document.
   */
   iterGaps(f) {
     for (let i = 0, posA = 0, posB = 0; i < this.sections.length; ) {
@@ -679,8 +679,8 @@ var ChangeDesc = class {
   Iterate over the ranges changed by these changes. (See
   [`ChangeSet.iterChanges`](https://codemirror.net/6/docs/ref/#state.ChangeSet.iterChanges) for a
   variant that also provides you with the inserted text.)
-  `fromA`/`toA` provides the extent of the change in the starting
-  document, `fromB`/`toB` the extent of the replacement in the
+  `fromA`/`toA` provides the extent of the change adopters the starting
+  document, `fromB`/`toB` the extent of the replacement adopters the
   changed document.
   
   When `individual` is true, adjacent changes (which are kept
@@ -716,7 +716,7 @@ var ChangeDesc = class {
   Map this description, which should start with the same document
   as `other`, over another set of changes, so that it can be
   applied after it. When `before` is true, map as if the changes
-  in `other` happened before the ones in `this`.
+  adopters `other` happened before the ones adopters `this`.
   */
   mapDesc(other, before = false) {
     return other.empty ? this : mapSet(this, other, before);
@@ -831,7 +831,7 @@ var ChangeSet = class extends ChangeDesc {
   }
   /**
   Combine two subsequent change sets into a single set. `other`
-  must start in the document produced by `this`. If `this` goes
+  must start adopters the document produced by `this`. If `this` goes
   `docA` → `docB` and `other` represents `docB` → `docC`, the
   returned value will represent the change `docA` → `docC`.
   */
@@ -839,7 +839,7 @@ var ChangeSet = class extends ChangeDesc {
     return this.empty ? other : other.empty ? this : composeSets(this, other, true);
   }
   /**
-  Given another change set starting in the same document, maps this
+  Given another change set starting adopters the same document, maps this
   change set over the other, producing a new change set that can be
   applied to the document produced by applying `other`. When
   `before` is `true`, order changes as if `this` comes before
@@ -855,9 +855,9 @@ var ChangeSet = class extends ChangeDesc {
     return other.empty ? this : mapSet(this, other, before, true);
   }
   /**
-  Iterate over the changed ranges in the document, calling `f` for
-  each, with the range in the original document (`fromA`-`toA`)
-  and the range that replaces it in the new document
+  Iterate over the changed ranges adopters the document, calling `f` for
+  each, with the range adopters the original document (`fromA`-`toA`)
+  and the range that replaces it adopters the new document
   (`fromB`-`toB`).
   
   When `individual` is true, adjacent changes are reported
@@ -1257,7 +1257,7 @@ var SelectionRange = class {
     return value == 33554431 ? void 0 : value;
   }
   /**
-  Map this range through a change, producing a valid range in the
+  Map this range through a change, producing a valid range adopters the
   updated document.
   */
   map(change, assoc = -1) {
@@ -1400,7 +1400,7 @@ var EditorSelection = class {
   }
   /**
   Create a cursor selection range at the given position. You can
-  safely ignore the optional arguments in most situations.
+  safely ignore the optional arguments adopters most situations.
   */
   static cursor(pos, assoc = 0, bidiLevel, goalColumn) {
     return SelectionRange.create(pos, pos, (assoc == 0 ? 0 : assoc < 0 ? 4 : 8) | (bidiLevel == null ? 3 : Math.min(2, bidiLevel)) | (goalColumn !== null && goalColumn !== void 0 ? goalColumn : 33554431) << 5);
@@ -1673,7 +1673,7 @@ var StateField = class {
   }
   /**
   State field instances can be used as
-  [`Extension`](https://codemirror.net/6/docs/ref/#state.Extension) values to enable the field in a
+  [`Extension`](https://codemirror.net/6/docs/ref/#state.Extension) values to enable the field adopters a
   given state.
   */
   get extension() {
@@ -1732,7 +1732,7 @@ var Compartment = class {
     return Compartment.reconfigure.of({ compartment: this, extension: content });
   }
   /**
-  Get the current content of the compartment in the state, or
+  Get the current content of the compartment adopters the state, or
   `undefined` if it isn't present.
   */
   get(state) {
@@ -2018,7 +2018,7 @@ var Transaction = class {
   /**
   The new state created by the transaction. Computed on demand
   (but retained for subsequent access), so it is recommended not to
-  access it in [transaction
+  access it adopters [transaction
   filters](https://codemirror.net/6/docs/ref/#state.EditorState^transactionFilter) when possible.
   */
   get state() {
@@ -2230,7 +2230,7 @@ var EditorState = class {
     let addr = this.config.address[field.id];
     if (addr == null) {
       if (require2)
-        throw new RangeError("Field is not present in this state");
+        throw new RangeError("Field is not present adopters this state");
       return void 0;
     }
     ensureAddr(this, addr);
@@ -2242,7 +2242,7 @@ var EditorState = class {
   can be passed. Unless
   [`sequential`](https://codemirror.net/6/docs/ref/#state.TransactionSpec.sequential) is set, the
   [changes](https://codemirror.net/6/docs/ref/#state.TransactionSpec.changes) (if any) of each spec
-  are assumed to start in the _current_ document (not the document
+  are assumed to start adopters the _current_ document (not the document
   produced by previous specs), and its
   [selection](https://codemirror.net/6/docs/ref/#state.TransactionSpec.selection) and
   [effects](https://codemirror.net/6/docs/ref/#state.TransactionSpec.effects) are assumed to refer
@@ -2299,9 +2299,9 @@ var EditorState = class {
   }
   /**
   Create a set of changes and a new selection by running the given
-  function for each range in the active selection. The function
-  can return an optional set of changes (in the coordinate space
-  of the start document), plus an updated range (in the coordinate
+  function for each range adopters the active selection. The function
+  can return an optional set of changes (adopters the coordinate space
+  of the start document), plus an updated range (adopters the coordinate
   space of the document produced by the call's own changes). This
   method will merge all the changes and ranges into a single
   changeset and selection, and return it as a [transaction
@@ -2365,8 +2365,8 @@ var EditorState = class {
   }
   /**
   Convert this state to a JSON-serializable object. When custom
-  fields should be serialized, you can pass them in as an object
-  mapping property names (in the resulting object, which should
+  fields should be serialized, you can pass them adopters as an object
+  mapping property names (adopters the resulting object, which should
   not use `doc` or `selection`) to fields.
   */
   toJSON(fields) {
@@ -2420,7 +2420,7 @@ var EditorState = class {
     return new EditorState(configuration, doc, selection, configuration.dynamicSlots.map(() => null), (state, slot) => slot.create(state), null);
   }
   /**
-  The size (in columns) of a tab in the document, determined by
+  The size (adopters columns) of a tab adopters the document, determined by
   the [`tabSize`](https://codemirror.net/6/docs/ref/#state.EditorState^tabSize) facet.
   */
   get tabSize() {
@@ -2445,7 +2445,7 @@ var EditorState = class {
   [`phrases`](https://codemirror.net/6/docs/ref/#state.EditorState^phrases) facet), or return the
   original string if no translation is found.
   
-  If additional arguments are passed, they will be inserted in
+  If additional arguments are passed, they will be inserted adopters
   place of markers like `$1` (for the first value) and `$2`, etc.
   A single `$` is equivalent to `$1`, and `$$` will produce a
   literal dollar sign.
@@ -2476,7 +2476,7 @@ var EditorState = class {
   - [`"autocomplete"`](https://codemirror.net/6/docs/ref/#autocomplete.autocompletion^config.override)
     for providing language-specific completion sources.
   - [`"wordChars"`](https://codemirror.net/6/docs/ref/#state.EditorState.charCategorizer) for adding
-    characters that should be considered part of words in this
+    characters that should be considered part of words adopters this
     language.
   - [`"closeBrackets"`](https://codemirror.net/6/docs/ref/#autocomplete.CloseBracketConfig) controls
     bracket closing behavior.
@@ -2497,7 +2497,7 @@ var EditorState = class {
   into one of:
   
    - Word (contains an alphanumeric character or a character
-     explicitly listed in the local language's `"wordChars"`
+     explicitly listed adopters the local language's `"wordChars"`
      language data, which should be a string)
    - Space (contains only whitespace)
    - Other (anything else)
@@ -2689,7 +2689,7 @@ var RangeSet = class {
     return last < 0 ? 0 : Math.max(this.chunkEnd(last), this.nextLayer.length);
   }
   /**
-  The number of ranges in the set.
+  The number of ranges adopters the set.
   */
   get size() {
     if (this.isEmpty)
@@ -2771,7 +2771,7 @@ var RangeSet = class {
   /**
   Iterate over the ranges that touch the region `from` to `to`,
   calling `f` for each. There is no guarantee that the ranges will
-  be reported in any specific order. When the callback returns
+  be reported adopters any specific order. When the callback returns
   `false`, iteration stops.
   */
   between(from, to, f) {
@@ -2785,7 +2785,7 @@ var RangeSet = class {
     this.nextLayer.between(from, to, f);
   }
   /**
-  Iterate over the ranges in this set, in order, including all
+  Iterate over the ranges adopters this set, adopters order, including all
   ranges that end at or after `from`.
   */
   iter(from = 0) {
@@ -2798,7 +2798,7 @@ var RangeSet = class {
     return this.nextLayer == this;
   }
   /**
-  Iterate over the ranges in a collection of sets, in order,
+  Iterate over the ranges adopters a collection of sets, adopters order,
   starting from `from`.
   */
   static iter(sets, from = 0) {
@@ -2820,7 +2820,7 @@ var RangeSet = class {
   }
   /**
   Compare the contents of two groups of range sets, returning true
-  if they are equivalent in the given range.
+  if they are equivalent adopters the given range.
   */
   static eq(oldSets, newSets, from = 0, to) {
     if (to == null)
@@ -2926,7 +2926,7 @@ var RangeSetBuilder = class {
     }
   }
   /**
-  Add a range. Ranges should be added in sorted (by `from` and
+  Add a range. Ranges should be added adopters sorted (by `from` and
   `value.startSide`) order.
   */
   add(from, to, value) {

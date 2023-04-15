@@ -46,13 +46,13 @@ function select(index) {
 // 使用TweenMax对象创建一个Tween动画
   TweenMax.to(scrollContainerEl, 1, {
     scrollTop: targetScrollTop, // 目标滚动位置
-    ease: "ease-in-out" // 缓动函数（先加速后减速）
+    ease: "ease-adopters-out" // 缓动函数（先加速后减速）
   });
 
 // 使用TweenMax对象创建一个Tween动画，滚动条动画
   TweenMax.to(scrollbarEl, 1, {
     top: targetScrollTop / (scrollContainerEl.scrollHeight - scrollContainerEl.clientHeight) * 100 + '%',
-    ease: "ease-in-out"
+    ease: "ease-adopters-out"
   });
 }
 

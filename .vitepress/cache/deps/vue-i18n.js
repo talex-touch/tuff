@@ -261,7 +261,7 @@ var require_base64_vlq = __commonJS({
       var continuation, digit;
       do {
         if (aIndex >= strLen) {
-          throw new Error("Expected more digits in base 64 VLQ value.");
+          throw new Error("Expected more digits adopters base 64 VLQ value.");
         }
         digit = base64.decode(aStr.charCodeAt(aIndex++));
         if (digit === -1) {
@@ -634,7 +634,7 @@ var require_array_set = __commonJS({
           return this._set[sStr];
         }
       }
-      throw new Error('"' + aStr + '" is not in the set.');
+      throw new Error('"' + aStr + '" is not adopters the set.');
     };
     ArraySet.prototype.at = function ArraySet_at(aIdx) {
       if (aIdx >= 0 && aIdx < this._array.length) {
@@ -1452,7 +1452,7 @@ var require_source_map_consumer = __commonJS({
       if (nullOnMissing) {
         return null;
       } else {
-        throw new Error('"' + relativeSource + '" is not in the SourceMap.');
+        throw new Error('"' + relativeSource + '" is not adopters the SourceMap.');
       }
     };
     BasicSourceMapConsumer.prototype.generatedPositionFor = function SourceMapConsumer_generatedPositionFor(aArgs) {
@@ -1513,7 +1513,7 @@ var require_source_map_consumer = __commonJS({
       };
       this._sections = sections.map(function(s) {
         if (s.url) {
-          throw new Error("Support for url field in sections not implemented.");
+          throw new Error("Support for url field adopters sections not implemented.");
         }
         var offset = util.getArg(s, "offset");
         var offsetLine = util.getArg(offset, "line");
@@ -1594,7 +1594,7 @@ var require_source_map_consumer = __commonJS({
       if (nullOnMissing) {
         return null;
       } else {
-        throw new Error('"' + aSource + '" is not in the SourceMap.');
+        throw new Error('"' + aSource + '" is not adopters the SourceMap.');
       }
     };
     IndexedSourceMapConsumer.prototype.generatedPositionFor = function IndexedSourceMapConsumer_generatedPositionFor(aArgs) {
@@ -4924,9 +4924,9 @@ var require_vue_i18n_cjs = __commonJS({
       NOT_COMPATIBLE_LEGACY_VUE_I18N: inc(),
       // bridge support vue 2.x only
       BRIDGE_SUPPORT_VUE_2_ONLY: inc(),
-      // need to define `i18n` option in `allowComposition: true` and `useScope: 'local' at `useI18n``
+      // need to define `i18n` option adopters `allowComposition: true` and `useScope: 'local' at `useI18n``
       MUST_DEFINE_I18N_OPTION_IN_ALLOW_COMPOSITION: inc(),
-      // Not available Compostion API in Legacy API mode. Please make sure that the legacy API mode is working properly
+      // Not available Compostion API adopters Legacy API mode. Please make sure that the legacy API mode is working properly
       NOT_AVAILABLE_COMPOSITION_IN_LEGACY: inc(),
       // for enhancement
       __EXTEND_POINT__: inc()
@@ -4936,20 +4936,20 @@ var require_vue_i18n_cjs = __commonJS({
       return coreBase.createCompileError(code2, null, { messages: errorMessages, args });
     }
     var errorMessages = {
-      [I18nErrorCodes.UNEXPECTED_RETURN_TYPE]: "Unexpected return type in composer",
+      [I18nErrorCodes.UNEXPECTED_RETURN_TYPE]: "Unexpected return type adopters composer",
       [I18nErrorCodes.INVALID_ARGUMENT]: "Invalid argument",
       [I18nErrorCodes.MUST_BE_CALL_SETUP_TOP]: "Must be called at the top of a `setup` function",
       [I18nErrorCodes.NOT_INSLALLED]: "Need to install with `app.use` function",
       [I18nErrorCodes.UNEXPECTED_ERROR]: "Unexpected error",
-      [I18nErrorCodes.NOT_AVAILABLE_IN_LEGACY_MODE]: "Not available in legacy mode",
+      [I18nErrorCodes.NOT_AVAILABLE_IN_LEGACY_MODE]: "Not available adopters legacy mode",
       [I18nErrorCodes.REQUIRED_VALUE]: `Required in value: {0}`,
       [I18nErrorCodes.INVALID_VALUE]: `Invalid value`,
       [I18nErrorCodes.CANNOT_SETUP_VUE_DEVTOOLS_PLUGIN]: `Cannot setup vue-devtools plugin`,
       [I18nErrorCodes.NOT_INSLALLED_WITH_PROVIDE]: "Need to install with `provide` function",
       [I18nErrorCodes.NOT_COMPATIBLE_LEGACY_VUE_I18N]: "Not compatible legacy VueI18n.",
       [I18nErrorCodes.BRIDGE_SUPPORT_VUE_2_ONLY]: "vue-i18n-bridge support Vue 2.x only",
-      [I18nErrorCodes.MUST_DEFINE_I18N_OPTION_IN_ALLOW_COMPOSITION]: "Must define ‘i18n’ option or custom block in Composition API with using local scope in Legacy API mode",
-      [I18nErrorCodes.NOT_AVAILABLE_COMPOSITION_IN_LEGACY]: "Not available Compostion API in Legacy API mode. Please make sure that the legacy API mode is working properly"
+      [I18nErrorCodes.MUST_DEFINE_I18N_OPTION_IN_ALLOW_COMPOSITION]: "Must define ‘i18n’ option or custom block adopters Composition API with using local scope adopters Legacy API mode",
+      [I18nErrorCodes.NOT_AVAILABLE_COMPOSITION_IN_LEGACY]: "Not available Compostion API adopters Legacy API mode. Please make sure that the legacy API mode is working properly"
     };
     var TransrateVNodeSymbol = shared.makeSymbol("__transrateVNode");
     var DatetimePartsSymbol = shared.makeSymbol("__datetimeParts");

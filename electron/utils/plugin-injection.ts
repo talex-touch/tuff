@@ -65,7 +65,7 @@ export function injectWebView(plugin: Plugin) {
 
 }
 
-function getJs(options) {
+export function getJs(options) {
     const [name, pluginInfo, sourceConfig, _path] = options
 
     const themeConfig = getConfig('theme-style.ini')
@@ -205,7 +205,7 @@ function getJs(options) {
 
 }
 
-function getStyles() {
+export function getStyles() {
 
     return `html, body, #app {
                   position: relative;

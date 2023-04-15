@@ -25,30 +25,27 @@ export default {
 </script>
 
 <script setup>
-import { pluginManager, registerTypeProcess } from '@modules/samples/node-api'
-import { onMounted, reactive, ref, onBeforeUnmount } from 'vue'
+import { ref, inject, onMounted } from 'vue'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import { sleep } from '@modules/utils'
 import EmptyAnimate from '@comp/base/EmptyAnimate.vue'
-import PluginCircling from '@comp/plugin/layout/PluginCircling.vue'
-import PluginIcon from "@comp/plugin/PluginIcon.vue";
 import PluginList from "@comp/plugin/layout/PluginList.vue";
 
 const plugins = ref()
 const pluginInfoRef = ref()
 const select = ref()
 
-!(async () => {
-    plugins.value = pluginManager.getPluginList()
+onMounted(() => {
+  const [_plugins, cb] = inject('plugins')()
 
-    const logout = registerTypeProcess('plugin-status-updated', ({ data }) => {
+  console.log( _plugins )
 
-        plugins.value[data.plugin]._status = data.status
+  plugins.value = [ ..._plugins ]
+  cb((val) => {
+    plugins.value = [ ...val ]
+  })
 
-    })
-
-    onBeforeUnmount(logout)
-})()
+})
 
 async function selectPlugin(index) {
   if( index === select.value ) return

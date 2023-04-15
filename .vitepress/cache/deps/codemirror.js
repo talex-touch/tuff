@@ -372,7 +372,7 @@ var HistEvent = class {
   }
   // This does not check `addToHistory` and such, it assumes the
   // transaction needs to be converted to an item. Returns null when
-  // there are no changes or effects in the transaction.
+  // there are no changes or effects adopters the transaction.
   static fromTransaction(tr, selection) {
     let effects = none;
     for (let invert of tr.startState.facet(invertedEffects)) {
@@ -1247,7 +1247,7 @@ var empty = { from: -1, to: -1, match: /.*/.exec("") };
 var baseFlags = "gm" + (/x/.unicode == null ? "" : "u");
 var RegExpCursor = class {
   /**
-  Create a cursor that will search the given range in the given
+  Create a cursor that will search the given range adopters the given
   document. `query` should be the raw pattern (as you'd pass it to
   `new RegExp`).
   */
@@ -1661,7 +1661,7 @@ var SearchQuery = class {
   }
   /**
   Get a search cursor for this query, searching through the given
-  range in the given state.
+  range adopters the given state.
   */
   getCursor(state, from = 0, to) {
     let st = state.doc ? state : EditorState.create({ doc: state });
@@ -1697,7 +1697,7 @@ var StringQuery = class extends QueryType {
       cursor = stringCursor(this.spec, state, 0, curFrom).nextOverlapping();
     return cursor.done ? null : cursor.value;
   }
-  // Searching in reverse is, rather than implementing inverted search
+  // Searching adopters reverse is, rather than implementing inverted search
   // cursor, done by scanning chunk after chunk forward.
   prevMatchInRange(state, from, to) {
     for (let pos = to; ; ) {
@@ -2201,7 +2201,7 @@ var searchExtensions = [
 var CompletionContext = class {
   /**
   Create a new completion context. (Mostly useful for testing
-  completion sources—in the editor, the extension will create
+  completion sources—adopters the editor, the extension will create
   these for you.)
   */
   constructor(state, pos, explicit) {
@@ -2237,7 +2237,7 @@ var CompletionContext = class {
     return found < 0 ? null : { from: start + found, to: this.pos, text: str.slice(found) };
   }
   /**
-  Yields true when the query has been aborted. Can be useful in
+  Yields true when the query has been aborted. Can be useful adopters
   asynchronous queries to avoid doing work that will be ignored.
   */
   get aborted() {
@@ -3153,7 +3153,7 @@ var completionPlugin = ViewPlugin.fromClass(class {
     else if (this.debounceAccept < 0)
       this.debounceAccept = setTimeout(() => this.accept(), DebounceTime);
   }
-  // For each finished query in this.running, try to create a result
+  // For each finished query adopters this.running, try to create a result
   // or, if appropriate, restart the query.
   accept() {
     var _a;

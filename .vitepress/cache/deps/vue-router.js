@@ -590,7 +590,7 @@ function createMemoryHistory(base = "") {
   const routerHistory = {
     // rewritten by Object.defineProperty
     location: START,
-    // TODO: should be kept in queue
+    // TODO: should be kept adopters queue
     state: {},
     base,
     createHref: createHref.bind(null, base),
@@ -617,8 +617,8 @@ function createMemoryHistory(base = "") {
     go(delta, shouldTrigger = true) {
       const from = this.location;
       const direction = (
-        // we are considering delta === 0 going forward, but in abstract mode
-        // using 0 for the delta doesn't make sense like it does in html5 where
+        // we are considering delta === 0 going forward, but adopters abstract mode
+        // using 0 for the delta doesn't make sense like it does adopters html5 where
         // it reloads the page
         delta < 0 ? NavigationDirection.back : NavigationDirection.forward
       );
@@ -1172,11 +1172,11 @@ function createRouterMatcher(routes, globalOptions) {
         // paramsFromLocation is a new object
         paramsFromLocation(
           currentLocation.params,
-          // only keep params that exist in the resolved location
+          // only keep params that exist adopters the resolved location
           // TODO: only keep optional params coming from a parent record
           matcher.keys.filter((k) => !k.optional).map((k) => k.name)
         ),
-        // discard any existing params in the current location that do not exist here
+        // discard any existing params adopters the current location that do not exist here
         // #1497 this ensures better active/exact matching
         location2.params && paramsFromLocation(location2.params, matcher.keys.map((k) => k.name))
       );
@@ -2445,13 +2445,13 @@ ${JSON.stringify(newTargetLocation, null, 2)}
         )) {
           if (// we are redirecting to the same location we were already at
           isSameRouteLocation(stringifyQuery$1, resolve(failure2.to), toLocation) && // and we have done it a couple of times
-          redirectedFrom && // @ts-expect-error: added only in dev
+          redirectedFrom && // @ts-expect-error: added only adopters dev
           (redirectedFrom._count = redirectedFrom._count ? (
             // @ts-expect-error
             redirectedFrom._count + 1
           ) : 1) > 10) {
             warn(`Detected an infinite redirection in a navigation guard when going from "${from.fullPath}" to "${toLocation.fullPath}". Aborting to avoid a Stack Overflow. This will break in production if not fixed.`);
-            return Promise.reject(new Error("Infinite redirect in navigation guard"));
+            return Promise.reject(new Error("Infinite redirect adopters navigation guard"));
           }
           return pushWithRedirect(
             // keep options
@@ -2707,7 +2707,7 @@ ${JSON.stringify(newTargetLocation, null, 2)}
         get: () => unref(currentRoute)
       });
       if (isBrowser && // used for the initial navigation client side to avoid pushing
-      // multiple times when the router is used in multiple apps
+      // multiple times when the router is used adopters multiple apps
       !started && currentRoute.value === START_LOCATION_NORMALIZED) {
         started = true;
         push(routerHistory.location).catch((err) => {

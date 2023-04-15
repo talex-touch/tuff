@@ -2,12 +2,12 @@
  * Copyright (c) 2022. TalexDreamSoul
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
+ * you may not use this file except adopters compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
+ * Unless required by applicable law or agreed to adopters writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
@@ -15,6 +15,7 @@
  */
 
 import { createRouter, createWebHashHistory } from 'vue-router'
+import {pluginManager} from "@modules/samples/node-api";
 
 const routes: any = [
     {
@@ -41,11 +42,21 @@ const routes: any = [
         name: "市场",
         component: () => import("../views/base/Market.vue")
     },
+    {
+        path: "/plugin/view/:name",
+        name: "插件视图",
+        component: () => import("../views/base/ViewPlugin.vue")
+    }
 ]
 
 const router = createRouter({
     history: createWebHashHistory(),
     routes
+})
+
+router.afterEach((to, from) => {
+    if ( to.name  !== '插件视图' ) pluginManager.changeActivePlugin()
+  // console.log( 'router reached: ' + to.path )
 })
 
 // router.beforeEach(async (to, from, next) => {

@@ -22,24 +22,28 @@
       <template #title>
         TalexTouch <span class="tag version fake-background" v-if="packageJson.version.indexOf('SNAPSHOT') !== -1 || packageJson.version.indexOf('Alpha') !== -1">{{packageJson.version }}</span>
       </template>
+      <template #plugin-nav>
+        <PluginNavList :plugins="plugins" v-model="activePlugin" />
+      </template>
     </component>
   </div>
 </template>
 
 <script>
 import AppLayoutInner from '@comp/layout/app/MacOSLayout.vue'
-import PluginView from "@comp/plugin/PluginView.vue";
 
 export default {
   name: "AppLayout",
-  components: { PluginView, AppLayoutInner }
+  components: { AppLayoutInner }
 }
 </script>
 
 <script setup>
-import { inject, shallowReactive, watch } from "vue";
+import { inject, provide, ref, shallowReactive, watch } from "vue";
 import { $t } from "@modules/lang";
 import IconButton from "@comp/button/IconButton.vue";
+import PluginNavList from "@comp/plugin/layout/PluginNavList.vue";
+import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 
 const options = window.$storage.themeStyle
 const paintCustom = window.$storage.paintCustom
@@ -63,8 +67,16 @@ async function loadModule(module) {
   return m.default
 }
 
+const plugins = ref()
 const activePlugin = inject('activePlugin')
 const account = window.$storage.account
+watch(() => pluginAdopter.plugins, val => {
+  plugins.value = val.values()
+
+  provide('plugins', () => [val.values(), (cb) => {
+    cb(val.values())
+  }])
+}, { deep: true, immediate: true })
 
 function openDevTools() {
   window.$nodeApi.openDevTools()
@@ -167,7 +179,7 @@ function openDevTools() {
   --fake-opacity: 0;
 
   opacity: 0;
-  animation: iconEnter .25s .25s ease-in-out forwards;
+  animation: iconEnter .5s .35s ease-in-out forwards;
   transition: all 0.2s ease-in-out;
 }
 

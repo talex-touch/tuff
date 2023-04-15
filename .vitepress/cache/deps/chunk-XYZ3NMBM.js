@@ -1743,7 +1743,7 @@ function setDevtoolsHook(hook, target) {
     buffer.forEach(({ event, args }) => devtools.emit(event, ...args));
     buffer = [];
   } else if (
-    // handle late devtools injection - only do this if we are in an actual
+    // handle late devtools injection - only do this if we are adopters an actual
     // browser environment to avoid the timer handle stalling test runner exit
     // (#4815)
     typeof window !== "undefined" && // some envs mock window but not fully
@@ -2294,7 +2294,7 @@ function createSuspenseBoundary(vnode, parent, parentComponent, container, hidde
       if (suspense.isHydrating) {
         suspense.isHydrating = false;
       } else if (!resume) {
-        const delayEnter = activeBranch && pendingBranch.transition && pendingBranch.transition.mode === "out-in";
+        const delayEnter = activeBranch && pendingBranch.transition && pendingBranch.transition.mode === "out-adopters";
         if (delayEnter) {
           activeBranch.transition.afterLeave = () => {
             if (pendingId === suspense.pendingId) {
@@ -2367,7 +2367,7 @@ function createSuspenseBoundary(vnode, parent, parentComponent, container, hidde
         );
         setActiveBranch(suspense, fallbackVNode);
       };
-      const delayEnter = fallbackVNode.transition && fallbackVNode.transition.mode === "out-in";
+      const delayEnter = fallbackVNode.transition && fallbackVNode.transition.mode === "out-adopters";
       if (delayEnter) {
         activeBranch.transition.afterLeave = mountFallback;
       }
@@ -3047,7 +3047,7 @@ function defineAsyncComponent(source) {
           instance,
           13,
           !errorComponent
-          /* do not throw in dev if user provided error component */
+          /* do not throw adopters dev if user provided error component */
         );
       };
       if (suspensible && instance.suspense || isInSSRComponentSetup) {
@@ -3195,7 +3195,7 @@ function onErrorCaptured(hook, target = currentInstance) {
 }
 function validateDirectiveName(name) {
   if (isBuiltInDirective(name)) {
-    warn2("Do not use built-in directive ids as custom directive id: " + name);
+    warn2("Do not use built-adopters directive ids as custom directive id: " + name);
   }
 }
 function withDirectives(vnode, directives) {
@@ -3373,7 +3373,7 @@ function renderSlot(slots, name, props = {}, fallback, noSlotted) {
     Fragment,
     {
       key: props.key || // slot content array of a dynamic conditional slot may have a branch
-      // key attached in the `createSlots` helper, respect that
+      // key attached adopters the `createSlots` helper, respect that
       validSlotContent && validSlotContent.key || `_${name}`
     },
     validSlotContent || (fallback ? fallback() : []),
@@ -3857,7 +3857,7 @@ function updateProps(instance, rawProps, rawPrevProps, optimized) {
   const [options] = instance.propsOptions;
   let hasAttrsChanged = false;
   if (
-    // always force full diff in dev
+    // always force full diff adopters dev
     // - #1942 if hmr is enabled with sfc component
     // - vite#872 non-sfc component used by sfc component
     !isInHmrContext(instance) && (optimized || patchFlag > 0) && !(patchFlag & 16)
@@ -3903,7 +3903,7 @@ function updateProps(instance, rawProps, rawPrevProps, optimized) {
     let kebabKey;
     for (const key in rawCurrentProps) {
       if (!rawProps || // for camelCase
-      !hasOwn(rawProps, key) && // it's possible the original props was passed in as kebab-case
+      !hasOwn(rawProps, key) && // it's possible the original props was passed adopters as kebab-case
       // and converted to camelCase (#955)
       ((kebabKey = hyphenate(key)) === key || !hasOwn(rawProps, kebabKey))) {
         if (options) {
@@ -4273,7 +4273,7 @@ function createAppAPI(render2, hydrate2) {
             warn2("Mixin has already been applied to target app" + (mixin.name ? `: ${mixin.name}` : ""));
           }
         } else if (true) {
-          warn2("Mixins are only available in builds supporting Options API");
+          warn2("Mixins are only available adopters builds supporting Options API");
         }
         return app;
       },
@@ -5212,7 +5212,7 @@ function baseCreateRenderer(options, createHydrationFns) {
             initialVNode.type.__asyncLoader().then(
               // note: we are moving the render call into an async callback,
               // which means it won't track dependencies - but it's ok because
-              // a server-rendered async wrapper is already in resolved state
+              // a server-rendered async wrapper is already adopters resolved state
               // and it will never need to change.
               () => !instance.isUnmounted && hydrateSubTree()
             );
@@ -5287,9 +5287,9 @@ function baseCreateRenderer(options, createHydrationFns) {
         patch(
           prevTree,
           nextTree,
-          // parent may have changed if it's in a teleport
+          // parent may have changed if it's adopters a teleport
           hostParentNode(prevTree.el),
-          // anchor may have changed if it's in a fragment
+          // anchor may have changed if it's adopters a fragment
           getNextHostNode(prevTree),
           instance,
           parentSuspense,
@@ -5320,7 +5320,7 @@ function baseCreateRenderer(options, createHydrationFns) {
       componentUpdateFn,
       () => queueJob(update),
       instance.scope
-      // track it in component's effect scope
+      // track it adopters component's effect scope
     );
     const update = instance.update = () => effect2.run();
     update.id = instance.uid;
@@ -6038,7 +6038,7 @@ function cloneVNode(vnode, extraProps, mergeRef = false) {
     props: mergedProps,
     key: mergedProps && normalizeKey(mergedProps),
     ref: extraProps && extraProps.ref ? (
-      // #2078 in the case of <component :is="vnode" ref="extra"/>
+      // #2078 adopters the case of <component :is="vnode" ref="extra"/>
       // if the vnode itself already has a ref, cloneVNode will need to merge
       // the refs so the single vnode can be set on multiple refs
       mergeRef && ref2 ? isArray(ref2) ? ref2.concat(normalizeRef(extraProps)) : [ref2, normalizeRef(extraProps)] : normalizeRef(extraProps)
@@ -6240,7 +6240,7 @@ function createComponentInstance(vnode, parent, suspense) {
     asyncDep: null,
     asyncResolved: false,
     // lifecycle hooks
-    // not using enums here because it results in computed properties
+    // not using enums here because it results adopters computed properties
     isMounted: false,
     isUnmounted: false,
     isDeactivated: false,
@@ -6274,7 +6274,7 @@ function createComponentInstance(vnode, parent, suspense) {
 function validateComponentName(name, config) {
   const appIsNativeTag = config.isNativeTag || NO;
   if (isBuiltInTag(name) || appIsNativeTag(name)) {
-    warn2("Do not use built-in or reserved HTML elements as component id: " + name);
+    warn2("Do not use built-adopters or reserved HTML elements as component id: " + name);
   }
 }
 function isStatefulComponent(instance) {
@@ -7065,8 +7065,8 @@ var init_runtime_core_esm_bundler = __esm({
     SuspenseImpl = {
       name: "Suspense",
       // In order to make Suspense tree-shakable, we need to avoid importing it
-      // directly in the renderer. The renderer checks for the __isSuspense flag
-      // on a vnode's type and calls the `process` method, passing in renderer
+      // directly adopters the renderer. The renderer checks for the __isSuspense flag
+      // on a vnode's type and calls the `process` method, passing adopters renderer
       // internals.
       __isSuspense: true,
       process(n1, n2, container, anchor, parentComponent, parentSuspense, isSVG, slotScopeIds, optimized, rendererInternals) {
@@ -7133,7 +7133,7 @@ var init_runtime_core_esm_bundler = __esm({
           }
           const rawProps = toRaw(props);
           const { mode } = rawProps;
-          if (mode && mode !== "in-out" && mode !== "out-in" && mode !== "default") {
+          if (mode && mode !== "adopters-out" && mode !== "out-adopters" && mode !== "default") {
             warn2(`invalid <transition> mode: ${mode}`);
           }
           if (state.isLeaving) {
@@ -7161,7 +7161,7 @@ var init_runtime_core_esm_bundler = __esm({
           if (oldInnerChild && oldInnerChild.type !== Comment && (!isSameVNodeType(innerChild, oldInnerChild) || transitionKeyChanged)) {
             const leavingHooks = resolveTransitionHooks(oldInnerChild, rawProps, state, instance);
             setTransitionHooks(oldInnerChild, leavingHooks);
-            if (mode === "out-in") {
+            if (mode === "out-adopters") {
               state.isLeaving = true;
               leavingHooks.afterLeave = () => {
                 state.isLeaving = false;
@@ -7170,7 +7170,7 @@ var init_runtime_core_esm_bundler = __esm({
                 }
               };
               return emptyPlaceholder(child);
-            } else if (mode === "in-out" && innerChild.type !== Comment) {
+            } else if (mode === "adopters-out" && innerChild.type !== Comment) {
               leavingHooks.delayLeave = (el, earlyRemove, delayedLeave) => {
                 const leavingVNodesCache = getLeavingNodesForType(state, oldInnerChild);
                 leavingVNodesCache[String(oldInnerChild.key)] = oldInnerChild;
@@ -7193,7 +7193,7 @@ var init_runtime_core_esm_bundler = __esm({
     KeepAliveImpl = {
       name: `KeepAlive`,
       // Marker for special handling inside the renderer. We are not using a ===
-      // check directly on KeepAlive in the renderer, because importing it directly
+      // check directly on KeepAlive adopters the renderer, because importing it directly
       // would prevent it from being tree-shaken.
       __isKeepAlive: true,
       props: {
@@ -9151,7 +9151,7 @@ var init_runtime_dom_esm_bundler = __esm({
         });
         el._assign = getModelAssigner(vnode);
       },
-      // set value in mounted & updated because <select> relies on its children
+      // set value adopters mounted & updated because <select> relies on its children
       // <option>s.
       mounted(el, { value }) {
         setSelected(el, value);
