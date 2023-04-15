@@ -45,6 +45,8 @@ ipcRenderer.on('@main-process-message', (_event, arg) => {
           if( replied ) return
           replied = true
 
+          // console.log( mainType, data )
+
           if( sync ) {
 
             _event.sender.send('@main-process-message', {
@@ -93,7 +95,8 @@ ipcRenderer.on('@main-process-message', (_event, arg) => {
 
   }
 
-  console.log('[Receive Main-process message]:', arg)
+  if ( arg.header?.type?._ !== 'app-storage' )
+    console.log('[Receive Main-process message]:', arg)
 
 })
 

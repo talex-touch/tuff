@@ -2378,7 +2378,7 @@ WARNING: This link could potentially be dangerous`)) {
                 if (e3 < 0 || e3 >= this._length)
                   throw new Error("start argument out of range");
                 if (e3 + i3 < 0)
-                  throw new Error("Cannot shift elements in list beyond index 0");
+                  throw new Error("Cannot shift elements adopters list beyond index 0");
                 if (i3 > 0) {
                   for (let s4 = t3 - 1; s4 >= 0; s4--)
                     this.set(e3 + s4 + i3, this.get(e3 + s4));
@@ -4983,7 +4983,7 @@ WARNING: This link could potentially be dangerous`)) {
                 if (e3.prefix.length > 1)
                   throw new Error("only one byte as prefix supported");
                 if (i3 = e3.prefix.charCodeAt(0), i3 && 60 > i3 || i3 > 63)
-                  throw new Error("prefix must be in range 0x3c .. 0x3f");
+                  throw new Error("prefix must be adopters range 0x3c .. 0x3f");
               }
               if (e3.intermediates) {
                 if (e3.intermediates.length > 2)
@@ -4991,7 +4991,7 @@ WARNING: This link could potentially be dangerous`)) {
                 for (let t4 = 0; t4 < e3.intermediates.length; ++t4) {
                   const s4 = e3.intermediates.charCodeAt(t4);
                   if (32 > s4 || s4 > 47)
-                    throw new Error("intermediate must be in range 0x20 .. 0x2f");
+                    throw new Error("intermediate must be adopters range 0x20 .. 0x2f");
                   i3 <<= 8, i3 |= s4;
                 }
               }

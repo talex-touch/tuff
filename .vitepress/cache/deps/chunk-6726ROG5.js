@@ -141,7 +141,7 @@ var computePosition = async (reference, floating, config) => {
     };
     if (true) {
       if (resetCount > 50) {
-        console.warn(["Floating UI: The middleware lifecycle appears to be running in an", "infinite loop. This is usually caused by a `reset` continually", "being returned without a break condition."].join(" "));
+        console.warn(["Floating UI: The middleware lifecycle appears to be running adopters an", "infinite loop. This is usually caused by a `reset` continually", "being returned without a break condition."].join(" "));
       }
     }
     if (reset && resetCount <= 50) {

@@ -1,19 +1,13 @@
 <template>
-  <ul class="PlantNavBar-Home"  @click="activePlugin = ''">
+  <ul class="PlantNavBar-Home">
     <IconButton plain direct="/home" icon="home-3" />
     <IconButton plain direct="/plugin" icon="plug-2" />
     <IconButton plain icon="quill-pen"></IconButton>
     <IconButton plain direct="/setting" icon="settings-6"></IconButton>
   </ul>
 
-  <ul class="NavBar-Programs fake-background">
-    <IconButton undot plain @click="activePlugin = plugin.pluginInfo.name " :select="activePlugin === plugin.pluginInfo.name" v-for="plugin in plugins">
-      <el-tooltip placement="right" :content="plugin.pluginInfo.name">
-        <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
-      </el-tooltip>
-    </IconButton>
-    <!--        <IconButton icon="device"></IconButton>-->
-    <IconButton undot plain direct="/market" icon="add"></IconButton>
+  <ul class="NavBar-Programs">
+    <slot name="plugin-nav" />
   </ul>
 </template>
 
@@ -24,21 +18,6 @@ export default {
   name: "PlantNavBar",
   components: { IconButton }
 }
-</script>
-
-<script setup>
-import { computed, ref } from 'vue'
-import { pluginManager } from '@modules/samples/node-api'
-import PluginIcon from '@comp/plugin/PluginIcon.vue'
-import { useModelWrapper } from '@modules/utils'
-
-const props = defineProps(['modelValue'])
-const emits = defineEmits(['update:modelValue'])
-
-const activePlugin = useModelWrapper(props, emits)
-
-const plugins = computed(() => Object.values(pluginManager.getPluginList()))
-
 </script>
 
 <style lang="scss" scoped>

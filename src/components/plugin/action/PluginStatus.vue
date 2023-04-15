@@ -29,8 +29,6 @@ watchEffect(() => {
 
 function refresh () {
 
-  console.log( this )
-
   this.$el.classList.remove('LOADED', 'LOADING', 'ACTIVE', 'ENABLED', 'CRASHED', 'DISABLING', 'DISABLED')
   this.$el.classList.add(this.status)
 

@@ -1,6 +1,6 @@
 <template>
   <div @click="handleClick" @mouseenter="hover = true"
-       :class="{ plain, small, select: _select, undot }"
+       :class="{ plain, small, select: _select, undot, scaleUpper, middle }"
        @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
     <div class="IconButton-Icon">
       <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
@@ -40,6 +40,12 @@ const props = defineProps({
   },
   undot: {
     type: Boolean
+  },
+  scaleUpper: {
+    type: Boolean
+  },
+  middle: {
+    type: Boolean
   }
 })
 
@@ -67,6 +73,9 @@ function handleClick() {
 <style lang="scss" scoped>
 
 .IconButton-Container {
+  &.scaleUpper {
+    animation: scale-up-center 0.4s cubic-bezier(0.785, 0.135, 0.150, 0.860) both
+  }
   &.plain {
     &:after {
       content: '';
@@ -110,6 +119,15 @@ function handleClick() {
     .IconButton-Icon {
       line-height: 24px;
       font-size: 14px;
+    }
+  }
+  &.middle {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    .IconButton-Icon {
+      line-height: 32px;
+      font-size: 18px;
     }
   }
   &.select {

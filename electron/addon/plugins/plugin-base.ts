@@ -3,7 +3,10 @@ import fse from 'fs-extra'
 import { BrowserWindow } from 'electron'
 import process from 'process'
 import { sendMainChannelMsg } from '../../utils/channel-util'
-import { injectWebView } from '../../utils/plugin-injection'
+import {getJs, getStyles, injectWebView} from '../../utils/plugin-injection'
+import {win} from "../../main";
+import pkg from "../../../package.json";
+import {ProcessorVars} from "../initializer";
 
 export class Plugin {
 
@@ -14,6 +17,8 @@ export class Plugin {
     process = []
 
     _status: any
+
+    webview: any
 
     get status() {
         return this._status
@@ -39,7 +44,43 @@ export class Plugin {
         if ( this.status !== PluginStatus.DISABLED && this.status !== PluginStatus.LOADED && this.status !== PluginStatus.CRASHED && this.status !== PluginStatus.LOADING ) return
         this.status = PluginStatus.LOADING
 
-        injectWebView(this)
+        const [name, pluginInfo, sourceConfig] = [this.pluginInfo.name, this.pluginInfo, this.sourceConfig]
+
+        const indexPath = this.__index(fileP)
+        const preload = path.normalize(this.__preload(fileP))
+
+        const _path = {
+            relative:  path.relative(ProcessorVars.rootPath, fileP),
+            root: ProcessorVars.rootPath,
+            plugin: fileP
+        }
+
+        this.webview = {
+            _: {
+                indexPath,
+                preload
+            },
+            attrs: {
+                // src: indexPath,
+                nodeintegration: 'true',
+                webpreferences: 'contextIsolation=false',
+                httpreferrer: `https://plugin.touch.talex.com/${name}`,
+                websecurity: 'false',
+                useragent: `${win.webContents.userAgent} TalexTouch/${pkg.version} (Plugins,like ${name})`,
+                partition: `persist:touch/${name}`
+            },
+            styles: `${getStyles()}`,
+            js: `${getJs([name, pluginInfo, sourceConfig, JSON.stringify(_path)])}`
+        }
+
+        sendMainChannelMsg('plugin-webview', {
+            plugin: this.pluginInfo.name,
+            data: this.webview
+        })
+
+
+        // injectWebView(this)
+
         // view.webContents.addListener('dom-ready', () => {
         //     this.__injectStyles()
         //

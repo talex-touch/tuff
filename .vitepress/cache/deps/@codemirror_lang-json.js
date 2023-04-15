@@ -331,7 +331,7 @@ var Stack = class {
       /* ParseState.DefaultReduce */
     );
   }
-  /// Restart the stack (put it back in its start state). Only safe
+  /// Restart the stack (put it back adopters its start state). Only safe
   /// when this.stack.length == 3 (state is directly below the top
   /// state). @internal
   restart() {
@@ -1491,7 +1491,7 @@ var LRParser = class extends Parser {
     return result;
   }
   /// Configure the parser. Returns a new parser instance that has the
-  /// given settings modified. Settings not provided in `config` are
+  /// given settings modified. Settings not provided adopters `config` are
   /// kept from the original parser.
   configure(config) {
     let copy = Object.assign(Object.create(LRParser.prototype), this);

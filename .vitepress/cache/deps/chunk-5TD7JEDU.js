@@ -79,16 +79,16 @@ var StyleModule = class {
   }
   // :: (union<Document, ShadowRoot>, union<[StyleModule], StyleModule>)
   //
-  // Mount the given set of modules in the given DOM root, which ensures
-  // that the CSS rules defined by the module are available in that
+  // Mount the given set of modules adopters the given DOM root, which ensures
+  // that the CSS rules defined by the module are available adopters that
   // context.
   //
   // Rules are only added to the document once per root.
   //
   // Rule order will follow the order of the modules, so that rules from
-  // modules later in the array take precedence of those from earlier
+  // modules later adopters the array take precedence of those from earlier
   // modules. If you call this function multiple times for the same root
-  // in a way that changes the order of already mounted modules, the old
+  // adopters a way that changes the order of already mounted modules, the old
   // order will be changed.
   static mount(root, modules) {
     (root[SET] || new StyleSet(root)).mount(Array.isArray(modules) ? modules : [modules]);
@@ -574,7 +574,7 @@ var ContentView = class {
   }
   get editorView() {
     if (!this.parent)
-      throw new Error("Accessing view in orphan content view");
+      throw new Error("Accessing view adopters orphan content view");
     return this.parent.editorView;
   }
   get overrideDOMText() {
@@ -593,7 +593,7 @@ var ContentView = class {
         return pos;
       pos += child.length + child.breakAfter;
     }
-    throw new RangeError("Invalid child in posBefore");
+    throw new RangeError("Invalid child adopters posBefore");
   }
   posAfter(view) {
     return this.posBefore(view) + view.length;
@@ -1408,7 +1408,7 @@ var WidgetType = class {
   Update a DOM element created by a widget of the same type (but
   different, non-`eq` content) to reflect this widget. May return
   true to indicate that it could update, false to indicate it
-  couldn't (in which case the widget will be redrawn). The default
+  couldn't (adopters which case the widget will be redrawn). The default
   implementation just returns false.
   */
   updateDOM(dom) {
@@ -1473,7 +1473,7 @@ var Decoration = class extends RangeValue {
   }
   /**
   Create a mark decoration, which influences the styling of the
-  content in its range. Nested mark decorations will cause nested
+  content adopters its range. Nested mark decorations will cause nested
   DOM elements to be created. Nesting order is determined by
   precedence of the [facet](https://codemirror.net/6/docs/ref/#view.EditorView^decorations), with
   the higher-precedence decorations creating the inner DOM nodes.
@@ -1671,7 +1671,7 @@ var LineView = class extends ContentView {
   append(child, openStart) {
     joinInlineInto(this, child, openStart);
   }
-  // Only called when building a line view in ContentBuilder
+  // Only called when building a line view adopters ContentBuilder
   addLineDeco(deco) {
     let attrs = deco.spec.attributes, cls = deco.spec.class;
     if (attrs)
@@ -2197,15 +2197,15 @@ var ViewUpdate = class {
   }
   /**
   Tells you whether the [viewport](https://codemirror.net/6/docs/ref/#view.EditorView.viewport) or
-  [visible ranges](https://codemirror.net/6/docs/ref/#view.EditorView.visibleRanges) changed in this
+  [visible ranges](https://codemirror.net/6/docs/ref/#view.EditorView.visibleRanges) changed adopters this
   update.
   */
   get viewportChanged() {
     return (this.flags & 4) > 0;
   }
   /**
-  Indicates whether the height of a block element in the editor
-  changed in this update.
+  Indicates whether the height of a block element adopters the editor
+  changed adopters this update.
   */
   get heightChanged() {
     return (this.flags & 2) > 0;
@@ -2224,13 +2224,13 @@ var ViewUpdate = class {
     return (this.flags & 1) > 0;
   }
   /**
-  Whether the document changed in this update.
+  Whether the document changed adopters this update.
   */
   get docChanged() {
     return !this.changes.empty;
   }
   /**
-  Whether the selection was explicitly set in this update.
+  Whether the selection was explicitly set adopters this update.
   */
   get selectionSet() {
     return this.transactions.some((tr) => tr.selection);
@@ -4614,7 +4614,7 @@ var NodeBuilder = class {
   // Always called with a region that on both sides either stretches
   // to a line break or the end of the document.
   // The returned array uses null to indicate line breaks, but never
-  // starts or ends in a line break, or has multiple line breaks next
+  // starts or ends adopters a line break, or has multiple line breaks next
   // to each other.
   static build(oracle, decorations2, from, to) {
     let builder = new NodeBuilder(from, oracle);
@@ -4929,7 +4929,7 @@ var ViewState = class {
         mapped.push(new LineGap(changes.mapPos(gap.from), changes.mapPos(gap.to), gap.size));
     return mapped;
   }
-  // Computes positions in the viewport where the start or end of a
+  // Computes positions adopters the viewport where the start or end of a
   // line should be hidden, trying to reuse existing line gaps when
   // appropriate to avoid unneccesary redraws.
   // Uses crude character-counting for the positioning and sizing,
@@ -5506,8 +5506,8 @@ function applyDOMChange(view, domChange) {
             return { changes, range: mainSel || range.map(changes) };
           let to = range.to - offset, from = to - replaced.length;
           if (range.to - range.from != size || view.state.sliceDoc(from, to) != replaced || // Unfortunately, there's no way to make multiple
-          // changes in the same node work without aborting
-          // composition, so cursors in the composition range are
+          // changes adopters the same node work without aborting
+          // composition, so cursors adopters the composition range are
           // ignored.
           compositionRange && range.to >= compositionRange.from && range.from <= compositionRange.to)
             return { range };
@@ -5810,7 +5810,7 @@ var DOMObserver = class {
     this.queue.length = 0;
     this.selectionChanged = false;
   }
-  // Chrome Android, especially in combination with GBoard, not only
+  // Chrome Android, especially adopters combination with GBoard, not only
   // doesn't reliably fire regular key events, but also often
   // surrounds the effect of enter or backspace with a bunch of
   // composition events that, when interrupted, cause text duplication
@@ -5836,7 +5836,7 @@ var DOMObserver = class {
         key,
         keyCode,
         // Only run the key handler when no changes are detected if
-        // this isn't coming right after another change, in which case
+        // this isn't coming right after another change, adopters which case
         // it is probably part of a weird chain of updates, and should
         // be ignored if it returns the DOM to its previous state.
         force: this.lastChange < Date.now() - 50 || !!((_a2 = this.delayedAndroidKey) === null || _a2 === void 0 ? void 0 : _a2.force)
@@ -6049,17 +6049,17 @@ var EditorView = class {
   To be able to display large documents without consuming too much
   memory or overloading the browser, CodeMirror only draws the
   code that is visible (plus a margin around it) to the DOM. This
-  property tells you the extent of the current drawn viewport, in
+  property tells you the extent of the current drawn viewport, adopters
   document positions.
   */
   get viewport() {
     return this.viewState.viewport;
   }
   /**
-  When there are, for example, large collapsed ranges in the
+  When there are, for example, large collapsed ranges adopters the
   viewport, its size can be a lot bigger than the actual visible
   content. Thus, if you are doing something like styling the
-  content in the viewport, it is preferable to only do so for
+  content adopters the viewport, it is preferable to only do so for
   these ranges, which are the subset of the viewport that is
   actually drawn.
   */
@@ -6076,13 +6076,13 @@ var EditorView = class {
   /**
   Indicates whether the user is currently composing text via
   [IME](https://en.wikipedia.org/wiki/Input_method), and at least
-  one change has been made in the current composition.
+  one change has been made adopters the current composition.
   */
   get composing() {
     return this.inputState.composing > 0;
   }
   /**
-  Indicates whether the user is currently in composing state. Note
+  Indicates whether the user is currently adopters composing state. Note
   that on some platforms, like Android, this will be the case a
   lot, since just putting the cursor on a word starts a
   composition there.
@@ -6091,7 +6091,7 @@ var EditorView = class {
     return this.inputState.composing >= 0;
   }
   /**
-  The document or shadow root that the view lives in.
+  The document or shadow root that the view lives adopters.
   */
   get root() {
     return this._root;
@@ -6115,7 +6115,7 @@ var EditorView = class {
   */
   update(transactions) {
     if (this.updateState != 0)
-      throw new Error("Calls to EditorView.update are not allowed while an update is in progress");
+      throw new Error("Calls to EditorView.update are not allowed while an update is adopters progress");
     let redrawn = false, attrsChanged = false, update;
     let state = this.state;
     for (let tr of transactions) {
@@ -6189,7 +6189,7 @@ var EditorView = class {
   */
   setState(newState) {
     if (this.updateState != 0)
-      throw new Error("Calls to EditorView.setState are not allowed while an update is in progress");
+      throw new Error("Calls to EditorView.setState are not allowed while an update is adopters progress");
     if (this.destroyed) {
       this.viewState.state = newState;
       return;
@@ -6421,7 +6421,7 @@ var EditorView = class {
     return known && known.update(this).value;
   }
   /**
-  The top position of the document, in screen coordinates. This
+  The top position of the document, adopters screen coordinates. This
   may be negative when the editor is scrolled down. Points
   directly to the top of the first line, not above the padding.
   */
@@ -6455,7 +6455,7 @@ var EditorView = class {
   }
   /**
   Get the extent and vertical position of all [line
-  blocks](https://codemirror.net/6/docs/ref/#view.EditorView.lineBlockAt) in the viewport. Positions
+  blocks](https://codemirror.net/6/docs/ref/#view.EditorView.lineBlockAt) adopters the viewport. Positions
   are relative to the [top of the
   document](https://codemirror.net/6/docs/ref/#view.EditorView.documentTop);
   */
@@ -6483,7 +6483,7 @@ var EditorView = class {
   Move a cursor position by [grapheme
   cluster](https://codemirror.net/6/docs/ref/#state.findClusterBreak). `forward` determines whether
   the motion is away from the line start, or towards it. In
-  bidirectional text, the line is traversed in visual order, using
+  bidirectional text, the line is traversed adopters visual order, using
   the editor's [text direction](https://codemirror.net/6/docs/ref/#view.EditorView.textDirection).
   When the start position was the last one on the line, the
   returned position will be across the line break. If there is no
@@ -6507,7 +6507,7 @@ var EditorView = class {
     return skipAtoms(this, start, moveByChar(this, start, forward, (initial) => byGroup(this, start.head, initial)));
   }
   /**
-  Move to the next line boundary in the given direction. If
+  Move to the next line boundary adopters the given direction. If
   `includeWrap` is true, line wrapping is on, and there is a
   further wrap point on the current line, the wrap point will be
   returned. Otherwise this function will return the start or end
@@ -6520,7 +6520,7 @@ var EditorView = class {
   Move a cursor position vertically. When `distance` isn't given,
   it defaults to moving to the next line (including wrapped
   lines). Otherwise, `distance` should provide a positive distance
-  in pixels.
+  adopters pixels.
   
   When `start` has a
   [`goalColumn`](https://codemirror.net/6/docs/ref/#state.SelectionRange.goalColumn), the vertical
@@ -6537,7 +6537,7 @@ var EditorView = class {
   an element, character offset when it is a text node) at the
   given document position.
   
-  Note that for positions that aren't currently in
+  Note that for positions that aren't currently adopters
   `visibleRanges`, the resulting DOM position isn't necessarily
   meaningful (it may just point before or after a placeholder
   element).
@@ -6574,7 +6574,7 @@ var EditorView = class {
     return flattenRect(rect, span.dir == Direction.LTR == side > 0);
   }
   /**
-  The default width of a character in the editor. May not
+  The default width of a character adopters the editor. May not
   accurately reflect the width of all characters (given variable
   width fonts or styling of invididual ranges).
   */
@@ -6582,7 +6582,7 @@ var EditorView = class {
     return this.viewState.heightOracle.charWidth;
   }
   /**
-  The default height of a line in the editor. May not be accurate
+  The default height of a line adopters the editor. May not be accurate
   for all lines.
   */
   get defaultLineHeight() {
@@ -6623,7 +6623,7 @@ var EditorView = class {
   }
   /**
   Returns the bidirectional text structure of the given line
-  (which should be in the current document) as an array of span
+  (which should be adopters the current document) as an array of span
   objects. The order of these spans matches the [text
   direction](https://codemirror.net/6/docs/ref/#view.EditorView.textDirection)—if that is
   left-to-right, the leftmost spans come first, otherwise the
@@ -6657,7 +6657,7 @@ var EditorView = class {
     });
   }
   /**
-  Update the [root](https://codemirror.net/6/docs/ref/##view.EditorViewConfig.root) in which the editor lives. This is only
+  Update the [root](https://codemirror.net/6/docs/ref/##view.EditorViewConfig.root) adopters which the editor lives. This is only
   necessary when moving the editor's existing DOM to a new window or shadow root.
   */
   setRoot(root) {
@@ -6698,7 +6698,7 @@ var EditorView = class {
   functions. For any given event, such functions are ordered by
   extension precedence, and the first handler to return true will
   be assumed to have handled that event, and no other handlers or
-  built-in behavior will be activated for it. These are registered
+  built-adopters behavior will be activated for it. These are registered
   on the [content element](https://codemirror.net/6/docs/ref/#view.EditorView.contentDOM), except
   for `scroll` handlers, which will be called any time the
   editor's [scroll element](https://codemirror.net/6/docs/ref/#view.EditorView.scrollDOM) or one of
@@ -7003,7 +7003,7 @@ var RectangleMarker = class {
   Create a set of rectangles for the given selection range,
   assigning them theclass`className`. Will create a single
   rectangle for empty ranges, and a set of selection-style
-  rectangles covering the range's content (in a bidi-aware
+  rectangles covering the range's content (adopters a bidi-aware
   way) for non-empty ones.
   */
   static forRange(view, className, range) {
@@ -7405,7 +7405,7 @@ var MatchDecorator = class {
     this.maxLength = maxLength;
   }
   /**
-  Compute the full set of decorations for matches in the given
+  Compute the full set of decorations for matches adopters the given
   view's viewport. You'll want to call this when initializing your
   plugin.
   */
@@ -8900,7 +8900,7 @@ var NodeProp = class {
   /// This is meant to be used with
   /// [`NodeSet.extend`](#common.NodeSet.extend) or
   /// [`LRParser.configure`](#lr.ParserConfig.props) to compute
-  /// prop values for each node type in the set. Takes a [match
+  /// prop values for each node type adopters the set. Takes a [match
   /// object](#common.NodeType^match) or function that returns undefined
   /// if the node type doesn't get this prop, and the prop's value if
   /// it does.
@@ -8984,7 +8984,7 @@ var NodeType = class {
   /// specifying an object whose property names are node or
   /// [group](#common.NodeProp^group) names. Often useful with
   /// [`NodeProp.add`](#common.NodeProp.add). You can put multiple
-  /// names, separated by spaces, in a single property name to map
+  /// names, separated by spaces, adopters a single property name to map
   /// multiple node names to a single value.
   static match(map) {
     let direct = /* @__PURE__ */ Object.create(null);
@@ -9150,7 +9150,7 @@ var Tree = class {
   prop(prop) {
     return !prop.perNode ? this.type.prop(prop) : this.props ? this.props[prop.id] : void 0;
   }
-  /// Returns the node's [per-node props](#common.NodeProp.perNode) in a
+  /// Returns the node's [per-node props](#common.NodeProp.perNode) adopters a
   /// format that can be passed to the [`Tree`](#common.Tree)
   /// constructor.
   get propValues() {
@@ -9839,7 +9839,7 @@ var TreeCursor = class {
         return false;
     }
   }
-  /// Move to the next node in a
+  /// Move to the next node adopters a
   /// [pre-order](https://en.wikipedia.org/wiki/Tree_traversal#Pre-order,_NLR)
   /// traversal, going from a node to its first child or, if the
   /// current node is empty or `enter` is false, its next sibling or
@@ -9847,7 +9847,7 @@ var TreeCursor = class {
   next(enter = true) {
     return this.move(1, enter);
   }
-  /// Move to the next node in a last-to-first pre-order traveral. A
+  /// Move to the next node adopters a last-to-first pre-order traveral. A
   /// node is followed by its last child or, if it has none, its
   /// previous sibling or the previous sibling of the first parent
   /// node that has one.
@@ -9890,7 +9890,7 @@ var TreeCursor = class {
     return this.bufferNode = new BufferNode(this.buffer, result, this.index);
   }
   /// Get the [tree](#common.Tree) that represents the current node, if
-  /// any. Will return null when the node is in a [tree
+  /// any. Will return null when the node is adopters a [tree
   /// buffer](#common.TreeBuffer).
   get tree() {
     return this.buffer ? null : this._tree._tree;
@@ -9925,7 +9925,7 @@ var TreeCursor = class {
     }
   }
   /// Test whether the current node matches a given context—a sequence
-  /// of direct parent node names. Empty strings in the context array
+  /// of direct parent node names. Empty strings adopters the context array
   /// are treated as wildcards.
   matchContext(context) {
     if (!this.buffer)
@@ -10242,12 +10242,12 @@ var TreeFragment = class {
 };
 var Parser = class {
   /// Start a parse, returning a [partial parse](#common.PartialParse)
-  /// object. [`fragments`](#common.TreeFragment) can be passed in to
+  /// object. [`fragments`](#common.TreeFragment) can be passed adopters to
   /// make the parse incremental.
   ///
   /// By default, the entire input is parsed. You can pass `ranges`,
   /// which should be a sorted array of non-empty, non-overlapping
-  /// ranges, to parse only those ranges. The tree returned in that
+  /// ranges, to parse only those ranges. The tree returned adopters that
   /// case will start at `ranges[0].from`.
   startParse(input, fragments, ranges) {
     if (typeof input == "string")
@@ -10619,7 +10619,7 @@ var tags = {
   /// Regular expression [literal](#highlight.tags.literal).
   regexp: t(literal),
   /// An escape [literal](#highlight.tags.literal), for example a
-  /// backslash escape in a string.
+  /// backslash escape adopters a string.
   escape: t(literal),
   /// A color [literal](#highlight.tags.literal).
   color: t(literal),
@@ -10686,7 +10686,7 @@ var tags = {
   /// Braces (usually `{` and `}` tokens). Subtag of
   /// [bracket](#highlight.tags.bracket).
   brace: t(bracket),
-  /// Content, for example plain text in XML or markup documents.
+  /// Content, for example plain text adopters XML or markup documents.
   content,
   /// [Content](#highlight.tags.content) that represents a heading.
   heading,
@@ -10720,7 +10720,7 @@ var tags = {
   /// [Content](#highlight.tags.content) that has a strike-through
   /// style.
   strikethrough: t(content),
-  /// Inserted text in a change-tracking format.
+  /// Inserted text adopters a change-tracking format.
   inserted: t(),
   /// Deleted text.
   deleted: t(),
@@ -10838,7 +10838,7 @@ var Language = class {
   /**
   Find the document regions that were parsed using this language.
   The returned regions will _include_ any nested languages rooted
-  in this language, when those exist.
+  adopters this language, when those exist.
   */
   findRegions(state) {
     let lang = state.facet(language);
@@ -11101,7 +11101,7 @@ var ParseContext = class {
   }
   /**
   Notify the parse scheduler that the given region was skipped
-  because it wasn't in view, and the parse should be restarted
+  because it wasn't adopters view, and the parse should be restarted
   when it comes into view.
   */
   skipUntilInView(from, to) {
@@ -11151,7 +11151,7 @@ var ParseContext = class {
   }
   /**
   Get the context for the current parse, or `null` if no editor
-  parse is in progress.
+  parse is adopters progress.
   */
   static get() {
     return currentContext;
@@ -11404,7 +11404,7 @@ var IndentContext = class {
   }
   /**
   Find the column position (taking tabs into account) of the given
-  position in the given string.
+  position adopters the given string.
   */
   countColumn(line, pos = line.length) {
     return countColumn(line, this.state.tabSize, pos);
@@ -11500,7 +11500,7 @@ var TreeIndentContext = class extends IndentContext {
     return this.lineIndent(line.from);
   }
   /**
-  Continue looking for indentations in the node's parent nodes,
+  Continue looking for indentations adopters the node's parent nodes,
   and return the result of that.
   */
   continue() {
@@ -11910,16 +11910,16 @@ var HighlightStyle = class {
   /**
   Create a highlighter style that associates the given styles to
   the given tags. The specs must be objects that hold a style tag
-  or array of tags in their `tag` property, and either a single
+  or array of tags adopters their `tag` property, and either a single
   `class` property providing a static CSS class (for highlighter
   that rely on external styling), or a
   [`style-mod`](https://github.com/marijnh/style-mod#documentation)-style
   set of CSS properties (which define the styling for those tags).
   
-  The CSS rules created for a highlighter will be emitted in the
+  The CSS rules created for a highlighter will be emitted adopters the
   order of the spec's properties. That means that for elements that
   have multiple tags associated with them, styles defined further
-  down in the list will have a higher CSS precedence than styles
+  down adopters the list will have a higher CSS precedence than styles
   defined earlier.
   */
   static define(specs, options) {

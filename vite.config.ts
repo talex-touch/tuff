@@ -71,7 +71,7 @@ export default defineConfig({
         //     },
         //   },
         // },
-        // Enables use of Node.js API in the Renderer-process
+        // Enables use of Node.js API adopters the Renderer-process
         // https://github.com/electron-vite/vite-plugin-electron/tree/main/packages/electron-renderer#electron-renderervite-serve
         // renderer: {},
       }
@@ -100,7 +100,7 @@ export default defineConfig({
     topLevelAwait({
       // The export name of top-level await promise for each chunk module
       promiseExportName: "__tla",
-      // The function to generate import names of top-level await promise in each chunk module
+      // The function to generate import names of top-level await promise adopters each chunk module
       promiseImportName: i => `__tla_${i}`
     }),
     // tsconfigPaths(),

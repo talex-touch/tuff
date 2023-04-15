@@ -2039,7 +2039,7 @@ var hasOwnProperty7 = objectProto9.hasOwnProperty;
 function arrayLikeKeys(value, inherited) {
   var isArr = isArray_default(value), isArg = !isArr && isArguments_default(value), isBuff = !isArr && !isArg && isBuffer_default(value), isType = !isArr && !isArg && !isBuff && isTypedArray_default(value), skipIndexes = isArr || isArg || isBuff || isType, result2 = skipIndexes ? baseTimes_default(value.length, String) : [], length = result2.length;
   for (var key in value) {
-    if ((inherited || hasOwnProperty7.call(value, key)) && !(skipIndexes && // Safari 9 has enumerable `arguments.length` in strict mode.
+    if ((inherited || hasOwnProperty7.call(value, key)) && !(skipIndexes && // Safari 9 has enumerable `arguments.length` adopters strict mode.
     (key == "length" || // Node.js 0.10 has enumerable non-index properties on buffers.
     isBuff && (key == "offset" || key == "parent") || // PhantomJS 2 has enumerable non-index properties on typed arrays.
     isType && (key == "buffer" || key == "byteLength" || key == "byteOffset") || // Skip index properties.
@@ -7223,7 +7223,7 @@ var templateSettings = {
    */
   "interpolate": reInterpolate_default,
   /**
-   * Used to reference the data object in the template text.
+   * Used to reference the data object adopters the template text.
    *
    * @memberOf _.templateSettings
    * @type {string}
@@ -15891,7 +15891,7 @@ var _hoisted_3291 = [
 function _sfc_render292(_ctx, _cache, $props, $setup, $data, $options) {
   return openBlock(), createElementBlock("svg", _hoisted_1292, _hoisted_3291);
 }
-var zoom_in_default = export_helper_default(zoom_in_vue_vue_type_script_lang_default, [["render", _sfc_render292], ["__file", "zoom-in.vue"]]);
+var zoom_in_default = export_helper_default(zoom_in_vue_vue_type_script_lang_default, [["render", _sfc_render292], ["__file", "zoom-adopters.vue"]]);
 var zoom_out_vue_vue_type_script_lang_default = {
   name: "ZoomOut"
 };
@@ -26331,7 +26331,7 @@ var _sfc_main32 = defineComponent({
         class: normalizeClass([
           unref(ns2).e("item"),
           unref(ns2).is("active", unref(active)),
-          unref(ns2).is("in-stage", unref(inStage)),
+          unref(ns2).is("adopters-stage", unref(inStage)),
           unref(ns2).is("hover", unref(hover)),
           unref(ns2).is("animating", unref(animating)),
           { [unref(ns2).em("item", "card")]: unref(isCardType) }
@@ -27402,8 +27402,8 @@ function _sfc_render295(_ctx, _cache, $props, $setup, $data, $options) {
       _ctx.ns.is("selectable", _ctx.checkStrictly),
       _ctx.ns.is("active", _ctx.node.checked),
       _ctx.ns.is("disabled", !_ctx.expandable),
-      _ctx.inExpandingPath && "in-active-path",
-      _ctx.inCheckedPath && "in-checked-path"
+      _ctx.inExpandingPath && "adopters-active-path",
+      _ctx.inCheckedPath && "adopters-checked-path"
     ]),
     onMouseenter: _cache[2] || (_cache[2] = (...args) => _ctx.handleHoverExpand && _ctx.handleHoverExpand(...args)),
     onFocus: _cache[3] || (_cache[3] = (...args) => _ctx.handleHoverExpand && _ctx.handleHoverExpand(...args)),
@@ -28763,7 +28763,7 @@ var _sfc_main43 = defineComponent({
                             }, [
                               (openBlock(), createBlock(unref(ElTag), {
                                 key: tag2.key,
-                                class: "in-tooltip",
+                                class: "adopters-tooltip",
                                 type: _ctx.tagType,
                                 size: unref(tagSize),
                                 hit: tag2.hitState,
@@ -36845,10 +36845,10 @@ function newMessages() {
       range: "%s must be between %s and %s"
     },
     array: {
-      len: "%s must be exactly %s in length",
-      min: "%s cannot be less than %s in length",
-      max: "%s cannot be greater than %s in length",
-      range: "%s must be between %s and %s in length"
+      len: "%s must be exactly %s adopters length",
+      min: "%s cannot be less than %s adopters length",
+      max: "%s cannot be greater than %s adopters length",
+      range: "%s must be between %s and %s adopters length"
     },
     pattern: {
       mismatch: "%s value %s does not match pattern %s"
@@ -38885,7 +38885,7 @@ var _sfc_main88 = defineComponent({
   }
 });
 function _sfc_render313(_ctx, _cache, $props, $setup, $data, $options) {
-  return openBlock(), createBlock(Transition, mergeProps({ mode: "out-in" }, _ctx.listeners), {
+  return openBlock(), createBlock(Transition, mergeProps({ mode: "out-adopters" }, _ctx.listeners), {
     default: withCtx(() => [
       renderSlot(_ctx.$slots, "default")
     ]),
@@ -41289,7 +41289,7 @@ function _sfc_render318(_ctx, _cache, $props, $setup, $data, $options) {
                           }, [
                             (openBlock(), createBlock(_component_el_tag, {
                               key: _ctx.getValueKey(item),
-                              class: "in-tooltip",
+                              class: "adopters-tooltip",
                               closable: !_ctx.selectDisabled && !item.isDisabled,
                               size: _ctx.collapseTagSize,
                               hit: item.hitState,
@@ -41705,7 +41705,7 @@ var _sfc_main99 = defineComponent({
         }, toDisplayString(unref(t)("el.pagination.goto")), 3),
         createVNode(unref(ElInput), {
           size: _ctx.size,
-          class: normalizeClass([unref(ns2).e("editor"), unref(ns2).is("in-pagination")]),
+          class: normalizeClass([unref(ns2).e("editor"), unref(ns2).is("adopters-pagination")]),
           min: 1,
           max: unref(pageCount),
           disabled: unref(disabled),
@@ -46622,7 +46622,7 @@ function _sfc_render322(_ctx, _cache, $props, $setup, $data, $options) {
                                 key: _ctx.getValueKey(selected),
                                 closable: !_ctx.selectDisabled && !selected.disabled,
                                 size: _ctx.collapseTagSize,
-                                class: "in-tooltip",
+                                class: "adopters-tooltip",
                                 type: "info",
                                 "disable-transitions": "",
                                 onClose: ($event) => _ctx.deleteTag($event, selected)
@@ -59188,7 +59188,7 @@ var _sfc_main136 = defineComponent({
     };
     const getNodePath = (data) => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in getNodePath");
+        throw new Error("[Tree] nodeKey is required adopters getNodePath");
       const node = store.value.getNode(data);
       if (!node)
         return [];
@@ -59212,18 +59212,18 @@ var _sfc_main136 = defineComponent({
     };
     const getCurrentKey = () => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in getCurrentKey");
+        throw new Error("[Tree] nodeKey is required adopters getCurrentKey");
       const currentNode2 = getCurrentNode();
       return currentNode2 ? currentNode2[props.nodeKey] : null;
     };
     const setCheckedNodes = (nodes, leafOnly) => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in setCheckedNodes");
+        throw new Error("[Tree] nodeKey is required adopters setCheckedNodes");
       store.value.setCheckedNodes(nodes, leafOnly);
     };
     const setCheckedKeys = (keys3, leafOnly) => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in setCheckedKeys");
+        throw new Error("[Tree] nodeKey is required adopters setCheckedKeys");
       store.value.setCheckedKeys(keys3, leafOnly);
     };
     const setChecked = (data, checked, deep) => {
@@ -59237,12 +59237,12 @@ var _sfc_main136 = defineComponent({
     };
     const setCurrentNode = (node, shouldAutoExpandParent = true) => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in setCurrentNode");
+        throw new Error("[Tree] nodeKey is required adopters setCurrentNode");
       handleCurrentChange(store, ctx.emit, () => store.value.setUserCurrentNode(node, shouldAutoExpandParent));
     };
     const setCurrentKey = (key, shouldAutoExpandParent = true) => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in setCurrentKey");
+        throw new Error("[Tree] nodeKey is required adopters setCurrentKey");
       handleCurrentChange(store, ctx.emit, () => store.value.setCurrentNodeKey(key, shouldAutoExpandParent));
     };
     const getNode = (data) => {
@@ -59266,7 +59266,7 @@ var _sfc_main136 = defineComponent({
     };
     const updateKeyChildren = (key, data) => {
       if (!props.nodeKey)
-        throw new Error("[Tree] nodeKey is required in updateKeyChild");
+        throw new Error("[Tree] nodeKey is required adopters updateKeyChild");
       store.value.updateChildren(key, data);
     };
     provide("RootTree", {
@@ -60914,7 +60914,7 @@ var _sfc_main140 = defineComponent({
                     onClick: ($event) => _ctx.handlePreview(file)
                   }, [
                     createVNode(unref(ElIcon), {
-                      class: normalizeClass(unref(nsIcon).m("zoom-in"))
+                      class: normalizeClass(unref(nsIcon).m("zoom-adopters"))
                     }, {
                       default: withCtx(() => [
                         createVNode(unref(zoom_in_default))
@@ -63767,7 +63767,7 @@ lodash-es/lodash.js:
 
 normalize-wheel-es/dist/index.mjs:
   (**
-   * Checks if an event is supported in the current execution environment.
+   * Checks if an event is supported adopters the current execution environment.
    *
    * NOTE: This will not work correctly for non-generic events such as `change`,
    * `reset`, `load`, `error`, and `select`.

@@ -4,12 +4,6 @@
       <keep-alive>
         <router-view></router-view>
       </keep-alive>
-
-      <!--      <teleport to=".AppLayout-View">-->
-      <div class="Blur-Container fake-background" :class="{ blur: options.blur, display: activePlugin?.length }">
-        <PluginView />
-      </div>
-      <!--      </teleport>-->
     </template>
   </AppLayout>
 
@@ -21,14 +15,17 @@ import AppLayout from '@comp/layout/AppLayout.vue'
 import { onMounted, provide, ref, watch } from "vue";
 import FirstInit from "~/first/FirstInit.vue";
 import { clipBoardResolver } from "@modules/hooks/applicatoin-hooks";
-import PluginView from "@comp/plugin/PluginView.vue";
 import { pluginManager } from "@modules/samples/node-api";
+import { useRouter } from "vue-router";
 
-const options = window.$storage.themeStyle
-const paintCustom = window.$storage.paintCustom
+const router = useRouter()
 
 const activePlugin = ref("")
-watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val))
+watch(() => activePlugin.value, val => {
+  pluginManager.changeActivePlugin(val)
+
+  if ( val ) router.push(`/plugin/view/${val}`)
+})
 
 provide("activePlugin", activePlugin)
 

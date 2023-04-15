@@ -55,7 +55,7 @@ const forClose = ref(async () => {
 
   const style = wholeDom.value?.style
 
-  // style.animation = 'enter .2s ease-in-out reverse'
+  // style.animation = 'enter .2s ease-adopters-out reverse'
 
   style.transform = 'translate(-50%, -50%) scale(1.15)'
 

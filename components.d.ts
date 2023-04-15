@@ -44,6 +44,7 @@ declare module '@vue/runtime-core' {
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
     PluginItem: typeof import('./src/components/plugin/PluginItem.vue')['default']
     PluginList: typeof import('./src/components/plugin/layout/PluginList.vue')['default']
+    PluginNavList: typeof import('./src/components/plugin/layout/PluginNavList.vue')['default']
     PluginStatus: typeof import('./src/components/plugin/action/PluginStatus.vue')['default']
     PluginView: typeof import('./src/components/plugin/PluginView.vue')['default']
     ProgressBar: typeof import('./src/components/base/ProgressBar.vue')['default']
@@ -70,7 +71,6 @@ declare module '@vue/runtime-core' {
     TvTabItem: typeof import('./src/components/tabs/vertical/TvTabItem.vue')['default']
     TvTabItemGroup: typeof import('./src/components/tabs/vertical/TvTabItemGroup.vue')['default']
     TvTabs: typeof import('./src/components/tabs/vertical/TvTabs.vue')['default']
-    WindowsController: typeof import('./src/components/customize/controller/WindowsController.vue')['default']
     WindowsLayout: typeof import('./src/components/layout/app/WindowsLayout.vue')['default']
   }
 }

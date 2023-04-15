@@ -14,7 +14,11 @@
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <PlantNavBar v-model="activePlugin" />
+        <PlantNavBar v-model="activePlugin">
+          <template #plugin-nav>
+            <slot name="plugin-nav" />
+          </template>
+        </PlantNavBar>
 
         <slot name="icon" />
       </div>
@@ -55,7 +59,7 @@ function closeWindow() {
 <style lang="scss">
 .blur {
   .AppLayout-Container {
-    backdrop-filter: blur(40px) saturate(180%) brightness(1.2) !important;
+    backdrop-filter: blur(100px) saturate(180%) brightness(1.2) !important;
   }
 }
 </style>

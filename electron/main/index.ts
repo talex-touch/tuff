@@ -30,7 +30,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 // Remove electron security warnings
-// This warning only shows in development mode
+// This warning only shows adopters development mode
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 process.env['trace-warnings'] = 'true'
@@ -53,7 +53,7 @@ async function createWindow() {
     resizable: false,
     webPreferences: {
       preload: _path.join(__dirname, '../addon/home-gear/preload.js'),
-      // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
+      // Warning: Enable nodeIntegration and disable contextIsolation is not secure adopters production
       // Consider using contextBridge.exposeInMainWorld
       // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
       nodeIntegration: true,
