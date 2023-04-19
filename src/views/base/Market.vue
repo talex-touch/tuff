@@ -5,9 +5,14 @@
 </template>
 
 <script>
+
+
 export default {
   name: "Market"
 }
+</script>
+
+<script setup>
 </script>
 
 <style scoped>

@@ -10,14 +10,16 @@ export function dropperResolver() {
             const { data } = await asyncMainProcessMessage('@drop-plugin', path) as any
 
             if ( data.status === 'error' ) {
-                // if ( data.msg === '10091' ) {
-                await blowMention('Install', '该插件已遭受不可逆破坏！')
-                // }
+                if ( data.msg === '10091' ) {
+                    await blowMention('Install', '该插件已遭受不可逆破坏！')
+                } else if ( data.msg === '10092' ) {
+                    await blowMention('Install', '无法识别该文件！')
+                }
             } else {
                 const { manifest } = data
 
                 await popperMention(manifest.name, () => {
-                    return h(PluginApplyInstall, { manifest })
+                    return h(PluginApplyInstall, { manifest, path })
                 })
             }
         }
@@ -36,7 +38,7 @@ export function dropperResolver() {
             //获取文件路径
             const { path } = files[0] as any;
 
-            dropperFile(path)
+            await dropperFile(path)
         }
     })
 

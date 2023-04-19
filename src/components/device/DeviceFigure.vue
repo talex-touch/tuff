@@ -14,14 +14,14 @@ import { ref } from 'vue'
 
 const devices = ref()
 
-;(async () => {
-  const res = await navigator.bluetooth.requestDevice({
-    acceptAllDevices: true
-  })
-
-  console.log( res )
-
-})()
+// ;(async () => {
+//   const res = await navigator.bluetooth.requestDevice({
+//     acceptAllDevices: true
+//   })
+//
+//   console.log( res )
+//
+// })()
 
 </script>
 

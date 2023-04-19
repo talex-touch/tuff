@@ -76,6 +76,7 @@ function refresh(v) {
     const _text = v ? $t('base.status-open') : $t('base.status-close')
 
     const el = mention.value
+    if ( !el ) return
 
     Object.assign(el.style, {
       opacity: 0,
