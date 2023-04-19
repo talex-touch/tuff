@@ -94,12 +94,13 @@ export class PluginResolver {
     async install(totalLength: number, manifest: any, cb: Function) {
         const _target = path.join(ProcessorVars.pluginPath, manifest.name)
 
-        const _plugin: Plugin = pluginManager.plugins[manifest.name]
+        // const _plugin: Plugin = pluginManager.plugins[manifest.name]
         // if ( _plugin ) {
         //     if ( !_plugin.pluginInfo.pluginSubInfo.dev ) {
         //         return cb('plugin already exists')
         //     }
         /*} else*/ if ( fse.existsSync(_target) ) return cb('plugin already exists')
+        await checkDirWithCreate(_target, true)
 
         const target = path.join(_target, 'extracted')
         const targetFile = path.join(target, manifest.name + '-unpacked.tar')
