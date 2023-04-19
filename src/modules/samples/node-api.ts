@@ -1,7 +1,4 @@
 // @ts-ignore
-import { lstat } from 'fs/promises'
-// @ts-ignore
-import { cwd } from 'process'
 import { forDialogMention } from '@modules/mention/dialog-mention'
 
 // @ts-ignore
@@ -179,14 +176,13 @@ export function registerTypeProcess(type: string, callback: Function) {
 
 }
 
-lstat(cwd()).then(async stats => {
-  console.log(stats, cwd())
-}).catch(err => {
-  console.error(err)
-})
+// lstat(cwd()).then(async stats => {
+//   console.log(stats, cwd())
+// }).catch(err => {
+//   console.error(err)
+// })
 
 class PluginManager {
-
   constructor() {
 
     registerTypeProcess('plugin-crashed', async ({ reply, data }) => {
@@ -247,6 +243,9 @@ class PluginManager {
     return postMainProcessMessage('change-active', name)
   }
 
+  exportPlugin(name: string, manifest: string, files: string) {
+    return asyncMainProcessMessage('pack-export', { plugin: name, manifest, files })
+  }
 }
 
 export const pluginManager = new PluginManager()
@@ -326,7 +325,6 @@ export class BaseNodeApi {
   reloadConfig(name) {
     return this._storage(name, { reload: true })
   }
-
 }
 
 export function genBaseNodeApi() {

@@ -1,7 +1,9 @@
-import { createApp } from 'vue'
+import { Component, createApp } from 'vue'
 import TDialogMention from '@comp/dialog/TDialogMention.vue'
 import TBottomDialog from '@comp/dialog/TBottomDialog.vue'
 import TBlowDialog from "@comp/dialog/TBlowDialog.vue";
+import TPopperDialog from "@comp/dialog/TPopperDialog.vue";
+import VWave from "v-wave";
 
 export class DialogBtn {
     content: string
@@ -40,6 +42,8 @@ export async function forDialogMention(title: String, message: String, icon: any
         })
 
         document.body.appendChild(root);
+
+        app.use(VWave, {})
 
         app.mount(root);
     })
@@ -81,22 +85,60 @@ export async function forApplyMention(title: String, message: String, btns: Bott
 
     document.body.appendChild(root);
 
+    app.use(VWave, {})
+
     app.mount(root);
 
 }
 
-export async function blowMention(title: String, message: String) {
+export async function blowMention(title: String, message: String | Component | Function ) {
+    return new Promise((resolve) => {
+        const root: HTMLDivElement = document.createElement('div');
+
+        if ( document.getElementById('touch-blow-dialog-tip') ) {
+            return
+        }
+
+        root.id = 'touch-bottom-dialog-tip';
+
+        const propName = (message instanceof String || typeof message === 'string') ? 'message' : (message instanceof Function ? 'render' : 'component')
+
+        const app = createApp(TBlowDialog, {
+            [propName]: message,
+            title,
+            close: async () => {
+
+                resolve()
+
+                app.unmount();
+
+                document.body.removeChild(root);
+
+            }
+        })
+
+        document.body.appendChild(root);
+
+        app.use(VWave, {})
+
+        app.mount(root);
+    })
+}
+export async function popperMention(title: String, message: String | Component | Function ) {
 
     const root: HTMLDivElement = document.createElement('div');
 
-    if ( document.getElementById('touch-blow-dialog-tip') ) {
+    if ( document.getElementById('touch-popper-dialog-tip') ) {
         return
     }
 
-    root.id = 'touch-bottom-dialog-tip';
+    root.id = 'touch-popper-dialog-tip';
 
-    const app = createApp(TBlowDialog, {
-        message, title,
+    const propName = (message instanceof String || typeof message === 'string') ? 'message' : (message instanceof Function ? 'render' : 'component')
+
+    const app = createApp(TPopperDialog, {
+        [propName]: message,
+        title,
         close: async () => {
 
             app.unmount();
@@ -107,6 +149,8 @@ export async function blowMention(title: String, message: String) {
     })
 
     document.body.appendChild(root);
+
+    app.use(VWave, {})
 
     app.mount(root);
 

@@ -6,9 +6,9 @@ export async function sleep(time: number) {
     return new Promise(resolve => setTimeout(() => resolve(time), time))
 }
 
-export async function checkDirWithCreate(url) {
+export async function checkDirWithCreate(url, abs = false) {
 
-    const p = path.join(ProcessorVars.rootPath, url)
+    const p = abs ? url : path.join(ProcessorVars.rootPath, url)
 
     if( !fse.existsSync(p) ) {
 

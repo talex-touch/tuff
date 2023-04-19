@@ -1,14 +1,14 @@
 <template>
-  <div :class="{ close }" class="TBlowDialog-Wrapper">
-    <div class="TBlowDialog-Container">
+  <div :class="{ close }" class="TPopperDialog-Wrapper">
+    <div class="TPopperDialog-Container fake-background">
       <component v-if="renderComp" :is="renderComp" />
       <component v-else-if="comp" :is="comp" />
       <template v-else>
         <p>{{ title }}</p>
-        <div class="TBlowDialog-Content">
+        <div class="TPopperDialog-Content">
           <span style="position: relative;height: 100%;" v-html="message"></span>
         </div>
-        <div @click="destroy" v-wave class="TBlowDialog-Confirm">
+        <div @click="destroy" v-wave class="TPopperDialog-Confirm">
           {{ $t('base.confirm') }}
         </div>
       </template>
@@ -18,7 +18,7 @@
 
 <script>
 export default {
-  name: "TBlowDialog"
+  name: "TPopperDialog"
 }
 </script>
 
@@ -39,29 +39,13 @@ onMounted(() => {
     })
   }
 
-  const app = document.getElementById('app')
-
-  Object.assign(app.style, {
-    transition: '.75s',
-    transform: 'scale(1.25)',
-    opacity: '.75'
-  })
-
 })
 
 async function destroy() {
-  const app = document.getElementById('app')
-
-  Object.assign(app.style, {
-    transform: 'scale(1)',
-    opacity: '1'
-  })
 
   close.value = true
 
   await sleep(550)
-
-  app.style.cssText = ''
 
   props.close()
 }
@@ -70,15 +54,15 @@ provide('destroy', destroy)
 </script>
 
 <style lang="scss">
-.blow-outer {
-  animation: blow-outer .55s forwards;
+.Popper-outer {
+  animation: Popper-outer .55s forwards cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
-.blow-outer-reverse {
+.Popper-outer-reverse {
   animation-direction: reverse;
 }
 
-@keyframes blow-outer {
+@keyframes Popper-outer {
   from {
     opacity: 1;
     transform: scale(1);
@@ -89,8 +73,8 @@ provide('destroy', destroy)
   }
 }
 
-.TBlowDialog-Container {
-  .TBlowDialog-Content {
+.TPopperDialog-Container {
+  .TPopperDialog-Content {
     position: relative;
     margin-bottom: 60px;
 
@@ -107,7 +91,7 @@ provide('destroy', destroy)
     box-sizing: border-box;
   }
 
-  .TBlowDialog-Confirm {
+  .TPopperDialog-Confirm {
     position: absolute;
 
     width: calc(100% - 40px);
@@ -124,6 +108,8 @@ provide('destroy', destroy)
     background: linear-gradient(to right, var(--el-color-primary-light-3), var(--el-color-primary-light-5), var(--el-color-primary-light-3));
   }
   p {
+    margin: 5px;
+
     font-size: 1.5rem;
     font-weight: 600;
 
@@ -135,27 +121,30 @@ provide('destroy', destroy)
     text-align: center;
   }
   position: relative;
-  padding: 8px 20px;
+  padding: 12px 20px;
 
-  min-width: 320px;
+  width: 380px;
   min-height: 200px;
   max-height: 80%;
 
-  border-radius: 8px;
+  --fake-radius: 4px;
+  border-radius: 4px;
   box-shadow: var(--el-box-shadow);
   box-sizing: border-box;
-  background-color: var(--el-fill-color-light);
+  //background-color: var(--el-fill-color-light);
 
-  transition: .5s;
-  animation: blow .5s;
+  backdrop-filter: blur(10px) saturate(180%) brightness(1.5);
+
+  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  animation: Popper .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
-.close .TBlowDialog-Container {
+.close .TPopperDialog-Container {
   opacity: 0;
-  transform: scale(0);
+  transform: scale(1.2);
 }
 
-.TBlowDialog-Wrapper {
+.TPopperDialog-Wrapper {
   &.close {
     opacity: 0;
   }
@@ -171,17 +160,19 @@ provide('destroy', destroy)
   width: 100%;
   height: 100%;
 
-  //background-color: #000000aa;
-  backdrop-filter: blur(5px);
-  transition: .5s;
-  animation: fade-in .5s;
+  background-color: #00000055;
+  //backdrop-filter: blur(5px);
+  transition: cubic-bezier(0.785, 0.135, 0.150, 0.860) .5s;
+  animation: cubic-bezier(0.785, 0.135, 0.150, 0.860) .5s;
 }
 
-@keyframes blow {
+@keyframes Popper {
   0% {
-    transform: scale(0);
+    opacity: 0;
+    transform: scale(1.25);
   }
   100% {
+    opacity: 1;
     transform: scale(1);
   }
 }

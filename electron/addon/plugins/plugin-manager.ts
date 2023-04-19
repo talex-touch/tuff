@@ -6,6 +6,7 @@ import { Plugin, PluginInfo, PluginStatus } from './plugin-base'
 import { win, win as mainWin } from '../../main'
 import { regChannel, regPluginChannel, sendMainChannelMsg } from '../../utils/channel-util'
 import { injectWebView } from '../../utils/plugin-injection'
+import {PluginPackager} from "./plugin-packager";
 
 export class PluginManager {
 
@@ -158,15 +159,25 @@ export class PluginManager {
 
         })
 
+        regChannel('pack-export', async ({ reply, data }) => {
+            const plug = this.#plugins[data.plugin]
+            if ( !plug ) return
+
+            console.log('[Plugin] Pack plugin ' + data.plugin + ' and export it.')
+
+            new PluginPackager(plug, data.manifest, data.files).pack()
+        })
+
     }
 
     loadPlugin(name) {
         const fileP = _path.join(this.pluginsPath, name)
 
         const fileInfo = fse.readFileSync(_path.join(fileP, 'init.json'))
+        const readme = fse.existsSync(_path.join(fileP, 'README.md')) ? fse.readFileSync(_path.join(fileP, 'README.md')).toString() : ''
 
         // TODO init config validation
-        const plugin = new Plugin(new PluginInfo(JSON.parse(fileInfo.toString()), fileP), fileInfo.toString())
+        const plugin = new Plugin(new PluginInfo(JSON.parse(fileInfo.toString()), fileP), fileInfo.toString(), readme)
 
         plugin.status = PluginStatus.LOADING
 
