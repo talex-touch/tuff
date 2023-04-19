@@ -13,16 +13,6 @@
     "value": "github"
   },
   "description": "This is a demo.",
-  "authors": [
-    {
-      "name": "Tds",
-      "email": "TalexDreamSoul@Gmail.com",
-      "website": "https://www.github.com/TalexDreamSoul",
-      "introduction": "Developer",
-      "local": "China ChengDu",
-      "position": "Major author"
-    }
-  ],
   "plugin": {
     "signature": "demo-signature",
     "dev": {
@@ -36,12 +26,7 @@
 
 ``` JSON [最简示例]
 {
-  "name": "demo-plugin",
-  "authors": [
-    {
-      "name": "Tds"
-    }
-  ]
+  "name": "demo-plugin"
 }
 ```
 
@@ -69,9 +54,6 @@ type字段标识插件图标的类型，填写 remix 时表示应用自带的图
 
 ## description <Badge type="info" text="可选" /> <Badge type="warning" text="建议填写" />
 icon字段标识一个插件的简介，如果您不填写将严重影响用户对插件的了解程度。
-
-## authors <Badge type="info" text="可选" />
-authors字段标识一个插件的作者们，对应内容不做过多赘述。
 
 ## plugin <Badge type="info" text="可选" />
 > plugin旗下具有诸多内容

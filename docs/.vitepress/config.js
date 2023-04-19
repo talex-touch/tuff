@@ -1,3 +1,4 @@
+// import './theme/style/var.css'
 import { defineConfigWithTheme } from "vitepress";
 
 export default defineConfigWithTheme({

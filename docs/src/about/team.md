@@ -27,7 +27,7 @@ const members = [
       Our Team
     </template>
     <template #lead>
-      The development of TalexTouch is guided by the first-class team, thanks goes to these people.
+      The development of TalexTouch is guided by the first-class team, thanks goes to these wonderful people.
     </template>
   </VPTeamPageTitle>
   <VPTeamMembers
