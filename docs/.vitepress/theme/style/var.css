@@ -1,0 +1,66 @@
+:root {
+    /* 标题 */
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: linear-gradient( 135deg, #3482B5 10%, #0c9dff 100%);
+
+    /* 图标背景 */
+    --vp-home-hero-image-background-image: linear-gradient( 135deg, #3482B5 10%, #0c9dff 100%);
+    --vp-home-hero-image-filter: blur(150px);
+
+    /* brand按钮 */
+    --vp-button-brand-border: #3482B5;
+    --vp-button-brand-text: #fff;
+    --vp-button-brand-bg: #0c9dff;
+
+    --vp-button-brand-hover-border: #3482B5;
+    --vp-button-brand-hover-text: #eee;
+    --vp-button-brand-hover-bg: #0c9dff;
+
+    --vp-button-brand-active-border: #3482B5;
+
+    /* 主题基色 */
+    --vp-c-brand: #0c9dff;
+    --vp-c-brand-light: #0c9dff;
+    --vp-c-brand-dark: #0c9dff;
+
+    --vp-button-brand-active-bg: #0c9dff55
+}
+
+.content-body {
+    padding-right: 20px;
+    /*background-color: var(--vp-c-brand) !important;*/
+    backdrop-filter: blur(10px) saturate(180%) brightness(120%);
+    background-color: transparent !important;
+}
+
+.content-body::before, .VPHomeFeatures .item span::before {
+    z-index: -1;
+    content: "";
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 100%;
+
+    opacity: .75;
+    background: var(--vp-c-bg);
+    /*background: linear-gradient( 135deg, #3482B5 10%, #0c9dff 100%);*/
+}
+
+.VPHomeFeatures .item span {
+
+    background: transparent;
+    backdrop-filter: blur(10px) saturate(180%) brightness(120%);
+}
+
+.image {
+    animation: rotate 10s linear infinite;
+}
+
+@keyframes rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}

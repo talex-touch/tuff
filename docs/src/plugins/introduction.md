@@ -36,16 +36,6 @@ TalexTouch 仅仅是一个框架的壳子，您可以为他添砖加瓦。 当�
     "value": "github"
   },
   "description": "我的第一款测试插件",
-  "authors": [
-    {
-      "name": "Tds",
-      "email": "TalexDreamSoul@Gmail.com",
-      "website": "https://www.github.com/TalexDreamSoul",
-      "introduction": "Developer",
-      "local": "China ChengDu",
-      "position": "Major author"
-    }
-  ],
   "plugin": {
     "signature": "TALEX-TOUCH-DEMO"
   }
