@@ -1,5 +1,8 @@
+// @ts-ignore
 import fse from 'fs/promises'
+// @ts-ignore
 import path from "path";
+// @ts-ignore
 import { cwd } from "process";
 
 const mainPath = cwd()

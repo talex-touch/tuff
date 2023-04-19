@@ -108,7 +108,7 @@ export async function blowMention(title: String, message: String | Component | F
             title,
             close: async () => {
 
-                resolve()
+                resolve(propName)
 
                 app.unmount();
 

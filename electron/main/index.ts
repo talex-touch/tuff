@@ -29,6 +29,11 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
+// handle global error
+process.on('uncaughtException', (error) => {
+    console.error(error)
+})
+
 // Remove electron security warnings
 // This warning only shows adopters development mode
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security

@@ -22,7 +22,8 @@
         ]
       }
     ],
-    "artifactName": "${productName}_${version}.${ext}"
+    "artifactName": "${productName}_${version}.${ext}",
+    "icon": "./public/favicon.ico"
   },
   "nsis": {
 //    "guild": "com.talex.touch",
@@ -34,5 +35,13 @@
     "uninstallerIcon": "./public/favicon.ico",
     "installerHeaderIcon": "./public/favicon.ico",
     "shortcutName": "TalexTouch"
-  }
+  },
+  "fileAssociations": [
+    {
+      "ext": "touch-plugin",
+      "name": "TalexTouch",
+      "role": "Editor",
+      "description": "TalexTouch AddonPackage File (Plugin)"
+    }
+  ]
 }
