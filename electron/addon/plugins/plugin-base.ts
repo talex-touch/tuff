@@ -12,6 +12,8 @@ export class Plugin {
 
     readonly pluginInfo
 
+    readonly readme
+
     readonly sourceConfig
 
     process = []
@@ -33,10 +35,11 @@ export class Plugin {
         }, {}).then(() => {})
     }
 
-    constructor(pluginInfo: PluginInfo, sourceConfig: string) {
+    constructor(pluginInfo: PluginInfo, sourceConfig: string, readme: string) {
 
         this.pluginInfo = pluginInfo
         this.sourceConfig = sourceConfig
+        this.readme = readme
 
     }
 
@@ -267,7 +270,7 @@ export class PluginInfo {
     readonly description
     readonly pluginSubInfo
 
-    readonly authors: Array<PluginAuthor> = []
+    // readonly authors: Array<PluginAuthor> = []
 
     constructor(options, rootPath: string) {
 
@@ -283,7 +286,7 @@ export class PluginInfo {
         this.description = options.description
         this.pluginSubInfo = new PluginSubInfo(options.plugin)
 
-        ;[ ...options.authors ].forEach(author => this.authors.push(new PluginAuthor(author)))
+        // ;[ ...options.authors ].forEach(author => this.authors.push(new PluginAuthor(author)))
 
     }
 

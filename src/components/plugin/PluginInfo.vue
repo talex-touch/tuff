@@ -12,16 +12,16 @@
         {{ plugin.pluginInfo.name }}
       </p>
 
-      <FlatButton class="plugin-export" v-if="plugin.pluginInfo.pluginSubInfo?.dev?.enable">
+      <FlatButton @click="wrapperView = !wrapperView" class="plugin-export" v-if="plugin.pluginInfo.pluginSubInfo?.dev?.enable">
         打包
       </FlatButton>
     </div>
 
     <el-tabs v-model="tabs">
       <el-tab-pane label="概述" name="overview">
-        {{ plugin.pluginInfo.pluginSubInfo }}
+        <FlatMarkdown v-model="plugin.readme" />
       </el-tab-pane>
-      <el-tab-pane label="作者" name="authors">
+      <el-tab-pane v-if="false" label="作者" name="authors">
         <div class="Authors-Wrapper">
           <el-scrollbar>
             <div class="Authors-Container">
@@ -61,6 +61,10 @@
       </el-tab-pane>
 
     </el-tabs>
+
+    <teleport to=".AppLayout-View" :disabled="!plugin">
+      <PluginWrapper v-if="plugin" v-model="wrapperView" :plugin="plugin" />
+    </teleport>
   </div>
 </template>
 
@@ -71,7 +75,7 @@ export default {
 </script>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { onBeforeUnmount, onMounted, onUpdated, ref, watchEffect } from 'vue'
 import ProfileAvatar from 'vue-profile-avatar'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { ElMessage } from 'element-plus'
@@ -83,6 +87,8 @@ import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import { registerTypeProcess } from '@modules/samples/node-api'
 import FlatButton from "@comp/button/FlatButton.vue";
+import PluginWrapper from "@comp/plugin/action/PluginWrapper.vue";
+import FlatMarkdown from "@comp/input/FlatMarkdown.vue";
 
 const tabs = ref("overview")
 const props = defineProps({
@@ -92,6 +98,7 @@ const props = defineProps({
   }
 })
 
+const wrapperView = ref()
 const codeRef = ref()
 
 onMounted(() => {

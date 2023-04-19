@@ -17,7 +17,7 @@ export default {
 
 <script setup>
 import Greeting from "~/first/steps/Greeting.vue";
-import {onMounted, provide, ref} from "vue";
+import { inject, onMounted, provide, ref } from "vue";
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 
 const dom = ref()
@@ -45,6 +45,8 @@ function showButton(callback) {
     dom.value.children[0].style.opacity = '0'
 
     window._firstInit = false
+
+    inject('closeGuidance')()
 
     // TODO NEXT
     // setTimeout(callback, 500)

@@ -38,8 +38,6 @@ const select = ref()
 onMounted(() => {
   const [_plugins, cb] = inject('plugins')()
 
-  console.log( _plugins )
-
   plugins.value = [ ..._plugins ]
   cb((val) => {
     plugins.value = [ ...val ]
@@ -53,7 +51,11 @@ async function selectPlugin(index) {
   const style = pluginInfoRef.value.style
 
   style.opacity = '0'
-  style.transform = 'scale(.95)'
+  style.transform = 'translateX(100%) scale(.85)'
+
+  await sleep(100)
+
+  select.value = null
 
   await sleep(100)
 
@@ -61,7 +63,7 @@ async function selectPlugin(index) {
 
   await sleep(100)
 
-  style.transform = 'scale(1)'
+  style.transform = 'translateX(0) scale(1)'
   style.opacity = '1'
 
 }

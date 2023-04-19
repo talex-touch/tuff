@@ -11,32 +11,30 @@ import { saveAllConfig } from './storage'
 
 // import DeviceBlueTooth from '../addon/device/blue-tooth'
 import ClipBoardWatcher from '../addon/device/clipboard'
+import AddonOpener from "./device/addon-opener";
 
-export class ProcessorVars {
-    static readonly startTime = new Date().getTime()
-    static readonly options = {
+export const ProcessorVars = {
+    startTime: new Date().getTime(),
+    options: {
         first: false
-    }
-    static readonly rootPath = process.cwd()
-    static readonly touchPath = path.join(ProcessorVars.rootPath, 'talex-touch')
-    static readonly configPath = path.join(ProcessorVars.rootPath, 'talex-touch', 'config')
-    static readonly pluginPath = path.join(ProcessorVars.rootPath, 'talex-touch', 'plugins')
-    // static readonly mainWin = win
+    },
+    rootPath: process.cwd(),
+    touchPath: path.join(process.cwd(), 'talex-touch'),
+    configPath: path.join(process.cwd(), 'talex-touch', 'config'),
+    pluginPath: path.join(process.cwd(), 'talex-touch', 'plugins'),
+    buildPath: path.join(process.cwd(), 'talex-touch', 'build')
+}
 
-    constructor() {
+checkDirWithCreate(ProcessorVars.touchPath, true).then(() => {
+    ProcessorVars.options.first = true
+})
+checkDirWithCreate(ProcessorVars.configPath, true).then(() => {})
+checkDirWithCreate(ProcessorVars.pluginPath, true).then(() => {})
+checkDirWithCreate(ProcessorVars.buildPath, true).then(() => {})
 
-        checkDirWithCreate(ProcessorVars.touchPath).then(() => {
-            ProcessorVars.options.first = true
-        })
-        checkDirWithCreate(ProcessorVars.configPath).then(() => {})
-        checkDirWithCreate(ProcessorVars.pluginPath).then(() => {})
-
-        if( fse.existsSync(path.resolve(ProcessorVars.configPath, 'dev.talex')) ) {
-            console.log("[Config] Dev mode enabled")
-            process.env.TALEX_DEV = "true"
-        }
-
-    }
+if( fse.existsSync(path.resolve(ProcessorVars.configPath, 'dev.talex')) ) {
+    console.log("[Config] Dev mode enabled")
+    process.env.TALEX_DEV = "true"
 }
 
 export async function beforeDestroy(event) {
@@ -105,6 +103,7 @@ export default async () => {
     BackgroundBlur()
     // DeviceBlueTooth()
     ClipBoardWatcher()
+    AddonOpener()
 
     if ( process.env.TALEX_DEV ) {
 

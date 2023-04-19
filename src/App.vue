@@ -12,11 +12,13 @@
 
 <script setup>
 import AppLayout from '@comp/layout/AppLayout.vue'
-import { onMounted, provide, ref, watch } from "vue";
+import { h, onMounted, provide, ref, watch } from "vue";
 import FirstInit from "~/first/FirstInit.vue";
-import { clipBoardResolver } from "@modules/hooks/applicatoin-hooks";
+import { clipBoardResolver, dropperResolver } from "@modules/hooks/applicatoin-hooks";
 import { pluginManager } from "@modules/samples/node-api";
 import { useRouter } from "vue-router";
+import { blowMention, popperMention } from "@modules/mention/dialog-mention";
+import PluginApplyInstall from "@comp/plugin/action/mention/PluginApplyInstall.vue";
 
 const router = useRouter()
 
@@ -30,9 +32,11 @@ watch(() => activePlugin.value, val => {
 provide("activePlugin", activePlugin)
 
 const first = ref(false)
+provide('closeGuidance', () => first.value = false)
 
 onMounted(() => {
   clipBoardResolver()
+  dropperResolver()
 
   if (window._firstInit) {
     first.value = true

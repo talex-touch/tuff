@@ -20,7 +20,7 @@ const actions = {
             {
                 content: "拒绝",
                 type: "info",
-                time: 18,
+                time: 6,
                 onClick: async () => {
                     reply(false)
 
