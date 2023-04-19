@@ -191,7 +191,7 @@
     "stable": "安定版",
     "latest": "最新版",
     "snapshot": "スナップショット版",
-    "official": "公式版",
+    "master": "公式版",
     "current": "現在のバージョン",
     "latest-version": "最新バージョン",
     "current-version": "現在のバージョン",

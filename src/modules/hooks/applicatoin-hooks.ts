@@ -1,8 +1,18 @@
 
-import {asyncMainProcessMessage, pluginManager, registerTypeProcess} from "@modules/samples/node-api";
-import {blowMention, forApplyMention, popperMention} from "@modules/mention/dialog-mention";
-import {h} from "vue";
+import { asyncMainProcessMessage, pluginManager, registerTypeProcess } from "@modules/samples/node-api";
+import { blowMention, forApplyMention, popperMention } from "@modules/mention/dialog-mention";
+import { h } from "vue";
 import PluginApplyInstall from "@comp/plugin/action/mention/PluginApplyInstall.vue";
+import {AppUpgradation } from "@modules/hooks/api/useUpgradation";
+import { $t } from '@modules/lang'
+import AppUpgradationView from "@comp/base/AppUpgradationView.vue";
+
+export async function applicationUpgrade() {
+    const res = await AppUpgradation.getInstance().check()
+    if ( res ) await popperMention($t('version.update-available'), () => {
+        return h(AppUpgradationView, {release: res})
+    })
+}
 
 export function dropperResolver() {
     async function dropperFile(path) {

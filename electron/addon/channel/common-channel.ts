@@ -4,7 +4,7 @@ import { ProcessorVars } from '../initializer'
 import { getConfig, reloadConfig, saveConfig } from '../storage'
 import { win as mainWin } from '../../main/index'
 
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import os from 'os'
 
 export default function install() {
@@ -26,6 +26,9 @@ export default function install() {
         },
         'get-package': ({ reply }) => {
             reply(packageJson)
+        },
+        'open-external': ({ data }) => {
+             shell.openExternal(data.url)
         }
     }
 

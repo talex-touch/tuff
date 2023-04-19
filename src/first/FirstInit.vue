@@ -49,7 +49,7 @@ function showButton(callback) {
     inject('closeGuidance')()
 
     // TODO NEXT
-    // setTimeout(callback, 500)
+    setTimeout(callback, 500)
 
   })
 }

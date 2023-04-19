@@ -11,6 +11,7 @@ declare module '@vue/runtime-core' {
   export interface GlobalComponents {
     AnimateIconButton: typeof import('./src/components/button/AnimateIconButton.vue')['default']
     AppLayout: typeof import('./src/components/layout/AppLayout.vue')['default']
+    AppUpgradationView: typeof import('./src/components/base/AppUpgradationView.vue')['default']
     DeviceFigure: typeof import('./src/components/device/DeviceFigure.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']

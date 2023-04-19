@@ -31,6 +31,13 @@ export class PluginPackager {
         // copy every file
         const array = JSON.parse(this.files)
 
+        const m = JSON.parse(this.manifest)
+
+        delete m['pluginSubInfo']
+        delete m['plugin']
+
+        this.manifest = JSON.stringify(m)
+
         // generate manifest
         fse.writeFileSync(path.join(this.mainPath, 'manifest.talex'), this.manifest)
 
@@ -43,6 +50,7 @@ export class PluginPackager {
         tarStream.addEntry(path.join(this.mainPath, 'key.talex'))
 
         array.forEach(file => {
+            if ( file === 'init.json' ) return
             tarStream.addEntry(path.join(this.pluginPath, file))
         })
 
@@ -125,6 +133,9 @@ export class PluginResolver {
             fse.rm(targetFile)
 
             cb('success', 'success')
+
+            // rename manifest 2 init
+            fse.rename(path.join(_target, 'manifest.talex'), path.join(_target, 'init.json'))
 
             // load plugin
             pluginManager.loadPlugin(manifest.name)

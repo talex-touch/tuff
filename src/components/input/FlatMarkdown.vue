@@ -1,5 +1,5 @@
 <template>
-  <div class="FlatMarkdown-Container">
+  <div class="FlatMarkdown-Container fake-background">
     <el-scrollbar>
       <div class="FlatMarkdown-Editor" ref="editorDom" />
     </el-scrollbar>
@@ -79,6 +79,6 @@ onMounted(() => {
   height: 100%;
 
   box-sizing: border-box;
-  border: 1px solid var(--el-border-color);
+  //border: 1px solid var(--el-border-color);
 }
 </style>

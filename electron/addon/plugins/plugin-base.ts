@@ -284,7 +284,7 @@ export class PluginInfo {
 
         this.version = options.version
         this.description = options.description
-        this.pluginSubInfo = new PluginSubInfo(options.plugin)
+        if ( options.plugin ) this.pluginSubInfo = new PluginSubInfo(options.plugin)
 
         // ;[ ...options.authors ].forEach(author => this.authors.push(new PluginAuthor(author)))
 

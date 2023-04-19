@@ -16,7 +16,7 @@ import _path from 'path'
 
 // handle global error
 process.on('uncaughtException', (error) => {
-    console.error("[TalexTouch-Error", error)
+    console.error("[TalexTouch-Error]", error)
 })
 
 // Remove electron security warnings

@@ -191,7 +191,7 @@
     "stable": "Stable Version",
     "latest": "Latest Version",
     "snapshot": "Snapshot Version",
-    "official": "Official Version",
+    "master": "Official Version",
     "current": "Current Version",
     "latest-version": "Latest Version",
     "current-version": "Current Version",

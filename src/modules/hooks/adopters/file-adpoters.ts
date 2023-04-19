@@ -7,7 +7,6 @@ import { cwd } from "process";
 
 const mainPath = cwd()
 export const pluginPath = path.join(mainPath, 'talex-touch', 'plugins')
-
 class FileAdpoter {
     mainPath
     constructor(mainPath) {
@@ -25,7 +24,7 @@ class FileAdpoter {
                 withFileTypes: true
             })
 
-            console.log( res, p )
+            // console.log( res, p )
 
         } catch (e) {
 

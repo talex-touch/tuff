@@ -299,6 +299,10 @@ export class BaseNodeApi {
     return this._action('dev-tools')
   }
 
+  openExternal(url: string) {
+    return this._action('open-external', { url })
+  }
+
   getPackageJSON() {
     return this._appSync('get-package')
   }

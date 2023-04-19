@@ -192,7 +192,7 @@
     "stable": "穩定版",
     "latest": "最新版",
     "snapshot": "快照版",
-    "official": "正式版",
+    "master": "正式版",
     "current": "當前版本",
     "latest-version": "最新版本",
     "current-version": "當前版本",
