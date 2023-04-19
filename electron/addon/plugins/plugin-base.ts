@@ -10,7 +10,7 @@ import {ProcessorVars} from "../initializer";
 
 export class Plugin {
 
-    readonly pluginInfo
+    readonly pluginInfo: PluginInfo
 
     readonly readme
 
@@ -233,7 +233,7 @@ export class PluginDev {
 
 export class PluginSubInfo {
 
-    readonly dev: object
+    readonly dev: any
     readonly signature: string
 
     constructor(pluginOptions) {
@@ -268,7 +268,7 @@ export class PluginInfo {
     readonly icon
     readonly version
     readonly description
-    readonly pluginSubInfo
+    readonly pluginSubInfo: PluginSubInfo
 
     // readonly authors: Array<PluginAuthor> = []
 
@@ -284,7 +284,7 @@ export class PluginInfo {
 
         this.version = options.version
         this.description = options.description
-        this.pluginSubInfo = new PluginSubInfo(options.plugin)
+        if ( options.plugin ) this.pluginSubInfo = new PluginSubInfo(options.plugin)
 
         // ;[ ...options.authors ].forEach(author => this.authors.push(new PluginAuthor(author)))
 

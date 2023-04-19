@@ -191,7 +191,7 @@
     "register": "注册",
     "step": "下一步",
     "last_step": "上一步",
-    "touchCaptcha": "旋转验证",
+    "touchCaptcha": "旋转验证"
   },
   "protocol": {
     "service": "服务条款",
@@ -204,11 +204,12 @@
     "stable": "稳定版",
     "latest": "最新版",
     "snapshot": "快照版",
-    "official": "正式版",
+    "master": "正式版",
     "current": "当前版本",
     "latest-version": "最新版本",
     "current-version": "当前版本",
     "update": "更新",
+    "wait": "暂时不",
     "update-available": "有可用更新",
     "update-not-available": "暂无可用更新",
     "update-checking": "正在检查更新",

@@ -1,6 +1,6 @@
 {
   "name": "talex-touch",
-  "version": "1.0.0-SNAPSHOT",
+  "version": "1.0.0",
   "main": "dist/electron/main/index.js",
   "description": "A strong adaptation platform more im chat program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",

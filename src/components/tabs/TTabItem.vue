@@ -36,6 +36,10 @@ const props = defineProps({
   },
   nonStyle: {
     type: Boolean
+  },
+  activation: {
+    type: Boolean,
+    default: false
   }
 })
 

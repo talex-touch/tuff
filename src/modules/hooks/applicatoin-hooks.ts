@@ -1,8 +1,18 @@
 
-import {asyncMainProcessMessage, pluginManager, registerTypeProcess} from "@modules/samples/node-api";
-import {blowMention, forApplyMention, popperMention} from "@modules/mention/dialog-mention";
-import {h} from "vue";
+import { asyncMainProcessMessage, pluginManager, registerTypeProcess } from "@modules/samples/node-api";
+import { blowMention, forApplyMention, popperMention } from "@modules/mention/dialog-mention";
+import { h } from "vue";
 import PluginApplyInstall from "@comp/plugin/action/mention/PluginApplyInstall.vue";
+import {AppUpgradation } from "@modules/hooks/api/useUpgradation";
+import { $t } from '@modules/lang'
+import AppUpgradationView from "@comp/base/AppUpgradationView.vue";
+
+export async function applicationUpgrade() {
+    const res = await AppUpgradation.getInstance().check()
+    if ( res ) await popperMention($t('version.update-available'), () => {
+        return h(AppUpgradationView, {release: res})
+    })
+}
 
 export function dropperResolver() {
     async function dropperFile(path) {
@@ -10,14 +20,16 @@ export function dropperResolver() {
             const { data } = await asyncMainProcessMessage('@drop-plugin', path) as any
 
             if ( data.status === 'error' ) {
-                // if ( data.msg === '10091' ) {
-                await blowMention('Install', '该插件已遭受不可逆破坏！')
-                // }
+                if ( data.msg === '10091' ) {
+                    await blowMention('Install', '该插件已遭受不可逆破坏！')
+                } else if ( data.msg === '10092' ) {
+                    await blowMention('Install', '无法识别该文件！')
+                }
             } else {
                 const { manifest } = data
 
                 await popperMention(manifest.name, () => {
-                    return h(PluginApplyInstall, { manifest })
+                    return h(PluginApplyInstall, { manifest, path })
                 })
             }
         }
@@ -36,7 +48,7 @@ export function dropperResolver() {
             //获取文件路径
             const { path } = files[0] as any;
 
-            dropperFile(path)
+            await dropperFile(path)
         }
     })
 

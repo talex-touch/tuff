@@ -14,7 +14,7 @@ const slotWrapper = ref()
 
 export default {
   name: "TTabs",
-  props: ['modelValue'],
+  props: ['default'],
   render() {
     const that = this
     let tabHeader = null
@@ -95,7 +95,7 @@ export default {
 
             activeNode.value = vnode
 
-            that.$emit('update:modelValue', vnode.props.name)
+            // that.$emit('update:modelValue', vnode.props.name)
 
             fixPointer(tab)
 
@@ -103,7 +103,14 @@ export default {
           }
         })
 
-        if( that.modelValue === vnode.props.name ) {
+        if ( !activeNode.value && tab.props.hasOwnProperty('activation') ) {
+          activeNode.value = vnode
+          nextTick(() => {
+            fixPointer(tab)
+          })
+        }
+
+        /*if( that.default === vnode.props.name ) {
 
           activeNode.value = vnode
 
@@ -112,7 +119,7 @@ export default {
           })
 
         }
-
+*/
         return tab
       }
 

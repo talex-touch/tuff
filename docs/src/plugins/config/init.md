@@ -51,7 +51,7 @@
 name字段标识一个插件的名称，在开发阶段您需要确保 name 字段与 插件文件夹名字 相同，否则应用会拒绝加载。当多个插件名称相同时，程序会**全部拒绝运行**
 
 ## version <Badge type="info" text="可选" /> <Badge type="warning" text="建议填写" />
-version字段标识一个插件的版本，如果您不填写将默认为 1.0.0-OFFICIAL 这也标示着您的插件无法完成自动更新，必须用户手动替换，因此建议您参考 [语义化版本模型](https://semver.org/) 进行设定。
+version字段标识一个插件的版本，如果您不填写将默认为 1.0.0 这也标示着您的插件无法完成自动更新，必须用户手动替换，因此建议您参考 [语义化版本模型](https://semver.org/) 进行设定。
 
 ## icon <Badge type="info" text="可选" /> <Badge type="warning" text="建议填写" />
 icon字段标识一个插件的图标，如果您不填写将默认为插件的logo， 这将严重影响到用户对插件的辨识程度。

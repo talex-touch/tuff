@@ -1,6 +1,6 @@
 <template>
   <div class="Setting-Container">
-    <t-tabs v-model="tabSelection">
+    <t-tabs>
       <t-tab-item-group :name="$t('settings.appearance.name')">
         <t-tab-item disabled icon="home-gear" :name="$t('settings.appearance.home-gear.name')">
 <!--          <HomeGear />-->
@@ -24,7 +24,7 @@
         <t-tab-item :non-style="true" icon="node-tree" name="依赖树" disabled>GOOD,TOUCH</t-tab-item>
       </t-tab-item-group>
       <t-tab-item-group :name="$t('settings.application.name')">
-        <t-tab-item icon="list-settings" :name="$t('settings.application.list-settings.name')">
+        <t-tab-item activation icon="list-settings" :name="$t('settings.application.list-settings.name')">
           <AppSettings />
         </t-tab-item>
         <t-tab-item icon="tools" :name="$t('settings.application.tools.name')" disabled>HELLO, WORLD!</t-tab-item>
@@ -57,7 +57,7 @@ import AlsoShare from '~/views/settings/AlsoShare.vue'
 import { $t } from '@modules/lang'
 
 const dev = ref(false)
-const tabSelection = ref($t('settings.application.list-settings.name'))
+// const tabSelection = ref($t('settings.application.list-settings.name'))
 
 onMounted(() => {
   dev.value = process.env.NODE_ENV === 'development'

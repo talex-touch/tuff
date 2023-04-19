@@ -11,7 +11,6 @@ export class StorageManager {
     appSetting: object
 
     account: AccountStorage
-
     constructor() {
 
         this.account = reactive(new AccountStorage(window.$nodeApi.getConfig('account.ini')))

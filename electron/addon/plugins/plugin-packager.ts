@@ -6,6 +6,7 @@ import fse from "fs-extra";
 import compressing from 'compressing'
 import * as fs from "fs";
 import { sendMainChannelMsg } from "../../utils/channel-util";
+import {pluginManager} from "./plugin-manager";
 
 export class PluginPackager {
     plugin: Plugin
@@ -30,13 +31,12 @@ export class PluginPackager {
         // copy every file
         const array = JSON.parse(this.files)
 
-        console.log(array)
+        const m = JSON.parse(this.manifest)
 
-        // array.forEach(file => {
-        //     fse.copyFileSync(path.join(this.pluginPath, file), path.join(this.mainPath, file))
-        //
-        //     console.log('[PluginPackager] Copying file: ' + file)
-        // })
+        delete m['pluginSubInfo']
+        delete m['plugin']
+
+        this.manifest = JSON.stringify(m)
 
         // generate manifest
         fse.writeFileSync(path.join(this.mainPath, 'manifest.talex'), this.manifest)
@@ -50,6 +50,7 @@ export class PluginPackager {
         tarStream.addEntry(path.join(this.mainPath, 'key.talex'))
 
         array.forEach(file => {
+            if ( file === 'init.json' ) return
             tarStream.addEntry(path.join(this.pluginPath, file))
         })
 
@@ -95,6 +96,52 @@ export class PluginResolver {
     constructor(filePath) {
 
         this.filePath = filePath
+
+    }
+
+    async install(totalLength: number, manifest: any, cb: Function) {
+        const _target = path.join(ProcessorVars.pluginPath, manifest.name)
+
+        // const _plugin: Plugin = pluginManager.plugins[manifest.name]
+        // if ( _plugin ) {
+        //     if ( !_plugin.pluginInfo.pluginSubInfo.dev ) {
+        //         return cb('plugin already exists')
+        //     }
+        /*} else*/ if ( fse.existsSync(_target) ) return cb('plugin already exists')
+        await checkDirWithCreate(_target, true)
+
+        const target = path.join(_target, 'extracted')
+        const targetFile = path.join(target, manifest.name + '-unpacked.tar')
+        await checkDirWithCreate(target, true)
+
+        let bytesReceived = 0
+        let totalBytes = fs.statSync(this.filePath).size - totalLength
+
+        // 先将文件写入新文件
+        const readStream = fs.createReadStream(this.filePath, { start: totalLength })
+        const fileStream = fs.createWriteStream(targetFile, { flags: 'a' })
+
+        readStream.on('data', (chunk) => {
+
+            console.log('[PluginResolver] Installing plugin: ' + manifest.name + " | " + (bytesReceived / totalBytes * 100).toFixed(2) + '%')
+        })
+
+        readStream.on('end', async() => {
+            // 解压新的文件
+            await compressing.tar.uncompress(targetFile, _target)
+
+            fse.rm(targetFile)
+
+            cb('success', 'success')
+
+            // rename manifest 2 init
+            fse.rename(path.join(_target, 'manifest.talex'), path.join(_target, 'init.json'))
+
+            // load plugin
+            pluginManager.loadPlugin(manifest.name)
+        })
+
+        readStream.pipe(fileStream)
 
     }
 
@@ -150,6 +197,17 @@ export class PluginResolver {
                         return callback({ event, type: 'success' })
                     }
 
+                    const totalLength = length + 32
+
+                    // install
+                    setTimeout(async () => {
+                        await this.install(totalLength, manifest, (msg, type = 'error') => {
+                            event.msg = msg
+
+                            callback({ event, type })
+                        })
+                    })
+
                 } catch ( e ) {
 
                     event.msg = e
@@ -163,6 +221,8 @@ export class PluginResolver {
                             return callback({ event, type: 'error' })
                         }
                     })
+
+                    console.log('[PluginResolver] Resolved plugin: ' + this.filePath + " | File released!")
 
                 }
 

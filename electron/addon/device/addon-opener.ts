@@ -29,15 +29,35 @@ export default () => {
         sendMainChannelMsg('@open-plugin', filePath)
     })
 
+    regChannel('@install-plugin', ({ data, reply }) => {
+        new PluginResolver(data).resolve(({ event, type }) => {
+            console.log('[AddonInstaller] Installed file: ' + data)
+
+            reply({
+                status: type,
+                msg: event.msg,
+                event
+            })
+
+        }, true)
+    })
+
     regChannel('@drop-plugin', ({ data, reply }) => {
         console.log('[AddonDropper] Dropped file: ' + data)
 
         new PluginResolver(data).resolve(({ event, type }) => {
+            console.log( event, type )
+
             if ( type === 'error' ) {
                 if ( event.msg === ResolverStatus.BROKEN_PLUGIN_FILE ) {
                     return reply({
                         status: 'error',
                         msg: '10091'
+                    })
+                } else {
+                    return reply({
+                        status: 'error',
+                        msg: '10092'
                     })
                 }
             } else {
@@ -48,10 +68,10 @@ export default () => {
                 })
             }
 
-            return reply({
+            /*return reply({
                 status: 'unknown',
                 msg: '-1'
-            })
+            })*/
         })
 
     })

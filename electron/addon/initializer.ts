@@ -12,7 +12,23 @@ import { saveAllConfig } from './storage'
 // import DeviceBlueTooth from '../addon/device/blue-tooth'
 import ClipBoardWatcher from '../addon/device/clipboard'
 import AddonOpener from "./device/addon-opener";
+import { release } from "os";
+import { app } from "electron";
+import _path from "path";
 
+process.env.DIST = _path.join(__dirname, '../..')
+process.env.PUBLIC = app.isPackaged ? process.env.DIST : _path.join(process.env.DIST, '../public')
+
+// Disable GPU Acceleration for Windows 7
+if (release().startsWith('6.1')) app.disableHardwareAcceleration()
+
+// Set application name for Windows 10+ notifications
+if (process.platform === 'win32') app.setAppUserModelId(app.getName())
+
+if (!app.requestSingleInstanceLock()) {
+    app.quit()
+    process.exit(0)
+}
 export const ProcessorVars = {
     startTime: new Date().getTime(),
     options: {

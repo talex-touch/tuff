@@ -23,7 +23,7 @@
         <t-block-switch title="自动转换" icon="refresh" v-model="options.plugin.syncLatest" description="自动转换剪贴板数据以适配不同设备" />
       </t-group-block>
 
-      <t-block-switch title="隐私" icon="shield" guidance description="获取数据保护和隐私保护的有关信息" />
+      <t-block-switch title="隐私" icon="shield" guidance description="获取数据保护和隐私保护的有关信息"  model-value/>
 
     </t-group-block>
   </div>
@@ -36,15 +36,12 @@ export default {
 </script>
 
 <script setup>
-import TvTabs from '@comp/tabs/vertical/TvTabs.vue'
-import TvTabItem from '@comp/tabs/vertical/TvTabItem.vue'
-import TvTabItemGroup from '@comp/tabs/vertical/TvTabItemGroup.vue'
-import { reactive, ref, unref, watch } from 'vue'
 import DeviceFigure from '@comp/device/DeviceFigure.vue'
 import TBlockSwitch from '@comp/switch/TBlockSwitch.vue'
 import TSelectItem from '@comp/select/TSelectItem.vue'
+import TGroupBlock from "@comp/group/TGroupBlock.vue";
+import TBlockSelect from "@comp/select/TBlockSelect.vue";
 
-const activeNodes = ref("")
 const options = window.$storage.appSetting
 </script>
 
