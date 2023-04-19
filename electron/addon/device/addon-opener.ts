@@ -2,9 +2,6 @@ import { win } from "../../main";
 import {regChannel, sendMainChannelMsg} from "../../utils/channel-util";
 import { app } from "electron";
 import process from "process";
-import fse from "fs/promises";
-import * as fs from "fs";
-import * as buffer from "buffer";
 import {PluginResolver, ResolverStatus} from "../plugins/plugin-packager";
 
 export default () => {
@@ -12,6 +9,17 @@ export default () => {
     app.setAsDefaultProtocolClient('talex-plugin', process.execPath, [
         '--file=%i'
     ])
+
+    async function onOpenFile(url) {
+        await sendMainChannelMsg('@mock-drop', url)
+    }
+
+    app.on('will-finish-launching', () => {
+      app.on('open-url', async (event, url) => {
+        event.preventDefault()
+        await onOpenFile(url)
+      })
+    })
 
     app.on('open-file', (event, filePath) => {
         event.preventDefault()
