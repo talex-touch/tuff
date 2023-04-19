@@ -7,7 +7,7 @@ hero:
   text: 触碰无边界
   tagline: 一款触手可及的全应用
   image:
-    src: logo.png
+    src: https://files.catbox.moe/2el8uf.png
     alt: TalexTouch
   actions:
     - theme: brand
