@@ -1,6 +1,6 @@
 {
   "name": "talex-touch",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "dist/electron/main/index.js",
   "description": "A strong adaptation platform more im chat program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -9,7 +9,10 @@
   "scripts": {
     "dev": "chcp 65001 && vite",
     "install-build": "electron-builder install-app-deps",
-    "build": "vue-tsc --noEmit && vite build && electron-builder",
+    "build:whole": "vue-tsc --noEmit && vite build && electron-builder",
+    "build": "electron-builder",
+    "signed-cert": "electron-builder create-self-signed-cert",
+    "dev:start": "electron-builder start",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
@@ -72,6 +75,7 @@
     "v-wave": "^1.5.0",
     "vite-plugin-commonjs-externals": "^0.1.1",
     "vite-plugin-electron": "^0.11.1",
+    "vite-plugin-vue-setup-extend": "^0.4.0",
     "vitepress": "1.0.0-alpha.49",
     "vue-i18n": "^9.2.2",
     "vue-profile-avatar": "^1.2.0",

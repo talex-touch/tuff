@@ -15,6 +15,7 @@ import AddonOpener from "./device/addon-opener";
 import { release } from "os";
 import { app } from "electron";
 import _path from "path";
+import ScreenCapture from "./device/screen-capture";
 
 process.env.DIST = _path.join(__dirname, '../..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : _path.join(process.env.DIST, '../public')
@@ -120,6 +121,7 @@ export default async () => {
     // DeviceBlueTooth()
     ClipBoardWatcher()
     AddonOpener()
+    // ScreenCapture()
 
     if ( process.env.TALEX_DEV ) {
 

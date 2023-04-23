@@ -42,7 +42,6 @@ export class Plugin {
         this.readme = readme
 
     }
-
     _enabled(parentWindow: BrowserWindow, fileP: string) {
         if ( this.status !== PluginStatus.DISABLED && this.status !== PluginStatus.LOADED && this.status !== PluginStatus.CRASHED && this.status !== PluginStatus.LOADING ) return
         this.status = PluginStatus.LOADING
@@ -50,7 +49,7 @@ export class Plugin {
         const [name, pluginInfo, sourceConfig] = [this.pluginInfo.name, this.pluginInfo, this.sourceConfig]
 
         const indexPath = this.__index(fileP)
-        const preload = path.normalize(this.__preload(fileP))
+        const preload = this.__preload(fileP)
 
         const _path = {
             relative:  path.relative(ProcessorVars.rootPath, fileP),
@@ -65,6 +64,7 @@ export class Plugin {
             },
             attrs: {
                 // src: indexPath,
+                enableRemoteModule: 'false',
                 nodeintegration: 'true',
                 webpreferences: 'contextIsolation=false',
                 httpreferrer: `https://plugin.touch.talex.com/${name}`,

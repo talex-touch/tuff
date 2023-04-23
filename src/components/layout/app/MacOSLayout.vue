@@ -6,11 +6,13 @@
         <remix-icon @click="minimizeWindow" name="subtract" />
       </ul>
 
-      <slot name="title" />
+      <span class="AppLayout-Title">
+        <slot name="title" />
+      </span>
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <LeafNavBar v-model="activePlugin">
+        <LeafNavBar>
           <template #plugin-nav>
             <slot name="plugin-nav" />
           </template>
@@ -55,6 +57,28 @@ function closeWindow() {
 
 <style lang="scss" scoped>
 .AppLayout-Container.MacOS {
+  .AppLayout-Header {
+    border-bottom: 1px solid var(--el-border-color);
+  }
+  .AppLayout-Aside {
+    border-right: 1px solid var(--el-border-color);
+  }
+  .blur & {
+    .AppLayout-Header {
+      border-bottom: none;
+    }
+    .AppLayout-Aside {
+      border-right: none;
+    }
+  }
+  .AppLayout-Title {
+    position: relative;
+
+    left: 35px;
+    width: calc(100% - 50px);
+
+    text-align: center;
+  }
   .AppLayout-Controller {
     .remix {
       &:hover {
@@ -91,23 +115,6 @@ function closeWindow() {
     gap: 10px;
 
     text-indent: 0;
-  }
-}
-
-@keyframes asideEnter {
-  0% {
-    transform: perspective(1px) scale(.95) translateX(-10px) rotate3d(0, .05, 0, 1deg);
-  }
-  100% {
-    transform: perspective(1px) scale(1) translateX(0) rotate3d(0, 0, 0, 1deg);
-  }
-}
-@keyframes headEnter {
-  0% {
-    transform: perspective(1px) scale(.95) translateY(-10px) rotate3d(.05, 0, 0, -1deg);
-  }
-  100% {
-    transform: perspective(1px) scale(1) translateY(0) rotate3d(0, 0, 0, -1deg);
   }
 }
 </style>

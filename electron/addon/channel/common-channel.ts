@@ -11,7 +11,11 @@ export default function install() {
 
     const typeMap = {
         'close': () => {
+            mainWin.close()
+
             app.quit()
+
+            process.exit(0)
         },
         'minimize': () => {
             mainWin.minimize()

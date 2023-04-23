@@ -74,6 +74,7 @@ onMounted(() => {
     border-color: var(--el-color-primary)
   }
   position: relative;
+  padding-left: 10px;
 
   width: 100%;
   height: 100%;

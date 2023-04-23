@@ -14,6 +14,50 @@ export async function applicationUpgrade() {
     })
 }
 
+export function screenCapture() {
+    const widthStr = document.body.style.getPropertyValue('--winWidth')
+    const heightStr = document.body.style.getPropertyValue('--winHeight')
+
+    const winWidth = widthStr ? parseInt(widthStr) : 0
+    const winHeight = heightStr ? parseInt(heightStr) : 0
+
+    if ( winWidth === 0 || winHeight === 0 ) return
+    registerTypeProcess('@screen-capture', async ({ data }) => {
+        const width = document.body.clientWidth
+        const height = document.body.clientHeight
+
+        const video = document.getElementById('video') as HTMLVideoElement
+
+        const media = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+                // @ts-ignore
+                chromeMediaSource: 'desktop',
+                // deviceId: data.id,
+                chromeMediaSourceId: data.id,
+                minWidth: width,
+                maxWidth: winHeight,
+                minHeight: height,
+                maxHeight: winHeight,
+                height: height,
+                width: width
+            },
+
+        })
+
+        console.log( data, media.getTracks() )
+        //
+        // const track = media.getVideoTracks()[0]
+
+        console.log( data, media )
+
+        // video.srcObject = media
+        // video.onloadedmetadata = (e) => {
+        //     video.play()
+        // }
+    })
+}
+
 export function dropperResolver() {
     async function dropperFile(path) {
         if ( path.endsWith('.touch-plugin') ) {

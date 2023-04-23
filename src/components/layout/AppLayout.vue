@@ -17,7 +17,11 @@
         </div>
       </template>
       <template #view>
-        <slot name="view" />
+        <router-view v-slot="{ Component, route }">
+          <transition :name="transitionName">
+            <component :is="Component" :key="route.path" />
+          </transition>
+        </router-view>
       </template>
       <template #title>
         TalexTouch <span class="tag version fake-background" v-if="packageJson.version.indexOf('SNAPSHOT') !== -1 || packageJson.version.indexOf('Alpha') !== -1">{{packageJson.version }}</span>
@@ -44,6 +48,7 @@ import { $t } from "@modules/lang";
 import IconButton from "@comp/button/IconButton.vue";
 import PluginNavList from "@comp/plugin/layout/PluginNavList.vue";
 import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
+import { useRouter } from "vue-router";
 
 const options = window.$storage.themeStyle
 const paintCustom = window.$storage.paintCustom
@@ -70,17 +75,23 @@ async function loadModule(module) {
 const plugins = ref()
 const activePlugin = inject('activePlugin')
 const account = window.$storage.account
-watch(() => pluginAdopter.plugins, val => {
-  plugins.value = val.values()
-
-  provide('plugins', () => [val.values(), (cb) => {
-    cb(val.values())
-  }])
-}, { deep: true, immediate: true })
+provide('plugins', () => plugins.value)
+watch(() => pluginAdopter.plugins, val => plugins.value = [ ...val.values() ], { deep: true, immediate: true })
 
 function openDevTools() {
   window.$nodeApi.openDevTools()
 }
+
+const router = useRouter()
+
+const transitionName = ref('fade')
+router.afterEach((to, from) => {
+  if ( to.meta?.index >= from.meta?.index ) {
+    transitionName.value = 'scale-down-and-cover'
+  } else {
+    transitionName.value = 'scale-up-and-cover'
+  }
+})
 
 // onMounted(async () => {
 //   const config = window.$storage.paintCustom
@@ -184,11 +195,17 @@ function openDevTools() {
 }
 
 :deep(.AppLayout-Aside) {
+  .NavBar-Home {
+    max-height: 300px;
+  }
+  z-index: 1000;
   position: relative;
   padding: 10px;
   display: flex;
 
   flex-direction: column;
+
+  left: 0;
 
   width: 70px;
   height: calc(100% - 30px);
@@ -197,7 +214,11 @@ function openDevTools() {
 
   --fake-radius: 0;
   --fake-opacity: .25;
-  animation: asideEnter .125s ease-in;
+  transition:
+          margin-right .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+          left .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+          width .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+          opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
 @keyframes viewEnter {
@@ -212,6 +233,16 @@ function openDevTools() {
 }
 
 :deep(.AppLayout-Main) {
+  &:has(.scale-down-and-cover-enter-active), &:has(.scale-up-and-cover-enter-active) {
+    & .AppLayout-Aside {
+      margin-right: -20px;
+
+      left: -70px;
+
+      width: 0 !important;
+      opacity: 0;
+    }
+  }
   position: relative;
   display: flex;
 
@@ -219,6 +250,7 @@ function openDevTools() {
 }
 
 :deep(.AppLayout-Header) {
+  z-index: 1000;
   position: sticky;
   padding: 0 10px;
   display: flex;
@@ -234,7 +266,6 @@ function openDevTools() {
 
   --fake-opacity: .25;
   --fake-radius: 8px 8px 0 0;
-  animation: headEnter .125s ease-in;
 }
 
 :deep(.AppLayout-Controller) {
@@ -255,7 +286,7 @@ function openDevTools() {
 
 .blur .AppLayout-Wrapper {
   :deep(.AppLayout-Container) {
-    backdrop-filter: blur(10px) saturate(180%) brightness(.8);
+    backdrop-filter: blur(50px) saturate(180%) brightness(.85);
   }
 
   :deep(.AppLayout-View) {
@@ -274,10 +305,13 @@ function openDevTools() {
     font-size: 12px;
   }
   :deep(.AppLayout-View) {
+    z-index: 100;
     position: relative;
 
-    width: calc(100% - 70px);
+    //width: calc(100% - 70px);
     height: calc(100% - 30px);
+
+    flex: 1;
 
     box-sizing: border-box;
 

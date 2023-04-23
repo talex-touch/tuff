@@ -1,10 +1,9 @@
 <template>
  <div class="PluginWrapper-Wrapper fake-background" :class="{ visible: visible || pluginWrapper.packaging }">
-   <span @click="visible = false" class="PluginWrapper-Referrer" />
+   <span @click="visible = pluginWrapper.packaging || false" class="PluginWrapper-Referrer" />
    <div class="PluginWrapper-Container">
      <el-tabs v-if="!pluginWrapper.packaging" tab-position="right" v-model="tab">
        <el-tab-pane name="Manifest" label="基本信息">
-         {{ pluginWrapper.manifest }}
          <FlatMarkdown v-model="plugin.readme" />
          <!--         <el-form>-->
          <!--            <el-form-item label="名称">-->
@@ -30,7 +29,14 @@
 
      <div v-else class="Pack-Compressing">
        正在导出插件中，请耐心等待...
-       <span>请勿操作数据文件！</span>
+       <PluginExportMention />
+       <teleport to=".PluginWrapper-Wrapper">
+         <div class="Pack-Progressing" :style="`--p: ${pluginWrapper.p.p}%`">
+           <span>
+             {{ (pluginWrapper.p.p).toFixed(4) }} %
+           </span>
+         </div>
+       </teleport>
        <LottieFrame :data="compressing" />
      </div>
    </div>
@@ -68,37 +74,114 @@ const pluginWrapper = reactive({
   packaging: false,
   name: props.plugin.pluginInfo.name,
   manifest: props.plugin.pluginInfo,
-  files: [ 'init.json', 'index.html' ]
+  files: [ 'init.json', 'index.html' ],
+  p: {
+    n: 0,
+    m: 0,
+    p: 0
+  }
+})
+
+registerTypeProcess('plugin-packager-progress/' + pluginWrapper.name, ({ data }) => {
+  pluginWrapper.packaging = true
+  pluginWrapper.p.m = data.total
+  pluginWrapper.p.n = data.received
+
+  const _p = (data.received / data.total * 100).toFixed(7)
+  function calc(__p) {
+    if ( __p > 99 ) {
+      return calc((__p - 99) * 100)
+    } else return __p
+  }
+
+  pluginWrapper.p.p = calc(_p)
+})
+
+registerTypeProcess('plugin-packager', ({ data }) => {
+  if ( !pluginWrapper.packaging ) return
+  if ( data.plugin === pluginWrapper.name ) {
+    pluginWrapper.packaging = false
+
+    if ( data.status === 'success' ) {
+      blowMention('success', '导出成功！')
+    } else {
+      blowMention('error', '导出失败！')
+    }
+  }
 })
 
 function pack() {
   pluginWrapper.packaging = true
-
-  const logout = registerTypeProcess('plugin-packager', ({ data, reply }) => {
-    if ( data.plugin === pluginWrapper.name ) {
-      pluginWrapper.packaging = false
-
-      if ( data.status === 'success' ) {
-        blowMention('success', '导出成功！')
-      } else {
-        blowMention('error', '导出失败！')
-      }
-    }
-
-    logout()
-  })
 
   pluginManager.exportPlugin(pluginWrapper.name, JSON.stringify(pluginWrapper.manifest), JSON.stringify(pluginWrapper.files))
 }
 </script>
 
 <style lang="scss" scoped>
-.Pack-Compressing {
-  position: relative;
-  padding-top: 30px;
+@keyframes waving {
+  from {
+    background-position: 200% 100%;
+  }
+  to {
+    background-position: 0 100%;
+  }
+}
+
+.Pack-Progressing {
+  span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -150%);
+    color: var(--el-color-primary-dark-2);
+  }
+  &:before {
+    content: "";
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: var(--p, 0);
+    height: 100%;
+
+    transition: .25s linear;
+    background-color: var(--el-color-primary-light-3);
+  }
+  &:after {
+    content: "";
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    //width: 100%;
+    width: var(--p, 0);
+    height: 100%;
+
+    transition: .25s linear;
+    background-image: linear-gradient(to right, var(--el-fill-color), var(--el-color-primary-dark-2), var(--el-fill-color));
+    background-size: 200% 200%;
+
+    animation: waving 1s linear infinite;
+  }
+  z-index: 1000;
+  position: absolute;
+
+  bottom: -5px;
 
   width: 100%;
-  height: 100%;
+  height: 5px;
+
+  background-color: var(--el-fill-color-darker);
+}
+
+.Pack-Compressing {
+  position: relative;
+  padding-top: 5%;
+
+  width: 100%;
+  height: 90%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -165,7 +248,7 @@ function pack() {
   width: 100%;
   height: calc(100% - 15px);
 
-  --fake-opacity: .95;
+  --fake-opacity: .75;
 
   opacity: 0;
   pointer-events: none;

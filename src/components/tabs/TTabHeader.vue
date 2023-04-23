@@ -39,7 +39,7 @@ const props = defineProps(['node'])
   left: 0;
 
   width: 100%;
-  height: 12%;
+  //height: 12%;
 
   box-sizing: border-box;
   //backdrop-filter: blur(10px);

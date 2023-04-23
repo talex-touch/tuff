@@ -1,5 +1,5 @@
 <template>
-  <div class="PluginInfo-Container">
+  <div class="PluginInfo-Container" :class="{ 'wrapper-view': wrapperView }">
     <plugin-status :plugin="plugin" />
 
     <div class="PluginInfo-Header">
@@ -47,14 +47,17 @@
           </el-scrollbar>
         </div>
       </el-tab-pane>
-<!--      <el-tab-pane label="历史版本" name="history">-->
-<!--        <el-empty description="暂无历史发布版本." />-->
-<!--      </el-tab-pane>-->
+      <el-tab-pane label="版本" name="history">
+        <el-empty description="暂无历史发布版本." />
+      </el-tab-pane>
+      <el-tab-pane label="评论" name="reviews">
+        <el-empty description="暂无历史发布版本." />
+      </el-tab-pane>
 <!--      <el-tab-pane label="运行日志" name="terminal">-->
 <!--        <LogTerminal :logs="plugin.logs" />-->
 <!--        <el-empty description="暂无历史日志." />-->
 <!--      </el-tab-pane>-->
-      <el-tab-pane label="配置源文件" name="config-source">
+      <el-tab-pane label="配置" name="config-source">
         <el-scrollbar>
           <div class="ConfigSource-Editor" ref="codeRef" />
         </el-scrollbar>
@@ -382,6 +385,9 @@ const rate = ref(0)
 }
 
 .PluginInfo-Container {
+  //&.wrapper-view {
+  //  transform: perspective(10px) rotateX(90deg);
+  //}
   position: relative;
 
   display: flex;
@@ -414,5 +420,17 @@ const rate = ref(0)
   }
 
   box-sizing: border-box;
+
+}
+</style>
+
+<style>
+.Plugin-Container:has(.wrapper-view) {
+    filter: blur(10px);
+  transform: perspective(100px) rotateX(9deg);
+}
+
+.Plugin-Container {
+    transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 </style>

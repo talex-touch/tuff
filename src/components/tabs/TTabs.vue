@@ -158,7 +158,7 @@ export default {
 
     }
 
-    return h('div', { class: 'TTabs-Container' }, [ h('div', { class: 'TTabs-Header' }, getTabs()),
+    return h('div', { class: 'TTabs-Container' }, [ h('div', { class: 'TTabs-Header' }, [that.$slots?.tabHeader?.(), getTabs()]),
       h('div', { class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '') }, getSelectSlotContent() ),
       pointer
     ])
@@ -185,7 +185,7 @@ export default {
   padding: 15px 10px 0 10px;
   //position: relative;
 
-  height: 100%;
+  //height: 100%;
   //width: 100%;
 
   box-sizing: border-box;
@@ -207,7 +207,7 @@ export default {
   display: flex;
   flex-direction: column;
 
-  height: 100%;
+  //min-height: 80vh;
 
   width: 35%;
   min-width: 220px;
@@ -268,7 +268,7 @@ export default {
       width: 100%;
       height: 100%;
 
-      border-radius: 8px 8px 0 0;
+      border-radius: 4px 4px 0 0;
       background-color: var(--el-fill-color-dark);
     }
     z-index: 0;
@@ -295,7 +295,7 @@ export default {
     left: 0;
     top: 0;
 
-    border-radius: 0 0 8px 8px;
+    border-radius: 0 0 4px 4px;
     background-color: var(--el-fill-color);
   }
   position: relative;

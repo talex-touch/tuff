@@ -7,6 +7,33 @@
   "directories": {
     "output": "release/${version}"
   },
+  "files": [
+    "!node_modules/",
+    "!.github/",
+    "!.vscode/",
+    "!.vitepress/",
+    "!docs/",
+    "!public/",
+    "!src/",
+    "!release/",
+    "!talex-touch/",
+    "!.gitattributes",
+    "!.gitignore",
+    "!.npmrc",
+    "!auto-imports.d.ts",
+    "!CHANGELOG.md",
+    "!component.d.ts",
+    "!electron-builder.json5",
+    "!index.html",
+    "!LICENSE",
+    "!pnpm-lock.yaml",
+    "!README.md",
+    "!tsconfig.json",
+    "!tsconfig.node.json",
+    "!vite.config.ts",
+    "!vite-plugin-electron.log",
+//    "!package.json"
+  ],
 //  "mac": {
 //    "artifactName": "${productName}_${version}.${ext}",
 //    "target": [
@@ -18,12 +45,31 @@
       {
         "target": "nsis",
         "arch": [
-          "x64"
+          "x64",
+          "ia32",
+//          "armv7l",
+          "arm64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64",
+          "ia32",
         ]
       }
     ],
     "artifactName": "${productName}_${version}.${ext}",
     "icon": "./public/favicon.ico"
+  },
+  "linux": {
+    "target": [
+      "AppImage",
+      "deb",
+      "rpm",
+      "snap",
+//      "tar.xz"
+    ]
   },
   "nsis": {
 //    "guild": "com.talex.touch",
@@ -43,5 +89,13 @@
       "role": "Editor",
       "description": "TalexTouch AddonPackage File (Plugin)"
     }
-  ]
+  ],
+//  "publish": [
+//    {
+//      "provider": "custom",
+//      "owner": "TalexDreamSoul",
+//      "repo": "talex-touch",
+//      "url": "https://github.com/TalexDreamSoul/talex-touch/releases/latest"
+//    }
+//  ],
 }

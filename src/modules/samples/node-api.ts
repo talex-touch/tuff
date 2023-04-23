@@ -92,8 +92,8 @@ ipcRenderer.on('@main-process-message', (_event, arg) => {
 
   }
 
-  if ( arg.header?.type?._ !== 'app-storage' )
-    console.log('[Receive Main-process message]:', arg)
+  // if ( arg.header?.type?._ !== 'app-storage' )
+  //   console.log('[Receive Main-process message]:', arg)
 
 })
 

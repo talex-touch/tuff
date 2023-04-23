@@ -1,14 +1,34 @@
-import { win } from "../../main";
 import {regChannel, sendMainChannelMsg} from "../../utils/channel-util";
-import { app } from "electron";
+import { app, protocol } from "electron";
 import process from "process";
 import {PluginResolver, ResolverStatus} from "../plugins/plugin-packager";
+import path from "path";
+import {win} from "../../main";
 
 export default () => {
 
-    app.setAsDefaultProtocolClient('talex-plugin', process.execPath, [
+    // default open
+    const argv = process.argv
+    if (argv.length >= 2) {
+        const filePath = argv[argv.length - 1]
+        if (filePath) {
+            onOpenFile(filePath)
+        }
+    }
+
+    protocol.registerFileProtocol('touch-plugin', (request, callback) => {
+        console.log('[Addon] Protocol opened file: ' + request.url)
+        const url = request.url.substr(15)
+        const fileExt = path.extname(url)
+        if (fileExt === '.touch-plugin') {
+            return callback({ error: 1,data: 'Unsupported file type' })
+        }
+        callback({ path: path.normalize(url) })
+    })
+
+    app.setAsDefaultProtocolClient('talex-touch', process.cwd()/*, [
         '--file=%i'
-    ])
+    ]*/)
 
     async function onOpenFile(url) {
         await sendMainChannelMsg('@mock-drop', url)
@@ -25,6 +45,8 @@ export default () => {
         event.preventDefault()
 
         console.log('[Addon] Opened file: ' + filePath)
+
+        win.previewFile(filePath)
 
         sendMainChannelMsg('@open-plugin', filePath)
     })

@@ -4,7 +4,7 @@
 
     <div class="Plugin-Info" ref="pluginInfoRef">
 <!--      <PluginCard v-if="plugins && plugins[select]" :plugin="plugins[select]" />-->
-      <PluginInfo v-if="plugins && plugins[select]" :plugin="plugins[select]" />
+      <PluginInfo v-if="select" :plugin="select" />
 
       <EmptyAnimate v-else />
     </div>
@@ -25,25 +25,16 @@ export default {
 </script>
 
 <script setup>
-import { ref, inject, onMounted } from 'vue'
+import { ref, inject, computed, onMounted } from 'vue'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import { sleep } from '@modules/utils'
 import EmptyAnimate from '@comp/base/EmptyAnimate.vue'
 import PluginList from "@comp/plugin/layout/PluginList.vue";
 
-const plugins = ref()
+const _plugins = inject('plugins')
+const plugins = computed(() => _plugins())
 const pluginInfoRef = ref()
 const select = ref()
-
-onMounted(() => {
-  const [_plugins, cb] = inject('plugins')()
-
-  plugins.value = [ ..._plugins ]
-  cb((val) => {
-    plugins.value = [ ...val ]
-  })
-
-})
 
 async function selectPlugin(index) {
   if( index === select.value ) return
@@ -51,19 +42,19 @@ async function selectPlugin(index) {
   const style = pluginInfoRef.value.style
 
   style.opacity = '0'
-  style.transform = 'translateX(100%) scale(.85)'
+  style.transform = 'translateX(100%) perspective(100px) rotateY(10deg) scale(.85)'
 
   await sleep(100)
 
   select.value = null
 
-  await sleep(100)
+  await sleep(50)
 
   select.value = index
 
   await sleep(100)
 
-  style.transform = 'translateX(0) scale(1)'
+  style.transform = 'translateX(0) perspective(100px) rotateY(0deg) scale(1)'
   style.opacity = '1'
 
 }
