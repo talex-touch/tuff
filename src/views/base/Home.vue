@@ -53,15 +53,15 @@ const packageJson = window.$nodeApi.getPackageJSON()
 
 <style lang="scss" scoped>
 .Home-Footer {
-  position: relative;
+  position: absolute;
   display: flex;
   justify-content: space-between;
 
-  margin-top: -5%;
-
   width: 50%;
-  //height: 30%;
 
+  bottom: 20%;
+
+  transition: all .25s ease-in-out;
   li {
     :deep(.remix) {
       position: relative;
@@ -81,14 +81,32 @@ const packageJson = window.$nodeApi.getPackageJSON()
   }
 }
 
+@media screen and (min-width: 1200px) {
+  .Home-Text {
+    top: 40% !important;
+  }
+
+  .Home-Logo {
+    top: 10% !important;
+    zoom: 1.5;
+  }
+
+  .Home-Footer {
+    bottom: 25% !important;
+  }
+}
+
 .Home-Text {
-  position: relative;
+  position: absolute;
+
+  top: 50%;
 
   width: 50%;
   height: 30%;
 
+  transition: all .25s ease-in-out;
   p {
-    margin-top: -8%;
+    margin-top: -5%;
 
     opacity: .75;
     text-align: center;
@@ -98,8 +116,7 @@ svg {
   width: 100%;
   height: 100%;
 
-  margin-top: -25%;
-
+  margin-top: -100px;
 }
 
   svg text {
@@ -138,18 +155,22 @@ svg {
 }
 
 .Home-Logo {
-  position: relative;
-  width: 30%;
+  position: absolute;
 
+  top: 15%;
+  left: 50%;
+
+  width: 150px;
+  height: 150px;
+
+  transform: translateX(-50%);
+  transition: all .25s ease-in-out;
   filter: drop-shadow(0 0 4px var(--el-color-primary));
-  transform: scale(.5);
   img {
     position: absolute;
 
-    top: 0%;
-    left: -0%;
+    top: 0;
 
-    width: 110%;
   }
 
   .Home-Logo-Bg {
@@ -184,12 +205,14 @@ svg {
         stroke-dashoffset: -972;
       }
     }
+
+    transform: scale(.5) translate(-50%, -50%);
   }
 }
 
 .Home-Container {
   position: relative;
-  padding: 5%;
+  //padding: 5%;
   display: flex;
   flex-direction: column;
   align-items: center;

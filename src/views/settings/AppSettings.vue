@@ -102,7 +102,7 @@
 
     <t-group-block :name="`${$t('settings.application.list-settings.specifications.name')} (Touch)`" icon="apps">
       <t-block-line :title="$t('settings.application.list-settings.specifications.version')" :description="versionStr"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H4 T2"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.specifications')" description="23H4 T4"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.time')">
         <template #description>
           {{ startCosts }}s
@@ -127,7 +127,7 @@
       <t-block-line title="V8-Engine" :description="$env.process.versions?.v8"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="$env.os.version"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${$env.process.platform} (${$env.os.arch})`"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.04.16"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.04.23"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
         <template #description>
           <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
@@ -181,7 +181,7 @@ const dev = ref(false)
 
 const options = window.$storage.appSetting
 
-const versionStr = computed(() => `TalexTouch ${dev.value ? $t('version.dev') : 'version.official'} ${$env.packageJson?.version}`)
+const versionStr = computed(() => `TalexTouch ${dev.value ? $t('version.dev') : 'version.master'} ${$env.packageJson?.version}`)
 const startCosts = ref('')
 
 const cpuUsage = useCPUUsage()

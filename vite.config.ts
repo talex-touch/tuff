@@ -13,6 +13,7 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import topLevelAwait from 'vite-plugin-top-level-await'
+import VueSetupExtend from 'vite-plugin-vue-setup-extend'
 
 rmSync('dist', { recursive: true, force: true }) // v14.14.0
 
@@ -45,7 +46,11 @@ export default defineConfig({
     ]
   },
   plugins: [
-    vue(),
+    vue({
+      customElement: [
+          'webview'
+      ]
+    }),
     electron([
       {
         entry: 'electron/main/index.ts',
@@ -90,6 +95,7 @@ export default defineConfig({
     ]),
     AutoImport({
       resolvers: [ElementPlusResolver()],
+      imports: [ 'vue' ]
     }),
     Components({
       resolvers: [ElementPlusResolver()],
@@ -106,7 +112,8 @@ export default defineConfig({
     // tsconfigPaths(),
     commonjsExternal({
       externals
-    })
+    }),
+    VueSetupExtend()
   ],
   optimizeDeps: {
     exclude: externals

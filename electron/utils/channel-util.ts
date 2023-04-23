@@ -11,7 +11,7 @@ ipcMain.on('@plugin-process-message', (e, arg) => {
 
     const { type, sync, plugin } = header
 
-    console.log("[插件消息] " + type + " | 开始处理!")
+    // console.log("[插件消息] " + type + " | 开始处理!")
 
     pluginTypeMap.get(type)?.forEach( (type) => {
 
@@ -78,7 +78,7 @@ ipcMain.on('@main-process-message', (e, arg) => {
 
     const { _: mainType, sync } = header.type
 
-    console.log("[IPC消息] " + mainType + " | 开始处理!")
+    // console.debug("[IPC消息] " + mainType + " | 开始处理!")
 
     typeMap.get(mainType)?.forEach( (type) => {
 
@@ -166,7 +166,7 @@ export function regChannel(type: string, callback: Function) {
 
 const syncMap = new Map<string, Function>()
 
-export async function sendMainChannelMsg(type: string, data: any = null, options: any = { timeout: 10000 }) {
+export async function sendMainChannelMsg(type: string, data: any = null, options: any = { timeout: 10000, reject: false }) {
     const onlyID = new Date().getTime() + "#" + type + "@" + Math.random().toString(12)
 
     let timer
@@ -174,9 +174,10 @@ export async function sendMainChannelMsg(type: string, data: any = null, options
     return new Promise((resolve, reject) => {
 
         if ( options?.timeout ) {
-            timer = setTimeout(() => {
-                reject({ type, status: 'timeout', data })
-            }, options.timeout)
+            if ( options.reject )
+                timer = setTimeout(() => {
+                    reject({ type, status: 'timeout', data })
+                }, options.timeout)
         }
 
         win.webContents.send('@main-process-message', {

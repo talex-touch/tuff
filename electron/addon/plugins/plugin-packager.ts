@@ -27,56 +27,101 @@ export class PluginPackager {
         checkDirWithCreate(this.mainPath, true).then(() => {})
     }
 
-    pack() {
-        // copy every file
-        const array = JSON.parse(this.files)
-
+    #__pack_manifest() {
         const m = JSON.parse(this.manifest)
 
         delete m['pluginSubInfo']
         delete m['plugin']
 
-        this.manifest = JSON.stringify(m)
+        return JSON.stringify(m)
+    }
+
+    #__pack__init() {
+        const manifest = this.#__pack_manifest()
 
         // generate manifest
-        fse.writeFileSync(path.join(this.mainPath, 'manifest.talex'), this.manifest)
+        fse.writeFileSync(path.join(this.mainPath, 'manifest.talex'), manifest)
 
         // generate key
         fse.writeFileSync(path.join(this.mainPath, 'key.talex'), this.plugin.pluginInfo.name)
+    }
 
+    #__pack__tarStream() {
         const tarStream = new compressing.tar.Stream();
 
         tarStream.addEntry(path.join(this.mainPath, 'manifest.talex'))
         tarStream.addEntry(path.join(this.mainPath, 'key.talex'))
 
+        const array = JSON.parse(this.files)
         array.forEach(file => {
             if ( file === 'init.json' ) return
             tarStream.addEntry(path.join(this.pluginPath, file))
         })
 
+        return tarStream
+    }
+
+    #__pack__destStream() {
         const target = path.join(this.mainPath, this.plugin.pluginInfo.name + '.touch-plugin')
         const destStream = fs.createWriteStream(target);
 
         const content = '@@@' + this.plugin.pluginInfo.name + '\n' + this.manifest + '\n\n\n'
         const length = content.length + 25
 
-        // 让l自动补位为5位 比如00125
         const l = length.toString().padStart(5, '0')
-
         destStream.write('TalexTouch-PluginPackage@@' + (l) + content)
 
-        tarStream.pipe(destStream).on('finish', () => {
-            // fse.copyFileSync(target, path.join(ProcessorVars.buildPath, this.plugin.pluginInfo.name + '.touch-plugin'))
-            // fse.removeSync(this.mainPath, { recursive: true })
+        return destStream
+    }
 
-            console.log("[PluginPackager] Packaged plugin: " + this.plugin.pluginInfo.name)
+    pack() {
+        this.#__pack__init()
 
-            sendMainChannelMsg('plugin-packager', {
-                type: 'pack',
-                plugin: this.plugin.pluginInfo.name,
-                status: 'success'
+        const tarStream: any = this.#__pack__tarStream()
+
+        const bytesReceived = (() => {
+            let _bytesReceived = 0, lastBytes = 0
+            return (bytes: number) => {
+                if ( tarStream._pack._stream?.written )
+                    lastBytes = Math.max(tarStream._pack._stream.written, lastBytes)
+                _bytesReceived += bytes, lastBytes += bytes
+
+                sendMainChannelMsg('plugin-packager-progress/' + this.plugin.pluginInfo.name, {
+                    type: 'pack',
+                    total: lastBytes,
+                    received: _bytesReceived
+                })
+            }
+        })()
+
+        tarStream
+            .on('ready', (e) => {
+                console.log("[PluginPackager] Packaging plugin: " + this.plugin.pluginInfo.name + " | ready", e)
             })
-        });
+            .on('data', chunk => {
+                bytesReceived(chunk.length)
+            })
+            .on('open', e => {
+                console.log("[PluginPackager] Packaging plugin: " + this.plugin.pluginInfo.name + " | open", e)
+            })
+
+       const destStream = this.#__pack__destStream()
+
+        destStream
+            .on('finish', () => {
+                // fse.copyFileSync(target, path.join(ProcessorVars.buildPath, this.plugin.pluginInfo.name + '.touch-plugin'))
+                // fse.removeSync(this.mainPath, { recursive: true })
+
+                console.log("[PluginPackager] Packaged plugin: " + this.plugin.pluginInfo.name)
+
+                sendMainChannelMsg('plugin-packager', {
+                    type: 'pack',
+                    plugin: this.plugin.pluginInfo.name,
+                    status: 'success'
+                })
+            });
+
+        tarStream.pipe(destStream)
 
     }
 }

@@ -1,4 +1,5 @@
 import '@styles/index.scss'
+import '@styles/animation/router-view.scss'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import 'remixicon/fonts/remixicon.css'
 

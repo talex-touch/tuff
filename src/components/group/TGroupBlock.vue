@@ -43,6 +43,7 @@ const expand = ref(!props.shrink)
   margin: 0;
 
   border-radius: 0 !important;
+  --fake-radius: 0 !important;
   .blur & {
     &:hover {
       --fake-color: var(--el-fill-color-light) !important;
@@ -139,6 +140,7 @@ const expand = ref(!props.shrink)
     border-bottom: 1px solid var(--el-border-color);
     margin-bottom: 0;
     border-radius: 0;
+    --fake-radius: 0 !important;
     :deep(.TBlockSelection) {
       &:after {
         content: "";
@@ -174,9 +176,7 @@ const expand = ref(!props.shrink)
       text-indent: 64px;
     }
   }
-  :deep(.TBlockSelection) {
-    --fake-radius: 0;
-  }
+  --fake-radius: 0 !important;
   &.expand {
     max-height: 1000px;
   }
@@ -188,6 +188,6 @@ const expand = ref(!props.shrink)
 
   overflow: hidden;
   border-radius: 4px;
-  transition: max-height .25s cubic-bezier(0.5,-0.02, 0.5, 1.11);
+  transition: max-height .35s cubic-bezier(0.5,-0.02, 0.5, 1.11);
 }
 </style>

@@ -26,7 +26,7 @@
 
       <div class="TDialogTip-Icon">
         <PluginIcon :icon="icon" v-if="icon instanceof Object" />
-        <RemixIcon :name="icon.substring(1)" v-if="icon.at(0) === '#'" />
+        <RemixIcon :name="icon.substring(1)" v-else-if="icon.at(0) === '#'" />
         <img v-else-if="icon" :src="icon" :alt="title" />
         <span class="tip-icon" v-else v-text="`Tip`" />
       </div>

@@ -34,6 +34,13 @@
           <h2>{{ node.props.name }}</h2>
         </template>
       </t-tab-header>
+      <template #tabHeader>
+        <FlatCompletion :fetch="settingSearch">
+          <template #default="{ item }">
+            {{ item.name }}
+          </template>
+        </FlatCompletion>
+      </template>
     </t-tabs>
   </div>
 </template>
@@ -55,6 +62,8 @@ import AppSettings from '~/views/settings/AppSettings.vue'
 import { onMounted, ref } from 'vue'
 import AlsoShare from '~/views/settings/AlsoShare.vue'
 import { $t } from '@modules/lang'
+import FlatInput from "@comp/input/FlatInput.vue";
+import FlatCompletion from "@comp/input/FlatCompletion.vue";
 
 const dev = ref(false)
 // const tabSelection = ref($t('settings.application.list-settings.name'))
@@ -62,16 +71,25 @@ const dev = ref(false)
 onMounted(() => {
   dev.value = process.env.NODE_ENV === 'development'
 })
+
+function settingSearch(query) {
+  // Rely on the length of query return amo number increasing
+  let amo = query.length
+  let result = []
+  for (let i = 0; i < amo; i++) {
+    result.push({
+      name: query + i,
+      value: amo - i
+    })
+  }
+
+  return result
+}
 </script>
 
 <style lang="scss" scoped>
-.Setting-Container {
-  position: relative;
-
-  width: 100%;
-  height: 100%;
-
-  box-sizing: border-box;
+:deep(.FlatInput-Container) {
+  --fake-opacity: .45 !important;
 }
 
 :deep(.TTabHeader-Container) {
@@ -80,4 +98,9 @@ onMounted(() => {
   }
 }
 
+.Setting-Container {
+  position: relative;
+
+  height: 100%;
+}
 </style>

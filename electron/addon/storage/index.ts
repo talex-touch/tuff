@@ -30,7 +30,7 @@ export function reloadConfig(name: string) {
 
 export function saveConfig(name: string, content?: string, clear?: boolean): boolean {
     if( content && configs[name] ) {
-        console.log("[Config] Save config", name, content, clear)
+        // console.log("[Config] Save config", name, content, clear)
         const p = path.resolve(ProcessorVars.configPath, name)
 
         fse.createFileSync(p)

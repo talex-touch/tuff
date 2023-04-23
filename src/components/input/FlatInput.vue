@@ -1,5 +1,5 @@
 <template>
-  <div @keydown="onKeyDown" class="FlatInput-Container">
+  <div @keydown="onKeyDown" class="FlatInput-Container fake-background">
     <span class="FlatInput-Prefix">
       <slot>
         <RemixIcon :name="icon" :style="`line`" />
@@ -99,6 +99,6 @@ function onKeyDown(e) {
   border-radius: 6px;
   box-sizing: border-box;
   border: 1px solid var(--el-border-color);
-  transition: .25s;
+  //transition: .25s;
 }
 </style>

@@ -14,18 +14,6 @@ import initializer, {beforeDestroy, ProcessorVars} from '../addon/initializer'
 import { app, BrowserWindow, shell } from 'electron'
 import _path from 'path'
 
-// handle global error
-process.on('uncaughtException', (error) => {
-    console.error("[TalexTouch-Error]", error)
-})
-
-// Remove electron security warnings
-// This warning only shows adopters development mode
-// Read more on https://www.electronjs.org/docs/latest/tutorial/security
-process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
-process.env['trace-warnings'] = 'true'
-process.env['unhandledrejections'] = 'strict'
-
 export let win: BrowserWindow | null = null
 // Here, you can also use other preload
 // const preload = import('../addon/home-gear/preload')//join(__dirname, '../addon/home-gear/preload.js')
@@ -38,9 +26,9 @@ async function createWindow() {
     title: 'TalexTouch',
     icon: _path.join(process.env.PUBLIC, 'favicon.ico'),
     frame: false,
-    width: 1080,
-    height: 600,
-    resizable: false,
+    minWidth: 1080,
+    minHeight: 600,
+    // resizable: false,
     webPreferences: {
       preload: _path.join(__dirname, '../addon/home-gear/preload.js'),
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure adopters production

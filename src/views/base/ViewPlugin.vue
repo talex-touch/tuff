@@ -11,21 +11,13 @@ export default {
 </script>
 
 <script setup>
-import { inject, onMounted, ref } from "vue";
+import { computed, inject, onMounted, ref } from "vue";
 import PluginView from "@comp/plugin/PluginView.vue";
 
 const options = window.$storage.themeStyle
-const plugins = ref()
+const _plugins = inject('plugins')
+const plugins = computed(() => _plugins())
 
-onMounted(() => {
-  const [_plugins, cb] = inject('plugins')()
-
-  plugins.value = [ ..._plugins ]
-  cb((val) => {
-    plugins.value = [ ...val ]
-  })
-
-})
 </script>
 
 <style scoped>

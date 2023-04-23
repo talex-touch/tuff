@@ -1,5 +1,5 @@
 <template>
-  <div ref="dom" @click="func" v-wave class="PluginStatus-Container">
+  <div ref="dom" @click="func" v-wave class="PluginStatus-Container" :class="{ shrink }">
   </div>
 </template>
 
@@ -16,7 +16,7 @@ export default {
 import { pluginManager } from '@modules/samples/node-api'
 import { toRefs, ref, watchEffect, onMounted } from 'vue'
 
-const props = defineProps(['plugin'])
+const props = defineProps(['plugin', 'shrink'])
 const dom = ref()
 
 const _PluginStatus = [ 'DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED' ]
@@ -178,6 +178,13 @@ onMounted(() => {
 }
 
 .PluginStatus-Container {
+  &.shrink {
+    width: 24px;
+    height: 24px;
+
+    //opacity: 1 !important;
+    color: transparent !important;
+  }
   position: relative;
   padding: 2px 4px;
   display: flex;

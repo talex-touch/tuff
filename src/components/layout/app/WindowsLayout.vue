@@ -14,7 +14,7 @@
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <PlantNavBar v-model="activePlugin">
+        <PlantNavBar>
           <template #plugin-nav>
             <slot name="plugin-nav" />
           </template>
@@ -120,24 +120,6 @@ function closeWindow() {
     justify-content: center;
     align-items: center;
     flex-direction: row-reverse;
-  }
-}
-
-@keyframes asideEnter {
-  0% {
-    transform: perspective(1px) scale(.95) translateX(-10px) rotate3d(0, .05, 0, 1deg);
-  }
-  100% {
-    transform: perspective(1px) scale(1) translateX(0) rotate3d(0, 0, 0, 1deg);
-  }
-}
-
-@keyframes headEnter {
-  0% {
-    transform: perspective(1px) scale(.95) translateY(-10px) rotate3d(.05, 0, 0, -1deg);
-  }
-  100% {
-    transform: perspective(1px) scale(1) translateY(0) rotate3d(0, 0, 0, -1deg);
   }
 }
 </style>

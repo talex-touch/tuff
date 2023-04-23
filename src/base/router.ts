@@ -23,29 +23,44 @@ const routes: any = [
         redirect: "/home"
     },
     {
-      path: "/home",
-      name: "主页",
-      component: () => import("../views/base/Home.vue")
+        path: "/home",
+        name: "主页",
+        component: () => import("../views/base/Home.vue"),
+        meta: {
+            index: 1
+        }
     },
     {
         path: "/plugin",
         name: "插件",
-        component: () => import("../views/base/Plugin.vue")
+        component: () => import("../views/base/Plugin.vue"),
+        meta: {
+            index: 2
+        }
     },
     {
         path: "/setting",
         name: "设置",
-        component: () => import("../views/base/Setting.vue")
+        component: () => import("../views/base/Setting.vue"),
+        meta: {
+            index: 3
+        }
     },
     {
         path: "/market",
         name: "市场",
-        component: () => import("../views/base/Market.vue")
+        component: () => import("../views/base/Market.vue"),
+        meta: {
+            index: 4
+        }
     },
     {
         path: "/plugin/view/:name",
         name: "插件视图",
-        component: () => import("../views/base/ViewPlugin.vue")
+        component: () => import("../views/base/ViewPlugin.vue"),
+        meta: {
+            index: 5
+        }
     }
 ]
 
@@ -56,7 +71,7 @@ const router = createRouter({
 
 router.afterEach((to, from) => {
     if ( to.name  !== '插件视图' ) pluginManager.changeActivePlugin()
-  // console.log( 'router reached: ' + to.path )
+    // console.log( 'router reached: ' + to.path )
 })
 
 // router.beforeEach(async (to, from, next) => {
