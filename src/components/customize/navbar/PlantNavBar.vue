@@ -1,8 +1,8 @@
 <template>
   <ul class="PlantNavBar-Home">
     <IconButton plain direct="/home" icon="home-3" />
+    <IconButton plain direct="/market" icon="quill-pen"></IconButton>
     <IconButton plain direct="/plugin" icon="plug-2" />
-    <IconButton plain icon="quill-pen"></IconButton>
     <IconButton plain direct="/setting" icon="settings-6"></IconButton>
   </ul>
 

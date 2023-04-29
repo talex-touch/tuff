@@ -35,7 +35,6 @@ const _plugins = inject('plugins')
 const plugins = computed(() => _plugins())
 const pluginInfoRef = ref()
 const select = ref()
-
 async function selectPlugin(index) {
   if( index === select.value ) return
 

@@ -1,5 +1,9 @@
 <template>
   <el-scrollbar v-if="plugins" class="PluginList-Container">
+    <div class="PluginList-Toolbox">
+      refreshPlugins
+    </div>
+
     <PluginListModule shrink="true" v-model="target" :plugins="runningPlugins" >
       <template #name>运行中</template>
     </PluginListModule>

@@ -21,7 +21,7 @@ export default {
 <script setup>
 import { inject, onMounted } from "vue";
 import { $t } from "@modules/lang";
-import FlatMarkdown from "@comp/input/FlatMarkdown.vue";
+import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
 import FlatButton from "@comp/button/FlatButton.vue";
 
 const props = defineProps(['release'])
@@ -33,6 +33,20 @@ function upgrade() {
 </script>
 
 <style lang="scss" scoped>
+:deep(.FlatMarkdown-Container) {
+  position: relative;
+
+  max-height: calc(85vh - 200px);
+
+  font-size: 12px;
+}
+
+.AppUpgradation-Container {
+  position: relative;
+
+  height: 100vh;
+}
+
 .AppUpgradation-Content {
   margin: 16px 5px;
   display: flex;

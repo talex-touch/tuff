@@ -20,15 +20,27 @@ export class PluginManager {
         return this.#plugins
     }
 
-    async initial( _p: string) {
+    async initial( _p: string ) {
 
         this.pluginsPath = _p //_path.join(ProcessorVars.touchPath, 'plugins')
         
         this._listenerInitial()
 
+        await this._initialPlugins()
+
+    }
+
+    async _initialPlugins() {
+
+        for (const name of Object.keys(this.#plugins)) {
+            await this.disablePlugin(name);
+        }
+
         const fileLists = fse.readdirSync(this.pluginsPath)
 
         fileLists.forEach(file => this.loadPlugin(file))
+
+        return this.#plugins
 
     }
 
@@ -68,6 +80,7 @@ export class PluginManager {
     _listenerInitial() {
 
         regChannel('plugin-list', ({ reply }) => reply(this.#plugins))
+        regChannel('plugin-list-refresh', async ({ reply }) => await this._initialPlugins())
         regChannel('change-active', ({ reply, data }) => reply(this.changeActivePlugin(data)))
 
         regChannel('plugin-action', async ({ reply, data }) => {

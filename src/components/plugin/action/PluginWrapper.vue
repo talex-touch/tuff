@@ -2,33 +2,15 @@
  <div class="PluginWrapper-Wrapper fake-background" :class="{ visible: visible || pluginWrapper.packaging }">
    <span @click="visible = pluginWrapper.packaging || false" class="PluginWrapper-Referrer" />
    <div class="PluginWrapper-Container">
-     <el-tabs v-if="!pluginWrapper.packaging" tab-position="right" v-model="tab">
-       <el-tab-pane name="Manifest" label="基本信息">
-         <FlatMarkdown v-model="plugin.readme" />
-         <!--         <el-form>-->
-         <!--            <el-form-item label="名称">-->
-         <!--              <el-input v-model="pluginWrapper.manifest.name" />-->
-         <!--            </el-form-item>-->
-         <!--            <el-form-item label="版本">-->
-         <!--              <el-input v-model="pluginWrapper.manifest.version" />-->
-         <!--            </el-form-item>-->
-         <!--            <el-form-item label="描述">-->
-         <!--              <el-input v-model="pluginWrapper.manifest.description" />-->
-         <!--            </el-form-item>-->
-         <!--         </el-form>-->
-       </el-tab-pane>
-       <el-tab-pane name="PackFiles" label="打包文件">
-         <FileTree v-model="pluginWrapper.files" :fileAdpoter="fileAdpoter" />
+     <div class="Pack-Main" v-if="!pluginWrapper.packaging">
+       <FileTree v-model="pluginWrapper.files" :fileAdpoter="fileAdpoter" />
 
-         <el-alert class="pack-alert" title="选择你要打包的文件" type="info" />
-       </el-tab-pane>
-       <el-tab-pane name="ReadyState" label="准备就绪">
-         <FlatButton @click="pack" type="primary">打包</FlatButton>
-       </el-tab-pane>
-     </el-tabs>
+<!--       <el-alert class="pack-alert" title="选择你要打包的文件" type="info" />-->
+       <FlatButton @click="pack" type="primary">打包</FlatButton>
+     </div>
 
      <div v-else class="Pack-Compressing">
-       正在导出插件中，请耐心等待...
+
        <PluginExportMention />
        <teleport to=".PluginWrapper-Wrapper">
          <div class="Pack-Progressing" :style="`--p: ${pluginWrapper.p.p}%`">
@@ -55,14 +37,13 @@ import { genFileAdpoter, pluginPath } from "@modules/hooks/adopters/file-adpoter
 import { useModelWrapper } from "@modules/utils";
 import { reactive, ref } from "vue";
 import FileTree from "@comp/tree/FileTree.vue";
-import FlatMarkdown from "@comp/input/FlatMarkdown.vue";
 import FlatButton from "@comp/button/FlatButton.vue";
 import { pluginManager, registerTypeProcess } from "@modules/samples/node-api";
 import LottieFrame from "@comp/icon/lotties/LottieFrame.vue";
 import compressing from "@assets/lotties/compress-loading.json"
 import { blowMention } from "@modules/mention/dialog-mention";
+import PluginExportMention from "@comp/plugin/action/mention/PluginExportMention.vue";
 
-const tab = ref("Manifest")
 const props = defineProps(["plugin", "modelValue"])
 const emit = defineEmits(["update:modelValue"])
 
@@ -181,7 +162,7 @@ function pack() {
   padding-top: 5%;
 
   width: 100%;
-  height: 90%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -232,9 +213,9 @@ function pack() {
       opacity: .25;
     }
     z-index: 1;
-    position: absolute;
+    position: relative;
 
-    bottom: 0;
+    bottom: 15px;
 
     background-color: var(--el-fill-color-darker);
   }
@@ -246,7 +227,7 @@ function pack() {
   top: 0;
 
   width: 100%;
-  height: calc(100% - 15px);
+  height: calc(100% - 10px);
 
   --fake-opacity: .75;
 
@@ -258,13 +239,8 @@ function pack() {
 }
 
 .PluginWrapper-Container {
-  :deep(.el-tabs) {
-    .el-tabs__content, .el-tab-pane {
-      position: relative;
-      height: 100%;
-    }
-    position: relative;
-    height: 100%;
+  .Pack-Main {
+    height: calc(100% - 35px);
   }
   position: relative;
   padding: 1% 2%;

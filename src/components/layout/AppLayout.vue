@@ -233,16 +233,16 @@ router.afterEach((to, from) => {
 }
 
 :deep(.AppLayout-Main) {
-  &:has(.scale-down-and-cover-enter-active), &:has(.scale-up-and-cover-enter-active) {
-    & .AppLayout-Aside {
-      margin-right: -20px;
-
-      left: -70px;
-
-      width: 0 !important;
-      opacity: 0;
-    }
-  }
+  //&:has(.scale-down-and-cover-enter-active), &:has(.scale-up-and-cover-enter-active) {
+  //  & .AppLayout-Aside {
+  //    margin-right: -20px;
+  //
+  //    left: -70px;
+  //
+  //    width: 0 !important;
+  //    opacity: 0;
+  //  }
+  //}
   position: relative;
   display: flex;
 

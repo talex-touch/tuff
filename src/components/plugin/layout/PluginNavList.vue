@@ -80,13 +80,13 @@ export default {
         ...((res) => {
           [...plugins].forEach( (plugin, i) => res.push( getPlugin.bind(this)(plugin, i) ) )
             return res
-        })([]),
-        h( IconButton, {
-          undot: true,
-          plain: true,
-          direct: '/market',
-          icon: 'add'
-        } )
+        })([])
+        // h( IconButton, {
+        //   undot: true,
+        //   plain: true,
+        //   direct: '/market',
+        //   icon: 'add'
+        // } )
       ]
     }
 
