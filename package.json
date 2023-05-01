@@ -45,7 +45,7 @@
     "@element-plus/icons-vue": "^2.1.0",
     "@floating-ui/dom": "^1.2.3",
     "@floating-ui/vue": "^0.2.1",
-    "@intlify/unplugin-vue-i18n": "^0.8.2",
+    "@intlify/unplugin-vue-i18n": "^0.10.0",
     "@milkdown/core": "^7.2.0",
     "@milkdown/ctx": "^7.2.0",
     "@milkdown/preset-commonmark": "^7.2.0",
