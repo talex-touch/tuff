@@ -10,7 +10,7 @@
 // │ ├── ...other-static-files-from-public
 // │
 import './polyfills'
-import initializer, {beforeDestroy, ProcessorVars} from '../addon/initializer'
+import initializer, { beforeDestroy, ProcessorVars} from '../addon/initializer'
 import { app, BrowserWindow, shell } from 'electron'
 import _path from 'path'
 
@@ -28,6 +28,8 @@ async function createWindow() {
     frame: false,
     minWidth: 1080,
     minHeight: 600,
+    autoHideMenuBar: true,
+    show: false,
     // resizable: false,
     webPreferences: {
       preload: _path.join(__dirname, '../addon/home-gear/preload.js'),
@@ -52,6 +54,8 @@ async function createWindow() {
       mode: 'detach'
     })
   }
+
+  win.webContents.once('dom-ready', () => win.show())
 
   const ts = new Date()
 

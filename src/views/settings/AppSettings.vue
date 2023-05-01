@@ -149,10 +149,10 @@
 </template>
 
 <script>
-import TGroupBlock from '@comp/group/TGroupBlock.vue'
-import TBlockSwitch from '@comp/switch/TBlockSwitch.vue'
-import TBlockSelect from '@comp/select/TBlockSelect.vue'
-import TSelectItem from '@comp/select/TSelectItem.vue'
+import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
+import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
+import TBlockSelect from '@comp/base/select/TBlockSelect.vue'
+import TSelectItem from '@comp/base/select/TSelectItem.vue'
 
 export default {
   name: "AppSettings",
@@ -163,11 +163,11 @@ export default {
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, reactive } from 'vue'
 import { $t, languages } from '@modules/lang'
-import TBlockLine from '@comp/group/TBlockLine.vue'
+import TBlockLine from '@comp/base/group/TBlockLine.vue'
 import { useCPUUsage, useMemoryUsage, useOS } from '@modules/hooks/os-hooks'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import TBlockSlot from "@comp/group/TBlockSlot.vue";
-import FlatButton from "@comp/button/FlatButton.vue";
+import TBlockSlot from "@comp/base/group/TBlockSlot.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 import { useLogin } from "@modules/hooks/function-hooks";
 
 const $env = reactive({

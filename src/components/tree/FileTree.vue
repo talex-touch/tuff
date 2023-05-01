@@ -43,7 +43,7 @@ export default {
 import { useModelWrapper } from "@modules/utils";
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 import { onMounted, reactive, ref, watchEffect } from "vue";
-import IconButton from "@comp/button/IconButton.vue";
+import IconButton from "@comp/base/button//IconButton.vue";
 
 const props = defineProps(['fileAdpoter', 'modelValue'])
 const emit = defineEmits(['update:modelValue'])

@@ -32,7 +32,7 @@ import { asyncMainProcessMessage } from "@modules/samples/node-api";
 import Loading from '@assets/lotties/compress-loading.json'
 import LottieFrame from "@comp/icon/lotties/LottieFrame.vue";
 import { sleep } from "@modules/utils";
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button/FlatButton.vue";
 
 const props = defineProps(["manifest", "path"])
 

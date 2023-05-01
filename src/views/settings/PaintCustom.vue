@@ -8,6 +8,9 @@
         <tv-tab-item icon="windows" name="Windows">
 <!--          <WindowsController :close-window="fakeFunc" :minimize-window="fakeFunc" />-->
         </tv-tab-item>
+        <tv-tab-item icon="bubble-chart" name="Flat">
+          <!--          <WindowsController :close-window="fakeFunc" :minimize-window="fakeFunc" />-->
+        </tv-tab-item>
       </tv-tab-item-group>
 <!--      <tv-tab-item-group :name="$t('settings.appearance.paint-custom.controller')">-->
 <!--        <tv-tab-item icon="finder" name="MacOS">-->
@@ -17,20 +20,20 @@
 <!--          <WindowsController :close-window="fakeFunc" :minimize-window="fakeFunc" />-->
 <!--        </tv-tab-item>-->
 <!--      </tv-tab-item-group>-->
-      <tv-tab-item-group :name="$t('settings.appearance.paint-custom.aside.name')">
-        <tv-tab-item disabled icon="leaf" :name="$t('settings.appearance.paint-custom.aside.leaf')">
-          <LeafNavBar />
-        </tv-tab-item>
-        <tv-tab-item disabled icon="plant" :name="$t('settings.appearance.paint-custom.aside.plant')">
-          <PlantNavBar />
-        </tv-tab-item>
-        <tv-tab-item icon="blaze" :name="$t('settings.appearance.paint-custom.aside.blaze')" disabled></tv-tab-item>
-      </tv-tab-item-group>
-      <tv-tab-item-group :name="$t('settings.appearance.paint-custom.icon.name')">
-        <tv-tab-item icon="exchange" :name="$t('settings.appearance.paint-custom.icon.exchange')" disabled>THIS,HUGE</tv-tab-item>
-        <tv-tab-item icon="remixicon" :name="$t('settings.appearance.paint-custom.icon.remixicon')">THIS,HUGE</tv-tab-item>
-      </tv-tab-item-group>
-      <tv-tab-item icon="more" :name="$t('settings.appearance.paint-custom.more')">MORE, SETTING</tv-tab-item>
+<!--      <tv-tab-item-group :name="$t('settings.appearance.paint-custom.aside.name')">-->
+<!--        <tv-tab-item disabled icon="leaf" :name="$t('settings.appearance.paint-custom.aside.leaf')">-->
+<!--          <LeafNavBar />-->
+<!--        </tv-tab-item>-->
+<!--        <tv-tab-item disabled icon="plant" :name="$t('settings.appearance.paint-custom.aside.plant')">-->
+<!--          <PlantNavBar />-->
+<!--        </tv-tab-item>-->
+<!--        <tv-tab-item icon="blaze" :name="$t('settings.appearance.paint-custom.aside.blaze')" disabled></tv-tab-item>-->
+<!--      </tv-tab-item-group>-->
+<!--      <tv-tab-item-group :name="$t('settings.appearance.paint-custom.icon.name')">-->
+<!--        <tv-tab-item icon="exchange" :name="$t('settings.appearance.paint-custom.icon.exchange')" disabled>THIS,HUGE</tv-tab-item>-->
+<!--        <tv-tab-item icon="remixicon" :name="$t('settings.appearance.paint-custom.icon.remixicon')">THIS,HUGE</tv-tab-item>-->
+<!--      </tv-tab-item-group>-->
+<!--      <tv-tab-item icon="more" :name="$t('settings.appearance.paint-custom.more')">MORE, SETTING</tv-tab-item>-->
     </tv-tabs>
   </div>
 </template>
@@ -50,13 +53,11 @@ import { $t } from '@modules/lang'
 import LeafNavBar from '@comp/customize/navbar/LeafNavBar.vue'
 import PlantNavBar from '@comp/customize/navbar/PlantNavBar.vue'
 
-const activeNodes = ref(window.$storage.paintCustom)
+const activeNodes = ref(window.$storage.paintCustom.data)
 
 watch(() => activeNodes.value, () => {
-  Object.assign(window.$storage.paintCustom, activeNodes.value)
+  Object.assign(window.$storage.paintCustom.data, activeNodes.value)
 })
-
-function fakeFunc() {}
 
 </script>
 

@@ -22,7 +22,7 @@ export default {
 import { inject, onMounted } from "vue";
 import { $t } from "@modules/lang";
 import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 
 const props = defineProps(['release'])
 const close = inject('destroy')

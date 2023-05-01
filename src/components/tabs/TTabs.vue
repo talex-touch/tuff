@@ -14,7 +14,7 @@ const slotWrapper = ref()
 
 export default {
   name: "TTabs",
-  props: ['default'],
+  props: ['default', 'offset'],
   render() {
     const that = this
     let tabHeader = null
@@ -30,6 +30,8 @@ export default {
       const pointerRect = pointerEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
 
+      const diffTop = that?.$props?.hasOwnProperty('offset') ? +that.$props.offset : -70
+
       if( nodeRect.top > pointerRect.top ) {
 
         pointerStyle.height = (nodeRect.height * 0.8) + 'px'
@@ -38,7 +40,7 @@ export default {
 
         await sleep(100)
 
-        pointerStyle.top = nodeRect.top + 'px'
+        pointerStyle.top = (nodeRect.top + diffTop) + 'px'
 
         await sleep(100)
 
@@ -47,7 +49,7 @@ export default {
 
         await sleep(100)
 
-        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) - 40) + 'px'
+        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) + diffTop) + 'px'
         pointerStyle.height = (nodeRect.height * 0.6) + 'px'
 
       } else {
@@ -62,7 +64,7 @@ export default {
 
         await sleep(100)
         pointerStyle.transform = ''
-        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) - 40) + 'px'
+        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) + diffTop ) + 'px'
 
         await sleep(100)
 

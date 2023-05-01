@@ -50,10 +50,17 @@ function onKeyDown(e) {
   }
 
   &:hover {
-    border-color: var(--el-color-primary-light-7)
+    border-color: var(--el-color-primary-light-3);
+    box-shadow:
+            0 0 2px 1px var(--el-color-primary-light-5)
+    ;
   }
   &:focus-within {
-    border-color: var(--el-color-primary-light-3)
+    border-color: var(--el-color-primary);
+    box-shadow:
+            0 0 2px 1px var(--el-color-primary-light-3),
+            0 0 4px 2px var(--el-color-primary-light-5)
+  ;
   }
   .FlatInput-Prefix {
     :deep(.remix) {
@@ -64,7 +71,7 @@ function onKeyDown(e) {
       width: 100%;
       height: 100%;
 
-      top: -0.125em;
+      top: -0.15em;
     }
     position: relative;
 
@@ -86,19 +93,22 @@ function onKeyDown(e) {
     background-color: transparent;
   }
   position: relative;
-  padding-right: 10px;
+  padding-top: 2px;
+  padding-right: 5px;
   margin-bottom: 20px;
   display: grid;
 
   grid-template-columns: 1fr 5fr;
 
   width: 100%;
-  height: 36px;
-  line-height: 36px;
+  height: 32px;
+  line-height: 32px;
 
   border-radius: 6px;
   box-sizing: border-box;
   border: 1px solid var(--el-border-color);
-  //transition: .25s;
+
+  --fake-radius: 6px;
+  transition: border-color .25s, box-shadow .25s;
 }
 </style>

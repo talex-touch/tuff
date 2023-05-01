@@ -22,7 +22,7 @@ export default {
 </script>
 
 <script setup>
-import TSelect from '@comp/select/TSelect.vue'
+import TSelect from '@comp/base/select/TSelect.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { useModelWrapper } from '@modules/utils'
 import { watch } from 'vue'

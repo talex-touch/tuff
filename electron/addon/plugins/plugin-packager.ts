@@ -7,6 +7,8 @@ import compressing from 'compressing'
 import * as fs from "fs";
 import { sendMainChannelMsg } from "../../utils/channel-util";
 import {pluginManager} from "./plugin-manager";
+import { exec } from "child_process";
+import { CompressLimit, TalexCompress } from "../../utils/compress-util";
 
 export class PluginPackager {
     plugin: Plugin
@@ -75,53 +77,103 @@ export class PluginPackager {
     }
 
     pack() {
+        const target = path.join(this.mainPath, this.plugin.pluginInfo.name + '.touch-plugin')
+        const sendLog = (log: string, prefix = "PluginPackager") => {
+            sendMainChannelMsg('plugin-packager-progress-log/' + this.plugin.pluginInfo.name, {
+                type: 'pack',
+                plugin: this.plugin.pluginInfo.name,
+                log: `\x1b[1;32m[${prefix}]\x1b[0m ${log}\n`
+            })
+        }
+        const sendProgress = (c: number, t: number) => {
+            sendMainChannelMsg('plugin-packager-progress/' + this.plugin.pluginInfo.name, {
+                type: 'pack',
+                total: t,
+                received: c
+            })
+        }
+        sendLog("Start packaging plugin: " + this.plugin.pluginInfo.name)
         this.#__pack__init()
+        sendLog("Initialized plugin package!")
 
-        const tarStream: any = this.#__pack__tarStream()
+        const srcPaths = [
+            path.join(this.mainPath, 'manifest.talex'),
+            path.join(this.mainPath, 'key.talex')
+        ]
+        const array = JSON.parse(this.files)
 
-        const bytesReceived = (() => {
-            let _bytesReceived = 0, lastBytes = 0
-            return (bytes: number) => {
-                if ( tarStream._pack._stream?.written )
-                    lastBytes = Math.max(tarStream._pack._stream.written, lastBytes)
-                _bytesReceived += bytes, lastBytes += bytes
+        array.forEach(file => {
+            if ( file === 'init.json' ) return
+            srcPaths.push(path.join(this.pluginPath, file))
+        })
 
-                sendMainChannelMsg('plugin-packager-progress/' + this.plugin.pluginInfo.name, {
-                    type: 'pack',
-                    total: lastBytes,
-                    received: _bytesReceived
-                })
+        // ========================================================
+
+        const content = '@@@' + this.plugin.pluginInfo.name + '\n' + this.manifest + '\n\n\n'
+        const length = content.length + 25
+
+        const l = length.toString().padStart(5, '0')
+
+        const tCompress = new TalexCompress(srcPaths, target, 'TalexTouch-PluginPackage@@' + (l) + content)
+
+        tCompress.on('progress', (bytes) => {
+
+            sendProgress(bytes, tCompress.totalBytes)
+            sendLog(`Compressing plugin files... (${bytes}/${tCompress.totalBytes})`)
+
+        })
+
+        tCompress.on('stats', (e) => {
+
+            if ( e === 0 ) {
+                sendLog('Stats compressing plugin files...')
+                sendProgress(tCompress.limit.size, tCompress.limit.size)
+                return
             }
-        })()
 
-        tarStream
-            .on('ready', (e) => {
-                console.log("[PluginPackager] Packaging plugin: " + this.plugin.pluginInfo.name + " | ready", e)
+            if ( e === -1 ) {
+                sendLog('Stats done, total: ' + tCompress.totalBytes + ' k-bytes')
+                sendProgress(0, tCompress.limit.size)
+                return
+            }
+
+            const { srcPath, srcStat, totalBytes } = e
+
+            sendLog(" - File: " + srcPath + " | " + srcStat.size + " bytes")
+            sendProgress(tCompress.limit.size - totalBytes, tCompress.limit.size)
+
+        })
+
+        tCompress.on('err', (msg) => {
+            sendLog(msg, "ERROR")
+
+            sendMainChannelMsg('plugin-packager', {
+                type: 'pack',
+                plugin: this.plugin.pluginInfo.name,
+                status: 'failed'
             })
-            .on('data', chunk => {
-                bytesReceived(chunk.length)
+        })
+
+        tCompress.on('flush', () => {
+            sendLog("DONE!")
+            sendProgress(1, 1)
+            sendLog("Finished packaging plugin! (" + tCompress.totalBytes + " bytes)")
+            console.log("[PluginPackager] Packaged plugin: " + this.plugin.pluginInfo.name)
+
+            sendLog("Opening plugin package folder at " + target + "!")
+
+            exec('explorer.exe /select,' + path.normalize(target))
+            sendMainChannelMsg('plugin-packager', {
+                type: 'pack',
+                plugin: this.plugin.pluginInfo.name,
+                status: 'success'
             })
-            .on('open', e => {
-                console.log("[PluginPackager] Packaging plugin: " + this.plugin.pluginInfo.name + " | open", e)
-            })
+        })
 
-       const destStream = this.#__pack__destStream()
+        tCompress.setLimit(new CompressLimit(0, 0))
 
-        destStream
-            .on('finish', () => {
-                // fse.copyFileSync(target, path.join(ProcessorVars.buildPath, this.plugin.pluginInfo.name + '.touch-plugin'))
-                // fse.removeSync(this.mainPath, { recursive: true })
-
-                console.log("[PluginPackager] Packaged plugin: " + this.plugin.pluginInfo.name)
-
-                sendMainChannelMsg('plugin-packager', {
-                    type: 'pack',
-                    plugin: this.plugin.pluginInfo.name,
-                    status: 'success'
-                })
-            });
-
-        tarStream.pipe(destStream)
+        sendLog('Start compressing plugin files...')
+        tCompress.compress()
 
     }
 }

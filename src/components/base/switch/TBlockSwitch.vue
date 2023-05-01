@@ -25,7 +25,7 @@ export default {
 </script>
 
 <script setup>
-import TSwitch from '@comp/switch/TSwitch.vue'
+import TSwitch from '@comp/base/switch/TSwitch.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { sleep, useModelWrapper } from '@modules/utils'
 import { nextTick, ref, watch } from 'vue'

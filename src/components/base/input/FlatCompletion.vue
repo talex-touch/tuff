@@ -16,7 +16,7 @@
 </template>
 
 <script setup name="FlatCompletion">
-import FlatInput from "@comp/input/FlatInput.vue";
+import FlatInput from "@comp/base/input/FlatInput.vue";
 import { sleep, useModelWrapper } from "@modules/utils";
 import { useFloating, autoUpdate, flip, shift, computePosition } from '@floating-ui/vue'
 
@@ -106,7 +106,7 @@ function blur() {
 
   max-height: 380px;
   //background-color: var(--el-fill-color-extra-light);
-  //border-radius: 4px;
+  border-radius: 50px;
   //box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.2);
   overflow: hidden;
 

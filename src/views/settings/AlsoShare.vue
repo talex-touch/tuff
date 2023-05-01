@@ -37,10 +37,10 @@ export default {
 
 <script setup>
 import DeviceFigure from '@comp/device/DeviceFigure.vue'
-import TBlockSwitch from '@comp/switch/TBlockSwitch.vue'
-import TSelectItem from '@comp/select/TSelectItem.vue'
-import TGroupBlock from "@comp/group/TGroupBlock.vue";
-import TBlockSelect from "@comp/select/TBlockSelect.vue";
+import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
+import TSelectItem from '@comp/base/select/TSelectItem.vue'
+import TGroupBlock from "@comp/base/group/TGroupBlock.vue";
+import TBlockSelect from "@comp/base/select/TBlockSelect.vue";
 
 const options = window.$storage.appSetting
 </script>

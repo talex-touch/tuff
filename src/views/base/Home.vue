@@ -81,7 +81,7 @@ const packageJson = window.$nodeApi.getPackageJSON()
   }
 }
 
-@media screen and (min-width: 1200px) {
+@media screen and (min-width: 1600px) {
   .Home-Text {
     top: 40% !important;
   }

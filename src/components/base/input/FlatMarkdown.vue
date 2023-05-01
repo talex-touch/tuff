@@ -71,7 +71,7 @@ onMounted(() => {
       left: 50%;
       top: 0;
 
-      width: 8em;
+      width: 120%;
       height: 100%;
 
       transform: translateX(-50%) skewX(-15deg);

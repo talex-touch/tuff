@@ -14,9 +14,9 @@ export default {
 </script>
 
 <script setup>
-import FlatInput from "@comp/input/FlatInput.vue";
+import FlatInput from "@comp/base/input/FlatInput.vue";
 import { inject, onMounted, ref } from "vue";
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 import { $t } from "@modules/lang";
 import PasswordView from "~/views/others/account/PasswordView.vue";
 import { useUserExists } from "@modules/hooks/api/useAccount";

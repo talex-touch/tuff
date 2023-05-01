@@ -82,16 +82,16 @@ import { onBeforeUnmount, onMounted, onUpdated, ref, watchEffect } from 'vue'
 import ProfileAvatar from 'vue-profile-avatar'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { ElMessage } from 'element-plus'
-import IconButton from '@comp/button/IconButton.vue'
+import IconButton from '@comp/base/button/IconButton.vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState, Facet } from '@codemirror/state'
 import { json } from '@codemirror/lang-json'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import { registerTypeProcess } from '@modules/samples/node-api'
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 import PluginWrapper from "@comp/plugin/action/PluginWrapper.vue";
-import FlatMarkdown from "@comp/input/FlatMarkdown.vue";
+import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
 
 const tabs = ref("overview")
 const props = defineProps({

@@ -1,10 +1,8 @@
 <script>
-import { h, nextTick, onUpdated, ref, watch, watchEffect } from 'vue'
-import IconButton from "@comp/button/IconButton.vue";
+import IconButton from "@comp/base/button//IconButton.vue";
 import { ElTooltip } from "element-plus";
 import PluginIcon from "@comp/plugin/PluginIcon.vue";
-
-const _PluginStatus = [ 'DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED' ]
+import PluginStatus from "@comp/plugin/action/PluginStatus.vue";
 
 export default {
   name: "PluginNavList",
@@ -50,27 +48,23 @@ export default {
     function getPlugin(plugin, i) {
       if ( i > 3 || plugin._status < 3 || plugin._status > 5 ) return null
       const modelValue = this.modelValue || null
-      const pluginStatus = _PluginStatus[plugin._status]
+      // const pluginStatus = _PluginStatus[plugin._status]
 
-      return h('div', { class: 'scale-upper' }, h( IconButton, {
-        undot: true,
-        plain: true,
+      function getPluginContent() {
+        return h( IconButton, {
+          undot: true,
+          plain: true,
+          select: modelValue === plugin.pluginInfo.name,
+        }, [ h( ElTooltip, { placement: 'right', content: plugin.pluginInfo.name }, h( PluginIcon, { icon: plugin.pluginInfo.icon, alt: plugin.pluginInfo.name } ) ) ] )
+      }
+
+      return h('div', {
+        class: 'scale-upper ' + (modelValue === plugin.pluginInfo.name ? 'active' : ''),
         onClick: (e) => {
           e.stopPropagation()
           this.$emit( 'update:modelValue', plugin.pluginInfo.name )
         },
-        select: modelValue === plugin.pluginInfo.name,
-      }, {
-        default: () => h( ElTooltip, {
-          placement: 'right',
-          content: plugin.pluginInfo.name
-        }, {
-          default: () => h( PluginIcon, {
-            icon: plugin.pluginInfo.icon,
-            alt: plugin.pluginInfo.name
-          } )
-        } )
-      } ))
+      }, [ getPluginContent.bind(this)(),  h('span', { class: 'PluginNavList-ItemText' }, plugin.pluginInfo.name), h(PluginStatus, { plugin, shrink: true }) ] )
     }
 
     function getPlugins() {
@@ -96,8 +90,44 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.scale-upper {
+.PluginNavList-ItemText {
+  position: absolute;
+
+  top: 12px;
+  left: 50px;
+
   opacity: 0;
+  transition: .25s  cubic-bezier(0.785, 0.135, 0.150, 0.860);
+}
+
+.Flat .PluginNavList-ItemText {
+  opacity: 1;
+}
+
+.Flat .PluginStatus-Container {
+  position: absolute;
+
+  right: 1em;
+  top: 50%;
+
+  border-radius: 50%;
+  transform: translateY(-50%) scale(.5);
+}
+
+.PluginStatus-Container {
+  position: absolute;
+  display: none;
+}
+
+.scale-upper {
+  &.active {
+    .PluginNavList-ItemText {
+      color: var(--el-color-primary-dark-2)
+    }
+  }
+  opacity: 0;
+
+  cursor: pointer;
 
   animation: scale-up-center .35s 0.4s cubic-bezier(0.785, 0.135, 0.150, 0.860) forwards;
 }

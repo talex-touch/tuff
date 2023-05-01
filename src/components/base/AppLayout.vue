@@ -19,12 +19,15 @@
       <template #view>
         <router-view v-slot="{ Component, route }">
           <transition :name="transitionName">
-            <component :is="Component" :key="route.path" />
+            <keep-alive>
+              <component :is="Component" :key="route.path" />
+            </keep-alive>
           </transition>
         </router-view>
       </template>
       <template #title>
-        TalexTouch <span class="tag version fake-background" v-if="packageJson.version.indexOf('SNAPSHOT') !== -1 || packageJson.version.indexOf('Alpha') !== -1">{{packageJson.version }}</span>
+<!--        v-if="packageJson.version.indexOf('SNAPSHOT') !== -1 || packageJson.version.indexOf('Alpha') !== -1"-->
+        TalexTouch <span class="tag version fake-background">{{packageJson.version }}</span>
       </template>
       <template #plugin-nav>
         <PluginNavList :plugins="plugins" v-model="activePlugin" />
@@ -34,36 +37,35 @@
 </template>
 
 <script>
-import AppLayoutInner from '@comp/layout/app/MacOSLayout.vue'
 
 export default {
-  name: "AppLayout",
-  components: { AppLayoutInner }
+  name: "AppLayout"
 }
 </script>
 
 <script setup>
 import { inject, provide, ref, shallowReactive, watch } from "vue";
 import { $t } from "@modules/lang";
-import IconButton from "@comp/button/IconButton.vue";
+import IconButton from "@comp/base/button/IconButton.vue";
 import PluginNavList from "@comp/plugin/layout/PluginNavList.vue";
 import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 import { useRouter } from "vue-router";
 
 const options = window.$storage.themeStyle
-const paintCustom = window.$storage.paintCustom
+const paintCustom = window.$storage.paintCustom.data
 const packageJson = window.$nodeApi.getPackageJSON()
 
 const layouts = shallowReactive({
   source: null,
   components: {
-    'MacOS': () => import('@comp/layout/app/MacOSLayout.vue'),
-    'Windows': () => import('@comp/layout/app/WindowsLayout.vue')
+    'MacOS': () => import('@comp/customize/app/MacOSLayout.vue'),
+    'Windows': () => import('@comp/customize/app/WindowsLayout.vue'),
+    'Flat': () => import('@comp/customize/app/FlatLayout.vue'),
   }
 })
 
 watch(() => paintCustom[1], async val => {
-  layouts.source = await loadModule(layouts.components[val] || layouts.components.MacOS)
+  layouts.source = await loadModule(layouts.components[val] || layouts.components.Flat)
 
 }, { immediate: true })
 
@@ -172,7 +174,7 @@ router.afterEach((to, from) => {
   z-index: 100000;
   position: absolute;
 
-  left: calc(10% + 5px);
+  left: calc(var(--default-icon-addon, 10%) + 5px);
 
   min-width: 400px;
   min-height: 400px;
@@ -207,8 +209,8 @@ router.afterEach((to, from) => {
 
   left: 0;
 
-  width: 70px;
-  height: calc(100% - 30px);
+  width: var(--nav-width);
+  height: calc(100% - var(--ctr-height, 30px) + 10px);
 
   box-sizing: border-box;
 
@@ -257,7 +259,7 @@ router.afterEach((to, from) => {
 
   top: 0;
 
-  height: 40px;
+  height: var(--ctr-height, 40px);
 
   align-items: center;
   justify-content: center;
@@ -266,6 +268,12 @@ router.afterEach((to, from) => {
 
   --fake-opacity: .25;
   --fake-radius: 8px 8px 0 0;
+
+  transition:
+          margin-bottom .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+          top .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+          height .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+          opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
 :deep(.AppLayout-Controller) {
@@ -328,6 +336,9 @@ router.afterEach((to, from) => {
 
     box-sizing: border-box;
   }
+
+  --nav-width: 70px;
+  --ctr-height: 40px;
   //.AppLayout-Container {
   //  .fullscreen & {
   //    width: 0;

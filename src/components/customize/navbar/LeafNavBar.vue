@@ -12,7 +12,7 @@
 </template>
 
 <script>
-import IconButton from '@comp/button/IconButton.vue'
+import IconButton from '@comp/base/button/IconButton.vue'
 
 export default {
   name: "LeafNavBar",

@@ -100,7 +100,7 @@ ipcRenderer.on('@main-process-message', (_event, arg) => {
 const typeMap = new Map<string, Array<Function>>()
 const syncMap = new Map<string, Function>()
 
-export async function asyncMainProcessMessage(type: string, data: any = null, options = { timeout: 10000 }) {
+export async function asyncMainProcessMessage(type: string, data: any = null, options = { timeout: 10000, reject: false }) {
   const onlyID = new Date().getTime() + "#" + type + "@" + Math.random().toString(12)
 
   let timer
@@ -108,9 +108,10 @@ export async function asyncMainProcessMessage(type: string, data: any = null, op
   return new Promise((resolve, reject) => {
 
     if ( options?.timeout ) {
-      timer = setTimeout(() => {
-        reject({ type, status: 'timeout', data })
-      }, options.timeout)
+      if ( options.reject )
+        timer = setTimeout(() => {
+          reject({ type, status: 'timeout', data })
+        }, options.timeout)
     }
 
     ipcRenderer.send('@main-process-message', {
