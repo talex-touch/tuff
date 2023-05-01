@@ -123,9 +123,11 @@ provide('destroy', destroy)
   position: relative;
   padding: 12px 20px;
 
-  width: 380px;
+  min-width: 380px;
+  max-width: 80%;
   min-height: 200px;
   max-height: 80%;
+  //height: 200px;
 
   --fake-radius: 4px;
   border-radius: 4px;
@@ -133,6 +135,7 @@ provide('destroy', destroy)
   box-sizing: border-box;
   //background-color: var(--el-fill-color-light);
 
+  overflow: hidden;
   backdrop-filter: blur(10px) saturate(180%) brightness(1.5);
 
   transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);

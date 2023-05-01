@@ -4,7 +4,6 @@ import zh_cn from '@assets/languages/zh_cn.json'
 import zh_tw from '@assets/languages/zh_tw.json'
 import en_us from '@assets/languages/en.json'
 import jp from '@assets/languages/jp.json'
-
 export const languages = [
     {
         name: "简体中文",

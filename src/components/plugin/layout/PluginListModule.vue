@@ -114,8 +114,10 @@ const value = useModelWrapper(props, emits)
     background-color: var(--el-fill-color);
   }
   &.target {
+    pointer-events: none;
+
     border: 2px solid var(--el-color-primary);
-    //box-shadow: 0 0 8px 4px var(--el-fill-color-dark);
+    box-shadow: 0 0 4px 2px var(--el-color-primary-light-5);
   }
   &:after {
     // linear image
@@ -129,11 +131,11 @@ const value = useModelWrapper(props, emits)
     width: 100%;
     height: 100%;
     background: linear-gradient(45deg, var(--el-color-primary-light-9) 25%, transparent 50%, transparent 75%, var(--el-color-primary-light-9) 75%);
-    background-size: 10px 10px;
+    background-size: 1px 1px;
   }
   &.dev {
     background: linear-gradient(45deg, rgba(254, 159, 14, 0.1) 25%, transparent 25%, transparent 50%, rgba(254, 159, 14, 0.2) 50%, rgba(254, 159, 14, 0.1) 75%, transparent 75%, transparent);
-    background-size: 300px 20px;
+    background-size: 20px 30px;
   }
   &.shrink {
     :deep(.PluginIcon-Container) {
@@ -149,9 +151,16 @@ const value = useModelWrapper(props, emits)
       }
     }
     height: 40px;
+
+    pointer-events: all !important;
   }
   &:hover {
-    border: 2px solid var(--el-color-primary-light-7);
+    border: 2px solid var(--el-color-primary-light-5);
+    box-shadow: 0 0 4px 1px var(--el-color-primary-light-5);
+
+    &:after {
+      background-size: 2px 2px;
+    }
   }
   display: flex;
   padding: 0 20px;
@@ -159,11 +168,12 @@ const value = useModelWrapper(props, emits)
   align-items: center;
 
   height: 80px;
-  margin: 10px 0;
+  margin: 10px 5px;
 
   cursor: pointer;
   border-radius: 8px;
-  border: 2px solid transparent;
+  border: 2px solid var(--el-border-color);
+  box-shadow: 0 0 2px 1px var(--el-fill-color-dark);
 
   overflow: hidden;
   transition: .25s;

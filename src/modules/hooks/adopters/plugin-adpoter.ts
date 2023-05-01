@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import {pluginManager, registerTypeProcess} from "@modules/samples/node-api";
+import {pluginManager, postMainProcessMessage, registerTypeProcess} from "@modules/samples/node-api";
 
 export interface Plugin {
     pluginInfo:   PluginInfo;
@@ -49,10 +49,9 @@ class PluginAdpoter {
     readonly plugins: Map<string, typeof reactive<Plugin>> = new Map()
 
     _logouts = []
-
     constructor() {
 
-        const plugins: object = pluginManager.getPluginList();
+        const plugins: object = postMainProcessMessage('plugin-list')
 
         // plugins 将 key: value 形式存储在map中
         Object.values(plugins).forEach(value => this.plugins.set(value.pluginInfo.name, reactive(value)))
@@ -76,6 +75,14 @@ class PluginAdpoter {
 
             Object.assign(p, { webview })
         }))
+
+    }
+
+    refreshPlugins() {
+
+        const plugins: object = postMainProcessMessage('plugin-list-refresh')
+
+        Object.values(plugins).forEach(value => this.plugins.set(value.pluginInfo.name, reactive(value)))
 
     }
 

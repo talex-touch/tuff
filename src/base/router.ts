@@ -31,25 +31,33 @@ const routes: any = [
         }
     },
     {
+        path: "/market",
+        name: "市场",
+        component: () => import("../views/base/Market.vue"),
+        meta: {
+            index: 2
+        }
+    },
+    {
         path: "/plugin",
         name: "插件",
         component: () => import("../views/base/Plugin.vue"),
         meta: {
-            index: 2
+            index: 3
+        }
+    },
+    {
+        path: "/plugin_new",
+        name: "NewPlugin",
+        component: () => import("../views/base/plugin/PluginNew.vue"),
+        meta: {
+            index: 3
         }
     },
     {
         path: "/setting",
         name: "设置",
         component: () => import("../views/base/Setting.vue"),
-        meta: {
-            index: 3
-        }
-    },
-    {
-        path: "/market",
-        name: "市场",
-        component: () => import("../views/base/Market.vue"),
         meta: {
             index: 4
         }

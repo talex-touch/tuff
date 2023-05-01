@@ -1,47 +1,28 @@
 <template>
- <div class="PluginWrapper-Wrapper fake-background" :class="{ visible: visible || pluginWrapper.packaging }">
-   <span @click="visible = pluginWrapper.packaging || false" class="PluginWrapper-Referrer" />
-   <div class="PluginWrapper-Container">
-     <el-tabs v-if="!pluginWrapper.packaging" tab-position="right" v-model="tab">
-       <el-tab-pane name="Manifest" label="基本信息">
-         <FlatMarkdown v-model="plugin.readme" />
-         <!--         <el-form>-->
-         <!--            <el-form-item label="名称">-->
-         <!--              <el-input v-model="pluginWrapper.manifest.name" />-->
-         <!--            </el-form-item>-->
-         <!--            <el-form-item label="版本">-->
-         <!--              <el-input v-model="pluginWrapper.manifest.version" />-->
-         <!--            </el-form-item>-->
-         <!--            <el-form-item label="描述">-->
-         <!--              <el-input v-model="pluginWrapper.manifest.description" />-->
-         <!--            </el-form-item>-->
-         <!--         </el-form>-->
-       </el-tab-pane>
-       <el-tab-pane name="PackFiles" label="打包文件">
-         <FileTree v-model="pluginWrapper.files" :fileAdpoter="fileAdpoter" />
+  <div class="PluginWrapper-Wrapper fake-background" :class="{ visible: visible || pluginWrapper.packaging }">
+    <span @click="visible = pluginWrapper.packaging || false" class="PluginWrapper-Referrer" />
+    <div class="PluginWrapper-Container">
+      <div class="Pack-Main" v-if="!pluginWrapper.packaging">
+        <FileTree v-model="pluginWrapper.files" :fileAdpoter="fileAdpoter" />
 
-         <el-alert class="pack-alert" title="选择你要打包的文件" type="info" />
-       </el-tab-pane>
-       <el-tab-pane name="ReadyState" label="准备就绪">
-         <FlatButton @click="pack" type="primary">打包</FlatButton>
-       </el-tab-pane>
-     </el-tabs>
+        <!--       <el-alert class="pack-alert" title="选择你要打包的文件" type="info" />-->
+        <FlatButton @click="pack" type="primary">打包</FlatButton>
+      </div>
 
-     <div v-else class="Pack-Compressing">
-       正在导出插件中，请耐心等待...
-       <PluginExportMention />
-       <teleport to=".PluginWrapper-Wrapper">
-         <div class="Pack-Progressing" :style="`--p: ${pluginWrapper.p.p}%`">
-           <span>
-             {{ (pluginWrapper.p.p).toFixed(4) }} %
+      <div v-else class="Pack-Compressing">
+        <LogTerminal :logs="pluginWrapper.log" />
+        <div class="Pack-Progressing" :style="`--p: ${pluginWrapper.p.p}%`">
+           <div>
+             <span v-if="pluginWrapper?.p?.p">
+             {{ (pluginWrapper.p.p)?.toFixed?.(4) }} %
            </span>
-         </div>
-       </teleport>
-       <LottieFrame :data="compressing" />
-     </div>
-   </div>
+             <PluginExportMention />
+           </div>
+        </div>
+      </div>
+    </div>
 
- </div>
+  </div>
 </template>
 
 <script>
@@ -55,14 +36,14 @@ import { genFileAdpoter, pluginPath } from "@modules/hooks/adopters/file-adpoter
 import { useModelWrapper } from "@modules/utils";
 import { reactive, ref } from "vue";
 import FileTree from "@comp/tree/FileTree.vue";
-import FlatMarkdown from "@comp/input/FlatMarkdown.vue";
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 import { pluginManager, registerTypeProcess } from "@modules/samples/node-api";
 import LottieFrame from "@comp/icon/lotties/LottieFrame.vue";
 import compressing from "@assets/lotties/compress-loading.json"
 import { blowMention } from "@modules/mention/dialog-mention";
+import PluginExportMention from "@comp/plugin/action/mention/PluginExportMention.vue";
+import LogTerminal from "@comp/terminal/LogTerminal.vue";
 
-const tab = ref("Manifest")
 const props = defineProps(["plugin", "modelValue"])
 const emit = defineEmits(["update:modelValue"])
 
@@ -79,7 +60,16 @@ const pluginWrapper = reactive({
     n: 0,
     m: 0,
     p: 0
-  }
+  },
+  log: []
+})
+
+registerTypeProcess('plugin-packager-progress-log/' + pluginWrapper.name, ({ data }) => {
+  pluginWrapper.packaging = true
+
+  console.log( data )
+
+  pluginWrapper.log.push(data.log)
 })
 
 registerTypeProcess('plugin-packager-progress/' + pluginWrapper.name, ({ data }) => {
@@ -87,27 +77,32 @@ registerTypeProcess('plugin-packager-progress/' + pluginWrapper.name, ({ data })
   pluginWrapper.p.m = data.total
   pluginWrapper.p.n = data.received
 
-  const _p = (data.received / data.total * 100).toFixed(7)
-  function calc(__p) {
-    if ( __p > 99 ) {
-      return calc((__p - 99) * 100)
-    } else return __p
-  }
+  const _p = ((data.received / data.total) * 100).toFixed(7)
 
-  pluginWrapper.p.p = calc(_p)
+  console.log( _p )
+
+  pluginWrapper.p.p = _p
 })
 
-registerTypeProcess('plugin-packager', ({ data }) => {
-  if ( !pluginWrapper.packaging ) return
+let suc = false
+registerTypeProcess('plugin-packager', async ({ data }) => {
+  if ( suc ) return
+  suc = true
+  if ( !pluginWrapper.packaging ) return suc = false
   if ( data.plugin === pluginWrapper.name ) {
-    pluginWrapper.packaging = false
+    // pluginWrapper.packaging = false
 
     if ( data.status === 'success' ) {
-      blowMention('success', '导出成功！')
+      await blowMention('success', '导出成功！')
     } else {
-      blowMention('error', '导出失败！')
+      await blowMention('error', '导出失败！')
     }
-  }
+
+    setTimeout(() => {
+      pluginWrapper.packaging = false
+    }, 3200)
+
+  } else return suc = false
 })
 
 function pack() {
@@ -128,12 +123,17 @@ function pack() {
 }
 
 .Pack-Progressing {
-  span {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -150%);
-    color: var(--el-color-primary-dark-2);
+  div {
+    span {
+      font-size: 12px;
+    }
+    position: relative;
+    display: flex;
+    flex-direction: row-reverse;
+
+    top: -30px;
+
+    justify-content: space-between;
   }
   &:before {
     content: "";
@@ -173,21 +173,23 @@ function pack() {
   width: 100%;
   height: 5px;
 
+  overflow: hidden;
   background-color: var(--el-fill-color-darker);
 }
 
 .Pack-Compressing {
+  :deep(.LogTerminal-Container) {
+    height: calc(100% - 30px);
+  }
   position: relative;
-  padding-top: 5%;
 
   width: 100%;
-  height: 90%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
-
   font-size: 25px;
 
   span {
@@ -232,9 +234,9 @@ function pack() {
       opacity: .25;
     }
     z-index: 1;
-    position: absolute;
+    position: relative;
 
-    bottom: 0;
+    bottom: 15px;
 
     background-color: var(--el-fill-color-darker);
   }
@@ -246,7 +248,7 @@ function pack() {
   top: 0;
 
   width: 100%;
-  height: calc(100% - 15px);
+  height: calc(100% - 10px);
 
   --fake-opacity: .75;
 
@@ -258,13 +260,8 @@ function pack() {
 }
 
 .PluginWrapper-Container {
-  :deep(.el-tabs) {
-    .el-tabs__content, .el-tab-pane {
-      position: relative;
-      height: 100%;
-    }
-    position: relative;
-    height: 100%;
+  .Pack-Main {
+    height: calc(100% - 35px);
   }
   position: relative;
   padding: 1% 2%;

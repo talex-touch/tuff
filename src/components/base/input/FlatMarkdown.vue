@@ -18,6 +18,7 @@ import { nord } from '@milkdown/theme-nord'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { onMounted, ref } from "vue";
 import { useModelWrapper } from "@modules/utils";
+import '@milkdown/theme-nord/style.css'
 
 const props = defineProps(["modelValue", "readonly"])
 const emit = defineEmits(["update:modelValue"])
@@ -43,17 +44,59 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+:deep(.milkdown) {
+  .ProseMirror {
+    &:focus-visible {
+      outline: none;
+    }
+    display: flex;
+    flex-direction: column;
+
+    height: 100%;
+    p {
+      font-weight: 400;
+
+      font-size: 14px;
+      text-align: left;
+    }
+  }
+  height: 100%;
+
+  h1 {
+    &:before {
+      z-index: -1;
+      content: "";
+      position: absolute;
+
+      left: 50%;
+      top: 0;
+
+      width: 120%;
+      height: 100%;
+
+      transform: translateX(-50%) skewX(-15deg);
+      background-color: var(--el-color-primary-light-7);
+    }
+    position: relative;
+    display: inline-block;
+
+    align-self: center;
+
+    text-align: center;
+  }
+
+  ul {
+    li {
+      p {
+        font-size: 14px;
+        text-align: left;
+      }
+    }
+  }
+}
+
 .FlatMarkdown-Container {
   .FlatMarkdown-Editor {
-    :deep(.milkdown) {
-      .ProseMirror {
-        &:focus-visible {
-          outline: none;
-        }
-        height: 100%;
-      }
-      height: 100%;
-    }
     position: relative;
 
     width: 100%;

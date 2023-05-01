@@ -1,22 +1,28 @@
 <template>
-  <ul class="PlantNavBar-Home">
-    <IconButton plain direct="/home" icon="home-3" />
-    <IconButton plain direct="/market" icon="quill-pen"></IconButton>
-    <IconButton plain direct="/plugin" icon="plug-2" />
-    <IconButton plain direct="/setting" icon="settings-6"></IconButton>
+  <ul class="FlatNavBar-Home">
+    <p class="FlatNavBar-Title">MAIN</p>
+    <TMenuTabs>
+      <TMenuItem route="/home" name="Dashboard" icon="home-3" />
+      <TMenuItem route="/market" name="Market" icon="quill-pen" />
+      <TMenuItem route="/plugin" name="Plugin" icon="plug-2" />
+      <TMenuItem route="/setting" name="Setting" icon="settings-6" />
+    </TMenuTabs>
   </ul>
 
   <ul class="NavBar-Programs">
+    <p class="FlatNavBar-Title">PLUGINS</p>
     <slot name="plugin-nav" />
   </ul>
 </template>
 
 <script>
 import IconButton from '@comp/base/button/IconButton.vue'
+import TMenuTabs from "@comp/tabs/TMenuTabs.vue";
+import TMenuItem from "@comp/tabs/TMenuItem.vue";
 
 export default {
-  name: "PlantNavBar",
-  components: { IconButton }
+  name: "FlatNavBar",
+  components: { TMenuItem, TMenuTabs, IconButton }
 }
 </script>
 
@@ -40,12 +46,17 @@ export default {
   }
 }
 
-.PlantNavBar-Home {
+:deep(.FlatNavBar-Title) {
+  margin: 0 0 10px 0;
+
+  opacity: .25;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.FlatNavBar-Home {
   * {
     -webkit-app-region: no-drag;
-  }
-  :deep(.IconButton-Container) {
-
   }
   position: relative;
   margin: 0;
@@ -56,7 +67,7 @@ export default {
   justify-content: space-between;
 
   width: 100%;
-  height: 50%;
+  //height: 50%;
 
   box-sizing: border-box;
 }

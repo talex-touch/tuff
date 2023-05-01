@@ -1,22 +1,24 @@
 <template>
-  <div class="AppLayout-Container MacOS">
+  <div class="AppLayout-Container Windows">
     <div class="AppLayout-Header fake-background">
+      <div class="AppLayout-Icon">
+        <img src="../../../assets/logo.svg" alt="logo">
+
+        <slot name="title" />
+      </div>
+
       <ul class="AppLayout-Controller">
         <remix-icon @click="closeWindow" name="close" />
         <remix-icon @click="minimizeWindow" name="subtract" />
       </ul>
-
-      <span class="AppLayout-Title">
-        <slot name="title" />
-      </span>
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <LeafNavBar>
+        <PlantNavBar>
           <template #plugin-nav>
             <slot name="plugin-nav" />
           </template>
-        </LeafNavBar>
+        </PlantNavBar>
 
         <slot name="icon" />
       </div>
@@ -25,23 +27,22 @@
         <slot name="view" />
       </div>
     </div>
-
   </div>
 </template>
 
 <script>
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import IconButton from '@comp/button/IconButton.vue'
+import IconButton from '@comp/base/button/IconButton.vue'
 
 export default {
-  name: "AppLayoutMacOS",
+  name: "AppLayoutWindows",
   components: { IconButton, RemixIcon }
 }
 </script>
 
 <script setup>
 import { inject } from 'vue'
-import LeafNavBar from "@comp/customize/navbar/LeafNavBar.vue";
+import PlantNavBar from "@comp/customize/navbar/PlantNavBar.vue";
 
 const account = window.$storage.account
 const activePlugin = inject('activePlugin')
@@ -55,66 +56,70 @@ function closeWindow() {
 }
 </script>
 
+<style lang="scss">
+.blur {
+  .AppLayout-Container {
+    backdrop-filter: blur(100px) saturate(180%) brightness(1.2) !important;
+  }
+}
+</style>
+
 <style lang="scss" scoped>
-.AppLayout-Container.MacOS {
+.AppLayout-Container.Windows {
   .AppLayout-Header {
-    border-bottom: 1px solid var(--el-border-color);
-  }
-  .AppLayout-Aside {
-    border-right: 1px solid var(--el-border-color);
-  }
-  .blur & {
-    .AppLayout-Header {
-      border-bottom: none;
-    }
-    .AppLayout-Aside {
-      border-right: none;
-    }
-  }
-  .AppLayout-Title {
-    position: relative;
+    .AppLayout-Icon {
+      display: flex;
 
-    left: 35px;
-    width: calc(100% - 50px);
+      align-items: center;
 
-    text-align: center;
+      text-indent: 5px;
+
+      img {
+        width: 28px;
+      }
+    }
+    justify-content: start;
   }
+
   .AppLayout-Controller {
     .remix {
       &:hover {
-        color: var(--el-text-color-primary);
+        color: var(--el-fill-color-light);
+        background-color: var(--color);
       }
-      width: 10px;
-      height: 10px;
+      position: relative;
+      display: flex;
 
-      border-radius: 50%;
+      justify-content: center;
+      align-items: center;
 
-      font-size: 10px;
-      color: var(--color);
+      width: 50px;
+      height: 100%;
+
       cursor: pointer;
-      background-color: var(--color);
+      font-size: 20px;
+      color: var(--el-text-color-primary);
+
+      --fake-radius: 0;
+      transition: .25s;
       &:first-child {
         --color: var(--el-color-error);
       }
       &:nth-child(2) {
-        --color: var(--el-color-warning);
+        --color: var(--el-text-color-primary);
       }
     }
     position: absolute;
-    padding: 3px 0;
     display: flex;
 
-    left: 10px;
+    right: 0;
 
     height: 100%;
-    width: 50px;
+    width: max-content;
 
     justify-content: center;
     align-items: center;
-
-    gap: 10px;
-
-    text-indent: 0;
+    flex-direction: row-reverse;
   }
 }
 </style>

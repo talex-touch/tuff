@@ -1,35 +1,31 @@
 <template>
-  <div class="TBlockSwitch-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
-    <div class="TBlockSwitch-Content TBlockSelection-Content">
+  <div class="TBlockSelect-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
+    <div class="TBlockSelect-Content TBlockSelection-Content">
       <remix-icon :name="icon" :style="value ? 'fill' : 'line'" />
-      <div class="TBlockSwitch-Label TBlockSelection-Label">
+      <div class="TBlockSelect-Label">
         <h3>{{ title }}</h3>
         <p>{{ description }}</p>
       </div>
     </div>
-    <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
-      <span style="transition: .2s" ref="mention"></span>
-<!--      样式同步透明 不额外设定disabled-->
-      <t-switch v-model="value" />
-    </div>
-    <div v-else class="TBlockSwitch-Guidance">
-      <remix-icon name="arrow-right-s" />
+    <div class="TBlockSelect-Select TBlockSelection-Func">
+      <t-select v-model="value">
+        <slot />
+      </t-select>
     </div>
   </div>
 </template>
 
 <script>
 export default {
-  name: "TBlockSwitch"
+  name: "TBlockSelect"
 }
 </script>
 
 <script setup>
-import TSwitch from '@comp/switch/TSwitch.vue'
+import TSelect from '@comp/base/select/TSelect.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { sleep, useModelWrapper } from '@modules/utils'
-import { nextTick, ref, watch } from 'vue'
-import { $t } from '@modules/lang'
+import { useModelWrapper } from '@modules/utils'
+import { watch } from 'vue'
 
 const props = defineProps({
   title: {
@@ -51,68 +47,30 @@ const props = defineProps({
   icon: {
     type: String,
     required: true
-  },
-  guidance: {
-    type: Boolean,
-    default: false
   }
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
-const mention = ref()
 const value = useModelWrapper(props, emits)
 
-watch(() => value.value, (v) => {
-  emits('change', value)
-
-  refresh(v)
-
-}, { immediate: true })
-
-watch(() => value.value ? $t('base.status-open') : $t('base.status-close'), (v) => refresh(v))
-
-function refresh(v) {
-  nextTick(async () => {
-    const _text = v ? $t('base.status-open') : $t('base.status-close')
-
-    const el = mention.value
-    if ( !el ) return
-
-    Object.assign(el.style, {
-      opacity: 0,
-      transform: 'translateX(5px)'
-    })
-
-    await sleep(200)
-
-    el.innerHTML = _text
-
-    Object.assign(el.style, {
-      opacity: 1,
-      transform: 'translateX(0)'
-    })
-
-    await sleep(200)
-
-  })
-}
+watch(() => value, () => emits('change', value))
 </script>
 
 <style lang="scss" scoped>
 
-//.TBlockSwitch-Container + .TBlockSwitch-Container {
+//.TBlockSelect-Container + .TBlockSelect-Container {
 //  border-radius: 0 0 4px 4px;
 //}
 
-.TBlockSwitch-Container {
+.TBlockSelect-Container {
   &.disabled {
-    .TBlockSwitch-Switch {
+    .TBlockSelect-Select {
       opacity: .5;
 
       pointer-events: none;
     }
   }
-  .TBlockSwitch-Switch {
+  .TBlockSelect-Select {
     display: flex;
 
     align-items: center;
@@ -123,7 +81,7 @@ function refresh(v) {
     }
 
   }
-  .TBlockSwitch-Content {
+  .TBlockSelect-Content {
     display: flex;
     align-items: center;
 
@@ -140,7 +98,7 @@ function refresh(v) {
       font-size: 24px;
     }
 
-    > .TBlockSwitch-Label {
+    > .TBlockSelect-Label {
       flex: 1;
 
       > h3 {
@@ -177,13 +135,13 @@ function refresh(v) {
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 4px;
-  --fake-opacity: .45;
+  --fake-opacity: .5;
   &:hover {
     --fake-color: var(--el-fill-color);
   }
 }
 
-.blur .TBlockSwitch-Container {
+.blur .TBlockSelect-Container {
   --fake-color: var(--el-fill-color);
   &:hover {
     --fake-color: var(--el-fill-color-light);

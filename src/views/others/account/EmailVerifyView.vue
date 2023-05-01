@@ -10,9 +10,9 @@ export default {
 
 <script setup>
 import { inject, onMounted, ref } from "vue";
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 import { $t } from "@modules/lang";
-import FlatCodeInput from "@comp/input/FlatCodeInput.vue";
+import FlatCodeInput from "@comp/base/input/FlatCodeInput.vue";
 import { forDialogMention } from "@modules/mention/dialog-mention";
 import { useRegister } from "@modules/hooks/api/useAccount";
 import { useCaptcha } from "@modules/hooks/api/useGeneralAPI";

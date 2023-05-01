@@ -3,18 +3,33 @@
     <PluginList @select="selectPlugin" :plugins="plugins" />
 
     <div class="Plugin-Info" ref="pluginInfoRef">
-<!--      <PluginCard v-if="plugins && plugins[select]" :plugin="plugins[select]" />-->
       <PluginInfo v-if="select" :plugin="select" />
 
-      <EmptyAnimate v-else />
-    </div>
+      <div class="Plugin-Empty" v-else>
+        <div class="Plugin-EmptyBox">
+          <el-skeleton style="width: 240px" animated>
+            <template #template>
+              <div style="padding: 14px">
+                <el-skeleton-item variant="p" style="width: 40%" />
+                <el-skeleton-item variant="text" style="width: 70%" />
+              </div>
+            </template>
+          </el-skeleton>
+        </div>
+        <div class="Plugin-EmptyBubble" :style="`--d: ${i * 2 + 1}s`" v-for="i in 5" />
 
-<!--    <div class="Plugin-Core">-->
-<!--      <template v-if="plugins && plugins[select]">-->
-<!---->
-<!--        <PluginIcon :icon="plugins[select].pluginInfo.icon" :alt="plugins[select].pluginInfo.name" />-->
-<!--      </template>-->
-<!--    </div>-->
+        <div class="Plugin-Mention">
+          <p>Start by installing or selecting a plugin</p>
+          <span>
+          Installing a plugin makes working with your favorite tools even easier. Share your work with your personal cloud, and find out what other developers are using.
+          Just click the button below to get started.
+        </span>
+          <FlatButton @click="() => $router.push('/market')">
+            Install a plugin
+          </FlatButton>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -30,12 +45,12 @@ import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import { sleep } from '@modules/utils'
 import EmptyAnimate from '@comp/base/EmptyAnimate.vue'
 import PluginList from "@comp/plugin/layout/PluginList.vue";
+import FlatButton from "@comp/base/button/FlatButton.vue";
 
 const _plugins = inject('plugins')
 const plugins = computed(() => _plugins())
 const pluginInfoRef = ref()
 const select = ref()
-
 async function selectPlugin(index) {
   if( index === select.value ) return
 
@@ -61,117 +76,153 @@ async function selectPlugin(index) {
 </script>
 
 <style lang="scss" scoped>
-//@keyframes waving {
-//  0% {
-//    transform: translate(-50%, -50%) scale(.8);
-//    opacity: .5;
-//  }
-//  50% {
-//    transform: translate(-50%, -50%) scale(1.3);
-//    opacity: .25;
-//  }
-//  100% {
-//    transform: translate(-50%, -50%) scale(0);
-//    opacity: 0;
-//  }
-//}
-//
-//@keyframes waving-2 {
-//  0% {
-//    transform: translate(-50%, -50%) scale(.8);
-//    opacity: .5;
-//  }
-//  100% {
-//    transform: translate(-50%, -50%) scale(1.75);
-//    opacity: 0;
-//  }
-//}
-//
-//@keyframes coloring {
-//  0%, 100% {
-//    background: var(--el-fill-color-light);
-//  }
-//  50% {
-//    background: var(--el-fill-color-dark);
-//  }
-//}
-//
-//@keyframes coloring-2 {
-//  0%, 100% {
-//    background: var(--el-color-primary-light-9);
-//  }
-//  50% {
-//    background: var(--el-color-primary-light-7);
-//  }
-//}
-//.Plugin-Core {
-//  &:has(.PluginIcon-Container) {
-//    //top: 30px;
-//    &:before {
-//      animation: waving-2 1.5s infinite;
-//    }
-//    &:after {
-//      animation: coloring-2 1.5s infinite;
-//    }
-//  }
-//  :deep(.PluginIcon-Container) {
-//    position: absolute;
-//
-//    top: 50%;
-//
-//    width: 48px;
-//    height: 48px;
-//
-//    right: -5px;
-//    font-size: 48px;
-//
-//    //mix-blend-mode: overlay;
-//    //-webkit-mask: -webkit-gradient(linear, 45% 45%, 55% 55%, from(rgba(0,0,0,1)), to(rgba(0,0,0,0)));
-//
-//    transform: translate(-50%, -50%);
-//  }
-//  &:before, &:after {
-//    z-index: -1;
-//    content: '';
-//    position: absolute;
-//
-//    left: 50%;
-//    top: 50%;
-//
-//    width: 100%;
-//    height: 100%;
-//    border-radius: 50%;
-//
-//    background: var(--el-fill-color-light);
-//    transform: translate(-50%, -50%);
-//
-//    animation: waving 2.5s infinite;
-//    //box-shadow: 0 0 2px 2px var(--el-fill-color), 0 0 16px 4px var(--el-fill-color-lighter);
-//  }
-//  &:after {
-//    opacity: .5;
-//
-//    transform: translate(-50%, -50%) scale(1.1);
-//
-//    animation: coloring 2.5s infinite;
-//  }
-//  position: absolute;
-//
-//  left: 0;
-//  top: 50%;
-//
-//  width: 148px;
-//  height: 148px;
-//
-//  background: var(--el-fill-color-light);
-//  //box-shadow:
-//  //    0 0 2px 2px var(--el-fill-color),
-//  //    0 0 16px 4px var(--el-fill-color-lighter)
-//  //  ;
-//  border-radius: 50%;
-//  transform: translate(-50%, -50%);
-//  transition: transform .25s;
-//}
+.Plugin-EmptyBox {
+  &:before {
+    content: '';
+    position: absolute;
+
+    bottom: 20%;
+    right: 5%;
+
+    width: 32px;
+    height: 32px;
+
+    border-radius: 50%;
+    filter: blur(3px) saturate(1.25) contrast(1.125);
+    background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+  }
+  &:after {
+    content: '';
+    position: absolute;
+
+    bottom: 20%;
+    right: 12%;
+
+    width: 32px;
+    height: 32px;
+
+    border-radius: 50%;
+    filter: blur(3px) saturate(1.25) contrast(1.125);
+    background-image: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
+  }
+  position: absolute;
+
+  top: 35%;
+  left: 50%;
+
+  width: 280px;
+  height: 70px;
+
+  transform: translate(-50%, -50%);
+  background-color: var(--el-fill-color-extra-lighter);
+  border-radius: 8px;
+  backdrop-filter: blur(2px) brightness(1.05);
+  box-shadow: 0 0 8px #00000011;
+  border: 2px solid var(--el-border-color);
+}
+.Plugin-Mention {
+  position: absolute;
+
+  top: 55%;
+  left: 50%;
+
+  width: 420px;
+  height: 70px;
+
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--el-text-color-light);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+
+  & > p {
+    margin-bottom: 8px;
+    color: var(--el-text-color-lighter);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  & > span {
+    display: block;
+    margin-bottom: 16px;
+    color: var(--el-text-color-lighter);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  & > button {
+    margin: 0 auto;
+  }
+
+  :deep(.FlatButton-Container) {
+    width: 50%;
+    left: 50%;
+
+    transform: translateX(-50%);
+  }
+}
+.Plugin-Empty {
+  & .Plugin-EmptyBubble:nth-child(2) {
+    left: 22%;
+    top: 35%;
+
+    transform: translate(-50%, -50%) scale(.45) skewX(5deg);
+  }
+  & .Plugin-EmptyBubble:nth-child(3) {
+    left: 72%;
+    top: 27%;
+
+    transform: translate(-50%, -50%) scale(.15) skewX(5deg);
+  }
+  & .Plugin-EmptyBubble:nth-child(4) {
+    left: 75%;
+    top: 45%;
+
+    transform: translate(-50%, -50%) scale(.35) skewX(12deg);
+  }
+  & .Plugin-EmptyBubble:nth-child(5) {
+    left: 35%;
+    top: 45%;
+
+    transform: translate(-50%, -50%) scale(.5) skewX(4deg);
+  }
+
+  & .Plugin-EmptyBubble:nth-child(6) {
+    left: 45%;
+    top: 25%;
+
+    transform: translate(-50%, -50%) scale(.25) skewX(16deg);
+  }
+  .Plugin-EmptyBubble {
+    z-index: -1;
+    position: absolute;
+
+    width: 48px;
+    height: 48px;
+
+    border-radius: 6px;
+    background-color: var(--el-fill-color-light);
+    filter: opacity(.5) brightness(120%);
+    box-shadow: 0 0 8px #00000011;
+    transform: translate(-50%, -50%);
+
+    animation: bubble 8s ease-in-out var(--d) infinite;
+  }
+}
+
+@keyframes bubble {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.25) skewX(16deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(.5) skewX(4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.75) skewX(16deg);
+  }
+}
 
 .Plugin-Container {
   position: relative;

@@ -1,11 +1,9 @@
-import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import _path from 'path'
 import { getConfig } from '../storage'
 import { Plugin, PluginInfo, PluginStatus } from './plugin-base'
 import { win, win as mainWin } from '../../main'
 import { regChannel, regPluginChannel, sendMainChannelMsg } from '../../utils/channel-util'
-import { injectWebView } from '../../utils/plugin-injection'
 import {PluginPackager} from "./plugin-packager";
 
 export class PluginManager {
@@ -20,15 +18,27 @@ export class PluginManager {
         return this.#plugins
     }
 
-    async initial( _p: string) {
+    async initial( _p: string ) {
 
         this.pluginsPath = _p //_path.join(ProcessorVars.touchPath, 'plugins')
         
         this._listenerInitial()
 
+        await this._initialPlugins()
+
+    }
+
+    async _initialPlugins() {
+
+        for (const name of Object.keys(this.#plugins)) {
+            await this.disablePlugin(name);
+        }
+
         const fileLists = fse.readdirSync(this.pluginsPath)
 
         fileLists.forEach(file => this.loadPlugin(file))
+
+        return this.#plugins
 
     }
 
@@ -68,6 +78,7 @@ export class PluginManager {
     _listenerInitial() {
 
         regChannel('plugin-list', ({ reply }) => reply(this.#plugins))
+        regChannel('plugin-list-refresh', async ({ reply }) => await this._initialPlugins())
         regChannel('change-active', ({ reply, data }) => reply(this.changeActivePlugin(data)))
 
         regChannel('plugin-action', async ({ reply, data }) => {
@@ -104,8 +115,6 @@ export class PluginManager {
                 win.webContents.executeJavaScript(`
                     document.body.parentElement.classList.add('fullscreen')
                 `)
-
-                // plugin.view.setFullScreen(true/*!plugin.window.isFullScreen()*/)
 
             }
 
@@ -204,30 +213,6 @@ export class PluginManager {
 
         plugin._enabled(mainWin, fileP);
 
-        // view.webContents.executeJavaScript(`
-        //
-        //         global.$config = {
-        //             themeStyle: ${ JSON.stringify(themeStyle) }
-        //         }
-        //
-        //         global.$config.themeStyle['dark'] ? clsL.add('dark') : clsL.remove('dark')
-        //         global.$config.themeStyle['blur'] ? clsL.add('blur') : clsL.remove('blur')
-        //         global.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
-        //     `)
-        //
-        // const appSetting = getConfig('app-setting.ini')
-        //
-        // const view = this.activePlugin?.view
-        // if( !view ) return
-        //
-        // const autoCloseDev = appSetting.dev?.autoCloseDev ?? true
-        // autoCloseDev && view.webContents.closeDevTools()
-        //
-        // view.hide()
-        //
-        // if ( this.activePlugin ) this.activePlugin.status = PluginStatus.ENABLED
-        // this.active = false
-
         return plugin
 
     }
@@ -238,11 +223,7 @@ export class PluginManager {
 
         console.log("[Plugin] Disabling plugin " + name)
 
-        return plugin._disabled()
-
-        // reply?.status === 1 ? closed() : setTimeout(closed, reply?.status === 2 ? 10000 : 3000)
-
-        // return () => doClosed
+        return await plugin._disabled() && delete this.#plugins[name]
 
     }
 

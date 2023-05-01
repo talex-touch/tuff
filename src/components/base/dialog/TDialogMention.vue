@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import Loading from './../icon/LoadingIcon.vue'
+import Loading from '@comp/icon/LoadingIcon.vue'
 import { defineProps, onMounted, ref, watchEffect } from 'vue'
 import { sleep } from '@modules/utils'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'

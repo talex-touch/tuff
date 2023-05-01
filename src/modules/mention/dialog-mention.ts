@@ -1,8 +1,8 @@
 import { Component, createApp } from 'vue'
-import TDialogMention from '@comp/dialog/TDialogMention.vue'
-import TBottomDialog from '@comp/dialog/TBottomDialog.vue'
-import TBlowDialog from "@comp/dialog/TBlowDialog.vue";
-import TPopperDialog from "@comp/dialog/TPopperDialog.vue";
+import TDialogMention from '@comp/base/dialog/TDialogMention.vue'
+import TBottomDialog from '@comp/base/dialog/TBottomDialog.vue'
+import TBlowDialog from "@comp/base/dialog/TBlowDialog.vue";
+import TPopperDialog from "@comp/base/dialog/TPopperDialog.vue";
 import VWave from "v-wave";
 
 export class DialogBtn {

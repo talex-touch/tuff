@@ -9,9 +9,15 @@ import AppUpgradationView from "@comp/base/AppUpgradationView.vue";
 
 export async function applicationUpgrade() {
     const res = await AppUpgradation.getInstance().check()
-    if ( res ) await popperMention($t('version.update-available'), () => {
-        return h(AppUpgradationView, {release: res})
-    })
+    if ( res ) {
+
+        document.body.classList.add('has-update')
+
+        await popperMention($t('version.update-available'), () => {
+            return h(AppUpgradationView, {release: res})
+        })
+
+    }
 }
 
 export function screenCapture() {

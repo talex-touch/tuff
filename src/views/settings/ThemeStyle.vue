@@ -24,8 +24,8 @@ export default {
 </script>
 
 <script setup>
-import TGroupSwitch from '@comp/group/TGroupBlock.vue'
-import TBlockSwitch from '@comp/switch/TBlockSwitch.vue'
+import TGroupSwitch from '@comp/base/group/TGroupBlock.vue'
+import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
 import { $t } from '@modules/lang'
 
 const options = window.$storage.themeStyle

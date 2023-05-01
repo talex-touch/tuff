@@ -9,12 +9,12 @@ console.log = function(...args) {
 
 }
 
-process.on('uncaughtException', (error) => {
-    console.error("[TalexTouch-Error]", error)
+process.on('uncaughtException', (error, origin) => {
+    console.error("[TalexTouch-ErrorUncaught]", error, origin)
 })
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error("[TalexTouch-Error]", reason, promise)
+    console.error("[TalexTouch-ErrorUnhandled]", reason, promise)
 })
 
 // Remove electron security warnings

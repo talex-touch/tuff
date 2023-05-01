@@ -35,17 +35,25 @@ const term = new Terminal({
 
 watchEffect(() => {
 
+  const array = props.logs
+  if ( !array || array.length < 1 ) return
+
+  const last = array[array.length - 1]
+
   // for(let i = logArray.length - 1; i < props.logs.length; i++) {
   //   logArray.push(props.logs[i])
   //
   //   term.write(props.logs[i])
   // }
 
-  term.clear()
+  // term.clear()
 
-  props.logs.forEach(log => {
-    term.writeln(log.data)
-  })
+  // props.logs.forEach(log => {
+  //   term.writeln(log)
+  // })
+
+  // write last
+  term.writeln(last)
 
 })
 
@@ -76,9 +84,10 @@ onMounted(() => {
   padding: 5px;
   box-sizing: border-box;
   :deep(.xterm-viewport) {
-    background-color: transparent !important;
+    background-color: #00000011 !important;
 
     overflow: hidden;
+    border-radius: 4px;
   }
   :deep(.xterm-screen) {
     .xterm-rows {
@@ -93,6 +102,7 @@ onMounted(() => {
   width: 100%;
   height: 100%;
 
+  text-align: left;
   overflow-y: hidden;
 
 }

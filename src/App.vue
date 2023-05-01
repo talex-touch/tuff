@@ -6,8 +6,8 @@
 <!--  <video id="video" autoplay muted playsinline></video>-->
 </template>
 
-<script setup>
-import AppLayout from '@comp/layout/AppLayout.vue'
+<script name="App" setup>
+import AppLayout from '@comp/base/AppLayout.vue'
 import { onMounted, provide, ref, watch } from "vue";
 import FirstInit from "~/first/FirstInit.vue";
 import {

@@ -5,7 +5,7 @@
 </template>
 
 <script>
-import FlatButton from "@comp/button/FlatButton.vue";
+import FlatButton from "@comp/base/button//FlatButton.vue";
 
 export default {
   name: "FlatCodeInput",

@@ -1,8 +1,8 @@
 <template>
   <ul class="NavBar-Home">
     <IconButton direct="/home" icon="home-3" />
+    <IconButton direct="/market" icon="quill-pen"></IconButton>
     <IconButton direct="/plugin" icon="plug-2" />
-    <IconButton icon="quill-pen"></IconButton>
     <IconButton direct="/setting" icon="settings-6"></IconButton>
   </ul>
 
@@ -12,7 +12,7 @@
 </template>
 
 <script>
-import IconButton from '@comp/button/IconButton.vue'
+import IconButton from '@comp/base/button/IconButton.vue'
 
 export default {
   name: "LeafNavBar",

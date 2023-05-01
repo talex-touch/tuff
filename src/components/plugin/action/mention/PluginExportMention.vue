@@ -1,10 +1,6 @@
 <template>
   <span v-if="msg" class="PluginExportMention-Wrapper">
-    <el-alert
-      :title="msg"
-      type="warning"
-      :closable="false"
-    />
+    {{ msg }}
   </span>
 </template>
 
@@ -17,7 +13,7 @@ export default {
 <script setup>
 import { ref } from "vue";
 
-const msg = ref()
+const msg = ref("")
 const messages = [
   "为了保证数据的完整性，请勿操作数据文件夹中的文件。",
   "为了保证导出速度，打包与进度计算同时进行，可能会造成进度条不准确的情况。",
