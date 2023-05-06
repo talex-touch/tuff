@@ -1,5 +1,5 @@
 <template>
-  <el-scrollbar v-if="plugins" class="PluginList-Container">
+  <el-scrollbar v-loading="refreshing" v-if="plugins" class="PluginList-Container">
     <div class="PluginList-Toolbox">
       <FlatCompletion :fetch="search" />
 <!--      <IconButton undot middle plain icon="refresh" />-->
@@ -24,14 +24,17 @@ import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 
 const props = defineProps(['plugins'])
 const emits = defineEmits(['select'])
+const refreshing = ref(false)
 const target = ref(-1)
 
 const runningPlugins = computed(() => Object.values(props.plugins).filter(plugin => plugin._status === 3 || plugin._status === 4))
 
 watch(() => target.value, () => emits('select',target.value))
 
-function refresh() {
-  pluginAdopter.refreshPlugins()
+async function refresh() {
+  refreshing.value = true
+  await pluginAdopter.refreshPlugins()
+  refreshing.value = false
 }
 
 function search() {

@@ -1,5 +1,5 @@
 <template>
-  <ul class="FlatNavBar-Home">
+  <ul class="FlatNavBar-Home" @click="activePlugin = ''">
     <p class="FlatNavBar-Title">MAIN</p>
     <TMenuTabs>
       <TMenuItem route="/home" name="Dashboard" icon="home-3" />
@@ -15,15 +15,13 @@
   </ul>
 </template>
 
-<script>
-import IconButton from '@comp/base/button/IconButton.vue'
+<script name="FlatNavBar" setup>
 import TMenuTabs from "@comp/tabs/TMenuTabs.vue";
 import TMenuItem from "@comp/tabs/TMenuItem.vue";
+import { inject } from "vue";
 
-export default {
-  name: "FlatNavBar",
-  components: { TMenuItem, TMenuTabs, IconButton }
-}
+const activePlugin = inject('activePlugin')
+
 </script>
 
 <style lang="scss" scoped>

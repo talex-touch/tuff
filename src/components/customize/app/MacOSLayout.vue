@@ -44,7 +44,6 @@ import { inject } from 'vue'
 import LeafNavBar from "@comp/customize/navbar/LeafNavBar.vue";
 
 const account = window.$storage.account
-const activePlugin = inject('activePlugin')
 
 function minimizeWindow() {
   window.$nodeApi.minimize()

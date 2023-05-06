@@ -100,7 +100,7 @@ ipcRenderer.on('@main-process-message', (_event, arg) => {
 const typeMap = new Map<string, Array<Function>>()
 const syncMap = new Map<string, Function>()
 
-export async function asyncMainProcessMessage(type: string, data: any = null, options = { timeout: 10000, reject: false }) {
+export async function asyncMainProcessMessage(type: string, data: any = null, options = { timeout: 10000, reject: false }): Promise<any> {
   const onlyID = new Date().getTime() + "#" + type + "@" + Math.random().toString(12)
 
   let timer

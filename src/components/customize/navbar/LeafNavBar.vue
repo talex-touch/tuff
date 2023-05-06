@@ -1,5 +1,5 @@
 <template>
-  <ul class="NavBar-Home">
+  <ul class="NavBar-Home" @click="activePlugin = ''">
     <IconButton direct="/home" icon="home-3" />
     <IconButton direct="/market" icon="quill-pen"></IconButton>
     <IconButton direct="/plugin" icon="plug-2" />
@@ -11,13 +11,12 @@
   </ul>
 </template>
 
-<script>
+<script name="LeafNavBar" setup>
 import IconButton from '@comp/base/button/IconButton.vue'
+import { inject } from "vue";
 
-export default {
-  name: "LeafNavBar",
-  components: { IconButton }
-}
+const activePlugin = inject('activePlugin')
+
 </script>
 
 <style lang="scss" scoped>

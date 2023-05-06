@@ -23,14 +23,14 @@ const router = useRouter()
 
 const activePlugin = ref("")
 watch(() => activePlugin.value, val => {
+  console.log("Plugin", val)
   pluginManager.changeActivePlugin(val)
 
-  if ( val ) router.push(`/plugin/view/${val}`)
+  if ( val ) router.push(`/plugin_view/${val}`)
 })
-watch(route, val => {
-  const param = val.params?.name
-  if ( !param ) activePlugin.value = ""
-})
+// router.afterEach((t, to) => {
+//   if ( to.name !== "插件视图" ) activePlugin.value = ""
+// })
 
 provide("activePlugin", activePlugin)
 
