@@ -82,4 +82,7 @@ declare module '@vue/runtime-core' {
     TvTabs: typeof import('./src/components/tabs/vertical/TvTabs.vue')['default']
     WindowsLayout: typeof import('./src/components/customize/app/WindowsLayout.vue')['default']
   }
+  export interface ComponentCustomProperties {
+    vLoading: typeof import('element-plus/es')['ElLoadingDirective']
+  }
 }

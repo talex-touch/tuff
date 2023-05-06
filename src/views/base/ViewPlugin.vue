@@ -1,6 +1,8 @@
 <template>
   <div class="Blur-Container fake-background" :class="{ blur: options.blur }">
-    <PluginView v-for="plugin in plugins" :key="plugin.pluginInfo.name" :plugin="plugin" />
+    <keep-alive>
+      <PluginView v-for="plugin in plugins" :key="plugin.pluginInfo.name" :plugin="plugin" />
+    </keep-alive>
   </div>
 </template>
 
