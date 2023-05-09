@@ -1,0 +1,7 @@
+{
+  "name": "utils",
+  "version": "1.0.0",
+  "description": "TalexTouch series utils",
+  "main": "./index.ts",
+  "module": "./index.ts"
+}

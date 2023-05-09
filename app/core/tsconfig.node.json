@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "composite": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "~/*": ["./*"],
+      "@assets/*": ["./assets/*"],
+      "@addon/*": ["./main/addon/*"],
+      "@config/*": ["./main/config/*"],
+      "@utils/*": ["./main/utils/*"],
+    },
+    "types": ["electron-vite/node"]
+  },
+  "include": ["package.json", "electron", "main/**/*"]
+}

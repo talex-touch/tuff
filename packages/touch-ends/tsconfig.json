@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "allowJs": true,
+        "module": "ESNext",
+        "moduleResolution": "Node16",
+        "target": "es2017",
+        "sourceMap": false,
+        "noImplicitAny": false,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "newLine": "lf",
+        "esModuleInterop": true,
+        "declaration": true,
+        "declarationDir": "dist/@types",
+        "paths": {
+            "@": ["./src"],
+            "/": ["./src"]
+        }
+    },
+    "include": [
+        "src/**/*",
+        "src/**/*.d.ts",
+        "src/**/*.xdb",
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

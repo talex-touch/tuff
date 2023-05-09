@@ -1,4 +1,4 @@
-
+# TalexTouch
 
 <div align="center">
 
@@ -6,68 +6,69 @@
 
   <h1>TalexTouch</h1>
 
-设计参考 TDesignS
+  Design reference <b>TDesignS</b>
 
-[![GitHub forks](https://img.shields.io/github/forks/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/network)
-[![GitHub stars](https://img.shields.io/github/stars/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-[![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-[![GitHub release](https://img.shields.io/badge/release-1.0.0-FDD835?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
-
+  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
+  [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
 </div>
 
-Touch(TalexTouch) 是 TalexTouchQ(TouchQ) 的后作，将原本的项目进行完全重构，是一个基于 [Electron](https://www.electronjs.org/) 制作的 [全](https://talex-touch.github.io/talex-touch/) 客户端, 目的皆在使用户获得更完美的UI体验
+## Announcement
 
-## 全平台支持
-在Windows、MacOS和Linux等主流平台上运行，为用户提供更多的选择。你可以在各种设备上享受一致的使用体验。
+> 2.0.0 version is now under dev and alpha test.
 
-## 优美的UI设计
-设计风格参考TDesignS，简洁美观。它的主题、字体和图标等都经过精心调整，以使用户获得更佳的使用体验。
+We are proud that our re-designed 2.0.0 version is developing and under test.
+Download from the `releases` with pre-release and fork this project with making contributions, any `Pull Request` and `Issues` are welcomed!
 
-## 丰富的功能
-集成多种实用的功能，让你的桌面更智能、更高效。它支持多窗口、快捷键、剪贴板管理、截图、定时器等等，同时支持自定义插件。
+Download it and feedback!
 
-## 简单易用的操作
-操作非常简单易用，用户可以轻松地完成各种任务。你只需要通过菜单或快捷键打开所需功能，即可享受到TalexTouch带来的方便。
+## Introduction
 
-## 安全可靠
-我们非常注重用户的安全和隐私。我们保证用户的数据不会被泄露或滥用，同时提供了多种安全机制来保护用户的使用安全。
+Touch (TalexTouch) is a follow-up project to TalexTouchQ (TouchQ), which involved a complete overhaul of the original project. It is a cross-platform client based on Electron, designed to provide users with a more polished UI experience.
 
-如果你正在寻找一款全平台支持、优美易用的桌面软件，TalexTouch将是你的不二选择。它不仅提供了丰富的功能，还有着良好的用户体验和开放的社区生态。欢迎使用TalexTouch，体验全新的桌面体验！
+## Goal
 
-## 使用协议
+Its primary goal is to deliver a seamless and intuitive user interface that enhances the user experience. You can access the client via the [link](https://talex-touch.github.io/talex-touch/).
 
-本项目使用 [Mozilla Public License 2.0](./LICENSE) 协议开源
+## Cross-Platform Support
 
-## 食用方式
+TalexTouch runs on mainstream platforms such as Windows, macOS, and Linux, providing users with more options. You can enjoy a consistent user experience across various devices.
 
-#### 安装环境
+> Soon to support Android, iOS, WearOS, and WatchOS.
 
-``` bash
+## Beautiful UI Design
 
-# 进入目录后安装依赖
-pnpm install
+The design style of TalexTouch is inspired by TDesignS, which is simple and elegant. The themes, fonts, and icons have been carefully adjusted to provide users with a better experience.
 
-# 打开测试环境 (localhost:5173)
-pnpm run dev
+## Rich Functionality
 
-# 打包生成
-pnpm run build
+TalexTouch integrates a variety of practical functions to make your desktop smarter and more efficient. It supports multiple windows, shortcuts, clipboard management, screenshots, timers, and more, as well as custom plugins.
 
-```
+## Simple and Easy-to-Use Operations
+
+The operation of TalexTouch is very simple and user-friendly, allowing users to easily complete various tasks. You only need to open the required function through the menu or shortcut keys to enjoy the convenience brought by TalexTouch.
+
+## Secure and Reliable
+
+We attach great importance to the security and privacy of our users. We guarantee that user data will not be leaked or abused and provide multiple security mechanisms to protect user usage safety.
+
+If you are looking for a cross-platform, beautifully designed desktop software that is easy to use, TalexTouch is your best choice. It not only provides rich functionality but also has a good user experience and an open community ecology. Welcome to use TalexTouch and experience a new desktop experience!
+
+## Usage Agreement
+This project is open-sourced under the Mozilla Public License 2.0 agreement.
 
 ## Issue
 
-> 请注意, 任何不符合模板要求的 Issue 均会被直接关闭
+> Any issues not match `issue template` will be closed directly!
 
-请记住，开发者并没有义务解决您的 Issue 就连这个项目以及开源和维护均是建立在开发者的空闲时间之上
+Please keep in mind that developers are under no obligation to solve your Issue even this project, as well as open source and maintenance are based on developers of free time.
 
-## 贡献指南
+## Contribution
 
-[这里](.github/contribute/README.md)
+[Here](.github/contribute/README.md)
 
-## 联系方式
+## Contact
 
-您可以通过邮箱 (TalexDreamSoul@Gmail) 联系我, 也可在本项目发送 Issue 提供您的问题
+Through email (TalexDreamSoul@Gmail) or open an issue.
 
-Copyright © 2023 TalexDreamSoul
+Copyright © 2022-2023 TalexDreamSoul
