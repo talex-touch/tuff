@@ -63,7 +63,7 @@ const routes: any = [
         }
     },
     {
-        path: "/plugin/view/:name",
+        path: "/plugin_view/:name",
         name: "插件视图",
         component: () => import("../views/base/ViewPlugin.vue"),
         meta: {
@@ -78,8 +78,8 @@ const router = createRouter({
 })
 
 router.afterEach((to, from) => {
-    if ( to.name  !== '插件视图' ) pluginManager.changeActivePlugin()
-    // console.log( 'router reached: ' + to.path )
+    // if ( to.name  !== '插件视图' ) pluginManager.changeActivePlugin()
+    console.log( 'router reached: ' + to.path, to, from )
 })
 
 // router.beforeEach(async (to, from, next) => {

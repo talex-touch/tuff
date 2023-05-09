@@ -31,12 +31,16 @@ export class PluginManager {
     async _initialPlugins() {
 
         for (const name of Object.keys(this.#plugins)) {
-            await this.disablePlugin(name);
+            await this.disablePlugin(name, true);
         }
+
+        console.log("PluginManager: re-initial plugins ...")
 
         const fileLists = fse.readdirSync(this.pluginsPath)
 
         fileLists.forEach(file => this.loadPlugin(file))
+
+        console.log("PluginManager: re-initial plugins done!")
 
         return this.#plugins
 
@@ -78,7 +82,11 @@ export class PluginManager {
     _listenerInitial() {
 
         regChannel('plugin-list', ({ reply }) => reply(this.#plugins))
-        regChannel('plugin-list-refresh', async ({ reply }) => await this._initialPlugins())
+        regChannel('plugin-list-refresh', async ({ reply }) => {
+            const res = await this._initialPlugins()
+            console.log( res )
+            reply(res)
+        })
         regChannel('change-active', ({ reply, data }) => reply(this.changeActivePlugin(data)))
 
         regChannel('plugin-action', async ({ reply, data }) => {
@@ -181,6 +189,7 @@ export class PluginManager {
 
     loadPlugin(name) {
         const fileP = _path.join(this.pluginsPath, name)
+        console.log("[PluginManager] Load plugin " + name + " from " + fileP)
 
         const fileInfo = fse.readFileSync(_path.join(fileP, 'init.json'))
         const readme = fse.existsSync(_path.join(fileP, 'README.md')) ? fse.readFileSync(_path.join(fileP, 'README.md')).toString() : ''
@@ -201,6 +210,7 @@ export class PluginManager {
         }
 
         plugin.status = PluginStatus.LOADED
+        console.log("[PluginManager] Load plugin " + name + " done!")
 
         return this.#plugins[plugin.pluginInfo.name] = plugin
     }
@@ -217,13 +227,13 @@ export class PluginManager {
 
     }
 
-    async disablePlugin(name) {
+    async disablePlugin(name, _delete = false) {
         const plugin: Plugin = this.#plugins[name]
         if ( !plugin ) throw new Error('Unknown plugin: ' + name + " | " + JSON.stringify(this.#plugins))
 
         console.log("[Plugin] Disabling plugin " + name)
 
-        return await plugin._disabled() && delete this.#plugins[name]
+        return await plugin._disabled() && (_delete && delete this.#plugins[name])
 
     }
 
