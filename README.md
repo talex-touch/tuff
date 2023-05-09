@@ -1,5 +1,3 @@
-# TalexTouch
-
 <div align="center">
 
   <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="logo">
@@ -10,7 +8,8 @@
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
+  [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
+  [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
 </div>
 
 ## Announcement
