@@ -1,0 +1,80 @@
+/* 缩小并覆盖 */
+.scale-down-and-cover-enter-active,
+.scale-down-and-cover-leave-active {
+  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+}
+
+.scale-down-and-cover-enter-from {
+  position: absolute;
+  //opacity: 0;
+  transform: translateY(100%);
+}
+
+.scale-down-and-cover-enter-to {
+  position: absolute;
+  //opacity: 1;
+  transform: translateY(0);
+}
+
+.scale-down-and-cover-leave-from {
+
+  //opacity: 1;
+  transform: translateY(-100%);
+}
+
+.scale-down-and-cover-leave-to {
+  z-index: -1;
+
+  //opacity: 0;
+  transform: translateY(0);
+}
+
+/* 放大并覆盖 */
+.scale-up-and-cover-enter-active,
+.scale-up-and-cover-leave-active {
+
+  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+}
+
+.scale-up-and-cover-enter-from {
+  margin-top: -100%;
+
+  opacity: 0;
+  filter: blur(10px);
+}
+
+.scale-up-and-cover-enter-to {
+  margin-top: 0;
+
+  opacity: 1;
+  filter: blur(0);
+}
+
+.scale-up-and-cover-leave-from {
+  z-index: -1;
+
+  top: 0;
+
+  opacity: 1;
+}
+
+.scale-up-and-cover-leave-to {
+
+  margin-top: 100%;
+
+  opacity: 0;
+  filter: blur(10px);
+}
+
+
+
+/* 淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}

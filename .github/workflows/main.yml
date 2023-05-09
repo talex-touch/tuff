@@ -35,7 +35,7 @@ jobs:
         run: |
           cd docs/dist 
           git init
-          git config user.name "TalexDreamSoul"
+          git config user.name "GITHUB_AUTO_WORKFLOWS"
           git config user.email "${{ secrets.GIT_EMAIL }}"
           git add -A
           git commit -m 'deploy github-pages automatically'

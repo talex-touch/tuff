@@ -1,0 +1,17 @@
+{
+  "name": "touch-music",
+  "version": "1.0.0-Alpha",
+  "icon": {
+    "type": "remix",
+    "value": "netease-cloud-music"
+  },
+  "description": "一款全平台资源聚合音乐平台",
+  "plugin": {
+    "signature": "TALEX-TOUCH*AX4ED3SWE987EF1D2S3",
+    "dev": {
+	  "enable": true,
+	  "address": "http://127.0.0.1:5174/",
+	  "source": true
+	}
+  }
+}
