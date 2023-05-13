@@ -9,13 +9,13 @@ console.log = function(...args) {
 
 }
 
-process.on('uncaughtException', (error, origin) => {
-    console.error("[TalexTouch-ErrorUncaught]", error, origin)
-})
+// process.on('uncaughtException', (error, origin) => {
+//     console.error("[TalexTouch-ErrorUncaught]", error, origin)
+// })
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error("[TalexTouch-ErrorUnhandled]", reason, promise)
-})
+// process.on('unhandledRejection', (reason, promise) => {
+//     console.error("[TalexTouch-ErrorUnhandled]", reason, promise)
+// })
 
 // Remove electron security warnings
 // This warning only shows adopters development mode

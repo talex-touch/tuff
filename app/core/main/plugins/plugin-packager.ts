@@ -1,14 +1,11 @@
-import { ProcessorVars } from "../addon/initializer";
+import { ProcessorVars } from "../core/addon/initializer";
 import path from "path";
-import { checkDirWithCreate } from "../../utils/common-util";
-import { Plugin } from "./plugin-base";
+import { checkDirWithCreate } from "../utils/common-util";
 import fse from "fs-extra";
 import compressing from 'compressing'
 import * as fs from "fs";
-import { sendMainChannelMsg } from "../../utils/channel-util";
-import {pluginManager} from "./plugin-manager";
 import { exec } from "child_process";
-import { CompressLimit, TalexCompress } from "../../utils/compress-util";
+import { CompressLimit, TalexCompress } from "../utils/compress-util";
 
 export class PluginPackager {
     plugin: Plugin

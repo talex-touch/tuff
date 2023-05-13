@@ -1,7 +1,8 @@
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
-import path from 'path'
+// import path from 'path-browserify'
+const path = require('path')
 import vueJsx from '@vitejs/plugin-vue-jsx'
 
 import topLevelAwait from 'vite-plugin-top-level-await'
@@ -46,7 +47,13 @@ export default defineConfig({
                 }
             ]
         },
-        plugins: [externalizeDepsPlugin()]
+        plugins: [
+            externalizeDepsPlugin({
+                exclude: [
+                    'path'
+                ]
+            })
+        ]
     },
     renderer: {
         root: './renderer/',
@@ -59,28 +66,14 @@ export default defineConfig({
             }
         },
         resolve: {
-            alias: [
-                {
-                    find: '@modules',
-                    replacement: path.resolve(__dirname, 'renderer/modules')
-                },
-                {
-                    find: '@comp',
-                    replacement: path.resolve(__dirname, 'renderer/components')
-                },
-                {
-                    find: '@styles',
-                    replacement: path.resolve(__dirname, 'renderer/styles')
-                },
-                {
-                    find: '@assets',
-                    replacement: path.resolve(__dirname, 'assets')
-                },
-                {
-                    find: '~',
-                    replacement: path.resolve(__dirname, 'renderer')
-                }
-            ]
+            alias: {
+                path: "path-browserify",
+                "@modules": path.resolve(__dirname, 'renderer/modules'),
+                "@comp": path.resolve(__dirname, 'renderer/components'),
+                "@styles": path.resolve(__dirname, 'renderer/styles'),
+                "@assets": path.resolve(__dirname, 'assets'),
+                "~": path.resolve(__dirname, 'renderer')
+            }
         },
         plugins: [
             vue({

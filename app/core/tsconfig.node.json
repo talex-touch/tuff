@@ -4,10 +4,12 @@
     "composite": true,
     "module": "ESNext",
     "moduleResolution": "Node",
-    "esModuleInterop": true,
     "jsx": "preserve",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationDir": "./dist",
+    "declarationMap": true,
     "paths": {
       "~/*": ["./*"],
       "@assets/*": ["./assets/*"],
@@ -15,7 +17,13 @@
       "@config/*": ["./main/config/*"],
       "@utils/*": ["./main/utils/*"],
     },
-    "types": ["electron-vite/node"]
+    "types": [
+      "vite/client",
+      "electron-vite/node"
+    ],
+    "typeRoots": [
+      "main/types/**/***/*"
+    ]
   },
-  "include": ["package.json", "electron", "main/**/*"]
+  "include": ["package.json", "main/**/*", "../../packages/utils/plugin/index.ts"]
 }

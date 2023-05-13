@@ -1,4 +1,8 @@
 {
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "isolatedModules": true
+  },
   "references": [
     { "path": "./tsconfig.web.json" },
     { "path": "./tsconfig.node.json" }

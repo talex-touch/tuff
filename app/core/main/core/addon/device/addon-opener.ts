@@ -1,7 +1,7 @@
 import { regChannel, sendMainChannelMsg } from "../../../utils/channel-util";
 import { app, protocol } from "electron";
 import process from "process";
-import { PluginResolver, ResolverStatus } from "../../plugins/plugin-packager";
+import { PluginResolver, ResolverStatus } from "../../../plugins/plugin-packager";
 import path from "path";
 import { genTouchApp } from "../../touch-core";
 

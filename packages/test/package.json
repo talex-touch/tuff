@@ -1,0 +1,19 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "test:nodemon": "nodemon",
+    "test": "vitest",
+    "coverage": "vitest --coverage"
+  },
+  "author": "TalexDreamSoul",
+  "license": "ISC",
+  "dependencies": {
+    "ts-node": "^10.9.1",
+    "utils": "workspace:^1.0.0",
+    "vitest": "^0.31.0"
+  }
+}
