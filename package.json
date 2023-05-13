@@ -11,6 +11,10 @@
   },
   "devDependencies": {
     "typescript": "^5.0.4",
-    "vite": "^4.3.5"
+    "vite": "^4.3.5",
+    "vitest": "^0.31.0"
+  },
+  "scripts": {
+    "test:utils": "pnpm -F test run test"
   }
 }

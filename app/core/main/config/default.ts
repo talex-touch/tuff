@@ -2,6 +2,8 @@ import appIcon from '../../public/favicon.ico?asset'
 
 export const AppName = "TalexTouch"
 
+export const APP_FOLDER_NAME = 'talex-touch'
+
 export const MainWindowOption = {
     title: AppName,
     icon: appIcon,

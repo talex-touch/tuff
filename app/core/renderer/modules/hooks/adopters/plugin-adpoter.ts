@@ -1,12 +1,5 @@
 import { reactive } from "vue";
-import {
-    asyncMainProcessMessage,
-    pluginManager,
-    postMainProcessMessage,
-    registerTypeProcess
-} from "@modules/samples/node-api";
-import {win} from "../../../../electron/main";
-import {sleep} from "@modules/utils";
+import { touchChannel  } from "../../channel/channel-core";
 
 export interface Plugin {
     pluginInfo:   PluginInfo;
@@ -58,7 +51,7 @@ class PluginAdpoter {
     _logouts = []
     constructor() {
 
-        const plugins: object = postMainProcessMessage('plugin-list')
+        const plugins: object = touchChannel.sendSync('plugin-list')
 
         this.__init_plugins(plugins)
 
@@ -71,13 +64,13 @@ class PluginAdpoter {
         // plugins 将 key: value 形式存储在map中
         Object.values(plugins).forEach(value => this.plugins.set(value.pluginInfo.name, reactive(value)))
 
-        this._logouts.push(registerTypeProcess('plugin-status-updated', ({ data, reply }) =>  {
+        this._logouts.push(touchChannel.regChannel('plugin-status-updated', ({ data, reply }) =>  {
             const p = this.plugins.get(data.plugin)
             if ( p ) Object.assign(p, { _status: data.status })
 
             reply(1)
         }))
-        this._logouts.push(registerTypeProcess('plugin-webview', ({ data }) =>  {
+        this._logouts.push(touchChannel.regChannel('plugin-webview', ({ data }) =>  {
             const p = this.plugins.get(data.plugin)
             if (!p) return
 
@@ -93,7 +86,7 @@ class PluginAdpoter {
 
     async refreshPlugins() {
 
-        const res: object = await asyncMainProcessMessage('plugin-list-refresh')
+        const res: object = await touchChannel.sendSync('plugin-list-refresh')
 
         const plugins: object = res['data']
 

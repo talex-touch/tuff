@@ -1,12 +1,9 @@
-// @ts-ignore
 import fse from 'fs/promises'
-// @ts-ignore
-import path from "path";
-// @ts-ignore
+import path from "path-browserify";
 import { cwd } from "process";
 
 const mainPath = cwd()
-export const pluginPath = path.join(mainPath, 'talex-touch', 'plugins')
+export const pluginPath = path.join(mainPath, 'talex-touch', 'modules', 'plugins')
 class FileAdpoter {
     mainPath
     constructor(mainPath) {

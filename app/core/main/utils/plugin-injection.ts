@@ -1,74 +1,7 @@
-import path from 'path'
-import { ProcessorVars } from '../core/addon/initializer'
-import { Plugin } from '../core/plugins/plugin-base'
-
-import pkg from './../../package.json'
 import { getConfig } from '../core/storage'
-import { genTouchApp } from '../core/touch-core'
-
-export function injectWebView(plugin: Plugin) {
-    const [name, pluginInfo, sourceConfig] = [plugin.pluginInfo.name, plugin.pluginInfo, plugin.sourceConfig]
-
-    const fileP = path.join(ProcessorVars.pluginPath, name)
-
-    const indexPath = plugin.__index(fileP)
-    const preload = plugin.__preload(fileP)
-
-    const _path = {
-        relative: path.relative(ProcessorVars.rootPath, fileP),
-        root: ProcessorVars.rootPath,
-        plugin: fileP
-    }
-
-    const app = genTouchApp()
-    const win = app.window.window
-
-    win.webContents.executeJavaScript(`
-
-        !(() => {
-            const injectionObj = {
-                indexPath: "${indexPath}",
-                preload: String.raw \`${String.raw`${preload}`}\`
-            }
-            
-            const wrapper = document.querySelector('#PluginView-Wrapper')
-            
-            wrapper.innerHTML = ''
-            
-            const webview = document.createElement('webview')
-            
-            webview.setAttribute('src', injectionObj.indexPath)
-            webview.setAttribute('nodeintegration', 'true')
-            webview.setAttribute('webpreferences', 'contextIsolation=false')
-            // webview.setAttribute('nodeintegrationinsubframes', 'true')
-            webview.setAttribute('httpreferrer', 'https://plugin.touch.talex.com/${name}')
-            webview.setAttribute('websecurity', 'false')
-            webview.setAttribute('useragent', '${win.webContents.userAgent} TalexTouch/${pkg.version} (Plugins,like ${name})')
-            webview.setAttribute('partition', 'persist:touch/${name}')
-            
-            injectionObj.preload && webview.setAttribute('preload', "file://" + injectionObj.preload)
-            
-            webview.addEventListener('did-finish-load', () => {
-                console.log("Webview dom-ready")
-                webview.openDevTools()
-                
-                webview.insertCSS(\`${getStyles()}\`)
-                  
-                webview.executeJavaScript(String.raw \`${String.raw`${getJs([name, pluginInfo, sourceConfig, JSON.stringify(_path)])}`}\`)  
-               
-                webview.send('@talex-plugin:preload', "${name}")
-            })
-            
-            wrapper.appendChild(webview)
-                
-        })()
-        
-    `)
-
-}
 
 export function getJs(options) {
-    const [name, pluginInfo, sourceConfig, _path] = options
+    const [name, _path] = options
 
     const themeConfig = getConfig('theme-style.ini')
 
@@ -86,8 +19,6 @@ export function getJs(options) {
             window.$plugin = {}
                             
             Object.assign(window.$plugin, {
-                pluginInfo: ${JSON.stringify(pluginInfo)},
-                sourceConfig: ${JSON.stringify(sourceConfig)},
                 path: ${_path},
                 typeMap: new Map(),
                 syncMap: new Map()

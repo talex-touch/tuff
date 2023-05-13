@@ -7,7 +7,6 @@
     "moduleResolution": "node",
     "importHelpers": true,
     "jsx": "preserve",
-    "esModuleInterop": true,
     "resolveJsonModule": true,
     "sourceMap": false,
     "baseUrl": ".",
@@ -24,5 +23,6 @@
   },
   "include": [
     "renderer/**/*",
+    "assets/**/*"
    ],
 }
