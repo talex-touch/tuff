@@ -95,7 +95,7 @@ export class AppUpgradation {
             return v1.channel > v2.channel
         }
 
-        return v1.major > v2.major || v1.minor > v2.minor || v1.patch > v2.patch
+        return v1.major >= v2.major && v1.minor >= v2.minor && v1.patch > v2.patch
     }
 
     public static getInstance() {

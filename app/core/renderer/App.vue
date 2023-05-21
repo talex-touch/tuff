@@ -12,10 +12,6 @@ import {
   dropperResolver
 } from "@modules/hooks/applicatoin-hooks";
 import { pluginManager  } from '@modules/channel/plugin-core/api'
-import { useRouter, useRoute } from "vue-router";
-
-const route = useRoute()
-const router = useRouter()
 
 const activePlugin = ref("")
 watch(() => activePlugin.value, pluginManager.changeActivePlugin, { immediate: true })

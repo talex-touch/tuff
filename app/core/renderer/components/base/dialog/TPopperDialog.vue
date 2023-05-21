@@ -156,6 +156,7 @@ provide('destroy', destroy)
     opacity: 0;
   }
 
+  z-index: 10000;
   position: absolute;
   display: flex;
 
