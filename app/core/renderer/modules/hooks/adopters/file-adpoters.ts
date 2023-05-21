@@ -1,8 +1,7 @@
 import fse from 'fs/promises'
 import path from "path-browserify";
-import { cwd } from "process";
 
-const mainPath = cwd()
+const mainPath = window.$nodeApi.getCWD()
 export const pluginPath = path.join(mainPath, 'talex-touch', 'modules', 'plugins')
 class FileAdpoter {
     mainPath

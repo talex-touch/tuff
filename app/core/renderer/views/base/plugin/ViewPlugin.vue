@@ -1,5 +1,5 @@
 <template>
-  <div class="Blur-Container" :class="{ blur: options.blur, active: activePlugin }">
+  <div class="Blur-Container" :class="{ blur: options?.blur || true, active: activePlugin }">
       <PluginView v-for="plugin in plugins" :key="plugin.pluginInfo.name" :plugin="plugin" />
   </div>
 </template>
@@ -14,7 +14,7 @@ export default {
 import { computed, inject, onMounted, ref } from "vue";
 import PluginView from "@comp/plugin/PluginView.vue";
 
-const options = window.$storage.themeStyle
+const options = {} //window.$storage.themeStyle
 const activePlugin = inject('activePlugin')
 const _plugins = inject('plugins')
 const plugins = computed(() => _plugins())

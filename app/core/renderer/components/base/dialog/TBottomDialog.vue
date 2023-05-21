@@ -33,7 +33,7 @@ export default {
 <script setup>
 import Loading from '@comp/icon/LoadingIcon.vue'
 import { onMounted, ref, watchEffect } from 'vue'
-import { sleep } from '@modules/utils'
+import { sleep } from 'utils/common'
 
 const props = defineProps({
   title: String, message: String, stay: Number, close: Function,

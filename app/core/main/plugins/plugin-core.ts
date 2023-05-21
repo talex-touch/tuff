@@ -197,8 +197,8 @@ class PluginManager implements IPluginManager {
   }
 
   __init__() {
-    if ( !fse.existsSync(this.pluginPath) ) return
-    
+    if (!fse.existsSync(this.pluginPath)) return;
+
     const plugins = fse.readdirSync(this.pluginPath);
 
     plugins.forEach(this.loadPlugin);

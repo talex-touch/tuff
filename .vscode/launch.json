@@ -42,7 +42,7 @@
       "name": "Launch Program",
       "configurations": [
         "Debug Main Process",
-        "Debug Renderer Process"
+        // "Debug Renderer Process"
       ],
       "presentation": {
         "order": 1

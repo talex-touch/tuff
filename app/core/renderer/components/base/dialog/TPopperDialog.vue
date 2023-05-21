@@ -24,7 +24,7 @@ export default {
 
 <script setup>
 import { defineComponent, onMounted, provide, ref } from "vue";
-import {sleep} from "@modules/utils";
+import { sleep } from 'utils/common';
 import { $t } from '@modules/lang'
 
 const close = ref(false)
@@ -33,7 +33,7 @@ const props = defineProps(['close', 'title', 'message', 'comp', 'render'])
 const renderComp = ref(null)
 
 onMounted(() => {
-  if ( props.render ) {
+  if (props.render) {
     renderComp.value = defineComponent({
       render: props.render
     })
@@ -67,6 +67,7 @@ provide('destroy', destroy)
     opacity: 1;
     transform: scale(1);
   }
+
   to {
     opacity: .75;
     transform: scale(1.25);
@@ -107,6 +108,7 @@ provide('destroy', destroy)
     border-radius: 5px;
     background: linear-gradient(to right, var(--el-color-primary-light-3), var(--el-color-primary-light-5), var(--el-color-primary-light-3));
   }
+
   p {
     margin: 5px;
 
@@ -115,11 +117,13 @@ provide('destroy', destroy)
 
     text-align: center;
   }
+
   span {
     width: 100%;
     display: block;
     text-align: center;
   }
+
   position: relative;
   padding: 12px 20px;
 
@@ -151,6 +155,7 @@ provide('destroy', destroy)
   &.close {
     opacity: 0;
   }
+
   position: absolute;
   display: flex;
 
@@ -174,6 +179,7 @@ provide('destroy', destroy)
     opacity: 0;
     transform: scale(1.25);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -184,8 +190,8 @@ provide('destroy', destroy)
   0% {
     opacity: 0;
   }
+
   100% {
     opacity: 1;
   }
-}
-</style>
+}</style>

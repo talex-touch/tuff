@@ -1,42 +1,39 @@
-// @ts-ignore
-import process from 'process'
-import { ref } from 'vue'
 import { postMainProcessMessage } from '@modules/samples/node-api'
 
 export function useOS() {
     return postMainProcessMessage('get-os')
 }
 
-export function useCPUUsage() {
-    const value = ref(process.getCPUUsage())
+// export function useCPUUsage() {
+//     const value = ref(process.getCPUUsage())
 
-    let cancel = false
+//     let cancel = false
 
-    async function running() {
-        value.value = process.getCPUUsage()
+//     async function running() {
+//         value.value = process.getCPUUsage()
 
-        if ( !cancel )
-            setTimeout(running, 1000)
-    }
+//         if ( !cancel )
+//             setTimeout(running, 1000)
+//     }
 
-    running().then(r => {})
+//     running().then(r => {})
 
-    return [value, () => cancel = true]
-}
+//     return [value, () => cancel = true]
+// }
 
-export function useMemoryUsage() {
-    const value = ref()
+// export function useMemoryUsage() {
+//     const value = ref()
 
-    let cancel = false
+//     let cancel = false
 
-    async function running() {
-        value.value = process.memoryUsage()
+//     async function running() {
+//         value.value = process.memoryUsage()
 
-        if ( !cancel )
-            setTimeout(running, 1000)
-    }
+//         if ( !cancel )
+//             setTimeout(running, 1000)
+//     }
 
-    running().then(r => {})
+//     running().then(r => {})
 
-    return [value, () => cancel = true]
-}
+//     return [value, () => cancel = true]
+// }

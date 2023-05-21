@@ -52,7 +52,7 @@ import FlatNavBar from "@comp/customize/navbar/FlatNavBar.vue";
 import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
 import { applicationUpgrade } from "@modules/hooks/applicatoin-hooks";
 
-const account = window.$storage.account
+const account = {} //window.$storage.account
 
 function minimizeWindow() {
   window.$nodeApi.minimize()

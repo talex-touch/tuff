@@ -7,13 +7,13 @@
           <div class="AppLayout-Icon-Footer">
             {{ activePlugin }}
             <span v-if="account.user" class="NavBar-Footer-LoginStatus">
-          {{ account.user.username }} 已登录
+              {{ account.user.username }} 已登录
             </span>
             <el-tooltip :content="$t('nav.footer-tool.open-devtool')">
               <icon-button @click="openDevTools" small plain icon="code-s-slash"></icon-button>
             </el-tooltip>
           </div>
-          <img src="../../assets/logo.svg" alt="logo">
+          <AppLogo />
         </div>
       </template>
       <template #view>
@@ -33,7 +33,7 @@
         <ViewPlugin />
       </template>
       <template #title>
-        TalexTouch <span class="tag version fake-background">{{packageJson.version }}</span>
+        TalexTouch <span class="tag version fake-background">{{ packageJson.version }}</span>
       </template>
       <template #plugin-nav>
         <PluginNavList :plugins="plugins" v-model="activePlugin" />
@@ -54,6 +54,7 @@ import { inject, provide, ref, shallowReactive, watch } from "vue";
 import { $t } from "@modules/lang";
 import IconButton from "@comp/base/button/IconButton.vue";
 import PluginNavList from "@comp/plugin/layout/PluginNavList.vue";
+import AppLogo from "@comp/icon/AppLogo.vue";
 import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 import { useRouter } from "vue-router";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
@@ -85,23 +86,14 @@ const plugins = ref()
 const activePlugin = inject('activePlugin')
 const account = window.$storage.account
 provide('plugins', () => plugins.value)
-watch(() => pluginAdopter.plugins.values(), val => plugins.value = [ ...val ], { deep: true, immediate: true })
-watch(() => pluginAdopter.plugins.size, () => plugins.value = [ ...pluginAdopter.plugins.values() ])
+watch(() => pluginAdopter.plugins.values(), val => plugins.value = [...val], { deep: true, immediate: true })
+watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
 
 function openDevTools() {
   window.$nodeApi.openDevTools()
 }
 
 const router = useRouter()
-
-// const transitionName = ref('fade')
-// router.afterEach((to, from) => {
-//   if ( to.meta?.index >= from.meta?.index ) {
-//     transitionName.value = 'scale-down-and-cover'
-//   } else {
-//     transitionName.value = 'scale-up-and-cover'
-//   }
-// })
 
 function beforeEnter(el) {
   el.style.opacity = 0
@@ -127,6 +119,7 @@ function afterLeave(el) {
     opacity: 0;
     filter: blur(10px) hue-rotate(180deg) invert(1) brightness(0.5) contrast(0.5) saturate(0.5) sepia(0.5);
   }
+
   100% {
     opacity: 1;
     filter: blur(0) hue-rotate(0deg) invert(0) brightness(1) contrast(1) saturate(1) sepia(0);
@@ -143,6 +136,7 @@ function afterLeave(el) {
       opacity: .8;
       font-size: 12px;
     }
+
     position: absolute;
     padding: 0 2%;
 
@@ -161,17 +155,20 @@ function afterLeave(el) {
     box-sizing: border-box;
     transition: all .25s ease-in-out;
   }
+
   &:hover {
     clip-path: circle(200% at 0% 0%);
     box-shadow: var(--el-box-shadow);
     --fake-opacity: .9;
     backdrop-filter: blur(10px) brightness(.5);
+
     //background-color: var(--el-fill-color);
     .AppLayout-Icon-Footer {
       opacity: 1;
       transform: translateY(0);
     }
   }
+
   img {
     position: absolute;
 
@@ -181,6 +178,7 @@ function afterLeave(el) {
     width: 32px;
 
   }
+
   z-index: 100000;
   position: absolute;
 
@@ -210,6 +208,7 @@ function afterLeave(el) {
   .NavBar-Home {
     max-height: 300px;
   }
+
   z-index: 1000;
   position: relative;
   padding: 10px;
@@ -226,11 +225,10 @@ function afterLeave(el) {
 
   --fake-radius: 0;
   --fake-opacity: .25;
-  transition:
-          margin-right .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-          left .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-          width .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-          opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: margin-right .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+  left .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+  width .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+  opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
 @keyframes viewEnter {
@@ -238,9 +236,10 @@ function afterLeave(el) {
     opacity: 0;
     transform: translateX(100%) scale(.85)
   }
+
   to {
     opacity: 1;
-    transform:  translateX(0) scale(1)
+    transform: translateX(0) scale(1)
   }
 }
 
@@ -280,10 +279,10 @@ function afterLeave(el) {
   --fake-radius: 8px 8px 0 0;
 
   transition:
-          margin-bottom .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-          top .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-          height .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-          opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+    margin-bottom .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+    top .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+    height .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
+    opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
 :deep(.AppLayout-Controller) {
@@ -322,6 +321,7 @@ function afterLeave(el) {
     opacity: .75;
     font-size: 12px;
   }
+
   :deep(.AppLayout-View) {
     z-index: 100;
     position: relative;
@@ -337,6 +337,7 @@ function afterLeave(el) {
     -webkit-app-region: no-drag;
     animation: viewEnter .25s .5s forwards;
   }
+
   :deep(.AppLayout-Container) {
     position: relative;
     //padding: 10px;
@@ -391,5 +392,4 @@ function afterLeave(el) {
 
   box-sizing: border-box;
   -webkit-app-region: drag;
-}
-</style>
+}</style>

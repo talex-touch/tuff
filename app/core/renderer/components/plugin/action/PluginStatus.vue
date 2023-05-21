@@ -3,18 +3,9 @@
   </div>
 </template>
 
-<script>
-import { pluginManager } from '@modules/samples/node-api'
-import { watchEffect } from 'vue'
-
-export default {
-  name: "PluginStatus",
-}
-</script>
-
-<script setup>
-import { pluginManager } from '@modules/samples/node-api'
-import { toRefs, ref, watchEffect, onMounted } from 'vue'
+<script name="PluginStatus" setup>
+import { pluginManager  } from '@modules/channel/plugin-core/api'
+import { ref, watchEffect, onMounted } from 'vue'
 
 const props = defineProps(['plugin', 'shrink'])
 const dom = ref()

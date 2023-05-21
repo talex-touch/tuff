@@ -1,7 +1,7 @@
 <script>
 import { h, nextTick, ref } from 'vue'
 import TTabItem from '@comp/tabs/TTabItem.vue'
-import { sleep } from '@modules/utils'
+import { sleep } from 'utils/common'
 import TTabHeader from '@comp/tabs/TTabHeader.vue'
 import { ElScrollbar } from 'element-plus'
 import { $t } from '@modules/lang'

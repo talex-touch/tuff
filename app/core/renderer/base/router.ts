@@ -60,26 +60,13 @@ const routes: any = [
         meta: {
             index: 4
         }
-    },
-    // {
-    //     path: "/plugin_view/:name",
-    //     name: "插件视图",
-    //     component: () => import("../views/base/plugin/ViewPluginWrapper.vue"),
-    //     meta: {
-    //         index: 5
-    //     }
-    // }
+    }
 ]
 
 const router = createRouter({
     history: createWebHashHistory(),
     routes
 })
-
-// router.afterEach((to, from) => {
-    // if ( to.name  !== '插件视图' ) pluginManager.changeActivePlugin()
-    // console.log( 'router reached: ' + to.path, to, from )
-// })
 
 // router.beforeEach(async (to, from, next) => {
 //

@@ -38,7 +38,7 @@
 <script setup>
 import Loading from '@comp/icon/LoadingIcon.vue'
 import { onMounted, ref, watchEffect } from 'vue'
-import { sleep } from '@modules/utils'
+import { sleep } from 'utils/common'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 
