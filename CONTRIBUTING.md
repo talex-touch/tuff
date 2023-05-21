@@ -91,10 +91,10 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
 
 ## Collaborator Tutorial
 
-If you received a mysterious blue links from our warehouse，Click it，You became a glorious TouchQ Collaborator！You could：
+If you received a mysterious blue links from our warehouse，Click it，You became a glorious TalexTouch Collaborator！You could：
 
 - Have a handsome collaborator in Issues identified
 - Push to the main warehouse directly (you can delete the fork before!)
 - Audit others pull request
 
-### [Guide a reference](https://github.com/TalexDreamSoul/touchq/blob/main/.github/contribute/README.md)
+### [Guide Reference](https://github.com/TalexDreamSoul/touchq/blob/main/.github/contribute/README.md)
