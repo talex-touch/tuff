@@ -56,8 +56,6 @@ export default defineConfig({
     renderer: () => {
         const basePath = path.resolve(__dirname, 'renderer')
 
-        console.log( basePath )
-
         return {
             root: basePath,
             build: {

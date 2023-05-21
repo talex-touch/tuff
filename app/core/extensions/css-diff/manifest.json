@@ -1,0 +1,14 @@
+{
+   "author": "Evan Borgstrom",
+   "description": "As you make CSS changes in the DevTools inspector window this will track your changes and provide you with a nicely formatted diff",
+   "devtools_page": "devtools.html",
+   "icons": {
+      "128": "icon-128.png",
+      "48": "icon-48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoNtZeX3oS/uZaEm758BwX+5ah1cEJb5mDioetAGe6UydfFDjbk3YKQ/vr8xkJFzlv93dN/Z9N38iJtEf60J3BFIJ+GjtTaVikhhZZo2icIF7gk1z0iJ10oSL2m7kku99bjLreU4ztcWNJG8V+7rWQrK6wwZ8YyemaOs+h0rFCsG/KUDGieL5ig0T0AxPqs/bQvVHGVGAxV9N9FLU9/UAhBouwjTIuoRJ9GOLsjA6v/jmjKgBtAagW+mIUm6v/oHXrNswDizseeedIloqro1knFGqxQ8KxMkw+VggEq7CJX6ZK8Jt4LS9OuILLeGwQhESkEbUF4lKK0EGlWVWH+YJ7QIDAQAB",
+   "manifest_version": 2,
+   "name": "CSS Diff",
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.0"
+}

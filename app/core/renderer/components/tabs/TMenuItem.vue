@@ -42,6 +42,10 @@ const props = defineProps({
   },
   route: {
     type: String
+  },
+  nonStyle: {
+    type: Boolean,
+    default: false
   }
 })
 

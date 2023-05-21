@@ -109,17 +109,12 @@ export default defineComponent({
 
       watch(router.currentRoute, (c) => {
 
-        console.log(map)
-
         // const tab = defaultSlots.find(slot => slot.props.route === c.path)
         const tab = map[c.path]
 
         if (tab) {
           activeNode.value = tab
-          nextTick(() => {
-            fixPointer(tab)
-            console.log(tab)
-          })
+          nextTick(fixPointer.bind(null, tab))
         }
       }, { lazy: true })
 

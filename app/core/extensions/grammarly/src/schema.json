@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "GrammarlyEnrollmentToken": {
+      "description": "By default, Grammarly’s extension is enabled for all users. To disable the extension for all users except those who are logged in to your Grammarly Business account, specify your organization ID in this property.",
+      "type": "string"
+    },
+    "GrammarlyBlockedClients": {
+      "description": "A comma-separated list of blocked clients.",
+      "type": "string"
+    },
+    "GrammarlyBlockedDomains": {
+      "description": "A comma-separated list of blocked domains.",
+      "type": "string"
+    },
+    "GrammarlyConfidentialModeEnabled": {
+      "description": "Enables the confidential mode support for GMail.",
+      "type": "boolean"
+    },
+    "GrammarlyDlpEnabled": {
+      "description": "Enables the data leak/loss prevention capabilities.",
+      "type": "boolean"
+    },
+    "GrammarlyExtensionMode": {
+      "description": "Enables type of extension work with desktop integration full or limited",
+      "type": "string"
+    }
+  }
+}
