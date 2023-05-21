@@ -29,7 +29,7 @@ jobs:
         run: pnpm -F docs install --no-frozen-lockfile
     
       - name: Build VitePress
-        run: pnpm run docs:build
+        run: pnpm -F docs run build
       
       - name: Deploy to Pages
         run: |
