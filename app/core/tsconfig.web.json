@@ -23,5 +23,5 @@
     "emitDeclarationOnly": true,
     "skipLibCheck": true
   },
-  "include": ["renderer/**/*", "renderer/modules/channel", "renderer/assets/**/*"],
+  "include": ["renderer/**/*.*", "renderer/modules/channel", "renderer/assets/**/*"],
 }

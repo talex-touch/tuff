@@ -1,0 +1,8 @@
+/**
+ * Allows to control the order in which subscriptions are made.
+ *
+ * Taken from @see https://github.com/cartant/rxjs-etc/blob/main/source/operators/prioritize.ts
+ *
+ * @license Use of this source code is governed by an MIT-style license that
+ * can be found in the LICENSE file at https://github.com/cartant/rxjs-etc
+ */

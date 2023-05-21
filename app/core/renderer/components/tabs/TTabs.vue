@@ -1,5 +1,5 @@
-<script>
-import { h, nextTick, ref } from 'vue'
+<script lang="jsx">
+import { h, nextTick, ref, defineComponent } from 'vue'
 import TTabItem from '@comp/tabs/TTabItem.vue'
 import { sleep } from 'utils/common'
 import TTabHeader from '@comp/tabs/TTabHeader.vue'
@@ -10,9 +10,8 @@ const qualifiedName = ['TTabItem', 'TTabItemGroup', 'TTabHeader']
 const activeNode = ref()
 
 const slotWrapper = ref()
-// const nodeHistory = reactive([])
 
-export default {
+export default defineComponent({
   name: "TTabs",
   props: ['default', 'offset'],
   render() {
@@ -23,7 +22,7 @@ export default {
     async function fixPointer(vnode) {
       const pointerEl = pointer.el
       const nodeEl = vnode.el
-      if( !pointerEl || !nodeEl ) return
+      if (!pointerEl || !nodeEl) return
 
       const pointerStyle = pointerEl.style
 
@@ -32,7 +31,7 @@ export default {
 
       const diffTop = that?.$props?.hasOwnProperty('offset') ? +that.$props.offset : -70
 
-      if( nodeRect.top > pointerRect.top ) {
+      if (nodeRect.top > pointerRect.top) {
 
         pointerStyle.height = (nodeRect.height * 0.8) + 'px'
         pointerStyle.transition = 'all 0'
@@ -64,7 +63,7 @@ export default {
 
         await sleep(100)
         pointerStyle.transform = ''
-        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) + diffTop ) + 'px'
+        pointerStyle.top = (nodeRect.top + (nodeRect.height * 0.2) + diffTop) + 'px'
 
         await sleep(100)
 
@@ -88,7 +87,7 @@ export default {
         const tab = h(TTabItem, {
           active: () => activeNode.value?.props.name === vnode.props.name, ...vnode.props,
           onClick: () => {
-            if( vnode.props.hasOwnProperty('disabled') ) return
+            if (vnode.props.hasOwnProperty('disabled')) return
 
             const el = slotWrapper.value.el
             const clsL = el.classList
@@ -105,7 +104,7 @@ export default {
           }
         })
 
-        if ( !activeNode.value && tab.props.hasOwnProperty('activation') ) {
+        if (!activeNode.value && tab.props.hasOwnProperty('activation')) {
           activeNode.value = vnode
           nextTick(() => {
             fixPointer(tab)
@@ -126,13 +125,13 @@ export default {
       }
 
       return that.$slots.default().filter(slot => slot.type.name && qualifiedName.includes(slot.type.name))
-          .map(child => child.type.name === "TTabHeader" ? (() => {
-            tabHeader = child
-            return null
-          })() : (child.type.name === "TTabItemGroup" ?
-              h('div', { class: 'TTabs-TabGroup' },
-                  [ h('div', { class: 'TTabs-TabGroup-Name' }, child.props.name), child.children.default()?.map(getTab) ])
-              : getTab(child)))
+        .map(child => child.type.name === "TTabHeader" ? (() => {
+          tabHeader = child
+          return null
+        })() : (child.type.name === "TTabItemGroup" ?
+          h('div', { class: 'TTabs-TabGroup' },
+            [h('div', { class: 'TTabs-TabGroup-Name' }, child.props.name), child.children.default()?.map(getTab)])
+          : getTab(child)))
 
     }
 
@@ -143,8 +142,8 @@ export default {
         const def = h('div', { class: 'TTabs-ContentWrapper' }, activeNode.value.children.default())
         const content = h(ElScrollbar, {}, def)
         //
-        return (tabHeader ? [ h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), content ]
-            : content)
+        return (tabHeader ? [h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), content]
+          : content)
 
         // const content = (tabHeader ? [ h(TTabHeader, tabHeader.children.default({ ...tabHeader.props, node: activeNode.value })), def ]
         //     : def)
@@ -153,20 +152,50 @@ export default {
       }
 
       return slotWrapper.value = h('div', { class: 'TTabs-SelectSlot animated' },
-          activeNode.value ? getSlotContent(activeNode.value) : h('div', {
-            class: 'TTabs-SelectSlot-Empty'
-          }, $t('base.empty-select'))
+        activeNode.value ? getSlotContent(activeNode.value) : h('div', {
+          class: 'TTabs-SelectSlot-Empty'
+        }, $t('base.empty-select'))
       )
 
     }
 
-    return h('div', { class: 'TTabs-Container' }, [ h('div', { class: 'TTabs-Header' }, [that.$slots?.tabHeader?.(), getTabs()]),
-      h('div', { class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '') }, getSelectSlotContent() ),
-      pointer
-    ])
+    // return h('div', { class: 'TTabs-Container' }, {
+    //   default: () => [h('div', { class: 'TTabs-Header' }, [that.$slots?.tabHeader?.(), getTabs()]),
+    //   h('div', { class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '') }, getSelectSlotContent()),
+    //     pointer
+    //   ]
+    // })
+
+    // [h('div', { class: 'TTabs-Header' }, [that.$slots?.tabHeader?.(), getTabs()]),
+    //   h('div', { class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '') }, getSelectSlotContent()),
+    //     pointer
+
+    return (
+      <>
+        <div class="TTabs-Container">
+          {{
+            default: () => [h('div', { class: 'TTabs-Header' }, [that.$slots?.tabHeader?.(), getTabs()]),
+            h('div', { class: 'TTabs-Main' + (tabHeader ? ' header-mode' : '') }, getSelectSlotContent()),
+              pointer
+            ]
+          }}
+          {/* <div class="TTabs-Header">
+            {{
+              default: () => [that.$slots?.tabHeader?.(), getTabs()]
+            }}
+          </div>
+          <div class={'TTabs-Main' + (tabHeader ? ' header-mode' : '')}>
+            {{
+              default: () => getSelectSlotContent()
+            }}
+          </div>
+          {pointer} */}
+        </div>
+      </>
+    )
 
   }
-}
+})
 </script>
 
 <style lang="scss" scoped>
@@ -174,6 +203,7 @@ export default {
   :deep(.el-scrollbar__view) {
     min-height: 100%;
   }
+
   //padding: 0 10px;
 
   width: 100%;
@@ -250,8 +280,10 @@ export default {
     &:before {
       opacity: .4;
     }
+
     //backdrop-filter: saturate(180%) blur(10px) brightness(95%);
   }
+
   &:before {
     opacity: .4;
   }
@@ -273,6 +305,7 @@ export default {
       border-radius: 4px 4px 0 0;
       background-color: var(--el-fill-color-dark);
     }
+
     z-index: 0;
     position: absolute;
     padding: 4px 12px;
@@ -287,6 +320,7 @@ export default {
     font-weight: 600;
     border-radius: 8px 8px 0 0;
   }
+
   &:before {
     content: "";
     position: absolute;
@@ -300,6 +334,7 @@ export default {
     border-radius: 0 0 4px 4px;
     background-color: var(--el-fill-color);
   }
+
   position: relative;
   padding-top: 10px;
   margin-top: 30px;
@@ -320,6 +355,7 @@ export default {
       flex-direction: column;
       justify-content: unset;
     }
+
     position: relative;
     flex: 1;
 
@@ -327,6 +363,7 @@ export default {
 
     box-sizing: border-box;
   }
+
   &:before {
     content: "";
     position: absolute;
@@ -339,6 +376,7 @@ export default {
 
     background-color: var(--el-fill-color-light);
   }
+
   position: relative;
   display: flex;
 
