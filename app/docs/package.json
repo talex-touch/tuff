@@ -1,0 +1,19 @@
+{
+  "name": "docs",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "serve": "vitepress serve"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "markdown-it": "^13.0.1",
+    "vitepress": "1.0.0-alpha.47",
+    "vue": "^3.2.47"
+  },
+  "devDependencies": {
+    "fighting-design": "0.25.1",
+    "sass": "^1.54.9",
+    "vite": "^3.0.9"
+  }
+}

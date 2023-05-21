@@ -2,3 +2,4 @@ packages:
   - 'packages/**'
   - 'app/**'
   # - 'plugins/**'
+  - '!app/core/extensions/**'

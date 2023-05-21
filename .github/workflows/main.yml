@@ -1,4 +1,4 @@
-name: pushDocs
+name: Deploy to Github Pages
 
 on:
   push:
@@ -26,14 +26,14 @@ jobs:
         run: npm install -g pnpm  
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm -F docs install --no-frozen-lockfile
     
       - name: Build VitePress
         run: pnpm run docs:build
       
       - name: Deploy to Pages
         run: |
-          cd docs/dist 
+          cd app/docs/.vitepress/dist 
           git init
           git config user.name "GITHUB_AUTO_WORKFLOWS"
           git config user.email "${{ secrets.GIT_EMAIL }}"

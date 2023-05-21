@@ -137,7 +137,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   minimize(): void {
     this.window.minimize();
   }
-  openDevTools(options?: Electron.OpenDevToolsOptions): void {
+  openDevTools(options?: OpenDevToolsOptions): void {
     this.window.webContents.openDevTools(options);
   }
 

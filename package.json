@@ -16,6 +16,7 @@
   },
   "scripts": {
     "test:utils": "pnpm -F test run test",
-    "dev:core": "pnpm -F core run dev"
+    "dev:core": "pnpm -F core run dev",
+    "build:docs": "pnpm -F docs run build"
   }
 }

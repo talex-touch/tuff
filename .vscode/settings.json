@@ -4,8 +4,10 @@
     "httpreferrer",
     "lotties",
     "nodeintegration",
+    "OPPO",
     "saveall",
     "webpreferences",
     "websecurity"
-  ]
+  ],
+  "debug.console.acceptSuggestionOnEnter": "on"
 }
