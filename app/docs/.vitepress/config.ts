@@ -11,6 +11,9 @@ import type MarkdownIt from "markdown-it";
  */
 export default defineConfig({
   title: "TalexTouch",
+  base: "/talex-touch/",
+  head: [["meta", { name: "theme-color", content: "#0c9dff" }]],
+  lang: "en-US",
   /**
    * 是否显示最后更新时间
    *
@@ -57,6 +60,7 @@ export default defineConfig({
    * @see markdown https://vitepress.vuejs.org/config/app-configs#markdown
    */
   markdown: {
+    lineNumbers: true,
     /**
      * 配置 Markdown-it 实例
      *
