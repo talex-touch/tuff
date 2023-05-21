@@ -18,7 +18,7 @@ export default {
 </script>
 
 <script setup>
-import { useModelWrapper } from "@modules/utils";
+import { useModelWrapper } from 'utils/renderer/ref';
 
 const props = defineProps({
   modelValue: {

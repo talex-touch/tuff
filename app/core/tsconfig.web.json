@@ -13,16 +13,15 @@
     "strict": false,
     "paths": {
       "~/*": ["./*"],
-      "@assets/*": ["./assets/*"],
+      "@assets/*": ["./renderer/assets/*"],
       "@comp/*": ["./renderer/components/*"],
       "@modules/*": ["./renderer/modules/*"],
       "@styles/*": ["./renderer/styles/*"]
     },
     "allowSyntheticDefaultImports": true,
-    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "emitDeclarationOnly": true,
+    "skipLibCheck": true
   },
-  "include": [
-    "renderer/**/*",
-    "assets/**/*"
-   ],
+  "include": ["renderer/**/*", "renderer/modules/channel", "renderer/assets/**/*"],
 }

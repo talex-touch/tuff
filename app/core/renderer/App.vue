@@ -1,21 +1,17 @@
 <template>
-  <AppLayout />
+ <AppLayout />
 
-  <FirstInit v-if="first" />
-
-<!--  <video id="video" autoplay muted playsinline></video>-->
 </template>
 
 <script name="App" setup>
 import AppLayout from '@comp/base/AppLayout.vue'
-import { onMounted, provide, ref, watch } from "vue";
-import FirstInit from "~/first/FirstInit.vue";
+import { provide, ref, watch } from "vue";
 import {
   applicationUpgrade,
   clipBoardResolver,
   dropperResolver
 } from "@modules/hooks/applicatoin-hooks";
-import { pluginManager } from "@modules/samples/node-api";
+import { pluginManager  } from '@modules/channel/plugin-core/api'
 import { useRouter, useRoute } from "vue-router";
 
 const route = useRoute()
@@ -26,9 +22,6 @@ watch(() => activePlugin.value, pluginManager.changeActivePlugin, { immediate: t
 
 provide("activePlugin", activePlugin)
 
-const first = ref(false)
-provide('closeGuidance', () => first.value = false)
-
 onMounted(() => {
   applicationUpgrade()
   clipBoardResolver()
@@ -36,19 +29,8 @@ onMounted(() => {
   // screenCapture()
 })
 
-document.onfocus = () => {
-  first.value = window._firstInit
-}
 </script>
 
 <style lang="scss">
-#video {
-  z-index: 10000;
-  position: absolute;
 
-  top: 0;
-  left: 0;
-
-
-}
 </style>

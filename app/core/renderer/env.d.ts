@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
-import { BaseNodeApi } from '@modules/samples/node-api'
-import { StorageManager } from '@modules/storage'
+import { BaseNodeApi } from '@modules/channel/main/node'
+import { StorageManager } from './modules/channel/storage'
 import { I18n } from 'vue-i18n'
 
 declare module '*.vue' {

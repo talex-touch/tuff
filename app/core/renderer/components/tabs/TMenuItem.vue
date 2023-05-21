@@ -18,7 +18,6 @@ export default {
 
 <script setup>
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { ref, watchEffect } from 'vue'
 import { useRouter } from "vue-router";
 
 const props = defineProps({

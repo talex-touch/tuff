@@ -47,6 +47,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 export interface IPluginManager {
   plugins: Map<string, ITouchPlugin>
   active: string | null
+  pluginPath: string
 
   setActivePlugin(pluginName: string): boolean
   

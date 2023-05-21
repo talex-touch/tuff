@@ -15,6 +15,7 @@
     "vitest": "^0.31.0"
   },
   "scripts": {
-    "test:utils": "pnpm -F test run test"
+    "test:utils": "pnpm -F test run test",
+    "dev:core": "pnpm -F core run dev"
   }
 }

@@ -24,7 +24,7 @@ export default {
 
 <script setup>
 import { defineComponent, onMounted, provide, ref } from "vue";
-import {sleep} from "@modules/utils";
+import {sleep} from "utils/common";
 import { $t } from '@modules/lang'
 
 const close = ref(false)

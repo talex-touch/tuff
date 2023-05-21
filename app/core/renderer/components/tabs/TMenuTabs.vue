@@ -1,12 +1,13 @@
 <script>
-import { h, nextTick, ref } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import TMenuItem from '@comp/tabs/TMenuItem.vue'
-import { sleep } from '@modules/utils'
+import { sleep } from 'utils/common'
+import router from '~/base/router'
 
 const qualifiedName = ['TMenuItem']
 const activeNode = ref()
 
-export default {
+export default defineComponent({
   name: "TMenuTabs",
   props: ['default'],
   render() {
@@ -16,7 +17,7 @@ export default {
     async function fixPointer(vnode) {
       const pointerEl = pointer.el
       const nodeEl = vnode.el
-      if( !pointerEl || !nodeEl ) return
+      if (!pointerEl || !nodeEl) return
 
       const pointerStyle = pointerEl.style
 
@@ -25,7 +26,7 @@ export default {
 
       const diffTop = -105
 
-      if( nodeRect.top > pointerRect.top ) {
+      if (nodeRect.top > pointerRect.top) {
 
         pointerStyle.height = (nodeRect.height * 0.8) + 'px'
         pointerStyle.transition = 'all 0'
@@ -74,12 +75,15 @@ export default {
 
     function getTabs() {
 
+      const defaultSlots = that.$slots.default()
+      const map = {}
+
       function getTab(vnode) {
 
         const tab = h(TMenuItem, {
           active: () => activeNode.value?.props.name === vnode.props.name, ...vnode.props,
           onClick: () => {
-            if( vnode.props.hasOwnProperty('disabled') ) return
+            if (vnode.props.hasOwnProperty('disabled')) return
 
             activeNode.value = vnode
 
@@ -89,28 +93,47 @@ export default {
           }
         })
 
-        if ( !activeNode.value && tab.props.hasOwnProperty('activation') ) {
+        map[vnode.props.route] = tab
+
+        nextTick(() => {
+          if (!activeNode.value && tab.props.hasOwnProperty('activation')) {
           activeNode.value = vnode
           nextTick(() => {
             fixPointer(tab)
           })
         }
+        })
 
         return tab
       }
 
-      return that.$slots.default().filter(slot => slot.type.name && qualifiedName.includes(slot.type.name)).map(getTab)
+      watch(router.currentRoute, (c) => {
+
+        console.log(map)
+
+        // const tab = defaultSlots.find(slot => slot.props.route === c.path)
+        const tab = map[c.path]
+
+        if (tab) {
+          activeNode.value = tab
+          nextTick(() => {
+            fixPointer(tab)
+            console.log(tab)
+          })
+        }
+      }, { lazy: true })
+
+      return defaultSlots.filter(slot => slot.type.name && qualifiedName.includes(slot.type.name)).map(getTab)
 
     }
 
-    return h('div', { class: 'TMenuTabs-Container' }, [ getTabs(), pointer ])
+    return h('div', { class: 'TMenuTabs-Container' }, [getTabs(), pointer])
 
   }
-}
+})
 </script>
 
 <style lang="scss" scoped>
-
 .TTabs-Pointer {
   position: absolute;
 

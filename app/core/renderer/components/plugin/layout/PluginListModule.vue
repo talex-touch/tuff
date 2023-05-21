@@ -37,7 +37,7 @@ export default {
 
 <script setup>
 import PluginIcon from "@comp/plugin/PluginIcon.vue";
-import { useModelWrapper } from "@modules/utils";
+import { useModelWrapper } from 'utils/renderer/ref';
 import PluginStatus from "@comp/plugin/action/PluginStatus.vue";
 
 const props = defineProps(['modelValue', 'plugins', 'shrink'])

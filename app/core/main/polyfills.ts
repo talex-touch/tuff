@@ -3,11 +3,11 @@ import { nowTime } from './utils/common-util'
 const originalConsoleLog = console.log;
 
 // define a new output
-console.log = function(...args) {
+// console.log = function(...args) {
 
-    originalConsoleLog(`[${nowTime()}]`, "[INFO]", ...args)
+//     originalConsoleLog(`[${nowTime()}]`, "[INFO]", ...args)
 
-}
+// }
 
 // process.on('uncaughtException', (error, origin) => {
 //     console.error("[TalexTouch-ErrorUncaught]", error, origin)

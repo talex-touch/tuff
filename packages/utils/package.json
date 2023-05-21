@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "description": "TalexTouch series utils",
   "main": "./index.ts",
-  "module": "./index.ts"
+  "module": "./index.ts",
+  "dependencies": {
+    "vue": "^3.2.47"
+  }
 }

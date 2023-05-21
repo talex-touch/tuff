@@ -27,7 +27,8 @@ export default {
 <script setup>
 import TSwitch from '@comp/base/switch/TSwitch.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { sleep, useModelWrapper } from '@modules/utils'
+import { sleep } from 'utils/common'
+import { useModelWrapper } from 'utils/renderer/ref'
 import { nextTick, ref, watch } from 'vue'
 import { $t } from '@modules/lang'
 

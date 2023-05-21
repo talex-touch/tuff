@@ -32,13 +32,30 @@ if (process.platform === "win32") app.setAppUserModelId(app.getName());
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
+} else {
+  app.addListener(
+    "second-instance",
+    (event, argv, workingDirectory, additionalData) =>
+      touchEventBus.emit(
+        TalexEvents.APP_SECONDARY_LAUNCH,
+        new AppSecondaryLaunch(event, argv, workingDirectory, additionalData)
+      )
+  );
 }
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
 
 app.addListener("ready", (event, launchInfo) =>
   touchEventBus.emit(
     TalexEvents.APP_READY,
     new AppReadyEvent(event, launchInfo)
   )
+);
+
+app.on("before-quit", (event) =>
+  touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
 );
 
 class TouchApp implements TalexTouch.TouchApp {
@@ -68,37 +85,15 @@ class TouchApp implements TalexTouch.TouchApp {
     this.moduleManager = new ModuleManager(this, this.channel);
     this.config = new TouchConfig(this);
 
-    this.__init__();
-    console.log("[TouchApp] TouchApp initialized!")
+    this.__init__().then(() => {
+      console.log("[TouchApp] TouchApp initialized!");
+    });
   }
 
   async __init__() {
     touchEventBus.emit(TalexEvents.APP_START, new AppStartEvent());
 
     checkDirWithCreate(this.rootPath, true);
-
-    app.on("window-all-closed", () => {
-      if (process.platform !== "darwin") app.quit();
-    });
-
-    app.on("before-quit", (event) =>
-      touchEventBus.emit(
-        TalexEvents.BEFORE_APP_QUIT,
-        new BeforeAppQuitEvent(event)
-      )
-    );
-
-    this.app.addListener("ready", () =>
-      touchEventBus.emit(TalexEvents.APP_READY, new BeforeAppStartEvent())
-    );
-    this.app.addListener(
-      "second-instance",
-      (event, argv, workingDirectory, additionalData) =>
-        touchEventBus.emit(
-          TalexEvents.APP_SECONDARY_LAUNCH,
-          new AppSecondaryLaunch(event, argv, workingDirectory, additionalData)
-        )
-    );
 
     let webContents: Electron.WebContents;
 
@@ -107,11 +102,15 @@ class TouchApp implements TalexTouch.TouchApp {
         path.join(__dirname, "../renderer/index.html")
       );
     } else {
-      webContents = await this.window.loadURL(
-        process.env["ELECTRON_RENDERER_URL"] as string,
-        { devtools: true }
-      );
+      const url = process.env["ELECTRON_RENDERER_URL"] as string;
+
+      this.window.window.show();
+      console.log("[TouchApp] Loading (mainWindow) webContents from: " + url);
+
+      webContents = await this.window.loadURL(url, { devtools: true });
     }
+
+    console.log("[TouchApp] WebContents loaded!");
 
     webContents.addListener("did-finish-load", () => {
       webContents.executeJavaScript(
@@ -127,7 +126,9 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   constructor(options?: BrowserWindowConstructorOptions) {
     this.window = new BrowserWindow(options);
 
-    this.window.once("ready-to-show", () => this.window.show());
+    this.window.once("ready-to-show", () => {
+      this.window.show();
+    });
   }
 
   close(): void {
@@ -147,12 +148,15 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     return new Promise(async (resolve) => {
       await this.window.loadURL(url, options);
 
-      if (options?.devtools)
+      if (options && options.devtools)
         this.window.webContents.openDevTools({
           mode: options.devtools === true ? "detach" : options.devtools,
         });
 
-        this.window.show()
+      this.window.webContents.addListener("crashed", (e, k) => {
+        console.error(e, k);
+        console.log("TouchWindow WebContents crashed!", this);
+      });
 
       resolve(this.window.webContents);
     });
@@ -165,10 +169,15 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     return new Promise(async (resolve) => {
       await this.window.loadFile(filePath, options);
 
-      if (options?.devtools)
+      if (options && options.devtools)
         this.window.webContents.openDevTools({
           mode: options.devtools === true ? "detach" : options.devtools,
         });
+
+      this.window.webContents.addListener("crashed", (e, k) => {
+        console.error(e, k);
+        console.log("TouchWindow WebContents crashed!", this);
+      });
 
       resolve(this.window.webContents);
     });
@@ -196,8 +205,15 @@ class ModuleManager implements TalexTouch.IModuleManager {
     } else
       return (() => {
         checkDirWithCreate(
-          path.join(this.modulePath, module.filePath || module.name.description),
+          path.join(
+            this.modulePath,
+            module.filePath || module.name.description
+          ),
           true
+        );
+
+        console.log(
+          `[ModuleManager] Loading module ${module.name.description}`
         );
 
         setTimeout(module.init.bind(module, touchApp, touchApp.moduleManager));
@@ -220,10 +236,10 @@ class ModuleManager implements TalexTouch.IModuleManager {
 }
 
 class TouchConfig implements TalexTouch.IConfiguration {
-  configPath: string
+  configPath: string;
 
   constructor(touchApp: TouchApp) {
-    this.configPath = path.join(touchApp.rootPath, "config")
+    this.configPath = path.join(touchApp.rootPath, "config");
     checkDirWithCreate(this.configPath, true);
 
     if (fse.existsSync(path.resolve(this.configPath, "dev.talex"))) {

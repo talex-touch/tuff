@@ -29,12 +29,12 @@ class TouchChannel implements ITouchChannel {
     if ( this.app.version === TalexTouch.AppVersion.DEV )
       console.log("Raw data: ", arg, e);
     if (arg) {
-      const { header, code, plugin, data, sync } = arg;
+      const { name, header, code, plugin, data, sync } = arg;
 
       if ( header ) {
         return {
           header: {
-            status: "request",
+            status: header.status || "request",
             type: plugin ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
           },
@@ -42,7 +42,7 @@ class TouchChannel implements ITouchChannel {
           code,
           data,
           plugin,
-          name: header.name as string,
+          name: name as string,
         };
       }
     }
@@ -65,12 +65,18 @@ class TouchChannel implements ITouchChannel {
     map.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any, options: any) => {
-          e.sender.send(
-            `@${
-              rawData.header.type === ChannelType.MAIN ? "main" : "plugin"
-            }-process-message`,
-            this.__parse_sender(code, data, rawData.sync)
-          );
+          const rData = this.__parse_sender(code, rawData, data, rawData.sync)
+
+          console.log("Reply data: ", rData)
+
+          if ( rawData.sync ) {
+            e.sender.send(
+              `@${
+                /* rawData.header.type ===  */ChannelType.MAIN/*  ? "main" : "plugin" */
+              }-process-message`,
+              rData
+            )
+          } else e.returnValue = rData
         },
         ...rawData,
       };
@@ -85,10 +91,12 @@ class TouchChannel implements ITouchChannel {
 
   __parse_sender(
     code: DataCode,
-    rawData: StandardChannelData,
+    rawData: RawStandardChannelData,
     data: any,
     sync?: RawChannelSyncData
   ): RawStandardChannelData {
+    if ( !rawData || !rawData.header )
+      throw new Error("Invalid data!" + JSON.stringify(rawData));
     return {
       code,
       data,
@@ -121,6 +129,8 @@ class TouchChannel implements ITouchChannel {
     if (!listeners.includes(callback)) {
       listeners.push(callback);
     } else return undefined;
+
+    map.set(eventName, listeners);
 
     return () => {
       const index = listeners.indexOf(callback);

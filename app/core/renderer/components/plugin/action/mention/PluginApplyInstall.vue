@@ -31,7 +31,7 @@ import { blowMention } from "@modules/mention/dialog-mention";
 import { asyncMainProcessMessage } from "@modules/samples/node-api";
 import Loading from '@assets/lotties/compress-loading.json'
 import LottieFrame from "@comp/icon/lotties/LottieFrame.vue";
-import { sleep } from "@modules/utils";
+import { sleep } from 'utils/common';
 import FlatButton from "@comp/base/button/FlatButton.vue";
 
 const props = defineProps(["manifest", "path"])

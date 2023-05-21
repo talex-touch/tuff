@@ -4,6 +4,8 @@ export const AppName = "TalexTouch"
 
 export const APP_FOLDER_NAME = 'talex-touch'
 
+export const APP_SCHEMA = 'talex-touch'
+
 export const MainWindowOption = {
     title: AppName,
     icon: appIcon,

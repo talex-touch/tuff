@@ -139,6 +139,8 @@ export class AppSecondaryLaunch implements ITouchEvent<TalexEvents> {
         this.argv = argv;
         this.cwd = cwd;
         this.data = data;
+
+        console.log('AppSecondaryLaunch', this)
     }
 
 }

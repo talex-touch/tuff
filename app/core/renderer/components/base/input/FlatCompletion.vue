@@ -17,8 +17,9 @@
 
 <script setup name="FlatCompletion">
 import FlatInput from "@comp/base/input/FlatInput.vue";
-import { sleep, useModelWrapper } from "@modules/utils";
-import { useFloating, autoUpdate, flip, shift, computePosition } from '@floating-ui/vue'
+import { sleep } from "utils/common";
+import { useModelWrapper } from 'utils/renderer/ref';
+import { computePosition } from '@floating-ui/vue'
 
 const props = defineProps({
   icon: {

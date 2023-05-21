@@ -33,7 +33,7 @@ export default {
 
 <script setup>
 import { onMounted, provide, reactive, ref } from "vue";
-import {sleep} from "@modules/utils";
+import { sleep } from 'utils/common';
 import AccountView from "~/views/others/account/AccountView.vue";
 // import AccountView from "~/views/others/account/SignSucceed.vue";
 import LoadingIcon from "@comp/icon/LoadingIcon.vue";

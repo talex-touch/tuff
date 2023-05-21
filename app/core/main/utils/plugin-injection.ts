@@ -1,9 +1,9 @@
-import { getConfig } from '../core/storage'
+import Storage from '../core/storage'
 
 export function getJs(options) {
     const [name, _path] = options
 
-    const themeConfig = getConfig('theme-style.ini')
+    const themeConfig = Storage['getConfig']('theme-style.ini')
 
     return `
         !(() => {

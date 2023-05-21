@@ -17,7 +17,7 @@ import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx } from '@milkdow
 import { nord } from '@milkdown/theme-nord'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { onMounted, ref } from "vue";
-import { useModelWrapper } from "@modules/utils";
+import { useModelWrapper } from 'utils/renderer/ref';
 import '@milkdown/theme-nord/style.css'
 
 const props = defineProps(["modelValue", "readonly"])

@@ -24,7 +24,7 @@ export default {
 <script setup>
 import TSelect from '@comp/base/select/TSelect.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { useModelWrapper } from '@modules/utils'
+import { useModelWrapper } from 'utils/renderer/ref'
 import { watch } from 'vue'
 
 const props = defineProps({

@@ -11,8 +11,7 @@ export default {
 </script>
 
 <script setup>
-
-import { useModelWrapper } from '@modules/utils'
+import { useModelWrapper } from 'utils/renderer/ref'
 import { watch } from 'vue'
 
 const props = defineProps(['modelValue', 'disabled'])

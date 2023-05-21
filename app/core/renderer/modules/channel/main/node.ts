@@ -1,0 +1,30 @@
+import { touchChannel } from "@modules/channel/channel-core";
+
+export class BaseNodeApi {
+  
+  close() {
+    return touchChannel.send("close");
+  }
+
+  minimize() {
+    return touchChannel.send("minimize");
+  }
+
+  openDevTools() {
+    return touchChannel.send("dev-tools");
+  }
+
+  openExternal(url: string) {
+    return touchChannel.send("open-external", { url });
+  }
+
+  getPackageJSON() {
+    return touchChannel.sendSync("get-package");
+  }
+
+  getCWD() {
+    return touchChannel.sendSync("common:cwd");
+  }
+}
+
+export const baseNodeApi = new BaseNodeApi();

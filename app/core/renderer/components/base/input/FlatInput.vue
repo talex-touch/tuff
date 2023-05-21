@@ -20,7 +20,7 @@ export default {
 
 <script setup>
 import RemixIcon from "@comp/icon/RemixIcon.vue";
-import { useModelWrapper } from "@modules/utils";
+import { useModelWrapper } from 'utils/renderer/ref';
 import { ref } from "vue";
 
 const props = defineProps(['icon', 'password', 'modelValue'])

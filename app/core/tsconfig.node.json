@@ -12,7 +12,6 @@
     "declarationMap": true,
     "paths": {
       "~/*": ["./*"],
-      "@assets/*": ["./assets/*"],
       "@addon/*": ["./main/addon/*"],
       "@config/*": ["./main/config/*"],
       "@utils/*": ["./main/utils/*"],

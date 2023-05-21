@@ -12,12 +12,12 @@
       <div v-else class="Pack-Compressing">
         <LogTerminal :logs="pluginWrapper.log" />
         <div class="Pack-Progressing" :style="`--p: ${pluginWrapper.p.p}%`">
-           <div>
-             <span v-if="pluginWrapper?.p?.p">
-             {{ (pluginWrapper.p.p)?.toFixed?.(4) }} %
-           </span>
-             <PluginExportMention />
-           </div>
+          <div>
+            <span v-if="pluginWrapper?.p?.p">
+              {{ (pluginWrapper.p.p)?.toFixed?.(4) }} %
+            </span>
+            <PluginExportMention />
+          </div>
         </div>
       </div>
     </div>
@@ -33,13 +33,11 @@ export default {
 
 <script setup>
 import { genFileAdpoter, pluginPath } from "@modules/hooks/adopters/file-adpoters";
-import { useModelWrapper } from "@modules/utils";
+import { useModelWrapper } from 'utils/renderer/ref';
 import { reactive, ref } from "vue";
 import FileTree from "@comp/tree/FileTree.vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import { pluginManager, registerTypeProcess } from "@modules/samples/node-api";
-import LottieFrame from "@comp/icon/lotties/LottieFrame.vue";
-import compressing from "@assets/lotties/compress-loading.json"
+import { pluginManager } from "@modules/channel/plugin-core/api";
 import { blowMention } from "@modules/mention/dialog-mention";
 import PluginExportMention from "@comp/plugin/action/mention/PluginExportMention.vue";
 import LogTerminal from "@comp/terminal/LogTerminal.vue";
@@ -55,7 +53,7 @@ const pluginWrapper = reactive({
   packaging: false,
   name: props.plugin.pluginInfo.name,
   manifest: props.plugin.pluginInfo,
-  files: [ 'init.json', 'index.html' ],
+  files: ['init.json', 'index.html'],
   p: {
     n: 0,
     m: 0,
@@ -67,7 +65,7 @@ const pluginWrapper = reactive({
 registerTypeProcess('plugin-packager-progress-log/' + pluginWrapper.name, ({ data }) => {
   pluginWrapper.packaging = true
 
-  console.log( data )
+  console.log(data)
 
   pluginWrapper.log.push(data.log)
 })
@@ -79,20 +77,20 @@ registerTypeProcess('plugin-packager-progress/' + pluginWrapper.name, ({ data })
 
   const _p = ((data.received / data.total) * 100).toFixed(7)
 
-  console.log( _p )
+  console.log(_p)
 
   pluginWrapper.p.p = _p
 })
 
 let suc = false
 registerTypeProcess('plugin-packager', async ({ data }) => {
-  if ( suc ) return
+  if (suc) return
   suc = true
-  if ( !pluginWrapper.packaging ) return suc = false
-  if ( data.plugin === pluginWrapper.name ) {
+  if (!pluginWrapper.packaging) return suc = false
+  if (data.plugin === pluginWrapper.name) {
     // pluginWrapper.packaging = false
 
-    if ( data.status === 'success' ) {
+    if (data.status === 'success') {
       await blowMention('success', '导出成功！')
     } else {
       await blowMention('error', '导出失败！')
@@ -117,6 +115,7 @@ function pack() {
   from {
     background-position: 200% 100%;
   }
+
   to {
     background-position: 0 100%;
   }
@@ -127,6 +126,7 @@ function pack() {
     span {
       font-size: 12px;
     }
+
     position: relative;
     display: flex;
     flex-direction: row-reverse;
@@ -135,6 +135,7 @@ function pack() {
 
     justify-content: space-between;
   }
+
   &:before {
     content: "";
     position: absolute;
@@ -148,6 +149,7 @@ function pack() {
     transition: .25s linear;
     background-color: var(--el-color-primary-light-3);
   }
+
   &:after {
     content: "";
     position: absolute;
@@ -165,6 +167,7 @@ function pack() {
 
     animation: waving 1s linear infinite;
   }
+
   z-index: 1000;
   position: absolute;
 
@@ -181,6 +184,7 @@ function pack() {
   :deep(.LogTerminal-Container) {
     height: calc(100% - 30px);
   }
+
   position: relative;
 
   width: 100%;
@@ -206,6 +210,7 @@ function pack() {
     pointer-events: all;
     transform: translate(0, 0) scale(1);
   }
+
   .PluginWrapper-Referrer {
     &:hover {
       opacity: 1;
@@ -213,6 +218,7 @@ function pack() {
       height: 8px;
       width: 120px;
     }
+
     position: absolute;
 
     top: 5px;
@@ -229,10 +235,12 @@ function pack() {
     transform: translate(-50%, 0);
     transition: .25s;
   }
+
   :deep(.pack-alert) {
     &:hover {
       opacity: .25;
     }
+
     z-index: 1;
     position: relative;
 
@@ -240,6 +248,7 @@ function pack() {
 
     background-color: var(--el-fill-color-darker);
   }
+
   z-index: 1000;
   position: absolute;
   padding-top: 15px;
@@ -263,6 +272,7 @@ function pack() {
   .Pack-Main {
     height: calc(100% - 35px);
   }
+
   position: relative;
   padding: 1% 2%;
 
@@ -270,5 +280,4 @@ function pack() {
   height: 100%;
 
   box-sizing: border-box;
-}
-</style>
+}</style>

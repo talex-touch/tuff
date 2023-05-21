@@ -34,9 +34,8 @@
 </template>
 
 <script name="Plugin" setup>
-import { ref, inject, computed, onMounted } from 'vue'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
-import { sleep } from '@modules/utils'
+import { sleep } from 'utils/common'
 import PluginList from "@comp/plugin/layout/PluginList.vue";
 import FlatButton from "@comp/base/button/FlatButton.vue";
 
@@ -86,7 +85,7 @@ async function selectPlugin(index) {
     height: 32px;
 
     border-radius: 50%;
-    filter: blur(3px) saturate(1.25) contrast(1.125);
+    filter: blur(1px) contrast(1.2);
     background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
   }
   &:after {
@@ -100,7 +99,7 @@ async function selectPlugin(index) {
     height: 32px;
 
     border-radius: 50%;
-    filter: blur(3px) saturate(1.25) contrast(1.125);
+    filter: blur(1px) contrast(1.2);
     background-image: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
   }
   position: absolute;

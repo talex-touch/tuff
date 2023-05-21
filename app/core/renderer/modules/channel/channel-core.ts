@@ -1,4 +1,4 @@
-import { ipcRenderer } from "electron";
+const { ipcRenderer, IpcMainEvent } = require("electron");
 import {
   ChannelType,
   DataCode,
@@ -24,7 +24,7 @@ class TouchChannel implements ITouchClientChannel {
       if (header) {
         return {
           header: {
-            status: "request",
+            status: header.status || "request",
             type: ChannelType.MAIN,
             _originData: arg,
           },
@@ -38,11 +38,13 @@ class TouchChannel implements ITouchClientChannel {
     }
 
     console.error(e, arg);
-    throw new Error("Invalid message!");
+    return null;
+    // throw new Error("Invalid message!");
   }
 
-  __handle_main(e: Electron.IpcMainEvent, arg: any) {
+  __handle_main(e: typeof IpcMainEvent, arg: any): any {
     const rawData = this.__parse_raw_data(e, arg);
+    if ( !rawData ) return
 
     if ( rawData.header.status === 'reply' && rawData.sync ) {
       const { id } = rawData.sync;
@@ -54,8 +56,8 @@ class TouchChannel implements ITouchClientChannel {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any, options: any) => {
           e.sender.send(
-            "main-process-message",
-            this.__parse_sender(code, data, rawData.sync)
+            "@main-process-message",
+            this.__parse_sender(code, rawData, data, rawData.sync)
           );
         },
         ...rawData,
@@ -71,7 +73,7 @@ class TouchChannel implements ITouchClientChannel {
 
   __parse_sender(
     code: DataCode,
-    rawData: StandardChannelData,
+    rawData: RawStandardChannelData,
     data: any,
     sync?: RawChannelSyncData
   ): RawStandardChannelData {
@@ -99,11 +101,13 @@ class TouchChannel implements ITouchClientChannel {
     eventName: string,
     callback: Function
   ): () => void {
-    const listeners = this.channelMap.get(eventName);
+    const listeners = this.channelMap.get(eventName) || [];
 
     if (!listeners.includes(callback)) {
       listeners.push(callback);
     } else return undefined;
+
+    this.channelMap.set(eventName, listeners);
 
     return () => {
       const index = listeners.indexOf(callback);
@@ -136,12 +140,12 @@ class TouchChannel implements ITouchClientChannel {
 
     return new Promise((resolve) => {
       
-      ipcRenderer.send("main-process-message", data);
+      ipcRenderer.send("@main-process-message", data);
 
       this.pendingMap.set(uniqueId, (res) => {
         this.pendingMap.delete(uniqueId);
 
-        resolve(res);
+        resolve(res.data);
       });
     });
   }
@@ -157,7 +161,7 @@ class TouchChannel implements ITouchClientChannel {
       },
     } as RawStandardChannelData;
 
-    const res = this.__parse_raw_data(null, ipcRenderer.sendSync("main-process-message", data))
+    const res = this.__parse_raw_data(null, ipcRenderer.sendSync("@main-process-message", data))
     
     if ( res.header.status === 'reply' ) return res.data;
 
@@ -166,4 +170,4 @@ class TouchChannel implements ITouchClientChannel {
   }
 }
 
-export const touchChannel = new TouchChannel();
+export const touchChannel: ITouchClientChannel = new TouchChannel();
