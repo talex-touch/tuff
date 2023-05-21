@@ -1,5 +1,7 @@
 import { anyStr2Num, num2anyStr } from 'utils/common'
+import { genFileTree } from "utils/help/tree-generator";
 import { describe, expect, it, vi } from "vitest";
+import path from 'path'
 
 describe("#Common", () => {
   it('serial str-num test', () => {
@@ -16,3 +18,11 @@ describe("#Common", () => {
 
   })
 })
+
+describe("#File tree", () => {
+  it("file tree generator test", () => {
+    const p = path.join(process.cwd(), '..', '..')
+
+    genFileTree(p);
+  });
+});

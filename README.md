@@ -68,7 +68,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 ## Contribution
 
-[Here](.github/contribute/README.md)
+[Here](CONTRIBUTING.md)
 
 ## Contact
 
