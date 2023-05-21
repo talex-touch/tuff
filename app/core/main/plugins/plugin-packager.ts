@@ -213,6 +213,7 @@ export function genPluginPackager(buildPath?: string): PluginPackager {
 
 export default {
   name: Symbol("PluginPackager"),
+  filePath: false,
   init(app, manager) {
     const buildPath = path.join(app.rootPath, "build");
 

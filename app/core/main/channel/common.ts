@@ -37,6 +37,7 @@ function getOSInformation() {
 export default {
   name: Symbol("CommonChannel"),
   listeners: new Array<Function>(),
+  filePath: false,
   init(app) {
     const channel = genTouchChannel(app);
 

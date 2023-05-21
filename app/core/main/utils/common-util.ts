@@ -66,7 +66,7 @@ export async function sleep(time: number) {
     return new Promise(resolve => setTimeout(() => resolve(time), time))
 }
 
-export async function checkDirWithCreate(url, abs = false) {
+export async function checkDirWithCreate(url, abs = true) {
 
     const p = abs ? url : path.join(process.cwd(), url)
 

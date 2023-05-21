@@ -204,13 +204,14 @@ class ModuleManager implements TalexTouch.IModuleManager {
       return false;
     } else
       return (() => {
-        checkDirWithCreate(
-          path.join(
-            this.modulePath,
-            module.filePath || module.name.description
-          ),
-          true
-        );
+        if (!module.hasOwnProperty("filePath") || module.filePath)
+          checkDirWithCreate(
+            path.join(
+              this.modulePath,
+              (module.filePath as string) || module.name.description
+            ),
+            true
+          );
 
         console.log(
           `[ModuleManager] Loading module ${module.name.description}`

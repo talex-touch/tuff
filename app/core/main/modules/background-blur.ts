@@ -73,6 +73,7 @@ function refreshWallPaper(win: Electron.BrowserWindow) {
 
 export default {
   name: Symbol("BackgroundBlur"),
+  filePath: false,
   init(app) {
     if (process.platform.indexOf("win") === -1) return; // Only windows supports
     const win = app.window.window;

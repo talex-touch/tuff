@@ -13,9 +13,6 @@
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
 </div>
 
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_large)
-
 ## Announcement
 
 > 2.0.0 version is now under dev and alpha test.
@@ -58,7 +55,10 @@ We attach great importance to the security and privacy of our users. We guarante
 If you are looking for a cross-platform, beautifully designed desktop software that is easy to use, TalexTouch is your best choice. It not only provides rich functionality but also has a good user experience and an open community ecology. Welcome to use TalexTouch and experience a new desktop experience!
 
 ## Usage Agreement
+
 This project is open-sourced under the Mozilla Public License 2.0 agreement.
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_large)
 
 ## Issue
 

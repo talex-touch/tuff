@@ -36,6 +36,7 @@ function onSchema(url) {
 
 export default {
   name: Symbol("AddonOpener"),
+  filePath: false,
   listeners: new Array<Function>(),
   init(app, manager) {
     const touchChannel = genTouchChannel();

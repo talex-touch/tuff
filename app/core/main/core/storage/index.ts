@@ -9,6 +9,7 @@ export default {
   name: Symbol("StorageChannel"),
   listeners: new Array<Function>(),
   configPath: undefined,
+  filePath: "config",
   configs: {},
   getConfig(name: string) {
     if ( !this.configPath ) throw new Error(`Config ${name} not found`);
@@ -65,7 +66,7 @@ export default {
     Object.keys(this.configs).forEach((key) => this.saveConfig(key));
   },
   init(app) {
-    this.configPath = path.join(app.rootPath, "config");
+    this.configPath = path.join(app.rootPath, "modules", "config");
     checkDirWithCreate(this.configPath, true)
 
     const channel = genTouchChannel(app);

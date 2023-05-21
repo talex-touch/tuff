@@ -120,7 +120,7 @@ export namespace TalexTouch {
      * @description If you want to load the module from a custom file-path, you can set this property.
      * @description If this property is not set, the manager will load the module from the default file-path. (.../modules/{module-name})
      */
-    filePath?: string;
+    filePath?: string | boolean;
 
     /**
      * Module Initialization
