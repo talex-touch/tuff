@@ -16,9 +16,9 @@
   "description": "This is a demo.",
   "plugin": {
     "dev": {
-	  "enable": true,
-	  "address": "http://127.0.0.1:5174/"
-	}
+   "enable": true,
+   "address": "http://127.0.0.1:5174/"
+ }
   }
 }
 ```
@@ -48,7 +48,7 @@ Filed `icon` identifies the icon of a plugin, if it's empty, the default will be
 <br />
 <br />
 
-> Here are 2 fileds under icon filed.
+> Here are 2 fields under icon filed.
 
 ### type <Badge type="info" text="OPTIONAL" />
 
@@ -60,7 +60,7 @@ It is important to note that you do not need to fill out the prefix remix and st
 
 ## value <Badge type="info" text="OPTIONAL" /> <Badge type="warning" text="Supposed" />
 
-`Filed icon.value` identifies the value of a plugin-icon. If it's empty, the default will be `TalexTouch` Logo.
+Filed `icon.value` identifies the value of a plugin-icon. If it's empty, the default will be `TalexTouch` Logo.
 
 ## plugin <Badge type="info" text="OPTIONAL" />
 

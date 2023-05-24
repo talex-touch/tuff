@@ -30,7 +30,6 @@ Just provide `index.html` `init.json`(will be exported as **manifest.json**) to 
 </html>
 ```
 
-
 ``` JSON [init.json]
 {
   "name": "plugin-demo",

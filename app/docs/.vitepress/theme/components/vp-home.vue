@@ -27,7 +27,7 @@ import TouchBubbles from './base/TouchBubbles.vue';
 
     <f-divider margin="40px" color="#eef" />
 
-    <f-text bold block>特性</f-text>
+    <f-text bold block>Features</f-text>
     <f-text>📌 Multiple platform supports!</f-text>
     <f-text>
       🚀 With

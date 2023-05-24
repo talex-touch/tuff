@@ -10,7 +10,7 @@
 
 One of the key features of `Polyglot Toolbox` is its plugin ecosystem. It utilizes the innovative `E-TOS` technology to independently package each plugin, providing a more flexible and streamlined selection and customization of plugins.
 
-Currently, `Polyglot Toolbox` has integrated a variety of practical tools and features, including notes, calendar, clock, countdown timer, file manager, screenshot tool, text editor, image browser, audio player, video player, clipboard manager, and more. 
+Currently, `Polyglot Toolbox` has integrated a variety of practical tools and features, including notes, calendar, clock, countdown timer, file manager, screenshot tool, text editor, image browser, audio player, video player, clipboard manager, and more.
 
 These plugins cover various aspects of life and work, allowing you to accomplish more on your desktop.
 

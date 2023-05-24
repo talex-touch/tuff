@@ -42,10 +42,10 @@ export default {
     const channel = genTouchChannel(app);
 
     this.listeners.push(
-      channel.regChannel(ChannelType.MAIN, "close", closeApp.bind(app, this))
+      channel.regChannel(ChannelType.MAIN, "close", () => closeApp(app))
     );
     this.listeners.push(
-      channel.regChannel(ChannelType.MAIN, "minimize", app.window.minimize)
+      channel.regChannel(ChannelType.MAIN, "minimize", () => app.window.minimize())
     );
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "dev-tools", () =>
