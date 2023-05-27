@@ -1,13 +1,16 @@
 {
   "cSpell.words": [
     "Adpoter",
+    "Attributify",
     "httpreferrer",
     "lotties",
     "nodeintegration",
     "OPPO",
     "saveall",
+    "undot",
     "webpreferences",
     "websecurity"
   ],
-  "debug.console.acceptSuggestionOnEnter": "on"
+  "debug.console.acceptSuggestionOnEnter": "on",
+  "unocss.root": "app/core"
 }

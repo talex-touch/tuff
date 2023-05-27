@@ -21,7 +21,7 @@
           </template>
         </FlatNavBar>
 
-        <div class="AppLayout-IconFooter" :class="{ 'active': account?.user?.username }">
+        <div class="AppLayout-IconFooter" :class="{ 'active': true || account?.user?.username }">
           <slot name="icon" />
           <div v-if="account?.user?.username" class="AppLayout-Footer">
             <p> {{ account.user.username }} <IdentifiedIcon style="color: var(--el-color-success-dark-2)" /> </p>

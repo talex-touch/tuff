@@ -10,6 +10,8 @@ import Lang from '@modules/lang'
 import VWave from 'v-wave'
 
 import '@modules/theme-manager'
+import 'uno.css'
+import 'virtual:unocss-devtools'
 
 window.$i18n = Lang
 window.$nodeApi = baseNodeApi

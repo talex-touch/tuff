@@ -10,15 +10,7 @@
 	"settings": {
 		"git.ignoreLimitWarning": true,
 		"i18n-ally.localesPaths": [
-			"src/assets/languages",
-			"release/1.0.0/win-unpacked/locales",
-			"release/1.0.0-SNAPSHOT/win-unpacked/locales",
-			"release/1.1.0/win-arm64-unpacked/locales",
-			"release/1.1.0/win-unpacked/locales",
-			"release/1.1.0/win-ia32-unpacked/locales",
-			"release/1.2.0/win-arm64-unpacked/locales",
-			"release/1.2.0/win-unpacked/locales",
-			"release/1.2.0/win-ia32-unpacked/locales"
+			"src/assets/languages"
 		],
 		"liveServer.settings.multiRootWorkspaceName": "talex-touch"
 	}

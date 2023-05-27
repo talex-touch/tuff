@@ -4,7 +4,7 @@
       <FlatCompletion :fetch="search" />
 <!--      <IconButton undot middle plain icon="refresh" />-->
       <IconButton undot middle plain @click="() => $router.push('/plugin_new')" icon="add" />
-      <IconButton undot middle plain @click="refresh" icon="refresh" />
+      <!-- <IconButton undot middle plain @click="refresh" icon="refresh" /> -->
     </div>
 
     <PluginListModule shrink="true" v-model="target" :plugins="runningPlugins" >

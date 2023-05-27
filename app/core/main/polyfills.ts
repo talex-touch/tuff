@@ -1,6 +1,6 @@
-import { nowTime } from './utils/common-util'
+// import { nowTime } from './utils/common-util'
 
-const originalConsoleLog = console.log;
+// const originalConsoleLog = console.log;
 
 // define a new output
 // console.log = function(...args) {

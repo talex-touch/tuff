@@ -16,6 +16,7 @@ import {
   BrowserWindowConstructorOptions,
   WebContents,
   app,
+  OpenDevToolsOptions,
 } from "electron";
 import { release } from "os";
 import { checkDirWithCreate } from "../utils/common-util";
@@ -58,8 +59,14 @@ app.on("before-quit", (event) =>
   touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
 );
 
+function getRootPath(root) {
+  return app.isPackaged
+    ? path.join(root, APP_FOLDER_NAME)
+    : path.join(root, "..", "..", APP_FOLDER_NAME);
+}
+
 class TouchApp implements TalexTouch.TouchApp {
-  readonly rootPath: string = path.join(process.cwd(), APP_FOLDER_NAME);
+  readonly rootPath: string = getRootPath(process.cwd());
 
   app: Electron.App;
 
@@ -137,7 +144,8 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   minimize(): void {
     this.window.minimize();
   }
-  openDevTools(options?: TalexTouch.OpenDevToolsOptions): void {
+  openDevTools(options?: OpenDevToolsOptions): void {
+    console.log("[TouchWindow] Open DevTools", options);
     this.window.webContents.openDevTools(options);
   }
 
@@ -217,7 +225,27 @@ class ModuleManager implements TalexTouch.IModuleManager {
           `[ModuleManager] Loading module ${module.name.description}`
         );
 
-        setTimeout(module.init.bind(module, touchApp, touchApp.moduleManager));
+        setTimeout(
+          module.init.bind(
+            {
+              ...module,
+              touchChannel: this.touchChannel,
+              modulePath: path.join(
+                touchApp.rootPath,
+                "modules",
+                module.name.description
+              ),
+              getModule(name: Symbol) {
+                return touchApp.moduleManager.getModule(name);
+              },
+              getModules() {
+                return this.modules.values();
+              },
+            },
+            touchApp,
+            touchApp.moduleManager
+          )
+        );
         return this.modules.set(module.name, _module).has(module.name);
       })();
   }

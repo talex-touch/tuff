@@ -1,7 +1,7 @@
 import packageJson from "./../../package.json";
 import { shell } from "electron";
 import os from "os";
-import { ChannelType } from "~/../../packages/utils/channel";
+import { ChannelType } from "utils/channel";
 import { genTouchChannel } from "../core/channel-core";
 import { TalexTouch } from "../types";
 
@@ -45,12 +45,15 @@ export default {
       channel.regChannel(ChannelType.MAIN, "close", () => closeApp(app))
     );
     this.listeners.push(
-      channel.regChannel(ChannelType.MAIN, "minimize", () => app.window.minimize())
+      channel.regChannel(ChannelType.MAIN, "minimize", () =>
+        app.window.minimize()
+      )
     );
     this.listeners.push(
-      channel.regChannel(ChannelType.MAIN, "dev-tools", () =>
-        app.window.openDevTools({ mode: "detach" })
-      )
+      channel.regChannel(ChannelType.MAIN, "dev-tools", () => {
+        console.log("[dev-tools] Open dev tools!")
+        app.window.openDevTools({ mode: "undocked" });
+      })
     );
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "get-package", () => packageJson)

@@ -1,7 +1,7 @@
 /* 缩小并覆盖 */
 .scale-down-and-cover-enter-active,
 .scale-down-and-cover-leave-active {
-  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: .25s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
 .scale-down-and-cover-enter-from {
@@ -33,7 +33,7 @@
 .scale-up-and-cover-enter-active,
 .scale-up-and-cover-leave-active {
 
-  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: .25s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
 
 .scale-up-and-cover-enter-from {

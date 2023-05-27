@@ -44,10 +44,6 @@ const plugins = computed(() => _plugins())
 const pluginInfoRef = ref()
 const select = ref()
 
-watch(plugins, val => {
-  console.log('plugins', val)
-})
-
 async function selectPlugin(index) {
   if( index === select.value ) return
 

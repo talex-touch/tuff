@@ -7,13 +7,14 @@ import {
   PluginStatus,
 } from "utils/plugin";
 import { TalexTouch } from "../types";
-import fse from "fs-extra";
+import fse, { WatchEventType } from "fs-extra";
 import path from "path";
 import { genTouchChannel } from "../core/channel-core";
 import { ChannelType } from "~/../../packages/utils/channel";
 import { genTouchApp } from "../core/touch-core";
 import pkg from "../../package.json";
 import { getJs, getStyles } from "../utils/plugin-injection";
+import chokidar from "chokidar";
 
 class PluginIcon implements IPluginIcon {
   type: string;
@@ -171,11 +172,12 @@ class PluginManager implements IPluginManager {
   active: string;
 
   pluginPath: string;
+  watcher: chokidar.FSWatcher;
 
   constructor(pluginPath: string) {
     this.pluginPath = pluginPath;
 
-    setTimeout(this.__init__);
+    this.__init__()
   }
 
   setActivePlugin(pluginName: string): boolean {
@@ -199,9 +201,35 @@ class PluginManager implements IPluginManager {
   __init__() {
     if (!fse.existsSync(this.pluginPath)) return;
 
-    const plugins = fse.readdirSync(this.pluginPath);
+    console.log("[PluginManager] Plugin path: " + this.pluginPath);
 
-    plugins.forEach(this.loadPlugin);
+    // const plugins = fse.readdirSync(this.pluginPath);
+
+    this.watcher = chokidar.watch(this.pluginPath, {
+      ignored: /(^|[\/\\])\../,
+      persistent: true,
+      depth: 0
+    })
+
+    this.watcher.on("addDir", path => {
+      if ( !fse.existsSync(path + "/plugin.json") ) return;
+      console.log(`[Plugin] Plugin ${path} has been added`)
+    });
+
+    this.watcher.on("unlinkDir", path => {
+      console.log(`[Plugin] Plugin ${path} has been removed`)
+    });
+
+    this.watcher.on('ready', () => {
+      console.log("[PluginManager] Initial scan complete. Ready for changes.")
+    })
+
+    this.watcher.on('error', error => {
+      console.error("[PluginManager] Error happened", error)
+      console.log(`[PluginManager] ${error}`)
+    })
+
+    // plugins.forEach(this.loadPlugin);
   }
 
   async listPlugins(): Promise<Array<string>> {

@@ -4,15 +4,15 @@ import { session } from "electron";
 import { TalexTouch } from "../types";
 
 export default {
-  name: Symbol("extension-loader"),
+  name: Symbol("ExtensionLoader"),
   filePath: "extensions",
   extensions: [],
   init(app, manager) {
-    const extensionPath = path.join(process.cwd(), "extensions");
+    const extensionPath = path.join(app.rootPath, "modules", "extensions");
     const extensions = fse.readdirSync(extensionPath);
 
     extensions.forEach((extension) => {
-      console.log("Loading extension", extension);
+      console.log("[Extension] Loading extension", extension);
 
       this.extensions.push(extension);
       session.defaultSession.loadExtension(

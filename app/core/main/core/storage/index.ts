@@ -1,4 +1,4 @@
-import { ChannelType } from "~/../../packages/utils/channel";
+import { ChannelType } from "utils/channel";
 import { genTouchChannel } from "../channel-core";
 import fse from "fs-extra";
 import { TalexTouch } from "~/main/types";
