@@ -53,6 +53,8 @@ export default {
       channel.regChannel(ChannelType.MAIN, "dev-tools", () => {
         console.log("[dev-tools] Open dev tools!")
         app.window.openDevTools({ mode: "undocked" });
+        app.window.openDevTools({ mode: "detach" });
+        app.window.openDevTools({ mode: "right" });
       })
     );
     this.listeners.push(

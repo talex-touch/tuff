@@ -1,87 +1,97 @@
+import { touchChannel } from "../channel-core";
+
 interface Token {
-    access_token: string;
-    refresh_token: string;
+  access_token: string;
+  refresh_token: string;
 }
 
 interface Eller {
-    permissions: Permission[];
-    roles: Role[];
+  permissions: Permission[];
+  roles: Role[];
 }
 
 interface Role {
-    id: number;
-    name: string;
-    desc: string;
-    parent?: any;
-    createdAt: string;
-    updatedAt: string;
-    deletedAt?: any;
-    UserRole: UserRole;
+  id: number;
+  name: string;
+  desc: string;
+  parent?: any;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: any;
+  UserRole: UserRole;
 }
 
 interface UserRole {
-    id: number;
-    user_id: number;
-    role_id: number;
-    createdAt: string;
-    updatedAt: string;
-    deletedAt?: any;
+  id: number;
+  user_id: number;
+  role_id: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: any;
 }
 
 interface Permission {
-    id: number;
-    name: string;
-    module: string;
-    createdAt: string;
-    updatedAt: string;
-    deletedAt?: any;
+  id: number;
+  name: string;
+  module: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: any;
 }
 
 interface User {
-    id: number;
-    username: string;
-    email: string;
-    updatedAt: string;
-    createdAt: string;
+  id: number;
+  username: string;
+  email: string;
+  updatedAt: string;
+  createdAt: string;
 }
 
 export class AccountStorage {
+  user: User;
+  eller: Eller;
+  token: Token;
 
-    user: User;
-    eller: Eller;
-    token: Token;
+  constructor(data: string) {
+    // console.log( data )
+    this.analyzeFromObj(data);
+  }
 
-    constructor(data: string) {
+  analyzeFromObj(data: any) {
+    if (!data) return;
+    if (data.user) this.user = data.user;
+    if (data.token) this.token = data.token;
+    if (data.eller) this.eller = data.eller;
 
-        // console.log( data )
-        this.analyzeFromObj(data);
+    setTimeout(() => this.__save());
+  }
 
-    }
+  __save() {
+    const { user, eller, token } = this;
 
-    analyzeFromObj(data: any) {
-        if ( !data ) return
-        if( data.user ) this.user = data.user;
-        if( data.token ) this.token = data.token;
-        if( data.eller ) this.eller = data.eller;
+    touchChannel.send("storage:save", {
+      key: "account.ini",
+      content: JSON.stringify({ user, eller, token }),
+      clear: false,
+    });
+  }
 
-        setTimeout(() => this.__save())
-    }
+  saveToStr() {
+    const { user, eller, token } = this;
 
-    __save() {
-        const { user, eller, token } = this;
+    console.log(
+      "Accounter",
+      JSON.stringify({
+        user,
+        eller,
+        token,
+      })
+    );
 
-        window.$storage._save('account.ini', { user, eller, token }, false)
-    }
-
-    saveToStr() {
-        const { user, eller, token } = this;
-
-        console.log("Accounter", JSON.stringify({
-            user, eller, token
-        }))
-
-        return JSON.stringify({
-          user, eller, token
-        })
-    }
+    return JSON.stringify({
+      user,
+      eller,
+      token,
+    });
+  }
 }

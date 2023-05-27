@@ -74,6 +74,9 @@ importers:
       '@iconify-json/ri':
         specifier: ^1.1.9
         version: 1.1.9
+      '@iconify-json/simple-icons':
+        specifier: ^1.1.54
+        version: 1.1.54
       '@intlify/unplugin-vue-i18n':
         specifier: ^0.8.2
         version: 0.8.2(vue-i18n@9.2.2)
@@ -108,6 +111,9 @@ importers:
         specifier: ^0.52.4
         version: 0.52.4
       '@unocss/preset-uno':
+        specifier: ^0.52.4
+        version: 0.52.4
+      '@unocss/transformer-variant-group':
         specifier: ^0.52.4
         version: 0.52.4
       '@vitejs/plugin-vue':
@@ -149,6 +155,9 @@ importers:
       unocss:
         specifier: ^0.52.4
         version: 0.52.4(postcss@8.4.23)(vite@4.3.5)
+      unocss-preset-theme:
+        specifier: ^0.7.0
+        version: 0.7.0(@unocss/core@0.52.4)
       unplugin-auto-import:
         specifier: ^0.15.0
         version: 0.15.3
@@ -210,8 +219,6 @@ importers:
       vite:
         specifier: ^3.0.9
         version: 3.0.9(sass@1.62.1)
-
-  app/docs/b-.vitepress/cache/deps_temp: {}
 
   app/ends/touch-ends:
     dependencies:
@@ -1368,6 +1375,12 @@ packages:
 
   /@iconify-json/ri@1.1.9:
     resolution: {integrity: sha512-YOSBce/bzkORxBI1mYz4b9vidaJDeorwzuddFoIV9ajazncI55VLtQ+puIra0d3HQhYfswNSwRy8PrHTZmvaOg==}
+    dependencies:
+      '@iconify/types': 2.0.0
+    dev: true
+
+  /@iconify-json/simple-icons@1.1.54:
+    resolution: {integrity: sha512-7g2yUYJgaYGLfGuO5j/XG1pu2c7p3svre1Nl2bLe68mPecit17EoCjDIJg2kK91Gfk3NwM4+U6P1QOfsFwlVkA==}
     dependencies:
       '@iconify/types': 2.0.0
     dev: true
@@ -9083,6 +9096,15 @@ packages:
   /universalify@2.0.0:
     resolution: {integrity: sha512-hAZsKq7Yy11Zu1DE0OzWjw7nnLZmJZYTDZZyEFHZdUhV8FkH5MCfoU1XMaxXovpyW5nq5scPqq0ZDP9Zyl04oQ==}
     engines: {node: '>= 10.0.0'}
+
+  /unocss-preset-theme@0.7.0(@unocss/core@0.52.4):
+    resolution: {integrity: sha512-dzfbvKHTLc+eAobYbTKrKBHH689o3oBURdpA9I22yVsJW1UjfKjnrwFzZd0DPb3pux2VRv4zj/DLX5tY3EiFvg==}
+    peerDependencies:
+      '@unocss/core': '>= 0.52.0'
+    dependencies:
+      '@unocss/core': 0.52.4
+      '@unocss/preset-mini': 0.52.4
+    dev: true
 
   /unocss@0.52.4(postcss@8.4.23)(vite@4.3.5):
     resolution: {integrity: sha512-EaXc398NWrTfxQBkYXXFLjAGMDL7lAlP3QRPE59uQCwlKxZ52WZs7L+ekhe6ZTIRyDGuNVEBcndy+9tSVLbN8A==}

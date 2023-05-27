@@ -48,7 +48,7 @@ function refreshWallPaper(win: Electron.BrowserWindow) {
     const wallPaperBase64Data = "data:image/jpg;base64," + wallPaperBase64;
 
     win.webContents.insertCSS(`
-            .blur #app {
+            .touch-blur #app {
               background-image: url('${wallPaperBase64Data}') !important;
               background-repeat: no-repeat !important;
               background-position: var(--winX) var(--winY) !important;  

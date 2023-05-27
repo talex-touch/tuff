@@ -88,7 +88,7 @@ watchEffect(() => {
   --fake-radius: 4px;
 }
 
-.blur .TTabItem-Container {
+.touch-blur .TTabItem-Container {
   &.active {
     --fake-color: var(--el-fill-color-lighter) !important;
   }

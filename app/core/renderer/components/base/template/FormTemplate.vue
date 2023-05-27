@@ -12,23 +12,25 @@ const props = defineProps({
 </script>
 
 <template>
-  <div mx-10 my-5>
-    <div border-b-1 border-b-solid border-gray-300>
-      <slot name="Header">
-        <p my-4 font-bold text-2xl>{{ title }}</p>
-        <span text="base" op-75 font-normal>{{ description }}</span>
+  <el-scrollbar>
+    <div mx-10 my-6>
+
+      <div pb-5 mb-10 border-b-1 border-b-solid border-gray-500>
+        <slot name="Header">
+          <p my-4 font-extrabold text-2xl>{{ title }}</p>
+          <span text="base" op-75 font-normal>{{ description }}</span>
+        </slot>
+      </div>
+
+      <slot>
+        <p>Content</p>
       </slot>
+
     </div>
-
-    <slot name="Content">
-      <p>Content</p>
-    </slot>
-
-  </div>
+  </el-scrollbar>
 </template>
 
 <style scoped lang="scss">
-
 .FormTemplate-Container {
   position: relative;
   margin: 2% 10%;

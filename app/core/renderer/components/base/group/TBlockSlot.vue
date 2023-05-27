@@ -130,7 +130,7 @@ const props = defineProps({
   }
 }
 
-.blur .TBlockSlot-Container {
+.touch-blur .TBlockSlot-Container {
   --fake-color: var(--el-fill-color);
   &:hover {
     --fake-color: var(--el-fill-color-light);

@@ -57,7 +57,7 @@ function closeWindow() {
 </script>
 
 <style lang="scss">
-.blur {
+.touch-blur {
   .AppLayout-Container {
     backdrop-filter: blur(100px) saturate(180%) brightness(1.2) !important;
   }

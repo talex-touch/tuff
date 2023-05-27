@@ -139,7 +139,7 @@ export class StorageManager {
         coloring: true,
         blur: false,
         contrast: false,
-        autoDark: false,
+        autoDark: true,
       });
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -156,7 +156,7 @@ export class StorageManager {
         const clsL = document.body.parentNode["classList"];
 
         this.themeStyle["dark"] ? clsL.add("dark") : clsL.remove("dark");
-        this.themeStyle["blur"] ? clsL.add("blur") : clsL.remove("blur");
+        this.themeStyle["blur"] ? clsL.add("touch-blur") : clsL.remove("touch-blur");
         this.themeStyle["coloring"]
           ? clsL.add("coloring")
           : clsL.remove("coloring");

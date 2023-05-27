@@ -275,7 +275,7 @@ export default defineComponent({
   font-size: 18px;
 }
 
-.blur .TTabs-TabGroup {
+.touch-blur .TTabs-TabGroup {
   .TTabs-TabGroup-Name {
     &:before {
       opacity: .4;
@@ -343,7 +343,7 @@ export default defineComponent({
   //border: 2px solid var(--el-border-color);
 }
 
-.blur .TTabs-Container {
+.touch-blur .TTabs-Container {
   &:before {
     opacity: 0;
   }

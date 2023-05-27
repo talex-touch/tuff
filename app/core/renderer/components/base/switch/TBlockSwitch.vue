@@ -184,7 +184,7 @@ function refresh(v) {
   }
 }
 
-.blur .TBlockSwitch-Container {
+.touch-blur .TBlockSwitch-Container {
   --fake-color: var(--el-fill-color);
   &:hover {
     --fake-color: var(--el-fill-color-light);

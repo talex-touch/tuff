@@ -40,7 +40,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.blur .PluginItem-Container {
+.touch-blur .PluginItem-Container {
   opacity: 0.75;
 }
 

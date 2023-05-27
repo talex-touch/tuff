@@ -62,7 +62,7 @@ function closeWindow() {
   .AppLayout-Aside {
     border-right: 1px solid var(--el-border-color);
   }
-  .blur & {
+  .touch-blur & {
     .AppLayout-Header {
       border-bottom: none;
     }

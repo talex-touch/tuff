@@ -301,7 +301,7 @@ function afterLeave(el) {
   -webkit-app-region: no-drag;
 }
 
-.blur .AppLayout-Wrapper {
+.touch-blur .AppLayout-Wrapper {
   :deep(.AppLayout-Container) {
     backdrop-filter: blur(50px) saturate(180%) brightness(.85);
   }

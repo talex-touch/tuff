@@ -44,7 +44,7 @@ const expand = ref(!props.shrink)
 
   border-radius: 0 !important;
   --fake-radius: 0 !important;
-  .blur & {
+  .touch-blur & {
     &:hover {
       --fake-color: var(--el-fill-color-light) !important;
     }
@@ -121,7 +121,7 @@ const expand = ref(!props.shrink)
   }
 }
 
-.blur .TGroupBlock-Header {
+.touch-blur .TGroupBlock-Header {
   --fake-color: var(--el-fill-color);
   &:hover {
     --fake-color: var(--el-fill-color-light);

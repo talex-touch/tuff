@@ -1,5 +1,5 @@
 <template>
-  <div class="Blur-Container" :class="{ blur: options?.blur || true, active: activePlugin }">
+  <div class="Blur-Container" :class="{ 'touch-blur': options?.blur || true, active: activePlugin }">
       <PluginView v-for="plugin in plugins" :key="plugin.pluginInfo.name" :plugin="plugin" />
   </div>
 </template>

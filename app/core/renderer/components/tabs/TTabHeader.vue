@@ -46,7 +46,7 @@ const props = defineProps(['node'])
   //background-color: var(--el-fill-color-lighter);
 }
 
-.blur .TTabHeader-Container {
+.touch-blur .TTabHeader-Container {
   &:after {
     opacity: 0;
   }

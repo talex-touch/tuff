@@ -109,7 +109,7 @@ watch(() => active.value, val => val && router.push(props.route))
   --fake-radius: 4px;
 }
 
-.blur .TMenuItem-Container {
+.touch-blur .TMenuItem-Container {
   &.active {
     --fake-color: var(--el-fill-color-lighter) !important;
   }

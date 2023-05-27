@@ -141,7 +141,7 @@ watch(() => value, () => emits('change', value))
   }
 }
 
-.blur .TBlockSelect-Container {
+.touch-blur .TBlockSelect-Container {
   --fake-color: var(--el-fill-color);
   &:hover {
     --fake-color: var(--el-fill-color-light);
