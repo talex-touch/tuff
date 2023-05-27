@@ -1,6 +1,6 @@
 <template>
-  <div @keydown="onKeyDown" class="FlatInput-Container fake-background">
-    <span class="FlatInput-Prefix">
+  <div @keydown="onKeyDown" class="FlatInput-Container fake-background" :class="{ 'none-prefix': !$slots?.default }">
+    <span v-if="$slots.default" class="FlatInput-Prefix">
       <slot>
         <RemixIcon :name="icon" :style="`line`" />
       </slot>
@@ -91,6 +91,10 @@ function onKeyDown(e) {
 
     border-radius: 0 6px 6px 0;
     background-color: transparent;
+  }
+  &.none-prefix {
+    padding: 0 5px;
+    grid-template-columns: 1fr;
   }
   position: relative;
   padding-top: 2px;

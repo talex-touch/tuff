@@ -46,14 +46,6 @@ const routes: any = [
         }
     },
     {
-        path: "/plugin_new",
-        name: "NewPlugin",
-        component: () => import("../views/base/plugin/PluginNew.vue"),
-        meta: {
-            index: 3
-        }
-    },
-    {
         path: "/setting",
         name: "设置",
         component: () => import("../views/base/Setting.vue"),

@@ -1,5 +1,5 @@
 <template>
-  <div class="Plugin-Container">
+  <div class="Plugin-Container" :class="{ 'state': toggleOptions.state }">
     <PluginList @select="selectPlugin" :plugins="plugins" />
 
     <div class="Plugin-Info" ref="pluginInfoRef">
@@ -21,14 +21,21 @@
         <div class="Plugin-Mention">
           <p>Start by installing or selecting a plugin</p>
           <span>
-          Installing a plugin makes working with your favorite tools even easier. Share your work with your personal cloud, and find out what other developers are using.
-          Just click the button below to get started.
-        </span>
+            Installing a plugin makes working with your favorite tools even easier. Share your work with your personal
+            cloud, and find out what other developers are using.
+            Just click the button below to get started.
+          </span>
           <FlatButton @click="() => $router.push('/market')">
             Install a plugin
           </FlatButton>
         </div>
       </div>
+    </div>
+
+    <div bd-lg absolute top-0 left-0 :style="`${toggleOptions.style}`">
+      <div id="floating-plus" :style="`z-index: 100;--x: ${toggleOptions.x}px;--y: ${toggleOptions.y}px`"
+        :class="{ 'active': toggleOptions.status }" class="new-plus" @click="() => toggleNewPlugin()" />
+      <PluginNew mt--9 />
     </div>
   </div>
 </template>
@@ -38,6 +45,8 @@ import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import { sleep } from 'utils/common'
 import PluginList from "@comp/plugin/layout/PluginList.vue";
 import FlatButton from "@comp/base/button/FlatButton.vue";
+import PluginNew from './plugin/PluginNew.vue'
+import { computePosition } from '@floating-ui/vue'
 
 const _plugins = inject('plugins')
 const plugins = computed(() => _plugins())
@@ -45,7 +54,7 @@ const pluginInfoRef = ref()
 const select = ref()
 
 async function selectPlugin(index) {
-  if( index === select.value ) return
+  if (index === select.value) return
 
   const style = pluginInfoRef.value.style
 
@@ -66,9 +75,159 @@ async function selectPlugin(index) {
   style.opacity = '1'
 
 }
+
+const toggleOptions = reactive({
+  points: [],
+  x: 0,
+  y: 0,
+  status: false,
+  state: true,
+  style: computed(() => {
+    const [a, b, c, d] = toggleOptions.points
+
+    if (!a || !b || !c || !d) return ''
+
+    const bg = 'var(--el-fill-color)'// toggleOptions.status ? 'transparent' : 'var(--el-fill-color)'
+
+    return `
+      clip-path: polygon(${a.x}% ${a.y}%, ${b.x}% ${b.y}%, ${c.x}% ${c.y}%, ${d.x}% ${d.y}%);
+      background-color: ${bg}; width: 100%; height: 100%; overflow: hidden;
+  z-index: 1; transition: clip-path .5s, opacity .5s
+    `
+  })
+})
+const toggleNewPlugin = (() => {
+  let status = true, _ele
+  return async (ele) => {
+    if (ele) {
+      _ele = ele
+      return
+    }
+    const floatingPlus = document.getElementById('floating-plus')
+
+    status = !status
+
+    toggleOptions.status = status
+
+    setTimeout(() => {
+      toggleOptions.state = status
+    }, 500)
+
+    if (status) {
+      if (!_ele) return
+      const floating = await computePosition(_ele, floatingPlus)
+
+      toggleOptions.x = floating.x
+      toggleOptions.y = floating.y + 8
+
+      toggleOptions.points = [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 }
+      ]
+    } else {
+      const el = document.getElementById('newPluginBtn')
+      if (!el) return
+
+      const floating = await computePosition(el, floatingPlus)
+
+      toggleOptions.x = floating.x
+      toggleOptions.y = floating.y
+
+      const ww = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
+      const wh = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+      const { left, top, width, height } = el.getBoundingClientRect()
+
+      const l = left - el.offsetLeft / 2 - width / 2 + 4
+      const t = top - el.offsetTop - el.parentNode.clientHeight - height
+
+      const [a, b, c, d] = [
+        l / ww,
+        (l + width) / ww,
+        t / wh,
+        (t + height) / wh,
+      ]
+
+      toggleOptions.points = [
+        { x: a * 100 - .5, y: c * 100 },
+        { x: b * 100 + 0, y: c * 100 },
+        { x: b * 100 + 0, y: d * 100 },
+        { x: a * 100 - .5, y: d * 100 }
+      ]
+    }
+  }
+})()
+
+provide('toggleNewPlugin', toggleNewPlugin)
+onMounted(() => {
+  setTimeout(toggleNewPlugin, 200)
+})
+window.addEventListener('resize', () => {
+  toggleNewPlugin()
+  setTimeout(toggleNewPlugin, 5)
+})
 </script>
 
 <style lang="scss" scoped>
+:deep(.new-plus) {
+
+  &:before,
+  &:after {
+    content: "";
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    width: 2px;
+    height: 50%;
+
+    filter: invert(1);
+    transform: translate(-50%, -50%);
+    background-color: var(--el-fill-color);
+    transition: all .75s;
+  }
+
+  &:after {
+
+    width: 50%;
+    height: 2px;
+
+  }
+
+  &:hover {
+    opacity: .5;
+  }
+
+  &.active {
+    &:before {
+      height: 40%;
+      transform: translate(-50%, -50%) translateY(-4px) rotate(45deg);
+    }
+
+    &:after {
+      width: 40%;
+      transform: translate(-50%, -50%) translateY(4px) rotate(45deg);
+    }
+  }
+
+  .state & {
+    opacity: 1;
+  }
+
+  position: relative;
+
+  width: 32px;
+  height: 32px;
+
+  cursor: pointer;
+  transition: transform .5s,
+  opacity 0s;
+
+  transform: translate(var(--x), calc(var(--y) - 100%));
+}
+
 .Plugin-EmptyBox {
   &:before {
     content: '';
@@ -84,6 +243,7 @@ async function selectPlugin(index) {
     filter: blur(1px) contrast(1.2);
     background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
   }
+
   &:after {
     content: '';
     position: absolute;
@@ -98,6 +258,7 @@ async function selectPlugin(index) {
     filter: blur(1px) contrast(1.2);
     background-image: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
   }
+
   position: absolute;
 
   top: 35%;
@@ -113,6 +274,7 @@ async function selectPlugin(index) {
   box-shadow: 0 0 8px #00000011;
   border: 2px solid var(--el-border-color);
 }
+
 .Plugin-Mention {
   position: absolute;
 
@@ -129,20 +291,22 @@ async function selectPlugin(index) {
   line-height: 1.5;
   font-weight: 500;
 
-  & > p {
+  &>p {
     margin-bottom: 8px;
     color: var(--el-text-color-lighter);
     font-size: 16px;
     font-weight: 600;
   }
-  & > span {
+
+  &>span {
     display: block;
     margin-bottom: 16px;
     color: var(--el-text-color-lighter);
     font-size: 14px;
     font-weight: 500;
   }
-  & > button {
+
+  &>button {
     margin: 0 auto;
   }
 
@@ -153,6 +317,7 @@ async function selectPlugin(index) {
     transform: translateX(-50%);
   }
 }
+
 .Plugin-Empty {
   & .Plugin-EmptyBubble:nth-child(2) {
     left: 22%;
@@ -160,18 +325,21 @@ async function selectPlugin(index) {
 
     transform: translate(-50%, -50%) scale(.45) skewX(5deg);
   }
+
   & .Plugin-EmptyBubble:nth-child(3) {
     left: 72%;
     top: 27%;
 
     transform: translate(-50%, -50%) scale(.15) skewX(5deg);
   }
+
   & .Plugin-EmptyBubble:nth-child(4) {
     left: 75%;
     top: 45%;
 
     transform: translate(-50%, -50%) scale(.35) skewX(12deg);
   }
+
   & .Plugin-EmptyBubble:nth-child(5) {
     left: 35%;
     top: 45%;
@@ -185,6 +353,7 @@ async function selectPlugin(index) {
 
     transform: translate(-50%, -50%) scale(.25) skewX(16deg);
   }
+
   .Plugin-EmptyBubble {
     z-index: -1;
     position: absolute;
@@ -207,10 +376,12 @@ async function selectPlugin(index) {
     opacity: 0;
     transform: translate(-50%, -50%) scale(.25) skewX(16deg);
   }
+
   50% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(.5) skewX(4deg);
   }
+
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(.75) skewX(16deg);
@@ -238,23 +409,24 @@ async function selectPlugin(index) {
     height: 500%;
 
     background-image:
-        radial-gradient(circle at top right, rgba(94, 74, 176, 0.2) 50%, transparent 60%),
-        radial-gradient(circle at top right, var(--el-color-primary-light-5) 10%, transparent 80%),
-        radial-gradient(circle at top right, rgba(94, 74, 176, 0.8) 20%,  rgba(94, 74, 176, 0) 100%),
-  ;
+      radial-gradient(circle at top right, rgba(94, 74, 176, 0.2) 50%, transparent 60%),
+      radial-gradient(circle at top right, var(--el-color-primary-light-5) 10%, transparent 80%),
+      radial-gradient(circle at top right, rgba(94, 74, 176, 0.8) 20%, rgba(94, 74, 176, 0) 100%),
+    ;
     background-position:
-        top right,
-        top right,
-        top right;
+      top right,
+      top right,
+      top right;
     background-size:
-        60% 25%,
-        80% 30%,
-        100% 25%;
+      60% 25%,
+      80% 30%,
+      100% 25%;
     background-repeat: no-repeat;
 
     opacity: .25;
     filter: blur(18px) saturate(100%) brightness(120%);
   }
+
   position: relative;
 
   top: 0;

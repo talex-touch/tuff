@@ -16,26 +16,28 @@ defineProps({
 </script>
 
 <template>
-  <el-scrollbar>
-    <div mx-10 my-6>
+  <div mx-10 my-6>
 
-      <div pb-5 mb-10 border-b-1 border-b-solid border-gray-500>
-        <slot name="header">
-          <div items-center flex>
-            <div p-2 @click="() => $router.back()" v-if="routerBack"
-              class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic" />
-            <p my-4 font-extrabold text-2xl>{{ title }}</p>
-          </div>
-          <span block text="base" op-75 font-normal>{{ description }}</span>
-        </slot>
-      </div>
-
-      <slot>
-        <p>Content</p>
+    <div pb-5 mb-10 border-b-1 border-b-solid border-gray-500>
+      <slot name="header">
+        <div items-center flex>
+          <div p-2 @click="() => $router.back()" v-if="routerBack"
+            class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic" />
+          <p my-4 font-extrabold text-2xl>{{ title }}</p>
+        </div>
+        <span block text="base" op-75 font-normal>{{ description }}</span>
       </slot>
-
     </div>
-  </el-scrollbar>
+
+    <div absolute style="height: calc(100% - 10rem);width: 96%">
+      <el-scrollbar>
+        <slot>
+          <p>Content</p>
+        </slot>
+      </el-scrollbar>
+    </div>
+
+  </div>
 </template>
 
 <style scoped lang="scss">
@@ -64,4 +66,5 @@ defineProps({
   top: 0;
 
   box-sizing: border-box;
-}</style>
+}
+</style>

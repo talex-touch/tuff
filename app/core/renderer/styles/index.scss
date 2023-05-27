@@ -70,12 +70,12 @@ html.coloring {
     opacity: var(--fake-inner-opacity, 1);
     background: var(--fake-color, var(--el-fill-color-lighter));
     border-radius: var(--fake-radius, 8px);
-}
+  }
   position: relative; // make sure background adapt to parent
 }
 
 .color-template {
-  --fake-inner-opacity: .5;
+  --fake-inner-opacity: 0.5;
   --fake-color: var(--el-fill-color);
   border-color: var(--el-border-color);
 }
@@ -136,6 +136,7 @@ html.fullscreen .Blur-Container {
   --el-skeleton-color: var(--el-fill-color-lighter) !important;
 }
 
-.cubic-transition {
+.cubic-transition,
+.transition-cubic {
   transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }

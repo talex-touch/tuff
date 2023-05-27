@@ -42,7 +42,7 @@ export default defineConfig({
     },
     editLink: {
       pattern:
-        "https://github.com/talex-touch/talex-touch/edit/master/docs/src/:path",
+        "https://github.com/talex-touch/talex-touch/edit/master/app/docs/src/:path",
       text: "Edit on GitHub",
     },
     socialLinks: [

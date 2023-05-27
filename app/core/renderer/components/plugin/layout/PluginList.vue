@@ -2,15 +2,14 @@
   <el-scrollbar v-if="plugins" class="PluginList-Container">
     <div class="PluginList-Toolbox">
       <FlatCompletion :fetch="search" />
-<!--      <IconButton undot middle plain icon="refresh" />-->
-      <IconButton undot middle plain @click="() => $router.push('/plugin_new')" icon="add" />
-      <!-- <IconButton undot middle plain @click="refresh" icon="refresh" /> -->
+
+      <div class="new-plus" @click="() => toggleNewPlugin()" id="newPluginBtn" />
     </div>
 
-    <PluginListModule shrink="true" v-model="target" :plugins="runningPlugins" >
+    <PluginListModule shrink="true" v-model="target" :plugins="runningPlugins">
       <template #name>运行中</template>
     </PluginListModule>
-    <PluginListModule v-model="target" :plugins="Object.values(plugins)" >
+    <PluginListModule v-model="target" :plugins="Object.values(plugins)">
       <template #name>全部插件</template>
     </PluginListModule>
   </el-scrollbar>
@@ -19,8 +18,6 @@
 <script name="PluginList" setup>
 import PluginListModule from "@comp/plugin/layout/PluginListModule.vue";
 import FlatCompletion from "@comp/base/input/FlatCompletion.vue";
-import IconButton from "@comp/base/button/IconButton.vue";
-import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 
 const props = defineProps(['plugins'])
 const emits = defineEmits(['select'])
@@ -28,18 +25,21 @@ const target = ref(-1)
 
 const runningPlugins = computed(() => Object.values(props.plugins).filter(plugin => plugin._status === 3 || plugin._status === 4))
 
-watch(() => target.value, () => emits('select',target.value))
-
-async function refresh() {
-  await pluginAdopter.refreshPlugins()
-}
+watch(() => target.value, () => emits('select', target.value))
 
 function search() {
   return []
 }
+
+const toggleNewPlugin = inject('toggleNewPlugin')
 </script>
 
 <style lang="scss" scoped>
+.new-plus {
+  visibility: hidden;
+  right: 1%;
+}
+
 .PluginList-Toolbox {
   z-index: 1;
   position: sticky;
@@ -54,9 +54,8 @@ function search() {
 
   justify-content: space-between;
 
-  background-color: #00000011;
+  background-color: var(--el-fill-color);
 
-  backdrop-filter: blur(2px) brightness(1.8);
   border-radius: 8px;
   box-sizing: border-box;
 }
