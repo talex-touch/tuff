@@ -1,6 +1,6 @@
 <template>
   <div class="Blur-Container" :class="{ 'touch-blur': options?.blur || true, active: activePlugin }">
-      <PluginView v-for="plugin in plugins" :key="plugin.pluginInfo.name" :plugin="plugin" />
+    <PluginView v-for="plugin in plugins" :key="plugin.name" :plugin="plugin" />
   </div>
 </template>
 
@@ -11,10 +11,9 @@ export default {
 </script>
 
 <script setup>
-import { computed, inject, onMounted, ref } from "vue";
 import PluginView from "@comp/plugin/PluginView.vue";
 
-const options = {} //window.$storage.themeStyle
+const options = window.$storage.themeStyle
 const activePlugin = inject('activePlugin')
 const _plugins = inject('plugins')
 const plugins = computed(() => _plugins())
@@ -27,6 +26,7 @@ const plugins = computed(() => _plugins())
     opacity: 1;
     pointer-events: all;
   }
+
   opacity: 0;
   pointer-events: none;
 }

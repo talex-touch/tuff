@@ -54,17 +54,17 @@ export default {
         return h( IconButton, {
           undot: true,
           plain: true,
-          select: modelValue === plugin.pluginInfo.name,
-        }, [ h( ElTooltip, { placement: 'right', content: plugin.pluginInfo.name }, h( PluginIcon, { icon: plugin.pluginInfo.icon, alt: plugin.pluginInfo.name } ) ) ] )
+          select: modelValue === plugin.name,
+        }, [ h( ElTooltip, { placement: 'right', content: plugin.name }, h( PluginIcon, { icon: plugin.icon, alt: plugin.name } ) ) ] )
       }
 
       return h('div', {
-        class: 'scale-upper ' + (modelValue === plugin.pluginInfo.name ? 'active' : ''),
+        class: 'scale-upper ' + (modelValue === plugin.name ? 'active' : ''),
         onClick: (e) => {
           e.stopPropagation()
-          this.$emit( 'update:modelValue', plugin.pluginInfo.name )
+          this.$emit( 'update:modelValue', plugin.name )
         },
-      }, [ getPluginContent.bind(this)(),  h('span', { class: 'PluginNavList-ItemText' }, plugin.pluginInfo.name), h(PluginStatus, { plugin, shrink: true }) ] )
+      }, [ getPluginContent.bind(this)(),  h('span', { class: 'PluginNavList-ItemText' }, plugin.name), h(PluginStatus, { plugin, shrink: true }) ] )
     }
 
     function getPlugins() {

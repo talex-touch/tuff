@@ -8,6 +8,7 @@ import {
   AppStartEvent,
   BeforeAppQuitEvent,
   BeforeAppStartEvent,
+  OpenExternalUrlEvent,
   TalexEvents,
   touchEventBus,
 } from "./eventbus/touch-event";
@@ -134,6 +135,14 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window = new BrowserWindow(options);
 
     this.window.once("ready-to-show", () => {
+      this.window.webContents.addListener('will-navigate', (event, url) => {
+        touchEventBus.emit(
+          TalexEvents.OPEN_EXTERNAL_URL,
+          new OpenExternalUrlEvent(url)
+        );
+        
+        event.preventDefault()
+      });
       this.window.show();
     });
   }

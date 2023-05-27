@@ -6,7 +6,7 @@ import FlatButton from '@comp/base/button/FlatButton.vue'
 </script>
 
 <template>
-  <FormTemplate title="New Pluin" description="Create a new plugin.">
+  <FormTemplate :router-back="true" title="New Plugin" description="Create a new plugin.">
     <BlockTemplate title="Templates">
       <BrickTemplate>
         <p>

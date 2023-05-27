@@ -8,7 +8,8 @@ import { provide, ref, watch } from "vue";
 import {
   applicationUpgrade,
   clipBoardResolver,
-  dropperResolver
+  dropperResolver,
+  urlHooker
 } from "@modules/hooks/applicatoin-hooks";
 import { pluginManager } from '@modules/channel/plugin-core/api'
 
@@ -21,6 +22,7 @@ onMounted(() => {
   applicationUpgrade()
   clipBoardResolver()
   dropperResolver()
+  urlHooker()
   // screenCapture()
 })
 

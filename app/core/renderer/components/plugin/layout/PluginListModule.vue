@@ -13,13 +13,13 @@
 
     <transition-group name="list">
       <div @click="value = plugin" class="PluginList-Item fake-background"
-           :class="{ shrink, target: plugin === value, dev: plugin.pluginInfo.pluginSubInfo?.dev?.enable }" v-for="(plugin, index) in Object.values(plugins)" :key="index" >
-        <PluginIcon :icon="plugin.pluginInfo.icon" :alt="plugin.pluginInfo.name" />
+           :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }" v-for="(plugin, index) in Object.values(plugins)" :key="index" >
+        <PluginIcon :icon="plugin.icon" :alt="plugin.name" />
 
         <div class="PluginList-Item-Main">
-          <p>{{ plugin.pluginInfo.name }}</p>
+          <p>{{ plugin.name }}</p>
 
-          <p v-if="!shrink">{{ plugin.pluginInfo.description }}</p>
+          <p v-if="!shrink">{{ plugin.desc }}</p>
           <div v-else class="PluginList-ShrinkStatus">
             <PluginStatus :plugin="plugin" :shrink="true" />
           </div>

@@ -59,7 +59,6 @@ import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 import { useRouter } from "vue-router";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
 
-const options = window.$storage.themeStyle
 const paintCustom = window.$storage.paintCustom.data
 const packageJson = window.$nodeApi.getPackageJSON()
 

@@ -48,6 +48,20 @@ class TouchPlugin implements ITouchPlugin {
 
   _status: PluginStatus = PluginStatus.DISABLED;
 
+  toJSONObject() {
+    return {
+      name: this.name,
+      readme: this.readme,
+      version: this.version,
+      desc: this.desc,
+      icon: this.icon,
+      dev: this.dev,
+      webViewInit: this.webViewInit,
+      webview: this.webview,
+      status: this.status,
+    };
+  }
+
   get status(): PluginStatus {
     return this._status;
   }
@@ -56,10 +70,11 @@ class TouchPlugin implements ITouchPlugin {
     this._status = v;
 
     const channel = genTouchChannel()!;
-    channel?.send(ChannelType.MAIN, "plugin-status-updated", {
-      plugin: this.name,
-      status: this._status,
-    });
+    channel &&
+      channel.send(ChannelType.MAIN, "plugin-status-updated", {
+        plugin: this.name,
+        status: this._status,
+      });
   }
 
   constructor(
@@ -117,7 +132,9 @@ class TouchPlugin implements ITouchPlugin {
         webpreferences: "contextIsolation=false",
         httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: "false",
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version} (Plugins,like ${this.name})`,
+        useragent: `${mainWin.webContents.userAgent} TalexTouch/${
+          pkg.version
+        } (Plugins,like ${this.name})`,
         partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
@@ -157,12 +174,12 @@ class TouchPlugin implements ITouchPlugin {
   }
 
   __index__() {
-    const dev = this.dev?.enable;
+    const dev = this.dev && this.dev.enable;
 
     if (dev) console.log("[Plugin] Plugin is now dev-mode: " + this.name);
 
     return dev
-      ? this.dev?.address
+      ? this.dev && this.dev.address
       : path.resolve(this.pluginPath, "index.html");
   }
 }
@@ -177,7 +194,16 @@ class PluginManager implements IPluginManager {
   constructor(pluginPath: string) {
     this.pluginPath = pluginPath;
 
-    this.__init__()
+    this.__init__();
+  }
+
+  getPluginList(): Array<Object> {
+    const list = [];
+
+    for (const plugin of this.plugins.values())
+      list.push((plugin as TouchPlugin).toJSONObject());
+
+    return list;
   }
 
   setActivePlugin(pluginName: string): boolean {
@@ -198,36 +224,99 @@ class PluginManager implements IPluginManager {
     return true;
   }
 
+  hasPlugin(name: string) {
+    return this.plugins.has(name);
+  }
+
   __init__() {
     if (!fse.existsSync(this.pluginPath)) return;
-
-    console.log("[PluginManager] Plugin path: " + this.pluginPath);
 
     // const plugins = fse.readdirSync(this.pluginPath);
 
     this.watcher = chokidar.watch(this.pluginPath, {
       ignored: /(^|[\/\\])\../,
       persistent: true,
-      depth: 0
-    })
-
-    this.watcher.on("addDir", path => {
-      if ( !fse.existsSync(path + "/plugin.json") ) return;
-      console.log(`[Plugin] Plugin ${path} has been added`)
+      depth: 0,
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+        pollInterval: 500
+      }
     });
 
-    this.watcher.on("unlinkDir", path => {
-      console.log(`[Plugin] Plugin ${path} has been removed`)
+    this.watcher.on("change", async (_path) => {
+      const baseName = path.basename(_path);
+      if (baseName.indexOf(".") === 0) return;
+
+      const pluginName = path.basename(path.dirname(_path));
+      if (!this.hasPlugin(pluginName)) {
+        // console.warn("[PluginManager] Plugin " + pluginName + " is not loaded, but its README.md has been changed.")
+        return;
+      }
+      const plugin = this.plugins.get(pluginName) as TouchPlugin;
+
+      if (
+        baseName === "init.json" ||
+        baseName === "preload.js" ||
+        baseName === "index.html"
+      ) {
+        await plugin.disable()
+
+        await plugin.enable();
+
+        genTouchChannel().send(ChannelType.MAIN, "plugin:reload", {
+          source: "disk",
+          plugin: (plugin as TouchPlugin).toJSONObject(),
+        });
+      } else if (baseName === "README.md") {
+        plugin.readme = fse.readFileSync(_path, "utf-8");
+
+        genTouchChannel().send(ChannelType.MAIN, "plugin:reload-readme", {
+          source: "disk",
+          plugin: pluginName,
+          readme: plugin.readme,
+        });
+      } else {
+      }
+
+      console.log(
+        `[Plugin] ${pluginName}'s ${baseName} has been changed, reload it.`
+      );
     });
 
-    this.watcher.on('ready', () => {
-      console.log("[PluginManager] Initial scan complete. Ready for changes.")
-    })
+    this.watcher.on("addDir", (_path) => {
+      if (!fse.existsSync(_path + "/init.json")) return;
+      const pluginName = path.basename(_path);
+      console.log(`[Plugin] Plugin ${pluginName} has been added`);
 
-    this.watcher.on('error', error => {
-      console.error("[PluginManager] Error happened", error)
-      console.log(`[PluginManager] ${error}`)
-    })
+      if (this.hasPlugin(pluginName)) {
+        console.log(`[PluginManager] Reload plugin ${pluginName}`);
+        genTouchChannel().send(ChannelType.MAIN, "plugin:reload", {
+          source: "disk",
+          plugin: pluginName,
+        });
+        return;
+      }
+
+      this.loadPlugin(pluginName);
+    });
+
+    this.watcher.on("unlinkDir", (_path) => {
+      const pluginName = path.basename(_path);
+      console.log(`[Plugin] Plugin ${pluginName} has been removed`);
+
+      if (!this.hasPlugin(pluginName)) return;
+
+      this.unloadPlugin(pluginName);
+    });
+
+    this.watcher.on("ready", () => {
+      console.log("[PluginManager] Initial scan complete. Ready for changes.");
+    });
+
+    this.watcher.on("error", (error) => {
+      console.error("[PluginManager] Error happened", error);
+      console.log(`[PluginManager] ${error}`);
+    });
 
     // plugins.forEach(this.loadPlugin);
   }
@@ -238,9 +327,12 @@ class PluginManager implements IPluginManager {
 
   loadPlugin(pluginName: string): Promise<boolean> {
     const pluginPath = path.resolve(this.pluginPath, pluginName);
-    const pluginInfo = fse.readJSONSync(
-      path.resolve(pluginPath, "plugin.json")
-    );
+    const pluginInfo = fse.readJSONSync(path.resolve(pluginPath, "init.json"));
+
+    const readme = ((p) =>
+      fse.existsSync(p)
+        ? (this.watcher.add(p), fse.readFileSync(p).toString())
+        : undefined)(path.resolve(pluginPath, "README.md"));
 
     const icon = new PluginIcon(
       pluginPath,
@@ -248,15 +340,13 @@ class PluginManager implements IPluginManager {
       pluginInfo.icon.value
     );
 
-    const dev = pluginInfo.pluginSubInfo.dev;
-
     const touchPlugin = new TouchPlugin(
       pluginInfo.name,
       icon,
       pluginInfo.version,
-      pluginInfo.desc,
-      pluginInfo.readme,
-      dev,
+      pluginInfo.description,
+      readme,
+      pluginInfo.dev,
       pluginPath
     );
 
@@ -271,6 +361,10 @@ class PluginManager implements IPluginManager {
     const plugin = this.plugins.get(pluginName);
 
     if (!plugin) return Promise.resolve(false);
+
+    this.watcher.unwatch(
+      path.resolve(path.resolve(this.pluginPath, pluginName), "README.md")
+    );
 
     plugin.disable();
 
@@ -301,7 +395,7 @@ export default {
 
     this.listeners.push(
       touchChannel.regChannel(ChannelType.MAIN, "plugin-list", () =>
-        pluginManager.plugins.values()
+        (pluginManager as PluginManager).getPluginList()
       )
     );
     this.listeners.push(

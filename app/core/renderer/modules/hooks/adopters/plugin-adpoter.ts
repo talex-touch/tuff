@@ -2,46 +2,25 @@ import { reactive } from "vue";
 import { touchChannel } from "@modules/channel/channel-core";
 
 export interface Plugin {
-  pluginInfo: PluginInfo;
-  sourceConfig: string;
-  process: any[];
-  _status: number;
-  webview: any;
-}
-
-export interface PluginInfo {
+  desc: string;
+  dev: PluginDev;
+  icon: PluginIcon;
   name: string;
-  icon: Icon;
+  readme: string;
+  status: number;
   version: string;
-  description: string;
-  pluginSubInfo: PluginSubInfo;
-  authors: Author[];
+  webViewInit: boolean;
 }
 
-export interface Author {
-  name: string;
-  email: string;
-  website: string;
-  introduction: string;
-  local: string;
-  position: string;
-}
-
-export interface Icon {
+export interface PluginIcon {
   type: string;
   value: string;
   _value: string;
 }
 
-export interface PluginSubInfo {
-  dev: Dev;
-  signature: string;
-}
-
-export interface Dev {
+export interface PluginDev {
   enable: boolean;
   address: string;
-  source: boolean;
 }
 
 class PluginAdpoter {
@@ -49,18 +28,14 @@ class PluginAdpoter {
 
   _logouts = [];
   constructor() {
-    const plugins: object = {}; //touchChannel.sendSync('plugin-list')
-
-    this.__init_plugins(plugins);
-  }
-
-  __init_plugins(plugins: object) {
     this._unmount();
     this.plugins.clear();
 
+    const plugins: object = touchChannel.sendSync('plugin-list')
+
     // plugins 将 key: value 形式存储在map中
     Object.values(plugins).forEach((value) =>
-      this.plugins.set(value.pluginInfo.name, reactive(value))
+      this.plugins.set(value.name, reactive(value))
     );
 
     this._logouts.push(
@@ -85,16 +60,18 @@ class PluginAdpoter {
         Object.assign(p, { webview });
       })
     );
+    this._logouts.push(
+      touchChannel.regChannel("plugin:reload-readme", ({ data, reply }) => {
+        console.log("plugin:reload-readme", data, reply)
+        const p = this.plugins.get(data.plugin);
+        if (p) Object.assign(p, { readme: data.readme });
+
+        reply(1);
+        console.log("plugin:reload-readme", data, reply);
+      })
+    );
   }
-
-  async refreshPlugins() {
-    const res: object = await touchChannel.sendSync("plugin-list-refresh");
-
-    const plugins: object = res["data"];
-
-    this.__init_plugins(plugins);
-  }
-
+  
   _unmount() {
     this._logouts.forEach((v) => v());
   }

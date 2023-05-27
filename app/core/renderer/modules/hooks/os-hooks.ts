@@ -1,7 +1,7 @@
-import { postMainProcessMessage } from '@modules/samples/node-api'
+import { touchChannel  } from '../channel/channel-core'
 
 export function useOS() {
-    return postMainProcessMessage('get-os')
+    return touchChannel.sendSync("get-os");
 }
 
 // export function useCPUUsage() {

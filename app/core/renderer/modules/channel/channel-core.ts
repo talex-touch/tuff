@@ -18,8 +18,9 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   __parse_raw_data(e, arg): RawStandardChannelData {
+    console.log("Raw data: ", arg, e);
     if (arg) {
-      const { header, code, plugin, data, sync } = arg;
+      const { name, header, code, plugin, data, sync } = arg;
 
       if (header) {
         return {
@@ -32,7 +33,7 @@ class TouchChannel implements ITouchClientChannel {
           code,
           data,
           plugin,
-          name: header.name as string,
+          name: name as string,
         };
       }
     }
@@ -170,4 +171,4 @@ class TouchChannel implements ITouchClientChannel {
   }
 }
 
-export const touchChannel: ITouchClientChannel = new TouchChannel();
+export const touchChannel: ITouchClientChannel = window['$channel'] = new TouchChannel();

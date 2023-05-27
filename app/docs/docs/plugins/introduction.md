@@ -44,7 +44,9 @@ Just provide `index.html` `init.json`(will be exported as **manifest.json**) to 
 
 :::
 
-Now, click button `Refresh` to list your plugin on `PluginList` and if no accident your `plugin icon` should be a notepad icon.
+Now, when you put the plugin folder inside, he will be applied automatically read and loaded.
+
+And, because you are automatically created by the app, so will comes with a default value, when you modify the content(`init.json` or `index.html` or `preload.js` or `README.md`) and save then, the plugin will be automatically according to the need to reload.
 
 ## Got it
 

@@ -15,7 +15,7 @@ const func = ref(() => {})
 const status = ref('DISABLED')
 
 watchEffect(() => {
-  status.value = _PluginStatus[props.plugin._status]
+  status.value = _PluginStatus[props.plugin.status]
 })
 
 function refresh () {
@@ -70,7 +70,7 @@ onMounted(() => {
 
     const ctx = {
       status: status.value,
-      pluginName: props.plugin.pluginInfo.name,
+      pluginName: props.plugin.name,
       ...props,
       get $el() { return dom.value }
     }

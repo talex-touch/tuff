@@ -2,7 +2,6 @@ import path from "path";
 import fs from "fs";
 import fse from "fs-extra";
 import compressing from "compressing";
-import { TalexTouch } from "../types/touch-core";
 import { genPluginManager } from "./plugin-core";
 import { checkDirWithCreate } from "../utils/common-util";
 

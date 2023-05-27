@@ -201,7 +201,7 @@ const startCosts = ref('')
     Promise.resolve( startCosts.value = (window['_doneTimeDiff'] ?? 0) / 1000 )
   ])
 
-  // console.log( res )
+  console.log( res )
 })()
 
 function login() {

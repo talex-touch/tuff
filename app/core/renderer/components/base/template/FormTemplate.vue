@@ -1,5 +1,5 @@
 <script setup name="FormTemplate" lang="ts">
-const props = defineProps({
+defineProps({
   title: {
     type: String,
     default: 'FormTemplate'
@@ -7,6 +7,10 @@ const props = defineProps({
   description: {
     type: String,
     default: 'This is a form template.'
+  },
+  routerBack: {
+    type: Boolean,
+    default: false
   }
 });
 </script>
@@ -16,9 +20,13 @@ const props = defineProps({
     <div mx-10 my-6>
 
       <div pb-5 mb-10 border-b-1 border-b-solid border-gray-500>
-        <slot name="Header">
-          <p my-4 font-extrabold text-2xl>{{ title }}</p>
-          <span text="base" op-75 font-normal>{{ description }}</span>
+        <slot name="header">
+          <div items-center flex>
+            <div p-2 @click="() => $router.back()" v-if="routerBack"
+              class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic" />
+            <p my-4 font-extrabold text-2xl>{{ title }}</p>
+          </div>
+          <span block text="base" op-75 font-normal>{{ description }}</span>
         </slot>
       </div>
 
@@ -31,6 +39,20 @@ const props = defineProps({
 </template>
 
 <style scoped lang="scss">
+.hover-button {
+  &:hover {
+
+    --fake-inner-opacity: .5;
+  }
+
+  &:active {
+    transform: scale(.75);
+  }
+
+  cursor: pointer;
+  --fake-inner-opacity: 0;
+}
+
 .FormTemplate-Container {
   position: relative;
   margin: 2% 10%;
@@ -42,5 +64,4 @@ const props = defineProps({
   top: 0;
 
   box-sizing: border-box;
-}
-</style>
+}</style>

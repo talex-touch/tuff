@@ -4,6 +4,7 @@ import os from "os";
 import { ChannelType } from "utils/channel";
 import { genTouchChannel } from "../core/channel-core";
 import { TalexTouch } from "../types";
+import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
 
 function closeApp(app: TalexTouch.TouchApp) {
   app.window.close();
@@ -51,7 +52,7 @@ export default {
     );
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "dev-tools", () => {
-        console.log("[dev-tools] Open dev tools!")
+        console.log("[dev-tools] Open dev tools!");
         app.window.openDevTools({ mode: "undocked" });
         app.window.openDevTools({ mode: "detach" });
         app.window.openDevTools({ mode: "right" });
@@ -66,11 +67,36 @@ export default {
       )
     );
     this.listeners.push(
-      channel.regChannel(ChannelType.MAIN, "get-os", getOSInformation)
+      channel.regChannel(ChannelType.MAIN, "get-os", () => getOSInformation())
     );
 
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "common:cwd", process.cwd)
+    );
+
+    this.listeners.push(
+      channel.regChannel(ChannelType.MAIN, "url:open", ({ data }) =>
+        onOpenUrl(data)
+      )
+    );
+
+    async function onOpenUrl(url) {
+      console.log("open url", url);
+      const data = await channel.send(ChannelType.MAIN, "url:open", url);
+
+      if (data.data) {
+        shell.openExternal(url);
+      }
+    }
+
+    app.app.addListener("open-url", (event, url) => {
+      event.preventDefault();
+
+      onOpenUrl(url);
+    });
+
+    touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) =>
+      onOpenUrl(event.data)
     );
   },
   destroy() {

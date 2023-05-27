@@ -34,25 +34,26 @@ export default {
 <script setup>
 import { genFileAdpoter, pluginPath } from "@modules/hooks/adopters/file-adpoters";
 import { useModelWrapper } from 'utils/renderer/ref';
-import { reactive, ref } from "vue";
+import { reactive } from "vue";
 import FileTree from "@comp/tree/FileTree.vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
 import { pluginManager } from "@modules/channel/plugin-core/api";
 import { blowMention } from "@modules/mention/dialog-mention";
 import PluginExportMention from "@comp/plugin/action/mention/PluginExportMention.vue";
 import LogTerminal from "@comp/terminal/LogTerminal.vue";
+import { touchChannel  } from "@modules/channel/channel-core";
 
 const props = defineProps(["plugin", "modelValue"])
 const emit = defineEmits(["update:modelValue"])
 
 const visible = useModelWrapper(props, emit)
 
-const fileAdpoter = genFileAdpoter(pluginPath, props.plugin.pluginInfo.name)
+const fileAdpoter = genFileAdpoter(pluginPath, props.plugin.name)
 
 const pluginWrapper = reactive({
   packaging: false,
-  name: props.plugin.pluginInfo.name,
-  manifest: props.plugin.pluginInfo,
+  name: props.plugin.name,
+  manifest: props.plugin,
   files: ['init.json', 'index.html'],
   p: {
     n: 0,
@@ -62,7 +63,7 @@ const pluginWrapper = reactive({
   log: []
 })
 
-registerTypeProcess('plugin-packager-progress-log/' + pluginWrapper.name, ({ data }) => {
+touchChannel.regChannel('plugin-packager-progress-log/' + pluginWrapper.name, ({ data }) => {
   pluginWrapper.packaging = true
 
   console.log(data)
@@ -70,7 +71,7 @@ registerTypeProcess('plugin-packager-progress-log/' + pluginWrapper.name, ({ dat
   pluginWrapper.log.push(data.log)
 })
 
-registerTypeProcess('plugin-packager-progress/' + pluginWrapper.name, ({ data }) => {
+touchChannel.regChannel('plugin-packager-progress/' + pluginWrapper.name, ({ data }) => {
   pluginWrapper.packaging = true
   pluginWrapper.p.m = data.total
   pluginWrapper.p.n = data.received
@@ -83,7 +84,7 @@ registerTypeProcess('plugin-packager-progress/' + pluginWrapper.name, ({ data })
 })
 
 let suc = false
-registerTypeProcess('plugin-packager', async ({ data }) => {
+touchChannel.regChannel('plugin-packager', async ({ data }) => {
   if (suc) return
   suc = true
   if (!pluginWrapper.packaging) return suc = false
