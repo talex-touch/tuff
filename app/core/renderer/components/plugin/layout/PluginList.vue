@@ -1,17 +1,19 @@
 <template>
-  <el-scrollbar v-if="plugins" class="PluginList-Container">
+  <el-scrollbar v-if="plugins" class="PluginList-Container cubic-transition">
     <div class="PluginList-Toolbox">
       <FlatCompletion :fetch="search" />
-
-      <div class="new-plus" @click="() => toggleNewPlugin()" id="newPluginBtn" />
     </div>
 
     <PluginListModule shrink="true" v-model="target" :plugins="runningPlugins">
-      <template #name>运行中</template>
+      <template #name>Running</template>
     </PluginListModule>
     <PluginListModule v-model="target" :plugins="Object.values(plugins)">
-      <template #name>全部插件</template>
+      <template #name>All</template>
     </PluginListModule>
+
+    <div class="PluginList-Add transition-cubic fake-background">
+      <div id="newPluginBtn" @click="() => toggleNewPlugin()" class="new-plus" />
+    </div>
   </el-scrollbar>
 </template>
 
@@ -35,26 +37,41 @@ const toggleNewPlugin = inject('toggleNewPlugin')
 </script>
 
 <style lang="scss" scoped>
-.new-plus {
-  visibility: hidden;
-  right: 1%;
+.PluginList-Add {
+  &:before {
+    filter: invert(.25);
+    transition: .25s;
+  }
+  &:hover {
+    padding: 4px 8px;
+    --fake-radius: 4px;
+
+    --fake-opacity: .35;
+  --fake-inner-opacity: .35;
+  }
+  position: sticky;
+  padding: 4px;
+  display: inline-block;
+
+  bottom: 2%;
+
+  left: 50%;
+
+  --fake-opacity: .25;
+  --fake-inner-opacity: .25;
+  --fake-radius: 50%;
+  transform: translateX(-50%);
 }
 
 .PluginList-Toolbox {
   z-index: 1;
   position: sticky;
-  display: flex;
   padding: 2px 2%;
 
-  gap: 16px;
   top: 1%;
 
   width: 100%;
   height: 36px;
-
-  justify-content: space-between;
-
-  background-color: var(--el-fill-color);
 
   border-radius: 8px;
   box-sizing: border-box;

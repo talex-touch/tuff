@@ -27,7 +27,7 @@ html.coloring {
     width: calc(100% - 4px);
     height: calc(100% - 4px);
 
-    border: 1px solid transparent;
+    border: 1px solid var(--el-border-color);
     border-radius: 8px;
     transition: border 0.25s;
     &:hover {
@@ -52,6 +52,14 @@ html.coloring {
 
 .fake-background.transition {
   transition: transform 0.25s;
+}
+
+.fake-background.border-radius {
+  transition: border-radius 0.25s;
+}
+
+.fake-background.transition.border-radius {
+  transition: transform 0.25s, border-radius 0.25s;
 }
 
 .fake-background.index-fix {
@@ -106,7 +114,8 @@ span.tag {
   //opacity: 0.5;
   //pointer-events: none;
   transition: 0.25s;
-  border-radius: 8px;
+  border-radius: 4px 0 0 0;
+  --fake-radius: 4px 0 0 0;
 
   --fake-opacity: 0.75;
   //backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
@@ -119,8 +128,8 @@ html.touch-blur .Blur-Container {
 html.coloring .Blur-Container {
   top: 2px;
 
-  height: calc(100% - 8px);
-  width: calc(100% - 68px);
+  height: calc(100% - 4px);
+  width: 100%;
 }
 
 html.fullscreen .Blur-Container {

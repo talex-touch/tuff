@@ -53,6 +53,10 @@ export const sidebar = [
     items: plugins,
   },
   {
+    text: "Q & A",
+    link: "/docs/q-a/index",
+  },
+  {
     text: "About",
     collapsible: true,
     link: "/docs/about/changelog",

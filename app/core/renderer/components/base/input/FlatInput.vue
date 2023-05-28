@@ -1,14 +1,15 @@
 <template>
-  <div @keydown="onKeyDown" class="FlatInput-Container fake-background" :class="{ 'none-prefix': !$slots?.default }">
+  <div @keydown="onKeyDown" class="FlatInput-Container fake-background"
+    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true }">
     <span v-if="$slots.default" class="FlatInput-Prefix">
       <slot>
         <RemixIcon :name="icon" :style="`line`" />
       </slot>
     </span>
-    <input v-model="value" :type="password ? 'password' : 'text'" />
-      <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
-        Caps Lock
-      </el-tag>
+    <input :placeholder="placeholder" relative v-model="value" :type="password ? 'password' : 'text'" />
+    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
+      Caps Lock
+    </el-tag>
   </div>
 </template>
 
@@ -23,20 +24,20 @@ import RemixIcon from "@comp/icon/RemixIcon.vue";
 import { useModelWrapper } from 'utils/renderer/ref';
 import { ref } from "vue";
 
-const props = defineProps(['icon', 'password', 'modelValue'])
+const props = defineProps(['placeholder', 'icon', 'password', 'modelValue', 'nonWin'])
 const emit = defineEmits(['update:modelValue'])
 
 const lapsLock = ref(false)
 const value = useModelWrapper(props, emit)
 
 function onKeyDown(e) {
-  if ( !props.password ) return
+  if (!props.password) return
 
   const valueCapsLock = e.keyCode ? e.keyCode : e.which; // 按键
-  const valueShift = e.shiftKey ? e.shiftKey : ((valueCapsLock === 16) ); // shift键是否按住
+  const valueShift = e.shiftKey ? e.shiftKey : ((valueCapsLock === 16)); // shift键是否按住
 
-  lapsLock.value = ((valueCapsLock >= 65 && valueCapsLock <= 90 ) && !valueShift) // 输入了大写字母，并且shift键没有按住，说明Caps Lock打开
-    || ((valueCapsLock >= 97 && valueCapsLock <= 122 ) && valueShift)
+  lapsLock.value = ((valueCapsLock >= 65 && valueCapsLock <= 90) && !valueShift) // 输入了大写字母，并且shift键没有按住，说明Caps Lock打开
+    || ((valueCapsLock >= 97 && valueCapsLock <= 122) && valueShift)
 
 }
 </script>
@@ -52,16 +53,16 @@ function onKeyDown(e) {
   &:hover {
     border-color: var(--el-color-primary-light-3);
     box-shadow:
-            0 0 2px 1px var(--el-color-primary-light-5)
-    ;
+      0 0 2px 1px var(--el-color-primary-light-5);
   }
+
   &:focus-within {
     border-color: var(--el-color-primary);
     box-shadow:
-            0 0 2px 1px var(--el-color-primary-light-3),
-            0 0 4px 2px var(--el-color-primary-light-5)
-  ;
+      0 0 2px 1px var(--el-color-primary-light-3),
+      0 0 4px 2px var(--el-color-primary-light-5);
   }
+
   .FlatInput-Prefix {
     :deep(.remix) {
       position: absolute;
@@ -73,13 +74,14 @@ function onKeyDown(e) {
 
       top: -0.15em;
     }
+
     position: relative;
 
     font-size: 18px;
     color: var(--el-text-color-primary)
   }
+
   input {
-    position: relative;
 
     height: calc(100% - 2px);
     width: calc(100% - 15px);
@@ -92,10 +94,12 @@ function onKeyDown(e) {
     border-radius: 0 6px 6px 0;
     background-color: transparent;
   }
+
   &.none-prefix {
     padding: 0 5px;
     grid-template-columns: 1fr;
   }
+
   position: relative;
   padding-top: 2px;
   padding-right: 5px;
@@ -113,6 +117,42 @@ function onKeyDown(e) {
   border: 1px solid var(--el-border-color);
 
   --fake-radius: 6px;
-  transition: border-color .25s, box-shadow .25s;
+  transition: border-color .25s,
+  box-shadow .25s;
+}
+
+div.FlatInput-Container.win {
+  &:before {
+    filter: invert(.25);
+    --fake-opacity: .25;
+    --fake-inner-opacity: .25;
+  }
+
+  &:hover {
+    &:before {
+      --fake-opacity: .35;
+      --fake-inner-opacity: .35;
+    }
+
+    border-color: var(--el-border-color);
+    border-bottom: 1px solid var(--el-border-color);
+    box-shadow: none;
+  }
+
+  &:focus-within {
+    &:before {
+       filter: invert(.05);
+      --fake-opacity: .5;
+      --fake-inner-opacity: .5;
+    }
+
+    border-color: var(--el-border-color);
+    border-bottom: 2px solid var(--el-color-primary);
+    box-shadow: none;
+  }
+
+  border-radius: 4px;
+  --fake-radius: 4px !important;
+  border-bottom: 1px solid var(--el-border-color);
 }
 </style>

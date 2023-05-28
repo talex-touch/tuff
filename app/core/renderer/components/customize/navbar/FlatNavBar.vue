@@ -35,12 +35,23 @@ const activePlugin = inject('activePlugin')
 
   box-sizing: border-box;
   border-radius: 8px;
-  --fake-color: var(--el-fill-color-light);
   --fake-radius: 8px;
-  --fake-opacity: .35;
+  --fake-opacity: 0;
+
+  -webkit-app-region: no-drag;
+
+  :deep(.scale-upper.active) {
+    .IconButton-Container {
+      transform: scale(.75);
+    }
+  }
 
   :deep(.IconButton-Container) {
-    transform: scale(.75);
+
+    --fake-opacity: 0;
+    --fake-inner-opacity: 0;
+    --fake-radius: 8px;
+    transform: scale(.85);
   }
 }
 
@@ -56,6 +67,7 @@ const activePlugin = inject('activePlugin')
   * {
     -webkit-app-region: no-drag;
   }
+
   position: relative;
   margin: 0;
   padding: 10px 0;
@@ -65,7 +77,6 @@ const activePlugin = inject('activePlugin')
   justify-content: space-between;
 
   width: 100%;
-  //height: 50%;
 
   box-sizing: border-box;
 }

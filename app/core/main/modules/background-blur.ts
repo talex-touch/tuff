@@ -81,6 +81,8 @@ export default {
     win.webContents.addListener("dom-ready", refreshWallPaper.bind(null, win));
   
     win.on("move", updateWallPaperPos.bind(null, win));
+    win.on("enter-full-screen", updateWallPaperPos.bind(null, win));
+    win.on("leave-full-screen", updateWallPaperPos.bind(null, win));
   },
   destroy() {},
 } as TalexTouch.IModule;

@@ -9,8 +9,8 @@
       </div>
 
       <ul class="AppLayout-Controller">
-        <remix-icon @click="closeWindow" name="close" />
         <remix-icon @click="minimizeWindow" name="subtract" />
+        <remix-icon @click="closeWindow" name="close" />
       </ul>
     </div>
     <div class="AppLayout-Main">
@@ -24,7 +24,9 @@
         <div class="AppLayout-IconFooter" :class="{ 'active': account?.user?.username }">
           <slot name="icon" />
           <div v-if="account?.user?.username" class="AppLayout-Footer">
-            <p> {{ account.user.username }} <IdentifiedIcon style="color: var(--el-color-success-dark-2)" /> </p>
+            <p> {{ account.user.username }}
+              <IdentifiedIcon style="color: var(--el-color-success-dark-2)" />
+            </p>
             <span> {{ account.user.email }}</span>
           </div>
         </div>
@@ -75,19 +77,18 @@ function closeWindow() {
 .AppLayout-Container.Flat {
   .AppLayout-View {
     position: relative;
-    padding: 5px;
 
-    top: 5px;
-    left: 5px;
+    top: 0;
+    left: 0;
 
     flex: none;
 
-    height: calc(100% - var(--ctr-height) - 10px);
-    width: calc(100% - var(--nav-width) - 10px);
+    height: calc(100% - var(--ctr-height));
+    width: calc(100% - var(--nav-width));
 
-    --fake-radius: 8px;
-    border-radius: 8px;
-    border: 1px solid var(--el-border-color-dark);
+    --fake-radius: 4px 0 0 0;
+    border-radius: 4px 0 0 0;
+    // border: 1px solid var(--el-border-color-dark);
     box-sizing: border-box;
   }
 
@@ -95,6 +96,7 @@ function closeWindow() {
     &.active {
       transform: translateY(0);
     }
+
     &:before {
       content: '';
       position: absolute;
@@ -107,20 +109,24 @@ function closeWindow() {
 
       border-top: 1px solid var(--el-border-color);
     }
+
     :deep(.AppLayout-Icon) {
       bottom: 0;
     }
+
     .AppLayout-Footer {
-      & > p {
+      &>p {
         margin: 0;
         font-size: 12px;
         font-weight: 600;
       }
-      & > span {
+
+      &>span {
         margin: 0;
         font-size: 10px;
         font-weight: 400;
       }
+
       position: absolute;
       display: flex;
 
@@ -136,6 +142,7 @@ function closeWindow() {
       font-size: 12px;
       box-sizing: border-box;
     }
+
     position: absolute;
     padding: 0;
 
@@ -150,32 +157,16 @@ function closeWindow() {
     transform: translateY(100%);
     transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
   }
-
-  .AppLayout-Aside {
-    &:before {
-      content: '';
-      position: absolute;
-
-      top: 0;
-      left: 5%;
-
-      width: 90%;
-      height: 0;
-
-      border-top: 1px solid var(--el-border-color);
-    }
-    position: relative;
-    border-right: 1px solid var(--el-border-color);
-  }
 }
 
 .AppLayout-Container.Flat {
 
-  --ctr-height: 60px;
+  --ctr-height: 30px;
   --nav-width: 230px;
 
   .AppLayout-Header {
     padding: 0;
+
     .AppLayout-Icon {
       & span {
         .has-update &:after {
@@ -193,35 +184,35 @@ function closeWindow() {
 
           animation: breathing 1.5s ease-in-out infinite;
         }
+
         .has-update & {
           pointer-events: all;
           cursor: pointer;
+
           :deep(span) {
             background-color: var(--el-color-warning-light-7) !important;
           }
         }
+
         .touch-blur & {
           opacity: .75;
         }
-        margin-left: 10px;
+
         padding: 4px 2px;
         font-size: 12px;
 
         pointer-events: none;
         -webkit-app-region: no-drag;
-
-        border-radius: 8px;
-        background-color: var(--el-fill-color);
       }
+
       :deep(.tag) {
         padding: 4px 6px;
-        filter: invert(.1) !important;
-
-        --fake-radius: 8px;
-        border-radius: 8px;
+        --fake-radius: 4px;
+        border-radius: 4px;
       }
+
       display: flex;
-      padding: 0 0 0 1%;
+      padding: 0 0 0 .5%;
 
       height: var(--ctr-height);
       width: var(--nav-width);
@@ -229,13 +220,13 @@ function closeWindow() {
       align-items: center;
       text-indent: 5px;
       box-sizing: border-box;
-      border-right: 1px solid var(--el-border-color);
 
       img {
-        width: 32px;
+        width: 24px;
       }
 
     }
+
     justify-content: start;
   }
 
@@ -245,6 +236,7 @@ function closeWindow() {
         color: var(--el-fill-color-light);
         background-color: var(--color);
       }
+
       position: relative;
       display: flex;
 
@@ -252,7 +244,7 @@ function closeWindow() {
       align-items: center;
 
       width: 50px;
-      //height: 100%;
+      height: 100%;
 
       cursor: pointer;
       font-size: 20px;
@@ -260,24 +252,22 @@ function closeWindow() {
 
       --fake-radius: 0;
       transition: .25s;
+
       &:first-child {
-        --color: var(--el-color-error);
-      }
-      &:nth-child(2) {
         --color: var(--el-text-color-primary);
       }
+
+      &:nth-child(2) {
+        --color: var(--el-color-error);
+      }
     }
+
     position: absolute;
-    display: flex;
 
-    right: 1%;
+    right: 0;
 
-    height: 25px;
+    height: 30px;
     width: max-content;
-
-    justify-content: center;
-    align-items: center;
-    flex-direction: row-reverse;
   }
 }
 </style>

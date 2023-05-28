@@ -1,5 +1,5 @@
 <template>
-  <div class="Plugin-Container" :class="{ 'state': toggleOptions.state }">
+  <div class="Plugin-Container" :class="{ 'state': toggleOptions.state, 'status': toggleOptions.status }">
     <PluginList @select="selectPlugin" :plugins="plugins" />
 
     <div class="Plugin-Info" ref="pluginInfoRef">
@@ -21,18 +21,19 @@
         <div class="Plugin-Mention">
           <p>Start by installing or selecting a plugin</p>
           <span>
-            Installing a plugin makes working with your favorite tools even easier. Share your work with your personal
-            cloud, and find out what other developers are using.
-            Just click the button below to get started.
+            Plugins can enhance your workflow.
+            Share your works through personal cloud.
+            Take a look on what other developers are doing.
+            Click button to get start.
           </span>
           <FlatButton @click="() => $router.push('/market')">
-            Install a plugin
+            Get started!
           </FlatButton>
         </div>
       </div>
     </div>
 
-    <div bd-lg absolute top-0 left-0 :style="`${toggleOptions.style}`">
+    <div class="fake-background" rounded bd-lg absolute top-0 left-0 :style="`${toggleOptions.style}`">
       <div id="floating-plus" :style="`z-index: 100;--x: ${toggleOptions.x}px;--y: ${toggleOptions.y}px`"
         :class="{ 'active': toggleOptions.status }" class="new-plus" @click="() => toggleNewPlugin()" />
       <PluginNew mt--9 />
@@ -87,12 +88,12 @@ const toggleOptions = reactive({
 
     if (!a || !b || !c || !d) return ''
 
-    const bg = 'var(--el-fill-color)'// toggleOptions.status ? 'transparent' : 'var(--el-fill-color)'
+    // const bg = 'var(--el-fill-color)'// toggleOptions.status ? 'transparent' : 'var(--el-fill-color)'
 
     return `
       clip-path: polygon(${a.x}% ${a.y}%, ${b.x}% ${b.y}%, ${c.x}% ${c.y}%, ${d.x}% ${d.y}%);
-      background-color: ${bg}; width: 100%; height: 100%; overflow: hidden;
-  z-index: 1; transition: clip-path .5s, opacity .5s
+      --fake-opacity: .95;
+      width: 100%; height: 100%; overflow: hidden;z-index: 1; transition: clip-path .35s, opacity .5s
     `
   })
 })
@@ -137,23 +138,23 @@ const toggleNewPlugin = (() => {
 
       const ww = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
       const wh = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
-      const { left, top, width, height } = el.getBoundingClientRect()
+      const { width, height } = el.getBoundingClientRect()
 
-      const l = left - el.offsetLeft / 2 - width / 2 + 4
-      const t = top - el.offsetTop - el.parentNode.clientHeight - height
+      const l = floating.x + width
+      const t = floating.y - height
 
       const [a, b, c, d] = [
-        l / ww,
-        (l + width) / ww,
-        t / wh,
+        (l) / ww,
+        (l) / ww,
+        (t + height) / wh,
         (t + height) / wh,
       ]
 
       toggleOptions.points = [
-        { x: a * 100 - .5, y: c * 100 },
-        { x: b * 100 + 0, y: c * 100 },
-        { x: b * 100 + 0, y: d * 100 },
-        { x: a * 100 - .5, y: d * 100 }
+        { x: a * 100, y: c * 100 },
+        { x: b * 100, y: c * 100 },
+        { x: b * 100, y: d * 100 },
+        { x: a * 100, y: d * 100 }
       ]
     }
   }
@@ -228,6 +229,12 @@ window.addEventListener('resize', () => {
   transform: translate(var(--x), calc(var(--y) - 100%));
 }
 
+:deep(.PluginList-Container) {
+  .status & {
+    filter: blur(4px);
+  }
+}
+
 .Plugin-EmptyBox {
   &:before {
     content: '';
@@ -240,7 +247,7 @@ window.addEventListener('resize', () => {
     height: 32px;
 
     border-radius: 50%;
-    filter: blur(1px) contrast(1.2);
+    filter: blur(1px) contrast(1.05);
     background-image: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
   }
 
@@ -255,7 +262,7 @@ window.addEventListener('resize', () => {
     height: 32px;
 
     border-radius: 50%;
-    filter: blur(1px) contrast(1.2);
+    filter: blur(1px) contrast(1.05);
     background-image: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
   }
 
@@ -270,7 +277,7 @@ window.addEventListener('resize', () => {
   transform: translate(-50%, -50%);
   background-color: var(--el-fill-color-extra-lighter);
   border-radius: 8px;
-  backdrop-filter: blur(2px) brightness(1.05);
+  backdrop-filter: blur(5px);
   box-shadow: 0 0 8px #00000011;
   border: 2px solid var(--el-border-color);
 }
@@ -397,6 +404,10 @@ window.addEventListener('resize', () => {
 }
 
 .Plugin-Info {
+  .status & {
+    filter: blur(4px);
+  }
+
   &:after {
     z-index: -1;
     content: "";

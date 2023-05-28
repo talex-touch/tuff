@@ -1,6 +1,6 @@
 <template>
   <div class="FlatInput-Container" ref="completionInput">
-    <FlatInput v-model="value" :icon="icon" />
+    <FlatInput placeholder="Search..." v-model="value" :icon="icon" />
   </div>
   <teleport to="body">
     <div @click="value = ''" class="FlatInput-Completion" ref="completionWrapper">

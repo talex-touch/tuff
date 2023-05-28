@@ -2,92 +2,71 @@
  * @see https://www.electron.build/configuration/configuration
  */
 {
-  "appId": "talex-touch",
-  "asar": true,
-  "directories": {
-    "output": "release/${version}"
+  appId: "talex-touch",
+  asar: true,
+  directories: {
+    output: "../../release/${version}",
   },
-  "files": [
-    "!node_modules/",
-    "!.github/",
+  files: [
     "!.vscode/",
-    "!.vitepress/",
+    "!node_modules/",
     "!public/",
-    "!src/",
-    "!release/",
-    "!talex-touch/",
-    "!.gitattributes",
-    "!.gitignore",
+    "!build/",
+    "!releases/",
     "!electron-builder.json5",
     "!index.html",
     "!pnpm-lock.yaml",
-    "!README.md",
     "!tsconfig.json",
     "!tsconfig.node.json",
-    "!vite.config.ts",
+    "!electron.vite.config.ts",
   ],
-//  "mac": {
-//    "artifactName": "${productName}_${version}.${ext}",
-//    "target": [
-//      "dmg"
-//    ]
-//  },
-  "win": {
-    "target": [
+  //  "mac": {
+  //    "artifactName": "${productName}_${version}.${ext}",
+  //    "target": [
+  //      "dmg"
+  //    ]
+  //  },
+  win: {
+    target: [
       {
-        "target": "nsis",
-        "arch": [
-          "x64",
-          "ia32",
-//          "armv7l",
-          "arm64"
-        ]
+        target: "nsis",
+        arch: ["x64", "ia32", "arm64"],
       },
       {
-        "target": "portable",
-        "arch": [
-          "x64",
-          "ia32",
-        ]
-      }
+        target: "portable",
+        arch: ["x64", "ia32"],
+      },
     ],
-    "artifactName": "${productName}_${version}.${ext}",
-    "icon": "./public/favicon.ico"
+    artifactName: "${productName}_${version}.${ext}",
+    icon: "./public/favicon.ico",
   },
-  "linux": {
-    "target": [
-      "AppImage",
-      "deb",
-      "rpm",
-      "snap",
-//      "tar.xz"
-    ]
+  linux: {
+    target: ["AppImage", "deb", "rpm", "snap"],
   },
-  "nsis": {
-//    "guild": "com.talex.touch",
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": true,
-    "installerIcon": "./public/favicon.ico",
-    "uninstallerIcon": "./public/favicon.ico",
-    "installerHeaderIcon": "./public/favicon.ico",
-    "shortcutName": "TalexTouch"
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: true,
+    installerIcon: "./public/favicon.ico",
+    uninstallerIcon: "./public/favicon.ico",
+    installerHeaderIcon: "./public/favicon.ico",
+    shortcutName: "TalexTouch",
   },
-  "fileAssociations": [
+  fileAssociations: [
     {
-      "ext": "touch-plugin",
-      "name": "TalexTouch",
-      "role": "Editor",
-      "description": "TalexTouch AddonPackage File (Plugin)"
-    }
+      ext: "touch-plugin",
+      name: "TalexTouch",
+      role: "Editor",
+      description: "TalexTouch AddonPackage File (Plugin)",
+    },
   ],
-//  "publish": [
-//    {
-//      "provider": "custom",
-//      "owner": "TalexDreamSoul",
-//      "repo": "talex-touch",
-//      "url": "https://github.com/TalexDreamSoul/talex-touch/releases/latest"
-//    }
-//  ],
+  //  "publish": [
+  //    {
+  //      "provider": "custom",
+  //      "owner": "TalexDreamSoul",
+  //      "repo": "talex-touch",
+  //      "url": "https://github.com/TalexDreamSoul/talex-touch/releases/latest"
+  //    }
+  //  ],
 }

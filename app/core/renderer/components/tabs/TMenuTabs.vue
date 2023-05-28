@@ -24,7 +24,7 @@ export default defineComponent({
       const pointerRect = pointerEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
 
-      const diffTop = -108
+      const diffTop = -78
 
       if (nodeRect.top > pointerRect.top) {
 

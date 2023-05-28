@@ -1,10 +1,11 @@
 <template>
-  <div class="PluginList-Module">
-    <p class="PluginList-Title">
+  <div class="PluginList-Module" mb-12 min-h-16>
+    <p flex justify-between items-center>
+      <!-- For slot change style (className) -->
       <span class="PluginList-Name">
         <slot name="name" />
       </span>
-      <span class="PluginList-Amo">
+      <span style="color: var(--el-text-color-secondary)" text-sm class="PluginList-Amo">
         {{ plugins.length }} 个
       </span>
     </p>
@@ -13,7 +14,8 @@
 
     <transition-group name="list">
       <div @click="value = plugin" class="PluginList-Item fake-background"
-           :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }" v-for="(plugin, index) in Object.values(plugins)" :key="index" >
+        :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }"
+        v-for="(plugin, index) in Object.values(plugins)" :key="index">
         <PluginIcon :icon="plugin.icon" :alt="plugin.name" />
 
         <div class="PluginList-Item-Main">
@@ -47,96 +49,80 @@ const value = useModelWrapper(props, emits)
 </script>
 
 <style lang="scss" scoped>
-.PluginList-Module {
-  .PluginList-Title {
-    .PluginList-Amo {
-      font-size: 14px;
-      color: var(--el-text-color-secondary);
-    }
-    //margin-bottom: -5px;
+.PluginList-Item-Main {
+  .PluginList-ShrinkStatus {
+    position: absolute;
 
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    top: 50%;
+
+    right: 5%;
+
+    border-radius: 8px;
+    transform: translateY(-50%);
+    overflow: hidden;
   }
-  margin-bottom: 40px;
-  min-height: 80px;
+
+  margin-left: 15px;
+
+  & :first-child {
+    margin: 0;
+
+    font-weight: 600;
+    font-size: 20px;
+  }
+
+  & :last-child {
+    margin: 0;
+
+    font-size: 14px;
+    color: var(--el-text-color-secondary);
+  }
+
+  display: flex;
+  height: 60%;
+
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+:deep(.PluginIcon-Container) {
+  display: flex;
+
+  justify-content: center;
+  align-items: center;
+
+  grid-column: 1;
+  grid-row: 1 / 3;
+
+  width: 48px;
+  height: 48px;
+
+  font-size: 32px;
+
+  border-radius: 8px;
+  box-sizing: border-box;
+  background-color: var(--el-fill-color);
 }
 
 .PluginList-Item {
-  .PluginList-Item-Main {
-    .PluginList-ShrinkStatus {
-      position: absolute;
 
-      top: 50%;
-
-      right: 5%;
-
-      border-radius: 8px;
-      transform: translateY(-50%);
-      overflow: hidden;
-    }
-    margin-left: 15px;
-    & :first-child {
-      margin: 0;
-
-      font-weight: 600;
-      font-size: 20px;
-    }
-    & :last-child {
-      margin: 0;
-
-      font-size: 14px;
-      color: var(--el-text-color-secondary);
-    }
-    display: flex;
-    height: 60%;
-
-    flex-direction: column;
-    justify-content: space-between;
+  &.dev :deep(.PluginIcon-Container) {
+    box-shadow: 0 0 4px 2px var(--el-color-warning-light-5);
   }
-  :deep(.PluginIcon-Container) {
-    display: flex;
 
-    justify-content: center;
-    align-items: center;
-
-    grid-column: 1;
-    grid-row: 1 / 3;
-
-    width: 64px;
-    height: 64px;
-
-    font-size: 48px;
-
-    border-radius: 50%;
-    box-sizing: border-box;
-    background-color: var(--el-fill-color);
-  }
   &.target {
+    &:before {
+      filter: invert(0);
+    }
+
+    --fake-opacity: .5;
+    --fake-inner-opacity: .5;
+
     pointer-events: none;
 
-    border: 2px solid var(--el-color-primary);
-    box-shadow: 0 0 4px 2px var(--el-color-primary-light-5);
+    border: 2px solid var(--el-color-primary-light-3);
   }
-  &:after {
-    // linear image
-    z-index: -1;
-    content: "";
-    position: absolute;
 
-    top: 0;
-    left: 0;
-
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(45deg, var(--el-color-primary-light-9) 25%, transparent 50%, transparent 75%, var(--el-color-primary-light-9) 75%);
-    background-size: 1px 1px;
-  }
-  &.dev {
-    background: linear-gradient(45deg, rgba(254, 159, 14, 0.1) 25%, transparent 25%, transparent 50%, rgba(254, 159, 14, 0.2) 50%, rgba(254, 159, 14, 0.1) 75%, transparent 75%, transparent);
-    background-size: 20px 30px;
-  }
   &.shrink {
     :deep(.PluginIcon-Container) {
       width: 32px;
@@ -144,24 +130,30 @@ const value = useModelWrapper(props, emits)
 
       font-size: 24px;
     }
+
     .PluginList-Item-Main {
       & :last-child {
         font-size: 16px;
         color: var(--el-text-color-primary);
       }
     }
+
     height: 40px;
 
     pointer-events: all !important;
   }
-  &:hover {
-    border: 2px solid var(--el-color-primary-light-5);
-    box-shadow: 0 0 4px 1px var(--el-color-primary-light-5);
 
-    &:after {
-      background-size: 2px 2px;
+  &:hover {
+    &:before {
+      filter: invert(.15)
     }
+
+    --fake-opacity: .25;
+    --fake-inner-opacity: .25;
+
+    border: 2px solid var(--el-border-color);
   }
+
   display: flex;
   padding: 0 20px;
 
@@ -172,14 +164,17 @@ const value = useModelWrapper(props, emits)
 
   cursor: pointer;
   border-radius: 8px;
-  border: 2px solid var(--el-border-color);
-  box-shadow: 0 0 2px 1px var(--el-fill-color-dark);
+  border: 2px solid transparent;
+
+  --fake-opacity: 0;
+  --fake-inner-opacity: 0;
 
   overflow: hidden;
   transition: .25s;
 }
 
-.list-move, /* 对移动中的元素应用的过渡 */
+.list-move,
+/* 对移动中的元素应用的过渡 */
 .list-enter-active,
 .list-leave-active {
   transition: all 0.5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
@@ -195,16 +190,12 @@ const value = useModelWrapper(props, emits)
 
 .PluginList-Empty {
   &.visible {
-    //margin-top: 30px;
-    //margin-bottom: -3px;
 
     opacity: 0;
     transform: translateY(20px);
   }
-  margin-bottom: -35px;
 
-  //top: 40px;
-  //width: 100%;
+  margin-bottom: -35px;
 
   text-align: center;
 

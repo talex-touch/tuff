@@ -7,13 +7,14 @@
   Design reference <b>TDesignS</b>
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_shield)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
   [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
 </div>
 
 ## Announcement
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_small)
 
 > 2.0.0 version is now under dev and alpha test.
 
@@ -40,6 +41,8 @@ TalexTouch runs on mainstream platforms such as Windows, macOS, and Linux, provi
 
 The design style of TalexTouch is inspired by TDesignS, which is simple and elegant. The themes, fonts, and icons have been carefully adjusted to provide users with a better experience.
 
+Thanks to the design from [@0x1021A0](https://github.com/0x1021A0) <img alt="0x1021A0" style="border-radius: 50%;position: relative;top: 5px" src="https://github.com/0x1021A0.png?size=32" /> and the design tool from [![Figma](https://api.iconify.design/logos:figma.svg)](https://www.figma.com/)
+
 ## Rich Functionality
 
 TalexTouch integrates a variety of practical functions to make your desktop smarter and more efficient. It supports multiple windows, shortcuts, clipboard management, screenshots, timers, and more, as well as custom plugins.
@@ -64,7 +67,7 @@ This project is open-sourced under the Mozilla Public License 2.0 agreement.
 
 > Any issues not match `issue template` will be closed directly!
 
-Please keep in mind that developers are under no obligation to solve your Issue even this project, as well as open source and maintenance are based on developers of free time.
+Please keep in mind that developers are under no obligation to solve your Issue even in this project, as well as open source and maintenance are based on the free time of developers.
 
 ## Contribution
 

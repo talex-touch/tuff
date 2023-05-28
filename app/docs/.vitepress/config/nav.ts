@@ -12,6 +12,7 @@ export const nav = [
   },
   // { text: "Plugins", link: "/docs/plugins/introduction" },
   { text: 'API', link: '/docs/api' },
+  { text: 'Q & A', link: '/q-a/index' },
   {
     text: "About",
     items: [
