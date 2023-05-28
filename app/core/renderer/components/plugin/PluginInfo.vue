@@ -30,7 +30,7 @@
         </LineTemplate>
       </BlockTemplate>
 
-      <BlockTemplate v-if="plugin.readme" title="Readme">
+      <BlockTemplate :style="`padding-right: 1.25rem`" v-if="plugin.readme" title="Readme">
         <FlatMarkdown :readonly="true" v-model="readme" />
       </BlockTemplate>
     </FormTemplate>

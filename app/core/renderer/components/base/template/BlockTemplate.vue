@@ -3,6 +3,10 @@ const props = defineProps({
   title: {
     type: String,
     default: 'BlockTemplate'
+  },
+  style: {
+    type: String,
+    default: ''
   }
 })
 </script>
@@ -12,7 +16,7 @@ const props = defineProps({
     <p font-bold>
       {{ title }}
     </p>
-    <div px-6>
+    <div :style="style">
       <slot />
     </div>
   </div>
