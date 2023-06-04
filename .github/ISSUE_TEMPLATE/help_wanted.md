@@ -32,7 +32,7 @@ assignees: ''
 
 ## Contact
 
-<!-- We use this just to ensure our engineers could receive it, and assist you to find more developers to see this as soon as possible! -->
+<!-- We use this to ensure our engineers can receive it, and assist you in finding more developers to see this as soon as possible! -->
 
 @TalexDreamSoul
 

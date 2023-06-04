@@ -4,6 +4,7 @@
 {
   appId: "talex-touch",
   asar: true,
+  productName: "TalexTouch",
   directories: {
     output: "../../release/${version}",
   },

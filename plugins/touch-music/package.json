@@ -1,0 +1,31 @@
+{
+  "name": "touch-music",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "music:dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@milkdown/theme-nord": "^7.2.1",
+    "@types/howler": "^2.2.7",
+    "axios": "^1.3.4",
+    "granim": "^2.0.0",
+    "gsap": "^3.11.4",
+    "howler": "^2.2.3",
+    "recorder-core": "^1.2.22080700",
+    "remixicon": "^2.5.0",
+    "rgbaster": "^2.1.1",
+    "typescript": "^4.9.4",
+    "vue": "^3.2.45",
+    "wavesurfer.js": "^6.4.0",
+    "xterm": "^5.1.0",
+    "xterm-addon-fit": "^0.7.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.0.0",
+    "vite": "^4.0.0"
+  }
+}

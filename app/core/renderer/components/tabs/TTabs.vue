@@ -29,7 +29,7 @@ export default defineComponent({
       const pointerRect = pointerEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
 
-      const diffTop = that?.$props?.hasOwnProperty('offset') ? +that.$props.offset : -70
+      const diffTop = that?.$props?.hasOwnProperty('offset') ? +that.$props.offset : -50
 
       if (nodeRect.top > pointerRect.top) {
 
@@ -374,7 +374,7 @@ export default defineComponent({
     top: 0;
     left: 0;
 
-    background-color: var(--el-fill-color-light);
+    // background-color: var(--el-fill-color);
   }
 
   position: relative;

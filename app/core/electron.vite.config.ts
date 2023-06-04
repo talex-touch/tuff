@@ -4,6 +4,7 @@ import path from "path";
 import vueJsx from "@vitejs/plugin-vue-jsx";
 
 // import topLevelAwait from "vite-plugin-top-level-await";
+import commonjsExternal from "vite-plugin-commonjs-externals";
 import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
 import Unocss from "unocss/vite";
@@ -43,6 +44,13 @@ export default defineConfig({
       ],
     },
     plugins: [
+      commonjsExternal({
+        externals: [
+          'path',
+          /^electron(\/.+)?$/,
+          'fs', 'fs-extra'
+        ]
+      }),
       externalizeDepsPlugin({
         exclude: [],
       }),

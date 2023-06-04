@@ -408,7 +408,7 @@ export default {
         const plugin = pluginManager.plugins.get(data);
         if (!plugin) return false;
 
-        plugin.enable();
+        return plugin.enable();
       })
     );
     this.listeners.push(
