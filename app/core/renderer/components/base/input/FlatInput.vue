@@ -1,30 +1,25 @@
 <template>
-  <div @keydown="onKeyDown" class="FlatInput-Container fake-background"
-    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true }">
+  <div tabindex="0" @keydown="onKeyDown" class="FlatInput-Container fake-background"
+    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true, area }">
     <span v-if="$slots.default" class="FlatInput-Prefix">
       <slot>
         <RemixIcon :name="icon" :style="`line`" />
       </slot>
     </span>
-    <input :placeholder="placeholder" relative v-model="value" :type="password ? 'password' : 'text'" />
+    <textarea resize="false" v-if="area" :placeholder="placeholder" relative v-model="value" />
+    <input v-else :placeholder="placeholder" relative v-model="value" :type="password ? 'password' : 'text'" />
     <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
       Caps Lock
     </el-tag>
   </div>
 </template>
 
-<script>
-export default {
-  name: "FlatInput"
-}
-</script>
-
-<script setup>
+<script name="FlatInput" setup>
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 import { useModelWrapper } from 'utils/renderer/ref';
 import { ref } from "vue";
 
-const props = defineProps(['placeholder', 'icon', 'password', 'modelValue', 'nonWin'])
+const props = defineProps(['placeholder', 'icon', 'password', 'modelValue', 'nonWin', 'area'])
 const emit = defineEmits(['update:modelValue'])
 
 const lapsLock = ref(false)
@@ -81,10 +76,10 @@ function onKeyDown(e) {
     color: var(--el-text-color-primary)
   }
 
-  input {
+  input, textarea {
 
-    height: calc(100% - 2px);
-    width: calc(100% - 15px);
+    height: calc(100% - 4px);
+    width: calc(100% - 2px);
 
     outline: none;
     border: none;
@@ -95,9 +90,19 @@ function onKeyDown(e) {
     background-color: transparent;
   }
 
+  textarea {
+    width: 100%;
+
+    resize: none;
+  }
+
   &.none-prefix {
     padding: 0 5px;
     grid-template-columns: 1fr;
+  }
+
+  &.area {
+    height: 10rem;
   }
 
   position: relative;

@@ -34,6 +34,7 @@
     "@milkdown/theme-nord": "^7.2.2",
     "@milkdown/transformer": "^7.2.2",
     "@milkdown/vue": "^7.2.2",
+    "@unocss/transformer-attributify-jsx": "^0.52.7",
     "axios": "^1.4.0",
     "child_process": "^1.0.2",
     "chokidar": "^3.5.3",

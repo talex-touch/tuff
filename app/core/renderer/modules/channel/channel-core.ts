@@ -18,7 +18,7 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   __parse_raw_data(e, arg): RawStandardChannelData {
-    console.log("Raw data: ", arg, e);
+    // console.log("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, plugin, data, sync } = arg;
 

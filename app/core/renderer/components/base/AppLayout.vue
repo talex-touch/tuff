@@ -92,8 +92,6 @@ function openDevTools() {
   window.$nodeApi.openDevTools()
 }
 
-const router = useRouter()
-
 function beforeEnter(el) {
   el.style.opacity = 0
   el.style.transform = 'scale(0.9)'
@@ -218,7 +216,10 @@ function afterLeave(el) {
   left: 0;
 
   width: var(--nav-width);
-  height: calc(100% - var(--ctr-height, 30px) + 10px);
+  // height: 100%;
+
+  flex: 1;
+  // flex-shrink: 0;
 
   box-sizing: border-box;
 
@@ -256,7 +257,8 @@ function afterLeave(el) {
   position: relative;
   display: flex;
 
-  height: 100vh;
+  flex: 1;
+  height: calc(100% - var(--ctr-height, 40px) - 3px);
 }
 
 :deep(.AppLayout-Header) {
@@ -326,7 +328,8 @@ function afterLeave(el) {
     position: relative;
 
     //width: calc(100% - 70px);
-    height: calc(100% - 30px);
+    // height: calc(100% - 30px);
+    flex: 1;
 
     flex: 1;
 

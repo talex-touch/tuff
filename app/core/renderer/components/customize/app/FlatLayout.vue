@@ -83,7 +83,6 @@ function closeWindow() {
 
     flex: none;
 
-    height: calc(100% - var(--ctr-height));
     width: calc(100% - var(--nav-width));
 
     --fake-radius: 4px 0 0 0;
@@ -93,8 +92,9 @@ function closeWindow() {
   }
 
   .AppLayout-IconFooter {
+    display: none;
     &.active {
-      transform: translateY(0);
+      transform: translate(0, 0);
     }
 
     &:before {
@@ -111,6 +111,7 @@ function closeWindow() {
     }
 
     :deep(.AppLayout-Icon) {
+      margin: 0;
       bottom: 0;
     }
 
@@ -128,7 +129,7 @@ function closeWindow() {
       }
 
       position: absolute;
-      display: flex;
+      display: none;
 
       flex-direction: column;
       justify-content: center;
@@ -147,14 +148,14 @@ function closeWindow() {
     padding: 0;
 
     left: 0;
-    bottom: 20px;
+    top: calc(100% - 100px);
 
     --default-icon-addon: 5px;
 
     width: 100%;
     height: 50px;
 
-    transform: translateY(100%);
+    // transform: translate(-100%, 0%);
     transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
   }
 }

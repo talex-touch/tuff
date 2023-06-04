@@ -13,6 +13,27 @@ defineProps({
     default: false
   }
 });
+
+const formFields = []
+
+provide('regFormFiled', (vnode, func) => {
+  formFields.push({
+    vnode, func
+  })
+})
+
+provide('checkForm', () => {
+  for (const field of formFields) {
+    const { access } = field.func()
+
+    if ( !access ) {
+      return false
+    }
+  }
+
+  return true
+})
+
 </script>
 
 <template>
