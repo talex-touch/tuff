@@ -21,7 +21,7 @@
 
 ## 我可以对项目做出优化吗 / Make a optimization to the project?
 
-> Aabout Animation/UI/UX Design
+> About Animation/UI/UX Design
 
 Of course! We are very support this kind of behavior, but please note that everything is given priority to with the user experience. Your design must be reference for the design of the project itself, otherwise it would be a disaster.
 
@@ -29,7 +29,7 @@ Of course! We are very support this kind of behavior, but please note that every
 
 ## 我可以添加新功能/特性吗 / Can I add new functions/features ?
 
-Sorry! We as much as possible the current primary goal is to optimize the program and to provide users with a good interface design. If you want to provide new functionality Suggestions to develop new plugins.
+Sorry! We as much as possible the current primary goal is to optimize the program and to provide users with a good UI design. If you want to provide new functionality Suggestions to develop new plugins.
 
 非常抱歉。我们当前的主要目标是尽可能优化程序,为用户提供一个良好的界面设计。如果你想提供新功能建议开发新的插件。
 
@@ -38,7 +38,7 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
 ### 前置条件
 
 1. Fork this repository.
-2. Check-out branch **master** 分支
+2. Check-out branch **master**
 3. Create your own branch on `head` and name it according to your preferences
 4. Start your develop
 5. When all things done, please create a `PULL REQUEST` about what you developed.
@@ -79,13 +79,13 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
  > talex-touch:
    ├── app: (Main applications)
    ├─── core: (Electron application)
-   ├─── docs: (Documention application)
+   ├─── docs: (Document application)
    ├─── ends: (Ends Application)
-   ├── packages: (Assitant packages)
+   ├── packages: (Assistant packages)
    ├─── components: (Touch components)
    ├─── test: (Util tests)
-   ├─── touch-view: (Component displayer)
-   ├─── utils: (Assitance Utils)
+   ├─── touch-view: (Component display)
+   ├─── utils: (Assistant Utils)
    ├── plugins: (Official plugins)
 ```
 

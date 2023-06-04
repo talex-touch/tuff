@@ -3,6 +3,7 @@ import FormTemplate from '@comp/base/template/FormTemplate.vue';
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue';
 import BrickTemplate from '@comp/base/template/BrickTemplate.vue';
 import LineTemplate from '@comp/base/template/LineTemplate.vue';
+import ActionTemplate from '@comp/base/template/ActionTemplate.vue';
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import FlatInput from '@comp/base/input/FlatInput.vue'
 import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue';
@@ -12,20 +13,30 @@ const arrow = ref()
 const toggleNewPlugin = inject('toggleNewPlugin')
 onMounted(() => {
   toggleNewPlugin(arrow.value)
+
 })
 
 const plugin = reactive({
   name: "",
-  desc: "Demo plugin",
+  desc: "",
   version: "0.0.1",
   dev: {
     enable: computed(() => plugin.dev.address),
-    address: "http://localhost:3000"
+    address: ""
   },
   readme: "# Demo Plugin.",
   openInVSC: false,
   agreement: false
 })
+
+function createAction(ctx) {
+  const { checkForm } = ctx
+
+  const result = checkForm()
+
+  if (!result) return
+  
+}
 </script>
 
 <template>
@@ -73,17 +84,17 @@ const plugin = reactive({
     </BlockTemplate>
 
     <BlockTemplate title="General">
-      <LineTemplate title="name">
+      <LineTemplate :msg="() => 'You must input the correct plugin name.'" regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{1,15}$" title="name">
         <FlatInput w="48!" v-model=plugin.name />
       </LineTemplate>
-      <LineTemplate title="version">
+      <LineTemplate :msg="() => 'You must input the correct plugin version.'" regex="^(\d+\.)(\d+\.)(\*|\d+)$" title="version">
         <FlatInput w="48!" v-model=plugin.version />
       </LineTemplate>
-      <LineTemplate title="dev-address">
+      <LineTemplate :msg="() => 'You must input the correct plugin dev address.'" regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$" title="dev-address">
         <FlatInput w="48!" v-model=plugin.dev.address />
       </LineTemplate>
-      <LineTemplate title="description">
-        <FlatInput w="48!" v-model=plugin.desc />
+      <LineTemplate :msg="() => 'You must input the correct plugin description.'" regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{15,80}$" title="description">
+        <FlatInput :area="true" w="96!" v-model=plugin.desc />
       </LineTemplate>
     </BlockTemplate>
 
@@ -101,9 +112,11 @@ const plugin = reactive({
         <FlatButton hover:bg-red>
           Cancel
         </FlatButton>
-        <FlatButton :primary="true">
-          Create
-        </FlatButton>
+        <ActionTemplate :action="createAction">
+          <FlatButton :primary="true">
+            Create
+          </FlatButton>
+        </ActionTemplate>
       </div>
 
     </BlockTemplate>
