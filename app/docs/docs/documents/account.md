@@ -5,16 +5,16 @@
 ## What's
 
 `TouchAccount` is a pass certificate in **talex-touch** series apps. You can sign in it in [Here](https://test.pvpin.net) or in our app.
-To use it, you must agree with our privacy policy and other policies when you register. Login account in different platforms and you can use cloud sync data all crossing your machines.
+To use it, you must agree with our privacy policy and other policies when you try to register. Login account in different platforms and you can use `CloudDataSync` crossing your machines.
 
 ## How
 
 To have a `TouchAccount`, you must read our polices closely. And you can register it in [Here](https://test.pvpin.net) or just open our app.
-Click `Settings` > `App Settings` > `Account` to login or sign-in.
+Click `Settings` > `App Settings` > `Account` to login or sign-up.
 
 Besides, you are supposed to complete some artificial verification to ensure you are human.
 
-> Attention, we have your account's whole permission and if you do sth. obey our laws, we are going to ban your account. And your are forbidden about any data in our platforms. You cannot export your data because the time you are banned, we delete all your data.
+> Attention, we have your account's whole permission and if you do sth. not obey our laws, we are going to ban your account. And your are forbidden about any data in our platforms. You cannot export your data because the time you are banned, we delete all your data.
 
 ## OAuth
 
@@ -48,4 +48,4 @@ Actually, you could establish your own `CloudDataSync` either.
 
 ### Others
 
-You could give us feedback about any question you encountered.
+You could give us some feedbacks about any question you encountered.
