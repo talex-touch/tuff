@@ -115,12 +115,18 @@ importers:
       remixicon:
         specifier: ^2.5.0
         version: 2.5.0
+      three:
+        specifier: ^0.153.0
+        version: 0.153.0
       utils:
         specifier: workspace:^
         version: link:../../packages/utils
       v-wave:
         specifier: ^1.5.1
         version: 1.5.1(vue@3.3.4)
+      vanta:
+        specifier: ^0.5.24
+        version: 0.5.24
       vite-plugin-commonjs-externals:
         specifier: ^0.1.3
         version: 0.1.3(vite@4.3.9)
@@ -3194,6 +3200,7 @@ packages:
 
   /base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+    requiresBuild: true
 
   /base@0.11.2:
     resolution: {integrity: sha512-5T6P4xPgpp0YDFvSWwEZ4NoE3aM4QBQXDzmVbraCkFj8zHM+mba8SyqB5DbZWyR7mYHo6Y7BdQo3MoA4m0TeQg==}
@@ -8973,6 +8980,10 @@ packages:
       supports-hyperlinks: 2.3.0
     dev: true
 
+  /three@0.153.0:
+    resolution: {integrity: sha512-OCP2/uQR6GcDpSLnJt/3a4mdS0kNWcbfUXIwLoEMgLzEUIVIYsSDwskpmOii/AkDM+BBwrl6+CKgrjX9+E2aWg==}
+    dev: false
+
   /time-zone@1.0.0:
     resolution: {integrity: sha512-TIsDdtKo6+XrPtiTm1ssmMngN1sAhyKnTO2kunQWqNPWIVvCm15Wmw4SWInwTVgJ5u/Tr04+8Ei9TNcw4x4ONA==}
     engines: {node: '>=4'}
@@ -9530,6 +9541,10 @@ packages:
   /validator@13.7.0:
     resolution: {integrity: sha512-nYXQLCBkpJ8X6ltALua9dRrZDHVYxjJ1wgskNt1lH9fzGjs3tgojGSCBjmEPwkWS1y29+DrizMTW19Pr9uB2nw==}
     engines: {node: '>= 0.10'}
+    dev: false
+
+  /vanta@0.5.24:
+    resolution: {integrity: sha512-fvieEbHy1ZS23zrcX+topzqAgA4Uct1enngOEWLFBgs9TtOf6RDFOYatH7KSVdrABzQDMCQ5myQy+nTSZZwLzg==}
     dev: false
 
   /vary@1.1.2:

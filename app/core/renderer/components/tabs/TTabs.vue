@@ -29,7 +29,19 @@ export default defineComponent({
       const pointerRect = pointerEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
 
-      const diffTop = that?.$props?.hasOwnProperty('offset') ? +that.$props.offset : -50
+      // let pTop = 0, p = nodeEl
+
+      // while (p) {
+      //   if ( p === nodeEl.offsetParent ) break
+      //   pTop += p.offsetTop
+      //   p = p.offsetParent
+      // }
+
+      let diffTop = that.$props?.hasOwnProperty('offset') ? +that.$props.offset || 0 : 0
+
+      // diffTop = pTop - nodeRect.height * 1.4
+
+      // console.log( diffTop, that.$props, nodeRect.top, nodeRect.height )
 
       if (nodeRect.top > pointerRect.top) {
 

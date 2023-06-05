@@ -1,5 +1,5 @@
 <template>
-  <div class="TTabHeader-Container">
+  <div class="TTabHeader-Container fake-background">
     <slot :props="props" />
   </div>
 </template>
@@ -16,18 +16,6 @@ const props = defineProps(['node'])
 
 <style lang="scss">
 .TTabHeader-Container {
-  &:after {
-    z-index: -1;
-    content: "";
-    position: absolute;
-
-    width: 100%;
-    height: 100%;
-
-    left: 0;
-
-    background-color: var(--el-fill-color-light);
-  }
   z-index: 1;
   position: sticky;
   display: flex;

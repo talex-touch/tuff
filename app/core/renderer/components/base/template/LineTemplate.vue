@@ -35,7 +35,7 @@ export default defineComponent({
     if (props.regex && defaultSlot[0]?.dynamicProps.length > 0) {
       regFormField(vnode, () => {
         vnode.tip = ""
-        
+
         const value = defaultSlot[0].component.props["modelValue"]
         const regex = new RegExp(props.regex)
 
@@ -45,6 +45,9 @@ export default defineComponent({
 
         const el = defaultSlot[0]?.el
         if (el && !access) {
+
+          console.log( el )
+
           el.scrollIntoView({
             behavior: "smooth",
             block: "center"

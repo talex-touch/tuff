@@ -258,7 +258,9 @@ function afterLeave(el) {
   display: flex;
 
   flex: 1;
-  height: calc(100% - var(--ctr-height, 40px) - 3px);
+  height: calc(100% - var(--ctr-height, 40px));
+
+  overflow: hidden;
 }
 
 :deep(.AppLayout-Header) {

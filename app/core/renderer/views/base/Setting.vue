@@ -1,6 +1,6 @@
 <template>
   <div class="Setting-Container cubic-transition">
-    <t-tabs :offset="-70">
+    <t-tabs :offset="-33">
       <!--        <t-tab-item disabled icon="home-gear" :name="$t('settings.appearance.home-gear.name')">-->
       <!--          <HomeGear />-->
       <!--        </t-tab-item>-->

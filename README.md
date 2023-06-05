@@ -27,6 +27,20 @@ Download it and feedback!
 
 Touch (TalexTouch) is a follow-up project to TalexTouchQ (TouchQ), which involved a complete overhaul of the original project. It is a cross-platform client based on Electron, designed to provide users with a more polished UI experience.
 
+### The best than ever UI design
+
+![HomePage](https://files.catbox.moe/ig0ipw.png)
+
+![Plugins](https://files.catbox.moe/8ltyn1.png)
+
+### The fantastic animation design
+
+> Some animations have been removed in the latest version.
+
+#### Out of date
+
+![Brief Animation](https://files.catbox.moe/e19hr1.gif)
+
 ## Goal
 
 Its primary goal is to deliver a seamless and intuitive user interface that enhances the user experience. You can access the client via the [link](https://talex-touch.github.io/talex-touch/).
