@@ -37,9 +37,15 @@ Touch (TalexTouch) is a follow-up project to TalexTouchQ (TouchQ), which involve
 
 > Some animations have been removed in the latest version.
 
+#### New but not latest
+
+![New Home Page](https://files.catbox.moe/3dylgz.gif)
+
 #### Out of date
 
 ![Brief Animation](https://files.catbox.moe/e19hr1.gif)
+
+![New Plugin](https://files.catbox.moe/xksrfv.gif)
 
 ## Goal
 
