@@ -18,12 +18,12 @@
         </div>
       </template>
       <BlockTemplate title="Overview">
-        <LineTemplate title="version">
-          {{ plugin.version }}
-        </LineTemplate>
         <LineTemplate title="dev">
           <span text-sm v-if="plugin.dev?.enable" class="plugin-dev">{{ $t('version.dev') }}</span>
           <span v-else>-</span>
+        </LineTemplate>
+        <LineTemplate title="version">
+          {{ plugin.version }}
         </LineTemplate>
         <LineTemplate v-if="plugin.dev" title="address">
           {{ plugin.dev?.address }}

@@ -12,9 +12,10 @@ import {
   urlHooker
 } from "@modules/hooks/applicatoin-hooks";
 import { pluginManager } from '@modules/channel/plugin-core/api'
+import { touchChannel } from './modules/channel/channel-core';
 
 const activePlugin = ref("")
-watch(() => activePlugin.value, pluginManager.changeActivePlugin, { immediate: true })
+watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val), { immediate: true })
 
 provide("activePlugin", activePlugin)
 
@@ -24,6 +25,10 @@ onMounted(() => {
   dropperResolver()
   urlHooker()
   // screenCapture()
+
+  const res = touchChannel.sendSync('app-ready')
+
+  console.log( res )
 })
 
 </script>

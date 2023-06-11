@@ -1,3 +1,4 @@
+import { startTime } from "./../../../ends/touch-ends/src/starter";
 import path from "path";
 import fse from "fs-extra";
 import { APP_FOLDER_NAME, MainWindowOption } from "../config/default";
@@ -22,8 +23,9 @@ import {
 import { release } from "os";
 import { checkDirWithCreate } from "../utils/common-util";
 import { genTouchChannel } from "./channel-core";
-import { ITouchChannel } from "utils/channel";
+import { ChannelType, ITouchChannel } from "utils/channel";
 import { TalexTouch } from "../types/touch-core";
+import pluginCore, { genPluginManager } from "../plugins/plugin-core";
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -99,6 +101,8 @@ class TouchApp implements TalexTouch.TouchApp {
   }
 
   async __init__() {
+    const startTime = new Date().getTime();
+
     touchEventBus.emit(TalexEvents.APP_START, new AppStartEvent());
 
     checkDirWithCreate(this.rootPath, true);
@@ -120,10 +124,36 @@ class TouchApp implements TalexTouch.TouchApp {
 
     console.log("[TouchApp] WebContents loaded!");
 
-    webContents.addListener("did-finish-load", () => {
-      webContents.executeJavaScript(
-        `window._firstInit = ${process.getCreationTime()}`
-      );
+    this.channel.regChannel(ChannelType.MAIN, "app-ready", (data) => {
+      genPluginManager().plugins.forEach((plugin) => {
+        plugin.webViewInit = false;
+      });
+
+      return {
+        version: this.version,
+        path: {
+          rootPath: this.rootPath,
+          appPath: app.getAppPath(),
+          appDataPath: app.getPath("appData"),
+          userDataPath: app.getPath("userData"),
+          tempPath: app.getPath("temp"),
+          homePath: app.getPath("home"),
+          exePath: app.getPath("exe"),
+          modulePath: path.join(this.rootPath, "modules"),
+          configPath: path.join(this.rootPath, "config"),
+          pluginPath: path.join(this.rootPath, "plugins"),
+        },
+        isPackaged: app.isPackaged,
+        isDev: this.version === TalexTouch.AppVersion.DEV,
+        isRelease: this.version === TalexTouch.AppVersion.RELEASE,
+        t: {
+          _s: process.getCreationTime(),
+          s: startTime,
+          e: new Date().getTime(),
+          p: process.uptime(),
+          h: process.hrtime(),
+        },
+      };
     });
   }
 }
@@ -135,13 +165,13 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window = new BrowserWindow(options);
 
     this.window.once("ready-to-show", () => {
-      this.window.webContents.addListener('will-navigate', (event, url) => {
+      this.window.webContents.addListener("will-navigate", (event, url) => {
         touchEventBus.emit(
           TalexEvents.OPEN_EXTERNAL_URL,
           new OpenExternalUrlEvent(url)
         );
-        
-        event.preventDefault()
+
+        event.preventDefault();
       });
       this.window.show();
     });

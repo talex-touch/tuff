@@ -17,12 +17,10 @@
 </template>
 
 <script name="Home" setup>
-import { $t } from '@modules/lang'
-import RemixIcon from '@comp/icon/RemixIcon.vue'
 import * as THREE from 'three';
 import Vanta from 'vanta/dist/vanta.trunk.min.js'
 
-const packageJson = window.$nodeApi.getPackageJSON()
+// const packageJson = window.$nodeApi.getPackageJSON()
 const vantaRef = ref()
 
 onMounted(() => {

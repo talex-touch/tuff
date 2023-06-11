@@ -35,10 +35,6 @@ const props = defineProps(['node'])
 }
 
 .touch-blur .TTabHeader-Container {
-  &:after {
-    opacity: 0;
-  }
-  //background-color: transparent;
-  //backdrop-filter: blur(10px);
- }
+  --fake-opacity: 0;
+}
 </style>

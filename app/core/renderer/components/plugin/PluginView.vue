@@ -16,7 +16,6 @@ export default {
 </script>
 
 <script setup>
-import { nextTick, onMounted, onUpdated, ref, watchEffect } from "vue";
 import { forDialogMention } from "@modules/mention/dialog-mention";
 import { pluginManager  } from '@modules/channel/plugin-core/api'
 import Loading from "@comp/icon/LoadingIcon.vue";
@@ -28,7 +27,7 @@ const props = defineProps({
   }
 })
 const loadDone = ref(false)
-const status = computed(() => props.plugin?._status || 0)
+const status = computed(() => props.plugin?.status || 0)
 const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value)
 
 const webviewDom = ref(null)
@@ -38,8 +37,8 @@ function init() {
   if (!viewData) return
   const { _, attrs, styles, js } = viewData
 
-  pluginManager.setPluginWebviewInit(props.plugin.pluginInfo.name)
-  props.plugin.isWebviewInit = true
+  pluginManager.setPluginWebviewInit(props.plugin.name)
+  props.plugin.webViewInit = true
 
   const webview = webviewDom.value
   console.log(props.plugin, webview)
@@ -59,7 +58,7 @@ function init() {
   webview.addEventListener('did-fail-load', async (e) => {
     console.log("Webview did-fail-load", e, props.plugin)
 
-    await forDialogMention(props.plugin.pluginInfo.name, e.errorDescription, props.plugin.pluginInfo.icon, [
+    await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
       {
         content: "忽略加载",
         type: 'info',
@@ -68,7 +67,7 @@ function init() {
       {
         content: "重启插件",
         type: 'warning',
-        onClick: () => pluginManager.reloadPlugin(props.plugin.pluginInfo.name) && true
+        onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true
       }
     ])
 
@@ -79,7 +78,7 @@ function init() {
       webview.openDevTools()
 
     webview.insertCSS(`${styles}`)
-    webview.executeJavaScript(String.raw`${js}`)
+    webview.executeJavaScript(`${js}`)
 
     webview.send('@talex-plugin:preload', "${name}")
 
@@ -92,7 +91,7 @@ function init() {
 }
 
 watch(status, (val, oldVal) => {
-  if (props.plugin?.isWebviewInit) return
+  if (props.plugin?.webViewInit) return
 
   if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init()
   // else if ( val === 4 ) webviewDom.value.openDevTools()

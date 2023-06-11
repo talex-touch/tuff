@@ -214,12 +214,24 @@ export function genPluginPackager(buildPath?: string): PluginPackager {
 export default {
   name: Symbol("PluginPackager"),
   filePath: false,
+  listeners: new Array<Function>,
   init(app, manager) {
     const buildPath = path.join(app.rootPath, "build");
 
     checkDirWithCreate(buildPath, true);
 
     genPluginPackager(buildPath);
+
+    const touchChannel = genTouchChannel();
+
+    this.listeners.push(
+      touchChannel.regChannel(ChannelType.MAIN, "new-plugin-template", async ({ options }) => {
+        
+        
+      })
+    );
   },
-  destroy(app, manager) {},
+  destroy(app, manager) {
+    this.listeners.forEach(v => v())
+  },
 } as TalexTouch.IModule;

@@ -5,18 +5,19 @@ import { TalexTouch } from "~/main/types";
 import path from "path-browserify";
 import { checkDirWithCreate } from "~/main/utils/common-util";
 
-export default {
+let configPath;
+
+const module = {
   name: Symbol("StorageChannel"),
   listeners: new Array<Function>(),
-  configPath: undefined,
   filePath: "config",
   configs: {},
   getConfig(name: string) {
-    if ( !this.configPath ) throw new Error(`Config ${name} not found`);
+    if ( !configPath ) throw new Error(`Config ${name} not found! ` + configPath);
     return (
       this.configs[name] ||
       (() => {
-        const p = path.resolve(this.configPath, name);
+        const p = path.resolve(configPath, name);
 
         const file = fse.existsSync(p)
           ? JSON.parse(fse.readFileSync(p).toString())
@@ -29,9 +30,9 @@ export default {
     );
   },
   reloadConfig(name: string) {
-    if ( !this.configPath ) throw new Error(`Config ${name} not found`);
+    if ( !configPath ) throw new Error(`Config ${name} not found`);
     const file = JSON.parse(
-      fse.readFileSync(path.resolve(this.configPath, name)).toString()
+      fse.readFileSync(path.resolve(configPath, name)).toString()
     );
 
     this.configs[name] = file;
@@ -39,10 +40,10 @@ export default {
     return file;
   },
   saveConfig(name: string, content?: string, clear?: boolean): boolean {
-    if ( !this.configPath ) throw new Error(`Config ${name} not found`);
+    if ( !configPath ) throw new Error(`Config ${name} not found`);
 
     if (content && this.configs[name]) {
-      const p = path.join(this.configPath, name);
+      const p = path.join(configPath, name);
       console.log("[Config] Save config", name, content, clear, p)
 
       fse.createFileSync(p);
@@ -62,12 +63,13 @@ export default {
     return false;
   },
   saveAllConfig() {
-    if ( !this.configPath ) throw new Error(`Config ${name} not found`);
+    if ( !configPath ) throw new Error(`Config ${name} not found!` + configPath);
     Object.keys(this.configs).forEach((key) => this.saveConfig(key));
   },
   init(app) {
-    this.configPath = path.join(app.rootPath, "modules", "config");
-    checkDirWithCreate(this.configPath, true)
+    configPath = path.join(app.rootPath, "config");
+    
+    console.log("[Config] Init config path", configPath)
 
     const channel = genTouchChannel(app);
 
@@ -100,4 +102,9 @@ export default {
   destroy() {
     this.listeners.forEach((f: () => void) => f());
   },
-} as TalexTouch.IModule;
+}
+
+export const getConfig = (name: string) => module.getConfig(name);
+export const saveConfig = module.saveConfig.bind(module);
+
+export default module as TalexTouch.IModule;

@@ -45,13 +45,7 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "Setting"
-}
-</script>
-
-<script setup>
+<script name="Setting" setup>
 import TTabs from '@comp/tabs/TTabs.vue'
 import TTabItem from '@comp/tabs/TTabItem.vue'
 import TTabItemGroup from '@comp/tabs/TTabItemGroup.vue'

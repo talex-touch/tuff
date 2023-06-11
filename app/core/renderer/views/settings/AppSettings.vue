@@ -200,8 +200,6 @@ const startCosts = ref('')
     Promise.resolve( $env.packageJson = window.$nodeApi.getPackageJSON() ),
     Promise.resolve( startCosts.value = (window['_doneTimeDiff'] ?? 0) / 1000 )
   ])
-
-  console.log( res )
 })()
 
 function login() {

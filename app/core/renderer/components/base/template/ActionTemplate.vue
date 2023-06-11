@@ -8,6 +8,7 @@ export default defineComponent({
   },
   render() {
     const checkForm = inject('checkForm')
+    const setLoading = inject('setLoading')
 
     const { $slots: slots, $props: props } = this
 
@@ -19,6 +20,7 @@ export default defineComponent({
       el.addEventListener('click', () => {
         props.action?.({
           checkForm,
+          setLoading,
           ...this
         })
       })

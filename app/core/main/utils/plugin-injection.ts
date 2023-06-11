@@ -1,11 +1,11 @@
-import Storage from '../core/storage'
+import { getConfig } from "../core/storage";
 
 export function getJs(options) {
-    const [name, _path] = options
+  const [name, _path] = options;
 
-    const themeConfig = Storage['getConfig']('theme-style.ini')
+  const themeConfig = getConfig("theme-style.ini");
 
-    return `
+  return `
         !(() => {
         
             if ( window.$plugin ) { return } 
@@ -13,8 +13,6 @@ export function getJs(options) {
             console.log("Touch # Auto inject JS")
                         
             const { ipcRenderer, contextBridge } = require('electron')
-                            
-                            console.log( contextBridge )
                             
             window.$plugin = {}
                             
@@ -134,13 +132,11 @@ export function getJs(options) {
                      
         })()
         
-    `
-
+    `;
 }
 
 export function getStyles() {
-
-    return `html, body, #app {
+  return `html, body, #app {
                   position: relative;
                   margin: 0;
                   padding: 0;
@@ -161,13 +157,12 @@ export function getStyles() {
                   --el-box-shadow: 0 0 4px 1px rgba(29, 29, 29, .2) !important;
                 }
                 
-                `
+                `;
 
-    // #app {
-    //     top: 2px;
-    //
-    //     height: calc(100% - 4px);
-    //     width: calc(100% - 2px);
-    // }
-
+  // #app {
+  //     top: 2px;
+  //
+  //     height: calc(100% - 4px);
+  //     width: calc(100% - 2px);
+  // }
 }

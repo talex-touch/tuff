@@ -1,4 +1,6 @@
 <script setup name="FormTemplate" lang="ts">
+import LoadingIcon from '../../icon/LoadingIcon.vue';
+
 defineProps({
   title: {
     type: String,
@@ -14,6 +16,7 @@ defineProps({
   }
 });
 
+const loading = ref(false)
 const formFields = []
 
 provide('regFormFiled', (vnode, func) => {
@@ -34,10 +37,12 @@ provide('checkForm', () => {
   return true
 })
 
+provide('setLoading', val => loading.value = val)
+
 </script>
 
 <template>
-  <div mx-10 my-6>
+  <div :class="{ loading }" mx-10 my-6>
 
     <div pb-5 mb-10 border-b-1 border-b-solid border-gray-500>
       <slot name="header">
@@ -50,7 +55,7 @@ provide('checkForm', () => {
       </slot>
     </div>
 
-    <div absolute style="height: calc(100% - 10rem);width: 96%">
+    <div mr-10 absolute style="height: calc(100% - 10rem);width: calc(100% - 5rem)">
       <el-scrollbar>
         <slot>
           <p>Content</p>
@@ -58,10 +63,40 @@ provide('checkForm', () => {
       </el-scrollbar>
     </div>
 
+    <div class="Form-Loading transition-cubic">
+      <loading-icon />
+    </div>
+
   </div>
 </template>
 
 <style scoped lang="scss">
+.loading {
+  .Form-Loading {
+    opacity: 1;
+  }
+
+  * {
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+  }
+
+  & :last-child {
+    backdrop-filter: none;
+  }
+}
+
+.Form-Loading {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  opacity: 0;
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, .25);
+  transform: translate(-50%, -50%);
+}
+
 .hover-button {
   &:hover {
 

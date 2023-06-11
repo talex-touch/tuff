@@ -8,6 +8,8 @@ import FlatButton from '@comp/base/button/FlatButton.vue'
 import FlatInput from '@comp/base/input/FlatInput.vue'
 import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue';
 import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
+import { forTouchTip } from '@modules/mention/dialog-mention';
+import { touchChannel } from '@modules/channel/channel-core';
 
 const arrow = ref()
 const toggleNewPlugin = inject('toggleNewPlugin')
@@ -30,11 +32,19 @@ const plugin = reactive({
 })
 
 function createAction(ctx) {
-  const { checkForm } = ctx
+  const { checkForm, setLoading } = ctx
 
   const result = checkForm()
 
   if (!result) return
+
+  if ( !plugin.agreement ) {
+    return forTouchTip("Attention", "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.")
+  }
+
+  setLoading(true)
+
+  touchChannel.send('new-plugin-template', plugin)
   
 }
 </script>
@@ -93,7 +103,8 @@ function createAction(ctx) {
       <LineTemplate :msg="() => 'You must input the correct plugin dev address.'" regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$" title="dev-address">
         <FlatInput w="48!" v-model=plugin.dev.address />
       </LineTemplate>
-      <LineTemplate :msg="() => 'You must input the correct plugin description.'" regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{15,80}$" title="description">
+      <!-- regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{15,80}$" -->
+      <LineTemplate :msg="() => 'You must input the correct plugin description.'" title="description">
         <FlatInput :area="true" w="96!" v-model=plugin.desc />
       </LineTemplate>
     </BlockTemplate>

@@ -31,6 +31,9 @@ export interface IPluginManager {
   // Enable the plugin with the given name.
   enablePlugin: (name: string) => void;
 
+  // Disable the plugin with the given name.
+  disablePlugin: (name: string) => void;
+
   // Set the webviewInit flag of the plugin with the given name.
   setPluginWebviewInit: (name: string) => void;
 
@@ -50,6 +53,10 @@ export interface IPluginManager {
 class PluginManager {
   async enablePlugin(name) {
     return touchChannel.send("enable-plugin", name);
+  }
+
+  async disablePlugin(name) {
+    return touchChannel.send("disable-plugin", name);
   }
 
   setPluginWebviewInit(name) {

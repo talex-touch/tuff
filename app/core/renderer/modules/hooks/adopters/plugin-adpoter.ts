@@ -41,13 +41,14 @@ class PluginAdpoter {
     this._logouts.push(
       touchChannel.regChannel("plugin-status-updated", ({ data, reply }) => {
         const p = this.plugins.get(data.plugin);
-        if (p) Object.assign(p, { _status: data.status });
+        if (p) Object.assign(p, { status: data.status });
 
         reply(1);
       })
     );
     this._logouts.push(
       touchChannel.regChannel("plugin-webview", ({ data }) => {
+        console.log( data )
         const p = this.plugins.get(data.plugin);
         if (!p) return;
 

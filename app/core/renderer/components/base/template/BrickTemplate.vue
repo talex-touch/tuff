@@ -1,5 +1,4 @@
 <script name="BrickTemplate" setup lang="ts">
-import FlatButton from '@comp/base/button/FlatButton.vue'
 
 </script>
 

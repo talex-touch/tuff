@@ -6,6 +6,7 @@ import {
 import {
   blowMention,
   forDialogMention,
+  forTouchTip,
   popperMention,
 } from "@modules/mention/dialog-mention";
 import { h } from "vue";
@@ -50,7 +51,7 @@ export async function urlHooker() {
   document.body.addEventListener("click", directListener);
 
   touchChannel.regChannel("url:open", async ({ data, reply }) => {
-    await forDialogMention("是否允许打开链接？", data, null, [
+    await forTouchTip("是否允许打开链接？", data, [
       {
         content: "取消",
         type: "info",

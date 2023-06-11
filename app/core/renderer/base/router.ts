@@ -14,51 +14,51 @@
  * limitations under the License.
  */
 
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from "vue-router";
 
 const routes: any = [
-    {
-        path: "/",
-        redirect: "/home"
+  {
+    path: "/",
+    redirect: "/home",
+  },
+  {
+    path: "/home",
+    name: "主页",
+    component: () => import("../views/base/Home.vue"),
+    meta: {
+      index: 1,
     },
-    {
-        path: "/home",
-        name: "主页",
-        component: () => import("../views/base/Home.vue"),
-        meta: {
-            index: 1
-        }
+  },
+  {
+    path: "/market",
+    name: "市场",
+    component: () => import("../views/base/Market.vue"),
+    meta: {
+      index: 2,
     },
-    {
-        path: "/market",
-        name: "市场",
-        component: () => import("../views/base/Market.vue"),
-        meta: {
-            index: 2
-        }
+  },
+  {
+    path: "/plugin",
+    name: "插件",
+    component: () => import("../views/base/Plugin.vue"),
+    meta: {
+      index: 3,
     },
-    {
-        path: "/plugin",
-        name: "插件",
-        component: () => import("../views/base/Plugin.vue"),
-        meta: {
-            index: 3
-        }
+  },
+  {
+    path: "/setting",
+    name: "设置",
+    component: () => import("../views/base/Setting.vue"),
+    meta: {
+      index: 4,
     },
-    {
-        path: "/setting",
-        name: "设置",
-        component: () => import("../views/base/Setting.vue"),
-        meta: {
-            index: 4
-        }
-    }
-]
+  },
+];
 
 const router = createRouter({
-    history: createWebHashHistory(),
-    routes
-})
+  history: createWebHashHistory(),
+  routes,
+});
 
 // router.beforeEach(async (to, from, next) => {
 //
@@ -100,4 +100,4 @@ const router = createRouter({
 //
 // })
 
-export default router
+export default router;

@@ -92,7 +92,7 @@ const toggleOptions = reactive({
 
     return `
       clip-path: polygon(${a.x}% ${a.y}%, ${b.x}% ${b.y}%, ${c.x}% ${c.y}%, ${d.x}% ${d.y}%);
-      --fake-opacity: .95;
+      --fake-opacity: .75;
       width: 100%; height: 100%; overflow: hidden;z-index: 1; transition: clip-path .35s, opacity .5s
     `
   })

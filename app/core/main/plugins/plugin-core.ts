@@ -157,12 +157,14 @@ class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING;
     console.log("[Plugin] Disabling plugin " + this.name);
 
+    this.webViewInit = false
+
     this.status = PluginStatus.DISABLED;
     console.log("[Plugin] Plugin " + this.name + " is disabled.");
 
-    setTimeout(() => {
-      pluginManager.plugins.delete(this.name);
-    });
+    // setTimeout(() => {
+    //   pluginManager.plugins.delete(this.name);
+    // });
 
     return true;
   }

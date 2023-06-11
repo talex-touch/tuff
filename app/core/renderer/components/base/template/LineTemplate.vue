@@ -46,14 +46,7 @@ export default defineComponent({
         const el = defaultSlot[0]?.el
         if (el && !access) {
 
-          console.log( el )
-
-          el.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          })
-
-          setTimeout(el.focus, 500)
+          el.focus()
 
           el.addEventListener('blur', () => vnode.tip = "")
         }
