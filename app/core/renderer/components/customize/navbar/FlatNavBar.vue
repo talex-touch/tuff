@@ -2,7 +2,7 @@
   <ul class="FlatNavBar-Home" @click="activePlugin = ''">
     <p class="FlatNavBar-Title">MAIN</p>
     <TMenuTabs>
-      <TMenuItem route="/home" name="Dashboard" icon="home-3" />
+      <TMenuItem activation route="/home" name="Dashboard" icon="home-3" />
       <TMenuItem route="/market" name="Market" icon="quill-pen" />
       <TMenuItem route="/plugin" name="Plugin" icon="plug-2" />
       <TMenuItem route="/setting" name="Setting" icon="settings-6" />

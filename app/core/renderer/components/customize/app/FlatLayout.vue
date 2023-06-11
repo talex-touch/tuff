@@ -75,6 +75,12 @@ function closeWindow() {
 
 <style lang="scss" scoped>
 .AppLayout-Container.Flat {
+
+  :deep(.TTabs-Header) {
+
+    border-right: none;
+  }
+
   .AppLayout-View {
     position: relative;
 
@@ -93,6 +99,7 @@ function closeWindow() {
 
   .AppLayout-IconFooter {
     display: none;
+
     &.active {
       transform: translate(0, 0);
     }
