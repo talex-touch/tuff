@@ -11,114 +11,13 @@ export function getJs(options) {
             if ( window.$plugin ) { return } 
                     
             console.log("Touch # Auto inject JS")
-                        
-            const { ipcRenderer, contextBridge } = require('electron')
-                            
+
             window.$plugin = {}
                             
             Object.assign(window.$plugin, {
-                path: ${_path},
-                typeMap: new Map(),
-                syncMap: new Map()
+                name: '${name}',
+                path: ${_path}
             })
-            
-            window.$postMainProcessMessage = function(type, data, options) {
-
-                const res = ipcRenderer.sendSync('@plugin-process-message', {
-                    status: 'send',
-                    timeStamp: new Date().getTime(),
-                    header: {
-                        type,
-                        plugin: "${name}",
-                        ...options
-                    },
-                    data
-                })
-        
-                if( res.status === 'reply' ) return res.data
-        
-                return res
-        
-            }
-        
-            window.$asyncMainProcessMessage = async function(type, data, options) {
-                options = options || { timeout: 10000 }
-                const onlyID = new Date().getTime() + "#" + type + "@" + Math.random().toString(12)
-        
-                let timer
-        
-                return new Promise((resolve, reject) => {
-        
-                    if ( options?.timeout ) {
-                        timer = setTimeout(() => {
-                            reject({ status: 'timeout' })
-                        }, options.timeout)
-                    }
-        
-                    ipcRenderer.send('@plugin-process-message', {
-                        status: 'send',
-                        timeStamp: new Date().getTime(),
-                        header: {
-                            type,
-                            sync: onlyID,
-                            plugin: "${name}",
-                            ...options
-                        },
-                        data
-                    })
-        
-                    window.$plugin.syncMap.set(onlyID, (data) => {
-        
-                        window.$plugin.syncMap.delete(onlyID)
-        
-                        clearTimeout(timer)
-        
-                        resolve(data)
-        
-                    });
-        
-                })
-        
-            }
-        
-            window.$registerTypeProcess = function(type, callback) {
-        
-                if ( !window.$plugin.typeMap.has(type) ) {
-                    window.$plugin.typeMap.set(type, [])
-                }
-        
-                window.$plugin.typeMap.get(type).push(callback)
-        
-            }
-        
-            ipcRenderer.on('@plugin-process-message', (_event, arg) => {
-        
-                const header = arg.header
-        
-                if( !header || !header.plugin ) {
-                    console.error(_event, arg)
-                    throw new Error("Invalid message!")
-                }
-        
-                if( header.plugin !== "${name}" ) return
-        
-                const { type, sync, plugin } = header
-        
-                if( sync )
-                    window.$plugin.syncMap.get(sync)?.({
-                        origin: arg,
-                        data: arg.data
-                    })
-                else window.$plugin.typeMap.get(type)?.forEach( (type) => type({
-                    origin: arg,
-                    data: arg.data
-                }) )
-        
-            })
-            
-            window.$crash = function(message, extraData) {
-                window.$postMainProcessMessage('crash', { message, ...extraData })
-            }
                 
             window.$config = {
                 themeStyle: ${JSON.stringify(themeConfig)}
@@ -131,7 +30,6 @@ export function getJs(options) {
             window.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
                      
         })()
-        
     `;
 }
 
