@@ -24,7 +24,7 @@
   ],
   "debug.console.acceptSuggestionOnEnter": "on",
   "unocss.root": "app/core",
-  "prettier.enable": false,
+  // "prettier.enable": false,
   "editor.formatOnSave": false,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": true

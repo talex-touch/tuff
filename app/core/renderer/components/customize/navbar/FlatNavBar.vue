@@ -1,27 +1,33 @@
 <template>
   <ul class="FlatNavBar-Home" @click="activePlugin = ''">
-    <p class="FlatNavBar-Title">MAIN</p>
-    <TMenuTabs>
-      <TMenuItem activation route="/home" name="Dashboard" icon="home-3" />
-      <TMenuItem route="/market" name="Market" icon="quill-pen" />
-      <TMenuItem route="/plugin" name="Plugin" icon="plug-2" />
-      <TMenuItem route="/setting" name="Setting" icon="settings-6" />
-    </TMenuTabs>
-  </ul>
-
-  <ul class="NavBar-Programs">
-    <p class="FlatNavBar-Title">PLUGINS</p>
-    <slot name="plugin-nav" />
+    <TouchMenu>
+      <p class="FlatNavBar-Title">MAIN</p>
+      <TouchMenuItem route="/home" name="Dashboard" icon="i-ri-home-3-line" />
+      <TouchMenuItem route="/market" name="Market" icon="i-ri-quill-pen-line" />
+      <TouchMenuItem route="/plugin" name="Plugin" icon="i-ri-plug-2-line" />
+      <TouchMenuItem route="/setting" name="Setting" icon="i-ri-settings-6-line" />
+      <p v-if="plugins.length" class="FlatNavBar-Title">PLUGINS</p>
+      <TouchMenuItem @active="changeActivePlugin($event, item)" :doActive="() => activePlugin === item.name" v-for="item in plugins" :key="item.name">
+        {{ item.name }}
+      </TouchMenuItem>
+    </TouchMenu>
   </ul>
 </template>
 
 <script name="FlatNavBar" setup>
-import TMenuTabs from "@comp/tabs/TMenuTabs.vue";
-import TMenuItem from "@comp/tabs/TMenuItem.vue";
+import TouchMenu from "@comp/menu/TouchMenu.vue";
+import TouchMenuItem from "@comp/menu/TouchMenuItem.vue";
 import { inject } from "vue";
 
 const activePlugin = inject('activePlugin')
+const _plugins = inject('plugins')
+const plugins = computed(() => _plugins().filter(item => item.status > 2 && item.status < 5))
 
+function changeActivePlugin(event, item) {
+  event.stopPropagation()
+
+  activePlugin.value = item.name
+}
 </script>
 
 <style lang="scss" scoped>

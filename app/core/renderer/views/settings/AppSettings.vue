@@ -127,7 +127,7 @@
       <t-block-line title="V8-Engine" :description="$env.process.versions?.v8"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="$env.os.version"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${$env.process.platform} (${$env.os.arch})`"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.06.04"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.06.12"></t-block-line>
       <!-- <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
         <template #description>
           <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
@@ -173,7 +173,8 @@ const $env = reactive({
   os: null,
   process: null,
   packageJson: null,
-  account: window.$storage.account
+  account: window.$storage.account,
+  sui: window.$startupInfo
 })
 
 const dev = ref(false)
@@ -181,7 +182,7 @@ const dev = ref(false)
 const options = window.$storage.appSetting
 
 const versionStr = computed(() => `TalexTouch ${dev.value ? $t('version.dev') : 'version.master'} ${$env.packageJson?.version}`)
-const startCosts = ref('')
+const startCosts = computed(() => $env.sui && ($env.sui.t.e - $env.sui.t.s) / 1000)
 
 // const cpuUsage = useCPUUsage()
 // const memoryUsage = useMemoryUsage()
