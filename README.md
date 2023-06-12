@@ -115,7 +115,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 - Electron Builder: ^23.6.0
 - Sass: ^1.62.1
 
-[Here](CONTRIBUTING.md)
+#### [Here](./.github/docs/contribution/CONTRIBUTING.md)
 
 ## ✉️ Contact
 
