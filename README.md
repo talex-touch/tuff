@@ -91,6 +91,30 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 ## ❤️ Contribution
 
+### What we use
+
+#### 🌀 Front-end
+
+- Vue.js: ^3.3.4
+- Vue Router: ^4.2.1
+- Element Plus: ^2.3.5
+- Axios: ^1.4.0
+- Codemirror: ^6.0.1
+- Vanta: ^0.5.24
+- Lottie-web: ^5.11.0
+
+#### 💠 Back-end
+
+- Node.js: (version not specified)
+- Express.js: (not found in the package.json)
+
+#### 🔧 Build Tools
+
+- Vite: (version not specified)
+- Electron: ^24.4.0
+- Electron Builder: ^23.6.0
+- Sass: ^1.62.1
+
 [Here](CONTRIBUTING.md)
 
 ## ✉️ Contact
