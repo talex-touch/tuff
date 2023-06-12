@@ -105,12 +105,12 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 💠 Back-end
 
-- Node.js: (version not specified)
-- Express.js: (not found in the package.json)
+- Node.js: ^14.18.0 || >=16.0.0
+- Koa: ^2.7.0
 
 #### 🔧 Build Tools
 
-- Vite: (version not specified)
+- Vite: ^4.3.5
 - Electron: ^24.4.0
 - Electron Builder: ^23.6.0
 - Sass: ^1.62.1
