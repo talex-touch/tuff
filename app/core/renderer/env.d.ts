@@ -2,6 +2,7 @@
 
 import { BaseNodeApi } from '@modules/channel/main/node'
 import { StorageManager } from './modules/channel/storage'
+import { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { I18n } from 'vue-i18n'
 
 declare module '*.vue' {
@@ -15,6 +16,7 @@ declare global {
   export interface Window {
     $nodeApi: BaseNodeApi
     $storage: StorageManager
+    $channel: ITouchClientChannel
     $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
   }
 }

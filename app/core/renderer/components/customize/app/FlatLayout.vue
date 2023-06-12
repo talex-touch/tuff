@@ -39,20 +39,11 @@
   </div>
 </template>
 
-<script>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
-import IconButton from '@comp/base/button/IconButton.vue'
-
-export default {
-  name: "AppLayoutFlat",
-  components: { IconButton, RemixIcon }
-}
-</script>
-
-<script setup>
+<script name="AppLayoutFlat" setup>
 import FlatNavBar from "@comp/customize/navbar/FlatNavBar.vue";
 import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
-import { applicationUpgrade } from "~/renderer/modules/hooks/application-hooks";
+import { applicationUpgrade } from "@modules/hooks/application-hooks";
+import RemixIcon from '@comp/icon/RemixIcon.vue'
 
 const account = {} //window.$storage.account
 

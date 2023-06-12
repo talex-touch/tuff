@@ -4,7 +4,8 @@ import { provide, ref, watch } from 'vue'
 import { pluginManager } from '@modules/channel/plugin-core/api'
 import {
   applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker,
-} from '~/renderer/modules/hooks/application-hooks'
+} from '@modules/hooks/application-hooks'
+import { touchChannel } from '@modules/channel/channel-core'
 
 const activePlugin = ref('')
 watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val), { immediate: true })
