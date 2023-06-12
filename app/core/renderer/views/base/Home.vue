@@ -17,36 +17,9 @@
 </template>
 
 <script name="Home" setup>
-import * as THREE from 'three';
-import Vanta from 'vanta/dist/vanta.trunk.min.js'
-
-// const packageJson = window.$nodeApi.getPackageJSON()
-const vantaRef = ref()
 
 onMounted(() => {
-  let vantaEffect = Vanta({
-    el: vantaRef.value,
-    THREE,
-    color: 0x409EFF,
-    chaos: 3,
-  })
-
-  function refresh() {
-    vantaEffect.destroy()
-
-    vantaEffect = Vanta({
-      el: vantaRef.value,
-      THREE,
-      color: 0x409EFF,
-      backgroundAlpha: 0.5
-    })
-  }
-
-  // window.addEventListener('resize', () => nextTick(refresh))
-
-  onBeforeUnmount(() => {
-    vantaEffect.destroy()
-  })
+  
 })
 </script>
 

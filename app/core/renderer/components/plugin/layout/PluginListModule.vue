@@ -10,10 +10,6 @@ const props = defineProps(['modelValue', 'plugins', 'shrink'])
 
 const emits = defineEmits(['update:modelValue'])
 
-export default {
-  name: 'PluginListModule',
-}
-
 const value = useModelWrapper(props, emits)
 </script>
 
