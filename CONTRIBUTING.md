@@ -11,34 +11,30 @@
   [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
   [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
+
+  English | [简体中文](./CONTRIBUTING_zh.md)
 </div>
 
-# 贡献指南 / Tutorial
+# Tutorial
 
 `TalexTouch` is at the bud stage, the power of the individual developers is negligible. Therefore, we are very support and agree with you to participate in the project of research and development, maintenance.
 
-`talex-touch` 处于萌芽阶段，个人开发者的力量是微不足道的。作者并没有足够的时间来完善和维护这个项目，因此，我们非常支持并且赞同您的亲自操刀，参与到项目的研发，维护中。
-
-## 我可以对项目做出优化吗 / Make a optimization to the project?
+## Make a optimization to the project
 
 > About Animation/UI/UX Design
 
 Of course! We are very support this kind of behavior, but please note that everything is given priority to with the user experience. Your design must be reference for the design of the project itself, otherwise it would be a disaster.
 
-当然可以。我们非常支持这种行为，但是请注意，一切以用户体验为主。您的设计必须参考项目本身的设计，否则这将会是一场灾难。
-
-## 我可以添加新功能/特性吗 / Can I add new functions/features ?
+## Can I add new functions/features
 
 Sorry! We as much as possible the current primary goal is to optimize the program and to provide users with a good UI design. If you want to provide new functionality Suggestions to develop new plugins.
 
-非常抱歉。我们当前的主要目标是尽可能优化程序,为用户提供一个良好的界面设计。如果你想提供新功能建议开发新的插件。
-
 ## Pull Request
 
-### 前置条件
+### Precondition
 
 1. Fork this repository.
-2. Check-out branch **master**
+2. Check-out branch `master`
 3. Create your own branch on `head` and name it according to your preferences
 4. Start your develop
 5. When all things done, please create a `PULL REQUEST` about what you developed.
@@ -82,7 +78,7 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
    ├── app: (Main applications)
    ├─── core: (Electron application)
    ├─── docs: (Document application)
-   ├─── ends: (Ends Application)
+   ├─── ends: (Ends Application) # Abandoned
    ├── packages: (Assistant packages)
    ├─── components: (Touch components)
    ├─── test: (Util tests)
