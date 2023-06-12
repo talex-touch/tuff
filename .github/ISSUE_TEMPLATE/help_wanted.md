@@ -15,10 +15,14 @@ assignees: ''
 
 <!-- Select which type best matches your bug -->
 
-- [ ] Function Adds
-- [ ] The UI beautification
-- [ ] Animation improvements
-- [ ] Others
+<!-- - Function Adds
+- The UI beautification
+- Animation Improvements
+- Others -->
+
+<!-- For example: -->
+
+<!-- Type: Animation Improvements -->
 
 ## Environment
 

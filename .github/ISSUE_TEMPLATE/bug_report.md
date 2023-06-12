@@ -16,17 +16,21 @@ labels: bug
 
 <!-- Select which type best matches your bug -->
 
-- [ ] Logic Error
-- [ ] UI-UX Error (Layouts and others)
-- [ ] Animation Error
-- [ ] Performance Error
-- [ ] Safety Error
-- [ ] Test not full-covered
-- [ ] OS Error
-- [ ] Dependencies Error
-- [ ] File Error
-- [ ] Api Error
-- [ ] Other error
+<!-- - Logic Error
+- UI-UX Error (Layouts and others)
+- Animation Error
+- Performance Error
+- Safety Error
+- Test not full-covered
+- OS Error
+- Dependencies Error
+- File Error
+- Api Error
+- Other error -->
+
+<!-- For example: -->
+
+<!-- Type: UI-UX Error -->
 
 ## Environment
 

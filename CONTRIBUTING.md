@@ -54,7 +54,8 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
 #### Commit Message
 
 1. `Commit Message` are supposed to like: prefix<range?>: brief description (range is optional)
-2. You can refer these:
+2. We use `husky` `commitlint` to ensure your commit message follow our protocols.
+3. You can refer these:
    - Fix<xxx>: message
    - Feat<xxx>: message
    - Test<xxx>: message
@@ -62,13 +63,14 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
    - Docs<xxx>: message
    - Add<xxx>: message
    - Upd<xxx>: message (Update dependencies versions)
-   - Change<xxx>: message (The last one to choose)
-3. The xxx is what you update and a area or a module:
+   - Change<xxx>: message (The last one to choose) [Fallback]
+   - More see `commitlint.config.js`
+4. The xxx is what you update and a area or a module:
    - Abstract range like PluginModule
    - Specific single file like touch-core.ts
    - Implementation of new features like SqlStorage
-4. The merge commit such as automatically generated a commit message is not subject to this restriction
-5. If you really not want to obey by the rules, you can directly use the `feat: xxxxxx`
+5. The merge commit such as automatically generated a commit message is not subject to this restriction
+6. If you really not want to obey by the rules, you can directly use the `Change: xxxxxx`
 
 ## Project Structures
 

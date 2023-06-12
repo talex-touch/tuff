@@ -10,11 +10,16 @@
     "node": "^14.18.0 || >=16.0.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^17.6.5",
+    "@commitlint/config-conventional": "^17.6.5",
+    "husky": "^8.0.3",
     "typescript": "^5.0.4",
     "vite": "^4.3.5",
     "vitest": "^0.31.0"
   },
   "scripts": {
+    "prepare": "husky install",
+    "preinstall": "npx only-allow pnpm",
     "test:utils": "pnpm -F test run test",
     "dev:core": "pnpm -F core run dev",
     "build:docs": "pnpm -F docs run build"
