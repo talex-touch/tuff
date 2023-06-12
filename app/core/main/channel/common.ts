@@ -1,7 +1,7 @@
 import packageJson from "./../../package.json";
 import { shell } from "electron";
 import os from "os";
-import { ChannelType } from "utils/channel";
+import { ChannelType } from "@talex-touch/utils/channel";
 import { genTouchChannel } from "../core/channel-core";
 import { TalexTouch } from "../types";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";

@@ -4,7 +4,7 @@ import {
   EventType,
   ITouchEvent,
   ITouchEventBus,
-} from "utils/eventbus";
+} from "@talex-touch/utils/eventbus";
 import { Event, HandlerDetails, NotificationResponse } from "electron";
 
 export enum TalexEvents {

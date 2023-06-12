@@ -22,6 +22,7 @@
     "preinstall": "npx only-allow pnpm",
     "test:utils": "pnpm -F test run test",
     "dev:core": "pnpm -F core run dev",
-    "build:docs": "pnpm -F docs run build"
+    "build:docs": "pnpm -F docs run build",
+    "publish:utils": "pnpm -F @talex-touch/utils run publish"
   }
 }

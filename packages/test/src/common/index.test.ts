@@ -1,5 +1,5 @@
 import { anyStr2Num, num2anyStr } from 'utils/common'
-import { genFileTree } from "utils/help/tree-generator";
+import { genFileTree } from "@talex-touch/utils/help/tree-generator";
 import { describe, expect, it, vi } from "vitest";
 import path from 'path'
 

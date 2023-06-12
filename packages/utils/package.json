@@ -6,6 +6,9 @@
   "license": "MPL-2.0",
   "private": false,
   "version": "1.0.0",
+  "scripts": {
+    "publish": "npm publish --access public"
+  },
   "keywords": [
     "vue",
     "electron",

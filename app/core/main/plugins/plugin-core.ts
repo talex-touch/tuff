@@ -5,12 +5,12 @@ import {
   IPluginWebview,
   ITouchPlugin,
   PluginStatus,
-} from "utils/plugin";
+} from "@talex-touch/utils/plugin";
 import { TalexTouch } from "../types";
-import fse, { WatchEventType } from "fs-extra";
+import fse from "fs-extra";
 import path from "path";
 import { genTouchChannel } from "../core/channel-core";
-import { ChannelType } from "~/../../packages/utils/channel";
+import { ChannelType } from "@talex-touch/utils/channel";
 import { genTouchApp } from "../core/touch-core";
 import pkg from "../../package.json";
 import { getJs, getStyles } from "../utils/plugin-injection";
@@ -157,7 +157,7 @@ class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING;
     console.log("[Plugin] Disabling plugin " + this.name);
 
-    this.webViewInit = false
+    this.webViewInit = false;
 
     this.status = PluginStatus.DISABLED;
     console.log("[Plugin] Plugin " + this.name + " is disabled.");
@@ -241,8 +241,8 @@ class PluginManager implements IPluginManager {
       depth: 0,
       awaitWriteFinish: {
         stabilityThreshold: 500,
-        pollInterval: 500
-      }
+        pollInterval: 500,
+      },
     });
 
     this.watcher.on("change", async (_path) => {
@@ -261,7 +261,7 @@ class PluginManager implements IPluginManager {
         baseName === "preload.js" ||
         baseName === "index.html"
       ) {
-        await plugin.disable()
+        await plugin.disable();
 
         await plugin.enable();
 

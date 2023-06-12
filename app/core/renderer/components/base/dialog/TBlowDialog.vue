@@ -24,7 +24,7 @@ export default {
 
 <script setup>
 import { defineComponent, onMounted, provide, ref } from "vue";
-import {sleep} from "utils/common";
+import {sleep} from "@talex-touch/utils/common";
 import { $t } from '@modules/lang'
 
 const close = ref(false)

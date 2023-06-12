@@ -13,7 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "ts-node": "^10.9.1",
-    "utils": "workspace:^1.0.0",
+    "@talex-touch/utils": "workspace:^1.0.0",
     "vitest": "^0.31.0"
   }
 }

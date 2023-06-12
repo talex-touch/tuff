@@ -23,7 +23,7 @@ import {
 import { release } from "os";
 import { checkDirWithCreate } from "../utils/common-util";
 import { genTouchChannel } from "./channel-core";
-import { ChannelType, ITouchChannel } from "utils/channel";
+import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import { TalexTouch } from "../types/touch-core";
 import pluginCore, { genPluginManager } from "../plugins/plugin-core";
 

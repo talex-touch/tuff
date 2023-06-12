@@ -6,7 +6,7 @@ import {
   RawChannelSyncData,
   RawStandardChannelData,
   StandardChannelData,
-} from "utils/channel";
+} from "@talex-touch/utils/channel";
 
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, Function[]> = new Map();

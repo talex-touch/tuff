@@ -6,7 +6,7 @@ import {
   RawChannelSyncData,
   RawStandardChannelData,
   StandardChannelData,
-} from "utils/channel";
+} from "@talex-touch/utils/channel";
 import { TalexTouch } from "../types";
 
 class TouchChannel implements ITouchChannel {

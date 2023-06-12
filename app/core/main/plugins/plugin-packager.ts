@@ -1,5 +1,5 @@
-import { ChannelType } from 'utils/channel/index';
-import { ITouchPlugin } from "utils/plugin";
+import { ChannelType } from '@talex-touch/utils/channel';
+import { ITouchPlugin } from "@talex-touch/utils/plugin";
 import { TalexTouch } from "./../types/touch-core";
 import path from "path";
 import { checkDirWithCreate } from "../utils/common-util";
