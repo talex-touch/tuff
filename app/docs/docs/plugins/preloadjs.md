@@ -14,11 +14,13 @@ Open your `Plugin Folder` and create a **preload.js** file on the root directory
 
 > Now, we're using official standard library to create bridge between plugins and app.
 
-``` cmd [Ni (Recommended)]
+::: code-group
+
+``` bash [Ni (Recommended)]
 ni @talex-touch/utils
 ```
 
-``` cmd [pnpm (Official)]
+``` bash [pnpm (Official)]
 pnpm install @talex-touch/utils
 ```
 
