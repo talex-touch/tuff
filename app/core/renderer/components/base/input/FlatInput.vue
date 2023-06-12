@@ -1,23 +1,7 @@
-<template>
-  <div tabindex="0" @keydown="onKeyDown" class="FlatInput-Container fake-background"
-    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true, area }">
-    <span v-if="$slots.default" class="FlatInput-Prefix">
-      <slot>
-        <RemixIcon :name="icon" :style="`line`" />
-      </slot>
-    </span>
-    <textarea resize="false" v-if="area" :placeholder="placeholder" relative v-model="value" />
-    <input v-else :placeholder="placeholder" relative v-model="value" :type="password ? 'password' : 'text'" />
-    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
-      Caps Lock
-    </el-tag>
-  </div>
-</template>
-
 <script name="FlatInput" setup>
-import RemixIcon from "@comp/icon/RemixIcon.vue";
-import { useModelWrapper } from 'utils/renderer/ref';
-import { ref } from "vue";
+import RemixIcon from '@comp/icon/RemixIcon.vue'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { ref } from 'vue'
 
 const props = defineProps(['placeholder', 'icon', 'password', 'modelValue', 'nonWin', 'area'])
 const emit = defineEmits(['update:modelValue'])
@@ -26,16 +10,34 @@ const lapsLock = ref(false)
 const value = useModelWrapper(props, emit)
 
 function onKeyDown(e) {
-  if (!props.password) return
+  if (!props.password)
+    return
 
-  const valueCapsLock = e.keyCode ? e.keyCode : e.which; // 按键
-  const valueShift = e.shiftKey ? e.shiftKey : ((valueCapsLock === 16)); // shift键是否按住
+  const valueCapsLock = e.keyCode ? e.keyCode : e.which // 按键
+  const valueShift = e.shiftKey ? e.shiftKey : ((valueCapsLock === 16)) // shift键是否按住
 
   lapsLock.value = ((valueCapsLock >= 65 && valueCapsLock <= 90) && !valueShift) // 输入了大写字母，并且shift键没有按住，说明Caps Lock打开
     || ((valueCapsLock >= 97 && valueCapsLock <= 122) && valueShift)
-
 }
 </script>
+
+<template>
+  <div
+    tabindex="0" class="FlatInput-Container fake-background" :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true, area }"
+    @keydown="onKeyDown"
+  >
+    <span v-if="$slots.default" class="FlatInput-Prefix">
+      <slot>
+        <RemixIcon :name="icon" style="line" />
+      </slot>
+    </span>
+    <textarea v-if="area" v-model="value" resize="false" :placeholder="placeholder" relative />
+    <input v-else v-model="value" :placeholder="placeholder" relative :type="password ? 'password' : 'text'">
+    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
+      Caps Lock
+    </el-tag>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .FlatInput-Container {

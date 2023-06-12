@@ -1,43 +1,16 @@
-<template>
-  <div class="PluginApplyInstall-Container" :class="{ installing }">
-    <div class="PluginApplyInstall-Installing">
-      <h4>正在安装中...</h4>
-      <LottieFrame :data="Loading" />
-    </div>
-    <div class="PluginApplyInstall-Main">
-      <p>新插件</p>
-      <!--    <div class="PluginApplyInstall-Main">-->
-      <!--      <PluginIcon :icon="manifest.icon" />-->
-      <!--    </div>-->
-      <h4>{{ manifest.description }}</h4>
-      <span>{{ manifest.version }}</span>
-      <div class="PluginApplyInstall-Button">
-        <FlatButton v-wave @click="close">忽略</FlatButton>
-        <FlatButton v-wave :primary="true" @click="install">安装</FlatButton>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script>
-export default {
-  name: "PluginApplyInstall"
-}
-</script>
-
-<script setup>
-import { h, inject, ref } from "vue";
-import { blowMention } from "@modules/mention/dialog-mention";
-import { asyncMainProcessMessage } from "@modules/samples/node-api";
+<script name="PluginApplyInstall" setup>
+import { inject, ref } from 'vue'
+import { blowMention } from '@modules/mention/dialog-mention'
+import { asyncMainProcessMessage } from '@modules/samples/node-api'
 import Loading from '@assets/lotties/compress-loading.json'
-import LottieFrame from "@comp/icon/lotties/LottieFrame.vue";
-import { sleep } from 'utils/common';
-import FlatButton from "@comp/base/button/FlatButton.vue";
+import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
+import { sleep } from '@talex-touch/utils/common'
+import FlatButton from '@comp/base/button/FlatButton.vue'
 
-const props = defineProps(["manifest", "path"])
+const props = defineProps(['manifest', 'path'])
 
 const installing = ref(false)
-const close = inject("destroy")
+const close = inject('destroy')
 
 async function install() {
   installing.value = true
@@ -45,7 +18,7 @@ async function install() {
   await sleep(400)
 
   const { data } = await asyncMainProcessMessage('@install-plugin', props.path, {
-    timeout: 1000 * 60 * 5
+    timeout: 1000 * 60 * 5,
   })
 
   await sleep(400)
@@ -56,20 +29,42 @@ async function install() {
 
   close()
 
-  if ( data.status === 'error' ) {
-    if ( data.msg === '10091' ) {
+  if (data.status === 'error') {
+    if (data.msg === '10091')
       await blowMention('Install', '该插件已遭受不可逆破坏！')
-    } else {
+    else
       await blowMention('Install', JSON.stringify(data.msg))
-    }
-
-  } else {
+  }
+  else {
     await blowMention('Install', '插件安装成功！')
   }
-
 }
-
 </script>
+
+<template>
+  <div class="PluginApplyInstall-Container" :class="{ installing }">
+    <div class="PluginApplyInstall-Installing">
+      <h4>正在安装中...</h4>
+      <LottieFrame :data="Loading" />
+    </div>
+    <div class="PluginApplyInstall-Main">
+      <p>新插件</p>
+      <!--    <div class="PluginApplyInstall-Main"> -->
+      <!--      <PluginIcon :icon="manifest.icon" /> -->
+      <!--    </div> -->
+      <h4>{{ manifest.description }}</h4>
+      <span>{{ manifest.version }}</span>
+      <div class="PluginApplyInstall-Button">
+        <FlatButton v-wave @click="close">
+          忽略
+        </FlatButton>
+        <FlatButton v-wave :primary="true" @click="install">
+          安装
+        </FlatButton>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .PluginApplyInstall-Installing {

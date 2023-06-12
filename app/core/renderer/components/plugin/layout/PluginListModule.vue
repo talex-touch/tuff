@@ -1,3 +1,22 @@
+<script>
+</script>
+
+<script name="PluginListModule" setup>
+import PluginIcon from '@comp/plugin/PluginIcon.vue'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
+
+const props = defineProps(['modelValue', 'plugins', 'shrink'])
+
+const emits = defineEmits(['update:modelValue'])
+
+export default {
+  name: 'PluginListModule',
+}
+
+const value = useModelWrapper(props, emits)
+</script>
+
 <template>
   <div class="PluginList-Module" mb-12 min-h-16>
     <p flex justify-between items-center>
@@ -10,18 +29,23 @@
       </span>
     </p>
 
-    <p :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" v-t="'base.empty-select'" />
+    <p v-t="'base.empty-select'" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
 
     <transition-group name="list">
-      <div @click="value = plugin" class="PluginList-Item fake-background"
+      <div
+        v-for="(plugin, index) in Object.values(plugins)"
+        :key="index" class="PluginList-Item fake-background"
         :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }"
-        v-for="(plugin, index) in Object.values(plugins)" :key="index">
+        @click="value = plugin"
+      >
         <PluginIcon :icon="plugin.icon" :alt="plugin.name" />
 
         <div class="PluginList-Item-Main">
           <p>{{ plugin.name }}</p>
 
-          <p v-if="!shrink">{{ plugin.desc }}</p>
+          <p v-if="!shrink">
+            {{ plugin.desc }}
+          </p>
           <div v-else class="PluginList-ShrinkStatus">
             <PluginStatus :plugin="plugin" :shrink="true" />
           </div>
@@ -30,23 +54,6 @@
     </transition-group>
   </div>
 </template>
-
-<script>
-export default {
-  name: "PluginListModule"
-}
-</script>
-
-<script setup>
-import PluginIcon from "@comp/plugin/PluginIcon.vue";
-import { useModelWrapper } from 'utils/renderer/ref';
-import PluginStatus from "@comp/plugin/action/PluginStatus.vue";
-
-const props = defineProps(['modelValue', 'plugins', 'shrink'])
-const emits = defineEmits(['update:modelValue'])
-
-const value = useModelWrapper(props, emits)
-</script>
 
 <style lang="scss" scoped>
 .PluginList-Item-Main {

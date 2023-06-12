@@ -1,17 +1,5 @@
-<template>
-  <div role="radio" @click="model = !model" :class="{ 'select': model, disabled }" class="TSwitch-Container">
-
-  </div>
-</template>
-
-<script>
-export default {
-  name: "TSwitch"
-}
-</script>
-
-<script setup>
-import { useModelWrapper } from 'utils/renderer/ref'
+<script name="TSwitch" setup>
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { watch } from 'vue'
 
 const props = defineProps(['modelValue', 'disabled'])
@@ -21,6 +9,10 @@ const model = useModelWrapper(props, emits)
 
 watch(() => model, () => emits('change', model))
 </script>
+
+<template>
+  <div role="radio" :class="{ select: model, disabled }" class="TSwitch-Container" @click="model = !model" />
+</template>
 
 <style lang="scss" scoped>
 @keyframes switchAnimation {

@@ -33,14 +33,8 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "FileTree"
-}
-</script>
-
-<script setup>
-import { useModelWrapper } from 'utils/renderer/ref';
+<script name="FileTree" setup>
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref';
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 import { onMounted, reactive, ref, watchEffect } from "vue";
 import IconButton from "@comp/base/button//IconButton.vue";

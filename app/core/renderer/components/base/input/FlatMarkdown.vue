@@ -1,28 +1,15 @@
-<template>
-  <div class="FlatMarkdown-Container fake-background">
-    <el-scrollbar>
-      <div class="FlatMarkdown-Editor" ref="editorDom" />
-    </el-scrollbar>
-  </div>
-</template>
-
-<script>
-export default {
-  name: "FlatMarkdown"
-}
-</script>
-
-<script setup>
-import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx } from '@milkdown/core';
+<script name="FlatMarkdown" setup>
+import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
 import { nord } from '@milkdown/theme-nord'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { replaceAll } from '@milkdown/utils'
-import { onMounted, ref } from "vue";
-import { useModelWrapper } from 'utils/renderer/ref';
+import { onMounted, ref } from 'vue'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import '@milkdown/theme-nord/style.css'
 
-const props = defineProps(["modelValue", "readonly"])
-const emit = defineEmits(["update:modelValue"])
+const props = defineProps(['modelValue', 'readonly'])
+
+const emit = defineEmits(['update:modelValue'])
 
 const value = useModelWrapper(props, emit)
 
@@ -34,19 +21,25 @@ watch(value, () => {
 })
 
 onMounted(async () => {
-  editor.value = await Editor.make().config(ctx => {
+  editor.value = await Editor.make().config((ctx) => {
     ctx.set(rootCtx, editorDom.value)
     ctx.set(defaultValueCtx, value.value)
 
     ctx.update(editorViewOptionsCtx, prev => ({
       ...prev,
-      editable: () => !props.readonly
+      editable: () => !props.readonly,
     }))
   }).use(nord).use(commonmark).create()
-
 })
-
 </script>
+
+<template>
+  <div class="FlatMarkdown-Container fake-background">
+    <el-scrollbar>
+      <div ref="editorDom" class="FlatMarkdown-Editor" />
+    </el-scrollbar>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 :deep(.milkdown) {

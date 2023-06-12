@@ -1,62 +1,36 @@
-<template>
-  <div class="TBlockSwitch-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
-    <div class="TBlockSwitch-Content TBlockSelection-Content">
-      <remix-icon :name="icon" :style="value ? 'fill' : 'line'" />
-      <div class="TBlockSwitch-Label TBlockSelection-Label">
-        <h3>{{ title }}</h3>
-        <p>{{ description }}</p>
-      </div>
-    </div>
-    <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
-      <span style="transition: .2s" ref="mention"></span>
-<!--      样式同步透明 不额外设定disabled-->
-      <t-switch v-model="value" />
-    </div>
-    <div v-else class="TBlockSwitch-Guidance">
-      <remix-icon name="arrow-right-s" />
-    </div>
-  </div>
-</template>
-
-<script>
-export default {
-  name: "TBlockSwitch"
-}
-</script>
-
-<script setup>
+<script name="TBlockSwitch" setup>
 import TSwitch from '@comp/base/switch/TSwitch.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { sleep } from 'utils/common'
-import { useModelWrapper } from 'utils/renderer/ref'
+import { sleep } from '@talex-touch/utils/common'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { nextTick, ref, watch } from 'vue'
 import { $t } from '@modules/lang'
 
 const props = defineProps({
   title: {
     type: String,
-    required: true
+    required: true,
   },
   description: {
     type: String,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Boolean,
-    required: true
+    required: true,
   },
   disabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   icon: {
     type: String,
-    required: true
+    required: true,
   },
   guidance: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
@@ -67,21 +41,21 @@ watch(() => value.value, (v) => {
   emits('change', value)
 
   refresh(v)
-
 }, { immediate: true })
 
-watch(() => value.value ? $t('base.status-open') : $t('base.status-close'), (v) => refresh(v))
+watch(() => value.value ? $t('base.status-open') : $t('base.status-close'), v => refresh(v))
 
 function refresh(v) {
   nextTick(async () => {
     const _text = v ? $t('base.status-open') : $t('base.status-close')
 
     const el = mention.value
-    if ( !el ) return
+    if (!el)
+      return
 
     Object.assign(el.style, {
       opacity: 0,
-      transform: 'translateX(5px)'
+      transform: 'translateX(5px)',
     })
 
     await sleep(200)
@@ -90,17 +64,35 @@ function refresh(v) {
 
     Object.assign(el.style, {
       opacity: 1,
-      transform: 'translateX(0)'
+      transform: 'translateX(0)',
     })
 
     await sleep(200)
-
   })
 }
 </script>
 
-<style lang="scss" scoped>
+<template>
+  <div class="TBlockSwitch-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
+    <div class="TBlockSwitch-Content TBlockSelection-Content">
+      <RemixIcon :name="icon" :style="value ? 'fill' : 'line'" />
+      <div class="TBlockSwitch-Label TBlockSelection-Label">
+        <h3>{{ title }}</h3>
+        <p>{{ description }}</p>
+      </div>
+    </div>
+    <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
+      <span ref="mention" style="transition: .2s" />
+      <!--      样式同步透明 不额外设定disabled -->
+      <TSwitch v-model="value" />
+    </div>
+    <div v-else class="TBlockSwitch-Guidance">
+      <RemixIcon name="arrow-right-s" />
+    </div>
+  </div>
+</template>
 
+<style lang="scss" scoped>
 //.TBlockSwitch-Container + .TBlockSwitch-Container {
 //  border-radius: 0 0 4px 4px;
 //}

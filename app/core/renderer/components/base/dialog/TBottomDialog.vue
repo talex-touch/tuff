@@ -1,51 +1,89 @@
-<template>
-  <teleport to="body">
-    <div ref="wholeDom" class="TBottomDialog-Wrapper fake-background" :style="`z-index: ${index + 10000}`">
-      <div class="TBottomDialog-Container">
-        <p v-text="title" class="dialog-title" />
-        <div class="dialog-content" v-text="message" />
-
-        <div class="dialog-btns">
-          <span v-for="(btn, index) in btnArray" :key="index"
-              @click="clickBtn(btn)" :class="{ 'info-tip': btn.value?.type === 'info',
-              'warn-tip': btn.value?.type === 'warning',
-              'error-tip': btn.value?.type === 'error',
-              'success-tip': btn.value?.type === 'success', 'loading-tip': btn.value.loading }"
-              class="btn-item">
-              <span class="TDialogTip-Btn-Item-Loading">
-                <Loading />
-              </span>
-              <span v-if="btn.value.time" class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }} ({{ btn.value.time }}s)</span>
-              <span v-else class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
-          </span>
-        </div>
-      </div>
-    </div>
-  </teleport>
-</template>
-
-<script>
-export default {
-  name: "TBottomDialog"
-}
-</script>
-
-<script setup>
+<script name="TBottomDialog" setup>
 import Loading from '@comp/icon/LoadingIcon.vue'
 import { onMounted, ref, watchEffect } from 'vue'
-import { sleep } from 'utils/common'
+import { sleep } from '@talex-touch/utils/common'
 
 const props = defineProps({
-  title: String, message: String, stay: Number, close: Function,
-  btns: Array, icon: String, index: Number
+  title: String,
+  message: String,
+  stay: Number,
+  close: Function,
+  btns: Array,
+  icon: String,
+  index: Number,
 })
 
 const btnArray = ref([])
 
 const wholeDom = ref(null)
 
-const forClose = ref(async () => {
+async function clickBtn(btn) {
+  btn.value.loading = true
 
+  await sleep(200)
+
+  if (await btn.value.onClick())
+
+    forClose.value()
+
+  btn.value.loading = false
+}
+
+watchEffect(() => {
+  const array = [];
+
+  ([...props.btns]).forEach((btn) => {
+    const obj = ref({
+      loading: false,
+      ...btn,
+    })
+
+    if (btn.loading) {
+      obj.value.loading = true
+
+      btn.loading(() => {
+        obj.value.loading = false
+      })
+    }
+
+    if (btn.time) {
+      const _clickBtn = clickBtn
+
+      function refresh() {
+        setTimeout(() => {
+          obj.value.time -= 1
+
+          if (obj.value.time <= 0) {
+            _clickBtn(obj)
+
+            return
+          }
+
+          refresh()
+        }, 1000)
+      }
+
+      refresh()
+    }
+
+    array.push(obj)
+  })
+
+  btnArray.value = array
+})
+
+// couldn't move
+function listener() {
+  window.scrollTo({
+    top: 0,
+  })
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', listener)
+})
+
+const forClose = ref(async () => {
   const style = wholeDom.value?.style
 
   style.transform = 'translate(-50%, 0) scale(.8) translateY(100%)'
@@ -59,99 +97,39 @@ const forClose = ref(async () => {
   props.close()
 
   window.removeEventListener('scroll', listener)
-
-})
-
-const clickBtn = async (btn) => {
-
-  btn.value.loading = true
-
-  await sleep(200)
-
-  if( await btn.value.onClick() ) {
-
-    forClose.value()
-
-  }
-
-  btn.value.loading = false
-
-}
-
-watchEffect(() => {
-
-  const array = [];
-
-  ([ ...props.btns ]).forEach(btn => {
-
-    const obj = ref({
-      loading: false,
-      ...btn
-    })
-
-    if( btn.loading ) {
-
-      obj.value.loading = true
-
-      btn.loading(() => {
-
-        obj.value.loading = false
-
-      })
-
-    }
-
-    if( btn.time ) {
-
-      const _clickBtn = clickBtn
-
-      function refresh() {
-
-        setTimeout(() => {
-
-          obj.value.time -= 1
-
-          if ( obj.value.time <= 0 ) {
-
-            _clickBtn(obj)
-
-            return
-
-          }
-
-          refresh()
-
-        }, 1000)
-
-      }
-
-      refresh()
-
-    }
-
-    array.push(obj)
-
-  })
-
-  btnArray.value = array
-
-})
-
-// couldn't move
-let listener = (e) => {
-
-  window.scrollTo({
-    top: 0
-  })
-
-}
-
-onMounted(() => {
-
-  window.addEventListener('scroll', listener)
-
 })
 </script>
+
+<template>
+  <teleport to="body">
+    <div ref="wholeDom" class="TBottomDialog-Wrapper fake-background" :style="`z-index: ${index + 10000}`">
+      <div class="TBottomDialog-Container">
+        <p class="dialog-title" v-text="title" />
+        <div class="dialog-content" v-text="message" />
+
+        <div class="dialog-btns">
+          <span
+            v-for="(btn, index) in btnArray" :key="index"
+            :class="{
+              'info-tip': btn.value?.type === 'info',
+              'warn-tip': btn.value?.type === 'warning',
+              'error-tip': btn.value?.type === 'error',
+              'success-tip': btn.value?.type === 'success',
+              'loading-tip': btn.value.loading,
+            }" class="btn-item"
+            @click="clickBtn(btn)"
+          >
+            <span class="TDialogTip-Btn-Item-Loading">
+              <Loading />
+            </span>
+            <span v-if="btn.value.time" class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }} ({{ btn.value.time }}s)</span>
+            <span v-else class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </teleport>
+</template>
 
 <style lang="scss" scoped>
 .TBottomDialog-Container {

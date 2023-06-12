@@ -1,7 +1,7 @@
 <script lang="jsx">
 import { h, nextTick, ref, defineComponent } from 'vue'
 import TTabItem from '@comp/tabs/TTabItem.vue'
-import { sleep } from 'utils/common'
+import { sleep } from '@talex-touch/utils/common'
 import TTabHeader from '@comp/tabs/TTabHeader.vue'
 import { ElScrollbar } from 'element-plus'
 import { $t } from '@modules/lang'

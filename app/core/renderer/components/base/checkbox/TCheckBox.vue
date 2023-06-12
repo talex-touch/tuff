@@ -1,5 +1,20 @@
+<script name="TCheckBox" setup>
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+
+const props = defineProps({
+  modelValue: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emits = defineEmits(['update:modelValue'])
+
+const value = useModelWrapper(props, emits, 'modelValue')
+</script>
+
 <template>
-  <div :class="{ 'select': value }" @click="value = !value" class="TCheckBox-Container" role="checkbox">
+  <div :class="{ select: value }" class="TCheckBox-Container" role="checkbox" @click="value = !value">
     <span class="TCheckBox-Inner">
       <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline fill="none" stroke-width="24" points="88,214 173,284 304,138" stroke-linecap="round" stroke-linejoin="round" class="tick" />
@@ -10,26 +25,6 @@
     </span>
   </div>
 </template>
-
-<script>
-export default {
-  name: "TCheckBox"
-}
-</script>
-
-<script setup>
-import { useModelWrapper } from 'utils/renderer/ref';
-
-const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  }
-})
-const emits = defineEmits(["update:modelValue"])
-
-const value = useModelWrapper(props, emits, "modelValue")
-</script>
 
 <style lang="scss" scoped>
 .TCheckBox-Container {

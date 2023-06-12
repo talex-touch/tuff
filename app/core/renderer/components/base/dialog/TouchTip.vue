@@ -1,54 +1,63 @@
-<template>
-  <div class="TouchTip-Wrapper transition-cubic">
-    <div class="TouchTip-Container fake-background" ref="wholeDom" :class="{ 'loading-tip': loading }">
-      <h1 v-text="title"></h1>
-
-      <span class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
-
-      <div class="TDialogTip-Btn">
-        <div v-for="(btn, index) in btnArray" :key="index" v-wave @click="clickBtn(btn)" :class="{
-            'info-tip': btn.value?.type === 'info',
-            'warn-tip': btn.value?.type === 'warning',
-            'error-tip': btn.value?.type === 'error',
-            'success-tip': btn.value?.type === 'success', 'loading-tip': btn.value.loading
-          }" class="TDialogTip-Btn-Item">
-          <span class="TDialogTip-Btn-Item-Loading">
-            <Loading />
-          </span>
-          <span class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script>
-import VWave from 'v-wave'
-export default {
-  name: "TouchTip",
-  directives: {
-    VWave
-  }
-}
-</script>
-
-<script setup>
+<script name="TouchTip" setup>
 import Loading from '@comp/icon/LoadingIcon.vue'
 import { onMounted, ref, watchEffect } from 'vue'
-import { sleep } from 'utils/common'
+import { sleep } from '@talex-touch/utils/common'
 
 const props = defineProps({
-  title: String, message: String, buttons: Array, close: Function
+  title: String, message: String, buttons: Array, close: Function,
 })
 
 const btnArray = ref([])
 
 const wholeDom = ref(null)
 
+watchEffect(() => {
+  const array = [];
+
+  ([...props.buttons]).forEach((btn) => {
+    const obj = ref({
+      loading: false,
+      ...btn,
+    })
+
+    if (btn.loading) {
+      obj.value.loading = true
+
+      btn.loading(() => {
+        obj.value.loading = false
+      })
+    }
+
+    array.push(obj)
+  })
+
+  btnArray.value = array
+})
+
+const clickBtn = ref(async (btn) => {
+  btn.value.loading = true
+
+  await sleep(200)
+
+  if (await btn.value.onClick())
+
+    forClose.value()
+
+  btn.value.loading = false
+})
+
+// couldn't move
+function listener() {
+  window.scrollTo({
+    top: 0,
+  })
+}
+
 const forClose = ref(async () => {
   const el = wholeDom.value
-  if (!el) return
-  
+  if (!el)
+    return
+
   const style = el.style
 
   await sleep(100)
@@ -63,72 +72,39 @@ const forClose = ref(async () => {
   props.close()
 
   window.removeEventListener('scroll', listener)
-
 })
-
-watchEffect(() => {
-
-  const array = [];
-
-  ([...props.buttons]).forEach(btn => {
-
-    const obj = ref({
-      loading: false,
-      ...btn
-    })
-
-    if (btn.loading) {
-
-      obj.value.loading = true
-
-      btn.loading(() => {
-
-        obj.value.loading = false
-
-      })
-
-    }
-
-    array.push(obj)
-
-  })
-
-  btnArray.value = array
-
-})
-
-const clickBtn = ref(async (btn) => {
-
-  btn.value.loading = true
-
-  await sleep(200)
-
-  if (await btn.value.onClick()) {
-
-    forClose.value()
-
-  }
-
-  btn.value.loading = false
-
-})
-
-// couldn't move
-let listener = (e) => {
-
-  window.scrollTo({
-    top: 0
-  })
-
-}
 
 onMounted(() => {
-
   window.addEventListener('scroll', listener)
-
 })
-
 </script>
+
+<template>
+  <div class="TouchTip-Wrapper transition-cubic">
+    <div ref="wholeDom" class="TouchTip-Container fake-background" :class="{ 'loading-tip': loading }">
+      <h1 v-text="title" />
+
+      <span class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
+
+      <div class="TDialogTip-Btn">
+        <div
+          v-for="(btn, index) in btnArray" :key="index" v-wave :class="{
+            'info-tip': btn.value?.type === 'info',
+            'warn-tip': btn.value?.type === 'warning',
+            'error-tip': btn.value?.type === 'error',
+            'success-tip': btn.value?.type === 'success',
+            'loading-tip': btn.value.loading,
+          }" class="TDialogTip-Btn-Item" @click="clickBtn(btn)"
+        >
+          <span class="TDialogTip-Btn-Item-Loading">
+            <Loading />
+          </span>
+          <span class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .TDialogTip-Content {

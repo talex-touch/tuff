@@ -1,53 +1,30 @@
-<template>
-  <div class="TBlockSelect-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
-    <div class="TBlockSelect-Content TBlockSelection-Content">
-      <remix-icon :name="icon" :style="value ? 'fill' : 'line'" />
-      <div class="TBlockSelect-Label">
-        <h3>{{ title }}</h3>
-        <p>{{ description }}</p>
-      </div>
-    </div>
-    <div class="TBlockSelect-Select TBlockSelection-Func">
-      <t-select v-model="value">
-        <slot />
-      </t-select>
-    </div>
-  </div>
-</template>
-
-<script>
-export default {
-  name: "TBlockSelect"
-}
-</script>
-
-<script setup>
+<script name="TBlockSelect" setup>
 import TSelect from '@comp/base/select/TSelect.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { useModelWrapper } from 'utils/renderer/ref'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { watch } from 'vue'
 
 const props = defineProps({
   title: {
     type: String,
-    required: true
+    required: true,
   },
   description: {
     type: String,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Boolean,
-    required: true
+    required: true,
   },
   disabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   icon: {
     type: String,
-    required: true
-  }
+    required: true,
+  },
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
@@ -56,8 +33,24 @@ const value = useModelWrapper(props, emits)
 watch(() => value, () => emits('change', value))
 </script>
 
-<style lang="scss" scoped>
+<template>
+  <div class="TBlockSelect-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
+    <div class="TBlockSelect-Content TBlockSelection-Content">
+      <RemixIcon :name="icon" :style="value ? 'fill' : 'line'" />
+      <div class="TBlockSelect-Label">
+        <h3>{{ title }}</h3>
+        <p>{{ description }}</p>
+      </div>
+    </div>
+    <div class="TBlockSelect-Select TBlockSelection-Func">
+      <TSelect v-model="value">
+        <slot />
+      </TSelect>
+    </div>
+  </div>
+</template>
 
+<style lang="scss" scoped>
 //.TBlockSelect-Container + .TBlockSelect-Container {
 //  border-radius: 0 0 4px 4px;
 //}

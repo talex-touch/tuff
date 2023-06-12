@@ -1,12 +1,91 @@
+<script name="PluginWrapper" setup>
+import { genFileAdpoter, pluginPath } from '@modules/hooks/adopters/file-adpoters'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { reactive } from 'vue'
+import FileTree from '@comp/tree/FileTree.vue'
+import FlatButton from '@comp/base/button//FlatButton.vue'
+import { pluginManager } from '@modules/channel/plugin-core/api'
+import { blowMention } from '@modules/mention/dialog-mention'
+import PluginExportMention from '@comp/plugin/action/mention/PluginExportMention.vue'
+import LogTerminal from '@comp/terminal/LogTerminal.vue'
+import { touchChannel } from '@modules/channel/channel-core'
+
+const props = defineProps(['plugin', 'modelValue'])
+const emit = defineEmits(['update:modelValue'])
+
+const visible = useModelWrapper(props, emit)
+
+const fileAdpoter = genFileAdpoter(pluginPath, props.plugin.name)
+
+const pluginWrapper = reactive({
+  packaging: false,
+  name: props.plugin.name,
+  manifest: props.plugin,
+  files: ['init.json', 'index.html'],
+  p: {
+    n: 0,
+    m: 0,
+    p: 0,
+  },
+  log: [],
+})
+
+touchChannel.regChannel(`plugin-packager-progress-log/${pluginWrapper.name}`, ({ data }) => {
+  pluginWrapper.packaging = true
+
+  pluginWrapper.log.push(data.log)
+})
+
+touchChannel.regChannel(`plugin-packager-progress/${pluginWrapper.name}`, ({ data }) => {
+  pluginWrapper.packaging = true
+  pluginWrapper.p.m = data.total
+  pluginWrapper.p.n = data.received
+
+  const _p = ((data.received / data.total) * 100).toFixed(7)
+
+  pluginWrapper.p.p = _p
+})
+
+let suc = false
+touchChannel.regChannel('plugin-packager', async ({ data }) => {
+  if (suc)
+    return
+  suc = true
+  if (!pluginWrapper.packaging)
+    return suc = false
+  if (data.plugin === pluginWrapper.name) {
+    // pluginWrapper.packaging = false
+
+    if (data.status === 'success')
+      await blowMention('success', '导出成功！')
+    else
+      await blowMention('error', '导出失败！')
+
+    setTimeout(() => {
+      pluginWrapper.packaging = false
+    }, 3200)
+  }
+  else { return suc = false }
+})
+
+function pack() {
+  pluginWrapper.packaging = true
+
+  pluginManager.exportPlugin(pluginWrapper.name, JSON.stringify(pluginWrapper.manifest), JSON.stringify(pluginWrapper.files))
+}
+</script>
+
 <template>
   <div class="PluginWrapper-Wrapper fake-background" :class="{ visible: visible || pluginWrapper.packaging }">
-    <span @click="visible = pluginWrapper.packaging || false" class="PluginWrapper-Referrer" />
+    <span class="PluginWrapper-Referrer" @click="visible = pluginWrapper.packaging || false" />
     <div class="PluginWrapper-Container">
-      <div class="Pack-Main" v-if="!pluginWrapper.packaging">
-        <FileTree v-model="pluginWrapper.files" :fileAdpoter="fileAdpoter" />
+      <div v-if="!pluginWrapper.packaging" class="Pack-Main">
+        <FileTree v-model="pluginWrapper.files" :file-adpoter="fileAdpoter" />
 
-        <!--       <el-alert class="pack-alert" title="选择你要打包的文件" type="info" />-->
-        <FlatButton @click="pack" type="primary">打包</FlatButton>
+        <!--       <el-alert class="pack-alert" title="选择你要打包的文件" type="info" /> -->
+        <FlatButton type="primary" @click="pack">
+          打包
+        </FlatButton>
       </div>
 
       <div v-else class="Pack-Compressing">
@@ -21,95 +100,8 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
-
-<script>
-export default {
-  name: "PluginWrapper"
-}
-</script>
-
-<script setup>
-import { genFileAdpoter, pluginPath } from "@modules/hooks/adopters/file-adpoters";
-import { useModelWrapper } from 'utils/renderer/ref';
-import { reactive } from "vue";
-import FileTree from "@comp/tree/FileTree.vue";
-import FlatButton from "@comp/base/button//FlatButton.vue";
-import { pluginManager } from "@modules/channel/plugin-core/api";
-import { blowMention } from "@modules/mention/dialog-mention";
-import PluginExportMention from "@comp/plugin/action/mention/PluginExportMention.vue";
-import LogTerminal from "@comp/terminal/LogTerminal.vue";
-import { touchChannel  } from "@modules/channel/channel-core";
-
-const props = defineProps(["plugin", "modelValue"])
-const emit = defineEmits(["update:modelValue"])
-
-const visible = useModelWrapper(props, emit)
-
-const fileAdpoter = genFileAdpoter(pluginPath, props.plugin.name)
-
-const pluginWrapper = reactive({
-  packaging: false,
-  name: props.plugin.name,
-  manifest: props.plugin,
-  files: ['init.json', 'index.html'],
-  p: {
-    n: 0,
-    m: 0,
-    p: 0
-  },
-  log: []
-})
-
-touchChannel.regChannel('plugin-packager-progress-log/' + pluginWrapper.name, ({ data }) => {
-  pluginWrapper.packaging = true
-
-  console.log(data)
-
-  pluginWrapper.log.push(data.log)
-})
-
-touchChannel.regChannel('plugin-packager-progress/' + pluginWrapper.name, ({ data }) => {
-  pluginWrapper.packaging = true
-  pluginWrapper.p.m = data.total
-  pluginWrapper.p.n = data.received
-
-  const _p = ((data.received / data.total) * 100).toFixed(7)
-
-  console.log(_p)
-
-  pluginWrapper.p.p = _p
-})
-
-let suc = false
-touchChannel.regChannel('plugin-packager', async ({ data }) => {
-  if (suc) return
-  suc = true
-  if (!pluginWrapper.packaging) return suc = false
-  if (data.plugin === pluginWrapper.name) {
-    // pluginWrapper.packaging = false
-
-    if (data.status === 'success') {
-      await blowMention('success', '导出成功！')
-    } else {
-      await blowMention('error', '导出失败！')
-    }
-
-    setTimeout(() => {
-      pluginWrapper.packaging = false
-    }, 3200)
-
-  } else return suc = false
-})
-
-function pack() {
-  pluginWrapper.packaging = true
-
-  pluginManager.exportPlugin(pluginWrapper.name, JSON.stringify(pluginWrapper.manifest), JSON.stringify(pluginWrapper.files))
-}
-</script>
 
 <style lang="scss" scoped>
 @keyframes waving {
@@ -281,4 +273,5 @@ function pack() {
   height: 100%;
 
   box-sizing: border-box;
-}</style>
+}
+</style>

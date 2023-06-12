@@ -1,58 +1,59 @@
-<template>
-  <div class="TDialogTip-Wrapper">
-    <div class="TDialogTip-Container" ref="wholeDom" :class="{ 'loading-tip': loading }">
-      <div class="TDialogTip-Main-Wrapper">
-        <h1 v-text="title"></h1>
-        <span class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
-
-        <div class="TDialogTip-Loading-Wrapper">
-          <Loading v-if="loading" />
-        </div>
-        <div class="TDialogTip-Btn">
-          <div v-for="(btn, index) in btnArray" :key="index" v-wave
-                @click="clickBtn(btn)" :class="{ 'info-tip': btn.value?.type === 'info',
-            'warn-tip': btn.value?.type === 'warning',
-            'error-tip': btn.value?.type === 'error',
-            'success-tip': btn.value?.type === 'success', 'loading-tip': btn.value.loading }"
-                class="TDialogTip-Btn-Item">
-            <span class="TDialogTip-Btn-Item-Loading">
-              <Loading />
-            </span>
-            <span class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
-          </div>
-        </div>
-      </div>
-
-
-      <div class="TDialogTip-Icon">
-        <PluginIcon :icon="icon" v-if="icon instanceof Object" />
-        <RemixIcon :name="icon.substring(1)" v-else-if="icon && icon.at(0) === '#'" />
-        <img v-else-if="icon" :src="icon" :alt="title" />
-        <span class="tip-icon" v-else v-text="`Tip`" />
-      </div>
-
-    </div>
-  </div>
-</template>
-
 <script setup>
 import Loading from '@comp/icon/LoadingIcon.vue'
 import { onMounted, ref, watchEffect } from 'vue'
-import { sleep } from 'utils/common'
+import { sleep } from '@talex-touch/utils/common'
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
-import RemixIcon from "@comp/icon/RemixIcon.vue";
+import RemixIcon from '@comp/icon/RemixIcon.vue'
 
 const props = defineProps({
-  title: String, message: String, stay: Number, close: Function,
-  btns: Array, icon: String, loading: Boolean
+  title: String,
+  message: String,
+  stay: Number,
+  close: Function,
+  btns: Array,
+  icon: String,
+  loading: Boolean,
 })
 
 const btnArray = ref([])
 
 const wholeDom = ref(null)
 
-const forClose = ref(async () => {
+watchEffect(() => {
+  const array = [];
 
+  ([...props.btns]).forEach((btn) => {
+    const obj = ref({
+      loading: false,
+      ...btn,
+    })
+
+    if (btn.loading) {
+      obj.value.loading = true
+
+      btn.loading(() => {
+        obj.value.loading = false
+      })
+    }
+
+    array.push(obj)
+  })
+
+  btnArray.value = array
+})
+
+// couldn't move
+function listener() {
+  window.scrollTo({
+    top: 0,
+  })
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', listener)
+})
+
+const forClose = ref(async () => {
   const style = wholeDom.value?.style
 
   // style.animation = 'enter .2s ease-adopters-out reverse'
@@ -69,82 +70,60 @@ const forClose = ref(async () => {
   props.close()
 
   window.removeEventListener('scroll', listener)
-
-})
-
-watchEffect(() => {
-
-  const array = [];
-
-  ([ ...props.btns ]).forEach(btn => {
-
-    const obj = ref({
-      loading: false,
-      ...btn
-    })
-
-    if( btn.loading ) {
-
-      obj.value.loading = true
-
-      btn.loading(() => {
-
-        obj.value.loading = false
-
-      })
-
-    }
-
-    array.push(obj)
-
-  })
-
-  btnArray.value = array
-
 })
 
 const clickBtn = ref(async (btn) => {
-
   btn.value.loading = true
 
   await sleep(200)
 
-  if( await btn.value.onClick() ) {
+  if (await btn.value.onClick())
 
     forClose.value()
 
-  }
-
   btn.value.loading = false
-
 })
-
-// couldn't move
-let listener = (e) => {
-
-  window.scrollTo({
-    top: 0
-  })
-
-}
-
-onMounted(() => {
-
-  window.addEventListener('scroll', listener)
-
-})
-
 </script>
 
-<script>
-import VWave from 'v-wave'
-export default {
-  name: "TDialogTip",
-  directives: {
-    VWave
-  }
-}
-</script>
+<template>
+  <div class="TDialogTip-Wrapper">
+    <div ref="wholeDom" class="TDialogTip-Container" :class="{ 'loading-tip': loading }">
+      <div class="TDialogTip-Main-Wrapper">
+        <h1 v-text="title" />
+        <span class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
+
+        <div class="TDialogTip-Loading-Wrapper">
+          <Loading v-if="loading" />
+        </div>
+        <div class="TDialogTip-Btn">
+          <div
+            v-for="(btn, index) in btnArray" :key="index" v-wave
+            :class="{
+              'info-tip': btn.value?.type === 'info',
+              'warn-tip': btn.value?.type === 'warning',
+              'error-tip': btn.value?.type === 'error',
+              'success-tip': btn.value?.type === 'success',
+              'loading-tip': btn.value.loading,
+            }" class="TDialogTip-Btn-Item"
+            @click="clickBtn(btn)"
+          >
+            <span class="TDialogTip-Btn-Item-Loading">
+              <Loading />
+            </span>
+            <span class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="TDialogTip-Icon">
+        <PluginIcon v-if="icon instanceof Object" :icon="icon" />
+        <RemixIcon v-else-if="icon && icon.at(0) === '#'" :name="icon.substring(1)" />
+        <img v-else-if="icon" :src="icon" :alt="title">
+        <span v-else class="tip-icon" v-text="`Tip`" />
+      </div>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .TDialogTip-Icon {
