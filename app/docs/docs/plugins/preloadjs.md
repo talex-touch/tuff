@@ -1,5 +1,7 @@
 # The `Preload.js` script
 
+> Warning! We have moved `InjectionCode` into to the official standard library. So before plugins must introduce our library!
+
 ## What's
 
 You can customize a script to start some necessary tasks before loading the extension plug-in, such as pre-server, some operations that need to be pre-processed. But you need to note that after version 2.0.0, your pre-processing operations also need the user’s permission and file declaration to proceed, including but not limited to network services, storage reading, startup programs …
@@ -8,12 +10,30 @@ You can customize a script to start some necessary tasks before loading the exte
 
 Open your `Plugin Folder` and create a **preload.js** file on the root directory and coding now!
 
+## Install
+
+> Now, we're using official standard library to create bridge between plugins and app.
+
+``` cmd [Ni (Recommended)]
+ni @talex-touch/utils
+```
+
+``` cmd [pnpm (Official)]
+pnpm install @talex-touch/utils
+```
+
+:::
+
 ## Reference
 
 ``` JavaScript
 const { ipcRenderer } = require('electron');
+const { init } = require('@talex-touch/utils')
 const path = require( 'path' )
 const child_process = require( 'child_process' )
+
+// This ensure app to create a bridge
+init(window)
 
 ipcRenderer.once('@plugin-loaded', () => {
   setTimeout(async() => {

@@ -17,7 +17,7 @@
 
 <script setup name="FlatCompletion">
 import FlatInput from "@comp/base/input/FlatInput.vue";
-import { sleep } from @talex - touch/utils/common";
+import { sleep } from "@talex-touch/utils/common";
 import { computePosition } from '@floating-ui/vue'
 
 const props = defineProps({

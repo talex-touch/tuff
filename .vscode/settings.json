@@ -1,6 +1,7 @@
 {
   "cSpell.words": [
     "Adpoter",
+    "antfu",
     "asar",
     "Attributify",
     "commitlint",
@@ -22,5 +23,10 @@
     "websecurity"
   ],
   "debug.console.acceptSuggestionOnEnter": "on",
-  "unocss.root": "app/core"
+  "unocss.root": "app/core",
+  "prettier.enable": false,
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
 }

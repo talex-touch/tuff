@@ -52,7 +52,7 @@ export default {
 <script setup>
 import FlatNavBar from "@comp/customize/navbar/FlatNavBar.vue";
 import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
-import { applicationUpgrade } from "@modules/hooks/applicatoin-hooks";
+import { applicationUpgrade } from "~/renderer/modules/hooks/application-hooks";
 
 const account = {} //window.$storage.account
 

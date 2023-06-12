@@ -1,23 +1,15 @@
-<template>
-  <AppLayout />
-</template>
-
 <script name="App" setup>
 import AppLayout from '@comp/base/AppLayout.vue'
-import { provide, ref, watch } from "vue";
-import {
-  applicationUpgrade,
-  clipBoardResolver,
-  dropperResolver,
-  urlHooker
-} from "@modules/hooks/applicatoin-hooks";
+import { provide, ref, watch } from 'vue'
 import { pluginManager } from '@modules/channel/plugin-core/api'
-import { touchChannel } from './modules/channel/channel-core';
+import {
+  applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker,
+} from '~/renderer/modules/hooks/application-hooks'
 
-const activePlugin = ref("")
+const activePlugin = ref('')
 watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val), { immediate: true })
 
-provide("activePlugin", activePlugin)
+provide('activePlugin', activePlugin)
 
 onMounted(() => {
   applicationUpgrade()
@@ -26,11 +18,12 @@ onMounted(() => {
   urlHooker()
   // screenCapture()
 
-  const res = touchChannel.sendSync('app-ready')
-
-  console.log( res )
+  window.$startupInfo = touchChannel.sendSync('app-ready')
 })
-
 </script>
+
+<template>
+  <AppLayout />
+</template>
 
 <style lang="scss"></style>

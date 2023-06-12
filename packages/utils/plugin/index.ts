@@ -1,14 +1,14 @@
 export enum PluginStatus {
   DISABLED,
   DISABLING,
-  
+
   CRASHED,
 
   ENABLED,
   ACTIVE,
-  
+
   LOADING,
-  LOADED
+  LOADED,
 }
 
 export interface IPluginIcon {
@@ -50,7 +50,7 @@ export interface IPluginManager {
   pluginPath: string
 
   setActivePlugin(pluginName: string): boolean
-  
+
   loadPlugin(pluginName: string): Promise<boolean>
   unloadPlugin(pluginName: string): Promise<boolean>
 }

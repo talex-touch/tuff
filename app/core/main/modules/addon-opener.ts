@@ -1,4 +1,4 @@
-import { ChannelType } from 'utils/channel/index';
+import { ChannelType } from '@talex-touch/utils/channel';
 import { APP_SCHEMA } from "../config/default";
 import { TalexTouch } from "../types";
 import { PluginResolver, ResolverStatus } from "../plugins/plugin-resolver";

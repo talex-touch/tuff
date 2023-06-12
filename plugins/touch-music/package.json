@@ -1,6 +1,6 @@
 {
-  "name": "touch-music",
-  "private": true,
+  "name": "@talex-touch/touch-music-plugin",
+  "private": false,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -15,7 +15,6 @@
     "granim": "^2.0.0",
     "gsap": "^3.11.4",
     "howler": "^2.2.3",
-    "recorder-core": "^1.2.22080700",
     "remixicon": "^2.5.0",
     "rgbaster": "^2.1.1",
     "typescript": "^4.9.4",
