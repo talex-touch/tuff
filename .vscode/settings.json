@@ -32,4 +32,5 @@
   "i18n-ally.localesPaths": [
     "app/core/renderer/assets/languages"
   ],
+  "vue.codeActions.enabled": false,
 }

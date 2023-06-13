@@ -43,9 +43,9 @@ const active = computed(() => props.doActive(props.route, route))
 const changePointer = inject('changePointer')
 
 function handleClick($event) {
-  if ( props.disabled ) return
+  if (props.disabled) return
 
-  if ( props.route )
+  if (props.route)
     router.push(props.route)
 
   let el = $event.target
@@ -62,6 +62,7 @@ function handleClick($event) {
 .TouchMenuItem-Container {
 
   &.active {
+    opacity: .75;
     --fake-color: var(--el-color-primary-light-5) !important;
   }
 

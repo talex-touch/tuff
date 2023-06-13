@@ -4,8 +4,6 @@ import { sleep } from '@talex-touch/utils/common';
 const pointer = ref<HTMLElement>()
 
 provide('changePointer', (el: HTMLElement) => {
-  console.log( pointer.value )
-
   nextTick(() => fixPointer(el))
 })
 
@@ -65,21 +63,22 @@ async function fixPointer(targetEl) {
 }
 
 onMounted(() => {
-  const dom = document.querySelector('.TouchMenuItem-Container.active')
+  setTimeout(() => {
+    const dom = document.querySelector('.TouchMenuItem-Container.active')
 
-  if (dom) {
-    fixPointer(dom)
-  }
+    if (dom) {
+      fixPointer(dom)
+    }
+  }, 500)
 })
 </script>
 
 <template>
   <div flex-col w-full h-full box-border>
     <slot />
-    <div absolute left="-5px" w="3px" opacity-0 transition=".25s" border="50%" class="bg-[color:var(--el-color-primary)]" ref="pointer" />
+    <div absolute left="-5px" w="3px" opacity-0 transition=".25s" border-rounded
+      class="bg-[color:var(--el-color-primary)]" ref="pointer" />
   </div>
 </template>
 
-<style lang="scss">
-
-</style>
+<style lang="scss"></style>

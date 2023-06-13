@@ -369,9 +369,9 @@ export default defineComponent({
     }
 
     position: relative;
+    padding: 10px 8px;
+    
     flex: 1;
-
-    //padding: 2px;
 
     box-sizing: border-box;
   }

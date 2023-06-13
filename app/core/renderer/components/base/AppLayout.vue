@@ -215,7 +215,7 @@ function afterLeave(el) {
 
   left: 0;
 
-  width: var(--nav-width);
+  width: var(--nav-width, 30px);
   // height: 100%;
 
   flex: 1;
