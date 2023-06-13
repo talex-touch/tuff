@@ -9,11 +9,11 @@
             <p my-4 font-extrabold text-2xl>
               {{ plugin.name }}
             </p>
-            <span block text="base" op-75 font-normal>{{ description }}</span>
+            <span block text="base" op-75 font-normal>{{ plugin.desc }}</span>
           </div>
 
-          <FlatButton h-5 w-2 @click="wrapperView = !wrapperView" class="plugin-export" v-if="plugin.dev?.enable">
-            打包
+          <FlatButton h-5 w-2 @click="handleExport" class="plugin-export" v-if="plugin.dev?.enable">
+            Export
           </FlatButton>
         </div>
       </template>
@@ -41,13 +41,7 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "PluginInfo"
-}
-</script>
-
-<script setup>
+<script lang="ts" name="PluginInfo" setup>
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import FlatButton from "@comp/base/button//FlatButton.vue";
 import PluginWrapper from "@comp/plugin/action/PluginWrapper.vue";
@@ -55,18 +49,36 @@ import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
 import FormTemplate from '@comp/base/template/FormTemplate.vue'
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue'
 import LineTemplate from '@comp/base/template/LineTemplate.vue'
+import AgreementTemplateVue from '@comp/customize/addon/AgreementTemplate.vue'
+import { popperMention } from '@modules/mention/dialog-mention'
+import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 
 const props = defineProps({
   plugin: {
-    type: Object,
+    type: Object as PropType<ITouchPlugin>,
     required: true
   }
 })
 
-const readme = computed(() => props.plugin.readme)
+const readme = computed<string>(() => props.plugin.readme)
 
-const wrapperView = ref()
+const wrapperView = ref<boolean>(false)
 
+onBeforeUnmount(() => {
+  wrapperView.value = false
+})
+
+async function handleExport() {
+  await popperMention(null, () => {
+    return h(AgreementTemplateVue, {
+      agreement: "You must agree with the agreement!",
+      agree: (bool: boolean) => {
+        if ( !bool ) return
+        wrapperView.value = true
+      }
+    })
+  })
+}
 </script>
 
 <style lang="scss" scoped>

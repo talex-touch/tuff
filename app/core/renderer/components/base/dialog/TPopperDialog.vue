@@ -124,6 +124,10 @@ provide('destroy', destroy)
     text-align: center;
   }
 
+  .FlatMarkdown-Container {
+    --fake-inner-opacity: 0;
+  }
+
   position: relative;
   padding: 12px 20px;
 
@@ -134,6 +138,7 @@ provide('destroy', destroy)
   //height: 200px;
 
   --fake-radius: 4px;
+  --fake-inner-opacity: .75;
   border-radius: 4px;
   box-shadow: var(--el-box-shadow);
   box-sizing: border-box;

@@ -72,3 +72,82 @@ Filed `dev` identifies the dev-mode of a plugin, you can use `enable` to enable 
 
 - address: Where to load page
 - source: Use confusion when exporting. <Badge type="danger" text="Beta" />
+
+### build
+
+> To export your plugin, you must have a build field.
+
+The build field is made up with 2 vital fields with other optional fields.
+
+Here is a completely demo:
+
+``` JSON
+"build": {
+  "files": [
+    "init.json",
+    "index.html"
+  ],
+  "secret": {
+    "pos": "TalexTouch",
+    "addon": [
+      "windows",
+      "darwin",
+      "linux"
+    ]
+  },
+  "verify": {
+    "enable": true,
+    "online": "always"
+  },
+  "version": {
+    "update": "auto",
+    "downgrade": false
+  }
+}
+```
+
+As you see above, the build field is consists of 4 fields.
+
+#### files (Necessary)
+
+`Field files` describes the files what you want to export!
+Attention, the `OFFICIAL` upload limit is 512MB and single plugin size limit is `2048MB`
+
+The export root path is your plugin root path.
+
+#### secret (Necessary)
+
+`Field secret` describes the secret that you want to choose.
+
+If you want to upload your plugin to `OFFICIAL` you must choose pos **TalexTouch**
+
+Otherwise you could choose your own secret url! (Up to your deploy method)
+
+`Field addon` describes what platforms you want to release.
+
+The platform that not match could not load it.
+
+#### verify (Optional)
+
+`Field verify` describes the plugin whether should be verified.
+
+It means if you turn on it, the plugin must be connected to Internet and be validated to use.
+(It's a necessary switch if you want user use by payment)
+
+`Field online` describes the validation method
+
+For **custom**: Up to developer to choose (See docs)
+For **always**: Plugin need to validate on each startup
+For **once**: Plugin need to validate on computer startup
+
+#### version (Optional)
+
+`Field update` describes the plugin update method.
+
+For **auto**: When new version released, the plugin will be automatically update when startup.
+For **ask**: Ask user whether to update.
+For **readable**: Deprecated the plugin, user could only use and no later version.
+
+`Field downgrade` describes the user could downgrade their plugin to this version.
+
+For more about it, you can see our source-code on right corder (GitHub)

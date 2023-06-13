@@ -201,7 +201,7 @@ function pack() {
   &.visible {
     opacity: 1;
     pointer-events: all;
-    transform: translate(0, 0) scale(1);
+    transform: perspective(10px) translateY(30px) translate3d(0, 0, 0) scale(1);
   }
 
   .PluginWrapper-Referrer {
@@ -250,13 +250,14 @@ function pack() {
   top: 0;
 
   width: 100%;
-  height: calc(100% - 10px);
+  height: calc(100% - 30px);
 
-  --fake-opacity: .75;
+  --fake-inner-opacity: .75;
+  --fake-radius: 16px;
 
   opacity: 0;
   pointer-events: none;
-  transform: translate(0, 100%) scale(.95);
+  transform: perspective(10px) translateY(100%) translate3d(0, 0, 4px) scale(.85);
   box-sizing: border-box;
   transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
 }
