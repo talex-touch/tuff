@@ -72,7 +72,7 @@ class TouchChannel implements ITouchChannel {
           if ( rawData.sync ) {
             e.sender.send(
               `@${
-                /* rawData.header.type ===  */ChannelType.MAIN/*  ? "main" : "plugin" */
+                rawData.header.type === ChannelType.MAIN ? "main" : "plugin"
               }-process-message`,
               rData
             )

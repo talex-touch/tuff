@@ -1,6 +1,5 @@
 import { touchChannel } from '@modules/channel/channel-core'
 import {
-  asyncMainProcessMessage,
   registerTypeProcess,
 } from '@modules/samples/node-api'
 import {
@@ -131,10 +130,10 @@ export function screenCapture() {
 export function dropperResolver() {
   async function dropperFile(path) {
     if (path.endsWith('.touch-plugin')) {
-      const { data } = (await asyncMainProcessMessage(
-        '@drop-plugin',
+      const data = touchChannel.sendSync(
+        'drop:plugin',
         path,
-      )) as any
+      )
 
       if (data.status === 'error') {
         if (data.msg === '10091')
@@ -155,7 +154,7 @@ export function dropperResolver() {
     return true
   }
 
-  registerTypeProcess('@mock-drop', ({ data }) => dropperFile(data))
+  touchChannel.regChannel('@mock-drop', ({ data }) => dropperFile(data))
 
   document.addEventListener('drop', async (e) => {
     e.preventDefault()

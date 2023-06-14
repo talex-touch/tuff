@@ -99,7 +99,7 @@ provide('destroy', destroy)
 
     height: 30px;
     line-height: 30px;
-    bottom: 20px;
+    bottom: 1.5rem;
 
     cursor: pointer;
     user-select: none;
@@ -122,19 +122,28 @@ provide('destroy', destroy)
     width: 100%;
     display: block;
     text-align: center;
+
+    margin: 1rem 0;
+    line-height: 1.25rem;
+  }
+
+  .FlatMarkdown-Container {
+    --fake-inner-opacity: 0;
   }
 
   position: relative;
   padding: 12px 20px;
 
-  min-width: 380px;
+  width: 380px;
+  //min-width: 380px;
   max-width: 80%;
-  min-height: 200px;
+  // min-height: 200px;
   max-height: 80%;
   //height: 200px;
 
-  --fake-radius: 4px;
-  border-radius: 4px;
+  --fake-radius: 8px;
+  --fake-inner-opacity: .75;
+  border-radius: 8px;
   box-shadow: var(--el-box-shadow);
   box-sizing: border-box;
   //background-color: var(--el-fill-color-light);

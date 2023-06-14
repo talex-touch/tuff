@@ -1,4 +1,4 @@
-import { ChannelType } from '@talex-touch/utils/channel';
+import { ChannelType, DataCode } from '@talex-touch/utils/channel';
 import { APP_SCHEMA } from "../config/default";
 import { TalexTouch } from "../types";
 import { PluginResolver, ResolverStatus } from "../plugins/plugin-resolver";
@@ -30,7 +30,7 @@ function macOSAdapter(touchApp: TalexTouch.TouchApp) {
   });
 }
 
-function onSchema(url) {
+function onSchema(url: string) {
     console.log("[Addon] Opened schema: " + url);
 }
 
@@ -57,7 +57,7 @@ export default {
         callback({ path: path.normalize(url) })
     })
 
-    async function onOpenFile(url) {
+    async function onOpenFile(url: any) {
       await touchChannel.send(ChannelType.MAIN, "@mock-drop", url);
     }
 
@@ -76,7 +76,7 @@ export default {
         new PluginResolver(data).resolve(({ event, type }) => {
           console.log("[AddonInstaller] Installed file: " + data);
 
-          reply({
+          reply(DataCode.SUCCESS, {
             status: type,
             msg: event.msg,
             event,
@@ -86,7 +86,7 @@ export default {
     );
 
     this.listeners.push(
-      touchChannel.regChannel(ChannelType.MAIN, "@drop-plugin", ({ data, reply }) => {
+      touchChannel.regChannel(ChannelType.MAIN, 'drop:plugin', async ({ data, reply }) => {
         console.log("[AddonDropper] Dropped file: " + data);
 
         new PluginResolver(data).resolve(({ event, type }) => {
@@ -94,18 +94,18 @@ export default {
 
           if (type === "error") {
             if (event.msg === ResolverStatus.BROKEN_PLUGIN_FILE) {
-              return reply({
+              return reply(DataCode.SUCCESS, {
                 status: "error",
                 msg: "10091",
               });
             } else {
-              return reply({
+              return reply(DataCode.SUCCESS, {
                 status: "error",
                 msg: "10092",
               });
             }
           } else {
-            return reply({
+            return reply(DataCode.SUCCESS, {
               status: "success",
               manifest: event.msg,
               msg: "10090",
@@ -121,6 +121,6 @@ export default {
     );
   },
   destroy(app, manager) {
-    this.listeners.forEach((v) => v());
+    this.listeners.forEach((v: () => any) => v());
   },
 } as TalexTouch.IModule;

@@ -49,9 +49,10 @@ async function install() {
     </div>
     <div class="PluginApplyInstall-Main">
       <p>新插件</p>
-      <!--    <div class="PluginApplyInstall-Main"> -->
-      <!--      <PluginIcon :icon="manifest.icon" /> -->
-      <!--    </div> -->
+      <!-- <div class="PluginApplyInstall-Main">
+        <PluginIcon :icon="manifest.icon" />
+      </div> -->
+      <h2 text-center>{{ manifest.name }}</h2>
       <h4>{{ manifest.description }}</h4>
       <span>{{ manifest.version }}</span>
       <div class="PluginApplyInstall-Button">
@@ -73,6 +74,7 @@ async function install() {
   opacity: 0;
   transition: cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
 }
+
 .PluginApplyInstall-Main {
   position: relative;
 
@@ -86,23 +88,26 @@ async function install() {
 
       opacity: 1;
     }
+
     .PluginApplyInstall-Main {
       opacity: 0;
 
       transform: translateY(-100%);
     }
   }
+
   .PluginApplyInstall-Button {
     display: flex;
     justify-content: space-between;
     margin-top: 16px;
 
     gap: 16px;
+    height: 2.5rem;
   }
+
   h4 {
     text-align: center;
   }
 
   transition: cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-}
-</style>
+}</style>

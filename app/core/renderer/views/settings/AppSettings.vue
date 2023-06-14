@@ -127,7 +127,7 @@
       <t-block-line title="V8-Engine" :description="$env.process.versions?.v8"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.os')" :description="$env.os.version"></t-block-line>
       <t-block-line :title="$t('settings.application.list-settings.specifications.platform')" :description="`${$env.process.platform} (${$env.os.arch})`"></t-block-line>
-      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.06.12"></t-block-line>
+      <t-block-line :title="$t('settings.application.list-settings.specifications.experience')" description="Touch Feature Experience Pack 2023.06.14"></t-block-line>
       <!-- <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
         <template #description>
           <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage" :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
