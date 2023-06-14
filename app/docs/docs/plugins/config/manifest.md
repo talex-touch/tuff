@@ -47,9 +47,7 @@ And here is a completely demo.
 
 Just remove `name` `version` `description` (They will auto imported from **package.json**)
 
-Other fields are all moved to the `touch` filed in **package.json**
-
-Other fields as normal.
+Other fields are all moved to the `touch` filed in **package.json** (As usual)
 
 ``` JSON [Whole]
 package.json
@@ -60,7 +58,6 @@ package.json
     "type": "remix",
     "value": "github"
     },
-    "description": "This is a demo.",
     "plugin": {
       "dev": {
       "enable": true,
