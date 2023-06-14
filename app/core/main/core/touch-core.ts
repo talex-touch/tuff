@@ -1,4 +1,3 @@
-import { startTime } from "./../../../ends/touch-ends/src/starter";
 import path from "path";
 import fse from "fs-extra";
 import { APP_FOLDER_NAME, MainWindowOption } from "../config/default";

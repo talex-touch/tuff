@@ -141,9 +141,9 @@ provide('destroy', destroy)
   max-height: 80%;
   //height: 200px;
 
-  --fake-radius: 4px;
+  --fake-radius: 8px;
   --fake-inner-opacity: .75;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: var(--el-box-shadow);
   box-sizing: border-box;
   //background-color: var(--el-fill-color-light);
