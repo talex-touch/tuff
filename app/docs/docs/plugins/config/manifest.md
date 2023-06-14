@@ -17,7 +17,7 @@ The `ni` is recommended to install any libs.
 Here is a quick avenue to see the latest version of it: [![NPM version](https://img.shields.io/npm/v/@talex-touch/unplugin-export-plugin?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-starter)
 
 ``` bash
-ni @talex-touch/unplugin-export-plugin
+ni -D @talex-touch/unplugin-export-plugin
 ```
 
 ### Vite
