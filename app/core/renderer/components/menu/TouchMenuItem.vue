@@ -62,12 +62,12 @@ function handleClick($event) {
 .TouchMenuItem-Container {
 
   &.active {
-    opacity: .75;
-    --fake-color: var(--el-color-primary-light-5) !important;
+    --fake-inner-opacity: .5 !important;
+    --fake-color: var(--el-fill-color-light);
   }
 
   &:hover {
-
+    --fake-inner-opacity: .25;
     --fake-color: var(--el-fill-color-light);
   }
 
@@ -80,7 +80,7 @@ function handleClick($event) {
   position: relative;
   display: flex;
   margin: 5px;
-  padding: 6px 8px;
+  padding: 8px 8px;
 
   cursor: pointer;
   user-select: none;

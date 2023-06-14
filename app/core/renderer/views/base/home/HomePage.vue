@@ -16,11 +16,8 @@
   </div>
 </template>
 
-<script name="Home" setup>
+<script name="HomePage" setup>
 
-onMounted(() => {
-  
-})
 </script>
 
 <style lang="scss" scoped>

@@ -187,7 +187,7 @@ const expand = ref(!props.shrink)
   max-height: 56px;
 
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 8px;
   transition: max-height .35s cubic-bezier(0.5,-0.02, 0.5, 1.11);
 }
 </style>

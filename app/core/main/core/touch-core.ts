@@ -25,6 +25,7 @@ import { genTouchChannel } from "./channel-core";
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import { TalexTouch } from "../types/touch-core";
 import pluginCore, { genPluginManager } from "../plugins/plugin-core";
+import { PARAMS, VALUE, MicaBrowserWindow, IS_WINDOWS_11, WIN10 } from 'mica-electron'
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -158,10 +159,15 @@ class TouchApp implements TalexTouch.TouchApp {
 }
 
 export class TouchWindow implements TalexTouch.ITouchWindow {
-  window: BrowserWindow;
+  window: BrowserWindow | MicaBrowserWindow;
 
   constructor(options?: BrowserWindowConstructorOptions) {
-    this.window = new BrowserWindow(options);
+    // this.window = new BrowserWindow(options);
+    this.window = new MicaBrowserWindow(options);
+
+    this.window.setDarkTheme();
+    this.window.setMicaAcrylicEffect();
+    this.window.setRoundedCorner()
 
     this.window.once("ready-to-show", () => {
       this.window.webContents.addListener("will-navigate", (event, url) => {

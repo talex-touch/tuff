@@ -70,15 +70,7 @@ export class TouchStorage<T extends object> {
   }
 }
 
-export interface IPaintCustom {
-  1: string;
-}
-
 export class StorageManager {
-  paintCustom: TouchStorage<IPaintCustom> = new TouchStorage<IPaintCustom>(
-    "paint-custom.ini",
-    { 1: "Flat" }
-  ).setAutoSave(true);
 
   themeStyle: object;
 
@@ -135,9 +127,9 @@ export class StorageManager {
     this.themeStyle = reactive(touchChannel.sendSync('storage:get', "theme-style.ini"));
     if (!this.themeStyle.hasOwnProperty("dark"))
       this.themeStyle = reactive({
-        dark: false,
+        dark: true,
         coloring: true,
-        blur: false,
+        blur: true,
         contrast: false,
         autoDark: true,
       });

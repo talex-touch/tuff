@@ -10,8 +10,8 @@ export const MainWindowOption = {
     title: AppName,
     icon: appIcon,
     frame: false,
-    minWidth: 1280,
-    minHeight: 720,
+    minWidth: 780,
+    minHeight: 360,
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
