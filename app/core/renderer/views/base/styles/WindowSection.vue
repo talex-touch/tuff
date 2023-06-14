@@ -4,11 +4,19 @@
     <div gap-4 box-border relative w-full flex items-center justify-center class="WindowsSection-Container">
       <slot />
     </div>
+    <p>
+      {{ tip }}
+    </p>
   </div>
 </template>
 
 <script name="WindowsSection" setup>
-
+defineProps({
+  tip: {
+    type: String,
+    default: ''
+  }
+})
 </script>
 
 <style lang="scss">
