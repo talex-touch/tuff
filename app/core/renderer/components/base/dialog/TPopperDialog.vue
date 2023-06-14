@@ -99,7 +99,7 @@ provide('destroy', destroy)
 
     height: 30px;
     line-height: 30px;
-    bottom: 20px;
+    bottom: 1.5rem;
 
     cursor: pointer;
     user-select: none;
@@ -122,6 +122,9 @@ provide('destroy', destroy)
     width: 100%;
     display: block;
     text-align: center;
+
+    margin: 1rem 0;
+    line-height: 1.25rem;
   }
 
   .FlatMarkdown-Container {
@@ -131,9 +134,10 @@ provide('destroy', destroy)
   position: relative;
   padding: 12px 20px;
 
-  min-width: 380px;
+  width: 380px;
+  //min-width: 380px;
   max-width: 80%;
-  min-height: 200px;
+  // min-height: 200px;
   max-height: 80%;
   //height: 200px;
 

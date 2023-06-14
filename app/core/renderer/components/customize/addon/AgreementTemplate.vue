@@ -67,7 +67,7 @@ async function dispose(agree: boolean) {
 
     overflow: hidden;
 
-    border: 1px solid #ebeef5;
+    border: 1px solid var(--el-border-color);
     border-radius: 4px;
     padding: 12px;
     box-sizing: border-box;

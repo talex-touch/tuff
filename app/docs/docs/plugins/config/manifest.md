@@ -1,50 +1,76 @@
-# init.json
+# Manifest
 
-## Announcement
+> `manifest.json` is our newly design that not need you manually manage configuration.
 
-Now we don't use `init.json` in product env any more.
-See [Manifest](./manifest.md) for more!
+## Introduction
 
-> init.json is a vital configuration that app identifies a completely plugin.
-> Here is a demo and descriptions.
+In the latest `2.0.0+`, we abandoned `init.json` but it still support in loading plugin.
 
-::: code-group
+We take measures on `manifest.json`, a configuration which you don't need to manage it manually!
+Just take config into `package.json`, the manifest and whole pack will be automatically packed when you build!
+
+## Get Started
+
+To start it, install our official unplugin in your project.
+The `ni` is recommended to install any libs.
+
+Here is a quick avenue to see the latest version of it: [![NPM version](https://img.shields.io/npm/v/@talex-touch/unplugin-export-plugin?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-starter)
+
+``` bash
+ni @talex-touch/unplugin-export-plugin
+```
+
+### Vite
+
+In your `vite.config.js` or `vite.config.ts`
+
+``` ts
+import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
+
+export default defineConfig({
+  plugins: [
+    ....,
+    TouchPluginExport()
+  ],
+})
+```
+
+### Other build tool
+
+You can refer to [this](https://github.com/unjs/unplugin) to know more about it.
+
+## Appendix
+
+In the newly manifest file, we abandoned many fields.
+
+And here is a completely demo.
+
+Just remove `name` `version` `description` (They will auto imported from **package.json**)
+
+Other fields are all moved to the `touch` filed in **package.json**
+
+Other fields as normal.
 
 ``` JSON [Whole]
+package.json
 {
-  "name": "demo-plugin",
-  "version": "1.0.0",
-  "icon": {
+  ...,
+  "touch": {
+    "icon": {
     "type": "remix",
     "value": "github"
-  },
-  "description": "This is a demo.",
-  "plugin": {
-    "dev": {
-    "enable": true,
-    "address": "http://127.0.0.1:5174/"
- }
+    },
+    "description": "This is a demo.",
+    "plugin": {
+      "dev": {
+      "enable": true,
+      "address": "http://127.0.0.1:5174/"
+      }
+    },
+    "build": {}
   }
 }
 ```
-
-``` JSON [Simplified]
-{
-  "name": "demo-plugin"
-}
-```
-
-:::
-
-## name
-
-Filed `name` identifies the name of a plugin, you are supposed to ensure it equals to your `Plugin Folder` or the app will deny to run it.
-If there has multiple same name plugins, the program will deny all.
-
-## version <Badge type="info" text="Optional" /> <Badge type="warning" text="Supposed" />
-
-Field `version` identifies the version of a plugin, if it's empty, the default will be `1.0.0` and it shows that your plugin could not finish self-upgrading.
-Here is a recommended [document](https://semver.org/) to refer.
 
 ## icon <Badge type="info" text="OPTIONAL" /> <Badge type="warning" text="Supposed" />
 

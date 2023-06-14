@@ -34,22 +34,16 @@
         <FlatMarkdown :readonly="true" v-model="readme" />
       </BlockTemplate>
     </FormTemplate>
-
-    <teleport to=".AppLayout-View" :disabled="!plugin">
-      <PluginWrapper v-if="plugin" v-model="wrapperView" :plugin="plugin" />
-    </teleport>
   </div>
 </template>
 
 <script lang="ts" name="PluginInfo" setup>
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import PluginWrapper from "@comp/plugin/action/PluginWrapper.vue";
 import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
 import FormTemplate from '@comp/base/template/FormTemplate.vue'
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue'
 import LineTemplate from '@comp/base/template/LineTemplate.vue'
-import AgreementTemplateVue from '@comp/customize/addon/AgreementTemplate.vue'
 import { popperMention } from '@modules/mention/dialog-mention'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 
@@ -62,22 +56,8 @@ const props = defineProps({
 
 const readme = computed<string>(() => props.plugin.readme)
 
-const wrapperView = ref<boolean>(false)
-
-onBeforeUnmount(() => {
-  wrapperView.value = false
-})
-
 async function handleExport() {
-  await popperMention(null, () => {
-    return h(AgreementTemplateVue, {
-      agreement: "You must agree with the agreement!",
-      agree: (bool: boolean) => {
-        if ( !bool ) return
-        wrapperView.value = true
-      }
-    })
-  })
+  await popperMention("Attention", "The export is abandoned\nSee our docs for more information!")
 }
 </script>
 
