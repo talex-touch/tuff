@@ -6,7 +6,6 @@ import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
 
 import addonOpener from './modules/addon-opener'
-import backgroundBlur from './modules/background-blur'
 import extensionLoader from './modules/extension-loader'
 
 app.whenReady().then(() => {
@@ -18,5 +17,4 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(PluginModule)
 
   app.moduleManager.loadModule(addonOpener)
-  app.moduleManager.loadModule(backgroundBlur)
 })

@@ -1,5 +1,9 @@
 lockfileVersion: '6.0'
 
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
 importers:
 
   .:
@@ -127,6 +131,9 @@ importers:
       lottie-web:
         specifier: ^5.11.0
         version: 5.11.0
+      mica-electron:
+        specifier: ^1.4.0
+        version: 1.4.0
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1
@@ -139,6 +146,9 @@ importers:
       three:
         specifier: ^0.153.0
         version: 0.153.0
+      v-shared-element:
+        specifier: ^3.1.1
+        version: 3.1.1(vue-router@4.2.1)(vue@3.3.4)
       v-wave:
         specifier: ^1.5.1
         version: 1.5.1(vue@3.3.4)
@@ -6988,6 +6998,12 @@ packages:
     engines: {node: '>= 4'}
     dev: true
 
+  /illusory@2.0.3:
+    resolution: {integrity: sha512-UKGUKGy2JjgqVtJkii4QY6VwJTa0bNKA0r3YehWip9DcK/Q0z190Vx7yDDDd4tPWqZ+j9zsZQ0iVSmYKCUgxwg==}
+    dependencies:
+      rematrix: 0.7.2
+    dev: false
+
   /immutable@4.3.0:
     resolution: {integrity: sha512-0AOCmOip+xgJwEVTQj1EfiDDOkPmuyllDuTuEX+DDXUgapLAsBIfkg3sxCYyCEA8mQqZrrxPUGjcOQ2JS3WLkg==}
 
@@ -9865,6 +9881,10 @@ packages:
       - supports-color
     dev: false
 
+  /rematrix@0.7.2:
+    resolution: {integrity: sha512-NYLmE17dX15eUPhngLMTKlRYwATxEhcRdn9LKtk/iOXHxDKglCZnD2MrMLKwLlB5FX8u9kF/9yMhlQJpeDcuPw==}
+    dev: false
+
   /remixicon@2.5.0:
     resolution: {integrity: sha512-q54ra2QutYDZpuSnFjmeagmEiN9IMo56/zz5dDNitzKD23oFRw77cWo4TsrAdmdkPiEn8mxlrTqxnkujDbEGww==}
     dev: false
@@ -11584,6 +11604,17 @@ packages:
       diff: 5.1.0
       kleur: 4.1.5
       sade: 1.8.1
+    dev: false
+
+  /v-shared-element@3.1.1(vue-router@4.2.1)(vue@3.3.4):
+    resolution: {integrity: sha512-F1n3FgN8nYXJo/4zsukDWQk0grnnFIcfuY2QU+U0lGxJUESdrSPEYGcIIktuOcGswwO95VNJZaNWWbwT2IZpXg==}
+    peerDependencies:
+      vue: ^2.6.14 || ^3.1.3
+      vue-router: ^3.5.2 || ^4.0.10
+    dependencies:
+      illusory: 2.0.3
+      vue: 3.3.4
+      vue-router: 4.2.1(vue@3.3.4)
     dev: false
 
   /v-wave@1.5.1(vue@3.3.4):

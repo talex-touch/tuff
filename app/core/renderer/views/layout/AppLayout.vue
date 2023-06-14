@@ -1,9 +1,8 @@
 <template>
   <div class="AppLayout-Wrapper">
-    <component v-if="layouts.source" :is="layouts.source">
+    <FlatLayout>
       <template #icon>
         <div class="AppLayout-Icon fake-background">
-
           <div class="AppLayout-Icon-Footer">
             {{ activePlugin }}
             <span v-if="account.user" class="NavBar-Footer-LoginStatus">
@@ -18,12 +17,8 @@
       </template>
       <template #view>
         <router-view v-slot="{ Component, route }">
-          <transition
-            @before-enter="beforeEnter"
-            @after-enter="afterEnter"
-            @before-leave="beforeLeave"
-            @after-leave="afterLeave"
-            >
+          <transition @before-enter="beforeEnter" @after-enter="afterEnter" @before-leave="beforeLeave"
+            @after-leave="afterLeave">
             <keep-alive>
               <component class="cubic-transition" :is="Component" :key="route.path" />
             </keep-alive>
@@ -35,51 +30,20 @@
       <template #title>
         TalexTouch <span class="tag version fake-background">{{ packageJson.version }}</span>
       </template>
-      <template #plugin-nav>
-        <PluginNavList :plugins="plugins" v-model="activePlugin" />
-      </template>
-    </component>
+    </FlatLayout>
   </div>
 </template>
 
-<script>
-
-export default {
-  name: "AppLayout"
-}
-</script>
-
-<script setup>
-import { inject, provide, ref, shallowReactive, watch } from "vue";
+<script name="AppLayout" setup>
+import { inject, provide, ref, watch } from "vue";
 import { $t } from "@modules/lang";
 import IconButton from "@comp/base/button/IconButton.vue";
-import PluginNavList from "@comp/plugin/layout/PluginNavList.vue";
 import AppLogo from "@comp/icon/AppLogo.vue";
 import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
-import { useRouter } from "vue-router";
+import FlatLayout from "./flat/FlatLayout.vue";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
 
-const paintCustom = window.$storage.paintCustom.data
 const packageJson = window.$nodeApi.getPackageJSON()
-
-const layouts = shallowReactive({
-  source: null,
-  components: {
-    'MacOS': () => import('@comp/customize/app/MacOSLayout.vue'),
-    'Windows': () => import('@comp/customize/app/WindowsLayout.vue'),
-    'Flat': () => import('@comp/customize/app/FlatLayout.vue'),
-  }
-})
-
-watch(() => paintCustom[1], async val => {
-  layouts.source = await loadModule(layouts.components[val] || layouts.components.Flat)
-
-}, { immediate: true })
-
-async function loadModule(module) {
-  const m = module instanceof Function ? await module() : await module
-  return m.default
-}
 
 const plugins = ref()
 const activePlugin = inject('activePlugin')
@@ -208,7 +172,7 @@ function afterLeave(el) {
 
   z-index: 1000;
   position: relative;
-  padding: 10px;
+  padding: 1rem .5rem;
   display: flex;
 
   flex-direction: column;
@@ -244,16 +208,6 @@ function afterLeave(el) {
 }
 
 :deep(.AppLayout-Main) {
-  //&:has(.scale-down-and-cover-enter-active), &:has(.scale-up-and-cover-enter-active) {
-  //  & .AppLayout-Aside {
-  //    margin-right: -20px;
-  //
-  //    left: -70px;
-  //
-  //    width: 0 !important;
-  //    opacity: 0;
-  //  }
-  //}
   position: relative;
   display: flex;
 
@@ -305,9 +259,6 @@ function afterLeave(el) {
 }
 
 .touch-blur .AppLayout-Wrapper {
-  :deep(.AppLayout-Container) {
-    backdrop-filter: blur(50px) saturate(180%) brightness(.85);
-  }
 
   :deep(.AppLayout-View) {
     --fake-radius: 0;
@@ -354,7 +305,7 @@ function afterLeave(el) {
 
   --nav-width: 70px;
   --ctr-height: 40px;
-  
+
   position: relative;
   display: flex;
 
@@ -365,4 +316,5 @@ function afterLeave(el) {
 
   box-sizing: border-box;
   -webkit-app-region: drag;
-}</style>
+}
+</style>

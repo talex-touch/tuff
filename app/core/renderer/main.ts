@@ -1,6 +1,11 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 
+import {
+    SharedElementRouteGuard,
+    SharedElementDirective
+} from 'v-shared-element'
+
 import router from './base/router'
 import { baseNodeApi } from '@modules/channel/main/node'
 import { storageManager } from '@modules/channel/storage'
@@ -17,7 +22,10 @@ window.$i18n = Lang
 window.$nodeApi = baseNodeApi
 window.$storage = storageManager
 
+router.beforeEach(SharedElementRouteGuard)
+
 const app = createApp(App)
+    .use(SharedElementDirective)
     .use(router)
     .use(ElementPlus)
     .use(Lang)

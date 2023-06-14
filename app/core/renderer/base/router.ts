@@ -15,6 +15,7 @@
  */
 
 import { createRouter, createWebHashHistory } from "vue-router";
+import Home from '../views/base/home/HomePage.vue'
 
 const routes: any = [
   {
@@ -23,15 +24,15 @@ const routes: any = [
   },
   {
     path: "/home",
-    name: "主页",
-    component: () => import("../views/base/Home.vue"),
+    name: "HomePage",
+    component: Home,
     meta: {
       index: 1,
     },
   },
   {
     path: "/market",
-    name: "市场",
+    name: "Plugin Market",
     component: () => import("../views/base/Market.vue"),
     meta: {
       index: 2,
@@ -39,18 +40,26 @@ const routes: any = [
   },
   {
     path: "/plugin",
-    name: "插件",
+    name: "Plugin",
     component: () => import("../views/base/Plugin.vue"),
     meta: {
       index: 3,
     },
   },
   {
-    path: "/setting",
-    name: "设置",
-    component: () => import("../views/base/Setting.vue"),
+    path: "/styles",
+    name: "Styles",
+    component: () => import("../views/base/styles/ThemeStyle.vue"),
     meta: {
       index: 4,
+    },
+  },
+  {
+    path: "/setting",
+    name: "AppSettings",
+    component: () => import("../views/base/settings/AppSettings.vue"),
+    meta: {
+      index: 5,
     },
   },
 ];

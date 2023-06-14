@@ -1,5 +1,5 @@
 <script name="App" setup>
-import AppLayout from '@comp/base/AppLayout.vue'
+import AppLayout from '~/views/layout/AppLayout.vue'
 import { provide, ref, watch } from 'vue'
 import { pluginManager } from '@modules/channel/plugin-core/api'
 import {
