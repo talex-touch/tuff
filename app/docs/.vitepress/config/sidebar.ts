@@ -35,7 +35,7 @@ const plugins = [
   {
     text: "config",
     collapsible: true,
-    items: [{ text: "init.json", link: "/docs/plugins/config/init" }],
+    items: [{ text: "Manifest", link: "/docs/plugins/config/manifest" }, { text: "init.json (out-date)", link: "/docs/plugins/config/init" }],
   },
 ];
 
