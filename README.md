@@ -95,6 +95,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 🌀 Front-end
 
+- Electron ^24.4.0
 - Vue.js: ^3.3.4
 - Vue Router: ^4.2.1
 - Element Plus: ^2.3.5
