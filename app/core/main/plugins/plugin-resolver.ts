@@ -65,8 +65,8 @@ export class PluginResolver {
 
       // rename manifest 2 init
       fse.rename(
-        path.join(_target, "manifest.talex"),
-        path.join(_target, "init.json")
+        path.join(_target, "key.talex"),
+        path.join(_target, "manifest.json")
       );
 
       // load plugin

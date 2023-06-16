@@ -251,13 +251,13 @@ class PluginManager implements IPluginManager {
 
       const pluginName = path.basename(path.dirname(_path));
       if (!this.hasPlugin(pluginName)) {
-        // console.warn("[PluginManager] Plugin " + pluginName + " is not loaded, but its README.md has been changed.")
+        console.warn("[PluginManager] Plugin " + pluginName + " is not loaded, but its README.md has been changed.")
         return;
       }
       const plugin = this.plugins.get(pluginName) as TouchPlugin;
 
       if (
-        baseName === "init.json" ||
+        baseName === "manifest.json" ||
         baseName === "preload.js" ||
         baseName === "index.html"
       ) {
@@ -286,7 +286,7 @@ class PluginManager implements IPluginManager {
     });
 
     this.watcher.on("addDir", (_path) => {
-      if (!fse.existsSync(_path + "/init.json")) return;
+      if (!fse.existsSync(_path + "/manifest.json")) return;
       const pluginName = path.basename(_path);
       console.log(`[Plugin] Plugin ${pluginName} has been added`);
 
@@ -329,7 +329,7 @@ class PluginManager implements IPluginManager {
 
   loadPlugin(pluginName: string): Promise<boolean> {
     const pluginPath = path.resolve(this.pluginPath, pluginName);
-    const pluginInfo = fse.readJSONSync(path.resolve(pluginPath, "init.json"));
+    const pluginInfo = fse.readJSONSync(path.resolve(pluginPath, "manifest.json"));
 
     const readme = ((p) =>
       fse.existsSync(p)

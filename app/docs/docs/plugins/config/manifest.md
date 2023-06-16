@@ -73,6 +73,8 @@ package.json
 
 Filed `icon` identifies the icon of a plugin, if it's empty, the default will be `TalexTouch` Logo, it will seriously affect the user's identification in the plug-in
 
+### Addon: You can use `class` as key (See UnoCSS [icones](https://icones.js.org/))
+
 <br />
 <br />
 

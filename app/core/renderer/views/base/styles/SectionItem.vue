@@ -38,7 +38,7 @@ function handleEnter() {
   if (!props.disabled)
     return
 
-  mention('Your device not support this feature.')
+  mention("<span style='color: var(--el-color-danger)'>Your device not support this feature.</span>")
 }
 
 function handleLeave() {
