@@ -1,10 +1,12 @@
 <template>
-  <el-scrollbar>
-    <div class="View-Container">
+  <div class="ViewTemplate-Wrapper">
+    <el-scrollbar>
+      <div class="View-Container">
 
-      <slot />
-    </div>
-  </el-scrollbar>
+        <slot />
+      </div>
+    </el-scrollbar>
+  </div>
 </template>
 
 <script name="View" setup>
@@ -17,6 +19,16 @@ defineProps({
 </script>
 
 <style lang="scss" scoped>
+.ViewTemplate-Wrapper {
+  position: relative;
+  padding: 0 .2rem;
+
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 .View-Header {
   z-index: 100;
   position: sticky;
@@ -33,7 +45,7 @@ defineProps({
 
 .View-Container {
   position: relative;
-  padding: 7px;
+  padding: .5rem;
 
   height: 100%;
   width: 100%;

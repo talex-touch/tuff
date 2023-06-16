@@ -1,11 +1,11 @@
 <script name="PluginApplyInstall" setup>
 import { inject, ref } from 'vue'
 import { blowMention } from '@modules/mention/dialog-mention'
-import { asyncMainProcessMessage } from '@modules/samples/node-api'
 import Loading from '@assets/lotties/compress-loading.json'
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
 import { sleep } from '@talex-touch/utils/common'
 import FlatButton from '@comp/base/button/FlatButton.vue'
+import { touchChannel } from '@modules/channel/channel-core'
 
 const props = defineProps(['manifest', 'path'])
 
@@ -17,7 +17,7 @@ async function install() {
 
   await sleep(400)
 
-  const { data } = await asyncMainProcessMessage('@install-plugin', props.path, {
+  const { data } = await touchChannel.send('@install-plugin', props.path, {
     timeout: 1000 * 60 * 5,
   })
 

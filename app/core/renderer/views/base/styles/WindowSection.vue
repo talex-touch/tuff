@@ -4,18 +4,53 @@
     <div gap-4 box-border relative w-full flex items-center justify-center class="WindowsSection-Container">
       <slot />
     </div>
-    <p>
-      {{ tip }}
-    </p>
+    <p style="transition: .1s" ref="tipRef" />
   </div>
 </template>
 
 <script name="WindowsSection" setup>
-defineProps({
+import { sleep } from '@talex-touch/utils/common';
+
+const props = defineProps({
   tip: {
     type: String,
     default: ''
   }
+})
+
+const tipRef = ref()
+
+async function mention(html) {
+  if (!html)
+    return mention(props.tip)
+
+  const el = tipRef.value
+  if (!el.innerHTML)
+    return el.innerHTML = html
+
+  const style = el.style
+
+  style.opacity = 0
+  style.transform = 'translateX(-1rem) scaleY(0)'
+
+  await sleep(100)
+
+  el.innerHTML = html
+
+  style.opacity = 0
+  style.transform = 'translateX(1rem) scaleY(0)'
+
+  await sleep(100)
+
+  style.opacity = 1
+  style.transform = 'translateX(0) scaleY(1)'
+  await sleep(100)
+}
+
+provide('mention', mention)
+
+onMounted(() => {
+  mention(props.tip)
 })
 </script>
 
@@ -24,7 +59,7 @@ defineProps({
   margin: 1rem 0;
   padding: 1rem;
 
-  --fake-radius: 8px;
+  --fake-radius: 4px;
 }
 
 .WindowsSection-Container {

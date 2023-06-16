@@ -1,5 +1,5 @@
 <template>
-  <div class="AppLayout-Wrapper">
+  <div class="AppLayout-Wrapper fake-background">
     <FlatLayout>
       <template #icon>
         <div class="AppLayout-Icon fake-background">
@@ -258,12 +258,8 @@ function afterLeave(el) {
   -webkit-app-region: no-drag;
 }
 
-.touch-blur .AppLayout-Wrapper {
-
-  :deep(.AppLayout-View) {
-    --fake-radius: 0;
-    --fake-opacity: .65;
-  }
+.mica .AppLayout-Wrapper {
+  --fake-inner-opacity: .75;
 }
 
 .AppLayout-Wrapper {

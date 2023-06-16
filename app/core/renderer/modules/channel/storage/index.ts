@@ -1,5 +1,4 @@
 import { reactive, unref, watch } from "vue";
-import { languages } from "@modules/lang";
 import { AccountStorage } from "./accounter";
 import { touchChannel } from "../channel-core";
 
@@ -122,41 +121,6 @@ export class StorageManager {
         await this._save("app-setting.ini", this.appSetting);
       },
       { immediate: true, deep: true }
-    );
-
-    this.themeStyle = reactive(touchChannel.sendSync('storage:get', "theme-style.ini"));
-    if (!this.themeStyle.hasOwnProperty("dark"))
-      this.themeStyle = reactive({
-        dark: true,
-        coloring: true,
-        blur: true,
-        contrast: false,
-        autoDark: true,
-      });
-
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const callback = (e) => {
-      if (!this.themeStyle["autoDark"]) return;
-      this.themeStyle["dark"] = e.matches;
-    };
-    media.addEventListener("change", callback);
-    callback(media);
-
-    watch(
-      this.themeStyle,
-      async () => {
-        const clsL = document.body.parentNode["classList"];
-
-        this.themeStyle["dark"] ? clsL.add("dark") : clsL.remove("dark");
-        this.themeStyle["blur"] ? clsL.add("touch-blur") : clsL.remove("touch-blur");
-        this.themeStyle["coloring"]
-          ? clsL.add("coloring")
-          : clsL.remove("coloring");
-        this.themeStyle["autoDark"] && callback(media);
-
-        await this._save("theme-style.ini", this.themeStyle);
-      },
-      { deep: true, immediate: true }
     );
   }
 

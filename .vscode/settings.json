@@ -19,6 +19,7 @@
     "vanta",
     "vantajs",
     "vnode",
+    "vueuse",
     "webpreferences",
     "websecurity"
   ],
@@ -26,9 +27,6 @@
   "unocss.root": "app/core",
   // "prettier.enable": false,
   "editor.formatOnSave": false,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
-  },
   "i18n-ally.localesPaths": [
     "app/core/renderer/assets/languages"
   ],

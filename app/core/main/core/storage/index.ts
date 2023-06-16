@@ -2,7 +2,7 @@ import { ChannelType } from "@talex-touch/utils/channel";
 import { genTouchChannel } from "../channel-core";
 import fse from "fs-extra";
 import { TalexTouch } from "~/main/types";
-import path from "path-browserify";
+import path from "path";
 
 let configPath;
 

@@ -47,12 +47,19 @@ export default defineConfig({
       commonjsExternal({
         externals: [
           'path',
-          /^electron(\/.+)?$/,
-          'fs', 'fs-extra'
+          'mica-electron'
         ]
       }),
       externalizeDepsPlugin({
-        exclude: [],
+        exclude: [
+          'chokidar',
+          'mica-electron',
+          'compressing',
+          'fs-extra',
+          'fs', 'path',
+          'graceful-fs',
+          'jsonfile'
+        ],
       }),
     ],
   },

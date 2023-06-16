@@ -1,5 +1,5 @@
 <template>
-  <div relative cursor-pointer h-full border-rounded flex items-center justify-center :class="{ disabled, active: value === title }"
+  <div @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full border-rounded flex items-center justify-center :class="{ disabled, active: value === title }"
     class="SectionItem-Container transition-cubic">
     <div class="SectionItem-Display">
 
@@ -30,8 +30,23 @@ const props = defineProps({
 const emits = defineEmits([
   'update:modelValue'
 ])
+const mention = inject('mention')
 
 const value = useModelWrapper(props, emits)
+
+function handleEnter() {
+  if (!props.disabled)
+    return
+
+  mention('Your device not support this feature.')
+}
+
+function handleLeave() {
+  if (!props.disabled)
+    return
+
+  mention()
+}
 </script>
 
 <style lang="scss">

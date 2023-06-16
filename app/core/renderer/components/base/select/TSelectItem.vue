@@ -1,12 +1,22 @@
 <template>
-  <div class="TSelectItem-Container" :class="{ ignore }">
+  <div class="TSelectItem-Container" :class="{ disabled }">
     <slot />
   </div>
 </template>
 
 <script>
 export default {
-  name: "TSelectItem"
+  name: "TSelectItem",
+  props: {
+    name: {
+      type: String,
+      required: true,
+    },
+    disabled: {
+      type: Boolean,
+      default: false,
+    },
+  },
 }
 </script>
 

@@ -14,7 +14,7 @@ provide('activePlugin', activePlugin)
 
 onMounted(() => {
   applicationUpgrade()
-  clipBoardResolver()
+  // clipBoardResolver()
   dropperResolver()
   urlHooker()
   // screenCapture()

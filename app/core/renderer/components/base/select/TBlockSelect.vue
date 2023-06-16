@@ -2,7 +2,6 @@
 import TSelect from '@comp/base/select/TSelect.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import { watch } from 'vue'
 
 const props = defineProps({
   title: {
@@ -30,7 +29,11 @@ const emits = defineEmits(['update:modelValue', 'change'])
 
 const value = useModelWrapper(props, emits)
 
-watch(() => value, () => emits('change', value))
+function handleChange(val) {
+  if (props.disabled) return
+
+  emits('change', val)
+}
 </script>
 
 <template>
@@ -43,7 +46,7 @@ watch(() => value, () => emits('change', value))
       </div>
     </div>
     <div class="TBlockSelect-Select TBlockSelection-Func">
-      <TSelect v-model="value">
+      <TSelect @change="handleChange" v-model="value">
         <slot />
       </TSelect>
     </div>

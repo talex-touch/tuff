@@ -17,7 +17,6 @@
 </template>
 
 <script name="HomePage" setup>
-
 </script>
 
 <style lang="scss" scoped>

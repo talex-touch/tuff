@@ -1,6 +1,6 @@
 <script>
 import { h, nextTick, ref, Teleport } from 'vue'
-import { useFloating, autoUpdate, flip, shift, computePosition } from '@floating-ui/vue'
+import { computePosition } from '@floating-ui/vue'
 
 const qualifiedName = 'TSelectItem'
 
@@ -23,9 +23,9 @@ export default {
     const click = ref(false)
 
     function clickListener(e) {
-      if( !click.value ) return
+      if( !click.value || !e.path ) return
       click.value = e.path.some(node => node?.className?.indexOf('TSelectItem-Container') > -1)
-      // console.log(e.path)
+      // console.log(e.path, e.path.some(node => node?.className?.indexOf('TSelectItem-Container') > -1))
       // click.value = false
     }
 
@@ -47,20 +47,11 @@ export default {
         }
       }).flat()
     }
-    // console.log( "@Slots", slotFlat(this.$slots.default()) )
+    
     const slots = slotFlat(this.$slots.default())//.filter(slot => slot.type.name === qualifiedName)
 
     function getContent() {
       if( that.click ) {
-
-        // const pointer = h('div', {
-        //   class: 'TSelect-Pointer',
-        //   style: {
-        //     top: `${activeIndex.value * 32}px`
-        //   }
-        // })
-
-        // const rect = activeSlot.$el.getBoundingClientRect()
 
         const wrapper = h('div', {
           class: 'TSelect-Wrapper'
@@ -80,7 +71,8 @@ export default {
               slot.el.addEventListener('click', () => {
                 // activeIndex.value = index //slots.indexOf(slot)
 
-                that.$emit('update:modelValue',  that.activeIndex = index)
+                that.$emit('update:modelValue', that.activeIndex = index)
+                that.$emit('change', slot.props?.hasOwnProperty('name') ? slot.props.name : index)
 
                 that.click = false
               })
@@ -168,6 +160,7 @@ export default {
     background-color: var(--el-color-primary);
     //--height: 28px;
   }
+  z-index: 100;
   position: absolute;
   display: flex;
   padding-bottom: 5px;

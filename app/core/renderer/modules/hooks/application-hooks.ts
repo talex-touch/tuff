@@ -1,8 +1,5 @@
 import { touchChannel } from '@modules/channel/channel-core'
 import {
-  registerTypeProcess,
-} from '@modules/samples/node-api'
-import {
   blowMention,
   forTouchTip,
   popperMention,
@@ -175,7 +172,7 @@ export function dropperResolver() {
 }
 
 export function clipBoardResolver() {
-  registerTypeProcess('clipboard', ({ data }) => {
+  // registerTypeProcess('clipboard', ({ data }) => {
     // if ( data.type === "text" ) {
     //     blowMention('粘贴板', `你好像复制了 ${data.data}`)
     // } else if ( data.type === "image" ) {
@@ -183,5 +180,5 @@ export function clipBoardResolver() {
     // } else if ( data.type === "html" ) {
     //     blowMention('粘贴板', data.data)
     // }
-  })
+  // })
 }

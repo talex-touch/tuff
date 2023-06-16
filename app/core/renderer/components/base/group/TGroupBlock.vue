@@ -8,9 +8,7 @@
           <p>{{ description }}</p>
         </div>
       </div>
-      <div class="TGroupBlock-Mode">
-        <remix-icon :name="expand ? 'subtract' : 'add'" />
-      </div>
+      <div class="TGroupBlock-Mode" :class="expand ? 'i-ri-subtract-line' : 'i-ri-add-fill'" />
     </div>
     <div class="TGroupBlock-Main">
       <slot />
@@ -18,13 +16,7 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "TGroupBlock"
-}
-</script>
-
-<script setup>
+<script name="TGroupBlock" setup>
 import { ref } from 'vue'
 
 const props = defineProps(['name', 'icon', 'description', 'expandFill', 'shrink'])
@@ -181,13 +173,13 @@ const expand = ref(!props.shrink)
     max-height: 1000px;
   }
   position: relative;
-  margin-bottom: 15px;
+  margin-bottom: .7rem;
 
   width: 100%;
   max-height: 56px;
 
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 4px;
   transition: max-height .35s cubic-bezier(0.5,-0.02, 0.5, 1.11);
 }
 </style>
