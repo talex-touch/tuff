@@ -31,14 +31,14 @@ async function mention(html) {
   const style = el.style
 
   style.opacity = 0
-  style.transform = 'translateX(-1rem) scaleY(0)'
+  style.transform = 'translateX(-1rem) scaleY(0.5)'
 
   await sleep(100)
 
   el.innerHTML = html
 
   style.opacity = 0
-  style.transform = 'translateX(1rem) scaleY(0)'
+  style.transform = 'translateX(1rem) scaleY(0.5)'
 
   await sleep(100)
 
@@ -59,7 +59,9 @@ onMounted(() => {
   margin: 1rem 0;
   padding: 1rem;
 
+  --fake-inner-opacity: 0.75;
   --fake-radius: 4px;
+  --fake-color: var(--el-fill-color-dark);
 }
 
 .WindowsSection-Container {
