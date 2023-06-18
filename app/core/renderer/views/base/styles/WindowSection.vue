@@ -31,19 +31,22 @@ async function mention(html) {
   const style = el.style
 
   style.opacity = 0
-  style.transform = 'translateX(-1rem) scaleY(0.5)'
+  style.filter = 'blur(2px)'
+  style.transform = 'translateX(-.5rem)'
 
   await sleep(100)
 
   el.innerHTML = html
 
   style.opacity = 0
-  style.transform = 'translateX(1rem) scaleY(0.5)'
+    style.filter = 'blur(2px)'
+  style.transform = 'translateX(.5rem)'
 
   await sleep(100)
 
   style.opacity = 1
-  style.transform = 'translateX(0) scaleY(1)'
+    style.filter = 'blur(0px)'
+  style.transform = 'translateX(0)'
   await sleep(100)
 }
 

@@ -72,4 +72,16 @@ onMounted(() => {
 
 </script>
 
-<style scoped></style>
+<style>
+.Mica {
+  filter: blur(16px) saturate(180%) brightness(1.25);
+}
+
+.Default {
+  filter: saturate(180%);
+}
+
+.Filter {
+  filter: blur(5px) saturate(180%)
+}
+</style>

@@ -13,6 +13,10 @@ defineProps({
   routerBack: {
     type: Boolean,
     default: false
+  },
+  contentStyle: {
+    type: String,
+    default: "height: calc(100% - 10rem)"
   }
 });
 
@@ -29,7 +33,7 @@ provide('checkForm', () => {
   for (const field of formFields) {
     const { access } = field.func()
 
-    if ( !access ) {
+    if (!access) {
       return false
     }
   }
@@ -55,7 +59,7 @@ provide('setLoading', val => loading.value = val)
       </slot>
     </div>
 
-    <div mr-10 absolute style="height: calc(100% - 10rem);width: calc(100% - 5rem)">
+    <div mr-10 absolute :style="`${contentStyle}`" w-full>
       <el-scrollbar>
         <slot>
           <p>Content</p>
@@ -97,7 +101,7 @@ provide('setLoading', val => loading.value = val)
   transform: translate(-50%, -50%);
 }
 
-.hover-button {
+:deep(.hover-button) {
   &:hover {
 
     --fake-inner-opacity: .5;
@@ -109,6 +113,13 @@ provide('setLoading', val => loading.value = val)
 
   cursor: pointer;
   --fake-inner-opacity: 0;
+}
+
+:deep(.el-scrollbar__view) {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
 }
 
 .FormTemplate-Container {

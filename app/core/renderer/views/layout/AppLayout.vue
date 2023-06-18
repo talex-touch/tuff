@@ -18,14 +18,15 @@
         </div>
       </template>
       <template #view>
-        <router-view v-slot="{ Component, route }">
-          <transition @before-enter="beforeEnter" @after-enter="afterEnter" @before-leave="beforeLeave"
+        <router-view />
+        <!-- <router-view v-slot="{ Component, route }"> -->
+          <!-- <transition @before-enter="beforeEnter" @after-enter="afterEnter" @before-leave="beforeLeave"
             @after-leave="afterLeave">
             <keep-alive>
               <component class="cubic-transition" :is="Component" :key="route.path" />
             </keep-alive>
-          </transition>
-        </router-view>
+          </transition> -->
+        <!-- </router-view> -->
 
         <ViewPlugin />
       </template>

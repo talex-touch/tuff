@@ -1,17 +1,22 @@
 <template>
-  <div @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full border-rounded flex items-center justify-center :class="{ disabled, active: value === title }"
-    class="SectionItem-Container transition-cubic">
-    <div class="SectionItem-Display">
-
+  <div @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full border-rounded flex items-center
+    justify-center :class="{ disabled, active: value === title }" class="SectionItem-Container transition-cubic">
+    <div class="SectionItem-Display" :class="title">
+      <div v-shared-element:[`theme-preference-${title}-img`] :style="`filter: ${filter}`" />
     </div>
-    <div flex items-center justify-center class="SectionItem-Bar fake-background">
-      {{ title }}
+    <div @click="goRouter" flex items-center cursor-pointer justify-center class="SectionItem-Bar fake-background">
+      <span v-shared-element:[`theme-preference-${title}`]>
+        {{ title }}
+      </span>
     </div>
   </div>
 </template>
 
 <script name="SectionItem" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref';
+import { useRouter } from 'vue-router';
+
+const router = useRouter()
 
 const props = defineProps({
   modelValue: {
@@ -21,6 +26,10 @@ const props = defineProps({
   title: {
     type: String,
     default: 'Section'
+  },
+  filter: {
+    type: String,
+    default: 'blur(0px)'
   },
   disabled: {
     type: Boolean,
@@ -33,6 +42,15 @@ const emits = defineEmits([
 const mention = inject('mention')
 
 const value = useModelWrapper(props, emits)
+
+function goRouter() {
+  router.push({
+    name: 'Theme',
+    query: {
+      theme: props.title
+    }
+  })
+}
 
 function handleEnter() {
   if (!props.disabled)
@@ -50,6 +68,23 @@ function handleLeave() {
 </script>
 
 <style lang="scss">
+.SectionItem-Display {
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+
+  div {
+    position: relative;
+
+    width: 100%;
+    height: 100%;
+
+    background-size: cover;
+    background-image: url("@assets/bg/apparent.jpg");
+  }
+}
+
 .SectionItem-Container {
   &:hover {
     border: 2px solid var(--el-color-primary);
@@ -71,14 +106,14 @@ function handleLeave() {
   flex: 1;
 
   width: 100%;
+  height: 100%;
 
   user-select: none;
   border: 2px solid var(--el-border-color);
 }
 
-.SectionItem-Display {}
-
 .SectionItem-Bar {
+  z-index: 100;
   position: absolute;
 
   bottom: 0;

@@ -22,13 +22,9 @@ export async function triggerThemeTransition(pos: [number, number], mode: string
   const [x, y] = pos
   // @ts-ignore
   const transition = document.startViewTransition(() => {
-     if (mode === 'auto') {
-      themeStyle.value.theme.style.auto = true
-      themeStyle.value.theme.style.dark = isDark.value
-    } else {
-      themeStyle.value.theme.style.auto = false
-      themeStyle.value.theme.style.dark = mode === 'dark'
-    }
+    themeStyle.value.theme.style.auto = mode === 'auto'
+    themeStyle.value.theme.style.dark = mode === 'auto' ? isDark.value : mode === 'dark'
+    
     const l = document.body.parentElement.classList
     mode === 'dark' ? l.add('dark') : l.remove('dark')
   })
@@ -51,7 +47,7 @@ export async function triggerThemeTransition(pos: [number, number], mode: string
           clipPath: !isDark.value ? clipPath.reverse() : clipPath,
         },
         {
-          duration: 500,
+          duration: 300,
           easing: "ease-in",
           pseudoElement: !isDark.value ? "::view-transition-old(root)" : "::view-transition-new(root)",
         }
@@ -63,7 +59,7 @@ export async function triggerThemeTransition(pos: [number, number], mode: string
           clipPath: isDark.value ? clipPath.reverse() : clipPath,
         },
         {
-          duration: 500,
+          duration: 300,
           easing: "ease-in",
           pseudoElement: isDark.value ? "::view-transition-old(root)" : "::view-transition-new(root)",
         }

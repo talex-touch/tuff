@@ -52,7 +52,15 @@ const routes: any = [
     component: () => import("../views/base/styles/ThemeStyle.vue"),
     meta: {
       index: 4,
-    },
+    }
+  },
+  {
+    path: "/styles/theme",
+    name: "Theme",
+    component: () => import("../views/base/styles/sub/ThemePreference.vue"),
+    meta: {
+      index: 4
+    }
   },
   {
     path: "/setting",
