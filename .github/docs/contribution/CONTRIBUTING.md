@@ -49,17 +49,17 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
 
 #### Commit Message
 
-1. `Commit Message` are supposed to like: prefix<range?>: brief description (range is optional)
+1. `Commit Message` are supposed to like: prefix(range?): brief description (range is optional)
 2. We use `husky` `commitlint` to ensure your commit message follow our protocols.
 3. You can refer these:
-   - Fix<xxx>: message
-   - Feat<xxx>: message
-   - Test<xxx>: message
-   - Build<xxx>: message
-   - Docs<xxx>: message
-   - Add<xxx>: message
-   - Upd<xxx>: message (Update dependencies versions)
-   - Change<xxx>: message (The last one to choose) [Fallback]
+   - Fix(xxx): message
+   - Feat(xxx): message
+   - Test(xxx): message
+   - Build(xxx): message
+   - Docs(xxx): message
+   - Add(xxx): message
+   - Upd(xxx): message (Update dependencies versions)
+   - Change(xxx): message (The last one to choose) [Fallback]
    - More see `commitlint.config.js`
 4. The xxx is what you update and a area or a module:
    - Abstract range like PluginModule
