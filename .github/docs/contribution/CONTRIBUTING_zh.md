@@ -48,17 +48,17 @@
 
 #### Commit Message
 
-1. `Commit Message` 应当像: 前缀<范围?>: 简短的描述 (范围 是可选的)
+1. `Commit Message` 应当像: 前缀(范围?): 简短的描述 (范围 是可选的)
 2. 我们使用 `husky` `commitlint` 来确保您的信息符合我们的协议。
 3. 前缀 可以参考:
-   - Fix<xxx>: message
-   - Feat<xxx>: message
-   - Test<xxx>: message
-   - Build<xxx>: message
-   - Docs<xxx>: message
-   - Add<xxx>: message
-   - Upd<xxx>: message (诸如更新dependencies的版本也可)
-   - Change<xxx>: message (应当留作备选)
+   - Fix(xxx): message
+   - Feat(xxx): message
+   - Test(xxx): message
+   - Build(xxx): message
+   - Docs(xxx): message
+   - Add(xxx): message
+   - Upd(xxx): message (诸如更新dependencies的版本也可)
+   - Change(xxx): message (应当留作备选)
    - 更多请参考 `commitlint.config.js`
 4. XXX 是你更新了什么，或者是一个抽象范围、模块:
    - 抽象范围 像是 PluginModule
