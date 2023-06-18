@@ -26,11 +26,10 @@ labels: bug
 - Dependencies Error
 - File Error
 - Api Error
+- Logic Error
 - Other error -->
 
-<!-- For example: -->
-
-<!-- Type: UI-UX Error -->
+Type: UI-UX Error
 
 ## Environment
 
@@ -44,7 +43,15 @@ labels: bug
 
 <!-- Please insert your description here and provide especially info about the "what" this report is about -->
 
-<!-- Try to give a whole step about how to repetition it! -->
+<!-- Try to give a whole step about how to repeat it! -->
+
+## Check your steps
+
+[ ] I confirm that I have to fill in the content and correct
+[ ] I confirm that I have seen no similar issues
+[ ] I confirm that I described and illustrated as far as possible
+
+Click above steps when you completed!
 
 ## Contact
 
