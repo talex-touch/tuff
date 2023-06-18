@@ -29,7 +29,7 @@ class PluginAdpoter {
   _logouts = [];
   constructor() {
     this._unmount();
-    this.plugins.clear();
+    this.plugins.clear()
 
     const plugins: object = touchChannel.sendSync('plugin-list')
 
@@ -63,12 +63,19 @@ class PluginAdpoter {
     );
     this._logouts.push(
       touchChannel.regChannel("plugin:reload-readme", ({ data, reply }) => {
-        console.log("plugin:reload-readme", data, reply)
         const p = this.plugins.get(data.plugin);
         if (p) Object.assign(p, { readme: data.readme });
 
         reply(1);
-        console.log("plugin:reload-readme", data, reply);
+      })
+    );
+
+    this._logouts.push(
+      touchChannel.regChannel("plugin:reload", ({ data, reply }) => {
+        const p = this.plugins.get(data.plugin.name);
+        if (p) Object.assign(p, data.plugin);
+
+        reply(1);
       })
     );
   }

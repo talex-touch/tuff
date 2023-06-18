@@ -36,17 +36,17 @@ const props = defineProps({
       </div>
 
       <ul class="About-Footer" v-if="env.process">
-        <li>
-          <remix-icon name="npmjs" />
+        <li flex items-center gap-2>
+          <div inline-block class="i-ri-npmjs-line" />
           <span>{{ env.process.versions?.node }}</span>
         </li>
-        <li>
-          <remix-icon name="chrome" />
+        <li flex items-center gap-2>
+          <div inline-block class="i-ri-chrome-line" />
           <span>{{ env.process.versions?.chrome }}</span>
         </li>
-        <li>
-          <remix-icon name="vuejs" />
-          <span>{{ String(env.packageJson?.devDependencies?.vue).substring(1) }}</span>
+        <li flex items-center gap-2>
+          <div inline-block class="i-ri-vuejs-line" />
+          <span>{{ String(env.packageJson?.dependencies?.vue).substring(1) }}</span>
         </li>
       </ul>
     </div>
