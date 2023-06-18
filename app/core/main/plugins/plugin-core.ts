@@ -133,9 +133,8 @@ class TouchPlugin implements ITouchPlugin {
         webpreferences: "contextIsolation=false",
         httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: "false",
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${
-          pkg.version
-        } (Plugins,like ${this.name})`,
+        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version
+          } (Plugins,like ${this.name})`,
         partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
@@ -244,7 +243,7 @@ class PluginManager implements IPluginManager {
     this.watcher = chokidar.watch(this.pluginPath, {
       ignored: /(^|[\/\\])\../,
       persistent: true,
-      depth: 0,
+      depth: 1,
       awaitWriteFinish: {
         stabilityThreshold: 500,
         pollInterval: 500,
@@ -257,19 +256,30 @@ class PluginManager implements IPluginManager {
 
       const pluginName = path.basename(path.dirname(_path));
       if (!this.hasPlugin(pluginName)) {
-        console.warn("[PluginManager] Plugin " + pluginName + " is not loaded, but its README.md has been changed.")
+        console.warn("[PluginManager] Plugin " + pluginName + " is not loaded, but its file has been changed.")
         return;
       }
-      const plugin = this.plugins.get(pluginName) as TouchPlugin;
+      let plugin = this.plugins.get(pluginName) as TouchPlugin;
+
+      console.log(
+        `[Plugin] ${pluginName}'s ${baseName} has been changed, reload it.`
+      );
 
       if (
         baseName === "manifest.json" ||
         baseName === "preload.js" ||
         baseName === "index.html"
       ) {
-        await plugin.disable();
+        let _enabled = plugin.status === PluginStatus.ENABLED
 
-        await plugin.enable();
+        await plugin.disable();
+        await this.unloadPlugin(pluginName);
+
+        await this.loadPlugin(pluginName);
+
+        plugin = this.plugins.get(pluginName) as TouchPlugin;
+
+        _enabled && await plugin.enable();
 
         genTouchChannel().send(ChannelType.MAIN, "plugin:reload", {
           source: "disk",
@@ -284,11 +294,9 @@ class PluginManager implements IPluginManager {
           readme: plugin.readme,
         });
       } else {
+        console.warn("[PluginManager] Plugin " + pluginName + "'s " + baseName + " has been changed, but it's not a valid file.")
       }
 
-      console.log(
-        `[Plugin] ${pluginName}'s ${baseName} has been changed, reload it.`
-      );
     });
 
     this.watcher.on("addDir", (_path) => {
@@ -318,7 +326,7 @@ class PluginManager implements IPluginManager {
     });
 
     this.watcher.on("ready", () => {
-      console.log("[PluginManager] Initial scan complete. Ready for changes.");
+      console.log("[PluginManager] Initial scan complete. Ready for changes. (" + this.pluginPath + ")");
     });
 
     this.watcher.on("error", (error) => {
