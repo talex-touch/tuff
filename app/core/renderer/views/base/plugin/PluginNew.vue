@@ -50,7 +50,7 @@ function createAction(ctx) {
 </script>
 
 <template>
-  <FormTemplate>
+  <FormTemplate contentStyle="width: calc(100% - 5rem);height: calc(100% - 10rem)">
     <template #header>
       <div items-center flex>
         <div px-1 @click="toggleNewPlugin" ref="arrow" op-0
