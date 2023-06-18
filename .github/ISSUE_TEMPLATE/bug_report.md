@@ -47,15 +47,15 @@ Type: UI-UX Error
 
 ## Check your steps
 
-[ ] I confirm that I have to fill in the content and correct
-[ ] I confirm that I have seen no similar issues
-[ ] I confirm that I described and illustrated as far as possible
+- [ ] I confirm that I have to fill in the content and correct
+- [ ] I confirm that I have seen no similar issues
+- [ ] I confirm that I described and illustrated as far as possible
 
-Click above steps when you completed!
+Click the above steps when you complete them!
 
 ## Contact
 
-<!-- We use this just to ensure our engineers could receive it, and assist you to find more developers to solve this as soon as possible! -->
+<!-- We use this just to ensure our engineers can receive it, and assist you in finding more developers to solve this as soon as possible! -->
 
 @TalexDreamSoul
 
