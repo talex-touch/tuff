@@ -2,7 +2,7 @@
   <div class="PluginInfo-Container" :class="{ 'wrapper-view': wrapperView }">
     <plugin-status :plugin="plugin" />
 
-    <FormTemplate>
+    <FormTemplate contentStyle="width: calc(100% - 5rem)">
       <template #header>
         <div grid gap-4 grid-cols-8 items-center>
           <div col-span-6>
