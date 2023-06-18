@@ -1,7 +1,7 @@
 <template>
   <ViewTemplate name="Styles">
     <WindowSectionVue tip="Use Mica style may cause performance issues on some devices.">
-      <SectionItem v-model="themeStyle.theme.window" title="Default" :disabled="true">
+      <SectionItem v-model="themeStyle.theme.window" title="Default">
 
       </SectionItem>
       <SectionItem v-model="themeStyle.theme.window" title="Mica" :disabled="os?.version !== 'Windows 10 Pro'">

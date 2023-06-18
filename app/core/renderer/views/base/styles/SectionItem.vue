@@ -1,5 +1,5 @@
 <template>
-  <div @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full border-rounded flex items-center
+  <div @click="value = title" @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full border-rounded flex items-center
     justify-center :class="{ disabled, active: value === title }" class="SectionItem-Container transition-cubic">
     <div class="SectionItem-Display" :class="title">
       <div v-shared-element:[`theme-preference-${title}-img`] :style="`filter: ${filter}`" />
