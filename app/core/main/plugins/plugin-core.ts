@@ -15,6 +15,7 @@ import { genTouchApp } from "../core/touch-core";
 import pkg from "../../package.json";
 import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
+import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
 
 class PluginIcon implements IPluginIcon {
   type: string;
@@ -234,6 +235,11 @@ class PluginManager implements IPluginManager {
     if (!fse.existsSync(this.pluginPath)) return;
 
     // const plugins = fse.readdirSync(this.pluginPath);
+
+    touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
+      this.watcher.close();
+      console.log("[PluginManager] Watcher closed.")
+    })
 
     this.watcher = chokidar.watch(this.pluginPath, {
       ignored: /(^|[\/\\])\../,

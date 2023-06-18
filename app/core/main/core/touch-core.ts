@@ -48,8 +48,14 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("window-all-closed", () => {
+  console.log("[TouchApp] All windows closed! App starts to exit ...")
   if (process.platform !== "darwin") app.quit();
+  process.exit(0)
 });
+
+app.on('will-quit', () => {
+  console.log('[TouchApp] App will quit!')
+})
 
 app.addListener("ready", (event, launchInfo) =>
   touchEventBus.emit(
