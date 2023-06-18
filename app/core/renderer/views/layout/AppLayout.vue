@@ -1,5 +1,7 @@
 <template>
-  <div class="AppLayout-Wrapper fake-background">
+  <div class="AppLayout-Wrapper fake-background" :class="{
+    mica, coloring, contrast
+  }">
     <FlatLayout>
       <template #icon>
         <div class="AppLayout-Icon fake-background">
@@ -42,6 +44,7 @@ import AppLogo from "@comp/icon/AppLogo.vue";
 import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 import FlatLayout from "./flat/FlatLayout.vue";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
+import { themeStyle } from "@modules/storage/theme-style";
 
 const packageJson = window.$nodeApi.getPackageJSON()
 
@@ -51,6 +54,10 @@ const account = window.$storage.account
 provide('plugins', () => plugins.value)
 watch(() => pluginAdopter.plugins.values(), val => plugins.value = [...val], { deep: true, immediate: true })
 watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
+
+const mica = computed(() => themeStyle.value.theme.window === 'Mica')
+const coloring = computed(() => themeStyle.value.theme.addon.coloring)
+const contrast = computed(() => themeStyle.value.theme.addon.contrast)
 
 function openDevTools() {
   window.$nodeApi.openDevTools()
@@ -258,7 +265,7 @@ function afterLeave(el) {
   -webkit-app-region: no-drag;
 }
 
-.mica .AppLayout-Wrapper {
+.mica.AppLayout-Wrapper {
   --fake-inner-opacity: .75;
 }
 

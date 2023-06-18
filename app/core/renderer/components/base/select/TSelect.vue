@@ -68,11 +68,11 @@ export default {
 
             } else {
 
-              slot.el.addEventListener('click', () => {
+              slot.el.addEventListener('click', (e) => {
                 // activeIndex.value = index //slots.indexOf(slot)
 
                 that.$emit('update:modelValue', that.activeIndex = index)
-                that.$emit('change', slot.props?.hasOwnProperty('name') ? slot.props.name : index)
+                that.$emit('change', slot.props?.hasOwnProperty('name') ? slot.props.name : index, e)
 
                 that.click = false
               })

@@ -13,7 +13,7 @@ const props = defineProps({
     required: true,
   },
   modelValue: {
-    type: Boolean,
+    type: Number,
     required: true,
   },
   disabled: {
@@ -29,10 +29,10 @@ const emits = defineEmits(['update:modelValue', 'change'])
 
 const value = useModelWrapper(props, emits)
 
-function handleChange(val) {
+function handleChange(val, e) {
   if (props.disabled) return
 
-  emits('change', val)
+  emits('change', val, e)
 }
 </script>
 

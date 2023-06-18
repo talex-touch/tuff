@@ -1,4 +1,4 @@
-import { RemovableRef, useStorage } from '@vueuse/core'
+import { RemovableRef, useDark, useStorage } from '@vueuse/core'
 
 const IThemeStyle = {
   theme: {
@@ -16,25 +16,57 @@ const IThemeStyle = {
 
 export const themeStyle: RemovableRef<typeof IThemeStyle> = useStorage<typeof IThemeStyle>('theme-style', IThemeStyle)
 
-const media = window.matchMedia("(prefers-color-scheme: dark)");
+export const isDark = useDark()
 
-const callback = (e) => {
-  if (!themeStyle.value.theme.style.auto) return;
-  themeStyle.value.theme.style.dark = e.matches;
-};
+export async function triggerThemeTransition(pos: [number, number], mode: string) {
+  const [x, y] = pos
+  // @ts-ignore
+  const transition = document.startViewTransition(() => {
+     if (mode === 'auto') {
+      themeStyle.value.theme.style.auto = true
+      themeStyle.value.theme.style.dark = isDark.value
+    } else {
+      themeStyle.value.theme.style.auto = false
+      themeStyle.value.theme.style.dark = mode === 'dark'
+    }
+    const l = document.body.parentElement.classList
+    mode === 'dark' ? l.add('dark') : l.remove('dark')
+  })
 
-media.addEventListener("change", callback);
-callback(media);
+  // @ts-ignore
+  const endRadius = Math.hypot(
+    Math.max(x, innerWidth - x),
+    Math.max(y, innerHeight - y)
+  );
 
-watch(themeStyle, () => {
-  const clsL = document.body.parentNode["classList"];
-  const { theme } = themeStyle.value;
+  transition.ready.then(() => {
+    const clipPath = [
+      `circle(0px at ${x}px ${y}px)`,
+      `circle(${endRadius}px at ${x}px ${y}px)`
+    ]
 
-  theme.style.dark ? clsL.add("dark") : clsL.remove("dark");
-  theme.window === 'Mica' ? clsL.add("mica") : clsL.remove("mica");
+    if (mode !== 'dark') {
+      document.documentElement.animate(
+        {
+          clipPath: !isDark.value ? clipPath.reverse() : clipPath,
+        },
+        {
+          duration: 500,
+          easing: "ease-in",
+          pseudoElement: !isDark.value ? "::view-transition-old(root)" : "::view-transition-new(root)",
+        }
+      );
+    } else
 
-  theme.addon.coloring ? clsL.add("coloring") : clsL.remove("coloring");
-  theme.addon.contrast ? clsL.add("contrast") : clsL.remove("contrast");
-
-  theme.style.auto && callback(media);
-}, { deep: true, immediate: true })
+      document.documentElement.animate(
+        {
+          clipPath: isDark.value ? clipPath.reverse() : clipPath,
+        },
+        {
+          duration: 500,
+          easing: "ease-in",
+          pseudoElement: isDark.value ? "::view-transition-old(root)" : "::view-transition-new(root)",
+        }
+      );
+  })
+}

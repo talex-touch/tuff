@@ -1,7 +1,7 @@
 /* 缩小并覆盖 */
 .scale-down-and-cover-enter-active,
 .scale-down-and-cover-leave-active {
-  transition: .25s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 .scale-down-and-cover-enter-from {
@@ -17,7 +17,6 @@
 }
 
 .scale-down-and-cover-leave-from {
-
   //opacity: 1;
   transform: translateY(-100%);
 }
@@ -32,8 +31,7 @@
 /* 放大并覆盖 */
 .scale-up-and-cover-enter-active,
 .scale-up-and-cover-leave-active {
-
-  transition: .25s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 .scale-up-and-cover-enter-from {
@@ -59,14 +57,11 @@
 }
 
 .scale-up-and-cover-leave-to {
-
   margin-top: 100%;
 
   opacity: 0;
   filter: blur(10px);
 }
-
-
 
 /* 淡入淡出 */
 .fade-enter-active,
@@ -77,4 +72,25 @@
 .fade-enter,
 .fade-leave-to {
   opacity: 0;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* 进入dark模式和退出dark模式时，两个图像的位置顺序正好相反 */
+.dark::view-transition-old(root) {
+  z-index: 999;
+}
+.dark::view-transition-new(root) {
+  z-index: 1;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 999;
 }

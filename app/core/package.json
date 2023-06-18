@@ -2,6 +2,7 @@
   "name": "core",
   "main": "./dist/main/index.js",
   "version": "2.0.0",
+  "type": "commonjs",
   "scripts": {
     "dev": "electron-vite dev -w --ignoreConfigWarning",
     "start": "electron-vite preview",

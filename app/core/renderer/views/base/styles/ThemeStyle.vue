@@ -13,11 +13,11 @@
     </WindowSectionVue>
 
     <t-group-block name="Personalized" icon="earth" description="Personalized your app">
-      <t-block-select @change="handleThemeChange" v-model="stylePreference" title="Color Style"
+      <t-block-select @change="handleThemeChange" v-model="styleValue" title="Color Style"
         :icon="themeStyle.theme.style.dark ? 'moon' : 'lightbulb'" description="Set color main style">
-        <t-select-item name="Light">Light Style</t-select-item>
-        <t-select-item name="Dark">Dark Style</t-select-item>
-        <t-select-item name="Follow">Follow System</t-select-item>
+        <t-select-item name="light">Light Style</t-select-item>
+        <t-select-item name="dark">Dark Style</t-select-item>
+        <t-select-item name="auto">Follow System</t-select-item>
       </t-block-select>
     </t-group-block>
 
@@ -49,19 +49,21 @@ import WindowSectionVue from './WindowSection.vue'
 import SectionItem from './SectionItem.vue'
 import { $t } from '@modules/lang'
 import { useOS } from '@modules/hooks/os-hooks'
-import { themeStyle } from '@modules/storage/AppStorage'
+import { themeStyle, triggerThemeTransition } from '@modules/storage/AppStorage'
 
 const os = ref()
-const stylePreference = ref(themeStyle.value.theme.style.auto ? 2 : themeStyle.value.theme.style.dark ? 1 : 0)
+const styleValue = ref(0)
 
-function handleThemeChange() {
-  if (stylePreference.value === 0) {
-    themeStyle.value.theme.style.dark = false
-  } else if (stylePreference.value === 1) {
-    themeStyle.value.theme.style.dark = true
-  }
+watchEffect(() => {
+  if (themeStyle.value.theme.style.auto)
+    styleValue.value = 2
+  else if (themeStyle.value.theme.style.dark)
+    styleValue.value = 1
+  else styleValue.value = 0
+})
 
-  themeStyle.value.theme.style.auto = stylePreference.value === 2
+function handleThemeChange(v: string, e: MouseEvent) {
+  triggerThemeTransition([e.x, e.y], v)
 }
 
 onMounted(() => {
