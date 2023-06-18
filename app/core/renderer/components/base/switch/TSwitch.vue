@@ -15,41 +15,6 @@ watch(() => model, () => emits('change', model))
 </template>
 
 <style lang="scss" scoped>
-@keyframes switchAnimation {
-  0% {
-    left: 10%;
-    filter: brightness(1);
-    border-radius: 5px;
-  }
-  50% {
-    transform: scale(1.4, 1);
-    filter: brightness(1.5) blur(2px);
-    border-radius: 8px;
-  }
-  100% {
-    left: 50%;
-    filter: brightness(2) blur(0);
-    border-radius: 5px;
-  }
-}
-
-@keyframes switchAnimationReverse {
-  0% {
-    left: 50%;
-    filter: brightness(2) blur(0);
-    border-radius: 5px;
-  }
-  50% {
-    transform: scale(1.4, 1);
-    filter: brightness(1.5) blur(2px);
-    border-radius: 8px;
-  }
-  100% {
-    left: 10%;
-    filter: brightness(1);
-    border-radius: 5px;
-  }
-}
 
 .TSwitch-Container {
   &.disabled {
@@ -57,6 +22,7 @@ watch(() => model, () => emits('change', model))
 
     pointer-events: none;
   }
+
   &:before {
     content: "";
     position: absolute;
@@ -72,18 +38,27 @@ watch(() => model, () => emits('change', model))
     border-radius: 5px;
     background-color: var(--el-text-color-secondary);
     transition: all .25s ease-in-out;
-    animation: switchAnimationReverse .25s ease-in-out forwards;
   }
+
   &.select {
     &:before {
-      animation: switchAnimation .25s ease-in-out forwards;
+      left: 50%;
+      filter: brightness(2) blur(0);
+      border-radius: 5px;
     }
+
     border-color: transparent;
     background-color: var(--el-color-primary);
   }
+
   &:hover {
     box-shadow: 0 0 16px 1px var(--el-color-primary-light-3);
   }
+
+  &:active:before {
+    transform: scale(.75);
+  }
+
   position: relative;
 
   width: 44px;
@@ -94,5 +69,4 @@ watch(() => model, () => emits('change', model))
   background-color: var(--el-fill-color);
   //border: 1px solid var(--el-text-color-secondary);
   transition: all .125s ease-in-out;
-}
-</style>
+}</style>
