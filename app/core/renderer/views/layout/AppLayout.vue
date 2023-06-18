@@ -1,7 +1,5 @@
 <template>
-  <div class="AppLayout-Wrapper fake-background" :class="{
-    mica, coloring, contrast
-  }">
+  <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
     <FlatLayout>
       <template #icon>
         <div class="AppLayout-Icon fake-background">
@@ -19,14 +17,6 @@
       </template>
       <template #view>
         <router-view />
-        <!-- <router-view v-slot="{ Component, route }"> -->
-          <!-- <transition @before-enter="beforeEnter" @after-enter="afterEnter" @before-leave="beforeLeave"
-            @after-leave="afterLeave">
-            <keep-alive>
-              <component class="cubic-transition" :is="Component" :key="route.path" />
-            </keep-alive>
-          </transition> -->
-        <!-- </router-view> -->
 
         <ViewPlugin />
       </template>
@@ -45,7 +35,7 @@ import AppLogo from "@comp/icon/AppLogo.vue";
 import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 import FlatLayout from "./flat/FlatLayout.vue";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
-import { themeStyle } from "@modules/storage/theme-style";
+import { themeStyle, triggerThemeTransition } from "@modules/storage/theme-style";
 
 const packageJson = window.$nodeApi.getPackageJSON()
 
@@ -64,22 +54,9 @@ function openDevTools() {
   window.$nodeApi.openDevTools()
 }
 
-function beforeEnter(el) {
-  el.style.opacity = 0
-  el.style.transform = 'scale(0.9)'
-}
-function afterEnter(el) {
-  el.style.opacity = 1
-  el.style.transform = 'scale(1)'
-}
-function beforeLeave(el) {
-  el.style.opacity = 1
-  el.style.transform = 'scale(1)'
-}
-function afterLeave(el) {
-  el.style.opacity = 0
-  el.style.transform = 'scale(1.1)'
-}
+onMounted(() => {
+  triggerThemeTransition([innerWidth / 2, innerHeight / 2], themeStyle.value.theme.style.auto ? 'auto' : themeStyle.value.theme.style.dark ? 'dark' : 'light')
+})
 </script>
 
 <style lang="scss" scoped>
