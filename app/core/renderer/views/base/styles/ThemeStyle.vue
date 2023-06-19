@@ -48,7 +48,7 @@ import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
 import WindowSectionVue from './WindowSection.vue'
 import SectionItem from './SectionItem.vue'
 import { $t } from '@modules/lang'
-import { useOS } from '~/renderer/modules/hooks/env-hookss/env-hooks'
+import { useEnv } from '@modules/hooks/env-hooks'
 import { themeStyle, triggerThemeTransition } from '@modules/storage/AppStorage'
 
 const os = ref()
@@ -67,7 +67,7 @@ function handleThemeChange(v: string, e: MouseEvent) {
 }
 
 onMounted(() => {
-  os.value = useOS()
+  os.value = useEnv().os
 })
 
 </script>

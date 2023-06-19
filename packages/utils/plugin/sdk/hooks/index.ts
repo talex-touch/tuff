@@ -1,0 +1,1 @@
+export * as LifeCycle from './life-cycle'

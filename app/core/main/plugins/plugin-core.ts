@@ -7,6 +7,7 @@ import {
   ITouchPlugin,
   PluginStatus,
 } from "@talex-touch/utils/plugin";
+import { LifeCycle } from "@talex-touch/utils/plugin/sdk/hooks";
 import { TalexTouch } from "../types";
 import fse from "fs-extra";
 import path from "path";
@@ -153,6 +154,11 @@ class TouchPlugin implements ITouchPlugin {
 
     this.status = PluginStatus.ENABLED;
 
+    genTouchChannel().send(ChannelType.PLUGIN, "@lifecycle:en", {
+      ...this.toJSONObject(),
+      plugin: this.name,
+    });
+
     return true;
   }
 
@@ -162,14 +168,15 @@ class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING;
     console.log("[Plugin] Disabling plugin " + this.name);
 
+    genTouchChannel().send(ChannelType.PLUGIN, "@lifecycle:di", {
+      ...this.toJSONObject(),
+      plugin: this.name,
+    });
+
     this.webViewInit = false;
 
     this.status = PluginStatus.DISABLED;
     console.log("[Plugin] Plugin " + this.name + " is disabled.");
-
-    // setTimeout(() => {
-    //   pluginManager.plugins.delete(this.name);
-    // });
 
     return true;
   }
@@ -217,6 +224,10 @@ class PluginManager implements IPluginManager {
     if (this.active) {
       const plugin = this.plugins.get(this.active);
 
+      genTouchChannel().send(ChannelType.PLUGIN, "@lifecycle:in", {
+        plugin: this.active,
+      });
+
       if (plugin) plugin.status = PluginStatus.ENABLED;
     }
 
@@ -226,6 +237,10 @@ class PluginManager implements IPluginManager {
 
       plugin.status = PluginStatus.ACTIVE;
       this.active = pluginName;
+
+      genTouchChannel().send(ChannelType.PLUGIN, "@lifecycle:ac", {
+        plugin: pluginName,
+      });
     }
 
     return true;
@@ -473,11 +488,17 @@ export default {
       touchChannel.regChannel(
         ChannelType.PLUGIN,
         "crash",
-        async ({ reply, data, plugin }) =>
+        async ({ reply, data, plugin }) => {
           touchChannel.send(ChannelType.MAIN, "plugin-crashed", {
             plugin,
             ...data,
           })
+
+          touchChannel.send(ChannelType.PLUGIN, "@lifecycle:cr", {
+            plugin,
+            ...data
+          })
+        }
       )
     );
 
@@ -490,9 +511,9 @@ export default {
             return console.error('[Plugin] Plugin template is not supported yet.')
           }
           const { name, desc, version, dev, readme, openInVSC } = data;
-          
+
           const manifest = {
-            
+
           }
         }
       )

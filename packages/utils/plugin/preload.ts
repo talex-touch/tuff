@@ -1,4 +1,5 @@
 import { touchChannel } from './channel'
+import './sdk/index'
 
 // window type
 declare global {
