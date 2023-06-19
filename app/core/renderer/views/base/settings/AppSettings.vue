@@ -13,7 +13,7 @@
 </template>
 
 <script name="AppSettings" setup>
-import { /* useCPUUsage, useMemoryUsage,  */useOS } from '@modules/hooks/os-hooks'
+import { useCPUUsage, useMemoryUsage, useEnv } from '@modules/hooks//env-hooks'
 import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingUser from './SettingUser.vue'
@@ -32,12 +32,12 @@ const dev = ref(false)
 
 // initially
 onMounted(async () => {
-  await Promise.all([
-    Promise.resolve(dev.value = process.env.NODE_ENV === 'development'),
-    Promise.resolve($env.os = useOS()),
-    Promise.resolve($env.process = process),
-    Promise.resolve($env.packageJson = window.$nodeApi.getPackageJSON())
-  ])
+  dev.value = process.env.NODE_ENV === 'development'
+
+  const env = useEnv()
+  $env.os = env.os
+  $env.process = env.process
+  $env.packageJson = env.packageJson
 })
 </script>
 

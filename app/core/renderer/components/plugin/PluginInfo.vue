@@ -1,5 +1,5 @@
 <template>
-  <div class="PluginInfo-Container" :class="{ 'wrapper-view': wrapperView }">
+  <div class="PluginInfo-Container">
     <plugin-status :plugin="plugin" />
 
     <FormTemplate contentStyle="width: calc(100% - 5rem);height: calc(100% - 15rem)">
@@ -30,6 +30,14 @@
         </LineTemplate>
       </BlockTemplate>
 
+      <BlockTemplate v-if="platforms" title="Environment">
+        <LineTemplate v-for="(platform, index) in platforms" :class="{ enable: platform?.enable }" :key="index" :title="index">
+           <el-tag v-for="(tag, index) in platform.arch" :key="index" size="mini" type="info">{{ tag }}</el-tag>
+           <el-tag v-for="(tag, index) in platform.os" :key="index" size="mini" type="primary">{{ tag }}</el-tag>
+        </LineTemplate>
+      </BlockTemplate>
+
+
       <BlockTemplate :style="`padding-right: 1.25rem`" v-if="plugin.readme" title="Readme">
         <FlatMarkdown :readonly="true" v-model="readme" />
       </BlockTemplate>
@@ -45,7 +53,8 @@ import FormTemplate from '@comp/base/template/FormTemplate.vue'
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue'
 import LineTemplate from '@comp/base/template/LineTemplate.vue'
 import { popperMention } from '@modules/mention/dialog-mention'
-import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { ITouchPlugin, IPlatform } from '@talex-touch/utils/plugin'
+import { useEnv } from '@modules/hooks/env-hooks'
 
 const props = defineProps({
   plugin: {
@@ -54,6 +63,8 @@ const props = defineProps({
   }
 })
 
+const env = useEnv()
+const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
 const readme = computed<string>(() => props.plugin.readme)
 
 async function handleExport() {
@@ -62,69 +73,6 @@ async function handleExport() {
 </script>
 
 <style lang="scss" scoped>
-.ConfigSource-Editor {
-  :deep(.cm-editor) {
-    .cm-gutters {
-      opacity: .75;
-      background: transparent;
-      //background-color: var(--el-fill-color-lighter) !important;
-    }
-
-    .cm-scroller {
-      font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
-      font-size: 14px;
-    }
-
-    .cm-foldGutter {
-      span[title="Fold line"] {
-        position: relative;
-
-        top: -5px
-      }
-    }
-
-    .cm-line {
-      color: var(--el-text-color-primary);
-    }
-
-    .ͼe {
-      color: var(--el-color-danger-dark-2);
-    }
-
-    .ͼc {
-      color: var(--el-color-primary-dark-2);
-    }
-
-    .cm-selectionBackground,
-    &::selection {
-      background-color: var(--el-color-primary-light-9) !important;
-    }
-  }
-}
-
-.plugin-action {
-  margin-left: 30px;
-}
-
-:deep(.el-scrollbar) {
-  position: relative;
-
-  height: calc(100% - 10px);
-
-}
-
-.plugin-version {
-  display: inline;
-  padding: 2px 4px;
-
-  width: max-content;
-  border-radius: 4px;
-
-  background: #FE9F0E;
-  color: #fff;
-  box-sizing: border-box;
-}
-
 .plugin-dev {
   display: inline;
   padding: 4px 8px;
@@ -136,56 +84,5 @@ async function handleExport() {
   box-sizing: border-box;
   border-radius: 4px;
   background-color: black;
-}
-
-.PluginInfo-Container {
-  //&.wrapper-view {
-  //  transform: perspective(10px) rotateX(90deg);
-  //}
-  position: relative;
-
-  display: flex;
-  flex-direction: column;
-
-  height: 100%;
-
-  :deep(.el-tabs) {
-    position: relative;
-
-    height: calc(100% - 120px);
-
-    .el-tabs__content,
-    .el-tab-pane {
-      position: relative;
-
-      height: calc(100% - 11px);
-    }
-
-    .el-tabs__active-bar,
-    .el-tabs__nav-wrap:after {
-      height: 1px;
-    }
-
-    .el-tabs__nav-scroll {
-      width: 90%;
-      left: 5%;
-
-      position: relative;
-    }
-
-    .el-tabs__header {
-      margin-bottom: 0;
-    }
-  }
-
-  box-sizing: border-box;
-
-}
-</style>
-
-<style>
-.Plugin-Container:has(.wrapper-view) {
-  filter: blur(10px);
-  transform: perspective(100px) rotateX(9deg);
 }
 </style>

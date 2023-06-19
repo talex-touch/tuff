@@ -1,10 +1,13 @@
 {
   "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
     "allowJs": true,
     "composite": true,
     "importHelpers": true,
     "jsx": "preserve",
-    "resolveJsonModule": true,
+    // "resolveJsonModule": true,
+    "moduleResolution": "nodenext",
     "sourceMap": false,
     "baseUrl": ".",
     "strict": false,

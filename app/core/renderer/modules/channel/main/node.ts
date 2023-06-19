@@ -22,6 +22,10 @@ export class BaseNodeApi {
     return touchChannel.sendSync("get-package");
   }
 
+  getOS() {
+    return touchChannel.sendSync("get-os");
+  }
+
   getCWD() {
     return touchChannel.sendSync("common:cwd");
   }
