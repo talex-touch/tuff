@@ -26,7 +26,7 @@ export interface IPlatformInfo {
 export type PlatformKey = 'win' | 'darwin' | 'linux'
 
 export type IPlatform = {
-  [key in PlatformKey]: IPlatformInfo
+  [key in PlatformKey]?: IPlatformInfo
 }
 
 export interface IPluginBaseInfo {
@@ -35,6 +35,7 @@ export interface IPluginBaseInfo {
   version: string
   desc: string
   icon: IPluginIcon
+  platforms: IPlatform
 }
 
 export interface IPluginDev {

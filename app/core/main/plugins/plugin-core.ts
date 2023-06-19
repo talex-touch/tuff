@@ -1,4 +1,5 @@
 import {
+  IPlatform,
   IPluginDev,
   IPluginIcon,
   IPluginManager,
@@ -44,6 +45,7 @@ class TouchPlugin implements ITouchPlugin {
   icon: IPluginIcon;
   webViewInit: boolean = false;
   webview: IPluginWebview;
+  platforms: IPlatform;
 
   pluginPath: string;
 
