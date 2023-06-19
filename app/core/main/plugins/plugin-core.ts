@@ -62,6 +62,7 @@ class TouchPlugin implements ITouchPlugin {
       webViewInit: this.webViewInit,
       webview: this.webview,
       status: this.status,
+      platforms: this.platforms,
     };
   }
 
@@ -87,7 +88,8 @@ class TouchPlugin implements ITouchPlugin {
     desc: string,
     readme: string,
     dev: IPluginDev,
-    pluginPath: string
+    pluginPath: string,
+    platforms: IPlatform = {}
   ) {
     this.name = name;
     this.icon = icon;
@@ -97,6 +99,7 @@ class TouchPlugin implements ITouchPlugin {
     this.dev = dev;
 
     this.pluginPath = pluginPath;
+    this.platforms = platforms;
   }
 
   async enable(): Promise<boolean> {
@@ -365,7 +368,8 @@ class PluginManager implements IPluginManager {
       pluginInfo.description,
       readme,
       pluginInfo.dev,
-      pluginPath
+      pluginPath,
+      pluginInfo.platforms
     );
 
     this.plugins.set(pluginInfo.name, touchPlugin);

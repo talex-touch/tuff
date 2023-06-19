@@ -63,7 +63,7 @@ function handleClick($event) {
 
   &.active {
     --fake-inner-opacity: .5 !important;
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--el-fill-color-lighter);
   }
 
   &:hover {
