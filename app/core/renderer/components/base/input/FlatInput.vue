@@ -61,18 +61,12 @@ function onKeyDown(e) {
   }
 
   .FlatInput-Prefix {
-    :deep(.remix) {
-      position: absolute;
-
-      left: 12px;
-
-      width: 100%;
-      height: 100%;
-
-      top: -0.15em;
-    }
-
     position: relative;
+    padding-left: 6px;
+    display: flex;
+
+    margin-bottom: 0.15rem;
+    align-items: center;
 
     font-size: 18px;
     color: var(--el-text-color-primary)

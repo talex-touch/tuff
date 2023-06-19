@@ -10,6 +10,7 @@ import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue';
 import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
 import { forTouchTip } from '@modules/mention/dialog-mention';
 import { touchChannel } from '@modules/channel/channel-core';
+import PluginIcon from '@comp/plugin/PluginIcon.vue';
 
 const arrow = ref()
 const toggleNewPlugin = inject('toggleNewPlugin')
@@ -19,9 +20,14 @@ onMounted(() => {
 })
 
 const plugin = reactive({
+  template: false,
   name: "",
   desc: "",
   version: "0.0.1",
+  icon: {
+    type: "class",
+    value: "i-ri-remixicon-line"
+  },
   dev: {
     enable: computed(() => plugin.dev.address),
     address: ""
@@ -38,14 +44,14 @@ function createAction(ctx) {
 
   if (!result) return
 
-  if ( !plugin.agreement ) {
+  if (!plugin.agreement) {
     return forTouchTip("Attention", "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.")
   }
 
   setLoading(true)
 
-  touchChannel.send('new-plugin-template', plugin)
-  
+  touchChannel.send('plugin:new', plugin)
+
 }
 </script>
 
@@ -94,13 +100,22 @@ function createAction(ctx) {
     </BlockTemplate>
 
     <BlockTemplate title="General">
-      <LineTemplate :msg="() => 'You must input the correct plugin name.'" regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{1,15}$" title="name">
+      <LineTemplate :msg="() => 'You must input the correct plugin name.'"
+        regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{1,15}$" title="name">
         <FlatInput w="48!" v-model=plugin.name />
       </LineTemplate>
-      <LineTemplate :msg="() => 'You must input the correct plugin version.'" regex="^(\d+\.)(\d+\.)(\*|\d+)$" title="version">
+      <LineTemplate title="icon">
+        <FlatInput w="48!" v-model=plugin.icon.value>
+          <div h-full :class="plugin.icon.value" />
+        </FlatInput>
+      </LineTemplate>
+      <LineTemplate :msg="() => 'You must input the correct plugin version.'" regex="^(\d+\.)(\d+\.)(\*|\d+)$"
+        title="version">
         <FlatInput w="48!" v-model=plugin.version />
       </LineTemplate>
-      <LineTemplate :msg="() => 'You must input the correct plugin dev address.'" regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$" title="dev-address">
+      <LineTemplate :msg="() => 'You must input the correct plugin dev address.'"
+        regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$"
+        title="dev-address">
         <FlatInput w="48!" v-model=plugin.dev.address />
       </LineTemplate>
       <!-- regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{15,80}$" -->

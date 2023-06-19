@@ -1,3 +1,4 @@
+import { Arch, SupportOS } from './../base/index';
 export enum PluginStatus {
   DISABLED,
   DISABLING,
@@ -12,8 +13,20 @@ export enum PluginStatus {
 }
 
 export interface IPluginIcon {
-  type: string | 'remixicon'
+  type: string | 'remixicon' | 'class'
   value: any
+}
+
+export interface IPlatformInfo {
+  enable: boolean
+  arch: Arch[]
+  os: SupportOS[]
+}
+
+export type PlatformKey = 'win' | 'darwin' | 'linux'
+
+export type IPlatform = {
+  [key in PlatformKey]: IPlatformInfo
 }
 
 export interface IPluginBaseInfo {

@@ -475,7 +475,23 @@ export default {
       )
     );
 
-    // regChannel('plugin-list-refresh', async ({ reply }) => await this._initialPlugins())
+    this.listeners.push(
+      touchChannel.regChannel(
+        ChannelType.PLUGIN,
+        "plugin:new",
+        async ({ reply, data, plugin }) => {
+          if (Object.hasOwn(data, 'template') && data.template !== false) {
+            return console.error('[Plugin] Plugin template is not supported yet.')
+          }
+          const { name, desc, version, dev, readme, openInVSC } = data;
+          
+          const manifest = {
+            
+          }
+        }
+      )
+    );
+
   },
   destroy(app, manager) {
     this.listeners.forEach((f: () => any) => f());

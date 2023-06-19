@@ -26,7 +26,7 @@
           {{ plugin.version }}
         </LineTemplate>
         <LineTemplate v-if="plugin.dev" title="address">
-          {{ plugin.dev?.address }}
+          <a :href="plugin.dev.address">{{ plugin.dev.address }}</a>
         </LineTemplate>
       </BlockTemplate>
 
