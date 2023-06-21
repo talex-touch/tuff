@@ -10,17 +10,17 @@ const _class = ref()
 
 watchEffect(() => {
   const { os } = props
-  if (os === 'Windows 10 Pro') {
+  if (os === 'Windows 10 Pro' || os === 'win') {
     _class.value = 'Windows_11'
   } else if (os.indexOf('Windows') !== -1) {
     _class.value = 'i-ri-windows-line'
-  } else if (os.indexOf('macOS') !== -1) {
+  } else if (os.indexOf('macOS') !== -1 || os === 'darwin') {
     _class.value = 'i-ri-apple-fill'
   } else if (os.indexOf('OS X') !== -1) {
     _class.value = 'i-ri-apple-line'
   } else if (os.indexOf('Kali') !== -1) {
     _class.value = 'i-simple-icons-kalilinux'
-  } else if (os.indexOf('Linux') !== -1) {
+  } else if (os.indexOf('Linux') !== -1 || os === 'linux') {
     _class.value = 'i-simple-icons-linux'
   } else if (os.indexOf('Ubuntu') !== -1) {
     _class.value = 'i-simple-icons-ubuntu'

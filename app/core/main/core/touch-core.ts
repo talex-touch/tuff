@@ -18,14 +18,15 @@ import {
   WebContents,
   app,
   OpenDevToolsOptions,
+  dialog,
 } from "electron";
 import { release } from "os";
 import { checkDirWithCreate } from "../utils/common-util";
 import { genTouchChannel } from "./channel-core";
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import { TalexTouch } from "../types/touch-core";
-import pluginCore, { genPluginManager } from "../plugins/plugin-core";
-import { PARAMS, VALUE, MicaBrowserWindow, IS_WINDOWS_11, WIN10 } from 'mica-electron'
+import { genPluginManager } from "../plugins/plugin-core";
+import { MicaBrowserWindow } from 'mica-electron'
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -37,13 +38,15 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 } else {
-  app.addListener(
+  app.on(
     "second-instance",
-    (event, argv, workingDirectory, additionalData) =>
+    (event, argv, workingDirectory, additionalData) => {
+      dialog.showErrorBox('Welcome Back', `You arrived from: ${argv}`)
       touchEventBus.emit(
         TalexEvents.APP_SECONDARY_LAUNCH,
         new AppSecondaryLaunch(event, argv, workingDirectory, additionalData)
       )
+    }
   );
 }
 
@@ -171,7 +174,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     // this.window = new BrowserWindow(options);
     this.window = new MicaBrowserWindow(options);
 
-    this.window.setDarkTheme();
+    // this.window.setDarkTheme();
     this.window.setMicaAcrylicEffect();
     this.window.setRoundedCorner()
 

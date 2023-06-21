@@ -31,7 +31,10 @@
       </BlockTemplate>
 
       <BlockTemplate v-if="platforms" title="Environment">
-        <LineTemplate v-for="(platform, index) in platforms" :class="{ enable: platform?.enable }" :key="index" :title="index">
+        <LineTemplate v-for="(platform, index) in platforms" :class="{ enable: platform?.enable }" :key="index">
+          <template #field>
+            <OSIcon inline-block relative mr-1 style="top: 0.125rem;width: 16px;height:16px" :os="index" />
+          </template>
           <el-tag v-for="(tag, index) in platform.os" :key="index" size="mini" type="primary">{{ tag }}</el-tag>
            <el-tag v-for="(tag, index) in platform.arch" :key="index" size="mini" type="info">{{ tag }}</el-tag>
         </LineTemplate>
@@ -55,6 +58,7 @@ import LineTemplate from '@comp/base/template/LineTemplate.vue'
 import { popperMention } from '@modules/mention/dialog-mention'
 import type { ITouchPlugin, IPlatform } from '@talex-touch/utils/plugin'
 import { useEnv } from '@modules/hooks/env-hooks'
+import OSIcon from '../icon/OSIcon.vue';
 
 const props = defineProps({
   plugin: {
