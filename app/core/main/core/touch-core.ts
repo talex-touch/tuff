@@ -98,6 +98,8 @@ class TouchApp implements TalexTouch.TouchApp {
   channel: ITouchChannel;
 
   constructor(app: Electron.App) {
+    console.log("[TouchApp] App running under: " + this.rootPath)
+
     this.app = app;
     this.window = new TouchWindow(MainWindowOption);
     this.channel = genTouchChannel(this);
