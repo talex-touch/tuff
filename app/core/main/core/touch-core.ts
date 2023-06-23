@@ -78,7 +78,7 @@ function getRootPath(root) {
 }
 
 class TouchApp implements TalexTouch.TouchApp {
-  readonly rootPath: string = getRootPath(process.cwd());
+  readonly rootPath: string = getRootPath(app.getAppPath());
 
   app: Electron.App;
 
@@ -175,8 +175,8 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window = new MicaBrowserWindow(options);
 
     // this.window.setDarkTheme();
-    this.window.setMicaAcrylicEffect();
-    this.window.setRoundedCorner()
+    this.window['setMicaAcrylicEffect']?.();
+    this.window['setRoundedCorner']?.()
 
     this.window.once("ready-to-show", () => {
       this.window.webContents.addListener("will-navigate", (event, url) => {
