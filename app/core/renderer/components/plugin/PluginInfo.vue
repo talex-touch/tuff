@@ -12,8 +12,8 @@
             <span block text="base" op-75 font-normal>{{ plugin.desc }}</span>
           </div>
 
-          <FlatButton h-5 w-2 @click="handleExport" class="plugin-export" v-if="plugin.dev?.enable">
-            Export
+          <FlatButton h-5 w-40 right-6 @click="handleExplorer" v-if="plugin.dev?.enable">
+            <div inline-block mr-1 class="i-ri-folder-line" />Open in Explorer
           </FlatButton>
         </div>
       </template>
@@ -57,7 +57,7 @@ import BlockTemplate from '@comp/base/template/BlockTemplate.vue'
 import LineTemplate from '@comp/base/template/LineTemplate.vue'
 import { popperMention } from '@modules/mention/dialog-mention'
 import type { ITouchPlugin, IPlatform } from '@talex-touch/utils/plugin'
-import { useEnv } from '@modules/hooks/env-hooks'
+import { touchChannel } from '@modules/channel/channel-core'
 import OSIcon from '../icon/OSIcon.vue';
 
 const props = defineProps({
@@ -67,12 +67,11 @@ const props = defineProps({
   }
 })
 
-const env = useEnv()
 const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
 const readme = computed<string>(() => props.plugin.readme)
 
-async function handleExport() {
-  await popperMention("Attention", "The export is abandoned\nSee our docs for more information!")
+async function handleExplorer() {
+  touchChannel.send('plugin:explorer', props.plugin.name)
 }
 </script>
 

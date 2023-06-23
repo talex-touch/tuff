@@ -40,7 +40,7 @@ const props = defineProps(['primary', 'mini'])
   align-items: center;
 
   min-width: 120px;
-  width: 100%;
+  //width: 100%;
   min-height: 32px;
 
   user-select: none;

@@ -46,8 +46,7 @@ export default defineConfig({
     plugins: [
       commonjsExternal({
         externals: [
-          'path',
-          'mica-electron'
+          'path'
         ]
       }),
       externalizeDepsPlugin({

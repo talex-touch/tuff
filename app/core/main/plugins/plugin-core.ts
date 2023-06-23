@@ -504,7 +504,7 @@ export default {
 
     this.listeners.push(
       touchChannel.regChannel(
-        ChannelType.PLUGIN,
+        ChannelType.MAIN,
         "plugin:new",
         async ({ reply, data, plugin }) => {
           if (Object.hasOwn(data, 'template') && data.template !== false) {
@@ -515,6 +515,27 @@ export default {
           const manifest = {
 
           }
+        }
+      )
+    );
+
+    this.listeners.push(
+      touchChannel.regChannel(
+        ChannelType.MAIN,
+        "plugin:explorer",
+        async ({ reply, data }) => {
+          const plugin: ITouchPlugin = pluginManager.plugins.get(data);
+          if (!plugin) return console.error('[PluginManager] Error open plugin in explorer', data)
+
+          const pluginPath = plugin['pluginPath']
+
+          const { exec } = require('child_process');
+          exec(`explorer ${pluginPath}`, (err, stdout, stderr) => {
+            if (err) {
+              console.error(err);
+              return;
+            }
+          })
         }
       )
     );

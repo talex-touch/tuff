@@ -12,8 +12,8 @@
   "author": "TalexDreamSoul",
   "license": "ISC",
   "dependencies": {
-    "ts-node": "^10.9.1",
     "@talex-touch/utils": "workspace:^1.0.0",
-    "vitest": "^0.31.0"
+    "ts-node": "^10.9.1",
+    "vitest": "^0.31.4"
   }
 }

@@ -20,7 +20,7 @@
   },
   "description": "TalexTouch series utils",
   "dependencies": {
-    "vue": "^3.2.47"
+    "vue": "^3.3.4"
   },
   "peerDependencies": {
     "vue": "^3.2.47",

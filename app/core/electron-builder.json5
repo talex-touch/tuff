@@ -11,11 +11,8 @@
   files: [
     "!.vscode/",
     "!node_modules/",
-    "!public/",
     "!build/",
-    "!releases/",
     "!electron-builder.json5",
-    "!index.html",
     "!pnpm-lock.yaml",
     "!tsconfig.json",
     "!tsconfig.node.json",
