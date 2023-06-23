@@ -78,7 +78,7 @@ function getRootPath(root) {
 }
 
 class TouchApp implements TalexTouch.TouchApp {
-  readonly rootPath: string = getRootPath(app.getAppPath());
+  readonly rootPath: string = getRootPath(process.cwd());
 
   app: Electron.App;
 
