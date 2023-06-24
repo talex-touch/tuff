@@ -65,7 +65,7 @@ onBeforeUnmount(() => {
     <t-block-line :title="$t('settings.application.list-settings.specifications.platform')"
       :description="`${env.process.platform} (${env.os.arch})`"></t-block-line>
     <t-block-line :title="$t('settings.application.list-settings.specifications.experience')"
-      description="Touch Feature Experience Pack 2023.06.14"></t-block-line>
+      description="Touch Feature Experience Pack 2023.06.25"></t-block-line>
     <t-block-line :title="$t('settings.application.list-settings.specifications.cpu-usage')">
       <template #description>
         <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage"
