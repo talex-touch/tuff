@@ -11,9 +11,11 @@ setTimeout(() => {
     options.value = data;
   });
 
-  regService(new ImageProtocolService(), e => {
+  const res = regService(new ImageProtocolService(), e => {
     console.log( e )
   })
+
+  console.log( res )
 }, 3000);
 </script>
 

@@ -11,7 +11,7 @@ export function regService(service: IService, handler: Function): boolean {
 }
 
 export function unRegService(service: IService): boolean {
-  return !!genChannel().sendSync('service:unreg', { service })
+  return !!genChannel().sendSync('service:unreg', { service: service.description })
 }
 
 export function onHandleService(service: IService, handler: Function) {

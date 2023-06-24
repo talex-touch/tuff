@@ -30,12 +30,21 @@ class ServiceCenter implements IServiceCenter {
     this.perMap.set(service.id, handler)
     return true
   }
+  
   unRegService(service: IService): boolean {
     if (!this.hasService(service)) return false;
 
     this.perMap.delete(service.id)
     return true
   }
+
+  /**
+   * Unsafe method, please use unRegService instead
+   */
+  unRegServiceBySymbolStr(symbol: string) {
+    this.perMap.delete(Symbol(symbol))
+  }
+
   useService(service: IService, data: object): boolean | Promise<boolean> {
     const handler = this.perMap.get(service.id)
 
@@ -58,6 +67,10 @@ class ServiceCenter implements IServiceCenter {
 
   hasService(service: IService): boolean {
     return this.perMap.has(service.id)
+  }
+
+  hasServiceBySymbolStr(symbol: string): boolean {
+    return this.perMap.has(Symbol(symbol))
   }
 
   getPerPath(serviceID: Symbol) {
@@ -143,7 +156,7 @@ export default {
       this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:reg', ({ data, reply, plugin }) => {
         const { service } = data
 
-        if (serviceCenter.hasService(service)) return reply(false)
+        if (serviceCenter.hasServiceBySymbolStr(service)) return reply(false)
 
         serviceCenter.regServiceBySymbolStr(service, {
           pluginScope: plugin,
@@ -160,7 +173,7 @@ export default {
       this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:unreg', ({ data, reply }) => {
         const { service } = data
 
-        if (!serviceCenter.hasService(service)) return reply(false)
+        if (!serviceCenter.hasServiceBySymbolStr(service)) return reply(false)
 
         serviceCenter.unRegService(service)
       })
