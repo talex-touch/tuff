@@ -12,7 +12,7 @@ export abstract class ProtocolService<T extends string> implements IService {
   constructor(id: symbol, protocol: string[]) {
     this.id = id;
     this.name = id.description!;
-    this.description = `${name} Protocol Service`;
+    this.description = `${this.name} Protocol Service`;
     this.protocol = protocol
   }
 }

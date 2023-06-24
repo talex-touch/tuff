@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-const options = ref()
+import { ref } from "vue";
+import { regService } from "@talex-touch/utils/plugin/sdk/service"
+import { ImageProtocolService } from "@talex-touch/utils/service/protocol"
+
+const options = ref();
 
 setTimeout(() => {
-  window.$regChannel('drop', ({ data }) => {
-  console.log('drop', data)
-  options.value = data
-})
-}, 3000)
+  window.$regChannel("drop", ({ data }) => {
+    console.log("drop", data);
+    options.value = data;
+  });
+
+  regService(new ImageProtocolService(), e => {
+    console.log( e )
+  })
+}, 3000);
 </script>
 
 <template>
