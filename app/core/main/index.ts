@@ -5,6 +5,7 @@ import StorageModule from './core/storage'
 import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
 import PermissionCenter from './modules/permission-center'
+import ServiceCenter from './modules/service-center'
 
 import addonOpener from './modules/addon-opener'
 import extensionLoader from './modules/extension-loader'
@@ -18,6 +19,7 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(CommonChannel)
   app.moduleManager.loadModule(PluginModule)
   app.moduleManager.loadModule(PermissionCenter)
+  app.moduleManager.loadModule(ServiceCenter)
 
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)

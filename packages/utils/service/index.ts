@@ -26,6 +26,15 @@ export interface IServiceEvent {
 
 export interface IServiceHandler {
   /**
+   * The plugin scope of the service handler
+   * @description
+   * When service registered, the service center will use the plugin scope to find the service handler.
+   * If plugin is disabled, the app will automatically enable plugin and hand on the service to the plugin.
+   * When plugin enabled, you must immediately register service handler to the service center, app will waiting for the service handler, until the service handler handled.
+   */
+  pluginScope: string
+
+  /**
    * Handle the service data
    * @param data service data
    */
