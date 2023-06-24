@@ -123,12 +123,14 @@ watch(status, (val, oldVal) => {
   &.done {
     .PluginView-Loader {
       opacity: 0;
+      pointer-events: none;
       transform: translate(-50%, -50%) scale(1.2);
     }
   }
 
   &.active {
     opacity: 1;
+    pointer-events: all;
   }
 
   webview {
@@ -144,5 +146,6 @@ watch(status, (val, oldVal) => {
   height: 100%;
 
   opacity: 0;
+  pointer-events: none;
 }
 </style>
