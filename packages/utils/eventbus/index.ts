@@ -40,7 +40,7 @@ export interface ITouchEventBus<E> {
    * @param handler Event handler (extends from EventHandler)
    * @returns true if the event was added, otherwise false
    */
-  on(event: E, handler: EventHandler): boolean;
+  on(event: E, handler: EventHandler): boolean | void;
 
   /**
    * Subscribe touch-app events (any kind of events extends from TouchEvent)
@@ -48,7 +48,7 @@ export interface ITouchEventBus<E> {
    * @param handler Event handler (extends from EventHandler)
    * @returns true if the event was added, otherwise false
    */
-  once(event: E, handler: EventHandler): boolean;
+  once(event: E, handler: EventHandler): boolean | void;
 
   /**
    * UnSubscribe touch-app events (any kind of events extends from TouchEvent)

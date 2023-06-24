@@ -35,23 +35,25 @@ export class TouchEventBus implements ITouchEventBus<TalexEvents> {
   emit<T extends ITouchEvent<TalexEvents>>(event: TalexEvents, data: T): void {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>();
 
-    [...handlers].forEach((h) => h.handler(data));
+    ;[...handlers].forEach((h) => h.handler(data));
   }
 
-  on(event: TalexEvents, handler: EventHandler): boolean {
+  on(event: TalexEvents, handler: EventHandler): boolean | void {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>();
 
-    if ([...handlers].filter((h) => h.handler === handler)) return false;
+    if ([...handlers].filter((h) => h.handler === handler).length)
+      throw new Error("EventHandler already exists (Repeat on)");
 
     handlers.add(new TouchEventHandlerWrapper(handler));
 
     this.map.set(event, handlers);
   }
 
-  once(event: TalexEvents, handler: EventHandler): boolean {
+  once(event: TalexEvents, handler: EventHandler): boolean | void {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>();
 
-    if ([...handlers].filter((h) => h.handler === handler)) return false;
+    if ([...handlers].filter((h) => h.handler === handler).length)
+      throw new Error("EventHandler already exists (Repeat once)");
 
     handlers.add(new TouchEventHandlerWrapper(handler, EventType.CONSUME));
 

@@ -1,9 +1,11 @@
-import { touchChannel } from '@modules/channel/channel-core';
 import fse from "fs-extra";
 import path from "path";
 import { TalexTouch } from "../types";
 import type { IService, IServiceCenter, IServiceEvent, IServiceHandler } from "@talex-touch/utils/service";
 import { ChannelType } from '@talex-touch/utils/channel';
+import { TalexEvents, touchEventBus, AppSecondaryLaunch } from "../core/eventbus/touch-event";
+import { suffix2Service } from '@talex-touch/utils/service/protocol'
+import { dialog } from "electron";
 
 class ServiceCenter implements IServiceCenter {
 
@@ -85,6 +87,44 @@ export default {
   filePath: "services",
   listeners: new Array<Function>,
   init() {
+
+    touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event: AppSecondaryLaunch) => {
+      const { argv } = event
+
+      const arr = argv.slice(1)
+      if (arr.length === 0) return;
+
+      // check each arg (if path)
+      arr.forEach(arg => {
+        if (!path.isAbsolute(arg)) return;
+
+        if (!fse.pathExistsSync(arg)) return;
+
+        if (fse.statSync(arg).isFile()) {
+          const extName = path.extname(arg)
+
+          const service = suffix2Service(extName)
+
+          if (!service) {
+            dialog.showErrorBox("Error", "The type " + extName + "has no plugin to handle, please install in plugin market!")
+            return;
+          }
+
+          serviceCenter.useService(service, {
+            path: arg,
+            type: 'file',
+            name: path.basename(arg),
+            extName,
+            service
+          })
+
+        } else {
+          // Folder not support
+          dialog.showErrorBox("Error", "Folder not support yet!")
+        }
+      })
+    })
+
     const perPath = this.modulePath
 
     genServiceCenter(perPath)
@@ -113,7 +153,7 @@ export default {
         if (!serviceCenter.hasService(service)) return reply(false)
 
         serviceCenter.unRegService(service)
-      }
+      })
     )
   },
   destroy() {

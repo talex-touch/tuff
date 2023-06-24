@@ -5,7 +5,7 @@ import StorageModule from './core/storage'
 import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
 import PermissionCenter from './modules/permission-center'
-import ServiceCenter from './modules/service-center'
+import ServiceCenter from './service/service-center'
 
 import addonOpener from './modules/addon-opener'
 import extensionLoader from './modules/extension-loader'
