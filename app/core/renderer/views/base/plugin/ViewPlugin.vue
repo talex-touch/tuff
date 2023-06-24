@@ -29,5 +29,6 @@ const plugins = computed(() => _plugins())
 
   opacity: 0;
   pointer-events: none;
+  -webkit-app-region: no-drag;
 }
 </style>

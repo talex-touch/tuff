@@ -1,58 +1,26 @@
 <template>
   <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
     <FlatLayout>
-      <template #icon>
-        <div class="AppLayout-Icon fake-background">
-          <div class="AppLayout-Icon-Footer">
-            {{ activePlugin }}
-            <span v-if="account.user" class="NavBar-Footer-LoginStatus">
-              {{ account.user.username }} 已登录
-            </span>
-            <el-tooltip :content="$t('nav.footer-tool.open-devtool')">
-              <icon-button @click="openDevTools" small plain icon="code-s-slash"></icon-button>
-            </el-tooltip>
-          </div>
-          <AppLogo />
-        </div>
-      </template>
       <template #view>
         <router-view />
 
         <ViewPlugin />
       </template>
       <template #title>
-        TalexTouch <span class="tag version fake-background">{{ packageJson.version }}</span>
+        <slot name="title" />
       </template>
     </FlatLayout>
   </div>
 </template>
 
 <script name="AppLayout" setup>
-import { inject, provide, ref, watch } from "vue";
-import { $t } from "@modules/lang";
-import IconButton from "@comp/base/button/IconButton.vue";
-import AppLogo from "@comp/icon/AppLogo.vue";
-import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
 import FlatLayout from "./flat/FlatLayout.vue";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
 import { themeStyle, triggerThemeTransition } from "@modules/storage/theme-style";
 
-const packageJson = window.$nodeApi.getPackageJSON()
-
-const plugins = ref()
-const activePlugin = inject('activePlugin')
-const account = window.$storage.account
-provide('plugins', () => plugins.value)
-watch(() => pluginAdopter.plugins.values(), val => plugins.value = [...val], { deep: true, immediate: true })
-watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
-
 const mica = computed(() => themeStyle.value.theme.window === 'Mica')
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
 const contrast = computed(() => themeStyle.value.theme.addon.contrast)
-
-function openDevTools() {
-  window.$nodeApi.openDevTools()
-}
 
 onMounted(() => {
   triggerThemeTransition([innerWidth / 2, innerHeight / 2], themeStyle.value.theme.style.auto ? 'auto' : themeStyle.value.theme.style.dark ? 'dark' : 'light')
@@ -60,96 +28,6 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-@keyframes iconEnter {
-  0% {
-    opacity: 0;
-    filter: blur(10px) hue-rotate(180deg) invert(1) brightness(0.5) contrast(0.5) saturate(0.5) sepia(0.5);
-  }
-
-  100% {
-    opacity: 1;
-    filter: blur(0) hue-rotate(0deg) invert(0) brightness(1) contrast(1) saturate(1) sepia(0);
-  }
-}
-
-.AppLayout-Icon {
-  .AppLayout-Icon-Footer {
-    .NavBar-Footer-LoginStatus {
-      position: absolute;
-
-      left: 48px;
-
-      opacity: .8;
-      font-size: 12px;
-    }
-
-    position: absolute;
-    padding: 0 2%;
-
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 45px;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-
-    background-color: var(--el-fill-color-dark);
-    border-radius: 0 0 8px 8px;
-    opacity: 0;
-    transform: translateY(100%);
-    box-sizing: border-box;
-    transition: all .25s ease-in-out;
-  }
-
-  &:hover {
-    clip-path: circle(200% at 0% 0%);
-    box-shadow: var(--el-box-shadow);
-    --fake-opacity: .9;
-    backdrop-filter: blur(10px) brightness(.5);
-
-    //background-color: var(--el-fill-color);
-    .AppLayout-Icon-Footer {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  img {
-    position: absolute;
-
-    left: 5px;
-    bottom: 5px;
-
-    width: 32px;
-
-  }
-
-  z-index: 100000;
-  position: absolute;
-
-  left: calc(var(--default-icon-addon, 10%) + 5px);
-
-  min-width: 400px;
-  min-height: 400px;
-
-  bottom: 20px;
-
-  border-radius: 8px;
-
-  user-select: none;
-  -webkit-app-region: no-drag;
-  clip-path: circle(50px at 0% 100%);
-  filter: drop-shadow(0 0 5px var(--el-fill-color-darker));
-
-  --fake-radius: 8px;
-  --fake-opacity: 0;
-
-  opacity: 0;
-  animation: iconEnter .5s .35s ease-in-out forwards;
-  transition: all 0.2s ease-in-out;
-}
-
 :deep(.AppLayout-Aside) {
   .NavBar-Home {
     max-height: 300px;

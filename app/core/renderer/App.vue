@@ -1,16 +1,20 @@
 <script name="App" setup>
 import AppLayout from '~/views/layout/AppLayout.vue'
-import { provide, ref, watch } from 'vue'
-import { pluginManager } from '@modules/channel/plugin-core/api'
 import {
-  applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker,
+  applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker, usePlugin, usePlugins
 } from '@modules/hooks/application-hooks'
 import { touchChannel } from '@modules/channel/channel-core'
 
-const activePlugin = ref('')
-watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val), { immediate: true })
+const packageJson = window.$nodeApi.getPackageJSON()
 
-provide('activePlugin', activePlugin)
+const [, pluginsScope] = usePlugins()
+const pluginScope = usePlugin()
+
+onBeforeUnmount(() => {
+  pluginScope()
+
+  pluginsScope.stop()
+})
 
 onMounted(() => {
   applicationUpgrade()
@@ -24,7 +28,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppLayout />
+  <AppLayout>
+    <template #title>
+      TalexTouch <span class="tag version fake-background">{{ packageJson.version }}</span>
+    </template>
+  </AppLayout>
 </template>
 
 <style lang="scss"></style>

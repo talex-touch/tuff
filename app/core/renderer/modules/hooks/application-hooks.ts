@@ -4,11 +4,37 @@ import {
   forTouchTip,
   popperMention,
 } from '@modules/mention/dialog-mention'
-import { h } from 'vue'
+import { h, ref, effectScope } from 'vue'
 import PluginApplyInstall from '@comp/plugin/action/mention/PluginApplyInstall.vue'
 import { AppUpdate } from '@modules/hooks/api/useUpdate'
 import { $t } from '@modules/lang'
 import AppUpdateView from '@comp/base/AppUpgradationView.vue'
+import { pluginManager } from '@modules/channel/plugin-core/api'
+import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
+
+export function usePlugins() {
+  const plugins = ref()
+  provide('plugins', () => plugins.value)
+  
+  const scope = effectScope()
+
+  scope.run(() => {
+    watch(() => pluginAdopter.plugins.values(), val => plugins.value = [...val], { deep: true, immediate: true })
+    watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
+  })
+
+  return [plugins, scope]
+}
+
+export function usePlugin() {
+  const activePlugin = ref('')
+
+  const stop = watch(() => activePlugin.value, val => pluginManager.changeActivePlugin(val), { immediate: true })
+
+  provide('activePlugin', activePlugin)
+
+  return stop
+}
 
 export async function urlHooker() {
   function directListener(event) {
@@ -173,12 +199,12 @@ export function dropperResolver() {
 
 export function clipBoardResolver() {
   // registerTypeProcess('clipboard', ({ data }) => {
-    // if ( data.type === "text" ) {
-    //     blowMention('粘贴板', `你好像复制了 ${data.data}`)
-    // } else if ( data.type === "image" ) {
-    //     blowMention('粘贴板', data.data)
-    // } else if ( data.type === "html" ) {
-    //     blowMention('粘贴板', data.data)
-    // }
+  // if ( data.type === "text" ) {
+  //     blowMention('粘贴板', `你好像复制了 ${data.data}`)
+  // } else if ( data.type === "image" ) {
+  //     blowMention('粘贴板', data.data)
+  // } else if ( data.type === "html" ) {
+  //     blowMention('粘贴板', data.data)
+  // }
   // })
 }
