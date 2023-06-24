@@ -62,7 +62,7 @@ export interface IServiceCenter {
    * @param id service id
    * @returns service
    */
-  getService(id: symbol): IService;
+  // getService(id: symbol): IService;
 
   useService(service: IService, data: object): Promise<boolean> | boolean;
 }

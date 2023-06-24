@@ -11,27 +11,33 @@ class ServiceCenter implements IServiceCenter {
 
   rootPath: string
 
-  perMap: Map<IService, IServiceHandler> = new Map()
+  perMap: Map<Symbol, IServiceHandler> = new Map()
 
   constructor(rootPath: string) {
     this.rootPath = rootPath
   }
 
+  /**
+   * Unsafe method, please use regService instead 
+   */
+  regServiceBySymbolStr(symbol: string, handler: IServiceHandler): void {
+    this.perMap.set(Symbol(symbol), handler)
+  }
+
   regService(service: IService, handler: IServiceHandler): boolean {
     if (this.hasService(service)) return false;
 
-    this.perMap.set(service, handler)
+    this.perMap.set(service.id, handler)
+    return true
   }
   unRegService(service: IService): boolean {
     if (!this.hasService(service)) return false;
 
-    this.perMap.delete(service)
-  }
-  getService(id: symbol): IService {
-    return [...this.perMap.keys()].find(service => service.id === id)
+    this.perMap.delete(service.id)
+    return true
   }
   useService(service: IService, data: object): boolean | Promise<boolean> {
-    const handler = this.perMap.get(service)
+    const handler = this.perMap.get(service.id)
 
     if (!handler) return false;
 
@@ -51,10 +57,10 @@ class ServiceCenter implements IServiceCenter {
   }
 
   hasService(service: IService): boolean {
-    return this.perMap.has(service)
+    return this.perMap.has(service.id)
   }
 
-  getPerPath(serviceID: symbol) {
+  getPerPath(serviceID: Symbol) {
     return path.join(this.rootPath, serviceID.description + ".json")
   }
 
@@ -62,7 +68,7 @@ class ServiceCenter implements IServiceCenter {
     const promises = []
     this.perMap.forEach((handler, service) => promises.push(() => {
 
-      fse.writeJSONSync(this.getPerPath(service.id), JSON.stringify({
+      fse.writeJSONSync(this.getPerPath(service), JSON.stringify({
         pluginScope: handler.pluginScope,
         service: service
       }))
@@ -135,7 +141,7 @@ export default {
 
         if (serviceCenter.hasService(service)) return reply(false)
 
-        serviceCenter.regService(service, {
+        serviceCenter.regServiceBySymbolStr(service, {
           pluginScope: plugin,
           handle(event, data) {
             this.touchChannel.send(ChannelType.PLUGIN, 'service:handle', { event, data })

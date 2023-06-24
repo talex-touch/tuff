@@ -2,7 +2,7 @@ import { genChannel } from './../../channel';
 import { IService } from "../../../service";
 
 export function regService(service: IService, handler: Function): boolean {
-  const res = !!genChannel().sendSync('service:reg', { service })
+  const res = !!genChannel().sendSync('service:reg', { service: service.description })
 
   if (res)
     onHandleService(service, handler)
