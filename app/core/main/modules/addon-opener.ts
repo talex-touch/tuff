@@ -57,10 +57,6 @@ export default {
         callback({ path: path.normalize(url) })
     })
 
-    async function onOpenFile(url: any) {
-      await touchChannel.send(ChannelType.MAIN, "@mock-drop", url);
-    }
-
     app.app.on("open-file", (event, filePath) => {
       event.preventDefault();
 

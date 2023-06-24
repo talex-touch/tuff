@@ -18,7 +18,7 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   applicationUpgrade()
-  // clipBoardResolver()
+  clipBoardResolver()
   dropperResolver()
   urlHooker()
   // screenCapture()

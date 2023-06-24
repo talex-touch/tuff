@@ -160,10 +160,10 @@ export function dropperResolver() {
 
       if (data.status === 'error') {
         if (data.msg === '10091')
-          await blowMention('Install', '该插件已遭受不可逆破坏！')
+          await blowMention('Install', 'The plugin has been irreversible damage!')
 
         else if (data.msg === '10092')
-          await blowMention('Install', '无法识别该文件！')
+          await blowMention('Install', 'Unable to identify the file!')
       }
       else {
         const { manifest } = data
@@ -172,12 +172,11 @@ export function dropperResolver() {
           return h(PluginApplyInstall, { manifest, path })
         })
       }
+      return true
     }
 
-    return true
+    return false
   }
-
-  touchChannel.regChannel('@mock-drop', ({ data }) => dropperFile(data))
 
   document.addEventListener('drop', async (e) => {
     e.preventDefault()
@@ -188,9 +187,39 @@ export function dropperResolver() {
       // 获取文件路径
       const { path } = files[0] as any
 
-      await dropperFile(path)
+      if ( await dropperFile(path) ) return
     }
+
+    const option = {
+      shift: e.shiftKey,
+      ctrl: e.ctrlKey,
+      alt: e.altKey,
+      meta: e.metaKey,
+      pageX: e.pageX,
+      pageY: e.pageY,
+      composed: e.composed,
+      timeStamp: e.timeStamp,
+      type: e.type,
+      x: e.x,
+      y: e.y,
+      data: {
+        files: [...e.dataTransfer.files ].map(parseFile),
+        // items: e.dataTransfer.items,
+        types: e.dataTransfer.types,
+      }
+    }
+    touchChannel.send('drop', option)
   })
+
+  function parseFile(file: File) {
+    return {
+      lastModified: file.lastModified,
+      name: file.name,
+      path: file['path'],
+      size: file.size,
+      type: file.type,
+    }
+  }
 
   document.addEventListener('dragover', (e) => {
     e.preventDefault()
@@ -198,13 +227,13 @@ export function dropperResolver() {
 }
 
 export function clipBoardResolver() {
-  // registerTypeProcess('clipboard', ({ data }) => {
-  // if ( data.type === "text" ) {
-  //     blowMention('粘贴板', `你好像复制了 ${data.data}`)
-  // } else if ( data.type === "image" ) {
-  //     blowMention('粘贴板', data.data)
-  // } else if ( data.type === "html" ) {
-  //     blowMention('粘贴板', data.data)
-  // }
-  // })
+  touchChannel.regChannel('clipboard', ({ data }) => {
+  if ( data.type === "text" ) {
+      blowMention('粘贴板', `你好像复制了 ${data.data}`)
+  } else if ( data.type === "image" ) {
+      blowMention('粘贴板', data.data)
+  } else if ( data.type === "html" ) {
+      blowMention('粘贴板', data.data)
+  }
+  })
 }
