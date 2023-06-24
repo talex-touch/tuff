@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@talex-touch/utils": "workspace:^",
     "vue": "^3.3.4"
   },
   "devDependencies": {

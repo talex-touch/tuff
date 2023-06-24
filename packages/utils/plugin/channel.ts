@@ -179,4 +179,12 @@ class TouchChannel implements ITouchClientChannel {
   }
 }
 
-export const touchChannel: ITouchClientChannel = window['$channel'] = new TouchChannel(window.$plugin.name);
+let touchChannel: ITouchClientChannel
+
+export function genChannel() {
+  if (!touchChannel) {
+    touchChannel = window['$channel'] = new TouchChannel(window.$plugin.name)
+  }
+
+  return touchChannel
+}

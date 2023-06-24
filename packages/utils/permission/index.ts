@@ -15,7 +15,6 @@ export interface Permission {
   description: string;
 }
 
-// generate a permission manager interface
 export interface IPermissionCenter {
   /**
    * add a permission

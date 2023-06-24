@@ -31,7 +31,7 @@ importers:
         version: 5.1.3
       vite:
         specifier: ^4.3.9
-        version: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
+        version: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
       vitest:
         specifier: ^0.31.4
         version: 0.31.4
@@ -612,6 +612,9 @@ importers:
 
   plugins/touch-image:
     dependencies:
+      '@talex-touch/utils':
+        specifier: workspace:^
+        version: link:../../packages/utils
       vue:
         specifier: ^3.3.4
         version: 3.3.4
@@ -624,7 +627,7 @@ importers:
         version: 5.1.3
       vite:
         specifier: ^4.3.9
-        version: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
+        version: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
       vue-tsc:
         specifier: ^1.8.1
         version: 1.8.1(typescript@5.1.3)
@@ -676,7 +679,7 @@ importers:
         version: 4.2.3(vite@4.3.9)(vue@3.3.4)
       vite:
         specifier: ^4.0.5
-        version: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
+        version: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
 
   plugins/touch-tools:
     dependencies:
@@ -692,7 +695,7 @@ importers:
         version: 5.1.3
       vite:
         specifier: ^4.3.9
-        version: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
+        version: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
       vue-tsc:
         specifier: ^1.8.1
         version: 1.8.1(typescript@5.1.3)
@@ -3151,7 +3154,7 @@ packages:
       '@babel/core': 7.22.1
       '@babel/plugin-transform-typescript': 7.22.3(@babel/core@7.22.1)
       '@vue/babel-plugin-jsx': 1.1.1(@babel/core@7.22.1)
-      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
+      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
       vue: 3.3.4
     transitivePeerDependencies:
       - supports-color
@@ -11793,7 +11796,7 @@ packages:
       mlly: 1.3.0
       pathe: 1.1.0
       picocolors: 1.0.0
-      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
+      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -11811,7 +11814,7 @@ packages:
       acorn: 8.8.2
       es-module-lexer: 1.2.1
       magic-string: 0.30.0
-      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
+      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
     dev: false
 
   /vite-plugin-electron@0.11.2:
@@ -11838,7 +11841,7 @@ packages:
     dependencies:
       '@vue/compiler-sfc': 3.3.4
       magic-string: 0.25.9
-      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
+      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
 
   /vite@3.2.7(@types/node@18.16.18)(sass@1.63.5):
     resolution: {integrity: sha512-29pdXjk49xAP0QBr0xXqu2s5jiQIXNvE/xwd0vUizYT2Hzqe4BksNNoWllFVXJf4eLZ+UlVQmXfB4lWrc+t18g==}
@@ -12048,7 +12051,7 @@ packages:
       strip-literal: 1.0.1
       tinybench: 2.5.0
       tinypool: 0.5.0
-      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.6)
+      vite: 4.3.9(@types/node@18.16.18)(sass@1.63.5)
       vite-node: 0.31.4(@types/node@18.16.18)
       why-is-node-running: 2.2.2
     transitivePeerDependencies:

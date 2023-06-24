@@ -9,7 +9,7 @@ export default {
 
     this.listeners.push(
       this.touchChannel.regChannel(ChannelType.MAIN, 'drop', ({ data }) => {
-        this.touchChannel.send(ChannelType.MAIN, 'drop', data)
+        this.touchChannel.send(ChannelType.PLUGIN, 'drop', data)
       })
     )
 

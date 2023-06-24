@@ -1,4 +1,4 @@
-import { touchChannel } from './channel'
+import { genChannel } from './channel'
 import './sdk/index'
 
 // window type
@@ -31,7 +31,9 @@ export function init(window: Window) {
 }
 
 export function initBridge(window: Window) {
-  window.$send = touchChannel.send
-  window.$sendSync = touchChannel.sendSync
-  window.$regChannel = touchChannel.regChannel
+  const touchChannel = genChannel()
+
+  window.$send = touchChannel.send.bind(touchChannel)
+  window.$sendSync = touchChannel.sendSync.bind(touchChannel)
+  window.$regChannel = touchChannel.regChannel.bind(touchChannel)
 }
