@@ -106,7 +106,7 @@ export default {
           const service = suffix2Service(extName)
 
           if (!service) {
-            dialog.showErrorBox("Error", "The type " + extName + "has no plugin to handle, please install in plugin market!")
+            dialog.showErrorBox("Error", "The type " + extName + " has no plugin to handle, please install in plugin market!")
             return;
           }
 
