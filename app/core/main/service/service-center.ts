@@ -107,7 +107,11 @@ export default {
         if (!fse.pathExistsSync(arg)) return;
 
         if (fse.statSync(arg).isFile()) {
-          const extName = path.extname(arg)
+          let extName = path.extname(arg)
+
+          if (extName.startsWith('.')) {
+            extName = extName.slice(1)
+          }
 
           const service = suffix2Service(extName)
 
