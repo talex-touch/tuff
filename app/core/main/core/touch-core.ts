@@ -41,7 +41,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on(
     "second-instance",
     (event, argv, workingDirectory, additionalData) => {
-      dialog.showErrorBox('Welcome Back', `You arrived from: ${argv}`)
+      dialog.showErrorBox('Welcome Back', `You arrived from: ${workingDirectory}`)
       touchEventBus.emit(
         TalexEvents.APP_SECONDARY_LAUNCH,
         new AppSecondaryLaunch(event, argv, workingDirectory, additionalData)
