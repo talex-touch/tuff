@@ -30,7 +30,7 @@ class ServiceCenter implements IServiceCenter {
     this.perMap.set(service.id, handler)
     return true
   }
-  
+
   unRegService(service: IService): boolean {
     if (!this.hasService(service)) return false;
 
@@ -70,7 +70,7 @@ class ServiceCenter implements IServiceCenter {
   }
 
   hasServiceBySymbolStr(symbol: string): boolean {
-    return this.perMap.has(Symbol(symbol))
+    return this.perMap.has(Symbol(symbol)) && !!this.perMap.get(Symbol(symbol))?.pluginScope
   }
 
   getPerPath(serviceID: Symbol) {
