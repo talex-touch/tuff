@@ -24,7 +24,7 @@ class TouchChannel implements ITouchClientChannel {
   __parse_raw_data(e, arg): RawStandardChannelData | null {
     console.log("Raw data: ", arg, e);
     if (arg) {
-      const { name, header, code, plugin, data, sync } = arg;
+      const { name, header, code, data, sync } = arg;
 
       if (header) {
         return {
@@ -36,7 +36,6 @@ class TouchChannel implements ITouchClientChannel {
           sync,
           code,
           data,
-          plugin,
           name: name as string,
         };
       }
@@ -47,7 +46,8 @@ class TouchChannel implements ITouchClientChannel {
     // throw new Error("Invalid message!");
   }
 
-  __handle_main(e: typeof IpcMainEvent, arg: any): any {
+  __handle_main(e: typeof IpcMainEvent, _arg: any): any {
+    const arg = JSON.parse(_arg)
     const rawData = this.__parse_raw_data(e, arg);
     if ( !rawData ) return
 
@@ -57,7 +57,7 @@ class TouchChannel implements ITouchClientChannel {
       return this.pendingMap.get(id)?.(rawData);
     }
 
-    if ( rawData.plugin !== this.plugin ) return
+    // if ( rawData.plugin !== this.plugin ) return
 
     this.channelMap.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
@@ -148,7 +148,7 @@ class TouchChannel implements ITouchClientChannel {
 
     return new Promise((resolve) => {
       
-      ipcRenderer.send("@main-process-message", data);
+      ipcRenderer.send("@plugin-process-message", data);
 
       this.pendingMap.set(uniqueId, (res) => {
         this.pendingMap.delete(uniqueId);
@@ -170,7 +170,7 @@ class TouchChannel implements ITouchClientChannel {
       },
     } as RawStandardChannelData;
 
-    const res = this.__parse_raw_data(null, ipcRenderer.sendSync("@main-process-message", data))!
+    const res = this.__parse_raw_data(null, ipcRenderer.sendSync("@plugin-process-message", data))!
     
     if ( res.header.status === 'reply' ) return res.data;
 

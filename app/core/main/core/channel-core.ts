@@ -155,18 +155,26 @@ class TouchChannel implements ITouchChannel {
         id: uniqueId,
       },
       name: eventName,
-      plugin: arg.plugin || void 0,
       header: {
         status: "request",
         type,
       },
     } as RawStandardChannelData;
 
+    if (type === ChannelType.PLUGIN) {
+      if (arg.plugin === void 0) {
+        throw new Error("Invalid plugin name!");
+      }
+      return this.send(ChannelType.MAIN, 'plugin:message-transport', {
+        data, plugin: arg.plugin
+      })
+    }
+
     return new Promise((resolve) => {
       const win = this.app.window.window;
 
       win.webContents.send(
-        `@${type === ChannelType.MAIN ? "main" : "plugin"}-process-message`,
+        `@main-process-message`,
         data
       );
 
@@ -191,5 +199,3 @@ export function genTouchChannel(app?: TalexTouch.TouchApp): ITouchChannel | null
 
   return touchChannel
 }
-
-// TODO: 把插件的channel改成http的形式，这样就可以不用electron了

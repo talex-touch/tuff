@@ -1,102 +1,138 @@
 <template>
-  <div class="PluginView-Container fake-background" :class="{ active: status === 4, done }">
+  <div
+    class="PluginView-Container fake-background"
+    :class="{ active: status === 4, done }"
+  >
     <div class="PluginView-Loader cubic-transition">
       <Loading />
       <span>插件正在加载中...</span>
     </div>
-    <webview ref="webviewDom" :class="{ exist: status === 3 || status === 4 }" />
+    <webview
+      ref="webviewDom"
+      :class="{ exist: status === 3 || status === 4 }"
+    />
   </div>
 </template>
 
 <script>
-
 export default {
   name: "PluginView",
-}
+};
 </script>
 
 <script setup>
 import { forDialogMention } from "@modules/mention/dialog-mention";
-import { pluginManager  } from '@modules/channel/plugin-core/api'
+import { pluginManager } from "@modules/channel/plugin-core/api";
 import Loading from "@comp/icon/LoadingIcon.vue";
 
 const props = defineProps({
   plugin: {
     type: Object,
-    required: true
-  }
-})
-const loadDone = ref(false)
-const status = computed(() => props.plugin?.status || 0)
-const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value)
+    required: true,
+  },
+  lists: {
+    type: Object,
+    required: true,
+  },
+});
+const loadDone = ref(false);
+const status = computed(() => props.plugin?.status || 0);
+const done = computed(
+  () => (status.value === 3 || status.value === 4) && loadDone.value
+);
 
-const webviewDom = ref(null)
+const webviewDom = ref(null);
+
+function handleListeners(viewData, webview) {
+  const { styles, js } = viewData;
+
+  webview.addEventListener("crashed", () => {
+    console.log("Webview crashed", props.plugin);
+  });
+
+  webview.addEventListener("did-fail-load", async (e) => {
+    console.log("Webview did-fail-load", e, props.plugin);
+
+    await forDialogMention(
+      props.plugin.name,
+      e.errorDescription,
+      props.plugin.icon,
+      [
+        {
+          content: "忽略加载",
+          type: "info",
+          onClick: () => true,
+        },
+        {
+          content: "重启插件",
+          type: "warning",
+          onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true,
+        },
+      ]
+    );
+  });
+
+  webview.addEventListener("did-finish-load", () => {
+    if (status.value === 4) webview.openDevTools();
+
+    webview.insertCSS(`${styles}`);
+    webview.executeJavaScript(`${js}`);
+
+    webview.send("@talex-plugin:preload", "${name}");
+
+    console.log("Webview did-finish-load", props.plugin);
+
+    watchEffect(async () => {
+      while (props.lists.length) {
+        const { data } = props.lists.pop();
+        console.log("--->", props.plugin, data);
+        const res = await webview.send("@plugin-process-message", JSON.stringify(data));
+
+        console.log("<---", props.plugin, res);
+
+        if (data.reply) {
+          data.reply(res);
+        }
+      }
+    });
+
+    console.log("Webview did-finish-load", props.plugin);
+    loadDone.value = true;
+  });
+}
 
 function init() {
   const viewData = props.plugin.webview;
-  if (!viewData) return
-  const { _, attrs, styles, js } = viewData
+  if (!viewData) return;
+  const { _, attrs } = viewData;
 
-  pluginManager.setPluginWebviewInit(props.plugin.name)
-  props.plugin.webViewInit = true
+  pluginManager.setPluginWebviewInit(props.plugin.name);
+  props.plugin.webViewInit = true;
 
-  const webview = webviewDom.value
-  console.log(props.plugin, webview)
+  const webview = webviewDom.value;
+  console.log(props.plugin, webview);
 
-  viewData.el = webview.parentElement
+  viewData.el = webview.parentElement;
 
-  Object.keys(attrs).forEach(key => {
-    webview.setAttribute(key, attrs[key])
-  })
+  Object.keys(attrs).forEach((key) => {
+    webview.setAttribute(key, attrs[key]);
+  });
 
-  _.preload && webview.setAttribute('preload', "file://" + _.preload)
+  _.preload && webview.setAttribute("preload", "file://" + _.preload);
 
-  webview.addEventListener('crashed', () => {
-    console.log("Webview crashed", props.plugin)
-  })
+  handleListeners(viewData, webview);
 
-  webview.addEventListener('did-fail-load', async (e) => {
-    console.log("Webview did-fail-load", e, props.plugin)
-
-    await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
-      {
-        content: "忽略加载",
-        type: 'info',
-        onClick: () => true
-      },
-      {
-        content: "重启插件",
-        type: 'warning',
-        onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true
-      }
-    ])
-
-  })
-
-  webview.addEventListener('did-finish-load', () => {
-    if (status.value === 4)
-      webview.openDevTools()
-
-    webview.insertCSS(`${styles}`)
-    webview.executeJavaScript(`${js}`)
-
-    webview.send('@talex-plugin:preload', "${name}")
-
-    console.log("Webview did-finish-load", props.plugin)
-    loadDone.value = true
-  })
-
-  loadDone.value = false
-  webview.setAttribute('src', _.indexPath)
+  loadDone.value = false;
+  webview.setAttribute("src", _.indexPath);
 }
 
 watch(status, (val, oldVal) => {
-  if (props.plugin?.webViewInit) return
+  if (props.plugin?.webViewInit) return;
 
-  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init()
+  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init();
   // else if ( val === 4 ) webviewDom.value.openDevTools()
   // else webviewDom.value.closeDevTools()
-})
+});
 </script>
 
 <style lang="scss" scoped>

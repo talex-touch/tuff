@@ -18,9 +18,9 @@ export function onHandleService(service: IService, handler: Function) {
   genChannel().regChannel('service:handle', ({ data: _data }) => {
     const { data } = _data
 
-    console.log('service:handle', data)
+    // console.log('service:handle', data, service)
 
-    if (data.service === service.description) {
+    if (data.service === service.name) {
       return handler(data)
     }
 

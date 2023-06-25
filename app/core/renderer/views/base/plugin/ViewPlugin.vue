@@ -1,23 +1,44 @@
 <template>
-  <div class="Blur-Container" :class="{ 'touch-blur': options?.blur || true, active: activePlugin }">
-    <PluginView v-for="plugin in plugins" :id="`${plugin.name}-plugin-view`" :key="plugin.name" :plugin="plugin" />
+  <div
+    class="Blur-Container"
+    :class="{ 'touch-blur': options?.blur || true, active: activePlugin }"
+  >
+    <PluginView
+      v-for="plugin in plugins"
+      :id="`${plugin.name}-plugin-view`"
+      :key="plugin.name"
+      :plugin="plugin"
+      :lists="pendingLists[plugin.name] || []"
+    />
   </div>
 </template>
 
-<script>
-export default {
-  name: "ViewPlugin"
-}
-</script>
-
-<script setup>
+<script name="ViewPlugin" setup>
 import PluginView from "@comp/plugin/PluginView.vue";
+import { touchChannel } from "@modules/channel/channel-core";
 
-const options = window.$storage.themeStyle
-const activePlugin = inject('activePlugin')
-const _plugins = inject('plugins')
-const plugins = computed(() => _plugins())
+const options = window.$storage.themeStyle;
+const activePlugin = inject("activePlugin");
+const _plugins = inject("plugins");
+const plugins = computed(() => _plugins());
 
+const pendingLists = reactive({})
+
+onMounted(() => {
+  touchChannel.regChannel(
+    "plugin:message-transport",
+    async ({ data: _data, reply }) => {
+      console.log("[Plugin] Receive message from plugin", _data)
+      const { data, plugin } = _data
+
+      const pendingList = pendingLists[plugin] || (pendingLists[plugin] = [])
+      pendingList.push({
+        data,
+        reply,
+      });
+    }
+  );
+});
 </script>
 
 <style lang="scss" scoped>

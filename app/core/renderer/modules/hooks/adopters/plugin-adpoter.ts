@@ -48,7 +48,6 @@ class PluginAdpoter {
     );
     this._logouts.push(
       touchChannel.regChannel("plugin-webview", ({ data }) => {
-        console.log( data )
         const p = this.plugins.get(data.plugin);
         if (!p) return;
 

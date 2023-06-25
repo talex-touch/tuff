@@ -73,8 +73,8 @@ class ServiceCenter implements IServiceCenter {
     return /* this.serviceMap.has(symbol) &&  */!!this.serviceMap.get(symbol)?.pluginScope
   }
 
-  getPerPath(serviceID: Symbol) {
-    return path.join(this.rootPath, serviceID.description + ".json")
+  getPerPath(serviceID: string) {
+    return path.join(this.rootPath, serviceID + ".json")
   }
 
   async save() {
@@ -169,7 +169,7 @@ export default {
             console.log('[Service] Plugin ' + plugin + ' handle service: ' + service, event, _data)
             const data = { 
               ..._data,
-              service: service.name
+              service: event.service.name
             }
 
             const res = touchChannel.sendSync(ChannelType.PLUGIN, 'service:handle', { plugin, data })
