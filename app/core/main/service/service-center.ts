@@ -11,7 +11,7 @@ class ServiceCenter implements IServiceCenter {
 
   rootPath: string
 
-  perMap: Map<Symbol, IServiceHandler> = new Map()
+  serviceMap: Map<string, IServiceHandler> = new Map()
 
   constructor(rootPath: string) {
     this.rootPath = rootPath
@@ -21,20 +21,20 @@ class ServiceCenter implements IServiceCenter {
    * Unsafe method, please use regService instead 
    */
   regServiceBySymbolStr(symbol: string, handler: IServiceHandler): void {
-    this.perMap.set(Symbol(symbol), handler)
+    this.serviceMap.set(symbol, handler)
   }
 
   regService(service: IService, handler: IServiceHandler): boolean {
     if (this.hasService(service)) return false;
 
-    this.perMap.set(service.id, handler)
+    this.serviceMap.set(service.id.description, handler)
     return true
   }
 
   unRegService(service: IService): boolean {
     if (!this.hasService(service)) return false;
 
-    this.perMap.delete(service.id)
+    this.serviceMap.delete(service.id.description)
     return true
   }
 
@@ -42,11 +42,11 @@ class ServiceCenter implements IServiceCenter {
    * Unsafe method, please use unRegService instead
    */
   unRegServiceBySymbolStr(symbol: string) {
-    this.perMap.delete(Symbol(symbol))
+    this.serviceMap.delete(symbol)
   }
 
   useService(service: IService, data: object): boolean | Promise<boolean> {
-    const handler = this.perMap.get(service.id)
+    const handler = this.serviceMap.get(service.name)
 
     if (!handler) return false;
 
@@ -66,11 +66,11 @@ class ServiceCenter implements IServiceCenter {
   }
 
   hasService(service: IService): boolean {
-    return this.perMap.has(service.id)
+    return this.serviceMap.has(service.id.description)
   }
 
   hasServiceBySymbolStr(symbol: string): boolean {
-    return this.perMap.has(Symbol(symbol)) && !!this.perMap.get(Symbol(symbol))?.pluginScope
+    return /* this.serviceMap.has(symbol) &&  */!!this.serviceMap.get(symbol)?.pluginScope
   }
 
   getPerPath(serviceID: Symbol) {
@@ -79,7 +79,7 @@ class ServiceCenter implements IServiceCenter {
 
   async save() {
     const promises = []
-    this.perMap.forEach((handler, service) => promises.push(() => {
+    this.serviceMap.forEach((handler, service) => promises.push(() => {
 
       fse.writeJSONSync(this.getPerPath(service), JSON.stringify({
         pluginScope: handler.pluginScope,
@@ -106,6 +106,7 @@ export default {
   filePath: "services",
   listeners: new Array<Function>,
   init() {
+    const touchChannel = this.touchChannel
 
     touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event: AppSecondaryLaunch) => {
       const { argv } = event
@@ -133,6 +134,8 @@ export default {
             return;
           }
 
+          console.log('[service] File ext protocol', service)
+
           serviceCenter.useService(service, {
             path: arg,
             type: 'file',
@@ -153,19 +156,30 @@ export default {
     genServiceCenter(perPath)
 
     this.listeners.push(
-      this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:reg', ({ data, reply, plugin }) => {
+      this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:reg', ({ data, plugin }) => {
         const { service } = data
 
-        if (serviceCenter.hasServiceBySymbolStr(service)) return reply(false)
+        if (serviceCenter.hasServiceBySymbolStr(service)) return false
+
+        console.log('[Service] Plugin register service as ' + service)
 
         serviceCenter.regServiceBySymbolStr(service, {
           pluginScope: plugin,
-          handle(event, data) {
-            this.touchChannel.send(ChannelType.PLUGIN, 'service:handle', { event, data })
+          handle(event, _data) {
+            console.log('[Service] Plugin ' + plugin + ' handle service: ' + service, event, _data)
+            const data = { 
+              ..._data,
+              service: service.name
+            }
+
+            const res = touchChannel.sendSync(ChannelType.PLUGIN, 'service:handle', { plugin, data })
+
+            event.setCancelled(res === true)
+
           }
         })
 
-        reply(true)
+        return true
       })
     )
 
@@ -173,9 +187,10 @@ export default {
       this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:unreg', ({ data, reply }) => {
         const { service } = data
 
-        if (!serviceCenter.hasServiceBySymbolStr(service)) return reply(false)
+        if (!serviceCenter.hasServiceBySymbolStr(service)) return false
 
         serviceCenter.unRegService(service)
+        return true
       })
     )
   },

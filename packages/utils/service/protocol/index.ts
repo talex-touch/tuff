@@ -23,7 +23,7 @@ export const IMAGE_SUFFIX = [
 
 export class ImageProtocolService extends ProtocolService<'image'> {
   constructor() {
-    super(Symbol('ImageProtocol'), IMAGE_SUFFIX)
+    super(Symbol('Image'), IMAGE_SUFFIX)
   }
 }
 
@@ -33,7 +33,7 @@ export const AUDIO_SUFFIX = [
 
 export class AudioProtocolService extends ProtocolService<'audio'> {
   constructor() {
-    super(Symbol('AudioProtocol'), AUDIO_SUFFIX)
+    super(Symbol('Audio'), AUDIO_SUFFIX)
   }
 }
 
@@ -43,7 +43,7 @@ export const VIDEO_SUFFIX = [
 
 export class VideoProtocolService extends ProtocolService<'video'> {
   constructor() {
-    super(Symbol('VideoProtocol'), VIDEO_SUFFIX)
+    super(Symbol('Video'), VIDEO_SUFFIX)
   }
 }
 
@@ -53,7 +53,7 @@ export const TEXT_SUFFIX = [
 
 export class TextProtocolService extends ProtocolService<'text'> {
   constructor() {
-    super(Symbol('TextProtocol'), TEXT_SUFFIX)
+    super(Symbol('Text'), TEXT_SUFFIX)
   }
 }
 

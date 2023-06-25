@@ -26,12 +26,12 @@ class TouchChannel implements ITouchChannel {
   }
 
   __parse_raw_data(e, arg): RawStandardChannelData {
-    if ( this.app.version === TalexTouch.AppVersion.DEV )
+    if (this.app.version === TalexTouch.AppVersion.DEV)
       console.log("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, plugin, data, sync } = arg;
 
-      if ( header ) {
+      if (header) {
         return {
           header: {
             status: header.status || "request",
@@ -54,7 +54,7 @@ class TouchChannel implements ITouchChannel {
   __handle_main(e: Electron.IpcMainEvent, arg: any) {
     const rawData = this.__parse_raw_data(e, arg);
 
-    if ( rawData.header.status === 'reply' && rawData.sync ) {
+    if (rawData.header.status === 'reply' && rawData.sync) {
       const { id } = rawData.sync;
 
       return this.pendingMap.get(id)?.(rawData);
@@ -69,10 +69,9 @@ class TouchChannel implements ITouchChannel {
 
           console.log("Reply data: ", rData)
 
-          if ( rawData.sync ) {
+          if (rawData.sync) {
             e.sender.send(
-              `@${
-                rawData.header.type === ChannelType.MAIN ? "main" : "plugin"
+              `@${rawData.header.type === ChannelType.MAIN ? "main" : "plugin"
               }-process-message`,
               rData
             )
@@ -95,7 +94,7 @@ class TouchChannel implements ITouchChannel {
     data: any,
     sync?: RawChannelSyncData
   ): RawStandardChannelData {
-    if ( !rawData || !rawData.header )
+    if (!rawData || !rawData.header)
       throw new Error("Invalid data!" + JSON.stringify(rawData));
     return {
       code,
@@ -103,12 +102,13 @@ class TouchChannel implements ITouchChannel {
       sync: !sync
         ? undefined
         : {
-            timeStamp: new Date().getTime(),
-            // reply sync timeout should follow the request timeout, unless user set it.
-            timeout: sync.timeout,
-            id: sync.id,
-          },
+          timeStamp: new Date().getTime(),
+          // reply sync timeout should follow the request timeout, unless user set it.
+          timeout: sync.timeout,
+          id: sync.id,
+        },
       name: rawData.name,
+      plugin: rawData.header['plugin'] || void 0,
       header: {
         status: "reply",
         type: rawData.header.type,
@@ -155,6 +155,7 @@ class TouchChannel implements ITouchChannel {
         id: uniqueId,
       },
       name: eventName,
+      plugin: arg.plugin || void 0,
       header: {
         status: "request",
         type,
@@ -177,7 +178,7 @@ class TouchChannel implements ITouchChannel {
     });
   }
 
-  sendSync(type: ChannelType, eventName: string, arg: any): Promise<void> {
+  sendSync(type: ChannelType, eventName: string, arg: any): Promise<any> {
     return this.send(type, eventName, arg);
   }
 }
@@ -185,8 +186,10 @@ class TouchChannel implements ITouchChannel {
 let touchChannel: ITouchChannel | null = null
 
 export function genTouchChannel(app?: TalexTouch.TouchApp): ITouchChannel | null {
-  if ( app && !touchChannel )
+  if (app && !touchChannel)
     touchChannel = new TouchChannel(app)
 
   return touchChannel
 }
+
+// TODO: 把插件的channel改成http的形式，这样就可以不用electron了

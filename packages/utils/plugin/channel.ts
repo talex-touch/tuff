@@ -18,11 +18,11 @@ class TouchChannel implements ITouchClientChannel {
   constructor(pluginName: string) {
     this.plugin = pluginName;
 
-    ipcRenderer.on("@main-process-message", this.__handle_main.bind(this));
+    ipcRenderer.on("@plugin-process-message", this.__handle_main.bind(this));
   }
 
   __parse_raw_data(e, arg): RawStandardChannelData | null {
-    // console.log("Raw data: ", arg, e);
+    console.log("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, plugin, data, sync } = arg;
 
@@ -63,7 +63,7 @@ class TouchChannel implements ITouchClientChannel {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any, options: any) => {
           e.sender.send(
-            "@main-process-message",
+            "@plugin-process-message",
             this.__parse_sender(code, rawData, data, rawData.sync)
           );
         },

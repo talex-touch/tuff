@@ -2,7 +2,7 @@ export interface IService {
   /**
    * service id
    */
-  id: symbol;
+  id: Symbol;
 
   /**
    * service name
