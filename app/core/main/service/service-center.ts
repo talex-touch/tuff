@@ -6,6 +6,7 @@ import { ChannelType } from '@talex-touch/utils/channel';
 import { TalexEvents, touchEventBus, AppSecondaryLaunch } from "../core/eventbus/touch-event";
 import { suffix2Service } from '@talex-touch/utils/service/protocol'
 import { dialog } from "electron";
+import './protocol-handler'
 
 class ServiceCenter implements IServiceCenter {
 
@@ -25,7 +26,7 @@ class ServiceCenter implements IServiceCenter {
   }
 
   regService(service: IService, handler: IServiceHandler): boolean {
-    if (this.hasService(service)) return false;
+    // if (this.hasService(service)) return false;
 
     this.serviceMap.set(service.id.description, handler)
     return true

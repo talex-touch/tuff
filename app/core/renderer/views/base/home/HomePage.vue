@@ -1,7 +1,6 @@
 <template>
   <div class="Home-Container">
     <div absolute left-0 top-0 w-full h-full ref="vantaRef" class="Home-Background">
-
     </div>
     <div class="Home-Logo">
       <div class="Home-Logo-Bg">

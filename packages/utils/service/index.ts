@@ -38,7 +38,7 @@ export interface IServiceHandler {
    * Handle the service data
    * @param data service data
    */
-  handle(event: IServiceEvent, data: object);
+  handle(event: IServiceEvent, data: object): any;
 }
 
 export interface IServiceCenter {

@@ -5,7 +5,7 @@ import {
   ITouchEvent,
   ITouchEventBus,
 } from "@talex-touch/utils/eventbus";
-import { Event, HandlerDetails, NotificationResponse } from "electron";
+import { Event, NotificationResponse } from "electron";
 
 export enum TalexEvents {
   BEFORE_APP_START = "before-app-start",

@@ -53,7 +53,7 @@ Other fields are all moved to the `touch` filed in **package.json** (As usual)
 package.json
 {
   ...,
-  "touch": {
+  "talex-touch": {
     "icon": {
     "type": "remix",
     "value": "github"

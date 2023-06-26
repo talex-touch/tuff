@@ -21,7 +21,7 @@ class TouchChannel implements ITouchClientChannel {
     ipcRenderer.on("@plugin-process-message", this.__handle_main.bind(this));
   }
 
-  __parse_raw_data(e, arg): RawStandardChannelData | null {
+  __parse_raw_data(e: typeof IpcMainEvent, arg: any): RawStandardChannelData | null {
     console.log("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, data, sync } = arg;
@@ -61,7 +61,7 @@ class TouchChannel implements ITouchClientChannel {
 
     this.channelMap.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
-        reply: (code: DataCode, data: any, options: any) => {
+        reply: (code: DataCode, data: any) => {
           e.sender.send(
             "@plugin-process-message",
             this.__parse_sender(code, rawData, data, rawData.sync)
@@ -150,7 +150,7 @@ class TouchChannel implements ITouchClientChannel {
       
       ipcRenderer.send("@plugin-process-message", data);
 
-      this.pendingMap.set(uniqueId, (res) => {
+      this.pendingMap.set(uniqueId, (res: any) => {
         this.pendingMap.delete(uniqueId);
 
         resolve(res.data);
@@ -183,7 +183,8 @@ let touchChannel: ITouchClientChannel
 
 export function genChannel() {
   if (!touchChannel) {
-    touchChannel = window['$channel'] = new TouchChannel(window.$plugin.name)
+    // @ts-ignore
+    touchChannel = window.$channel = new TouchChannel(window.$plugin.name)
   }
 
   return touchChannel

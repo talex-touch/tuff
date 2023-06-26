@@ -1,6 +1,6 @@
 <template>
   <div
-    class="PluginView-Container fake-background"
+    class="PluginView-Container"
     :class="{ active: status === 4, done }"
   >
     <div class="PluginView-Loader cubic-transition">
@@ -78,9 +78,9 @@ function handleListeners(viewData, webview) {
     webview.insertCSS(`${styles}`);
     webview.executeJavaScript(`${js}`);
 
-    webview.send("@talex-plugin:preload", "${name}");
-
     console.log("Webview did-finish-load", props.plugin);
+
+    setTimeout(() => webview.send("@loaded", props.plugin.name), 1000)
 
     watchEffect(async () => {
       while (props.lists.length) {

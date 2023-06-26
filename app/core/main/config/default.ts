@@ -16,6 +16,7 @@ export const MainWindowOption = {
     show: false,
     webPreferences: {
       // preload: path.join(__dirname, '../addon/home-gear/preload.js'),
+      webSecurity: false,
       nodeIntegration: true,
       nodeIntegrationInSubFrames: true,
       contextIsolation: false,

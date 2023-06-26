@@ -15,6 +15,7 @@ export function unRegService(service: IService): boolean {
 }
 
 export function onHandleService(service: IService, handler: Function) {
+  // @ts-ignore
   genChannel().regChannel('service:handle', ({ data: _data }) => {
     const { data } = _data
 

@@ -1,41 +1,118 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { regService } from "@talex-touch/utils/plugin/sdk/service"
-import { ImageProtocolService } from "@talex-touch/utils/service/protocol"
+import { onMounted, ref } from "vue";
+import { regService } from "@talex-touch/utils/plugin/sdk/service";
+import { ImageProtocolService } from "@talex-touch/utils/service/protocol";
+import ImageView from "./components/ImageView.vue";
 
-const options = ref();
+const historyImgs = ref<string[]>(
+  JSON.parse(localStorage.getItem("historyImgs") || "[]")
+);
+const index = ref(historyImgs.value.length ? historyImgs.value.length : -1);
 
-setTimeout(() => {
-  window.$regChannel("drop", ({ data }) => {
-    console.log("drop", data);
-    options.value = data;
+function addImage(path: string) {
+  if (historyImgs.value.includes(path)) {
+    const i = historyImgs.value.indexOf(path);
+
+    return (index.value = i);
+  }
+
+  historyImgs.value.push(path);
+
+  index.value = historyImgs.value.length - 1;
+  localStorage.setItem("historyImgs", JSON.stringify(historyImgs.value));
+}
+
+onMounted(() => {
+  document.addEventListener("drop", (e) => {
+    e.preventDefault();
+
+    const files = e.dataTransfer!.files;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (file.type.startsWith("image")) {
+        // @ts-ignore
+        addImage(file.path);
+      }
+    }
   });
 
-  const res = regService(new ImageProtocolService(), e => {
-    console.log( e )
-  })
+  document.addEventListener("dragover", (e: Event) => {
+    e.preventDefault();
+  });
 
-  console.log( res )
-}, 3000);
+  regService(new ImageProtocolService(), (e: any) => {
+    addImage(e.path);
+  });
+});
 </script>
 
 <template>
-  {{ options }}
+  <div class="App-Container">
+    <div class="App-Content">
+      <ImageView v-if="index >= 0" :src="`atom:///${historyImgs[index]}`" />
+    </div>
+    <div class="App-Footer" :class="{ active: historyImgs.length }">
+      <div class="App-Footer-Content">
+        <div
+          class="App-Footer-Content-Item"
+          @mouseenter="index = i"
+          v-for="(img, i) in historyImgs"
+          :key="img"
+        >
+          <img :src="`atom:///${img}`" />
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+<style lang="scss" scoped>
+.App-Footer-Content {
+  &-Item {
+    img {
+      position: relative;
+
+      width: 100%;
+      height: 100%;
+
+      object-fit: cover;
+    }
+    &:active {
+      filter: brightness(0.8)
+    }
+    width: 48px;
+    height: 48px;
+
+    cursor: pointer;
+  }
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem;
+
+  gap: 0.5rem;
 }
 
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
+.App-Footer {
+  &.active {
+    opacity: 1;
+    transform: translateY(0);
+    background-color: #ffffff50;
+    backdrop-filter: blur(16px) saturate(180%) contrast(80%) brightness(130%);
+  }
+  position: absolute;
 
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+  width: 100%;
+  height: 4rem;
+
+  bottom: 0;
+
+  opacity: 0;
+  box-sizing: border-box;
+  transform: translateY(10%);
+  transition: cubic-bezier(0.215, 0.61, 0.355, 1) 0.25s;
 }
 </style>

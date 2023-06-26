@@ -26,7 +26,7 @@ export function getJs(options) {
             window.clsL = document.body.parentNode['classList']
         
             window.$config.themeStyle['dark'] ? clsL.add('dark') : clsL.remove('dark')
-            window.$config.themeStyle['blur'] ? clsL.add('blur') : clsL.remove('blur')
+            window.$config.themeStyle['blur'] ? clsL.add('touch-blur') : clsL.remove('touch-blur')
             window.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
                      
         })()

@@ -1,4 +1,4 @@
-import { touchChannel } from './../../channel';
+import { genChannel } from './../../channel';
 
 export enum LifecycleHooks {
   ENABLE = 'en',
@@ -9,22 +9,27 @@ export enum LifecycleHooks {
   CRASH = 'cr'
 }
 
+// @ts-ignore
 export function injectHook(type: LifecycleHooks, hook: Function, processFunc = ({ data, reply }) => {
+  // @ts-ignore
   const hooks: Array<Function> = window.$touchSDK.__hooks[type]
   if (hooks) {
     hooks.forEach(hook => hook(data))
   }
   reply(true)
 }) {
+  // @ts-ignore
   const __hooks = window.$touchSDK.__hooks
+  // @ts-ignore
   const hooks: Array<Function> = __hooks[type] || (__hooks[type] = [])
 
   if (hooks.length === 0) {
 
-    touchChannel.regChannel("@lifecycle:" + type, obj => {
+    genChannel().regChannel("@lifecycle:" + type, (obj: any) => {
 
       processFunc(obj)
 
+      // @ts-ignore
       delete window.$touchSDK.__hooks[type]
     })
 

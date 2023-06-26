@@ -115,13 +115,13 @@ span.tag {
   border-radius: 4px 0 0 0;
   --fake-radius: 4px 0 0 0;
 
-  --fake-opacity: 0.75;
+  // --fake-opacity: 0.75;
   //backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
 }
 
-html.touch-blur .Blur-Container {
-  backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
-}
+// html.touch-blur .Blur-Container {
+//   backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
+// }
 
 html.coloring .Blur-Container {
   top: 2px;

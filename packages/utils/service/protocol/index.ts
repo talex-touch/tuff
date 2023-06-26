@@ -14,6 +14,8 @@ export abstract class ProtocolService<T extends string> implements IService {
     this.name = id.description!;
     this.description = `${this.name} Protocol Service`;
     this.protocol = protocol
+
+    this.type = id.description as T
   }
 }
 

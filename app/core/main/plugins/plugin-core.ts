@@ -137,11 +137,11 @@ class TouchPlugin implements ITouchPlugin {
         enableRemoteModule: "false",
         nodeintegration: "true",
         webpreferences: "contextIsolation=false",
-        httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
+        // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: "false",
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version
-          } (Plugins,like ${this.name})`,
-        partition: `persist:touch/${this.name}`,
+        // useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version
+          // } (Plugins,like ${this.name})`,
+        // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
       js: `${getJs([this.name, JSON.stringify(_path)])}`,
