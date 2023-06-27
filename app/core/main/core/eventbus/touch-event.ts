@@ -14,6 +14,8 @@ export enum TalexEvents {
   APP_READY = "app-ready",
 
   BEFORE_APP_QUIT = "app-before-quit",
+  WILL_QUIT = "will-quit",
+  WINDOW_ALL_CLOSED = "window-all-closed",
 
   APP_SECONDARY_LAUNCH = "app-secondary-launch",
   OPEN_EXTERNAL_URL = "open-external-url",
@@ -173,6 +175,47 @@ export class BeforeAppQuitEvent implements ITouchEvent<TalexEvents> {
 
   constructor(event: Event) {
     this.event = event;
+  }
+}
+
+export class AppQuitEvent implements ITouchEvent<TalexEvents> {
+  /**
+     * Emitted when all windows have been closed and the application will quit. Calling
+     * `event.preventDefault()` will prevent the default behavior, which is terminating
+     * the application.
+     *
+     * See the description of the `window-all-closed` event for the differences between
+     * the `will-quit` and `window-all-closed` events.
+     *
+     * **Note:** On Windows, this event will not be emitted if the app is closed due to
+     * a shutdown/restart of the system or a user logout.
+     */
+  name: TalexEvents = TalexEvents.WILL_QUIT;
+
+  /**
+   * Electron's `Event` object
+   */
+  event: Event;
+
+  constructor(event: Event) {
+    this.event = event;
+  }
+}
+
+export class WindowAllClosedEvent implements ITouchEvent<TalexEvents> {
+  /**
+     * Emitted when all windows have been closed.
+     *
+     * If you do not subscribe to this event and all windows are closed, the default
+     * behavior is to quit the app; however, if you subscribe, you control whether the
+     * app quits or not. If the user pressed `Cmd + Q`, or the developer called
+     * `app.quit()`, Electron will first try to close all the windows and then emit the
+     * `will-quit` event, and in this case the `window-all-closed` event would not be
+     * emitted.
+     */
+  name: TalexEvents = TalexEvents.WILL_QUIT;
+
+  constructor() {
   }
 }
 

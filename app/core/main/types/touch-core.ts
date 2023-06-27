@@ -68,7 +68,7 @@ export namespace TalexTouch {
      * @description This function will load the module with the given name.
      * @returns {boolean} Returns true if the module is loaded successfully, otherwise returns false.
      */
-    loadModule(module: IModule): boolean;
+    loadModule(module: IModule): boolean | Promise<boolean>;
 
     /**
      * Module Unloader
@@ -77,7 +77,7 @@ export namespace TalexTouch {
      * @description This function will also call the module's destroy function.
      * @returns {boolean} Returns true if the module is unloaded successfully, otherwise returns false.
      */
-    unloadModule(moduleName: Symbol): boolean;
+    unloadModule(moduleName: Symbol): boolean | Promise<boolean>;
 
     /**
      * Module Getter

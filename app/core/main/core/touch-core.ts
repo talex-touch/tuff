@@ -10,6 +10,7 @@ import {
   BeforeAppStartEvent,
   OpenExternalUrlEvent,
   TalexEvents,
+  WindowAllClosedEvent,
   touchEventBus,
 } from "./eventbus/touch-event";
 import {
@@ -51,12 +52,14 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on("window-all-closed", () => {
   console.log("[TouchApp] All windows closed! App starts to exit ...")
+  touchEventBus.emit(TalexEvents.WINDOW_ALL_CLOSED, new WindowAllClosedEvent())
   if (process.platform !== "darwin") app.quit();
   process.exit(0)
 });
 
-app.on('will-quit', () => {
+app.on('will-quit', (event: Event) => {
   console.log('[TouchApp] App will quit!')
+  touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
 })
 
 app.addListener("ready", (event, launchInfo) =>
@@ -260,14 +263,14 @@ class ModuleManager implements TalexTouch.IModuleManager {
     checkDirWithCreate(this.modulePath, true);
   }
 
-  loadModule(module: TalexTouch.IModule): boolean {
+  loadModule(module: TalexTouch.IModule): boolean | Promise<boolean> {
     const _module = this.modules.get(module.name);
     if (_module) {
       return false;
     } else
-      return (() => {
+      return (async () => {
         if (!module.hasOwnProperty("filePath") || module.filePath)
-          checkDirWithCreate(
+          await checkDirWithCreate(
             path.join(
               this.modulePath,
               (module.filePath as string) || module.name.description
@@ -308,6 +311,7 @@ class ModuleManager implements TalexTouch.IModuleManager {
     return (() => {
       const _module = this.modules.get(moduleName);
       if (!_module) return false;
+      console.log('[ModuleManager] Unloading module ' + moduleName.description)
       _module.destroy(touchApp, this);
       return this.modules.delete(moduleName);
     })();
@@ -315,6 +319,10 @@ class ModuleManager implements TalexTouch.IModuleManager {
 
   getModule(moduleName: Symbol): TalexTouch.IModule {
     return this.modules.get(moduleName)!;
+  }
+
+  getAllModules(): IterableIterator<Symbol> {
+    return this.modules.keys();
   }
 }
 
