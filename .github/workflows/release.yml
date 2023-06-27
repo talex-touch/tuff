@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  changelog:
+    name: Changelog PR or Release
+    if: ${{ github.repository_owner == 'talex-touch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2.2.1
+        with:
+          version: ^8.6
+
+      # 设置 Node
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'pnpm'
+      # 安装依赖
+      - name: Install dependencies
+        run: pnpm install
+      # 打包
+      - name: Build Packages
+        run: pnpm run build
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # 执行更新版本和发布的命令
+          version: changeset version && pnpm install
+          publish: pnpm exec changeset
+          commit: 'CI: release'
+          title: 'CI: release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
