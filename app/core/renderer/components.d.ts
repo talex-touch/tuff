@@ -12,9 +12,6 @@ declare module '@vue/runtime-core' {
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
-    ElSlider: typeof import('element-plus/es')['ElSlider']
-    ElTag: typeof import('element-plus/es')['ElTag']
-    ElTooltip: typeof import('element-plus/es')['ElTooltip']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
