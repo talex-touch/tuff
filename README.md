@@ -121,6 +121,23 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 ### Who works with us
 
 <!-- readme: collaborators,contributors -start -->
+<table>
+<tr>
+    <td align="center">
+        <a href="https://github.com/TalexDreamSoul">
+            <img src="https://avatars.githubusercontent.com/u/59305952?v=4" width="100;" alt="TalexDreamSoul"/>
+            <br />
+            <sub><b>TalexDreamSoul</b></sub>
+        </a>
+    </td>
+    <td align="center">
+        <a href="https://github.com/fossabot">
+            <img src="https://avatars.githubusercontent.com/u/29791463?v=4" width="100;" alt="fossabot"/>
+            <br />
+            <sub><b>Fossabot</b></sub>
+        </a>
+    </td></tr>
+</table>
 <!-- readme: collaborators,contributors -end -->
 
 ## ✉️ Contact
