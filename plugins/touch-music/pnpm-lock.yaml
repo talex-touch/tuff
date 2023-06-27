@@ -8,7 +8,6 @@ specifiers:
   granim: ^2.0.0
   gsap: ^3.11.4
   howler: ^2.2.3
-  recorder-core: ^1.2.22080700
   remixicon: ^2.5.0
   rgbaster: ^2.1.1
   typescript: ^4.9.4
@@ -25,7 +24,6 @@ dependencies:
   granim: 2.0.0
   gsap: 3.11.4
   howler: 2.2.3
-  recorder-core: 1.2.22080700
   remixicon: 2.5.0
   rgbaster: 2.1.1
   typescript: 4.9.4
@@ -522,10 +520,6 @@ packages:
 
   /proxy-from-env/1.1.0:
     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
-    dev: false
-
-  /recorder-core/1.2.22080700:
-    resolution: {integrity: sha512-A7VfuVBbOCJpvo+YmEc/Sshw4nDTmfAg1beL9P+vlCYHnECfZeaa07tFADT++z6VtdYCuu0un6DGl1uZQnzamg==}
     dev: false
 
   /remixicon/2.5.0:
