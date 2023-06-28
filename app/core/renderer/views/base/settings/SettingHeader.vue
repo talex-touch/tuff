@@ -26,13 +26,8 @@ const props = defineProps({
         <svg>
           <text x="0" y="20%"> Talex-Touch </text>
         </svg>
-        <span class="version" v-if="env.packageJson" :class="{
-          dev,
-          'snapshot': env.packageJson.version.indexOf('SNAPSHOT') !== -1,
-          'alpha': env.packageJson.version.indexOf('Alpha') !== -1,
-        }">{{ env.packageJson.version }}</span>
 
-        <p>{{ $t('app.description') }}</p>
+        <p>A within easy reach of all applications</p>
       </div>
 
       <ul class="About-Footer" v-if="env.process">

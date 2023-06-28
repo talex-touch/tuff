@@ -3,9 +3,9 @@
     <div class="AppSettings-Container">
       <SettingHeader :dev="dev" :env="$env" />
 
-      <SettingUser :env="$env" />
+      <!-- <SettingUser :env="$env" /> -->
 
-      <SettingLanguage :env="$env" />
+      <!-- <SettingLanguage :env="$env" /> -->
 
       <SettingAbout :dev="dev" :env="$env" />
     </div>
