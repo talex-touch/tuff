@@ -82,7 +82,7 @@ function refresh(v) {
       </div>
     </div>
     <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
-      <span ref="mention" style="transition: .2s" />
+      <span display-none ref="mention" style="transition: .2s" />
       <!--      样式同步透明 不额外设定disabled -->
       <TSwitch v-model="value" />
     </div>

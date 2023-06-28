@@ -1,6 +1,6 @@
 <template>
   <div class="WindowSection-Wrapper fake-background">
-    <p>Window Preference</p>
+    <p font-600 text-lg>Window Preference</p>
     <div gap-4 box-border relative w-full flex items-center justify-center class="WindowsSection-Container">
       <slot />
     </div>

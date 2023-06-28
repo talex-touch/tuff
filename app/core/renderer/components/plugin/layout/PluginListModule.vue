@@ -21,11 +21,12 @@ const value = useModelWrapper(props, emits)
         <slot name="name" />
       </span>
       <span style="color: var(--el-text-color-secondary)" text-sm class="PluginList-Amo">
-        {{ plugins.length }} 个
+        {{ plugins.length }}
       </span>
     </p>
 
-    <p v-t="'base.empty-select'" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
+    <!-- <p v-t="'base.empty-select'" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" /> -->
+    <p v-text="`No any selected.`" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
 
     <transition-group name="list">
       <div

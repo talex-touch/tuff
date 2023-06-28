@@ -25,7 +25,7 @@
     "@floating-ui/dom": "^1.4.2",
     "@floating-ui/vue": "^0.2.1",
     "@iconify-json/ri": "^1.1.10",
-    "@iconify-json/simple-icons": "^1.1.57",
+    "@iconify-json/simple-icons": "^1.1.58",
     "@intlify/unplugin-vue-i18n": "^0.8.2",
     "@milkdown/core": "^7.2.3",
     "@milkdown/ctx": "^7.2.3",
@@ -77,14 +77,14 @@
     "@vitejs/plugin-vue-jsx": "^3.0.1",
     "electron": "^24.6.0",
     "electron-builder": "^23.6.0",
-    "electron-vite": "^1.0.23",
-    "sass": "^1.63.5",
+    "electron-vite": "^1.0.24",
+    "sass": "^1.63.6",
     "unocss": "^0.52.7",
     "unocss-preset-theme": "^0.7.0",
     "unplugin-auto-import": "^0.15.3",
     "unplugin-vue-components": "^0.24.1",
     "vite-plugin-electron": "^0.11.2",
     "vite-plugin-vue-setup-extend": "^0.4.0",
-    "vue-tsc": "^1.8.1"
+    "vue-tsc": "^1.8.2"
   }
 }
