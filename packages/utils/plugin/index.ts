@@ -68,3 +68,30 @@ export interface IPluginManager {
   loadPlugin(pluginName: string): Promise<boolean>
   unloadPlugin(pluginName: string): Promise<boolean>
 }
+
+export interface IManifest {
+  name: string
+  version: string
+  description: string
+  plugin?: {
+    dev: {
+      enable: boolean
+      address: string
+    }
+  }
+  build?: {
+    files: string[]
+    secret: {
+      pos: string
+      addon: string[]
+    }
+    verify?: {
+      enable: boolean
+      online: 'custom' | 'always' | 'once'
+    }
+    version?: {
+      update: 'auto' | 'ask' | 'readable'
+      downgrade: boolean
+    }
+  }
+}

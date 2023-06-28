@@ -53,10 +53,10 @@
   },
   fileAssociations: [
     {
-      ext: "touch-plugin",
+      ext: "tpex",
       name: "TalexTouch",
       role: "Editor",
-      description: "TalexTouch AddonPackage File (Plugin)",
+      description: "TalexTouch Plugin Extension",
     },
   ],
   //  "publish": [

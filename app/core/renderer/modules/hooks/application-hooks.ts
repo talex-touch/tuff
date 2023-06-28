@@ -153,6 +153,12 @@ export function screenCapture() {
 export function dropperResolver() {
   async function dropperFile(path) {
     if (path.endsWith('.touch-plugin')) {
+      await popperMention('Fatal Error', 'Sorry, the plugin is deprecated, we only supports .tpex now.')
+
+      return true
+    }
+
+    if (path.endsWith('.tpex')) {
       const data = touchChannel.sendSync(
         'drop:plugin',
         path,

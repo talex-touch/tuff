@@ -4,6 +4,7 @@ import fse from "fs-extra";
 import compressing from "compressing";
 import { genPluginManager } from "./plugin-core";
 import { checkDirWithCreate } from "../utils/common-util";
+import { IManifest } from "@talex-touch/utils/plugin";
 
 export enum ResolverStatus {
   OPEN_FILE_ERROR,
@@ -21,7 +22,8 @@ export class PluginResolver {
     this.filePath = filePath;
   }
 
-  async install(totalLength: number, manifest: any, cb: Function) {
+  async install(totalLength: number, manifest: IManifest, cb: Function) {
+    console.log('[PluginResolver] Installing plugin: ' + manifest.name, manifest, totalLength, JSON.stringify(manifest).length)
     const _target = path.join(genPluginManager().pluginPath, manifest.name);
 
     // const _plugin: Plugin = pluginManager.plugins[manifest.name]
@@ -98,8 +100,6 @@ export class PluginResolver {
           const identifier = buffer.toString();
           const arr = identifier.split("@");
 
-          console.log("[PluginResolver] Identifier: " + identifier);
-
           if (
             !identifier.startsWith("TalexTouch-PluginPackage@@") ||
             arr.length !== 4
@@ -133,7 +133,7 @@ export class PluginResolver {
 
           // install
           setTimeout(async () => {
-            await this.install(totalLength, manifest, (msg, type = "error") => {
+            await this.install(totalLength, manifest as IManifest, (msg, type = "error") => {
               event.msg = msg;
 
               callback({ event, type });

@@ -47,15 +47,15 @@ export default {
 
     app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.cwd());
 
-    protocol.registerFileProtocol('touch-plugin', (request, callback) => {
-        console.log('[Addon] Protocol opened file: ' + request.url)
-        const url = request.url.substr(15)
-        const fileExt = path.extname(url)
-        if (fileExt === '.touch-plugin') {
-            return callback({ error: 1, data: 'Unsupported file type' })
-        }
-        callback({ path: path.normalize(url) })
-    })
+    // protocol.registerFileProtocol('touch-plugin', (request, callback) => {
+    //     console.log('[Addon] Protocol opened file: ' + request.url)
+    //     const url = request.url.substr(15)
+    //     const fileExt = path.extname(url)
+    //     if (fileExt === '.touch-plugin') {
+    //         return callback({ error: 1, data: 'Unsupported file type' })
+    //     }
+    //     callback({ path: path.normalize(url) })
+    // })
 
     app.app.on("open-file", (event, filePath) => {
       event.preventDefault();
@@ -86,7 +86,6 @@ export default {
         console.log("[AddonDropper] Dropped file: " + data);
 
         new PluginResolver(data).resolve(({ event, type }) => {
-          console.log(event, type);
 
           if (type === "error") {
             if (event.msg === ResolverStatus.BROKEN_PLUGIN_FILE) {
