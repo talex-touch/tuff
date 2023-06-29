@@ -616,8 +616,8 @@ importers:
         specifier: ^1.1.10
         version: 1.1.10
       '@talex-touch/unplugin-export-plugin':
-        specifier: ^0.2.11
-        version: 0.2.11
+        specifier: ^0.2.13
+        version: 0.2.13
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
@@ -2424,8 +2424,8 @@ packages:
     dependencies:
       defer-to-connect: 2.0.1
 
-  /@talex-touch/unplugin-export-plugin@0.2.11:
-    resolution: {integrity: sha512-NL2LFpnF4K2zoC9Dep+QahvEK6pqu7Pxr0etMNDjKQzkCogpG1esq9ofzzSer9TXRywHN3fentfLEUQNLAexFQ==}
+  /@talex-touch/unplugin-export-plugin@0.2.13:
+    resolution: {integrity: sha512-Jh8jwvkcreTrKhua2xbqfWE+O+kwmzzG2L1/5OSyJDN+Yc6lYsD+xNqXzEwmHuRZx08tNa2RifeWPdCD6RPt8g==}
     dependencies:
       cli-progress: 3.12.0
       compressing: 1.9.0
@@ -3435,12 +3435,12 @@ packages:
       acorn: 7.4.1
     dev: false
 
-  /acorn-jsx@5.3.2(acorn@8.8.2):
+  /acorn-jsx@5.3.2(acorn@8.9.0):
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
       acorn: ^6.0.0 || ^7.0.0 || ^8.0.0
     dependencies:
-      acorn: 8.8.2
+      acorn: 8.9.0
     dev: true
 
   /acorn-walk@8.2.0:
@@ -6053,8 +6053,8 @@ packages:
     resolution: {integrity: sha512-7OASN1Wma5fum5SrNhFMAMJxOUAbhyfQ8dQ//PJaJbNw0URTPWqIghHWt1MmAANKhHZIYOHruW4Kw4ruUWOdGw==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     dependencies:
-      acorn: 8.8.2
-      acorn-jsx: 5.3.2(acorn@8.8.2)
+      acorn: 8.9.0
+      acorn-jsx: 5.3.2(acorn@8.9.0)
       eslint-visitor-keys: 3.4.1
     dev: true
 
@@ -7672,7 +7672,7 @@ packages:
     resolution: {integrity: sha512-9xZPKVYp9DxnM3sd1yAsh/d59iIaswDkai8oTxbursfKYbg/ibjX0IzFt35+VZ8iEW453TVTXztnRvYUQlAfUQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     dependencies:
-      acorn: 8.8.2
+      acorn: 8.9.0
       eslint-visitor-keys: 3.4.1
       espree: 9.5.2
       semver: 7.5.3
