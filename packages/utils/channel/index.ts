@@ -15,7 +15,7 @@ export interface ITouchChannel {
    * Register a channel
    * @description Register a channel, and return a function to cancel the registration
    * @param type {@link ChannelType} The type of channel
-   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param callback {Function} The callback function
    */
   regChannel(type: ChannelType, eventName: string, callback: (data: StandardChannelData) => any): () => void
@@ -90,5 +90,5 @@ export interface RawStandardChannelData extends RawChannelData {
 }
 
 export interface StandardChannelData extends RawStandardChannelData {
-  reply: (code: DataCode, data: any, options?: any) => void
+  reply: (code: DataCode, data: any) => void
 }

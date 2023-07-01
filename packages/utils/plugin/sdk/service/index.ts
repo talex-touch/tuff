@@ -1,4 +1,4 @@
-import { genChannel } from './../../channel';
+import { genChannel } from '../../channel';
 import { IService } from "../../../service";
 
 export function regService(service: IService, handler: Function): boolean {

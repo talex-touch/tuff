@@ -12,7 +12,7 @@ import type MarkdownIt from "markdown-it";
 export default defineConfig({
   title: "TalexTouch",
   base: "/talex-touch/",
-  head: [["meta", { name: "theme-color", content: "#0c9dff" }]],
+  head: [["meta", { name: "theme-color", content: "#0c23ff" }]],
   lang: "en-US",
   /**
    * 是否显示最后更新时间
