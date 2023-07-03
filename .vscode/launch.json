@@ -13,27 +13,16 @@
       ],
       // "program": "${file}",
       "autoAttachChildProcesses": true,
-      "cwd": "${workspaceFolder}/app/core",
+      "cwd": "${workspaceFolder}/app/main",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "-F",
-        "core",
+        "main",
         "dev",
         "--sourcemap"
       ],
       "env": {
         "REMOTE_DEBUGGING_PORT": "5173"
-      }
-    },
-    {
-      "name": "Debug Renderer Process",
-      "port": 5173,
-      "request": "attach",
-      "type": "chrome",
-      "webRoot": "${workspaceFolder}/app/core/renderer",
-      "timeout": 60000,
-      "presentation": {
-        "hidden": true
       }
     }
   ],
@@ -42,7 +31,6 @@
       "name": "Launch Program",
       "configurations": [
         "Debug Main Process",
-        // "Debug Renderer Process"
       ],
       "presentation": {
         "order": 1

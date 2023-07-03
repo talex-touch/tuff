@@ -126,3 +126,4 @@ talex-touch/
 .idea/
 app/ends/
 plugins/
+.history/

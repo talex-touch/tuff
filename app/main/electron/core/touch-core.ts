@@ -27,7 +27,7 @@ import { genTouchChannel } from "./channel-core";
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import { TalexTouch } from "../types/touch-core";
 import { genPluginManager } from "../plugins/plugin-core";
-import { MicaBrowserWindow } from 'mica-electron'
+import { MicaBrowserWindow, useMicaElectron } from 'talex-mica-electron'
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -78,6 +78,8 @@ function getRootPath(root) {
     ? path.join(root, APP_FOLDER_NAME)
     : path.join(root, "..", "..", APP_FOLDER_NAME);
 }
+
+export const micaSupport = useMicaElectron();
 
 class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = getRootPath(process.cwd());
@@ -175,14 +177,14 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   constructor(options?: BrowserWindowConstructorOptions) {
     // this.window = new BrowserWindow(options);
-    this.window = new MicaBrowserWindow(options);
+    this.window = micaSupport ? new MicaBrowserWindow(options) : new BrowserWindow(options)
 
     // this.window.setDarkTheme();
     this.window['setMicaAcrylicEffect']?.();
     this.window['setRoundedCorner']?.()
 
     this.window.once("ready-to-show", () => {
-      this.window.webContents.addListener("will-navigate", (event, url) => {
+      this.window.webContents.addListener("will-navigate", (event: any, url: string) => {
         touchEventBus.emit(
           TalexEvents.OPEN_EXTERNAL_URL,
           new OpenExternalUrlEvent(url)

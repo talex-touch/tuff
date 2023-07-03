@@ -495,8 +495,8 @@ importers:
         specifier: ^2.1.4
         version: 2.1.4(typescript@5.1.3)(vue@3.3.4)
       talex-mica-electron:
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: ^1.0.1
+        version: 1.0.1
       v-shared-element:
         specifier: ^3.1.1
         version: 3.1.1(vue-router@4.2.2)(vue@3.3.4)
@@ -11215,8 +11215,8 @@ packages:
   /svg-tags@1.0.0:
     resolution: {integrity: sha512-ovssysQTa+luh7A5Weu3Rta6FJlFBBbInjOh722LIt6klpU2/HtdUbszju/G4devcvk8PGt7FCLv5wftu3THUA==}
 
-  /talex-mica-electron@1.0.0:
-    resolution: {integrity: sha512-PadRpPl8GCvX8zX9kSB4fLdAYMpvj0O6JofRSXjiaosbLwNC/fGHwhgpA9/RcKvlW3AmR2FncHw/498HVlC+qw==}
+  /talex-mica-electron@1.0.1:
+    resolution: {integrity: sha512-uYUrbvCw5aX7HcoSPtXD4mwiE5OxpN6iBnpufoGj13f5O6GRqIytXfbYPDbvz5iBhOPG2f7rdvhyiLEG2jmL+w==}
     dev: false
 
   /tar-fs@1.16.3:
