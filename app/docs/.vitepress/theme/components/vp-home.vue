@@ -2,6 +2,7 @@
 import { onMounted } from 'vue';
 import Logo from './base/Logo.vue';
 import TouchBubbles from './base/TouchBubbles.vue';
+import Bg from './../../../images/assets/home.png'
 
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -158,7 +159,7 @@ function logoInit() {
 <template>
   <div class="Home">
     <div class="Home-Logo">
-      <img id="home-logo-img" src="images/assets/home.png" alt="home-bg" />
+      <img id="home-logo-img" :src="Bg" alt="home-bg" />
 
       <Logo id="home-logo-logo" />
 
