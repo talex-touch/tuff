@@ -198,7 +198,7 @@ function logoInit() {
 
   opacity: 0;
   transform: translateY(50px) scale(0);
-  mix-blend-mode: color-burn;
+  mix-blend-mode: difference;
   text-align: center;
 }
 
