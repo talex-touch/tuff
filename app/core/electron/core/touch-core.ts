@@ -1,6 +1,20 @@
-import path from "path";
+import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
+import {
+  BrowserWindow,
+  BrowserWindowConstructorOptions,
+  OpenDevToolsOptions,
+  WebContents,
+  app
+} from "electron";
 import fse from "fs-extra";
+import { release } from "os";
+import path from "path";
+import { MicaBrowserWindow, useMicaElectron } from 'talex-mica-electron';
 import { APP_FOLDER_NAME, MainWindowOption } from "../config/default";
+import { genPluginManager } from "../plugins/plugin-core";
+import { TalexTouch } from "../types/touch-core";
+import { checkDirWithCreate } from "../utils/common-util";
+import { genTouchChannel } from "./channel-core";
 import {
   AfterAppStartEvent,
   AppReadyEvent,
@@ -13,21 +27,6 @@ import {
   WindowAllClosedEvent,
   touchEventBus,
 } from "./eventbus/touch-event";
-import {
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  WebContents,
-  app,
-  OpenDevToolsOptions,
-  dialog,
-} from "electron";
-import { release } from "os";
-import { checkDirWithCreate } from "../utils/common-util";
-import { genTouchChannel } from "./channel-core";
-import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
-import { TalexTouch } from "../types/touch-core";
-import { genPluginManager } from "../plugins/plugin-core";
-import { MicaBrowserWindow, useMicaElectron } from 'talex-mica-electron'
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -101,6 +100,7 @@ class TouchApp implements TalexTouch.TouchApp {
 
   constructor(app: Electron.App) {
     console.log("[TouchApp] App running under: " + this.rootPath)
+    checkDirWithCreate(this.rootPath, true)
 
     this.app = app;
     this.version = app.isPackaged ? TalexTouch.AppVersion.RELEASE : TalexTouch.AppVersion.DEV;

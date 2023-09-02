@@ -1,36 +1,33 @@
-<script name="App" setup>
-import AppLayout from '~/views/layout/AppLayout.vue'
-import {
-  applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker, usePlugin, usePlugins
-} from '@modules/hooks/application-hooks'
-import { touchChannel } from '@modules/channel/channel-core'
-
-const packageJson = window.$nodeApi.getPackageJSON()
-
-const [, pluginsScope] = usePlugins()
-const pluginScope = usePlugin()
-
-onBeforeUnmount(() => {
-  pluginScope()
-
-  pluginsScope.stop()
-})
-
-onMounted(() => {
-  applicationUpgrade()
-  clipBoardResolver()
-  dropperResolver()
-  urlHooker()
-  // screenCapture()
-
-  window.$startupInfo = touchChannel.sendSync('app-ready')
-})
+<script setup lang="ts">
+import HelloWorld from './components/HelloWorld.vue'
 </script>
 
 <template>
-  <AppLayout>
-    <template #title>
-      TalexTouch <span class="tag version fake-background">{{ packageJson.version }}</span>
-    </template>
-  </AppLayout>
+  <div>
+    <HelloWorld msg="Hello VVTE Template" />
+    <div class="ColorMixin">
+      <p>Color1</p>
+      <p>Color2</p>
+      <p>Color3</p>
+    </div>
+  </div>
 </template>
+
+<style lang="scss" scoped>
+$color: #ff0000;
+
+.ColorMixin {
+  p {
+    margin: 0;
+    color: $color;
+  }
+
+  p+p {
+    color: transparentize($color, $amount: 0.25);
+  }
+
+  p+p+p {
+    color: transparentize($color, $amount: 0.5);
+  }
+}
+</style>

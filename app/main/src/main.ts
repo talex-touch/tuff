@@ -1,30 +1,20 @@
 import { createApp } from 'vue'
+import './style.css'
 import App from './App.vue'
 
-import {
-    SharedElementRouteGuard,
-    SharedElementDirective
-} from 'v-shared-element'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
-import router from './base/router'
-import { baseNodeApi } from '@modules/channel/main/node'
-import { storageManager } from '@modules/channel/storage'
+// import 'element-plus/dist/index.css'
 import ElementPlus from 'element-plus'
-import VWave from 'v-wave'
-
-import '~/modules/theme-manager'
-import 'uno.css'
-import 'virtual:unocss-devtools'
-
-window.$nodeApi = baseNodeApi
-window.$storage = storageManager
-
-router.beforeEach(SharedElementRouteGuard)
+import 'element-plus/theme-chalk/dark/css-vars.css'
 
 const app = createApp(App)
-    .use(SharedElementDirective)
-    .use(router)
-    .use(ElementPlus)
-    .use(VWave)
+  
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: []
+})
+
+app.use(router).use(ElementPlus)
 
 app.mount('#app').$nextTick(() => postMessage({ payload: 'removeLoading' }, '*'))
