@@ -1,3 +1,5 @@
+import appIcon from '../public/favicon.ico?asset'
+
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
   return new Promise(resolve => {
     if (condition.includes(document.readyState)) {
@@ -32,41 +34,98 @@ const safeDOM = {
  * https://matejkustec.github.io/SpinThatShit
  */
 function useLoading() {
-  const className = `loaders-css__square-spin`
+  const className = `AppLoading`
   const styleContent = `
-@keyframes square-spin {
-  25% { transform: perspective(100px) rotateX(180deg) rotateY(0); }
-  50% { transform: perspective(100px) rotateX(180deg) rotateY(180deg); }
-  75% { transform: perspective(100px) rotateX(0) rotateY(180deg); }
-  100% { transform: perspective(100px) rotateX(0) rotateY(0); }
+.${className}__bar {
+  position: absolute;
+    
+  width: 280px;
+  height: 8px;
+  
+  bottom: 30%;
+  
+  overflow: hidden;
+  border-radius: 2px;
+  background: #dddddd50;
 }
-.${className} > div {
-  animation-fill-mode: both;
-  width: 50px;
-  height: 50px;
-  background: #fff;
-  animation: square-spin 3s 0s cubic-bezier(0.09, 0.57, 0.49, 0.9) infinite;
+.${className}__bar::before {
+    content: '';
+    position: absolute;
+    
+    width: 0;
+    height: 100%;
+    
+    border-radius: 2px;
+    background: #dddddd;
+    animation: ${className}__bar__animation 1s infinite linear;
 }
-.app-loading-wrap {
-  position: fixed;
+
+@keyframes ${className}__logo__animation {
+  0% {
+    filter: hue-rotate(0) blur(0) drop-shadow(0 0 10px #212121);
+    transform: rotate(0deg);
+  }
+  50% {
+    filter: hue-rotate(30deg) blur(1px) drop-shadow(0 0 40px #262626);
+    transform: rotate(180deg);
+  }
+  100% {
+    filter: hue-rotate(0) blur(0) drop-shadow(0 0 10px #212121);
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ${className}__bar__animation {
+  0%, 100% {
+    left: 0;
+    width: 0;
+  }
+  25% {
+    left: 0;
+    width: 50%;
+  }
+  50% {
+    left: 100%;
+    width: 50%;
+  }
+  75% {
+    left: 100%;
+    width: 0;
+  }
+}
+
+.${className}__logo {
+  position: absolute;
+  margin-top: -100px;
+  
+  width: 180px;
+  height: 180px;
+  
+  background-size: contain;
+  background-image: url("${appIcon}");
+  
+   animation: ${className}__logo__animation 1s infinite linear;
+}
+.${className} {
+  position: absolute;
+  
   top: 0;
   left: 0;
+  
   width: 100vw;
   height: 100vh;
+  
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #282c34;
   z-index: 9;
 }
     `
   const oStyle = document.createElement('style')
   const oDiv = document.createElement('div')
 
-  oStyle.id = 'app-loading-style'
   oStyle.innerHTML = styleContent
-  oDiv.className = 'app-loading-wrap'
-  oDiv.innerHTML = `<div class="${className}"><div></div></div>`
+  oDiv.innerHTML = `<div class="${className}"><div class="${className}__logo"></div><div class="${className}__bar"></div></div>`
 
   return {
     appendLoading() {
@@ -88,5 +147,3 @@ domReady().then(appendLoading)
 window.onmessage = ev => {
   ev.data.payload === 'removeLoading' && removeLoading()
 }
-
-setTimeout(removeLoading, 4999)
