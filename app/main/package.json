@@ -17,7 +17,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.3.4",
     "@vue-macros/volar": "^0.14.2",
-    "electron": "^24.8.2",
+    "electron": "^26.1.0",
     "electron-builder": "^23.6.0",
     "typescript": "^5.2.2",
     "unplugin-auto-import": "^0.16.6",
