@@ -53,7 +53,7 @@
     "@unocss/transformer-variant-group": "^0.55.4",
     "@vitejs/plugin-vue": "^4.3.4",
     "@vitejs/plugin-vue-jsx": "^3.0.2",
-    "electron": "^24.8.2",
+    "electron": "^26.1.0",
     "electron-builder": "^24.6.3",
     "sass": "^1.66.1",
     "typescript": "^5.2.2",
