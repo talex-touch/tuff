@@ -16,6 +16,12 @@ const props = defineProps({
   }
 })
 
+const appUpdate = ref()
+
+onMounted(() => {
+  appUpdate.value = window['_appUpdate']
+})
+
 const versionStr = computed(() => `TalexTouch ${props.dev ? 'Dev' : 'Master'} ${props.env.packageJson?.version}`)
 const startCosts = computed(() => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000)
 
@@ -29,12 +35,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <t-group-block v-if="env.process" name="Application specification (Touch)"
-    icon="apps">
-    <t-block-line title="Version"
-      :description="versionStr"></t-block-line>
-    <t-block-line title="Specification"
-      description="23H6 T1"></t-block-line>
+  <t-group-block v-if="env.process" name="Application specification (Touch)" icon="apps">
+    <t-block-line title="Version">
+      <template #description>
+        {{ versionStr }}
+        <span v-if="appUpdate" class="tag" style="color: #FEA113;font-weight: 600;cursor: pointer">
+          New!
+        </span>
+        <span v-else class="tag" style="color: #6D8B51">
+          Latest
+        </span>
+      </template>
+    </t-block-line>
+    <t-block-line title="Specification" description="23H6 T1"></t-block-line>
     <t-block-line title="Start Costs">
       <template #description>
         {{ startCosts }}s
@@ -62,10 +75,8 @@ onBeforeUnmount(() => {
         </span>
       </template>
     </t-block-line>
-    <t-block-line title="Platform"
-      :description="`${env.process.platform} (${env.os.arch})`"></t-block-line>
-    <t-block-line title="Experience"
-      description="Touch Feature Experience Pack 2023.06.28"></t-block-line>
+    <t-block-line title="Platform" :description="`${env.process.platform} (${env.os.arch})`"></t-block-line>
+    <t-block-line title="Experience" description="Touch Feature Experience Pack 2023.09.03"></t-block-line>
     <t-block-line title="CPU Usage">
       <template #description>
         <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage"
@@ -106,12 +117,14 @@ onBeforeUnmount(() => {
     border-radius: 2px;
     transition: 1s linear;
   }
+
   &:after {
     content: attr(data-text);
     position: absolute;
 
     left: 80%;
   }
+
   position: relative;
   display: inline-block;
 

@@ -18,6 +18,8 @@
       </div>
     </div>
 
+    <!-- <Footer></Footer> -->
+
   </el-scrollbar>
 </template>
 
@@ -25,7 +27,7 @@
 import Header from "./components/music/layout/Header.vue";
 import IndexImages from "@comp/display/IndexImages.vue";
 import PlayStation from "@comp/display/PlayStation.vue";
-
+// import Footer from './components/music/layout/Footer.vue'
 
 </script>
 
