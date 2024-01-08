@@ -7,7 +7,7 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -17,11 +17,13 @@
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
+    "noImplicitThis": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
     /* Type checking */
-    "types": ["element-plus/global"]
+    "types": ["node", "element-plus/global"],
+    "allowSyntheticDefaultImports": true,
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue", "electron"],
   "references": [{ "path": "./tsconfig.node.json" }]

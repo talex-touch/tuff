@@ -169,7 +169,7 @@ watch(() => value.value, (v) => {
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 4px;
-  --fake-opacity: .45;
+  --fake-inner-opacity: .5;
   &:hover {
     --fake-color: var(--el-fill-color);
   }

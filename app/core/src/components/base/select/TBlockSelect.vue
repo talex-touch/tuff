@@ -24,6 +24,9 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  iconChange: {
+    type: String
+  }
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
@@ -39,7 +42,7 @@ function handleChange(val, e) {
 <template>
   <div class="TBlockSelect-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
     <div class="TBlockSelect-Content TBlockSelection-Content">
-      <RemixIcon :name="icon" :style="value ? 'fill' : 'line'" />
+      <RemixIcon :name="icon" :style="iconChange ? (value ? 'fill' : 'line') : iconChange" />
       <div class="TBlockSelect-Label">
         <h3>{{ title }}</h3>
         <p>{{ description }}</p>

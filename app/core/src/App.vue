@@ -1,4 +1,4 @@
-<script name="App" setup>
+<script name="App" lang="ts" setup>
 import AppLayout from '~/views/layout/AppLayout.vue'
 import {
   applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker, usePlugin, usePlugins

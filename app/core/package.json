@@ -1,5 +1,5 @@
 {
-  "name": "main",
+  "name": "core",
   "private": true,
   "version": "2.0.0",
   "scripts": {
@@ -39,6 +39,7 @@
     "gsap": "^3.12.2",
     "js-md5": "^0.7.3",
     "pinia": "^2.1.6",
+    "remixicon": "^3.5.0",
     "talex-mica-electron": "^1.0.2",
     "v-shared-element": "^3.1.1",
     "v-wave": "^1.5.1",
@@ -47,6 +48,7 @@
     "vue-router": "^4.2.4"
   },
   "devDependencies": {
+    "@types/node": "^20.5.8",
     "@unocss/preset-attributify": "^0.55.4",
     "@unocss/preset-icons": "^0.55.4",
     "@unocss/preset-uno": "^0.55.4",

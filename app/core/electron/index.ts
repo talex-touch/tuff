@@ -12,8 +12,6 @@ import extensionLoader from './modules/extension-loader'
 import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
 
-import { TalexEvents, touchEventBus } from './core/eventbus/touch-event'
-
 app.whenReady().then(() => {
   const app = genTouchApp()
 
@@ -27,10 +25,4 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)
   app.moduleManager.loadModule(GlobalShortcon)
-
-  touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
-    app.moduleManager['getAllModules']!.forEach((module: Symbol) => {
-      app.moduleManager.unloadModule(module)
-    })
-  })
 })

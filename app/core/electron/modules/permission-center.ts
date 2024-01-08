@@ -1,6 +1,5 @@
 import fse from "fs-extra";
 import path from "path";
-import { TalexTouch } from "../types";
 import type { Permission, IPermissionCenter } from "@talex-touch/utils/permission";
 
 class PermissionCenter implements IPermissionCenter {
@@ -8,6 +7,8 @@ class PermissionCenter implements IPermissionCenter {
     const index = this.getPerIndex(pluginScope, permission)
 
     if (index !== -1) throw new Error("Permission already exists")
+
+    const perArr = this.getPerFile(pluginScope)
 
     perArr.push(permission)
   }
@@ -67,7 +68,7 @@ let permissionCenter: PermissionCenter
 
 export function genPermissionCenter(rootPath?: string): IPermissionCenter {
   if (!permissionCenter) {
-    permissionCenter = new PermissionCenter(rootPath)
+    permissionCenter = new PermissionCenter(rootPath!)
   }
 
   return permissionCenter
@@ -77,11 +78,12 @@ export default {
   name: Symbol("PermissionCenter"),
   filePath: "permissions",
   init() {
-    const perPath = this.modulePath
+    const that: any = this
+    const perPath = that['modulePath']!
 
     genPermissionCenter(perPath)
   },
   destroy() {
     permissionCenter.save()
   },
-} as TalexTouch.IModule;
+};

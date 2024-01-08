@@ -1,18 +1,21 @@
 <template>
   <ViewTemplate name="Styles">
     <WindowSectionVue
-      tip="Use Mica style may cause performance issues on some devices."
+      tip=""
     >
-      <SectionItem v-model="themeStyle.theme.window" title="Default">
+      <SectionItem tip="Click to select." v-model="themeStyle.theme.window" title="Default">
       </SectionItem>
+      <!-- :disabled="os?.version !== 'Windows 10 Pro'" -->
       <SectionItem
+        tip="Mica style may impact device performance."
         v-model="themeStyle.theme.window"
         title="Mica"
-        :disabled="os?.version !== 'Windows 10 Pro'"
+        :disabled="os?.type !== 'Windows_NT'"
       >
       </SectionItem>
       <SectionItem
         v-model="themeStyle.theme.window"
+        tip="This feature only supports Windows."
         title="Filter"
         :disabled="true"
       >
@@ -29,6 +32,7 @@
         v-model="styleValue"
         title="Color Style"
         :icon="themeStyle.theme.style.dark ? 'moon' : 'lightbulb'"
+        iconChange="line"
         description="Set color main style"
       >
         <t-select-item name="light">Light Style</t-select-item>
@@ -46,7 +50,7 @@
       <t-block-switch
         v-model="themeStyle.theme.addon.coloring"
         title="Coloring"
-        description="As the main interface to emphasize the colouring"
+        description="As the main interface to emphasize the coloring"
         icon="contrast-drop-2"
       />
       <t-block-switch
@@ -82,11 +86,11 @@ import TBlockSwitch from "@comp/base/switch/TBlockSwitch.vue";
 import WindowSectionVue from "./WindowSection.vue";
 import SectionItem from "./SectionItem.vue";
 import { $t } from "@modules/lang";
-import { useEnv } from "@modules/hooks/env-hooks";
+import { useEnv } from "~/modules/hooks/env-hooks";
 import {
   themeStyle,
   triggerThemeTransition,
-} from "@modules/storage/AppStorage";
+} from "~/modules/storage/AppStorage";
 
 const os = ref();
 const styleValue = ref(0);
@@ -101,14 +105,15 @@ function handleThemeChange(v: string, e: MouseEvent) {
   triggerThemeTransition([e.x, e.y], v);
 }
 
-onMounted(() => {
+onMounted(async () => {
+  console.log( useEnv() )
   os.value = useEnv().os;
 });
 </script>
 
 <style>
 .Mica {
-  filter: blur(16px) saturate(180%) brightness(1.25);
+  filter: blur(16px) saturate(180%) brightness(1.125);
 }
 
 .Default {

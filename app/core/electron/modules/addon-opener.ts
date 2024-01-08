@@ -3,13 +3,11 @@ import { APP_SCHEMA } from "../config/default";
 import { TalexTouch } from "../types";
 import { PluginResolver, ResolverStatus } from "../plugins/plugin-resolver";
 import { genTouchChannel } from "../core/channel-core";
-import { protocol } from 'electron';
-import path from 'path';
 
 function windowsAdapter(touchApp: TalexTouch.TouchApp) {
   const app = touchApp.app;
 
-  app.on("second-instance", (event, argv, workingDirectory) => {
+  app.on("second-instance", (_, argv) => {
     const win = touchApp.window.window;
 
     if (win.isMinimized()) win.restore();
@@ -25,20 +23,20 @@ function windowsAdapter(touchApp: TalexTouch.TouchApp) {
 function macOSAdapter(touchApp: TalexTouch.TouchApp) {
   const app = touchApp.app;
 
-  app.on("open-url", (event, url) => {
+  app.on("open-url", (_, url) => {
     onSchema(url);
   });
 }
 
 function onSchema(url: string) {
-    console.log("[Addon] Opened schema: " + url);
+  console.log("[Addon] Opened schema: " + url);
 }
 
 export default {
   name: Symbol("AddonOpener"),
   filePath: false,
-  listeners: new Array<Function>(),
-  init(app, manager) {
+  listeners: new Array<() => void>(),
+  init(app: TalexTouch.TouchApp) {
     const touchChannel = genTouchChannel();
     const win = app.window.window;
 
@@ -69,7 +67,7 @@ export default {
 
     this.listeners.push(
       touchChannel.regChannel(ChannelType.MAIN, "@install-plugin", ({ data, reply }) => {
-        new PluginResolver(data).resolve(({ event, type }) => {
+        new PluginResolver(data).resolve(({ event, type }: any) => {
           console.log("[AddonInstaller] Installed file: " + data);
 
           reply(DataCode.SUCCESS, {
@@ -85,7 +83,7 @@ export default {
       touchChannel.regChannel(ChannelType.MAIN, 'drop:plugin', async ({ data, reply }) => {
         console.log("[AddonDropper] Dropped file: " + data);
 
-        new PluginResolver(data).resolve(({ event, type }) => {
+        new PluginResolver(data).resolve(({ event, type }: any) => {
 
           if (type === "error") {
             if (event.msg === ResolverStatus.BROKEN_PLUGIN_FILE) {
@@ -115,7 +113,7 @@ export default {
       })
     );
   },
-  destroy(app, manager) {
+  destroy() {
     this.listeners.forEach((v: () => any) => v());
   },
-} as TalexTouch.IModule;
+};

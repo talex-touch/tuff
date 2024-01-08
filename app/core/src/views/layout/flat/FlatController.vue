@@ -11,8 +11,8 @@
   </span>
 
   <ul class="FlatLayout-Controller">
-    <remix-icon @click="minimizeWindow" name="subtract" />
-    <remix-icon @click="closeWindow" name="close" />
+    <remix-icon class="remix" @click="minimizeWindow" name="subtract" />
+    <remix-icon class="remix" @click="closeWindow" name="close" />
   </ul>
 </template>
 

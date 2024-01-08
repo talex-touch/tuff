@@ -23,7 +23,9 @@ const isDev = process.argv.slice(2).includes('--watch')
 const isTest = process.env.NODE_ENV === 'test'
 
 // https://vitejs.dev/config/
-export default defineConfig(() => {
+export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
+
+    console.log(command, mode, isSsrBuild, isPreview)
 
     if (!isDev && !isTest) {
         for (const dir of ['dist', 'plugin']) {
@@ -34,7 +36,7 @@ export default defineConfig(() => {
     }
 
     const build = {
-        minify: false,
+        minify: !isDev,
         emptyOutDir: false,
         outDir: 'dist',
         lib: {
@@ -46,6 +48,7 @@ export default defineConfig(() => {
         },
         rollupOptions: {
             external: [
+                'mica-electron',
                 'electron',
                 'vite',
                 'vite-plugin-electron-renderer',
@@ -86,7 +89,17 @@ export default defineConfig(() => {
             electron([
                 {
                     // Main-Process entry file of the Electron App.
-                    entry: 'electron/index.ts'
+                    entry: 'electron/index.ts',
+                    vite: {
+                        build: {
+                            rollupOptions: {
+                                external: [
+                                    'talex-mica-electron',
+                                    'mica-electron'
+                                ]
+                            }
+                        }
+                    }
                 },
                 {
                     entry: 'electron/preload.ts',

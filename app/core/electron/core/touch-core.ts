@@ -1,6 +1,5 @@
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import {
-  BrowserWindow,
   BrowserWindowConstructorOptions,
   OpenDevToolsOptions,
   WebContents,
@@ -9,7 +8,7 @@ import {
 import fse from "fs-extra";
 import { release } from "os";
 import path from "path";
-import { MicaBrowserWindow, useMicaElectron } from 'talex-mica-electron';
+import { MicaBrowserWindow } from 'mica-electron';
 import { APP_FOLDER_NAME, MainWindowOption } from "../config/default";
 import { genPluginManager } from "../plugins/plugin-core";
 import { TalexTouch } from "../types/touch-core";
@@ -56,11 +55,6 @@ app.on("window-all-closed", () => {
   process.exit(0)
 });
 
-app.on('will-quit', (event: Event) => {
-  console.log('[TouchApp] App will quit!')
-  touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
-})
-
 app.addListener("ready", (event, launchInfo) =>
   touchEventBus.emit(
     TalexEvents.APP_READY,
@@ -68,17 +62,22 @@ app.addListener("ready", (event, launchInfo) =>
   )
 );
 
-app.on("before-quit", (event) =>
+app.on("before-quit", (event) => {
   touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
-);
+  console.log('[TouchApp] App will quit!')
+  touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
+});
 
-function getRootPath(root) {
+function getRootPath(root: string) {
   return app.isPackaged
     ? path.join(root, APP_FOLDER_NAME)
     : path.join(root, "..", "..", APP_FOLDER_NAME);
 }
 
-export const micaSupport = useMicaElectron();
+// let micaLib: string;
+// let _micaSupport: boolean = false
+
+// export const micaSupport: () => boolean = () => app.isPackaged ? fse.existsSync(micaLib) : true && _micaSupport;
 
 class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = getRootPath(process.cwd());
@@ -102,6 +101,26 @@ class TouchApp implements TalexTouch.TouchApp {
     console.log("[TouchApp] App running under: " + this.rootPath)
     checkDirWithCreate(this.rootPath, true)
 
+    const micaLib = path.join(this.rootPath, 'modules', 'lib', `micaElectron_${process.arch}.node`)
+
+    console.log(micaLib)
+
+    // const micaBuild = require("file://" + micaLib)
+
+    // const micaBuild = import.meta.glob(`./lib/micaElectron_${process.arch}.node`)
+
+    // console.log(micaBuild)
+
+    // micaBuild.then(v => {
+    //   console.log(v)
+    // })
+
+    // const micaBuild = import.meta.glob(micaLib)
+
+    // console.log(micaBuild)
+
+    // _micaSupport = useMica(micaBuild)
+
     this.app = app;
     this.version = app.isPackaged ? TalexTouch.AppVersion.RELEASE : TalexTouch.AppVersion.DEV;
     this.window = new TouchWindow(MainWindowOption);
@@ -121,11 +140,9 @@ class TouchApp implements TalexTouch.TouchApp {
 
     checkDirWithCreate(this.rootPath, true);
 
-    let webContents: Electron.WebContents;
-
     if (this.version === TalexTouch.AppVersion.RELEASE) {
-      webContents = await this.window.loadFile(
-          path.join(process.env.DIST, 'index.html')
+      await this.window.loadFile(
+        path.join(process.env.DIST, 'index.html')
       );
     } else {
       const url = (process.env['VITE_DEV_SERVER_URL'] || process.env["ELECTRON_RENDERER_URL"]) as string;
@@ -133,12 +150,12 @@ class TouchApp implements TalexTouch.TouchApp {
       this.window.window.show();
       console.log("[TouchApp] Loading (mainWindow) webContents from: " + url);
 
-      webContents = await this.window.loadURL(url, { devtools: true });
+      await this.window.loadURL(url, { devtools: true });
     }
 
     console.log("[TouchApp] WebContents loaded!");
 
-    this.channel.regChannel(ChannelType.MAIN, "app-ready", (data) => {
+    this.channel.regChannel(ChannelType.MAIN, "app-ready", () => {
       genPluginManager().plugins.forEach((plugin) => {
         plugin.webViewInit = false;
       });
@@ -173,15 +190,20 @@ class TouchApp implements TalexTouch.TouchApp {
 }
 
 export class TouchWindow implements TalexTouch.ITouchWindow {
-  window: BrowserWindow | MicaBrowserWindow;
+  window: /* BrowserWindow |  */MicaBrowserWindow;
 
   constructor(options?: BrowserWindowConstructorOptions) {
     // this.window = new BrowserWindow(options);
-    this.window = micaSupport ? new MicaBrowserWindow(options) : new BrowserWindow(options)
+    this.window = /* micaSupport() ? */ new MicaBrowserWindow(options)// : new BrowserWindow(options)
 
-    // this.window.setDarkTheme();
-    this.window['setMicaAcrylicEffect']?.();
-    this.window['setRoundedCorner']?.()
+    this.window.setMicaAcrylicEffect()
+    this.window.setRoundedCorner()
+
+    // if (this.window instanceof MicaBrowserWindow) {
+    //   // this.window.setDarkTheme();
+    //   this.window['setMicaAcrylicEffect']?.();
+    //   this.window['setRoundedCorner']?.()
+    // }
 
     this.window.once("ready-to-show", () => {
       this.window.webContents.addListener("will-navigate", (event: any, url: string) => {
@@ -262,6 +284,12 @@ class ModuleManager implements TalexTouch.IModuleManager {
     this.touchChannel = touchChannel;
 
     checkDirWithCreate(this.modulePath, true);
+
+    touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
+      [...this.getAllModules()].forEach((module: Symbol) => {
+        this.unloadModule(module)
+      })
+    })
   }
 
   loadModule(module: TalexTouch.IModule): boolean | Promise<boolean> {
@@ -274,7 +302,7 @@ class ModuleManager implements TalexTouch.IModuleManager {
           await checkDirWithCreate(
             path.join(
               this.modulePath,
-              (module.filePath as string) || module.name.description
+              (module.filePath as string) || module.name.description!
             ),
             true
           );
@@ -289,22 +317,23 @@ class ModuleManager implements TalexTouch.IModuleManager {
               ...module,
               touchChannel: this.touchChannel,
               modulePath: path.join(
-                touchApp.rootPath,
+                touchApp!.rootPath,
                 "modules",
-                module.name.description
+                module.name.description!
               ),
+              modules: [],
               getModule(name: Symbol) {
-                return touchApp.moduleManager.getModule(name);
+                return touchApp!.moduleManager.getModule(name);
               },
               getModules() {
                 return this.modules.values();
               },
             },
-            touchApp,
-            touchApp.moduleManager
+            touchApp!,
+            touchApp!.moduleManager
           )
         );
-        return this.modules.set(module.name, _module).has(module.name);
+        return this.modules.set(module.name, _module!).has(module.name);
       })();
   }
 
@@ -313,7 +342,7 @@ class ModuleManager implements TalexTouch.IModuleManager {
       const _module = this.modules.get(moduleName);
       if (!_module) return false;
       console.log('[ModuleManager] Unloading module ' + moduleName.description)
-      _module.destroy(touchApp, this);
+      _module.destroy(touchApp!, this);
       return this.modules.delete(moduleName);
     })();
   }

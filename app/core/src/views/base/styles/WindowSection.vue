@@ -59,10 +59,13 @@ onMounted(() => {
 
 <style lang="scss">
 .WindowSection-Wrapper {
+  & p {
+    margin: .5rem .25rem;
+  }
   margin: 1rem 0;
-  padding: 1rem;
+  padding: .5rem;
 
-  --fake-inner-opacity: 0.75;
+  --fake-inner-opacity: 0.5;
   --fake-radius: 4px;
   --fake-color: var(--el-fill-color-dark);
 }

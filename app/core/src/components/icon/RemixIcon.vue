@@ -1,5 +1,5 @@
 <template>
-  <i class="remix" :class="`ri-${name}-${style || 'line'}`"></i>
+  <i class="" :class="`i-ri-${name}-${style || 'line'}`"></i>
 </template>
 
 <script>

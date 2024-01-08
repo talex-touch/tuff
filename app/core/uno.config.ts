@@ -23,8 +23,8 @@ export default defineConfig({
     presetAttributify(),
     presetIcons({
       collections: {
-        // 'ri': () => import('@iconify-json/ri/icons.json').then(i => i.default),
-        // 'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then(i => i.default),
+        'ri': () => import('@iconify-json/ri/icons.json').then(i => i.default),
+        'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then(i => i.default),
       }
     }),
     // presetTheme<Theme>({

@@ -5,6 +5,7 @@ import { ChannelType } from "@talex-touch/utils/channel";
 import { genTouchChannel } from "../core/channel-core";
 import { TalexTouch } from "../types";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
+// import { micaSupport } from "../core/touch-core";
 
 function closeApp(app: TalexTouch.TouchApp) {
   app.window.close();
@@ -37,9 +38,9 @@ function getOSInformation() {
 
 export default {
   name: Symbol("CommonChannel"),
-  listeners: new Array<Function>(),
+  listeners: new Array<() => void>(),
   filePath: false,
-  init(app) {
+  init(app: TalexTouch.TouchApp) {
     const channel = genTouchChannel(app);
 
     this.listeners.push(
@@ -80,7 +81,15 @@ export default {
       )
     );
 
-    async function onOpenUrl(url) {
+    // this.listeners.push(
+    //   channel.regChannel(ChannelType.MAIN, "support:mica", () => {
+    //     const _ = micaSupport()
+    //     console.log(_)
+    //     return _
+    //   })
+    // );
+
+    async function onOpenUrl(url: string) {
       console.log("open url", url);
       const data = await channel.send(ChannelType.MAIN, "url:open", url);
 
@@ -102,4 +111,4 @@ export default {
   destroy() {
     this.listeners.forEach((f: () => void) => f());
   },
-} as TalexTouch.IModule;
+};

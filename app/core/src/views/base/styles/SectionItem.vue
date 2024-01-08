@@ -1,6 +1,7 @@
 <template>
-  <div @click="value = title" @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full border-rounded flex items-center
-    justify-center :class="{ disabled, active: value === title }" class="SectionItem-Container transition-cubic">
+  <div @click="value = title" @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full
+    border-rounded flex items-center justify-center :class="{ disabled, active: value === title }"
+    class="SectionItem-Container transition-cubic">
     <div class="SectionItem-Display" :class="title">
       <div v-shared-element:[`theme-preference-${title}-img`] :style="`filter: ${filter}`" />
     </div>
@@ -34,6 +35,9 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  tip: {
+    type: String
   }
 })
 const emits = defineEmits([
@@ -53,10 +57,13 @@ function goRouter() {
 }
 
 function handleEnter() {
+  if (props.tip)
+    mention("<span style='color: var(--el-color-warning)'>" + props.tip + "</span>")
+
   if (!props.disabled)
     return
 
-  mention("<span style='color: var(--el-color-danger)'>Your device not support this feature.</span>")
+  mention("<span style='color: var(--el-color-danger)'>Your device doesn't support this feature.</span>")
 }
 
 function handleLeave() {

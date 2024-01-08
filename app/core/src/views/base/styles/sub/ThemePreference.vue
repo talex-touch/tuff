@@ -14,7 +14,7 @@ const route = useRoute()
         <p my-4 font-extrabold text-2xl v-shared-element:[`theme-preference-${route.query.theme}`]>{{ route.query.theme }}</p>
       </div>
     </template>
-    
+
     <div class="ThemePreference-Content">
       <div class="ThemePreference-Display" :class="route.query.theme" v-shared-element:[`theme-preference-${route.query.theme}-img`]>
 

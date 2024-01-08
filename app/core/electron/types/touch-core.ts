@@ -150,5 +150,5 @@ export namespace TalexTouch {
     ): void;
   }
 
-  export interface IConfiguration {}
+  export interface IConfiguration { }
 }

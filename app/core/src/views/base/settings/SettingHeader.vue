@@ -1,6 +1,5 @@
 <script setup name="SettingHeader" lang="ts">
-import { $t } from '@modules/lang'
-const props = defineProps({
+defineProps({
   env: {
     type: Object,
     required: true
@@ -27,19 +26,19 @@ const props = defineProps({
           <text x="0" y="20%"> Talex-Touch </text>
         </svg>
 
-        <p>A within easy reach of all applications</p>
+        <p>A within easy reach of all applications.</p>
       </div>
 
       <ul class="About-Footer" v-if="env.process">
-        <li flex items-center gap-2>
+        <li class="fake-background" flex items-center gap-2>
           <div inline-block class="i-ri-npmjs-line" />
           <span>{{ env.process.versions?.node }}</span>
         </li>
-        <li flex items-center gap-2>
+        <li class="fake-background" flex items-center gap-2>
           <div inline-block class="i-ri-chrome-line" />
           <span>{{ env.process.versions?.chrome }}</span>
         </li>
-        <li flex items-center gap-2>
+        <li class="fake-background" flex items-center gap-2>
           <div inline-block class="i-ri-vuejs-line" />
           <span>{{ String(env.packageJson?.dependencies?.vue).substring(1) }}</span>
         </li>
@@ -81,9 +80,11 @@ const props = defineProps({
         border-radius: 8px;
         list-style: none;
 
-        opacity: .85;
+        --fake-inner-opacity: .75;
+        overflow: hidden;
         transform: scale(.85);
-        background-color: var(--el-fill-color-light);
+        backdrop-filter: blur(18px);
+        // background-color: var(--el-fill-color-light);
       }
     }
 

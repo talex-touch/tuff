@@ -6,8 +6,8 @@ import { TalexTouch } from "../types";
 export default {
   name: Symbol("ExtensionLoader"),
   filePath: "extensions",
-  extensions: [],
-  init(app, manager) {
+  extensions: new Array<string>(),
+  init(app: TalexTouch.TouchApp) {
     const extensionPath = path.join(app.rootPath, "modules", "extensions");
     const extensions = fse.readdirSync(extensionPath);
 
@@ -20,5 +20,5 @@ export default {
       );
     });
   },
-  destroy() {},
-} as TalexTouch.IModule;
+  destroy() { },
+};

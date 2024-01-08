@@ -1,15 +1,16 @@
-import { TalexTouch } from "../types";
+import { genTouchChannel } from "../core/channel-core";
 import { ChannelType } from "@talex-touch/utils/channel";
 
 export default {
   name: Symbol("DropManager"),
   filePath: false,
-  listeners: new Array<Function>,
-  init(app, manager) {
+  listeners: new Array<() => void>,
+  init() {
+    const touchChannel = genTouchChannel();
 
     this.listeners.push(
-      this.touchChannel.regChannel(ChannelType.MAIN, 'drop', ({ data }) => {
-        this.touchChannel.send(ChannelType.PLUGIN, 'drop', data)
+      touchChannel.regChannel(ChannelType.MAIN, 'drop', ({ data }) => {
+        touchChannel.send(ChannelType.PLUGIN, 'drop', data)
       })
     )
 
@@ -17,4 +18,4 @@ export default {
   destroy() {
     this.listeners.forEach(listener => listener())
   },
-} as TalexTouch.IModule;
+};
