@@ -7,7 +7,7 @@ provide('changePointer', (el: HTMLElement) => {
   nextTick(() => fixPointer(el))
 })
 
-async function fixPointer(targetEl) {
+async function fixPointer(targetEl: HTMLElement) {
   const pointerEl = pointer.value
   if (!pointerEl || !targetEl)
     return
@@ -17,7 +17,7 @@ async function fixPointer(targetEl) {
   const pointerRect = pointerEl.getBoundingClientRect()
   const nodeRect = targetEl.getBoundingClientRect()
 
-  const diffTop = -targetEl.parentElement.offsetTop - nodeRect.height
+  const diffTop = -targetEl.parentElement!.offsetTop - nodeRect.height + 8
 
   if (nodeRect.top > pointerRect.top) {
     pointerStyle.height = `${nodeRect.height * 0.8}px`

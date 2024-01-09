@@ -19,15 +19,15 @@
         <div class="Plugin-EmptyBubble" :style="`--d: ${i * 2 + 1}s`" v-for="i in 5" />
 
         <div class="Plugin-Mention">
-          <p>Start by installing or selecting a plugin</p>
+          <p>Begin by installing or choosing a plugin</p>
           <span>
-            Plugins can enhance your workflow.
-            Share your works through personal cloud.
-            Take a look on what other developers are doing.
-            Click button to get start.
+            Explore how plugins can enhance your workflow,
+            share your work via a personal cloud,
+            and discover what other developers are creating.
+            Click the button to get started.
           </span>
           <FlatButton @click="() => $router.push('/market')">
-            Get started!
+            Let's begin!
           </FlatButton>
         </div>
       </div>
@@ -86,14 +86,14 @@ const toggleOptions = reactive({
   style: computed(() => {
     const [a, b, c, d] = toggleOptions.points
 
-    if (!a || !b || !c || !d) return ''
+    if (!a || !b || !c || !d) return 'display: none;'
 
     // const bg = 'var(--el-fill-color)'// toggleOptions.status ? 'transparent' : 'var(--el-fill-color)'
 
     return `
       clip-path: polygon(${a.x}% ${a.y}%, ${b.x}% ${b.y}%, ${c.x}% ${c.y}%, ${d.x}% ${d.y}%);
       --fake-opacity: .75;
-      width: 100%; height: 100%; overflow: hidden;z-index: 1; transition: clip-path .35s, opacity .5s
+      width: 100%; height: 100%;z-index: 1; transition: clip-path .35s, opacity .5s
     `
   })
 })
@@ -186,7 +186,7 @@ window.addEventListener('resize', () => {
 
     filter: invert(1);
     transform: translate(-50%, -50%);
-    background-color: var(--el-fill-color);
+    background-color: var(--el-bg-color);
     transition: all .75s;
   }
 

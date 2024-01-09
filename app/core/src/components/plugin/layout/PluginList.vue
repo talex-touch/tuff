@@ -42,13 +42,15 @@ const toggleNewPlugin = inject('toggleNewPlugin')
     filter: invert(.25);
     transition: .25s;
   }
+
   &:hover {
     padding: 4px 8px;
     --fake-radius: 4px;
 
-    --fake-opacity: .35;
-  --fake-inner-opacity: .35;
+    --fake-opacity: .125;
+    --fake-inner-opacity: .125;
   }
+
   position: sticky;
   padding: 4px;
   display: inline-block;
@@ -57,6 +59,7 @@ const toggleNewPlugin = inject('toggleNewPlugin')
 
   left: 50%;
 
+  --fake-color: var(--el-text-color-primary);
   --fake-opacity: .25;
   --fake-inner-opacity: .25;
   --fake-radius: 50%;

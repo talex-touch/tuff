@@ -13,10 +13,39 @@ declare module '*.vue' {
 }
 
 declare global {
+
+  export interface IStartupInfo {
+    isDev: boolean
+    isPackaged: boolean
+    isRelease: boolean
+    path: {
+      appDataPath: string
+      appPath: string
+      configPath: string
+      exePath: string
+      homePath: string
+      modulePath: string
+      pluginPath: string
+      rootPath: string
+      tempPath: string
+      userDataPath: string
+    }
+    t: {
+      _s: number
+      s: number
+      e: number
+      p: number
+      h: number[]
+    }
+    version: string
+    appUpdate: boolean
+  }
+
   export interface Window {
     $nodeApi: BaseNodeApi
     $storage: StorageManager
     $channel: ITouchClientChannel
     $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
+    $startupInfo: IStartupInfo
   }
 }

@@ -77,7 +77,7 @@ function changeActivePlugin(event, item) {
 
   position: relative;
   margin: 0;
-  padding: 10px 0;
+  padding: 5px 0;
   display: flex;
   flex-direction: column;
 

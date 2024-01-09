@@ -26,7 +26,7 @@ const value = useModelWrapper(props, emits)
     </p>
 
     <!-- <p v-t="'base.empty-select'" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" /> -->
-    <p v-text="`No any selected.`" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
+    <p v-text="`No selection made.`" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
 
     <transition-group name="list">
       <div

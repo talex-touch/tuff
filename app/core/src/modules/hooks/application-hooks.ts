@@ -96,7 +96,7 @@ export async function urlHooker() {
 
 export async function applicationUpgrade() {
   const res = await AppUpdate.getInstance().check()
-  window['_appUpdate'] = res
+  window.$startupInfo.appUpdate = res
   if (res) {
     document.body.classList.add('has-update')
 
