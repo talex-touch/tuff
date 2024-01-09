@@ -1,5 +1,5 @@
 <template>
-  <div @click="value = title" @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full
+  <div @click="handleClick" @mouseenter="handleEnter" @mouseleave="handleLeave" relative cursor-pointer h-full
     border-rounded flex items-center justify-center :class="{ disabled, active: value === title }"
     class="SectionItem-Container transition-cubic">
     <div class="SectionItem-Display" :class="title">
@@ -47,6 +47,12 @@ const mention = inject('mention')
 
 const value = useModelWrapper(props, emits)
 
+function handleClick() {
+  if ( props.disabled ) return
+
+  value.value = props.title
+}
+
 function goRouter() {
   router.push({
     name: 'Theme',
@@ -63,7 +69,7 @@ function handleEnter() {
   if (!props.disabled)
     return
 
-  mention("<span style='color: var(--el-color-danger)'>Your device doesn't support this feature.</span>")
+  mention("<span style='color: var(--el-color-danger)'>Your device doesn't support this feature yet.</span>")
 }
 
 function handleLeave() {
@@ -93,14 +99,14 @@ function handleLeave() {
 }
 
 .SectionItem-Container {
-  &:hover {
-    border: 2px solid var(--el-color-primary);
-  }
+  // &:hover {
+  //   border: 2px solid var(--el-color-primary);
+  // }
 
   &.active {
     cursor: default;
     box-shadow: 0 0 8px 0 var(--el-color-primary-light-5);
-    border: 2px solid var(--el-color-primary);
+    // border: 2px solid var(--el-color-primary);
   }
 
   &.disabled {

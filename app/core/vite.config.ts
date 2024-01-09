@@ -90,6 +90,15 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
                 {
                     // Main-Process entry file of the Electron App.
                     entry: 'electron/index.ts',
+                    onstart({ startup }) {
+                        startup([
+                            '.',
+                            '--no-sandbox',
+                            '--sourcemap',
+                            // For Chrome devtools
+                            '--remote-debugging-port=9222',
+                        ])
+                    },
                     vite: {
                         build: {
                             rollupOptions: {
