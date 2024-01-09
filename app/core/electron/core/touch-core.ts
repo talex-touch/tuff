@@ -3,7 +3,8 @@ import {
   BrowserWindowConstructorOptions,
   OpenDevToolsOptions,
   WebContents,
-  app
+  app,
+  crashReporter
 } from "electron";
 import fse from "fs-extra";
 import { release } from "os";
@@ -26,6 +27,72 @@ import {
   WindowAllClosedEvent,
   touchEventBus,
 } from "./eventbus/touch-event";
+import * as log4js from 'log4js'
+
+console.log('TALEX TOUCH STARTED')
+
+const rootPath = getRootPath(process.cwd())
+
+console.log('Application running under folder: ' + rootPath)
+
+const logs = path.join(rootPath, 'logs')
+checkDirWithCreate(logs)
+
+app.setPath('crashDumps', path.join(logs, 'crashes'))
+
+crashReporter.start({
+  companyName: "TalexTouch",
+  productName: "TalexTouch",
+  submitURL: "",
+  uploadToServer: false,
+  ignoreSystemCrashHandler: false,
+  extra: {
+    version: app.getVersion()
+  }
+})
+
+log4js.configure({
+  appenders: {
+    all: {
+      type: "dateFile",
+      keepFileExt: true,
+      filename: path.join(logs, "D"),
+      maxLogSize: 10485760,
+      backups: 3,
+      compress: true,
+      alwaysIncludePattern: true,
+      pattern: "yyyy-MM-dd.log",
+    },
+    out: {
+      type: "stdout"
+    },
+    err: {
+      type: "stderr"
+    },
+    error: {
+      type: "dateFile",
+      keepFileExt: true,
+      filename: path.join(logs, "E"),
+      maxLogSize: 10485760,
+      backups: 3,
+      compress: true,
+      alwaysIncludePattern: true,
+      pattern: "yyyy-MM-dd.err",
+    }
+  },
+  categories: {
+    default: {
+      appenders: ["out"], level: "debug"
+    },
+    all: {
+      appenders: ["all"], level: "all"
+    },
+    error: {
+      appenders: ["err", "error"], level: "error"
+    }
+  }
+})
+
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -80,7 +147,7 @@ function getRootPath(root: string) {
 // export const micaSupport: () => boolean = () => app.isPackaged ? fse.existsSync(micaLib) : true && _micaSupport;
 
 class TouchApp implements TalexTouch.TouchApp {
-  readonly rootPath: string = getRootPath(process.cwd());
+  readonly rootPath: string = rootPath;
 
   app: Electron.App;
 

@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingUser">
-import { useLogin } from "@modules/hooks/function-hooks";
+import { useLogin } from "~/modules/hooks/function-hooks.ts";
 import TBlockSlot from "@comp/base/group/TBlockSlot.vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'

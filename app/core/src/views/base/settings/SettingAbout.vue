@@ -19,7 +19,7 @@ const props = defineProps({
 const appUpdate = ref()
 
 onMounted(() => {
-  appUpdate.value = window['_appUpdate']
+  appUpdate.value = window.$startupInfo.appUpdate
 })
 
 const versionStr = computed(() => `TalexTouch ${props.dev ? 'Dev' : 'Master'} ${props.env.packageJson?.version}`)
@@ -76,7 +76,7 @@ onBeforeUnmount(() => {
       </template>
     </t-block-line>
     <t-block-line title="Platform" :description="`${env.process.platform} (${env.os.arch})`"></t-block-line>
-    <t-block-line title="Experience" description="Touch Feature Experience Pack 2023.09.03"></t-block-line>
+    <t-block-line title="Experience" description="Touch Feature Experience Pack 2024.01.09"></t-block-line>
     <t-block-line title="CPU Usage">
       <template #description>
         <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage"

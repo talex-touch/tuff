@@ -288,8 +288,9 @@ class PluginManager implements IPluginManager {
       if (baseName.indexOf(".") === 0) return;
 
       const pluginName = path.basename(path.dirname(_path));
+
       if (!this.hasPlugin(pluginName)) {
-        console.warn("[PluginManager] Plugin " + pluginName + " is not loaded, but its file has been changed.")
+        console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded despite changes made to its file.")
         return;
       }
       let plugin = this.plugins.get(pluginName) as TouchPlugin;
@@ -381,7 +382,7 @@ class PluginManager implements IPluginManager {
     const readme = ((p) =>
       fse.existsSync(p)
         ? (this.watcher.add(p), fse.readFileSync(p).toString())
-        : undefined)(path.resolve(pluginPath, "README.md"));
+        : '')(path.resolve(pluginPath, "README.md"));
 
     const icon = new PluginIcon(
       pluginPath,
@@ -606,7 +607,7 @@ export default {
       property.window && bind2Objs(window, property.window)
 
       property.webContents && bind2Objs(window.webContents, property.webContents)
-        
+
       return true
     })
 

@@ -45,7 +45,7 @@
       :expand-fill="true"
       name="Emphasis"
       icon="record-circle"
-      description="Different emphasis is suitable for different people, if the color clear is not recommended"
+      description="Different emphasis for different people. Avoid using clear colors randomly."
     >
       <t-block-switch
         v-model="themeStyle.theme.addon.coloring"

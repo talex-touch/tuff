@@ -128,3 +128,4 @@ app/ends/
 # plugins/
 .history/
 app/main/dist-electron
+t/
