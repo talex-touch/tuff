@@ -8,26 +8,34 @@
       <TouchMenuItem route="/styles" name="Style" icon="i-ri-paint-line" />
       <TouchMenuItem route="/setting" name="Setting" icon="i-ri-settings-6-line" />
       <p v-if="plugins.length" class="FlatNavBar-Title">PLUGINS</p>
-      <TouchMenuItem @active="changeActivePlugin($event, item)" :doActive="() => activePlugin === item.name" v-for="item in plugins" :key="item.name">
+      <TouchMenuItem
+        @active="changeActivePlugin($event, item)"
+        :doActive="() => activePlugin === item.name"
+        v-for="item in plugins"
+        :key="item.name"
+      >
         {{ item.name }}
       </TouchMenuItem>
     </TouchMenu>
   </ul>
 </template>
 
-<script name="FlatNavBar" setup>
+<script lang="ts" name="FlatNavBar" setup>
 import TouchMenu from "@comp/menu/TouchMenu.vue";
 import TouchMenuItem from "@comp/menu/TouchMenuItem.vue";
+import { ITouchPlugin } from "@talex-touch/utils/plugin";
 import { inject } from "vue";
 
-const activePlugin = inject('activePlugin')
-const _plugins = inject('plugins')
-const plugins = computed(() => _plugins().filter(item => item.status > 2 && item.status < 5))
+const activePlugin = inject("activePlugin");
+const _plugins = inject("plugins");
+const plugins = computed(() =>
+  _plugins().filter((item: ITouchPlugin) => item.status > 2 && item.status < 5)
+);
 
-function changeActivePlugin(event, item) {
-  event.stopPropagation()
+function changeActivePlugin(event: Event, item: ITouchPlugin) {
+  event.stopPropagation();
 
-  activePlugin.value = item.name
+  activePlugin.value = item.name;
 }
 </script>
 
@@ -49,23 +57,22 @@ function changeActivePlugin(event, item) {
 
   :deep(.scale-upper.active) {
     .IconButton-Container {
-      transform: scale(.75);
+      transform: scale(0.75);
     }
   }
 
   :deep(.IconButton-Container) {
-
     --fake-opacity: 0;
     --fake-inner-opacity: 0;
     --fake-radius: 8px;
-    transform: scale(.85);
+    transform: scale(0.85);
   }
 }
 
 :deep(.FlatNavBar-Title) {
   margin: 0 0 10px 0;
 
-  opacity: .25;
+  opacity: 0.25;
   font-size: 12px;
   font-weight: 600;
 }

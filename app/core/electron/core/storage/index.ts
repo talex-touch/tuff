@@ -1,20 +1,21 @@
 import { ChannelType } from "@talex-touch/utils/channel";
 import { genTouchChannel } from "../channel-core";
 import fse from "fs-extra";
-import { TalexTouch } from "~/main/types";
 import path from "path";
+import { TalexTouch } from "../../types";
 
-let configPath;
+let configPath: string;
 
 const module = {
   name: Symbol("StorageChannel"),
-  listeners: new Array<Function>(),
+  listeners: new Array<() => void>(),
   filePath: "config",
-  configs: {},
+  configs: new Map<string, object>,
   getConfig(name: string) {
-    if ( !configPath ) throw new Error(`Config ${name} not found! ` + configPath);
+    if (!configPath) throw new Error(`Config ${name} not found! ` + configPath);
+
     return (
-      this.configs[name] ||
+      this.configs.get(name) ||
       (() => {
         const p = path.resolve(configPath, name);
 
@@ -22,39 +23,39 @@ const module = {
           ? JSON.parse(fse.readFileSync(p).toString())
           : {};
 
-        this.configs[name] = file;
+        this.configs.set(name, file);
 
         return file;
       })()
     );
   },
   reloadConfig(name: string) {
-    if ( !configPath ) throw new Error(`Config ${name} not found`);
+    if (!configPath) throw new Error(`Config ${name} not found`);
     const file = JSON.parse(
       fse.readFileSync(path.resolve(configPath, name)).toString()
     );
 
-    this.configs[name] = file;
+    this.configs.set(name, file);
 
     return file;
   },
   saveConfig(name: string, content?: string, clear?: boolean): boolean {
-    if ( !configPath ) throw new Error(`Config ${name} not found`);
+    if (!configPath) throw new Error(`Config ${name} not found`)
 
-    if (content && this.configs[name]) {
-      const p = path.join(configPath, name);
-      console.log("[Config] Save config", name, content, clear, p)
+    if (content && this.configs.get(name)) {
+      const p = path.join(configPath, name)
+      console.log("[Config] Save " + name + " with clear status: " + clear)
 
-      fse.createFileSync(p);
+      fse.createFileSync(p)
       fse.writeFileSync(
         p,
-        content ? content : JSON.stringify(this.configs[name])
+        content ? content : JSON.stringify(this.configs.get(name))
       );
 
       if (clear) {
-        delete this.configs[name];
+        this.configs.delete(name)
       } else {
-        this.configs[name] = JSON.parse(content);
+        this.configs.set(name, JSON.parse(content));
       }
 
       return true;
@@ -62,13 +63,13 @@ const module = {
     return false;
   },
   saveAllConfig() {
-    if ( !configPath ) throw new Error(`Config ${name} not found!` + configPath);
+    if (!configPath) throw new Error(`Config ${name} not found!` + configPath);
     Object.keys(this.configs).forEach((key) => this.saveConfig(key));
   },
-  init(app) {
+  init(app: TalexTouch.TouchApp) {
     configPath = path.join(app.rootPath, "config");
-    
-    console.log("[Config] Init config path", configPath)
+
+    console.log("[Config] Init config path " + configPath)
 
     const channel = genTouchChannel(app);
 

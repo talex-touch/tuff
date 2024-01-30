@@ -1,20 +1,30 @@
 <template>
-  <div cursor-pointer flex relative v-wave role="button" :class="{ primary, 'fake-background': !primary, mini }"
-    class="FlatButton-Container">
+  <div
+    cursor-pointer
+    flex
+    relative
+    v-wave
+    role="button"
+    :class="{ primary, 'fake-background': !primary, mini }"
+    class="FlatButton-Container"
+  >
     <span v-wave>
       <slot />
     </span>
   </div>
 </template>
 
-<script>
+<script lang="ts">
 export default {
-  name: "FlatButton"
-}
+  name: "FlatButton",
+};
 </script>
 
-<script setup>
-const props = defineProps(['primary', 'mini'])
+<script lang="ts" setup>
+defineProps({
+  primary: Boolean,
+  mini: Boolean,
+});
 </script>
 
 <style lang="scss" scoped>
@@ -48,5 +58,6 @@ const props = defineProps(['primary', 'mini'])
 
   border-radius: 6px;
   border: 1px solid var(--el-border-color);
-  transition: .25s;
-}</style>
+  transition: 0.25s;
+}
+</style>

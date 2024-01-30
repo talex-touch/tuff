@@ -6,65 +6,62 @@
       <template v-else>
         <p>{{ title }}</p>
         <div class="TBlowDialog-Content">
-          <span style="position: relative;height: 100%;" v-html="message"></span>
+          <span style="position: relative; height: 100%" v-html="message"></span>
         </div>
-        <div @click="destroy" v-wave class="TBlowDialog-Confirm">
-          Confirm
-        </div>
+        <div @click="destroy" v-wave class="TBlowDialog-Confirm">Confirm</div>
       </template>
     </div>
   </div>
 </template>
 
-<script name="TBlowDialog" setup>
+<script lang="ts" name="TBlowDialog" setup>
 import { defineComponent, onMounted, provide, ref } from "vue";
-import {sleep} from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common";
 
-const close = ref(false)
-const props = defineProps(['close', 'title', 'message', 'comp', 'render'])
+const close = ref(false);
+const props = defineProps(["close", "title", "message", "comp", "render"]);
 
-const renderComp = ref(null)
+const renderComp = ref(null);
 
 onMounted(() => {
-  if ( props.render ) {
+  if (props.render) {
     renderComp.value = defineComponent({
-      render: props.render
-    })
+      render: props.render,
+    });
   }
 
-  const app = document.getElementById('app')
+  const app = document.getElementById("app")!;
 
   Object.assign(app.style, {
-    transition: '.75s',
-    transform: 'scale(1.25)',
-    opacity: '.75'
-  })
-
-})
+    transition: ".75s",
+    transform: "scale(1.25)",
+    opacity: ".75",
+  });
+});
 
 async function destroy() {
-  const app = document.getElementById('app')
+  const app = document.getElementById("app")!;
 
   Object.assign(app.style, {
-    transform: 'scale(1)',
-    opacity: '1'
-  })
+    transform: "scale(1)",
+    opacity: "1",
+  });
 
-  close.value = true
+  close.value = true;
 
-  await sleep(550)
+  await sleep(550);
 
-  app.style.cssText = ''
+  app.style.cssText = "";
 
-  props.close()
+  props.close();
 }
 
-provide('destroy', destroy)
+provide("destroy", destroy);
 </script>
 
 <style lang="scss">
 .blow-outer {
-  animation: blow-outer .55s forwards;
+  animation: blow-outer 0.55s forwards;
 }
 
 .blow-outer-reverse {
@@ -76,8 +73,9 @@ provide('destroy', destroy)
     opacity: 1;
     transform: scale(1);
   }
+
   to {
-    opacity: .75;
+    opacity: 0.75;
     transform: scale(1.25);
   }
 }
@@ -114,19 +112,27 @@ provide('destroy', destroy)
     text-align: center;
 
     border-radius: 5px;
-    background: linear-gradient(to right, var(--el-color-primary-light-3), var(--el-color-primary-light-5), var(--el-color-primary-light-3));
+    background: linear-gradient(
+      to right,
+      var(--el-color-primary-light-3),
+      var(--el-color-primary-light-5),
+      var(--el-color-primary-light-3)
+    );
   }
+
   p {
     font-size: 1.5rem;
     font-weight: 600;
 
     text-align: center;
   }
+
   span {
     width: 100%;
     display: block;
     text-align: center;
   }
+
   position: relative;
   padding: 8px 20px;
 
@@ -139,8 +145,8 @@ provide('destroy', destroy)
   box-sizing: border-box;
   background-color: var(--el-fill-color-light);
 
-  transition: .5s;
-  animation: blow .5s;
+  transition: 0.5s;
+  animation: blow 0.5s;
 }
 
 .close .TBlowDialog-Container {
@@ -152,6 +158,7 @@ provide('destroy', destroy)
   &.close {
     opacity: 0;
   }
+
   position: absolute;
   display: flex;
 
@@ -166,14 +173,15 @@ provide('destroy', destroy)
 
   //background-color: #000000aa;
   backdrop-filter: blur(5px);
-  transition: .5s;
-  animation: fade-in .5s;
+  transition: 0.5s;
+  animation: fade-in 0.5s;
 }
 
 @keyframes blow {
   0% {
     transform: scale(0);
   }
+
   100% {
     transform: scale(1);
   }
@@ -183,6 +191,7 @@ provide('destroy', destroy)
   0% {
     opacity: 0;
   }
+
   100% {
     opacity: 1;
   }

@@ -6,49 +6,45 @@
       <template v-else>
         <p>{{ title }}</p>
         <div class="TPopperDialog-Content">
-          <span style="position: relative;height: 100%;" v-html="message"></span>
+          <span style="position: relative; height: 100%" v-html="message"></span>
         </div>
-        <div @click="destroy" v-wave class="TPopperDialog-Confirm">
-          Confirm
-        </div>
+        <div @click="destroy" v-wave class="TPopperDialog-Confirm">Confirm</div>
       </template>
     </div>
   </div>
 </template>
 
-<script name="TPopperDialog" setup>
+<script lang="ts" name="TPopperDialog" setup>
 import { defineComponent, onMounted, provide, ref } from "vue";
-import { sleep } from '@talex-touch/utils/common';
+import { sleep } from "@talex-touch/utils/common";
 
-const close = ref(false)
-const props = defineProps(['close', 'title', 'message', 'comp', 'render'])
+const close = ref(false);
+const props = defineProps(["close", "title", "message", "comp", "render"]);
 
-const renderComp = ref(null)
+const renderComp = ref(null);
 
 onMounted(() => {
   if (props.render) {
     renderComp.value = defineComponent({
-      render: props.render
-    })
+      render: props.render,
+    });
   }
-
-})
+});
 
 async function destroy() {
+  close.value = true;
 
-  close.value = true
+  await sleep(550);
 
-  await sleep(550)
-
-  props.close()
+  props.close();
 }
 
-provide('destroy', destroy)
+provide("destroy", destroy);
 </script>
 
 <style lang="scss">
 .Popper-outer {
-  animation: Popper-outer .55s forwards cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  animation: Popper-outer 0.55s forwards cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 .Popper-outer-reverse {
@@ -62,7 +58,7 @@ provide('destroy', destroy)
   }
 
   to {
-    opacity: .75;
+    opacity: 0.75;
     transform: scale(1.25);
   }
 }
@@ -99,7 +95,12 @@ provide('destroy', destroy)
     text-align: center;
 
     border-radius: 5px;
-    background: linear-gradient(to right, var(--el-color-primary-light-3), var(--el-color-primary-light-5), var(--el-color-primary-light-3));
+    background: linear-gradient(
+      to right,
+      var(--el-color-primary-light-3),
+      var(--el-color-primary-light-5),
+      var(--el-color-primary-light-3)
+    );
   }
 
   p {
@@ -135,7 +136,7 @@ provide('destroy', destroy)
   //height: 200px;
 
   --fake-radius: 8px;
-  --fake-inner-opacity: .75;
+  --fake-inner-opacity: 0.75;
   border-radius: 8px;
   box-shadow: var(--el-box-shadow);
   box-sizing: border-box;
@@ -144,8 +145,8 @@ provide('destroy', destroy)
   overflow: hidden;
   backdrop-filter: blur(10px) saturate(180%) brightness(1.5);
 
-  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
-  animation: Popper .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+  animation: Popper 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 .close .TPopperDialog-Container {
@@ -173,8 +174,8 @@ provide('destroy', destroy)
 
   background-color: #00000055;
   //backdrop-filter: blur(5px);
-  transition: cubic-bezier(0.785, 0.135, 0.150, 0.860) .5s;
-  animation: cubic-bezier(0.785, 0.135, 0.150, 0.860) .5s;
+  transition: cubic-bezier(0.785, 0.135, 0.15, 0.86) 0.5s;
+  animation: cubic-bezier(0.785, 0.135, 0.15, 0.86) 0.5s;
 }
 
 @keyframes Popper {
@@ -197,4 +198,5 @@ provide('destroy', destroy)
   100% {
     opacity: 1;
   }
-}</style>
+}
+</style>

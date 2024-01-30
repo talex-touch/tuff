@@ -13,30 +13,36 @@
   </div>
 </template>
 
-<script name="AppLayout" setup>
+<script lang="ts" name="AppLayout" setup>
 import FlatLayout from "./flat/FlatLayout.vue";
 import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
-import { themeStyle, triggerThemeTransition } from "@modules/storage/theme-style";
+import { themeStyle, triggerThemeTransition } from "~/modules/storage/theme-style";
 
-const mica = computed(() => themeStyle.value.theme.window === 'Mica')
-const coloring = computed(() => themeStyle.value.theme.addon.coloring)
-const contrast = computed(() => themeStyle.value.theme.addon.contrast)
+const mica = computed(() => themeStyle.value.theme.window === "Mica");
+const coloring = computed(() => themeStyle.value.theme.addon.coloring);
+const contrast = computed(() => themeStyle.value.theme.addon.contrast);
 
 onMounted(() => {
-  triggerThemeTransition([innerWidth / 2, innerHeight / 2], themeStyle.value.theme.style.auto ? 'auto' : themeStyle.value.theme.style.dark ? 'dark' : 'light')
-})
+  triggerThemeTransition(
+    [innerWidth / 2, innerHeight / 2],
+    themeStyle.value.theme.style.auto
+      ? "auto"
+      : themeStyle.value.theme.style.dark
+      ? "dark"
+      : "light"
+  );
+});
 </script>
 
 <style lang="scss">
 .AppLayout-Aside {
-
   .NavBar-Home {
     max-height: 300px;
   }
 
   z-index: 1000;
   position: relative;
-  padding: .1rem .5rem;
+  padding: 0.1rem 0.5rem;
   display: flex;
 
   flex-direction: column;
@@ -51,25 +57,25 @@ onMounted(() => {
 
   box-sizing: border-box;
 
-  --fake-opacity: .25;
+  --fake-opacity: 0.25;
   --fake-radius: 0;
   --fake-color: var(--el-fill-color-extra-light);
 
-  transition: margin-right .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-  left .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-  width .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-  opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: margin-right 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    left 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    width 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 @keyframes viewEnter {
   from {
     opacity: 0;
-    transform: translateX(100%) scale(.85)
+    transform: translateX(100%) scale(0.85);
   }
 
   to {
     opacity: 1;
-    transform: translateX(0) scale(1)
+    transform: translateX(0) scale(1);
   }
 }
 
@@ -98,15 +104,14 @@ onMounted(() => {
 
   box-sizing: border-box;
 
-  --fake-opacity: .25;
+  --fake-opacity: 0.25;
   --fake-radius: 8px 8px 0 0;
   --fake-color: var(--el-fill-color-extra-light);
 
-  transition:
-    margin-bottom .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-    top .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-    height .5s cubic-bezier(0.785, 0.135, 0.150, 0.860),
-    opacity .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: margin-bottom 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    top 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    height 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 .AppLayout-Controller {
@@ -126,7 +131,7 @@ onMounted(() => {
 }
 
 .mica.AppLayout-Wrapper {
-  --fake-inner-opacity: .75;
+  --fake-inner-opacity: 0.75;
 }
 
 .AppLayout-Wrapper {
@@ -135,7 +140,7 @@ onMounted(() => {
 
     width: 110px;
 
-    opacity: .75;
+    opacity: 0.75;
     font-size: 12px;
   }
 
@@ -151,7 +156,7 @@ onMounted(() => {
 
     opacity: 0;
     -webkit-app-region: no-drag;
-    animation: viewEnter .25s .5s forwards;
+    animation: viewEnter 0.25s 0.5s forwards;
   }
 
   .AppLayout-Container {

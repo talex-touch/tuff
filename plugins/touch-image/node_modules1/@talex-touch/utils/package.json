@@ -1,0 +1,30 @@
+{
+  "main": "./index.ts",
+  "name": "@talex-touch/utils",
+  "author": "TalexDreamSoul",
+  "module": "./index.ts",
+  "license": "MPL-2.0",
+  "private": false,
+  "version": "1.0.10",
+  "scripts": {
+    "publish": "npm publish --access public"
+  },
+  "keywords": [
+    "vue",
+    "electron",
+    "talex-touch"
+  ],
+  "repository": {
+    "url": "https://github.com/talex-touch/talex-touch.git",
+    "type": "git"
+  },
+  "description": "TalexTouch series utils",
+  "dependencies": {
+    "path-browserify": "^1.0.1",
+    "vue": "^3.3.4"
+  },
+  "peerDependencies": {
+    "electron": "^24.4.0",
+    "vue": "^3.2.47"
+  }
+}

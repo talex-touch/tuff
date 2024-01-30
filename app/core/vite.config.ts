@@ -48,7 +48,7 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
         },
         rollupOptions: {
             external: [
-                'mica-electron',
+                // 'mica-electron',
                 'electron',
                 'vite',
                 'vite-plugin-electron-renderer',
@@ -74,17 +74,17 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
             },
         },
         plugins: [
-            {
-                name: 'generate-types',
-                async closeBundle() {
-                    if (isTest) return
+            // {
+            //     name: 'generate-types',
+            //     async closeBundle() {
+            //         if (isTest) return
 
-                    removeTypes()
-                    await generateTypes()
-                    moveTypesToDist()
-                    removeTypes()
-                }
-            },
+            //         removeTypes()
+            //         await generateTypes()
+            //         moveTypesToDist()
+            //         removeTypes()
+            //     }
+            // },
             vue(),
             electron([
                 {

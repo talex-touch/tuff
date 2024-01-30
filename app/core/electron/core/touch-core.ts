@@ -29,11 +29,7 @@ import {
 } from "./eventbus/touch-event";
 import * as log4js from 'log4js'
 
-console.log('TALEX TOUCH STARTED')
-
 const rootPath = getRootPath(process.cwd())
-
-console.log('Application running under folder: ' + rootPath)
 
 const logs = path.join(rootPath, 'logs')
 checkDirWithCreate(logs)
@@ -82,17 +78,15 @@ log4js.configure({
   },
   categories: {
     default: {
-      appenders: ["out"], level: "debug"
-    },
-    all: {
-      appenders: ["all"], level: "all"
+      appenders: ["all", "out"], level: "INFO"
     },
     error: {
-      appenders: ["err", "error"], level: "error"
+      appenders: ["all", "err", "error"], level: "ERROR"
     }
   }
 })
 
+console.log('TALEX TOUCH STARTED')
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -209,7 +203,7 @@ class TouchApp implements TalexTouch.TouchApp {
 
     if (this.version === TalexTouch.AppVersion.RELEASE) {
       await this.window.loadFile(
-        path.join(process.env.DIST, 'index.html')
+        path.join(process.env.DIST!, 'index.html')
       );
     } else {
       const url = (process.env['VITE_DEV_SERVER_URL'] || process.env["ELECTRON_RENDERER_URL"]) as string;

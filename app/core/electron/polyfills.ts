@@ -1,16 +1,58 @@
+import fse from 'fs-extra';
 import path from "node:path";
-import {app, BrowserWindow} from "electron";
+import { app } from "electron";
+import log4js from "log4js";
 
 process.env.DIST = path.join(__dirname, '../dist')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public')
 
-// process.on('uncaughtException', (error, origin) => {
-//     console.error("[TalexTouch-ErrorUncaught]", error, origin)
-// })
+globalThis.logger = log4js.getLogger()
+globalThis.errLogger = log4js.getLogger('error')
+console._log = console.log
+console.log = (...args: any[]) => {
+  globalThis.logger.info(args)
+}
+console.log = (message: any, ...args: any[]) => {
+  if (args?.length)
+    globalThis.logger.info(message, args)
+  else globalThis.logger.info(message)
+}
 
-// process.on('unhandledRejection', (reason, promise) => {
-//     console.error("[TalexTouch-ErrorUnhandled]", reason, promise)
-// })
+console._error = console.error
+console.error = (...args: any[]) => {
+  globalThis.errLogger.error(args)
+}
+console.error = (message: any, ...args: any[]) => {
+  if (args?.length)
+    globalThis.errLogger.error(message, args)
+  else globalThis.errLogger.error(message)
+}
+
+console._warn = console.warn
+console.warn = (...args: any[]) => {
+  globalThis.logger.warn(args)
+}
+console.warn = (message: any, ...args: any[]) => {
+  if (args?.length)
+    globalThis.logger.warn(message, args)
+  else globalThis.logger.warn(message)
+}
+
+console._debug = console.debug
+console.debug = (...args: any[]) => {
+  globalThis.logger.debug(args)
+}
+console.debug = (message: any, ...args: any[]) => {
+  if (args?.length)
+    globalThis.logger.debug(message, args)
+  else globalThis.logger.debug(message)
+}
+
+// check debug settings
+if (fse.existsSync(path.join(process.cwd(), 'debug.talex'))) {
+  process.env.DEBUG = 'true'
+  globalThis.logger.level = 'debug'
+} else globalThis.logger.level = app.isPackaged ? 'info' : 'debug'
 
 // Remove electron security warnings
 // This warning only shows adopters development mode

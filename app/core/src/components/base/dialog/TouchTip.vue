@@ -1,100 +1,109 @@
-<script name="TouchTip" setup>
-import Loading from '@comp/icon/LoadingIcon.vue'
-import { onMounted, ref, watchEffect } from 'vue'
-import { sleep } from '@talex-touch/utils/common'
+<script lang="ts" name="TouchTip" setup>
+import Loading from "@comp/icon/LoadingIcon.vue";
+import { onMounted, ref, watchEffect } from "vue";
+import { sleep } from "@talex-touch/utils/common";
 
 const props = defineProps({
-  title: String, message: String, buttons: Array, close: Function,
-})
+  title: String,
+  message: String,
+  buttons: Array,
+  close: Function,
+});
 
-const btnArray = ref([])
+const btnArray = ref([]);
 
-const wholeDom = ref(null)
+const wholeDom = ref(null);
 
 watchEffect(() => {
   const array = [];
 
-  ([...props.buttons]).forEach((btn) => {
+  [...props.buttons].forEach((btn) => {
     const obj = ref({
       loading: false,
       ...btn,
-    })
+    });
 
     if (btn.loading) {
-      obj.value.loading = true
+      obj.value.loading = true;
 
       btn.loading(() => {
-        obj.value.loading = false
-      })
+        obj.value.loading = false;
+      });
     }
 
-    array.push(obj)
-  })
+    array.push(obj);
+  });
 
-  btnArray.value = array
-})
+  btnArray.value = array;
+});
 
 const clickBtn = ref(async (btn) => {
-  btn.value.loading = true
+  btn.value.loading = true;
 
-  await sleep(200)
+  await sleep(200);
 
-  if (await btn.value.onClick())
+  if (await btn.value.onClick()) forClose.value();
 
-    forClose.value()
-
-  btn.value.loading = false
-})
+  btn.value.loading = false;
+});
 
 // couldn't move
 function listener() {
   window.scrollTo({
     top: 0,
-  })
+  });
 }
 
 const forClose = ref(async () => {
-  const el = wholeDom.value
-  if (!el)
-    return
+  const el = wholeDom.value;
+  if (!el) return;
 
-  const style = el.style
+  const style = el.style;
 
-  await sleep(100)
+  await sleep(100);
 
-  style.transform = 'translate(-50%, -50%) scale(1.125)'
-  style.opacity = '0'
+  style.transform = "translate(-50%, -50%) scale(1.125)";
+  style.opacity = "0";
 
-  el.parentNode.style.opacity = '0'
+  el.parentNode.style.opacity = "0";
 
-  await sleep(400)
+  await sleep(400);
 
-  props.close()
+  props.close();
 
-  window.removeEventListener('scroll', listener)
-})
+  window.removeEventListener("scroll", listener);
+});
 
 onMounted(() => {
-  window.addEventListener('scroll', listener)
-})
+  window.addEventListener("scroll", listener);
+});
 </script>
 
 <template>
   <div class="TouchTip-Wrapper transition-cubic">
-    <div ref="wholeDom" class="TouchTip-Container fake-background" :class="{ 'loading-tip': loading }">
+    <div
+      ref="wholeDom"
+      class="TouchTip-Container fake-background"
+      :class="{ 'loading-tip': loading }"
+    >
       <h1 v-text="title" />
 
       <span class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
 
       <div class="TDialogTip-Btn">
         <div
-          v-for="(btn, index) in btnArray" :key="index" v-wave :class="{
+          v-for="(btn, index) in btnArray"
+          :key="index"
+          v-wave
+          :class="{
             'info-tip': btn.value?.type === 'info',
             'warn-tip': btn.value?.type === 'warning',
             'error-tip': btn.value?.type === 'error',
             'success-tip': btn.value?.type === 'success',
             'loading-tip': btn.value.loading,
-          }" class="TDialogTip-Btn-Item" @click="clickBtn(btn)"
+          }"
+          class="TDialogTip-Btn-Item"
+          @click="clickBtn(btn)"
         >
           <span class="TDialogTip-Btn-Item-Loading">
             <Loading />
@@ -119,49 +128,35 @@ onMounted(() => {
 }
 
 .loading-tip {
-
   .TDialogTip-Btn-Item-Loading {
+    opacity: 0.75 !important;
 
-    opacity: .75 !important;
-
-    transform: scale(.5) translateX(-50%) !important;
-
+    transform: scale(0.5) translateX(-50%) !important;
   }
 
   .TDialogTip-Container-Btn-Item-Text {
+    opacity: 0.25;
 
-    opacity: .25;
-
-    transform: scale(.65);
-
+    transform: scale(0.65);
   }
 
   pointer-events: none;
-
 }
 
 .success-tip {
-
   --theme-color: var(--el-color-success);
-
 }
 
 .info-tip {
-
   --theme-color: var(--el-color-primary);
-
 }
 
 .warn-tip {
-
   --theme-color: var(--el-color-warning);
-
 }
 
 .error-tip {
-
   --theme-color: var(--el-color-danger);
-
 }
 
 .TDialogTip-Container-Btn-Item-Text {
@@ -179,7 +174,7 @@ onMounted(() => {
   cursor: pointer;
 
   color: var(--theme-color, var(--el-text-color-regular));
-  transition: .3s cubic-bezier(.25, .8, .25, 1);
+  transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .TouchTip-Container {
@@ -197,7 +192,7 @@ onMounted(() => {
     transform: scale(0) translateX(-50%);
     opacity: 0;
     --bg-color: var(--theme-color);
-    transition: .3s cubic-bezier(.25, .8, .25, 1);
+    transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
 
   .TDialogTip-Btn {
@@ -248,19 +243,17 @@ onMounted(() => {
   box-shadow: var(--el-box-shadow-lighter);
   border-radius: 8px;
 
-  --fake-opacity: .75;
-  --fake-inner-opacity: .75;
+  --fake-opacity: 0.75;
+  --fake-inner-opacity: 0.75;
 
   -webkit-app-region: no-drag;
   transform: translate(-50%, -50%);
-  transition: .35s cubic-bezier(.25, .8, .25, 1);
-  animation: enter .35s ease-in-out;
+  transition: 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  animation: enter 0.35s ease-in-out;
   backdrop-filter: blur(16px) saturate(150%) brightness(1.5);
-
 }
 
 @keyframes enter {
-
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.25);
@@ -270,7 +263,6 @@ onMounted(() => {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-
 }
 
 .TouchTip-Wrapper {
@@ -295,8 +287,8 @@ onMounted(() => {
     height: 100%;
 
     background-color: var(--el-overlay-color);
-    opacity: .35;
-    animation: fadeIn .5s;
+    opacity: 0.35;
+    animation: fadeIn 0.5s;
   }
 }
 
@@ -306,7 +298,7 @@ onMounted(() => {
   }
 
   to {
-    opacity: .35;
+    opacity: 0.35;
   }
 }
 </style>

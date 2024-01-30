@@ -17,9 +17,10 @@
       </div>
 
       <span class="TouchSign-Copyright">
-<!--        generate a text copyright-->
+        <!--        generate a text copyright-->
         <span>©</span>
-        2022 - {{ new Date().getFullYear() }} <a href="https://tagzxia.com">TalexTouch</a> All Rights Reserved.
+        2022 - {{ new Date().getFullYear() }}
+        <a href="https://tagzxia.com">TalexTouch</a> All Rights Reserved.
       </span>
     </div>
   </div>
@@ -27,127 +28,124 @@
 
 <script>
 export default {
-  name: "TouchSign"
-}
+  name: "TouchSign",
+};
 </script>
 
-<script setup>
+<script lang="ts" setup>
 import { onMounted, provide, reactive, ref } from "vue";
-import { sleep } from '@talex-touch/utils/common';
+import { sleep } from "@talex-touch/utils/common";
 import AccountView from "~/views/others/account/AccountView.vue";
 // import AccountView from "~/views/others/account/SignSucceed.vue";
 import LoadingIcon from "@comp/icon/LoadingIcon.vue";
 import { forDialogMention } from "@modules/mention/dialog-mention";
 
-const content = ref()
-const close = ref(false)
-const component = ref()
-const props = defineProps(['close'])
+const content = ref();
+const close = ref(false);
+const component = ref();
+const props = defineProps(["close"]);
 
-const form = reactive({})
-provide('form', () => form)
+const form = reactive({});
+provide("form", () => form);
 
 async function step(func) {
-  const el = content.value
-  if( !el ) return
-  const wrapper = el.children[0]
-  const inner = el.children[1]
+  const el = content.value;
+  if (!el) return;
+  const wrapper = el.children[0];
+  const inner = el.children[1];
 
-  await sleep(100)
+  await sleep(100);
 
-  el.style.transform = 'scale(.8) translateX(0)'
+  el.style.transform = "scale(.8) translateX(0)";
 
-  await sleep(200)
+  await sleep(200);
 
-  inner.style.opacity = '0'
-  wrapper.style.opacity = '1'
+  inner.style.opacity = "0";
+  wrapper.style.opacity = "1";
 
-  await sleep(100)
+  await sleep(100);
 
-  const [info, data, callback] = func()
+  const [info, data, callback] = func();
 
-  if ( !info.pass ) {
-    wrapper.style.pointerEvents = 'all'
+  if (!info.pass) {
+    wrapper.style.pointerEvents = "all";
 
-    if ( info.message )
-      await forDialogMention("验证失败", info.message, "#error-warning")
-    else if ( info.loading ) return
-
+    if (info.message) await forDialogMention("验证失败", info.message, "#error-warning");
+    else if (info.loading) return;
   } else {
-    if( data ) Object.assign(form, data)
-    component.value = info.comp
-
+    if (data) Object.assign(form, data);
+    component.value = info.comp;
   }
 
-  await sleep(300)
+  await sleep(300);
 
   // el.style.opacity = '1'
-  inner.style.opacity = '1'
-  wrapper.style.opacity = '0'
-  wrapper.style.pointerEvents = 'none'
+  inner.style.opacity = "1";
+  wrapper.style.opacity = "0";
+  wrapper.style.pointerEvents = "none";
   // el.style.transform = 'scale(.8) translateX(10%)'
 
-  await sleep(100)
+  await sleep(100);
 
-  el.style.transform = 'scale(.8) translateX(0)'
+  el.style.transform = "scale(.8) translateX(0)";
 
-  await sleep(200)
+  await sleep(200);
 
-  el.style.transform = 'scale(1) translateX(0)'
+  el.style.transform = "scale(1) translateX(0)";
 
-  callback?.()
+  callback?.();
 }
 
 async function signDone() {
-  const el = content.value
-  if( !el ) return
-  const wrapper = el.children[0]
-  const inner = el.children[1]
+  const el = content.value;
+  if (!el) return;
+  const wrapper = el.children[0];
+  const inner = el.children[1];
 
-  await sleep(100)
+  await sleep(100);
 
-  el.style.transform = 'scale(.8) translateX(0)'
+  el.style.transform = "scale(.8) translateX(0)";
 
-  await sleep(200)
+  await sleep(200);
 
-  inner.style.opacity = '0'
-  wrapper.style.opacity = '1'
+  inner.style.opacity = "0";
+  wrapper.style.opacity = "1";
 
-  await sleep(300)
+  await sleep(300);
 
-  await destroy()
+  await destroy();
 }
 
-provide('step', step)
-provide('close', signDone)
+provide("step", step);
+provide("close", signDone);
 
 onMounted(() => {
-  const app = document.getElementById('app')
+  const app = document.getElementById("app");
 
   Object.assign(app.style, {
-    transition: '.75s',
-    transform: 'scale(1.25)',
-    opacity: '.75'
-  })
+    transition: ".75s",
+    transform: "scale(1.25)",
+    opacity: ".75",
+  });
 
-  step(() => [{ pass: true, comp: AccountView }])
-})
+  step(() => [{ pass: true, comp: AccountView }]);
+});
 
 async function destroy() {
-  const app = document.getElementById('app')
+  const app = document.getElementById("app");
 
   Object.assign(app.style, {
-    transform: 'scale(1)',
-    opacity: '1'
-  })
+    transform: "scale(1)",
+    opacity: "1",
+  });
 
-  close.value = true
+  close.value = true;
 
-  await sleep(550)
+  await sleep(550);
 
-  app.style.cssText = ''
+  app.style.cssText = "";
 
-  props.close()
+  props.close();
 }
 </script>
 
@@ -168,7 +166,7 @@ async function destroy() {
     height: 100%;
 
     border-radius: 8px;
-    transition: .25s;
+    transition: 0.25s;
     box-shadow: 0 0 2px 1px var(--el-fill-color);
     backdrop-filter: blur(18px) saturate(180%) brightness(180%);
   }
@@ -184,16 +182,16 @@ async function destroy() {
   width: 100%;
   height: calc(100% - 100px);
 
-  transition: .2s;
+  transition: 0.2s;
   box-sizing: border-box;
 }
 
 @keyframes logoBreathing {
   from {
-    transform: scale(.8) rotate(0)
+    transform: scale(0.8) rotate(0);
   }
   to {
-    transform: scale(1) rotate(15deg)
+    transform: scale(1) rotate(15deg);
   }
 }
 
@@ -209,7 +207,7 @@ async function destroy() {
 .TouchSign-Title {
   &:before {
     z-index: -1;
-    content: '';
+    content: "";
     position: absolute;
 
     left: 0;
@@ -219,9 +217,9 @@ async function destroy() {
     height: 50%;
     border-radius: 4px;
 
-    opacity: .35;
+    opacity: 0.35;
     transform: skewX(-15deg);
-    animation: titleInitial .85s;
+    animation: titleInitial 0.85s;
     background-color: var(--el-color-primary-dark-2);
   }
   z-index: 0;
@@ -235,7 +233,7 @@ async function destroy() {
 }
 
 .blow-outer {
-  animation: blow-outer .35s forwards;
+  animation: blow-outer 0.35s forwards;
 }
 
 .blow-outer-reverse {
@@ -248,7 +246,7 @@ async function destroy() {
     transform: scale(1);
   }
   to {
-    opacity: .75;
+    opacity: 0.75;
     transform: scale(1.25);
   }
 }
@@ -257,7 +255,7 @@ async function destroy() {
   img {
     filter: hue-rotate(-45deg);
 
-    animation: logoBreathing ease-out .65s infinite alternate;
+    animation: logoBreathing ease-out 0.65s infinite alternate;
   }
   position: relative;
   padding: 50px 60px;
@@ -266,11 +264,16 @@ async function destroy() {
   height: 400px;
 
   border-radius: 8px 0 0 8px;
-  background: linear-gradient(-60deg, var(--el-color-primary-light-5), var(--el-color-primary-light-5), var(--el-color-primary));
+  background: linear-gradient(
+    -60deg,
+    var(--el-color-primary-light-5),
+    var(--el-color-primary-light-5),
+    var(--el-color-primary)
+  );
   box-shadow: 0 0 20px 0 rgba(0, 0, 0, 0.2);
 
-  transition: .35s;
-  animation: blow .35s;
+  transition: 0.35s;
+  animation: blow 0.35s;
   filter: hue-rotate(45deg);
   box-sizing: border-box;
 }
@@ -289,8 +292,8 @@ async function destroy() {
 
   --fake-radius: 0 8px 8px 0;
 
-  transition: .35s;
-  animation: blow .35s;
+  transition: 0.35s;
+  animation: blow 0.35s;
   -webkit-app-region: no-drag;
 }
 
@@ -319,8 +322,8 @@ async function destroy() {
   -webkit-app-region: drag;
   user-select: none;
   backdrop-filter: blur(18px) saturate(1.8);
-  transition: .35s;
-  animation: fade-in .35s;
+  transition: 0.35s;
+  animation: fade-in 0.35s;
 }
 
 @keyframes blow {
@@ -354,7 +357,7 @@ async function destroy() {
   height: 30px;
   line-height: 30px;
 
-  opacity: .25;
+  opacity: 0.25;
 
   font-size: 12px;
   text-align: center;
