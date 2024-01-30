@@ -93,7 +93,7 @@ export default {
       if (!fse.existsSync(iconPath)) {
         console.log('[TrayHolder] AppIcon file not found, app starting to quit ...')
 
-        app.app.quit()
+        app.app.exit(-1)
 
         return
       }
