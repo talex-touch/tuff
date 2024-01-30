@@ -359,12 +359,14 @@ class ModuleManager implements TalexTouch.IModuleManager {
       return false;
     } else
       return (async () => {
+        const modulePath = path.join(
+          this.modulePath,
+          (module.filePath as string) || module.name.description!
+        )
+
         if (!module.hasOwnProperty("filePath") || module.filePath)
           await checkDirWithCreate(
-            path.join(
-              this.modulePath,
-              (module.filePath as string) || module.name.description!
-            ),
+            modulePath,
             true
           );
 
@@ -377,11 +379,7 @@ class ModuleManager implements TalexTouch.IModuleManager {
             {
               ...module,
               touchChannel: this.touchChannel,
-              modulePath: path.join(
-                touchApp!.rootPath,
-                "modules",
-                module.name.description!
-              ),
+              modulePath,
               modules: [],
               getModule(name: Symbol) {
                 return touchApp!.moduleManager.getModule(name);

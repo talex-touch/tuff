@@ -11,6 +11,7 @@ import addonOpener from './modules/addon-opener'
 import extensionLoader from './modules/extension-loader'
 import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
+import TrayHolder from './modules/tray-holder'
 
 app.whenReady().then(() => {
   const app = genTouchApp()
@@ -22,6 +23,7 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(PermissionCenter)
   app.moduleManager.loadModule(ServiceCenter)
 
+  app.moduleManager.loadModule(TrayHolder)
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)
   app.moduleManager.loadModule(GlobalShortcon)
