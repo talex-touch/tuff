@@ -2,6 +2,7 @@ import { TalexTouch } from '../types';
 import { Menu, Tray, net } from 'electron'
 import path from 'path'
 import fse from 'fs-extra'
+import { AppName, APP_SCHEMA } from '../config/default'
 
 const iconUrls = [
   "https://files.catbox.moe/ssn1rx.png"
@@ -110,6 +111,19 @@ export default {
       contextMenu.items[1].checked = false
 
       tray.setContextMenu(contextMenu)
+      tray.setToolTip(APP_SCHEMA)
+      tray.setTitle(AppName)
+
+      tray.addListener('click', () => {
+        if (contextMenu.items[1].checked) {
+          app.app.exit(0)
+        } else {
+          const window = app.window.window
+
+          window.show()
+          window.focus()
+        }
+      })
     }
   },
   destroy() {

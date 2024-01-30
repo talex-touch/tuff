@@ -12,7 +12,7 @@
 
   <ul class="FlatLayout-Controller">
     <remix-icon class="remix" @click="minimizeWindow" name="subtract" />
-    <remix-icon class="remix" @click="closeWindow" name="close" />
+    <remix-icon class="remix" @click="handleClose" name="close" />
   </ul>
 </template>
 
@@ -27,8 +27,16 @@ function minimizeWindow() {
   window.$nodeApi.minimize();
 }
 
+function handleClose(e: PointerEvent) {
+  e.shiftKey ? closeWindow() : hideWindow();
+}
+
 function closeWindow() {
   window.$nodeApi.close();
+}
+
+function hideWindow() {
+  window.$nodeApi.hide();
 }
 </script>
 

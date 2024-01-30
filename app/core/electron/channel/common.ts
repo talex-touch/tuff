@@ -47,6 +47,9 @@ export default {
       channel.regChannel(ChannelType.MAIN, "close", () => closeApp(app))
     );
     this.listeners.push(
+      channel.regChannel(ChannelType.MAIN, "hide", () => app.window.window.hide())
+    );
+    this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "minimize", () =>
         app.window.minimize()
       )
