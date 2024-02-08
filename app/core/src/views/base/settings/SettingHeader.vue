@@ -2,20 +2,19 @@
 defineProps({
   env: {
     type: Object,
-    required: true
+    required: true,
   },
   dev: {
     type: Boolean,
-    required: true
-  }
-})
+    required: true,
+  },
+});
 </script>
 
 <template>
   <div class="AboutApplication activate">
     <div class="About-Image">
-      <div class="Home-Logo-Bg">
-      </div>
+      <div class="Home-Logo-Bg"></div>
 
       <img src="@assets/logo.svg" alt="logo" />
     </div>
@@ -23,7 +22,7 @@ defineProps({
     <div class="About-Content">
       <div class="Home-Text">
         <svg>
-          <text x="0" y="20%"> Talex-Touch </text>
+          <text x="0" y="20%">Talex-Touch</text>
         </svg>
 
         <p>A within easy reach of all applications.</p>
@@ -44,7 +43,6 @@ defineProps({
         </li>
       </ul>
     </div>
-
   </div>
 </template>
 
@@ -67,7 +65,7 @@ defineProps({
           margin-left: -5px;
           margin-right: 5px;
           padding: 2px;
-          top: .15em;
+          top: 0.15em;
 
           border-radius: 50%;
           background-color: var(--el-fill-color-darker);
@@ -80,9 +78,9 @@ defineProps({
         border-radius: 8px;
         list-style: none;
 
-        --fake-inner-opacity: .75;
+        --fake-inner-opacity: 0.75;
         overflow: hidden;
-        transform: scale(.85);
+        transform: scale(0.85);
         backdrop-filter: blur(18px);
         // background-color: var(--el-fill-color-light);
       }
@@ -98,8 +96,8 @@ defineProps({
 
     .Home-Text {
       p {
-        opacity: .75;
-        color: var(--el-fill-color-light)
+        opacity: 0.75;
+        color: var(--el-fill-color-light);
       }
 
       & .version {
@@ -126,8 +124,8 @@ defineProps({
         font-size: 14px;
         border-radius: 4px;
         box-sizing: border-box;
-        opacity: .85;
-        transform: scale(.8);
+        opacity: 0.85;
+        transform: scale(0.8);
         background-color: var(--el-color-primary-light-5);
       }
 
@@ -178,13 +176,10 @@ defineProps({
           stroke-width: 0;
         }
       }
-
     }
-
   }
 
   .About-Image {
-
     &:before,
     &:after {
       content: "";
@@ -200,14 +195,14 @@ defineProps({
       transform: translate(-50%, -50%);
       border: 1px solid var(--el-fill-color-light);
 
-      animation: breathing 1s linear infinite;
+      animation: header-breathing 1s linear infinite;
     }
 
     &:after {
       width: 125%;
       height: 125%;
 
-      animation-delay: .5s;
+      animation-delay: 0.5s;
     }
 
     position: absolute;
@@ -238,8 +233,13 @@ defineProps({
       opacity: 0;
     }
 
-    opacity: .75;
-    background-image: linear-gradient(to right, var(--el-color-primary-light-3) 0%, var(--el-color-primary-dark-2) 50%, var(--el-color-primary-light-3) 100%);
+    opacity: 0.75;
+    background-image: linear-gradient(
+      to right,
+      var(--el-color-primary-light-3) 0%,
+      var(--el-color-primary-dark-2) 50%,
+      var(--el-color-primary-light-3) 100%
+    );
   }
 
   &:before {
@@ -256,7 +256,7 @@ defineProps({
     width: 100%;
     height: 100%;
 
-    opacity: .5;
+    opacity: 0.5;
     font-size: 20px;
     font-weight: 600;
     border-radius: 4px;
@@ -271,17 +271,22 @@ defineProps({
   height: 30%;
 
   clear: both;
-  opacity: .45;
+  opacity: 0.45;
   border-radius: 4px;
   background-color: var(--el-fill-color-light);
-  background-image: linear-gradient(to right, var(--el-color-primary-light-3) 0%, var(--el-color-info-dark-2) 50%, var(--el-color-primary-light-3) 100%);
+  background-image: linear-gradient(
+    to right,
+    var(--el-color-primary-light-3) 0%,
+    var(--el-color-info-dark-2) 50%,
+    var(--el-color-primary-light-3) 100%
+  );
   background-size: 200% 100%;
   // filter: drop-shadow(0 0 4px var(--el-color-primary-light-7));
 
   animation: waving 10s infinite linear;
 }
 
-@keyframes breathing {
+@keyframes header-breathing {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0);
@@ -294,8 +299,8 @@ defineProps({
   }
 
   50% {
-    opacity: .8;
-    transform: translate(-50%, -50%) scale(.8);
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(0.8);
   }
 
   100% {
