@@ -12,12 +12,17 @@
   </div>
 </template>
 
-<script name="AppUpgradationView" setup>
-import { inject, onMounted } from "vue";
+<script lang="ts" name="AppUpgradationView" setup>
+import { inject } from "vue";
 import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
 
-const props = defineProps(['release'])
+const props = defineProps({
+  release: {
+    type: Object,
+    required: true,
+  },
+});
 const close = inject('destroy')
 
 function upgrade() {

@@ -12,10 +12,10 @@ export default {
 }
 </script>
 
-<script setup>
+<script lang="ts" setup>
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
-import { $t } from '@modules/lang'
-import empty from '@assets/lotties/empty.json'
+import { $t } from '~/modules/lang'
+import empty from '~/assets/lotties/empty.json'
 
 </script>
 

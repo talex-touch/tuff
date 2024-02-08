@@ -1,5 +1,5 @@
 // const { ipcRenderer, IpcMainEvent } = require("electron");
-import { ipcRenderer, IpcRendererEvent } from "electron";
+import { ipcRenderer } from "electron";
 import {
   ChannelType,
   DataCode,
@@ -23,7 +23,7 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   __parse_raw_data(e: typeof IpcRendererEvent, arg: any): RawStandardChannelData | null {
-    console.log("Raw data: ", arg, e);
+    console.debug("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, data, sync } = arg;
 

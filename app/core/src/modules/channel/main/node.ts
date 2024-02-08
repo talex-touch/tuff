@@ -1,9 +1,13 @@
 import { touchChannel } from "@modules/channel/channel-core";
 
 export class BaseNodeApi {
-  
+
   close() {
     return touchChannel.send("close");
+  }
+
+  hide() {
+    return touchChannel.send("hide");
   }
 
   minimize() {

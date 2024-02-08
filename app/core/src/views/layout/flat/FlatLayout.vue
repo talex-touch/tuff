@@ -11,10 +11,11 @@
       <div class="AppLayout-Aside fake-background">
         <FlatNavBar />
 
-        <div class="AppLayout-IconFooter" :class="{ 'active': account?.user?.username }">
+        <div class="AppLayout-IconFooter" :class="{ active: account?.user?.username }">
           <slot name="icon" />
           <div v-if="account?.user?.username" class="AppLayout-Footer">
-            <p> {{ account.user.username }}
+            <p>
+              {{ account.user.username }}
               <IdentifiedIcon style="color: var(--el-color-success-dark-2)" />
             </p>
             <span> {{ account.user.email }}</span>
@@ -29,16 +30,14 @@
   </div>
 </template>
 
-<script name="AppLayoutFlat" setup>
-import FlatController from './FlatController.vue'
+<script lang="ts" name="AppLayoutFlat" setup>
+import FlatController from "./FlatController.vue";
 import FlatNavBar from "./FlatNavBar.vue";
 import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
-
 </script>
 
 <style lang="scss" scoped>
 .AppLayout-Container.Flat {
-
   .AppLayout-View {
     position: relative;
 
@@ -62,7 +61,7 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
     }
 
     &:before {
-      content: '';
+      content: "";
       position: absolute;
 
       top: -1px;
@@ -80,13 +79,13 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
     }
 
     .AppLayout-Footer {
-      &>p {
+      & > p {
         margin: 0;
         font-size: 12px;
         font-weight: 600;
       }
 
-      &>span {
+      & > span {
         margin: 0;
         font-size: 10px;
         font-weight: 400;
@@ -118,12 +117,11 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
     height: 50px;
 
     // transform: translate(-100%, 0%);
-    transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+    transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
   }
 }
 
 .AppLayout-Container.Flat {
-
   --ctr-height: 30px;
   --nav-width: 200px;
 

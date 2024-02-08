@@ -27,7 +27,7 @@ class TouchChannel implements ITouchChannel {
 
   __parse_raw_data(e: Electron.IpcMainEvent, arg: any): RawStandardChannelData {
     if (this.app.version === TalexTouch.AppVersion.DEV)
-      console.log("Raw data: ", arg, e);
+      console.debug("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, plugin, data, sync } = arg;
 
@@ -69,7 +69,7 @@ class TouchChannel implements ITouchChannel {
         reply: (code: DataCode, data: any) => {
           const rData = this.__parse_sender(code, rawData, data, rawData.sync)
 
-          console.log("Reply data: ", rData)
+          console.debug("Reply data: ", rData)
 
           if (rawData.sync) {
             e.sender.send(

@@ -1,6 +1,6 @@
 <template>
   <div class="FlatLayout-Icon">
-    <img src="../../../assets/logo.svg" alt="logo">
+    <img src="../../../assets/logo.svg" alt="logo" />
     <span @click="applicationUpgrade">
       <slot name="title" />
     </span>
@@ -12,23 +12,31 @@
 
   <ul class="FlatLayout-Controller">
     <remix-icon class="remix" @click="minimizeWindow" name="subtract" />
-    <remix-icon class="remix" @click="closeWindow" name="close" />
+    <remix-icon class="remix" @click="handleClose" name="close" />
   </ul>
 </template>
 
-<script name="FlatController" setup>
-import { useRoute } from 'vue-router'
+<script lang="ts" name="FlatController" setup>
+import { useRoute } from "vue-router";
 import { applicationUpgrade } from "@modules/hooks/application-hooks";
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from "@comp/icon/RemixIcon.vue";
 
-const route = useRoute()
+const route = useRoute();
 
 function minimizeWindow() {
-  window.$nodeApi.minimize()
+  window.$nodeApi.minimize();
+}
+
+function handleClose(e: PointerEvent) {
+  e.shiftKey ? closeWindow() : hideWindow();
 }
 
 function closeWindow() {
-  window.$nodeApi.close()
+  window.$nodeApi.close();
+}
+
+function hideWindow() {
+  window.$nodeApi.hide();
 }
 </script>
 
@@ -36,7 +44,7 @@ function closeWindow() {
 .FlatLayout-Icon {
   & span {
     .has-update &:after {
-      content: '';
+      content: "";
       position: absolute;
 
       margin-left: 10px;
@@ -61,7 +69,7 @@ function closeWindow() {
     }
 
     .touch-blur & {
-      opacity: .75;
+      opacity: 0.75;
     }
 
     padding: 4px 2px;
@@ -78,7 +86,7 @@ function closeWindow() {
   }
 
   display: flex;
-  padding: 0 0 0 .5%;
+  padding: 0 0 0 0.5%;
 
   height: var(--ctr-height);
   width: var(--nav-width);
@@ -90,7 +98,6 @@ function closeWindow() {
   img {
     width: 24px;
   }
-
 }
 
 .FlatLayout-Controller {
@@ -114,7 +121,7 @@ function closeWindow() {
     color: var(--el-text-color-primary);
 
     --fake-radius: 0;
-    transition: .25s;
+    transition: 0.25s;
 
     &:first-child {
       --color: var(--el-text-color-primary);

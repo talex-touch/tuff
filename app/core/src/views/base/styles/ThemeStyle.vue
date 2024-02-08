@@ -1,9 +1,11 @@
 <template>
   <ViewTemplate name="Styles">
-    <WindowSectionVue
-      tip=""
-    >
-      <SectionItem tip="Click to select." v-model="themeStyle.theme.window" title="Default">
+    <WindowSectionVue tip="">
+      <SectionItem
+        tip="Click to select."
+        v-model="themeStyle.theme.window"
+        title="Default"
+      >
       </SectionItem>
       <!-- :disabled="os?.version !== 'Windows 10 Pro'" -->
       <SectionItem
@@ -22,11 +24,7 @@
       </SectionItem>
     </WindowSectionVue>
 
-    <t-group-block
-      name="Personalized"
-      icon="earth"
-      description="Personalized your app"
-    >
+    <t-group-block name="Personalized" icon="earth" description="Personalized your app">
       <t-block-select
         @change="handleThemeChange"
         v-model="styleValue"
@@ -87,10 +85,7 @@ import WindowSectionVue from "./WindowSection.vue";
 import SectionItem from "./SectionItem.vue";
 import { $t } from "@modules/lang";
 import { useEnv } from "~/modules/hooks/env-hooks";
-import {
-  themeStyle,
-  triggerThemeTransition,
-} from "~/modules/storage/AppStorage";
+import { themeStyle, triggerThemeTransition } from "~/modules/storage/AppStorage";
 
 const os = ref();
 const styleValue = ref(0);
@@ -106,7 +101,7 @@ function handleThemeChange(v: string, e: MouseEvent) {
 }
 
 onMounted(async () => {
-  console.log( useEnv() )
+  console.log(useEnv());
   os.value = useEnv().os;
 });
 </script>

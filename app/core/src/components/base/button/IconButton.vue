@@ -16,9 +16,9 @@ export default {
 }
 </script>
 
-<script setup>
+<script lang="ts" setup>
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { ref, watch, watchEffect } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({

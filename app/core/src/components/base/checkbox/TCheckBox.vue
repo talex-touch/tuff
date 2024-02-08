@@ -1,4 +1,4 @@
-<script name="TCheckBox" setup>
+<script lang="ts" name="TCheckBox" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 
 const props = defineProps({

@@ -12,9 +12,26 @@ export default {
 }
 </script>
 
-<script setup>
-
-const props = defineProps(['loading', 'error', 'success', 'message'])
+<script lang="ts" setup>
+defineProps({
+  loading: {
+    type: Boolean,
+    default: false
+  },
+  error: {
+    type: Boolean,
+    default: false
+  },
+  success: {
+    type: Boolean,
+    default: false
+  },
+  message: {
+    type: String,
+    default: ''
+  }
+})
+// const props = defineProps(['loading', 'error', 'success', 'message'])
 
 </script>
 
@@ -24,6 +41,7 @@ const props = defineProps(['loading', 'error', 'success', 'message'])
     width: 0;
     left: -100%;
   }
+
   100% {
     left: 100%;
     width: 100%;
@@ -34,18 +52,21 @@ const props = defineProps(['loading', 'error', 'success', 'message'])
   &.loading {
     animation: loading 1.25s infinite;
   }
+
   &.error {
     height: 30px;
 
     border-radius: 0;
     background-color: var(--el-color-danger);
   }
+
   &.success {
     height: 8px;
 
     border-radius: 0;
     background-color: var(--el-color-success);
   }
+
   position: relative;
   display: flex;
 
@@ -68,5 +89,4 @@ const props = defineProps(['loading', 'error', 'success', 'message'])
 
   overflow: hidden;
   //border-radius: 8px;
-}
-</style>
+}</style>

@@ -23,6 +23,7 @@ declare module 'vue' {
     FlatCodeInput: typeof import('./src/components/base/input/FlatCodeInput.vue')['default']
     FlatCompletion: typeof import('./src/components/base/input/FlatCompletion.vue')['default']
     FlatInput: typeof import('./src/components/base/input/FlatInput.vue')['default']
+    FlatKeyInput: typeof import('./src/components/base/input/FlatKeyInput.vue')['default']
     FlatMarkdown: typeof import('./src/components/base/input/FlatMarkdown.vue')['default']
     FormTemplate: typeof import('./src/components/base/template/FormTemplate.vue')['default']
     IconButton: typeof import('./src/components/base/button/IconButton.vue')['default']

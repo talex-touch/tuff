@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { touchChannel } from "@modules/channel/channel-core";
+import { touchChannel } from "~/modules/channel/channel-core";
 
 export interface Plugin {
   desc: string;
@@ -26,7 +26,7 @@ export interface PluginDev {
 class PluginAdpoter {
   readonly plugins: Map<string, typeof reactive<Plugin>> = new Map();
 
-  _logouts = [];
+  _logouts = new Array<() => void>();
   constructor() {
     this._unmount();
     this.plugins.clear()
@@ -39,15 +39,21 @@ class PluginAdpoter {
     );
 
     this._logouts.push(
-      touchChannel.regChannel("plugin-status-updated", ({ data, reply }) => {
+      touchChannel.regChannel("plugin-status-updated", ({ data, reply }: any) => {
         const p = this.plugins.get(data.plugin);
         if (p) Object.assign(p, { status: data.status });
+
+        if (data.status === 3) {
+          // @ts-ignore
+          p.webViewInit = p.webview.data._.isWebviewInit
+          console.log(p)
+        }
 
         reply(1);
       })
     );
     this._logouts.push(
-      touchChannel.regChannel("plugin-webview", ({ data }) => {
+      touchChannel.regChannel("plugin-webview", ({ data }: any) => {
         const p = this.plugins.get(data.plugin);
         if (!p) return;
 
@@ -78,7 +84,7 @@ class PluginAdpoter {
       })
     );
   }
-  
+
   _unmount() {
     this._logouts.forEach((v) => v());
   }

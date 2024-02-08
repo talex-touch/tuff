@@ -17,7 +17,7 @@ export function toggleWinVisible(id: number, visible?: boolean): boolean {
   return res.visible
 }
 
-export function setWindowProperty<K extends keyof BrowserWindow, V>(id: number, property: {
+export function setWindowProperty(id: number, property: {
 
 }): boolean {
   const res = genChannel().sendSync('window:property', { id, property })

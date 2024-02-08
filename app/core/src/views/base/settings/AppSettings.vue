@@ -7,38 +7,41 @@
 
       <!-- <SettingLanguage :env="$env" /> -->
 
+      <SettingTools :env="$env" />
+
       <SettingAbout :dev="dev" :env="$env" />
     </div>
   </ViewTemplate>
 </template>
 
 <script name="AppSettings" setup>
-import { useEnv } from '@modules/hooks//env-hooks'
-import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
-import SettingHeader from './SettingHeader.vue'
+import { useEnv } from "@modules/hooks//env-hooks";
+import ViewTemplate from "@comp/base/template/ViewTemplate.vue";
+import SettingHeader from "./SettingHeader.vue";
 // import SettingUser from './SettingUser.vue'
 // import SettingLanguage from './SettingLanguage.vue'
-import SettingAbout from './SettingAbout.vue'
+import SettingTools from "./SettingTools.vue";
+import SettingAbout from "./SettingAbout.vue";
 
 const $env = reactive({
   os: null,
   process: null,
   packageJson: null,
   account: window.$storage.account,
-  sui: window.$startupInfo
-})
+  sui: window.$startupInfo,
+});
 
-const dev = ref(false)
+const dev = ref(false);
 
 // initially
 onMounted(async () => {
-  dev.value = process.env.NODE_ENV === 'development'
+  dev.value = process.env.NODE_ENV === "development";
 
-  const env = useEnv()
-  $env.os = env.os
-  $env.process = env.process
-  $env.packageJson = env.packageJson
-})
+  const env = useEnv();
+  $env.os = env.os;
+  $env.process = env.process;
+  $env.packageJson = env.packageJson;
+});
 </script>
 
 <style lang="scss" scoped>
@@ -81,6 +84,5 @@ onMounted(async () => {
 
   height: 100%;
   width: 100%;
-
 }
 </style>

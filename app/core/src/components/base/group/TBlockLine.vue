@@ -12,14 +12,27 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 export default {
-  name: "TBlockLine"
-}
+  name: "TBlockLine",
+};
 </script>
 
-<script setup>
-const props = defineProps(['title', 'description', 'link'])
+<script lang="ts" setup>
+defineProps({
+  title: {
+    type: String,
+    default: "",
+  },
+  description: {
+    type: String,
+    default: "",
+  },
+  link: {
+    type: Boolean,
+    default: false,
+  },
+});
 </script>
 
 <style lang="scss" scoped>
@@ -28,6 +41,7 @@ const props = defineProps(['title', 'description', 'link'])
     &:hover .TBlockLine-Title {
       background-color: var(--el-fill-color-dark);
     }
+
     .TBlockLine-Title {
       position: relative;
       padding: 2px 6px;
@@ -42,6 +56,7 @@ const props = defineProps(['title', 'description', 'link'])
       text-indent: 0;
       //transform: scale(.9);
     }
+
     display: flex;
     align-items: center;
 
@@ -56,14 +71,16 @@ const props = defineProps(['title', 'description', 'link'])
     font-weight: 500;
     color: var(--el-text-color);
   }
+
   .TBlockLine-Description {
     position: absolute;
 
     left: 120px;
 
-    opacity: .5;
+    opacity: 0.5;
     font-size: 13px;
   }
+
   position: relative;
   padding: 6px 18px 2px 18px;
   display: flex;
@@ -71,6 +88,6 @@ const props = defineProps(['title', 'description', 'link'])
   height: 24px;
 
   --fake-color: var(--el-fill-color);
-  --fake-opacity: .45;
+  --fake-opacity: 0.45;
 }
 </style>

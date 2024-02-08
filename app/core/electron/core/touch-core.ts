@@ -82,17 +82,15 @@ log4js.configure({
   },
   categories: {
     default: {
-      appenders: ["out"], level: "debug"
-    },
-    all: {
-      appenders: ["all"], level: "all"
+      appenders: ["all", "out"], level: "INFO"
     },
     error: {
-      appenders: ["err", "error"], level: "error"
+      appenders: ["all", "err", "error"], level: "ERROR"
     }
   }
 })
 
+console.log('TALEX TOUCH STARTED')
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith("6.1")) app.disableHardwareAcceleration();
@@ -209,7 +207,7 @@ class TouchApp implements TalexTouch.TouchApp {
 
     if (this.version === TalexTouch.AppVersion.RELEASE) {
       await this.window.loadFile(
-        path.join(process.env.DIST, 'index.html')
+        path.join(process.env.DIST!, 'index.html')
       );
     } else {
       const url = (process.env['VITE_DEV_SERVER_URL'] || process.env["ELECTRON_RENDERER_URL"]) as string;
@@ -365,12 +363,14 @@ class ModuleManager implements TalexTouch.IModuleManager {
       return false;
     } else
       return (async () => {
+        const modulePath = path.join(
+          this.modulePath,
+          (module.filePath as string) || module.name.description!
+        )
+
         if (!module.hasOwnProperty("filePath") || module.filePath)
           await checkDirWithCreate(
-            path.join(
-              this.modulePath,
-              (module.filePath as string) || module.name.description!
-            ),
+            modulePath,
             true
           );
 
@@ -383,11 +383,7 @@ class ModuleManager implements TalexTouch.IModuleManager {
             {
               ...module,
               touchChannel: this.touchChannel,
-              modulePath: path.join(
-                touchApp!.rootPath,
-                "modules",
-                module.name.description!
-              ),
+              modulePath,
               modules: [],
               getModule(name: Symbol) {
                 return touchApp!.moduleManager.getModule(name);
