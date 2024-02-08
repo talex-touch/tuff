@@ -12,11 +12,9 @@ import { storageManager } from '~/modules/channel/storage'
 import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
 
-import '~/styles/index.scss'
-import 'element-plus/theme-chalk/dark/css-vars.css'
-
 import '~/styles/element/index.scss'
-import 'element-plus/dist/index.css'
+import '~/styles/index.scss'
+
 import 'uno.css'
 import 'virtual:unocss-devtools'
 

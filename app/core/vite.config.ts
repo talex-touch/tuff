@@ -65,6 +65,13 @@ export default defineConfig(({ mode }) => {
                 "~": basePath,
             },
         },
+        // css: {
+        //     preprocessorOptions: {
+        //         scss: {
+        //             additionalData: `@use "~/styles/index.scss" as *;`
+        //         }
+        //     }
+        // },
         plugins: [
             vue(),
             electron([

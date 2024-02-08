@@ -1,3 +1,5 @@
+// @use '~/styles/element/index.scss' as *;
+
 html,
 body,
 #app {
@@ -123,4 +125,212 @@ html.fullscreen .Blur-Container {
 .cubic-transition,
 .transition-cubic {
   transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+}
+
+:root {
+  --app-color: #40A6F1
+}
+
+/*base code*/
+.animated {
+  -webkit-animation-duration: .5s;
+  animation-duration: .5s;
+  -webkit-animation-fill-mode: both;
+  animation-fill-mode: both;
+}
+.animated.infinite {
+  -webkit-animation-iteration-count: infinite;
+  animation-iteration-count: infinite;
+}
+.animated.hinge {
+  -webkit-animation-duration: 2s;
+  animation-duration: 2s;
+}
+/*the animation definition*/
+@-webkit-keyframes zoomInUp {
+  0% {
+    opacity: 0;
+    -webkit-transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
+    transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.55, .055, .675, .19);
+    animation-timing-function: cubic-bezier(0.55, .055, .675, .19)
+  }
+  60% {
+    opacity: 1;
+    -webkit-transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
+    transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.175, .885, .32, 1);
+    animation-timing-function: cubic-bezier(0.175, .885, .32, 1)
+  }
+}
+@keyframes zoomInUp {
+  0% {
+    opacity: 0;
+    -webkit-transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
+    -ms-transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
+    transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.55, .055, .675, .19);
+    animation-timing-function: cubic-bezier(0.55, .055, .675, .19)
+  }
+  60% {
+    opacity: 1;
+    -webkit-transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
+    -ms-transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
+    transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.175, .885, .32, 1);
+    animation-timing-function: cubic-bezier(0.175, .885, .32, 1)
+  }
+}
+.zoomInUp {
+  -webkit-animation-name: zoomInUp;
+  animation-name: zoomInUp
+}
+
+
+.fade-in {
+  animation: fadeIn .25s
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes breathing {
+  from {
+    opacity: .75;
+    transform: scale(.8)
+  }
+  to {
+    opacity: 0;
+    transform: scale(var(--size, 2))
+  }
+}
+
+@keyframes scale-up-center {
+  0% {
+    transform: scale(0.5);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shaken {
+  0%, 100% {
+    transform: translateX(0);
+  }
+
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-10px);
+  }
+
+  20%, 40%, 60%, 80% {
+    transform: translateX(10px);
+  }
+}
+
+.ani-shaken {
+  animation: shaken 0.5s 5;
+}
+
+/* 缩小并覆盖 */
+.scale-down-and-cover-enter-active,
+.scale-down-and-cover-leave-active {
+  transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+}
+
+.scale-down-and-cover-enter-from {
+  position: absolute;
+  //opacity: 0;
+  transform: translateY(100%);
+}
+
+.scale-down-and-cover-enter-to {
+  position: absolute;
+  //opacity: 1;
+  transform: translateY(0);
+}
+
+.scale-down-and-cover-leave-from {
+  //opacity: 1;
+  transform: translateY(-100%);
+}
+
+.scale-down-and-cover-leave-to {
+  z-index: -1;
+
+  //opacity: 0;
+  transform: translateY(0);
+}
+
+/* 放大并覆盖 */
+.scale-up-and-cover-enter-active,
+.scale-up-and-cover-leave-active {
+  transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+}
+
+.scale-up-and-cover-enter-from {
+  margin-top: -100%;
+
+  opacity: 0;
+  filter: blur(10px);
+}
+
+.scale-up-and-cover-enter-to {
+  margin-top: 0;
+
+  opacity: 1;
+  filter: blur(0);
+}
+
+.scale-up-and-cover-leave-from {
+  z-index: -1;
+
+  top: 0;
+
+  opacity: 1;
+}
+
+.scale-up-and-cover-leave-to {
+  margin-top: 100%;
+
+  opacity: 0;
+  filter: blur(10px);
+}
+
+/* 淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* 进入dark模式和退出dark模式时，两个图像的位置顺序正好相反 */
+.dark::view-transition-old(root) {
+  z-index: 9999999;
+}
+.dark::view-transition-new(root) {
+  z-index: 10000000;
+}
+
+::view-transition-old(root) {
+  z-index: 1000;
+}
+::view-transition-new(root) {
+  z-index: 99999;
 }

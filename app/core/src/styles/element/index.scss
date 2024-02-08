@@ -6,4 +6,5 @@
   ),
 );
 
+@use 'element-plus/theme-chalk/dark/css-vars.css' as *;
 @use "element-plus/theme-chalk/src/index.scss" as *;

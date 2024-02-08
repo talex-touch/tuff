@@ -21,17 +21,25 @@ onBeforeUnmount(() => {
   pluginsScope.stop();
 });
 
+const _init = ref(false);
+
+function init() {
+  touchChannel.send("app-ready").then((res: any) => {
+    window.$startupInfo = res;
+
+    applicationUpgrade();
+    clipBoardResolver();
+    dropperResolver();
+    urlHooker();
+    // screenCapture()
+
+    _init.value = true;
+  });
+}
+
 onMounted(() => {
   try {
-    touchChannel.send("app-ready").then((res: any) => {
-      window.$startupInfo = res;
-
-      applicationUpgrade();
-      clipBoardResolver();
-      dropperResolver();
-      urlHooker();
-      // screenCapture()
-    });
+    setTimeout(init, 1000);
   } catch (e) {
     console.error("FATAL ERROR OCCURRED");
     console.error(e);
@@ -40,7 +48,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppLayout>
+  <AppLayout v-if="_init">
     <template #title>
       TalexTouch
       <span class="tag version fake-background">{{ packageJson.version }}</span>
