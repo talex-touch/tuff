@@ -85,11 +85,11 @@
   z-index: 9999999;
 }
 .dark::view-transition-new(root) {
-  z-index: 1000000000;
+  z-index: 100000;
 }
 
 ::view-transition-old(root) {
-  z-index: 100000000;
+  z-index: 100000;
 }
 ::view-transition-new(root) {
   z-index: 9999999;

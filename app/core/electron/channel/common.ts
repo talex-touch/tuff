@@ -93,6 +93,11 @@ export default {
     // );
 
     async function onOpenUrl(url: string) {
+      const regex = /(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)/;
+      if (regex.test(url)) {
+        return;
+      }
+
       console.log("open url", url);
       const data = await channel.send(ChannelType.MAIN, "url:open", url);
 
