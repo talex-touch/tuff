@@ -95,6 +95,8 @@ if (release().startsWith("6.1")) app.disableHardwareAcceleration();
 if (process.platform === "win32") app.setAppUserModelId(app.getName());
 
 if (!app.requestSingleInstanceLock()) {
+  console.log('Secondary launch, app will quit.')
+
   app.quit();
   process.exit(0);
 } else {
@@ -166,25 +168,15 @@ class TouchApp implements TalexTouch.TouchApp {
 
     console.log(micaLib)
 
-    // const micaBuild = require("file://" + micaLib)
+    const _windowOptions = { ...MainWindowOption }
 
-    // const micaBuild = import.meta.glob(`./lib/micaElectron_${process.arch}.node`)
-
-    // console.log(micaBuild)
-
-    // micaBuild.then(v => {
-    //   console.log(v)
-    // })
-
-    // const micaBuild = import.meta.glob(micaLib)
-
-    // console.log(micaBuild)
-
-    // _micaSupport = useMica(micaBuild)
+    // if (app.isPackaged) {
+      
+    // }
 
     this.app = app;
     this.version = app.isPackaged ? TalexTouch.AppVersion.RELEASE : TalexTouch.AppVersion.DEV;
-    this.window = new TouchWindow(MainWindowOption);
+    this.window = new TouchWindow(_windowOptions);
     this.channel = genTouchChannel(this);
     this.moduleManager = new ModuleManager(this, this.channel);
     this.config = new TouchConfig(this);
@@ -201,12 +193,20 @@ class TouchApp implements TalexTouch.TouchApp {
 
     checkDirWithCreate(this.rootPath, true);
 
-    if (this.version === TalexTouch.AppVersion.RELEASE) {
+    if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
+      const url = path.join(process.env.DIST!, 'index.html')
+
+      this.window.window.show();
+      console.log("[TouchApp] Loading (mainWindow) webContents from: " + url);
+
       await this.window.loadFile(
-        path.join(process.env.DIST!, 'index.html')
+        `${url}`,
+        {
+          devtools: this.version === TalexTouch.AppVersion.DEV
+        }
       );
     } else {
-      const url = (process.env['VITE_DEV_SERVER_URL'] || process.env["ELECTRON_RENDERER_URL"]) as string;
+      const url = (process.env['VITE_DEV_SERVER_URL']) as string;
 
       this.window.window.show();
       console.log("[TouchApp] Loading (mainWindow) webContents from: " + url);

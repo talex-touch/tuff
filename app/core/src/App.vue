@@ -1,36 +1,49 @@
 <script name="App" lang="ts" setup>
-import AppLayout from '~/views/layout/AppLayout.vue'
+import AppLayout from "~/views/layout/AppLayout.vue";
 import {
-  applicationUpgrade, clipBoardResolver, dropperResolver, urlHooker, usePlugin, usePlugins
-} from '~/modules/hooks/application-hooks'
-import { touchChannel } from '~/modules/channel/channel-core'
+  applicationUpgrade,
+  clipBoardResolver,
+  dropperResolver,
+  urlHooker,
+  usePlugin,
+  usePlugins,
+} from "~/modules/hooks/application-hooks";
+import { touchChannel } from "~/modules/channel/channel-core";
 
-const packageJson = window.$nodeApi.getPackageJSON()
+const packageJson = window.$nodeApi.getPackageJSON();
 
-const [, pluginsScope] = usePlugins()
-const pluginScope = usePlugin()
+const [, pluginsScope] = usePlugins();
+const pluginScope = usePlugin();
 
 onBeforeUnmount(() => {
-  pluginScope()
+  pluginScope();
 
-  pluginsScope.stop()
-})
+  pluginsScope.stop();
+});
 
 onMounted(() => {
-  applicationUpgrade()
-  clipBoardResolver()
-  dropperResolver()
-  urlHooker()
-  // screenCapture()
+  try {
+    touchChannel.send("app-ready").then((res: any) => {
+      window.$startupInfo = res;
 
-  window.$startupInfo = touchChannel.sendSync('app-ready')
-})
+      applicationUpgrade();
+      clipBoardResolver();
+      dropperResolver();
+      urlHooker();
+      // screenCapture()
+    });
+  } catch (e) {
+    console.error("FATAL ERROR OCCURRED");
+    console.error(e);
+  }
+});
 </script>
 
 <template>
   <AppLayout>
     <template #title>
-      TalexTouch <span class="tag version fake-background">{{ packageJson.version }}</span>
+      TalexTouch
+      <span class="tag version fake-background">{{ packageJson.version }}</span>
     </template>
   </AppLayout>
 </template>

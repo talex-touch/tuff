@@ -1,7 +1,5 @@
 import fs from 'node:fs'
-import path from "node:path";
-import { spawn } from 'node:child_process'
-import { builtinModules } from 'node:module'
+import path, { resolve } from "node:path";
 import { defineConfig } from 'vite'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
@@ -23,9 +21,11 @@ const isDev = process.argv.slice(2).includes('--watch')
 const isTest = process.env.NODE_ENV === 'test'
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
+export default defineConfig(({ mode }) => {
 
-    console.log(command, mode, isSsrBuild, isPreview)
+    console.log("*** TALEX-TOUCH | Starting to build ...")
+
+    console.log(mode)
 
     if (!isDev && !isTest) {
         for (const dir of ['dist', 'plugin']) {
@@ -36,7 +36,8 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
     }
 
     const build = {
-        minify: !isDev,
+        base: './',
+        // minify: !isDev,
         emptyOutDir: false,
         outDir: 'dist',
         lib: {
@@ -47,17 +48,8 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
             fileName: format => `[name].${format === 'es' ? 'm' : ''}js`
         },
         rollupOptions: {
-            external: [
-                // 'mica-electron',
-                'electron',
-                'vite',
-                'vite-plugin-electron-renderer',
-                ...builtinModules,
-                ...builtinModules.map(m => `node:${m}`),
-                ...Object.keys('dependencies' in pkg ? pkg.dependencies as object : {}),
-            ],
-            output: {
-                exports: 'named',
+            input: {
+                main: resolve(__dirname, 'index.html')
             },
         },
     }
@@ -74,17 +66,6 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
             },
         },
         plugins: [
-            // {
-            //     name: 'generate-types',
-            //     async closeBundle() {
-            //         if (isTest) return
-
-            //         removeTypes()
-            //         await generateTypes()
-            //         moveTypesToDist()
-            //         removeTypes()
-            //     }
-            // },
             vue(),
             electron([
                 {
@@ -101,6 +82,7 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
                     },
                     vite: {
                         build: {
+                            outDir: 'dist/electron',
                             rollupOptions: {
                                 external: [
                                     'talex-mica-electron',
@@ -117,6 +99,11 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
                         // instead of restarting the entire Electron App.
                         options.reload()
                     },
+                    vite: {
+                        build: {
+                            outDir: 'dist/electron'
+                        }
+                    }
                 },
             ]),
             renderer({
@@ -143,36 +130,3 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
     }
 
 })
-
-function removeTypes() {
-    fs.rmSync(path.join(__dirname, 'types'), { recursive: true, force: true })
-}
-
-function generateTypes() {
-    return new Promise(resolve => {
-        const cp = spawn(
-            process.platform === 'win32' ? 'npm.cmd' : 'npm',
-            ['run', 'types'],
-            { stdio: 'inherit' },
-        )
-        cp.on('exit', code => {
-            !code && console.log('[types]', 'declaration generated')
-            resolve(code)
-        })
-        cp.on('error', process.exit)
-    })
-}
-
-function moveTypesToDist() {
-    const types = path.join(__dirname, 'types')
-    const dist = path.join(__dirname, 'dist')
-    const files = fs.readdirSync(types).filter(n => n.endsWith('.d.ts'))
-    for (const file of files) {
-        const from = path.join(types, file)
-        const to = path.join(dist, file)
-        fs.writeFileSync(to, fs.readFileSync(from, 'utf8'))
-
-        const cwd = process.cwd()
-        console.log('[types]', `${path.relative(cwd, from)} -> ${path.relative(cwd, to)}`)
-    }
-}
