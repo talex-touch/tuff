@@ -11,31 +11,32 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  title: {
+    type: String,
+    default: "Agreement",
+  },
 });
 const content = ref("");
-const destroy: Function = inject("destroy")!;
 
 watchEffect(() => {
   content.value = props.agreement;
 });
 
 async function dispose(agree: boolean) {
-  await destroy();
-
   props.agree(agree);
 }
 </script>
 
 <template>
   <div class="AgreeTemplate-Container">
-    <p font-600>Agreement</p>
-    <span> To use this software, you must agree this terms. </span>
+    <p font-600>{{ title }}</p>
+    <span mb-2> To use this software, you must agree this terms. </span>
     <el-scrollbar>
       <div class="AgreeTemplate-Content">
         <FlatMarkdown :readonly="true" v-model="content" />
       </div>
     </el-scrollbar>
-    <div box-border w="85%" mt-4 flex gap-8>
+    <div justify-center box-border w="85%" mt-4 flex gap-8>
       <FlatButton @click="dispose(false)" hover:bg-red> Cancel </FlatButton>
       <FlatButton @click="dispose(true)" :primary="true"> Agree </FlatButton>
     </div>

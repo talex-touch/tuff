@@ -10,6 +10,7 @@ import {
 } from "~/modules/hooks/application-hooks";
 import { touchChannel } from "~/modules/channel/channel-core";
 import Beginner from "~/views/base/begin/Beginner.vue";
+import { storageManager } from "~/modules/channel/storage/index.ts";
 
 const packageJson = window.$nodeApi.getPackageJSON();
 
@@ -23,6 +24,7 @@ onBeforeUnmount(() => {
 });
 
 const _init = ref(false);
+const beginner = ref(false);
 
 function init() {
   touchChannel.send("app-ready").then((res: any) => {
@@ -35,6 +37,8 @@ function init() {
     // screenCapture()
 
     _init.value = true;
+
+    if (!storageManager.appSetting?.beginner?.init) beginner.value = true;
   });
 }
 
@@ -56,5 +60,5 @@ onMounted(() => {
     </template>
   </AppLayout>
 
-  <Beginner />
+  <Beginner v-if="beginner" />
 </template>

@@ -104,6 +104,9 @@ export class StorageManager {
           plugins: 0,
           settings: 0,
         },
+        beginner: {
+          init: false
+        }
       });
     watch(
       this.appSetting,
