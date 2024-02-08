@@ -6,33 +6,26 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "ProgressBar"
-}
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="ProgressBar" setup>
 defineProps({
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: Boolean,
-    default: false
+    default: false,
   },
   success: {
     type: Boolean,
-    default: false
+    default: false,
   },
   message: {
     type: String,
-    default: ''
-  }
-})
+    default: "",
+  },
+});
 // const props = defineProps(['loading', 'error', 'success', 'message'])
-
 </script>
 
 <style lang="scss" scoped>
@@ -76,7 +69,7 @@ defineProps({
   width: 100%;
   height: 5px;
 
-  transition: .25s;
+  transition: 0.25s;
   border-radius: 8px;
   background-color: var(--el-color-primary);
 }
@@ -89,4 +82,5 @@ defineProps({
 
   overflow: hidden;
   //border-radius: 8px;
-}</style>
+}
+</style>

@@ -5,17 +5,11 @@
   </FlatButton>
 </template>
 
-<script>
-export default {
-  name: "AccountView",
-};
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="AccountView" setup>
 import FlatInput from "@comp/base/input/FlatInput.vue";
 import { inject, onMounted, ref } from "vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import { $t } from "@modules/lang";
+// import { $t } from "@modules/lang";
 import PasswordView from "~/views/others/account/PasswordView.vue";
 import { useUserExists } from "@modules/hooks/api/useAccount";
 import EmailView from "~/views/others/account/EmailView.vue";

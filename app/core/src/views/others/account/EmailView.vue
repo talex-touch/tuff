@@ -10,17 +10,11 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "EmaildView",
-};
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="EmaildView" setup>
 import FlatInput from "@comp/base/input/FlatInput.vue";
 import { inject, onMounted, ref } from "vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import { $t } from "@modules/lang";
+// import { $t } from "@modules/lang";
 import AccountView from "~/views/others/account/AccountView.vue";
 import PasswordView from "~/views/others/account/PasswordView.vue";
 

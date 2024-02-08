@@ -1,36 +1,40 @@
 <script name="FlatMarkdown" setup>
-import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
-import { nord } from '@milkdown/theme-nord'
-import { commonmark } from '@milkdown/preset-commonmark'
-import { replaceAll } from '@milkdown/utils'
-import { onMounted, ref } from 'vue'
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import '@milkdown/theme-nord/style.css'
+import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from "@milkdown/core";
+import { nord } from "@milkdown/theme-nord";
+import { commonmark } from "@milkdown/preset-commonmark";
+import { replaceAll } from "@milkdown/utils";
+import { onMounted, ref } from "vue";
+import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
+import "@milkdown/theme-nord/style.css";
 
-const props = defineProps(['modelValue', 'readonly'])
+const props = defineProps(["modelValue", "readonly"]);
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(["update:modelValue"]);
 
-const value = useModelWrapper(props, emit)
+const value = useModelWrapper(props, emit);
 
-const editor = ref()
-const editorDom = ref()
+const editor = ref();
+const editorDom = ref();
 
 watch(value, () => {
-  editor.value?.action(replaceAll(value.value))
-})
+  editor.value?.action(replaceAll(value.value));
+});
 
 onMounted(async () => {
-  editor.value = await Editor.make().config((ctx) => {
-    ctx.set(rootCtx, editorDom.value)
-    ctx.set(defaultValueCtx, value.value)
+  editor.value = await Editor.make()
+    .config((ctx) => {
+      ctx.set(rootCtx, editorDom.value);
+      ctx.set(defaultValueCtx, value.value);
 
-    ctx.update(editorViewOptionsCtx, prev => ({
-      ...prev,
-      editable: () => !props.readonly,
-    }))
-  }).use(nord).use(commonmark).create()
-})
+      ctx.update(editorViewOptionsCtx, (prev) => ({
+        ...prev,
+        editable: () => !props.readonly,
+      }));
+    })
+    .use(nord)
+    .use(commonmark)
+    .create();
+});
 </script>
 
 <template>
@@ -43,6 +47,8 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 :deep(.milkdown) {
+  position: relative;
+
   .ProseMirror {
     &:focus-visible {
       outline: none;
@@ -61,6 +67,7 @@ onMounted(async () => {
     }
   }
 
+  position: relative;
   height: 100%;
 
   h1 {
@@ -97,11 +104,15 @@ onMounted(async () => {
   }
 
   blockquote {
-    margin: 10px 0;
+    margin: 10px 0px;
+    box-sizing: border-box;
+
+    width: calc(100% - 10px);
 
     border-radius: 0 4px 4px 0;
     border-left: 3px solid var(--el-color-primary);
     background-color: var(--el-fill-color);
+    position: relative;
   }
 
   code {
@@ -139,11 +150,11 @@ onMounted(async () => {
   }
 
   &:hover {
-    border-color: var(--el-color-primary-light-7)
+    border-color: var(--el-color-primary-light-7);
   }
 
   &:focus-visible {
-    border-color: var(--el-color-primary)
+    border-color: var(--el-color-primary);
   }
 
   position: relative;

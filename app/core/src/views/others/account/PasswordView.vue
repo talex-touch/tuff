@@ -11,17 +11,11 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "PasswordView",
-};
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="PasswordView" setup>
 import FlatInput from "@comp/base/input/FlatInput.vue";
 import { inject, onMounted, ref } from "vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import { $t } from "@modules/lang";
+// import { $t } from "@modules/lang";
 import { useCaptcha } from "@modules/hooks/api/useGeneralAPI";
 import EmailVerifyView from "~/views/others/account/EmailVerifyView.vue";
 import AccountView from "~/views/others/account/AccountView.vue";

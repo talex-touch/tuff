@@ -334,3 +334,16 @@ html.fullscreen .Blur-Container {
 ::view-transition-new(root) {
   z-index: 99999;
 }
+
+.Touch-Dialog {
+  z-index: 1000;
+  position: absolute;
+  padding: 1rem 2rem;
+
+  left: 50%;
+  top: 50%;
+
+  border-radius: 8px;
+  transform: translate(-50%, -50%);
+  background-color: var(--el-fill-color);
+}

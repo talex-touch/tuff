@@ -25,16 +25,10 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "SignSucceedView",
-};
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="SignSucceedView" setup>
 import { inject, onMounted, ref } from "vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import { $t } from "@modules/lang";
+// import { $t } from "@modules/lang";
 
 const value = ref("");
 const close = inject("close");

@@ -9,6 +9,7 @@ import {
   usePlugins,
 } from "~/modules/hooks/application-hooks";
 import { touchChannel } from "~/modules/channel/channel-core";
+import Beginner from "~/views/base/begin/Beginner.vue";
 
 const packageJson = window.$nodeApi.getPackageJSON();
 
@@ -54,4 +55,6 @@ onMounted(() => {
       <span class="tag version fake-background">{{ packageJson.version }}</span>
     </template>
   </AppLayout>
+
+  <Beginner />
 </template>
