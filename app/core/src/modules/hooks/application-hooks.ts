@@ -1,20 +1,20 @@
-import { touchChannel } from '@modules/channel/channel-core'
+import { touchChannel } from '~/modules/channel/channel-core'
 import {
   blowMention,
   forTouchTip,
   popperMention,
-} from '@modules/mention/dialog-mention'
+} from '~/modules/mention/dialog-mention'
 import { h, ref, effectScope } from 'vue'
 import PluginApplyInstall from '@comp/plugin/action/mention/PluginApplyInstall.vue'
-import { AppUpdate } from '@modules/hooks/api/useUpdate'
+import { AppUpdate } from '~/modules/hooks/api/useUpdate'
 import AppUpdateView from '@comp/base/AppUpgradationView.vue'
-import { pluginManager } from '@modules/channel/plugin-core/api'
-import { pluginAdopter } from "@modules/hooks/adopters/plugin-adpoter";
+import { pluginManager } from '~/modules/channel/plugin-core/api'
+import { pluginAdopter } from "~/modules/hooks/adopters/plugin-adpoter";
 
 export function usePlugins() {
   const plugins = ref()
   provide('plugins', () => plugins.value)
-  
+
   const scope = effectScope()
 
   scope.run(() => {
@@ -36,7 +36,7 @@ export function usePlugin() {
 }
 
 export async function urlHooker() {
-  function directListener(event) {
+  function directListener(event: any) {
     const target = event.target
 
     if (target.nodeName.toLocaleLowerCase() === 'a') {
@@ -193,7 +193,7 @@ export function dropperResolver() {
       // 获取文件路径
       const { path } = files[0] as any
 
-      if ( await dropperFile(path) ) return
+      if (await dropperFile(path)) return
     }
 
     const option = {
@@ -209,7 +209,7 @@ export function dropperResolver() {
       x: e.x,
       y: e.y,
       data: {
-        files: [...e.dataTransfer.files ].map(parseFile),
+        files: [...e.dataTransfer.files].map(parseFile),
         // items: e.dataTransfer.items,
         types: e.dataTransfer.types,
       }
@@ -234,12 +234,12 @@ export function dropperResolver() {
 
 export function clipBoardResolver() {
   touchChannel.regChannel('clipboard', ({ data }) => {
-  if ( data.type === "text" ) {
+    if (data.type === "text") {
       blowMention('粘贴板', `你好像复制了 ${data.data}`)
-  } else if ( data.type === "image" ) {
+    } else if (data.type === "image") {
       blowMention('粘贴板', data.data)
-  } else if ( data.type === "html" ) {
+    } else if (data.type === "html") {
       blowMention('粘贴板', data.data)
-  }
+    }
   })
 }

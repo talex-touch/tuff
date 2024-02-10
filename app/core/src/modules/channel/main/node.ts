@@ -1,4 +1,4 @@
-import { touchChannel } from "@modules/channel/channel-core";
+import { touchChannel } from "~/modules/channel/channel-core";
 
 export class BaseNodeApi {
 

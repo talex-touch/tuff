@@ -8,9 +8,11 @@ import {
   usePlugin,
   usePlugins,
 } from "~/modules/hooks/application-hooks";
+import { useCoreBox } from "~/modules/hooks/core-box";
 import { touchChannel } from "~/modules/channel/channel-core";
 import Beginner from "~/views/base/begin/Beginner.vue";
 import { storageManager } from "~/modules/channel/storage/index.ts";
+import CoreBox from "~/views/box/CoreBox.vue";
 
 const packageJson = window.$nodeApi.getPackageJSON();
 
@@ -34,6 +36,7 @@ function init() {
     clipBoardResolver();
     dropperResolver();
     urlHooker();
+    useCoreBox();
     // screenCapture()
 
     _init.value = true;
@@ -61,4 +64,5 @@ onMounted(() => {
   </AppLayout>
 
   <Beginner v-if="beginner" />
+  <CoreBox />
 </template>

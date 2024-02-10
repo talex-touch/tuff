@@ -1,5 +1,5 @@
 import { clipboard } from 'electron'
-import {sendMainChannelMsg} from "../../../utils/channel-util";
+import { sendMainChannelMsg } from "../../../utils/channel-util";
 import { genTouchApp } from '../../touch-core';
 
 export default () => {
@@ -15,16 +15,16 @@ export default () => {
     }
 
     function formatClipboard(type, data) {
-        if ( data && clipboardStash[type] !== data ) return clipboardStash[type] = data
+        if (data && clipboardStash[type] !== data) return clipboardStash[type] = data
         return null
     }
 
     function formatClipboards(types) {
         const data: any = {}
-        for ( let type in types ) {
+        for (let type in types) {
             data.type = type
             data.data = formatClipboard(type, types[type])
-            if ( data.data ) return data
+            if (data.data) return data
         }
         return
     }
@@ -43,13 +43,13 @@ export default () => {
 
         Object.assign(data, res)
 
-       // clipboardStash[data.type] = data.data
+        // clipboardStash[data.type] = data.data
 
         // const buffer = clipboard.readBuffer("public/utf8-plain-text")
         // const base64 = buffer.toString("base64")
 
         // send to renderer
-        sendMainChannelMsg('clipboard', data).then(() => {})
+        sendMainChannelMsg('clipboard', data).then(() => { })
     }
     // on win focus
     win.addListener('focus', sendClipboardMsg)

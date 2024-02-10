@@ -4,6 +4,7 @@ import { BaseNodeApi } from '@modules/channel/main/node'
 import { StorageManager } from './modules/channel/storage'
 import { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { I18n } from 'vue-i18n'
+import { ShortconApi } from './modules/channel/main/shortcon'
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
@@ -43,6 +44,7 @@ declare global {
 
   export interface Window {
     $nodeApi: BaseNodeApi
+    $shortconApi: ShortconApi
     $storage: StorageManager
     $channel: ITouchClientChannel
     $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>

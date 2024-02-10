@@ -10,7 +10,7 @@ export enum DataCode {
 }
 
 export interface ITouchChannel {
-  
+
   /**
    * Register a channel
    * @description Register a channel, and return a function to cancel the registration
@@ -30,7 +30,7 @@ export interface ITouchChannel {
 }
 
 export interface ITouchClientChannel {
-  
+
   /**
    * Register a channel
    * @description Register a channel, and return a function to cancel the registration
@@ -85,10 +85,14 @@ export interface RawChannelData {
 
 export interface RawStandardChannelData extends RawChannelData {
   code: DataCode
-  data?: any
+  data?: IChannelData
   plugin?: string
 }
 
 export interface StandardChannelData extends RawStandardChannelData {
-  reply: (code: DataCode, data: any) => void
+  reply: (code: DataCode, data: IChannelData) => void
+}
+
+export interface IChannelData {
+  [prop: string]: any
 }

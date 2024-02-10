@@ -6,6 +6,7 @@ import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
 import PermissionCenter from './modules/permission-center'
 import ServiceCenter from './service/service-center'
+import CoreBox from './modules/box-tool/core-box'
 
 import addonOpener from './modules/addon-opener'
 import extensionLoader from './modules/extension-loader'
@@ -23,6 +24,7 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(PermissionCenter)
   app.moduleManager.loadModule(ServiceCenter)
 
+  app.moduleManager.loadModule(CoreBox)
   app.moduleManager.loadModule(TrayHolder)
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)

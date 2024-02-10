@@ -30,28 +30,28 @@
     ],
     "allowSyntheticDefaultImports": true,
     "paths": {
-      "@/*": [
+      "~/*": [
         "./src/*"
       ],
-      "@/assets/*": [
+      "~/assets/*": [
         "./src/assets/*"
       ],
-      "@/components/*": [
+      "~/components/*": [
         "./src/components/*"
       ],
-      "@/views/*": [
+      "~/views/*": [
         "./src/views/*"
       ],
-      "@/store/*": [
+      "~/store/*": [
         "./src/store/*"
       ],
-      "@/plugins/*": [
+      "~/plugins/*": [
         "./src/plugins/*"
       ],
-      "@/utils/*": [
+      "~/utils/*": [
         "./src/utils/*"
       ],
-      "@/types/*": [
+      "~/types/*": [
         "./src/types/*"
       ],
       "~": [

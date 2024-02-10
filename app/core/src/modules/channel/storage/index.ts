@@ -69,11 +69,41 @@ export class TouchStorage<T extends object> {
   }
 }
 
+const _appSettingOriginData = {
+  autoStart: false,
+  defaultApp: 0,
+  plugin: {
+    sync: 0,
+    syncLatest: false,
+    dataSync: false,
+  },
+  dev: {
+    autoCloseDev: true,
+  },
+  lang: {
+    followSystem: true,
+    locale: 0,
+  },
+  keyBind: {
+    summon: "CTRL + E",
+    home: 0,
+    plugins: 0,
+    settings: 0,
+  },
+  beginner: {
+    init: false
+  }
+}
+
+export type AppSetting = typeof _appSettingOriginData & {
+  [key: string]: any;
+};
+
 export class StorageManager {
 
   themeStyle: object;
 
-  appSetting: object;
+  appSetting: AppSetting;
 
   account: AccountStorage;
   constructor() {
@@ -83,31 +113,7 @@ export class StorageManager {
 
     this.appSetting = reactive(touchChannel.sendSync('storage:get', "app-setting.ini"));
     if (!this.appSetting.hasOwnProperty("autoStart"))
-      this.appSetting = reactive({
-        autoStart: false,
-        defaultApp: 0,
-        plugin: {
-          sync: 0,
-          syncLatest: false,
-          dataSync: false,
-        },
-        dev: {
-          autoCloseDev: true,
-        },
-        lang: {
-          followSystem: true,
-          locale: 0,
-        },
-        keyBind: {
-          summon: 0,
-          home: 0,
-          plugins: 0,
-          settings: 0,
-        },
-        beginner: {
-          init: false
-        }
-      });
+      this.appSetting = reactive({ ..._appSettingOriginData });
     watch(
       this.appSetting,
       async () => {

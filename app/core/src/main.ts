@@ -7,7 +7,8 @@ import {
 } from 'v-shared-element'
 
 import router from './base/router'
-import { baseNodeApi } from '~/modules/channel/main/node'
+import { baseNodeApi } from '~/modules/channel/main/node.ts'
+import { shortconApi } from '~/modules/channel/main/shortcon.ts'
 import { storageManager } from '~/modules/channel/storage'
 import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
@@ -19,6 +20,7 @@ import 'uno.css'
 import 'virtual:unocss-devtools'
 
 window.$nodeApi = baseNodeApi
+window.$shortconApi = shortconApi
 window.$storage = storageManager
 
 router.beforeEach(SharedElementRouteGuard)

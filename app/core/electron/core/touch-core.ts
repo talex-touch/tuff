@@ -142,7 +142,7 @@ function getRootPath(root: string) {
 
 // export const micaSupport: () => boolean = () => app.isPackaged ? fse.existsSync(micaLib) : true && _micaSupport;
 
-class TouchApp implements TalexTouch.TouchApp {
+export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = rootPath;
 
   app: Electron.App;

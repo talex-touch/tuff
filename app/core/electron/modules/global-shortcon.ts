@@ -1,4 +1,3 @@
-import { touchChannel } from '~/modules/channel/channel-core';
 import { ChannelType, StandardChannelData } from "@talex-touch/utils/channel";
 import { globalShortcut } from "electron";
 import { genTouchChannel } from "../core/channel-core";
@@ -13,7 +12,7 @@ export default {
     const touchChannel = genTouchChannel()
 
     touchChannel.regChannel(ChannelType.MAIN, 'shortcon:check', ({ data }: StandardChannelData) => {
-      const { key } = data
+      const { key } = data!
       if (!key) return {
         registered: false,
         message: 'key is required'
@@ -33,7 +32,7 @@ export default {
     })
 
     touchChannel.regChannel(ChannelType.MAIN, 'shortcon:reg', ({ data }: StandardChannelData) => {
-      const { key } = data
+      const { key } = data!
       if (!key) return {
         registered: false,
         message: 'key is required'
@@ -59,7 +58,7 @@ export default {
     })
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'shortcon:reg', ({ data, plugin }: StandardChannelData) => {
-      const { key } = data
+      const { key } = data!
       if (registered.has(key)) {
         return 'key already registered'
       }
