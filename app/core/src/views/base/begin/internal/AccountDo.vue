@@ -65,9 +65,31 @@ function handleAgree() {
   }
 }
 
+@keyframes frame_down {
+  0% {
+    transform: translateY(-50%) scale(0.5) translateY(0%);
+  }
+  25% {
+    transform: translateY(-50%) scale(0.5) translateY(-15%);
+  }
+  50% {
+    transform: translateY(-50%) scale(0.5) translateY(15%);
+  }
+  75% {
+    transform: translateY(-50%) scale(0.5) translateY(-10%);
+  }
+  100% {
+    transform: translateY(-50%) scale(0.5) translateY(10%);
+  }
+}
+
 .diaplyer {
   &.fill {
     --el-color-primary: var(--el-border-color);
+
+    &::after {
+      animation: frame_down 0.75s infinite;
+    }
   }
 
   &::before {
