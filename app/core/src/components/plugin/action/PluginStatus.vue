@@ -1,87 +1,97 @@
 <template>
-  <div ref="dom" @click="func" v-wave class="PluginStatus-Container" :class="{ shrink }">
-  </div>
+  <div
+    ref="dom"
+    @click="func"
+    v-wave
+    class="PluginStatus-Container"
+    :class="{ shrink }"
+  ></div>
 </template>
 
 <script name="PluginStatus" setup>
-import { pluginManager  } from '@modules/channel/plugin-core/api'
-import { ref, watchEffect, onMounted } from 'vue'
+import { pluginManager } from "@modules/channel/plugin-core/api";
+import { ref, watchEffect, onMounted } from "vue";
 
-const props = defineProps(['plugin', 'shrink'])
-const dom = ref()
+const props = defineProps(["plugin", "shrink"]);
+const dom = ref();
 
-const _PluginStatus = [ 'DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED' ]
-const func = ref(() => {})
-const status = ref('DISABLED')
+const _PluginStatus = [
+  "DISABLED",
+  "DISABLING",
+  "CRASHED",
+  "ENABLED",
+  "ACTIVE",
+  "LOADING",
+  "LOADED",
+];
+const func = ref(() => {});
+const status = ref("DISABLED");
 
 watchEffect(() => {
-  status.value = _PluginStatus[props.plugin.status]
-})
+  status.value = _PluginStatus[props.plugin.status];
+});
 
-function refresh () {
+function refresh() {
+  this.$el.classList.remove(
+    "LOADED",
+    "LOADING",
+    "ACTIVE",
+    "ENABLED",
+    "CRASHED",
+    "DISABLING",
+    "DISABLED"
+  );
+  this.$el.classList.add(this.status);
 
-  this.$el.classList.remove('LOADED', 'LOADING', 'ACTIVE', 'ENABLED', 'CRASHED', 'DISABLING', 'DISABLED')
-  this.$el.classList.add(this.status)
-
-  if( this.status === 'DISABLED' ) {
-    this.$el.innerHTML = `点击启用插件`
-
-    func.value = () => {
-
-      pluginManager.enablePlugin(this.pluginName)
-
-    }
-  } else if( this.status === 'DISABLING' ) {
-    this.$el.innerHTML = ``
-  } else if( this.status === 'CRASHED' ) {
-    this.$el.innerHTML = `插件已崩溃，点击重启！`
+  if (this.status === "DISABLED") {
+    this.$el.innerHTML = `Click to enable plugin.`;
 
     func.value = () => {
-
-      pluginManager.enablePlugin(this.pluginName)
-
-    }
-  } else if( this.status === 'ENABLED' ) {
-    this.$el.innerHTML = `插件已启用，点击停用！`
-
-    func.value = () => {
-
-      pluginManager.disablePlugin(this.pluginName)
-
-    }
-  } else if( this.status === 'ACTIVE' ) {
-    this.$el.innerHTML = ``
-  } else if( this.status === 'LOADING' ) {
-    this.$el.innerHTML = ``
-  } else if( this.status === 'LOADED' ) {
-    this.$el.innerHTML = `插件已加载，点击启用！`
+      pluginManager.enablePlugin(this.pluginName);
+    };
+  } else if (this.status === "DISABLING") {
+    this.$el.innerHTML = ``;
+  } else if (this.status === "CRASHED") {
+    this.$el.innerHTML = `Plugin crashed, click to restart.`;
 
     func.value = () => {
+      pluginManager.enablePlugin(this.pluginName);
+    };
+  } else if (this.status === "ENABLED") {
+    this.$el.innerHTML = `Plugin enabled, click to disable.`;
 
-      pluginManager.enablePlugin(this.pluginName)
+    func.value = () => {
+      pluginManager.disablePlugin(this.pluginName);
+    };
+  } else if (this.status === "ACTIVE") {
+    this.$el.innerHTML = ``;
+  } else if (this.status === "LOADING") {
+    this.$el.innerHTML = ``;
+  } else if (this.status === "LOADED") {
+    this.$el.innerHTML = `Plugin loaded, click to enable.`;
 
-    }
+    func.value = () => {
+      pluginManager.enablePlugin(this.pluginName);
+    };
   }
-
 }
 
 onMounted(() => {
   watchEffect(() => {
-
     const ctx = {
       status: status.value,
       pluginName: props.plugin.name,
       ...props,
-      get $el() { return dom.value }
-    }
+      get $el() {
+        return dom.value;
+      },
+    };
 
-    const func = refresh.bind(ctx)
+    const func = refresh.bind(ctx);
 
-    func()
-
-  })
-})
-
+    func();
+  });
+});
 </script>
 
 <style lang="scss" scoped>
@@ -89,7 +99,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: .75;
+  opacity: 0.75;
   color: #fff;
   background: var(--el-color-primary-light-3);
 }
@@ -98,16 +108,16 @@ onMounted(() => {
   height: 5px;
 
   pointer-events: none;
-  opacity: .75;
+  opacity: 0.75;
   background: var(--el-color-primary-light-3);
-  animation: loading .5s infinite;
+  animation: loading 0.5s infinite;
 }
 
 .PluginStatus-Container.ACTIVE {
   height: 5px;
 
   cursor: not-allowed;
-  opacity: .75;
+  opacity: 0.75;
   pointer-events: none;
   color: var(--el-text-color-primary);
   background: var(--el-color-success);
@@ -118,7 +128,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: .75;
+  opacity: 0.75;
   color: var(--el-text-color-primary);
   background: var(--el-color-success);
 }
@@ -127,7 +137,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: .75;
+  opacity: 0.75;
   color: var(--el-color-warning-light-7);
   background: var(--el-color-danger);
 }
@@ -136,7 +146,7 @@ onMounted(() => {
   height: 30px;
 
   cursor: pointer;
-  opacity: .75;
+  opacity: 0.75;
   background: var(--el-color-info);
 }
 
@@ -144,9 +154,9 @@ onMounted(() => {
   height: 5px;
 
   pointer-events: none;
-  opacity: .75;
+  opacity: 0.75;
   background: var(--el-color-info-light-3);
-  animation: loading .5s infinite;
+  animation: loading 0.5s infinite;
 }
 
 @keyframes loading {
@@ -187,7 +197,7 @@ onMounted(() => {
   height: 0;
 
   box-sizing: border-box;
-  transition: .25s;
+  transition: 0.25s;
   opacity: 0;
   user-select: none;
   border-bottom: 1px solid var(--el-border-color);

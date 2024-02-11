@@ -97,9 +97,6 @@ if (process.platform === "win32") app.setAppUserModelId(app.getName());
 if (!app.requestSingleInstanceLock()) {
   console.log('Secondary launch, app will quit.')
 
-  app.quit();
-  process.exit(0);
-} else {
   app.on(
     "second-instance",
     (event, argv, workingDirectory, additionalData) => {
@@ -109,6 +106,9 @@ if (!app.requestSingleInstanceLock()) {
       )
     }
   );
+
+  app.quit();
+  process.exit(0);
 }
 
 app.on("window-all-closed", () => {
