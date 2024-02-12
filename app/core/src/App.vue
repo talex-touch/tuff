@@ -33,7 +33,7 @@ function init() {
     window.$startupInfo = res;
 
     applicationUpgrade();
-    clipBoardResolver();
+    // clipBoardResolver();
     dropperResolver();
     urlHooker();
     useCoreBox();
