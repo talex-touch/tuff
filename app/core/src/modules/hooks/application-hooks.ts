@@ -233,13 +233,13 @@ export function dropperResolver() {
 }
 
 export function clipBoardResolver() {
-  touchChannel.regChannel('clipboard', ({ data }) => {
+  touchChannel.regChannel('clipboard:trigger', ({ data }: any) => {
     if (data.type === "text") {
-      blowMention('粘贴板', `你好像复制了 ${data.data}`)
+      blowMention('Clipboard', `You may copied "${data.data}"`)
     } else if (data.type === "image") {
-      blowMention('粘贴板', data.data)
+      blowMention('Clipboard', data.data)
     } else if (data.type === "html") {
-      blowMention('粘贴板', data.data)
+      blowMention('Clipboard', data.data)
     }
   })
 }

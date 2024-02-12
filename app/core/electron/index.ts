@@ -13,6 +13,7 @@ import extensionLoader from './modules/extension-loader'
 import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
+import Clipboard from './modules/clipboard'
 
 app.whenReady().then(() => {
   const app = genTouchApp()
@@ -29,4 +30,5 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)
   app.moduleManager.loadModule(GlobalShortcon)
+  app.moduleManager.loadModule(Clipboard)
 })

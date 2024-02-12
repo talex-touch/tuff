@@ -124,20 +124,12 @@ export default {
       tray.setToolTip(APP_SCHEMA)
       tray.setTitle(AppName)
 
-      // tray.addListener('click', () => {
-      //   console.log('[Tray] Clicked as ' + contextMenu.items[1].checked)
+      tray.addListener('click', () => {
+        const window = app.window.window
 
-      //   if (contextMenu.items[1].checked) {
-      //     app.app.quit()
-
-      //     process.exit(0)
-      //   } else {
-      //     const window = app.window.window
-
-      //     window.show()
-      //     window.focus()
-      //   }
-      // })
+        window.show()
+        window.focus()
+      })
     }
   },
   destroy() {

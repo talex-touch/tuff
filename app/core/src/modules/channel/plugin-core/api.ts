@@ -51,19 +51,19 @@ export interface IPluginManager {
 }
 
 class PluginManager {
-  async enablePlugin(name) {
+  async enablePlugin(name: string) {
     return touchChannel.send("enable-plugin", name);
   }
 
-  async disablePlugin(name) {
+  async disablePlugin(name: string) {
     return touchChannel.send("disable-plugin", name);
   }
 
-  setPluginWebviewInit(name) {
+  setPluginWebviewInit(name: string) {
     return touchChannel.sendSync("webview-init", name);
   }
 
-  async getPlugin(name) {
+  async getPlugin(name: string) {
     return touchChannel.send("get-plugin", name);
   }
   getPluginList() {
