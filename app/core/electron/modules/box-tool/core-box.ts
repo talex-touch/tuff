@@ -1,7 +1,7 @@
 import { genTouchApp, TouchApp } from '../../core/touch-core';
 import { ChannelType } from "@talex-touch/utils/channel";
 import { globalShortcut, screen } from "electron";
-import AppAddon from './addon/app-addon'
+import AppAddon, { apps } from './addon/app-addon'
 
 let touchApp: TouchApp
 
@@ -10,12 +10,13 @@ let height: number, width: number, left: number, top: number
 let lastVisible: boolean = false
 
 const addonList: Array<(keyword: string) => Promise<any>> = [
-  AppAddon()
+  AppAddon
 ]
 
 export class CoreBoxManager {
 
   #_show: boolean
+  #_expand: number
   resList: Array<any>
 
   constructor() {
@@ -49,16 +50,25 @@ export class CoreBoxManager {
       return true
     })
 
-    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => data ? this.expand() : this.shrink())
+    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => data ? this.expand(data) : this.shrink())
+    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box-get:apps', () => apps)
 
   }
 
-  expand() {
-    touchApp.window.window.setSize(900, 550, false)
+  expand(length: number = 100) {
+    this.#_expand = length
+
+    const height = Math.min(length * 48 + 65, 550)
+
+    touchApp.window.window.setMinimumSize(900, height)
+    touchApp.window.window.setSize(900, height, false)
+
     console.log('[CoreBox] Expanded.')
   }
 
   shrink() {
+    this.#_expand = 0
+
     touchApp.window.window.setMinimumSize(900, 60)
     touchApp.window.window.setSize(900, 60, false)
     console.log('[CoreBox] Shrunk.')
@@ -96,9 +106,11 @@ export class CoreBoxManager {
     w.window.setMovable(!show)
 
     if (show) {
-      w.window.setMinimumSize(900, 60)
-      w.window.setSize(900, 60, false)
-      console.log('[CoreBox] Size changed.')
+      if (!this.#_expand) {
+        w.window.setMinimumSize(900, 60)
+        w.window.setSize(900, 60, false)
+        console.log('[CoreBox] Size changed.')
+      } else this.expand(this.#_expand)
 
       const { bounds } = screen.getPrimaryDisplay()
 

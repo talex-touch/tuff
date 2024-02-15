@@ -8,7 +8,7 @@ export function useCoreBox() {
       document.body.classList.add('core-box')
 
       setTimeout(() => {
-        const input = document.querySelector('#core-box-input input')
+        const input = document.querySelector('#core-box-input')
 
         input?.focus()
       }, 100);
