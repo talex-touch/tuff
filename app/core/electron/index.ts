@@ -6,12 +6,14 @@ import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
 import PermissionCenter from './modules/permission-center'
 import ServiceCenter from './service/service-center'
+import CoreBox from './modules/box-tool/core-box'
 
 import addonOpener from './modules/addon-opener'
 import extensionLoader from './modules/extension-loader'
 import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
+import Clipboard from './modules/clipboard'
 
 app.whenReady().then(() => {
   const app = genTouchApp()
@@ -23,8 +25,10 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(PermissionCenter)
   app.moduleManager.loadModule(ServiceCenter)
 
+  app.moduleManager.loadModule(CoreBox)
   app.moduleManager.loadModule(TrayHolder)
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)
   app.moduleManager.loadModule(GlobalShortcon)
+  app.moduleManager.loadModule(Clipboard)
 })

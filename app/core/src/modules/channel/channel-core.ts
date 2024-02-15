@@ -17,8 +17,8 @@ class TouchChannel implements ITouchClientChannel {
     ipcRenderer.on("@main-process-message", this.__handle_main.bind(this));
   }
 
-  __parse_raw_data(e, arg): RawStandardChannelData {
-    // console.log("Raw data: ", arg, e);
+  __parse_raw_data(e: typeof IpcMainEvent, arg: any): RawStandardChannelData | null {
+    console.debug("Raw data: ", arg, e);
     if (arg) {
       const { name, header, code, plugin, data, sync } = arg;
 
@@ -45,9 +45,12 @@ class TouchChannel implements ITouchClientChannel {
 
   __handle_main(e: typeof IpcMainEvent, arg: any): any {
     const rawData = this.__parse_raw_data(e, arg);
-    if ( !rawData ) return
+    if (!rawData?.header) {
+      console.error("Invalid message: ", arg);
+      return
+    }
 
-    if ( rawData.header.status === 'reply' && rawData.sync ) {
+    if (rawData.header.status === 'reply' && rawData.sync) {
       const { id } = rawData.sync;
 
       return this.pendingMap.get(id)?.(rawData);
@@ -55,7 +58,7 @@ class TouchChannel implements ITouchClientChannel {
 
     this.channelMap.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
-        reply: (code: DataCode, data: any, options: any) => {
+        reply: (code: DataCode, data: any) => {
           e.sender.send(
             "@main-process-message",
             this.__parse_sender(code, rawData, data, rawData.sync)
@@ -84,11 +87,11 @@ class TouchChannel implements ITouchClientChannel {
       sync: !sync
         ? undefined
         : {
-            timeStamp: new Date().getTime(),
-            // reply sync timeout should follow the request timeout, unless user set it.
-            timeout: sync.timeout,
-            id: sync.id,
-          },
+          timeStamp: new Date().getTime(),
+          // reply sync timeout should follow the request timeout, unless user set it.
+          timeout: sync.timeout,
+          id: sync.id,
+        },
       name: rawData.name,
       header: {
         status: "reply",
@@ -106,7 +109,7 @@ class TouchChannel implements ITouchClientChannel {
 
     if (!listeners.includes(callback)) {
       listeners.push(callback);
-    } else return undefined;
+    } else return;
 
     this.channelMap.set(eventName, listeners);
 
@@ -140,7 +143,7 @@ class TouchChannel implements ITouchClientChannel {
     } as RawStandardChannelData;
 
     return new Promise((resolve) => {
-      
+
       ipcRenderer.send("@main-process-message", data);
 
       this.pendingMap.set(uniqueId, (res) => {
@@ -163,8 +166,10 @@ class TouchChannel implements ITouchClientChannel {
     } as RawStandardChannelData;
 
     const res = this.__parse_raw_data(null, ipcRenderer.sendSync("@main-process-message", data))
-    
-    if ( res.header.status === 'reply' ) return res.data;
+
+    console.debug("sync res", res)
+
+    if (res?.header?.status === 'reply') return res.data;
 
     return res;
 

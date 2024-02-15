@@ -2,16 +2,10 @@
   <FlatCodeInput @input="inputDone" />
 </template>
 
-<script>
-export default {
-  name: "EmailVerifyView",
-};
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="EmailVerifyView" setup>
 import { inject, onMounted, ref } from "vue";
 import FlatButton from "@comp/base/button//FlatButton.vue";
-import { $t } from "@modules/lang";
+// import { $t } from "@modules/lang";
 import FlatCodeInput from "@comp/base/input/FlatCodeInput.vue";
 import { forDialogMention } from "@modules/mention/dialog-mention";
 import { useRegister } from "@modules/hooks/api/useAccount";

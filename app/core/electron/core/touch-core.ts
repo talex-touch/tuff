@@ -1,3 +1,4 @@
+import { TalexTouch } from '~/main/types';
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import {
   BrowserWindowConstructorOptions,
@@ -29,11 +30,7 @@ import {
 } from "./eventbus/touch-event";
 import * as log4js from 'log4js'
 
-console.log('TALEX TOUCH STARTED')
-
 const rootPath = getRootPath(process.cwd())
-
-console.log('Application running under folder: ' + rootPath)
 
 const logs = path.join(rootPath, 'logs')
 checkDirWithCreate(logs)
@@ -99,9 +96,8 @@ if (release().startsWith("6.1")) app.disableHardwareAcceleration();
 if (process.platform === "win32") app.setAppUserModelId(app.getName());
 
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
-  process.exit(0);
-} else {
+  console.log('Secondary launch, app will quit.')
+
   app.on(
     "second-instance",
     (event, argv, workingDirectory, additionalData) => {
@@ -111,6 +107,9 @@ if (!app.requestSingleInstanceLock()) {
       )
     }
   );
+
+  app.quit();
+  process.exit(0);
 }
 
 app.on("window-all-closed", () => {
@@ -144,7 +143,7 @@ function getRootPath(root: string) {
 
 // export const micaSupport: () => boolean = () => app.isPackaged ? fse.existsSync(micaLib) : true && _micaSupport;
 
-class TouchApp implements TalexTouch.TouchApp {
+export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = rootPath;
 
   app: Electron.App;
@@ -170,25 +169,15 @@ class TouchApp implements TalexTouch.TouchApp {
 
     console.log(micaLib)
 
-    // const micaBuild = require("file://" + micaLib)
+    const _windowOptions = { ...MainWindowOption }
 
-    // const micaBuild = import.meta.glob(`./lib/micaElectron_${process.arch}.node`)
+    // if (app.isPackaged) {
 
-    // console.log(micaBuild)
-
-    // micaBuild.then(v => {
-    //   console.log(v)
-    // })
-
-    // const micaBuild = import.meta.glob(micaLib)
-
-    // console.log(micaBuild)
-
-    // _micaSupport = useMica(micaBuild)
+    // }
 
     this.app = app;
     this.version = app.isPackaged ? TalexTouch.AppVersion.RELEASE : TalexTouch.AppVersion.DEV;
-    this.window = new TouchWindow(MainWindowOption);
+    this.window = new TouchWindow(_windowOptions);
     this.channel = genTouchChannel(this);
     this.moduleManager = new ModuleManager(this, this.channel);
     this.config = new TouchConfig(this);
@@ -205,12 +194,20 @@ class TouchApp implements TalexTouch.TouchApp {
 
     checkDirWithCreate(this.rootPath, true);
 
-    if (this.version === TalexTouch.AppVersion.RELEASE) {
+    if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
+      const url = path.join(process.env.DIST!, 'index.html')
+
+      this.window.window.show();
+      console.log("[TouchApp] Loading (mainWindow) webContents from: " + url);
+
       await this.window.loadFile(
-        path.join(process.env.DIST!, 'index.html')
+        `${url}`,
+        {
+          devtools: this.version === TalexTouch.AppVersion.DEV
+        }
       );
     } else {
-      const url = (process.env['VITE_DEV_SERVER_URL'] || process.env["ELECTRON_RENDERER_URL"]) as string;
+      const url = (process.env['VITE_DEV_SERVER_URL']) as string;
 
       this.window.window.show();
       console.log("[TouchApp] Loading (mainWindow) webContents from: " + url);
@@ -421,10 +418,45 @@ class ModuleManager implements TalexTouch.IModuleManager {
 
 class TouchConfig implements TalexTouch.IConfiguration {
   configPath: string;
+  data: TalexTouch.TouchAppConfig
 
   constructor(touchApp: TouchApp) {
     this.configPath = path.join(touchApp.rootPath, "config");
+    const configFilePath = path.resolve(this.configPath, "config.ini")
     checkDirWithCreate(this.configPath, true);
+
+    setTimeout(() => {
+      let _data: TalexTouch.TouchAppConfig = {
+        frame: {
+          height: 1280,
+          width: 780
+        }
+      }
+      if (fse.existsSync(configFilePath)) {
+        const rawData = fse.readFileSync(configFilePath, "utf-8")
+        _data = rawData ? JSON.parse(rawData) : _data;
+      }
+
+      this.data = new Proxy(_data, {
+        get: (target, prop) => {
+          if (prop in target) return target[prop];
+
+          return _data[prop];
+          // if (prop in _data) return _data[prop];
+
+          // console.warn(`[Config] Property ${String(prop)} not found`);
+
+          // return undefined;
+        },
+        set: (target, prop, value) => {
+          target[prop] = value;
+
+          this.triggerSave()
+
+          return true;
+        }
+      })
+    })
 
     if (fse.existsSync(path.resolve(this.configPath, "dev.talex"))) {
       process.env.TALEX_DEV = "true";
@@ -436,7 +468,19 @@ class TouchConfig implements TalexTouch.IConfiguration {
         mode: "undocked",
         activate: true,
       });
+
+      setTimeout(() => {
+        const { width, height } = this.data.frame;
+        touchApp!.window.window.setSize(width, height);
+      }, 1000);
     }
+  }
+
+  triggerSave() {
+    const configFilePath = path.resolve(this.configPath, "config.ini")
+    fse.writeFileSync(configFilePath, JSON.stringify(this.data));
+
+    console.log('[TouchConfig] Default config updated!')
   }
 }
 

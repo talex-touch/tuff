@@ -26,13 +26,7 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "TouchSign",
-};
-</script>
-
-<script lang="ts" setup>
+<script lang="ts" name="TouchSign" setup>
 import { onMounted, provide, reactive, ref } from "vue";
 import { sleep } from "@talex-touch/utils/common";
 import AccountView from "~/views/others/account/AccountView.vue";

@@ -1,37 +1,41 @@
 <script setup lang="ts" name="SettingUser">
-import { $t } from '@modules/lang'
-import TBlockLine from '@comp/base/group/TBlockLine.vue';
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
-import OSIcon from '@comp/icon/OSIcon.vue'
-import { useCPUUsage, useMemoryUsage } from '@modules/hooks/env-hooks';
+import { $t } from "@modules/lang";
+import TBlockLine from "@comp/base/group/TBlockLine.vue";
+import TGroupBlock from "@comp/base/group/TGroupBlock.vue";
+import OSIcon from "@comp/icon/OSIcon.vue";
+import { useCPUUsage, useMemoryUsage } from "@modules/hooks/env-hooks";
 
 const props = defineProps({
   env: {
     type: Object,
-    required: true
+    required: true,
   },
   dev: {
     type: Boolean,
-    required: true
-  }
-})
+    required: true,
+  },
+});
 
-const appUpdate = ref()
+const appUpdate = ref();
 
 onMounted(() => {
-  appUpdate.value = window.$startupInfo.appUpdate
-})
+  appUpdate.value = window.$startupInfo.appUpdate;
+});
 
-const versionStr = computed(() => `TalexTouch ${props.dev ? 'Dev' : 'Master'} ${props.env.packageJson?.version}`)
-const startCosts = computed(() => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000)
+const versionStr = computed(
+  () => `TalexTouch ${props.dev ? "Dev" : "Master"} ${props.env.packageJson?.version}`
+);
+const startCosts = computed(
+  () => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000
+);
 
-const cpuUsage = useCPUUsage()
-const memoryUsage = useMemoryUsage()
+const cpuUsage = useCPUUsage();
+const memoryUsage = useMemoryUsage();
 
 onBeforeUnmount(() => {
-  cpuUsage[1]()
-  memoryUsage[1]()
-})
+  cpuUsage[1]();
+  memoryUsage[1]();
+});
 </script>
 
 <template>
@@ -39,12 +43,14 @@ onBeforeUnmount(() => {
     <t-block-line title="Version">
       <template #description>
         {{ versionStr }}
-        <span v-if="appUpdate" class="tag" style="color: #FEA113;font-weight: 600;cursor: pointer">
+        <span
+          v-if="appUpdate"
+          class="tag"
+          style="color: #fea113; font-weight: 600; cursor: pointer"
+        >
           New!
         </span>
-        <span v-else class="tag" style="color: #6D8B51">
-          Latest
-        </span>
+        <span v-else class="tag" style="color: #6d8b51"> Latest </span>
       </template>
     </t-block-line>
     <t-block-line title="Specification" description="23H6 T1"></t-block-line>
@@ -54,7 +60,11 @@ onBeforeUnmount(() => {
         <span class="tag" style="color: var(--el-color-success)" v-if="startCosts < 1">
           Perfect
         </span>
-        <span class="tag" style="color: var(--el-color-warning)" v-else-if="startCosts < 2">
+        <span
+          class="tag"
+          style="color: var(--el-color-warning)"
+          v-else-if="startCosts < 2"
+        >
           Good
         </span>
         <span class="tag" style="color: var(--el-color-error)" v-else-if="startCosts < 5">
@@ -65,8 +75,14 @@ onBeforeUnmount(() => {
         </span>
       </template>
     </t-block-line>
-    <t-block-line title="Electron" :description="env.process.versions?.electron"></t-block-line>
-    <t-block-line title="V8 Engine" :description="env.process.versions?.v8"></t-block-line>
+    <t-block-line
+      title="Electron"
+      :description="env.process.versions?.electron"
+    ></t-block-line>
+    <t-block-line
+      title="V8 Engine"
+      :description="env.process.versions?.v8"
+    ></t-block-line>
     <t-block-line title="OS">
       <template #description>
         <span indent-1 flex items-center>
@@ -75,12 +91,23 @@ onBeforeUnmount(() => {
         </span>
       </template>
     </t-block-line>
-    <t-block-line title="Platform" :description="`${env.process.platform} (${env.os.arch})`"></t-block-line>
-    <t-block-line title="Experience" description="Touch Feature Experience Pack 2024.01.09"></t-block-line>
+    <t-block-line
+      title="Platform"
+      :description="`${env.process.platform} (${env.os.arch})`"
+    ></t-block-line>
+    <t-block-line
+      title="Experience"
+      description="Touch Feature Experience Pack 2024.02.15"
+    ></t-block-line>
     <t-block-line title="CPU Usage">
       <template #description>
-        <span :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`" class="Usage"
-          :style="`--color: var(--el-color-danger);--percent: ${cpuUsage[0].value.percentCPUUsage * 100}%`">
+        <span
+          :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`"
+          class="Usage"
+          :style="`--color: var(--el-color-danger);--percent: ${
+            cpuUsage[0].value.percentCPUUsage * 100
+          }%`"
+        >
         </span>
       </template>
     </t-block-line>
@@ -89,9 +116,16 @@ onBeforeUnmount(() => {
     <t-block-line title="Mem Usage">
       <template #description>
         <span
-          :data-text="`${Math.round((memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 10000) / 100}%`"
+          :data-text="`${
+            Math.round(
+              (memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 10000
+            ) / 100
+          }%`"
           class="Usage"
-          :style="`--color: var(--el-color-primary);--percent: ${(memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 100}%`">
+          :style="`--color: var(--el-color-primary);--percent: ${
+            (memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 100
+          }%`"
+        >
         </span>
       </template>
     </t-block-line>

@@ -24,7 +24,7 @@ export async function triggerThemeTransition(pos: [number, number], mode: string
   const transition = document.startViewTransition(() => {
     themeStyle.value.theme.style.auto = mode === 'auto'
     themeStyle.value.theme.style.dark = mode === 'auto' ? isDark.value : mode === 'dark'
-    
+
     const l = document.body.parentElement.classList
     mode === 'dark' ? l.add('dark') : l.remove('dark')
   })
@@ -41,7 +41,7 @@ export async function triggerThemeTransition(pos: [number, number], mode: string
       `circle(${endRadius}px at ${x}px ${y}px)`
     ]
 
-    if (mode === 'dark') {
+    if (mode !== 'dark') {
       document.documentElement.animate(
         {
           clipPath: !isDark.value ? clipPath.reverse() : clipPath,

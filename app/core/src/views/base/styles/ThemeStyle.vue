@@ -17,7 +17,7 @@
       </SectionItem>
       <SectionItem
         v-model="themeStyle.theme.window"
-        tip="This feature only supports Windows."
+        tip="This feature only supports Windows11."
         title="Filter"
         :disabled="true"
       >
@@ -36,6 +36,16 @@
         <t-select-item name="light">Light Style</t-select-item>
         <t-select-item name="dark">Dark Style</t-select-item>
         <t-select-item name="auto">Follow System</t-select-item>
+      </t-block-select>
+      <t-block-select
+        v-model="homeBgSource"
+        title="Homepage Wallpaper"
+        icon="image-add"
+        iconChange="line"
+        description="Choose the source of your homepage background wallpaper. This selection takes effect immediately."
+      >
+        <t-select-item name="bing">Bing</t-select-item>
+        <t-select-item name="folder">Folder</t-select-item>
       </t-block-select>
     </t-group-block>
 
@@ -89,6 +99,7 @@ import { themeStyle, triggerThemeTransition } from "~/modules/storage/AppStorage
 
 const os = ref();
 const styleValue = ref(0);
+const homeBgSource = ref(0);
 
 watchEffect(() => {
   if (themeStyle.value.theme.style.auto) styleValue.value = 2;

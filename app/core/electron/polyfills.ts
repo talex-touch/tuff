@@ -3,7 +3,7 @@ import path from "node:path";
 import { app } from "electron";
 import log4js from "log4js";
 
-process.env.DIST = path.join(__dirname, '../dist')
+process.env.DIST = path.join(__dirname, '..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public')
 
 globalThis.logger = log4js.getLogger()

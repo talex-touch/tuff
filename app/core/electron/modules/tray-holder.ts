@@ -104,8 +104,18 @@ export default {
       const tray = new Tray(iconPath)
 
       const contextMenu = Menu.buildFromTemplate([
-        { label: '退出时最小化程序', type: 'radio' },
-        { label: '退出', type: 'normal' }
+        {
+          label: '退出时最小化程序', type: 'radio', click() {
+            contextMenu.items[1].checked = !contextMenu.items[1].checked
+          }
+        },
+        {
+          label: '退出', type: 'normal', click() {
+            app.app.quit()
+
+            process.exit(0)
+          }
+        }
       ])
 
       contextMenu.items[1].checked = false
@@ -115,14 +125,10 @@ export default {
       tray.setTitle(AppName)
 
       tray.addListener('click', () => {
-        if (contextMenu.items[1].checked) {
-          app.app.exit(0)
-        } else {
-          const window = app.window.window
+        const window = app.window.window
 
-          window.show()
-          window.focus()
-        }
+        window.show()
+        window.focus()
       })
     }
   },
