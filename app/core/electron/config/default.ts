@@ -5,14 +5,14 @@ export const AppName = "TalexTouch"
 
 export const APP_FOLDER_NAME = 'talex-touch'
 
-export const APP_SCHEMA = 'talex-touch'
+export const APP_SCHEMA = 'talextouch'
 
 export const MainWindowOption = {
     title: AppName,
     icon: appIcon,
     frame: false,
     minWidth: 1280,
-    minHeight: 720,
+    minHeight: 780,
     autoHideMenuBar: true,
     show: false,
     webPreferences: {

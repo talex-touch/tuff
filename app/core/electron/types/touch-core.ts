@@ -150,5 +150,18 @@ export namespace TalexTouch {
     ): void;
   }
 
-  export interface IConfiguration { }
+  export interface IConfiguration {
+    configPath: string;
+    data: TouchAppConfig
+    triggerSave: Function
+  }
+
+  export interface TouchAppConfig {
+    frame: {
+      width: number;
+      height: number;
+      left: number;
+      top: number;
+    }
+  }
 }

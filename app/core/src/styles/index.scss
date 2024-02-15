@@ -16,7 +16,8 @@ body,
   overflow: hidden;
 }
 
-#app:has(div.coloring) {
+#app:has(div.coloring),
+.core-box #app {
   top: 1px;
   left: 1px;
 
@@ -31,8 +32,13 @@ body,
   }
 }
 
+.core-box #app {
+  border: 1px solid var(--el-color-primary) !important;
+}
+
 .el-scrollbar__bar {
-  &.is-vertical, &.is-horizontal {
+  &.is-vertical,
+  &.is-horizontal {
     width: 3px !important;
   }
 }
@@ -128,13 +134,13 @@ html.fullscreen .Blur-Container {
 }
 
 :root {
-  --app-color: #40A6F1
+  --app-color: #40a6f1;
 }
 
 /*base code*/
 .animated {
-  -webkit-animation-duration: .5s;
-  animation-duration: .5s;
+  -webkit-animation-duration: 0.5s;
+  animation-duration: 0.5s;
   -webkit-animation-fill-mode: both;
   animation-fill-mode: both;
 }
@@ -150,45 +156,44 @@ html.fullscreen .Blur-Container {
 @-webkit-keyframes zoomInUp {
   0% {
     opacity: 0;
-    -webkit-transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
-    transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
-    -webkit-animation-timing-function: cubic-bezier(0.55, .055, .675, .19);
-    animation-timing-function: cubic-bezier(0.55, .055, .675, .19)
+    -webkit-transform: scale3d(0.1, 0.1, 0.1) translate3d(0, 1000px, 0);
+    transform: scale3d(0.1, 0.1, 0.1) translate3d(0, 1000px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
   }
   60% {
     opacity: 1;
-    -webkit-transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
-    transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
-    -webkit-animation-timing-function: cubic-bezier(0.175, .885, .32, 1);
-    animation-timing-function: cubic-bezier(0.175, .885, .32, 1)
+    -webkit-transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
+    transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1);
+    animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1);
   }
 }
 @keyframes zoomInUp {
   0% {
     opacity: 0;
-    -webkit-transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
-    -ms-transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
-    transform: scale3d(.1, .1, .1) translate3d(0, 1000px, 0);
-    -webkit-animation-timing-function: cubic-bezier(0.55, .055, .675, .19);
-    animation-timing-function: cubic-bezier(0.55, .055, .675, .19)
+    -webkit-transform: scale3d(0.1, 0.1, 0.1) translate3d(0, 1000px, 0);
+    -ms-transform: scale3d(0.1, 0.1, 0.1) translate3d(0, 1000px, 0);
+    transform: scale3d(0.1, 0.1, 0.1) translate3d(0, 1000px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
   }
   60% {
     opacity: 1;
-    -webkit-transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
-    -ms-transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
-    transform: scale3d(.475, .475, .475) translate3d(0, -60px, 0);
-    -webkit-animation-timing-function: cubic-bezier(0.175, .885, .32, 1);
-    animation-timing-function: cubic-bezier(0.175, .885, .32, 1)
+    -webkit-transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
+    -ms-transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
+    transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
+    -webkit-animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1);
+    animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1);
   }
 }
 .zoomInUp {
   -webkit-animation-name: zoomInUp;
-  animation-name: zoomInUp
+  animation-name: zoomInUp;
 }
 
-
 .fade-in {
-  animation: fadeIn .25s
+  animation: fadeIn 0.25s;
 }
 
 @keyframes fadeIn {
@@ -202,12 +207,12 @@ html.fullscreen .Blur-Container {
 
 @keyframes breathing {
   from {
-    opacity: .75;
-    transform: scale(.8)
+    opacity: 0.75;
+    transform: scale(0.8);
   }
   to {
     opacity: 0;
-    transform: scale(var(--size, 2))
+    transform: scale(var(--size, 2));
   }
 }
 
@@ -221,15 +226,23 @@ html.fullscreen .Blur-Container {
 }
 
 @keyframes shaken {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(0);
   }
 
-  10%, 30%, 50%, 70%, 90% {
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
     transform: translateX(-10px);
   }
 
-  20%, 40%, 60%, 80% {
+  20%,
+  40%,
+  60%,
+  80% {
     transform: translateX(10px);
   }
 }

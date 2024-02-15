@@ -1,3 +1,4 @@
+import { TalexTouch } from '~/main/types';
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import {
   BrowserWindowConstructorOptions,
@@ -171,7 +172,7 @@ export class TouchApp implements TalexTouch.TouchApp {
     const _windowOptions = { ...MainWindowOption }
 
     // if (app.isPackaged) {
-      
+
     // }
 
     this.app = app;
@@ -417,10 +418,45 @@ class ModuleManager implements TalexTouch.IModuleManager {
 
 class TouchConfig implements TalexTouch.IConfiguration {
   configPath: string;
+  data: TalexTouch.TouchAppConfig
 
   constructor(touchApp: TouchApp) {
     this.configPath = path.join(touchApp.rootPath, "config");
+    const configFilePath = path.resolve(this.configPath, "config.ini")
     checkDirWithCreate(this.configPath, true);
+
+    setTimeout(() => {
+      let _data: TalexTouch.TouchAppConfig = {
+        frame: {
+          height: 1280,
+          width: 780
+        }
+      }
+      if (fse.existsSync(configFilePath)) {
+        const rawData = fse.readFileSync(configFilePath, "utf-8")
+        _data = rawData ? JSON.parse(rawData) : _data;
+      }
+
+      this.data = new Proxy(_data, {
+        get: (target, prop) => {
+          if (prop in target) return target[prop];
+
+          return _data[prop];
+          // if (prop in _data) return _data[prop];
+
+          // console.warn(`[Config] Property ${String(prop)} not found`);
+
+          // return undefined;
+        },
+        set: (target, prop, value) => {
+          target[prop] = value;
+
+          this.triggerSave()
+
+          return true;
+        }
+      })
+    })
 
     if (fse.existsSync(path.resolve(this.configPath, "dev.talex"))) {
       process.env.TALEX_DEV = "true";
@@ -432,7 +468,19 @@ class TouchConfig implements TalexTouch.IConfiguration {
         mode: "undocked",
         activate: true,
       });
+
+      setTimeout(() => {
+        const { width, height } = this.data.frame;
+        touchApp!.window.window.setSize(width, height);
+      }, 1000);
     }
+  }
+
+  triggerSave() {
+    const configFilePath = path.resolve(this.configPath, "config.ini")
+    fse.writeFileSync(configFilePath, JSON.stringify(this.data));
+
+    console.log('[TouchConfig] Default config updated!')
   }
 }
 

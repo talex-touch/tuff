@@ -87,6 +87,9 @@ importers:
       chokidar:
         specifier: ^3.5.3
         version: 3.6.0
+      commander:
+        specifier: ^12.0.0
+        version: 12.0.0
       compressing:
         specifier: ^1.10.0
         version: 1.10.0
@@ -111,6 +114,9 @@ importers:
       hotkeys-js:
         specifier: ^3.13.5
         version: 3.13.7
+      iconv-lite:
+        specifier: ^0.6.3
+        version: 0.6.3
       js-md5:
         specifier: ^0.7.3
         version: 0.7.3
@@ -126,6 +132,9 @@ importers:
       pinia:
         specifier: ^2.1.6
         version: 2.1.7(typescript@5.3.3)(vue@3.4.18)
+      pinyin-match:
+        specifier: ^1.2.5
+        version: 1.2.5
       remixicon:
         specifier: ^3.5.0
         version: 3.7.0
@@ -3749,6 +3758,11 @@ packages:
     dependencies:
       delayed-stream: 1.0.0
 
+  /commander@12.0.0:
+    resolution: {integrity: sha512-MwVNWlYjDTtOjX5PiD7o5pK0UrFU/OYgcJfjjK4RaHZETNtjJqrZa9Y9ds88+A+f+d5lv+561eZ+yCKoS3gbAA==}
+    engines: {node: '>=18'}
+    dev: false
+
   /commander@5.1.0:
     resolution: {integrity: sha512-P0CysNDQ7rtVw4QIQtm+MRxV66vKFSvlsQvGYXZWR3qFU0jlMKHZZZgw8e+8DSah4UDKMqnknRDQz+xuQXQ/Zg==}
     engines: {node: '>= 6'}
@@ -6698,6 +6712,10 @@ packages:
       typescript: 5.3.3
       vue: 3.4.18(typescript@5.3.3)
       vue-demi: 0.14.7(vue@3.4.18)
+    dev: false
+
+  /pinyin-match@1.2.5:
+    resolution: {integrity: sha512-+F3bi5v95enkqSJ0nD1e2fGp8Uj3YCRBzka3DlCQ4tyurfqYmAChLR3aAO/c/Pk+xBgvEx9zI35HoyYATSb0mw==}
     dev: false
 
   /pkg-types@1.0.3:
