@@ -2,13 +2,13 @@
 
 ## What's
 
-`TalexTouch` just a shell of the frame, you can do whatever you want do by developing plugins.
+`TalexTouch` is just a shell of the frame, you can do whatever you want to do by developing plugins.
 
-When the program is running, the directory `talex-touch` will be automatically create. Click `Plugins` and click `+ Create One` to create a plugin, the environment will be automatically established by app.
+When the program is running, the directory `talex-touch` will be automatically created. Click `Plugins` and click `+ Create One` to create a plugin, the environment will be automatically established by app.
 
 Just provide `index.html` `init.json`(will be exported as **manifest.json**) to ensure the plugin will be loaded!
 
-> Please note that your `plugin name` must same as the field `name` in `init.json` and must not contains any in **talex/touch** or will be disabled!
+> Please note that your `plugin name` must same as the field `name` in `init.json` and must not contain any in **talex/touch** or will be disabled!
 
 ## Reference
 
