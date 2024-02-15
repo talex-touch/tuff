@@ -1,5 +1,6 @@
 import { touchChannel } from "~/modules/channel/channel-core";
 import PinyinMatch from 'pinyin-match'
+import cprocess from 'child_process'
 import { ref } from 'vue'
 
 const apps = ref([])
@@ -21,7 +22,16 @@ function check(keyword: string, appName: string) {
   // return PinyinMatchTw.match(appName, keyword)
 }
 
-console.log(apps.value)
+export const appAmo: any = JSON.parse(localStorage.getItem('app-count') || '{}')
+
+export function execute(item: any) {
+  appAmo[item.name] = (appAmo[item.name] || 0) + 1
+  localStorage.setItem('app-count', JSON.stringify(appAmo))
+
+  const { action } = item
+  cprocess.execSync(action)
+  console.log("execute", item);
+}
 
 export function search(keyword: string, callback: (res: Array<any>) => void) {
 
@@ -57,7 +67,7 @@ export function search(keyword: string, callback: (res: Array<any>) => void) {
 
       results.push(obj)
 
-      callback([obj])
+      callback(obj)
     }
 
   }

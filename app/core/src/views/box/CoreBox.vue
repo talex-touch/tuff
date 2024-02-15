@@ -1,12 +1,13 @@
 <script setup lang="ts" name="CoreBox">
 import { touchChannel } from "~/modules/channel/channel-core";
 import AppIcon from "~/assets/logo.svg";
-import { search } from "./search-box";
+import { search, appAmo, execute } from "./search-box";
 import BoxItem from "./BoxItem.vue";
 
 const searchVal = ref("");
 const focus = ref(0);
 const res = ref<Array<any>>([]);
+const scrollbar = ref();
 
 function onKeyDown(event: KeyboardEvent) {
   // check if body contains core-box
@@ -14,10 +15,13 @@ function onKeyDown(event: KeyboardEvent) {
     return;
   }
 
-  console.log(event);
+  const lastFocus = focus.value;
 
   if (event.key === "Enter") {
-    touchChannel.sendSync("core-box:run", searchVal.value);
+    execute(res.value[focus.value]);
+
+    searchVal.value = "";
+    // touchChannel.sendSync("core-box:run", searchVal.value);
   } else if (event.key === "ArrowDown") {
     focus.value = focus.value + 1;
   } else if (event.key === "ArrowUp") {
@@ -30,6 +34,21 @@ function onKeyDown(event: KeyboardEvent) {
     focus.value = 0;
   } else if (focus.value > res.value.length - 1) {
     focus.value = res.value.length - 1;
+  }
+
+  const diff = Math.max(0, focus.value * 48);
+
+  const sb = scrollbar.value;
+
+  if (lastFocus < focus.value) {
+    if (diff <= 48 * 9) return;
+
+    sb.scrollTo(0, diff - 48 * 9);
+  } else {
+    const mod = focus.value / 9;
+    if (!mod) return;
+
+    sb.scrollTo(0, diff - 48 * 9);
   }
 }
 
@@ -45,16 +64,23 @@ watch(
     focus.value = 0;
     res.value = [];
 
-    search(val, (v: any) => res.value.push(...v));
+    search(val, (v: any) => {
+      const amo = appAmo[v.name] || 0;
+      v.amo = amo;
+
+      const arr = [...res.value, v].toSorted((b: any, a: any) => a.amo - b.amo);
+
+      res.value = arr;
+    });
 
     // touchChannel.sendSync("core-box:search", { keyword: val });
   }
 );
 
 watch(
-  () => res.value.length,
-  (val) => {
-    touchChannel.sendSync("core-box:expand", val);
+  () => searchVal.value?.length + res.value?.length,
+  () => {
+    touchChannel.sendSync("core-box:expand", res.value.length);
   }
 );
 
@@ -73,14 +99,16 @@ const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
     />
 
     <div class="CoreBox-Tag">
-      <span v-if="commandMode">COMMAND</span>
-      <span v-else>SEARCH</span>
+      <span class="fake-background" v-if="commandMode">COMMAND</span>
+      <span class="fake-background" v-else>SEARCH</span>
     </div>
   </div>
 
   <div class="CoreBoxRes">
-    <el-scrollbar>
+    <el-scrollbar ref="scrollbar">
       <BoxItem
+        @click="execute(item)"
+        :i="index + 1"
         @mousemove="focus = index"
         :active="focus === index"
         v-for="(item, index) in res"
@@ -109,9 +137,10 @@ const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
     padding: 2px 4px;
     font-size: 15px;
 
-    opacity: 0.5;
+    --fake-inner-opacity: 0.5 !important;
+    --fake-color: var(--el-color-primary);
     border-radius: 8px;
-    background-color: var(--el-color-warning-light-5);
+    // background-color: var(--el-color-warning-light-5);
   }
 }
 

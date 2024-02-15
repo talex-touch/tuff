@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   data: any;
+  i: number;
   active: boolean;
 }>();
 
@@ -36,6 +37,9 @@ function highlightText(text: string, matched: Array<any>) {
         <h5 v-html="highlightText(data.name, data.matched)" />
         <p>{{ data.desc }}</p>
       </template>
+
+      <span class="index">{{ i }}</span>
+      <span class="amo">{{ data.amo }}</span>
     </div>
   </div>
 </template>
@@ -44,6 +48,28 @@ function highlightText(text: string, matched: Array<any>) {
 .matched {
   color: var(--el-color-primary);
   font-weight: 600;
+}
+
+.index {
+  position: absolute;
+
+  right: 8px;
+  bottom: 4px;
+
+  opacity: 0.15;
+  font-size: 12px;
+  color: var(--el-color-primary);
+}
+
+.amo {
+  position: absolute;
+
+  right: 8px;
+  top: 4px;
+
+  opacity: 0.15;
+  font-size: 12px;
+  color: var(--el-color-success);
 }
 
 .BoxItem {

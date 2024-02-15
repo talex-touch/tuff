@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
     ></t-block-line>
     <t-block-line
       title="Experience"
-      description="Touch Feature Experience Pack 2024.02.11"
+      description="Touch Feature Experience Pack 2024.02.15"
     ></t-block-line>
     <t-block-line title="CPU Usage">
       <template #description>
