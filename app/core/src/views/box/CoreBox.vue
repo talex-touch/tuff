@@ -133,6 +133,8 @@ const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
   justify-content: flex-end;
   align-items: center;
 
+  user-select: none;
+
   span {
     padding: 2px 4px;
     font-size: 15px;
@@ -146,6 +148,8 @@ const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
 
 .CoreBox-Icon {
   position: relative;
+
+  user-select: none;
 
   img {
     width: 52px;
