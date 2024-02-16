@@ -145,6 +145,7 @@ export class CoreBoxManager {
 
 export default {
   name: Symbol("CoreBox"),
+  filePath: "corebox",
   listeners: new Array<() => void>,
   init() {
     touchApp = genTouchApp()
