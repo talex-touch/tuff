@@ -3,6 +3,7 @@ import { APP_SCHEMA } from "../config/default";
 import { TalexTouch } from "../types";
 import { PluginResolver, ResolverStatus } from "../plugins/plugin-resolver";
 import { genTouchChannel } from "../core/channel-core";
+import path from 'path'
 
 function windowsAdapter(touchApp: TalexTouch.TouchApp) {
   const app = touchApp.app;
@@ -43,7 +44,18 @@ export default {
     windowsAdapter(app);
     macOSAdapter(app);
 
-    app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.cwd());
+    if (!app.app.isDefaultProtocolClient(APP_SCHEMA)) {
+      if (app.app.isPackaged) {
+        app.app.setAsDefaultProtocolClient(APP_SCHEMA)
+      } else {
+        app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.execPath, [
+          path.resolve(process.argv[1])
+        ])
+      }
+      // app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.cwd());
+
+      console.log("[Addon] Set as default protocol handler: " + APP_SCHEMA)
+    }
 
     // protocol.registerFileProtocol('touch-plugin', (request, callback) => {
     //     console.log('[Addon] Protocol opened file: ' + request.url)

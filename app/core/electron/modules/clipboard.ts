@@ -5,6 +5,7 @@ import { clipboard } from 'electron'
 
 export default {
     name: Symbol("Clipboard"),
+    filePath: "clipboard",
     init(touchApp: TalexTouch.TouchApp) {
         const touchChannel = genTouchChannel()
         const win = touchApp.window.window

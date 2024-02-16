@@ -105,6 +105,9 @@ importers:
       element-plus:
         specifier: ^2.3.12
         version: 2.5.5(vue@3.4.18)
+      extract-file-icon:
+        specifier: ^0.3.2
+        version: 0.3.2
       fs-extra:
         specifier: ^11.1.1
         version: 11.2.0
@@ -4864,6 +4867,13 @@ packages:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
     dev: false
 
+  /extract-file-icon@0.3.2:
+    resolution: {integrity: sha512-We5/HaMDlioOx3c9zDjit8RtKWEvT94sJF8jTujaKVOyWL8Kkqu4QGnwDr5fID6XsbKvWT0JJNuWuV2Tmr7yiw==}
+    requiresBuild: true
+    dependencies:
+      node-addon-api: 1.7.1
+    dev: false
+
   /extract-zip@2.0.1:
     resolution: {integrity: sha512-GDhU9ntwuKyGXdZBUgTIe+vXnWj0fppUEtMDL0+idd5Sta8TGpHssn/eusA9mrPr9qNDym6SxAYZjNvCn/9RBg==}
     engines: {node: '>= 10.17.0'}
@@ -6450,6 +6460,10 @@ packages:
   /negotiator@0.6.3:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
     engines: {node: '>= 0.6'}
+    dev: false
+
+  /node-addon-api@1.7.1:
+    resolution: {integrity: sha512-2+DuKodWvwRTrCfKOeR24KIc5unKjOh8mz17NCzVnHWfjAdDqbfbjqh7gUT+BkXBRQM52+xCHciKWonJ3CbJMQ==}
     dev: false
 
   /node-addon-api@1.7.2:
