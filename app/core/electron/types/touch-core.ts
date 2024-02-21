@@ -160,8 +160,8 @@ export namespace TalexTouch {
     frame: {
       width: number;
       height: number;
-      left: number;
-      top: number;
+      left?: number;
+      top?: number;
     }
   }
 }

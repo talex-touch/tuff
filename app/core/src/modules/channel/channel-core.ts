@@ -28,6 +28,7 @@ class TouchChannel implements ITouchClientChannel {
             status: header.status || "request",
             type: ChannelType.MAIN,
             _originData: arg,
+            event: e
           },
           sync,
           code,

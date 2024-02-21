@@ -37,6 +37,7 @@ class TouchChannel implements ITouchChannel {
             status: header.status || "request",
             type: plugin ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
+            event: e
           },
           sync,
           code,

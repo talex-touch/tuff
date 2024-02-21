@@ -16,6 +16,7 @@ declare module '*.vue' {
 declare global {
 
   export interface IStartupInfo {
+    id: number
     isDev: boolean
     isPackaged: boolean
     isRelease: boolean

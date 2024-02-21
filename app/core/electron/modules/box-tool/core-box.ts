@@ -1,182 +1,204 @@
-import { genTouchApp, TouchApp } from '../../core/touch-core';
+import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
+import { BoxWindowOption } from "../../config/default";
 import { ChannelType } from "@talex-touch/utils/channel";
-import { globalShortcut, screen } from "electron";
-import AppAddon, { apps } from './addon/app-addon'
+import { globalShortcut, screen, app } from "electron";
+import { apps } from "./addon/app-addon";
+import { TalexTouch } from "../../types";
+import path from "path";
 
-let touchApp: TouchApp
+let touchApp: TouchApp;
 
-let height: number, width: number, left: number, top: number
+async function createNewBoxWindow() {
+  const window = new TouchWindow({ ...BoxWindowOption });
 
-let lastVisible: boolean = false
+  if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
+    const url = path.join(process.env.DIST!, "index.html");
 
-const addonList: Array<(keyword: string) => Promise<any>> = [
-  AppAddon
-]
+    window.loadFile(`${url}`, {
+      devtools: touchApp.version === TalexTouch.AppVersion.DEV,
+    });
+  } else {
+    const url = process.env["VITE_DEV_SERVER_URL"] as string;
+
+    window.loadURL(url, { devtools: true });
+  }
+
+  window.window.hide();
+
+  window.window.webContents.addListener("dom-ready", () => {
+    console.log(
+      "[CoreBox] BoxWindow " +
+        window.window.webContents.id +
+        " dom loaded, injecting ..."
+    );
+
+    window.window.webContents.executeJavaScript(`
+    document.body.classList.add('core-box');
+    window.$coreBox = {
+      enabled: true
+    }
+  `);
+
+    touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
+      id: window.window.webContents.id,
+      show: true,
+    });
+  });
+
+  console.log("[CoreBox] NewBox created, WebContents loaded!");
+
+  return window;
+}
 
 export class CoreBoxManager {
+  #_show: boolean;
+  #_expand: number;
+  windows: Array<TouchWindow>;
+  resList: Array<any>;
 
-  #_show: boolean
-  #_expand: number
-  resList: Array<any>
+  lastWindow: Electron.Display | null;
 
   constructor() {
-    this.#_show = false
-    this.resList = []
+    this.#_show = false;
+    this.#_expand = 0;
+    this.resList = [];
+    this.windows = [];
+    this.lastWindow = null;
 
-    this.register()
+    // 永远取最后一个当 popover window
+    this.init().then(() => this.register());
+  }
+
+  get getCurScreen() {
+    const cursorPoint = screen.getCursorScreenPoint();
+    const curScreen = screen.getDisplayNearestPoint(cursorPoint);
+
+    return curScreen;
+  }
+
+  async init() {
+    const w = await createNewBoxWindow();
+
+    this.initWindow(w);
+
+    this.windows.push(w);
+  }
+
+  initWindow(window: TouchWindow) {
+    window.window.addListener("blur", () => {
+      if (this.nowWindow !== window) return;
+
+      if (this.#_show) this.trigger(false);
+    });
   }
 
   get showCoreBox() {
-    return this.#_show
+    return this.#_show;
+  }
+
+  get nowWindow() {
+    return this.windows[this.windows.length - 1];
+  }
+
+  updateWindowPos(window: TouchWindow, screen: Electron.Display) {
+    const { bounds } = screen;
+
+    const left = bounds.x + bounds.width / 2 - 450;
+    const top = bounds.y + bounds.height * 0.25;
+
+    window.window.setPosition(left, top);
+
+    window.window.show();
+    setTimeout(() => {
+      window.window.focus();
+    }, 100);
   }
 
   register() {
+    globalShortcut.register("CommandOrControl+E", () => {
+      const curScreen = this.getCurScreen;
+      if (this.lastWindow && curScreen.id !== this.lastWindow.id) {
+        this.updateWindowPos(this.nowWindow, curScreen);
+        this.lastWindow = curScreen;
+      } else this.trigger(!this.#_show);
+    });
 
-    const w = touchApp.window
-
-    // w.window.addListener('always-on-top-changed', () => this.trigger(false,))
-    w.window.addListener('blur', () => {
-      if (this.#_show) this.trigger(false, false)
-    })
-
-    globalShortcut.register('CommandOrControl+E', () => this.trigger(!this.#_show))
-
-    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:search', ({ data }: any) => {
-      const { keyword } = data!
-      if (!keyword) return false
-
-      this.run(keyword)
-
-      return true
-    })
-
-    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => data ? this.expand(data) : this.shrink())
-    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box-get:apps', () => apps)
-
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      "core-box:expand",
+      ({ data }: any) => (data ? this.expand(data) : this.shrink())
+    );
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      "core-box-get:apps",
+      () => apps
+    );
   }
 
   expand(length: number = 100) {
-    this.#_expand = length
+    this.#_expand = length;
 
-    const height = Math.min(length * 48 + 65, 550)
+    const height = Math.min(length * 48 + 65, 550);
 
-    touchApp.window.window.setMinimumSize(900, height)
-    touchApp.window.window.setSize(900, height, false)
+    this.nowWindow.window.setMinimumSize(900, height);
+    this.nowWindow.window.setSize(900, height, false);
 
-    console.log('[CoreBox] Expanded.')
+    console.log("[CoreBox] Expanded.");
   }
 
   shrink() {
-    this.#_expand = 0
+    this.#_expand = 0;
 
-    touchApp.window.window.setMinimumSize(900, 60)
-    touchApp.window.window.setSize(900, 60, false)
-    console.log('[CoreBox] Shrunk.')
+    this.nowWindow.window.setMinimumSize(900, 60);
+    this.nowWindow.window.setSize(900, 60, false);
+    console.log("[CoreBox] Shrunk.");
   }
 
-  run(keyword: string) {
-    this.resList = []
-    console.log('[CoreBox] Running search on `' + keyword + '`')
-
-    for (let addon of addonList) {
-
-      addon(keyword).then(res => {
-        if (res?.length) {
-          touchApp.channel.send(ChannelType.MAIN, 'core-box:res', {
-            keyword,
-            res
-          })
-
-          this.resList.push(...res)
-        }
-      })
-
-    }
-
-  }
-
-  trigger(show: boolean, hide: boolean = true) {
+  trigger(show: boolean) {
     this.#_show = show;
 
-    const w = touchApp.window
+    const w = this.nowWindow;
 
-    w.window.setAlwaysOnTop(show)
-    w.window.setSkipTaskbar(show)
-    w.window.setResizable(!show)
-    w.window.setMovable(!show)
+    w.window.setAlwaysOnTop(show);
 
     if (show) {
       if (!this.#_expand) {
-        w.window.setMinimumSize(900, 60)
-        w.window.setSize(900, 60, false)
-        console.log('[CoreBox] Size changed.')
-      } else this.expand(this.#_expand)
+        w.window.setMinimumSize(900, 60);
+        w.window.setSize(900, 60, false);
+        console.log("[CoreBox] Size changed.");
+      } else this.expand(this.#_expand);
 
-      const { bounds } = screen.getPrimaryDisplay()
+      touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
+        id: w.window.webContents.id,
+        show: true,
+      });
 
-      left = bounds.x + bounds.width / 2 - 450
-      top = bounds.y + bounds.height * 0.25
+      // const displayes = screen.getAllDisplays()
+      const curScreen = (this.lastWindow = this.getCurScreen);
 
-      lastVisible = w.window.isFocused()
-      w.window.setPosition(left, top, false)
-      // w.window.center()
-
-      w.window.show()
-      w.window.focus()
+      this.updateWindowPos(w, curScreen);
     } else {
+      w.window.setPosition(-1000000, -1000000);
 
-      if (hide || !lastVisible) w.window.hide()
-      else if (lastVisible) {
-        w.window.show()
-        w.window.focus()
-      }
-
-      w.window.setMinimumSize(1280, 780)
-      w.window.setSize(width, height, false)
-      w.window.setPosition(left, top, false)
-      console.log('[CoreBox] Size recovered.')
-
+      setTimeout(() => {
+        w.window.hide();
+      }, 500);
     }
 
-    touchApp.channel.send(ChannelType.MAIN, 'core-box:trigger', { show })
-
+    touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
+      id: w.window.id,
+      show,
+    });
   }
 }
 
 export default {
   name: Symbol("CoreBox"),
   filePath: "corebox",
-  listeners: new Array<() => void>,
+  listeners: new Array<() => void>(),
   init() {
-    touchApp = genTouchApp()
-    const coreBoxManager = new CoreBoxManager()
-
-    height = touchApp.config.data.frame.height
-    width = touchApp.config.data.frame.width
-
-    function _saveBounds() {
-      if (coreBoxManager.showCoreBox) return
-
-      width = touchApp.config.data.frame.width = touchApp.window.window.getSize()[0]
-      height = touchApp.config.data.frame.height = touchApp.window.window.getSize()[1]
-
-      touchApp.config.triggerSave()
-    }
-    function _savePos() {
-      if (coreBoxManager.showCoreBox) return
-      const { x, y } = touchApp.window.window.getBounds()
-
-      left = touchApp.config.data.frame.left = x
-      top = touchApp.config.data.frame.top = y
-
-      touchApp.config.triggerSave()
-    }
-
-    touchApp.window.window.addListener('move', _savePos)
-    _savePos()
-
-    touchApp.window.window.addListener('resize', _saveBounds)
-    _saveBounds()
+    touchApp = genTouchApp();
+    /* const coreBoxManager =  */ new CoreBoxManager();
 
     // const touchChannel = genTouchChannel();
 
@@ -184,14 +206,12 @@ export default {
     //   touchChannel.regChannel(ChannelType.MAIN, 'core-box:trigger', ({ data }) => {
     //     const { key } = data!
 
-
     //   })
     // )
 
-    console.log('[CoreBox] Core box initialized!')
-
+    console.log("[CoreBox] Core box initialized!");
   },
   destroy() {
-    this.listeners.forEach(listener => listener())
+    this.listeners.forEach((listener) => listener());
   },
 };
