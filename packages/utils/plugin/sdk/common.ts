@@ -15,4 +15,6 @@ export function regShortcut(key: string, func: Function) {
     return true;
 }
 
+// TODO: register search input in core-box
+
 export * from './window';

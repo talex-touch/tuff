@@ -4,6 +4,9 @@ import AppIcon from "~/assets/logo.svg";
 import { search, appAmo, execute } from "./search-box";
 import BoxItem from "./BoxItem.vue";
 
+const clipboardOptions = reactive<any>({
+  last: null,
+});
 const searchVal = ref("");
 const focus = ref(0);
 const res = ref<Array<any>>([]);
@@ -85,6 +88,18 @@ watch(
 );
 
 const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
+
+onMounted(() => {
+  touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
+    if (!data?.type) return;
+
+    console.log("CLIPBOARD TRIGGERED", data);
+
+    Object.assign(clipboardOptions, {
+      last: data,
+    });
+  });
+});
 </script>
 
 <template>
@@ -99,8 +114,30 @@ const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
     />
 
     <div class="CoreBox-Tag">
-      <span class="fake-background" v-if="commandMode">COMMAND</span>
-      <span class="fake-background" v-else>SEARCH</span>
+      <template v-if="clipboardOptions.last">
+        <span
+          v-if="clipboardOptions.last?.type === 'text'"
+          class="fake-background dotted"
+        >
+          Copied Text
+        </span>
+        <span
+          v-else-if="clipboardOptions.last?.type === 'image'"
+          class="fake-background dotted"
+        >
+          Copied Image
+        </span>
+        <span
+          v-else-if="clipboardOptions.last?.type === 'html'"
+          class="fake-background dotted"
+        >
+          Copied Html
+        </span>
+      </template>
+      <template v-else>
+        <span class="fake-background" v-if="commandMode">COMMAND</span>
+        <span class="fake-background" v-else>SEARCH</span>
+      </template>
     </div>
   </div>
 

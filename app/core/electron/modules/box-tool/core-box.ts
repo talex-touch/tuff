@@ -2,13 +2,15 @@ import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
 import { BoxWindowOption } from "../../config/default";
 import { ChannelType } from "@talex-touch/utils/channel";
 import { globalShortcut, screen, app } from "electron";
+import { clipboardManager } from '../clipboard'
 import { apps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
+import win from "./addon/apps/win";
 
 let touchApp: TouchApp;
 
-async function createNewBoxWindow() {
+async function createNewBoxWindow(closeCallback: Function) {
   const window = new TouchWindow({ ...BoxWindowOption });
 
   if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
@@ -45,6 +47,16 @@ async function createNewBoxWindow() {
     });
   });
 
+  window.window.addListener('closed', () => {
+    closeCallback(window)
+
+    clipboardManager.unregisterWindow(window)
+
+    console.log("[CoreBox] BoxWindow closed!")
+  })
+
+  clipboardManager.registerWindow(window)
+
   console.log("[CoreBox] NewBox created, WebContents loaded!");
 
   return window;
@@ -77,7 +89,9 @@ export class CoreBoxManager {
   }
 
   async init() {
-    const w = await createNewBoxWindow();
+    const w = await createNewBoxWindow((window: TalexTouch.ITouchWindow) => {
+      this.windows = this.windows.filter((w) => w !== window);
+    });
 
     this.initWindow(w);
 
@@ -121,6 +135,13 @@ export class CoreBoxManager {
         this.updateWindowPos(this.nowWindow, curScreen);
         this.lastWindow = curScreen;
       } else this.trigger(!this.#_show);
+    });
+
+    globalShortcut.register("CommandOrControl+D", () => {
+      const w = this.nowWindow
+      if (!w.window.isFocused()) return
+      
+      console.log("divide")
     });
 
     touchApp.channel.regChannel(
