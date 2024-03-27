@@ -128,7 +128,7 @@ provide("destroy", destroy);
   position: relative;
   padding: 12px 20px;
 
-  width: 380px;
+  width: 480px;
   //min-width: 380px;
   max-width: 80%;
   // min-height: 200px;

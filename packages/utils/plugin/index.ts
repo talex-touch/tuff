@@ -50,12 +50,34 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
   webViewInit: boolean
   webview: IPluginWebview
+  features: IPluginFeature[]
+
+  addFeature(feature: IPluginFeature): boolean
+  delFeature(featureId: string): boolean
+  getFeature(featureId: string): IPluginFeature | null
+  getFeatures(): IPluginFeature[]
 
   get status(): PluginStatus
   set status(v: PluginStatus)
 
   enable(): Promise<boolean>
   disable(): Promise<boolean>
+}
+
+export interface IFeatureCommand {
+  type: "match" | "contain" | "regex" | "function" | "over" | "image" | "files" | "directory" | "window"
+  value: string | string[] | RegExp | Function
+  onTrigger(): void
+}
+
+export interface IPluginFeature {
+  id: string
+  name: string
+  desc: string
+  icon: IPluginIcon
+  push: boolean
+  platform: IPlatform
+  commands: IFeatureCommand[]
 }
 
 export interface IPluginManager {

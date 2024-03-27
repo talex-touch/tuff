@@ -1,62 +1,97 @@
+import { TouchWindow } from './../../../../t/talex-touch/app/core/electron/core/touch-core';
 import { ChannelType } from "@talex-touch/utils/channel";
 import { genTouchChannel } from "../core/channel-core";
 import { TalexTouch } from "../types";
 import { clipboard } from 'electron'
 
-export default {
-    name: Symbol("Clipboard"),
-    filePath: "clipboard",
-    init(touchApp: TalexTouch.TouchApp) {
-        const touchChannel = genTouchChannel()
-        const win = touchApp.window.window
+export interface IClipboardStash {
+    html: string | null
+    image: string | null
+    buffer: string | null
+    text: string | null
+}
 
-        const clipboardStash: any = {
+export class ClipboardManager {
+
+    windows: TalexTouch.ITouchWindow[]
+    clipboardStash: IClipboardStash
+
+    constructor() {
+        this.windows = []
+        this.clipboardStash = {
             html: null,
             image: null,
             buffer: null,
             text: null
         }
+    }
 
-        function formatClipboard(type: string, data: any) {
-            if (data && clipboardStash[type] !== data) return clipboardStash[type] = data
-            return null
+    registerWindow(window: TouchWindow | TalexTouch.ITouchWindow) {
+        this.windows.push(window)
+
+        window.window.addListener('focus', () => this.sendClipboardMsg())
+
+        console.log('[Clipboard] Register window ' + window.window.id + ' success.')
+    }
+
+    unregisterWindow(window: TouchWindow) {
+        this.windows = this.windows.filter(w => w !== window)
+
+        window.window.removeListener('focus', this.sendClipboardMsg)
+
+        console.log('[Clipboard] Unregister window ' + window.window.id + ' success.')
+    }
+
+    formatClipboard(type: keyof IClipboardStash, data: any) {
+        if (data && this.clipboardStash[type] !== data) return this.clipboardStash[type] = data
+        return null
+    }
+
+    formatClipboards(types: IClipboardStash) {
+        const data: any = {}
+        for (let type in types) {
+            data.type = type
+            // @ts-ignore
+            data.data = this.formatClipboard(type, types[type])
+            if (data.data) return data
+        }
+        return
+    }
+
+    sendClipboardMsg() {
+        const data = {
+            action: "read"
         }
 
-        function formatClipboards(types: any) {
-            const data: any = {}
-            for (let type in types) {
-                data.type = type
-                data.data = formatClipboard(type, types[type])
-                if (data.data) return data
-            }
-            return
-        }
+        const res = this.formatClipboards({
+            "html": clipboard.readHTML(),
+            "image": clipboard.readImage().toDataURL(),
+            "buffer": clipboard.readBuffer("public/utf8-plain-text").toString("base64"),
+            "text": clipboard.readText()
+        })
 
-        function sendClipboardMsg() {
-            const data = {
-                action: "read"
-            }
+        Object.assign(data, res)
 
-            const res = formatClipboards({
-                "html": clipboard.readHTML(),
-                "image": clipboard.readImage().toDataURL(),
-                "buffer": clipboard.readBuffer("public/utf8-plain-text").toString("base64"),
-                "text": clipboard.readText()
-            })
+        // clipboardStash[data.type] = data.data
 
-            Object.assign(data, res)
+        // const buffer = clipboard.readBuffer("public/utf8-plain-text")
+        // const base64 = buffer.toString("base64")
 
-            // clipboardStash[data.type] = data.data
+        // send to renderer
+        const touchChannel = genTouchChannel()
+        touchChannel.send(ChannelType.MAIN, 'clipboard:trigger', data).then(() => { })
+    }
+}
 
-            // const buffer = clipboard.readBuffer("public/utf8-plain-text")
-            // const base64 = buffer.toString("base64")
+export const clipboardManager = new ClipboardManager()
 
-            // send to renderer
-            touchChannel.send(ChannelType.MAIN, 'clipboard:trigger', data).then(() => { })
-        }
+export default {
+    name: Symbol("Clipboard"),
+    filePath: "clipboard",
+    init(touchApp: TalexTouch.TouchApp) {
+        const win = touchApp.window
 
-        // on win focus
-        win.addListener('focus', sendClipboardMsg)
+        clipboardManager.registerWindow(win)
     },
     destroy() { }
 }

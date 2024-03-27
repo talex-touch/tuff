@@ -29,6 +29,8 @@ const _init = ref(false);
 const beginner = ref(false);
 
 function init() {
+  useCoreBox();
+
   touchChannel.send("app-ready").then((res: any) => {
     window.$startupInfo = res;
 
@@ -36,7 +38,6 @@ function init() {
     // clipBoardResolver();
     dropperResolver();
     urlHooker();
-    useCoreBox();
     // screenCapture()
 
     _init.value = true;

@@ -2,6 +2,10 @@ import fse from 'fs-extra';
 import path from "node:path";
 import { app } from "electron";
 import log4js from "log4js";
+import { fileURLToPath } from 'url';
+
+globalThis.__filename = fileURLToPath(import.meta.url);
+globalThis.__dirname = path.dirname(__filename);
 
 process.env.DIST = path.join(__dirname, '..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public')

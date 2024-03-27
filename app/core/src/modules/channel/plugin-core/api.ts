@@ -52,26 +52,26 @@ export interface IPluginManager {
 
 class PluginManager {
   async enablePlugin(name: string) {
-    return touchChannel.send("enable-plugin", name);
+    return touchChannel.send("enable-plugin", { name });
   }
 
   async disablePlugin(name: string) {
-    return touchChannel.send("disable-plugin", name);
+    return touchChannel.send("disable-plugin", { name });
   }
 
   setPluginWebviewInit(name: string) {
-    return touchChannel.sendSync("webview-init", name);
+    return touchChannel.sendSync("webview-init", { name });
   }
 
   async getPlugin(name: string) {
-    return touchChannel.send("get-plugin", name);
+    return touchChannel.send("get-plugin", { name });
   }
   getPluginList() {
     return touchChannel.sendSync("plugin-list");
   }
 
   changeActivePlugin(name: string = "") {
-    return touchChannel.sendSync("change-active", name);
+    return touchChannel.sendSync("change-active", { name });
   }
 
   exportPlugin(name: string, manifest: string, files: string) {

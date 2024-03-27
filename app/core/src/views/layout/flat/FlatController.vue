@@ -18,7 +18,7 @@
 
 <script lang="ts" name="FlatController" setup>
 import { useRoute } from "vue-router";
-import { applicationUpgrade } from "@modules/hooks/application-hooks";
+import { applicationUpgrade } from "~/modules/hooks/application-hooks";
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 
 const route = useRoute();
@@ -48,7 +48,7 @@ function hideWindow() {
       position: absolute;
 
       margin-left: 10px;
-      margin-top: 5px;
+      margin-top: 4px;
 
       width: 8px;
       height: 8px;
@@ -63,9 +63,13 @@ function hideWindow() {
       pointer-events: all;
       cursor: pointer;
 
-      :deep(span) {
+      span {
         background-color: var(--el-color-warning-light-7) !important;
       }
+
+      // :deep(span) {
+      //   background-color: var(--el-color-warning-light-7) !important;
+      // }
     }
 
     .touch-blur & {

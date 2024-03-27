@@ -23,10 +23,10 @@ const props = defineProps({
     required: true,
   },
 });
-const close = inject('destroy')
+const close = inject("destroy");
 
 function upgrade() {
-  window.$nodeApi.openExternal(props.release.html_url)
+  window.$nodeApi.openExternal(props.release.html_url);
 }
 </script>
 
@@ -34,7 +34,7 @@ function upgrade() {
 :deep(.FlatMarkdown-Container) {
   position: relative;
 
-  max-height: calc(85vh - 200px);
+  max-height: calc(85vh - 220px);
 
   font-size: 12px;
 }
@@ -46,9 +46,16 @@ function upgrade() {
 }
 
 .AppUpgradation-Content {
-  margin: 16px 5px;
+  position: relative;
+  margin: 8px 5px;
   display: flex;
 
-  gap: 16px;
+  justify-content: space-around;
+
+  gap: 2rem;
+
+  height: 40px;
+
+  // bottom: 1.5rem;
 }
 </style>
