@@ -1,3 +1,4 @@
+import { IPluginFeature } from './../../../../packages/utils/plugin/index';
 import {
   IPlatform,
   IPluginDev,
@@ -18,7 +19,7 @@ import { genTouchApp, TouchWindow } from "../core/touch-core";
 import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
-import { BrowserWindow, webContents } from "electron";
+import { BrowserWindow } from "electron";
 import { MicaBrowserWindow } from "talex-mica-electron";
 
 class PluginIcon implements IPluginIcon {
@@ -37,6 +38,9 @@ class PluginIcon implements IPluginIcon {
     } else this.value = this._value;
   }
 }
+
+const disallowedArrays = ["官方", "touch", "talex", "第一"]
+
 class TouchPlugin implements ITouchPlugin {
   dev: IPluginDev;
   name: string;
@@ -47,6 +51,7 @@ class TouchPlugin implements ITouchPlugin {
   webViewInit: boolean = false;
   webview: IPluginWebview = {};
   platforms: IPlatform;
+  features: IPluginFeature[]
 
   pluginPath: string;
 
@@ -84,6 +89,37 @@ class TouchPlugin implements ITouchPlugin {
       });
   }
 
+  addFeature(feature: IPluginFeature): boolean {
+    if (this.features.find((f) => f.name === feature.name)) return false;
+
+    const { id, name, desc, commands } = feature
+
+    const regex = /^[a-zA-Z0-9_-]+$/;
+    if (!regex.test(id)) return false;
+
+    if (disallowedArrays.filter((item: string) => name.indexOf(item) !== -1 || desc.indexOf(item) !== -1)) {
+      return false;
+    }
+
+    if (commands.length < 1) return false;
+
+    return this.features.push(feature) >= 0;
+  }
+
+  delFeature(featureId: string): boolean {
+    if (!this.features.find((f) => f.name === featureId)) return false;
+
+    return this.features.splice(this.features.findIndex((f) => f.name === featureId), 1) !== undefined;
+  }
+
+  getFeature(featureId: string): IPluginFeature | null {
+    return this.features.find((f) => f.name === featureId) || null;
+  }
+
+  getFeatures(): IPluginFeature[] {
+    return this.features;
+  }
+
   constructor(
     name: string,
     icon: PluginIcon,
@@ -103,6 +139,7 @@ class TouchPlugin implements ITouchPlugin {
 
     this.pluginPath = pluginPath;
     this.platforms = platforms;
+    this.features = []
   }
 
   async enable(): Promise<boolean> {
@@ -216,10 +253,11 @@ class PluginManager implements IPluginManager {
   active: string = '';
 
   pluginPath: string;
-  watcher: chokidar.FSWatcher;
+  watcher: chokidar.FSWatcher | null;
 
   constructor(pluginPath: string) {
     this.pluginPath = pluginPath;
+    this.watcher = null
 
     this.__init__();
   }
@@ -269,7 +307,7 @@ class PluginManager implements IPluginManager {
     // const plugins = fse.readdirSync(this.pluginPath);
 
     touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
-      this.watcher.close();
+      this.watcher!.close();
       console.log("[PluginManager] Watcher closed.")
     })
 
@@ -291,6 +329,8 @@ class PluginManager implements IPluginManager {
 
       if (!this.hasPlugin(pluginName)) {
         console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded despite changes made to its file.")
+
+        this.loadPlugin(pluginName)
         return;
       }
       let plugin = this.plugins.get(pluginName) as TouchPlugin;
@@ -336,6 +376,12 @@ class PluginManager implements IPluginManager {
     this.watcher.on("addDir", (_path) => {
       if (!fse.existsSync(_path + "/manifest.json")) return;
       const pluginName = path.basename(_path);
+
+      if (pluginName.indexOf(".") !== -1 || pluginName.indexOf("\\") !== -1 || pluginName.indexOf("/") !== -1) {
+        console.log(`[PluginManager] IGNORE | Plugin ${pluginName} has been added, but it's not a valid name.`)
+        return;
+      }
+
       console.log(`[Plugin] Plugin ${pluginName} has been added`);
 
       if (this.hasPlugin(pluginName)) {
@@ -377,11 +423,22 @@ class PluginManager implements IPluginManager {
 
   loadPlugin(pluginName: string): Promise<boolean> {
     const pluginPath = path.resolve(this.pluginPath, pluginName);
-    const pluginInfo = fse.readJSONSync(path.resolve(pluginPath, "manifest.json"));
+    const manifestPath = path.resolve(pluginPath, "manifest.json")
+
+    if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
+      console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded because it's not a valid plugin.");
+      return Promise.resolve(false);
+    }
+
+    const pluginInfo = fse.readJSONSync(manifestPath);
+    if (pluginInfo.name !== pluginName) {
+      console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded because it's name not matched.")
+      return Promise.resolve(false);
+    }
 
     const readme = ((p) =>
       fse.existsSync(p)
-        ? (this.watcher.add(p), fse.readFileSync(p).toString())
+        ? (this.watcher!.add(p), fse.readFileSync(p).toString())
         : '')(path.resolve(pluginPath, "README.md"));
 
     const icon = new PluginIcon(
@@ -413,7 +470,7 @@ class PluginManager implements IPluginManager {
 
     if (!plugin) return Promise.resolve(false);
 
-    this.watcher.unwatch(
+    this.watcher!.unwatch(
       path.resolve(path.resolve(this.pluginPath, pluginName), "README.md")
     );
 
@@ -447,10 +504,10 @@ export default {
       (pluginManager as PluginManager).getPluginList()
     )
     touchChannel.regChannel(ChannelType.MAIN, "change-active", ({ data }) =>
-      pluginManager!.setActivePlugin(data)
+      pluginManager!.setActivePlugin(data!.name)
     )
     touchChannel.regChannel(ChannelType.MAIN, "enable-plugin", ({ data }) => {
-      const plugin = pluginManager!.plugins.get(data);
+      const plugin = pluginManager!.plugins.get(data!.name);
       if (!plugin) return false;
 
       return plugin.enable();
@@ -459,17 +516,17 @@ export default {
       ChannelType.MAIN,
       "disable-plugin",
       ({ data }) => {
-        const plugin = pluginManager!.plugins.get(data);
+        const plugin = pluginManager!.plugins.get(data!.name);
         if (!plugin) return false;
 
         plugin.disable();
       }
     )
     touchChannel.regChannel(ChannelType.MAIN, "get-plugin", ({ data }) =>
-      pluginManager!.plugins.get(data)
+      pluginManager!.plugins.get(data!.name)
     )
     touchChannel.regChannel(ChannelType.MAIN, "webview-init", ({ data }) => {
-      const plugin = pluginManager!.plugins.get(data);
+      const plugin = pluginManager!.plugins.get(data!.name);
       if (!plugin) return false;
 
       return (plugin.webViewInit = true);
@@ -498,6 +555,28 @@ export default {
           plugin,
           ...data
         })
+      }
+    )
+
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      "feature:reg",
+      ({ data, plugin }) => {
+        const { feature } = data!
+        const pluginIns = pluginManager!.plugins.get(plugin!);
+
+        return pluginIns?.addFeature(feature)
+      }
+    )
+
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      "feature:unreg",
+      ({ data, plugin }) => {
+        const { feature } = data!
+        const pluginIns = pluginManager!.plugins.get(plugin!);
+
+        return pluginIns?.delFeature(feature)
       }
     )
 

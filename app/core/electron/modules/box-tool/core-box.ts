@@ -164,7 +164,7 @@ export class CoreBoxManager {
     this.nowWindow.window.setMinimumSize(900, height);
     this.nowWindow.window.setSize(900, height, false);
 
-    console.log("[CoreBox] Expanded.");
+    console.debug("[CoreBox] Expanded.");
   }
 
   shrink() {
@@ -172,7 +172,7 @@ export class CoreBoxManager {
 
     this.nowWindow.window.setMinimumSize(900, 60);
     this.nowWindow.window.setSize(900, 60, false);
-    console.log("[CoreBox] Shrunk.");
+    console.debug("[CoreBox] Shrunk.");
   }
 
   trigger(show: boolean) {

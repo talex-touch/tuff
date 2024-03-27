@@ -1,9 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const plist = require('simple-plist');
+import plist from 'simple-plist';
 
 const getIconFile = (appFileInput) => {
   return new Promise((resolve, reject) => {
