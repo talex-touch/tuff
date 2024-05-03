@@ -34,7 +34,7 @@ export default defineConfig({
             // input: {
             //     main: path.resolve(__dirname, 'index.html')
             // },
-            external: [ 'simple-plist' ]
+            external: [ 'simple-plist', 'extract-file-icon' ]
         },
     },
     resolve: {
@@ -48,7 +48,7 @@ export default defineConfig({
     },
     plugins: [
         commonjs({
-            ignore: ['bplist-creator']
+            ignore: [ 'simple-plist' ]
         }),
         vue(),
         electron([
@@ -64,6 +64,12 @@ export default defineConfig({
                         '--remote-debugging-port=9222',
                     ])
                 },
+                rollupOptions: {
+            // input: {
+            //     main: path.resolve(__dirname, 'index.html')
+            // },
+            external: [ 'simple-plist', 'extract-file-icon' ]
+        },
                 vite: {
                     build: {
                         outDir: 'dist/electron',
@@ -76,7 +82,6 @@ export default defineConfig({
                         }
                     }
                 },
-                external: [ 'simple-plist' ]
             },
             {
                 entry: 'electron/preload.ts',

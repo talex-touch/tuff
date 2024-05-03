@@ -27,7 +27,7 @@ export default () => {
   const getico = (app: any) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fileIcon = require('extract-file-icon');
+      const fileIcon = import('extract-file-icon');
       const buffer = fileIcon(app.desc, 32);
       const iconpath = path.join(icondir, `${app.name}.png`);
 
