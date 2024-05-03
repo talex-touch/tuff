@@ -1,24 +1,24 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { shell } from 'electron';
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { shell } from "electron";
 
 export default () => {
   const filePath = path.resolve(
-    'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"
   );
 
-  const appData = path.join(os.homedir(), './AppData/Roaming');
+  const appData = path.join(os.homedir(), "./AppData/Roaming");
 
   const startMenu = path.join(
     appData,
-    'Microsoft\\Windows\\Start Menu\\Programs'
+    "Microsoft\\Windows\\Start Menu\\Programs"
   );
 
   const fileLists: any = [];
   const isZhRegex = /[\u4e00-\u9fa5]/;
 
-  const icondir = path.join(os.tmpdir(), 'ProcessIcon');
+  const icondir = path.join(os.tmpdir(), "ProcessIcon");
   const exists = fs.existsSync(icondir);
   if (!exists) {
     fs.mkdirSync(icondir);
@@ -27,13 +27,17 @@ export default () => {
   const getico = (app: any) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fileIcon = import('extract-file-icon');
+      const fileIcon = import("extract-file-icon");
+      if (typeof fileIcon !== "function") {
+        return;
+      }
+
       const buffer = fileIcon(app.desc, 32);
       const iconpath = path.join(icondir, `${app.name}.png`);
 
       fs.exists(iconpath, (exists) => {
         if (!exists) {
-          fs.writeFile(iconpath, buffer, 'base64', () => {
+          fs.writeFile(iconpath, buffer, "base64", () => {
             //
           });
         }
@@ -53,12 +57,12 @@ export default () => {
           const filedir = path.join(filePath, filename);
           fs.stat(filedir, function (eror, stats) {
             if (eror) {
-              console.warn('获取文件stats失败');
+              console.warn("获取文件stats失败");
             } else {
               const isFile = stats.isFile(); // 是文件
               const isDir = stats.isDirectory(); // 是文件夹
               if (isFile) {
-                const appName = filename.split('.')[0];
+                const appName = filename.split(".")[0];
                 const keyWords = [appName];
                 let appDetail: any = {};
                 try {
@@ -68,12 +72,12 @@ export default () => {
                 }
                 if (
                   !appDetail.target ||
-                  appDetail.target.toLowerCase().indexOf('unin') >= 0
+                  appDetail.target.toLowerCase().indexOf("unin") >= 0
                 )
                   return;
 
                 // C:/program/cmd.exe => cmd
-                keyWords.push(path.basename(appDetail.target, '.exe'));
+                keyWords.push(path.basename(appDetail.target, ".exe"));
 
                 if (isZhRegex.test(appName)) {
                   // const [, pinyinArr] = translate(appName);
@@ -84,24 +88,24 @@ export default () => {
                   // keyWords.push(zh_firstLatter.join(''));
                 } else {
                   const firstLatter = appName
-                    .split(' ')
+                    .split(" ")
                     .map((name) => name[0])
-                    .join('');
+                    .join("");
                   keyWords.push(firstLatter);
                 }
 
                 const icon = path.join(
                   os.tmpdir(),
-                  'ProcessIcon',
+                  "ProcessIcon",
                   `${encodeURIComponent(appName)}.png`
                 );
 
                 const appInfo = {
-                  value: 'plugin',
+                  value: "plugin",
                   desc: appDetail.target,
-                  type: 'app',
+                  type: "app",
                   icon,
-                  pluginType: 'app',
+                  pluginType: "app",
                   action: `start "dummyclient" "${appDetail.target}"`,
                   keyWords: keyWords,
                   name: appName,

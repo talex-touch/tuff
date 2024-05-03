@@ -17,7 +17,7 @@ class TouchChannel implements ITouchChannel {
   app: TalexTouch.TouchApp;
 
   constructor(app: TalexTouch.TouchApp) {
-    this.app = app
+    this.app = app;
     this.channelMap.set(ChannelType.MAIN, new Map());
     this.channelMap.set(ChannelType.PLUGIN, new Map());
 
@@ -37,7 +37,7 @@ class TouchChannel implements ITouchChannel {
             status: header.status || "request",
             type: plugin ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
-            event: e
+            event: e,
           },
           sync,
           code,
@@ -55,30 +55,31 @@ class TouchChannel implements ITouchChannel {
   __handle_main(e: Electron.IpcMainEvent, arg: any) {
     const rawData = this.__parse_raw_data(e, arg);
 
-    if (rawData.header.status === 'reply' && rawData.sync) {
+    if (rawData.header.status === "reply" && rawData.sync) {
       const { id } = rawData.sync;
 
       return this.pendingMap.get(id)?.(rawData);
     }
 
-    const map = this.channelMap.get(rawData.header.type)
+    const map = this.channelMap.get(rawData.header.type);
 
-    if ( !map ) throw new Error("Invalid channel type!")
+    if (!map) throw new Error("Invalid channel type!");
 
     map.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any) => {
-          const rData = this.__parse_sender(code, rawData, data, rawData.sync)
+          const rData = this.__parse_sender(code, rawData, data, rawData.sync);
 
-          console.debug("Reply data: ", rData)
+          console.debug("Reply data: ", rData);
 
           if (rawData.sync) {
             e.sender.send(
-              `@${rawData.header.type === ChannelType.MAIN ? "main" : "plugin"
+              `@${
+                rawData.header.type === ChannelType.MAIN ? "main" : "plugin"
               }-process-message`,
               rData
-            )
-          } else e.returnValue = rData
+            );
+          } else e.returnValue = rData;
         },
         ...rawData,
       };
@@ -105,13 +106,13 @@ class TouchChannel implements ITouchChannel {
       sync: !sync
         ? undefined
         : {
-          timeStamp: new Date().getTime(),
-          // reply sync timeout should follow the request timeout, unless user set it.
-          timeout: sync.timeout,
-          id: sync.id,
-        },
+            timeStamp: new Date().getTime(),
+            // reply sync timeout should follow the request timeout, unless user set it.
+            timeout: sync.timeout,
+            id: sync.id,
+          },
       name: rawData.name,
-      plugin: rawData.header['plugin'] || void 0,
+      plugin: rawData.header["plugin"] || void 0,
       header: {
         status: "reply",
         type: rawData.header.type,
@@ -144,7 +145,7 @@ class TouchChannel implements ITouchChannel {
     };
   }
 
-  send(type: ChannelType, eventName: string, arg: any): Promise<any> {
+  sendTo(win: any, type: ChannelType, eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(
       12
     )}`;
@@ -168,18 +169,15 @@ class TouchChannel implements ITouchChannel {
       if (arg.plugin === void 0) {
         throw new Error("Invalid plugin name!");
       }
-      return this.send(ChannelType.MAIN, 'plugin:message-transport', {
-        data, plugin: arg.plugin
-      })
+      return this.send(ChannelType.MAIN, "plugin:message-transport", {
+        data,
+        plugin: arg.plugin,
+      });
     }
 
     return new Promise((resolve) => {
-      const win = this.app.window.window;
 
-      win.webContents.send(
-        `@main-process-message`,
-        data
-      );
+      win.webContents.send(`@main-process-message`, data);
 
       this.pendingMap.set(uniqueId, (res) => {
         this.pendingMap.delete(uniqueId);
@@ -187,6 +185,10 @@ class TouchChannel implements ITouchChannel {
         resolve(res);
       });
     });
+  }
+
+  send(type: ChannelType, eventName: string, arg: any): Promise<any> {
+    return this.sendTo(this.app.window.window, type, eventName, arg);
   }
 
   sendSync(type: ChannelType, eventName: string, arg: any): Promise<any> {

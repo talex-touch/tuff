@@ -1,8 +1,9 @@
+import { clipboardManager } from './../clipboard';
 import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
 import { BoxWindowOption } from "../../config/default";
 import { ChannelType } from "@talex-touch/utils/channel";
 import { globalShortcut, screen, app } from "electron";
-import { clipboardManager } from '../clipboard'
+import { clipboardManager } from "../clipboard";
 import { apps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
@@ -13,19 +14,23 @@ let touchApp: TouchApp;
 async function createNewBoxWindow(closeCallback: Function) {
   const window = new TouchWindow({ ...BoxWindowOption });
 
-  if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
-    const url = path.join(process.env.DIST!, "index.html");
+  setTimeout(() => {
+    console.log("[CoreBox] NewBox created, injecting developing tools ...");
 
-    window.loadFile(`${url}`, {
-      devtools: touchApp.version === TalexTouch.AppVersion.DEV,
-    });
-  } else {
-    const url = process.env["VITE_DEV_SERVER_URL"] as string;
+    if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
+      const url = path.join(process.env.DIST!, "index.html");
 
-    window.loadURL(url, { devtools: true });
-  }
+      window.loadFile(`${url}`, {
+        devtools: touchApp.version === TalexTouch.AppVersion.DEV,
+      });
+    } else {
+      const url = process.env["VITE_DEV_SERVER_URL"] as string;
 
-  window.window.hide();
+      window.loadURL(url, { devtools: true });
+    }
+
+    window.window.hide();
+  }, 200);
 
   window.window.webContents.addListener("dom-ready", () => {
     console.log(
@@ -47,15 +52,15 @@ async function createNewBoxWindow(closeCallback: Function) {
     });
   });
 
-  window.window.addListener('closed', () => {
-    closeCallback(window)
+  window.window.addListener("closed", () => {
+    closeCallback(window);
 
-    clipboardManager.unregisterWindow(window)
+    clipboardManager.unregisterWindow(window);
 
-    console.log("[CoreBox] BoxWindow closed!")
-  })
+    console.log("[CoreBox] BoxWindow closed!");
+  });
 
-  clipboardManager.registerWindow(window)
+  clipboardManager.registerWindow(window);
 
   console.log("[CoreBox] NewBox created, WebContents loaded!");
 
@@ -77,7 +82,7 @@ export class CoreBoxManager {
     this.windows = [];
     this.lastWindow = null;
 
-    // 永远取最后一个当 popover window
+    // Always match the last window => popover window
     this.init().then(() => this.register());
   }
 
@@ -104,6 +109,9 @@ export class CoreBoxManager {
 
       if (this.#_show) this.trigger(false);
     });
+
+    // register clipboard listen in clipboard manager
+    clipboardManager.registerWindow(window);
   }
 
   get showCoreBox() {
@@ -138,10 +146,10 @@ export class CoreBoxManager {
     });
 
     globalShortcut.register("CommandOrControl+D", () => {
-      const w = this.nowWindow
-      if (!w.window.isFocused()) return
-      
-      console.log("divide")
+      const w = this.nowWindow;
+      if (!w.window.isFocused()) return;
+
+      console.log("divide");
     });
 
     touchApp.channel.regChannel(
@@ -202,6 +210,8 @@ export class CoreBoxManager {
       w.window.setPosition(-1000000, -1000000);
 
       setTimeout(() => {
+        this.shrink();
+
         w.window.hide();
       }, 500);
     }
@@ -216,7 +226,7 @@ export class CoreBoxManager {
 export default {
   name: Symbol("CoreBox"),
   filePath: "corebox",
-  listeners: new Array<() => void>,
+  listeners: new Array<() => void>(),
   init() {
     touchApp = genTouchApp();
     /* const coreBoxManager =  */ new CoreBoxManager();

@@ -79,7 +79,11 @@ export class ClipboardManager {
 
         // send to renderer
         const touchChannel = genTouchChannel()
-        touchChannel.send(ChannelType.MAIN, 'clipboard:trigger', data).then(() => { })
+        this.windows.forEach((w) =>
+          touchChannel
+            .sendTo(w.window, ChannelType.MAIN, "clipboard:trigger", data)
+            .then(() => {})
+        );
     }
 }
 

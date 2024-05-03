@@ -12,7 +12,6 @@
     "email": "TalexDreamSoul@Gmail.com"
   },
   "description": "A strong adaptation more platform all-tool program.",
-  "type": "module",
   "engines": {
     "node": "^16.0.0 || >=18.0.0"
   },
@@ -39,7 +38,7 @@
     "dayjs": "^1.11.10",
     "electron-log": "5.0.0-beta.28",
     "element-plus": "^2.7.0",
-    "extract-file-icon": "^0.3.2",
+    "extract-file-icon-fix": "^0.3.3",
     "fs-extra": "^11.2.0",
     "gsap": "^3.12.5",
     "hotkeys-js": "^3.13.7",

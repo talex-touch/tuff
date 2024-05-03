@@ -46,6 +46,8 @@ function init() {
   });
 }
 
+const _coreBox = ref(false)
+
 onMounted(() => {
   try {
     setTimeout(init, 1000);
@@ -53,6 +55,8 @@ onMounted(() => {
     console.error("FATAL ERROR OCCURRED");
     console.error(e);
   }
+
+  _coreBox.value = document.body.classList.contains("core-box")
 });
 </script>
 
@@ -65,5 +69,5 @@ onMounted(() => {
   </AppLayout>
 
   <Beginner v-if="beginner" />
-  <CoreBox />
+  <CoreBox v-else-if="_coreBox" />
 </template>

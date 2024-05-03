@@ -53,7 +53,7 @@ onBeforeUnmount(() => {
         <span v-else class="tag" style="color: #6d8b51"> Latest </span>
       </template>
     </t-block-line>
-    <t-block-line title="Specification" description="23H6 T1"></t-block-line>
+    <t-block-line title="Specification" description="24H5 T2"></t-block-line>
     <t-block-line title="Start Costs">
       <template #description>
         {{ startCosts }}s
@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
     ></t-block-line>
     <t-block-line
       title="Experience"
-      description="Touch Feature Experience Pack 2024.02.15"
+      description="Touch Feature Experience Pack 2024.05.03"
     ></t-block-line>
     <t-block-line title="CPU Usage">
       <template #description>

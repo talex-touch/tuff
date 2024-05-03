@@ -27,8 +27,14 @@ function onKeyDown(event: KeyboardEvent) {
     // touchChannel.sendSync("core-box:run", searchVal.value);
   } else if (event.key === "ArrowDown") {
     focus.value = focus.value + 1;
+
+    // Avoid cursor moving in input.
+    event.preventDefault();
   } else if (event.key === "ArrowUp") {
     focus.value = focus.value - 1;
+
+    // Avoid cursor moving in input.
+    event.preventDefault();
   } else if (event.key === "Escape") {
     searchVal.value = "";
   }
