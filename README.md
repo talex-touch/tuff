@@ -95,26 +95,23 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 🌀 Front-end
 
-- Electron ^24.4.0
-- Vue.js: ^3.3.4
-- Vue Router: ^4.2.1
-- Element Plus: ^2.3.5
-- Axios: ^1.4.0
-- Codemirror: ^6.0.1
-- Vanta: ^0.5.24
+- Electron ^29.3.0
+- Vue.js: ^3.4.23
+- Vue Router: ^4.3.0
+- Element Plus: ^2.7.0
+- Milkdown: ^7.3.6
 - Lottie-web: ^5.11.0
 
 #### 💠 Back-end
 
-- Node.js: ^14.18.0 || >=16.0.0
+- Node.js: ^16.0.0 || >=18.0.0
 - Koa: ^2.7.0
 
 #### 🔧 Build Tools
 
-- Vite: ^4.3.5
-- Electron: ^24.4.0
-- Electron Builder: ^23.6.0
-- Sass: ^1.62.1
+- Vite: ^5.2.9
+- Electron Builder: ^24.13.3
+- Sass: ^1.75.0
 
 #### [Here](./.github/docs/contribution/CONTRIBUTING.md)
 
