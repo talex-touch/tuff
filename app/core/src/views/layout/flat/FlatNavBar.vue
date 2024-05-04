@@ -25,10 +25,10 @@ import { ITouchPlugin } from "@talex-touch/utils/plugin";
 import { inject } from "vue";
 
 const activePlugin = inject("activePlugin");
-const _plugins = inject("plugins");
-const plugins = computed(() =>
-  _plugins().filter((item: ITouchPlugin) => item.status > 2 && item.status < 5)
-);
+const plugins = inject("plugins");
+// const plugins = computed(() =>
+//   _plugins().filter((item: ITouchPlugin) => item.status > 2 && item.status < 5)
+// );
 
 function changeActivePlugin(event: Event, item: ITouchPlugin) {
   event.stopPropagation();

@@ -7,7 +7,7 @@ const props = defineProps<{
 }>()
 const emits = defineEmits<{
   (e: "search", val: string): void,
-  (e: "select", val: any): void,
+  (e: "select", val: any, ind: number): void,
 }>()
 
 enum EOrderWay {
@@ -25,6 +25,8 @@ watch(() => props.list, () => {
   _list.value = [...props.list]
 
   handleOrderWay()
+
+  emits('select', null, -1)
 }, { immediate: true })
 
 function handleOrderWay() {
@@ -74,6 +76,8 @@ function handleOrderChange() {
   orderWay.value = (orderWay.value + 1) % 4
 
   handleOrderWay()
+
+  emits('select', null, -1)
 }
 
 watch(() => search.value, val => {
@@ -121,7 +125,7 @@ function handleClick(item: any, ind: number) {
           <i v-if="orderWay === 3" class="i-ri-sort-number-asc" />
         </span>
       </div>
-      <li class="fake-background" :class="{ active: index === ind }" @click="handleClick(item, ind)"
+      <li :index="ind" class="fake-background" :class="{ active: index === ind }" @click="handleClick(item, ind)"
         v-for="(item, ind) in _list">
         <img :src="item.icon" alt="">
 
@@ -132,7 +136,7 @@ function handleClick(item: any, ind: number) {
         </div>
       </li>
     </TransitionGroup>
-    <div class="AppList-Info">
+    <div class="AppList-Info fake-background">
       <span v-if="search">{{ _list.length }} searched on this device.</span>
       <span v-else>{{ _list.length }} applications on this device.</span>
       <span class="order">
@@ -175,7 +179,8 @@ function handleClick(item: any, ind: number) {
 
   bottom: 0;
 
-  background-color: var(--el-fill-color);
+  // background-color: var(--el-fill-color);
+  backdrop-filter: blur(18px) saturate(180%);
 }
 
 .AppList-Toolbox {

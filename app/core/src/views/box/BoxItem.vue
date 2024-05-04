@@ -3,6 +3,7 @@ const props = defineProps<{
   data: any;
   i: number;
   active: boolean;
+  selected: boolean;
 }>();
 
 function highlightText(text: string, matched: Array<any>) {
@@ -24,7 +25,7 @@ function highlightText(text: string, matched: Array<any>) {
 </script>
 
 <template>
-  <div class="BoxItem fake-background" :class="{ active }">
+  <div class="BoxItem fake-background" :class="{ active, selected }">
     <!-- <div class="BoxItem-Main"> -->
     <img :src="data.icon" :alt="data.name" />
     <!-- </div> -->
@@ -73,6 +74,21 @@ function highlightText(text: string, matched: Array<any>) {
 }
 
 .BoxItem {
+  &.selected::after {
+    z-index: -1;
+
+    left: 0;
+    top: 0%;
+
+    width: 100%;
+    height: 100%;
+
+    opacity: .5;
+    border-radius: 0;
+    transition: 0.25s;
+    box-shadow: 0 0 4px 0 var(--el-color-primary);
+  }
+
   &::after {
     content: "";
     position: absolute;

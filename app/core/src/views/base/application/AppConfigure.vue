@@ -1,4 +1,5 @@
 <script name="AppConfigure" setup lang="ts">
+import { touchChannel } from "~/modules/channel/channel-core";
 import FlatButton from "@comp/base/button/FlatButton.vue";
 import cprocess from "child_process";
 import fs from 'fs'
@@ -87,6 +88,13 @@ function handleDelete() {
     }
   })
 }
+
+function handleHelp() {
+  // open google and search
+  const url = `https://www.google.com/search?q=${props.data.name}`
+
+  touchChannel.sendSync('open-external', { url })
+}
 </script>
 
 <template>
@@ -116,8 +124,8 @@ function handleDelete() {
               </template>
               <FlatButton @click="handleDelete" hover:bg-red>Uninstall</FlatButton>
             </t-block-slot>
-            <t-block-switch guidance title="Application Help" description="Find help through search engine."
-              icon="search-2" />
+            <t-block-switch @click="handleHelp" guidance title="Application Help"
+              description="Find help through search engine." icon="search-2" />
           </t-group-block>
 
           <t-group-block name="Application stats" icon="dashboard-horizontal">

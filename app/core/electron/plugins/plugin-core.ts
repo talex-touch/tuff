@@ -1,4 +1,4 @@
-import { IPluginFeature } from './../../../../packages/utils/plugin/index';
+import { IPluginFeature } from "./../../../../packages/utils/plugin/index";
 import {
   IPlatform,
   IPluginDev,
@@ -8,7 +8,11 @@ import {
   ITouchPlugin,
   PluginStatus,
 } from "@talex-touch/utils/plugin";
-import { WebContentsProperty, WindowProperties, WindowProperty } from '@talex-touch/utils/plugin/sdk/window'
+import {
+  WebContentsProperty,
+  WindowProperties,
+  WindowProperty,
+} from "@talex-touch/utils/plugin/sdk/window";
 import { TalexTouch } from "../types";
 import fse from "fs-extra";
 import path from "path";
@@ -39,7 +43,7 @@ class PluginIcon implements IPluginIcon {
   }
 }
 
-const disallowedArrays = ["官方", "touch", "talex", "第一"]
+const disallowedArrays = ["官方", "touch", "talex", "第一"];
 
 class TouchPlugin implements ITouchPlugin {
   dev: IPluginDev;
@@ -51,7 +55,7 @@ class TouchPlugin implements ITouchPlugin {
   webViewInit: boolean = false;
   webview: IPluginWebview = {};
   platforms: IPlatform;
-  features: IPluginFeature[]
+  features: IPluginFeature[];
 
   pluginPath: string;
 
@@ -92,12 +96,16 @@ class TouchPlugin implements ITouchPlugin {
   addFeature(feature: IPluginFeature): boolean {
     if (this.features.find((f) => f.name === feature.name)) return false;
 
-    const { id, name, desc, commands } = feature
+    const { id, name, desc, commands } = feature;
 
     const regex = /^[a-zA-Z0-9_-]+$/;
     if (!regex.test(id)) return false;
 
-    if (disallowedArrays.filter((item: string) => name.indexOf(item) !== -1 || desc.indexOf(item) !== -1)) {
+    if (
+      disallowedArrays.filter(
+        (item: string) => name.indexOf(item) !== -1 || desc.indexOf(item) !== -1
+      )
+    ) {
       return false;
     }
 
@@ -109,7 +117,12 @@ class TouchPlugin implements ITouchPlugin {
   delFeature(featureId: string): boolean {
     if (!this.features.find((f) => f.name === featureId)) return false;
 
-    return this.features.splice(this.features.findIndex((f) => f.name === featureId), 1) !== undefined;
+    return (
+      this.features.splice(
+        this.features.findIndex((f) => f.name === featureId),
+        1
+      ) !== undefined
+    );
   }
 
   getFeature(featureId: string): IPluginFeature | null {
@@ -139,7 +152,7 @@ class TouchPlugin implements ITouchPlugin {
 
     this.pluginPath = pluginPath;
     this.platforms = platforms;
-    this.features = []
+    this.features = [];
   }
 
   async enable(): Promise<boolean> {
@@ -153,7 +166,7 @@ class TouchPlugin implements ITouchPlugin {
 
     this.status = PluginStatus.LOADING;
 
-    this.webview = this.__getInjections__()
+    this.webview = this.__getInjections__();
 
     const app = genTouchApp();
 
@@ -198,13 +211,12 @@ class TouchPlugin implements ITouchPlugin {
         webpreferences: "contextIsolation=false",
         // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: "false",
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version
-          } (Plugins,like ${this.name})`,
+        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version} (Plugins,like ${this.name})`,
         // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
       js: `${getJs([this.name, JSON.stringify(_path)])}`,
-    }
+    };
   }
 
   async disable(): Promise<boolean> {
@@ -223,7 +235,7 @@ class TouchPlugin implements ITouchPlugin {
     this._windows.forEach((win, id) => {
       win.close();
       this._windows.delete(id);
-    })
+    });
 
     this.status = PluginStatus.DISABLED;
     console.log("[Plugin] Plugin " + this.name + " is disabled.");
@@ -250,14 +262,14 @@ class TouchPlugin implements ITouchPlugin {
 
 class PluginManager implements IPluginManager {
   plugins: Map<string, ITouchPlugin> = new Map();
-  active: string = '';
+  active: string = "";
 
   pluginPath: string;
   watcher: chokidar.FSWatcher | null;
 
   constructor(pluginPath: string) {
     this.pluginPath = pluginPath;
-    this.watcher = null
+    this.watcher = null;
 
     this.__init__();
   }
@@ -308,8 +320,8 @@ class PluginManager implements IPluginManager {
 
     touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
       this.watcher!.close();
-      console.log("[PluginManager] Watcher closed.")
-    })
+      console.log("[PluginManager] Watcher closed.");
+    });
 
     this.watcher = chokidar.watch(this.pluginPath, {
       ignored: /(^|[\/\\])\../,
@@ -328,9 +340,13 @@ class PluginManager implements IPluginManager {
       const pluginName = path.basename(path.dirname(_path));
 
       if (!this.hasPlugin(pluginName)) {
-        console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded despite changes made to its file.")
+        console.warn(
+          "[PluginManager] IGNORE | The plugin " +
+            pluginName +
+            " isn't loaded despite changes made to its file."
+        );
 
-        this.loadPlugin(pluginName)
+        this.loadPlugin(pluginName);
         return;
       }
       let plugin = this.plugins.get(pluginName) as TouchPlugin;
@@ -344,7 +360,7 @@ class PluginManager implements IPluginManager {
         baseName === "preload.js" ||
         baseName === "index.html"
       ) {
-        let _enabled = plugin.status === PluginStatus.ENABLED
+        let _enabled = plugin.status === PluginStatus.ENABLED;
 
         await plugin.disable();
         await this.unloadPlugin(pluginName);
@@ -353,7 +369,7 @@ class PluginManager implements IPluginManager {
 
         plugin = this.plugins.get(pluginName) as TouchPlugin;
 
-        _enabled && await plugin.enable();
+        _enabled && (await plugin.enable());
 
         genTouchChannel().send(ChannelType.MAIN, "plugin:reload", {
           source: "disk",
@@ -368,17 +384,28 @@ class PluginManager implements IPluginManager {
           readme: plugin.readme,
         });
       } else {
-        console.warn("[PluginManager] Plugin " + pluginName + "'s " + baseName + " has been changed, but it's not a valid file.")
+        console.warn(
+          "[PluginManager] Plugin " +
+            pluginName +
+            "'s " +
+            baseName +
+            " has been changed, but it's not a valid file."
+        );
       }
-
     });
 
     this.watcher.on("addDir", (_path) => {
       if (!fse.existsSync(_path + "/manifest.json")) return;
       const pluginName = path.basename(_path);
 
-      if (pluginName.indexOf(".") !== -1 || pluginName.indexOf("\\") !== -1 || pluginName.indexOf("/") !== -1) {
-        console.log(`[PluginManager] IGNORE | Plugin ${pluginName} has been added, but it's not a valid name.`)
+      if (
+        pluginName.indexOf(".") !== -1 ||
+        pluginName.indexOf("\\") !== -1 ||
+        pluginName.indexOf("/") !== -1
+      ) {
+        console.log(
+          `[PluginManager] IGNORE | Plugin ${pluginName} has been added, but it's not a valid name.`
+        );
         return;
       }
 
@@ -406,7 +433,11 @@ class PluginManager implements IPluginManager {
     });
 
     this.watcher.on("ready", () => {
-      console.log("[PluginManager] Initial scan complete. Ready for changes. (" + this.pluginPath + ")");
+      console.log(
+        "[PluginManager] Initial scan complete. Ready for changes. (" +
+          this.pluginPath +
+          ")"
+      );
     });
 
     this.watcher.on("error", (error) => {
@@ -423,23 +454,31 @@ class PluginManager implements IPluginManager {
 
   loadPlugin(pluginName: string): Promise<boolean> {
     const pluginPath = path.resolve(this.pluginPath, pluginName);
-    const manifestPath = path.resolve(pluginPath, "manifest.json")
+    const manifestPath = path.resolve(pluginPath, "manifest.json");
 
     if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
-      console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded because it's not a valid plugin.");
+      console.warn(
+        "[PluginManager] IGNORE | The plugin " +
+          pluginName +
+          " isn't loaded because it's not a valid plugin."
+      );
       return Promise.resolve(false);
     }
 
     const pluginInfo = fse.readJSONSync(manifestPath);
     if (pluginInfo.name !== pluginName) {
-      console.warn("[PluginManager] IGNORE | The plugin " + pluginName + " isn't loaded because it's name not matched.")
+      console.warn(
+        "[PluginManager] IGNORE | The plugin " +
+          pluginName +
+          " isn't loaded because it's name not matched."
+      );
       return Promise.resolve(false);
     }
 
     const readme = ((p) =>
       fse.existsSync(p)
         ? (this.watcher!.add(p), fse.readFileSync(p).toString())
-        : '')(path.resolve(pluginPath, "README.md"));
+        : "")(path.resolve(pluginPath, "README.md"));
 
     const icon = new PluginIcon(
       pluginPath,
@@ -460,6 +499,9 @@ class PluginManager implements IPluginManager {
 
     this.plugins.set(pluginInfo.name, touchPlugin);
 
+    genTouchChannel().send(ChannelType.MAIN, "plugin:add", {
+      plugin: touchPlugin,
+    });
     console.log("[PluginManager] Load plugin " + pluginName + " done!");
 
     return Promise.resolve(true);
@@ -478,6 +520,9 @@ class PluginManager implements IPluginManager {
 
     this.plugins.delete(pluginName);
 
+    genTouchChannel().send(ChannelType.MAIN, "plugin:del", {
+      plugin: pluginName,
+    });
     console.log("[Plugin] Disabling plugin " + pluginName);
 
     return Promise.resolve(true);
@@ -489,7 +534,7 @@ let pluginManager: IPluginManager | null = null;
 export function genPluginManager(pluginPath?: string) {
   if (!pluginManager) pluginManager = new PluginManager(pluginPath!);
 
-  return pluginManager!
+  return pluginManager!;
 }
 
 export default {
@@ -502,35 +547,31 @@ export default {
 
     touchChannel.regChannel(ChannelType.MAIN, "plugin-list", () =>
       (pluginManager as PluginManager).getPluginList()
-    )
+    );
     touchChannel.regChannel(ChannelType.MAIN, "change-active", ({ data }) =>
       pluginManager!.setActivePlugin(data!.name)
-    )
+    );
     touchChannel.regChannel(ChannelType.MAIN, "enable-plugin", ({ data }) => {
       const plugin = pluginManager!.plugins.get(data!.name);
       if (!plugin) return false;
 
       return plugin.enable();
-    })
-    touchChannel.regChannel(
-      ChannelType.MAIN,
-      "disable-plugin",
-      ({ data }) => {
-        const plugin = pluginManager!.plugins.get(data!.name);
-        if (!plugin) return false;
+    });
+    touchChannel.regChannel(ChannelType.MAIN, "disable-plugin", ({ data }) => {
+      const plugin = pluginManager!.plugins.get(data!.name);
+      if (!plugin) return false;
 
-        plugin.disable();
-      }
-    )
+      plugin.disable();
+    });
     touchChannel.regChannel(ChannelType.MAIN, "get-plugin", ({ data }) =>
       pluginManager!.plugins.get(data!.name)
-    )
+    );
     touchChannel.regChannel(ChannelType.MAIN, "webview-init", ({ data }) => {
       const plugin = pluginManager!.plugins.get(data!.name);
       if (!plugin) return false;
 
       return (plugin.webViewInit = true);
-    })
+    });
     // this.listeners.push(
     //   touchChannel.regChannel(ChannelType.MAIN, "pack-export", ({ data }) => {
     //     const plugin = pluginManager.plugins.get(data);
@@ -549,36 +590,36 @@ export default {
         touchChannel.send(ChannelType.MAIN, "plugin-crashed", {
           plugin,
           ...data,
-        })
+        });
 
         touchChannel.send(ChannelType.PLUGIN, "@lifecycle:cr", {
           plugin,
-          ...data
-        })
+          ...data,
+        });
       }
-    )
+    );
 
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       "feature:reg",
       ({ data, plugin }) => {
-        const { feature } = data!
+        const { feature } = data!;
         const pluginIns = pluginManager!.plugins.get(plugin!);
 
-        return pluginIns?.addFeature(feature)
+        return pluginIns?.addFeature(feature);
       }
-    )
+    );
 
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       "feature:unreg",
       ({ data, plugin }) => {
-        const { feature } = data!
+        const { feature } = data!;
         const pluginIns = pluginManager!.plugins.get(plugin!);
 
-        return pluginIns?.delFeature(feature)
+        return pluginIns?.delFeature(feature);
       }
-    )
+    );
 
     // touchChannel.regChannel(
     //   ChannelType.MAIN,
@@ -600,96 +641,123 @@ export default {
       "plugin:explorer",
       async ({ data }) => {
         const plugin = pluginManager!.plugins.get(data) as TouchPlugin;
-        if (!plugin) return console.error('[PluginManager] Error open plugin in explorer', data)
+        if (!plugin)
+          return console.error(
+            "[PluginManager] Error open plugin in explorer",
+            data
+          );
 
-        const pluginPath = plugin.pluginPath
+        const pluginPath = plugin.pluginPath;
 
-        const { exec } = require('child_process');
+        const { exec } = require("child_process");
         exec(`explorer ${pluginPath}`, (err: any) => {
           if (err) {
             console.error(err);
             return;
           }
-        })
+        });
       }
-    )
+    );
 
-    touchChannel.regChannel(ChannelType.PLUGIN, "window:new", async ({ data, plugin, reply }) => {
-      const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin;
-      if (!touchPlugin) return reply(DataCode.ERROR, { error: "Plugin not found!" });
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      "window:new",
+      async ({ data, plugin, reply }) => {
+        const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin;
+        if (!touchPlugin)
+          return reply(DataCode.ERROR, { error: "Plugin not found!" });
 
-      const win = new TouchWindow(data);
+        const win = new TouchWindow(data);
 
-      let webContents: Electron.WebContents;
+        let webContents: Electron.WebContents;
 
-      if (data.file) {
-        webContents = await win.loadFile(data.file)
-      } else if (data.url) {
-        webContents = await win.loadURL(data.url)
-      } else {
-        return reply(DataCode.ERROR, { error: "No file or url provided!" })
+        if (data.file) {
+          webContents = await win.loadFile(data.file);
+        } else if (data.url) {
+          webContents = await win.loadURL(data.url);
+        } else {
+          return reply(DataCode.ERROR, { error: "No file or url provided!" });
+        }
+
+        console.log("[Plugin] Window loaded for plugin " + plugin);
+
+        const obj = touchPlugin.__getInjections__();
+
+        await webContents.insertCSS(obj.styles);
+        await webContents.executeJavaScript(obj.js);
+
+        webContents.send("@loaded", {
+          id: webContents.id,
+          plugin,
+          type: "intend",
+        });
+
+        touchPlugin._windows.set(webContents.id, win);
+
+        win.window.on("closed", () =>
+          touchPlugin._windows.delete(webContents.id)
+        );
+
+        console.log("[Plugin] Create new window for plugin " + plugin);
+
+        return reply(DataCode.SUCCESS, { id: webContents.id });
       }
+    );
 
-      console.log('[Plugin] Window loaded for plugin ' + plugin)
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      "window:visible",
+      ({ data, plugin }) => {
+        const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin;
+        if (!touchPlugin) return { error: "Plugin not found!" };
 
-      const obj = touchPlugin.__getInjections__()
+        const win = touchPlugin._windows.get(data.id);
+        if (!win) return { error: "Window not found!" };
 
-      await webContents.insertCSS(obj.styles)
-      await webContents.executeJavaScript(obj.js)
+        if (data.hasOwnProperty("visible")) {
+          data.visible ? win.window.show() : win.window.hide();
+        } else win.window.isVisible() ? win.window.hide() : win.window.show();
 
-      webContents.send('@loaded', { id: webContents.id, plugin, type: 'intend' })
-
-      touchPlugin._windows.set(webContents.id, win)
-
-      win.window.on('closed', () => touchPlugin._windows.delete(webContents.id))
-
-      console.log("[Plugin] Create new window for plugin " + plugin);
-
-      return reply(DataCode.SUCCESS, { id: webContents.id });
-    })
-
-    touchChannel.regChannel(ChannelType.PLUGIN, "window:visible", ({ data, plugin }) => {
-      const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin;
-      if (!touchPlugin) return { error: "Plugin not found!" };
-
-      const win = touchPlugin._windows.get(data.id);
-      if (!win) return { error: "Window not found!" };
-
-      if (data.hasOwnProperty('visible')) {
-        data.visible ? win.window.show() : win.window.hide()
-      } else win.window.isVisible() ? win.window.hide() : win.window.show()
-
-      return true
-    })
-
-    touchChannel.regChannel(ChannelType.PLUGIN, "window:property", ({ data, plugin }) => {
-      const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin;
-      if (!touchPlugin) return { error: "Plugin not found!" };
-
-      const { id, property }: { id: number, property: WindowProperties } = data
-
-      const win = touchPlugin._windows.get(id)!;
-      if (!win) return { error: "Window not found!" };
-
-      const window: BrowserWindow | MicaBrowserWindow = win.window
-
-      function bind2Objs<T extends Object, P extends WindowProperty | WebContentsProperty>(obj: T, property: P) {
-        Object.keys(property).forEach(k => {
-          const key = k as keyof P
-          const v = property[key]
-
-          if (v instanceof Function) (v as Function).apply(obj, v)
-          else Object.assign(obj, { [key]: v })
-        })
+        return true;
       }
+    );
 
-      property.window && bind2Objs(window, property.window)
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      "window:property",
+      ({ data, plugin }) => {
+        const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin;
+        if (!touchPlugin) return { error: "Plugin not found!" };
 
-      property.webContents && bind2Objs(window.webContents, property.webContents)
+        const { id, property }: { id: number; property: WindowProperties } =
+          data;
 
-      return true
-    })
+        const win = touchPlugin._windows.get(id)!;
+        if (!win) return { error: "Window not found!" };
 
+        const window: BrowserWindow | MicaBrowserWindow = win.window;
+
+        function bind2Objs<
+          T extends Object,
+          P extends WindowProperty | WebContentsProperty,
+        >(obj: T, property: P) {
+          Object.keys(property).forEach((k) => {
+            const key = k as keyof P;
+            const v = property[key];
+
+            if (v instanceof Function) (v as Function).apply(obj, v);
+            else Object.assign(obj, { [key]: v });
+          });
+        }
+
+        property.window && bind2Objs(window, property.window);
+
+        property.webContents &&
+          bind2Objs(window.webContents, property.webContents);
+
+        return true;
+      }
+    );
   },
   destroy() {
     const plugins = pluginManager!.plugins;

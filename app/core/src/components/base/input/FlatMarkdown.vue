@@ -17,10 +17,17 @@ const editor = ref();
 const editorDom = ref();
 
 watch(value, () => {
-  editor.value?.action(replaceAll(value.value));
+  console.log('text updated', value, editor.value, replaceAll)
+
+  handleInit()
+  // editor.value?.action(replaceAll(value.value, true));
 });
 
-onMounted(async () => {
+async function handleInit() {
+  if (editor.value) {
+    editor.value.destroy();
+  }
+
   editor.value = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, editorDom.value);
@@ -34,6 +41,10 @@ onMounted(async () => {
     .use(nord)
     .use(commonmark)
     .create();
+}
+
+onMounted(async () => {
+  handleInit()
 });
 </script>
 
@@ -127,6 +138,7 @@ onMounted(async () => {
     &:visited {
       color: var(--el-color-primary);
     }
+
     color: var(--el-color-primary-dark-2);
   }
 }

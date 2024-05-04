@@ -49,8 +49,9 @@ import FlatButton from "@comp/base/button/FlatButton.vue";
 import PluginNew from './plugin/PluginNew.vue'
 import { computePosition } from '@floating-ui/vue'
 
-const _plugins = inject('plugins')
-const plugins = computed(() => _plugins())
+const plugins = inject('plugins')
+// const plugins = computed(() => _plugins())
+// console.log("_", plugins)
 const pluginInfoRef = ref()
 const select = ref()
 

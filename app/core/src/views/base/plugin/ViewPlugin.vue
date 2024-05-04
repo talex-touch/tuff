@@ -19,8 +19,8 @@ import { touchChannel } from "@modules/channel/channel-core";
 
 const options = window.$storage.themeStyle;
 const activePlugin = inject("activePlugin");
-const _plugins = inject("plugins");
-const plugins = computed(() => _plugins());
+const plugins = inject("plugins");
+// const plugins = computed(() => _plugins());
 
 const pendingLists = reactive({})
 

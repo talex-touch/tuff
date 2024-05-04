@@ -194,7 +194,6 @@ export class CoreBoxManager {
       if (!this.#_expand) {
         w.window.setMinimumSize(900, 60);
         w.window.setSize(900, 60, false);
-        console.log("[CoreBox] Size changed.");
       } else this.expand(this.#_expand);
 
       touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {

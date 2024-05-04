@@ -9,6 +9,7 @@ const clipboardOptions = reactive<any>({
 });
 const searchVal = ref("");
 const focus = ref(0);
+const select = ref(-1);
 const res = ref<Array<any>>([]);
 const scrollbar = ref();
 
@@ -21,9 +22,15 @@ function onKeyDown(event: KeyboardEvent) {
   const lastFocus = focus.value;
 
   if (event.key === "Enter") {
-    execute(res.value[focus.value]);
+    select.value = focus.value;
 
-    searchVal.value = "";
+    setTimeout(() => {
+      execute(res.value[focus.value]);
+
+      searchVal.value = "";
+      select.value = -1
+    }, 300);
+
     // touchChannel.sendSync("core-box:run", searchVal.value);
   } else if (event.key === "ArrowDown") {
     focus.value = focus.value + 1;
@@ -113,30 +120,17 @@ onMounted(() => {
     <div class="CoreBox-Icon">
       <img :src="AppIcon" />
     </div>
-    <input
-      id="core-box-input"
-      placeholder="Type what you want to search by talex-touch."
-      v-model="searchVal"
-    />
+    <input id="core-box-input" placeholder="Type what you want to search by talex-touch." v-model="searchVal" />
 
     <div class="CoreBox-Tag">
       <template v-if="clipboardOptions.last">
-        <span
-          v-if="clipboardOptions.last?.type === 'text'"
-          class="fake-background dotted"
-        >
+        <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted">
           Copied Text
         </span>
-        <span
-          v-else-if="clipboardOptions.last?.type === 'image'"
-          class="fake-background dotted"
-        >
+        <span v-else-if="clipboardOptions.last?.type === 'image'" class="fake-background dotted">
           Copied Image
         </span>
-        <span
-          v-else-if="clipboardOptions.last?.type === 'html'"
-          class="fake-background dotted"
-        >
+        <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted">
           Copied Html
         </span>
       </template>
@@ -149,15 +143,8 @@ onMounted(() => {
 
   <div class="CoreBoxRes">
     <el-scrollbar ref="scrollbar">
-      <BoxItem
-        @click="execute(item)"
-        :i="index + 1"
-        @mousemove="focus = index"
-        :active="focus === index"
-        v-for="(item, index) in res"
-        :key="index"
-        :data="item"
-      />
+      <BoxItem @click="execute(item)" :i="index + 1" @mousemove="focus = index" :active="focus === index"
+        v-for="(item, index) in res" :key="index" :data="item" :selected="select===index" />
     </el-scrollbar>
   </div>
 </template>
