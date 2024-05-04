@@ -10,7 +10,9 @@
           </transition>
         </router-view>
 
-        <ViewPlugin />
+        <keep-alive>
+          <ViewPlugin />
+        </keep-alive>
       </template>
       <template #title>
         <slot name="title" />

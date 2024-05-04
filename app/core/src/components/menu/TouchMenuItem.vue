@@ -1,6 +1,6 @@
 <template>
-  <div v-wave @click="handleClick" class="TouchMenuItem-Container fake-background" flex items-center
-    :class="{ active, disabled }">
+  <div ref="dom" v-wave :data-route="props.route" @click="handleClick" class="TouchMenuItem-Container fake-background"
+    flex items-center :class="{ active, disabled }">
     <slot>
       <span :class="`${icon}`" class="TouchMenu-Tab-Icon">
       </span>
@@ -36,11 +36,23 @@ const props = defineProps({
 })
 const emit = defineEmits(['active'])
 
+const dom = ref()
 const route = useRoute()
 const router = useRouter()
 const active = computed(() => props.doActive(props.route, route))
 
 const changePointer = inject('changePointer')
+
+router.afterEach((to, from) => {
+  if (!to.path.startsWith(props.route))
+    return
+
+  changePointer(dom.value)
+})
+
+onMounted(() => {
+  dom.value['$fixPointer'] = () => changePointer(dom.value)
+})
 
 function handleClick($event) {
   if (props.disabled) return
@@ -48,12 +60,7 @@ function handleClick($event) {
   if (props.route)
     router.push(props.route)
 
-  let el = $event.target
-  while (el && el.tagName !== 'DIV') {
-    el = el.parentElement
-  }
-
-  changePointer(el)
+  changePointer(dom.value)
   emit('active', $event)
 }
 </script>

@@ -360,7 +360,9 @@ class PluginManager implements IPluginManager {
         baseName === "preload.js" ||
         baseName === "index.html"
       ) {
-        let _enabled = plugin.status === PluginStatus.ENABLED;
+        let _enabled =
+          plugin.status === PluginStatus.ENABLED ||
+          plugin.status === PluginStatus.ACTIVE;
 
         await plugin.disable();
         await this.unloadPlugin(pluginName);
@@ -369,12 +371,14 @@ class PluginManager implements IPluginManager {
 
         plugin = this.plugins.get(pluginName) as TouchPlugin;
 
-        _enabled && (await plugin.enable());
-
         genTouchChannel().send(ChannelType.MAIN, "plugin:reload", {
           source: "disk",
           plugin: (plugin as TouchPlugin).toJSONObject(),
         });
+
+        console.log("plugin reload event sent", _enabled);
+
+        _enabled && (await plugin.enable());
       } else if (baseName === "README.md") {
         plugin.readme = fse.readFileSync(_path, "utf-8");
 

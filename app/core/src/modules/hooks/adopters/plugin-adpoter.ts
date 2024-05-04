@@ -43,13 +43,12 @@ class PluginAdpoter {
         "plugin-status-updated",
         ({ data, reply }: any) => {
           const p = this.plugins.get(data.plugin);
-          console.log("status updated", data, plugins, this.plugins, p);
           if (p) Object.assign(p, { status: data.status });
 
           if (data.status === 3) {
+            console.log("status updated", p, data)
             // @ts-ignore
-            p.webViewInit = p.webview?.data?._?.isWebviewInit || false;
-            console.log(p);
+            p.webViewInit = p.webview?._?.isWebviewInit || p.webViewInit;
           }
 
           reply(1);
@@ -83,6 +82,8 @@ class PluginAdpoter {
       touchChannel.regChannel("plugin:reload", ({ data, reply }) => {
         const p = this.plugins.get(data.plugin.name);
         if (p) Object.assign(p, data.plugin);
+
+        p.webViewInit = false;
 
         reply(1);
       })

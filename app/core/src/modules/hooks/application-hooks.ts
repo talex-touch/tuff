@@ -10,6 +10,7 @@ import { AppUpdate } from "~/modules/hooks/api/useUpdate";
 import AppUpdateView from "@comp/base/AppUpgradationView.vue";
 import { pluginManager } from "~/modules/channel/plugin-core/api";
 import { pluginAdopter } from "~/modules/hooks/adopters/plugin-adpoter";
+import { useRouter } from "vue-router";
 
 export function usePlugins() {
   const plugins = ref();
@@ -20,6 +21,34 @@ export function usePlugins() {
   scope.run(() => {
     watchEffect(() => {
       plugins.value = [...pluginAdopter.plugins.values()];
+
+      if (activePlugin?.value) {
+        if (
+          !plugins.value.filter((item) => item.name === activePlugin.value)
+            .length
+        ) {
+          lastActivePlugin.value = activePlugin.value;
+          activePlugin.value = "";
+        }
+      } else if (
+        plugins.value.filter((item) => item.name === lastActivePlugin.value)
+          .length &&
+        lastActivePlugin.value
+      ) {
+        setTimeout(() => {
+          activePlugin.value = lastActivePlugin.value;
+          lastActivePlugin.value = "";
+
+          const id = `touch-plugin-item-${activePlugin.value}`;
+
+          setTimeout(() => {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            el["$fixPointer"]?.();
+          }, 200);
+        }, 200);
+      }
     });
     // watch(pluginAdopter, val => {
     //   console.log("updated", pluginAdopter, val);
@@ -32,12 +61,17 @@ export function usePlugins() {
   return [plugins, scope];
 }
 
+const activePlugin = ref("");
+const lastActivePlugin = ref("");
+
 export function usePlugin() {
-  const activePlugin = ref("");
+  const router = useRouter();
 
   const stop = watch(
     () => activePlugin.value,
-    (val) => pluginManager.changeActivePlugin(val),
+    (val, oldVal) => {
+      pluginManager.changeActivePlugin(val);
+    },
     { immediate: true }
   );
 
