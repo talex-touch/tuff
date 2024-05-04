@@ -6,15 +6,12 @@
       <TouchMenuItem route="/market" name="Market" icon="i-ri-quill-pen-line" />
       <TouchMenuItem route="/plugin" name="Plugin" icon="i-ri-plug-2-line" />
       <TouchMenuItem route="/styles" name="Style" icon="i-ri-paint-line" />
+      <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" />
       <TouchMenuItem route="/setting" name="Setting" icon="i-ri-settings-6-line" />
       <p class="FlatNavBar-Title">PLUGINS</p>
       <p op-50 font-size-3 text-center v-if="!plugins.length">NO PLUGIN INSTALLED.</p>
-      <TouchMenuItem
-        @active="changeActivePlugin($event, item)"
-        :doActive="() => activePlugin === item.name"
-        v-for="item in plugins"
-        :key="item.name"
-      >
+      <TouchMenuItem @active="changeActivePlugin($event, item)" :doActive="() => activePlugin === item.name"
+        v-for="item in plugins" :key="item.name">
         {{ item.name }}
       </TouchMenuItem>
     </TouchMenu>

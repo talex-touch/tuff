@@ -52,22 +52,30 @@ const routes: any = [
     component: () => import("../views/base/styles/ThemeStyle.vue"),
     meta: {
       index: 4,
-    }
+    },
   },
   {
     path: "/styles/theme",
     name: "Theme",
     component: () => import("../views/base/styles/sub/ThemePreference.vue"),
     meta: {
-      index: 4
-    }
+      index: 4,
+    },
+  },
+  {
+    path: "/application",
+    name: "Application",
+    component: () => import("../views/base/application/ApplicationIndex.vue"),
+    meta: {
+      index: 5,
+    },
   },
   {
     path: "/setting",
     name: "AppSettings",
     component: () => import("../views/base/settings/AppSettings.vue"),
     meta: {
-      index: 5,
+      index: 6,
     },
   },
 ];

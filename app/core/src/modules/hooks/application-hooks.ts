@@ -43,7 +43,6 @@ export async function urlHooker() {
       if (target.getAttribute('ignoreSafeCheck') === 'true')
         return
 
-      // 处理完 a 标签的内容，重新触发跳转，根据原来 a 标签页 target 来判断是否需要新窗口打开
       const url = target.getAttribute('href')
 
       if (url.startsWith(window.location.origin) || url.startsWith('/'))
@@ -52,7 +51,7 @@ export async function urlHooker() {
       event.preventDefault()
 
       // if(/^\//.test(target)) {
-      //   // 相对本站链接
+      //   // Relative to this website url
       //   return true
       // }
 
@@ -73,9 +72,9 @@ export async function urlHooker() {
   document.body.addEventListener('click', directListener)
 
   touchChannel.regChannel('url:open', async ({ data, reply }) => {
-    await forTouchTip('是否允许打开链接？', data, [
+    await forTouchTip('Allow to open external link?', data, [
       {
-        content: '取消',
+        content: 'Cancel',
         type: 'info',
         onClick: async () => {
           reply(false)
@@ -83,7 +82,7 @@ export async function urlHooker() {
         },
       },
       {
-        content: '确定',
+        content: 'Sure',
         type: 'danger',
         onClick: async () => {
           reply(true)

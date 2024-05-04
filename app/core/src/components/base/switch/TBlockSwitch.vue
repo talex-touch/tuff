@@ -82,11 +82,11 @@ watch(() => value.value, (v) => {
     </div>
     <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
       <span display-none ref="mention" style="transition: .2s" />
-      <!--      样式同步透明 不额外设定disabled -->
+      <!--      Style sync opacity no external setting disabled -->
       <TSwitch v-model="value" />
     </div>
     <div v-else class="TBlockSwitch-Guidance">
-      <RemixIcon name="arrow-right-s" />
+      <RemixIcon name="arrow-right-s" :style="'line'" />
     </div>
   </div>
 </template>
@@ -96,6 +96,15 @@ watch(() => value.value, (v) => {
 //  border-radius: 0 0 4px 4px;
 //}
 
+.TBlockSwitch-Guidance {
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .TBlockSwitch-Container {
   &.disabled {
     .TBlockSwitch-Switch {
@@ -104,10 +113,12 @@ watch(() => value.value, (v) => {
       pointer-events: none;
     }
   }
+
   .TBlockSwitch-Switch {
     display: flex;
 
     align-items: center;
+
     span {
       margin-right: 0.5rem;
 
@@ -115,6 +126,7 @@ watch(() => value.value, (v) => {
     }
 
   }
+
   .TBlockSwitch-Content {
     display: flex;
     align-items: center;
@@ -126,23 +138,23 @@ watch(() => value.value, (v) => {
 
     cursor: pointer;
 
-    > * {
+    >* {
       margin-right: 16px;
 
       font-size: 24px;
     }
 
-    > .TBlockSwitch-Label {
+    >.TBlockSwitch-Label {
       flex: 1;
 
-      > h3 {
+      >h3 {
         margin: 0;
 
         font-size: 14px;
         font-weight: 500;
       }
 
-      > p {
+      >p {
         margin: 0;
 
         font-size: 12px;
@@ -152,6 +164,7 @@ watch(() => value.value, (v) => {
       }
     }
   }
+
   position: relative;
   margin-bottom: 10px;
   padding: 4px 16px;
@@ -170,6 +183,7 @@ watch(() => value.value, (v) => {
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 4px;
   --fake-inner-opacity: .5;
+
   &:hover {
     --fake-color: var(--el-fill-color);
   }
@@ -177,6 +191,7 @@ watch(() => value.value, (v) => {
 
 .touch-blur .TBlockSwitch-Container {
   --fake-color: var(--el-fill-color);
+
   &:hover {
     --fake-color: var(--el-fill-color-light);
   }

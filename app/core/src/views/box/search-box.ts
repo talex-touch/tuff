@@ -3,7 +3,7 @@ import PinyinMatch from "pinyin-match";
 import cprocess from "child_process";
 import { ref } from "vue";
 
-const apps = ref([]);
+export const apps = ref([]);
 
 (() => {
   apps.value = touchChannel.sendSync("core-box-get:apps");

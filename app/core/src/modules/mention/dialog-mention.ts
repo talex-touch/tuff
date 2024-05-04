@@ -23,7 +23,7 @@ export async function forTouchTip(
   title: String,
   message: String,
   buttons: DialogBtn[] = [
-    { content: "确定", type: "info", onClick: async () => true },
+    { content: "Sure", type: "info", onClick: async () => true },
   ]
 ) {
   return new Promise<void>((resolve) => {
@@ -66,7 +66,7 @@ export async function forDialogMention(
   message: String,
   icon: any = null,
   btns: DialogBtn[] = [
-    { content: "确定", type: "info", onClick: async () => true },
+    { content: "Sure", type: "info", onClick: async () => true },
   ]
 ) {
   return new Promise<void>((resolve) => {
@@ -118,7 +118,7 @@ export async function forApplyMention(
   title: String,
   message: String,
   btns: BottomDialogBtn[] = [
-    { content: "确定", type: "info", onClick: async () => true, time: 0 },
+    { content: "Sure", type: "info", onClick: async () => true, time: 0 },
   ]
 ) {
   const root: HTMLDivElement = document.createElement("div");

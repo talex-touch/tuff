@@ -3,8 +3,10 @@
     <div class="TBlockSlot-Content TBlockSelection-Content">
       <remix-icon :name="icon" :style="`line`" />
       <div class="TBlockSlot-Label TBlockSelection-Label">
-        <h3>{{ title }}</h3>
-        <p>{{ description }}</p>
+        <slot name="label">
+          <h3>{{ title }}</h3>
+          <p>{{ description }}</p>
+        </slot>
       </div>
     </div>
     <div class="TBlockSlot-Slot TBlockSelection-Func">
@@ -44,7 +46,6 @@ const props = defineProps({
 </script>
 
 <style lang="scss" scoped>
-
 //.TBlockSlot-Container + .TBlockSlot-Container {
 //  border-radius: 0 0 4px 4px;
 //}
@@ -57,6 +58,7 @@ const props = defineProps({
       pointer-events: none;
     }
   }
+
   .TBlockSlot-Slot {
     //display: flex;
 
@@ -70,6 +72,7 @@ const props = defineProps({
     //align-items: center;
     //box-sizing: border-box;
   }
+
   .TBlockSlot-Content {
     display: flex;
     align-items: center;
@@ -81,23 +84,23 @@ const props = defineProps({
 
     cursor: pointer;
 
-    > * {
+    >* {
       margin-right: 16px;
 
       font-size: 24px;
     }
 
-    > .TBlockSlot-Label {
+    >.TBlockSlot-Label {
       flex: 1;
 
-      > h3 {
+      >h3 {
         margin: 0;
 
         font-size: 14px;
         font-weight: 500;
       }
 
-      > p {
+      >p {
         margin: 0;
 
         font-size: 12px;
@@ -107,6 +110,7 @@ const props = defineProps({
       }
     }
   }
+
   position: relative;
   margin-bottom: 10px;
   padding: 4px 16px;
@@ -125,6 +129,7 @@ const props = defineProps({
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 4px;
   --fake-opacity: .45;
+
   &:hover {
     --fake-color: var(--el-fill-color);
   }
@@ -132,6 +137,7 @@ const props = defineProps({
 
 .touch-blur .TBlockSlot-Container {
   --fake-color: var(--el-fill-color);
+
   &:hover {
     --fake-color: var(--el-fill-color-light);
   }

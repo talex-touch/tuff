@@ -2,7 +2,13 @@
   <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
     <FlatLayout>
       <template #view>
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition>
+            <keep-alive>
+              <component :is="Component" />
+            </keep-alive>
+          </transition>
+        </router-view>
 
         <ViewPlugin />
       </template>
@@ -28,8 +34,8 @@ onMounted(() => {
     themeStyle.value.theme.style.auto
       ? "auto"
       : themeStyle.value.theme.style.dark
-      ? "dark"
-      : "light"
+        ? "dark"
+        : "light"
   );
 });
 </script>
@@ -62,9 +68,9 @@ onMounted(() => {
   --fake-color: var(--el-fill-color-extra-light);
 
   transition: margin-right 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
-    left 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
-    width 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
-    opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+  left 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+  width 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+  opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 @keyframes viewEnter {

@@ -167,7 +167,8 @@ onMounted(() => {
   position: absolute;
   display: flex;
 
-  width: 64px;
+  min-width: 64px;
+  width: max-content;
   height: 60px;
 
   right: 20px;
