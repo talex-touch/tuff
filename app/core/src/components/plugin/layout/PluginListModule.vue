@@ -29,12 +29,8 @@ const value = useModelWrapper(props, emits)
     <p v-text="`No selection made.`" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
 
     <transition-group name="list">
-      <div
-        v-for="(plugin, index) in Object.values(plugins)"
-        :key="index" class="PluginList-Item fake-background"
-        :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }"
-        @click="value = plugin"
-      >
+      <div v-for="(plugin, index) in Object.values(plugins)" :key="index" class="PluginList-Item fake-background"
+        :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }" @click="value = plugin">
         <PluginIcon :icon="plugin.icon" :alt="plugin.name" />
 
         <div class="PluginList-Item-Main">
@@ -140,6 +136,10 @@ const value = useModelWrapper(props, emits)
         font-size: 16px;
         color: var(--el-text-color-primary);
       }
+    }
+
+    &:hover {
+      border: 2px solid var(--el-color-primary-light-3);
     }
 
     height: 40px;
