@@ -47,6 +47,10 @@ The design style of TalexTouch is inspired by TDesignS, which is simple and eleg
 
 ![Plugins](https://files.catbox.moe/8ltyn1.png)
 
+![Application Empty](https://files.catbox.moe/ih8nj9.png)
+
+![Application Select.png](https://files.catbox.moe/fh19zg.png)
+
 ### The fantastic animation design
 
 > Some animations have been removed in the latest version.
