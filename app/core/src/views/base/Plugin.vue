@@ -79,8 +79,10 @@ watch(
 
 watch(
   () => plugins.value,
-  () => {
+  (newPlugins, oldPlugins) => {
     if (!select.value) return;
+
+    if (newPlugins.length === oldPlugins.length) return;
 
     const temp = select.value;
     select.value = "";
