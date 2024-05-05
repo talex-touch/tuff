@@ -31,15 +31,24 @@ class PluginIcon implements IPluginIcon {
   value: any;
 
   _value: string;
+  rootPath: string;
   constructor(rootPath: string, type: string, value: string) {
     this.type = type;
     this._value = value;
+    this.rootPath = rootPath;
 
+    this.value = this._value;
+  }
+
+  async init() {
     if (this.type === "file") {
-      setTimeout(async () => {
-        this.value = await fse.readFileSync(path.resolve(rootPath, value));
-      });
-    } else this.value = this._value;
+      const iconPath = path.resolve(this.rootPath, this._value)
+      if (!(await fse.pathExists(iconPath))) {
+        this._value = "error"
+        this.value = "Cannot find target icon."
+      } else
+        this.value = await fse.readFileSync(iconPath);
+    }
   }
 }
 
@@ -243,7 +252,7 @@ class TouchPlugin implements ITouchPlugin {
   }
 
   async disable(): Promise<boolean> {
-    if (this.status !== PluginStatus.ENABLED) return Promise.resolve(false);
+    if (this.status !== PluginStatus.ENABLED && this.status !== PluginStatus.ACTIVE) return Promise.resolve(false);
 
     this.status = PluginStatus.DISABLING;
     console.log("[Plugin] Disabling plugin " + this.name);
@@ -365,8 +374,8 @@ class PluginManager implements IPluginManager {
       if (!this.hasPlugin(pluginName)) {
         console.warn(
           "[PluginManager] IGNORE | The plugin " +
-            pluginName +
-            " isn't loaded despite changes made to its file."
+          pluginName +
+          " isn't loaded despite changes made to its file."
         );
 
         this.loadPlugin(pluginName);
@@ -413,10 +422,10 @@ class PluginManager implements IPluginManager {
       } else {
         console.warn(
           "[PluginManager] Plugin " +
-            pluginName +
-            "'s " +
-            baseName +
-            " has been changed, but it's not a valid file."
+          pluginName +
+          "'s " +
+          baseName +
+          " has been changed, but it's not a valid file."
         );
       }
     });
@@ -462,8 +471,8 @@ class PluginManager implements IPluginManager {
     this.watcher.on("ready", () => {
       console.log(
         "[PluginManager] Initial scan complete. Ready for changes. (" +
-          this.pluginPath +
-          ")"
+        this.pluginPath +
+        ")"
       );
     });
 
@@ -479,15 +488,15 @@ class PluginManager implements IPluginManager {
     return fse.readdirSync(this.pluginPath);
   }
 
-  loadPlugin(pluginName: string): Promise<boolean> {
+  async loadPlugin(pluginName: string): Promise<boolean> {
     const pluginPath = path.resolve(this.pluginPath, pluginName);
     const manifestPath = path.resolve(pluginPath, "manifest.json");
 
     if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
       console.warn(
         "[PluginManager] IGNORE | The plugin " +
-          pluginName +
-          " isn't loaded because it's not a valid plugin."
+        pluginName +
+        " isn't loaded because it's not a valid plugin."
       );
       return Promise.resolve(false);
     }
@@ -496,8 +505,8 @@ class PluginManager implements IPluginManager {
     if (pluginInfo.name !== pluginName) {
       console.warn(
         "[PluginManager] IGNORE | The plugin " +
-          pluginName +
-          " isn't loaded because it's name not matched."
+        pluginName +
+        " isn't loaded because it's name not matched."
       );
       return Promise.resolve(false);
     }
@@ -512,6 +521,8 @@ class PluginManager implements IPluginManager {
       pluginInfo.icon.type,
       pluginInfo.icon.value
     );
+
+    await icon.init()
 
     const touchPlugin = new TouchPlugin(
       pluginInfo.name,

@@ -15,6 +15,8 @@ export enum PluginStatus {
 export interface IPluginIcon {
   type: string | 'remixicon' | 'class'
   value: any
+
+  init(): Promise<void>
 }
 
 export interface IPlatformInfo {
