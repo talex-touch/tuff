@@ -48,6 +48,8 @@ img {
   &__Content {
     h1 {
       margin: 0;
+
+      flex-shrink: 0;
     }
 
     span {

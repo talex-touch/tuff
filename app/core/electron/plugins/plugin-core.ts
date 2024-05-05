@@ -43,7 +43,30 @@ class PluginIcon implements IPluginIcon {
   }
 }
 
-const disallowedArrays = ["官方", "touch", "talex", "第一"];
+const disallowedArrays = [
+  "官方",
+  "touch",
+  "talex",
+  "第一",
+  "权利",
+  "权威性",
+  "官方认证",
+  "触控",
+  "联系",
+  "互动",
+  "互动式",
+  "触控技术",
+  "互动体验",
+  "互动设计",
+  "创意性",
+  "创造性",
+  "首发",
+  "首部",
+  "首款",
+  "首张",
+  "排行",
+  "排名系统",
+];
 
 class TouchPlugin implements ITouchPlugin {
   dev: IPluginDev;
