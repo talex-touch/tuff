@@ -200,7 +200,7 @@ export function screenCapture() {
 export function dropperResolver() {
   async function dropperFile(path) {
     if (path.endsWith(".touch-plugin")) {
-      await popperMention(
+      await blowMention(
         "Fatal Error",
         "Sorry, the plugin is deprecated, we only supports .tpex now."
       );
@@ -235,7 +235,7 @@ export function dropperResolver() {
   document.addEventListener("drop", async (e) => {
     e.preventDefault();
 
-    const files = e.dataTransfer.files;
+    const files = e.dataTransfer!.files;
 
     if (files && files.length === 1) {
       // 获取文件路径
@@ -257,12 +257,14 @@ export function dropperResolver() {
       x: e.x,
       y: e.y,
       data: {
-        files: [...e.dataTransfer.files].map(parseFile),
+        files: [...e.dataTransfer!.files].map(parseFile),
         // items: e.dataTransfer.items,
-        types: e.dataTransfer.types,
+        types: e.dataTransfer!.types,
       },
     };
-    touchChannel.send("drop", option);
+
+    // TODO: drop file to plugins (lack plugin name)
+    // touchChannel.send("drop", option);
   });
 
   function parseFile(file: File) {
