@@ -67,7 +67,7 @@ export default {
     );
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "open-external", ({ data }) =>
-        shell.openExternal(data.url)
+        shell.openExternal(data!.url)
       )
     );
     this.listeners.push(
@@ -80,7 +80,7 @@ export default {
 
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, "url:open", ({ data }) =>
-        onOpenUrl(data)
+        onOpenUrl(data as any)
       )
     );
 
@@ -93,13 +93,14 @@ export default {
     // );
 
     async function onOpenUrl(url: string) {
-      const regex = /(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)/;
-      if (regex.test(url)) {
-        return;
-      }
+      // const regex = /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/;
+      // if (regex.test(url)) {
+      //   return;
+      // }
 
       console.log("open url", url);
       const data = await channel.send(ChannelType.MAIN, "url:open", url);
+      console.log('open url', url, data)
 
       if (data.data) {
         shell.openExternal(url);

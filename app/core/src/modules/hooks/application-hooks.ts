@@ -11,6 +11,7 @@ import AppUpdateView from "@comp/base/AppUpgradationView.vue";
 import { pluginManager } from "~/modules/channel/plugin-core/api";
 import { pluginAdopter } from "~/modules/hooks/adopters/plugin-adpoter";
 import { useRouter } from "vue-router";
+import { DataCode } from "@talex-touch/utils/channel";
 
 export function usePlugins() {
   const plugins = ref();
@@ -89,9 +90,14 @@ export async function urlHooker() {
 
       const url = target.getAttribute("href");
 
-      if (url.startsWith(window.location.origin) || url.startsWith("/")) return;
+      console.log(target, url, window.location.origin)
+
+      const regex = /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/;
 
       event.preventDefault();
+      if (!regex.test(url) || url.startsWith(window.location.origin) || url.startsWith("/")) {
+        touchChannel.send("url:open", url);
+      } else touchChannel.send("open-external", { url });
 
       // if(/^\//.test(target)) {
       //   // Relative to this website url
@@ -107,7 +113,6 @@ export async function urlHooker() {
       // window.open(`${safeLink}${target}`, '_blank')
       // }
 
-      touchChannel.send("url:open", url);
       // window.open(`${url}`, "_blank");
     }
   }
@@ -120,7 +125,7 @@ export async function urlHooker() {
         content: "Cancel",
         type: "info",
         onClick: async () => {
-          reply(false);
+          reply(DataCode.SUCCESS, false);
           return true;
         },
       },
@@ -128,7 +133,7 @@ export async function urlHooker() {
         content: "Sure",
         type: "danger",
         onClick: async () => {
-          reply(true);
+          reply(DataCode.SUCCESS, true);
           return true;
         },
       },
