@@ -201,11 +201,13 @@ const value = useModelWrapper(props, emits);
 
 .PluginList-Empty {
   &.visible {
+    margin-bottom: -35px;
+
     opacity: 0;
     transform: translateY(20px);
   }
-
-  margin-bottom: -35px;
+  margin: 0;
+  margin-bottom: 18px;
 
   text-align: center;
 
