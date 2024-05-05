@@ -21,34 +21,39 @@
 import PluginListModule from "@comp/plugin/layout/PluginListModule.vue";
 import FlatCompletion from "@comp/base/input/FlatCompletion.vue";
 
-const props = defineProps(['plugins'])
-const emits = defineEmits(['select'])
-const target = ref(-1)
+const props = defineProps(["plugins"]);
+const emits = defineEmits(["select"]);
+const target = ref(-1);
 
-const runningPlugins = computed(() => props.plugins.filter(plugin => plugin.status === 3 || plugin.status === 4))
+const runningPlugins = computed(() =>
+  props.plugins.filter((plugin) => plugin.status === 3 || plugin.status === 4)
+);
 
-watch(() => target.value, () => emits('select', target.value))
+watch(
+  () => target.value,
+  () => emits("select", target.value)
+);
 
 function search() {
-  return []
+  return [];
 }
 
-const toggleNewPlugin = inject('toggleNewPlugin')
+const toggleNewPlugin = inject("toggleNewPlugin");
 </script>
 
 <style lang="scss" scoped>
 .PluginList-Add {
   &:before {
-    filter: invert(.25);
-    transition: .25s;
+    filter: invert(0.25);
+    transition: 0.25s;
   }
 
   &:hover {
     padding: 4px 8px;
     --fake-radius: 4px;
 
-    --fake-opacity: .125;
-    --fake-inner-opacity: .125;
+    --fake-opacity: 0.125;
+    --fake-inner-opacity: 0.125;
   }
 
   position: sticky;
@@ -60,8 +65,8 @@ const toggleNewPlugin = inject('toggleNewPlugin')
   left: 50%;
 
   --fake-color: var(--el-text-color-primary);
-  --fake-opacity: .25;
-  --fake-inner-opacity: .25;
+  --fake-opacity: 0.25;
+  --fake-inner-opacity: 0.25;
   --fake-radius: 50%;
   transform: translateX(-50%);
 }

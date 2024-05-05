@@ -1,16 +1,15 @@
-<script>
-</script>
+<script></script>
 
 <script name="PluginListModule" setup>
-import PluginIcon from '@comp/plugin/PluginIcon.vue'
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
+import PluginIcon from "@comp/plugin/PluginIcon.vue";
+import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
+import PluginStatus from "@comp/plugin/action/PluginStatus.vue";
 
-const props = defineProps(['modelValue', 'plugins', 'shrink'])
+const props = defineProps(["modelValue", "plugins", "shrink"]);
 
-const emits = defineEmits(['update:modelValue'])
+const emits = defineEmits(["update:modelValue"]);
 
-const value = useModelWrapper(props, emits)
+const value = useModelWrapper(props, emits);
 </script>
 
 <template>
@@ -26,11 +25,20 @@ const value = useModelWrapper(props, emits)
     </p>
 
     <!-- <p v-t="'base.empty-select'" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" /> -->
-    <p v-text="`No selection made.`" :class="{ visible: Object.values(plugins).length > 0 }" class="PluginList-Empty" />
+    <p
+      v-text="`No selection made.`"
+      :class="{ visible: Object.values(plugins).length > 0 }"
+      class="PluginList-Empty"
+    />
 
     <transition-group name="list">
-      <div v-for="(plugin, index) in Object.values(plugins)" :key="index" class="PluginList-Item fake-background"
-        :class="{ shrink, target: plugin === value, dev: plugin.dev?.enable }" @click="value = plugin">
+      <div
+        v-for="(plugin, index) in Object.values(plugins)"
+        :key="index"
+        class="PluginList-Item fake-background"
+        :class="{ shrink, target: plugin.name === value, dev: plugin.dev?.enable }"
+        @click="value = plugin.name"
+      >
         <PluginIcon :icon="plugin.icon" :alt="plugin.name" />
 
         <div class="PluginList-Item-Main">
@@ -105,7 +113,6 @@ const value = useModelWrapper(props, emits)
 }
 
 .PluginList-Item {
-
   &.dev :deep(.PluginIcon-Container) {
     box-shadow: 0 0 4px 2px var(--el-color-warning-light-5);
   }
@@ -115,8 +122,8 @@ const value = useModelWrapper(props, emits)
       filter: invert(0);
     }
 
-    --fake-opacity: .5;
-    --fake-inner-opacity: .5;
+    --fake-opacity: 0.5;
+    --fake-inner-opacity: 0.5;
 
     pointer-events: none;
 
@@ -149,11 +156,11 @@ const value = useModelWrapper(props, emits)
 
   &:hover {
     &:before {
-      filter: invert(.15)
+      filter: invert(0.15);
     }
 
-    --fake-opacity: .25;
-    --fake-inner-opacity: .25;
+    --fake-opacity: 0.25;
+    --fake-inner-opacity: 0.25;
 
     border: 2px solid var(--el-border-color);
   }
@@ -174,14 +181,14 @@ const value = useModelWrapper(props, emits)
   --fake-inner-opacity: 0;
 
   overflow: hidden;
-  transition: .25s;
+  transition: 0.25s;
 }
 
 .list-move,
 /* 对移动中的元素应用的过渡 */
 .list-enter-active,
 .list-leave-active {
-  transition: all 0.5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: all 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 .list-enter-from,
@@ -194,7 +201,6 @@ const value = useModelWrapper(props, emits)
 
 .PluginList-Empty {
   &.visible {
-
     opacity: 0;
     transform: translateY(20px);
   }
@@ -203,9 +209,9 @@ const value = useModelWrapper(props, emits)
 
   text-align: center;
 
-  opacity: .75;
+  opacity: 0.75;
   font-size: 14px;
 
-  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 </style>
