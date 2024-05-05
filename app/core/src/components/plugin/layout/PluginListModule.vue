@@ -132,6 +132,9 @@ const value = useModelWrapper(props, emits);
 
   &.shrink {
     :deep(.PluginIcon-Container) {
+      span {
+        transform: scale(0.75);
+      }
       width: 32px;
       height: 32px;
 
