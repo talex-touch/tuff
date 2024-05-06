@@ -3,30 +3,28 @@ import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
 import { BoxWindowOption } from "../../config/default";
 import { ChannelType } from "@talex-touch/utils/channel";
 import { globalShortcut, screen, app } from "electron";
-import { clipboardManager } from "../clipboard";
 import { apps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
-import win from "./addon/apps/win";
 
 let touchApp: TouchApp;
 
 async function createNewBoxWindow(closeCallback: Function) {
   const window = new TouchWindow({ ...BoxWindowOption });
 
-  setTimeout(() => {
+  setTimeout(async () => {
     console.log("[CoreBox] NewBox created, injecting developing tools ...");
 
     if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
       const url = path.join(process.env.DIST!, "index.html");
 
-      window.loadFile(`${url}`, {
+      await window.loadFile(`${url}`, {
         devtools: touchApp.version === TalexTouch.AppVersion.DEV,
       });
     } else {
       const url = process.env["VITE_DEV_SERVER_URL"] as string;
 
-      window.loadURL(url, { devtools: true });
+      await window.loadURL(url/* , { devtools: true } */);
     }
 
     window.window.hide();
@@ -35,8 +33,8 @@ async function createNewBoxWindow(closeCallback: Function) {
   window.window.webContents.addListener("dom-ready", () => {
     console.log(
       "[CoreBox] BoxWindow " +
-        window.window.webContents.id +
-        " dom loaded, injecting ..."
+      window.window.webContents.id +
+      " dom loaded, injecting ..."
     );
 
     window.window.webContents.executeJavaScript(`

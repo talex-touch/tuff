@@ -315,7 +315,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
           mode: options.devtools === true ? "detach" : options.devtools,
         });
 
-      this.window.webContents.addListener("crashed", (e, k) => {
+      this.window.webContents.addListener("render-process-gone", (e: any, k: any) => {
         console.error(e, k);
         console.log("TouchWindow WebContents crashed!", this);
       });
