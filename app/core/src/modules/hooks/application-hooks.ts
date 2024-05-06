@@ -90,8 +90,6 @@ export async function urlHooker() {
 
       const url = target.getAttribute("href");
 
-      console.log(target, url, window.location.origin)
-
       const regex = /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/;
 
       event.preventDefault();
