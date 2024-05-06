@@ -10,9 +10,17 @@
       <TouchMenuItem route="/setting" name="Setting" icon="i-ri-settings-6-line" />
       <p class="FlatNavBar-Title">PLUGINS</p>
       <p op-50 font-size-3 text-center v-if="!plugins.length">NO PLUGIN INSTALLED.</p>
-      <TouchMenuItem :id="`touch-plugin-item-${item.name}`" @active="changeActivePlugin($event, item)" :doActive="() => activePlugin === item.name"
-        v-for="item in plugins" :key="item.name">
-        {{ item.name }}
+      <TouchMenuItem
+        :id="`touch-plugin-item-${item.name}`"
+        @active="changeActivePlugin($event, item)"
+        :doActive="() => activePlugin === item.name"
+        v-for="item in plugins"
+        :key="item.name"
+      >
+        <span class="plugin-item-section">
+          <PluginIcon :alt="item.name" :icon="item.icon" />
+          {{ item.name }}
+        </span>
       </TouchMenuItem>
     </TouchMenu>
   </ul>
@@ -21,13 +29,16 @@
 <script lang="ts" name="FlatNavBar" setup>
 import TouchMenu from "@comp/menu/TouchMenu.vue";
 import TouchMenuItem from "@comp/menu/TouchMenuItem.vue";
+import PluginIcon from "@comp/plugin/PluginIcon.vue";
 import { ITouchPlugin } from "@talex-touch/utils/plugin";
 import { inject } from "vue";
 
 const activePlugin = inject("activePlugin");
 const _plugins = inject("plugins");
 const plugins = computed(() =>
-  [...(_plugins.value || [])].filter((item: ITouchPlugin) => item.status > 2 && item.status < 5)
+  [...(_plugins.value || [])].filter(
+    (item: ITouchPlugin) => item.status > 2 && item.status < 5
+  )
 );
 
 function changeActivePlugin(event: Event, item: ITouchPlugin) {
@@ -38,6 +49,18 @@ function changeActivePlugin(event: Event, item: ITouchPlugin) {
 </script>
 
 <style lang="scss" scoped>
+.plugin-item-section {
+  .PluginIcon-Container,
+  :deep(.html svg) {
+    width: 20px;
+    height: 20px;
+  }
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-start;
+}
+
 .NavBar-Programs {
   position: relative;
   padding: 0;
