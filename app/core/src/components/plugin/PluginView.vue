@@ -1,16 +1,10 @@
 <template>
-  <div
-    class="PluginView-Container"
-    :class="{ active: status === 4, done }"
-  >
+  <div class="PluginView-Container" :class="{ active: status === 4, done }">
     <div class="PluginView-Loader cubic-transition">
       <Loading />
       <span>Plugin is loading...</span>
     </div>
-    <webview
-      ref="webviewDom"
-      :class="{ exist: status === 3 || status === 4 }"
-    />
+    <webview ref="webviewDom" :class="{ exist: status === 3 || status === 4 }" />
   </div>
 </template>
 
@@ -37,16 +31,14 @@ const props = defineProps({
 });
 const loadDone = ref(false);
 const status = computed(() => props.plugin?.status || 0);
-const done = computed(
-  () => (status.value === 3 || status.value === 4) && loadDone.value
-);
+const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value);
 
 const webviewDom = ref();
 
 onBeforeUnmount(() => {
-  const webView = webviewDom.value
+  const webView = webviewDom.value;
 
-  webView.closeDevTools()
+  webView.closeDevTools();
 });
 
 function handleListeners(viewData, webview) {
@@ -57,25 +49,23 @@ function handleListeners(viewData, webview) {
   });
 
   webview.addEventListener("did-fail-load", async (e) => {
-    // console.log("Webview did-fail-load", e, props.plugin);
+    console.log("Webview did-fail-load", e, props.plugin);
 
-    await forDialogMention(
-      props.plugin.name,
-      e.errorDescription,
-      props.plugin.icon,
-      [
-        {
-          content: "Ignore Load",
-          type: "info",
-          onClick: () => true,
-        },
-        {
-          content: "Restart plugin",
-          type: "warning",
-          onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true,
-        },
-      ]
-    );
+    // When failed => close devtool
+    webview.closeDevTools();
+
+    await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
+      {
+        content: "Ignore Load",
+        type: "info",
+        onClick: () => true,
+      },
+      {
+        content: "Restart plugin",
+        type: "warning",
+        onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true,
+      },
+    ]);
   });
 
   webview.addEventListener("did-finish-load", async () => {
@@ -86,7 +76,7 @@ function handleListeners(viewData, webview) {
 
     // console.log("Webview did-finish-load", props.plugin);
 
-    webview.send("@loaded", { plugin: props.plugin.name, id: webview.id, type: 'init' })
+    webview.send("@loaded", { plugin: props.plugin.name, id: webview.id, type: "init" });
 
     watchEffect(async () => {
       while (props.lists.length) {

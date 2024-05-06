@@ -46,7 +46,6 @@ class PluginAdpoter {
           if (p) Object.assign(p, { status: data.status });
 
           if (data.status === 3) {
-            console.log("status updated", p, data)
             // @ts-ignore
             p.webViewInit = p.webview?._?.isWebviewInit || p.webViewInit;
           }
@@ -70,7 +69,7 @@ class PluginAdpoter {
       })
     );
     this._logouts.push(
-      touchChannel.regChannel("plugin:reload-readme", ({ data, reply }) => {
+      touchChannel.regChannel("plugin:reload-readme", ({ data, reply }: any) => {
         const p = this.plugins.get(data.plugin);
         if (p) Object.assign(p, { readme: data.readme });
 
@@ -79,18 +78,19 @@ class PluginAdpoter {
     );
 
     this._logouts.push(
-      touchChannel.regChannel("plugin:reload", ({ data, reply }) => {
+      touchChannel.regChannel("plugin:reload", ({ data, reply }: any) => {
         const p = this.plugins.get(data.plugin.name);
         if (p) Object.assign(p, data.plugin);
 
-        p.webViewInit = false;
+        // @ts-ignore exist
+        p!['webViewInit'] = false;
 
         reply(1);
       })
     );
 
     this._logouts.push(
-      touchChannel.regChannel("plugin:add", ({ data }) => {
+      touchChannel.regChannel("plugin:add", ({ data }: any) => {
         const { plugin } = data;
         if (this.plugins.has(plugin.name)) {
           console.warn(
@@ -104,7 +104,7 @@ class PluginAdpoter {
     );
 
     this._logouts.push(
-      touchChannel.regChannel("plugin:del", ({ data }) => {
+      touchChannel.regChannel("plugin:del", ({ data }: any) => {
         const { plugin } = data;
         this.plugins.delete(plugin);
       })
