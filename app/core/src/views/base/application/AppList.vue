@@ -1,89 +1,91 @@
 <script name="AppList" setup lang="ts">
-import { appAmo } from '~/views/box/search-box'
+import { appAmo } from "~/views/box/search-box";
 
 const props = defineProps<{
-  list: any[],
-  index: number,
-}>()
+  list: any[];
+  index: number;
+}>();
 const emits = defineEmits<{
-  (e: "search", val: string): void,
-  (e: "select", val: any, ind: number): void,
-}>()
+  (e: "search", val: string): void;
+  (e: "select", val: any, ind: number): void;
+}>();
 
 enum EOrderWay {
   SORT_DESC = 0, // default
   DIC = 1,
   D_DIC = 2,
-  FREQ = 3
+  FREQ = 3,
 }
 
-const _list = ref()
-const search = ref("")
-const orderWay = ref<EOrderWay>(0)
+const _list = ref<any[]>([]);
+const search = ref("");
+const orderWay = ref<EOrderWay>(0);
 
-watch(() => props.list, () => {
-  _list.value = [...props.list]
+watch(
+  () => props.list,
+  () => {
+    _list.value = [...props.list];
 
-  handleOrderWay()
+    handleOrderWay();
 
-  emits('select', null, -1)
-}, { immediate: true })
+    emits("select", null, -1);
+  },
+  { immediate: true }
+);
 
 function handleOrderWay() {
-  console.log("a", orderWay.value)
+  console.log("a", orderWay.value);
 
   if (orderWay.value === EOrderWay.SORT_DESC) {
-    _list.value = [...props.list]
-    return
+    _list.value = [...props.list];
+    return;
   }
 
   if (orderWay.value === EOrderWay.DIC) {
-    _list.value = _list.value.sort((a, b) => a.name.localeCompare(b.name))
-    return
+    _list.value = _list.value!.sort((a, b) => a.name.localeCompare(b.name));
+    return;
   }
 
   if (orderWay.value === EOrderWay.D_DIC) {
-    _list.value = _list.value.sort((a, b) => b.name.localeCompare(a.name))
-    return
+    _list.value = _list.value!.sort((a, b) => b.name.localeCompare(a.name));
+    return;
   }
 
-  if (orderWay === EOrderWay.D_DIC) {
-    _list.value = _list.value.sort((a, b) => b.name.localeCompare(a.name))
-    return
-  }
-
-  _list.value = _list.value.sort((a, b) => {
-    const aI = appAmo[a.name]
-    const bI = appAmo[b.name]
+  _list.value = _list.value!.sort((a, b) => {
+    const aI = appAmo[a.name];
+    const bI = appAmo[b.name];
 
     if (aI === undefined && bI === undefined) {
-      return 0
+      return 0;
     }
 
     if (aI === undefined) {
-      return 1
+      return 1;
     }
 
     if (bI === undefined) {
-      return -1
+      return -1;
     }
 
-    return bI - aI
-  })
+    return bI - aI;
+  });
 }
 
 function handleOrderChange() {
-  orderWay.value = (orderWay.value + 1) % 4
+  orderWay.value = (orderWay.value + 1) % 4;
 
-  handleOrderWay()
+  handleOrderWay();
 
-  emits('select', null, -1)
+  emits("select", null, -1);
 }
 
-watch(() => search.value, val => {
-  emits('search', val)
-  // _list.value = props.list.filter(item => item.name.includes(val))
-})
+watch(
+  () => search.value,
+  (val) => {
+    emits("search", val);
+    // _list.value = props.list.filter(item => item.name.includes(val))
+  }
+);
 
 function highlightText(text: string, matched: Array<any>) {
   let result = "";
@@ -105,10 +107,10 @@ function highlightText(text: string, matched: Array<any>) {
 function handleClick(item: any, ind: number) {
   // Repeat click => cancel
   if (props.index === ind) {
-    emits('select', null, -1)
-    return
+    emits("select", null, -1);
+    return;
   }
-  emits('select', item, ind)
+  emits("select", item, ind);
 }
 </script>
 
@@ -125,9 +127,14 @@ function handleClick(item: any, ind: number) {
           <i v-if="orderWay === 3" class="i-ri-sort-number-asc" />
         </span>
       </div>
-      <li :index="ind" class="fake-background" :class="{ active: index === ind }" @click="handleClick(item, ind)"
-        v-for="(item, ind) in _list">
-        <img :src="item.icon" alt="">
+      <li
+        :index="ind"
+        class="fake-background"
+        :class="{ active: index === ind }"
+        @click="handleClick(item, ind)"
+        v-for="(item, ind) in _list"
+      >
+        <img :src="item.icon" alt="" />
 
         <div class="Main">
           <p v-if="item.matched" v-html="highlightText(item.name, item.matched)" />
@@ -137,8 +144,8 @@ function handleClick(item: any, ind: number) {
       </li>
     </TransitionGroup>
     <div class="AppList-Info fake-background">
-      <span v-if="search">{{ _list.length }} searched on this device.</span>
-      <span v-else>{{ _list.length }} applications on this device.</span>
+      <span v-if="search">{{ _list!.length }} searched on this device.</span>
+      <span v-else>{{ _list!.length }} applications on this device.</span>
       <span class="order">
         <span v-if="orderWay === 0">Default Order</span>
         <span v-if="orderWay === 1">Dictionary In</span>
@@ -163,17 +170,17 @@ function handleClick(item: any, ind: number) {
 
 .AppList-Info {
   span {
-    opacity: .75;
-    font-size: .8rem;
+    opacity: 0.75;
+    font-size: 0.8rem;
   }
 
   .order span {
-    font-size: .7rem;
+    font-size: 0.7rem;
   }
 
   position: sticky;
   display: flex;
-  padding: .25rem .75rem;
+  padding: 0.25rem 0.75rem;
 
   justify-content: space-between;
 
@@ -184,7 +191,6 @@ function handleClick(item: any, ind: number) {
 }
 
 .AppList-Toolbox {
-
   .order-way {
     display: flex;
 
@@ -207,13 +213,13 @@ function handleClick(item: any, ind: number) {
   z-index: 100;
   position: sticky;
   display: flex;
-  padding: .25rem;
+  padding: 0.25rem;
 
   justify-content: space-between;
 
   top: 0;
 
-  gap: .5rem;
+  gap: 0.5rem;
   border-radius: 8px;
   background-color: var(--el-fill-color);
 }
@@ -224,16 +230,16 @@ function handleClick(item: any, ind: number) {
     border: 1px solid var(--el-color-primary);
   }
 
-  padding: 0 .5rem;
+  padding: 0 0.5rem;
 
-  top: .5rem;
+  top: 0.5rem;
 
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: 0.5rem;
 
   cursor: pointer;
-  transition: .25s;
+  transition: 0.25s;
   border: 1px solid transparent;
 
   img {
@@ -244,11 +250,11 @@ function handleClick(item: any, ind: number) {
   .Main {
     p {
       margin: 0;
-      font-size: .8rem;
+      font-size: 0.8rem;
     }
 
     .desc {
-      font-size: .8rem;
+      font-size: 0.8rem;
       color: var(--el-text-color-secondary);
     }
   }
@@ -257,9 +263,9 @@ function handleClick(item: any, ind: number) {
 .AppList {
   display: flex;
   margin: 0;
-  padding: 1rem .5rem;
+  padding: 1rem 0.5rem;
 
-  gap: .5rem;
+  gap: 0.5rem;
   flex-direction: column;
 
   list-style: none;
