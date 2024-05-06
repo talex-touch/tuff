@@ -46,7 +46,7 @@ function init() {
   });
 }
 
-const _coreBox = ref(false)
+const _coreBox = ref(false);
 
 onMounted(() => {
   try {
@@ -56,7 +56,7 @@ onMounted(() => {
     console.error(e);
   }
 
-  _coreBox.value = document.body.classList.contains("core-box")
+  _coreBox.value = document.body.classList.contains("core-box");
 });
 </script>
 
@@ -68,6 +68,6 @@ onMounted(() => {
     </template>
   </AppLayout>
 
-  <Beginner v-if="beginner" />
-  <CoreBox v-else-if="_coreBox" />
+  <CoreBox v-if="_coreBox" />
+  <Beginner v-else-if="beginner" />
 </template>
