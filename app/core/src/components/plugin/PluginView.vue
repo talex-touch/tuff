@@ -51,9 +51,6 @@ function handleListeners(viewData, webview) {
   webview.addEventListener("did-fail-load", async (e) => {
     console.log("Webview did-fail-load", e, props.plugin);
 
-    // When failed => close devtool
-    webview.closeDevTools();
-
     await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
       {
         content: "Ignore Load",
@@ -66,6 +63,9 @@ function handleListeners(viewData, webview) {
         onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true,
       },
     ]);
+
+    // When failed => close devtool
+    webview.closeDevTools();
   });
 
   webview.addEventListener("did-finish-load", async () => {
