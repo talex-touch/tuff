@@ -3,11 +3,11 @@ import { exec, ExecException } from 'child_process';
 export interface IGlobalPkgResult {
   exist: boolean
   error?: ExecException
-  name: string
-  version: string
+  name?: string
+  version?: string
 }
 
-export function checkGlobalPackageExist(packageName: string) {
+export function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkgResult> {
   return new Promise((resolve, reject) => {
     exec(`npm list -g ${packageName}`, (error, stdout, stderr) => {
       if (error) {
@@ -39,8 +39,19 @@ export function checkGlobalPackageExist(packageName: string) {
 
       resolve({
         exist: false
-      })
+      } as IGlobalPkgResult)
 
     });
+  })
+}
+
+// Check npm version
+export function getNpmVersion(): Promise<string | null> {
+  return new Promise((resolve) => {
+    exec(`npm --version`, (error, stdout, stderr) => {
+      if (error || stderr) resolve(null)
+
+      resolve(stdout.trim())
+    })
   })
 }

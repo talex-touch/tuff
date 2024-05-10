@@ -18,6 +18,7 @@ const toggleNewPlugin = inject('toggleNewPlugin')
 onMounted(() => {
   toggleNewPlugin(arrow.value)
 
+  envCheck()
 })
 
 const plugin = reactive({
@@ -37,6 +38,15 @@ const plugin = reactive({
   openInVSC: false,
   agreement: false
 })
+
+const envOptions = reactive < {
+  node: any,
+  degit: any
+}> ({})
+
+function envCheck() {
+
+}
 
 function createAction(ctx) {
   const { checkForm, setLoading } = ctx

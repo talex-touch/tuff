@@ -5,7 +5,7 @@
   "module": "./index.ts",
   "license": "MPL-2.0",
   "private": false,
-  "version": "1.0.12",
+  "version": "1.0.13",
   "scripts": {
     "publish": "npm publish --access public"
   },
