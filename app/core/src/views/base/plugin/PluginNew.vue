@@ -11,6 +11,7 @@ import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
 import { forTouchTip } from '@modules/mention/dialog-mention';
 import { touchChannel } from '@modules/channel/channel-core';
 import PluginIcon from '@comp/plugin/PluginIcon.vue';
+import { checkGlobalPackageExist } from '@talex-touch/utils/common/env-tool'
 
 const arrow = ref()
 const toggleNewPlugin = inject('toggleNewPlugin')

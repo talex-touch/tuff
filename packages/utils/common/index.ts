@@ -11,8 +11,8 @@ export function anyStr2Num(str: string): BigInt {
 
         numbers.push(("" + e).padStart(5, "0"))
 
-        if ( minium > e ) minium = e
-        
+        if (minium > e) minium = e
+
     }
 
     // each number transform
@@ -28,7 +28,7 @@ export function num2anyStr(num: BigInt): string {
 
     let text = ''
 
-    for ( let i = 0; i < length; i++ ) {
+    for (let i = 0; i < length; i++) {
         const str = strs[1].slice(i * 2, i * 2 + 2)
 
         // strs[1] = strs[1].replace(str, (BigInt(+str) + BigInt(baseNum)).toString().padStart(5, "0"))
