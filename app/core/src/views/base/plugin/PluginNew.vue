@@ -106,27 +106,27 @@ function createAction(ctx) {
         <FlatInput w="48!" v-model="plugin.name" />
       </LineTemplate>
       <LineTemplate title="icon">
-        <FlatInput w="48!" v-model=plugin.icon.value>
+        <FlatInput w="48!" v-model="plugin.icon.value">
           <div h-full :class="plugin.icon.value" />
         </FlatInput>
       </LineTemplate>
       <LineTemplate :msg="() => 'You must input the correct plugin version.'" regex="^(\d+\.)(\d+\.)(\*|\d+)$"
         title="version">
-        <FlatInput w="48!" v-model=plugin.version />
+        <FlatInput w="48!" v-model="plugin.version" />
       </LineTemplate>
       <LineTemplate :msg="() => 'You must input the correct plugin dev address.'"
         regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$"
         title="dev-address">
-        <FlatInput w="48!" v-model=plugin.dev.address />
+        <FlatInput w="48!" v-model="plugin.dev.address" />
       </LineTemplate>
       <!-- regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{15,80}$" -->
       <LineTemplate :msg="() => 'You must input the correct plugin description.'" title="description">
-        <FlatInput :area="true" w="96!" v-model=plugin.desc />
+        <FlatInput :area="true" w="96!" v-model="plugin.desc" />
       </LineTemplate>
     </BlockTemplate>
 
     <BlockTemplate title="Readme">
-      <FlatMarkdown v-model=plugin.readme />
+      <FlatMarkdown v-model="plugin.readme" />
 
     </BlockTemplate>
 
