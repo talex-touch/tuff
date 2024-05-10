@@ -12,6 +12,7 @@ import { forTouchTip } from '@modules/mention/dialog-mention';
 import { touchChannel } from '@modules/channel/channel-core';
 import PluginIcon from '@comp/plugin/PluginIcon.vue';
 import { getNpmVersion, checkGlobalPackageExist } from '@talex-touch/utils/common/env-tool'
+import { spawn } from 'child_process'
 
 const arrow = ref()
 const toggleNewPlugin = inject('toggleNewPlugin')
@@ -60,6 +61,11 @@ async function envCheck() {
     }
   }
 
+  envOptions.node = {
+      type: 'success',
+      version: nodeVersion
+  }
+
   const degit = await checkGlobalPackageExist("degit")
   if (!degit) {
     return envOptions.degit = {
@@ -68,10 +74,6 @@ async function envCheck() {
   }
 
   return Object.assign(envOptions, {
-    node: {
-      type: 'success',
-      version: nodeVersion
-    },
     degit: {
       type: 'success',
       ...degit
@@ -95,6 +97,15 @@ function createAction(ctx) {
   touchChannel.send('plugin:new', plugin)
 
 }
+
+function handleInstallDegit() {
+  console.log('hi')
+
+  spawn('cmd', [], {
+    shell: true,
+    detached: true
+  })
+}
 </script>
 
 <template>
@@ -111,7 +122,23 @@ function createAction(ctx) {
     <BlockTemplate>
       <template #title>
         Templates
-        {{ envOptions }}
+        <span>
+          <span color="green-2" v-if="envOptions.node?.type ==='success'">
+            <span relative top=".5" inline-block i-ri-nodejs-fill />{{ envOptions.node?.version.join('.') }}
+          </span>
+          <span color="red-4" v-else>
+            <span relative top=".5" inline-block i-ri-nodejs-fill />{{ envOptions.node?.msg }}
+          </span>
+
+          <span mr-2 />
+
+          <span color="green-2" v-if="envOptions.degit?.type ==='success'">
+            <span relative top=".5" inline-block i-ri-git-branch-fill />{{ envOptions.degit?.version }}
+          </span>
+          <span @click="handleInstallDegit" border-round pl-1 pr-1 select-none cursor-pointer v-wave color="red-4" v-else>
+            <span relative top=".5" inline-block i-ri-git-branch-fill /> Install
+          </span>
+        </span>
       </template>
       <BrickTemplate>
         <p>
