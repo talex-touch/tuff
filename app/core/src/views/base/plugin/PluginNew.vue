@@ -102,8 +102,8 @@ function createAction(ctx) {
 
     <BlockTemplate title="General">
       <LineTemplate :msg="() => 'You must input the correct plugin name.'"
-        regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{1,15}$" title="name">
-        <FlatInput w="48!" v-model=plugin.name />
+        regex='^[^\\\\/:*?"<>|]+(\\.[^\\\\/:*?"<>|]+)*$' title="name">
+        <FlatInput w="48!" v-model="plugin.name" />
       </LineTemplate>
       <LineTemplate title="icon">
         <FlatInput w="48!" v-model=plugin.icon.value>
