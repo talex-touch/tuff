@@ -1,9 +1,12 @@
 <script name="BrickTemplate" setup lang="ts">
+const _disabled: any = inject('disabled')
 
+const disabled = computed(() => _disabled.value)
+console.log("a", disabled)
 </script>
 
 <template>
-  <div mr-6 border-solid border rounded-lg relative inline-block px-4 w-60 h-32 class="color-template fake-background">
+  <div :class="{ disabled }" mr-6 border-solid border rounded-lg relative inline-block px-4 w-60 h-32 class="BrickTemplate color-template fake-background">
     <slot>
       <p>
         <div inline-block mr-2 class="i-simple-icons-remix" />Template
@@ -17,4 +20,11 @@
   </div>
 </template>
 
-<style lang="scss" scoped></style>
+<style lang="scss">
+.BrickTemplate.disabled button {
+  &:hover {
+    cursor: not-allowed;
+    background-color: var(--el-color-danger)
+  }
+}
+</style>

@@ -119,7 +119,7 @@ function handleInstallDegit() {
       <span block text="base" op-75 font-normal>Create a new plugin.</span>
     </template>
 
-    <BlockTemplate>
+    <BlockTemplate  :disabled="envOptions.degit?.type !=='success'">
       <template #title>
         Templates
         <span>
@@ -136,7 +136,7 @@ function handleInstallDegit() {
             <span relative top=".5" inline-block i-ri-git-branch-fill />{{ envOptions.degit?.version }}
           </span>
           <span @click="handleInstallDegit" border-round pl-1 pr-1 select-none cursor-pointer v-wave color="red-4" v-else>
-            <span relative top=".5" inline-block i-ri-git-branch-fill /> Install
+            <span relative top=".5" inline-block i-ri-git-branch-fill /> Install degit
           </span>
         </span>
       </template>

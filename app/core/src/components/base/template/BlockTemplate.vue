@@ -8,7 +8,15 @@ const props = defineProps({
     type: String,
     default: "",
   },
+  disabled: {
+    type: Boolean,
+  },
 });
+
+provide(
+  "disabled",
+  computed(() => props.disabled)
+);
 </script>
 
 <template>
