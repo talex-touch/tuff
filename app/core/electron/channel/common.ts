@@ -110,6 +110,11 @@ export default {
     app.app.addListener("open-url", (event, url) => {
       event.preventDefault();
 
+      const regex = /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/;
+      if (regex.test(url) && url.indexOf('/#/') !== -1) {
+        return;
+      }
+
       onOpenUrl(url);
     });
 

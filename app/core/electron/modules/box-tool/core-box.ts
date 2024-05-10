@@ -181,7 +181,12 @@ export class CoreBoxManager {
     console.debug("[CoreBox] Shrunk.");
   }
 
+  lastTrigger: number = -1
+
   trigger(show: boolean) {
+    if (Date.now() - this.lastTrigger < 200) return;
+    this.lastTrigger = Date.now();
+
     this.#_show = show;
 
     const w = this.nowWindow;

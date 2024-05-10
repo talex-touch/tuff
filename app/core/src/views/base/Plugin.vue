@@ -225,7 +225,7 @@ window.addEventListener("resize", () => {
     filter: invert(1);
     transform: translate(-50%, -50%);
     background-color: var(--el-bg-color);
-    transition: all 0.75s;
+    transition: all 0.75s 0.5s;
   }
 
   &:after {

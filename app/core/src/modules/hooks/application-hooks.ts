@@ -19,7 +19,7 @@ export function usePlugins() {
 
   const scope = effectScope();
 
-  scope.run(() => {
+  scope.run(() => { 
     watchEffect(() => {
       plugins.value = [...pluginAdopter.plugins.values()];
 
