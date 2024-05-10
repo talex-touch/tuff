@@ -2,19 +2,21 @@
 const props = defineProps({
   title: {
     type: String,
-    default: 'BlockTemplate'
+    default: "BlockTemplate",
   },
   style: {
     type: String,
-    default: ''
-  }
-})
+    default: "",
+  },
+});
 </script>
 
 <template>
   <div pb-6 mb-10 border-b-1 border-b-solid border-gray-500>
     <p font-bold>
-      {{ title }}
+      <slot name="title">
+        {{ title }}
+      </slot>
     </p>
     <div :style="style">
       <slot />

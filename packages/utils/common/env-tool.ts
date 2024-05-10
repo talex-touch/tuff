@@ -26,7 +26,7 @@ export function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkg
       }
 
       const lines = stdout.split('\n');
-      const lastLine = lines[lines.length - 2];
+      const lastLine = lines[lines.length - 3];
       const match = lastLine.match(/(\S+)@(\S+)/);
       if (match) {
         resolve({

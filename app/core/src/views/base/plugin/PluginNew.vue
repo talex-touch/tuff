@@ -1,4 +1,4 @@
-<script setup name="PluginNew">
+<script setup lang="ts" name="PluginNew">
 import FormTemplate from '@comp/base/template/FormTemplate.vue';
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue';
 import BrickTemplate from '@comp/base/template/BrickTemplate.vue';
@@ -11,7 +11,7 @@ import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
 import { forTouchTip } from '@modules/mention/dialog-mention';
 import { touchChannel } from '@modules/channel/channel-core';
 import PluginIcon from '@comp/plugin/PluginIcon.vue';
-import { checkGlobalPackageExist } from '@talex-touch/utils/common/env-tool'
+import { getNpmVersion, checkGlobalPackageExist } from '@talex-touch/utils/common/env-tool'
 
 const arrow = ref()
 const toggleNewPlugin = inject('toggleNewPlugin')
@@ -44,8 +44,39 @@ const envOptions = reactive < {
   degit: any
 }> ({})
 
-function envCheck() {
+async function envCheck() {
+  const res = await getNpmVersion()
+  if (!res) {
+    return envOptions.node = {
+      msg: "Cannot find node.js, please install it first.", type: "error"
+    }
+  }
 
+  // not less than 8
+  const nodeVersion = res.split(".").map(Number)
+  if (nodeVersion[0] < 8) {
+    return envOptions.node = {
+      msg: "Node.js version is too low, please upgrade it to 8 or higher.", type: "error"
+    }
+  }
+
+  const degit = await checkGlobalPackageExist("degit")
+  if (!degit) {
+    return envOptions.degit = {
+      msg: "Cannot find degit, please install it first.", type: "error"
+    }
+  }
+
+  return Object.assign(envOptions, {
+    node: {
+      type: 'success',
+      version: nodeVersion
+    },
+    degit: {
+      type: 'success',
+      ...degit
+    }
+  })
 }
 
 function createAction(ctx) {
@@ -77,7 +108,11 @@ function createAction(ctx) {
       <span block text="base" op-75 font-normal>Create a new plugin.</span>
     </template>
 
-    <BlockTemplate title="Templates">
+    <BlockTemplate>
+      <template #title>
+        Templates
+        {{ envOptions }}
+      </template>
       <BrickTemplate>
         <p>
           <div inline-block mr-2 class="i-simple-icons-vuedotjs" />
