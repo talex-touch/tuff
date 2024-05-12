@@ -8,21 +8,22 @@ import FlatButton from '@comp/base/button/FlatButton.vue'
 import FlatInput from '@comp/base/input/FlatInput.vue'
 import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue';
 import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
-import { forTouchTip } from '@modules/mention/dialog-mention';
-import { touchChannel } from '@modules/channel/channel-core';
-import PluginIcon from '@comp/plugin/PluginIcon.vue';
+import { forTouchTip } from '~/modules/mention/dialog-mention';
+import { touchChannel } from '~/modules/channel/channel-core';
 import { getNpmVersion, checkGlobalPackageExist } from '@talex-touch/utils/common/env-tool'
-import { spawn } from 'child_process'
+import { popperMention } from '~/modules/mention/dialog-mention'
+import { createVNode } from 'vue'
+import TerminalTemplate from '~/components/addon/TerminalTemplate.vue';
 
 const arrow = ref()
-const toggleNewPlugin = inject('toggleNewPlugin')
+const toggleNewPlugin: any = inject('toggleNewPlugin')
 onMounted(() => {
   toggleNewPlugin(arrow.value)
 
   envCheck()
 })
 
-const plugin = reactive({
+const plugin: any = reactive({
   template: false,
   name: "",
   desc: "",
@@ -41,8 +42,8 @@ const plugin = reactive({
 })
 
 const envOptions = reactive < {
-  node: any,
-  degit: any
+  node?: any,
+  degit?: any
 }> ({})
 
 async function envCheck() {
@@ -81,7 +82,7 @@ async function envCheck() {
   })
 }
 
-function createAction(ctx) {
+function createAction(ctx: any) {
   const { checkForm, setLoading } = ctx
 
   const result = checkForm()
@@ -98,13 +99,12 @@ function createAction(ctx) {
 
 }
 
-function handleInstallDegit() {
-  console.log('hi')
+async function handleInstallDegit() {
+  await popperMention("", () => createVNode(TerminalTemplate, {
+    title: "Installing degit",
+    command: 'npm install -g degit'
+  }))
 
-  spawn('cmd', [], {
-    shell: true,
-    detached: true
-  })
 }
 </script>
 
