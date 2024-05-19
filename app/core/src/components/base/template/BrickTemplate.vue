@@ -2,7 +2,6 @@
 const _disabled: any = inject('disabled')
 
 const disabled = computed(() => _disabled.value)
-console.log("a", disabled)
 </script>
 
 <template>

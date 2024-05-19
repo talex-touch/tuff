@@ -135,7 +135,7 @@ const value = useModelWrapper(props, emits);
       span {
         transform: scale(0.75);
       }
-      width: 32px;
+      min-width: 32px;
       height: 32px;
 
       font-size: 24px;

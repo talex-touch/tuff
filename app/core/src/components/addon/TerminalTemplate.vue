@@ -1,16 +1,28 @@
 <script lang="ts" name="AgreementTemplate" setup>
+import InteractiveTerminal from "../terminal/InteractiveTerminal.vue";
+
 const props = defineProps({
   title: {
     type: String,
     default: "TERMINAL",
   },
 });
+
+const terminal = ref();
+
+onMounted(() => {
+  console.log("a", terminal.value);
+});
 </script>
 
 <template>
   <div class="TerminalTemplate-Container">
     <p font-600>{{ title }}</p>
-    <el-scrollbar> HELLO </el-scrollbar>
+    <el-scrollbar>
+      <div class="TerminalTemplate-Content">
+        <InteractiveTerminal ref="terminal" />
+      </div>
+    </el-scrollbar>
   </div>
 </template>
 
@@ -30,9 +42,10 @@ const props = defineProps({
   }
 
   .TerminalTemplate-Content {
-    max-height: 380px;
-    width: 100%;
-    max-width: 1280px;
+    width: 320px;
+    height: 200px;
+
+    background-color: red;
 
     border-radius: 8px;
 
