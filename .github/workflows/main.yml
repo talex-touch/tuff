@@ -1,27 +1,33 @@
-name: Deploy documents
+name: Deploy to Github Pages
 
 on:
   push:
-    branches:
-      - master
+    branches: 
+     - master
+
 
 jobs:
-  build-and-deploy:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
     steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout
+        uses: actions/checkout@main
 
-      - name: Setup Node.js and pnpm
-        uses: actions/setup-node@v3
+      - name: Install Node.js
+        uses: actions/setup-node@main
         with:
-          node-version: '20.10.0'
+          node-version:  20.10.0
           
-      - name: Install pnpm
-        run: npm install -g pnpm
+      - name: Downloading PNPM
+        run: npm install -g pnpm  
 
       - name: Install dependencies
-        run: pnpm install
-
+        run: pnpm -F docs install --no-frozen-lockfile
+    
       - name: Build VitePress
         run: pnpm -F docs run build
 
@@ -32,3 +38,14 @@ jobs:
           publish_dir: app/docs/.vitepress/dist
           publish_branch: gh-pages
           dotfiles: true
+  
+      # - name: Deploy to Pages
+      #   run: |
+      #     cd app/docs/.vitepress/dist 
+      #     git init
+      #     git config user.name "TalexDreamSoul"
+      #     git config user.email "${{ secrets.GIT_EMAIL }}"
+      #     git add -A
+      #     git commit -m 'deploy github-pages automatically'
+      #     git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch/talex-touch.git master:gh-pages
+      #     cd -
