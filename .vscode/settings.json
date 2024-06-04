@@ -48,4 +48,9 @@
   "vue.codeActions.enabled": false,
   "vue3snippets.enable-compile-vue-file-on-did-save-code": true,
   "Lingma.cloudModelAutoTriggerDisplayRule": true,
+  "javascript.suggest.autoImports": true,
+  "typescript.suggest.autoImports": true,
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "source.organizeImports": true
 }
