@@ -13,9 +13,6 @@ const pointer = ref();
 const value = useModelWrapper(props, emits);
 
 function fixPointer(el: HTMLElement) {
-  console.log("a", el);
-
-  // 获取带 data-type="label-select-item" 的div 并且 data-value=value
   const target = el.parentElement!.querySelector(
     `.TLabelSelectItem[data-type="label-select-item"][data-value="${value.value}"]`
   );

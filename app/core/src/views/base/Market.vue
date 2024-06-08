@@ -3,7 +3,12 @@
     <div class="Market-Header">
       <div class="Market-Header-Search">
         <FlatCompletion :fetch="fetch" />
-        <FlatButton mini> <div class="i-carbon-list" /> </FlatButton>
+        <div flex items-center gap-2>
+          <FlatButton mini @click="toggleSourceEditorShow()">
+            <div class="i-carbon-list" />
+          </FlatButton>
+          <span op-50>{{ pluginSettings.source.list.length }} sources</span>
+        </div>
       </div>
       <div class="Market-Header-Labels">
         <div class="Market-Header-Labels-Inner">
@@ -35,14 +40,20 @@
       <MarketItem :data-index="index" :item="item" v-for="(item, index) in value" />
     </transition-group>
   </div>
+
+  <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
 </template>
 
 <script name="Market" setup>
+import { pluginSettings } from "~/modules/storage/plugin-settings";
 import gsap from "gsap";
 import FlatCompletion from "@comp/base/input/FlatCompletion.vue";
 import MarketItem from "@comp/market/MarketItem.vue";
+import MarketSourceEditor from "~/views/base/market/MarketSourceEditor.vue";
+import { useToggle } from "@vueuse/core";
 
 const orderType = ref("flow");
+const [sourceEditorShow, toggleSourceEditorShow] = useToggle();
 const tagInd = ref(0);
 const tags = reactive([
   {
