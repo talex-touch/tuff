@@ -1,5 +1,6 @@
 <script name="TLabelSelect" setup lang="ts">
 import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
+import { useDebounceFn } from "@vueuse/core";
 
 const props = defineProps<{
   modelValue: string;
@@ -52,9 +53,12 @@ watch(
   { immediate: true }
 );
 
-provide("refresh", (_value: string) => {
-  value.value = _value;
-});
+provide(
+  "refresh",
+  useDebounceFn((_value: string) => {
+    value.value = _value;
+  }, 200)
+);
 </script>
 
 <template>
