@@ -108,9 +108,9 @@ importers:
       element-plus:
         specifier: ^2.7.0
         version: 2.7.4(vue@3.4.27(typescript@5.4.5))
-      extract-file-icon-fix:
-        specifier: ^0.3.3
-        version: 0.3.3
+      extract-file-icon:
+        specifier: ^0.3.2
+        version: 0.3.2
       fs-extra:
         specifier: ^11.2.0
         version: 11.2.0
@@ -4465,8 +4465,8 @@ packages:
     resolution: {integrity: sha512-hMQ4CX1p1izmuLYyZqLMO/qGNw10wSv9QDCPfzXfyFrOaCSSoRfqE1Kf1s5an66J5JZC62NewG+mK49jOCtQew==}
     engines: {node: '>=4'}
 
-  extract-file-icon-fix@0.3.3:
-    resolution: {integrity: sha512-JCzPT+gcqeLpEyq00NTOMWW7GFCcp/XIXwbGNsI5meiQFrAyRQ+nQzDXX8B1oPEa20eYmwXo/FoslcAwLLVzXQ==}
+  extract-file-icon@0.3.2:
+    resolution: {integrity: sha512-We5/HaMDlioOx3c9zDjit8RtKWEvT94sJF8jTujaKVOyWL8Kkqu4QGnwDr5fID6XsbKvWT0JJNuWuV2Tmr7yiw==}
 
   extract-zip@2.0.1:
     resolution: {integrity: sha512-GDhU9ntwuKyGXdZBUgTIe+vXnWj0fppUEtMDL0+idd5Sta8TGpHssn/eusA9mrPr9qNDym6SxAYZjNvCn/9RBg==}
@@ -12453,7 +12453,7 @@ snapshots:
       iconv-lite: 0.4.24
       tmp: 0.0.33
 
-  extract-file-icon-fix@0.3.3:
+  extract-file-icon@0.3.2:
     dependencies:
       node-addon-api: 1.7.1
 

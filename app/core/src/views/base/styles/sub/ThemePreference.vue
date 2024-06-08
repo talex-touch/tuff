@@ -1,7 +1,6 @@
 <script setup lang="ts" name="ThemePreference">
 import FormTemplate from "@comp/base/template/FormTemplate.vue";
-import { en } from "element-plus/es/locale";
-import { LocationQueryValue, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
 
 const route = useRoute();
 
