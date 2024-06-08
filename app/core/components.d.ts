@@ -60,6 +60,8 @@ declare module 'vue' {
     TDialogMention: typeof import('./src/components/base/dialog/TDialogMention.vue')['default']
     TerminalTemplate: typeof import('./src/components/addon/TerminalTemplate.vue')['default']
     TGroupBlock: typeof import('./src/components/base/group/TGroupBlock.vue')['default']
+    TLabelSelect: typeof import('./src/components/base/select/TLabelSelect.vue')['default']
+    TLabelSelectItem: typeof import('./src/components/base/select/TLabelSelectItem.vue')['default']
     TMenuItem: typeof import('./src/components/tabs/TMenuItem.vue')['default']
     TMenuTabs: typeof import('./src/components/tabs/TMenuTabs.vue')['default']
     TouchMenu: typeof import('./src/components/menu/TouchMenu.vue')['default']

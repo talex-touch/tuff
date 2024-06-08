@@ -1,7 +1,12 @@
 <template>
-  <div @click="handleClick" @mouseenter="hover = true"
-       :class="{ plain, small, select: _select, undot, scaleUpper, middle }"
-       @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
+  <div
+    @click="handleClick"
+    @mouseenter="hover = true"
+    :class="{ plain, small, select: _select, undot, scaleUpper, middle }"
+    @mouseleave="hover = false"
+    role="button"
+    class="IconButton-Container fake-background transition"
+  >
     <div class="IconButton-Icon">
       <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
         <remix-icon :name="icon" :style="_select || hover ? 'fill' : 'line'" />
@@ -10,75 +15,71 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "IconButton"
-}
-</script>
-
-<script lang="ts" setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+<script name="IconButton" lang="ts" setup>
+import RemixIcon from "@comp/icon/RemixIcon.vue";
+import { ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 const props = defineProps({
   icon: {
-    type: String
+    type: String,
   },
   direct: {
     type: String,
-    required: false
+    required: false,
   },
   plain: {
-    type: Boolean
+    type: Boolean,
   },
   small: {
-    type: Boolean
+    type: Boolean,
   },
   select: {
-    type: Boolean
+    type: Boolean,
   },
   undot: {
-    type: Boolean
+    type: Boolean,
   },
   scaleUpper: {
-    type: Boolean
+    type: Boolean,
   },
   middle: {
-    type: Boolean
+    type: Boolean,
+  },
+});
+
+const router = useRouter();
+const route = useRoute();
+
+const hover = ref(false);
+const _select = ref(false);
+
+watch(
+  () => route.path,
+  () => {
+    if (props.hasOwnProperty("select")) _select.value = props.select;
+    if (props.direct) {
+      _select.value = route.path === props.direct;
+
+      // if (  _select.value )
+      // console.log( route, props.direct, _select.value )
+    }
   }
-})
-
-const router = useRouter()
-const route = useRoute()
-
-const hover = ref(false)
-const _select = ref(false)
-
-watch(() => route.path, () => {
-  if ( props.hasOwnProperty('select') ) _select.value = props.select
-  if (props.direct) {
-    _select.value = (route.path === props.direct)
-
-    // if (  _select.value )
-    // console.log( route, props.direct, _select.value )
-  }
-})
+);
 
 function handleClick() {
-  props.direct && router.push( props.direct )
+  props.direct && router.push(props.direct);
 }
 </script>
 
 <style lang="scss" scoped>
-
 .IconButton-Container {
   &.scaleUpper {
-    animation: scale-up-center 0.4s cubic-bezier(0.785, 0.135, 0.150, 0.860) both
+    animation: scale-up-center 0.4s cubic-bezier(0.785, 0.135, 0.15, 0.86) both;
   }
   &.plain {
     &:after {
-      content: '';
+      content: "";
       position: absolute;
 
       top: 50%;
@@ -92,10 +93,10 @@ function handleClick() {
       opacity: var(--fake-opacity);
 
       transform: translateY(-50%);
-      transition: .25s;
+      transition: 0.25s;
     }
     &.select {
-      --fake-opacity: .75;
+      --fake-opacity: 0.75;
       &:after {
         height: 25px;
 
@@ -103,14 +104,16 @@ function handleClick() {
       }
     }
 
-    --fake-opacity: .5;
+    --fake-opacity: 0.5;
 
     background-color: transparent;
     border: none;
     box-shadow: none;
   }
   &.undot {
-    &:after { display: none }
+    &:after {
+      display: none;
+    }
   }
   &.small {
     width: 24px;
@@ -138,7 +141,7 @@ function handleClick() {
   }
   .IconButton-Icon {
     &:hover {
-      opacity: .9;
+      opacity: 0.9;
     }
     padding: 5px;
 
@@ -148,7 +151,7 @@ function handleClick() {
     &:after {
       transform: translate(-100%, -50%) scale(1.5) !important;
     }
-    transform: scale(.75)
+    transform: scale(0.75);
   }
   display: flex;
   //margin: 10px 0;
@@ -164,6 +167,6 @@ function handleClick() {
   box-shadow: var(--el-box-shadow);
   --fake-color: var(--el-fill-color);
   --fake-radius: 8px;
-  --fake-opacity: .5;
+  --fake-opacity: 0.5;
 }
 </style>
