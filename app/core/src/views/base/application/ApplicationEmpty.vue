@@ -1,9 +1,4 @@
-<script setup lang="ts">
-const props = defineProps<{
-  modelValue?: boolean,
-}>()
-
-</script>
+<script setup lang="ts"></script>
 
 <template>
   <div class="ApplicationEmpty">
@@ -13,9 +8,12 @@ const props = defineProps<{
 
     <div class="Describer">
       <h4>Choose an application to configure.</h4>
-      <p>Unleash the power of app customization to tailor your digital space. Fine-tune settings to optimize workflow
-        and seamlessly share configurations via a personal cloud. Explore diverse setups for inspiration and insights.
-        Ready to create your perfect workspace? Select an app to begin.</p>
+      <p>
+        Unleash the power of app customization to tailor your digital space. Fine-tune
+        settings to optimize workflow and seamlessly share configurations via a personal
+        cloud. Explore diverse setups for inspiration and insights. Ready to create your
+        perfect workspace? Select an app to begin.
+      </p>
     </div>
   </div>
 </template>
@@ -33,22 +31,26 @@ const props = defineProps<{
     width: 100%;
     height: 500%;
 
-    background-image:
-      radial-gradient(circle at top right, rgba(94, 74, 176, 0.2) 50%, transparent 60%),
-      radial-gradient(circle at top right, var(--el-color-primary-light-5) 10%, transparent 80%),
-      radial-gradient(circle at top right, rgba(94, 74, 176, 0.8) 20%, rgba(94, 74, 176, 0) 100%),
-    ;
-    background-position:
-      top right,
-      top right,
-      top right;
-    background-size:
-      60% 25%,
-      80% 30%,
-      100% 25%;
+    background-image: radial-gradient(
+        circle at top right,
+        rgba(94, 74, 176, 0.2) 50%,
+        transparent 60%
+      ),
+      radial-gradient(
+        circle at top right,
+        var(--el-color-primary-light-5) 10%,
+        transparent 80%
+      ),
+      radial-gradient(
+        circle at top right,
+        rgba(94, 74, 176, 0.8) 20%,
+        rgba(94, 74, 176, 0) 100%
+      );
+    background-position: top right, top right, top right;
+    background-size: 60% 25%, 80% 30%, 100% 25%;
     background-repeat: no-repeat;
 
-    opacity: .25;
+    opacity: 0.25;
     filter: blur(18px) saturate(100%) brightness(120%);
   }
 
@@ -68,8 +70,8 @@ const props = defineProps<{
   p {
     margin: 0;
 
-    opacity: .95;
-    font-size: .85rem;
+    opacity: 0.95;
+    font-size: 0.85rem;
     text-align: center;
   }
 
@@ -79,7 +81,7 @@ const props = defineProps<{
 
   padding: 0 8rem;
 
-  gap: .5rem;
+  gap: 0.5rem;
   display: flex;
   flex-direction: column;
   justify-content: center;

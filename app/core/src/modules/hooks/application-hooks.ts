@@ -231,6 +231,7 @@ export function dropperResolver() {
   }
 
   document.addEventListener("drop", async (e) => {
+    console.log("A drop", e)
     e.preventDefault();
 
     const files = e.dataTransfer!.files;

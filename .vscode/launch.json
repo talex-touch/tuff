@@ -13,11 +13,12 @@
       ],
       // "program": "${file}",
       "autoAttachChildProcesses": true,
-      "cwd": "${workspaceFolder}/app/main",
+      "cwd": "${workspaceFolder}/app/core",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "-F",
-        "main",
+        "core",
+        "run",
         "dev",
         "--sourcemap"
       ],

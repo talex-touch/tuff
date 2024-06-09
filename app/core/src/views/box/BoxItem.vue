@@ -66,9 +66,10 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
 
 <style lang="scss">
 .matched {
-  opacity: 0.75;
-  color: var(--el-color-primary-light-3);
+  // opacity: 0.75;
   font-weight: 600;
+  filter: invert(0) brightness(150%);
+  color: var(--el-color-primary);
 }
 
 .index {

@@ -54,6 +54,7 @@ function handleAdd() {
         >
           <div
             v-for="(item, ind) in pluginSettings.source.list"
+            :key="ind"
             class="MarketSourceEditor-Content-Item Item"
           >
             <div class="handle" />
@@ -209,6 +210,7 @@ function handleAdd() {
   cursor: pointer;
   overflow: hidden;
   border-radius: 8px;
+  border: 2px dashed transparent;
   background-color: var(--el-fill-color);
 }
 
@@ -239,7 +241,7 @@ function handleAdd() {
   text-align: center;
 
   border-radius: 8px;
-  transform: translate(-50%, -185%);
+  transform: translate(-50%, -200%);
   background-color: var(--el-fill-color-light);
   box-shadow: 0 0 8px 2px var(--el-fill-color-light);
   backdrop-filter: blur(18px) saturate(180%);
