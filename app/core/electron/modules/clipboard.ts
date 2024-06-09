@@ -5,7 +5,7 @@ import { TalexTouch } from "../types";
 import { clipboard } from 'electron'
 
 export interface IClipboardStash {
-    html: string | null
+    // html: string | null
     image: string | null
     buffer: string | null
     text: string | null
@@ -19,11 +19,18 @@ export class ClipboardManager {
     constructor() {
         this.windows = []
         this.clipboardStash = {
-            html: null,
+            // html: null,
             image: null,
             buffer: null,
             text: null
         }
+
+        const intervalRead = () => {
+            this.sendClipboardMsg()
+
+            setTimeout(intervalRead, 1000)
+        }
+        intervalRead()
     }
 
     registerWindow(window: TouchWindow | TalexTouch.ITouchWindow) {
@@ -60,11 +67,12 @@ export class ClipboardManager {
 
     sendClipboardMsg() {
         const data = {
-            action: "read"
+            action: "read",
+            time: Date.now()
         }
 
         const res = this.formatClipboards({
-            "html": clipboard.readHTML(),
+            // "html": clipboard.readHTML(),
             "image": clipboard.readImage().toDataURL(),
             "buffer": clipboard.readBuffer("public/utf8-plain-text").toString("base64"),
             "text": clipboard.readText()

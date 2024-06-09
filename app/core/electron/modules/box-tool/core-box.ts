@@ -143,12 +143,12 @@ export class CoreBoxManager {
       } else this.trigger(!this.#_show);
     });
 
-    globalShortcut.register("CommandOrControl+D", () => {
-      const w = this.nowWindow;
-      if (!w.window.isFocused()) return;
+    // globalShortcut.register("CommandOrControl+D", () => {
+    //   const w = this.nowWindow;
+    //   if (!w.window.isFocused()) return;
 
-      console.log("divide");
-    });
+    //   console.log("divide");
+    // });
 
     touchApp.channel.regChannel(
       ChannelType.MAIN,

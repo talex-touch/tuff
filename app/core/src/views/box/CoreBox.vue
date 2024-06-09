@@ -3,7 +3,10 @@ import { touchChannel } from "~/modules/channel/channel-core";
 import AppIcon from "~/assets/logo.svg";
 import { search, appAmo, execute } from "./search-box";
 import BoxItem from "./BoxItem.vue";
+import { useDocumentVisibility } from "@vueuse/core";
+import { storageManager } from "~/modules/channel/storage/index.ts";
 
+const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
   last: null,
 });
@@ -12,6 +15,42 @@ const focus = ref(0);
 const select = ref(-1);
 const res = ref<Array<any>>([]);
 const scrollbar = ref();
+const boxOptions = reactive<{
+  lastHidden: number;
+}>({ lastHidden: -1 });
+
+watch(
+  () => visibility.value,
+  (val) => {
+    if (!val) return (boxOptions.lastHidden = Date.now());
+
+    // handle auto clear
+    if (
+      Date.now() - boxOptions.lastHidden >
+      storageManager.appSetting.tools.autoClear * 1000
+    ) {
+      searchVal.value = "";
+    }
+
+    if (clipboardOptions.last) {
+      // handle auto paste
+      const time = storageManager.appSetting.tools.autoPaste.time;
+      const timeDiff = Date.now() - clipboardOptions.last.time;
+
+      if (
+        time !== -1 &&
+        storageManager.appSetting.tools.autoPaste.enable &&
+        (time === 0 || timeDiff < time * 1000)
+      ) {
+        const data = clipboardOptions.last;
+        if (data.type !== "image") {
+          searchVal.value = data.data;
+          clipboardOptions.last = null;
+        }
+      }
+    }
+  }
+);
 
 function onKeyDown(event: KeyboardEvent) {
   // check if body contains core-box
@@ -102,19 +141,13 @@ watch(
 
 const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
 
-onMounted(() => {
-  touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
-    if (!data?.type) return;
+touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
+  if (!data?.type) return;
 
-    console.log("CLIPBOARD TRIGGERED", data);
+  // console.log("CLIPBOARD TRIGGERED", data);
 
-    Object.assign(clipboardOptions, {
-      last: data,
-    });
-
-    if (data.type !== "image") {
-      searchVal.value = data.data;
-    }
+  Object.assign(clipboardOptions, {
+    last: data,
   });
 });
 </script>

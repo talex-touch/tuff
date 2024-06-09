@@ -92,6 +92,13 @@ const _appSettingOriginData = {
   },
   beginner: {
     init: false
+  },
+  tools: {
+    autoPaste: {
+      enable: true,
+      time: 180
+    },
+    autoClear: 600
   }
 }
 

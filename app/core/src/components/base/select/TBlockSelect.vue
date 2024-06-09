@@ -1,7 +1,7 @@
 <script name="TBlockSelect" setup>
-import TSelect from '@comp/base/select/TSelect.vue'
-import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import TSelect from "@comp/base/select/TSelect.vue";
+import RemixIcon from "@comp/icon/RemixIcon.vue";
+import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
 
 const props = defineProps({
   title: {
@@ -25,24 +25,30 @@ const props = defineProps({
     required: true,
   },
   iconChange: {
-    type: String
-  }
-})
-const emits = defineEmits(['update:modelValue', 'change'])
+    type: String,
+  },
+});
+const emits = defineEmits(["update:modelValue", "change"]);
 
-const value = useModelWrapper(props, emits)
+const value = useModelWrapper(props, emits);
+const iconStyle = computed(() =>
+  props.iconChange === null ? (value.value ? "fill" : "line") : props.iconChange
+);
 
 function handleChange(val, e) {
-  if (props.disabled) return
+  if (props.disabled) return;
 
-  emits('change', val, e)
+  emits("change", val, e);
 }
 </script>
 
 <template>
-  <div class="TBlockSelect-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
+  <div
+    class="TBlockSelect-Container TBlockSelection fake-background index-fix"
+    :class="{ disabled }"
+  >
     <div class="TBlockSelect-Content TBlockSelection-Content">
-      <RemixIcon :name="icon" :style="iconChange ? (value ? 'fill' : 'line') : iconChange" />
+      <RemixIcon :name="icon" :style="iconStyle" />
       <div class="TBlockSelect-Label">
         <h3>{{ title }}</h3>
         <p>{{ description }}</p>
@@ -64,7 +70,7 @@ function handleChange(val, e) {
 .TBlockSelect-Container {
   &.disabled {
     .TBlockSelect-Select {
-      opacity: .5;
+      opacity: 0.5;
 
       pointer-events: none;
     }
@@ -78,7 +84,6 @@ function handleChange(val, e) {
 
       font-size: 12px;
     }
-
   }
   .TBlockSelect-Content {
     display: flex;
@@ -113,7 +118,7 @@ function handleChange(val, e) {
         font-size: 12px;
         font-weight: 400;
 
-        opacity: .5;
+        opacity: 0.5;
       }
     }
   }
@@ -134,7 +139,7 @@ function handleChange(val, e) {
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 4px;
-  --fake-opacity: .5;
+  --fake-opacity: 0.5;
   &:hover {
     --fake-color: var(--el-fill-color);
   }

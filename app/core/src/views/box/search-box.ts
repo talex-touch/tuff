@@ -36,13 +36,12 @@ export function execute(item: any) {
 export function search(keyword: string, callback: (res: Array<any>) => void) {
   const results = [];
 
-  console.log("[CoreBox] Searching " + keyword);
+  // console.log("[CoreBox] Searching " + keyword);
 
   for (let searchSection of searchList) {
     const data = [...searchSection.value];
 
     for (let item of data) {
-      console.log("search", item)
       const [matchedName, matchedDesc, matchedAbridge] = [
         check(keyword, item.name),
         check(keyword, item.desc),
@@ -78,5 +77,5 @@ export function search(keyword: string, callback: (res: Array<any>) => void) {
     }
   }
 
-  console.log("[CoreBox] Searched " + keyword, results);
+  // console.log("[CoreBox] Searched " + keyword, results);
 }
