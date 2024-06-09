@@ -16,8 +16,7 @@ body,
   overflow: hidden;
 }
 
-#app:has(div.coloring),
-.core-box #app {
+#app:has(div.coloring) {
   top: 1px;
   left: 1px;
 
@@ -27,16 +26,24 @@ body,
   border: 1px solid var(--el-border-color);
   border-radius: 8px;
   transition: border 0.25s;
+
   &:hover {
     border: 1px solid var(--el-color-primary);
   }
 }
 
-.core-box #app {
-  border: 1px solid var(--el-color-primary) !important;
+body.core-box #app {
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  border: none !important;
 }
 
 .el-scrollbar__bar {
+
   &.is-vertical,
   &.is-horizontal {
     width: 3px !important;
@@ -66,6 +73,7 @@ body,
     background: var(--fake-color, var(--el-fill-color-lighter));
     border-radius: var(--fake-radius, 8px);
   }
+
   position: relative; // make sure background adapt to parent
 }
 
@@ -89,6 +97,7 @@ span.tag {
     opacity: 1;
     pointer-events: unset;
   }
+
   z-index: 100000;
   position: absolute;
 
@@ -144,14 +153,17 @@ html.fullscreen .Blur-Container {
   -webkit-animation-fill-mode: both;
   animation-fill-mode: both;
 }
+
 .animated.infinite {
   -webkit-animation-iteration-count: infinite;
   animation-iteration-count: infinite;
 }
+
 .animated.hinge {
   -webkit-animation-duration: 2s;
   animation-duration: 2s;
 }
+
 /*the animation definition*/
 @-webkit-keyframes zoomInUp {
   0% {
@@ -161,6 +173,7 @@ html.fullscreen .Blur-Container {
     -webkit-animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
     animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
   }
+
   60% {
     opacity: 1;
     -webkit-transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
@@ -169,6 +182,7 @@ html.fullscreen .Blur-Container {
     animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1);
   }
 }
+
 @keyframes zoomInUp {
   0% {
     opacity: 0;
@@ -178,6 +192,7 @@ html.fullscreen .Blur-Container {
     -webkit-animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
     animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
   }
+
   60% {
     opacity: 1;
     -webkit-transform: scale3d(0.475, 0.475, 0.475) translate3d(0, -60px, 0);
@@ -187,6 +202,7 @@ html.fullscreen .Blur-Container {
     animation-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1);
   }
 }
+
 .zoomInUp {
   -webkit-animation-name: zoomInUp;
   animation-name: zoomInUp;
@@ -200,6 +216,7 @@ html.fullscreen .Blur-Container {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -210,6 +227,7 @@ html.fullscreen .Blur-Container {
     opacity: 0.75;
     transform: scale(0.8);
   }
+
   to {
     opacity: 0;
     transform: scale(var(--size, 2));
@@ -220,12 +238,14 @@ html.fullscreen .Blur-Container {
   0% {
     transform: scale(0.5);
   }
+
   100% {
     transform: scale(1);
   }
 }
 
 @keyframes shaken {
+
   0%,
   100% {
     transform: translateX(0);
@@ -337,6 +357,7 @@ html.fullscreen .Blur-Container {
 .dark::view-transition-old(root) {
   z-index: 9999999;
 }
+
 .dark::view-transition-new(root) {
   z-index: 10000000;
 }
@@ -344,6 +365,7 @@ html.fullscreen .Blur-Container {
 ::view-transition-old(root) {
   z-index: 1000;
 }
+
 ::view-transition-new(root) {
   z-index: 99999;
 }

@@ -5,11 +5,9 @@ import { ref } from "vue";
 
 export const apps = ref([]);
 
-(() => {
-  if (document.body.classList.contains("core-box"))
-    apps.value = touchChannel.sendSync("core-box-get:apps");
-
-})();
+setTimeout(() => {
+  apps.value = touchChannel.sendSync("core-box-get:apps");
+}, 200)
 
 const searchList: any = [apps];
 

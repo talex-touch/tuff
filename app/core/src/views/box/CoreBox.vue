@@ -28,7 +28,7 @@ function onKeyDown(event: KeyboardEvent) {
       execute(res.value[focus.value]);
 
       searchVal.value = "";
-      select.value = -1
+      select.value = -1;
     }, 300);
 
     // touchChannel.sendSync("core-box:run", searchVal.value);
@@ -111,6 +111,10 @@ onMounted(() => {
     Object.assign(clipboardOptions, {
       last: data,
     });
+
+    if (data.type !== "image") {
+      searchVal.value = data.data;
+    }
   });
 });
 </script>
@@ -120,31 +124,52 @@ onMounted(() => {
     <div class="CoreBox-Icon">
       <img :src="AppIcon" />
     </div>
-    <input id="core-box-input" placeholder="Type what you want to search by talex-touch." v-model="searchVal" />
+    <input
+      id="core-box-input"
+      placeholder="Type what you want to search by talex-touch."
+      v-model="searchVal"
+    />
 
     <div class="CoreBox-Tag">
-      <template v-if="clipboardOptions.last">
-        <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted">
+      <!-- <template v-if="clipboardOptions.last">
+        <span
+          v-if="clipboardOptions.last?.type === 'text'"
+          class="fake-background dotted"
+        >
           Copied Text
         </span>
-        <span v-else-if="clipboardOptions.last?.type === 'image'" class="fake-background dotted">
+        <span
+          v-else-if="clipboardOptions.last?.type === 'image'"
+          class="fake-background dotted"
+        >
           Copied Image
         </span>
-        <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted">
+        <span
+          v-else-if="clipboardOptions.last?.type === 'html'"
+          class="fake-background dotted"
+        >
           Copied Html
         </span>
       </template>
-      <template v-else>
-        <span class="fake-background" v-if="commandMode">COMMAND</span>
-        <span class="fake-background" v-else>SEARCH</span>
-      </template>
+      <template v-else> -->
+      <span class="fake-background" v-if="commandMode">COMMAND</span>
+      <span class="fake-background" v-else>SEARCH</span>
+      <!-- </template> -->
     </div>
   </div>
 
   <div class="CoreBoxRes">
     <el-scrollbar ref="scrollbar">
-      <BoxItem @click="execute(item)" :i="index + 1" @mousemove="focus = index" :active="focus === index"
-        v-for="(item, index) in res" :key="index" :data="item" :selected="select===index" />
+      <BoxItem
+        @click="execute(item)"
+        :i="index + 1"
+        @mousemove="focus = index"
+        :active="focus === index"
+        v-for="(item, index) in res"
+        :key="index"
+        :data="item"
+        :selected="select === index"
+      />
     </el-scrollbar>
   </div>
 </template>
@@ -235,7 +260,7 @@ div.CoreBox {
   display: none;
 
   width: 100%;
-  height: 60px;
+  height: 64px;
 
   left: 0;
   top: 0;

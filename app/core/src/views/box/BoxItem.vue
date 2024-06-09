@@ -7,8 +7,6 @@ const props = defineProps<{
 }>();
 
 function highlightText(text: string, matched: Array<any>) {
-  console.log("a", matched);
-
   let result = "";
 
   const [startIndex, endIndex] = matched;
@@ -68,7 +66,8 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
 
 <style lang="scss">
 .matched {
-  color: var(--el-color-primary);
+  opacity: 0.75;
+  color: var(--el-color-primary-light-3);
   font-weight: 600;
 }
 
