@@ -49,7 +49,7 @@ watch(
       v-model="storageManager.appSetting.tools.autoPaste.time"
       title="Auto paste"
       icon="checkbox-multiple-blank"
-      description="Paste what you copied in searchbar"
+      description="Paste what you copied in searchbar."
     >
       <t-select-item name="-1">Disabled</t-select-item>
       <t-select-item name="0">No limit</t-select-item>
@@ -66,7 +66,7 @@ watch(
       title="Auto clear"
       icon="format"
       iconChange="clear"
-      description="Clear searchbar after box hidden"
+      description="Clear searchbar after box hidden."
     >
       <t-select-item name="-1">Disabled</t-select-item>
       <t-select-item name="0">No limit</t-select-item>
