@@ -13,7 +13,6 @@ declare module 'vue' {
     AppUpgradationView: typeof import('./src/components/base/AppUpgradationView.vue')['default']
     BlockTemplate: typeof import('./src/components/base/template/BlockTemplate.vue')['default']
     BrickTemplate: typeof import('./src/components/base/template/BrickTemplate.vue')['default']
-    copy: typeof import('./src/components/terminal/LogTerminal copy.vue')['default']
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']

@@ -7,6 +7,8 @@ const props = defineProps<{
 }>();
 
 function highlightText(text: string, matched: Array<any>) {
+  console.log("a", matched);
+
   let result = "";
 
   const [startIndex, endIndex] = matched;
@@ -22,6 +24,21 @@ function highlightText(text: string, matched: Array<any>) {
 
   return result;
 }
+
+function highlightAbridgeText(text: string, matched: Array<any>) {
+  const textArr = text.split(" ");
+
+  const [startIndex, endIndex] = matched;
+  const newText = [...textArr].map((item, ind) => {
+    if (ind >= startIndex && ind <= endIndex) {
+      const [first, ...rest] = item;
+      return `<span class="matched">${first}</span>${rest.join("")}`;
+    }
+    return item;
+  });
+
+  return newText;
+}
 </script>
 
 <template>
@@ -33,6 +50,10 @@ function highlightText(text: string, matched: Array<any>) {
       <template v-if="data.descMatched">
         <h5 v-text="data.name" />
         <p v-html="highlightText(data.desc, data.matched)" />
+      </template>
+      <template v-else-if="data.abridgeMatched">
+        <h5 v-html="highlightAbridgeText(data.name, data.matched)" />
+        <p>{{ data.desc }}</p>
       </template>
       <template v-else="data.descMatched">
         <h5 v-html="highlightText(data.name, data.matched)" />
@@ -83,7 +104,7 @@ function highlightText(text: string, matched: Array<any>) {
     width: 100%;
     height: 100%;
 
-    opacity: .5;
+    opacity: 0.5;
     border-radius: 0;
     transition: 0.25s;
     box-shadow: 0 0 4px 0 var(--el-color-primary);

@@ -6,7 +6,9 @@ import { ref } from "vue";
 export const apps = ref([]);
 
 (() => {
-  apps.value = touchChannel.sendSync("core-box-get:apps");
+  if (document.body.classList.contains("core-box"))
+    apps.value = touchChannel.sendSync("core-box-get:apps");
+
 })();
 
 const searchList: any = [apps];
@@ -42,9 +44,11 @@ export function search(keyword: string, callback: (res: Array<any>) => void) {
     const data = [...searchSection.value];
 
     for (let item of data) {
-      const [matchedName, matchedDesc] = [
+      console.log("search", item)
+      const [matchedName, matchedDesc, matchedAbridge] = [
         check(keyword, item.name),
         check(keyword, item.desc),
+        check(keyword, item.keyWords.at(-1)),
       ];
 
       let obj: any;
@@ -59,6 +63,12 @@ export function search(keyword: string, callback: (res: Array<any>) => void) {
           ...item,
           descMatched: true,
           matched: matchedDesc,
+        };
+      } else if (matchedAbridge !== false) {
+        obj = {
+          ...item,
+          abridgeMatched: true,
+          matched: matchedAbridge,
         };
       } else {
         continue;

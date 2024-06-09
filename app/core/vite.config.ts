@@ -31,9 +31,9 @@ export default defineConfig({
       fileName: (format) => `[name].${format === "es" ? "m" : ""}js`,
     },
     rollupOptions: {
-      // input: {
-      //     main: path.resolve(__dirname, 'index.html')
-      // },
+      input: {
+          main: path.resolve(__dirname, 'index.html')
+      },
       external: ["simple-plist"],
     },
   },

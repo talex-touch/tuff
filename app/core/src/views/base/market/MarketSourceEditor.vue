@@ -43,54 +43,59 @@ function handleAdd() {
     <h2 my-2>Source</h2>
     <p op-75 my-1>Edit plugin market source.</p>
 
-    <div
-      v-draggable="[
-        pluginSettings.source.list,
-        { animation: 150, handle: '.handle', ghostClass: 'ghost' },
-      ]"
-      class="MarketSourceEditor-Content"
-    >
+    <div class="MarketSourceEditor-Container">
       <el-scrollbar>
         <div
-          v-for="(item, ind) in pluginSettings.source.list"
-          class="MarketSourceEditor-Content-Item Item"
+          v-draggable="[
+            pluginSettings.source.list,
+            { animation: 150, handle: '.handle', ghostClass: 'ghost' },
+          ]"
+          class="MarketSourceEditor-Content"
         >
-          <div class="handle" />
-          <div class="Item-Container">
-            <div class="Item-Title">
-              {{ item.name }}<span class="adapter">({{ item.adapter }})</span>
-            </div>
-            <div class="Item-Desc">{{ item.url }}</div>
-          </div>
           <div
-            :class="{ disabled: pluginSettings.source.list.length === 1 }"
-            @click="deleteSource(ind)"
-            class="transition-cubic action"
+            v-for="(item, ind) in pluginSettings.source.list"
+            class="MarketSourceEditor-Content-Item Item"
           >
-            <div v-if="pluginSettings.source.list.length !== 1" class="i-carbon-close" />
-            <div v-else class="i-carbon-carbon-for-salesforce" />
+            <div class="handle" />
+            <div class="Item-Container">
+              <div class="Item-Title">
+                {{ item.name }}<span class="adapter">({{ item.adapter }})</span>
+              </div>
+              <div class="Item-Desc">{{ item.url }}</div>
+            </div>
+            <div
+              :class="{ disabled: pluginSettings.source.list.length === 1 }"
+              @click="deleteSource(ind)"
+              class="transition-cubic action"
+            >
+              <div
+                v-if="pluginSettings.source.list.length !== 1"
+                class="i-carbon-close"
+              />
+              <div v-else class="i-carbon-carbon-for-salesforce" />
+            </div>
           </div>
-        </div>
 
-        <div class="MarketSourceEditor-Content-Item Item New">
-          <div class="Item-Container">
-            <div flex gap-2 class="Item-Title">
-              <FlatInput flex-1 placeholder="Source name" v-model="newSource.name" />
-              <!-- <t-select v-model="newSource.adapter">
+          <div class="MarketSourceEditor-Content-Item Item New">
+            <div class="Item-Container">
+              <div flex gap-2 class="Item-Title">
+                <FlatInput flex-1 placeholder="Source name" v-model="newSource.name" />
+                <!-- <t-select v-model="newSource.adapter">
                 <t-select-item v-for="adapter in pluginSettings.source.adapter">{{
                   adapter
                 }}</t-select-item>
               </t-select> -->
-              <FlatInput
-                style="width: 30%"
-                placeholder="Source adapter"
-                v-model="newSource.adapter"
-              />
+                <FlatInput
+                  style="width: 30%"
+                  placeholder="Source adapter"
+                  v-model="newSource.adapter"
+                />
+              </div>
+              <div mt-2 class="Item-Desc">
+                <FlatInput placeholder="Source url" v-model="newSource.url" />
+              </div>
+              <FlatButton @click="handleAdd" mt-2> Add </FlatButton>
             </div>
-            <div mt-2 class="Item-Desc">
-              <FlatInput placeholder="Source url" v-model="newSource.url" />
-            </div>
-            <FlatButton @click="handleAdd" mt-2> Add </FlatButton>
           </div>
         </div>
       </el-scrollbar>
@@ -210,6 +215,10 @@ function handleAdd() {
 .MarketSourceEditor-Content {
   padding: 0.5rem;
 
+  height: 80%;
+}
+
+.MarketSourceEditor-Container {
   height: 80%;
 }
 

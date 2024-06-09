@@ -24,13 +24,14 @@ export default () => {
     fs.mkdirSync(icondir);
   }
 
-  const getico = (app: any) => {
+  const getico = async (app: any) => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fileIcon = import("extract-file-icon");
+      const fileIcon = (await import("extract-file-icon")).default;
       if (typeof fileIcon !== "function") {
         return;
       }
+
 
       const buffer = fileIcon(app.desc, 32);
       const iconpath = path.join(icondir, `${app.name}.png`);
