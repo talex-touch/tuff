@@ -68,7 +68,6 @@
           v-for="feature in plugin.features"
           :title="`${feature.name}(${feature.commands.length})`"
         </LineTemplate>
-        {{ plugin.features }}
       </BlockTemplate>
 
       <BlockTemplate
