@@ -60,6 +60,8 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
         <p>{{ data.desc }}</p>
       </template>
 
+      <span class="end"> {{ (data.pluginType || data.type).toUpperCase() }} </span>
+
       <span class="index">{{ i }}</span>
       <span class="amo">{{ data.amo }}</span>
     </div>
@@ -83,6 +85,16 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
   opacity: 0.15;
   font-size: 12px;
   color: var(--el-color-primary);
+}
+
+.end {
+  position: absolute;
+
+  top: 50%;
+  right: 1rem;
+
+  opacity: 0.75;
+  transform: translateY(-50%);
 }
 
 .amo {

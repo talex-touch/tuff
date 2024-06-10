@@ -83,6 +83,43 @@ export function search(keyword: string, callback: (res: SearchItem) => void) {
         check(keyword, item.keyWords.at(-1)),
       ];
 
+      // 如果是 feature 检验 feature commands
+      if (item.pluginType === 'feature') {
+        for (let cmd of item.commands) {
+          const { type, value } = cmd as IFeatureCommand
+
+          const cmdObj: SearchItem = {
+            id: item.id,
+            name: item.name,
+            desc: item.desc,
+            icon: item.icon,
+            push: true,
+            names: [...item.names],
+            keyWords: [...item.keyWords],
+            pluginType: "cmd",
+            type: item.type,
+            value: item.value,
+            originFeature: item
+          }
+
+          function _push() {
+            results.push(cmdObj);
+
+            callback(cmdObj);
+          }
+
+          // function => todo channel transmission
+          if (type === 'match') {
+            value === keyword && _push()
+          } else if (type === 'regex') {
+            const _r = new RegExp(value as string)
+            _r.test(keyword) && _push()
+          } else if (type === 'contain') {
+            ; (keyword.length && (value === "" || keyword.indexOf(value as string) !== -1)) && _push()
+          }
+        }
+      }
+
       let obj: any;
 
       if (matchedName !== false) {
@@ -104,43 +141,6 @@ export function search(keyword: string, callback: (res: SearchItem) => void) {
           matched: matchedAbridge,
         };
       } else {
-
-        // 如果是 feature 检验 feature commands
-        if (item.pluginType === 'feature') {
-          for (let cmd of item.commands) {
-            const { type, value } = cmd as IFeatureCommand
-
-            const cmdObj: SearchItem = {
-              id: item.id,
-              name: item.name,
-              desc: item.desc,
-              icon: item.icon,
-              push: true,
-              names: [...item.names],
-              keyWords: [...item.keyWords],
-              pluginType: "cmd",
-              type: item.type,
-              value: item.value,
-              originFeature: item
-            }
-
-            function _push() {
-              results.push(cmdObj);
-
-              callback(cmdObj);
-            }
-
-            // function => todo channel transmission
-            if (type === 'match') {
-              value === keyword && _push()
-            } else if (type === 'regex') {
-              const _r = new RegExp(value as string)
-              _r.test(keyword) && _push()
-            } else if (type === 'contain') {
-              ; (keyword.length && (value === "" || keyword.indexOf(value as string) !== -1)) && _push()
-            }
-          }
-        }
 
         continue;
       }
