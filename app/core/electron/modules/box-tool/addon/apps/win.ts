@@ -16,6 +16,7 @@ export default () => {
   );
 
   const fileLists: any = [];
+  const fileMapper: Record<string, any> = new Map();
   const isZhRegex = /[\u4e00-\u9fa5]/;
 
   const icondir = path.join(os.tmpdir(), "ProcessIcon");
@@ -112,7 +113,23 @@ export default () => {
                   name: appName,
                   names: JSON.parse(JSON.stringify(keyWords)),
                 };
+
+                if (fileMapper.has(appName)) {
+                  const oldApp = fileMapper.get(appName);
+
+                  // 判断 value desc type name 是否完全相同
+                  if (
+                    oldApp.value === appInfo.value &&
+                    oldApp.desc === appInfo.desc &&
+                    oldApp.type === appInfo.type &&
+                    oldApp.name === appInfo.name
+                  ) {
+                    return;
+                  }
+                }
+
                 fileLists.push(appInfo);
+                fileMapper.set(appName, appInfo);
                 getico(appInfo);
               }
               if (isDir) {
