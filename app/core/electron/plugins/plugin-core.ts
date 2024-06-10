@@ -107,6 +107,7 @@ class TouchPlugin implements ITouchPlugin {
       webview: this.webview,
       status: this.status,
       platforms: this.platforms,
+      features: this.features
     };
   }
 
@@ -131,13 +132,17 @@ class TouchPlugin implements ITouchPlugin {
     const { id, name, desc, commands } = feature;
 
     const regex = /^[a-zA-Z0-9_-]+$/;
-    if (!regex.test(id)) return false;
+    if (!regex.test(id)) {
+      console.error(`[Plugin] Feature add error, id ${id} not valid.`)
+      return false;
+    }
 
     if (
       disallowedArrays.filter(
         (item: string) => name.indexOf(item) !== -1 || desc.indexOf(item) !== -1
-      )
+      ).length
     ) {
+      console.error(`[Plugin] Feature add error, name or desc contains disallowed words.`)
       return false;
     }
 
@@ -534,6 +539,16 @@ class PluginManager implements IPluginManager {
       pluginPath,
       pluginInfo.platforms
     );
+
+    // Read features
+    if (pluginInfo.features) {
+      console.log('features', pluginInfo.features, pluginInfo)
+      ;[...pluginInfo.features ].forEach((feature: IPluginFeature) => {
+        touchPlugin.addFeature(feature)
+      })
+
+      console.log(`[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`)
+    }
 
     this.plugins.set(pluginInfo.name, touchPlugin);
 

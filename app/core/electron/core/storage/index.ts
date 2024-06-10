@@ -44,7 +44,7 @@ const module = {
 
     if (content && this.configs.get(name)) {
       const p = path.join(configPath, name)
-      console.log("[Config] Save " + name + " with clear status: " + clear)
+      // console.log("[Config] Save " + name + " with clear status: " + clear)
 
       fse.createFileSync(p)
       fse.writeFileSync(

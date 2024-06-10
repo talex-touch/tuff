@@ -47,20 +47,28 @@
             />
           </template>
           <el-tag
-            v-for="(tag, index) in platform.os"
+            v-for="(tag, index) in platform!.os"
             :key="index"
-            size="mini"
+            size="small"
             type="primary"
             >{{ tag }}</el-tag
           >
           <el-tag
-            v-for="(tag, index) in platform.arch"
+            v-for="(tag, index) in platform!.arch"
             :key="index"
-            size="mini"
+            size="small"
             type="info"
             >{{ tag }}</el-tag
           >
         </LineTemplate>
+      </BlockTemplate>
+
+      <BlockTemplate title="Features">
+        <LineTemplate
+          v-for="feature in plugin.features"
+          :title="`${feature.name}(${feature.commands.length})`"
+        </LineTemplate>
+        {{ plugin.features }}
       </BlockTemplate>
 
       <BlockTemplate
