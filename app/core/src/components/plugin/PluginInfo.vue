@@ -67,6 +67,8 @@
         <LineTemplate
           v-for="feature in plugin.features"
           :title="`${feature.name}(${feature.commands.length})`"
+        >
+          {{ feature.desc }}
         </LineTemplate>
       </BlockTemplate>
 
