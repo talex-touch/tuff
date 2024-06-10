@@ -119,7 +119,7 @@ watch(
     focus.value = 0;
     res.value = [];
 
-    search(val, (v: any) => {
+    search(val, (v) => {
       const amo = appAmo[v.name] || 0;
       v.amo = amo;
 

@@ -7,6 +7,8 @@ const props = defineProps<{
 }>();
 
 function highlightText(text: string, matched: Array<any>) {
+  if (!matched) return text;
+
   let result = "";
 
   const [startIndex, endIndex] = matched;

@@ -25,7 +25,7 @@ import { genTouchApp, TouchWindow } from "../core/touch-core";
 import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
-import { BrowserWindow } from "electron";
+import { BrowserWindow, shell } from "electron";
 import { MicaBrowserWindow } from "talex-mica-electron";
 
 class PluginIcon implements IPluginIcon {
@@ -561,6 +561,9 @@ class PluginManager implements IPluginManager {
         plugin: touchPlugin,
         console,
         pkg,
+        $util: {
+          openUrl: (url: string) => shell.openExternal(url)
+        }
       }
 
       const featureScript = new vm.Script(fse.readFileSync(featureIndex, "utf-8"))

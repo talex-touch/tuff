@@ -2,6 +2,7 @@ import { touchChannel } from "~/modules/channel/channel-core";
 import PinyinMatch from "pinyin-match";
 import cprocess from "child_process";
 import { ref } from "vue";
+import type { IFeatureCommand, IPluginIcon } from '@talex-touch/utils/plugin';
 
 export const apps = ref([]);
 export const features = ref([])
@@ -40,18 +41,34 @@ export function execute(item: any, query: any) {
   if (type === 'app')
     cprocess.execSync(action);
   else if (type === 'plugin') {
-    if (pluginType === 'feature') {
+    if (pluginType === 'feature' || pluginType === 'cmd') {
       touchChannel.sendSync("trigger-plugin-feature", {
         query,
         plugin: value,
         feature: JSON.parse(JSON.stringify(item)),
       })
+
     }
   }
 
 }
 
-export function search(keyword: string, callback: (res: Array<any>) => void) {
+interface SearchItem {
+  "name": string,
+  "desc": string,
+  "icon": IPluginIcon
+  "push": boolean,
+  "commands"?: IFeatureCommand
+  "names": string[]
+  "keyWords": string[],
+  "pluginType": string,
+  "type": string,
+  "value": string
+  amo?: number
+  [key: string]: any
+}
+
+export function search(keyword: string, callback: (res: SearchItem) => void) {
   const results = [];
 
   console.log("[CoreBox] Searching " + keyword, searchList);
@@ -80,12 +97,51 @@ export function search(keyword: string, callback: (res: Array<any>) => void) {
           matched: matchedDesc,
         };
       } else if (matchedAbridge !== false) {
+        [0]
         obj = {
           ...item,
           abridgeMatched: true,
           matched: matchedAbridge,
         };
       } else {
+
+        // 如果是 feature 检验 feature commands
+        if (item.pluginType === 'feature') {
+          for (let cmd of item.commands) {
+            const { type, value } = cmd as IFeatureCommand
+
+            const cmdObj: SearchItem = {
+              id: item.id,
+              name: item.name,
+              desc: item.desc,
+              icon: item.icon,
+              push: true,
+              names: [...item.names],
+              keyWords: [...item.keyWords],
+              pluginType: "cmd",
+              type: item.type,
+              value: item.value,
+              originFeature: item
+            }
+
+            function _push() {
+              results.push(cmdObj);
+
+              callback(cmdObj);
+            }
+
+            // function => todo channel transmission
+            if (type === 'match') {
+              value === keyword && _push()
+            } else if (type === 'regex') {
+              const _r = new RegExp(value as string)
+              _r.test(keyword) && _push()
+            } else if (type === 'contain') {
+              ; (keyword.length && (value === "" || keyword.indexOf(value as string) !== -1)) && _push()
+            }
+          }
+        }
+
         continue;
       }
 
