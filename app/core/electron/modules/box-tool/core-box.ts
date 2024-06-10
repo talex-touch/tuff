@@ -6,6 +6,8 @@ import { globalShortcut, screen, app } from "electron";
 import { apps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
+import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin';
+import { genPluginManager } from '../../plugins/plugin-core';
 
 let touchApp: TouchApp;
 
@@ -159,6 +161,28 @@ export class CoreBoxManager {
       ChannelType.MAIN,
       "core-box-get:apps",
       () => apps
+    );
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      "core-box-get:features",
+      () => {
+        const features: IPluginFeature[] = []
+        const pluginManager = genPluginManager();
+        [...pluginManager.plugins.values()].forEach(plugin => {
+          features.push(...([...plugin.features].map(item => {
+            return {
+              ...item,
+              names: [item.name],
+              keyWords: [],
+              pluginType: "feature",
+              type: "plugin",
+              value: plugin.name
+            }
+          })))
+        })
+
+        return features
+      }
     );
   }
 

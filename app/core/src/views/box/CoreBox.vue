@@ -64,7 +64,7 @@ function onKeyDown(event: KeyboardEvent) {
     select.value = focus.value;
 
     setTimeout(() => {
-      execute(res.value[focus.value]);
+      execute(res.value[focus.value], searchVal.value);
 
       searchVal.value = "";
       select.value = -1;
@@ -123,7 +123,9 @@ watch(
       const amo = appAmo[v.name] || 0;
       v.amo = amo;
 
-      const arr = [...res.value, v].toSorted((b: any, a: any) => a.amo - b.amo);
+      const arr = [...res.value, v].toSorted((b: any, a: any) =>
+        a.type !== b.type ? a.type.length - b.type.length : a.amo - b.amo
+      );
 
       res.value = arr;
     });

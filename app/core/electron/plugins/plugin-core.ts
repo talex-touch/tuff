@@ -7,6 +7,7 @@ import {
   IPluginWebview,
   ITouchPlugin,
   PluginStatus,
+  IFeatureLifeCycle,
 } from "@talex-touch/utils/plugin";
 import {
   WebContentsProperty,
@@ -16,6 +17,7 @@ import {
 import { TalexTouch } from "../types";
 import fse from "fs-extra";
 import path from "path";
+import vm from 'node:vm';
 import pkg from "../../package.json";
 import { genTouchChannel } from "../core/channel-core";
 import { ChannelType, DataCode } from "@talex-touch/utils/channel";
@@ -90,6 +92,8 @@ class TouchPlugin implements ITouchPlugin {
   features: IPluginFeature[];
 
   pluginPath: string;
+
+  _featureFunc: IFeatureLifeCycle | null = null
 
   _status: PluginStatus = PluginStatus.DISABLED;
 
@@ -168,6 +172,10 @@ class TouchPlugin implements ITouchPlugin {
 
   getFeatures(): IPluginFeature[] {
     return this.features;
+  }
+
+  triggerFeature(feature: IPluginFeature, query: any) {
+    this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
   }
 
   constructor(
@@ -395,7 +403,8 @@ class PluginManager implements IPluginManager {
       if (
         baseName === "manifest.json" ||
         baseName === "preload.js" ||
-        baseName === "index.html"
+        baseName === "index.html" ||
+        baseName === "index.js"
       ) {
         let _enabled =
           plugin.status === PluginStatus.ENABLED ||
@@ -542,10 +551,21 @@ class PluginManager implements IPluginManager {
 
     // Read features
     if (pluginInfo.features) {
-      console.log('features', pluginInfo.features, pluginInfo)
       ;[...pluginInfo.features ].forEach((feature: IPluginFeature) => {
         touchPlugin.addFeature(feature)
       })
+
+      // 当插件被load的时候就需要自动执行 /index.js 来完成feature注入
+      const featureIndex = path.resolve(pluginPath, "index.js")
+      const featureContext = {
+        plugin: touchPlugin,
+        console,
+        pkg,
+      }
+
+      const featureScript = new vm.Script(fse.readFileSync(featureIndex, "utf-8"))
+      vm.createContext(featureContext)
+      touchPlugin._featureFunc = featureScript.runInContext(featureContext) as IFeatureLifeCycle
 
       console.log(`[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`)
     }
@@ -671,6 +691,17 @@ export default {
         const pluginIns = pluginManager!.plugins.get(plugin!);
 
         return pluginIns?.delFeature(feature);
+      }
+    );
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      "trigger-plugin-feature",
+      ({ data }) => {
+        const { feature, query, plugin } = data!;
+        const pluginIns = pluginManager!.plugins.get(plugin!);
+
+        return pluginIns?.triggerFeature(feature, query);
       }
     );
 

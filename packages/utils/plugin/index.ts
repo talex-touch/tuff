@@ -58,6 +58,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   delFeature(featureId: string): boolean
   getFeature(featureId: string): IPluginFeature | null
   getFeatures(): IPluginFeature[]
+  triggerFeature(feature: IPluginFeature, query: any): void
 
   get status(): PluginStatus
   set status(v: PluginStatus)
@@ -80,6 +81,10 @@ export interface IPluginFeature {
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]
+}
+
+export interface IFeatureLifeCycle {
+  onFeatureTriggered: (id: string, data: any, feature: IPluginFeature) => void
 }
 
 export interface IPluginManager {

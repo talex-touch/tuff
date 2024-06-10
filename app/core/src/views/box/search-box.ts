@@ -4,12 +4,18 @@ import cprocess from "child_process";
 import { ref } from "vue";
 
 export const apps = ref([]);
+export const features = ref([])
 
-setTimeout(() => {
+setTimeout(refreshSearchList, 200)
+
+const searchList: any = [apps, features];
+
+function refreshSearchList() {
   apps.value = touchChannel.sendSync("core-box-get:apps");
-}, 200)
+  features.value = touchChannel.sendSync("core-box-get:features");
 
-const searchList: any = [apps];
+  console.log('search box all', features, apps)
+}
 
 function check(keyword: string, appName: string) {
   let res = PinyinMatch.match(appName, keyword);
@@ -24,19 +30,31 @@ export const appAmo: any = JSON.parse(
   localStorage.getItem("app-count") || "{}"
 );
 
-export function execute(item: any) {
+export function execute(item: any, query: any) {
   appAmo[item.name] = (appAmo[item.name] || 0) + 1;
   localStorage.setItem("app-count", JSON.stringify(appAmo));
 
-  const { action } = item;
-  cprocess.execSync(action);
-  console.log("execute", item);
+  console.log("execute", item, query);
+
+  const { type, action, pluginType, value } = item;
+  if (type === 'app')
+    cprocess.execSync(action);
+  else if (type === 'plugin') {
+    if (pluginType === 'feature') {
+      touchChannel.sendSync("trigger-plugin-feature", {
+        query,
+        plugin: value,
+        feature: JSON.parse(JSON.stringify(item)),
+      })
+    }
+  }
+
 }
 
 export function search(keyword: string, callback: (res: Array<any>) => void) {
   const results = [];
 
-  // console.log("[CoreBox] Searching " + keyword);
+  console.log("[CoreBox] Searching " + keyword, searchList);
 
   for (let searchSection of searchList) {
     const data = [...searchSection.value];
