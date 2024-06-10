@@ -82,7 +82,8 @@ function onKeyDown(event: KeyboardEvent) {
     // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "Escape") {
-    searchVal.value = "";
+    if (searchVal.value) searchVal.value = "";
+    else touchChannel.sendSync("core-box:hide");
   }
 
   if (focus.value < 0) {

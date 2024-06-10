@@ -154,6 +154,11 @@ export class CoreBoxManager {
 
     touchApp.channel.regChannel(
       ChannelType.MAIN,
+      "core-box:hide",
+      () => this.trigger(false)
+    );
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
       "core-box:expand",
       ({ data }: any) => (data ? this.expand(data) : this.shrink())
     );
