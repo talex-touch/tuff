@@ -19,6 +19,15 @@ const plugins = [
   { text: "Preload scripts", link: "/docs/plugins/preloadjs" },
   { text: "Events", link: "/docs/plugins/events" },
   { text: "Permission", link: "/docs/plugins/permission" },
+  {
+    text: "Feature",
+    collapsible: true,
+    items: [
+      { text: "Overview", link: "/docs/plugins/feature/overview" },
+      { text: "index.js", link: "/docs/plugins/feature/index" },
+      { text: "Examples", link: "/docs/plugins/feature/examples" },
+    ],
+  },
   // { text: "Toast", link: "/docs/plugins/toast" },
   // { text: "Snippets", link: "/docs/plugins/snippets" },
   // { text: "Storage", link: "/docs/plugins/storage" },

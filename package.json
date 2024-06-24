@@ -30,7 +30,7 @@
     "build:docs": "pnpm -F docs run build",
     "publish:utils": "pnpm -F @talex-touch/utils run publish"
   },
-  "dependencies": {
+  "dependencies": { 
     "vite-plugin-electron": "^0.28.2"
   }
 }

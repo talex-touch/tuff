@@ -1,0 +1,21 @@
+// vite.config.ts
+import { defineConfig } from "file:///E:/Workspace/Applications/talex-touch/node_modules/.pnpm/vite@5.2.13_@types+node@20.14.2_sass@1.77.4/node_modules/vite/dist/node/index.js";
+import vue from "file:///E:/Workspace/Applications/talex-touch/node_modules/.pnpm/@vitejs+plugin-vue@5.0.5_vite@5.2.13_vue@3.4.27/node_modules/@vitejs/plugin-vue/dist/index.mjs";
+import UnoCSS from "file:///E:/Workspace/Applications/talex-touch/node_modules/.pnpm/unocss@0.58.9_postcss@8.4.38_vite@5.2.13/node_modules/unocss/dist/vite.mjs";
+import TouchPluginExport from "file:///E:/Workspace/Applications/talex-touch/node_modules/.pnpm/@talex-touch+unplugin-export-plugin@0.2.13/node_modules/@talex-touch/unplugin-export-plugin/dist/vite.js";
+var vite_config_default = defineConfig({
+  plugins: [vue(), UnoCSS(), TouchPluginExport()],
+  css: {
+    preprocessorOptions: {
+      scss: {}
+    }
+  },
+  // set server port
+  server: {
+    port: 6001
+  }
+});
+export {
+  vite_config_default as default
+};
+//# sourceMappingURL=data:application/json;base64,ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidml0ZS5jb25maWcudHMiXSwKICAic291cmNlc0NvbnRlbnQiOiBbImNvbnN0IF9fdml0ZV9pbmplY3RlZF9vcmlnaW5hbF9kaXJuYW1lID0gXCJFOlxcXFxXb3Jrc3BhY2VcXFxcQXBwbGljYXRpb25zXFxcXHRhbGV4LXRvdWNoXFxcXHBsdWdpbnNcXFxcdG91Y2gtaW1hZ2VcIjtjb25zdCBfX3ZpdGVfaW5qZWN0ZWRfb3JpZ2luYWxfZmlsZW5hbWUgPSBcIkU6XFxcXFdvcmtzcGFjZVxcXFxBcHBsaWNhdGlvbnNcXFxcdGFsZXgtdG91Y2hcXFxccGx1Z2luc1xcXFx0b3VjaC1pbWFnZVxcXFx2aXRlLmNvbmZpZy50c1wiO2NvbnN0IF9fdml0ZV9pbmplY3RlZF9vcmlnaW5hbF9pbXBvcnRfbWV0YV91cmwgPSBcImZpbGU6Ly8vRTovV29ya3NwYWNlL0FwcGxpY2F0aW9ucy90YWxleC10b3VjaC9wbHVnaW5zL3RvdWNoLWltYWdlL3ZpdGUuY29uZmlnLnRzXCI7aW1wb3J0IHsgZGVmaW5lQ29uZmlnIH0gZnJvbSAndml0ZSdcclxuaW1wb3J0IHZ1ZSBmcm9tICdAdml0ZWpzL3BsdWdpbi12dWUnXHJcbmltcG9ydCBVbm9DU1MgZnJvbSAndW5vY3NzL3ZpdGUnXHJcbmltcG9ydCBUb3VjaFBsdWdpbkV4cG9ydCBmcm9tICdAdGFsZXgtdG91Y2gvdW5wbHVnaW4tZXhwb3J0LXBsdWdpbi92aXRlJ1xyXG5cclxuLy8gaHR0cHM6Ly92aXRlanMuZGV2L2NvbmZpZy9cclxuZXhwb3J0IGRlZmF1bHQgZGVmaW5lQ29uZmlnKHtcclxuICBwbHVnaW5zOiBbdnVlKCksIFVub0NTUygpLCBUb3VjaFBsdWdpbkV4cG9ydCgpXSxcclxuICBjc3M6IHtcclxuICAgIHByZXByb2Nlc3Nvck9wdGlvbnM6IHtcclxuICAgICAgc2Nzczoge1xyXG4gICAgICAgIFxyXG4gICAgICB9XHJcbiAgICB9XHJcbiAgfSxcclxuICAvLyBzZXQgc2VydmVyIHBvcnRcclxuICBzZXJ2ZXI6IHtcclxuICAgIHBvcnQ6IDYwMDFcclxuICB9XHJcbn0pXHJcbiJdLAogICJtYXBwaW5ncyI6ICI7QUFBeVcsU0FBUyxvQkFBb0I7QUFDdFksT0FBTyxTQUFTO0FBQ2hCLE9BQU8sWUFBWTtBQUNuQixPQUFPLHVCQUF1QjtBQUc5QixJQUFPLHNCQUFRLGFBQWE7QUFBQSxFQUMxQixTQUFTLENBQUMsSUFBSSxHQUFHLE9BQU8sR0FBRyxrQkFBa0IsQ0FBQztBQUFBLEVBQzlDLEtBQUs7QUFBQSxJQUNILHFCQUFxQjtBQUFBLE1BQ25CLE1BQU0sQ0FFTjtBQUFBLElBQ0Y7QUFBQSxFQUNGO0FBQUE7QUFBQSxFQUVBLFFBQVE7QUFBQSxJQUNOLE1BQU07QUFBQSxFQUNSO0FBQ0YsQ0FBQzsiLAogICJuYW1lcyI6IFtdCn0K
