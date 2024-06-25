@@ -5,7 +5,7 @@ import { ref } from "vue";
 import type { IFeatureCommand, IPluginIcon } from '@talex-touch/utils/plugin';
 
 export const apps = ref([]);
-export const features = ref([])
+export const features = ref<any[]>([])
 
 setTimeout(refreshSearchList, 200)
 
@@ -13,7 +13,13 @@ const searchList: any = [apps, features];
 
 function refreshSearchList() {
   apps.value = touchChannel.sendSync("core-box-get:apps");
+
   features.value = touchChannel.sendSync("core-box-get:features");
+  touchChannel.regChannel("core-box-updated:features", () => {
+    features.value = touchChannel.sendSync("core-box-get:features");
+
+    console.log('[Feature] Features updated.')
+  })
 
   console.log('search box all', features, apps)
 }

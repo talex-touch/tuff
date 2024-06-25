@@ -38,7 +38,7 @@ export interface ITouchClientChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType
    * @param callback {Function} The callback function
    */
-  regChannel(eventName: string, callback: Function): () => void
+  regChannel(eventName: string, callback: (data: StandardChannelData) => any): () => void
 
   /**
    * Send a message to a channel

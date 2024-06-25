@@ -129,11 +129,8 @@ watch(
       const amo = appAmo[v.name] || 0;
       v.amo = amo;
 
-      const arr = [...res.value, v].toSorted(
-        (b: any, a: any) =>
-          // a.amo - b.amo < 3 && a.type !== b.type
-          //   ? a.type.length - b.type.length
-          /* : */ a.amo - b.amo
+      const arr = [...res.value, v].toSorted((b: any, a: any) =>
+        a.type !== b.type ? -a.type.length + b.type.length : a.amo - b.amo
       );
 
       res.value = arr;

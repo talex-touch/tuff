@@ -44,7 +44,10 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
 <template>
   <div class="BoxItem fake-background" :class="{ active, selected }">
     <!-- <div class="BoxItem-Main"> -->
-    <img :src="data.icon" :alt="data.name" />
+    <template v-if="data.icon?.type">
+      <PluginIcon :icon="data.icon" :alt="data.name" />
+    </template>
+    <img v-else :src="data.icon" :alt="data.name" />
     <!-- </div> -->
     <div class="BoxItem-Content">
       <template v-if="data.descMatched">
@@ -151,11 +154,16 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
     font-size: 12px;
   }
 
-  img {
+  img,
+  .PluginIcon-Container {
     width: 40px;
     height: 40px;
 
     object-fit: none;
+  }
+
+  .PluginIcon-Container {
+    top: 3px;
   }
 
   position: relative;

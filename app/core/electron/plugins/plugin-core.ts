@@ -1,4 +1,4 @@
-import { IPluginFeature } from "./../../../../packages/utils/plugin/index";
+import { IPluginFeature, type IFeatureCommand } from "./../../../../packages/utils/plugin/index";
 import {
   IPlatform,
   IPluginDev,
@@ -54,6 +54,26 @@ class PluginIcon implements IPluginIcon {
   }
 }
 
+export class PluginFeature implements IPluginFeature {
+  id: string;
+  name: string;
+  desc: string;
+  icon: IPluginIcon;
+  push: boolean;
+  platform: IPlatform;
+  commands: IFeatureCommand[];
+
+  constructor(pluginPath: string, options: IPluginFeature) {
+    this.id = options.id;
+    this.name = options.name;
+    this.desc = options.desc;
+    this.icon = new PluginIcon(pluginPath, options.icon.type, options.icon.value);
+    this.push = options.push;
+    this.platform = options.platform;
+    this.commands = [...options.commands]
+  }
+}
+
 const disallowedArrays = [
   "官方",
   "touch",
@@ -89,7 +109,7 @@ class TouchPlugin implements ITouchPlugin {
   webViewInit: boolean = false;
   webview: IPluginWebview = {};
   platforms: IPlatform;
-  features: IPluginFeature[];
+  features: PluginFeature[];
 
   pluginPath: string;
 
@@ -302,6 +322,14 @@ class TouchPlugin implements ITouchPlugin {
     return dev
       ? this.dev && this.dev.address
       : path.resolve(this.pluginPath, "index.html");
+  }
+
+  getFeatureUtil() {
+
+
+    return {
+      openUrl: (url: string) => shell.openExternal(url)
+    }
   }
 }
 
@@ -551,19 +579,28 @@ class PluginManager implements IPluginManager {
 
     // Read features
     if (pluginInfo.features) {
-      ;[...pluginInfo.features ].forEach((feature: IPluginFeature) => {
-        touchPlugin.addFeature(feature)
-      })
+      const pendingList = new Array<Promise<any>>()
+
+        ;[...pluginInfo.features].forEach((feature: IPluginFeature) => {
+          const pluginFeature = new PluginFeature(pluginPath, feature)
+
+          touchPlugin.addFeature(pluginFeature);
+
+          pendingList.push(new Promise((resolve) => 
+            pluginFeature.icon.init().then(resolve)
+          ))
+        })
+
+      await Promise.allSettled(pendingList)
 
       // 当插件被load的时候就需要自动执行 /index.js 来完成feature注入
       const featureIndex = path.resolve(pluginPath, "index.js")
+      const featureUtil = touchPlugin.getFeatureUtil()
       const featureContext = {
         plugin: touchPlugin,
         console,
         pkg,
-        $util: {
-          openUrl: (url: string) => shell.openExternal(url)
-        }
+        $util: featureUtil
       }
 
       const featureScript = new vm.Script(fse.readFileSync(featureIndex, "utf-8"))
@@ -571,6 +608,9 @@ class PluginManager implements IPluginManager {
       touchPlugin._featureFunc = featureScript.runInContext(featureContext) as IFeatureLifeCycle
 
       console.log(`[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`)
+
+      // updated features when feature changed
+      genTouchChannel().send(ChannelType.MAIN, 'core-box-updated:features')
     }
 
     this.plugins.set(pluginInfo.name, touchPlugin);
@@ -817,7 +857,7 @@ export default {
         if (!touchPlugin) return { error: "Plugin not found!" };
 
         const { id, property }: { id: number; property: WindowProperties } =
-          data;
+          data!;
 
         const win = touchPlugin._windows.get(id)!;
         if (!win) return { error: "Window not found!" };
