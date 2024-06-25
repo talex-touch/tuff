@@ -4,6 +4,9 @@ import TBlockLine from "@comp/base/group/TBlockLine.vue";
 import TGroupBlock from "@comp/base/group/TGroupBlock.vue";
 import OSIcon from "@comp/icon/OSIcon.vue";
 import { useCPUUsage, useMemoryUsage } from "@modules/hooks/env-hooks";
+import AppInformation from "talex-touch:information";
+
+console.log("information aaa", AppInformation);
 
 const props = defineProps({
   env: {
@@ -36,6 +39,25 @@ onBeforeUnmount(() => {
   cpuUsage[1]();
   memoryUsage[1]();
 });
+
+const wrappedTime = {};
+
+const currentQuarter = computed(() => {
+  const now = new Date(AppInformation.buildTime);
+  const month = now.getMonth() + 1;
+  const quarter = Math.ceil(month / 3);
+
+  return `${now.getYear() - 100}H${month} T${quarter}`;
+});
+
+const currentExperiencePack = computed(() => {
+  const now = new Date(AppInformation.buildTime);
+
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${now.getYear() + 1900}.${month}.${day}`;
+});
 </script>
 
 <template>
@@ -53,7 +75,7 @@ onBeforeUnmount(() => {
         <span v-else class="tag" style="color: #6d8b51"> Latest </span>
       </template>
     </t-block-line>
-    <t-block-line title="Specification" description="24H6 T1"></t-block-line>
+    <t-block-line title="Specification" :description="`${currentQuarter}`"></t-block-line>
     <t-block-line title="Start Costs">
       <template #description>
         {{ startCosts }}s
@@ -97,7 +119,7 @@ onBeforeUnmount(() => {
     ></t-block-line>
     <t-block-line
       title="Experience"
-      description="Touch Feature Experience Pack 2024.06.08"
+      :description="`Touch Feature Experience Pack ${currentExperiencePack}`"
     ></t-block-line>
     <t-block-line title="CPU Usage">
       <template #description>

@@ -129,3 +129,6 @@ app/ends/
 .history/
 app/main/dist-electron
 t/
+
+app/core/signature.json
+app/core/src/information.json

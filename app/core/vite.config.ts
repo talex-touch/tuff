@@ -12,6 +12,7 @@ import Unocss from "unocss/vite";
 import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 import VueSetupExtend from "vite-plugin-vue-setup-extend";
 import { fileURLToPath } from "url";
+import generatorInformation from './generator-information'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -50,6 +51,7 @@ export default defineConfig({
     commonjs({
       ignore: ["simple-plist"],
     }),
+    generatorInformation(),
     vue(),
     electron([
       {
@@ -63,12 +65,6 @@ export default defineConfig({
             // For Chrome devtools
             "--remote-debugging-port=9222",
           ]);
-        },
-        rollupOptions: {
-          // input: {
-          //     main: path.resolve(__dirname, 'index.html')
-          // },
-          external: ["simple-plist"],
         },
         vite: {
           build: {
