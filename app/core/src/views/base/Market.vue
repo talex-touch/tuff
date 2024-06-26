@@ -3,7 +3,7 @@
     <div class="Market-Header">
       <div class="Market-Header-Search">
         <FlatCompletion :fetch="fetch" />
-        <div flex items-center gap-2>
+        <div :class="{ _disabled: sourceEditorShow }" flex items-center gap-2>
           <FlatButton mini @click="toggleSourceEditorShow()">
             <div class="i-carbon-list" />
           </FlatButton>

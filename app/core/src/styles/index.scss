@@ -42,6 +42,12 @@ body.core-box #app {
   border: none !important;
 }
 
+._disabled {
+  opacity: .75;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 .el-scrollbar__bar {
 
   &.is-vertical,
