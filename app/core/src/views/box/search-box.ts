@@ -3,9 +3,17 @@ import PinyinMatch from "pinyin-match";
 import cprocess from "child_process";
 import { ref } from "vue";
 import type { IFeatureCommand, IPluginIcon } from '@talex-touch/utils/plugin';
+import { handleItemData } from './search-core';
 
 export const apps = ref([]);
 export const features = ref<any[]>([])
+
+export const enum BoxMode {
+  INPUT,
+  COMMAND,
+  IMAGE,
+  FILE,
+}
 
 setTimeout(refreshSearchList, 200)
 
@@ -59,12 +67,12 @@ export function execute(item: any, query: any = '') {
 
 }
 
-interface SearchItem {
+export interface SearchItem {
   "name": string,
   "desc": string,
   "icon": IPluginIcon
   "push": boolean,
-  "commands"?: IFeatureCommand
+  "commands"?: IFeatureCommand[]
   "names": string[]
   "keyWords": string[],
   "pluginType": string,
@@ -74,7 +82,11 @@ interface SearchItem {
   [key: string]: any
 }
 
-export function search(keyword: string, callback: (res: SearchItem) => void) {
+export interface SearchOptions {
+  mode: BoxMode
+}
+
+export function search(keyword: string, options: SearchOptions, callback: (res: SearchItem) => void) {
   const results = [];
 
   console.log("[CoreBox] Searching " + keyword, searchList);
@@ -83,77 +95,14 @@ export function search(keyword: string, callback: (res: SearchItem) => void) {
     const data = [...searchSection.value];
 
     for (let item of data) {
-      const [matchedName, matchedDesc, matchedAbridge] = [
-        check(keyword, item.name),
-        check(keyword, item.desc),
-        check(keyword, item.keyWords.at(-1)),
-      ];
+      const result = handleItemData(item, keyword, options)
 
-      let obj: any;
+      if (Array.isArray(result)) {
+        ;[...result].forEach(item => {
+          item && (callback(item), results.push(item))
+        })
+      } else result && (callback(result), results.push(result))
 
-      if (matchedName !== false) {
-        obj = {
-          ...item,
-          matched: matchedName,
-        };
-      } else if (matchedDesc !== false) {
-        obj = {
-          ...item,
-          descMatched: true,
-          matched: matchedDesc,
-        };
-      } else if (matchedAbridge !== false) {
-        [0]
-        obj = {
-          ...item,
-          abridgeMatched: true,
-          matched: matchedAbridge,
-        };
-      } else {
-
-        // if it is feature -> validate feature commands
-        if (item.pluginType === 'feature') {
-          for (let cmd of item.commands) {
-            const { type, value } = cmd as IFeatureCommand
-
-            const cmdObj: SearchItem = {
-              id: item.id,
-              name: item.name,
-              desc: item.desc,
-              icon: item.icon,
-              push: true,
-              names: [...item.names],
-              keyWords: [...item.keyWords],
-              pluginType: "cmd",
-              type: item.type,
-              value: item.value,
-              originFeature: item
-            }
-
-            function _push() {
-              results.push(cmdObj);
-
-              callback(cmdObj);
-            }
-
-            // function => todo channel transmission
-            if (type === 'match') {
-              value === keyword && _push()
-            } else if (type === 'regex') {
-              const _r = new RegExp(value as string)
-              _r.test(keyword) && _push()
-            } else if (type === 'contain') {
-              ; (keyword.length && (value === "" || keyword.indexOf(value as string) !== -1)) && _push()
-            }
-          }
-        }
-
-        continue;
-      }
-
-      results.push(obj);
-
-      callback(obj);
     }
   }
 

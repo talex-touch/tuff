@@ -1,18 +1,11 @@
 <script setup lang="ts" name="CoreBox">
 import { touchChannel } from "~/modules/channel/channel-core";
 import AppIcon from "~/assets/logo.svg";
-import { search, appAmo, execute } from "./search-box";
+import { search, appAmo, execute, BoxMode } from "./search-box";
 import BoxItem from "./BoxItem.vue";
 import FileTag from "./tag/FileTag.vue";
 import { useDocumentVisibility } from "@vueuse/core";
 import { storageManager } from "~/modules/channel/storage/index.ts";
-
-const enum BoxMode {
-  INPUT,
-  COMMAND,
-  IMAGE,
-  FILE,
-}
 
 const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
@@ -125,12 +118,7 @@ function onKeyDown(event: KeyboardEvent) {
   } else if (event.key === "Escape") {
     if (boxOptions.mode !== BoxMode.INPUT) {
       boxOptions.mode = BoxMode.INPUT;
-      searchVal.value = "";
-
-      return;
-    }
-
-    if (searchVal.value) searchVal.value = "";
+    } else if (searchVal.value) searchVal.value = "";
     else touchChannel.sendSync("core-box:hide");
   }
 
@@ -162,24 +150,26 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeyDown);
 });
 
+function handleSearch() {
+  boxOptions.focus = 0;
+  res.value = [];
+
+  search(searchVal.value, { mode: boxOptions.mode }, (v) => {
+    const amo = appAmo[v.name] || 0;
+    v.amo = amo;
+
+    const arr = [...res.value, v].toSorted((b: any, a: any) =>
+      a.type !== b.type ? -a.type.length + b.type.length : a.amo - b.amo
+    );
+
+    res.value = arr;
+  });
+}
+
 watch(
   () => searchVal.value,
-  (val) => {
-    boxOptions.focus = 0;
-    res.value = [];
-
-    search(val, (v) => {
-      const amo = appAmo[v.name] || 0;
-      v.amo = amo;
-
-      const arr = [...res.value, v].toSorted((b: any, a: any) =>
-        a.type !== b.type ? -a.type.length + b.type.length : a.amo - b.amo
-      );
-
-      res.value = arr;
-    });
-
-    // touchChannel.sendSync("core-box:search", { keyword: val });
+  () => {
+    handleSearch();
   }
 );
 
@@ -187,6 +177,13 @@ watch(
   () => searchVal.value?.length + res.value?.length,
   () => {
     touchChannel.sendSync("core-box:expand", res.value.length);
+  }
+);
+
+watch(
+  () => boxOptions.mode,
+  () => {
+    handleSearch();
   }
 );
 
