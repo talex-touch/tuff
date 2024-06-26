@@ -38,8 +38,6 @@ function handleAutoPaste() {
     const data = clipboardOptions.last;
 
     if (data.type === "file") {
-      console.log("data", data);
-
       const pathList = data.data;
       const [firstFile] = pathList;
       if (firstFile) {
@@ -117,7 +115,7 @@ function onKeyDown(event: KeyboardEvent) {
     event.preventDefault();
   } else if (event.key === "Escape") {
     if (boxOptions.mode !== BoxMode.INPUT) {
-      boxOptions.mode = BoxMode.INPUT;
+      boxOptions.mode = searchVal.value.startsWith("/") ? BoxMode.COMMAND : BoxMode.INPUT;
     } else if (searchVal.value) searchVal.value = "";
     else touchChannel.sendSync("core-box:hide");
   }
@@ -209,8 +207,6 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
 function handlePaste() {
   const { clipboard } = touchChannel.sendSync("clipboard:got");
 
-  console.log("paste aaa", clipboard);
-
   Object.assign(clipboardOptions, {
     last: clipboard,
   });
@@ -282,14 +278,19 @@ function handlePaste() {
 
 <style lang="scss">
 .CoreBox-Tag {
-  position: absolute;
+  position: relative;
   display: flex;
 
   min-width: 64px;
   width: max-content;
+  max-width: 360px;
   height: 60px;
 
-  right: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  // right: 20px;
   top: 0;
 
   justify-content: flex-end;
@@ -342,7 +343,8 @@ div.CoreBox {
   input {
     margin-left: 8px;
 
-    width: calc(100% - 158px);
+    flex: 1;
+    // width: calc(100% - 320px);
     height: 52px !important;
 
     outline: none;
@@ -370,6 +372,9 @@ div.CoreBox {
 
   left: 0;
   top: 0;
+
+  gap: 0.25rem;
+  align-items: center;
 
   border-radius: 8px;
   box-sizing: border-box;

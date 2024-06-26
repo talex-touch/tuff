@@ -29,26 +29,34 @@ const fileLength = computed(() => props?.paths.length || 0);
 <template>
   <div class="FileTag">
     <img :src="image" alt="" />
-    {{ firstFileName }}
+    <span class="name">{{ firstFileName }}</span>
     <span class="badge" v-if="fileLength - 1" v-text="fileLength" />
   </div>
 </template>
 
 <style lang="scss">
 .FileTag {
+  .name {
+    flex: 1;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .badge {
     display: flex;
-    padding: 0;
+    padding: 0.25rem;
 
     align-items: center;
     justify-content: center;
 
     right: 0.5rem;
 
-    width: 24px;
+    min-width: 24px;
     height: 24px;
 
-    border-radius: 50%;
+    border-radius: 12px;
     background-color: var(--el-fill-color);
   }
   img {
@@ -56,16 +64,18 @@ const fileLength = computed(() => props?.paths.length || 0);
 
     height: 24px;
   }
-
+  position: relative;
   display: flex;
   gap: 0.25rem;
 
   padding: 0.25rem 0.5rem;
 
+  width: 100%;
   align-items: center;
 
   color: var(--el-text-color);
   border-radius: 8px;
+  box-sizing: border-box;
   border: 1px solid currentColor;
 }
 </style>
