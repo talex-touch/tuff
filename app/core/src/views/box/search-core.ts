@@ -33,6 +33,7 @@ middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => 
   if (res !== false) {
     return {
       ...item,
+      descMatched: true,
       matched: res
     }
   }
