@@ -263,7 +263,7 @@ export function dropperResolver() {
     };
 
     // TODO: drop file to plugins (lack plugin name)
-    // touchChannel.send("drop", option);
+    touchChannel.send("drop", option);
   });
 
   function parseFile(file: File) {

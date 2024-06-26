@@ -58,6 +58,8 @@ function handleAdd() {
             class="MarketSourceEditor-Content-Item Item"
           >
             <div class="handle" />
+            <div class="GhostTitle" v-html="item.name" />
+
             <div class="Item-Container">
               <div class="Item-Title">
                 {{ item.name }}<span class="adapter">({{ item.adapter }})</span>
@@ -106,9 +108,32 @@ function handleAdd() {
 
 <style lang="scss">
 .MarketSourceEditor-Content-Item {
+  .GhostTitle {
+    position: absolute;
+    font-size: 18px;
+
+    line-height: 45px;
+
+    top: 50%;
+    left: 50%;
+    opacity: 0;
+    transition: 0.125s;
+    --s: 0;
+    transform: translate(-50%, -50%) scale(var(--s));
+  }
+
   &.ghost {
-    * {
+    .Item-Title,
+    .Item-Desc,
+    .action {
       opacity: 0 !important;
+      transition: none !important;
+    }
+
+    div.GhostTitle {
+      opacity: 1;
+
+      --s: 1;
     }
 
     border: 2px dashed currentColor;
@@ -206,6 +231,8 @@ function handleAdd() {
   position: relative;
   margin: 0.5rem;
   padding: 0.5rem;
+
+  height: 45px;
 
   cursor: pointer;
   overflow: hidden;
