@@ -145,7 +145,7 @@ class TouchChannel implements ITouchChannel {
     };
   }
 
-  sendTo(win: any, type: ChannelType, eventName: string, arg: any): Promise<any> {
+  sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(
       12
     )}`;

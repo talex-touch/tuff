@@ -75,6 +75,7 @@ export default defineConfig({
                 "mica-electron",
                 "simple-plist",
                 "extract-file-icon",
+                "electron-clipboard-ex"
               ],
             },
           },

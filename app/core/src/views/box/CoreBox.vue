@@ -3,21 +3,70 @@ import { touchChannel } from "~/modules/channel/channel-core";
 import AppIcon from "~/assets/logo.svg";
 import { search, appAmo, execute } from "./search-box";
 import BoxItem from "./BoxItem.vue";
+import FileTag from "./tag/FileTag.vue";
 import { useDocumentVisibility } from "@vueuse/core";
 import { storageManager } from "~/modules/channel/storage/index.ts";
+
+const enum BoxMode {
+  INPUT,
+  COMMAND,
+  IMAGE,
+  FILE,
+}
 
 const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
   last: null,
 });
 const searchVal = ref("");
-const focus = ref(0);
 const select = ref(-1);
 const res = ref<Array<any>>([]);
 const scrollbar = ref();
 const boxOptions = reactive<{
   lastHidden: number;
-}>({ lastHidden: -1 });
+  mode: BoxMode;
+  focus: number;
+  file: {
+    buffer: Uint8Array | null;
+    paths: string[];
+  };
+}>({ lastHidden: -1, mode: BoxMode.INPUT, focus: 0, file: { buffer: null, paths: [] } });
+
+function handleAutoPaste() {
+  // handle auto paste
+  const time = storageManager.appSetting.tools.autoPaste.time;
+  const timeDiff = Date.now() - clipboardOptions.last.time;
+
+  if (
+    time !== -1 &&
+    storageManager.appSetting.tools.autoPaste.enable &&
+    (time === 0 || timeDiff < time * 1000)
+  ) {
+    const data = clipboardOptions.last;
+
+    if (data.type === "file") {
+      console.log("data", data);
+
+      const pathList = data.data;
+      const [firstFile] = pathList;
+      if (firstFile) {
+        const buffer = touchChannel.sendSync("file:extract-icon", {
+          path: firstFile,
+        });
+
+        boxOptions.file = {
+          buffer,
+          paths: pathList,
+        };
+        boxOptions.mode = BoxMode.FILE;
+      }
+    } else if (data.type !== "image") {
+      searchVal.value = data.data;
+    }
+
+    clipboardOptions.last = null;
+  }
+}
 
 watch(
   () => visibility.value,
@@ -35,24 +84,11 @@ watch(
       storageManager.appSetting.tools.autoClear * 1000
     ) {
       searchVal.value = "";
+      boxOptions.mode = BoxMode.INPUT;
     }
 
     if (clipboardOptions.last) {
-      // handle auto paste
-      const time = storageManager.appSetting.tools.autoPaste.time;
-      const timeDiff = Date.now() - clipboardOptions.last.time;
-
-      if (
-        time !== -1 &&
-        storageManager.appSetting.tools.autoPaste.enable &&
-        (time === 0 || timeDiff < time * 1000)
-      ) {
-        const data = clipboardOptions.last;
-        if (data.type !== "image") {
-          searchVal.value = data.data;
-          clipboardOptions.last = null;
-        }
-      }
+      handleAutoPaste();
     }
   }
 );
@@ -63,13 +99,13 @@ function onKeyDown(event: KeyboardEvent) {
     return;
   }
 
-  const lastFocus = focus.value;
+  const lastFocus = boxOptions.focus;
 
   if (event.key === "Enter") {
-    select.value = focus.value;
+    select.value = boxOptions.focus;
 
     setTimeout(() => {
-      execute(res.value[focus.value], searchVal.value);
+      execute(res.value[boxOptions.focus], searchVal.value);
 
       searchVal.value = "";
       select.value = -1;
@@ -77,36 +113,43 @@ function onKeyDown(event: KeyboardEvent) {
 
     // touchChannel.sendSync("core-box:run", searchVal.value);
   } else if (event.key === "ArrowDown") {
-    focus.value = focus.value + 1;
+    boxOptions.focus += 1;
 
     // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "ArrowUp") {
-    focus.value = focus.value - 1;
+    boxOptions.focus -= 1;
 
     // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "Escape") {
+    if (boxOptions.mode !== BoxMode.INPUT) {
+      boxOptions.mode = BoxMode.INPUT;
+      searchVal.value = "";
+
+      return;
+    }
+
     if (searchVal.value) searchVal.value = "";
     else touchChannel.sendSync("core-box:hide");
   }
 
-  if (focus.value < 0) {
-    focus.value = 0;
-  } else if (focus.value > res.value.length - 1) {
-    focus.value = res.value.length - 1;
+  if (boxOptions.focus < 0) {
+    boxOptions.focus = 0;
+  } else if (boxOptions.focus > res.value.length - 1) {
+    boxOptions.focus = res.value.length - 1;
   }
 
-  const diff = Math.max(0, focus.value * 48);
+  const diff = Math.max(0, boxOptions.focus * 48);
 
   const sb = scrollbar.value;
 
-  if (lastFocus < focus.value) {
+  if (lastFocus < boxOptions.focus) {
     if (diff <= 48 * 9) return;
 
     sb.scrollTo(0, diff - 48 * 9);
   } else {
-    const mod = focus.value / 9;
+    const mod = boxOptions.focus / 9;
     if (!mod) return;
 
     sb.scrollTo(0, diff - 48 * 9);
@@ -122,7 +165,7 @@ onBeforeUnmount(() => {
 watch(
   () => searchVal.value,
   (val) => {
-    focus.value = 0;
+    boxOptions.focus = 0;
     res.value = [];
 
     search(val, (v) => {
@@ -147,7 +190,14 @@ watch(
   }
 );
 
-const commandMode = computed(() => searchVal.value?.at?.(0) === "/");
+watch(
+  () => searchVal.value,
+  (val) => {
+    if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND)
+      boxOptions.mode = val?.at?.(0) === "/" ? BoxMode.COMMAND : BoxMode.INPUT;
+  },
+  { immediate: true }
+);
 
 touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
   if (!data?.type) return;
@@ -158,10 +208,22 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
     last: data,
   });
 });
+
+function handlePaste() {
+  const { clipboard } = touchChannel.sendSync("clipboard:got");
+
+  console.log("paste aaa", clipboard);
+
+  Object.assign(clipboardOptions, {
+    last: clipboard,
+  });
+
+  handleAutoPaste();
+}
 </script>
 
 <template>
-  <div class="CoreBox">
+  <div @paste="handlePaste" class="CoreBox">
     <div class="CoreBox-Icon">
       <img :src="AppIcon" />
     </div>
@@ -193,7 +255,13 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
         </span>
       </template>
       <template v-else> -->
-      <span class="fake-background" v-if="commandMode">COMMAND</span>
+      <template v-if="boxOptions.mode === BoxMode.FILE">
+        <FileTag :buffer="boxOptions.file.buffer!" :paths="boxOptions.file.paths" />
+      </template>
+      <template v-else-if="boxOptions.mode === BoxMode.IMAGE"> </template>
+      <template v-else-if="boxOptions.mode === BoxMode.COMMAND">
+        <span class="fake-background">COMMAND</span>
+      </template>
       <span class="fake-background" v-else>SEARCH</span>
       <!-- </template> -->
     </div>
@@ -204,8 +272,8 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
       <BoxItem
         @click="execute(item)"
         :i="index + 1"
-        @mousemove="focus = index"
-        :active="focus === index"
+        @mousemove="boxOptions.focus = index"
+        :active="boxOptions.focus === index"
         v-for="(item, index) in res"
         :key="index"
         :data="item"

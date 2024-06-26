@@ -37,7 +37,7 @@ export const appAmo: any = JSON.parse(
   localStorage.getItem("app-count") || "{}"
 );
 
-export function execute(item: any, query: any) {
+export function execute(item: any, query: any = '') {
   appAmo[item.name] = (appAmo[item.name] || 0) + 1;
   localStorage.setItem("app-count", JSON.stringify(appAmo));
 

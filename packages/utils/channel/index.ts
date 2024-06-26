@@ -27,6 +27,15 @@ export interface ITouchChannel {
    * @param arg {any} The arguments of the message
    */
   send(type: ChannelType, eventName: string, arg?: any): Promise<any>
+
+  /**
+   * Send a message to a channel with settled window
+   * @param win {@link Electron.BrowserWindow} the window you want to sent
+   * @param type {@link ChannelType} The type of channel
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
+   * @param arg {any} The arguments of the message
+   */
+  sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: any): Promise<any>
 }
 
 export interface ITouchClientChannel {

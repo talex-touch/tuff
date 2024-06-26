@@ -1,7 +1,7 @@
 import { clipboardManager } from './../clipboard';
 import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
 import { BoxWindowOption } from "../../config/default";
-import { ChannelType } from "@talex-touch/utils/channel";
+import { ChannelType, DataCode } from "@talex-touch/utils/channel";
 import { globalShortcut, screen, app } from "electron";
 import { apps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
@@ -151,6 +151,23 @@ export class CoreBoxManager {
 
     //   console.log("divide");
     // });
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      "file:extract-icon",
+      async ({ data, reply }) => {
+        const { path } = data!
+        const fileIcon = (await import("extract-file-icon")).default;
+        if (typeof fileIcon !== "function") {
+          return;
+        }
+
+
+        const buffer = fileIcon(path, 32);
+        reply(DataCode.SUCCESS, {
+          buffer
+        })
+      }
+    );
 
     touchApp.channel.regChannel(
       ChannelType.MAIN,

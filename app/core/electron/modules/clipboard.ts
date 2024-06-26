@@ -1,11 +1,12 @@
-import { TouchWindow } from './../../../../t/talex-touch/app/core/electron/core/touch-core';
-import { ChannelType } from "@talex-touch/utils/channel";
+import clip from 'electron-clipboard-ex'
+import { ChannelType, DataCode } from "@talex-touch/utils/channel";
 import { genTouchChannel } from "../core/channel-core";
 import { TalexTouch } from "../types";
 import { clipboard } from 'electron'
+import type { TouchWindow } from '../core/touch-core';
 
 export interface IClipboardStash {
-    // html: string | null
+    file: string[] | null
     image: string | null
     buffer: string | null
     text: string | null
@@ -16,10 +17,13 @@ export class ClipboardManager {
     windows: TalexTouch.ITouchWindow[]
     clipboardStash: IClipboardStash
 
+    sendLastFunc: () => void
+
     constructor() {
         this.windows = []
+        this.sendLastFunc = () => void 0;
         this.clipboardStash = {
-            // html: null,
+            file: null,
             image: null,
             buffer: null,
             text: null
@@ -72,7 +76,7 @@ export class ClipboardManager {
         }
 
         const res = this.formatClipboards({
-            // "html": clipboard.readHTML(),
+            "file": clip.readFilePaths(),
             "image": clipboard.readImage().toDataURL(),
             "buffer": clipboard.readBuffer("public/utf8-plain-text").toString("base64"),
             "text": clipboard.readText()
@@ -88,10 +92,12 @@ export class ClipboardManager {
         // send to renderer
         const touchChannel = genTouchChannel()
         this.windows.forEach((w) =>
-          touchChannel
-            .sendTo(w.window, ChannelType.MAIN, "clipboard:trigger", data)
-            .then(() => {})
+            touchChannel
+                .sendTo(w.window, ChannelType.MAIN, "clipboard:trigger", data)
+                .then(() => { })
         );
+
+        this.sendLastFunc = () => data
     }
 }
 
@@ -104,6 +110,13 @@ export default {
         const win = touchApp.window
 
         clipboardManager.registerWindow(win)
+
+        genTouchChannel()
+            .regChannel(ChannelType.MAIN, "clipboard:got", ({ reply }) => {
+                reply(DataCode.SUCCESS, {
+                    clipboard: clipboardManager.sendLastFunc?.()
+                })
+            })
     },
     destroy() { }
 }

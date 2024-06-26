@@ -72,6 +72,18 @@ export class PluginFeature implements IPluginFeature {
     this.platform = options.platform;
     this.commands = [...options.commands]
   }
+
+  toJSONObject() {
+    return {
+      id: this.id,
+      name: this.name,
+      desc: this.desc,
+      icon: this.icon,
+      push: this.push,
+      platform: this.platform,
+      commands: this.commands
+    }
+  }
 }
 
 const disallowedArrays = [
@@ -131,7 +143,7 @@ class TouchPlugin implements ITouchPlugin {
       webview: this.webview,
       status: this.status,
       platforms: this.platforms,
-      features: this.features
+      features: this.features.map(feature => feature.toJSONObject())
     };
   }
 
@@ -616,7 +628,7 @@ class PluginManager implements IPluginManager {
     this.plugins.set(pluginInfo.name, touchPlugin);
 
     genTouchChannel().send(ChannelType.MAIN, "plugin:add", {
-      plugin: touchPlugin,
+      plugin: touchPlugin.toJSONObject(),
     });
     console.log("[PluginManager] Load plugin " + pluginName + " done!");
 
