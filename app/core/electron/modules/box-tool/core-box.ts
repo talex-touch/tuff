@@ -3,7 +3,7 @@ import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
 import { BoxWindowOption } from "../../config/default";
 import { ChannelType, DataCode } from "@talex-touch/utils/channel";
 import { globalShortcut, screen, app } from "electron";
-import { apps } from "./addon/app-addon";
+import { getApps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin';
@@ -182,7 +182,11 @@ export class CoreBoxManager {
     touchApp.channel.regChannel(
       ChannelType.MAIN,
       "core-box-get:apps",
-      () => apps
+      () => {
+        console.log('a', getApps())
+
+        return getApps()
+      }
     );
     touchApp.channel.regChannel(
       ChannelType.MAIN,

@@ -1,5 +1,4 @@
 import { touchChannel } from "~/modules/channel/channel-core";
-import PinyinMatch from "pinyin-match";
 import cprocess from "child_process";
 import { ref } from "vue";
 import type { IFeatureCommand, IPluginIcon } from '@talex-touch/utils/plugin';
@@ -15,14 +14,13 @@ export const enum BoxMode {
   FILE,
 }
 
-setTimeout(refreshSearchList, 200)
+setTimeout(initialize, 200)
 
 const searchList: any = [apps, features];
 
-function refreshSearchList() {
-  apps.value = touchChannel.sendSync("core-box-get:apps");
+function initialize() {
+  refreshSearchList()
 
-  features.value = touchChannel.sendSync("core-box-get:features");
   touchChannel.regChannel("core-box-updated:features", () => {
     features.value = touchChannel.sendSync("core-box-get:features");
 
@@ -32,13 +30,9 @@ function refreshSearchList() {
   console.log('search box all', features, apps)
 }
 
-function check(keyword: string, appName: string) {
-  let res = PinyinMatch.match(appName, keyword);
-
-  // if (res !== false) return res
-
-  return res;
-  // return PinyinMatchTw.match(appName, keyword)
+function refreshSearchList() {
+  apps.value = touchChannel.sendSync("core-box-get:apps");
+  features.value = touchChannel.sendSync("core-box-get:features");
 }
 
 export const appAmo: any = JSON.parse(
@@ -46,6 +40,8 @@ export const appAmo: any = JSON.parse(
 );
 
 export function execute(item: any, query: any = '') {
+  if (!item) return
+
   appAmo[item.name] = (appAmo[item.name] || 0) + 1;
   localStorage.setItem("app-count", JSON.stringify(appAmo));
 
@@ -87,6 +83,8 @@ export interface SearchOptions {
 }
 
 export function search(keyword: string, options: SearchOptions, callback: (res: SearchItem) => void) {
+  refreshSearchList()
+
   const results = [];
 
   console.log("[CoreBox] Searching " + keyword, searchList);
