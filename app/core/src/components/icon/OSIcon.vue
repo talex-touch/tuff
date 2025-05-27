@@ -10,7 +10,7 @@ const _class = ref()
 
 watchEffect(() => {
   const { os } = props
-  if (os === 'Windows 10 Pro' || os === 'win' || os.indexOf('Home China') !== -1 ) {
+  if (os === 'Windows 10 Pro' || os === 'Windows 11 Pro' || os === 'win' || os.indexOf('Home China') !== -1 ) {
     _class.value = 'Windows_11'
   } else if (os.indexOf('Windows') !== -1) {
     _class.value = 'i-ri-windows-line'

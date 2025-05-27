@@ -42,11 +42,17 @@ export default {
 
     function slotFlat(slot) {
       return slot
-        .map((item) => {
+        ?.map((item) => {
           if (item.type.name === qualifiedName) {
             return item;
           } else if (item.children) {
-            return slotFlat(item.children);
+            return item.children.map((tempSlot) => {
+              if (tempSlot instanceof Array) {
+                return slotFlat(tempSlot);
+              } else {
+                return slotFlat(tempSlot?.default?.());
+              }
+            });
           }
         })
         .flat();
@@ -86,7 +92,7 @@ export default {
             }
 
             if (index <= that.activeIndex) {
-              height += slot.el.getBoundingClientRect().height + 2;
+              height += slot.el?.getBoundingClientRect().height + 2;
             }
           });
 
@@ -135,6 +141,7 @@ export default {
     opacity: 0;
     transform: scaleY(0);
   }
+
   to {
     opacity: 1;
     transform: scaleY(1);
@@ -142,6 +149,7 @@ export default {
 }
 
 .TSelect-Wrapper {
+
   //&.selection:before {
   //  opacity: 1;
   //  transform: scaleY(1);
@@ -164,6 +172,7 @@ export default {
     background-color: var(--el-color-primary);
     //--height: 28px;
   }
+
   z-index: 100;
   position: absolute;
   display: flex;
@@ -211,6 +220,7 @@ export default {
   from {
     max-height: 0;
   }
+
   to {
     max-height: 1000px;
   }
