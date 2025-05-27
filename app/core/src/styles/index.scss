@@ -77,10 +77,12 @@ body.core-box #app {
     height: 100%;
     opacity: var(--fake-inner-opacity, 1);
     background: var(--fake-color, var(--el-fill-color-lighter));
-    border-radius: var(--fake-radius, 8px);
+    border-radius: var(--fake-radius, inherit);
   }
 
   position: relative; // make sure background adapt to parent
+
+  border-radius: 12px;
 }
 
 .color-template {

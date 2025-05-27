@@ -87,15 +87,15 @@ function handleClick($event) {
   position: relative;
   display: flex;
   margin: 5px;
-  padding: 8px 8px;
+  padding: 0.5rem;
 
   cursor: pointer;
   user-select: none;
-  border-radius: 4px;
+  border-radius: 12px;
   text-indent: .5em;
   box-sizing: border-box;
 
   --fake-color: transparent;
-  --fake-radius: 4px;
+  --fake-radius: 12px;
 }
 </style>
