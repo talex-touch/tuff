@@ -1,5 +1,3 @@
-<script></script>
-
 <script name="PluginListModule" setup>
 import PluginIcon from "@comp/plugin/PluginIcon.vue";
 import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
@@ -14,7 +12,7 @@ const value = useModelWrapper(props, emits);
 
 <template>
   <div class="PluginList-Module" mb-12 min-h-16>
-    <p flex justify-between items-center>
+    <p my-4 flex justify-between items-center>
       <!-- For slot change style (className) -->
       <span class="PluginList-Name">
         <slot name="name" />
@@ -60,17 +58,17 @@ const value = useModelWrapper(props, emits);
 .PluginList-Item-Main {
   .PluginList-ShrinkStatus {
     position: absolute;
+    padding: 0.5rem 0;
 
     top: 50%;
-
     right: 5%;
 
-    border-radius: 8px;
+    border-radius: 18px;
     transform: translateY(-50%);
     overflow: hidden;
   }
 
-  margin-left: 15px;
+  margin-left: 1rem;
 
   & :first-child {
     margin: 0;
@@ -87,7 +85,6 @@ const value = useModelWrapper(props, emits);
   }
 
   display: flex;
-  height: 60%;
 
   flex-direction: column;
   justify-content: space-between;
@@ -102,12 +99,12 @@ const value = useModelWrapper(props, emits);
   grid-column: 1;
   grid-row: 1 / 3;
 
-  width: 48px;
-  height: 48px;
+  width: 1.25em;
+  height: 1.25em;
 
   font-size: 32px;
 
-  border-radius: 8px;
+  border-radius: 12px;
   box-sizing: border-box;
   background-color: var(--el-fill-color);
 }
@@ -152,7 +149,7 @@ const value = useModelWrapper(props, emits);
       border: 2px solid var(--el-color-primary-light-3);
     }
 
-    height: 40px;
+    height: 64px;
 
     pointer-events: all !important;
   }
@@ -177,7 +174,7 @@ const value = useModelWrapper(props, emits);
   margin: 10px 5px;
 
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 2px solid transparent;
 
   --fake-opacity: 0;

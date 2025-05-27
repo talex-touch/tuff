@@ -91,11 +91,11 @@ function handleClick($event) {
 
   cursor: pointer;
   user-select: none;
-  border-radius: 12px;
+  border-radius: 8px;
   text-indent: .5em;
   box-sizing: border-box;
 
   --fake-color: transparent;
-  --fake-radius: 12px;
+  --fake-radius: 8px;
 }
 </style>

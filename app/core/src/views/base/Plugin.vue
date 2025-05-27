@@ -3,7 +3,7 @@
     class="Plugin-Container"
     :class="{ state: toggleOptions.state, status: toggleOptions.status }"
   >
-    <PluginList @select="selectPlugin" :plugins="plugins" />
+    <PluginList @select="selectPlugin" :plugins="[...plugins ]" />
 
     <div class="Plugin-Info" ref="pluginInfoRef">
       <PluginInfo v-if="select" :plugin="curSelect" />
