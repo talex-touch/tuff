@@ -7,7 +7,7 @@
   "private": false,
   "type": "module",
   "engines": {
-    "node": "^14.18.0 || >=16.0.0"
+    "node": ">=22.0.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.27.3",
@@ -32,6 +32,5 @@
   },
   "dependencies": {
     "vite-plugin-electron": "^0.28.8"
-  },
-  "packageManager": "pnpm@9.15.9"
+  }
 }
