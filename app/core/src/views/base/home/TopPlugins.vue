@@ -58,6 +58,7 @@ function handleMove(event: MouseEvent) {
     var distanceX = mouseX - elementX;
     var distanceY = mouseY - elementY;
 
+    element.style.setProperty("--op", '1');
     element.style.setProperty("--x", distanceX + "px");
     element.style.setProperty("--y", distanceY + "px");
   }
@@ -65,8 +66,10 @@ function handleMove(event: MouseEvent) {
 
 function cancelColor() {
   document.querySelectorAll(".BoxContent .element").forEach((element) => {
-    element.style.setProperty("--x", "-1000px");
-    element.style.setProperty("--y", "-1000px");
+
+    element.style.setProperty("--op", '0');
+    // element.style.setProperty("--x", "-1000px");
+    // element.style.setProperty("--y", "-1000px");
   });
 }
 </script>
@@ -74,8 +77,8 @@ function cancelColor() {
 <template>
   <div class="BoxContentWrapper">
     <div class="BoxContent-Header">
-      <p>TOP PLUGINS</p>
-      <span>Popular worldwide choices</span>
+      <p text-xl font-bold>TOP PLUGINS</p>
+      <span text-lg>Popular worldwide choices</span>
     </div>
 
     <div @mouseleave="cancelColor" @mousemove="handleMove" class="BoxContent">
@@ -142,7 +145,12 @@ function cancelColor() {
   background: var(--el-fill-color-light);
   height: 100%;
   position: relative;
-  border-radius: 12px;
+  border-radius: 16px;
+}
+
+.BoxContent-Item {
+  height: 110px;
+  width: 280px;
 }
 
 .element::before {
@@ -152,8 +160,10 @@ function cancelColor() {
   height: calc(100% + 3px);
   top: 50%;
   left: 50%;
+  opacity: var(--op);
+  transition: opacity 0.25s ease-in-out;
   transform: translate(-50%, -50%);
-  border-radius: 12px;
+  border-radius: 16px;
   background: radial-gradient(
     250px circle at var(--x) var(--y),
     #00dc8250 0,
@@ -195,6 +205,6 @@ function cancelColor() {
   position: absolute;
   inset: 0;
   background: var(--el-fill-color);
-  border-radius: 10px;
+  border-radius: 16px;
 }
 </style>

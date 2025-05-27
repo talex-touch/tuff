@@ -1,4 +1,6 @@
 <script setup lang="ts" name="HomerBanner">
+import Wallpaper from '~/assets/bg/wallpaper.png'
+
 const props = defineProps<{
   modelValue?: boolean;
 }>();
@@ -29,14 +31,18 @@ getOneWord();
 
 <template>
   <div class="HomeBanner">
-    <img
+    <!-- <img
       src="https://api.dujin.org/bing/1920.php"
       alt="Background Wallpaper Not Support!"
+    /> -->
+    <img
+    :src="Wallpaper"
+      alt="Wallpaper"
     />
 
     <div class="HomeBanner__Content">
-      <h1>Home Page</h1>
-      <span>{{ oneWord }}</span>
+      <h1 text-3xl font-bold>Home Page</h1>
+      <span text-xl>{{ oneWord }}</span>
     </div>
     "
   </div>
