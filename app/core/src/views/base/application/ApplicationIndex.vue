@@ -1,24 +1,27 @@
 <script name="ApplicationIndex" setup lang="ts">
-import AppList from './AppList.vue'
-import AppConfigure from './AppConfigure.vue'
-import ApplicationEmpty from './ApplicationEmpty.vue'
-import { apps, search, appAmo, execute } from '~/views/box/search-box'
-import { touchChannel } from "~/modules/channel/channel-core";
+import AppList from "./AppList.vue";
+import AppConfigure from "./AppConfigure.vue";
+import ApplicationEmpty from "./ApplicationEmpty.vue";
+import { refreshSearchList, apps, search, appAmo, execute } from "~/views/box/search-box";
 
-const props = defineProps<{
-  modelValue?: boolean,
-}>()
+defineProps<{
+  modelValue?: boolean;
+}>();
 
-const index = ref(-1)
-const curSelect = ref()
-const appList = ref(apps.value);
+const index = ref(-1);
+const curSelect = ref();
+const appList: any = ref(apps.value);
+
+onMounted(() => {
+  setTimeout(refreshSearchList, 200);
+});
 
 function handleSearch(value: string) {
   if (!value.length) {
-    appList.value = apps.value
-    return
+    appList.value = apps.value;
+    return;
   }
-  appList.value = []
+  appList.value = [];
 
   search(value, (v: any) => {
     const amo = appAmo[v.name] || 0;
@@ -28,7 +31,6 @@ function handleSearch(value: string) {
 
     appList.value = arr;
   });
-
 }
 
 function handleSelect(item: any, _index: number) {
@@ -37,14 +39,19 @@ function handleSelect(item: any, _index: number) {
 }
 
 function handleExecute(item: any) {
-  execute(item)
+  execute(item);
 }
 </script>
 
 <template>
   <div class="ApplicationIndex">
     <div class="ApplicationList">
-      <AppList :index="index" @select="handleSelect" @search="handleSearch" :list="appList" />
+      <AppList
+        :index="index"
+        @select="handleSelect"
+        @search="handleSearch"
+        :list="appList"
+      />
     </div>
     <div class="ApplicationContent">
       <ApplicationEmpty v-if="!curSelect" />
@@ -55,7 +62,6 @@ function handleExecute(item: any) {
 
 <style lang="scss">
 .ApplicationIndex {
-
   position: relative;
   display: flex;
   height: 100%;

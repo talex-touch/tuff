@@ -21,7 +21,7 @@
   "description": "TalexTouch series utils",
   "dependencies": {
     "path-browserify": "^1.0.1",
-    "vue": "^3.4.19"
+    "vue": "^3.5.15"
   },
   "peerDependencies": {
     "electron": "^24.4.0",

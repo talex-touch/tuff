@@ -30,7 +30,7 @@ function initialize() {
   console.log('search box all', features, apps)
 }
 
-function refreshSearchList() {
+export function refreshSearchList() {
   apps.value = touchChannel.sendSync("core-box-get:apps");
   features.value = touchChannel.sendSync("core-box-get:features");
 }

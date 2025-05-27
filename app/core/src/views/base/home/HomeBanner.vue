@@ -30,7 +30,7 @@ getOneWord();
 <template>
   <div class="HomeBanner">
     <img
-      src="https://api.bimg.cc/today?w=1920&h=1080&mkt=en-US"
+      src="https://api.dujin.org/bing/1920.php"
       alt="Background Wallpaper Not Support!"
     />
 

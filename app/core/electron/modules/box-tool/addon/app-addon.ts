@@ -18,13 +18,11 @@ if (env === 'darwin') {
 }
 
 export function getApps() {
-  console.log('getapps', appSearch)
-
   return appSearch()
 }
 
-export const apps = appSearch()
-const appNames = apps.map((app: any) => app.name)
+export let apps: any = appSearch()
+let appNames: any = apps.map((app: any) => app.name)
 
 function check(keyword: string, appName: string) {
   let res = PinyinMatch.match(appName, keyword)

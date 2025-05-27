@@ -32,7 +32,7 @@ import { sleep } from "@talex-touch/utils/common";
 import AccountView from "~/views/others/account/AccountView.vue";
 // import AccountView from "~/views/others/account/SignSucceed.vue";
 import LoadingIcon from "@comp/icon/LoadingIcon.vue";
-import { forDialogMention } from "@modules/mention/dialog-mention";
+import { forDialogMention } from "~/modules/mention/dialog-mention";
 
 const content = ref();
 const close = ref(false);
@@ -42,7 +42,7 @@ const props = defineProps(["close"]);
 const form = reactive({});
 provide("form", () => form);
 
-async function step(func) {
+async function step(func: any) {
   const el = content.value;
   if (!el) return;
   const wrapper = el.children[0];

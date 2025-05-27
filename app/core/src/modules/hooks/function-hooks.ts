@@ -9,6 +9,11 @@ export function useLogin() {
 
     element.id = 'Touch-Login'
     element.className = 'Touch-Dialog fake-background'
+    Object.assign(element.style, {
+        width: '820px',
+        height: '400px',
+        boxSizing: 'border-box'
+    })
 
     const app = createApp(Login, {
         close: () => {

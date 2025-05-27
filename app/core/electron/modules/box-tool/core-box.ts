@@ -183,9 +183,13 @@ export class CoreBoxManager {
       ChannelType.MAIN,
       "core-box-get:apps",
       () => {
-        console.log('a', getApps())
+        console.log('core box apps')
 
-        return getApps()
+        const res = getApps()
+
+        console.log('apps', res)
+
+        return res
       }
     );
     touchApp.channel.regChannel(

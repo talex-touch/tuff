@@ -3,72 +3,71 @@ import path from "path";
 import os from "os";
 import { shell } from "electron";
 
+const filePath = path.resolve(
+  "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"
+);
+const appData = path.join(os.homedir(), "./AppData/Roaming");
+const startMenu = path.join(
+  appData,
+  "Microsoft\\Windows\\Start Menu\\Programs"
+);
+
+const isZhRegex = /[\u4e00-\u9fa5]/;
+const iconDir = path.join(os.tmpdir(), "ProcessIcon");
+
+async function getIcon(app: any) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fileIcon = (await import("extract-file-icon")).default;
+    if (typeof fileIcon !== "function") {
+      return;
+    }
+
+    const buffer = fileIcon(app.desc, 32);
+    const iconPath = path.join(iconDir, `${app.name}.png`);
+
+    fs.exists(iconPath, (exists) => {
+      if (!exists) {
+        fs.writeFile(iconPath, buffer, "base64", () => {
+          //
+        });
+      }
+    });
+  } catch (e) {
+    console.log(e, app.desc);
+  }
+}
+
+const fileLists: any = [];
+const fileMapper: Record<string, any> = new Map();
+
 export default () => {
-  const filePath = path.resolve(
-    "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"
-  );
-
-  const appData = path.join(os.homedir(), "./AppData/Roaming");
-
-  const startMenu = path.join(
-    appData,
-    "Microsoft\\Windows\\Start Menu\\Programs"
-  );
-
-  const fileLists: any = [];
-  const fileMapper: Record<string, any> = new Map();
-  const isZhRegex = /[\u4e00-\u9fa5]/;
-
-  const icondir = path.join(os.tmpdir(), "ProcessIcon");
-  const exists = fs.existsSync(icondir);
+  const exists = fs.existsSync(iconDir);
   if (!exists) {
-    fs.mkdirSync(icondir);
+    fs.mkdirSync(iconDir);
   }
 
-  const getico = async (app: any) => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fileIcon = (await import("extract-file-icon")).default;
-      if (typeof fileIcon !== "function") {
-        return;
-      }
-
-
-      const buffer = fileIcon(app.desc, 32);
-      const iconpath = path.join(icondir, `${app.name}.png`);
-
-      fs.exists(iconpath, (exists) => {
-        if (!exists) {
-          fs.writeFile(iconpath, buffer, "base64", () => {
-            //
-          });
-        }
-      });
-    } catch (e) {
-      console.log(e, app.desc);
-    }
-  };
-
-  function fileDisplay(filePath) {
-    //根据文件路径读取文件，返回文件列表
-    fs.readdir(filePath, function (err, files) {
+  function fileDisplay(filePath: string) {
+    fs.readdir(filePath, async function (err, files) {
       if (err) {
         console.warn(err);
       } else {
-        files.forEach(function (filename) {
-          const filedir = path.join(filePath, filename);
-          fs.stat(filedir, function (eror, stats) {
+
+        for (let fileName of files) {
+          const fileDir = path.join(filePath, fileName);
+
+          fs.stat(fileDir, function (eror, stats) {
             if (eror) {
-              console.warn("获取文件stats失败");
+              console.warn("[Win] [CoreBox] [App] Read file stats err: " + fileName, fileDir);
             } else {
               const isFile = stats.isFile(); // 是文件
               const isDir = stats.isDirectory(); // 是文件夹
               if (isFile) {
-                const appName = filename.split(".")[0];
+                const appName = fileName.split(".")[0];
                 const keyWords = [appName];
                 let appDetail: any = {};
                 try {
-                  appDetail = shell.readShortcutLink(filedir);
+                  appDetail = shell.readShortcutLink(fileDir);
                 } catch (e) {
                   //
                 }
@@ -117,7 +116,6 @@ export default () => {
                 if (fileMapper.has(appName)) {
                   const oldApp = fileMapper.get(appName);
 
-                  // 判断 value desc type name 是否完全相同
                   if (
                     oldApp.value === appInfo.value &&
                     oldApp.desc === appInfo.desc &&
@@ -130,19 +128,24 @@ export default () => {
 
                 fileLists.push(appInfo);
                 fileMapper.set(appName, appInfo);
-                getico(appInfo);
+                getIcon(appInfo);
               }
               if (isDir) {
-                fileDisplay(filedir); // 递归，如果是文件夹，就继续遍历该文件夹下面的文件
+                fileDisplay(fileDir);
               }
             }
+
           });
-        });
+        }
       }
+
     });
   }
 
   fileDisplay(filePath);
   fileDisplay(startMenu);
+
+  console.log('filelists', fileLists)
+
   return fileLists;
 };
