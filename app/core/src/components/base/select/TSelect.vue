@@ -2,6 +2,7 @@
 import { h, nextTick, ref, Teleport } from "vue";
 import { computePosition } from "@floating-ui/vue";
 import { extractFromSlots } from '@talex-touch/utils/common/slots'
+import { onClickOutside } from '@vueuse/core'
 
 const qualifiedName = "TSelectItem";
 
@@ -126,16 +127,22 @@ export default {
 
     const that = this;
 
-    return h(
+    const v = h(
       "div",
       {
-        class: "TSelect-Container " + (that.click ? "selection" : ""),
+        class: "TSelect-Container win" + (that.click ? "selection" : ""),
         onclick() {
           that.click = !that.click;
         },
       },
       getContent()
-    );
+    )
+
+    onClickOutside(v, event => {
+      that.click = false;
+    })
+
+    return v;
   },
 };
 </script>
@@ -215,10 +222,46 @@ export default {
 
   border-radius: 4px;
 
-  transition: all 0.25s;
+  overflow: hidden;
   user-select: none;
   box-sizing: border-box;
-  background-color: var(--el-fill-color);
+  transition: all 0.25s;
+  border: 1px solid var(--el-border-color);
+}
+
+.TSelect-Container.win {
+  &:before {
+    filter: invert(0.25);
+    --fake-opacity: 0.25;
+    --fake-inner-opacity: 0.25;
+  }
+
+  &:hover {
+    &:before {
+      --fake-opacity: 0.35;
+      --fake-inner-opacity: 0.35;
+    }
+
+    border-color: var(--el-border-color);
+    border-bottom: 1px solid var(--el-border-color);
+    box-shadow: none;
+  }
+
+  &:focus-within {
+    &:before {
+      filter: invert(0.05);
+      --fake-opacity: 0.5;
+      --fake-inner-opacity: 0.5;
+    }
+
+    border-color: var(--el-border-color);
+    border-bottom: 2px solid var(--el-color-primary);
+    box-shadow: none;
+  }
+
+  border-radius: 4px;
+  --fake-radius: 4px !important;
+  border-bottom: 1px solid var(--el-border-color);
 }
 
 @keyframes expand {
@@ -227,7 +270,7 @@ export default {
   }
 
   to {
-    max-height: 1000px;
+    max-height: 2000px;
   }
 }
 </style>

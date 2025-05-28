@@ -46,7 +46,7 @@ export default {
     return h(
       'div',
       {
-        class: `TSelectItem-Container ${that.click ? 'selection' : ''}`,
+        class: `TSelectItem-Container fake-background ${that.click ? 'selection' : ''}`,
         onclick() {
           that.click = !that.click
         },
