@@ -43,6 +43,8 @@ The design style of TalexTouch is inspired by TDesignS, which is simple and eleg
 
 ### The best than ever UI design
 
+![CoreBox](https://files.catbox.moe/a2tbvh.png)
+
 ![HomePage](https://files.catbox.moe/ig0ipw.png)
 
 ![Plugins](https://files.catbox.moe/8ltyn1.png)
