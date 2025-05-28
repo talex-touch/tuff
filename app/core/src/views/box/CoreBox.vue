@@ -216,6 +216,9 @@ function handlePaste() {
 </script>
 
 <template>
+  <teleport to="body">
+    <div class="CoreBox-Mask" />
+  </teleport>
   <div @paste="handlePaste" class="CoreBox">
     <div class="CoreBox-Icon">
       <img :src="AppIcon" />
@@ -227,7 +230,7 @@ function handlePaste() {
     />
 
     <div class="CoreBox-Tag">
-      <!-- <template v-if="clipboardOptions.last">
+      <template v-if="clipboardOptions.last">
         <span
           v-if="clipboardOptions.last?.type === 'text'"
           class="fake-background dotted"
@@ -247,7 +250,7 @@ function handlePaste() {
           Copied Html
         </span>
       </template>
-      <template v-else> -->
+      <!-- <template v-else> -->
       <template v-if="boxOptions.mode === BoxMode.FILE">
         <FileTag :buffer="boxOptions.file.buffer!" :paths="boxOptions.file.paths" />
       </template>
@@ -393,5 +396,15 @@ div.CoreBox {
   // user-select: none;
   // pointer-events: none;
   // -webkit-app-region: drag;
+}
+
+.core-box .CoreBox-Mask {
+  z-index: -100;
+  position: absolute;
+
+  inset: 0;
+
+  opacity: 0.5;
+  background-color: var(--el-bg-color);
 }
 </style>
