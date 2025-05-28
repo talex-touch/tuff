@@ -89,7 +89,7 @@ async function readSectionItems() {
     pointerRef.value!.classList.remove('active')
     pointerOptions.show()
 
-    pointerOptions.pos = [el.offsetLeft + 'px', el.parentElement!.offsetTop + el.offsetTop / 3 + 'px', rect.width + 'px', rect.height + 'px']
+    pointerOptions.pos = [el.offsetLeft + 'px', el.parentElement!.offsetTop + el.offsetTop / 3 + 'px', rect.width + 16 + 'px', rect.height + 16 + 'px']
   }
 
   function activeEl(el: HTMLElement) {
@@ -136,7 +136,7 @@ onMounted(() => {
 })
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .pointer-border {
   --len: 1rem;
 
@@ -244,7 +244,7 @@ onMounted(() => {
     height: var(--h);
 
     opacity: 0;
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
     transition: cubic-bezier(.85,.1,1,.5) .25s;
 
