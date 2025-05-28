@@ -32,5 +32,8 @@
   },
   "dependencies": {
     "vite-plugin-electron": "^0.28.8"
+  },
+  "volta": {
+    "node": "22.16.0"
   }
 }
