@@ -40,8 +40,8 @@ function handleAdd() {
 
 <template>
   <div ref="editor" :class="{ show }" class="transition-cubic MarketSourceEditor">
-    <h2 my-2>Source</h2>
-    <p op-75 my-1>Edit plugin market source.</p>
+    <h2 text-xl my-2 font-bold>Source</h2>
+    <p op-75 text-lg>Edit plugin market source.</p>
 
     <div class="MarketSourceEditor-Container">
       <el-scrollbar>
@@ -196,7 +196,7 @@ function handleAdd() {
     background-color: var(--el-fill-color-dark);
     background-size: 50% 50%;
     background-repeat: no-repeat;
-    border-radius: 8px 0 0 8px;
+    border-radius: 12px 0 0 12px;
   }
 
   .Item-Container {
@@ -232,11 +232,11 @@ function handleAdd() {
   margin: 0.5rem;
   padding: 0.5rem;
 
-  height: 45px;
+  height: 65px;
 
   cursor: pointer;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 2px dashed transparent;
   background-color: var(--el-fill-color);
 }
@@ -244,7 +244,7 @@ function handleAdd() {
 .MarketSourceEditor-Content {
   padding: 0.5rem;
 
-  height: 80%;
+  height: 100%;
 }
 
 .MarketSourceEditor-Container {
@@ -267,10 +267,10 @@ function handleAdd() {
 
   text-align: center;
 
-  border-radius: 8px;
+  border-radius: 12px;
   transform: translate(-50%, -200%);
   background-color: var(--el-fill-color-light);
-  box-shadow: 0 0 8px 2px var(--el-fill-color-light);
+  // box-shadow: 0 0 8px 2px var(--el-fill-color-light);
   backdrop-filter: blur(18px) saturate(180%);
 }
 </style>
