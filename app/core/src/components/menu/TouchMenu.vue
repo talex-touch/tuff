@@ -76,7 +76,7 @@ onMounted(() => {
 <template>
   <div flex-col w-full h-full box-border>
     <slot />
-    <div absolute left="-2.5px" w="3px" opacity-0 transition=".25s" border-rounded
+    <div absolute left="-3.5px" w="5px" opacity-0 transition=".25s" border-rounded
       class="bg-[color:var(--el-color-primary)]" ref="pointer" />
   </div>
 </template>

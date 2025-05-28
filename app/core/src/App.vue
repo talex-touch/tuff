@@ -22,7 +22,7 @@ const pluginScope = usePlugin();
 onBeforeUnmount(() => {
   pluginScope();
 
-  pluginsScope.stop();
+  (pluginsScope as any).stop();
 });
 
 const _init = ref(false);
@@ -35,7 +35,7 @@ function init() {
     window.$startupInfo = res;
 
     applicationUpgrade();
-    // clipBoardResolver();
+    clipBoardResolver();
     dropperResolver();
     urlHooker();
     // screenCapture()
