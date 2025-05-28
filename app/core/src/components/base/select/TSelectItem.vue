@@ -1,80 +1,76 @@
-<script>
-import { Teleport, h, nextTick, ref } from 'vue'
-import { computePosition } from '@floating-ui/vue'
+<script name="TSelectItem" setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
-const qualifiedName = 'TSelectItem'
+/**
+ * Props definition
+ * @prop modelValue - The currently selected value
+ */
+const _props = defineProps<{
+  modelValue: string | number
+}>()
 
-export default {
-  name: 'TSelectItem',
-  props: {
-    modelValue: {
-      type: [String, Number],
-      required: true,
-    },
-  },
-  data() {
-    const activeIndex = ref(0)
-    const click = ref(false)
+/**
+ * Indicates whether the component is in an active (clicked/open) state.
+ */
+const isActive = ref(false)
 
-    function clickListener(e) {
-      if (!click.value || !e.path)
-        return
-      click.value = e.path.some(
-        node => node?.className?.indexOf('TSelectItem-Container') > -1,
-      )
-      // console.log(e.path, e.path.some(node => node?.className?.indexOf('TSelectItem-Container') > -1))
-      // click.value = false
-    }
+/**
+ * Handles document-level click events to determine if the component should be closed.
+ * Closes the component if the click occurred outside of the container.
+ * 
+ * @param event - MouseEvent triggered on document
+ */
+function handleDocumentClick(event: MouseEvent): void {
+  if (!isActive.value) return
 
-    return {
-      activeIndex,
-      click,
-      clickListener,
-    }
-  },
-  beforeUnmount() {
-    document.removeEventListener('click', this.clickListener)
-  },
-  mounted() {
-    document.addEventListener('click', this.clickListener)
-  },
-  render() {
-    this.activeIndex = this.modelValue || 0
-
-    const that = this
-
-    return h(
-      'div',
-      {
-        class: `TSelectItem-Container fake-background ${that.click ? 'selection' : ''}`,
-        onclick() {
-          that.click = !that.click
-        },
-      },
-      this.$slots,
-    )
-  },
+  // Use composedPath (standard), fallback to legacy .path if needed
+  const path = (event.composedPath?.() || (event as any).path) as HTMLElement[]
+  isActive.value = path.some(node =>
+    node?.className?.includes('TSelectItem-Container')
+  )
 }
+
+/**
+ * Toggles the active state when the component is clicked.
+ */
+function toggle(): void {
+  isActive.value = !isActive.value
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
+})
 </script>
 
-<style lang="scss" scoped>
+<template>
+  <div
+    class="TSelectItem-Container fake-background"
+    :class="{ selection: isActive }"
+    @click="toggle"
+  >
+    <slot />
+  </div>
+</template>
+
+<style scoped lang="scss">
 .TSelectItem-Container {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s;
+  background-color: var(--el-fill-color);
+
   &:hover {
     background-color: var(--el-bg-color);
   }
-  position: relative;
-  padding: 0.25rem 0.75rem;
-
-  width: 100%;
-  height: 36px;
-
-  text-indent: 0;
-  border-radius: 4px;
-
-  cursor: pointer;
-  user-select: none;
-  box-sizing: border-box;
-  transition: all 0.25s;
-  background-color: var(--el-fill-color);
 }
 </style>

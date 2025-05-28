@@ -222,6 +222,7 @@ export default {
 
   border-radius: 4px;
 
+  text-indent: 0;
   overflow: hidden;
   user-select: none;
   box-sizing: border-box;
