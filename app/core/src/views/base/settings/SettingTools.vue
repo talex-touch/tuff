@@ -1,6 +1,8 @@
 <script setup lang="ts" name="SettingUser">
 import TBlockSlot from "@comp/base/group/TBlockSlot.vue";
 import TBlockSwitch from "~/components/base/switch/TBlockSwitch.vue";
+import TBlockSelect from "~/components/base/select/TBlockSelect.vue";
+import TSelectItem from "~/components/base/select/TSelectItem.vue";
 import TGroupBlock from "@comp/base/group/TGroupBlock.vue";
 import FlatKeyInput from "~/components/base/input/FlatKeyInput.vue";
 import { storageManager } from "~/modules/channel/storage/index.ts";

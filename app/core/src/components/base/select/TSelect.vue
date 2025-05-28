@@ -1,6 +1,7 @@
 <script>
 import { h, nextTick, ref, Teleport } from "vue";
 import { computePosition } from "@floating-ui/vue";
+import { extractFromSlots } from '@talex-touch/utils/common/slots'
 
 const qualifiedName = "TSelectItem";
 
@@ -40,25 +41,29 @@ export default {
   render() {
     this.activeIndex = this.modelValue || 0;
 
-    function slotFlat(slot) {
-      return slot
-        ?.map((item) => {
-          if (item.type.name === qualifiedName) {
-            return item;
-          } else if (item.children) {
-            return item.children.map((tempSlot) => {
-              if (tempSlot instanceof Array) {
-                return slotFlat(tempSlot);
-              } else {
-                return slotFlat(tempSlot?.default?.());
-              }
-            });
-          }
-        })
-        .flat();
-    }
+    const slots = extractFromSlots(this.$slots, 'default', vnode => vnode.type?.name === qualifiedName);
 
-    const slots = slotFlat(this.$slots.default()); //.filter(slot => slot.type.name === qualifiedName)
+    // function slotFlat(slot) {
+    //   return slot
+    //     ?.map((item) => {
+    //       console.log("current", item)
+
+    //       if (item.type.name === qualifiedName) {
+    //         return item;
+    //       } else if (item.children?.length) {
+    //         return item.children.map((tempSlot) => {
+    //           if (tempSlot instanceof Array) {
+    //             return slotFlat(tempSlot);
+    //           } else {
+    //             return slotFlat(tempSlot?.default?.());
+    //           }
+    //         });
+    //       }
+    //     })
+    //     .flat();
+    // }
+
+    // const slots = slotFlat(this.$slots.default()); //.filter(slot => slot.type.name === qualifiedName)
 
     function getContent() {
       if (that.click) {
@@ -101,7 +106,7 @@ export default {
           async function adaptPosition() {
             const floating = await computePosition(that.$el, wrapper.el);
 
-            wrapper.el.style.setProperty("--height", `${30 * that.activeIndex + 8}px`);
+            wrapper.el.style.setProperty("--height", `${36 * that.activeIndex + 8}px`);
 
             Object.assign(wrapper.el.style, {
               top: `${floating.y}px`,
@@ -159,11 +164,11 @@ export default {
     content: "";
     position: absolute;
 
-    width: 3px;
+    width: 5px;
     height: 20px;
 
     top: var(--height, 8px);
-    left: 5px;
+    left: 4px;
 
     //opacity: 0;
     border-radius: 50px;
@@ -183,7 +188,7 @@ export default {
   justify-content: space-between;
 
   background-color: var(--el-fill-color);
-  border-radius: 4px;
+  border-radius: 12px;
 
   left: 0;
   top: 0;

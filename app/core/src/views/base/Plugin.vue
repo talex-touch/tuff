@@ -100,15 +100,15 @@ async function selectPlugin(index) {
   style.opacity = "0";
   style.transform = "translateX(100%) perspective(100px) rotateY(10deg) scale(.85)";
 
-  await sleep(100);
+  await sleep(50);
 
   select.value = null;
 
-  await sleep(50);
+  await sleep(10);
 
   select.value = index;
 
-  await sleep(100);
+  await sleep(50);
 
   style.transform = "translateX(0) perspective(100px) rotateY(0deg) scale(1)";
   style.opacity = "1";
