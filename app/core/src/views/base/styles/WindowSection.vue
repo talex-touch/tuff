@@ -265,7 +265,7 @@ onMounted(() => {
   padding: .5rem;
 
   --fake-inner-opacity: 0.5;
-  --fake-radius: 4px;
+  --fake-radius: 12px;
   --fake-color: var(--el-fill-color-dark);
 }
 

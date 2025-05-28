@@ -181,7 +181,7 @@ const expand = ref(!props.shrink)
   max-height: 56px;
 
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 12px;
   transition: max-height .35s;
 }
 </style>

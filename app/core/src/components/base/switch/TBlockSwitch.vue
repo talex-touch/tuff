@@ -177,11 +177,11 @@ watch(() => value.value, (v) => {
   height: 56px;
 
   user-select: none;
-  border-radius: 4px;
+  border-radius: 12px;
   //transition: .5s,;
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
-  --fake-radius: 4px;
+  --fake-radius: 12px;
   --fake-inner-opacity: .5;
 
   &:hover {
