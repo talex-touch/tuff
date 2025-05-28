@@ -193,7 +193,7 @@ export default {
   left: 0;
   top: 0;
 
-  width: 128px;
+  width: 158px;
   //width: 100%;
   //max-height: 500%;
 
@@ -210,7 +210,7 @@ export default {
   display: inline-flex;
   flex-direction: column;
 
-  width: 128px;
+  width: 158px;
   height: 32px;
 
   border-radius: 4px;

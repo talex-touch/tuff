@@ -65,9 +65,10 @@ export default {
   position: relative;
   padding: 0.25rem 0.75rem;
 
-  width: 128px;
+  width: 100%;
   height: 36px;
 
+  text-indent: 0;
   border-radius: 4px;
 
   cursor: pointer;
