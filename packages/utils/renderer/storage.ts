@@ -101,6 +101,8 @@ export class TouchStorage<T extends object> {
 
     this.#qualifiedName = qName;
     this.originalData = initData;
+    // Make sure data structure
+    this.data = reactive(initData) as UnwrapNestedRefs<T>;
 
     const stored = (channel.sendSync('storage:get', qName) as Partial<T>) || {};
     this.data = reactive({ ...initData, ...stored }) as UnwrapNestedRefs<T>;
@@ -148,7 +150,7 @@ export class TouchStorage<T extends object> {
         async () => {
           this._onUpdate.forEach((fn) => fn());
 
-          await channel!.send('save-config', {
+          await channel!.send('storage:save', {
             key: this.#qualifiedName,
             content: JSON.stringify(this.data),
             clear: false,

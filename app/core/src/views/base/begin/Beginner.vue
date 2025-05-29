@@ -1,15 +1,15 @@
 <script setup lang="ts" name="Beginner">
 import { sleep } from "@talex-touch/utils/common";
 import Greeting from "./internal/Greeting.vue";
-import { storageManager } from "~/modules/channel/storage/index.ts";
+import { appSetting, storageManager } from "~/modules/channel/storage/index.ts";
 
 const main = ref();
 const content = ref();
 const component = ref();
 const last_component = ref();
 
-if (!storageManager.appSetting.beginner) {
-  storageManager.appSetting.beginner = {
+if (!appSetting.beginner) {
+  appSetting.beginner = {
     init: false,
   };
 }

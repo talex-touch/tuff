@@ -11,7 +11,7 @@ import {
 import { useCoreBox } from "~/modules/hooks/core-box";
 import { touchChannel } from "~/modules/channel/channel-core";
 import Beginner from "~/views/base/begin/Beginner.vue";
-import { storageManager } from "~/modules/channel/storage/index.ts";
+import { appSetting, storageManager } from "~/modules/channel/storage/index.ts";
 import CoreBox from "~/views/box/CoreBox.vue";
 
 const packageJson = window.$nodeApi.getPackageJSON();
@@ -42,7 +42,7 @@ function init() {
 
     _init.value = true;
 
-    if (!storageManager.appSetting?.beginner?.init) beginner.value = true;
+    if (!appSetting?.beginner?.init) beginner.value = true;
   });
 }
 

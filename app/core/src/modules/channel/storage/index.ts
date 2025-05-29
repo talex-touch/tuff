@@ -1,46 +1,9 @@
-import { reactive, unref, watch } from 'vue';
+import './base'
+import { reactive, unref } from 'vue';
 import { AccountStorage } from './accounter';
 import { touchChannel } from '../channel-core';
-import { initStorageChannel, storages } from '@talex-touch/utils/renderer';
-
-initStorageChannel(touchChannel);
-
-const _appSettingOriginData = {
-  autoStart: false,
-  defaultApp: 0,
-  plugin: {
-    sync: 0,
-    syncLatest: false,
-    dataSync: false,
-  },
-  dev: {
-    autoCloseDev: true,
-  },
-  lang: {
-    followSystem: true,
-    locale: 0,
-  },
-  keyBind: {
-    summon: 'CTRL + E',
-    home: 0,
-    plugins: 0,
-    settings: 0,
-  },
-  beginner: {
-    init: false,
-  },
-  tools: {
-    autoPaste: {
-      enable: true,
-      time: 180,
-    },
-    autoClear: 600,
-  },
-};
-
-export type AppSetting = typeof _appSettingOriginData & {
-  [key: string]: any;
-};
+import { storages } from '@talex-touch/utils/renderer';
+import { appSettings } from './app-settings-storage';
 
 /**
  * StorageManager handles the reactive data storages of the app,
@@ -53,12 +16,20 @@ export type AppSetting = typeof _appSettingOriginData & {
  * const appSetting = storageManager.appSetting;
  * ```
  */
+/**
+ * StorageManager handles the reactive data storages of the app,
+ * such as theme settings and user accounts.
+ * It also ensures data persistence through touchChannel sync and save operations.
+ *
+ * @example
+ * ```ts
+ * import { storageManager } from './storage-manager';
+ * const account = storageManager.account;
+ * ```
+ */
 export class StorageManager {
   /** Reactive theme configuration */
   themeStyle: object = {};
-
-  /** Reactive application settings */
-  appSetting: AppSetting;
 
   /** Reactive user account information */
   account: AccountStorage;
@@ -66,21 +37,6 @@ export class StorageManager {
   constructor() {
     this.account = reactive(
       new AccountStorage(touchChannel.sendSync('storage:get', 'account.ini'))
-    );
-
-    const savedAppSetting = touchChannel.sendSync('storage:get', 'app-setting.ini');
-    if (!savedAppSetting || !savedAppSetting.hasOwnProperty('autoStart')) {
-      this.appSetting = reactive({ ..._appSettingOriginData });
-    } else {
-      this.appSetting = reactive(savedAppSetting);
-    }
-
-    watch(
-      this.appSetting,
-      async () => {
-        await this._save('app-setting.ini', this.appSetting);
-      },
-      { immediate: true, deep: true }
     );
   }
 
@@ -121,3 +77,21 @@ window.onbeforeunload = () => {
  * Global instance of the StorageManager
  */
 export const storageManager = new StorageManager();
+
+/**
+ * Convenient access to application settings, powered by TouchStorage
+ *
+ * @example
+ * ```ts
+ * import { appSetting } from './storage';
+ *
+ * // Read a setting
+ * console.log(appSetting.autoStart);
+ *
+ * // Modify a setting (automatically persisted)
+ * appSetting.autoStart = true;
+ * ```
+ */
+export const appSetting = appSettings.data;
+
+console.log(appSettings, appSetting)
