@@ -80,5 +80,22 @@ watch(
       <t-select-item name="600">10 min</t-select-item>
       <t-select-item name="750">15 min</t-select-item>
     </t-block-select>
+    <t-block-select
+      v-model="storageManager.appSetting.tools.autoClear"
+      title="Auto clear"
+      icon="format"
+      iconChange="clear"
+      description="Clear searchbar after box hidden."
+    >
+      <t-select-item name="-1">Disabled</t-select-item>
+      <t-select-item name="0">No limit</t-select-item>
+      <t-select-item name="15">15 sec</t-select-item>
+      <t-select-item name="30">30 sec</t-select-item>
+      <t-select-item name="60">1 min</t-select-item>
+      <t-select-item name="180">3 min</t-select-item>
+      <t-select-item name="300">5 min</t-select-item>
+      <t-select-item name="600">10 min</t-select-item>
+      <t-select-item name="750">15 min</t-select-item>
+    </t-block-select>
   </t-group-block>
 </template>

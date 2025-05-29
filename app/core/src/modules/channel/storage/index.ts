@@ -1,73 +1,9 @@
-import { reactive, unref, watch } from "vue";
-import { AccountStorage } from "./accounter";
-import { touchChannel } from "../channel-core";
+import { reactive, unref, watch } from 'vue';
+import { AccountStorage } from './accounter';
+import { touchChannel } from '../channel-core';
+import { initStorageChannel, storages } from '@talex-touch/utils/renderer';
 
-const storages = new Map<string, TouchStorage<any>>();
-
-export class TouchStorage<T extends object> {
-  #qualifiedName: string;
-
-  #autoSave: boolean = false;
-  #_autoSave;
-
-  _onUpdate: Array<Function> = [];
-  _initData: T;
-
-  data: typeof reactive<T>;
-
-  constructor(qName: string, initData: T, onUpdate?: Function) {
-    if (storages.has(qName))
-      throw new Error(`Storage ${qName} already exists!`);
-
-    this.#qualifiedName = qName;
-    this._initData = initData;
-    this.data = reactive(touchChannel.sendSync('storage:get', qName));
-
-    Object.keys(initData).forEach((key) => {
-      if (this.data.hasOwnProperty(key)) return;
-      this.data[key] = initData[key];
-    });
-
-    if (onUpdate) this._onUpdate = [onUpdate];
-
-    storages.set(qName, this);
-  }
-
-  setAutoSave(autoSave: boolean) {
-    this.#autoSave = autoSave;
-
-    if (!autoSave) {
-      this.#_autoSave?.();
-    } else {
-      this.#_autoSave = watch(
-        this.data,
-        async () => {
-          this._onUpdate?.forEach((fn) => fn());
-
-          await touchChannel.send(
-            'save-config',
-            {
-              key: this.#qualifiedName,
-              content: JSON.stringify(this.data),
-              clear: false
-            }
-          );
-        },
-        { deep: true, immediate: true }
-      );
-    }
-
-    return this;
-  }
-
-  onUpdate(fn: Function) {
-    this._onUpdate.push(fn);
-  }
-
-  offUpdate(fn: Function) {
-    this._onUpdate.splice(this._onUpdate.indexOf(fn), 1);
-  }
-}
+initStorageChannel(touchChannel);
 
 const _appSettingOriginData = {
   autoStart: false,
@@ -85,78 +21,103 @@ const _appSettingOriginData = {
     locale: 0,
   },
   keyBind: {
-    summon: "CTRL + E",
+    summon: 'CTRL + E',
     home: 0,
     plugins: 0,
     settings: 0,
   },
   beginner: {
-    init: false
+    init: false,
   },
   tools: {
     autoPaste: {
       enable: true,
-      time: 180
+      time: 180,
     },
-    autoClear: 600
-  }
-}
+    autoClear: 600,
+  },
+};
 
 export type AppSetting = typeof _appSettingOriginData & {
   [key: string]: any;
 };
 
+/**
+ * StorageManager handles the reactive data storages of the app,
+ * such as theme settings, application preferences, and user accounts.
+ * It also ensures data persistence through touchChannel sync and save operations.
+ *
+ * @example
+ * ```ts
+ * import { storageManager } from './storage-manager';
+ * const appSetting = storageManager.appSetting;
+ * ```
+ */
 export class StorageManager {
+  /** Reactive theme configuration */
+  themeStyle: object = {};
 
-  themeStyle: object;
-
+  /** Reactive application settings */
   appSetting: AppSetting;
 
+  /** Reactive user account information */
   account: AccountStorage;
+
   constructor() {
     this.account = reactive(
-      new AccountStorage(touchChannel.sendSync('storage:get', "account.ini"))
+      new AccountStorage(touchChannel.sendSync('storage:get', 'account.ini'))
     );
 
-    this.appSetting = reactive(touchChannel.sendSync('storage:get', "app-setting.ini"));
-    if (!this.appSetting.hasOwnProperty("autoStart"))
+    const savedAppSetting = touchChannel.sendSync('storage:get', 'app-setting.ini');
+    if (!savedAppSetting || !savedAppSetting.hasOwnProperty('autoStart')) {
       this.appSetting = reactive({ ..._appSettingOriginData });
+    } else {
+      this.appSetting = reactive(savedAppSetting);
+    }
+
     watch(
       this.appSetting,
       async () => {
-        // if (this.appSetting["lang"]["followSystem"])
-        //   // @ts-ignore
-        //   window.$i18n.global.locale.value =
-        //     languages[navigator.language.toLowerCase()];
-        // // @ts-ignore
-        // else
-        // // @ts-ignore
-        //   window.$i18n.global.locale.value =
-        //     languages[this.appSetting["lang"]["locale"]]["key"];
-
-        await this._save("app-setting.ini", this.appSetting);
+        await this._save('app-setting.ini', this.appSetting);
       },
       { immediate: true, deep: true }
     );
   }
 
-  async _save(name: string, data: object, clear: boolean = false) {
-    return touchChannel.send("storage:save", {
+  /**
+   * Persists data to the backend channel.
+   *
+   * @param name The key name used for storage.
+   * @param data The data to be serialized and saved.
+   * @param clear Whether to clear previous content before saving.
+   * @returns A Promise indicating when save is complete.
+   *
+   * @example
+   * ```ts
+   * await manager._save('example.ini', { key: 'value' }, true);
+   * ```
+   */
+  async _save(name: string, data: object, clear: boolean = false): Promise<void> {
+    await touchChannel.send('storage:save', {
       key: name,
-      content: JSON.stringify(data),
+      content: JSON.stringify(unref(data)),
       clear,
     });
   }
 }
 
+// Auto-save all registered storages before the app closes
 window.onbeforeunload = () => {
   for (const storage of storages.values()) {
-    touchChannel.send("storage:save", {
-      key: storage["#qualifiedName"],
-      content: JSON.stringify(unref(storage.data) || storage._initData),
+    touchChannel.send('storage:save', {
+      key: storage.getQualifiedName(),
+      content: JSON.stringify(unref(storage.data) || storage.originalData),
       clear: true,
     });
   }
 };
 
+/**
+ * Global instance of the StorageManager
+ */
 export const storageManager = new StorageManager();
