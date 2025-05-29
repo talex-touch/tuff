@@ -60,7 +60,7 @@ export default function generatorInformation() {
       }
     },
     buildStart() {
-      const informationPath = path.resolve(config.root, 'src/information.json')
+      const informationPath = path.resolve(config.root, 'src/distinformation.json')
 
       fse.writeFileSync(informationPath, JSON.stringify({
         refuse: false,

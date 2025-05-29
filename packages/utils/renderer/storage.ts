@@ -6,59 +6,53 @@ import {
 
 /**
  * Interface representing the external communication channel.
- * You must initialize this channel before using any `TouchStorage` instances.
+ * Must be initialized before any `TouchStorage` instance is used.
  */
 export interface IStorageChannel {
   /**
-   * Sends an asynchronous message.
+   * Asynchronous send interface
    * @param event Event name
-   * @param payload Message payload
-   * @returns A promise resolving with the response
+   * @param payload Event payload
    */
   send(event: string, payload: unknown): Promise<unknown>;
 
   /**
-   * Sends a synchronous message.
+   * Synchronous send interface
    * @param event Event name
-   * @param payload Message payload
-   * @returns The response synchronously
+   * @param payload Event payload
    */
   sendSync(event: string, payload: unknown): unknown;
 }
 
-/** Global variable to hold the initialized channel */
 let channel: IStorageChannel | null = null;
 
 /**
- * Initializes the global communication channel for all TouchStorage instances.
- * This should be called before constructing any storage instances.
+ * Initializes the global channel for communication.
  *
  * @example
  * ```ts
- * import { initTouchChannel } from './touch-storage';
+ * import { initStorageChannel } from './TouchStorage';
  * import { ipcRenderer } from 'electron';
  *
- * initTouchChannel({
+ * initStorageChannel({
  *   send: ipcRenderer.invoke.bind(ipcRenderer),
  *   sendSync: ipcRenderer.sendSync.bind(ipcRenderer),
  * });
  * ```
- *
- * @param c The channel instance implementing the TouchChannel interface
  */
 export function initStorageChannel(c: IStorageChannel): void {
   channel = c;
 }
 
 /**
- * A global map holding all instantiated storage instances.
+ * Global registry of storage instances.
  */
 export const storages = new Map<string, TouchStorage<any>>();
 
 /**
- * Generic class to manage reactive data storage with optional auto-save and update callbacks.
+ * A reactive storage utility with optional auto-save and update subscriptions.
  *
- * @template T The shape of the stored reactive data object.
+ * @template T Shape of the stored data.
  */
 export class TouchStorage<T extends object> {
   readonly #qualifiedName: string;
@@ -68,41 +62,34 @@ export class TouchStorage<T extends object> {
   private readonly _onUpdate: Array<() => void> = [];
 
   /**
-   * The reactive data object being managed.
+   * The reactive data exposed to users.
    */
-  public readonly data: UnwrapNestedRefs<T>;
+  public data: UnwrapNestedRefs<T>;
 
   /**
-   * Constructs a new instance of TouchStorage.
+   * Creates a new reactive storage instance.
    *
-   * @param qName A globally unique identifier for this storage instance
-   * @param initData The default shape and values for the data object
-   * @param onUpdate An optional callback to execute when data changes
-   * @throws Will throw if the given name is already registered or if the channel is not initialized
+   * @param qName Globally unique name for the instance
+   * @param initData Initial data to populate the storage
+   * @param onUpdate Optional callback when data is updated
    *
    * @example
    * ```ts
-   * const userStore = new TouchStorage('user', { name: '', age: 0 });
+   * const settings = new TouchStorage('settings', { darkMode: false });
    * ```
    */
-  constructor(
-    qName: string,
-    initData: T,
-    onUpdate?: () => void,
-  ) {
+  constructor(qName: string, initData: T, onUpdate?: () => void) {
     if (storages.has(qName)) {
       throw new Error(`Storage "${qName}" already exists`);
     }
     if (!channel) {
       throw new Error(
-        'TouchStorage: channel is not initialized. Please call initTouchChannel(...) before using.'
+        'TouchStorage: channel is not initialized. Please call initStorageChannel(...) before using.'
       );
     }
 
     this.#qualifiedName = qName;
     this.originalData = initData;
-    // Make sure data structure
-    this.data = reactive(initData) as UnwrapNestedRefs<T>;
 
     const stored = (channel.sendSync('storage:get', qName) as Partial<T>) || {};
     this.data = reactive({ ...initData, ...stored }) as UnwrapNestedRefs<T>;
@@ -113,26 +100,34 @@ export class TouchStorage<T extends object> {
   }
 
   /**
-   * Gets the qualified name of the current storage instance.
-   * @returns Returns the unique identifier passed during initialization
+   * Returns the unique identifier of this storage.
+   *
+   * @example
+   * ```ts
+   * console.log(userStore.getQualifiedName()); // "user"
+   * ```
    */
   getQualifiedName(): string {
     return this.#qualifiedName;
   }
 
   /**
-   * Checks if auto-save is enabled for the current storage instance.
-   * @returns Returns true if auto-save is enabled, otherwise returns false
+   * Checks whether auto-save is currently enabled.
+   *
+   * @example
+   * ```ts
+   * if (store.isAutoSave()) console.log("Auto-save is on!");
+   * ```
    */
   isAutoSave(): boolean {
     return this.#autoSave;
   }
 
   /**
-   * Enables or disables auto-saving of the data object.
+   * Enables or disables auto-saving.
    *
-   * @param autoSave If true, automatically saves data on change
-   * @returns Returns the current instance for chaining
+   * @param autoSave Whether to enable auto-saving
+   * @returns The current instance for chaining
    *
    * @example
    * ```ts
@@ -142,13 +137,19 @@ export class TouchStorage<T extends object> {
   setAutoSave(autoSave: boolean): this {
     this.#autoSave = autoSave;
 
-    this.#autoSaveStopHandle?.();
+    this.#autoSaveStopHandle?.(); // stop previous watcher
 
     if (autoSave) {
       this.#autoSaveStopHandle = watch(
         this.data,
         async () => {
-          this._onUpdate.forEach((fn) => fn());
+          this._onUpdate.forEach((fn) => {
+            try {
+              fn();
+            } catch (e) {
+              console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
+            }
+          });
 
           await channel!.send('storage:save', {
             key: this.#qualifiedName,
@@ -164,13 +165,15 @@ export class TouchStorage<T extends object> {
   }
 
   /**
-   * Registers a callback function to be called when the data is updated.
+   * Registers a callback that runs when data changes (only triggered in auto-save mode).
    *
-   * @param fn The callback function
+   * @param fn Callback function
    *
    * @example
    * ```ts
-   * store.onUpdate(() => console.log('Data changed!'));
+   * store.onUpdate(() => {
+   *   console.log('Data changed');
+   * });
    * ```
    */
   onUpdate(fn: () => void): void {
@@ -178,19 +181,76 @@ export class TouchStorage<T extends object> {
   }
 
   /**
-   * Removes a previously registered callback function.
+   * Removes a previously registered update callback.
    *
-   * @param fn The callback function to remove
+   * @param fn The same callback used in `onUpdate`
    *
    * @example
    * ```ts
-   * const callback = () => console.log('Updated');
-   * store.onUpdate(callback);
-   * store.offUpdate(callback);
+   * const cb = () => console.log("Change!");
+   * store.onUpdate(cb);
+   * store.offUpdate(cb);
    * ```
    */
   offUpdate(fn: () => void): void {
-    const i = this._onUpdate.indexOf(fn);
-    if (i >= 0) this._onUpdate.splice(i, 1);
+    const index = this._onUpdate.indexOf(fn);
+    if (index !== -1) {
+      this._onUpdate.splice(index, 1);
+    }
+  }
+
+  /**
+   * Internal method to assign new values and trigger update events.
+   *
+   * @param newData Partial update data
+   */
+  private assignData(newData: Partial<T>): void {
+    Object.assign(this.data, newData);
+
+    this._onUpdate.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {
+        console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
+      }
+    });
+  }
+
+  /**
+   * Applies new data to the current storage instance. Use with caution.
+   *
+   * @param data Partial object to merge into current data
+   * @returns The current instance for chaining
+   *
+   * @example
+   * ```ts
+   * store.applyData({ theme: 'dark' });
+   * ```
+   */
+  applyData(data: Partial<T>): this {
+    this.assignData(data);
+    return this;
+  }
+
+  /**
+   * Reloads data from remote storage and applies it.
+   *
+   * @returns The current instance
+   *
+   * @example
+   * ```ts
+   * await store.reloadFromRemote();
+   * ```
+   */
+  async reloadFromRemote(): Promise<this> {
+    if (!channel) {
+      throw new Error("TouchStorage: channel not initialized");
+    }
+
+    const result = await channel.send('storage:reload', this.#qualifiedName);
+    const parsed = result ? (result as Partial<T>) : {};
+    this.assignData(parsed);
+
+    return this;
   }
 }

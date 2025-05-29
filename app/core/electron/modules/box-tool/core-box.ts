@@ -6,7 +6,7 @@ import { globalShortcut, screen, app } from "electron";
 import { getApps } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
-import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin';
+import type { IPluginFeature } from '@talex-touch/utils/plugin';
 import { genPluginManager } from '../../plugins/plugin-core';
 
 let touchApp: TouchApp;
