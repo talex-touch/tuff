@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import Loading from "@comp/icon/LoadingIcon.vue";
 import { onMounted, ref, watchEffect } from "vue";
-import { sleep } from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common/utils";
 import PluginIcon from "@comp/plugin/PluginIcon.vue";
 import RemixIcon from "@comp/icon/RemixIcon.vue";
 

@@ -56,7 +56,7 @@
 
 <script name="Plugin" setup>
 import PluginInfo from "@comp/plugin/PluginInfo.vue";
-import { sleep } from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common/utils";
 import PluginList from "@comp/plugin/layout/PluginList.vue";
 import FlatButton from "@comp/base/button/FlatButton.vue";
 import PluginNew from "./plugin/PluginNew.vue";

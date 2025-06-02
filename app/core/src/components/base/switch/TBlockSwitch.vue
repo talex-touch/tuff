@@ -1,7 +1,7 @@
 <script name="TBlockSwitch" setup>
 import TSwitch from '@comp/base/switch/TSwitch.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { sleep } from '@talex-touch/utils/common'
+import { sleep } from '@talex-touch/utils/common/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { nextTick, ref, watch } from 'vue'
 // import { $t } from '@modules/lang'

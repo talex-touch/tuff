@@ -1,7 +1,7 @@
 <script lang="ts" name="TBottomDialog" setup>
 import Loading from "@comp/icon/LoadingIcon.vue";
 import { onMounted, ref, watchEffect } from "vue";
-import { sleep } from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common/utils";
 
 const props = defineProps({
   title: String,

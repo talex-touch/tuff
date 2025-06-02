@@ -1,7 +1,7 @@
 <script>
 import { defineComponent, h, nextTick, ref } from 'vue'
 import TMenuItem from '@comp/tabs/TMenuItem.vue'
-import { sleep } from '@talex-touch/utils/common'
+import { sleep } from '@talex-touch/utils/common/utils'
 import router from '~/base/router'
 
 const qualifiedName = ['TMenuItem']

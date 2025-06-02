@@ -28,7 +28,7 @@
 
 <script lang="ts" name="TouchSign" setup>
 import { onMounted, provide, reactive, ref } from "vue";
-import { sleep } from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common/utils";
 import AccountView from "~/views/others/account/AccountView.vue";
 // import AccountView from "~/views/others/account/SignSucceed.vue";
 import LoadingIcon from "@comp/icon/LoadingIcon.vue";

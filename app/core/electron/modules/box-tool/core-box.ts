@@ -8,6 +8,8 @@ import { TalexTouch } from "../../types";
 import path from "path";
 import type { IPluginFeature } from '@talex-touch/utils/plugin';
 import { genPluginManager } from '../../plugins/plugin-core';
+import { getConfig } from '../../core/storage';
+import { StorageList, type AppSetting } from '@talex-touch/utils';
 
 let touchApp: TouchApp;
 
@@ -93,6 +95,10 @@ export class CoreBoxManager {
     return curScreen;
   }
 
+  getAppSettingConfig() {
+    return getConfig(StorageList.APP_SETTING) as AppSetting
+  }
+
   async init() {
     const w = await createNewBoxWindow((window: TalexTouch.ITouchWindow) => {
       this.windows = this.windows.filter((w) => w !== window);
@@ -106,6 +112,10 @@ export class CoreBoxManager {
   initWindow(window: TouchWindow) {
     window.window.addListener("blur", () => {
       if (this.nowWindow !== window) return;
+
+      const appSettingConfig = this.getAppSettingConfig()
+
+      if ( !appSettingConfig.tools.autoHide ) return
 
       if (this.#_show) this.trigger(false);
     });

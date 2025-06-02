@@ -10,7 +10,7 @@ import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue';
 import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
 import { forTouchTip } from '~/modules/mention/dialog-mention';
 import { touchChannel } from '~/modules/channel/channel-core';
-import { getNpmVersion, checkGlobalPackageExist } from '@talex-touch/utils/common/env-tool'
+import { getNpmVersion, checkGlobalPackageExist } from '@talex-touch/utils/electron/env-tool'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import { createVNode } from 'vue'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue';

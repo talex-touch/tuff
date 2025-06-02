@@ -95,7 +95,7 @@ import WindowSectionVue from "./WindowSection.vue";
 import SectionItem from "./SectionItem.vue";
 import { $t } from "@modules/lang";
 import { useEnv } from "~/modules/hooks/env-hooks";
-import { themeStyle, triggerThemeTransition } from "~/modules/storage/AppStorage";
+import { themeStyle, triggerThemeTransition } from "~/modules/storage/app-storage";
 
 const os = ref();
 const styleValue = ref(0);

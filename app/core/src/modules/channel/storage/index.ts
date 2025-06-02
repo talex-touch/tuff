@@ -3,7 +3,7 @@ import { reactive, unref } from 'vue';
 import { AccountStorage } from './accounter';
 import { touchChannel } from '../channel-core';
 import { storages } from '@talex-touch/utils/renderer';
-import { appSettings } from './app-settings-storage';
+import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 
 /**
  * StorageManager handles the reactive data storages of the app,

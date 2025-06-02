@@ -1,5 +1,5 @@
 <script setup lang="ts" name="Beginner">
-import { sleep } from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common/utils";
 import Greeting from "./internal/Greeting.vue";
 import { appSetting, storageManager } from "~/modules/channel/storage/index.ts";
 

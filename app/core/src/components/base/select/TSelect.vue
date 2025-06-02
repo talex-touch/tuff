@@ -1,7 +1,7 @@
 <script>
 import { h, nextTick, ref, Teleport } from "vue";
 import { computePosition } from "@floating-ui/vue";
-import { extractFromSlots } from '@talex-touch/utils/common/slots'
+import { extractFromSlots } from '@talex-touch/utils/renderer/slots'
 import { onClickOutside } from '@vueuse/core'
 
 const qualifiedName = "TSelectItem";

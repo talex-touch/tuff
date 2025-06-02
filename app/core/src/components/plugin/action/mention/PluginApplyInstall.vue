@@ -3,7 +3,7 @@ import { inject, ref } from 'vue'
 import { blowMention } from '@modules/mention/dialog-mention'
 import Loading from '@assets/lotties/compress-loading.json'
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
-import { sleep } from '@talex-touch/utils/common'
+import { sleep } from '@talex-touch/utils/common/utils'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import { touchChannel } from '@modules/channel/channel-core'
 

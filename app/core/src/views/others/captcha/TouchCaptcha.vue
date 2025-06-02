@@ -49,7 +49,7 @@ import { get, post } from "~/base/axios";
 // import { $t } from "@modules/lang";
 import ProgressBar from "@comp/base/ProgressBar.vue";
 import { nextTick, reactive, ref, watch } from "vue";
-import { sleep } from "@talex-touch/utils/common";
+import { sleep } from "@talex-touch/utils/common/utils";
 
 const props = defineProps(["func"]);
 
