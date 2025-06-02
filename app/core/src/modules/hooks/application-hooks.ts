@@ -12,6 +12,7 @@ import { pluginManager } from "~/modules/channel/plugin-core/api";
 import { pluginAdopter } from "~/modules/hooks/adopters/plugin-adpoter";
 import { useRouter } from "vue-router";
 import { DataCode } from "@talex-touch/utils/channel";
+import { isLocalhostUrl } from '@talex-touch/utils';
 
 export function usePlugins() {
   const plugins = ref();
@@ -19,7 +20,7 @@ export function usePlugins() {
 
   const scope = effectScope();
 
-  scope.run(() => { 
+  scope.run(() => {
     watchEffect(() => {
       plugins.value = [...pluginAdopter.plugins.values()];
 
@@ -118,7 +119,12 @@ export async function urlHooker() {
   document.body.addEventListener("click", directListener);
 
   touchChannel.regChannel("url:open", async ({ data, reply }) => {
-    await forTouchTip("Allow to open external link?", data, [
+    const url = data! as unknown as string
+    if (isLocalhostUrl(url)) {
+      return
+    }
+
+    await forTouchTip("Allow to open external link?", url, [
       {
         content: "Cancel",
         type: "info",

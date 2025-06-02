@@ -103,6 +103,6 @@ export interface StandardChannelData extends RawStandardChannelData {
   reply: (code: DataCode, data: IChannelData) => void
 }
 
-export interface IChannelData {
+export type IChannelData = boolean | number | string | null | undefined | {
   [prop: string]: any
 }
