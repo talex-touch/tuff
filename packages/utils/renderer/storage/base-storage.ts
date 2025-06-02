@@ -2,13 +2,16 @@ import {
   reactive,
   watch,
   type UnwrapNestedRefs,
+  type WatchHandle,
 } from 'vue';
+import { useDebounceFn } from '@vueuse/core'
+import type { ITouchClientChannel } from '../../channel';
 
 /**
  * Interface representing the external communication channel.
  * Must be initialized before any `TouchStorage` instance is used.
  */
-export interface IStorageChannel {
+export interface IStorageChannel extends ITouchClientChannel {
   /**
    * Asynchronous send interface
    * @param event Event name
@@ -57,7 +60,8 @@ export const storages = new Map<string, TouchStorage<any>>();
 export class TouchStorage<T extends object> {
   readonly #qualifiedName: string;
   #autoSave = false;
-  #autoSaveStopHandle?: () => void;
+  #autoSaveStopHandle?: WatchHandle;
+  #assigning = false;
   readonly originalData: T;
   private readonly _onUpdate: Array<() => void> = [];
 
@@ -91,10 +95,19 @@ export class TouchStorage<T extends object> {
     this.#qualifiedName = qName;
     this.originalData = initData;
 
-    const stored = (channel.sendSync('storage:get', qName) as Partial<T>) || {};
-    this.data = reactive({ ...initData, ...stored }) as UnwrapNestedRefs<T>;
+    // const stored = (channel.sendSync('storage:get', qName) as Partial<T>) || {};
+    this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>;
+    this.loadFromRemote()
 
     if (onUpdate) this._onUpdate.push(onUpdate);
+
+    channel.regChannel('storage:update', ({ data }) => {
+      const { name } = data!
+
+      if (name === qName) {
+        this.loadFromRemote()
+      }
+    })
 
     storages.set(qName, this);
   }
@@ -124,6 +137,36 @@ export class TouchStorage<T extends object> {
   }
 
   /**
+   * Saves the current data to remote storage.
+   *
+   * @param options Optional configuration
+   * @param options.force Force save even if data is being assigned
+   *
+   * @example
+   * ```ts
+   * await store.saveToRemote();
+   * ```
+   */
+  saveToRemote = useDebounceFn(async (options?: { force?: boolean }): Promise<void> => {
+    if (!channel) {
+      throw new Error("TouchStorage: channel not initialized");
+    }
+
+    if (this.#assigning && !options?.force) {
+      console.debug("[Storage] Skip saveToRemote for", this.getQualifiedName());
+      return;
+    }
+
+    console.debug("Storage saveToRemote triggered", this.getQualifiedName());
+
+    await channel.send('storage:save', {
+      key: this.#qualifiedName,
+      content: JSON.stringify(this.data),
+      clear: false,
+    });
+  }, 300);
+
+  /**
    * Enables or disables auto-saving.
    *
    * @param autoSave Whether to enable auto-saving
@@ -137,12 +180,17 @@ export class TouchStorage<T extends object> {
   setAutoSave(autoSave: boolean): this {
     this.#autoSave = autoSave;
 
-    this.#autoSaveStopHandle?.(); // stop previous watcher
+    this.#autoSaveStopHandle?.();
 
     if (autoSave) {
       this.#autoSaveStopHandle = watch(
         this.data,
-        async () => {
+        () => {
+          if (this.#assigning) {
+            console.debug("[Storage] Skip auto-save watch handle for", this.getQualifiedName());
+            return;
+          }
+
           this._onUpdate.forEach((fn) => {
             try {
               fn();
@@ -151,11 +199,7 @@ export class TouchStorage<T extends object> {
             }
           });
 
-          await channel!.send('storage:save', {
-            key: this.#qualifiedName,
-            content: JSON.stringify(this.data),
-            clear: false,
-          });
+          this.saveToRemote();
         },
         { deep: true, immediate: true },
       );
@@ -200,20 +244,34 @@ export class TouchStorage<T extends object> {
   }
 
   /**
+   * Internal method to assign new values and trigger update events. (Debounced)
+   *
+   * @param newData Partial update data
+   * @param stopWatch Whether to stop the watcher after assignment
+   */
+  assignDataDebounced = useDebounceFn(this.assignData.bind(this), 100)
+
+  /**
    * Internal method to assign new values and trigger update events.
    *
    * @param newData Partial update data
+   * @param stopWatch Whether to stop the watcher during assignment
    */
-  private assignData(newData: Partial<T>): void {
-    Object.assign(this.data, newData);
+  private assignData(newData: Partial<T>, stopWatch: boolean = true): void {
+    if (stopWatch && this.#autoSave) {
+      this.#assigning = true;
+      console.debug(`[Storage] Stop auto-save watch handle for ${this.getQualifiedName()}`);
+    }
 
-    this._onUpdate.forEach((fn) => {
-      try {
-        fn();
-      } catch (e) {
-        console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
-      }
-    });
+    Object.assign(this.data, newData);
+    console.debug(`[Storage] Assign data to ${this.getQualifiedName()}`);
+
+    if (stopWatch && this.#autoSave) {
+      setTimeout(() => {
+        this.#assigning = false;
+        console.debug(`[Storage] Resume auto-save watch handle for ${this.getQualifiedName()}`);
+      }, 0);
+    }
   }
 
   /**
@@ -249,7 +307,28 @@ export class TouchStorage<T extends object> {
 
     const result = await channel.send('storage:reload', this.#qualifiedName);
     const parsed = result ? (result as Partial<T>) : {};
-    this.assignData(parsed);
+    this.assignData(parsed, true);
+
+    return this;
+  }
+  /**
+   * Loads data from remote storage and applies it.
+   *
+   * @returns The current instance
+   *
+   * @example
+   * ```ts
+   * store.loadFromRemote();
+   * ```
+   */
+  loadFromRemote(): this {
+    if (!channel) {
+      throw new Error("TouchStorage: channel not initialized");
+    }
+
+    const result = channel.sendSync('storage:get', this.#qualifiedName)
+    const parsed = result ? (result as Partial<T>) : {};
+    this.assignData(parsed, true);
 
     return this;
   }

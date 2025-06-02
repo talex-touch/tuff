@@ -92,6 +92,7 @@ const module = {
         if (!data || typeof data !== "object") return false;
         const { key, content, clear } = data;
         if (typeof key !== "string") return false;
+        broadcastUpdate(key);
         return this.saveConfig(key, content, clear);
       })
     );

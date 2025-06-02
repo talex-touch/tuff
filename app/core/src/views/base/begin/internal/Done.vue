@@ -1,17 +1,17 @@
 <script setup lang="ts" name="Done">
 import HelloData from "~/assets/lotties/welcome.json";
 import LottieFrame from "~/components/icon/lotties/LottieFrame.vue";
-import Protocol from "./Protocol.vue";
+import { appSetting } from '~/modules/channel/storage';
 
-const step = inject("step")!;
+const step: any = inject("step")!;
 
 function goon() {
   step(
     {
       comp: null,
     },
-    (sm) => {
-      sm.appSetting.beginner.init = true;
+    () => {
+      appSetting.beginner.init = true;
     }
   );
 }

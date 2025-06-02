@@ -5,7 +5,8 @@ import { search, appAmo, execute, BoxMode } from "./search-box";
 import BoxItem from "./BoxItem.vue";
 import FileTag from "./tag/FileTag.vue";
 import { useDocumentVisibility } from "@vueuse/core";
-import { storageManager } from "~/modules/channel/storage/index.ts";
+import { appSetting } from "~/modules/channel/storage/index.ts";
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
@@ -27,12 +28,12 @@ const boxOptions = reactive<{
 
 function handleAutoPaste() {
   // handle auto paste
-  const time = storageManager.appSetting.tools.autoPaste.time;
+  const time = appSetting.tools.autoPaste.time;
   const timeDiff = Date.now() - clipboardOptions.last.time;
 
   if (
     time !== -1 &&
-    storageManager.appSetting.tools.autoPaste.enable &&
+    appSetting.tools.autoPaste.enable &&
     (time === 0 || timeDiff < time * 1000)
   ) {
     const data = clipboardOptions.last;
@@ -72,7 +73,7 @@ watch(
     // handle auto clear
     if (
       Date.now() - boxOptions.lastHidden >
-      storageManager.appSetting.tools.autoClear * 1000
+      appSetting.tools.autoClear * 1000
     ) {
       searchVal.value = "";
       boxOptions.mode = BoxMode.INPUT;
@@ -213,6 +214,10 @@ function handlePaste() {
 
   handleAutoPaste();
 }
+
+function handleTogglePin() {
+  appSetting.tools.autoHide = !appSetting.tools.autoHide;
+}
 </script>
 
 <template>
@@ -260,6 +265,9 @@ function handlePaste() {
       </template>
       <span class="fake-background" v-else>SEARCH</span>
       <!-- </template> -->
+    </div>
+    <div class="CoreBox-Configure">
+      <RemixIcon :style="appSetting.tools.autoHide ? 'line' : 'fill'" @click="handleTogglePin" name="pushpin-2" />
     </div>
   </div>
 
@@ -310,6 +318,14 @@ function handlePaste() {
     border-radius: 8px;
     // background-color: var(--el-color-warning-light-5);
   }
+}
+
+.CoreBox-Configure {
+  display: flex;
+  padding: 0 0.5rem;
+
+  cursor: pointer;
+  font-size: 1.25em;
 }
 
 .CoreBox-Icon {

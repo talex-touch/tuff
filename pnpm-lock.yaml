@@ -532,9 +532,12 @@ importers:
 
   packages/utils:
     dependencies:
+      '@vueuse/core':
+        specifier: ^10.11.1
+        version: 10.11.1(vue@3.5.15(typescript@5.8.3))
       electron:
-        specifier: ^24.4.0
-        version: 24.8.8
+        specifier: ^29.4.6
+        version: 29.4.6
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1
@@ -2994,9 +2997,6 @@ packages:
   '@types/ms@0.7.34':
     resolution: {integrity: sha512-nG96G3Wp6acyAgJqGasjODb+acrI7KltPiRxzHPXnP3NgI28bpQDRv53olbqGXbfcgF5aiiHmO3xpwEpS5Ld9g==}
 
-  '@types/node@18.19.34':
-    resolution: {integrity: sha512-eXF4pfBNV5DAMKGbI02NnDtWrQ40hAN558/2vvS4gMpMIxaf6JmD7YjnZbq0Q9TDSSkKBamime8ewRoomHdt4g==}
-
   '@types/node@20.17.50':
     resolution: {integrity: sha512-Mxiq0ULv/zo1OzOhwPqOA13I81CV/W3nvd3ChtQZRT5Cwz3cr0FKo/wMSsbTqL3EXpaBAEQhva2B8ByRkOIh9A==}
 
@@ -4926,11 +4926,6 @@ packages:
 
   electron-to-chromium@1.5.158:
     resolution: {integrity: sha512-9vcp2xHhkvraY6AHw2WMi+GDSLPX42qe2xjYaVoZqFRJiOcilVQFq9mZmpuHEQpzlgGDelKlV7ZiGcmMsc8WxQ==}
-
-  electron@24.8.8:
-    resolution: {integrity: sha512-0A2tGwG/0hxnD32Lil9wgSydQ0HCP5AdkgcH+qee3QgaC2jVq55YIbrj/0ZAq4L7yiZvQTzYIrc6kie7OahJKQ==}
-    engines: {node: '>= 12.20.55'}
-    hasBin: true
 
   electron@29.4.6:
     resolution: {integrity: sha512-fz8ndj8cmmf441t4Yh2FDP3Rn0JhLkVGvtUf2YVMbJ5SdJPlc0JWll9jYkhh60jDKVVCr/tBAmfxqRnXMWJpzg==}
@@ -8420,9 +8415,6 @@ packages:
   unctx@2.3.1:
     resolution: {integrity: sha512-PhKke8ZYauiqh3FEMVNm7ljvzQiph0Mt3GBRve03IJm7ukfaON2OBK795tLwhbyfzknuRRkW0+Ze+CQUmzOZ+A==}
 
-  undici-types@5.26.5:
-    resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
-
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
 
@@ -11825,10 +11817,6 @@ snapshots:
 
   '@types/ms@0.7.34': {}
 
-  '@types/node@18.19.34':
-    dependencies:
-      undici-types: 5.26.5
-
   '@types/node@20.17.50':
     dependencies:
       undici-types: 6.19.8
@@ -14205,14 +14193,6 @@ snapshots:
   electron-to-chromium@1.4.796: {}
 
   electron-to-chromium@1.5.158: {}
-
-  electron@24.8.8:
-    dependencies:
-      '@electron/get': 2.0.3
-      '@types/node': 18.19.34
-      extract-zip: 2.0.1
-    transitivePeerDependencies:
-      - supports-color
 
   electron@29.4.6:
     dependencies:
@@ -18386,8 +18366,6 @@ snapshots:
       magic-string: 0.30.10
       unplugin: 1.10.1
 
-  undici-types@5.26.5: {}
-
   undici-types@6.19.8: {}
 
   unicorn-magic@0.1.0: {}
@@ -18852,7 +18830,7 @@ snapshots:
       '@docsearch/css': 3.6.0
       '@docsearch/js': 3.6.0(@algolia/client-search@4.23.3)(search-insights@2.14.0)
       '@vue/devtools-api': 6.6.3
-      '@vueuse/core': 10.10.0(vue@3.5.15(typescript@5.8.3))
+      '@vueuse/core': 10.11.1(vue@3.5.15(typescript@5.8.3))
       '@vueuse/integrations': 10.10.0(async-validator@4.2.5)(axios@1.9.0)(focus-trap@7.5.4)(vue@3.5.15(typescript@5.8.3))
       focus-trap: 7.5.4
       mark.js: 8.11.1
