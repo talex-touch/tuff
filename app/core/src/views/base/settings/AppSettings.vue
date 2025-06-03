@@ -3,9 +3,9 @@
     <div class="AppSettings-Container">
       <SettingHeader :dev="dev" :env="$env" />
 
-      <!-- <SettingUser :env="$env" /> -->
+      <SettingUser :env="$env" />
 
-      <!-- <SettingLanguage :env="$env" /> -->
+      <SettingLanguage :env="$env" />
 
       <SettingTools :env="$env" />
 
@@ -15,11 +15,11 @@
 </template>
 
 <script name="AppSettings" setup>
-import { useEnv } from "@modules/hooks//env-hooks";
+import { useEnv } from "@modules/hooks/env-hooks";
 import ViewTemplate from "@comp/base/template/ViewTemplate.vue";
 import SettingHeader from "./SettingHeader.vue";
-// import SettingUser from './SettingUser.vue'
-// import SettingLanguage from './SettingLanguage.vue'
+import SettingUser from './SettingUser.vue'
+import SettingLanguage from './SettingLanguage.vue'
 import SettingTools from "./SettingTools.vue";
 import SettingAbout from "./SettingAbout.vue";
 

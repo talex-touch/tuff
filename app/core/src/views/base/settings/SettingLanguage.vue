@@ -1,11 +1,11 @@
 <script setup lang="ts" name="SettingUser">
-import { $t, languages } from "~/modules/lang";
 import TGroupBlock from "@comp/base/group/TGroupBlock.vue";
 import TBlockSwitch from "@comp/base/switch/TBlockSwitch.vue";
 import TBlockSelect from "@comp/base/select/TBlockSelect.vue";
 import TSelectItem from "@comp/base/select/TSelectItem.vue";
+import { appSetting } from '~/modules/channel/storage';
 
-const options = window.$storage.appSetting;
+const options = appSetting;
 
 defineProps({
   env: {
@@ -16,25 +16,13 @@ defineProps({
 </script>
 
 <template>
-  <t-group-block
-    :name="$t('settings.application.list-settings.language.name')"
-    icon="earth"
-    :description="$t('settings.application.list-settings.language.description')"
-  >
-    <t-block-switch
-      v-model="options.lang.followSystem"
-      :title="$t('settings.application.list-settings.language.system')"
-      icon="exchange"
-      :description="$t('settings.application.list-settings.language.description')"
-    />
-    <t-block-select
-      :disabled="options.lang?.followSystem"
-      v-model="options.lang.locale"
-      :title="$t('settings.application.list-settings.language.select.name')"
-      icon="goblet"
-      :description="$t('settings.application.list-settings.language.select.description')"
-    >
-      <t-select-item v-for="lang in languages">{{ lang.name }}</t-select-item>
+  <t-group-block name="Language Settings" icon="earth"
+    description="Select your preferred language for the application.">
+    <t-block-switch v-model="options.lang.followSystem" title="Follow System Language" icon="exchange"
+      description="Automatically match the system language setting." />
+    <t-block-select :disabled="options.lang?.followSystem" v-model="options.lang.locale" title="Choose Language"
+      icon="goblet" description="Manually select your preferred display language.">
+      <t-select-item v-for="lang in [{ name: 'en-US' }]">{{ lang.name }}</t-select-item>
     </t-block-select>
   </t-group-block>
 </template>

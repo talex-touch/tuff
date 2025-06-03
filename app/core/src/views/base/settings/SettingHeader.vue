@@ -272,7 +272,7 @@ defineProps({
 
   clear: both;
   opacity: 0.45;
-  border-radius: 4px;
+  border-radius: 12px;
   background-color: var(--el-fill-color-light);
   background-image: linear-gradient(
     to right,

@@ -17,18 +17,21 @@ function login() {
 </script>
 
 <template>
-  <t-group-block :name="$t('base.account')" icon="account-box"
-    :description="$t('settings.application.list-settings.account.description')">
+  <t-group-block name="Account" icon="account-box" description="Manage your account information and login status.">
+
     <t-block-slot v-if="env.account?.user" :title="env.account?.user.username" icon="account-circle" disabled
       :description="env.account?.user.email">
+
       <FlatButton>
-        {{ $t('base.logout') }}
+        Logout
       </FlatButton>
     </t-block-slot>
-    <t-block-slot v-else :title="$t('base.none-account')" icon="account-circle" disabled
-      :description="$t('settings.application.list-settings.account.unavailable')">
+
+    <t-block-slot v-else title="No Account" icon="account-circle" disabled
+      description="Account access is currently unavailable.">
+
       <FlatButton @click="login">
-        {{ $t('base.login') }}
+        Login
       </FlatButton>
     </t-block-slot>
   </t-group-block>
