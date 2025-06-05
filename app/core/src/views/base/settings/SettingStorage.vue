@@ -14,6 +14,6 @@ const router = useRouter()
         View app storage details
       "
       icon="file-2"
-      @click="router.push('/settings/storage')"
+      @click="router.push('/setting/storage')"
     />
 </template>

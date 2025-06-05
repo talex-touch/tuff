@@ -7,7 +7,7 @@
   </div>
 
   <span>
-    {{ route.name }}
+    {{ route.name ?? route.path }}
   </span>
 
   <ul class="FlatLayout-Controller">
