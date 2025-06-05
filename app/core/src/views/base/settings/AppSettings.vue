@@ -9,6 +9,8 @@
 
       <SettingTools :env="$env" />
 
+      <SettingStorage />
+
       <SettingAbout :dev="dev" :env="$env" />
     </div>
   </ViewTemplate>
@@ -21,6 +23,7 @@ import SettingHeader from "./SettingHeader.vue";
 import SettingUser from './SettingUser.vue'
 import SettingLanguage from './SettingLanguage.vue'
 import SettingTools from "./SettingTools.vue";
+import SettingStorage from './SettingStorage.vue';
 import SettingAbout from "./SettingAbout.vue";
 
 const $env = reactive({

@@ -74,6 +74,16 @@ const routes: any = [
     path: "/setting",
     name: "AppSettings",
     component: () => import("../views/base/settings/AppSettings.vue"),
+    children: [
+      {
+        path: "/setting/storage",
+        name: "Storagable",
+        component: () => import("../views/storage/Storagable.vue"),
+        meta: {
+          index: 7,
+        },
+      },
+    ],
     meta: {
       index: 6,
     },
