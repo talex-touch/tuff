@@ -1,4 +1,3 @@
-import { IPluginFeature, type IFeatureCommand } from "./../../../../packages/utils/plugin/index";
 import {
   IPlatform,
   IPluginDev,
@@ -8,6 +7,9 @@ import {
   ITouchPlugin,
   PluginStatus,
   IFeatureLifeCycle,
+  type IPluginFeature,
+  type ITargetFeatureLifeCycle,
+  type IFeatureCommand,
 } from "@talex-touch/utils/plugin";
 import {
   WebContentsProperty,
@@ -126,6 +128,7 @@ class TouchPlugin implements ITouchPlugin {
   pluginPath: string;
 
   _featureFunc: IFeatureLifeCycle | null = null
+  _featureEvent: Map<string, ITargetFeatureLifeCycle[]> = new Map<string, ITargetFeatureLifeCycle[]>()
 
   _status: PluginStatus = PluginStatus.DISABLED;
 
@@ -208,6 +211,14 @@ class TouchPlugin implements ITouchPlugin {
 
   triggerFeature(feature: IPluginFeature, query: any) {
     this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
+
+    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature));
+  }
+
+  triggerInputChanged(feature: IPluginFeature, query: any) {
+    this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
+
+    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query));
   }
 
   constructor(
@@ -336,11 +347,31 @@ class TouchPlugin implements ITouchPlugin {
       : path.resolve(this.pluginPath, "index.html");
   }
 
-  getFeatureUtil() {
-
+  getFeatureEventUtil() {
+    const ins = this
 
     return {
-      openUrl: (url: string) => shell.openExternal(url)
+      onFeatureLifeCycle(id: string, callback: ITargetFeatureLifeCycle) {
+        const listeners = ins._featureEvent.get(id) || []
+        listeners.push(callback)
+        ins._featureEvent.set(id, listeners)
+      },
+      offFeatureLifeCycle(id: string, callback: ITargetFeatureLifeCycle) {
+        const listeners = ins._featureEvent.get(id) || []
+        listeners.splice(listeners.indexOf(callback), 1)
+        ins._featureEvent.set(id, listeners)
+      }
+    }
+  }
+
+  getFeatureUtil() {
+
+    return {
+      $event: this.getFeatureEventUtil(),
+      openUrl: (url: string) => shell.openExternal(url),
+      clearItems: () => void 0,
+      pushItems: () => void 0,
+      getItems: () => void 0,
     }
   }
 }
@@ -598,7 +629,7 @@ class PluginManager implements IPluginManager {
 
           touchPlugin.addFeature(pluginFeature);
 
-          pendingList.push(new Promise((resolve) => 
+          pendingList.push(new Promise((resolve) =>
             pluginFeature.icon.init().then(resolve)
           ))
         })
@@ -757,6 +788,17 @@ export default {
         const pluginIns = pluginManager!.plugins.get(plugin!);
 
         return pluginIns?.triggerFeature(feature, query);
+      }
+    );
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      "trigger-plugin-feature-input-changed",
+      ({ data }) => {
+        const { feature, query, plugin } = data!;
+        const pluginIns = pluginManager!.plugins.get(plugin!);
+
+        return pluginIns?.triggerInputChanged(feature, query);
       }
     );
 

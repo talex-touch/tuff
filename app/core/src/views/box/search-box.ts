@@ -12,6 +12,7 @@ export const enum BoxMode {
   COMMAND,
   IMAGE,
   FILE,
+  FEATURE,
 }
 
 setTimeout(initialize, 200)
@@ -48,9 +49,16 @@ export function execute(item: any, query: any = '') {
   console.log("execute", item, query);
 
   const { type, action, pluginType, value } = item;
-  if (type === 'app')
-    cprocess.execSync(action);
+  if (type === 'app') {
+    touchChannel.sendSync("core-box:hide");
+
+    cprocess.exec(action);
+  }
   else if (type === 'plugin') {
+    if (item.push) {
+      return "push"
+    }
+
     if (pluginType === 'feature' || pluginType === 'cmd') {
       touchChannel.sendSync("trigger-plugin-feature", {
         query,
@@ -82,12 +90,20 @@ export interface SearchOptions {
   mode: BoxMode
 }
 
-export function search(keyword: string, options: SearchOptions, callback: (res: SearchItem) => void) {
+export function search(keyword: string, options: SearchOptions, info: any, callback: (res: SearchItem) => void) {
   refreshSearchList()
 
   const results = [];
 
-  console.log("[CoreBox] Searching " + keyword, searchList);
+  console.debug("[CoreBox] Searching " + keyword, searchList);
+
+  if (options.mode === BoxMode.FEATURE) {
+    touchChannel.send("trigger-plugin-feature-input-changed", {
+      query: keyword,
+      plugin: info?.plugin,
+      feature: JSON.parse(JSON.stringify(info?.feature)),
+    })
+  }
 
   for (let searchSection of searchList) {
     const data = [...searchSection.value];

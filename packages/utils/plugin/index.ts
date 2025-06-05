@@ -59,6 +59,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   getFeature(featureId: string): IPluginFeature | null
   getFeatures(): IPluginFeature[]
   triggerFeature(feature: IPluginFeature, query: any): void
+  triggerInputChanged(feature: IPluginFeature, query: any): void
 
   get status(): PluginStatus
   set status(v: PluginStatus)
@@ -83,8 +84,89 @@ export interface IPluginFeature {
   commands: IFeatureCommand[]
 }
 
+/**
+ * Lifecycle hooks for a feature's behavior within the launcher environment.
+ * These hooks are triggered based on real user interaction and system events.
+ */
 export interface IFeatureLifeCycle {
-  onFeatureTriggered: (id: string, data: any, feature: IPluginFeature) => void
+  /**
+   * Called when a feature is actively launched from the launcher.
+   * Can be used to prepare data or UI specific to this session.
+   * @param feature - The feature instance being launched
+   */
+  onLaunch?(feature: IPluginFeature): void
+
+  /**
+   * Called when a feature is triggered via a matching command.
+   * @param id - Feature ID
+   * @param data - The triggering payload
+   * @param feature - The full feature definition
+   */
+  onFeatureTriggered(id: string, data: any, feature: IPluginFeature): void
+
+  /**
+   * Called when user input changes within this feature’s input box.
+   * For example, search text or commands typed.
+   * @param input - The new input value
+   */
+  onInputChanged?(input: string): void
+
+  /**
+   * Called when a user selects or clicks an actionable item inside the feature.
+   * For example, selecting a suggestion or executing an option.
+   * @param actionId - A string identifier for the clicked action
+   * @param data - Optional payload associated with that action
+   */
+  onActionClick?(actionId: string, data?: any): void
+
+  /**
+   * Called when the feature is manually closed by the user or by the system.
+   * Useful for cleanup or state saving.
+   * @param feature - The feature instance being closed
+   */
+  onClose?(feature: IPluginFeature): void
+}
+
+/**
+ * Lifecycle hooks for the feature's behavior within the launcher environment.
+ * These hooks are triggered based on real user interaction and system events.
+ */
+export interface ITargetFeatureLifeCycle {
+  /**
+   * Called when the feature is actively launched from the launcher.
+   * Can be used to prepare data or UI specific to this session.
+   * @param feature - The feature instance being launched
+   */
+  onLaunch?(feature: IPluginFeature): void
+
+  /**
+   * Called when the feature is triggered via a matching command.
+   * @param data - The triggering payload
+   * @param feature - The full feature definition
+   */
+  onFeatureTriggered(data: any, feature: IPluginFeature): void
+
+  /**
+   * Called when user input changes within this feature’s input box.
+   * For example, search text or commands typed.
+   * @param input - The new input value
+   */
+  onInputChanged?(input: string): void
+
+  /**
+   * Called when a user selects or clicks an actionable item inside the feature.
+   * For example, selecting a suggestion or executing an option.
+   * @param actionId - A string identifier for the clicked action
+   * @param data - Optional payload associated with that action
+   */
+  onActionClick?(actionId: string, data?: any): void
+
+  /**
+   * Called when the feature is manually closed by the user or by the system.
+   * Useful for cleanup or state saving.
+   * @param feature - The feature instance being closed
+   */
+  onClose?(feature: IPluginFeature): void
 }
 
 export interface IPluginManager {

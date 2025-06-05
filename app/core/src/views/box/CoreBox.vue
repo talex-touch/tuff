@@ -1,12 +1,12 @@
 <script setup lang="ts" name="CoreBox">
 import { touchChannel } from "~/modules/channel/channel-core";
-import AppIcon from "~/assets/logo.svg";
 import { search, appAmo, execute, BoxMode } from "./search-box";
 import BoxItem from "./BoxItem.vue";
 import FileTag from "./tag/FileTag.vue";
 import { useDocumentVisibility } from "@vueuse/core";
 import { appSetting } from "~/modules/channel/storage/index.ts";
 import RemixIcon from '~/components/icon/RemixIcon.vue'
+import PrefixIcon from './PrefixIcon.vue';
 
 const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
@@ -24,7 +24,8 @@ const boxOptions = reactive<{
     buffer: Uint8Array | null;
     paths: string[];
   };
-}>({ lastHidden: -1, mode: BoxMode.INPUT, focus: 0, file: { buffer: null, paths: [] } });
+  data: any
+}>({ lastHidden: -1, mode: BoxMode.INPUT, focus: 0, file: { buffer: null, paths: [] }, data: {} });
 
 function handleAutoPaste() {
   // handle auto paste
@@ -85,6 +86,24 @@ watch(
   }
 );
 
+function handleExecute(item: any) {
+  const data = execute(item, searchVal.value);
+  if (data === 'push') {
+    boxOptions.mode = BoxMode.FEATURE;
+
+    boxOptions.data = {
+      feature: item,
+      plugin: item.value,
+      query: searchVal.value
+    }
+  }
+
+  searchVal.value = "";
+  select.value = -1;
+
+  // touchChannel.sendSync("core-box:run", searchVal.value);
+}
+
 function onKeyDown(event: KeyboardEvent) {
   // check if body contains core-box
   if (!document.body.classList.contains("core-box")) {
@@ -95,15 +114,9 @@ function onKeyDown(event: KeyboardEvent) {
 
   if (event.key === "Enter") {
     select.value = boxOptions.focus;
+    const target = res.value[boxOptions.focus]
 
-    setTimeout(() => {
-      execute(res.value[boxOptions.focus], searchVal.value);
-
-      searchVal.value = "";
-      select.value = -1;
-    }, 300);
-
-    // touchChannel.sendSync("core-box:run", searchVal.value);
+    handleExecute(target)
   } else if (event.key === "ArrowDown") {
     boxOptions.focus += 1;
 
@@ -115,10 +128,7 @@ function onKeyDown(event: KeyboardEvent) {
     // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "Escape") {
-    if (boxOptions.mode !== BoxMode.INPUT) {
-      boxOptions.mode = searchVal.value.startsWith("/") ? BoxMode.COMMAND : BoxMode.INPUT;
-    } else if (searchVal.value) searchVal.value = "";
-    else touchChannel.sendSync("core-box:hide");
+    handleExit()
   }
 
   if (boxOptions.focus < 0) {
@@ -153,7 +163,13 @@ function handleSearch() {
   boxOptions.focus = 0;
   res.value = [];
 
-  search(searchVal.value, { mode: boxOptions.mode }, (v) => {
+  const info: any = {}
+
+  if (boxOptions.mode === BoxMode.FEATURE) {
+    Object.assign(info, boxOptions.data)
+  }
+
+  search(searchVal.value, { mode: boxOptions.mode }, info, (v) => {
     const amo = appAmo[v.name] || 0;
     v.amo = amo;
 
@@ -218,6 +234,13 @@ function handlePaste() {
 function handleTogglePin() {
   appSetting.tools.autoHide = !appSetting.tools.autoHide;
 }
+
+function handleExit() {
+  if (boxOptions.mode !== BoxMode.INPUT) {
+    boxOptions.mode = searchVal.value.startsWith("/") ? BoxMode.COMMAND : BoxMode.INPUT;
+  } else if (searchVal.value) searchVal.value = "";
+  else touchChannel.sendSync("core-box:hide");
+}
 </script>
 
 <template>
@@ -226,32 +249,19 @@ function handleTogglePin() {
   </teleport>
   <div @paste="handlePaste" class="CoreBox">
     <div class="CoreBox-Icon">
-      <img :src="AppIcon" />
+      <PrefixIcon @close="handleExit" :feature="boxOptions.data?.feature" />
     </div>
-    <input
-      id="core-box-input"
-      placeholder="Type what you want to search by talex-touch."
-      v-model="searchVal"
-    />
+    <input id="core-box-input" :placeholder="boxOptions.mode === BoxMode.FEATURE ? boxOptions.data?.feature?.desc ?? boxOptions.data?.feature?.name : 'Type what you want to search by talex-touch.'" v-model="searchVal" />
 
-    <div class="CoreBox-Tag">
+    <div v-if="boxOptions.mode !== BoxMode.FEATURE" class="CoreBox-Tag">
       <template v-if="clipboardOptions.last">
-        <span
-          v-if="clipboardOptions.last?.type === 'text'"
-          class="fake-background dotted"
-        >
+        <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted">
           Copied Text
         </span>
-        <span
-          v-else-if="clipboardOptions.last?.type === 'image'"
-          class="fake-background dotted"
-        >
+        <span v-else-if="clipboardOptions.last?.type === 'image'" class="fake-background dotted">
           Copied Image
         </span>
-        <span
-          v-else-if="clipboardOptions.last?.type === 'html'"
-          class="fake-background dotted"
-        >
+        <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted">
           Copied Html
         </span>
       </template>
@@ -273,16 +283,9 @@ function handleTogglePin() {
 
   <div class="CoreBoxRes">
     <el-scrollbar ref="scrollbar">
-      <BoxItem
-        @click="execute(item)"
-        :i="index + 1"
-        @mousemove="boxOptions.focus = index"
-        :active="boxOptions.focus === index"
-        v-for="(item, index) in res"
-        :key="index"
-        :data="item"
-        :selected="select === index"
-      />
+      <BoxItem @click="handleExecute(item)" :i="index + 1" @mousemove="boxOptions.focus = index"
+        :active="boxOptions.focus === index" v-for="(item, index) in res" :key="index" :data="item"
+        :selected="select === index" />
     </el-scrollbar>
   </div>
 </template>
