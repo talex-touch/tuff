@@ -27,7 +27,7 @@ import { genTouchApp, TouchWindow } from "../core/touch-core";
 import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
-import { BrowserWindow, shell } from "electron";
+import { BrowserWindow, dialog, shell } from "electron";
 import { MicaBrowserWindow } from "talex-mica-electron";
 
 class PluginIcon implements IPluginIcon {
@@ -367,6 +367,7 @@ class TouchPlugin implements ITouchPlugin {
   getFeatureUtil() {
 
     return {
+      dialog,
       $event: this.getFeatureEventUtil(),
       openUrl: (url: string) => shell.openExternal(url),
       clearItems: () => void 0,
@@ -639,15 +640,18 @@ class PluginManager implements IPluginManager {
       // 当插件被load的时候就需要自动执行 /index.js 来完成feature注入
       const featureIndex = path.resolve(pluginPath, "index.js")
       const featureUtil = touchPlugin.getFeatureUtil()
+      const featureEvent = touchPlugin.getFeatureEventUtil()
       const featureContext = {
         plugin: touchPlugin,
         console,
         pkg,
-        $util: featureUtil
+        $util: featureUtil,
+        $event: featureEvent
       }
 
       const featureScript = new vm.Script(fse.readFileSync(featureIndex, "utf-8"))
       vm.createContext(featureContext)
+      console.log("==============", featureScript)
       touchPlugin._featureFunc = featureScript.runInContext(featureContext) as IFeatureLifeCycle
 
       console.log(`[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`)

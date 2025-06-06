@@ -145,7 +145,5 @@ export default () => {
   fileDisplay(filePath);
   fileDisplay(startMenu);
 
-  console.log('filelists', fileLists)
-
   return fileLists;
 };

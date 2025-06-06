@@ -165,17 +165,20 @@ export class CoreBoxManager {
       ChannelType.MAIN,
       "file:extract-icon",
       async ({ data, reply }) => {
-        const { path } = data!
-        const fileIcon = (await import("extract-file-icon")).default;
-        if (typeof fileIcon !== "function") {
-          return;
+        try {
+          const { path } = data!
+          const fileIcon = (await import("extract-file-icon")).default;
+          if (typeof fileIcon !== "function") {
+            return;
+          }
+
+          const buffer = fileIcon(path, 32);
+          reply(DataCode.SUCCESS, {
+            buffer
+          })
+        } catch (e) {
+          console.log(e, path);
         }
-
-
-        const buffer = fileIcon(path, 32);
-        reply(DataCode.SUCCESS, {
-          buffer
-        })
       }
     );
 

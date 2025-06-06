@@ -72,6 +72,7 @@ export default defineConfig({
             outDir: "dist/electron",
             rollupOptions: {
               external: [
+                "fsevents",
                 "talex-mica-electron",
                 "mica-electron",
                 "simple-plist",
