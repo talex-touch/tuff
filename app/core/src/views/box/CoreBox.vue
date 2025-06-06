@@ -43,15 +43,15 @@ function handleAutoPaste() {
       const pathList = data.data;
       const [firstFile] = pathList;
       if (firstFile) {
-        const buffer = touchChannel.sendSync("file:extract-icon", {
+        touchChannel.send("file:extract-icon", {
           path: firstFile,
-        });
-
-        boxOptions.file = {
-          buffer,
-          paths: pathList,
-        };
-        boxOptions.mode = BoxMode.FILE;
+        }).then((buffer) => {
+          boxOptions.file = {
+            buffer,
+            paths: pathList,
+          };
+          boxOptions.mode = BoxMode.FILE;
+        })
       }
     } else if (data.type !== "image") {
       searchVal.value = data.data;
@@ -78,6 +78,7 @@ watch(
     ) {
       searchVal.value = "";
       boxOptions.mode = BoxMode.INPUT;
+      boxOptions.data = {}
     }
 
     if (clipboardOptions.last) {
@@ -96,9 +97,10 @@ function handleExecute(item: any) {
       plugin: item.value,
       query: searchVal.value
     }
+  } else {
+    searchVal.value = "";
   }
 
-  searchVal.value = "";
   select.value = -1;
 
   // touchChannel.sendSync("core-box:run", searchVal.value);
@@ -251,7 +253,9 @@ function handleExit() {
     <div class="CoreBox-Icon">
       <PrefixIcon @close="handleExit" :feature="boxOptions.data?.feature" />
     </div>
-    <input id="core-box-input" :placeholder="boxOptions.mode === BoxMode.FEATURE ? boxOptions.data?.feature?.desc ?? boxOptions.data?.feature?.name : 'Type what you want to search by talex-touch.'" v-model="searchVal" />
+    <input id="core-box-input"
+      :placeholder="boxOptions.mode === BoxMode.FEATURE ? boxOptions.data?.feature?.desc ?? boxOptions.data?.feature?.name : 'Type what you want to search by talex-touch.'"
+      v-model="searchVal" />
 
     <div v-if="boxOptions.mode !== BoxMode.FEATURE" class="CoreBox-Tag">
       <template v-if="clipboardOptions.last">

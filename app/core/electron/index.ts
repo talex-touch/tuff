@@ -4,6 +4,7 @@ import { app, protocol } from 'electron'
 import StorageModule from './core/storage'
 import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
+import pluginLoggerManager from './plugins/plugin-logger-manager'
 import PermissionCenter from './modules/permission-center'
 import ServiceCenter from './service/service-center'
 import CoreBox from './modules/box-tool/core-box'
@@ -22,6 +23,7 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(extensionLoader)
   app.moduleManager.loadModule(CommonChannel)
   app.moduleManager.loadModule(PluginModule)
+  app.moduleManager.loadModule(pluginLoggerManager)
   app.moduleManager.loadModule(PermissionCenter)
   app.moduleManager.loadModule(ServiceCenter)
 

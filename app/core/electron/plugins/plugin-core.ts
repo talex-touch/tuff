@@ -19,7 +19,6 @@ import {
 import { TalexTouch } from "../types";
 import fse from "fs-extra";
 import path from "path";
-import vm from 'node:vm';
 import pkg from "../../package.json";
 import { genTouchChannel } from "../core/channel-core";
 import { ChannelType, DataCode } from "@talex-touch/utils/channel";
@@ -29,6 +28,9 @@ import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
 import { BrowserWindow, dialog, shell } from "electron";
 import { MicaBrowserWindow } from "talex-mica-electron";
+import { PluginLogger } from '@talex-touch/utils/plugin/log/logger';
+import { loggerManager } from './plugin-logger-manager';
+import { loadPluginFeatureContext } from './plugin-feature';
 
 class PluginIcon implements IPluginIcon {
   type: string;
@@ -120,6 +122,7 @@ class TouchPlugin implements ITouchPlugin {
   version: string;
   desc: string;
   icon: IPluginIcon;
+  logger: PluginLogger;
   webViewInit: boolean = false;
   webview: IPluginWebview = {};
   platforms: IPlatform;
@@ -241,6 +244,8 @@ class TouchPlugin implements ITouchPlugin {
     this.pluginPath = pluginPath;
     this.platforms = platforms;
     this.features = [];
+
+    this.logger = new PluginLogger(name, loggerManager)
   }
 
   async enable(): Promise<boolean> {
@@ -368,6 +373,7 @@ class TouchPlugin implements ITouchPlugin {
 
     return {
       dialog,
+      logger: this.logger,
       $event: this.getFeatureEventUtil(),
       openUrl: (url: string) => shell.openExternal(url),
       clearItems: () => void 0,
@@ -649,10 +655,8 @@ class PluginManager implements IPluginManager {
         $event: featureEvent
       }
 
-      const featureScript = new vm.Script(fse.readFileSync(featureIndex, "utf-8"))
-      vm.createContext(featureContext)
-      console.log("==============", featureScript)
-      touchPlugin._featureFunc = featureScript.runInContext(featureContext) as IFeatureLifeCycle
+      const func = loadPluginFeatureContext(touchPlugin, featureIndex, featureContext) as IFeatureLifeCycle
+      touchPlugin._featureFunc = func
 
       console.log(`[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`)
 
@@ -680,6 +684,8 @@ class PluginManager implements IPluginManager {
     );
 
     plugin.disable();
+
+    plugin.logger.getManager().destroy()
 
     this.plugins.delete(pluginName);
 

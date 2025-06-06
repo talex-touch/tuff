@@ -166,7 +166,7 @@ export class CoreBoxManager {
       "file:extract-icon",
       async ({ data, reply }) => {
         try {
-          const { path } = data!
+          const { path } = data as { path: string };
           const fileIcon = (await import("extract-file-icon")).default;
           if (typeof fileIcon !== "function") {
             return;
@@ -177,7 +177,7 @@ export class CoreBoxManager {
             buffer
           })
         } catch (e) {
-          console.log(e, path);
+          console.log("Cannot find target file icon:", path);
         }
       }
     );

@@ -1,4 +1,6 @@
 import { Arch, SupportOS } from './../base/index';
+import { PluginLogger } from './log/logger';
+
 export enum PluginStatus {
   DISABLED,
   DISABLING,
@@ -48,9 +50,12 @@ export interface IPluginDev {
 export interface IPluginWebview {
 }
 
+
+
 export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
   webViewInit: boolean
+  logger: PluginLogger
   webview: IPluginWebview
   features: IPluginFeature[]
 
