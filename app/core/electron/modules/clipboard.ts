@@ -16,8 +16,9 @@ export class ClipboardManager {
 
     windows: TalexTouch.ITouchWindow[]
     clipboardStash: IClipboardStash
-
     sendLastFunc: () => void
+    private intervalId: NodeJS.Timeout | null = null
+    private isDestroyed = false
 
     constructor() {
         this.windows = []
@@ -29,10 +30,22 @@ export class ClipboardManager {
             text: null
         }
 
-        const intervalRead = () => {
-            this.sendClipboardMsg()
+        this.startClipboardMonitoring()
+    }
 
-            setTimeout(intervalRead, 1000)
+    private startClipboardMonitoring() {
+        const intervalRead = () => {
+            if (this.isDestroyed) return
+            
+            try {
+                this.sendClipboardMsg()
+            } catch (error) {
+                console.error('[Clipboard] Error in sendClipboardMsg:', error)
+            }
+
+            if (!this.isDestroyed) {
+                this.intervalId = setTimeout(intervalRead, 1000)
+            }
         }
         intervalRead()
     }
@@ -48,9 +61,34 @@ export class ClipboardManager {
     unregisterWindow(window: TouchWindow) {
         this.windows = this.windows.filter(w => w !== window)
 
-        window.window.removeListener('focus', this.sendClipboardMsg)
+        try {
+            window.window.removeListener('focus', this.sendClipboardMsg)
+        } catch (error) {
+            console.warn('[Clipboard] Error removing focus listener:', error)
+        }
 
         console.log('[Clipboard] Unregister window ' + window.window.id + ' success.')
+    }
+
+    destroy() {
+        this.isDestroyed = true
+        
+        if (this.intervalId) {
+            clearTimeout(this.intervalId)
+            this.intervalId = null
+        }
+
+        // Clean up all window listeners
+        this.windows.forEach(window => {
+            try {
+                window.window.removeListener('focus', this.sendClipboardMsg)
+            } catch (error) {
+                console.warn('[Clipboard] Error removing focus listener during cleanup:', error)
+            }
+        })
+
+        this.windows = []
+        console.log('[Clipboard] ClipboardManager destroyed')
     }
 
     formatClipboard(type: keyof IClipboardStash, data: any) {
@@ -70,32 +108,60 @@ export class ClipboardManager {
     }
 
     sendClipboardMsg() {
+        if (this.isDestroyed || this.windows.length === 0) {
+            return
+        }
+
         const data = {
             action: "read",
             time: Date.now()
         }
 
-        const res = this.formatClipboards({
-            "file": clip.readFilePaths(),
-            "image": clipboard.readImage().toDataURL(),
-            "buffer": clipboard.readBuffer("public/utf8-plain-text").toString("base64"),
-            "text": clipboard.readText()
+        try {
+            const res = this.formatClipboards({
+                "file": clip.readFilePaths(),
+                "image": clipboard.readImage().toDataURL(),
+                "buffer": clipboard.readBuffer("public/utf8-plain-text").toString("base64"),
+                "text": clipboard.readText()
+            })
+
+            Object.assign(data, res)
+        } catch (error) {
+            console.error('[Clipboard] Error reading clipboard data:', error)
+            return
+        }
+
+        // Filter out destroyed/invalid windows
+        const validWindows = this.windows.filter(w => {
+            try {
+                return !w.window.isDestroyed() && w.window.webContents && !w.window.webContents.isDestroyed()
+            } catch (error) {
+                console.warn('[Clipboard] Window validation failed:', error)
+                return false
+            }
         })
 
-        Object.assign(data, res)
+        // Update windows list to only include valid ones
+        if (validWindows.length !== this.windows.length) {
+            this.windows = validWindows
+        }
 
-        // clipboardStash[data.type] = data.data
-
-        // const buffer = clipboard.readBuffer("public/utf8-plain-text")
-        // const base64 = buffer.toString("base64")
+        if (validWindows.length === 0) {
+            return
+        }
 
         // send to renderer
         const touchChannel = genTouchChannel()
-        this.windows.forEach((w) =>
+        validWindows.forEach((w) => {
             touchChannel
                 .sendTo(w.window, ChannelType.MAIN, "clipboard:trigger", data)
                 .then(() => { })
-        );
+                .catch((error) => {
+                    console.error('[Clipboard] Error sending to window:', error)
+                    // Remove this window from the list if it's causing persistent errors
+                    this.windows = this.windows.filter(win => win !== w)
+                })
+        })
 
         this.sendLastFunc = () => data
     }
@@ -111,6 +177,11 @@ export default {
 
         clipboardManager.registerWindow(win)
 
+        // Register cleanup when window is closed
+        win.window.on('closed', () => {
+            clipboardManager.unregisterWindow(win)
+        })
+
         genTouchChannel()
             .regChannel(ChannelType.MAIN, "clipboard:got", ({ reply }) => {
                 reply(DataCode.SUCCESS, {
@@ -118,5 +189,7 @@ export default {
                 })
             })
     },
-    destroy() { }
+    destroy() { 
+        clipboardManager.destroy()
+    }
 }
