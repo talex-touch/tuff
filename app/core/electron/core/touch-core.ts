@@ -421,56 +421,6 @@ class TouchConfig implements TalexTouch.IConfiguration {
         width: 780,
       },
     };
-
-    // setTimeout(() => {
-    //   let _data: TalexTouch.TouchAppConfig = {
-    //     frame: {
-    //       height: 1280,
-    //       width: 780,
-    //     },
-    //   };
-    //   if (fse.existsSync(configFilePath)) {
-    //     const rawData = fse.readFileSync(configFilePath, "utf-8");
-    //     _data = rawData ? JSON.parse(rawData) : _data;
-    //   }
-
-    //   this.data = new Proxy(_data, {
-    //     get: (target, prop) => {
-    //       if (prop in target) return target[prop];
-
-    //       return _data[prop];
-    //       // if (prop in _data) return _data[prop];
-
-    //       // console.warn(`[Config] Property ${String(prop)} not found`);
-
-    //       // return undefined;
-    //     },
-    //     set: (target, prop, value) => {
-    //       target[prop] = value;
-
-    //       this.triggerSave();
-
-    //       return true;
-    //     },
-    //   });
-    // });
-
-    // if (fse.existsSync(path.resolve(this.configPath, "dev.talex"))) {
-    //   process.env.TALEX_DEV = "true";
-    //   touchApp.version = TalexTouch.AppVersion.DEV;
-
-    //   console.log("[Config] Dev mode enabled");
-
-    //   touchApp.window.window.webContents.openDevTools({
-    //     mode: "undocked",
-    //     activate: true,
-    //   });
-
-    //   setTimeout(() => {
-    //     const { width, height } = this.data.frame;
-    //     touchApp!.window.window.setSize(width, height);
-    //   }, 1000);
-    // }
   }
 
   triggerSave() {
