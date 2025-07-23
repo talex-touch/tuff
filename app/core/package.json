@@ -38,7 +38,7 @@
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.13",
     "electron-clipboard-ex": "^1.3.3",
-    "electron-log": "5.0.0-beta.28",
+    "electron-log": "5.0.0-beta.28",22ss
     "element-plus": "^2.9.11",
     "extract-file-icon": "^0.3.2",
     "fs-extra": "^11.3.0",
@@ -47,7 +47,6 @@
     "iconv-lite": "^0.6.3",
     "js-md5": "^0.8.3",
     "log4js": "^6.9.1",
-    "mica-electron": "^1.5.16",
     "mousetrap": "^1.6.5",
     "original-fs": "^1.2.0",
     "pinia": "^2.3.1",
