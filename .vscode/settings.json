@@ -54,5 +54,8 @@
   "typescript.suggest.autoImports": true,
   "javascript.updateImportsOnFileMove.enabled": "always",
   "typescript.updateImportsOnFileMove.enabled": "always",
-  "source.organizeImports": true
+  "source.organizeImports": true,
+  "debug.javascript.defaultRuntimeExecutable": {
+    "pwa-node": "/Users/talexdreamsoul/.local/share/mise/shims/node"
+  }
 }
