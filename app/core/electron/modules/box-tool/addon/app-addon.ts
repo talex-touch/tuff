@@ -4,6 +4,7 @@ import LinuxApp from './apps/linux'
 
 import PinyinMatch from 'pinyin-match'
 import PinyinMatchTw from 'pinyin-match/es/traditional.js';
+import { isAsyncFunction } from 'node:util/types';
 
 const env = process.platform
 
@@ -18,11 +19,21 @@ if (env === 'darwin') {
 }
 
 export function getApps() {
-  return appSearch()
+  const res = []
+
+  if ( isAsyncFunction(appSearch) ) {
+    appSearch().then((apps: any) => res.push(...apps))
+  } else {
+    res.push(...appSearch())
+  }
+
+  console.log("res", res)
+
+  return res
 }
 
-export let apps: any = appSearch()
-let appNames: any = apps.map((app: any) => app.name)
+export let apps: any = getApps()
+let appNames: any = apps?.map((app: any) => app.name)
 
 function check(keyword: string, appName: string) {
   let res = PinyinMatch.match(appName, keyword)

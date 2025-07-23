@@ -21,78 +21,78 @@ const externals =  [ 'path', 'fs/promises', 'process', 'os', 'crypto', 'child_pr
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  resolve: {
-    alias: [
-      {
-        find: '@modules',
-        replacement: _path.resolve(__dirname, 'src/modules') // "/src/modules"
-      },
-      {
-        find: '@assets',
-        replacement: _path.resolve(__dirname, 'src/assets') // "/src/assets"
-      },
-      {
-        find: '@comp',
-        replacement: _path.resolve(__dirname, 'src/components') // "/src/components"
-      },
-      {
-        find: '@styles',
-        replacement: _path.resolve(__dirname, 'src/styles') // "/src/styles"
-      },
-      {
-        find: '~',
-        replacement: _path.resolve(__dirname, 'src')
-      }
-    ]
-  },
+  // resolve: {
+  //   alias: [
+  //     {
+  //       find: '@modules',
+  //       replacement: _path.resolve(__dirname, 'src/modules') // "/src/modules"
+  //     },
+  //     {
+  //       find: '@assets',
+  //       replacement: _path.resolve(__dirname, 'src/assets') // "/src/assets"
+  //     },
+  //     {
+  //       find: '@comp',
+  //       replacement: _path.resolve(__dirname, 'src/components') // "/src/components"
+  //     },
+  //     {
+  //       find: '@styles',
+  //       replacement: _path.resolve(__dirname, 'src/styles') // "/src/styles"
+  //     },
+  //     {
+  //       find: '~',
+  //       replacement: _path.resolve(__dirname, 'src')
+  //     }
+  //   ]
+  // },
   plugins: [
     vue({
       customElement: [
           'webview'
       ]
     }),
-    electron([
-      {
-        entry: 'electron/main/index.ts',
-        vite: {
-          build: {
-            // For Debug
-            sourcemap: false,
-            outDir: 'dist/electron/main',
-          },
-          // Will start Electron via VSCode Debug
-          // plugins: [ process.env.VSCODE_DEBUG ? startup : null ],
-        }
-        // preload: {
-        //   input: {
-        //     // You can configure multiple preload here
-        //     index: path.join(__dirname, 'electron/preload/index.ts'),
-        //   },
-        //   vite: {
-        //     build: {
-        //       // For Debug
-        //       sourcemap: 'inline',
-        //       outDir: 'dist/electron/preload',
-        //     },
-        //   },
-        // },
-        // Enables use of Node.js API adopters the Renderer-process
-        // https://github.com/electron-vite/vite-plugin-electron/tree/main/packages/electron-renderer#electron-renderervite-serve
-        // renderer: {},
-      }
-      ,
-      {
-        entry: 'electron/addon/home-gear/preload.ts',
-        vite: {
-          build: {
-            outDir: 'dist/electron/addon/home-gear',
-          }
-        },
-        onstart(options) {
-          options.reload()
-        }
-      }
-    ]),
+    // electron([
+    //   {
+    //     entry: 'electron/main/index.ts',
+    //     vite: {
+    //       build: {
+    //         // For Debug
+    //         sourcemap: false,
+    //         outDir: 'dist/electron/main',
+    //       },
+    //       // Will start Electron via VSCode Debug
+    //       // plugins: [ process.env.VSCODE_DEBUG ? startup : null ],
+    //     }
+    //     // preload: {
+    //     //   input: {
+    //     //     // You can configure multiple preload here
+    //     //     index: path.join(__dirname, 'electron/preload/index.ts'),
+    //     //   },
+    //     //   vite: {
+    //     //     build: {
+    //     //       // For Debug
+    //     //       sourcemap: 'inline',
+    //     //       outDir: 'dist/electron/preload',
+    //     //     },
+    //     //   },
+    //     // },
+    //     // Enables use of Node.js API adopters the Renderer-process
+    //     // https://github.com/electron-vite/vite-plugin-electron/tree/main/packages/electron-renderer#electron-renderervite-serve
+    //     // renderer: {},
+    //   }
+    //   ,
+    //   {
+    //     entry: 'electron/addon/home-gear/preload.ts',
+    //     vite: {
+    //       build: {
+    //         outDir: 'dist/electron/addon/home-gear',
+    //       }
+    //     },
+    //     onstart(options) {
+    //       options.reload()
+    //     }
+    //   }
+    // ]),
     AutoImport({
       resolvers: [ElementPlusResolver()],
       imports: [ 'vue' ]
@@ -100,9 +100,9 @@ export default defineConfig({
     Components({
       resolvers: [ElementPlusResolver()],
     }),
-    VueI18nPlugin({
-      include: _path.resolve(_path.dirname(fileURLToPath(import.meta.url)), './src/assets/languages/**')
-    }),
+    // VueI18nPlugin({
+    //   include: _path.resolve(_path.dirname(fileURLToPath(import.meta.url)), './src/assets/languages/**')
+    // }),
     topLevelAwait({
       // The export name of top-level await promise for each chunk module
       promiseExportName: "__tla",

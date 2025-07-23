@@ -15,6 +15,8 @@ export const MainWindowOption = {
   minHeight: 780,
   autoHideMenuBar: true,
   show: false,
+  vibrancy: 'window',
+  visualEffectState: "followWindow", // 这个参数不加的话，鼠标离开应用程序其背景就会变成白色
   webPreferences: {
     preload: path.join(__dirname, "preload.js"),
     webSecurity: false,

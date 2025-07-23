@@ -116,5 +116,7 @@ export default async (nativeImage: any) => {
     return fileOptions;
   });
 
+  console.log("darwin apps", apps)
+
   return apps;
 };
