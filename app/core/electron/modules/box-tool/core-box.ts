@@ -89,10 +89,21 @@ export class CoreBoxManager {
   }
 
   get getCurScreen() {
-    const cursorPoint = screen.getCursorScreenPoint();
-    const curScreen = screen.getDisplayNearestPoint(cursorPoint);
+    try {
+      const cursorPoint = screen.getCursorScreenPoint();
+      const curScreen = screen.getDisplayNearestPoint(cursorPoint);
 
-    return curScreen;
+      if (!curScreen) {
+        console.warn("[CoreBox] No screen found for cursor point, using primary display");
+        return screen.getPrimaryDisplay();
+      }
+
+      return curScreen;
+    } catch (error) {
+      console.error("[CoreBox] Error getting current screen:", error);
+
+      return screen.getPrimaryDisplay();
+    }
   }
 
   getAppSettingConfig() {
@@ -133,26 +144,49 @@ export class CoreBoxManager {
   }
 
   updateWindowPos(window: TouchWindow, screen: Electron.Display) {
+    if (!screen || !screen.bounds) {
+      console.error("[CoreBox] Invalid screen object:", screen);
+      return;
+    }
+
     const { bounds } = screen;
 
-    const left = bounds.x + bounds.width / 2 - 450;
-    const top = bounds.y + bounds.height * 0.25;
+    if (typeof bounds.x !== 'number' || typeof bounds.y !== 'number' ||
+        typeof bounds.width !== 'number' || typeof bounds.height !== 'number') {
+      console.error("[CoreBox] Invalid bounds properties:", bounds);
+      return;
+    }
 
-    window.window.setPosition(left, top);
+    const left = Math.round(bounds.x + bounds.width / 2 - 450);
+    const top = Math.round(bounds.y + bounds.height * 0.25);
 
-    window.window.show();
-    setTimeout(() => {
-      window.window.focus();
-    }, 100);
+    if (isNaN(left) || isNaN(top)) {
+      console.error("[CoreBox] Invalid position calculation:", { left, top, bounds });
+      return;
+    }
+
+    try {
+      window.window.setPosition(left, top);
+      window.window.show();
+      setTimeout(() => {
+        window.window.focus();
+      }, 100);
+    } catch (error) {
+      console.error("[CoreBox] Failed to set window position:", error);
+    }
   }
 
   register() {
     globalShortcut.register("CommandOrControl+E", () => {
       const curScreen = this.getCurScreen;
-      if (this.lastWindow && curScreen.id !== this.lastWindow.id) {
-        console.log("curScreen", curScreen)
-        this.updateWindowPos(this.nowWindow, curScreen);
-        this.lastWindow = curScreen;
+      if (this.lastWindow && curScreen && curScreen.id !== this.lastWindow.id) {
+        const currentWindow = this.nowWindow;
+        if (currentWindow) {
+          this.updateWindowPos(currentWindow, curScreen);
+          this.lastWindow = curScreen;
+        } else {
+          console.error("[CoreBox] No current window available");
+        }
       } else this.trigger(!this.#_show);
     });
 
@@ -269,7 +303,11 @@ export class CoreBoxManager {
       // const displayes = screen.getAllDisplays()
       const curScreen = (this.lastWindow = this.getCurScreen);
 
-      this.updateWindowPos(w, curScreen);
+      if (curScreen && w) {
+        this.updateWindowPos(w, curScreen);
+      } else {
+        console.error("[CoreBox] Invalid screen or window for positioning:", { curScreen, window: w });
+      }
     } else {
       w.window.setPosition(-1000000, -1000000);
 
