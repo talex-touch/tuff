@@ -1,6 +1,7 @@
 import { TalexTouch } from "../types";
 import { ChannelType, ITouchChannel } from "@talex-touch/utils/channel";
 import {
+  BrowserWindow,
   BrowserWindowConstructorOptions,
   OpenDevToolsOptions,
   WebContents,
@@ -10,9 +11,8 @@ import {
 import fse from "fs-extra";
 import { release } from "os";
 import path from "path";
-import { MicaBrowserWindow } from "mica-electron";
 import { APP_FOLDER_NAME, MainWindowOption } from "../config/default";
-import { genPluginManager } from "../plugins/plugin-core";
+// import { genPluginManager } from "../plugins/plugin-core";
 import { checkDirWithCreate } from "../utils/common-util";
 import { genTouchChannel } from "./channel-core";
 import {
@@ -139,11 +139,6 @@ function getRootPath(root: string) {
     : path.join(root, "..", "..", APP_FOLDER_NAME);
 }
 
-// let micaLib: string;
-// let _micaSupport: boolean = false
-
-// export const micaSupport: () => boolean = () => app.isPackaged ? fse.existsSync(micaLib) : true && _micaSupport;
-
 export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = rootPath;
 
@@ -166,20 +161,7 @@ export class TouchApp implements TalexTouch.TouchApp {
     console.log("[TouchApp] App running under: " + this.rootPath);
     checkDirWithCreate(this.rootPath, true);
 
-    const micaLib = path.join(
-      this.rootPath,
-      "modules",
-      "lib",
-      `micaElectron_${process.arch}.node`
-    );
-
-    console.log(micaLib);
-
     const _windowOptions = { ...MainWindowOption };
-
-    // if (app.isPackaged) {
-
-    // }
 
     this.app = app;
     this.version = app.isPackaged
@@ -261,20 +243,19 @@ export class TouchApp implements TalexTouch.TouchApp {
 }
 
 export class TouchWindow implements TalexTouch.ITouchWindow {
-  window: /* BrowserWindow |  */ MicaBrowserWindow;
+  window: BrowserWindow;
 
   constructor(options?: BrowserWindowConstructorOptions) {
-    // this.window = new BrowserWindow(options);
-    this.window = /* micaSupport() ? */ new MicaBrowserWindow(options); // : new BrowserWindow(options)
+    this.window = new BrowserWindow(options)
 
-    this.window.setMicaAcrylicEffect();
-    this.window.setRoundedCorner();
-
-    // if (this.window instanceof MicaBrowserWindow) {
-    //   // this.window.setDarkTheme();
-    //   this.window['setMicaAcrylicEffect']?.();
-    //   this.window['setRoundedCorner']?.()
-    // }
+    /**
+     * Auto apply Vibrancy(darwin) or MicaMaterial(windows) on window
+     */
+    if (process.platform === "darwin") {
+      this.window.setVibrancy("fullscreen-ui");
+    } else {
+      this.window.setBackgroundMaterial('mica')
+    }
 
     this.window.once("ready-to-show", () => {
       this.window.webContents.addListener(

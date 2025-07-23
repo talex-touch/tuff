@@ -150,6 +150,7 @@ export class CoreBoxManager {
     globalShortcut.register("CommandOrControl+E", () => {
       const curScreen = this.getCurScreen;
       if (this.lastWindow && curScreen.id !== this.lastWindow.id) {
+        console.log("curScreen", curScreen)
         this.updateWindowPos(this.nowWindow, curScreen);
         this.lastWindow = curScreen;
       } else this.trigger(!this.#_show);

@@ -27,8 +27,6 @@ export function getApps() {
     res.push(...appSearch())
   }
 
-  console.log("res", res)
-
   return res
 }
 
