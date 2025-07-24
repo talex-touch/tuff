@@ -142,6 +142,7 @@ export default async () => {
     const appSubStr = appName.split(extname)[0];
     let fileOptions = {
       ...app,
+      type: 'app',
       value: 'plugin',
       desc: app.path,
       pluginType: 'app',

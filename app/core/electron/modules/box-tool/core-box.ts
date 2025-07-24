@@ -29,6 +29,10 @@ async function createNewBoxWindow(closeCallback: Function) {
       const url = process.env["VITE_DEV_SERVER_URL"] as string;
 
       await window.loadURL(url/* , { devtools: true } */);
+
+      window.openDevTools({
+        mode: 'detach'
+      })
     }
 
     window.window.hide();
@@ -50,7 +54,7 @@ async function createNewBoxWindow(closeCallback: Function) {
 
     touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
       id: window.window.webContents.id,
-      show: true,
+      show: false,
     });
   });
 

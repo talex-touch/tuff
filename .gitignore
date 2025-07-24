@@ -132,3 +132,4 @@ t/
 
 app/core/signature.json
 app/core/src/information.json
+app/core/src/distinformation.json

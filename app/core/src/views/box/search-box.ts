@@ -70,10 +70,37 @@ export function execute(item: any, query: any = '') {
   console.log("execute", item, query);
 
   const { type, action, pluginType, value } = item;
-  if (type === 'app') {
+  console.log(`[Execute Debug] type: ${type}, action: ${action}, pluginType: ${pluginType}`);
+
+  if (type === 'app' || pluginType === 'app') {
+    console.log(`[App Launch] Attempting to launch app with action: ${action}`);
     touchChannel.sendSync("core-box:hide");
 
-    cprocess.exec(action);
+    cprocess.exec(action, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`[App Launch] Failed to launch app: ${error.message}`);
+        console.error(`[App Launch] Command: ${action}`);
+        if (stderr) console.error(`[App Launch] stderr: ${stderr}`);
+
+        if (process.platform === 'darwin' && action.startsWith('open ')) {
+          const appPath = action.replace('open ', '').replace(/\\ /g, ' ');
+          console.log(`[App Launch] Trying alternative launch method for: ${appPath}`);
+
+          cprocess.exec(`open -a "${appPath}"`, (altError, altStdout, altStderr) => {
+            if (altError) {
+              console.error(`[App Launch] Alternative launch also failed: ${altError.message}`);
+              if (altStderr) console.error(`[App Launch] Alternative stderr: ${altStderr}`);
+            } else {
+              console.log(`[App Launch] Successfully launched app using alternative method`);
+              if (altStdout) console.log(`[App Launch] stdout: ${altStdout}`);
+            }
+          });
+        }
+      } else {
+        console.log(`[App Launch] Successfully launched app: ${action}`);
+        if (stdout) console.log(`[App Launch] stdout: ${stdout}`);
+      }
+    });
   }
   else if (type === 'plugin') {
     if (item.push) {
