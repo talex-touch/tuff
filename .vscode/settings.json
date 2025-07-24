@@ -49,7 +49,7 @@
     "app/core/renderer/assets/languages"
   ],
   "vue.codeActions.enabled": false,
-  "vue3snippets.enable-compile-vue-file-on-did-save-code": true,
+  "vue3snippets.enable-compile-vue-file-on-did-save-code": false,
   "Lingma.cloudModelAutoTriggerDisplayRule": true,
   "javascript.suggest.autoImports": true,
   "typescript.suggest.autoImports": true,

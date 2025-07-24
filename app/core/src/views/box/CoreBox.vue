@@ -2,6 +2,7 @@
 import { touchChannel } from "~/modules/channel/channel-core";
 import { search, appAmo, execute, BoxMode } from "./search-box";
 import BoxItem from "./BoxItem.vue";
+import BoxInput from "./BoxInput.vue";
 import FileTag from "./tag/FileTag.vue";
 import { useDocumentVisibility } from "@vueuse/core";
 import { appSetting } from "~/modules/channel/storage/index.ts";
@@ -248,6 +249,8 @@ function handleExit() {
   } else if (searchVal.value) searchVal.value = "";
   else touchChannel.sendSync("core-box:hide");
 }
+
+const activeItem = computed(() => res.value[boxOptions.focus]);
 </script>
 
 <template>
@@ -258,15 +261,11 @@ function handleExit() {
     <div class="CoreBox-Icon">
       <PrefixIcon @close="handleExit" :feature="boxOptions.data?.feature" />
     </div>
-    <input
-      id="core-box-input"
-      :placeholder="
-        boxOptions.mode === BoxMode.FEATURE
-          ? boxOptions.data?.feature?.desc ?? boxOptions.data?.feature?.name
-          : 'Type what you want to search by talex-touch.'
-      "
-      v-model="searchVal"
-    />
+    <BoxInput v-model="searchVal" :box-options="boxOptions">
+      <template v-if="activeItem" #completion>
+        {{ activeItem?.name }}
+      </template>
+    </BoxInput>
 
     <div v-if="boxOptions.mode !== BoxMode.FEATURE" class="CoreBox-Tag">
       <template v-if="clipboardOptions.last">
@@ -297,7 +296,7 @@ function handleExit() {
       <template v-else-if="boxOptions.mode === BoxMode.COMMAND">
         <span class="fake-background">COMMAND</span>
       </template>
-      <span class="fake-background" v-else>SEARCH</span>
+      <!-- <span class="fake-background" v-else>SEARCH</span> -->
       <!-- </template> -->
     </div>
     <div class="CoreBox-Configure">
@@ -397,28 +396,6 @@ div.CoreBoxRes {
 }
 
 div.CoreBox {
-  input {
-    margin-left: 8px;
-
-    flex: 1;
-    // width: calc(100% - 320px);
-    height: 52px !important;
-
-    outline: none;
-    border: none;
-
-    font-size: 16px;
-
-    border-radius: 8px;
-    background-color: transparent;
-
-    opacity: 0.75;
-
-    font-size: 22px;
-    // box-shadow: 0 0 2px 1px var(--el-color-primary-light-3),
-    //   0 0 4px 2px var(--el-color-primary-light-5);
-  }
-
   z-index: 100000000;
   position: absolute;
   padding: 4px 8px;
