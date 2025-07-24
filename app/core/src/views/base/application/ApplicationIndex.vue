@@ -13,17 +13,19 @@ const curSelect = ref();
 const appList: any = ref(apps.value);
 
 onMounted(() => {
-  setTimeout(refreshSearchList, 200);
+  setTimeout(async () => {
+    await refreshSearchList();
+  }, 200);
 });
 
-function handleSearch(value: string) {
+async function handleSearch(value: string) {
   if (!value.length) {
     appList.value = apps.value;
     return;
   }
   appList.value = [];
 
-  search(value, (v: any) => {
+  await search(value, { mode: 0 }, {}, (v: any) => {
     const amo = appAmo[v.name] || 0;
     v.amo = amo;
 

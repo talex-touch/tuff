@@ -1,5 +1,6 @@
 <script name="AppList" setup lang="ts">
 import { appAmo } from "~/views/box/search-box";
+import PluginIcon from "~/components/plugin/PluginIcon.vue";
 
 const props = defineProps<{
   list: any[];
@@ -134,7 +135,12 @@ function handleClick(item: any, ind: number) {
         @click="handleClick(item, ind)"
         v-for="(item, ind) in _list"
       >
-        <img :src="item.icon" alt="" />
+        <div class="AppList-IconContainer">
+          <PluginIcon v-if="item.icon" :icon="item.icon" :alt="item.name" />
+          <div v-else class="AppList-IconPlaceholder">
+            <i class="i-ri-apps-2-line" />
+          </div>
+        </div>
 
         <div class="Main">
           <p v-if="item.matched" v-html="highlightText(item.name, item.matched)" />
@@ -242,9 +248,25 @@ function handleClick(item: any, ind: number) {
   transition: 0.25s;
   border: 1px solid transparent;
 
-  img {
+  .AppList-IconContainer {
     width: 2rem;
     height: 2rem;
+    flex-shrink: 0;
+
+    .AppList-IconPlaceholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--el-fill-color-lighter);
+      border-radius: 4px;
+      color: var(--el-text-color-placeholder);
+
+      i {
+        font-size: 1.2rem;
+      }
+    }
   }
 
   .Main {

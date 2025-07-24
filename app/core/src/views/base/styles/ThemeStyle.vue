@@ -12,7 +12,6 @@
         tip="Mica style may impact device performance."
         v-model="themeStyle.theme.window"
         title="Mica"
-        :disabled="os?.type !== 'Windows_NT'"
       >
       </SectionItem>
       <SectionItem

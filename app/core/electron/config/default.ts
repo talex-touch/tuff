@@ -13,8 +13,11 @@ export const MainWindowOption = {
   frame: false,
   minWidth: 1280,
   minHeight: 780,
+  height: 780,
+  width: 1280,
   autoHideMenuBar: true,
   show: false,
+  transparent: true,
   webPreferences: {
     preload: path.join(__dirname, "preload.js"),
     webSecurity: false,
@@ -37,6 +40,7 @@ export const BoxWindowOption = {
   skipTaskbar: true,
   autoHideMenuBar: true,
   show: false,
+  transparent: true,
   webPreferences: {
     preload: path.join(__dirname, "preload.js"),
     webSecurity: false,

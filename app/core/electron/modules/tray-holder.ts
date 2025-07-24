@@ -5,7 +5,8 @@ import fse from 'fs-extra'
 import { AppName, APP_SCHEMA } from '../config/default'
 
 const iconUrls = [
-  "https://files.catbox.moe/ssn1rx.png"
+  "https://files.catbox.moe/44pnti.png",
+  // "https://files.catbox.moe/ssn1rx.png"
 ]
 
 async function downloadImage(url: string, path: string) {
@@ -122,7 +123,7 @@ export default {
 
       tray.setContextMenu(contextMenu)
       tray.setToolTip(APP_SCHEMA)
-      tray.setTitle(AppName)
+      // tray.setTitle(AppName)
 
       tray.addListener('click', () => {
         const window = app.window.window

@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeyDown);
 });
 
-function handleSearch() {
+async function handleSearch() {
   boxOptions.focus = 0;
   res.value = [];
 
@@ -171,7 +171,7 @@ function handleSearch() {
     Object.assign(info, boxOptions.data)
   }
 
-  search(searchVal.value, { mode: boxOptions.mode }, info, (v) => {
+  await search(searchVal.value, { mode: boxOptions.mode }, info, (v) => {
     const amo = appAmo[v.name] || 0;
     v.amo = amo;
 

@@ -3,7 +3,7 @@ import { genTouchApp, TouchApp, TouchWindow } from "../../core/touch-core";
 import { BoxWindowOption } from "../../config/default";
 import { ChannelType, DataCode } from "@talex-touch/utils/channel";
 import { globalShortcut, screen, app } from "electron";
-import { getApps } from "./addon/app-addon";
+import { getAppsAsync, appDataManager } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
 import type { IPluginFeature } from '@talex-touch/utils/plugin';
@@ -230,8 +230,34 @@ export class CoreBoxManager {
     touchApp.channel.regChannel(
       ChannelType.MAIN,
       "core-box-get:apps",
-      () => {
-        return getApps()
+      async ({ reply }) => {
+        try {
+          console.log("[CoreBox] Received request for apps data");
+          
+          const apps = await getAppsAsync()
+          console.log(`[CoreBox] Sending ${apps.length} apps to frontend`);
+
+          const appsWithIcons = apps.filter(app => app.icon);
+          const appsWithoutIcons = apps.filter(app => !app.icon);
+          console.log(`[CoreBox] Apps with icons: ${appsWithIcons.length}, without icons: ${appsWithoutIcons.length}`);
+
+          if (appsWithIcons.length > 0) {
+            console.log("[CoreBox] Sample apps with icons:", appsWithIcons.slice(0, 3).map(app => ({
+              name: app.name,
+              icon: app.icon ? {
+                type: app.icon.type,
+                hasValue: !!app.icon.value,
+                valueLength: app.icon.value ? app.icon.value.length : 0,
+                _value: app.icon._value
+              } : null
+            })));
+          }
+
+          reply(DataCode.SUCCESS, apps)
+        } catch (error) {
+          console.error("[CoreBox] Failed to get apps:", error)
+          reply(DataCode.ERROR, [])
+        }
       }
     );
     touchApp.channel.regChannel(
@@ -290,6 +316,10 @@ export class CoreBoxManager {
     w.window.setAlwaysOnTop(show);
 
     if (show) {
+      appDataManager.onCoreBoxShow().catch(error => {
+        console.error("[CoreBox] Failed to refresh app data on show:", error);
+      });
+
       if (!this.#_expand) {
         w.window.setMinimumSize(900, 60);
         w.window.setSize(900, 60, false);

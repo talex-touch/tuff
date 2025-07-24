@@ -3,66 +3,108 @@
 import getMacApps from './get-mac-app';
 import fs from 'fs';
 import path from 'path';
-
+import { exec } from 'child_process';
 import os from 'os';
 
-export default async (nativeImage: any) => {
+/**
+ * Get application icon base64 string
+ * @param appPath Application path
+ * @param appName Application name
+ * @returns base64 string or null
+ */
+async function getApplicationIcon(appPath: string, appName: string): Promise<string | null> {
   const icondir = path.join(os.tmpdir(), 'ProcessIcon');
+  const iconPath = path.join(icondir, `${appName}.png`);
+  const iconNonePath = path.join(icondir, `${appName}.none`);
 
-  const exists = fs.existsSync(icondir);
-  if (!exists) {
+  if (fs.existsSync(iconPath)) {
+    try {
+      const iconBuffer = fs.readFileSync(iconPath);
+      return iconBuffer.toString('base64');
+    } catch (error) {
+      console.warn(`[Darwin] Failed to read cached icon for ${appName}:`, error);
+    }
+  }
+
+  if (fs.existsSync(iconNonePath)) {
+    return null;
+  }
+
+  try {
+    await getMacApps.app2png(appPath, iconPath);
+    const iconBuffer = fs.readFileSync(iconPath);
+    return iconBuffer.toString('base64');
+  } catch (app2pngError) {
+    console.warn(`[Darwin] app2png failed for ${appName}, trying manual extraction`);
+  }
+
+  const appFileName = appPath.split('/').pop() || '';
+  const extname = path.extname(appFileName);
+  const appSubStr = appFileName.split(extname)[0];
+
+  const iconPaths = [
+    path.join(appPath, '/Contents/Resources/App.icns'),
+    path.join(appPath, '/Contents/Resources/AppIcon.icns'),
+    path.join(appPath, `/Contents/Resources/${appSubStr}.icns`),
+    path.join(appPath, `/Contents/Resources/${appSubStr.replace(/ /g, '')}.icns`),
+    path.join(appPath, `/Contents/Resources/${appSubStr.replace(/[^a-zA-Z0-9]/g, '')}.icns`)
+  ];
+
+  let foundIconPath: string | null = null;
+
+  for (const testPath of iconPaths) {
+    if (fs.existsSync(testPath)) {
+      foundIconPath = testPath;
+      break;
+    }
+  }
+
+  if (!foundIconPath) {
+    try {
+      const resourcesPath = path.join(appPath, '/Contents/Resources');
+      if (fs.existsSync(resourcesPath)) {
+        const resourceList = fs.readdirSync(resourcesPath);
+        const iconName = resourceList.find(file => path.extname(file) === '.icns');
+        if (iconName) {
+          foundIconPath = path.join(resourcesPath, iconName);
+        }
+      }
+    } catch (scanError) {
+      console.warn(`[Darwin] Failed to scan resources for ${appName}:`, scanError);
+    }
+  }
+
+  if (!foundIconPath) {
+    fs.writeFileSync(iconNonePath, '');
+    return null;
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      exec(
+        `sips -s format png '${foundIconPath}' --out '${iconPath}' --resampleHeightWidth 64 64`,
+        (error: any) => {
+          error ? reject(error) : resolve();
+        }
+      );
+    });
+
+    const iconBuffer = fs.readFileSync(iconPath);
+    return iconBuffer.toString('base64');
+  } catch (sipsError) {
+    console.warn(`[Darwin] sips conversion failed for ${appName}:`, sipsError);
+    fs.writeFileSync(iconNonePath, '');
+    return null;
+  }
+}
+
+export default async () => {
+  const icondir = path.join(os.tmpdir(), 'ProcessIcon');
+  if (!fs.existsSync(icondir)) {
     fs.mkdirSync(icondir);
   }
 
   const isZhRegex = /[\u4e00-\u9fa5]/;
-
-  async function getAppIcon(appPath: string, nativeImage: any, name: string) {
-    try {
-      const iconpath = path.join(icondir, `${name}.png`);
-      const iconnone = path.join(icondir, `${name}.none`);
-      const exists = fs.existsSync(iconpath);
-      const existsnone = fs.existsSync(iconnone);
-      if (exists) return true;
-      if (existsnone) return false;
-      // const appName: string = appPath.split('/').pop() || '';
-      // const extname: string = path.extname(appName);
-      // const appSubStr: string = appName.split(extname)[0];
-      // const path1 = path.join(appPath, `/Contents/Resources/App.icns`);
-      // const path2 = path.join(appPath, `/Contents/Resources/AppIcon.icns`);
-      // const path3 = path.join(appPath, `/Contents/Resources/${appSubStr}.icns`);
-      // const path4 = path.join(
-      //   appPath,
-      //   `/Contents/Resources/${appSubStr.replace(' ', '')}.icns`
-      // );
-      // let iconPath: string = path1;
-      // if (fs.existsSync(path1)) {
-      //   iconPath = path1;
-      // } else if (fs.existsSync(path2)) {
-      //   iconPath = path2;
-      // } else if (fs.existsSync(path3)) {
-      //   iconPath = path3;
-      // } else if (fs.existsSync(path4)) {
-      //   iconPath = path4;
-      // } else {
-      //   // 性能最低的方式
-      //   const resourceList = fs.readdirSync(
-      //     path.join(appPath, `/Contents/Resources`)
-      //   );
-      //   const iconName = resourceList.filter(
-      //     (file) => path.extname(file) === '.icns'
-      //   )[0];
-      //   if (!iconName) {
-      //     fs.writeFileSync(iconnone, '');
-      //     return false;
-      //   }
-      //   iconPath = path.join(appPath, `/Contents/Resources/${iconName}`);
-      // }
-      await getMacApps.app2png(appPath, iconpath);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
 
   let apps: any = await getMacApps.getApps();
 
@@ -70,19 +112,29 @@ export default async (nativeImage: any) => {
     const extname = path.extname(app.path);
     return extname === '.app' || extname === '.prefPane';
   });
+  
+  let successCount = 0;
+  let failCount = 0;
+
   for (const app of apps) {
-    if (await getAppIcon(app.path, nativeImage, app._name)) {
-      app.icon =
-        'image://' +
-        path.join(
-          os.tmpdir(),
-          'ProcessIcon',
-          `${encodeURIComponent(app._name)}.png`
-        );
+    const base64Icon = await getApplicationIcon(app.path, app._name);
+    if (base64Icon) {
+      const dataUrl = `data:image/png;base64,${base64Icon}`;
+      app.icon = {
+        type: 'dataurl',
+        value: dataUrl,
+        _value: `${app._name}.png`
+      };
+      successCount++;
+      console.log(`[Darwin] ✅ ${app._name} - icon loaded as base64`);
+    } else {
+      app.icon = null;
+      failCount++;
+      console.log(`[Darwin] ❌ ${app._name} - no icon`);
     }
-    // todo getApp size
   }
-  apps = apps.filter((app: any) => !!app.icon);
+
+  console.log(`[Darwin] Icon processing complete: ${successCount} success, ${failCount} failed`);
 
   apps = apps.map((app: any) => {
     const appName: any = app.path.split('/').pop();

@@ -19,8 +19,8 @@ setTimeout(initialize, 200)
 
 const searchList: any = [apps, features];
 
-function initialize() {
-  refreshSearchList()
+async function initialize() {
+  await refreshSearchList()
 
   touchChannel.regChannel("core-box-updated:features", () => {
     features.value = touchChannel.sendSync("core-box-get:features");
@@ -31,9 +31,30 @@ function initialize() {
   console.log('search box all', features, apps)
 }
 
-export function refreshSearchList() {
-  apps.value = touchChannel.sendSync("core-box-get:apps");
-  features.value = touchChannel.sendSync("core-box-get:features");
+export async function refreshSearchList() {
+  try {
+    // 使用异步调用获取 app 数据
+    console.log("[SearchBox] Requesting app data from backend...");
+    apps.value = await touchChannel.send("core-box-get:apps");
+    console.log(`[SearchBox] Received ${apps.value.length} apps from backend`);
+
+    // 检查前几个应用的图标数据
+    const appsWithIcons = apps.value.filter(app => app.icon);
+    const appsWithoutIcons = apps.value.filter(app => !app.icon);
+    console.log(`[SearchBox] Apps with icons: ${appsWithIcons.length}, without icons: ${appsWithoutIcons.length}`);
+
+    if (appsWithIcons.length > 0) {
+      console.log("[SearchBox] Sample apps with icons:", appsWithIcons.slice(0, 3).map(app => ({
+        name: app.name,
+        icon: app.icon
+      })));
+    }
+
+    features.value = touchChannel.sendSync("core-box-get:features");
+  } catch (error) {
+    console.error("[SearchBox] Failed to refresh search list:", error);
+    // 如果异步调用失败，保持原有数据
+  }
 }
 
 export const appAmo: any = JSON.parse(
@@ -90,8 +111,8 @@ export interface SearchOptions {
   mode: BoxMode
 }
 
-export function search(keyword: string, options: SearchOptions, info: any, callback: (res: SearchItem) => void) {
-  refreshSearchList()
+export async function search(keyword: string, options: SearchOptions, info: any, callback: (res: SearchItem) => void) {
+  await refreshSearchList()
 
   const results = [];
 

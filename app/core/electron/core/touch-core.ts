@@ -253,8 +253,12 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
      */
     if (process.platform === "darwin") {
       this.window.setVibrancy("fullscreen-ui");
+
+      console.log("[TouchWindow] Apply Vibrancy on window");
     } else {
       this.window.setBackgroundMaterial('mica')
+
+      console.log("[TouchWindow] Apply MicaMaterial on window");
     }
 
     this.window.once("ready-to-show", () => {
