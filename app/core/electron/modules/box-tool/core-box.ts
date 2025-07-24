@@ -349,7 +349,7 @@ export class CoreBoxManager {
         this.shrink();
 
         w.window.hide();
-      }, 500);
+      }, 100);
     }
 
     touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
