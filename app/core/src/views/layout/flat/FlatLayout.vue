@@ -23,7 +23,7 @@
         </div>
       </div>
 
-      <div class="AppLayout-View">
+      <div class="AppLayout-View fake-background">
         <slot name="view" />
       </div>
     </div>

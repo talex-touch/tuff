@@ -36,8 +36,8 @@ onMounted(() => {
     themeStyle.value.theme.style.auto
       ? "auto"
       : themeStyle.value.theme.style.dark
-        ? "dark"
-        : "light"
+      ? "dark"
+      : "light"
   );
 });
 </script>
@@ -65,14 +65,14 @@ onMounted(() => {
 
   box-sizing: border-box;
 
-  --fake-opacity: 0.25;
+  --fake-inner-opacity: 0.125;
   --fake-radius: 0;
   --fake-color: var(--el-fill-color-extra-light);
 
   transition: margin-right 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
-  left 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
-  width 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
-  opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+    left 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    width 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+    opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 }
 
 @keyframes viewEnter {
@@ -112,7 +112,7 @@ onMounted(() => {
 
   box-sizing: border-box;
 
-  --fake-opacity: 0.25;
+  --fake-inner-opacity: 0.125;
   --fake-radius: 8px 8px 0 0;
   --fake-color: var(--el-fill-color-extra-light);
 
