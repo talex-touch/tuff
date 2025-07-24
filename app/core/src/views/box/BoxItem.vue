@@ -44,10 +44,10 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
 <template>
   <div class="BoxItem fake-background" :class="{ active, selected }">
     <!-- <div class="BoxItem-Main"> -->
-    <template v-if="data.icon?.type">
+    <div class="BoxItem-Icon" relative>
       <PluginIcon :icon="data.icon" :alt="data.name" />
-    </template>
-    <img v-else :src="data.icon" :alt="data.name" />
+      <span class="amo" v-text="data.amo"></span>
+    </div>
     <!-- </div> -->
     <div class="BoxItem-Content">
       <template v-if="data.descMatched">
@@ -64,29 +64,13 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
       </template>
 
       <span class="end"> {{ (data.pluginType || data.type).toUpperCase() }} </span>
-
-      <span class="index">{{ i }}</span>
-      <span class="amo">{{ data.amo }}</span>
     </div>
   </div>
 </template>
 
 <style lang="scss">
 .matched {
-  // opacity: 0.75;
   font-weight: 600;
-  filter: invert(0) brightness(150%);
-  color: var(--el-color-primary);
-}
-
-.index {
-  position: absolute;
-
-  right: 8px;
-  bottom: 4px;
-
-  opacity: 0.15;
-  font-size: 12px;
   color: var(--el-color-primary);
 }
 
@@ -97,18 +81,27 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
   right: 1rem;
 
   opacity: 0.75;
+  font-size: 12px;
   transform: translateY(-50%);
 }
 
 .amo {
   position: absolute;
+  display: flex;
 
-  right: 8px;
-  top: 4px;
+  align-items: center;
+  justify-content: center;
 
-  opacity: 0.15;
-  font-size: 12px;
-  color: var(--el-color-success);
+  right: 0;
+  bottom: 0;
+
+  width: 12px;
+  height: 12px;
+
+  font-size: 10px;
+  line-height: 12px;
+  border-radius: 50%;
+  background-color: var(--el-color-primary);
 }
 
 .BoxItem {
@@ -121,8 +114,7 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
     width: 100%;
     height: 100%;
 
-    opacity: 0.5;
-    border-radius: 0;
+    opacity: 0.85;
     transition: 0.25s;
     box-shadow: 0 0 4px 0 var(--el-color-primary);
   }
@@ -139,7 +131,7 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
 
     opacity: 0;
     transition: 0.125s;
-    border-radius: 5px;
+    border-radius: 12px;
     box-shadow: 0 0 2px 0 var(--el-color-primary);
     background-color: var(--el-color-primary);
   }
@@ -154,27 +146,23 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
     font-size: 12px;
   }
 
-  img,
   .PluginIcon-Container {
-    width: 40px;
-    height: 40px;
+    display: block;
 
-    object-fit: none;
-  }
-
-  .PluginIcon-Container {
-    top: 3px;
+    width: 36px;
+    height: 36px;
   }
 
   position: relative;
   display: flex;
-  padding: 4px 0.75rem;
+  margin: 0.25rem 0.5rem;
+  padding: 0.25rem 0.75rem;
 
   gap: 0.5rem;
   align-items: center;
 
-  width: 100%;
-  height: 48px;
+  width: calc(100% - 1rem);
+  height: 44px;
 
   cursor: pointer;
   overflow: hidden;
@@ -188,7 +176,8 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
       opacity: 1;
     }
 
-    --fake-inner-opacity: 0.25;
+    --fake-color: var(--el-bg-color);
+    --fake-inner-opacity: 0.85;
   }
 }
 </style>
