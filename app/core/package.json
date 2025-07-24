@@ -13,7 +13,7 @@
   },
   "description": "A strong adaptation more platform all-tool program.",
   "engines": {
-    "node": "^16.0.0 || >=18.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.0",
