@@ -7,6 +7,9 @@ import { handleItemData } from './search-core';
 export const apps = ref([]);
 export const features = ref<any[]>([])
 
+let lastRefreshTime = 0;
+const REFRESH_COOLDOWN = 15000;
+
 export const enum BoxMode {
   INPUT,
   COMMAND,
@@ -20,41 +23,32 @@ setTimeout(initialize, 200)
 const searchList: any = [apps, features];
 
 async function initialize() {
-  await refreshSearchList()
+  await refreshSearchList(true)
 
   touchChannel.regChannel("core-box-updated:features", () => {
     features.value = touchChannel.sendSync("core-box-get:features");
-
-    console.log('[Feature] Features updated.')
   })
-
-  console.log('search box all', features, apps)
 }
 
-export async function refreshSearchList() {
+export async function refreshSearchList(forceRefresh = false) {
+  const currentTime = Date.now();
+
+  if (!forceRefresh && currentTime - lastRefreshTime < REFRESH_COOLDOWN) {
+    return;
+  }
+
   try {
-    // 使用异步调用获取 app 数据
-    console.log("[SearchBox] Requesting app data from backend...");
+    lastRefreshTime = currentTime;
     apps.value = await touchChannel.send("core-box-get:apps");
-    console.log(`[SearchBox] Received ${apps.value.length} apps from backend`);
-
-    // 检查前几个应用的图标数据
-    const appsWithIcons = apps.value.filter(app => app.icon);
-    const appsWithoutIcons = apps.value.filter(app => !app.icon);
-    console.log(`[SearchBox] Apps with icons: ${appsWithIcons.length}, without icons: ${appsWithoutIcons.length}`);
-
-    if (appsWithIcons.length > 0) {
-      console.log("[SearchBox] Sample apps with icons:", appsWithIcons.slice(0, 3).map(app => ({
-        name: app.name,
-        icon: app.icon
-      })));
-    }
-
     features.value = touchChannel.sendSync("core-box-get:features");
   } catch (error) {
-    console.error("[SearchBox] Failed to refresh search list:", error);
-    // 如果异步调用失败，保持原有数据
+    console.error("Failed to refresh search list:", error);
+    lastRefreshTime = 0;
   }
+}
+
+export async function forceRefreshSearchList() {
+  return await refreshSearchList(true);
 }
 
 export const appAmo: any = JSON.parse(
@@ -67,38 +61,23 @@ export function execute(item: any, query: any = '') {
   appAmo[item.name] = (appAmo[item.name] || 0) + 1;
   localStorage.setItem("app-count", JSON.stringify(appAmo));
 
-  console.log("execute", item, query);
-
   const { type, action, pluginType, value } = item;
-  console.log(`[Execute Debug] type: ${type}, action: ${action}, pluginType: ${pluginType}`);
 
   if (type === 'app' || pluginType === 'app') {
-    console.log(`[App Launch] Attempting to launch app with action: ${action}`);
     touchChannel.sendSync("core-box:hide");
 
-    cprocess.exec(action, (error, stdout, stderr) => {
+    cprocess.exec(action, (error) => {
       if (error) {
-        console.error(`[App Launch] Failed to launch app: ${error.message}`);
-        console.error(`[App Launch] Command: ${action}`);
-        if (stderr) console.error(`[App Launch] stderr: ${stderr}`);
+        console.error(`Failed to launch app: ${error.message}`);
 
         if (process.platform === 'darwin' && action.startsWith('open ')) {
           const appPath = action.replace('open ', '').replace(/\\ /g, ' ');
-          console.log(`[App Launch] Trying alternative launch method for: ${appPath}`);
-
-          cprocess.exec(`open -a "${appPath}"`, (altError, altStdout, altStderr) => {
+          cprocess.exec(`open -a "${appPath}"`, (altError) => {
             if (altError) {
-              console.error(`[App Launch] Alternative launch also failed: ${altError.message}`);
-              if (altStderr) console.error(`[App Launch] Alternative stderr: ${altStderr}`);
-            } else {
-              console.log(`[App Launch] Successfully launched app using alternative method`);
-              if (altStdout) console.log(`[App Launch] stdout: ${altStdout}`);
+              console.error(`Alternative launch failed: ${altError.message}`);
             }
           });
         }
-      } else {
-        console.log(`[App Launch] Successfully launched app: ${action}`);
-        if (stdout) console.log(`[App Launch] stdout: ${stdout}`);
       }
     });
   }
@@ -143,8 +122,6 @@ export async function search(keyword: string, options: SearchOptions, info: any,
 
   const results = [];
 
-  console.debug("[CoreBox] Searching " + keyword, searchList);
-
   if (options.mode === BoxMode.FEATURE) {
     touchChannel.send("trigger-plugin-feature-input-changed", {
       query: keyword,
@@ -167,6 +144,4 @@ export async function search(keyword: string, options: SearchOptions, info: any,
 
     }
   }
-
-  // console.log("[CoreBox] Searched " + keyword, results);
 }
