@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && electron-builder",
+    "build:beta": "cross-env BUILD_TYPE=beta vite build && electron-builder",
+    "build:snapshot": "cross-env BUILD_TYPE=snapshot vite build && electron-builder",
+    "build:release": "cross-env BUILD_TYPE=release vite build && electron-builder",
     "preview": "vite preview"
   },
   "author": {
@@ -72,6 +75,7 @@
     "@unocss/transformer-variant-group": "^0.58.9",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vitejs/plugin-vue-jsx": "^3.1.0",
+    "cross-env": "^7.0.3",
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
     "sass": "^1.89.0",

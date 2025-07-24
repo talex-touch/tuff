@@ -12,8 +12,10 @@
   "files": [
     "dist"
   ],
+  "nodeGypRebuild": false,
+  "npmRebuild": false,
   "mac": {
-    "artifactName": "${productName}_${version}.${ext}",
+    "artifactName": "${productName}_${version}_${env.BUILD_TYPE}.${ext}",
     "target": [
       "dmg"
     ]
@@ -27,7 +29,7 @@
         ]
       }
     ],
-    "artifactName": "${productName}_${version}.${ext}"
+    "artifactName": "${productName}_${version}_${env.BUILD_TYPE}.${ext}"
   },
   "nsis": {
     "oneClick": false,

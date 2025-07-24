@@ -62,28 +62,49 @@ export default function generatorInformation() {
     buildStart() {
       const informationPath = path.resolve(config.root, 'src/distinformation.json')
 
+      // 获取构建类型
+      const buildType = process.env.BUILD_TYPE || 'release'
+      const isSnapshot = buildType === 'snapshot'
+      const isBeta = buildType === 'beta'
+      const isRelease = buildType === 'release'
+
       fse.writeFileSync(informationPath, JSON.stringify({
         refuse: false,
         version: pkg.version,
         buildTime: Date.now(),
+        buildType,
+        isSnapshot,
+        isBeta,
+        isRelease,
         signature
       }))
 
-      console.log(`[Talex-Touch] generate information.json`)
+      console.log(`[Talex-Touch] generate information.json with build type: ${buildType}`)
     },
     load(id) {
       if (id !== resolvedVirtualModuleId) return
 
       const devMode = config.command === 'serve'
+      const buildType = process.env.BUILD_TYPE || 'release'
+
       const information = {
         buildTime: -1,
-        refuse: true
+        refuse: true,
+        buildType: 'unknown',
+        isSnapshot: false,
+        isBeta: false,
+        isRelease: false
       }
+
       if (devMode) {
         Object.assign(information, {
           refuse: false,
           buildTime: Date.now(),
           version: pkg.version,
+          buildType,
+          isSnapshot: buildType === 'snapshot',
+          isBeta: buildType === 'beta',
+          isRelease: buildType === 'release',
           signature
         })
       } else {

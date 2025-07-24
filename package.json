@@ -28,6 +28,9 @@
     "test:utils": "pnpm -F test run test",
     "dev:core": "pnpm -F core run dev",
     "build:core": "pnpm -F core run build",
+    "build:core:beta": "pnpm -F core run build:beta",
+    "build:core:snapshot": "pnpm -F core run build:snapshot",
+    "build:core:release": "pnpm -F core run build:release",
     "build:docs": "pnpm -F docs run build",
     "publish:utils": "pnpm -F @talex-touch/utils run publish"
   },

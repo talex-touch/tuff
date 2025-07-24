@@ -46,7 +46,14 @@ jobs:
         run: npm install -g pnpm && pnpm i
 
       - name: Build Electron App
-        run: pnpm -F core run build
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
+            pnpm -F core run build:beta
+          elif [ "${{ github.event.inputs.release_type }}" = "snapshot" ]; then
+            pnpm -F core run build:snapshot
+          else
+            pnpm -F core run build:release
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
 

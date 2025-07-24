@@ -5,8 +5,8 @@ import BoxItem from "./BoxItem.vue";
 import FileTag from "./tag/FileTag.vue";
 import { useDocumentVisibility } from "@vueuse/core";
 import { appSetting } from "~/modules/channel/storage/index.ts";
-import RemixIcon from '~/components/icon/RemixIcon.vue'
-import PrefixIcon from './PrefixIcon.vue';
+import RemixIcon from "~/components/icon/RemixIcon.vue";
+import PrefixIcon from "./PrefixIcon.vue";
 
 const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
@@ -24,8 +24,14 @@ const boxOptions = reactive<{
     buffer: Uint8Array | null;
     paths: string[];
   };
-  data: any
-}>({ lastHidden: -1, mode: BoxMode.INPUT, focus: 0, file: { buffer: null, paths: [] }, data: {} });
+  data: any;
+}>({
+  lastHidden: -1,
+  mode: BoxMode.INPUT,
+  focus: 0,
+  file: { buffer: null, paths: [] },
+  data: {},
+});
 
 function handleAutoPaste() {
   // handle auto paste
@@ -43,15 +49,17 @@ function handleAutoPaste() {
       const pathList = data.data;
       const [firstFile] = pathList;
       if (firstFile) {
-        touchChannel.send("file:extract-icon", {
-          path: firstFile,
-        }).then((buffer) => {
-          boxOptions.file = {
-            buffer,
-            paths: pathList,
-          };
-          boxOptions.mode = BoxMode.FILE;
-        })
+        touchChannel
+          .send("file:extract-icon", {
+            path: firstFile,
+          })
+          .then((buffer) => {
+            boxOptions.file = {
+              buffer,
+              paths: pathList,
+            };
+            boxOptions.mode = BoxMode.FILE;
+          });
       }
     } else if (data.type !== "image") {
       searchVal.value = data.data;
@@ -72,13 +80,10 @@ watch(
     }
 
     // handle auto clear
-    if (
-      Date.now() - boxOptions.lastHidden >
-      appSetting.tools.autoClear * 1000
-    ) {
+    if (Date.now() - boxOptions.lastHidden > appSetting.tools.autoClear * 1000) {
       searchVal.value = "";
       boxOptions.mode = BoxMode.INPUT;
-      boxOptions.data = {}
+      boxOptions.data = {};
     }
 
     if (clipboardOptions.last) {
@@ -89,14 +94,14 @@ watch(
 
 function handleExecute(item: any) {
   const data = execute(item, searchVal.value);
-  if (data === 'push') {
+  if (data === "push") {
     boxOptions.mode = BoxMode.FEATURE;
 
     boxOptions.data = {
       feature: item,
       plugin: item.value,
-      query: searchVal.value
-    }
+      query: searchVal.value,
+    };
   } else {
     searchVal.value = "";
   }
@@ -116,9 +121,9 @@ function onKeyDown(event: KeyboardEvent) {
 
   if (event.key === "Enter") {
     select.value = boxOptions.focus;
-    const target = res.value[boxOptions.focus]
+    const target = res.value[boxOptions.focus];
 
-    handleExecute(target)
+    handleExecute(target);
   } else if (event.key === "ArrowDown") {
     boxOptions.focus += 1;
 
@@ -130,7 +135,7 @@ function onKeyDown(event: KeyboardEvent) {
     // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "Escape") {
-    handleExit()
+    handleExit();
   }
 
   if (boxOptions.focus < 0) {
@@ -165,10 +170,10 @@ async function handleSearch() {
   boxOptions.focus = 0;
   res.value = [];
 
-  const info: any = {}
+  const info: any = {};
 
   if (boxOptions.mode === BoxMode.FEATURE) {
-    Object.assign(info, boxOptions.data)
+    Object.assign(info, boxOptions.data);
   }
 
   await search(searchVal.value, { mode: boxOptions.mode }, info, (v) => {
@@ -253,19 +258,34 @@ function handleExit() {
     <div class="CoreBox-Icon">
       <PrefixIcon @close="handleExit" :feature="boxOptions.data?.feature" />
     </div>
-    <input id="core-box-input"
-      :placeholder="boxOptions.mode === BoxMode.FEATURE ? boxOptions.data?.feature?.desc ?? boxOptions.data?.feature?.name : 'Type what you want to search by talex-touch.'"
-      v-model="searchVal" />
+    <input
+      id="core-box-input"
+      :placeholder="
+        boxOptions.mode === BoxMode.FEATURE
+          ? boxOptions.data?.feature?.desc ?? boxOptions.data?.feature?.name
+          : 'Type what you want to search by talex-touch.'
+      "
+      v-model="searchVal"
+    />
 
     <div v-if="boxOptions.mode !== BoxMode.FEATURE" class="CoreBox-Tag">
       <template v-if="clipboardOptions.last">
-        <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted">
+        <span
+          v-if="clipboardOptions.last?.type === 'text'"
+          class="fake-background dotted"
+        >
           Copied Text
         </span>
-        <span v-else-if="clipboardOptions.last?.type === 'image'" class="fake-background dotted">
+        <span
+          v-else-if="clipboardOptions.last?.type === 'image'"
+          class="fake-background dotted"
+        >
           Copied Image
         </span>
-        <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted">
+        <span
+          v-else-if="clipboardOptions.last?.type === 'html'"
+          class="fake-background dotted"
+        >
           Copied Html
         </span>
       </template>
@@ -281,15 +301,26 @@ function handleExit() {
       <!-- </template> -->
     </div>
     <div class="CoreBox-Configure">
-      <RemixIcon :style="appSetting.tools.autoHide ? 'line' : 'fill'" @click="handleTogglePin" name="pushpin-2" />
+      <RemixIcon
+        :style="appSetting.tools.autoHide ? 'line' : 'fill'"
+        @click="handleTogglePin"
+        name="pushpin-2"
+      />
     </div>
   </div>
 
   <div class="CoreBoxRes">
     <el-scrollbar ref="scrollbar">
-      <BoxItem @click="handleExecute(item)" :i="index + 1" @mousemove="boxOptions.focus = index"
-        :active="boxOptions.focus === index" v-for="(item, index) in res" :key="index" :data="item"
-        :selected="select === index" />
+      <BoxItem
+        @click="handleExecute(item)"
+        :i="index + 1"
+        @mousemove="boxOptions.focus = index"
+        :active="boxOptions.focus === index"
+        v-for="(item, index) in res"
+        :key="index"
+        :data="item"
+        :selected="select === index"
+      />
     </el-scrollbar>
   </div>
 </template>
@@ -427,7 +458,7 @@ div.CoreBox {
 
   inset: 0;
 
-  opacity: 0.5;
+  opacity: 0.125;
   background-color: var(--el-bg-color);
 }
 </style>
