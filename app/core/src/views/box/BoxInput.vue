@@ -82,6 +82,7 @@ const placeholder = computed(() => {
 
 .BoxInput-Display-Completion {
   position: relative;
+  margin: 0 0.25rem;
   padding: 0 0.5rem;
 
   font-size: 18px;
@@ -119,7 +120,7 @@ input {
   outline: none;
   border: none;
 
-  font-size: 16px;
+  font-size: 22px;
 
   border-radius: 8px;
   background-color: transparent;
