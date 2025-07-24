@@ -46,7 +46,7 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
     <!-- <div class="BoxItem-Main"> -->
     <div class="BoxItem-Icon" relative>
       <PluginIcon :icon="data.icon" :alt="data.name" />
-      <span class="amo" v-text="data.amo"></span>
+      <span v-if="data.amo" class="amo" v-text="data.amo"></span>
     </div>
     <!-- </div> -->
     <div class="BoxItem-Content">
