@@ -66,6 +66,7 @@ declare module 'vue' {
     TMenuTabs: typeof import('./src/components/tabs/TMenuTabs.vue')['default']
     TouchMenu: typeof import('./src/components/menu/TouchMenu.vue')['default']
     TouchMenuItem: typeof import('./src/components/menu/TouchMenuItem.vue')['default']
+    TouchScroll: typeof import('./src/components/base/TouchScroll.vue')['default']
     TouchTip: typeof import('./src/components/base/dialog/TouchTip.vue')['default']
     TPopperDialog: typeof import('./src/components/base/dialog/TPopperDialog.vue')['default']
     TSelect: typeof import('./src/components/base/select/TSelect.vue')['default']

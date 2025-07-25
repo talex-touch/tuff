@@ -9,6 +9,7 @@ import { useDocumentVisibility, useDebounceFn } from "@vueuse/core";
 import { appSetting } from "~/modules/channel/storage/index.ts";
 import RemixIcon from "~/components/icon/RemixIcon.vue";
 import PrefixIcon from "./PrefixIcon.vue";
+import TouchScroll from "~/components/base/TouchScroll.vue";
 
 const visibility = useDocumentVisibility();
 const clipboardOptions = reactive<any>({
@@ -342,7 +343,7 @@ const activeItem = computed(() => res.value[boxOptions.focus]);
   </div>
 
   <div class="CoreBoxRes">
-    <el-scrollbar ref="scrollbar">
+    <TouchScroll ref="scrollbar">
       <BoxItem
         @click="handleExecute(item)"
         :i="index + 1"
@@ -353,7 +354,7 @@ const activeItem = computed(() => res.value[boxOptions.focus]);
         :data="item"
         :selected="select === index"
       />
-    </el-scrollbar>
+    </TouchScroll>
   </div>
 </template>
 

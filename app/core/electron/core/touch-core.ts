@@ -9,7 +9,7 @@ import {
   crashReporter,
 } from "electron";
 import fse from "fs-extra";
-import { release } from "os";
+import { platform, release } from "os";
 import path from "path";
 import { APP_FOLDER_NAME, MainWindowOption } from "../config/default";
 // import { genPluginManager } from "../plugins/plugin-core";
@@ -230,6 +230,8 @@ export class TouchApp implements TalexTouch.TouchApp {
         isPackaged: app.isPackaged,
         isDev: this.version === TalexTouch.AppVersion.DEV,
         isRelease: this.version === TalexTouch.AppVersion.RELEASE,
+        platform: process.platform,
+        arch: process.arch,
         t: {
           _s: process.getCreationTime(),
           s: startTime,

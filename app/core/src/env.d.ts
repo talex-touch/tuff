@@ -39,6 +39,8 @@ declare global {
       p: number
       h: number[]
     }
+    platform: string
+    arch: string
     version: string
     appUpdate: boolean
   }
