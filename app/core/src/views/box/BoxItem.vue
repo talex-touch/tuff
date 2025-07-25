@@ -52,15 +52,15 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
     <div class="BoxItem-Content">
       <template v-if="data.descMatched">
         <h5 v-text="data.name" />
-        <p v-html="highlightText(data.desc, data.matched)" />
+        <p class="desc" v-html="highlightText(data.desc, data.matched)" />
       </template>
       <template v-else-if="data.abridgeMatched">
         <h5 v-html="highlightAbridgeText(data.name, data.matched)" />
-        <p>{{ data.desc }}</p>
+        <p class="desc">{{ data.desc }}</p>
       </template>
       <template v-else="data.descMatched">
         <h5 v-html="highlightText(data.name, data.matched)" />
-        <p>{{ data.desc }}</p>
+        <p class="desc">{{ data.desc }}</p>
       </template>
 
       <span class="end"> {{ (data.pluginType || data.type).toUpperCase() }} </span>
@@ -144,6 +144,14 @@ function highlightAbridgeText(text: string, matched: Array<any>) {
   p {
     opacity: 0.75;
     font-size: 12px;
+  }
+  
+  .desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
   }
 
   .PluginIcon-Container {
