@@ -398,10 +398,14 @@ class TouchPlugin implements ITouchPlugin {
         };
 
         const channel = genTouchChannel();
-        channel.send(ChannelType.MAIN, "plugin-search-results", searchResult)
-          .catch(error => {
-            console.error(`[Plugin ${this.name}] Failed to push search results:`, error);
-          });
+        const windows = BrowserWindow.getAllWindows();
+
+        windows.forEach(window => {
+          channel.sendTo(window, ChannelType.MAIN, "plugin-search-results", searchResult)
+            .catch(error => {
+              console.error(`[Plugin ${this.name}] Failed to push search results to window ${window.id}:`, error);
+            });
+        });
 
         console.log(`[Plugin ${this.name}] Pushed ${items.length} search results`);
       },
@@ -411,11 +415,15 @@ class TouchPlugin implements ITouchPlugin {
         this._searchTimestamp = Date.now();
 
         const channel = genTouchChannel();
-        channel.send(ChannelType.MAIN, "plugin-search-clear", {
-          pluginName: this.name,
-          timestamp: this._searchTimestamp
-        }).catch(error => {
-          console.error(`[Plugin ${this.name}] Failed to clear search results:`, error);
+        const windows = BrowserWindow.getAllWindows();
+
+        windows.forEach(window => {
+          channel.sendTo(window, ChannelType.MAIN, "plugin-search-clear", {
+            pluginName: this.name,
+            timestamp: this._searchTimestamp
+          }).catch(error => {
+            console.error(`[Plugin ${this.name}] Failed to clear search results from window ${window.id}:`, error);
+          });
         });
 
         console.log(`[Plugin ${this.name}] Cleared search results`);
@@ -737,8 +745,15 @@ class PluginManager implements IPluginManager {
 
       console.log(`[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`)
 
-      // updated features when feature changed
-      genTouchChannel().send(ChannelType.MAIN, 'core-box-updated:features')
+      const channel = genTouchChannel();
+      const windows = BrowserWindow.getAllWindows();
+
+      windows.forEach(window => {
+        channel.sendTo(window, ChannelType.MAIN, 'core-box-updated:features', {})
+          .catch(error => {
+            console.error(`Failed to notify window ${window.id} about feature updates:`, error);
+          });
+      });
     }
 
     this.plugins.set(pluginInfo.name, touchPlugin);

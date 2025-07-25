@@ -253,6 +253,30 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
   });
 });
 
+touchChannel.regChannel("core-box-plugin-results", ({ data }: any) => {
+  console.log("[CoreBox] Received plugin search results:", data);
+
+  if (data && data.items && Array.isArray(data.items)) {
+    data.items.forEach((item: any) => {
+      const amo = appAmo[item.name] || 0;
+      item.amo = amo;
+
+      res.value = insertSorted(res.value, item, searchVal.value);
+    });
+
+    console.log(`[CoreBox] Added ${data.items.length} plugin search results to display`);
+  }
+});
+
+touchChannel.regChannel("core-box-plugin-clear", ({ data }: any) => {
+  console.log("[CoreBox] Plugin cleared search results:", data);
+
+  if (data && data.pluginName) {
+    res.value = res.value.filter((item: any) => item.value !== data.pluginName);
+    console.log(`[CoreBox] Cleared search results from plugin: ${data.pluginName}`);
+  }
+});
+
 /**
  * Handles paste operation from clipboard
  */
@@ -296,7 +320,7 @@ const activeItem = computed(() => res.value[boxOptions.focus]);
       <PrefixIcon @close="handleExit" :feature="boxOptions.data?.feature" />
     </div>
     <BoxInput v-model="searchVal" :box-options="boxOptions">
-      <template v-if="activeItem && boxOptions.mode !== BoxMode.FEATURE" #completion>
+      <template v-if="searchVal.trim() && activeItem && boxOptions.mode !== BoxMode.FEATURE" #completion>
         {{ activeItem?.name }}
       </template>
     </BoxInput>

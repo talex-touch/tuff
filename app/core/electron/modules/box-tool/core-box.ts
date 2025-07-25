@@ -53,7 +53,7 @@ async function createNewBoxWindow(closeCallback: Function) {
     }
   `);
 
-    touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
+    touchApp.channel.sendTo(window.window, ChannelType.MAIN, "core-box:trigger", {
       id: window.window.webContents.id,
       show: false,
     });
@@ -238,7 +238,7 @@ export class CoreBoxManager {
       async ({ reply }) => {
         try {
           console.log("[CoreBox] Received request for apps data");
-          
+
           const apps = await getAppsAsync()
           console.log(`[CoreBox] Sending ${apps.length} apps to frontend`);
 
@@ -276,7 +276,6 @@ export class CoreBoxManager {
       }
     );
 
-    // 注册插件搜索结果处理
     touchApp.channel.regChannel(
       ChannelType.MAIN,
       "plugin-search-results",
@@ -284,12 +283,18 @@ export class CoreBoxManager {
         const searchResult = data as IPluginSearchResult;
         console.log(`[CoreBox] Received search results from plugin ${searchResult.pluginName}:`, searchResult.items.length, 'items');
 
-        // 这里可以将搜索结果存储或转发给前端
-        // 暂时只是记录日志，具体的搜索结果处理逻辑需要在前端实现
-        touchApp.channel.send(ChannelType.MAIN, "core-box-plugin-results", searchResult)
-          .catch(error => {
-            console.error("[CoreBox] Failed to forward plugin search results:", error);
-          });
+        const currentWindow = this.nowWindow;
+        if (currentWindow && currentWindow.window && !currentWindow.window.isDestroyed()) {
+          touchApp.channel.sendTo(currentWindow.window, ChannelType.MAIN, "core-box-plugin-results", searchResult)
+            .then(() => {
+              console.log(`[CoreBox] Successfully forwarded search results to CoreBox window`);
+            })
+            .catch(error => {
+              console.error("[CoreBox] Failed to forward plugin search results:", error);
+            });
+        } else {
+          console.error("[CoreBox] No valid CoreBox window available to forward search results");
+        }
       }
     );
 
@@ -300,11 +305,18 @@ export class CoreBoxManager {
         const { pluginName, timestamp } = data as { pluginName: string; timestamp: number };
         console.log(`[CoreBox] Plugin ${pluginName} cleared search results at ${timestamp}`);
 
-        // 通知前端清空该插件的搜索结果
-        touchApp.channel.send(ChannelType.MAIN, "core-box-plugin-clear", { pluginName, timestamp })
-          .catch(error => {
-            console.error("[CoreBox] Failed to forward plugin search clear:", error);
-          });
+        const currentWindow = this.nowWindow;
+        if (currentWindow && currentWindow.window && !currentWindow.window.isDestroyed()) {
+          touchApp.channel.sendTo(currentWindow.window, ChannelType.MAIN, "core-box-plugin-clear", { pluginName, timestamp })
+            .then(() => {
+              console.log(`[CoreBox] Successfully forwarded search clear to CoreBox window`);
+            })
+            .catch(error => {
+              console.error("[CoreBox] Failed to forward plugin search clear:", error);
+            });
+        } else {
+          console.error("[CoreBox] No valid CoreBox window available to forward search clear");
+        }
       }
     );
   }
@@ -350,12 +362,11 @@ export class CoreBoxManager {
         w.window.setSize(900, 60, false);
       } else this.expand(this.#_expand);
 
-      touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
+      touchApp.channel.sendTo(w.window, ChannelType.MAIN, "core-box:trigger", {
         id: w.window.webContents.id,
         show: true,
       });
 
-      // const displayes = screen.getAllDisplays()
       const curScreen = (this.lastWindow = this.getCurScreen);
 
       if (curScreen && w) {
@@ -373,8 +384,8 @@ export class CoreBoxManager {
       }, 100);
     }
 
-    touchApp.channel.send(ChannelType.MAIN, "core-box:trigger", {
-      id: w.window.id,
+    touchApp.channel.sendTo(w.window, ChannelType.MAIN, "core-box:trigger", {
+      id: w.window.webContents.id,
       show,
     });
   }
