@@ -250,6 +250,7 @@ function handleTogglePin() {
 function handleExit() {
   if (boxOptions.mode !== BoxMode.INPUT) {
     boxOptions.mode = searchVal.value.startsWith("/") ? BoxMode.COMMAND : BoxMode.INPUT;
+    boxOptions.data = {}
   } else if (searchVal.value) searchVal.value = "";
   else touchChannel.sendSync("core-box:hide");
 }
