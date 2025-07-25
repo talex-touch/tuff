@@ -55,6 +55,8 @@ const props = defineProps<{
   }
 
   .Home-Logo-Bg {
+    transform: scale(0.5) translate(-50%, -50%);
+
     svg {
       overflow: visible;
     }
@@ -87,8 +89,6 @@ const props = defineProps<{
         stroke-dashoffset: -972;
       }
     }
-
-    transform: scale(0.5) translate(-50%, -50%);
   }
 }
 </style>

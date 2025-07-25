@@ -77,16 +77,21 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .Beginner {
+  z-index: 1000;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  background-color: #ffffff80;
+
   &-Content {
     position: absolute;
     padding: 2rem;
-
     top: 0;
     left: 0;
-
     width: 100%;
     height: 100%;
-
     border-radius: 8px;
     box-sizing: border-box;
   }
@@ -94,35 +99,20 @@ onMounted(() => {
   &-Main {
     position: absolute;
     padding: 2rem;
-
     width: 60%;
     height: 80%;
-
     left: 50%;
     top: 50%;
-
     animation: join 1s;
-
     --fake-inner-opacity: 0.98;
     box-sizing: border-box;
     transform: translate(-50%, -50%);
     backdrop-filter: saturate(180%) brightness(99%) blur(50px);
   }
 
-  z-index: 1000;
-  position: absolute;
-
-  width: 100%;
-  height: 100%;
-
-  left: 0;
-  top: 0;
-
   .dark & {
     background-color: #00000080;
   }
-
-  background-color: #ffffff80;
 }
 
 @keyframes join {
