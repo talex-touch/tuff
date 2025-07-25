@@ -26,7 +26,10 @@ import { genTouchApp, TouchWindow } from "../core/touch-core";
 import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
-import { BrowserWindow, dialog, shell } from "electron";
+import { BrowserWindow, dialog, shell, clipboard, net } from "electron";
+import axios from "axios";
+import type { ISearchItem, IPluginSearchResult } from "@talex-touch/utils";
+import { createStorageManager, createClipboardManager } from "@talex-touch/utils/plugin/sdk";
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger';
 import { loggerManager } from './plugin-logger-manager';
 import { loadPluginFeatureContext } from './plugin-feature';
@@ -135,6 +138,11 @@ class TouchPlugin implements ITouchPlugin {
   _status: PluginStatus = PluginStatus.DISABLED;
 
   _windows: Map<number, TouchWindow> = new Map();
+
+  // Search Result
+  _searchItems: ISearchItem[] = [];
+  _lastSearchQuery: string = '';
+  _searchTimestamp: number = 0;
 
   toJSONObject() {
     return {
@@ -369,15 +377,79 @@ class TouchPlugin implements ITouchPlugin {
   }
 
   getFeatureUtil() {
+    const pluginPath = this.pluginPath;
+
+    const http = axios;
+    const storage = createStorageManager(pluginPath, fse);
+    const clipboardUtil = createClipboardManager(clipboard);
+
+    const searchManager = {
+      pushItems: (items: ISearchItem[]) => {
+        this._searchItems = [...items];
+        this._searchTimestamp = Date.now();
+
+        const searchResult: IPluginSearchResult = {
+          pluginName: this.name,
+          items: this._searchItems,
+          timestamp: this._searchTimestamp,
+          query: this._lastSearchQuery,
+          total: items.length,
+          hasMore: false
+        };
+
+        const channel = genTouchChannel();
+        channel.send(ChannelType.MAIN, "plugin-search-results", searchResult)
+          .catch(error => {
+            console.error(`[Plugin ${this.name}] Failed to push search results:`, error);
+          });
+
+        console.log(`[Plugin ${this.name}] Pushed ${items.length} search results`);
+      },
+
+      clearItems: () => {
+        this._searchItems = [];
+        this._searchTimestamp = Date.now();
+
+        const channel = genTouchChannel();
+        channel.send(ChannelType.MAIN, "plugin-search-clear", {
+          pluginName: this.name,
+          timestamp: this._searchTimestamp
+        }).catch(error => {
+          console.error(`[Plugin ${this.name}] Failed to clear search results:`, error);
+        });
+
+        console.log(`[Plugin ${this.name}] Cleared search results`);
+      },
+
+      getItems: (): ISearchItem[] => {
+        return [...this._searchItems];
+      },
+
+      updateQuery: (query: string) => {
+        this._lastSearchQuery = query;
+      },
+
+      getQuery: (): string => {
+        return this._lastSearchQuery;
+      },
+
+      getTimestamp: (): number => {
+        return this._searchTimestamp;
+      }
+    };
 
     return {
       dialog,
       logger: this.logger,
       $event: this.getFeatureEventUtil(),
       openUrl: (url: string) => shell.openExternal(url),
-      clearItems: () => void 0,
-      pushItems: () => void 0,
-      getItems: () => void 0,
+      http,
+      storage,
+      clipboard: clipboardUtil,
+      clearItems: searchManager.clearItems,
+      pushItems: searchManager.pushItems,
+      getItems: searchManager.getItems,
+      search: searchManager,
     }
   }
 }

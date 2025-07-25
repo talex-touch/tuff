@@ -139,10 +139,14 @@ export default () => {
     const info = {
       value: "plugin",
       pluginType: "app",
+      type: "app",
+      push: false,
       desc,
       icon: "file://" + icon,
       keyWords: [targetAppInfo.Name],
+      names: [targetAppInfo.Name],
       action: execPath,
+      name: targetAppInfo.Name,
     };
 
     if ("X-Ubuntu-Gettext-Domain" in targetAppInfo) {

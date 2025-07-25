@@ -1,2 +1,5 @@
 export * from './base'
 export * from './common'
+export * from './search/types'
+export * from './plugin'
+export * from './core-box'

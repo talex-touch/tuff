@@ -107,10 +107,11 @@ export default () => {
                   type: "app",
                   icon,
                   pluginType: "app",
+                  push: false,
                   action: `start "dummyclient" "${appDetail.target}"`,
                   keyWords: keyWords,
                   name: appName,
-                  names: JSON.parse(JSON.stringify(keyWords)),
+                  names: [appName, ...keyWords], // Include app name and keywords
                 };
 
                 if (fileMapper.has(appName)) {

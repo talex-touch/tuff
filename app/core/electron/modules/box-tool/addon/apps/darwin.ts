@@ -145,6 +145,7 @@ export default async () => {
       value: 'plugin',
       desc: app.path,
       pluginType: 'app',
+      push: false,
       action: `open ${app.path.replace(/ /g, '\\ ') as string}`,
       keyWords: [appSubStr],
     };
@@ -163,7 +164,7 @@ export default async () => {
     fileOptions = {
       ...fileOptions,
       name: app._name,
-      names: JSON.parse(JSON.stringify(fileOptions.keyWords)),
+      names: [app._name, appSubStr], // Include both full name and name without extension
     };
     return fileOptions;
   });

@@ -7,6 +7,7 @@ import { getAppsAsync, appDataManager } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
 import type { IPluginFeature } from '@talex-touch/utils/plugin';
+import type { IPluginSearchResult } from '@talex-touch/utils';
 import { genPluginManager } from '../../plugins/plugin-core';
 import { getConfig } from '../../core/storage';
 import { StorageList, type AppSetting } from '@talex-touch/utils';
@@ -272,6 +273,38 @@ export class CoreBoxManager {
         })
 
         return features
+      }
+    );
+
+    // 注册插件搜索结果处理
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      "plugin-search-results",
+      ({ data }) => {
+        const searchResult = data as IPluginSearchResult;
+        console.log(`[CoreBox] Received search results from plugin ${searchResult.pluginName}:`, searchResult.items.length, 'items');
+
+        // 这里可以将搜索结果存储或转发给前端
+        // 暂时只是记录日志，具体的搜索结果处理逻辑需要在前端实现
+        touchApp.channel.send(ChannelType.MAIN, "core-box-plugin-results", searchResult)
+          .catch(error => {
+            console.error("[CoreBox] Failed to forward plugin search results:", error);
+          });
+      }
+    );
+
+    touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      "plugin-search-clear",
+      ({ data }) => {
+        const { pluginName, timestamp } = data as { pluginName: string; timestamp: number };
+        console.log(`[CoreBox] Plugin ${pluginName} cleared search results at ${timestamp}`);
+
+        // 通知前端清空该插件的搜索结果
+        touchApp.channel.send(ChannelType.MAIN, "core-box-plugin-clear", { pluginName, timestamp })
+          .catch(error => {
+            console.error("[CoreBox] Failed to forward plugin search clear:", error);
+          });
       }
     );
   }

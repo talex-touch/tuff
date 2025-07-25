@@ -87,21 +87,49 @@ middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => 
 })
 
 /**
+ * Names matching middleware - matches items by alternative names
+ */
+middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => {
+  if (options.mode !== BoxMode.INPUT) return null
+
+  const names = item.names
+  if (!keyword.length || !names || names.length === 0) return null
+
+  // Check all alternative names
+  for (const nameItem of names) {
+    const res = check(keyword, nameItem)
+
+    if (res !== false) {
+      return {
+        ...item,
+        matched: res,
+        matchedByName: true
+      }
+    }
+  }
+
+  return null
+})
+
+/**
  * Keywords matching middleware - matches items by keywords
  */
 middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => {
   if (options.mode !== BoxMode.INPUT) return null
 
   const keywords = item.keyWords
-  if (!keyword.length) return null
+  if (!keyword.length || !keywords || keywords.length === 0) return null
 
-  const res = check(keyword, keywords.at(-1)!)
+  // Check all keywords, not just the last one
+  for (const keywordItem of keywords) {
+    const res = check(keyword, keywordItem)
 
-  if (res !== false) {
-    return {
-      ...item,
-      matched: res,
-      matchedByName: true
+    if (res !== false) {
+      return {
+        ...item,
+        matched: res,
+        matchedByName: true
+      }
     }
   }
 
@@ -155,10 +183,15 @@ middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => 
   const { pluginType } = item
   if (pluginType !== 'feature') return null
 
-  const commands = item.commands!
-  const results: any[] = []
+  const commands = item.commands
+  if (!commands || commands.length === 0) {
+    // If no commands, return the feature item as-is
+    return item
+  }
 
+  const results: any[] = []
   let hasMatchingCommand = false
+
   for (let cmd of commands) {
     const cmdObj: SearchItem = {
       id: item.id,

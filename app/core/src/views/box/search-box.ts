@@ -113,19 +113,67 @@ export function execute(item: any, query: any = '') {
 
 }
 
+/**
+ * Search result item interface - unified with backend types
+ * Compatible with ISearchItem from @talex-touch/utils
+ */
 export interface SearchItem {
-  "name": string,
-  "desc": string,
-  "icon": IPluginIcon
-  "push": boolean,
-  "commands"?: IFeatureCommand[]
-  "names": string[]
-  "keyWords": string[],
-  "pluginType": string,
-  "type": string,
-  "value": string
-  amo?: number
-  [key: string]: any
+  /** Display name of the search result */
+  name: string;
+
+  /** Description or subtitle of the search result */
+  desc: string;
+
+  /** Icon configuration for visual representation */
+  icon: IPluginIcon;
+
+  /** Whether this item supports push mode functionality */
+  push: boolean;
+
+  /** List of feature commands associated with this item */
+  commands?: IFeatureCommand[];
+
+  /** Array of searchable names for this item */
+  names: string[];
+
+  /** Array of keywords for search matching */
+  keyWords: string[];
+
+  /** Type of plugin this item belongs to */
+  pluginType: string;
+
+  /** General type classification of the item */
+  type: string;
+
+  /** Associated value, typically the plugin name */
+  value: string;
+
+  /** Usage frequency counter for ranking */
+  amo?: number;
+
+  /** Matching information from search algorithms */
+  matched?: any;
+
+  /** Whether this item was matched by name */
+  matchedByName?: boolean;
+
+  /** Whether this item was matched by description */
+  descMatched?: boolean;
+
+  /** Whether this item was matched by abbreviation */
+  abridgeMatched?: boolean;
+
+  /** Unique identifier for this search item */
+  id?: string;
+
+  /** Action to execute when this item is selected */
+  action?: string;
+
+  /** Reference to original feature object for command matching */
+  originFeature?: SearchItem;
+
+  /** Additional properties for extensibility */
+  [key: string]: any;
 }
 
 export interface SearchOptions {
@@ -150,6 +198,8 @@ export async function search(keyword: string, options: SearchOptions, info: any,
       plugin: info?.plugin,
       feature: JSON.parse(JSON.stringify(info?.feature)),
     })
+    // In FEATURE mode, don't search through apps and features list
+    return;
   }
 
   for (let searchSection of searchList) {
