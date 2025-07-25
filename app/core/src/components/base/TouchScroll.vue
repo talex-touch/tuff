@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useAttrs, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElScrollbar } from 'element-plus'
 
 defineOptions({
@@ -37,15 +37,24 @@ const emit = defineEmits<{
   scroll: [scrollInfo: { scrollTop: number, scrollLeft: number }]
 }>()
 
-// refs
 const scrollContainer = ref<HTMLElement | null>(null)
 const nativeScrollRef = ref<HTMLElement | null>(null)
 const elScrollRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
 
+const platform = ref<string | null>(null);
+
 const isDarwin = computed(() => {
   if (typeof window === 'undefined') return false
-
-  return window.$startupInfo.platform === 'darwin'
+  
+  if (window.$startupInfo) {
+    return window.$startupInfo.platform === 'darwin';
+  }
+  
+  if (platform.value) {
+    return platform.value === 'darwin';
+  }
+  
+  return false;
 })
 
 const useNative = computed(() => {
@@ -123,6 +132,33 @@ defineExpose({
     }
   }
 })
+
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.$startupInfo) {
+    platform.value = window.$startupInfo.platform;
+    return;
+  }
+  
+  let retryCount = 0;
+  const maxRetries = 5;
+  
+  const retry = () => {
+    if (typeof window !== 'undefined' && window.$startupInfo) {
+      platform.value = window.$startupInfo.platform;
+      return;
+    }
+    
+    if (retryCount < maxRetries) {
+      retryCount++;
+      setTimeout(retry, 100);
+    } else {
+      console.warn('Failed to get startupInfo after', maxRetries, 'attempts');
+      platform.value = 'unknown';
+    }
+  };
+  
+  retry();
+});
 </script>
 
 <style scoped>
@@ -144,7 +180,6 @@ defineExpose({
   height: 100%;
 }
 
-/* 隐藏原生滚动条的样式（可选） */
 .native-scroll-wrapper::-webkit-scrollbar {
   width: 0;
   height: 0;
