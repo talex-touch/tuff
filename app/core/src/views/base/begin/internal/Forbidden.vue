@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import HelloData from "~/assets/lotties/compress-loading.json";
 import LottieFrame from "~/components/icon/lotties/LottieFrame.vue";
-import Protocol from "./Protocol.vue";
 
 const back = inject("back")!;
 
@@ -41,17 +40,15 @@ function close() {
 }
 
 .Forbidden {
+  position: relative;
+  height: 100%;
+
   &-Content {
     display: flex;
-
     align-items: center;
     flex-direction: column;
-
     opacity: 0;
     animation: join forwards 0.5s 1s;
   }
-  position: relative;
-
-  height: 100%;
 }
 </style>

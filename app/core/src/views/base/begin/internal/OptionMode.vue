@@ -60,13 +60,20 @@ function handleAgree() {
 }
 
 .diaplyer {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  --s: 2.5;
+  --t: 0.5;
+  border-radius: 50%;
+  border: 2px solid var(--el-color-primary);
+  animation: shining 1.25s infinite;
+
   &::before,
   &::after {
     content: "";
     position: absolute;
-
     inset: 0;
-
     border-radius: 50%;
     transform: scale(1.25);
     border: 2px solid var(--el-color-primary);
@@ -79,16 +86,6 @@ function handleAgree() {
     --t: 0;
     animation: shining 1s infinite;
   }
-
-  position: relative;
-  width: 5rem;
-  height: 5rem;
-
-  --s: 2.5;
-  --t: 0.5;
-  border-radius: 50%;
-  border: 2px solid var(--el-color-primary);
-  animation: shining 1.25s infinite;
 }
 
 .diaplyer.fill {
@@ -118,21 +115,20 @@ function handleAgree() {
 }
 
 .OptionMode {
+  position: relative;
+  height: 100%;
+
   &-Display {
     display: flex;
-
     align-items: center;
     justify-content: center;
-
     height: 60%;
   }
 
   &-Choice {
     margin: 10px 0;
     display: flex;
-
     height: 30%;
-
     gap: 1rem;
   }
 
@@ -141,12 +137,19 @@ function handleAgree() {
   }
 
   &-Section {
+    width: 50%;
+    padding: 1rem;
+    cursor: pointer;
+    border-radius: 8px;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+
     .tag {
       margin-left: 5px;
       font-size: 14px;
-
       background-color: #b7aa46a0;
     }
+
     h1 {
       margin: 0;
     }
@@ -159,19 +162,6 @@ function handleAgree() {
       border-color: var(--el-color-primary);
       background-color: var(--el-color-primary-light-7);
     }
-
-    width: 50%;
-
-    padding: 1rem;
-
-    cursor: pointer;
-    border-radius: 8px;
-    box-sizing: border-box;
-    border: 1px solid transparent;
   }
-
-  position: relative;
-
-  height: 100%;
 }
 </style>

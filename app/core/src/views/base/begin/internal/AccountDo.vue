@@ -84,6 +84,10 @@ function handleAgree() {
 }
 
 .diaplyer {
+  position: relative;
+  width: 8rem;
+  height: 8rem;
+
   &.fill {
     --el-color-primary: var(--el-border-color);
 
@@ -95,11 +99,8 @@ function handleAgree() {
   &::before {
     content: "";
     position: absolute;
-
     inset: 0;
-
     height: 30%;
-
     transition: 0.25s;
     border-radius: 12px;
     transform: translateY(150%);
@@ -110,19 +111,13 @@ function handleAgree() {
   &::after {
     content: "";
     position: absolute;
-
     inset: 0;
-
     transition: 0.25s;
     border-radius: 50%;
     transform: translateY(-50%) scale(0.5);
     background-color: var(--el-color-primary);
     animation: frame 2s infinite;
   }
-
-  position: relative;
-  width: 8rem;
-  height: 8rem;
 }
 
 @keyframes join {
@@ -132,21 +127,20 @@ function handleAgree() {
 }
 
 .AccountDo {
+  position: relative;
+  height: 100%;
+
   &-Display {
     display: flex;
-
     align-items: center;
     justify-content: center;
-
     height: 60%;
   }
 
   &-Choice {
     margin: 10px 0;
     display: flex;
-
     height: 30%;
-
     gap: 1rem;
   }
 
@@ -155,10 +149,16 @@ function handleAgree() {
   }
 
   &-Section {
+    width: 50%;
+    padding: 1rem;
+    cursor: pointer;
+    border-radius: 8px;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+
     .tag {
       margin-left: 5px;
       font-size: 14px;
-
       background-color: #b7aa46a0;
     }
 
@@ -174,19 +174,6 @@ function handleAgree() {
       border-color: var(--el-color-primary);
       background-color: var(--el-color-primary-light-7);
     }
-
-    width: 50%;
-
-    padding: 1rem;
-
-    cursor: pointer;
-    border-radius: 8px;
-    box-sizing: border-box;
-    border: 1px solid transparent;
   }
-
-  position: relative;
-
-  height: 100%;
 }
 </style>

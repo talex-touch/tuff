@@ -50,15 +50,15 @@ function changeActivePlugin(event: Event, item: ITouchPlugin) {
 
 <style lang="scss" scoped>
 .plugin-item-section {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
   .PluginIcon-Container,
   :deep(.html svg) {
     width: 20px;
     height: 20px;
   }
-  display: flex;
-
-  align-items: center;
-  justify-content: flex-start;
 }
 
 .NavBar-Programs {
@@ -99,20 +99,17 @@ function changeActivePlugin(event: Event, item: ITouchPlugin) {
 }
 
 .FlatNavBar-Home {
-  * {
-    -webkit-app-region: no-drag;
-  }
-
   position: relative;
   margin: 0;
   padding: 5px 0;
   display: flex;
   flex-direction: column;
-
   justify-content: space-between;
-
   width: 100%;
-
   box-sizing: border-box;
+
+  * {
+    -webkit-app-region: no-drag;
+  }
 }
 </style>

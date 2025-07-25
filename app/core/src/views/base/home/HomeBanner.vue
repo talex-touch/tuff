@@ -51,45 +51,36 @@ getOneWord();
 <style lang="scss" scoped>
 .HomeBanner,
 img {
+  position: absolute;
+  height: 60%;
+  width: 100%;
+  user-select: none;
+  pointer-events: none;
+
   &__Content {
+    z-index: 100;
+    position: absolute;
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: end;
+    bottom: 5%;
+    width: 100%;
+    height: 15%;
+    box-sizing: border-box;
+
     h1 {
       margin: 0;
-
       flex-shrink: 0;
     }
 
     span {
       margin-left: 1rem;
-
       opacity: 0.5;
     }
-
-    z-index: 100;
-    position: absolute;
-    padding: 0.5rem 1rem;
-    display: flex;
-
-    align-items: end;
-
-    bottom: 5%;
-    width: 100%;
-
-    height: 15%;
-
-    box-sizing: border-box;
   }
-
-  position: absolute;
-
-  height: 60%;
-  width: 100%;
-
-  user-select: none;
-  pointer-events: none;
 
   img {
     height: 100%;
-
     object-fit: fill;
   }
 }

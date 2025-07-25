@@ -36,17 +36,15 @@ function goon() {
 }
 
 .Greeting {
+  position: relative;
+  height: 100%;
+
   &-Content {
     display: flex;
-
     align-items: center;
     flex-direction: column;
-
     opacity: 0;
     animation: join forwards 0.5s 3s;
   }
-  position: relative;
-
-  height: 100%;
 }
 </style>
