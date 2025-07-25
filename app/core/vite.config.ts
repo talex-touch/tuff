@@ -73,8 +73,6 @@ export default defineConfig({
             rollupOptions: {
               external: [
                 "fsevents",
-                "talex-mica-electron",
-                "mica-electron",
                 "simple-plist",
                 "extract-file-icon",
                 "electron-clipboard-ex"

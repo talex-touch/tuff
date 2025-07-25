@@ -27,7 +27,6 @@ import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
 import { BrowserWindow, dialog, shell } from "electron";
-import { MicaBrowserWindow } from "talex-mica-electron";
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger';
 import { loggerManager } from './plugin-logger-manager';
 import { loadPluginFeatureContext } from './plugin-feature';
@@ -926,7 +925,7 @@ export default {
         const win = touchPlugin._windows.get(id)!;
         if (!win) return { error: "Window not found!" };
 
-        const window: BrowserWindow | MicaBrowserWindow = win.window;
+        const window: BrowserWindow = win.window;
 
         function bind2Objs<
           T extends Object,

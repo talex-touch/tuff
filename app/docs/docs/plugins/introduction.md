@@ -48,6 +48,22 @@ Now, when you put the plugin folder inside, he will be applied automatically rea
 
 And, because you are automatically created by the app, so will comes with a default value, when you modify the content(`init.json` or `index.html` or `preload.js` or `README.md`) and save then, the plugin will be automatically according to the need to reload.
 
+## Plugin Launch Context
+
+Your plugin page can be opened from different contexts:
+- **Main page**: Launched from the main application interface
+- **Core-box page**: Launched from the core-box interface
+
+You need to determine the launch context through the parameters passed to your plugin (todo+beta feature).
+
+## Plugin Activation Requirements
+
+**Important**: Your plugin page can only be opened when it is enabled. If the plugin is disabled, access will be denied.
+
+However, the `preload.js` execution timing remains the same regardless of the plugin's enabled state.
+
+**Note**: Your plugin will only load when the user manually starts it, regardless of other conditions.
+
 ## Got it
 
 You just complete this section, and click `Next Section` to learn more.
