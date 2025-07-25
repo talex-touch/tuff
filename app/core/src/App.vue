@@ -57,6 +57,10 @@ onMounted(() => {
   }
 
   _coreBox.value = document.body.classList.contains("core-box");
+
+  if (_coreBox.value) {
+    console.log('%c CoreBox MODE ', 'background: #42b983; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;');
+  }
 });
 </script>
 
