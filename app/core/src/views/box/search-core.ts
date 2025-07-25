@@ -41,6 +41,26 @@ middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => 
   return null
 })
 
+// 添加 ID 搜索中间件
+middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => {
+  if (options.mode !== BoxMode.INPUT) return null
+
+  // 检查 item 是否有 id 字段
+  if (item.id) {
+    const res = check(keyword, item.id)
+
+    if (res !== false) {
+      return {
+        ...item,
+        idMatched: true,
+        matched: res
+      }
+    }
+  }
+
+  return null
+})
+
 middlewares.push((item: SearchItem, keyword: string, options: SearchOptions) => {
   if (options.mode !== BoxMode.INPUT) return null
 
