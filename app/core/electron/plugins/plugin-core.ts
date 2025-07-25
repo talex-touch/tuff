@@ -648,7 +648,13 @@ class PluginManager implements IPluginManager {
       const featureEvent = touchPlugin.getFeatureEventUtil()
       const featureContext = {
         plugin: touchPlugin,
-        console,
+        console: {
+          log: touchPlugin.logger.info,
+          info: touchPlugin.logger.info,
+          warn: touchPlugin.logger.warn,
+          error: touchPlugin.logger.error,
+          debug: touchPlugin.logger.debug,
+        },
         pkg,
         $util: featureUtil,
         $event: featureEvent

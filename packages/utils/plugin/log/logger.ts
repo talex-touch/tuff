@@ -71,5 +71,21 @@ export class PluginLogger {
       data,
     }
     this.manager.append(log)
+
+    if (level === 'ERROR') {
+      console.error(`DANGER - [${this.pluginName}] ${message}`, ...data)
+    }
+
+    if (level === 'WARN') {
+      console.warn(`!!! [${this.pluginName}] ${message}`, ...data)
+    }
+
+    if (level === 'DEBUG') {
+      console.debug(`DEBUG - [${this.pluginName}] ${message}`, ...data)
+    }
+
+    if (level === 'INFO') {
+      console.info(`INFO - [${this.pluginName}] ${message}`, ...data)
+    }
   }
 }
