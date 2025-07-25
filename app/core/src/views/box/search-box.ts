@@ -22,6 +22,9 @@ setTimeout(initialize, 200)
 
 const searchList: any = [apps, features];
 
+/**
+ * Initializes the search system and sets up feature update listeners
+ */
 async function initialize() {
   await refreshSearchList(true)
 
@@ -30,6 +33,10 @@ async function initialize() {
   })
 }
 
+/**
+ * Refreshes the search list with cooldown protection
+ * @param forceRefresh - Whether to bypass cooldown protection
+ */
 export async function refreshSearchList(forceRefresh = false) {
   const currentTime = Date.now();
 
@@ -47,6 +54,9 @@ export async function refreshSearchList(forceRefresh = false) {
   }
 }
 
+/**
+ * Forces a refresh of the search list bypassing cooldown
+ */
 export async function forceRefreshSearchList() {
   return await refreshSearchList(true);
 }
@@ -55,6 +65,11 @@ export const appAmo: any = JSON.parse(
   localStorage.getItem("app-count") || "{}"
 );
 
+/**
+ * Executes a search item (app or plugin feature)
+ * @param item - The item to execute
+ * @param query - The search query that triggered the execution
+ */
 export function execute(item: any, query: any = '') {
   if (!item) return
 
@@ -117,6 +132,13 @@ export interface SearchOptions {
   mode: BoxMode
 }
 
+/**
+ * Performs search across all available items
+ * @param keyword - The search keyword
+ * @param options - Search options including mode
+ * @param info - Additional search context information
+ * @param callback - Callback function called for each search result
+ */
 export async function search(keyword: string, options: SearchOptions, info: any, callback: (res: SearchItem) => void) {
   await refreshSearchList()
 

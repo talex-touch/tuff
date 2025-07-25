@@ -35,8 +35,10 @@ const boxOptions = reactive<{
   data: {},
 });
 
+/**
+ * Handles automatic paste functionality based on clipboard data and timing settings
+ */
 function handleAutoPaste() {
-  // handle auto paste
   const time = appSetting.tools.autoPaste.time;
   const timeDiff = Date.now() - clipboardOptions.last.time;
 
@@ -81,7 +83,6 @@ watch(
       setTimeout(() => inputEl?.focus(), 200);
     }
 
-    // handle auto clear
     if (Date.now() - boxOptions.lastHidden > appSetting.tools.autoClear * 1000) {
       searchVal.value = "";
       boxOptions.mode = BoxMode.INPUT;
@@ -94,27 +95,44 @@ watch(
   }
 );
 
+/**
+ * Executes the selected item and handles query clearing logic
+ * @param item - The selected search item to execute
+ */
 function handleExecute(item: any) {
   const data = execute(item, searchVal.value);
   if (data === "push") {
     boxOptions.mode = BoxMode.FEATURE;
 
+    /**
+     * Determine whether to clear the search query:
+     * - If matched by name/description/keywords (matchedByName === true), clear the query
+     * - If matched by command conditions (no matchedByName flag), preserve the query
+     */
+    const shouldClearQuery = item.matchedByName === true;
+    const queryToUse = shouldClearQuery ? "" : searchVal.value;
+
     boxOptions.data = {
       feature: item,
       plugin: item.value,
-      query: searchVal.value,
+      query: queryToUse,
     };
+
+    if (shouldClearQuery) {
+      searchVal.value = "";
+    }
   } else {
     searchVal.value = "";
   }
 
   select.value = -1;
-
-  // touchChannel.sendSync("core-box:run", searchVal.value);
 }
 
+/**
+ * Handles keyboard navigation and actions for the search box
+ * @param event - The keyboard event
+ */
 function onKeyDown(event: KeyboardEvent) {
-  // check if body contains core-box
   if (!document.body.classList.contains("core-box")) {
     return;
   }
@@ -128,13 +146,9 @@ function onKeyDown(event: KeyboardEvent) {
     handleExecute(target);
   } else if (event.key === "ArrowDown") {
     boxOptions.focus += 1;
-
-    // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "ArrowUp") {
     boxOptions.focus -= 1;
-
-    // Avoid cursor moving in input.
     event.preventDefault();
   } else if (event.key === "Escape") {
     handleExit();
@@ -168,9 +182,17 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeyDown);
 });
 
+/**
+ * Performs search operation and updates results
+ */
 async function handleSearch() {
   boxOptions.focus = 0;
   res.value = [];
+
+  if (!searchVal.value) {
+    boxOptions.data = {};
+    return;
+  }
 
   const info: any = {};
 
@@ -182,7 +204,6 @@ async function handleSearch() {
     const amo = appAmo[v.name] || 0;
     v.amo = amo;
 
-    // 使用新的排序系统，传递搜索关键词以计算匹配度
     res.value = insertSorted(res.value, v, searchVal.value);
   });
 }
@@ -231,6 +252,9 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
   });
 });
 
+/**
+ * Handles paste operation from clipboard
+ */
 function handlePaste() {
   const { clipboard } = touchChannel.sendSync("clipboard:got");
 
@@ -241,10 +265,16 @@ function handlePaste() {
   handleAutoPaste();
 }
 
+/**
+ * Toggles the auto-hide pin state
+ */
 function handleTogglePin() {
   appSetting.tools.autoHide = !appSetting.tools.autoHide;
 }
 
+/**
+ * Handles exit/escape actions for the search box
+ */
 function handleExit() {
   if (boxOptions.mode !== BoxMode.INPUT) {
     boxOptions.mode = searchVal.value.startsWith("/") ? BoxMode.COMMAND : BoxMode.INPUT;
@@ -265,7 +295,7 @@ const activeItem = computed(() => res.value[boxOptions.focus]);
       <PrefixIcon @close="handleExit" :feature="boxOptions.data?.feature" />
     </div>
     <BoxInput v-model="searchVal" :box-options="boxOptions">
-      <template v-if="activeItem" #completion>
+      <template v-if="activeItem && boxOptions.mode !== BoxMode.FEATURE" #completion>
         {{ activeItem?.name }}
       </template>
     </BoxInput>
