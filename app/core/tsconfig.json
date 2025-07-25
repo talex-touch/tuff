@@ -65,7 +65,7 @@
     "src/**/*.tsx",
     "src/**/*.vue",
     "electron"
-  ],
+, "../../talex-touch/internal-apps-example.ts", "../../talex-touch/internal-apps.ts"  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

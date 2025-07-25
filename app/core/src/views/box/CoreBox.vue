@@ -4,7 +4,7 @@ import { search, appAmo, execute, BoxMode } from "./search-box";
 import BoxItem from "./BoxItem.vue";
 import BoxInput from "./BoxInput.vue";
 import FileTag from "./tag/FileTag.vue";
-import { useDocumentVisibility } from "@vueuse/core";
+import { useDocumentVisibility, useDebounceFn } from "@vueuse/core";
 import { appSetting } from "~/modules/channel/storage/index.ts";
 import RemixIcon from "~/components/icon/RemixIcon.vue";
 import PrefixIcon from "./PrefixIcon.vue";
@@ -196,10 +196,14 @@ watch(
   }
 );
 
+const debouncedExpand = useDebounceFn(() => {
+  touchChannel.sendSync("core-box:expand", res.value.length);
+}, 50);
+
 watch(
   () => searchVal.value?.length + res.value?.length,
   () => {
-    touchChannel.sendSync("core-box:expand", res.value.length);
+    debouncedExpand();
   }
 );
 
@@ -435,7 +439,7 @@ div.CoreBox {
 
   inset: 0;
 
-  opacity: 0.125;
+  opacity: 0.25;
   background-color: var(--el-bg-color);
 }
 </style>
