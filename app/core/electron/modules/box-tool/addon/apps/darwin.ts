@@ -126,7 +126,6 @@ export default async () => {
         _value: `${app._name}.png`
       };
       successCount++;
-      console.log(`[Darwin] ✅ ${app._name} - icon loaded as base64`);
     } else {
       app.icon = null;
       failCount++;

@@ -245,18 +245,6 @@ export class CoreBoxManager {
           const appsWithoutIcons = apps.filter(app => !app.icon);
           console.log(`[CoreBox] Apps with icons: ${appsWithIcons.length}, without icons: ${appsWithoutIcons.length}`);
 
-          if (appsWithIcons.length > 0) {
-            console.log("[CoreBox] Sample apps with icons:", appsWithIcons.slice(0, 3).map(app => ({
-              name: app.name,
-              icon: app.icon ? {
-                type: app.icon.type,
-                hasValue: !!app.icon.value,
-                valueLength: app.icon.value ? app.icon.value.length : 0,
-                _value: app.icon._value
-              } : null
-            })));
-          }
-
           reply(DataCode.SUCCESS, apps)
         } catch (error) {
           console.error("[CoreBox] Failed to get apps:", error)
