@@ -1,6 +1,7 @@
 <script setup lang="ts" name="CoreBox">
 import { touchChannel } from "~/modules/channel/channel-core";
 import { search, appAmo, execute, BoxMode } from "./search-box";
+import { insertSorted } from "./search-sorter";
 import BoxItem from "./BoxItem.vue";
 import BoxInput from "./BoxInput.vue";
 import FileTag from "./tag/FileTag.vue";
@@ -181,11 +182,8 @@ async function handleSearch() {
     const amo = appAmo[v.name] || 0;
     v.amo = amo;
 
-    const arr = [...res.value, v].toSorted((b: any, a: any) =>
-      a.type !== b.type ? -a.type.length + b.type.length : a.amo - b.amo
-    );
-
-    res.value = arr;
+    // 使用新的排序系统，传递搜索关键词以计算匹配度
+    res.value = insertSorted(res.value, v, searchVal.value);
   });
 }
 
