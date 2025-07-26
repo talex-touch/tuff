@@ -7,12 +7,20 @@ import { getAppsAsync, appDataManager } from "./addon/app-addon";
 import { TalexTouch } from "../../types";
 import path from "path";
 import type { IPluginFeature } from '@talex-touch/utils/plugin';
-import type { IPluginSearchResult } from '@talex-touch/utils';
 import { genPluginManager } from '../../plugins/plugin-core';
 import { getConfig } from '../../core/storage';
 import { StorageList, type AppSetting } from '@talex-touch/utils';
 
 let touchApp: TouchApp;
+let coreBoxManagerInstance: CoreBoxManager | null = null;
+
+/**
+ * Gets the current CoreBox window instance for direct communication
+ * @returns The current CoreBox window or null if not available
+ */
+export function getCoreBoxWindow(): TouchWindow | null {
+  return coreBoxManagerInstance?.nowWindow || null;
+}
 
 async function createNewBoxWindow(closeCallback: Function) {
   const window = new TouchWindow({ ...BoxWindowOption });
@@ -88,6 +96,9 @@ export class CoreBoxManager {
     this.resList = [];
     this.windows = [];
     this.lastWindow = null;
+
+    // Set the global instance for external access
+    coreBoxManagerInstance = this;
 
     // Always match the last window => popover window
     this.init().then(() => this.register());
@@ -259,66 +270,47 @@ export class CoreBoxManager {
       () => {
         const features: IPluginFeature[] = []
         const pluginManager = genPluginManager();
-        [...pluginManager.plugins.values()].forEach(plugin => {
-          features.push(...([...plugin.features].map(item => {
-            return {
-              ...item,
-              names: [item.name],
+        const plugins = [...pluginManager.plugins.values()];
+
+        console.debug(`[CoreBox] Processing ${plugins.length} plugins for features`);
+
+        plugins.forEach((plugin, pluginIndex) => {
+          const pluginFeatures = [...plugin.features];
+          console.log(`[CoreBox] Plugin ${pluginIndex} "${plugin.name}" has ${pluginFeatures.length} features`);
+
+          pluginFeatures.forEach((feature, featureIndex) => {
+            const processedFeature = {
+              ...feature,
+              names: [feature.name],
               keyWords: [],
               pluginType: "feature",
               type: "plugin",
               value: plugin.name
+            };
+
+            console.debug(`[CoreBox] Adding feature ${featureIndex}: "${feature.name}" (desc: "${feature.desc}") from plugin "${plugin.name}"`);
+
+            // Check for potential duplicates
+            const existingFeature = features.find(f =>
+              f.name === processedFeature.name &&
+              f.desc === processedFeature.desc &&
+              f.value === plugin.name
+            );
+
+            if (existingFeature) {
+              console.warn(`[CoreBox] Potential duplicate feature detected: "${feature.name}" from "${plugin.name}"`);
             }
-          })))
-        })
 
-        return features
+            features.push(processedFeature);
+          });
+        });
+
+        console.log(`[CoreBox] Returning ${features.length} total features`);
+        return features;
       }
     );
 
-    touchApp.channel.regChannel(
-      ChannelType.MAIN,
-      "plugin-search-results",
-      ({ data }) => {
-        const searchResult = data as IPluginSearchResult;
-        console.log(`[CoreBox] Received search results from plugin ${searchResult.pluginName}:`, searchResult.items.length, 'items');
 
-        const currentWindow = this.nowWindow;
-        if (currentWindow && currentWindow.window && !currentWindow.window.isDestroyed()) {
-          touchApp.channel.sendTo(currentWindow.window, ChannelType.MAIN, "core-box-plugin-results", searchResult)
-            .then(() => {
-              console.log(`[CoreBox] Successfully forwarded search results to CoreBox window`);
-            })
-            .catch(error => {
-              console.error("[CoreBox] Failed to forward plugin search results:", error);
-            });
-        } else {
-          console.error("[CoreBox] No valid CoreBox window available to forward search results");
-        }
-      }
-    );
-
-    touchApp.channel.regChannel(
-      ChannelType.MAIN,
-      "plugin-search-clear",
-      ({ data }) => {
-        const { pluginName, timestamp } = data as { pluginName: string; timestamp: number };
-        console.log(`[CoreBox] Plugin ${pluginName} cleared search results at ${timestamp}`);
-
-        const currentWindow = this.nowWindow;
-        if (currentWindow && currentWindow.window && !currentWindow.window.isDestroyed()) {
-          touchApp.channel.sendTo(currentWindow.window, ChannelType.MAIN, "core-box-plugin-clear", { pluginName, timestamp })
-            .then(() => {
-              console.log(`[CoreBox] Successfully forwarded search clear to CoreBox window`);
-            })
-            .catch(error => {
-              console.error("[CoreBox] Failed to forward plugin search clear:", error);
-            });
-        } else {
-          console.error("[CoreBox] No valid CoreBox window available to forward search clear");
-        }
-      }
-    );
   }
 
   expand(length: number = 100) {

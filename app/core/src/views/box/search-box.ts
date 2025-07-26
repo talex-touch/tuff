@@ -39,17 +39,27 @@ async function initialize() {
  */
 export async function refreshSearchList(forceRefresh = false) {
   const currentTime = Date.now();
+  const timeSinceLastRefresh = currentTime - lastRefreshTime;
 
-  if (!forceRefresh && currentTime - lastRefreshTime < REFRESH_COOLDOWN) {
+  console.log(`[SearchBox] refreshSearchList called - forceRefresh: ${forceRefresh}, timeSinceLastRefresh: ${timeSinceLastRefresh}ms, cooldown: ${REFRESH_COOLDOWN}ms`);
+
+  if (!forceRefresh && timeSinceLastRefresh < REFRESH_COOLDOWN) {
+    console.log(`[SearchBox] Skipping refresh due to cooldown (${timeSinceLastRefresh}ms < ${REFRESH_COOLDOWN}ms)`);
     return;
   }
 
   try {
+    console.log(`[SearchBox] Starting refresh - apps.value.length: ${apps.value.length}, features.value.length: ${features.value.length}`);
     lastRefreshTime = currentTime;
+
     apps.value = await touchChannel.send("core-box-get:apps");
+    console.log(`[SearchBox] Apps refreshed - new count: ${apps.value.length}`);
+
     features.value = touchChannel.sendSync("core-box-get:features");
+    console.log(`[SearchBox] Features refreshed - new count: ${features.value.length}`);
+    console.log(`[SearchBox] Features list:`, features.value.map(f => f.name));
   } catch (error) {
-    console.error("Failed to refresh search list:", error);
+    console.error("[SearchBox] Failed to refresh search list:", error);
     lastRefreshTime = 0;
   }
 }
@@ -73,10 +83,13 @@ export const appAmo: any = JSON.parse(
 export function execute(item: any, query: any = '') {
   if (!item) return
 
+  console.log(`[SearchBox] execute() called - item:`, item, `query: "${query}"`);
+
   appAmo[item.name] = (appAmo[item.name] || 0) + 1;
   localStorage.setItem("app-count", JSON.stringify(appAmo));
 
   const { type, action, pluginType, value } = item;
+  console.log(`[SearchBox] execute() - type: ${type}, action: ${action}, pluginType: ${pluginType}, value: ${value}, push: ${item.push}`);
 
   if (type === 'app' || pluginType === 'app') {
     touchChannel.sendSync("core-box:hide");
@@ -97,17 +110,29 @@ export function execute(item: any, query: any = '') {
     });
   }
   else if (type === 'plugin') {
-    if (item.push) {
-      return "push"
-    }
-
     if (pluginType === 'feature' || pluginType === 'cmd') {
+      console.log(`[SearchBox] execute() - triggering plugin feature: ${value}`);
+
+      // Safely handle item serialization
+      let feature = item;
+      try {
+        feature = JSON.parse(JSON.stringify(item));
+      } catch (error) {
+        console.error(`[SearchBox] Failed to serialize item for trigger-plugin-feature:`, error, item);
+        // Use original item if serialization fails
+      }
+
       touchChannel.sendSync("trigger-plugin-feature", {
         query,
         plugin: value,
-        feature: JSON.parse(JSON.stringify(item)),
+        feature: feature,
       })
+    }
 
+    // After triggering the feature, check if it's a push mode plugin
+    if (item.push) {
+      console.log(`[SearchBox] execute() - item has push=true, returning "push" after triggering feature`);
+      return "push"
     }
   }
 
@@ -188,32 +213,71 @@ export interface SearchOptions {
  * @param callback - Callback function called for each search result
  */
 export async function search(keyword: string, options: SearchOptions, info: any, callback: (res: SearchItem) => void) {
-  await refreshSearchList()
+  console.log(`[SearchBox] search() called - keyword: "${keyword}", mode: ${options.mode}, info:`, info);
+
+  // Remove automatic refresh on every search - now only refresh when CoreBox is shown
+  // await refreshSearchList()
 
   const results = [];
 
   if (options.mode === BoxMode.FEATURE) {
+    console.log(`[SearchBox] FEATURE mode - sending trigger-plugin-feature-input-changed`);
+    console.log(`[SearchBox] FEATURE mode - info:`, info);
+
+    // Safely handle feature serialization
+    let feature = null;
+    if (info?.feature) {
+      try {
+        feature = JSON.parse(JSON.stringify(info.feature));
+      } catch (error) {
+        console.error(`[SearchBox] Failed to serialize feature:`, error, info.feature);
+        feature = info.feature; // Use original if serialization fails
+      }
+    }
+
     touchChannel.send("trigger-plugin-feature-input-changed", {
       query: keyword,
       plugin: info?.plugin,
-      feature: JSON.parse(JSON.stringify(info?.feature)),
+      feature: feature,
     })
     // In FEATURE mode, don't search through apps and features list
     return;
   }
 
-  for (let searchSection of searchList) {
+  console.log(`[SearchBox] Searching through ${searchList.length} sections`);
+
+  for (let i = 0; i < searchList.length; i++) {
+    const searchSection = searchList[i];
+    const sectionName = searchSection === apps ? 'apps' : 'features';
     const data = [...searchSection.value];
 
-    for (let item of data) {
-      const result = handleItemData(item, keyword, options)
+    console.log(`[SearchBox] Processing section ${i} (${sectionName}) with ${data.length} items`);
 
-      if (Array.isArray(result)) {
-        ;[...result].forEach(item => {
-          item && (callback(item), results.push(item))
-        })
-      } else result && (callback(result), results.push(result))
+    for (let j = 0; j < data.length; j++) {
+      const item = data[j];
 
+      try {
+        const result = handleItemData(item, keyword, options)
+
+        if (Array.isArray(result)) {
+          console.log(`[SearchBox] Item "${item?.name || 'unknown'}" returned ${result.length} results`);
+          ;[...result].forEach((resultItem, idx) => {
+            if (resultItem) {
+              console.log(`[SearchBox] Adding result ${idx}: "${resultItem?.name || 'unknown'}" (type: ${resultItem?.type || 'unknown'})`);
+              callback(resultItem);
+              results.push(resultItem);
+            }
+          })
+        } else if (result) {
+          console.log(`[SearchBox] Item "${item?.name || 'unknown'}" returned single result: "${result?.name || 'unknown'}" (type: ${result?.type || 'unknown'})`);
+          callback(result);
+          results.push(result);
+        }
+      } catch (error) {
+        console.error(`[SearchBox] Error processing item:`, error, item);
+      }
     }
   }
+
+  console.log(`[SearchBox] Search completed - total results: ${results.length}`);
 }

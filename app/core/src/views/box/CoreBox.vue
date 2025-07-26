@@ -113,11 +113,17 @@ function handleExecute(item: any) {
     const shouldClearQuery = item.matchedByName === true;
     const queryToUse = shouldClearQuery ? "" : searchVal.value;
 
+    // Use originFeature if available (for command items), otherwise use the item itself
+    const featureToUse = item.originFeature || item;
+
     boxOptions.data = {
-      feature: item,
+      feature: featureToUse,
       plugin: item.value,
       query: queryToUse,
+      pushedItemIds: new Set(), // 记录当前 feature 推送的数据 ID
     };
+
+    console.log("[CoreBox] Entering FEATURE mode with data:", boxOptions.data);
 
     if (shouldClearQuery) {
       searchVal.value = "";
@@ -187,10 +193,27 @@ onBeforeUnmount(() => {
  * Performs search operation and updates results
  */
 async function handleSearch() {
+  console.debug(`[CoreBox] handleSearch() called - searchVal: "${searchVal.value}", mode: ${boxOptions.mode}`);
+  console.debug(`[CoreBox] Before search - res.value.length: ${res.value.length}`);
+
   boxOptions.focus = 0;
-  res.value = [];
+
+  // 清空之前的搜索结果，但在 FEATURE 模式下保留当前 feature 推送的数据
+  const beforeFilter = res.value.length;
+  if (boxOptions.mode === BoxMode.FEATURE && boxOptions.data?.pushedItemIds) {
+    // 在 FEATURE 模式下，只保留当前 feature 推送的数据
+    const pushedIds = boxOptions.data.pushedItemIds;
+    res.value = res.value.filter((item: any) => item.pushedItemId && pushedIds.has(item.pushedItemId));
+    console.log(`[CoreBox] FEATURE mode - preserved ${res.value.length} items pushed by current feature`);
+  } else {
+    // 在其他模式下，清空所有结果
+    res.value = [];
+    console.log(`[CoreBox] Non-FEATURE mode - cleared all results`);
+  }
+  console.log(`[CoreBox] Filtered results - before: ${beforeFilter}, after: ${res.value.length}`);
 
   if (!searchVal.value) {
+    console.log(`[CoreBox] Empty search value - clearing data and returning`);
     boxOptions.data = {};
     return;
   }
@@ -199,14 +222,25 @@ async function handleSearch() {
 
   if (boxOptions.mode === BoxMode.FEATURE) {
     Object.assign(info, boxOptions.data);
+    console.log(`[CoreBox] FEATURE mode - info:`, info);
   }
 
+  console.log(`[CoreBox] Starting search with callback...`);
+  let callbackCount = 0;
+
   await search(searchVal.value, { mode: boxOptions.mode }, info, (v) => {
+    callbackCount++;
+    console.log(`[CoreBox] Search callback ${callbackCount} - item: "${v.name}" (type: ${v.type}, pluginType: ${v.pluginType})`);
+
     const amo = appAmo[v.name] || 0;
     v.amo = amo;
 
+    const beforeInsert = res.value.length;
     res.value = insertSorted(res.value, v, searchVal.value);
+    console.log(`[CoreBox] Inserted item - res.value.length: ${beforeInsert} -> ${res.value.length}`);
   });
+
+  console.log(`[CoreBox] Search completed - total callbacks: ${callbackCount}, final res.value.length: ${res.value.length}`);
 }
 
 watch(
@@ -253,27 +287,99 @@ touchChannel.regChannel("clipboard:trigger", ({ data }: any) => {
   });
 });
 
-touchChannel.regChannel("core-box-plugin-results", ({ data }: any) => {
+/**
+ * Handles CoreBox show/hide events and refreshes search data when shown
+ */
+touchChannel.regChannel("core-box:trigger", ({ data }: any) => {
+  const { show, id } = data;
+
+  console.log(`[CoreBox] core-box:trigger received - show: ${show}, id: ${id}`);
+  console.log(`[CoreBox] window.$startupInfo:`, window.$startupInfo);
+
+  // Check if this trigger is for our window
+  const isOurWindow = window.$startupInfo?.id === undefined || window.$startupInfo.id === id;
+
+  if (show && isOurWindow) {
+    console.log(`[CoreBox] CoreBox is being shown - refreshing search data`);
+
+    // Import and call refreshSearchList when CoreBox is shown (with cooldown protection)
+    import("./search-box").then(({ refreshSearchList }) => {
+      refreshSearchList().then(() => {
+        console.log(`[CoreBox] Search data refreshed successfully`);
+      }).catch(error => {
+        console.error(`[CoreBox] Failed to refresh search data:`, error);
+      });
+    }).catch(error => {
+      console.error(`[CoreBox] Failed to import search-box module:`, error);
+    });
+  } else {
+    console.log(`[CoreBox] Skipping refresh - show: ${show}, isOurWindow: ${isOurWindow}`);
+  }
+});
+
+/**
+ * Handles plugin search results pushed directly from plugins
+ */
+touchChannel.regChannel("core-box:push-items", ({ data }: any) => {
   console.log("[CoreBox] Received plugin search results:", data);
 
   if (data && data.items && Array.isArray(data.items)) {
+    console.log(`[CoreBox] Before adding: res.value.length = ${res.value.length}`);
+
     data.items.forEach((item: any) => {
       const amo = appAmo[item.name] || 0;
       item.amo = amo;
 
+      // 为每个推送的项目生成唯一 ID
+      const itemId = `${item.name}-${item.desc || ''}-${item.value || ''}-${Date.now()}-${Math.random()}`;
+      item.pushedItemId = itemId;
+
+      // 如果当前是 FEATURE 模式，记录推送的数据 ID
+      if (boxOptions.mode === BoxMode.FEATURE && boxOptions.data?.pushedItemIds) {
+        boxOptions.data.pushedItemIds.add(itemId);
+        console.log(`[CoreBox] Recorded pushed item ID: ${itemId} for current feature`);
+      }
+
+      console.log("[CoreBox] Adding item:", item);
       res.value = insertSorted(res.value, item, searchVal.value);
     });
 
+    console.log(`[CoreBox] After adding: res.value.length = ${res.value.length}`);
     console.log(`[CoreBox] Added ${data.items.length} plugin search results to display`);
   }
 });
 
-touchChannel.regChannel("core-box-plugin-clear", ({ data }: any) => {
+/**
+ * Handles plugin search results clearing from plugins
+ */
+touchChannel.regChannel("core-box:clear-items", ({ data }: any) => {
   console.log("[CoreBox] Plugin cleared search results:", data);
 
   if (data && data.pluginName) {
-    res.value = res.value.filter((item: any) => item.value !== data.pluginName);
-    console.log(`[CoreBox] Cleared search results from plugin: ${data.pluginName}`);
+    // 清除指定插件的数据，同时从 pushedItemIds 中移除
+    const beforeCount = res.value.length;
+    const removedIds = new Set();
+
+    res.value = res.value.filter((item: any) => {
+      if (item.value === data.pluginName) {
+        // 记录被移除的 ID
+        if (item.pushedItemId) {
+          removedIds.add(item.pushedItemId);
+        }
+        return false; // 移除这个项目
+      }
+      return true; // 保留这个项目
+    });
+
+    // 从当前 feature 的 pushedItemIds 中移除已清除的 ID
+    if (boxOptions.mode === BoxMode.FEATURE && boxOptions.data?.pushedItemIds) {
+      removedIds.forEach(id => {
+        boxOptions.data.pushedItemIds.delete(id);
+      });
+    }
+
+    const afterCount = res.value.length;
+    console.log(`[CoreBox] Cleared ${beforeCount - afterCount} search results from plugin: ${data.pluginName}`);
   }
 });
 
@@ -302,6 +408,32 @@ function handleTogglePin() {
  */
 function handleExit() {
   if (boxOptions.mode !== BoxMode.INPUT) {
+    // When exiting from FEATURE mode, clear only the plugin results pushed by current feature
+    if (boxOptions.mode === BoxMode.FEATURE) {
+      console.log("[CoreBox] Exiting FEATURE mode - clearing current feature's plugin results");
+
+      // 只清除当前 feature 推送的数据
+      if (boxOptions.data?.pushedItemIds && boxOptions.data.pushedItemIds.size > 0) {
+        const pushedIds = boxOptions.data.pushedItemIds;
+        const beforeCount = res.value.length;
+
+        res.value = res.value.filter((item: any) => {
+          // 保留不是当前 feature 推送的数据
+          return !item.pushedItemId || !pushedIds.has(item.pushedItemId);
+        });
+
+        const afterCount = res.value.length;
+        console.log(`[CoreBox] Cleared ${beforeCount - afterCount} items pushed by current feature`);
+      }
+
+      // Notify plugins that we're exiting feature mode
+      if (boxOptions.data?.plugin) {
+        touchChannel.send("trigger-plugin-feature-exit", {
+          plugin: boxOptions.data.plugin
+        });
+      }
+    }
+
     boxOptions.mode = searchVal.value.startsWith("/") ? BoxMode.COMMAND : BoxMode.INPUT;
     boxOptions.data = {}
   } else if (searchVal.value) searchVal.value = "";

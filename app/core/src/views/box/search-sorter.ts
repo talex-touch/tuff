@@ -99,14 +99,46 @@ export function sortSearchResults(items: SearchItem[], keyword?: string): Search
 }
 
 /**
- * Insert new item into sorted array while maintaining sort order
+ * Creates a unique key for deduplication based on item properties
+ * @param item - The search item
+ * @returns Unique key string
+ */
+function createItemKey(item: SearchItem): string {
+  // Use name, description, value, pluginType, type, and additional unique properties to create a unique key
+  const baseKey = `${item.name}-${item.desc || ''}-${item.value || ''}-${item.pluginType || ''}-${item.type || ''}`;
+
+  // Add additional unique identifiers if available
+  const additionalKeys = [];
+  if (item.id) additionalKeys.push(item.id);
+  if (item.action) additionalKeys.push(item.action);
+  if (item.featureId) additionalKeys.push(item.featureId);
+  if (item.pushedItemId) additionalKeys.push(item.pushedItemId);
+
+  const finalKey = additionalKeys.length > 0 ? `${baseKey}-${additionalKeys.join('-')}` : baseKey;
+  console.log(`[SearchSorter] Created key for "${item.name}": ${finalKey}`);
+  return finalKey;
+}
+
+/**
+ * Insert new item into sorted array while maintaining sort order and preventing duplicates
  * Used for real-time search result updates
  * @param items - Existing sorted array
  * @param newItem - New item to insert
  * @param keyword - The search keyword
- * @returns New sorted array with item inserted
+ * @returns New sorted array with item inserted (if not duplicate)
  */
 export function insertSorted(items: SearchItem[], newItem: SearchItem, keyword?: string): SearchItem[] {
+  // Check for duplicates first
+  const newItemKey = createItemKey(newItem);
+  const isDuplicate = items.some(item => createItemKey(item) === newItemKey);
+
+  if (isDuplicate) {
+    console.log(`[SearchSorter] Skipping duplicate item: "${newItem.name}" (${newItem.type})`);
+    return items; // Return original array if duplicate found
+  }
+
+  console.log(`[SearchSorter] DEBUG: Inserting item without deduplication: "${newItem.name}" (${newItem.type})`);
+
   const newScore = calculateSortScore(newItem, keyword)
 
   let insertIndex = 0
@@ -121,6 +153,7 @@ export function insertSorted(items: SearchItem[], newItem: SearchItem, keyword?:
 
   const result = [...items]
   result.splice(insertIndex, 0, newItem)
+  console.log(`[SearchSorter] Inserted item: "${newItem.name}" at index ${insertIndex}`);
   return result
 }
 

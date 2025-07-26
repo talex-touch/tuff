@@ -28,7 +28,8 @@ import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
 import { BrowserWindow, dialog, shell, clipboard, net } from "electron";
 import axios from "axios";
-import type { ISearchItem, IPluginSearchResult } from "@talex-touch/utils";
+import type { ISearchItem } from "@talex-touch/utils";
+import { getCoreBoxWindow } from "../modules/box-tool/core-box";
 import { createStorageManager, createClipboardManager } from "@talex-touch/utils/plugin/sdk";
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger';
 import { loggerManager } from './plugin-logger-manager';
@@ -384,49 +385,73 @@ class TouchPlugin implements ITouchPlugin {
     const clipboardUtil = createClipboardManager(clipboard);
 
     const searchManager = {
+      /**
+       * Pushes search items directly to the CoreBox window
+       * @param items - Array of search items to display
+       */
       pushItems: (items: ISearchItem[]) => {
+        console.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`);
+        console.debug(`[Plugin ${this.name}] Items to push:`, items.map(item => ({ name: item.name, type: item.type })));
+
         this._searchItems = [...items];
         this._searchTimestamp = Date.now();
 
-        const searchResult: IPluginSearchResult = {
-          pluginName: this.name,
-          items: this._searchItems,
-          timestamp: this._searchTimestamp,
-          query: this._lastSearchQuery,
-          total: items.length,
-          hasMore: false
-        };
+        const coreBoxWindow = getCoreBoxWindow();
+        console.debug(`[Plugin ${this.name}] CoreBox window available:`, !!coreBoxWindow);
 
-        const channel = genTouchChannel();
-        const windows = BrowserWindow.getAllWindows();
+        if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+          const channel = genTouchChannel();
 
-        windows.forEach(window => {
-          channel.sendTo(window, ChannelType.MAIN, "plugin-search-results", searchResult)
-            .catch(error => {
-              console.error(`[Plugin ${this.name}] Failed to push search results to window ${window.id}:`, error);
-            });
-        });
+          const payload = {
+            pluginName: this.name,
+            items: this._searchItems,
+            timestamp: this._searchTimestamp,
+            query: this._lastSearchQuery,
+            total: items.length,
+          };
 
-        console.log(`[Plugin ${this.name}] Pushed ${items.length} search results`);
+          console.debug(`[Plugin ${this.name}] Sending core-box:push-items with payload:`, payload);
+
+          channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, "core-box:push-items", payload).catch(error => {
+            console.error(`[Plugin ${this.name}] Failed to push search results to CoreBox:`, error);
+          });
+
+          console.log(`[Plugin ${this.name}] Successfully sent ${items.length} search results to CoreBox`);
+        } else {
+          console.warn(`[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`);
+        }
       },
 
+      /**
+       * Clears search items from the CoreBox window
+       */
       clearItems: () => {
+        console.debug(`[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`);
+
         this._searchItems = [];
         this._searchTimestamp = Date.now();
 
-        const channel = genTouchChannel();
-        const windows = BrowserWindow.getAllWindows();
+        const coreBoxWindow = getCoreBoxWindow();
+        console.debug(`[Plugin ${this.name}] CoreBox window available for clearing:`, !!coreBoxWindow);
 
-        windows.forEach(window => {
-          channel.sendTo(window, ChannelType.MAIN, "plugin-search-clear", {
+        if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+          const channel = genTouchChannel();
+
+          const payload = {
             pluginName: this.name,
             timestamp: this._searchTimestamp
-          }).catch(error => {
-            console.error(`[Plugin ${this.name}] Failed to clear search results from window ${window.id}:`, error);
-          });
-        });
+          };
 
-        console.log(`[Plugin ${this.name}] Cleared search results`);
+          console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload);
+
+          channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, "core-box:clear-items", payload).catch(error => {
+            console.error(`[Plugin ${this.name}] Failed to clear search results from CoreBox:`, error);
+          });
+
+          console.log(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`);
+        } else {
+          console.warn(`[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`);
+        }
       },
 
       getItems: (): ISearchItem[] => {
