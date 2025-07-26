@@ -5,40 +5,68 @@ const props = defineProps<{
 
 const topPlugins = reactive([
   {
-    name: "Vue",
-    url: "https://vuejs.org/",
-    description: "Vue is a progressive framework for building user interfaces.",
-    icon: "https://vuejs.org/images/logo.png",
+    name: "Smart Clipboard",
+    url: "#",
+    description: "Advanced clipboard manager with history and sync",
+    icon: "ri-clipboard-line",
+    downloads: "2.3M",
+    rating: 4.8,
   },
   {
-    name: "Vite",
-    url: "https://vitejs.dev/",
-    description: "Blazing fast development & production build tool for Vue.js",
-    icon: "https://vitejs.dev/logo.svg",
+    name: "Universal Translator",
+    url: "#",
+    description: "Real-time translation for 100+ languages",
+    icon: "ri-translate-2",
+    downloads: "1.8M",
+    rating: 4.7,
   },
   {
-    name: "VitePress",
-    url: "https://vitepress.vuejs.org/",
-    description: "VitePress is a simple static site generator for Vue",
-    icon: "https://vitepress.dev/vitepress-logo-mini.svg",
+    name: "Quick Search",
+    url: "#",
+    description: "Lightning-fast search across all your files and web",
+    icon: "ri-search-line",
+    downloads: "3.1M",
+    rating: 4.9,
   },
   {
-    name: "Vue",
-    url: "https://vuejs.org/",
-    description: "Vue is a progressive framework for building user interfaces.",
-    icon: "https://vuejs.org/images/logo.png",
+    name: "AI Assistant",
+    url: "#",
+    description: "Your intelligent coding companion powered by AI",
+    icon: "ri-robot-line",
+    downloads: "1.5M",
+    rating: 4.6,
   },
   {
-    name: "Vite",
-    url: "https://vitejs.dev/",
-    description: "Blazing fast development & production build tool for Vue.js",
-    icon: "https://vitejs.dev/logo.svg",
+    name: "Password Manager",
+    url: "#",
+    description: "Secure password generation and management",
+    icon: "ri-shield-keyhole-line",
+    downloads: "2.7M",
+    rating: 4.8,
   },
   {
-    name: "VitePress",
-    url: "https://vitepress.vuejs.org/",
-    description: "VitePress is a simple static site generator for Vue",
-    icon: "https://vitepress.dev/vitepress-logo-mini.svg",
+    name: "Color Picker Pro",
+    url: "#",
+    description: "Advanced color picker with palette management",
+    icon: "ri-palette-line",
+    downloads: "890K",
+    rating: 4.5,
+  },
+  {
+    name: "Screenshot Tool",
+    url: "#",
+    description: "Capture, annotate and share screenshots instantly",
+    icon: "ri-screenshot-line",
+    downloads: "2.1M",
+    rating: 4.7,
+  },
+  {
+    name: "File Organizer",
+    url: "#",
+    description: "Smart file organization and duplicate finder",
+    icon: "ri-folder-line",
+    downloads: "1.2M",
+    rating: 4.4,
   },
 ]);
 
@@ -66,10 +94,10 @@ function handleMove(event: MouseEvent) {
 
 function cancelColor() {
   document.querySelectorAll(".BoxContent .element").forEach((element) => {
-
-    element.style.setProperty("--op", '0');
-    // element.style.setProperty("--x", "-1000px");
-    // element.style.setProperty("--y", "-1000px");
+    const htmlElement = element as HTMLElement;
+    htmlElement.style.setProperty("--op", '0');
+    // htmlElement.style.setProperty("--x", "-1000px");
+    // htmlElement.style.setProperty("--y", "-1000px");
   });
 }
 </script>
@@ -82,11 +110,26 @@ function cancelColor() {
     </div>
 
     <div @mouseleave="cancelColor" @mousemove="handleMove" class="BoxContent">
-      <div class="BoxContent-Item col" v-for="item in topPlugins">
+      <div class="BoxContent-Item col" v-for="item in topPlugins" :key="item.name">
         <div class="element">
           <div class="BoxContent-ItemContent">
-            <img :src="item.icon" :alt="item.name" />
-            <p>{{ item.name }}</p>
+            <div class="plugin-icon">
+              <i :class="`i-${item.icon}`"></i>
+            </div>
+            <div class="plugin-info">
+              <h3>{{ item.name }}</h3>
+              <p class="plugin-description">{{ item.description }}</p>
+              <div class="plugin-stats">
+                <span class="downloads">
+                  <i class="ri-download-line"></i>
+                  {{ item.downloads }}
+                </span>
+                <span class="rating">
+                  <i class="ri-star-fill"></i>
+                  {{ item.rating }}
+                </span>
+              </div>
+            </div>
           </div>
           <div class="mask" />
         </div>
@@ -98,47 +141,56 @@ function cancelColor() {
 <style lang="scss">
 .BoxContent-Header {
   display: flex;
-
-  align-items: center;
+  align-items: baseline;
+  margin-bottom: 1.5rem;
 
   p {
-    opacity: 0.75;
-    font-weight: 600;
+    opacity: 0.85;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin: 0;
+    letter-spacing: 0.5px;
   }
 
   span {
-    margin-left: 0.5rem;
-
-    opacity: 0.5;
-    font-size: 12px;
+    margin-left: 1rem;
+    opacity: 0.6;
+    font-size: 14px;
+    font-weight: 400;
   }
 }
 
 .BoxContentWrapper {
   position: relative;
-  padding: 1rem 2rem;
-
+  padding: 2rem;
   width: 100%;
-
   box-sizing: border-box;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .BoxContent {
-  margin: 0;
+  margin: 1rem 0;
   padding: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
 
-  align-items: center;
-  justify-content: center;
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 
-  flex-wrap: wrap;
+  @media (min-width: 1400px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .col {
-  width: calc((100% - 5px) / 4);
-  height: 80px;
-  padding: 1rem;
-  margin: 0 1.5rem;
+  height: 140px;
+  padding: 0;
+  margin: 0;
 }
 
 .element {
@@ -146,11 +198,17 @@ function cancelColor() {
   height: 100%;
   position: relative;
   border-radius: 16px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+
+  &:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
 }
 
 .BoxContent-Item {
-  height: 110px;
-  width: 280px;
+  height: 140px;
+  width: 100%;
 }
 
 .element::before {
@@ -163,42 +221,122 @@ function cancelColor() {
   opacity: var(--op);
   transition: opacity 0.25s ease-in-out;
   transform: translate(-50%, -50%);
-  border-radius: 16px;
+  border-radius: 18px;
+  filter: blur(5px);
   background: radial-gradient(
     250px circle at var(--x) var(--y),
-    #00dc8250 0,
+    var(--el-color-primary) 0,
     transparent 100%
   );
 }
 
 .BoxContent-ItemContent {
-  img {
-    width: 48px;
-    height: 48px;
-  }
-
-  p {
-    margin-left: 2rem;
-    font-size: 22px;
-    opacity: 0.75;
-    font-weight: 600;
-  }
-
   z-index: 1;
   position: absolute;
   display: flex;
-  padding: 0.25rem 2rem;
+  padding: 1.25rem 1.5rem;
+  gap: 1.25rem;
 
-  align-items: center;
+  align-items: flex-start;
 
   width: 100%;
-  height: calc(80px - 0.5rem);
+  height: 100%;
 
   left: 0;
-  top: 0.25rem;
+  top: 0;
 
   box-sizing: border-box;
   overflow: hidden;
+
+  .plugin-icon {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--el-color-primary-light-9);
+    border-radius: 14px;
+    transition: all 0.3s ease;
+
+    i {
+      font-size: 26px;
+      color: var(--el-color-primary);
+      transition: all 0.3s ease;
+    }
+  }
+
+  .element:hover .plugin-icon {
+    background: var(--el-color-primary-light-8);
+    transform: scale(1.05);
+
+    i {
+      color: var(--el-color-primary-dark-2);
+    }
+  }
+
+  .plugin-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+
+    h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 17px;
+      font-weight: 600;
+      opacity: 0.9;
+      line-height: 1.2;
+      color: var(--el-text-color-primary);
+    }
+
+    .plugin-description {
+      margin: 0 0 auto 0;
+      font-size: 13px;
+      opacity: 0.65;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: var(--el-text-color-regular);
+      flex-grow: 1;
+      min-height: 3.6em; /* 确保有足够空间显示3行 */
+    }
+
+    .plugin-stats {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 12px;
+      opacity: 0.75;
+      margin-top: 0.5rem;
+
+      span {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-weight: 500;
+
+        i {
+          font-size: 12px;
+        }
+      }
+
+      .downloads {
+        color: var(--el-color-info);
+      }
+
+      .rating {
+        color: var(--el-color-warning);
+
+        i {
+          color: #f7ba2a;
+        }
+      }
+    }
+  }
 }
 
 .element .mask {
