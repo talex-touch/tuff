@@ -466,7 +466,7 @@ class TouchPlugin implements ITouchPlugin {
             console.error(`[Plugin ${this.name}] Failed to clear search results from CoreBox:`, error);
           });
 
-          console.log(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`);
+          console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`);
         } else {
           console.warn(`[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`);
         }
