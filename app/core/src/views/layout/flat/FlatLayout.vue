@@ -123,12 +123,17 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
 }
 
 .AppLayout-Container.Flat {
-  --ctr-height: 30px;
+  --ctr-height: 40px;
   --nav-width: 200px;
 
   .AppLayout-Header {
     padding: 0;
     justify-content: space-between;
+
+    body.darwin & {
+      flex-direction: row-reverse;
+      justify-content: center;
+    }
   }
 }
 </style>

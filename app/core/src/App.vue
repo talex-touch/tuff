@@ -29,10 +29,11 @@ const _init = ref(false);
 const beginner = ref(false);
 
 function init() {
-  useCoreBox();
 
   touchChannel.send("app-ready").then((res: any) => {
     window.$startupInfo = res;
+
+    document.body.classList.add(window.$startupInfo.platform);
 
     applicationUpgrade();
     clipBoardResolver();
@@ -59,6 +60,9 @@ onMounted(() => {
   _coreBox.value = document.body.classList.contains("core-box");
 
   if (_coreBox.value) {
+
+    useCoreBox();
+
     console.log('%c CoreBox MODE ', 'background: #42b983; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;');
   }
 });

@@ -17,7 +17,7 @@ async function fixPointer(targetEl: HTMLElement) {
   const pointerRect = pointerEl.getBoundingClientRect()
   const nodeRect = targetEl.getBoundingClientRect()
 
-  const diffTop = -targetEl.parentElement!.offsetTop - nodeRect.height + 12
+  const diffTop = -targetEl.parentElement!.offsetTop - nodeRect.height + 5
 
   if (nodeRect.top > pointerRect.top) {
     pointerStyle.height = `${nodeRect.height * 0.8}px`

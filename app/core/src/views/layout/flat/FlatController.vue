@@ -6,41 +6,24 @@
     </span>
   </div>
 
-  <span>
+  <span class="mx-auto">
     {{ route.name ?? route.path }}
   </span>
 
-  <ul class="FlatLayout-Controller">
-    <remix-icon class="remix" @click="minimizeWindow" name="subtract" />
-    <remix-icon class="remix" @click="handleClose" name="close" />
+  <ul class="FlatLayout-Controller op-0">
+     Use native window control instead
   </ul>
 </template>
 
 <script lang="ts" name="FlatController" setup>
 import { useRoute } from "vue-router";
 import { applicationUpgrade } from "~/modules/hooks/application-hooks";
-import RemixIcon from "@comp/icon/RemixIcon.vue";
 
 const route = useRoute();
-
-function minimizeWindow() {
-  window.$nodeApi.minimize();
-}
-
-function handleClose(e: PointerEvent) {
-  e.shiftKey ? closeWindow() : hideWindow();
-}
-
-function closeWindow() {
-  window.$nodeApi.close();
-}
-
-function hideWindow() {
-  window.$nodeApi.hide();
-}
 </script>
 
 <style lang="scss">
+
 .FlatLayout-Icon {
   & span {
     .has-update &:after {
@@ -83,10 +66,15 @@ function hideWindow() {
     -webkit-app-region: no-drag;
   }
 
-  :deep(.tag) {
+  .tag {
     padding: 4px 6px;
     --fake-radius: 4px;
     border-radius: 4px;
+  }
+
+  body.darwin & {
+    padding-right: 4px;
+    flex-direction: row-reverse;
   }
 
   display: flex;
@@ -102,48 +90,5 @@ function hideWindow() {
   img {
     width: 24px;
   }
-}
-
-.FlatLayout-Controller {
-  .remix {
-    &:hover {
-      color: var(--el-fill-color-light);
-      background-color: var(--color);
-    }
-
-    position: relative;
-    display: flex;
-
-    justify-content: center;
-    align-items: center;
-
-    width: 50px;
-    height: 100%;
-
-    cursor: pointer;
-    font-size: 20px;
-    color: var(--el-text-color-primary);
-
-    --fake-radius: 0;
-    transition: 0.25s;
-
-    &:first-child {
-      --color: var(--el-text-color-primary);
-    }
-
-    &:nth-child(2) {
-      --color: var(--el-color-error);
-    }
-  }
-
-  position: relative;
-  display: flex;
-
-  right: 0;
-
-  height: 30px;
-  width: max-content;
-
-  -webkit-app-region: no-drag;
 }
 </style>
