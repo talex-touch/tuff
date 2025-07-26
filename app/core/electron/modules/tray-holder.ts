@@ -1,7 +1,7 @@
 import { TalexTouch } from '../types';
 import { Menu, Tray } from 'electron'
 import fse from 'fs-extra'
-import { APP_SCHEMA } from '../config/default'
+import { APP_SCHEMA, AppName } from '../config/default'
 import { DownloadManager } from '@talex-touch/utils/electron/download-manager'
 
 interface IconItem {
@@ -51,6 +51,10 @@ const iconItems: IconItem[] = [
     apply: (app: TalexTouch.TouchApp, filePath: string) => {
       if ( process.platform === 'darwin' ) {
         app.app.dock?.setIcon(filePath)
+
+        if (app.version === TalexTouch.AppVersion.DEV) {
+          app.app.dock?.setBadge(app.version)
+        }
       } else {
         app.window.window.setIcon(filePath)
       }
@@ -70,7 +74,7 @@ export default {
     })
 
     setTimeout(() => {
-        const downloadManager = new DownloadManager();
+        const downloadManager = new DownloadManager(modulePath);
 
         downloadManager.addDownloads(iconItems.map(item => ({
           ...item,
