@@ -16,7 +16,7 @@
   },
   "description": "A strong adaptation more platform all-tool program.",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.2",
@@ -30,7 +30,6 @@
     "@milkdown/prose": "^7.15.1",
     "@milkdown/theme-nord": "^7.15.1",
     "@milkdown/transformer": "^7.15.1",
-    "@rollup/plugin-commonjs": "^28.0.6",
     "@talex-touch/utils": "workspace:^",
     "@unocss/transformer-attributify-jsx": "^66.3.3",
     "@vueuse/core": "^13.5.0",
