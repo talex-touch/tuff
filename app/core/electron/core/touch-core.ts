@@ -28,6 +28,7 @@ import {
   touchEventBus,
 } from "./eventbus/touch-event";
 import * as log4js from "log4js";
+import { devProcessManager } from "../utils/dev-process-manager";
 
 const rootPath = getRootPath(process.cwd());
 
@@ -113,8 +114,19 @@ if (!app.requestSingleInstanceLock()) {
 app.on("window-all-closed", () => {
   console.log("[TouchApp] All windows closed! App starts to exit ...");
   touchEventBus.emit(TalexEvents.WINDOW_ALL_CLOSED, new WindowAllClosedEvent());
-  if (process.platform !== "darwin") app.quit();
-  process.exit(0);
+
+  if (process.platform !== "darwin") {
+    if (!app.isPackaged) {
+      console.log("[TouchApp] Development mode: Graceful shutdown initiated...");
+      setTimeout(() => {
+        app.quit();
+        process.exit(0);
+      }, 200);
+    } else {
+      app.quit();
+      process.exit(0);
+    }
+  }
 });
 
 app.addListener("ready", (event, launchInfo) =>
@@ -130,6 +142,18 @@ app.on("before-quit", (event) => {
     new BeforeAppQuitEvent(event)
   );
   console.log("[TouchApp] App will quit!");
+
+  if (!app.isPackaged) {
+    console.log("[TouchApp] Development mode: Using DevProcessManager for cleanup...");
+
+    // Forbidden default quit behavior, let DevProcessManager handle it
+    if (!devProcessManager.isShuttingDownProcess()) {
+      event.preventDefault();
+      devProcessManager.triggerGracefulShutdown();
+      return;
+    }
+  }
+
   touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event));
 });
 
@@ -167,6 +191,12 @@ export class TouchApp implements TalexTouch.TouchApp {
     this.version = app.isPackaged
       ? TalexTouch.AppVersion.RELEASE
       : TalexTouch.AppVersion.DEV;
+
+    if (!app.isPackaged) {
+      devProcessManager.init();
+      console.log("[TouchApp] Development process manager initialized");
+    }
+
     this.window = new TouchWindow(_windowOptions);
     this.channel = genTouchChannel(this);
     this.moduleManager = new ModuleManager(this, this.channel);
@@ -302,9 +332,20 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
           mode: options.devtools === true ? "detach" : options.devtools,
         });
 
-      this.window.webContents.addListener("render-process-gone", (e: any, k: any) => {
-        console.error(e, k);
-        console.log("TouchWindow WebContents crashed!", this);
+      this.window.webContents.addListener("render-process-gone", (event: any, details: any) => {
+        console.error("[TouchWindow] Render process gone:", event, details);
+        console.log("[TouchWindow] WebContents crashed!", this);
+
+        // In development mode, if the process is killed, it's likely due to a hot reload
+        if (!app.isPackaged && details.reason === 'killed') {
+          console.log("[TouchWindow] Development mode: Process killed during hot reload, this is expected.");
+          return;
+        }
+
+        // Other cases of crashes
+        if (details.reason === 'crashed') {
+          console.error("[TouchWindow] Renderer process crashed unexpectedly!");
+        }
       });
 
       resolve(this.window.webContents);
@@ -323,9 +364,20 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
           mode: options.devtools === true ? "detach" : options.devtools,
         });
 
-      this.window.webContents.addListener("plugin-crashed", (e, k) => {
-        console.error(e, k);
-        console.log("TouchWindow WebContents crashed!", this);
+      this.window.webContents.addListener("render-process-gone", (event: any, details: any) => {
+        console.error("[TouchWindow] Render process gone:", event, details);
+        console.log("[TouchWindow] WebContents crashed!", this);
+
+        // In development mode, if the process is killed, it's likely due to a hot reload
+        if (!app.isPackaged && details.reason === 'killed') {
+          console.log("[TouchWindow] Development mode: Process killed during hot reload, this is expected.");
+          return;
+        }
+
+        // Other cases of crashes
+        if (details.reason === 'crashed') {
+          console.error("[TouchWindow] Renderer process crashed unexpectedly!");
+        }
       });
 
       resolve(this.window.webContents);
@@ -347,9 +399,29 @@ class ModuleManager implements TalexTouch.IModuleManager {
     checkDirWithCreate(this.modulePath, true);
 
     touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
-      [...this.getAllModules()].forEach((module: Symbol) => {
-        this.unloadModule(module);
-      });
+      console.log("[ModuleManager] Starting graceful shutdown...");
+
+      // In development mode, try to gracefully close all modules first
+      if (!app.isPackaged) {
+        console.log("[ModuleManager] Development mode: Gracefully shutting down modules...");
+
+        // Give modules some time to clean up
+        const modules = [...this.getAllModules()];
+        modules.forEach((module: Symbol) => {
+          try {
+            console.log(`[ModuleManager] Unloading module: ${module.description}`);
+            this.unloadModule(module);
+          } catch (error) {
+            console.warn(`[ModuleManager] Error unloading module ${module.description}:`, error);
+          }
+        });
+      } else {
+        [...this.getAllModules()].forEach((module: Symbol) => {
+          this.unloadModule(module);
+        });
+      }
+
+      console.log("[ModuleManager] All modules unloaded.");
     });
   }
 

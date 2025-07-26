@@ -26,7 +26,7 @@ import { genTouchApp, TouchWindow } from "../core/touch-core";
 import { getJs, getStyles } from "../utils/plugin-injection";
 import chokidar from "chokidar";
 import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
-import { BrowserWindow, dialog, shell, clipboard, net } from "electron";
+import { BrowserWindow, dialog, shell, clipboard, net, app } from "electron";
 import axios from "axios";
 import type { ISearchItem } from "@talex-touch/utils";
 import { getCoreBoxWindow } from "../modules/box-tool/core-box";
@@ -334,8 +334,26 @@ class TouchPlugin implements ITouchPlugin {
     this.webViewInit = false;
 
     this._windows.forEach((win, id) => {
-      win.close();
-      this._windows.delete(id);
+      try {
+        if (!win.window.isDestroyed()) {
+          // In development mode, close the window more gently
+          if (!app.isPackaged) {
+            console.log(`[Plugin] Gracefully closing window ${id} for plugin ${this.name}`);
+            win.window.hide();
+            setTimeout(() => {
+              if (!win.window.isDestroyed()) {
+                win.close();
+              }
+            }, 50);
+          } else {
+            win.close();
+          }
+        }
+        this._windows.delete(id);
+      } catch (error) {
+        console.warn(`[Plugin] Error closing window ${id} for plugin ${this.name}:`, error);
+        this._windows.delete(id);
+      }
     });
 
     this.status = PluginStatus.DISABLED;
@@ -416,7 +434,7 @@ class TouchPlugin implements ITouchPlugin {
             console.error(`[Plugin ${this.name}] Failed to push search results to CoreBox:`, error);
           });
 
-          console.log(`[Plugin ${this.name}] Successfully sent ${items.length} search results to CoreBox`);
+          console.debug(`[Plugin ${this.name}] Successfully sent ${items.length} search results to CoreBox`);
         } else {
           console.warn(`[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`);
         }

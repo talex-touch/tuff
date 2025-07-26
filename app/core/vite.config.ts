@@ -65,6 +65,10 @@ export default defineConfig({
             "--sourcemap",
             // For Chrome devtools
             "--remote-debugging-port=9222",
+            // 优化开发环境的进程管理
+            "--disable-gpu-process-crash-limit",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
           ]);
         },
         vite: {

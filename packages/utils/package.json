@@ -20,9 +20,9 @@
   },
   "description": "TalexTouch series utils",
   "dependencies": {
-    "@vueuse/core": "^10.11.1",
+    "@vueuse/core": "^13.5.0",
     "path-browserify": "^1.0.1",
-    "vue": "^3.5.15"
+    "vue": "^3.5.18"
   },
   "peerDependencies": {
     "electron": "^29.4.6",

@@ -10,15 +10,15 @@
     "node": ">=22.0.0"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^2.27.3",
-    "@commitlint/cli": "^18.6.1",
-    "@commitlint/config-conventional": "^18.6.3",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.1",
+    "@antfu/eslint-config": "^5.0.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "^9.32.0",
     "husky": "^9.1.7",
     "typescript": "^5.8.3",
-    "vite": "^5.4.19",
-    "vitest": "^1.6.1"
+    "vite": "^7.0.6",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "lint": "eslint .",
@@ -35,12 +35,14 @@
     "publish:utils": "pnpm -F @talex-touch/utils run publish"
   },
   "dependencies": {
-    "vite-plugin-electron": "^0.28.8"
+    "vite-plugin-electron": "^0.29.0"
   },
   "volta": {
     "node": "22.16.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["electron"]
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   }
 }
