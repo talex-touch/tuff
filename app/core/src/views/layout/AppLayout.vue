@@ -163,6 +163,7 @@ onMounted(() => {
     box-sizing: border-box;
 
     opacity: 0;
+    --fake-opacity: 1;
     -webkit-app-region: no-drag;
     animation: viewEnter 0.25s 0.5s forwards;
   }
@@ -175,6 +176,12 @@ onMounted(() => {
     width: 100%;
 
     box-sizing: border-box;
+  }
+
+  &.mica {
+    &::before {
+      display: none;
+    }
   }
 
   --nav-width: 70px;

@@ -48,8 +48,9 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
 
     width: calc(100% - var(--nav-width));
 
-    --fake-radius: 0 0 0 0;
-    border-radius: 0 0 0 0;
+    overflow: hidden;
+    --fake-radius: 8px 0 0 0;
+    border-radius: 8px 0 0 0;
     box-sizing: border-box;
   }
 
