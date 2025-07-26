@@ -1,5 +1,3 @@
-import { *asfse } from 'fs-extra';
-import { Window } from './../../../../packages/utils/plugin/preload';
 import { app, BrowserWindow } from "electron";
 
 /**

@@ -1,4 +1,3 @@
-import appIcon from "../../public/favicon.ico?asset";
 import path from "node:path";
 
 export const AppName = "TalexTouch";
@@ -9,7 +8,6 @@ export const APP_SCHEMA = "talextouch";
 
 export const MainWindowOption = {
   title: AppName,
-  icon: appIcon,
   frame: false,
   minWidth: 1280,
   minHeight: 780,
@@ -31,7 +29,6 @@ export const MainWindowOption = {
 
 export const BoxWindowOption = {
   title: `${AppName} CoreBox`,
-  icon: appIcon,
   frame: false,
   minWidth: 900,
   minHeight: 60,
