@@ -762,7 +762,8 @@ class PluginManager implements IPluginManager {
         },
         pkg,
         $util: featureUtil,
-        $event: featureEvent
+        $event: featureEvent,
+        URLSearchParams,
       }
 
       const func = loadPluginFeatureContext(touchPlugin, featureIndex, featureContext) as IFeatureLifeCycle
