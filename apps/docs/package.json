@@ -10,7 +10,7 @@
     "markdown-it": "^14.1.0",
     "ogl": "^1.0.11",
     "typeit": "^8.8.7",
-    "vitepress": "1.0.0-alpha.47",
+    "vitepress": "2.0.0-alpha.9",
     "vue": "^3.5.18"
   },
   "devDependencies": {
