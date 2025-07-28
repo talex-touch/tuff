@@ -47,7 +47,7 @@ Verified plugins display a special badge in the market, giving you confidence in
 Developers can publish their own plugins to the Plugin Market:
 
 1. Create your plugin following the [Plugin Development Guide](../plugins/introduction.md)
-2. Package your plugin according to the [Publishing Guidelines](../plugins/publish.md)
+2. Package your plugin according to the [Publishing Guidelines](../plugins/config/manifest.md)
 3. Submit your plugin through the Developer Portal
 4. After review and approval, your plugin will be available to the community
 
