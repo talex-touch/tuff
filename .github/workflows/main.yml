@@ -26,7 +26,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm -F @talex-touch/docs install
+        run: pnpm install
 
       - name: Build VitePress
         run: pnpm -F @talex-touch/docs run build
