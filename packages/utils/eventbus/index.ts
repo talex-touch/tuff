@@ -61,7 +61,7 @@ export interface ITouchEventBus<E> {
    *    console.log(event)
    * }
    */
-  off<T extends ITouchEvent>(event: E, handler: EventHandler): boolean;
+  off(event: E, handler: EventHandler): boolean;
 
   /**
    * UnSubscribe touch-app events all matched (any kind of events extends from TouchEvent)
@@ -73,10 +73,9 @@ export interface ITouchEventBus<E> {
   /**
    * UnSubscribe touch-app events all matched (any kind of events extends from TouchEvent)
    * @param event EventName (extends from TouchEvent)
-   * @param handler Event handler (extends from EventHandler)
    * @returns true if the event was added, otherwise false
    */
-  off<T extends ITouchEvent>(event: E, handler: EventHandler): boolean;
+  offAll(event: E): boolean;
 
   /**
    * Emit touch-app events (any kind of events extends from TouchEvent)

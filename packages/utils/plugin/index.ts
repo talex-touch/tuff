@@ -213,4 +213,4 @@ export interface IManifest {
 }
 
 export * from './log/logger'
-export * from './sdk'
+export * from './sdk/index'

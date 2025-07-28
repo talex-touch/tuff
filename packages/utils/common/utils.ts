@@ -80,3 +80,81 @@ const LOCALHOST_KEYS = ['localhost', '127.0.0.1']
 export function isLocalhostUrl(urlStr: string): boolean {
     return LOCALHOST_KEYS.includes(new URL(urlStr).hostname)
 }
+
+/**
+ * Serializes a value to JSON, throwing a detailed error on the first unsupported value (like a function, DOM node, symbol, etc.).
+ * Reports the exact path to the error.
+ *
+ * @param value - Any JS value.
+ * @returns The JSON string if serialization succeeds.
+ * @throws Error if an unsupported value is found (reports path and type).
+ */
+export function structuredStrictStringify(value: unknown): string {
+  const seen = new WeakMap<object, string>();
+  const badTypes = [
+    'symbol'
+  ];
+  // Support Map/Set, but not Error, DOM, Proxy, WeakMap, WeakSet
+  function getType(val: any): string {
+    if (val === null) return 'null';
+    if (Array.isArray(val)) return 'Array';
+    if (typeof Document !== 'undefined') {
+      if (val instanceof Node) return 'DOMNode';
+    }
+    if (val instanceof Error) return 'Error';
+    if (val instanceof WeakMap) return 'WeakMap';
+    if (val instanceof WeakSet) return 'WeakSet';
+    if (typeof val === 'object' && val !== null && val.constructor?.name === 'Proxy') return 'Proxy';
+    if (typeof val === 'bigint') return 'BigInt';
+    return typeof val;
+  }
+
+  function serialize(val: any, path: string): any {
+    const type = getType(val);
+    // Block disallowed/unsafe types and edge cases for structured-clone
+    if (badTypes.includes(typeof val) || type === 'DOMNode' || type === 'Error' || type === 'Proxy' || type === 'WeakMap' || type === 'WeakSet' || type === 'BigInt') {
+      throw new Error(`Cannot serialize property at path "${path}": type "${type}"`);
+    }
+    // JSON doesn't support undefined, skip it for values in objects, preserve in arrays as null
+    if (typeof val === 'undefined') return null;
+    // Simple value
+    if (
+      val === null ||
+      typeof val === 'number' ||
+      typeof val === 'boolean' ||
+      typeof val === 'string'
+    ) return val;
+    // Cycle check
+    if (typeof val === 'object') {
+      if (seen.has(val)) {
+        return `[Circular ~${seen.get(val)}]`; // You could just throw if you dislike this fallback!
+      }
+      seen.set(val, path);
+      if (Array.isArray(val)) {
+        return val.map((item, idx) => serialize(item, `${path}[${idx}]`));
+      }
+      if (val instanceof Date) {
+        return val.toISOString();
+      }
+      if (val instanceof Map) {
+        const obj: Record<string, any> = {};
+        for (const [k, v] of val.entries()) {
+          obj[typeof k === 'string' ? k : JSON.stringify(k)] = serialize(v, `${path}[Map(${typeof k === 'string' ? k : JSON.stringify(k)})]`);
+        }
+        return obj;
+      }
+      if (val instanceof Set) {
+        return Array.from(val).map((item, idx) => serialize(item, `${path}[SetEntry${idx}]`));
+      }
+      // General object
+      const res: any = {};
+      for (const key of Object.keys(val)) {
+        res[key] = serialize(val[key], `${path}.${key}`);
+      }
+      return res;
+    }
+    throw new Error(`Cannot serialize property at path "${path}": unknown type`);
+  }
+
+  return JSON.stringify(serialize(value, 'root'));
+}

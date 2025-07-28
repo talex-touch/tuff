@@ -84,7 +84,7 @@ export interface RawChannelHeaderData {
   status: "reply" | "request";
   type: ChannelType;
   _originData?: any;
-  event: Electron.IpcMainEvent | Electron.IpcRendererEvent;
+  event?: Electron.IpcMainEvent | Electron.IpcRendererEvent;
 }
 
 export interface RawChannelData {
@@ -103,6 +103,6 @@ export interface StandardChannelData extends RawStandardChannelData {
   reply: (code: DataCode, data: IChannelData) => void
 }
 
-export type IChannelData = boolean | number | string | null | undefined | {
-  [prop: string]: any
-}
+export type IChannelData = any //boolean | number | string | null | undefined | {
+  // [prop: string]: any
+// }

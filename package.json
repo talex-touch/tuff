@@ -25,14 +25,16 @@
     "lint:fix": "eslint --fix .",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
-    "test:utils": "pnpm -F test run test",
-    "dev:core": "pnpm -F core run dev",
-    "build:core": "pnpm -F core run build",
-    "build:core:beta": "pnpm -F core run build:beta",
-    "build:core:snapshot": "pnpm -F core run build:snapshot",
-    "build:core:release": "pnpm -F core run build:release",
-    "build:docs": "pnpm -F docs run build",
-    "publish:utils": "pnpm -F @talex-touch/utils run publish"
+    "core:dev": "pnpm -F @talex-touch/core-app run dev",
+    "core:build": "pnpm -F @talex-touch/core-app run build",
+    "core:build:beta": "pnpm -F @talex-touch/core-app run build:beta",
+    "core:build:snapshot": "pnpm -F @talex-touch/core-app run build:snapshot",
+    "core:build:release": "pnpm -F @talex-touch/core-app run build:release",
+    "core:build:docs": "pnpm -F @talex-touch/core-app run build:docs",
+    "docs:dev": "pnpm -F @talex-touch/docs run dev",
+    "docs:build": "pnpm -F @talex-touch/docs run build",
+    "utils:test": " pnpm -F test run test",
+    "utils:publish": "pnpm -F @talex-touch/utils run publish"
   },
   "dependencies": {
     "vite-plugin-electron": "^0.29.0"
@@ -42,7 +44,18 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "electron"
-    ]
+      "@parcel/watcher",
+      "@swc/core",
+      "electron",
+      "electron-clipboard-ex",
+      "esbuild",
+      "extract-file-icon",
+      "simple-git-hooks",
+      "vue-demi"
+    ],
+    "overrides": {
+      "vite": "7.0.6",
+      "@types/node": "24.1.0"
+    }
   }
 }

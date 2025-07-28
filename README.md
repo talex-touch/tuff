@@ -147,4 +147,4 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 Through email (TalexDreamSoul@Gmail) or open an issue.
 
-Copyright © 2022-2023 TalexDreamSoul
+Copyright © 2022-PRESENT TalexDreamSoul

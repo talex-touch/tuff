@@ -11,3 +11,8 @@ declare global {
     $touchSDK: ITouchSDK
   }
 }
+
+export * from './types'
+export * from './window/index'
+export * from './hooks/index'
+export * from './service/index'

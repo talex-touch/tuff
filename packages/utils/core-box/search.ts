@@ -3,7 +3,7 @@
  * Provides tools for creating, managing, and manipulating search results
  */
 
-import type { 
+import { 
   ISearchItem, 
   IDataItem, 
   IAppItem, 
