@@ -26,16 +26,16 @@ jobs:
         run: npm install -g pnpm  
 
       - name: Install dependencies
-        run: pnpm -F docs install --no-frozen-lockfile
+        run: pnpm -F @talex-touch/docs install --no-frozen-lockfile
     
       - name: Build VitePress
-        run: pnpm -F docs run build
+        run: pnpm -F @talex-touch/docs run build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.ACCESS_TOKEN }}
-          publish_dir: app/docs/.vitepress/dist
+          publish_dir: apps/docs/.vitepress/dist
           publish_branch: gh-pages
           dotfiles: true
   

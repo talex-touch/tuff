@@ -13,4 +13,12 @@
 - [ ] Bug fix
 - [ ] New Feature
 - [ ] Documentation update
+- [ ] Refactoring
+- [ ] Build related changes
+- [ ] CI related changes
+- [ ] Test related changes
+- [ ] Chore
+- [ ] Enhancement
+- [ ] Performance improvement
+- [ ] Security fix
 - [ ] Other
