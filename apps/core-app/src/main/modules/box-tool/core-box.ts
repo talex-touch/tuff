@@ -24,7 +24,16 @@ export function getCoreBoxWindow(): TouchWindow | null {
   return coreBoxManagerInstance?.nowWindow || null
 }
 
-async function createNewBoxWindow(closeCallback: Function) {
+/**
+ * Creates a new CoreBox window with the specified options and initializes it.
+ * This function handles the creation of a new BrowserWindow, loading the appropriate
+ * content based on whether the app is packaged, and setting up event listeners.
+ *
+ * @param closeCallback - Callback function that is called when the window is closed.
+ *                        Receives the closed TouchWindow instance as a parameter.
+ * @returns A Promise that resolves to the created TouchWindow instance.
+ */
+async function createNewBoxWindow(closeCallback: (window: TouchWindow) => void): Promise<TouchWindow> {
   const window = new TouchWindow({ ...BoxWindowOption })
 
   windowAnimation.changeWindow(window)
@@ -32,23 +41,27 @@ async function createNewBoxWindow(closeCallback: Function) {
   setTimeout(async () => {
     console.log('[CoreBox] NewBox created, injecting developing tools ...')
 
-    if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
-      const url = path.join(process.env.DIST!, 'index.html')
+    try {
+      if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
+        const url = path.join(process.env.DIST!, 'index.html')
 
-      await window.loadFile(`${url}`, {
-        devtools: touchApp.version === TalexTouch.AppVersion.DEV
-      })
-    } else {
-      const url = process.env['ELECTRON_RENDERER_URL'] as string
+        await window.loadFile(`${url}`, {
+          devtools: touchApp.version === TalexTouch.AppVersion.DEV
+        })
+      } else {
+        const url = process.env['ELECTRON_RENDERER_URL'] as string
 
-      await window.loadURL(url /* , { devtools: true } */)
+        await window.loadURL(url /* , { devtools: true } */)
 
-      window.openDevTools({
-        mode: 'detach'
-      })
+        window.openDevTools({
+          mode: 'detach'
+        })
+      }
+
+      window.window.hide()
+    } catch (error) {
+      console.error('[CoreBox] Failed to load content in new box window:', error)
     }
-
-    window.window.hide()
   }, 200)
 
   window.window.webContents.addListener('dom-ready', () => {
@@ -88,25 +101,32 @@ export class CoreBoxManager {
   #_show: boolean
   #_expand: number
   windows: Array<TouchWindow>
-  resList: Array<any>
 
   lastWindow: Electron.Display | null
 
   constructor() {
     this.#_show = false
     this.#_expand = 0
-    this.resList = []
     this.windows = []
     this.lastWindow = null
-
-    // Set the global instance for external access
-    coreBoxManagerInstance = this
 
     // Always match the last window => popover window
     this.init().then(() => this.register())
   }
 
-  get getCurScreen() {
+  /**
+   * Gets the singleton instance of CoreBoxManager.
+   * @returns The CoreBoxManager instance or null if not initialized.
+   */
+  static getInstance(): CoreBoxManager | null {
+    return coreBoxManagerInstance
+  }
+
+  /**
+   * Gets the current screen based on cursor position.
+   * @returns The current screen display or primary display if not found.
+   */
+  get getCurScreen(): Electron.Display {
     try {
       const cursorPoint = screen.getCursorScreenPoint()
       const curScreen = screen.getDisplayNearestPoint(cursorPoint)
@@ -124,12 +144,20 @@ export class CoreBoxManager {
     }
   }
 
-  getAppSettingConfig() {
+  /**
+   * Gets the application setting configuration.
+   * @returns The application setting configuration.
+   */
+  getAppSettingConfig(): AppSetting {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
-  async init() {
-    const w = await createNewBoxWindow((window: TalexTouch.ITouchWindow) => {
+  /**
+   * Initializes the CoreBoxManager by creating a new box window.
+   * @returns A promise that resolves when initialization is complete.
+   */
+  async init(): Promise<void> {
+    const w = await createNewBoxWindow((window: TouchWindow) => {
       this.windows = this.windows.filter((w) => w !== window)
     })
 
@@ -138,13 +166,17 @@ export class CoreBoxManager {
     this.windows.push(w)
   }
 
-  initWindow(window: TouchWindow) {
+  /**
+   * Initializes a window with event listeners.
+   * @param window - The TouchWindow to initialize.
+   */
+  initWindow(window: TouchWindow): void {
     window.window.addListener('blur', () => {
       if (this.nowWindow !== window) return
 
       const appSettingConfig = this.getAppSettingConfig()
 
-      if (!appSettingConfig.tools.autoHide) return
+      if (!appSettingConfig.tools?.autoHide) return
 
       if (this.#_show) this.trigger(false)
     })
@@ -153,15 +185,28 @@ export class CoreBoxManager {
     clipboardManager.registerWindow(window)
   }
 
-  get showCoreBox() {
+  /**
+   * Gets the show state of the core box.
+   * @returns True if the core box is shown, false otherwise.
+   */
+  get showCoreBox(): boolean {
     return this.#_show
   }
 
-  get nowWindow() {
+  /**
+   * Gets the current window.
+   * @returns The current TouchWindow or undefined if no windows exist.
+   */
+  get nowWindow(): TouchWindow | undefined {
     return this.windows[this.windows.length - 1]
   }
 
-  updateWindowPos(window: TouchWindow, screen: Electron.Display) {
+  /**
+   * Updates the window position based on the screen bounds.
+   * @param window - The TouchWindow to position.
+   * @param screen - The Electron.Display to position the window on.
+   */
+  updateWindowPos(window: TouchWindow, screen: Electron.Display): void {
     if (!screen || !screen.bounds) {
       console.error('[CoreBox] Invalid screen object:', screen)
       return
@@ -198,7 +243,10 @@ export class CoreBoxManager {
     }
   }
 
-  register() {
+  /**
+   * Registers global shortcuts and channel listeners.
+   */
+  register(): void {
     globalShortcut.register('CommandOrControl+E', () => {
       const curScreen = this.getCurScreen
       if (this.lastWindow && curScreen && curScreen.id !== this.lastWindow.id) {
@@ -230,8 +278,8 @@ export class CoreBoxManager {
         reply(DataCode.SUCCESS, {
           buffer
         })
-      } catch (e) {
-        console.log('Cannot find target file icon:', path)
+      } catch (error) {
+        console.log('Cannot find target file icon:', path, error)
       }
     })
 
@@ -309,36 +357,66 @@ export class CoreBoxManager {
     })
   }
 
-  expand(length: number = 100) {
+  /**
+   * Expands the core box window to accommodate more content.
+   * @param length - The expansion length (default: 100).
+   */
+  expand(length: number = 100): void {
     this.#_expand = length
 
     const height = Math.min(length * 48 + 65, 550)
 
-    this.nowWindow.window.setMinimumSize(900, height)
-    this.nowWindow.window.setSize(900, height, process.platform === 'darwin')
+    const currentWindow = this.nowWindow
+    if (currentWindow) {
+      currentWindow.window.setMinimumSize(900, height)
+      currentWindow.window.setSize(900, height, process.platform === 'darwin')
+    } else {
+      console.error('[CoreBox] No current window available for expansion')
+    }
 
     console.debug('[CoreBox] Expanded.')
   }
 
-  shrink() {
+  /**
+   * Shrinks the core box window to its default size.
+   */
+  shrink(): void {
     this.#_expand = 0
 
-    this.nowWindow.window.setMinimumSize(900, 60)
-    this.nowWindow.window.setSize(900, 60, false)
+    const currentWindow = this.nowWindow
+    if (currentWindow) {
+      currentWindow.window.setMinimumSize(900, 60)
+      currentWindow.window.setSize(900, 60, false)
+    } else {
+      console.error('[CoreBox] No current window available for shrinking')
+    }
     console.debug('[CoreBox] Shrunk.')
   }
 
   lastTrigger: number = -1
 
-  trigger(show: boolean) {
+  /**
+   * Triggers the core box window to show or hide.
+   * @param show - True to show the window, false to hide it.
+   * @returns void
+   */
+  trigger(show: boolean): void {
     if (Date.now() - this.lastTrigger < 200) return
     this.lastTrigger = Date.now()
 
     this.#_show = show
 
     const w = this.nowWindow
+    if (!w) {
+      console.error('[CoreBox] No current window available for trigger')
+      return
+    }
 
-    w.window.setAlwaysOnTop(show)
+    // TypeScript doesn't recognize that w is not undefined after the check above
+    // So we use a non-null assertion operator to tell TypeScript that w is definitely not undefined
+    const window = w!
+
+    window.window.setAlwaysOnTop(show)
 
     if (show) {
       appDataManager.onCoreBoxShow().catch((error) => {
@@ -346,37 +424,37 @@ export class CoreBoxManager {
       })
 
       if (!this.#_expand) {
-        w.window.setMinimumSize(900, 60)
-        w.window.setSize(900, 60, false)
+        window.window.setMinimumSize(900, 60)
+        window.window.setSize(900, 60, false)
       } else this.expand(this.#_expand)
 
-      touchApp.channel.sendTo(w.window, ChannelType.MAIN, 'core-box:trigger', {
-        id: w.window.webContents.id,
+      touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+        id: window.window.webContents.id,
         show: true
       })
 
       const curScreen = (this.lastWindow = this.getCurScreen)
 
-      if (curScreen && w) {
-        this.updateWindowPos(w, curScreen)
+      if (curScreen) {
+        this.updateWindowPos(window, curScreen)
       } else {
-        console.error('[CoreBox] Invalid screen or window for positioning:', {
+        console.error('[CoreBox] Invalid screen for positioning:', {
           curScreen,
-          window: w
+          window
         })
       }
     } else {
-      w.window.setPosition(-1000000, -1000000)
+      window.window.setPosition(-1000000, -1000000)
 
       setTimeout(() => {
         this.shrink()
 
-        w.window.hide()
+        window.window.hide()
       }, 100)
     }
 
-    touchApp.channel.sendTo(w.window, ChannelType.MAIN, 'core-box:trigger', {
-      id: w.window.webContents.id,
+    touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+      id: window.window.webContents.id,
       show
     })
   }
@@ -388,7 +466,7 @@ export default {
   listeners: new Array<() => void>(),
   init() {
     touchApp = genTouchApp()
-    /* const coreBoxManager =  */ new CoreBoxManager()
+    coreBoxManagerInstance = new CoreBoxManager()
 
     // const touchChannel = genTouchChannel();
 
