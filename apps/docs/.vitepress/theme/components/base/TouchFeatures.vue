@@ -84,7 +84,8 @@ import TouchRay from './TouchRay.vue'
 .touch-feature {
   position: relative;
   width: 100%;
-  height: var(--vh, 100%);
+  height: 100%;
+  /* height: var(--vh, 100%); */
   overflow: hidden;
   flex: 1;
   display: flex;
@@ -102,9 +103,8 @@ import TouchRay from './TouchRay.vue'
   z-index: 10;
   position: relative;
   padding: 2rem 1rem;
-  max-width: 1200px;
+  /* max-width: 1200px; */
   width: 100%;
-  min-height: 80vh;
 }
 
 .beta-tag {

@@ -128,7 +128,8 @@ import TouchButton from "./base/TouchButton.vue";
   justify-content: center;
 
   padding: 2rem 1rem;
-  height: var(--vh, 100%);
+  /* height: var(--vh, 100%); */
+  height: 100%;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);

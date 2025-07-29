@@ -240,6 +240,14 @@ body {
   flex-direction: column;
 
   margin-top: -65px !important;
+
+  .vp-doc {
+    h2 {
+      border: none;
+    }
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
 }
 
 #app .Layout:has(.VPContent.is-home) {
@@ -257,4 +265,6 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+
+  margin-bottom: 0 !important;
 }

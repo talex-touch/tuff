@@ -66,7 +66,8 @@ import TouchButton from './base/TouchButton.vue'
 <style scoped>
 .plugin-extension-section {
   padding: 4rem 1rem;
-  height: var(--vh, 100%);
+  height: 100%;
+  /* height: var(--vh, 100%); */
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
