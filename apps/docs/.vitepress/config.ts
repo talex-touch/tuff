@@ -34,12 +34,12 @@ export default defineConfig({
   themeConfig: {
     nav,
     sidebar,
-    // footer: {
-    //   message:
-    //     'Released under the <a style="font-weight: 600" href="https://github.com/talex-touch/talex-touch/blob/master/LICENSE">Mozilla Public License 2.0</a>.',
-    //   copyright:
-    //     'Copyright © 2022-2025 <a style="font-weight: 600" href="https://github.com/TalexDreamSoul">TalexDreamSoul</a>',
-    // },
+    footer: {
+      message:
+        'Released under the <a style="font-weight: 600" href="https://github.com/talex-touch/talex-touch/blob/master/LICENSE">Mozilla Public License 2.0</a>.',
+      copyright:
+        'Copyright © 2022-2025 <a style="font-weight: 600" href="https://github.com/TalexDreamSoul">TalexDreamSoul</a>',
+    },
     editLink: {
       pattern:
         "https://github.com/talex-touch/talex-touch/edit/master/app/docs/:path",
@@ -54,6 +54,7 @@ export default defineConfig({
       next: "Next Section",
     },
   },
+  appearance: 'force-dark',
   /**
    * 自定义 markdown 解析器
    *
