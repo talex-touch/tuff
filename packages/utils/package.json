@@ -5,9 +5,10 @@
   "module": "./index.ts",
   "license": "MPL-2.0",
   "private": false,
-  "version": "1.0.14",
+  "version": "1.0.18",
   "exports": {
     ".": "./index.ts",
+    "./types": "./types/index.ts",
     "./channel": "./channel/index.ts",
     "./base": "./base/index.ts",
     "./common": "./common/index.ts",
@@ -28,7 +29,8 @@
     "./service": "./service/index.ts",
     "./service/protocol": "./service/protocol/index.ts",
     "./electron/env-tool": "./electron/env-tool.ts",
-    "./electron/download-manager": "./electron/download-manager.ts"
+    "./electron/download-manager": "./electron/download-manager.ts",
+    "./animation/": "./animation/"
   },
   "scripts": {
     "publish": "npm publish --access public"
@@ -44,7 +46,7 @@
   },
   "description": "TalexTouch series utils",
   "dependencies": {
-    "@vueuse/core": "^13.5.0",
+    "@vueuse/core": "^13.6.0",
     "path-browserify": "^1.0.1",
     "vue": "^3.5.18"
   },

@@ -10,9 +10,11 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import { genPluginManager } from '../../plugins/plugin-core'
 import { getConfig } from '../../core/storage'
 import { StorageList, type AppSetting } from '@talex-touch/utils'
+import { useWindowAnimation } from '@talex-touch/utils/animation/window.ts'
 
 let touchApp: TouchApp
 let coreBoxManagerInstance: CoreBoxManager | null = null
+const windowAnimation = useWindowAnimation()
 
 /**
  * Gets the current CoreBox window instance for direct communication
@@ -24,6 +26,8 @@ export function getCoreBoxWindow(): TouchWindow | null {
 
 async function createNewBoxWindow(closeCallback: Function) {
   const window = new TouchWindow({ ...BoxWindowOption })
+
+  windowAnimation.changeWindow(window)
 
   setTimeout(async () => {
     console.log('[CoreBox] NewBox created, injecting developing tools ...')
@@ -311,7 +315,7 @@ export class CoreBoxManager {
     const height = Math.min(length * 48 + 65, 550)
 
     this.nowWindow.window.setMinimumSize(900, height)
-    this.nowWindow.window.setSize(900, height, false)
+    this.nowWindow.window.setSize(900, height, process.platform === 'darwin')
 
     console.debug('[CoreBox] Expanded.')
   }

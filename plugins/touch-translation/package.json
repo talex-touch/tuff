@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@talex-touch/utils": "workspace:^",
-    "@vueuse/core": "^13.5.0",
+    "@vueuse/core": "^13.6.0",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1"
   },
@@ -25,7 +25,7 @@
     "@unocss/eslint-config": "^66.3.3",
     "@unocss/eslint-plugin": "^66.3.3",
     "@unocss/reset": "^66.3.3",
-    "@vitejs/plugin-vue": "^6.0.0",
+    "@vitejs/plugin-vue": "^6.0.1",
     "@vue-macros/volar": "^0.30.15",
     "@vue/test-utils": "^2.4.6",
     "eslint": "^9.32.0",
