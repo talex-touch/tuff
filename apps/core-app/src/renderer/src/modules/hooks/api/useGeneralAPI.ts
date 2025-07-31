@@ -1,28 +1,24 @@
-import {get} from "~/base/axios";
-import {createApp} from "vue";
-import TouchCaptcha from "~/views/others/captcha/TouchCaptcha.vue";
+import { createApp } from 'vue'
+import TouchCaptcha from '~/views/others/captcha/TouchCaptcha.vue'
 
-export async function useCaptcha(callback) {
-    if ( document.getElementById('touch-captcha') ) return
+export async function useCaptcha(callback: (res: any) => void): Promise<void> {
+  if (document.getElementById('touch-captcha')) return
 
-    const div = document.createElement('div')
+  const div = document.createElement('div')
 
-    document.body.appendChild(div)
+  document.body.appendChild(div)
 
-    div.id = 'touch-captcha'
+  div.id = 'touch-captcha'
 
-    const app = createApp(TouchCaptcha, {
+  const app = createApp(TouchCaptcha, {
+    func: async (res: any) => {
+      app.unmount()
 
-        func: async (res) => {
+      document.body.removeChild(div)
 
-            app.unmount()
+      callback(res)
+    }
+  })
 
-            document.body.removeChild(div)
-
-            callback(res)
-
-        }
-    })
-
-    app.mount('#touch-captcha')
+  app.mount('#touch-captcha')
 }

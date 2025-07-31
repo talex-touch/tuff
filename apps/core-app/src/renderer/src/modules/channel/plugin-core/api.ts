@@ -1,4 +1,4 @@
-import { touchChannel } from "@modules/channel/channel-core";
+import { touchChannel } from '../channel-core'
 
 // TODO PLUGIN-CRASHED
 // touchChannel.regChannel("plugin-crashed", async ({ reply, data }) => {
@@ -27,62 +27,62 @@ import { touchChannel } from "@modules/channel/channel-core";
 // });
 
 export interface IPluginManager {
-
   // Enable the plugin with the given name.
-  enablePlugin: (name: string) => void;
+  enablePlugin: (name: string) => Promise<any>
 
   // Disable the plugin with the given name.
-  disablePlugin: (name: string) => void;
+  disablePlugin: (name: string) => Promise<any>
 
   // Set the webviewInit flag of the plugin with the given name.
-  setPluginWebviewInit: (name: string) => void;
+  setPluginWebviewInit: (name: string) => any
 
   // Get the plugin with the given name.
-  getPlugin: (name: string) => Promise<Plugin>;
+  getPlugin: (name: string) => Promise<any>
 
   // Get the list of plugins.
-  getPluginList: () => Plugin[];
+  getPluginList: () => any[]
 
   // Change the active plugin.
-  changeActivePlugin: (name: string) => void;
+  changeActivePlugin: (name: string) => any
 
   // Export the plugin with the given name.
-  exportPlugin: (name: string, manifest: string, files: string) => void;
+  exportPlugin: (name: string, manifest: string, files: string) => any
 }
 
 class PluginManager {
-  async enablePlugin(name: string) {
-    return touchChannel.send("enable-plugin", { name });
+  async enablePlugin(name: string): Promise<any> {
+    return touchChannel.send('enable-plugin', { name })
   }
 
-  async disablePlugin(name: string) {
-    return touchChannel.send("disable-plugin", { name });
+  async disablePlugin(name: string): Promise<any> {
+    return touchChannel.send('disable-plugin', { name })
   }
 
-  setPluginWebviewInit(name: string) {
-    return touchChannel.sendSync("webview-init", { name });
+  setPluginWebviewInit(name: string): any {
+    return touchChannel.sendSync('webview-init', { name })
   }
 
-  async getPlugin(name: string) {
-    return touchChannel.send("get-plugin", { name });
-  }
-  getPluginList() {
-    return touchChannel.sendSync("plugin-list");
+  async getPlugin(name: string): Promise<any> {
+    return touchChannel.send('get-plugin', { name })
   }
 
-  changeActivePlugin(name: string = "") {
-    return touchChannel.sendSync("change-active", { name });
+  getPluginList(): any[] {
+    return touchChannel.sendSync('plugin-list')
   }
 
-  exportPlugin(name: string, manifest: string, files: string) {
-    console.error("TODO: exportPlugin");
-    return null;
+  changeActivePlugin(name: string = ''): any {
+    return touchChannel.sendSync('change-active', { name })
+  }
+
+  exportPlugin(_name: string, _manifest: string, _files: string): any {
+    console.error('TODO: exportPlugin')
+    return null
     // return asyncMainProcessMessage("pack-export", {
-    //   plugin: name,
-    //   manifest,
-    //   files,
+    //   plugin: _name,
+    //   manifest: _manifest,
+    //   files: _files,
     // });
   }
 }
 
-export const pluginManager: IPluginManager = new PluginManager();
+export const pluginManager: IPluginManager = new PluginManager()

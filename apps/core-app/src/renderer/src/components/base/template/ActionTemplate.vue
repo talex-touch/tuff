@@ -1,36 +1,41 @@
-<script name="ActionTemplate" lang="ts">
-export default defineComponent({
-  props: {
-    action: {
-      type: Function,
-      required: true
+<script setup lang="ts" name="ActionTemplate">
+import { inject, nextTick, useSlots } from 'vue'
+
+interface ActionContext {
+  checkForm: () => boolean
+  setLoading: (loading: boolean) => void
+  [key: string]: any
+}
+
+interface ActionTemplateProps {
+  action: (context: ActionContext) => void
+}
+
+const props = defineProps<ActionTemplateProps>()
+
+const checkForm = inject<() => boolean>('checkForm', () => true)
+const setLoading = inject<(loading: boolean) => void>('setLoading', () => {})
+
+const slots = useSlots()
+
+function addListener(el: Element): void {
+  if (!el) throw new Error('No element found.')
+
+  el.addEventListener('click', () => {
+    const context: ActionContext = {
+      checkForm,
+      setLoading
     }
-  },
-  render() {
-    const checkForm = inject('checkForm')
-    const setLoading = inject('setLoading')
+    props.action?.(context)
+  })
+}
 
-    const { $slots: slots, $props: props } = this
-
-    const slot = slots.default?.()
-
-    function addListener(el: Element) {
-      if (!el) throw new Error('No element found.')
-
-      el.addEventListener('click', () => {
-        props.action?.({
-          checkForm,
-          setLoading,
-          ...this
-        })
-      })
-    }
-
-    nextTick(() => {
-      slot.forEach(e => addListener(e.el))
+nextTick(() => {
+  const slot = slots.default?.()
+  if (slot) {
+    slot.forEach((e: any) => {
+      if (e.el) addListener(e.el)
     })
-
-    return slot
   }
 })
 </script>

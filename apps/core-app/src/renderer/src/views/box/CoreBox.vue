@@ -83,8 +83,11 @@ function handleAutoPaste(): void {
 watch(
   () => visibility.value,
   (val) => {
-    if (!val) return (boxOptions.lastHidden = Date.now())
-    else {
+    if (!val) {
+      boxOptions.lastHidden = Date.now()
+
+      return
+    } else {
       const inputEl = document.getElementById('core-box-input')
 
       setTimeout(() => inputEl?.focus(), 200)

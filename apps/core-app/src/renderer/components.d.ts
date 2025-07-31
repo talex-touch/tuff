@@ -17,7 +17,6 @@ declare module 'vue' {
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
-    ElSlider: typeof import('element-plus/es')['ElSlider']
     ElTag: typeof import('element-plus/es')['ElTag']
     EmptyAnimate: typeof import('./src/components/base/EmptyAnimate.vue')['default']
     FileTree: typeof import('./src/components/tree/FileTree.vue')['default']

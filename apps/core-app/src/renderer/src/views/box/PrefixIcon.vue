@@ -43,7 +43,7 @@ const originFeature = computed(() => props.feature?.originFeature)
       class="PrefixIcon-Feature fake-background cursor-pointer hover:op-75 flex gap-2 items-center transition-cubic"
       @click="emits('close')"
     >
-      <PluginIcon v-if="originFeature" :icon="originFeature.icon" :alt="originFeature.name" />
+      <PluginIcon v-if="originFeature" :icon="originFeature.icon as any" :alt="originFeature.name" />
       <span>{{ feature?.name }}</span>
       <div i-ri-close-line />
     </div>

@@ -1,35 +1,37 @@
 <script setup name="FormTemplate" lang="ts">
-import LoadingIcon from '../../icon/LoadingIcon.vue';
+import { ref, provide } from 'vue'
+import LoadingIcon from '../../icon/LoadingIcon.vue'
 
-defineProps({
-  title: {
-    type: String,
-    default: 'FormTemplate'
-  },
-  description: {
-    type: String,
-    default: 'This is a form template.'
-  },
-  routerBack: {
-    type: Boolean,
-    default: false
-  },
-  contentStyle: {
-    type: String,
-    default: "height: calc(100% - 10rem)"
-  }
-});
+interface FormField {
+  vnode: any
+  func: () => { access: boolean }
+}
+
+interface FormTemplateProps {
+  title?: string
+  description?: string
+  routerBack?: boolean
+  contentStyle?: string
+}
+
+withDefaults(defineProps<FormTemplateProps>(), {
+  title: 'FormTemplate',
+  description: 'This is a form template.',
+  routerBack: false,
+  contentStyle: 'height: calc(100% - 10rem)'
+})
 
 const loading = ref(false)
-const formFields = []
+const formFields: FormField[] = []
 
-provide('regFormFiled', (vnode, func) => {
+provide('regFormFiled', (vnode: any, func: () => { access: boolean }) => {
   formFields.push({
-    vnode, func
+    vnode,
+    func
   })
 })
 
-provide('checkForm', () => {
+provide('checkForm', (): boolean => {
   for (const field of formFields) {
     const { access } = field.func()
 
@@ -41,18 +43,20 @@ provide('checkForm', () => {
   return true
 })
 
-provide('setLoading', val => loading.value = val)
-
+provide('setLoading', (val: boolean) => (loading.value = val))
 </script>
 
 <template>
   <div :class="{ loading }" mx-10 my-6>
-
     <div pb-5 mb-10 border-b-1 border-b-solid border-gray-500>
       <slot name="header">
         <div items-center flex>
-          <div p-2 @click="() => $router.back()" v-if="routerBack"
-            class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic" />
+          <div
+            v-if="routerBack"
+            p-2
+            class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic"
+            @click="() => $router.back()"
+          />
           <p my-4 font-extrabold text-2xl>{{ title }}</p>
         </div>
         <span block text="base" op-75 font-normal>{{ description }}</span>
@@ -70,7 +74,6 @@ provide('setLoading', val => loading.value = val)
     <div class="Form-Loading transition-cubic">
       <loading-icon />
     </div>
-
   </div>
 </template>
 
@@ -97,18 +100,17 @@ provide('setLoading', val => loading.value = val)
   top: 50%;
 
   opacity: 0;
-  box-shadow: 0 0 0 1000px rgba(0, 0, 0, .25);
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.25);
   transform: translate(-50%, -50%);
 }
 
 :deep(.hover-button) {
   &:hover {
-
-    --fake-inner-opacity: .5;
+    --fake-inner-opacity: 0.5;
   }
 
   &:active {
-    transform: scale(.75);
+    transform: scale(0.75);
   }
 
   cursor: pointer;

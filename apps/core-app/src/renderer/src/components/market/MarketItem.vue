@@ -1,10 +1,20 @@
 <script setup name="MarketItem" lang="ts">
-const props = defineProps(['item'])
+interface MarketItemProps {
+  item: any;
+}
+
+defineProps<MarketItemProps>()
 </script>
 
 <template>
-  <li  class="MarketItem-Container fake-background">
-    {{ item }}
+  <li class="MarketItem-Container fake-background">
+    <div v-if="typeof item === 'object'">
+      <h3>{{ item.name || 'Unnamed Item' }}</h3>
+      <p>{{ item.description || 'No description available' }}</p>
+    </div>
+    <div v-else>
+      {{ item }}
+    </div>
   </li>
 </template>
 
