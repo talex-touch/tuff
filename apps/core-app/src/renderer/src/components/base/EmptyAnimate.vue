@@ -2,19 +2,13 @@
   <div class="EmptyAnimate-Container">
     <LottieFrame :data="empty" />
 
-    <p :data-text="$t('base.empty-select')">{{ $t('base.empty-select') }}</p>
+    <!-- <p :data-text="$t('base.empty-select')">{{ $t('base.empty-select') }}</p> -->
   </div>
 </template>
 
-<script>
-export default {
-  name: "EmptyAnimate"
-}
-</script>
-
-<script lang="ts" setup>
+<script name="EmptyAnimate" lang="ts" setup>
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
-import { $t } from '~/modules/lang'
+// import { $t } from '~/modules/lang'
 import empty from '~/assets/lotties/empty.json'
 
 </script>

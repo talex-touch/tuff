@@ -5,7 +5,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
  * Props definition
  * @prop modelValue - The currently selected value
  */
-const _props = defineProps<{
+defineProps<{
   modelValue: string | number
 }>()
 
@@ -17,7 +17,7 @@ const isActive = ref(false)
 /**
  * Handles document-level click events to determine if the component should be closed.
  * Closes the component if the click occurred outside of the container.
- * 
+ *
  * @param event - MouseEvent triggered on document
  */
 function handleDocumentClick(event: MouseEvent): void {
