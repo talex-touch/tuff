@@ -8,7 +8,7 @@
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
+  [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
 </div>
 
@@ -16,9 +16,9 @@
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_small)
 
-> 2.0.0 version is now under dev and alpha test.
+> 2.0.0 version is now under development and beta testing.
 
-We are proud that our re-designed 2.0.0 version is developing and under test.
+We are proud that our re-designed 2.0.0 version is actively developing and under beta test.
 Download from the `releases` with pre-release and fork this project with making contributions, any `Pull Request` and `Issues` are welcomed!
 
 Download it and feedback!
@@ -101,12 +101,12 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 🌀 Front-end
 
-- Electron ^37.3.0
-- Vue.js: ^3.4.23
-- Vue Router: ^4.3.0
-- Element Plus: ^2.7.0
-- Milkdown: ^7.3.6
-- Lottie-web: ^5.11.0
+- Electron ^37.2.4
+- Vue.js: ^3.5.18
+- Vue Router: ^4.5.1
+- Element Plus: ^2.10.4
+- Milkdown: ^7.15.2
+- Lottie-web: ^5.13.0
 
 #### 💠 Back-end
 
@@ -115,9 +115,9 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 🔧 Build Tools
 
-- Vite: ^5.2.9
-- Electron Builder: ^24.13.3
-- Sass: ^1.75.0
+- Vite: ^7.0.6
+- Electron Builder: ^25.1.8
+- Sass: ^1.89.2
 
 #### [Here](./.github/docs/contribution/CONTRIBUTING.md)
 
