@@ -1,18 +1,20 @@
-<script lang="ts" name="AgreementTemplate" setup>
-import InteractiveTerminal from "../terminal/InteractiveTerminal.vue";
+<script lang="ts" name="TerminalTemplate" setup>
+import InteractiveTerminal from '../terminal/InteractiveTerminal.vue'
 
-const props = defineProps({
-  title: {
-    type: String,
-    default: "TERMINAL",
-  },
-});
+withDefaults(
+  defineProps<{
+    title?: string
+  }>(),
+  {
+    title: 'TERMINAL'
+  }
+)
 
-const terminal = ref();
+const terminal = ref()
 
 onMounted(() => {
-  console.log("a", terminal.value);
-});
+  console.log('[TerminalTemplate] terminal reference', terminal.value)
+})
 </script>
 
 <template>

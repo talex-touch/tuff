@@ -1,62 +1,62 @@
 <template>
   <div :class="{ close }" class="TBlowDialog-Wrapper">
     <div class="TBlowDialog-Container">
-      <component v-if="renderComp" :is="renderComp" />
-      <component v-else-if="comp" :is="comp" />
+      <component :is="renderComp" v-if="renderComp" />
+      <component :is="comp" v-else-if="comp" />
       <template v-else>
         <p>{{ title }}</p>
         <div class="TBlowDialog-Content">
           <span style="position: relative; height: 100%" v-html="message"></span>
         </div>
-        <div @click="destroy" v-wave class="TBlowDialog-Confirm">Confirm</div>
+        <div v-wave class="TBlowDialog-Confirm" @click="destroy">Confirm</div>
       </template>
     </div>
   </div>
 </template>
 
 <script lang="ts" name="TBlowDialog" setup>
-import { defineComponent, onMounted, provide, ref } from "vue";
-import { sleep } from "@talex-touch/utils/common";
+import { defineComponent, onMounted, provide, ref } from 'vue'
+import { sleep } from '@talex-touch/utils/common'
 
-const close = ref(false);
-const props = defineProps(["close", "title", "message", "comp", "render"]);
+const close = ref(false)
+const props = defineProps(['close', 'title', 'message', 'comp', 'render'])
 
-const renderComp = ref(null);
+const renderComp = ref(null)
 
 onMounted(() => {
   if (props.render) {
     renderComp.value = defineComponent({
-      render: props.render,
-    });
+      render: props.render
+    })
   }
 
-  const app = document.getElementById("app")!;
+  const app = document.getElementById('app')!
 
   Object.assign(app.style, {
-    transition: ".75s",
-    transform: "scale(1.25)",
-    opacity: ".75",
-  });
-});
+    transition: '.75s',
+    transform: 'scale(1.25)',
+    opacity: '.75'
+  })
+})
 
 async function destroy() {
-  const app = document.getElementById("app")!;
+  const app = document.getElementById('app')!
 
   Object.assign(app.style, {
-    transform: "scale(1)",
-    opacity: "1",
-  });
+    transform: 'scale(1)',
+    opacity: '1'
+  })
 
-  close.value = true;
+  close.value = true
 
-  await sleep(550);
+  await sleep(550)
 
-  app.style.cssText = "";
+  app.style.cssText = ''
 
-  props.close();
+  props.close()
 }
 
-provide("destroy", destroy);
+provide('destroy', destroy)
 </script>
 
 <style lang="scss">

@@ -15,6 +15,7 @@ let ipcRenderer: IpcRenderer
 if (typeof window === 'undefined') {
   ipcRenderer = require('electron').ipcRenderer
 } else {
+  // @ts-ignore
   ipcRenderer = window.electron.ipcRenderer as unknown as IpcRenderer
 }
 

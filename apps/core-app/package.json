@@ -18,7 +18,10 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:linux": "npm run build && electron-builder --linux",
+    "build:snapshot:win": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --win",
+    "build:snapshot:mac": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --mac",
+    "build:snapshot:linux": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
