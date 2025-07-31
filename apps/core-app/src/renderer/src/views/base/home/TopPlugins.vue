@@ -1,129 +1,169 @@
+<!--
+  TopPlugins Component
+
+  Displays a grid of top plugins with interactive hover effects.
+  Shows plugin information including name, description, downloads, and rating.
+-->
 <script setup lang="ts" name="TopPlugins">
-const props = defineProps<{
-  modelValue?: boolean;
-}>();
+// Define the structure for plugin data
+interface Plugin {
+  name: string
+  url: string
+  description: string
+  icon: string
+  downloads: string
+  rating: number
+}
 
-const topPlugins = reactive([
+// Reactive array of top plugins data
+const topPlugins = reactive<Plugin[]>([
   {
-    name: "Smart Clipboard",
-    url: "#",
-    description: "Advanced clipboard manager with history and sync",
-    icon: "ri-clipboard-line",
-    downloads: "2.3M",
-    rating: 4.8,
+    name: 'Smart Clipboard',
+    url: '#',
+    description: 'Advanced clipboard manager with history and sync',
+    icon: 'ri-clipboard-line',
+    downloads: '2.3M',
+    rating: 4.8
   },
   {
-    name: "Universal Translator",
-    url: "#",
-    description: "Real-time translation for 100+ languages",
-    icon: "ri-translate-2",
-    downloads: "1.8M",
-    rating: 4.7,
+    name: 'Universal Translator',
+    url: '#',
+    description: 'Real-time translation for 100+ languages',
+    icon: 'ri-translate-2',
+    downloads: '1.8M',
+    rating: 4.7
   },
   {
-    name: "Quick Search",
-    url: "#",
-    description: "Lightning-fast search across all your files and web",
-    icon: "ri-search-line",
-    downloads: "3.1M",
-    rating: 4.9,
+    name: 'Quick Search',
+    url: '#',
+    description: 'Lightning-fast search across all your files and web',
+    icon: 'ri-search-line',
+    downloads: '3.1M',
+    rating: 4.9
   },
   {
-    name: "AI Assistant",
-    url: "#",
-    description: "Your intelligent coding companion powered by AI",
-    icon: "ri-robot-line",
-    downloads: "1.5M",
-    rating: 4.6,
+    name: 'AI Assistant',
+    url: '#',
+    description: 'Your intelligent coding companion powered by AI',
+    icon: 'ri-robot-line',
+    downloads: '1.5M',
+    rating: 4.6
   },
   {
-    name: "Password Manager",
-    url: "#",
-    description: "Secure password generation and management",
-    icon: "ri-shield-keyhole-line",
-    downloads: "2.7M",
-    rating: 4.8,
+    name: 'Password Manager',
+    url: '#',
+    description: 'Secure password generation and management',
+    icon: 'ri-shield-keyhole-line',
+    downloads: '2.7M',
+    rating: 4.8
   },
   {
-    name: "Color Picker Pro",
-    url: "#",
-    description: "Advanced color picker with palette management",
-    icon: "ri-palette-line",
-    downloads: "890K",
-    rating: 4.5,
+    name: 'Color Picker Pro',
+    url: '#',
+    description: 'Advanced color picker with palette management',
+    icon: 'ri-palette-line',
+    downloads: '890K',
+    rating: 4.5
   },
   {
-    name: "Screenshot Tool",
-    url: "#",
-    description: "Capture, annotate and share screenshots instantly",
-    icon: "ri-screenshot-line",
-    downloads: "2.1M",
-    rating: 4.7,
+    name: 'Screenshot Tool',
+    url: '#',
+    description: 'Capture, annotate and share screenshots instantly',
+    icon: 'ri-screenshot-line',
+    downloads: '2.1M',
+    rating: 4.7
   },
   {
-    name: "File Organizer",
-    url: "#",
-    description: "Smart file organization and duplicate finder",
-    icon: "ri-folder-line",
-    downloads: "1.2M",
-    rating: 4.4,
-  },
-]);
+    name: 'File Organizer',
+    url: '#',
+    description: 'Smart file organization and duplicate finder',
+    icon: 'ri-folder-line',
+    downloads: '1.2M',
+    rating: 4.4
+  }
+])
 
-function handleMove(event: MouseEvent) {
-  // 获取鼠标位置
-  var mouseX = event.pageX;
-  var mouseY = event.pageY;
+/**
+ * Handle mouse move event to create interactive hover effect
+ * Updates CSS variables for each plugin element based on mouse position
+ * @param event - Mouse move event
+ * @returns void
+ */
+function handleMove(event: MouseEvent): void {
+  // Get mouse position
+  const mouseX = event.pageX
+  const mouseY = event.pageY
 
-  var elements = document.querySelectorAll(".BoxContent .element");
-  // 遍历元素并输出距离鼠标的坐标
-  for (var i = 0; i < elements.length; i++) {
-    var element: any = elements[i];
-    var rect = element.getBoundingClientRect();
-    var elementX = rect.left + window.pageXOffset;
-    var elementY = rect.top + window.pageYOffset;
+  const elements = document.querySelectorAll('.BoxContent .element')
+  // Iterate through elements and calculate distance from mouse
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i] as HTMLElement
+    const rect = element.getBoundingClientRect()
+    const elementX = rect.left + window.pageXOffset
+    const elementY = rect.top + window.pageYOffset
 
-    var distanceX = mouseX - elementX;
-    var distanceY = mouseY - elementY;
+    const distanceX = mouseX - elementX
+    const distanceY = mouseY - elementY
 
-    element.style.setProperty("--op", '1');
-    element.style.setProperty("--x", distanceX + "px");
-    element.style.setProperty("--y", distanceY + "px");
+    element.style.setProperty('--op', '1')
+    element.style.setProperty('--x', distanceX + 'px')
+    element.style.setProperty('--y', distanceY + 'px')
   }
 }
 
-function cancelColor() {
-  document.querySelectorAll(".BoxContent .element").forEach((element) => {
-    const htmlElement = element as HTMLElement;
-    htmlElement.style.setProperty("--op", '0');
-    // htmlElement.style.setProperty("--x", "-1000px");
-    // htmlElement.style.setProperty("--y", "-1000px");
-  });
+/**
+ * Reset hover effect when mouse leaves the container
+ * Sets opacity to 0 for all plugin elements
+ * @returns void
+ */
+function cancelColor(): void {
+  document.querySelectorAll('.BoxContent .element').forEach((element) => {
+    const htmlElement = element as HTMLElement
+    htmlElement.style.setProperty('--op', '0')
+  })
 }
 </script>
 
+<!--
+  TopPlugins Component Template
+
+  Displays a responsive grid of top plugins with interactive hover effects.
+-->
 <template>
+  <!-- Main wrapper for top plugins section -->
   <div class="BoxContentWrapper">
+    <!-- Header section with title and subtitle -->
     <div class="BoxContent-Header">
       <p text-xl font-bold>TOP PLUGINS</p>
       <span text-lg>Popular worldwide choices</span>
     </div>
 
-    <div @mouseleave="cancelColor" @mousemove="handleMove" class="BoxContent">
-      <div class="BoxContent-Item col" v-for="item in topPlugins" :key="item.name">
+    <!-- Plugins grid container with mouse event handlers -->
+    <div class="BoxContent" @mouseleave="cancelColor" @mousemove="handleMove">
+      <!-- Individual plugin item -->
+      <div v-for="item in topPlugins" :key="item.name" class="BoxContent-Item col">
+        <!-- Plugin element with interactive hover effect -->
         <div class="element">
+          <!-- Plugin content area -->
           <div class="BoxContent-ItemContent">
+            <!-- Plugin icon -->
             <div class="plugin-icon">
               <i :class="`i-${item.icon}`"></i>
             </div>
+            <!-- Plugin information -->
             <div class="plugin-info">
+              <!-- Plugin name -->
               <h3>{{ item.name }}</h3>
+              <!-- Plugin description -->
               <p class="plugin-description">{{ item.description }}</p>
+              <!-- Plugin statistics -->
               <div class="plugin-stats">
+                <!-- Download count -->
                 <span class="downloads">
                   <i class="ri-download-line"></i>
                   {{ item.downloads }}
                 </span>
+                <!-- Rating -->
                 <span class="rating">
                   <i class="ri-star-fill"></i>
                   {{ item.rating }}
@@ -131,6 +171,7 @@ function cancelColor() {
               </div>
             </div>
           </div>
+          <!-- Mask element for visual effect -->
           <div class="mask" />
         </div>
       </div>
@@ -138,12 +179,19 @@ function cancelColor() {
   </div>
 </template>
 
+<!--
+  TopPlugins Component Styles
+
+  SCSS styles for the top plugins section including responsive grid layout and interactive effects.
+-->
 <style lang="scss">
+/** Header styles for top plugins section */
 .BoxContent-Header {
   display: flex;
   align-items: baseline;
   margin-bottom: 1.5rem;
 
+  /** Title styles */
   p {
     opacity: 0.85;
     font-weight: 700;
@@ -152,6 +200,7 @@ function cancelColor() {
     letter-spacing: 0.5px;
   }
 
+  /** Subtitle styles */
   span {
     margin-left: 1rem;
     opacity: 0.6;
@@ -160,6 +209,7 @@ function cancelColor() {
   }
 }
 
+/** Main wrapper styles */
 .BoxContentWrapper {
   position: relative;
   padding: 2rem;
@@ -169,6 +219,7 @@ function cancelColor() {
   margin: 0 auto;
 }
 
+/** Plugins grid container styles */
 .BoxContent {
   margin: 1rem 0;
   padding: 0;
@@ -177,22 +228,26 @@ function cancelColor() {
   gap: 1.5rem;
   align-items: stretch;
 
+  /** Mobile responsive styles */
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
 
+  /** Large screen styles */
   @media (min-width: 1400px) {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
+/** Column styles for grid items */
 .col {
   height: 140px;
   padding: 0;
   margin: 0;
 }
 
+/** Plugin element styles with interactive effects */
 .element {
   background: var(--el-fill-color-light);
   height: 100%;
@@ -201,18 +256,21 @@ function cancelColor() {
   transition: all 0.3s ease;
   cursor: pointer;
 
+  /** Hover state styles */
   &:hover {
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   }
 }
 
+/** Plugin item styles */
 .BoxContent-Item {
   height: 140px;
   width: 100%;
 }
 
+/** Interactive hover effect styles */
 .element::before {
-  content: "";
+  content: '';
   position: absolute;
   width: calc(100% + 3px);
   height: calc(100% + 3px);
@@ -230,6 +288,7 @@ function cancelColor() {
   );
 }
 
+/** Plugin content area styles */
 .BoxContent-ItemContent {
   z-index: 1;
   position: absolute;
@@ -248,6 +307,7 @@ function cancelColor() {
   box-sizing: border-box;
   overflow: hidden;
 
+  /** Plugin icon styles */
   .plugin-icon {
     flex-shrink: 0;
     width: 52px;
@@ -259,6 +319,7 @@ function cancelColor() {
     border-radius: 14px;
     transition: all 0.3s ease;
 
+    /** Icon styles */
     i {
       font-size: 26px;
       color: var(--el-color-primary);
@@ -266,6 +327,7 @@ function cancelColor() {
     }
   }
 
+  /** Hover effect for plugin icon */
   .element:hover .plugin-icon {
     background: var(--el-color-primary-light-8);
     transform: scale(1.05);
@@ -275,6 +337,7 @@ function cancelColor() {
     }
   }
 
+  /** Plugin information styles */
   .plugin-info {
     flex: 1;
     min-width: 0;
@@ -282,6 +345,7 @@ function cancelColor() {
     flex-direction: column;
     justify-content: space-between;
 
+    /** Plugin name styles */
     h3 {
       margin: 0 0 0.5rem 0;
       font-size: 17px;
@@ -291,6 +355,7 @@ function cancelColor() {
       color: var(--el-text-color-primary);
     }
 
+    /** Plugin description styles */
     .plugin-description {
       margin: 0 0 auto 0;
       font-size: 13px;
@@ -306,6 +371,7 @@ function cancelColor() {
       min-height: 3.6em; /* 确保有足够空间显示3行 */
     }
 
+    /** Plugin statistics styles */
     .plugin-stats {
       display: flex;
       gap: 1.5rem;
@@ -313,21 +379,25 @@ function cancelColor() {
       opacity: 0.75;
       margin-top: 0.5rem;
 
+      /** Statistics item styles */
       span {
         display: flex;
         align-items: center;
         gap: 0.3rem;
         font-weight: 500;
 
+        /** Icon styles */
         i {
           font-size: 12px;
         }
       }
 
+      /** Download count styles */
       .downloads {
         color: var(--el-color-info);
       }
 
+      /** Rating styles */
       .rating {
         color: var(--el-color-warning);
 
@@ -339,6 +409,7 @@ function cancelColor() {
   }
 }
 
+/** Mask element styles */
 .element .mask {
   position: absolute;
   inset: 0;

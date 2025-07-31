@@ -101,7 +101,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 🌀 Front-end
 
-- Electron ^29.3.0
+- Electron ^37.3.0
 - Vue.js: ^3.4.23
 - Vue Router: ^4.3.0
 - Element Plus: ^2.7.0
@@ -110,7 +110,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 #### 💠 Back-end
 
-- Node.js: ^16.0.0 || >=18.0.0
+- Node.js: >=22.0.0
 - Koa: ^2.7.0
 
 #### 🔧 Build Tools

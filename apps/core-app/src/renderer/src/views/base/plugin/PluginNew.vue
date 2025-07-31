@@ -1,13 +1,24 @@
+<!--
+  PluginNew Component
+
+  Handles the creation of new plugins with template selection and form validation.
+  Checks environment requirements and provides template options for plugin development.
+-->
 <script setup lang="ts" name="PluginNew">
+// Import template components
 import FormTemplate from '@comp/base/template/FormTemplate.vue';
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue';
 import BrickTemplate from '@comp/base/template/BrickTemplate.vue';
 import LineTemplate from '@comp/base/template/LineTemplate.vue';
 import ActionTemplate from '@comp/base/template/ActionTemplate.vue';
+
+// Import UI components
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import FlatInput from '@comp/base/input/FlatInput.vue'
 import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue';
 import TCheckBox from '@comp/base/checkbox/TCheckBox.vue';
+
+// Import utility functions
 import { forTouchTip } from '~/modules/mention/dialog-mention';
 import { touchChannel } from '~/modules/channel/channel-core';
 import { getNpmVersion, checkGlobalPackageExist } from '@talex-touch/utils/electron/env-tool'
@@ -15,15 +26,54 @@ import { popperMention } from '~/modules/mention/dialog-mention'
 import { createVNode } from 'vue'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue';
 
+// Reactive references
 const arrow = ref()
+
+// Inject toggle function from parent component
 const toggleNewPlugin: any = inject('toggleNewPlugin')
+
+// Lifecycle hook to initialize component
 onMounted(() => {
   toggleNewPlugin(arrow.value)
 
   envCheck()
 })
 
-const plugin: any = reactive({
+// Define the structure for plugin data
+interface Plugin {
+  template: boolean;
+  name: string;
+  desc: string;
+  version: string;
+  icon: {
+    type: string;
+    value: string;
+  };
+  dev: {
+    enable: ComputedRef<boolean>;
+    address: string;
+  };
+  readme: string;
+  openInVSC: boolean;
+  agreement: boolean;
+}
+
+// Define the structure for environment options
+interface EnvOptions {
+  node?: {
+    type: string;
+    version?: number[];
+    msg?: string;
+  };
+  degit?: {
+    type: string;
+    version?: string;
+    msg?: string;
+  };
+}
+
+// Reactive plugin data object
+const plugin = reactive<Plugin>({
   template: false,
   name: "",
   desc: "",
@@ -33,7 +83,7 @@ const plugin: any = reactive({
     value: "i-ri-remixicon-line"
   },
   dev: {
-    enable: computed(() => plugin.dev.address),
+    enable: computed(() => !!plugin.dev.address),
     address: ""
   },
   readme: "# Demo Plugin.",
@@ -41,25 +91,30 @@ const plugin: any = reactive({
   agreement: false
 })
 
-const envOptions = reactive < {
-  node?: any,
-  degit?: any
-}> ({})
+// Reactive environment options object
+const envOptions = reactive<EnvOptions>({})
 
-async function envCheck() {
+/**
+ * Check environment requirements for plugin creation
+ * Verifies Node.js version and degit installation
+ * @returns Promise<void>
+ */
+async function envCheck(): Promise<void> {
   const res = await getNpmVersion()
   if (!res) {
-    return envOptions.node = {
+    envOptions.node = {
       msg: "Cannot find node.js, please install it first.", type: "error"
     }
+    return
   }
 
-  // not less than 8
+  // Check if Node.js version is not less than 8
   const nodeVersion = res.split(".").map(Number)
   if (nodeVersion[0] < 8) {
-    return envOptions.node = {
+    envOptions.node = {
       msg: "Node.js version is too low, please upgrade it to 8 or higher.", type: "error"
     }
+    return
   }
 
   envOptions.node = {
@@ -69,12 +124,13 @@ async function envCheck() {
 
   const degit = await checkGlobalPackageExist("degit")
   if (!degit) {
-    return envOptions.degit = {
+    envOptions.degit = {
       msg: "Cannot find degit, please install it first.", type: "error"
     }
+    return
   }
 
-  return Object.assign(envOptions, {
+  Object.assign(envOptions, {
     degit: {
       type: 'success',
       ...degit
@@ -82,7 +138,13 @@ async function envCheck() {
   })
 }
 
-function createAction(ctx: any) {
+/**
+ * Handle plugin creation action
+ * Validates form and sends plugin data to backend
+ * @param ctx - Action context containing form validation functions
+ * @returns Promise<void>
+ */
+async function createAction(ctx: any): Promise<void> {
   const { checkForm, setLoading } = ctx
 
   const result = checkForm()
@@ -90,21 +152,25 @@ function createAction(ctx: any) {
   if (!result) return
 
   if (!plugin.agreement) {
-    return forTouchTip("Attention", "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.")
+    await forTouchTip("Attention", "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.")
+    return
   }
 
   setLoading(true)
 
   touchChannel.send('plugin:new', plugin)
-
 }
 
-async function handleInstallDegit() {
+/**
+ * Handle degit installation
+ * Opens a terminal dialog to install degit globally
+ * @returns Promise<void>
+ */
+async function handleInstallDegit(): Promise<void> {
   await popperMention("", () => createVNode(TerminalTemplate, {
     title: "Installing degit",
     command: 'npm install -g degit'
   }))
-
 }
 </script>
 
@@ -124,7 +190,7 @@ async function handleInstallDegit() {
         Templates
         <span>
           <span color="green-2" v-if="envOptions.node?.type ==='success'">
-            <span relative top=".5" inline-block i-ri-nodejs-fill />{{ envOptions.node?.version.join('.') }}
+            <span relative top=".5" inline-block i-ri-nodejs-fill />{{ envOptions.node?.version?.join('.') }}
           </span>
           <span color="red-4" v-else>
             <span relative top=".5" inline-block i-ri-nodejs-fill />{{ envOptions.node?.msg }}

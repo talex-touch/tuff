@@ -1,94 +1,139 @@
 <template>
-  <FlatInput @keydown.enter="next" v-model="value" icon="lock" password="true">
-  </FlatInput>
+  <!-- Password Input View -->
+  <FlatInput v-model="value" icon="lock" password="true" @keydown.enter="next"> </FlatInput>
   <div style="display: flex; gap: 16px">
     <FlatButton @click="last">
-      {{ $t("base.last_step") }}
+      {{ $t('base.last_step') }}
     </FlatButton>
     <FlatButton @click="next">
-      {{ $t("base.step") }}
+      {{ $t('base.step') }}
     </FlatButton>
   </div>
 </template>
 
 <script lang="ts" name="PasswordView" setup>
-import FlatInput from "@comp/base/input/FlatInput.vue";
-import { inject, onMounted, ref } from "vue";
-import FlatButton from "@comp/base/button//FlatButton.vue";
+/**
+ * Password Input View Component
+ *
+ * This component handles the password input during user authentication.
+ * It supports both login and registration flows, with appropriate validation
+ * and navigation to the next step.
+ *
+ * Features:
+ * - Password input field with masking
+ * - Navigation buttons (previous/next)
+ * - Integration with authentication APIs
+ * - Support for both login and registration flows
+ * - Error handling and user feedback
+ */
+
+import FlatInput from '@comp/base/input/FlatInput.vue'
+import { inject, onMounted, ref } from 'vue'
+import FlatButton from '@comp/base/button/FlatButton.vue'
 // import { $t } from "@modules/lang";
-import { useCaptcha } from "@modules/hooks/api/useGeneralAPI";
-import EmailVerifyView from "~/views/others/account/EmailVerifyView.vue";
-import AccountView from "~/views/others/account/AccountView.vue";
-import { useLogin, useRegisterVerification } from "@modules/hooks/api/useAccount";
-import SignSucceed from "~/views/others/account/SignSucceed.vue";
+import { useCaptcha } from '~/modules/hooks/api/useGeneralAPI'
+import EmailVerifyView from '~/views/others/account/EmailVerifyView.vue'
+import AccountView from '~/views/others/account/AccountView.vue'
+import { useLogin, useRegisterVerification } from '~/modules/hooks/api/useAccount'
+import SignSucceed from '~/views/others/account/SignSucceed.vue'
 
-const value = ref("");
-const step = inject("step");
-const form = inject("form");
+// Reactive references
+const value = ref('')
+const step: any = inject('step')
+const form: any = inject('form')
 
+/**
+ * Setup component on mount
+ * Initializes the password value from form data
+ */
 onMounted(() => {
-  value.value = form().password;
-});
+  value.value = form().password
+})
 
-function last() {
-  step(() => [{ pass: true, comp: AccountView }]);
+/**
+ * Navigate to the previous step (account view)
+ *
+ * @returns void
+ */
+function last(): void {
+  step(() => [{ pass: true, comp: AccountView }])
 }
 
-async function next() {
-  step(() => [{ pass: false, loading: true }]);
+/**
+ * Handle next step navigation
+ * Processes either login or registration based on form type
+ *
+ * @returns Promise<void>
+ */
+async function next(): Promise<void> {
+  // Show loading state
+  step(() => [{ pass: false, loading: true }])
 
-  const { type, email, username } = form();
+  // Extract form data
+  const { type, email, username } = form()
 
-  async function verifyAccount(captcha) {
-    const password = value.value;
+  /**
+   * Handle account verification for registration
+   *
+   * @param captcha - Captcha token for security
+   * @returns Promise<void>
+   */
+  async function verifyAccount(captcha: string): Promise<void> {
+    const password = value.value
 
-    const res = await useRegisterVerification(captcha, email, username, password);
+    const res: any = await useRegisterVerification(captcha, email, username, password)
 
     if (res.data && res.code === 200) {
       step(() => [
         { pass: true, comp: EmailVerifyView },
-        { password, hex: res.data },
-      ]);
+        { password, hex: res.data }
+      ])
     } else {
       step(() => [
         { pass: false, message: res.error.msg ? res.error.msg[0] : res.message },
         () => {
-          step(() => [{ pass: true, comp: AccountView }]);
-        },
-      ]);
+          step(() => [{ pass: true, comp: AccountView }])
+        }
+      ])
     }
   }
 
-  async function loginAccount(captcha) {
-    const password = value.value;
+  /**
+   * Handle account login
+   *
+   * @param captcha - Captcha token for security
+   * @returns Promise<void>
+   */
+  async function loginAccount(captcha: string): Promise<void> {
+    const password = value.value
 
-    const res = await useLogin(captcha, username, password);
+    const res: any = await useLogin(captcha, username, password)
 
     if (res.data && res.code === 200) {
-      window.$storage.account.analyzeFromObj(res.data);
-
-      step(() => [{ pass: true, comp: SignSucceed }]);
+      // Login successful, update account storage
+      window.$storage.account.analyzeFromObj(res.data)
+      step(() => [{ pass: true, comp: SignSucceed }])
     } else {
       step(() => [
         { pass: false, message: res.error ? res.error : res.message },
         () => {
-          step(() => [{ pass: true, comp: AccountView }]);
-        },
-      ]);
+          step(() => [{ pass: true, comp: AccountView }])
+        }
+      ])
     }
   }
 
-  await useCaptcha((res) => {
-    form().password = value.value;
+  // Use captcha and process authentication
+  await useCaptcha((res: string) => {
+    form().password = value.value
 
-    if (type === "login") {
-      // login logic
-      loginAccount(res);
+    if (type === 'login') {
+      // Login logic
+      loginAccount(res)
     } else {
-      verifyAccount(res);
+      // Registration logic
+      verifyAccount(res)
     }
-
-    // step(() => [{ pass: true, comp: EmailVerifyView }, { password: value.value }]) // TODO: md5
-  });
+  })
 }
 </script>

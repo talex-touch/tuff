@@ -1,15 +1,19 @@
+// Import utility functions and types
 import { touchChannel } from '~/modules/channel/channel-core'
 // import cprocess from "child_process";
 import { ref } from 'vue'
 import type { IFeatureCommand, IPluginIcon } from '@talex-touch/utils/plugin'
 import { handleItemData } from './search-core'
 
-export const apps = ref([])
+// Reactive references for apps and features
+export const apps = ref<any[]>([])
 export const features = ref<any[]>([])
 
+// Variables for refresh cooldown management
 let lastRefreshTime = 0
 const REFRESH_COOLDOWN = 15000
 
+// Enum for different box modes
 export const enum BoxMode {
   INPUT,
   COMMAND,
@@ -18,14 +22,17 @@ export const enum BoxMode {
   FEATURE
 }
 
+// Initialize the search system after a short delay
 setTimeout(initialize, 200)
 
+// Search list containing apps and features
 const searchList: any = [apps, features]
 
 /**
  * Initializes the search system and sets up feature update listeners
+ * @returns Promise<void>
  */
-async function initialize() {
+async function initialize(): Promise<void> {
   await refreshSearchList(true)
 
   touchChannel.regChannel('core-box-updated:features', () => {
@@ -36,10 +43,11 @@ async function initialize() {
 /**
  * Refreshes the search list with cooldown protection
  * @param forceRefresh - Whether to bypass cooldown protection
+ * @returns Promise<void>
  */
-export async function refreshSearchList(forceRefresh = false) {
+export async function refreshSearchList(forceRefresh = false): Promise<void> {
   const currentTime = Date.now()
-  const timeSinceLastRefresh = currentTime - lastRefreshTime
+  const timeSinceLastRefresh = currentTime - lastRefreshTime;
 
   console.log(
     `[SearchBox] refreshSearchList called - forceRefresh: ${forceRefresh}, timeSinceLastRefresh: ${timeSinceLastRefresh}ms, cooldown: ${REFRESH_COOLDOWN}ms`
@@ -75,19 +83,22 @@ export async function refreshSearchList(forceRefresh = false) {
 
 /**
  * Forces a refresh of the search list bypassing cooldown
+ * @returns Promise<void>
  */
-export async function forceRefreshSearchList() {
-  return await refreshSearchList(true)
+export async function forceRefreshSearchList(): Promise<void> {
+  return await refreshSearchList(true);
 }
 
+// Application usage count stored in localStorage
 export const appAmo: any = JSON.parse(localStorage.getItem('app-count') || '{}')
 
 /**
  * Executes a search item (app or plugin feature)
  * @param item - The item to execute
  * @param query - The search query that triggered the execution
+ * @returns string | void
  */
-export function execute(item: any, query: any = '') {
+export function execute(item: any, query: any = ''): string | void {
   if (!item) return
 
   console.log(`[SearchBox] execute() called - item:`, item, `query: "${query}"`)
@@ -147,7 +158,7 @@ export function execute(item: any, query: any = '') {
       console.log(
         `[SearchBox] execute() - item has push=true, returning "push" after triggering feature`
       )
-      return 'push'
+      return 'push';
     }
   }
 }
@@ -215,6 +226,7 @@ export interface SearchItem {
   [key: string]: any
 }
 
+// Interface for search options
 export interface SearchOptions {
   mode: BoxMode
 }
@@ -225,13 +237,14 @@ export interface SearchOptions {
  * @param options - Search options including mode
  * @param info - Additional search context information
  * @param callback - Callback function called for each search result
+ * @returns Promise<void>
  */
 export async function search(
   keyword: string,
   options: SearchOptions,
   info: any,
   callback: (res: SearchItem) => void
-) {
+): Promise<void> {
   console.log(
     `[SearchBox] search() called - keyword: "${keyword}", mode: ${options.mode}, info:`,
     info
@@ -240,7 +253,7 @@ export async function search(
   // Remove automatic refresh on every search - now only refresh when CoreBox is shown
   // await refreshSearchList()
 
-  const results = []
+  const results: SearchItem[] = [];
 
   if (options.mode === BoxMode.FEATURE) {
     console.log(`[SearchBox] FEATURE mode - sending trigger-plugin-feature-input-changed`)
@@ -307,5 +320,5 @@ export async function search(
     }
   }
 
-  console.log(`[SearchBox] Search completed - total results: ${results.length}`)
+  console.log(`[SearchBox] Search completed - total results: ${results.length}`);
 }

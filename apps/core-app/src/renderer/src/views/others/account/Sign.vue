@@ -1,4 +1,5 @@
 <template>
+  <!-- Touch Sign Component -->
   <div :class="{ close }" class="TouchSign-Wrapper">
     <div class="TouchSign-Aside">
       <img src="@assets/logo.svg" alt="logo" />
@@ -19,132 +20,194 @@
       <span class="TouchSign-Copyright">
         <!--        generate a text copyright-->
         <span>©</span>
-        2022 - {{ new Date().getFullYear() }}
-        <a href="https://tagzxia.com">TalexTouch</a> All Rights Reserved.
+        2022 - {{ new Date().getFullYear() }} <a href="https://tagzxia.com">TalexTouch</a> All
+        Rights Reserved.
       </span>
     </div>
   </div>
 </template>
 
 <script lang="ts" name="TouchSign" setup>
-import { onMounted, provide, reactive, ref } from "vue";
-import { sleep } from "@talex-touch/utils/common/utils";
-import AccountView from "~/views/others/account/AccountView.vue";
+/**
+ * Touch Sign Component
+ *
+ * This component provides the main authentication flow for TalexTouch.
+ * It handles both login and registration processes with smooth animations
+ * and transitions between different steps.
+ *
+ * Features:
+ * - Animated transitions between steps
+ * - Form data management through reactive injection
+ * - Loading states and user feedback
+ * - Copyright information display
+ */
+
+import { onMounted, provide, reactive, ref } from 'vue'
+import { sleep } from '@talex-touch/utils/common/utils'
+import AccountView from '~/views/others/account/AccountView.vue'
 // import AccountView from "~/views/others/account/SignSucceed.vue";
-import LoadingIcon from "@comp/icon/LoadingIcon.vue";
-import { forDialogMention } from "~/modules/mention/dialog-mention";
+import LoadingIcon from '@comp/icon/LoadingIcon.vue'
+import { forDialogMention } from '~/modules/mention/dialog-mention'
 
-const content = ref();
-const close = ref(false);
-const component = ref();
-const props = defineProps(["close"]);
+// Reactive references
+const content = ref()
+const close = ref(false)
+const component = ref()
+const props = defineProps<{
+  close: () => void
+}>()
 
-const form = reactive({});
-provide("form", () => form);
+// Form data management
+const form = reactive({})
+provide('form', () => form)
 
-async function step(func: any) {
-  const el = content.value;
-  if (!el) return;
-  const wrapper = el.children[0];
-  const inner = el.children[1];
+/**
+ * Handle step transitions with animations
+ *
+ * @param func - Function that returns step information
+ * @returns Promise<void>
+ */
+async function step(func: any): Promise<void> {
+  const el = content.value
+  if (!el) return
+  const wrapper = el.children[0]
+  const inner = el.children[1]
 
-  await sleep(100);
+  // Initial animation
+  await sleep(100)
+  el.style.transform = 'scale(.8) translateX(0)'
 
-  el.style.transform = "scale(.8) translateX(0)";
+  // Fade out current content
+  await sleep(200)
+  inner.style.opacity = '0'
+  wrapper.style.opacity = '1'
 
-  await sleep(200);
+  await sleep(100)
 
-  inner.style.opacity = "0";
-  wrapper.style.opacity = "1";
-
-  await sleep(100);
-
-  const [info, data, callback] = func();
+  // Process step information
+  const [info, data, callback] = func()
 
   if (!info.pass) {
-    wrapper.style.pointerEvents = "all";
+    // Handle failed step
+    wrapper.style.pointerEvents = 'all'
 
-    if (info.message) await forDialogMention("验证失败", info.message, "#error-warning");
-    else if (info.loading) return;
+    if (info.message) await forDialogMention('验证失败', info.message, '#error-warning')
+    else if (info.loading) return
   } else {
-    if (data) Object.assign(form, data);
-    component.value = info.comp;
+    // Handle successful step
+    if (data) Object.assign(form, data)
+    component.value = info.comp
   }
 
-  await sleep(300);
+  // Fade in new content
+  await sleep(300)
+  inner.style.opacity = '1'
+  wrapper.style.opacity = '0'
+  wrapper.style.pointerEvents = 'none'
 
-  // el.style.opacity = '1'
-  inner.style.opacity = "1";
-  wrapper.style.opacity = "0";
-  wrapper.style.pointerEvents = "none";
-  // el.style.transform = 'scale(.8) translateX(10%)'
+  await sleep(100)
+  el.style.transform = 'scale(.8) translateX(0)'
 
-  await sleep(100);
+  await sleep(200)
+  el.style.transform = 'scale(1) translateX(0)'
 
-  el.style.transform = "scale(.8) translateX(0)";
-
-  await sleep(200);
-
-  el.style.transform = "scale(1) translateX(0)";
-
-  callback?.();
+  callback?.()
 }
 
-async function signDone() {
-  const el = content.value;
-  if (!el) return;
-  const wrapper = el.children[0];
-  const inner = el.children[1];
+/**
+ * Handle sign completion animation
+ *
+ * @returns Promise<void>
+ */
+async function signDone(): Promise<void> {
+  const el = content.value
+  if (!el) return
+  const wrapper = el.children[0]
+  const inner = el.children[1]
 
-  await sleep(100);
+  // Animation sequence for sign completion
+  await sleep(100)
+  el.style.transform = 'scale(.8) translateX(0)'
 
-  el.style.transform = "scale(.8) translateX(0)";
+  await sleep(200)
+  inner.style.opacity = '0'
+  wrapper.style.opacity = '1'
 
-  await sleep(200);
-
-  inner.style.opacity = "0";
-  wrapper.style.opacity = "1";
-
-  await sleep(300);
-
-  await destroy();
+  await sleep(300)
+  await destroy()
 }
 
-provide("step", step);
-provide("close", signDone);
+// Provide functions to child components
+provide('step', step)
+provide('close', signDone)
 
+/**
+ * Setup component on mount
+ * Initializes the authentication flow
+ */
 onMounted(() => {
-  const app = document.getElementById("app");
+  const app = document.getElementById('app')
 
-  Object.assign(app.style, {
-    transition: ".75s",
-    transform: "scale(1.25)",
-    opacity: ".75",
-  });
+  // Apply initial animation to main app
+  if (app) {
+    Object.assign(app.style, {
+      transition: '.75s',
+      transform: 'scale(1.25)',
+      opacity: '.75'
+    })
+  }
 
-  step(() => [{ pass: true, comp: AccountView }]);
-});
+  // Start with account view
+  step(() => [{ pass: true, comp: AccountView }])
+})
 
-async function destroy() {
-  const app = document.getElementById("app");
+/**
+ * Destroy component and reset app styles
+ *
+ * @returns Promise<void>
+ */
+async function destroy(): Promise<void> {
+  const app = document.getElementById('app')
 
-  Object.assign(app.style, {
-    transform: "scale(1)",
-    opacity: "1",
-  });
+  // Reset app styles
+  if (app) {
+    Object.assign(app.style, {
+      transform: 'scale(1)',
+      opacity: '1'
+    })
+  }
 
-  close.value = true;
+  close.value = true
 
-  await sleep(550);
+  await sleep(550)
+  if (app) {
+    app.style.cssText = ''
+  }
 
-  app.style.cssText = "";
-
-  props.close();
+  props.close()
 }
 </script>
 
 <style lang="scss">
+/**
+ * Touch Sign Styles
+ *
+ * Provides styling for the authentication flow including:
+ * - Content container with loading overlay
+ * - Animated logo and title
+ * - Form container with animations
+ * - Copyright information
+ */
+
+/**
+ * Content container styling
+ * Includes loading overlay and step transition animations
+ */
 .TouchSign-Content {
+  /**
+   * Loading overlay wrapper
+   * Positioned absolutely to cover entire content area
+   */
   .TouchSign-Content-Wrapper {
     z-index: 1;
     position: absolute;
@@ -164,6 +227,7 @@ async function destroy() {
     box-shadow: 0 0 2px 1px var(--el-fill-color);
     backdrop-filter: blur(18px) saturate(180%) brightness(180%);
   }
+
   position: relative;
   padding: 0 5px;
   display: flex;
@@ -180,6 +244,10 @@ async function destroy() {
   box-sizing: border-box;
 }
 
+/**
+ * Logo breathing animation
+ * Creates a subtle pulsing effect for the logo
+ */
 @keyframes logoBreathing {
   from {
     transform: scale(0.8) rotate(0);
@@ -189,6 +257,10 @@ async function destroy() {
   }
 }
 
+/**
+ * Title initial animation
+ * Slides and scales the title into view on component mount
+ */
 @keyframes titleInitial {
   from {
     transform: skewX(-15deg) scale(0) translateX(-100%);
@@ -198,10 +270,14 @@ async function destroy() {
   }
 }
 
+/**
+ * Main title styling
+ * Includes animated background effect
+ */
 .TouchSign-Title {
   &:before {
     z-index: -1;
-    content: "";
+    content: '';
     position: absolute;
 
     left: 0;
@@ -226,6 +302,10 @@ async function destroy() {
   text-align: center;
 }
 
+/**
+ * Blow outer animation classes
+ * Used for additional animation effects
+ */
 .blow-outer {
   animation: blow-outer 0.35s forwards;
 }
@@ -234,6 +314,10 @@ async function destroy() {
   animation-direction: reverse;
 }
 
+/**
+ * Blow outer animation
+ * Scales and fades elements
+ */
 @keyframes blow-outer {
   from {
     opacity: 1;
@@ -245,6 +329,10 @@ async function destroy() {
   }
 }
 
+/**
+ * Aside section styling
+ * Contains the animated logo and gradient background
+ */
 .TouchSign-Aside {
   img {
     filter: hue-rotate(-45deg);
@@ -272,6 +360,10 @@ async function destroy() {
   box-sizing: border-box;
 }
 
+/**
+ * Main container styling
+ * Contains the authentication form and copyright
+ */
 .TouchSign-Container {
   position: relative;
   padding: 50px 60px;
@@ -291,11 +383,19 @@ async function destroy() {
   -webkit-app-region: no-drag;
 }
 
+/**
+ * Container close animation
+ * Scales and fades out the container when closing
+ */
 .close .TouchSign-Container {
   opacity: 0;
   transform: scale(0);
 }
 
+/**
+ * Wrapper styling
+ * Full-screen container for the authentication flow
+ */
 .TouchSign-Wrapper {
   &.close {
     opacity: 0;
@@ -320,6 +420,10 @@ async function destroy() {
   animation: fade-in 0.35s;
 }
 
+/**
+ * Blow animation
+ * Scales elements from 0 to full size
+ */
 @keyframes blow {
   0% {
     transform: scale(0);
@@ -329,6 +433,10 @@ async function destroy() {
   }
 }
 
+/**
+ * Fade in animation
+ * Fades elements from transparent to opaque
+ */
 @keyframes fade-in {
   0% {
     opacity: 0;
@@ -338,6 +446,10 @@ async function destroy() {
   }
 }
 
+/**
+ * Copyright styling
+ * Positioned at the bottom of the container
+ */
 .TouchSign-Copyright {
   a {
     color: var(--el-color-primary-info-2);

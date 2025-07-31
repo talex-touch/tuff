@@ -1,27 +1,23 @@
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 
-import zhCN from './zh-CN.json'
-import enUS from './en-US.json'
-
-const messages = [
-  {
-    locale: 'en-US',
-    messages: enUS
-  },
-  {
-    locale: 'zh-CN',
-    messages: zhCN
-  }
-]
-
-export function setupI18n(options = { locale: 'en-US' }) {
+/**
+ * Setup i18n instance with provided options
+ * @param options - i18n options with default locale
+ * @returns i18n instance
+ */
+export function setupI18n(options: { locale: string } = { locale: 'en-US' }): any {
   const i18n = createI18n(options)
   setI18nLanguage(i18n, options.locale)
   return i18n
 }
 
-export function setI18nLanguage(i18n, locale) {
+/**
+ * Set the language for the i18n instance and HTML document
+ * @param i18n - i18n instance
+ * @param locale - locale string
+ */
+export function setI18nLanguage(i18n: any, locale: string): void {
   if (i18n.mode === 'legacy') {
     i18n.global.locale = locale
   } else {
@@ -37,7 +33,13 @@ export function setI18nLanguage(i18n, locale) {
   document.querySelector('html')!.setAttribute('lang', locale)
 }
 
-export async function loadLocaleMessages(i18n, locale) {
+/**
+ * Load locale messages dynamically
+ * @param i18n - i18n instance
+ * @param locale - locale string
+ * @returns Promise that resolves when messages are loaded
+ */
+export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
   // load locale messages with dynamic import
   const messages = await import(
     /* webpackChunkName: "locale-[request]" */ `./locales/${locale}.json`

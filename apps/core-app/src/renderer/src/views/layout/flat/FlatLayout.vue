@@ -31,13 +31,47 @@
 </template>
 
 <script lang="ts" name="AppLayoutFlat" setup>
+/**
+ * FlatLayout Component
+ *
+ * This component provides a flat layout structure for the application.
+ * It includes a header with a controller, a sidebar navigation, and a main content area.
+ *
+ * Slots:
+ * - title: For the title content in the header
+ * - icon: For icons in the footer
+ * - view: For the main content area
+ */
+
 import FlatController from "./FlatController.vue";
 import FlatNavBar from "./FlatNavBar.vue";
 import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
+
+// Import account store for user information
+import { storageManager } from "~/modules/channel/storage";
+
+// Use the account store
+const account = storageManager.account;
 </script>
 
 <style lang="scss" scoped>
+/**
+ * Flat Layout Styles
+ *
+ * Provides styling for the flat layout structure including:
+ * - Main container layout
+ * - Header styling
+ * - Sidebar navigation
+ * - Main content area
+ * - Footer with user information
+ */
+
 .AppLayout-Container.Flat {
+  /**
+   * Main content view styling
+   * Positioned relative to the container
+   * Takes up remaining width after sidebar
+   */
   .AppLayout-View {
     position: relative;
 
@@ -54,6 +88,10 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
     box-sizing: border-box;
   }
 
+  /**
+   * Icon footer styling
+   * Hidden by default, shown when user is logged in
+   */
   .AppLayout-IconFooter {
     display: none;
 
@@ -79,6 +117,10 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
       bottom: 0;
     }
 
+    /**
+     * User information footer
+     * Displays username and email when user is logged in
+     */
     .AppLayout-Footer {
       & > p {
         margin: 0;
@@ -122,6 +164,9 @@ import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
   }
 }
 
+/**
+ * Flat layout container variables and header styling
+ */
 .AppLayout-Container.Flat {
   --ctr-height: 40px;
   --nav-width: 200px;

@@ -56,9 +56,9 @@
         :min="90"
         :max="270"
         :show-tooltip="false"
-        @change="validateCaptcha"
         aria-label="Rotate image to match target"
         role="slider"
+        @change="validateCaptcha"
       >
       </el-slider>
     </div>

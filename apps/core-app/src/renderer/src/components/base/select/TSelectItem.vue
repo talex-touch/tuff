@@ -25,9 +25,7 @@ function handleDocumentClick(event: MouseEvent): void {
 
   // Use composedPath (standard), fallback to legacy .path if needed
   const path = (event.composedPath?.() || (event as any).path) as HTMLElement[]
-  isActive.value = path.some(node =>
-    node?.className?.includes('TSelectItem-Container')
-  )
+  isActive.value = path.some((node) => node?.className?.includes('TSelectItem-Container'))
 }
 
 /**

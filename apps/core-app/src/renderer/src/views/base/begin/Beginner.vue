@@ -1,81 +1,116 @@
+<!--
+  Beginner Component
+
+  Handles the initial setup wizard for new users.
+-->
 <script setup lang="ts" name="Beginner">
-import { sleep } from "@talex-touch/utils/common/utils";
-import Greeting from "./internal/Greeting.vue";
-import { appSetting, storageManager } from "~/modules/channel/storage/index.ts";
+import { sleep } from '@talex-touch/utils/common/utils'
+import Greeting from './internal/Greeting.vue'
+import { appSetting, storageManager } from '~/modules/channel/storage/index'
+import { type Component, type Ref } from 'vue'
 
-const main = ref();
-const content = ref();
-const component = ref();
-const last_component = ref();
+// Reactive references
+const main: Ref<HTMLElement | null> = ref(null)
+const content: Ref<HTMLElement | null> = ref(null)
+const component: Ref<Component | null> = ref(null)
+const last_component: Ref<Component | null> = ref(null)
 
+// Initialize appSetting.beginner if it doesn't exist
 if (!appSetting.beginner) {
   appSetting.beginner = {
-    init: false,
-  };
+    init: false
+  }
 }
 
-async function step(call: any, dataAction?: Function) {
-  content.value.style.opacity = "0";
+/**
+ * Step through the setup wizard
+ * @param call - Object containing component and optional rectangle dimensions
+ * @param dataAction - Optional function to perform data actions
+ */
+async function step(
+  call: { comp: Component | null; rect?: { width: number; height: number } },
+  dataAction?: (storageManager: any) => void
+): Promise<void> {
+  if (!content.value) return
 
-  await sleep(300);
+  content.value.style.opacity = '0'
+  await sleep(300)
 
-  const { comp, rect } = call;
+  const { comp, rect } = call
+  dataAction?.(storageManager)
 
-  dataAction?.(storageManager);
-
+  // Handle completion case
   if (!comp) {
-    main.value.parentElement.style.opacity = "0";
-    main.value.parentElement.style.transform = "scale(1.05)";
-
-    await sleep(1000);
-
-    main.value.parentElement.style.display = "none";
-
-    return;
+    if (main.value && main.value.parentElement) {
+      main.value.parentElement.style.opacity = '0'
+      main.value.parentElement.style.transform = 'scale(1.05)'
+      await sleep(1000)
+      main.value.parentElement.style.display = 'none'
+    }
+    return
   }
 
-  if (rect) {
+  // Adjust size if rectangle dimensions are provided
+  if (rect && main.value) {
     Object.assign(main.value.style, {
       width: `${rect.width}px`,
-      height: `${rect.height}px`,
-    });
-
-    await sleep(300);
+      height: `${rect.height}px`
+    })
+    await sleep(300)
   }
 
-  last_component.value = component.value;
-  component.value = comp;
+  // Update component
+  last_component.value = component.value
+  component.value = comp
+  await sleep(100)
 
-  await sleep(100);
-
-  content.value.style.opacity = "1";
+  if (content.value) {
+    content.value.style.opacity = '1'
+  }
 }
 
-provide("step", step);
-provide("back", () => {
+// Provide step and back functions to child components
+provide('step', step)
+provide('back', () => {
   step({
-    comp: last_component.value,
-  });
-});
+    comp: last_component.value
+  })
+})
 
+// Initialize with Greeting component on mount
 onMounted(() => {
   step({
-    comp: Greeting,
-  });
-});
+    comp: Greeting
+  })
+})
 </script>
 
+<!--
+  Beginner Component Template
+
+  Displays the setup wizard with dynamic content.
+-->
 <template>
+  <!-- Main container for the beginner setup wizard -->
   <div class="Beginner">
+    <!-- Main content area with background effect -->
     <div ref="main" class="Beginner-Main fake-background transition-cubic">
+      <!-- Content container with transition effect -->
       <div ref="content" class="Beginner-Content transition-cubic">
+        <!-- Dynamic component rendering -->
         <component :is="component" />
       </div>
     </div>
   </div>
 </template>
 
+<!--
+  Beginner Component Styles
+
+  SCSS styles for the beginner setup wizard including animations and responsive design.
+-->
 <style lang="scss" scoped>
+/** Main container styles */
 .Beginner {
   z-index: 1000;
   position: absolute;
@@ -85,6 +120,7 @@ onMounted(() => {
   top: 0;
   background-color: #ffffff80;
 
+  /** Content area styles */
   &-Content {
     position: absolute;
     padding: 2rem;
@@ -96,6 +132,7 @@ onMounted(() => {
     box-sizing: border-box;
   }
 
+  /** Main area styles */
   &-Main {
     position: absolute;
     padding: 2rem;
@@ -110,11 +147,13 @@ onMounted(() => {
     backdrop-filter: saturate(180%) brightness(99%) blur(50px);
   }
 
+  /** Dark mode styles */
   .dark & {
     background-color: #00000080;
   }
 }
 
+/** Join animation keyframes */
 @keyframes join {
   from {
     transform: translate(-50%, -50%) scale(1.05);

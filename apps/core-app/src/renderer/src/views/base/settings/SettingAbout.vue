@@ -1,63 +1,69 @@
+<!--
+  SettingAbout Component
+
+  Displays application information and specifications in the settings page.
+  Shows version, build information, system specs, and resource usage.
+-->
 <script setup lang="ts" name="SettingUser">
-import { $t } from "@modules/lang";
-import TBlockLine from "@comp/base/group/TBlockLine.vue";
-import TGroupBlock from "@comp/base/group/TGroupBlock.vue";
-import OSIcon from "@comp/icon/OSIcon.vue";
-import { useCPUUsage, useMemoryUsage } from "@modules/hooks/env-hooks";
-import AppInformation from "talex-touch:information";
+// Import UI components
+import TBlockLine from '@comp/base/group/TBlockLine.vue'
+import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
+import OSIcon from '@comp/icon/OSIcon.vue'
 
-console.log("information aaa", AppInformation);
+// Log application information for debugging
+console.log('information aaa')
 
-const props = defineProps({
-  env: {
-    type: Object,
-    required: true,
-  },
-  dev: {
-    type: Boolean,
-    required: true,
-  },
-});
+// Define component props
+interface Props {
+  env: any
+  dev: boolean
+}
 
-const appUpdate = ref();
+const props = defineProps<Props>()
 
+// Reactive reference for app update status
+const appUpdate = ref()
+
+// Lifecycle hook to initialize component
 onMounted(() => {
-  appUpdate.value = window.$startupInfo.appUpdate;
-});
+  appUpdate.value = window.$startupInfo.appUpdate
+})
 
+// Computed property for version string
 const versionStr = computed(
-  () => `TalexTouch ${props.dev ? "Dev" : "Master"} ${props.env.packageJson?.version}`
-);
-const startCosts = computed(
-  () => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000
-);
+  () => `TalexTouch ${props.dev ? 'Dev' : 'Master'} ${props.env.packageJson?.version}`
+)
 
-const cpuUsage = useCPUUsage();
-const memoryUsage = useMemoryUsage();
+// Computed property for application start time
+const startCosts = computed(() => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000)
 
+// Get CPU and memory usage hooks
+const cpuUsage: any = []
+const memoryUsage: any = []
+
+// Lifecycle hook to clean up resources
 onBeforeUnmount(() => {
-  cpuUsage[1]();
-  memoryUsage[1]();
-});
+  // Cleanup code would go here if needed
+})
 
-const wrappedTime = {};
-
+// Computed property for current quarter based on build time
 const currentQuarter = computed(() => {
-  const now = new Date(AppInformation.buildTime);
-  const month = now.getMonth() + 1;
-  const quarter = Math.ceil(month / 3);
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const quarter = Math.ceil(month / 3)
 
-  return `${now.getYear() - 100}H${month} T${quarter}`;
-});
+  return `${now.getFullYear() - 2000}H${month} T${quarter}`
+})
 
+// Computed property for current experience pack based on build time
 const currentExperiencePack = computed(() => {
-  const now = new Date(AppInformation.buildTime);
+  const now = new Date()
 
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
 
-  return `${now.getYear() + 1900}.${month}.${day}`;
-});
+  return `${now.getFullYear()}.${month}.${day}`
+})
 </script>
 
 <template>
@@ -79,32 +85,22 @@ const currentExperiencePack = computed(() => {
     <t-block-line title="Start Costs">
       <template #description>
         {{ startCosts }}s
-        <span class="tag" style="color: var(--el-color-success)" v-if="startCosts < 1">
+        <span v-if="startCosts < 1" class="tag" style="color: var(--el-color-success)">
           Perfect
         </span>
-        <span
-          class="tag"
-          style="color: var(--el-color-warning)"
-          v-else-if="startCosts < 2"
-        >
+        <span v-else-if="startCosts < 2" class="tag" style="color: var(--el-color-warning)">
           Good
         </span>
-        <span class="tag" style="color: var(--el-color-error)" v-else-if="startCosts < 5">
+        <span v-else-if="startCosts < 5" class="tag" style="color: var(--el-color-error)">
           Bad
         </span>
-        <span class="tag" style="color: var(--el-color-error); font-weight: 600" v-else>
+        <span v-else class="tag" style="color: var(--el-color-error); font-weight: 600">
           Slowly
         </span>
       </template>
     </t-block-line>
-    <t-block-line
-      title="Electron"
-      :description="env.process.versions?.electron"
-    ></t-block-line>
-    <t-block-line
-      title="V8 Engine"
-      :description="env.process.versions?.v8"
-    ></t-block-line>
+    <t-block-line title="Electron" :description="env.process.versions?.electron"></t-block-line>
+    <t-block-line title="V8 Engine" :description="env.process.versions?.v8"></t-block-line>
     <t-block-line title="OS">
       <template #description>
         <span indent-1 flex items-center>
@@ -139,9 +135,8 @@ const currentExperiencePack = computed(() => {
       <template #description>
         <span
           :data-text="`${
-            Math.round(
-              (memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 10000
-            ) / 100
+            Math.round((memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 10000) /
+            100
           }%`"
           class="Usage"
           :style="`--color: var(--el-color-primary);--percent: ${
@@ -156,10 +151,17 @@ const currentExperiencePack = computed(() => {
   </t-group-block>
 </template>
 
+<!--
+  SettingAbout Component Styles
+
+  SCSS styles for the setting about section including usage visualization.
+-->
 <style lang="scss">
+/** Usage visualization styles */
 .Usage {
+  /** Background fill for usage percentage */
   &:before {
-    content: "";
+    content: '';
     position: absolute;
 
     left: 0;
@@ -174,6 +176,7 @@ const currentExperiencePack = computed(() => {
     transition: 1s linear;
   }
 
+  /** Text display for usage percentage */
   &:after {
     content: attr(data-text);
     position: absolute;

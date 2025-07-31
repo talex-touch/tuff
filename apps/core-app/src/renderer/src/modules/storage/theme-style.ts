@@ -2,18 +2,35 @@ import { RemovableRef, useDark, usePreferredDark, useStorage } from '@vueuse/cor
 import { watchEffect } from 'vue'
 
 /**
- * Theme style configuration interface
+ * Interface for theme style configuration
  */
-const IThemeStyle = {
+interface IThemeStyle {
+  theme: {
+    window: string
+    style: {
+      dark: boolean
+      auto: boolean
+    }
+    addon: {
+      contrast: boolean
+      coloring: boolean
+    }
+  }
+}
+
+/**
+ * Default theme style configuration
+ */
+const defaultThemeStyle: IThemeStyle = {
   theme: {
     window: 'Mica',
     style: {
       dark: false,
-      auto: true,
+      auto: true
     },
     addon: {
       contrast: false,
-      coloring: false,
+      coloring: false
     }
   }
 }
@@ -21,7 +38,10 @@ const IThemeStyle = {
 /**
  * Persistent storage for theme preferences
  */
-export const themeStyle: RemovableRef<typeof IThemeStyle> = useStorage<typeof IThemeStyle>('theme-style', IThemeStyle)
+export const themeStyle: RemovableRef<IThemeStyle> = useStorage<IThemeStyle>(
+  'theme-style',
+  defaultThemeStyle
+)
 
 /**
  * Reactive dark mode state
@@ -54,12 +74,20 @@ function updateDocumentClass(isDarkMode: boolean): void {
 }
 
 /**
+ * Theme mode type
+ */
+type ThemeMode = 'auto' | 'dark' | 'light'
+
+/**
  * Triggers a theme transition with a circular animation effect
  *
  * @param pos - [x, y] coordinates for the center of the transition animation
  * @param mode - Theme mode to switch to: 'auto', 'dark', or 'light'
  */
-export async function triggerThemeTransition(pos: [number, number], mode: string): Promise<void> {
+export async function triggerThemeTransition(
+  pos: [number, number],
+  mode: ThemeMode
+): Promise<void> {
   const [x, y] = pos
   const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
 
@@ -81,33 +109,26 @@ export async function triggerThemeTransition(pos: [number, number], mode: string
 
   // Calculate animation radius
   // @ts-ignore - Math.hypot with these parameters is valid
-  const endRadius = Math.hypot(
-    Math.max(x, innerWidth - x),
-    Math.max(y, innerHeight - y)
-  )
+  const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
 
   // Animate the transition when ready
   transition.ready.then(() => {
-    const clipPath = [
-      `circle(0px at ${x}px ${y}px)`,
-      `circle(${endRadius}px at ${x}px ${y}px)`
-    ]
+    const clipPath = [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`]
 
     // Determine direction of animation based on theme change
-    const isReversed = (isChangingToDark !== isDark.value)
+    const isReversed = isChangingToDark !== isDark.value
     const animationPath = isReversed ? clipPath.reverse() : clipPath
-    const pseudoElement = isReversed ?
-      "::view-transition-old(root)" :
-      "::view-transition-new(root)"
+    // const pseudoElement = isReversed ?
+    //   "::view-transition-old(root)" :
+    //   "::view-transition-new(root)"
 
     // Apply animation
     document.documentElement.animate(
-      { clipPath: animationPath },
+      [{ clipPath: animationPath[0] } as any, { clipPath: animationPath[1] } as any],
       {
         duration: 300,
-        easing: "ease-in",
-        pseudoElement
-      }
+        easing: 'ease-in'
+      } as any
     )
   })
 }
