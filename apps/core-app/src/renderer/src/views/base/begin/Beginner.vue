@@ -1,19 +1,18 @@
-<!--
-  Beginner Component
-
-  Handles the initial setup wizard for new users.
--->
 <script setup lang="ts" name="Beginner">
 import { sleep } from '@talex-touch/utils/common/utils'
 import Greeting from './internal/Greeting.vue'
 import { appSetting, storageManager } from '~/modules/channel/storage/index'
 import { type Component, type Ref } from 'vue'
+import LaunchMusic from '~/assets/sound/launch.mp3'
 
 // Reactive references
 const main: Ref<HTMLElement | null> = ref(null)
 const content: Ref<HTMLElement | null> = ref(null)
 const component: Ref<Component | null> = ref(null)
 const last_component: Ref<Component | null> = ref(null)
+
+// Audio element for launch sound
+let audio: HTMLAudioElement | null = null
 
 // Initialize appSetting.beginner if it doesn't exist
 if (!appSetting.beginner) {
@@ -69,6 +68,16 @@ async function step(
   }
 }
 
+// Play launch sound
+function playLaunchSound(): void {
+  if (!audio) {
+    audio = new Audio(LaunchMusic)
+    audio.volume = 0.5
+  }
+
+  audio.play().catch(e => console.log('Audio play failed:', e))
+}
+
 // Provide step and back functions to child components
 provide('step', step)
 provide('back', () => {
@@ -78,39 +87,29 @@ provide('back', () => {
 })
 
 // Initialize with Greeting component on mount
-onMounted(() => {
+onMounted(async () => {
+  await sleep(100)
+
+  // Play launch sound when component mounts
+  playLaunchSound()
+
   step({
     comp: Greeting
   })
 })
 </script>
 
-<!--
-  Beginner Component Template
-
-  Displays the setup wizard with dynamic content.
--->
 <template>
-  <!-- Main container for the beginner setup wizard -->
   <div class="Beginner">
-    <!-- Main content area with background effect -->
     <div ref="main" class="Beginner-Main fake-background transition-cubic">
-      <!-- Content container with transition effect -->
       <div ref="content" class="Beginner-Content transition-cubic">
-        <!-- Dynamic component rendering -->
         <component :is="component" />
       </div>
     </div>
   </div>
 </template>
 
-<!--
-  Beginner Component Styles
-
-  SCSS styles for the beginner setup wizard including animations and responsive design.
--->
 <style lang="scss" scoped>
-/** Main container styles */
 .Beginner {
   z-index: 1000;
   position: absolute;
@@ -120,7 +119,6 @@ onMounted(() => {
   top: 0;
   background-color: #ffffff80;
 
-  /** Content area styles */
   &-Content {
     position: absolute;
     padding: 2rem;
@@ -132,12 +130,11 @@ onMounted(() => {
     box-sizing: border-box;
   }
 
-  /** Main area styles */
   &-Main {
     position: absolute;
     padding: 2rem;
-    width: 60%;
-    height: 80%;
+    width: 70%; // Increased width for better layout
+    height: 85%; // Increased height for better layout
     left: 50%;
     top: 50%;
     animation: join 1s;
@@ -145,15 +142,17 @@ onMounted(() => {
     box-sizing: border-box;
     transform: translate(-50%, -50%);
     backdrop-filter: saturate(180%) brightness(99%) blur(50px);
+
+    // Added max-width and max-height for better responsiveness
+    max-width: 900px;
+    max-height: 600px;
   }
 
-  /** Dark mode styles */
   .dark & {
     background-color: #00000080;
   }
 }
 
-/** Join animation keyframes */
 @keyframes join {
   from {
     transform: translate(-50%, -50%) scale(1.05);

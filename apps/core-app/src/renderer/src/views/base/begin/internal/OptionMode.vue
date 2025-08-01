@@ -1,46 +1,27 @@
-<!--
-  OptionMode Component
-
-  Handles the option mode selection step in the setup wizard.
--->
 <script setup lang="ts" name="OptionMode">
 import Forbidden from './Forbidden.vue'
 import Done from './Done.vue'
 import { Ref } from 'vue'
 
-// Type definition for step function
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
-// Reactive references
 const choice: Ref<number> = ref(0)
-const step: Ref<StepFunction> = inject('step')!
+const step: StepFunction = inject('step')!
 
-/**
- * Handle user agreement and navigate to the next step
- */
 function handleAgree(): void {
-  step.value({
+  step({
     comp: !choice.value ? Forbidden : Done
   })
 }
 </script>
 
-<!--
-  OptionMode Component Template
-
-  Displays option mode selection and handles user interaction.
--->
 <template>
-  <!-- Main container for option mode selection -->
   <div class="OptionMode">
-    <!-- Display area for visual representation -->
     <div class="OptionMode-Display">
       <div class="diaplyer transition-cubic" :class="{ fill: choice }"></div>
     </div>
 
-    <!-- Choice options container -->
     <div class="OptionMode-Choice">
-      <!-- Novice option -->
       <div
         :class="{ active: !choice }"
         class="transition-cubic OptionMode-Section"
@@ -50,14 +31,13 @@ function handleAgree(): void {
         @keydown.enter="choice = 0"
         @keydown.space="choice = 0"
       >
-        <h1>Novice<span class="tag">RECOMMENDED</span></h1>
+        <h1>Guided Tour<span class="tag">RECOMMENDED</span></h1>
         <span>
-          I'm a novice. And I have not yet learned how to use this software even other similar apps.
-          Please help me.
+          I'm new to this application and would like a comprehensive walkthrough to help me
+          understand its features and capabilities.
         </span>
       </div>
 
-      <!-- Experienced option -->
       <div
         :class="{ active: choice }"
         class="transition-cubic OptionMode-Section"
@@ -67,27 +47,21 @@ function handleAgree(): void {
         @keydown.enter="choice = 1"
         @keydown.space="choice = 1"
       >
-        <h1>Experienced</h1>
+        <h1>Self-Guided</h1>
         <span>
-          I'm an experienced user. I have used other similar apps. Skip the base tutorial.
+          I'm familiar with similar applications and prefer to explore the interface at my own pace
+          without a formal tutorial.
         </span>
       </div>
     </div>
 
-    <!-- Next button container -->
     <div class="OptionMode-Next">
-      <FlatButton primary @click="handleAgree"> SURE </FlatButton>
+      <FlatButton primary @click="handleAgree">Continue</FlatButton>
     </div>
   </div>
 </template>
 
-<!--
-  OptionMode Component Styles
-
-  SCSS styles for the option mode component including animations and responsive design.
--->
 <style lang="scss" scoped>
-/** Shining animation keyframes for display element */
 @keyframes shining {
   from {
     opacity: var(--ob, 0);
@@ -100,7 +74,6 @@ function handleAgree(): void {
   }
 }
 
-/** Display element styles */
 .diaplyer {
   position: relative;
   width: 5rem;
@@ -111,7 +84,6 @@ function handleAgree(): void {
   border: 2px solid var(--el-color-primary);
   animation: shining 1.25s infinite;
 
-  /** Before and after pseudo-element styles */
   &::before,
   &::after {
     content: '';
@@ -120,11 +92,9 @@ function handleAgree(): void {
     border-radius: 50%;
     transform: scale(1.25);
     border: 2px solid var(--el-color-primary);
-    // background-color: var(--el-color-primary);
     animation: shining 0.5s infinite;
   }
 
-  /** After pseudo-element styles */
   &::after {
     --s: 2;
     --t: 0;
@@ -132,9 +102,7 @@ function handleAgree(): void {
   }
 }
 
-/** Filled state styles for display element */
 .diaplyer.fill {
-  /** Before pseudo-element filled state */
   &::before {
     --s: 0;
     --t: 1.75;
@@ -142,7 +110,6 @@ function handleAgree(): void {
     --ot: 0;
   }
 
-  /** After pseudo-element filled state */
   &::after {
     --s: 0;
     --t: 2.5;
@@ -156,69 +123,76 @@ function handleAgree(): void {
   --ot: 0;
 }
 
-/** Join animation keyframes */
-@keyframes join {
-  to {
-    opacity: 1;
-  }
-}
-
-/** Main container styles */
 .OptionMode {
   position: relative;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
 
-  /** Display area styles */
   &-Display {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 60%;
+    flex: 1;
+    min-height: 0;
   }
 
-  /** Choice options container styles */
   &-Choice {
     margin: 10px 0;
     display: flex;
-    height: 30%;
     gap: 1rem;
+    flex: 0 0 auto;
   }
 
-  /** Next button container styles */
   &-Next {
-    height: 10%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 1rem 0;
   }
 
-  /** Choice section styles */
   &-Section {
-    width: 50%;
-    padding: 1rem;
+    flex: 1;
+    padding: 1.5rem;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 12px;
     box-sizing: border-box;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
 
-    /** Tag styles */
     .tag {
-      margin-left: 5px;
-      font-size: 14px;
+      margin-left: 8px;
+      font-size: 0.7rem;
       background-color: #b7aa46a0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      vertical-align: middle;
     }
 
-    /** Heading styles */
     h1 {
-      margin: 0;
+      margin: 0 0 1rem 0;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
     }
 
-    /** Hover state styles */
+    span {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--el-text-color-regular);
+    }
+
     &:hover {
       border-color: var(--el-border-color);
+      background-color: var(--el-fill-color-light);
     }
 
-    /** Active state styles */
     &.active {
       border-color: var(--el-color-primary);
-      background-color: var(--el-color-primary-light-7);
+      background-color: var(--el-color-primary-light-9);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
   }
 }

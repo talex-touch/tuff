@@ -1,9 +1,9 @@
 <template>
   <div
+    v-wave
     cursor-pointer
     flex
     relative
-    v-wave
     role="button"
     :class="{ primary, 'fake-background': !primary, mini }"
     class="FlatButton-Container"
@@ -14,17 +14,11 @@
   </div>
 </template>
 
-<script lang="ts">
-export default {
-  name: "FlatButton",
-};
-</script>
-
-<script lang="ts" setup>
+<script name="FlatButton" lang="ts" setup>
 defineProps({
   primary: Boolean,
-  mini: Boolean,
-});
+  mini: Boolean
+})
 </script>
 
 <style lang="scss" scoped>
@@ -46,11 +40,12 @@ defineProps({
     min-height: 32px;
   }
 
+  display: flex;
   justify-content: center;
   align-items: center;
 
   min-width: 120px;
-  //width: 100%;
+  // width: 100%;
   min-height: 32px;
 
   user-select: none;

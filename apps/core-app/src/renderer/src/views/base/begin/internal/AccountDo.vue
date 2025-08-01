@@ -1,51 +1,27 @@
-<!--
-  AccountDo Component
-
-  Handles the account selection step in the setup wizard.
--->
-<!--
-  AccountDo Component
-
-  Handles the account selection step in the setup wizard.
--->
 <script setup lang="ts" name="AccountDo">
 import Forbidden from './Forbidden.vue'
 import OptionMode from './OptionMode.vue'
 import { Ref } from 'vue'
 
-// Type definition for step function
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
-// Reactive references
 const choice: Ref<number> = ref(0)
-const step: Ref<StepFunction> = inject('step')!
+const step: StepFunction = inject('step')!
 
-/**
- * Handle user agreement and navigate to the next step
- */
 function handleAgree(): void {
-  step.value({
+  step({
     comp: !choice.value ? Forbidden : OptionMode
   })
 }
 </script>
 
-<!--
-  AccountDo Component Template
-
-  Displays account selection options and handles user interaction.
--->
 <template>
-  <!-- Main container for account selection -->
   <div class="AccountDo">
-    <!-- Display area for visual representation -->
     <div class="AccountDo-Display">
       <div class="diaplyer transition-cubic" :class="{ fill: choice }"></div>
     </div>
 
-    <!-- Choice options container -->
     <div class="AccountDo-Choice">
-      <!-- Login option -->
       <div
         :class="{ active: !choice }"
         class="transition-cubic AccountDo-Section"
@@ -55,15 +31,18 @@ function handleAgree(): void {
         @keydown.enter="choice = 0"
         @keydown.space="choice = 0"
       >
-        <h1>Log in<span class="tag">RECOMMENDED</span></h1>
+        <h1>Sign In<span class="tag">RECOMMENDED</span></h1>
         <span>
-          Sign in or sign up, and start using this app. You are able to synchronize your data with
-          other devices. Walk through cloud services.
-          <a href="https://github.com/17809/blog" target="_blank">Learn more</a>
+          Create an account or sign in to unlock the full potential of this application. Seamlessly
+          synchronize your data across all your devices and access cloud services.
+          <a
+            href="https://talex-touch.github.io/talex-touch/docs/documents/account.html"
+            target="_blank"
+            >Learn more</a
+          >
         </span>
       </div>
 
-      <!-- Skip option -->
       <div
         :class="{ active: choice }"
         class="transition-cubic AccountDo-Section"
@@ -73,28 +52,21 @@ function handleAgree(): void {
         @keydown.enter="choice = 1"
         @keydown.space="choice = 1"
       >
-        <h1>Not now</h1>
+        <h1>Continue Offline</h1>
         <span>
-          Using this app without signing in is fine. You can still use this app, but you won't be
-          able to synchronize your data with other devices.
+          You can use this application without signing in. However, please note that you will not be
+          able to synchronize your data across devices or access cloud-based features.
         </span>
       </div>
     </div>
 
-    <!-- Next button container -->
     <div class="AccountDo-Next">
-      <FlatButton primary @click="handleAgree"> SURE </FlatButton>
+      <FlatButton primary @click="handleAgree">Continue</FlatButton>
     </div>
   </div>
 </template>
 
-<!--
-  AccountDo Component Styles
-
-  SCSS styles for the account selection component including animations and responsive design.
--->
 <style lang="scss" scoped>
-/** Frame animation keyframes for display element */
 @keyframes frame {
   25% {
     transform: translateY(-50%) scale(0.5) translateX(-20%);
@@ -111,7 +83,6 @@ function handleAgree(): void {
   }
 }
 
-/** Frame down animation keyframes for display element */
 @keyframes frame_down {
   0% {
     transform: translateY(-50%) scale(0.5) translateY(0%);
@@ -130,13 +101,11 @@ function handleAgree(): void {
   }
 }
 
-/** Display element styles */
 .diaplyer {
   position: relative;
   width: 8rem;
   height: 8rem;
 
-  /** Filled state styles */
   &.fill {
     --el-color-primary: var(--el-border-color);
 
@@ -145,7 +114,6 @@ function handleAgree(): void {
     }
   }
 
-  /** Before pseudo-element styles */
   &::before {
     content: '';
     position: absolute;
@@ -158,7 +126,6 @@ function handleAgree(): void {
     background-color: var(--el-color-primary);
   }
 
-  /** After pseudo-element styles */
   &::after {
     content: '';
     position: absolute;
@@ -171,69 +138,85 @@ function handleAgree(): void {
   }
 }
 
-/** Join animation keyframes */
-@keyframes join {
-  to {
-    opacity: 1;
-  }
-}
-
-/** Main container styles */
 .AccountDo {
   position: relative;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
 
-  /** Display area styles */
   &-Display {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 60%;
+    flex: 1;
+    min-height: 0;
   }
 
-  /** Choice options container styles */
   &-Choice {
     margin: 10px 0;
     display: flex;
-    height: 30%;
     gap: 1rem;
+    flex: 0 0 auto;
   }
 
-  /** Next button container styles */
   &-Next {
-    height: 10%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 1rem 0;
   }
 
-  /** Choice section styles */
   &-Section {
-    width: 50%;
-    padding: 1rem;
+    flex: 1;
+    padding: 1.5rem;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 12px;
     box-sizing: border-box;
-    border: 1px solid transparent;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
 
-    /** Tag styles */
     .tag {
-      margin-left: 5px;
-      font-size: 14px;
+      margin-left: 8px;
+      font-size: 0.7rem;
       background-color: #b7aa46a0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      vertical-align: middle;
     }
 
-    /** Heading styles */
     h1 {
-      margin: 0;
+      margin: 0 0 1rem 0;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
     }
 
-    /** Hover state styles */
+    span {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--el-text-color-regular);
+    }
+
+    a {
+      color: var(--el-color-primary);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
     &:hover {
       border-color: var(--el-border-color);
+      background-color: var(--el-fill-color-light);
     }
 
-    /** Active state styles */
     &.active {
       border-color: var(--el-color-primary);
-      background-color: var(--el-color-primary-light-7);
+      background-color: var(--el-color-primary-light-9);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
   }
 }
