@@ -207,7 +207,7 @@ export class TouchApp implements TalexTouch.TouchApp {
     checkDirWithCreate(this.rootPath, true)
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
-      const url = path.join(process.env.DIST!, 'index.html')
+      const url = path.join(__dirname, '../renderer/index.html')
 
       this.window.window.show()
       console.log('[TouchApp] Loading (mainWindow) webContents from: ' + url)

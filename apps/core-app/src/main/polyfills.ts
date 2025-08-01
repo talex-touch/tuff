@@ -49,7 +49,7 @@ console.debug = (message: any, ...args: any[]) => {
 }
 
 // check debug settings
-if (fse.existsSync(path.join(process.cwd(), 'debug.talex'))) {
+if (fse.existsSync(path.join(app.getPath('userData'), 'debug.talex'))) {
   process.env.DEBUG = 'true'
   globalThis.logger.level = 'debug'
 } else globalThis.logger.level = app.isPackaged ? 'info' : 'debug'
