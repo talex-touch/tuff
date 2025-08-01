@@ -1,24 +1,24 @@
 import { LogLevel, LogItem, LogDataType } from './types'
-import { LoggerManager } from './logger-manager'
+import { PluginLoggerManager } from './logger-manager'
 
 /**
  * PluginLogger provides structured logging capabilities for individual plugins.
  */
 export class PluginLogger {
   private readonly pluginName: string
-  private readonly manager: LoggerManager
+  private readonly manager: PluginLoggerManager
 
   /**
    * Get logger manager
    */
-  getManager(): LoggerManager { return this.manager }
+  getManager(): PluginLoggerManager { return this.manager }
 
   /**
    * Creates an instance of PluginLogger.
    * @param pluginName - The name of the plugin.
    * @param manager - The logger manager instance controlling log file storage.
    */
-  constructor(pluginName: string, manager: LoggerManager) {
+  constructor(pluginName: string, manager: PluginLoggerManager) {
     this.pluginName = pluginName
     this.manager = manager
   }

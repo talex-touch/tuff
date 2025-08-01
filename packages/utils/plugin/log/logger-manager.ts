@@ -1,25 +1,35 @@
 import fs from 'fs'
 import path from 'path'
 import { LogItem } from './types'
+import { ITouchPlugin } from '..'
 
 /**
- * LoggerManager is responsible for managing and writing logs for all plugins.
+ * PluginLoggerManager is responsible for managing and writing logs for a specific plugin.
  */
-export class LoggerManager {
-  private readonly logDir: string
+export class PluginLoggerManager {
+  private readonly pluginInfo: ITouchPlugin
+  private readonly pluginLogDir: string
   private readonly sessionLogPath: string
+  private readonly pluginInfoPath: string
   private buffer: LogItem[] = []
   private flushInterval: NodeJS.Timeout
 
   /**
-   * Initializes a new LoggerManager instance.
+   * Initializes a new PluginLoggerManager instance.
    * @param baseDir - Base directory to store logs.
+   * @param pluginInfo - Plugin information for logging context.
    */
-  constructor(baseDir: string) {
-    this.logDir = path.resolve(baseDir, 'logs')
+  constructor(baseDir: string, pluginInfo: ITouchPlugin) {
+    this.pluginInfo = pluginInfo
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    this.sessionLogPath = path.resolve(this.logDir, `${timestamp}.log`)
+    const sessionFolder = `${timestamp}_${pluginInfo.name.replace(/[^a-zA-Z0-9-_]/g, '_')}`
+
+    this.pluginLogDir = path.resolve(baseDir, 'logs', sessionFolder)
+    this.sessionLogPath = path.resolve(this.pluginLogDir, 'session.log')
+    this.pluginInfoPath = path.resolve(this.pluginLogDir, 'touch-plugin.info')
+
     this.ensureDirectory()
+    this.createPluginInfoFile()
     this.flushInterval = setInterval(() => this.flush(), 5000)
   }
 
@@ -50,11 +60,33 @@ export class LoggerManager {
   }
 
   /**
+   * Creates the touch-plugin.info file with plugin information.
+   */
+  private createPluginInfoFile(): void {
+    const pluginInfo = {
+      name: this.pluginInfo.name,
+      version: this.pluginInfo.version,
+      description: this.pluginInfo.desc,
+      sessionStart: new Date().toISOString(),
+      icon: this.pluginInfo.icon,
+      platforms: this.pluginInfo.platforms,
+      status: this.pluginInfo.status,
+      features: this.pluginInfo.features.map(feature => ({
+        id: feature.id,
+        name: feature.name,
+        desc: feature.desc
+      }))
+    }
+
+    fs.writeFileSync(this.pluginInfoPath, JSON.stringify(pluginInfo, null, 2))
+  }
+
+  /**
    * Ensures the log directory exists.
    */
   private ensureDirectory(): void {
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true })
+    if (!fs.existsSync(this.pluginLogDir)) {
+      fs.mkdirSync(this.pluginLogDir, { recursive: true })
     }
   }
 }

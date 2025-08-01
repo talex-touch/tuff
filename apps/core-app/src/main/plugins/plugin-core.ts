@@ -33,8 +33,8 @@ import axios from 'axios'
 import type { ISearchItem } from '@talex-touch/utils'
 import { getCoreBoxWindow } from '../modules/box-tool/core-box'
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger'
-import { genLoggerManager, genPluginLogger } from './plugin-logger-manager'
 import { loadPluginFeatureContext } from './plugin-feature'
+import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
 
 class PluginIcon implements IPluginIcon {
   type: string
@@ -256,7 +256,7 @@ class TouchPlugin implements ITouchPlugin {
     this.platforms = platforms
     this.features = []
 
-    this.logger = new PluginLogger(name, genPluginLogger())
+    this.logger = new PluginLogger(name, new PluginLoggerManager(this.pluginPath, this))
   }
 
   async enable(): Promise<boolean> {
