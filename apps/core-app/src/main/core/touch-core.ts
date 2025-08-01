@@ -30,9 +30,9 @@ import {
 import * as log4js from 'log4js'
 import { devProcessManager } from '../utils/dev-process-manager'
 
-const rootPath = getRootPath(app.getAppPath())
+const innerRootPath = getRootPath(app.getPath('userData'))
 
-const logs = path.join(rootPath, 'logs')
+const logs = path.join(innerRootPath, 'logs')
 checkDirWithCreate(logs)
 
 app.setPath('crashDumps', path.join(logs, 'crashes'))
@@ -154,11 +154,11 @@ app.on('before-quit', (event) => {
 function getRootPath(root: string): string {
   return app.isPackaged
     ? path.join(root, APP_FOLDER_NAME)
-    : path.join(root, '..', '..', APP_FOLDER_NAME)
+    : path.join(root, `${APP_FOLDER_NAME}-dev`)
 }
 
 export class TouchApp implements TalexTouch.TouchApp {
-  readonly rootPath: string = rootPath
+  readonly rootPath: string = innerRootPath
 
   app: Electron.App
 

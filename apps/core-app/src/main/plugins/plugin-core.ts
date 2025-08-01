@@ -33,7 +33,7 @@ import axios from 'axios'
 import type { ISearchItem } from '@talex-touch/utils'
 import { getCoreBoxWindow } from '../modules/box-tool/core-box'
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger'
-import { loggerManager } from './plugin-logger-manager'
+import { genLoggerManager, genPluginLogger } from './plugin-logger-manager'
 import { loadPluginFeatureContext } from './plugin-feature'
 
 class PluginIcon implements IPluginIcon {
@@ -50,7 +50,7 @@ class PluginIcon implements IPluginIcon {
     this.value = this._value
   }
 
-  async init() {
+  async init(): Promise<void> {
     if (this.type === 'file') {
       const iconPath = path.resolve(this.rootPath, this._value)
       if (!(await fse.pathExists(iconPath))) {
@@ -80,7 +80,7 @@ export class PluginFeature implements IPluginFeature {
     this.commands = [...options.commands]
   }
 
-  toJSONObject() {
+  toJSONObject(): object {
     return {
       id: this.id,
       name: this.name,
@@ -148,7 +148,7 @@ class TouchPlugin implements ITouchPlugin {
   _lastSearchQuery: string = ''
   _searchTimestamp: number = 0
 
-  toJSONObject() {
+  toJSONObject(): object {
     return {
       name: this.name,
       readme: this.readme,
@@ -256,7 +256,7 @@ class TouchPlugin implements ITouchPlugin {
     this.platforms = platforms
     this.features = []
 
-    this.logger = new PluginLogger(name, loggerManager)
+    this.logger = new PluginLogger(name, genPluginLogger())
   }
 
   async enable(): Promise<boolean> {
