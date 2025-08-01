@@ -30,7 +30,7 @@ import {
 import * as log4js from 'log4js'
 import { devProcessManager } from '../utils/dev-process-manager'
 
-const rootPath = getRootPath(process.cwd())
+const rootPath = getRootPath(app.getAppPath())
 
 const logs = path.join(rootPath, 'logs')
 checkDirWithCreate(logs)
