@@ -108,7 +108,6 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.quit()
-  process.exit(0)
 }
 
 app.on('window-all-closed', () => {
@@ -194,6 +193,8 @@ export class TouchApp implements TalexTouch.TouchApp {
     this.moduleManager = new ModuleManager(this, this.channel)
     this.config = new TouchConfig(this)
 
+    app.setAppUserModelId('com.tagzxia.talex-touch')
+
     this.__init__().then(() => {
       console.log('[TouchApp] TouchApp initialized!')
     })
@@ -222,7 +223,7 @@ export class TouchApp implements TalexTouch.TouchApp {
       }
 
       this.window.window.show()
-      console.log('[TouchApp] Loading (mainWindow) webContents from: ' + url)
+      console.log('[TouchApp DEV] Loading (mainWindow) webContents from: ' + url)
 
       await this.window.loadURL(url, { devtools: true })
     }

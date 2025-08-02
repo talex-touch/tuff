@@ -1,5 +1,6 @@
 appId: com.tagzxia.app.talex-touch
 productName: talex-touch
+asar: false
 directories:
   buildResources: build
 files:
