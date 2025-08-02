@@ -8,17 +8,17 @@
     :class="{ primary, 'fake-background': !primary, mini }"
     class="FlatButton-Container"
   >
-    <span v-wave>
+    <div flex items-center px-4 gap-2 w-full justify-center>
       <slot />
-    </span>
+    </div>
   </div>
 </template>
 
 <script name="FlatButton" lang="ts" setup>
-defineProps({
-  primary: Boolean,
-  mini: Boolean
-})
+defineProps<{
+  primary: boolean
+  mini: boolean
+}>()
 </script>
 
 <style lang="scss" scoped>
@@ -38,6 +38,10 @@ defineProps({
   &.mini {
     min-width: 32px;
     min-height: 32px;
+  }
+
+  &:hover {
+    background-color: var(--el-fill-color);
   }
 
   display: flex;

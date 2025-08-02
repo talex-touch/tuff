@@ -13,6 +13,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import CoreBox from '~/views/box/CoreBox.vue'
+import { useTouchSDK } from '@talex-touch/utils/renderer'
 
 const packageJson = window.$nodeApi.getPackageJSON()
 
@@ -27,7 +28,7 @@ onBeforeUnmount(() => {
 const _init = ref(false)
 const beginner = ref(false)
 
-function init() {
+function init(): void {
   touchChannel.send('app-ready').then((res: any) => {
     window.$startupInfo = res
 
@@ -38,6 +39,7 @@ function init() {
     dropperResolver()
     urlHooker()
     // screenCapture()
+    useTouchSDK({ channel: touchChannel })
 
     _init.value = true
 
@@ -66,8 +68,6 @@ onMounted(() => {
     )
   }
 })
-
-// const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
 </script>
 
 <template>

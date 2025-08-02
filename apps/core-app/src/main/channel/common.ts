@@ -5,6 +5,7 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../core/channel-core'
 import { TalexTouch } from '../types'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import path from 'path'
 
 function closeApp(app: TalexTouch.TouchApp): void {
   app.window.close()
@@ -66,6 +67,43 @@ export default {
     this.listeners.push(channel.regChannel(ChannelType.MAIN, 'get-os', () => getOSInformation()))
 
     this.listeners.push(channel.regChannel(ChannelType.MAIN, 'common:cwd', process.cwd))
+
+    this.listeners.push(
+      channel.regChannel(ChannelType.MAIN, 'folder:open', ({ data }) => {
+        if (data?.path) {
+          shell.showItemInFolder(data.path)
+        }
+      })
+    )
+
+    this.listeners.push(
+      channel.regChannel(ChannelType.MAIN, 'module:folder', ({ data }) => {
+        if (data?.name) {
+          const modulePath = path.join(app.rootPath, 'modules', data?.name ? data.name : undefined)
+          shell.openPath(modulePath)
+
+          console.log(
+            `[Channel] Open path [${modulePath}] with module folder @${data?.name ?? 'defaults'}`
+          )
+        }
+      })
+    )
+
+    this.listeners.push(
+      channel.regChannel(ChannelType.MAIN, 'execute:cmd', ({ data }) => {
+        if (data?.command) {
+          shell.openPath(data.command)
+        }
+      })
+    )
+
+    this.listeners.push(
+      channel.regChannel(ChannelType.MAIN, 'app:open', ({ data }) => {
+        if (data?.appName || data?.path) {
+          shell.openPath(data.appName || data.path)
+        }
+      })
+    )
 
     this.listeners.push(
       channel.regChannel(ChannelType.MAIN, 'url:open', ({ data }) => onOpenUrl(data as any))
