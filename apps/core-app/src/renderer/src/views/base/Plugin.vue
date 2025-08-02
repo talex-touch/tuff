@@ -3,12 +3,12 @@
     class="Plugin-Container"
     :class="{ state: toggleOptions.state, status: toggleOptions.status }"
   >
-    <PluginList @select="selectPlugin" :plugins="[...plugins ]" />
+    <PluginList :plugins="[...plugins]" @select="selectPlugin" />
 
-    <div class="Plugin-Info" ref="pluginInfoRef">
+    <div ref="pluginInfoRef" class="Plugin-Info">
       <PluginInfo v-if="select" :plugin="curSelect" />
 
-      <div class="Plugin-Empty" v-else>
+      <div v-else class="Plugin-Empty">
         <div class="Plugin-EmptyBox">
           <el-skeleton style="width: 240px" animated>
             <template #template>
@@ -19,14 +19,13 @@
             </template>
           </el-skeleton>
         </div>
-        <div class="Plugin-EmptyBubble" :style="`--d: ${i * 2 + 1}s`" v-for="i in 5" />
+        <div v-for="i in 5" :key="i" class="Plugin-EmptyBubble" :style="`--d: ${i * 2 + 1}s`" />
 
         <div class="Plugin-Mention">
           <p>Begin by installing or choosing a plugin</p>
           <span>
-            Explore how plugins can enhance your workflow, share your work via a personal
-            cloud, and discover what other developers are creating. Click the button to
-            get started.
+            Explore how plugins can enhance your workflow, share your work via a personal cloud, and
+            discover what other developers are creating. Click the button to get started.
           </span>
           <FlatButton @click="() => $router.push('/market')"> Let's begin! </FlatButton>
         </div>
@@ -54,64 +53,64 @@
   </div>
 </template>
 
-<script name="Plugin" setup>
-import PluginInfo from "@comp/plugin/PluginInfo.vue";
-import { sleep } from "@talex-touch/utils/common/utils";
-import PluginList from "@comp/plugin/layout/PluginList.vue";
-import FlatButton from "@comp/base/button/FlatButton.vue";
-import PluginNew from "./plugin/PluginNew.vue";
-import { computePosition } from "@floating-ui/vue";
+<script lang="ts" name="Plugin" setup>
+import PluginInfo from '@comp/plugin/PluginInfo.vue'
+import { sleep } from '@talex-touch/utils/common/utils'
+import PluginList from '@comp/plugin/layout/PluginList.vue'
+import FlatButton from '@comp/base/button/FlatButton.vue'
+import PluginNew from './plugin/PluginNew.vue'
+import { computePosition } from '@floating-ui/vue'
 
-const plugins = inject("plugins");
+const plugins: any = inject('plugins')
 // const plugins = computed(() => _plugins())
 // console.log("_", plugins)
-const pluginInfoRef = ref();
-const select = ref();
-const curSelect = ref();
+const pluginInfoRef = ref()
+const select = ref()
+const curSelect = ref()
 
 watch(
   () => select.value,
   () => {
-    curSelect.value = [...plugins.value].find((item) => item.name === select.value);
+    curSelect.value = [...plugins.value].find((item) => item.name === select.value)
   },
   { immediate: true }
-);
+)
 
 watch(
   () => plugins.value,
   (newPlugins, oldPlugins) => {
-    if (!select.value) return;
+    if (!select.value) return
 
-    if (newPlugins.length === oldPlugins.length) return;
+    if (newPlugins.length === oldPlugins.length) return
 
-    const temp = select.value;
-    select.value = "";
+    const temp = select.value
+    select.value = ''
 
-    setTimeout(() => (select.value = temp), 200);
+    setTimeout(() => (select.value = temp), 200)
   },
   { deep: true }
-);
+)
 
-async function selectPlugin(index) {
-  if (index === select.value) return;
+async function selectPlugin(index): Promise<void> {
+  if (index === select.value) return
 
-  const style = pluginInfoRef.value.style;
+  const style = pluginInfoRef.value.style
 
-  style.opacity = "0";
-  style.transform = "translateX(100%) perspective(100px) rotateY(10deg) scale(.85)";
+  style.opacity = '0'
+  style.transform = 'translateX(100%) perspective(100px) rotateY(10deg) scale(.85)'
 
-  await sleep(50);
+  await sleep(50)
 
-  select.value = null;
+  select.value = null
 
-  await sleep(10);
+  await sleep(10)
 
-  select.value = index;
+  select.value = index
 
-  await sleep(50);
+  await sleep(50)
 
-  style.transform = "translateX(0) perspective(100px) rotateY(0deg) scale(1)";
-  style.opacity = "1";
+  style.transform = 'translateX(0) perspective(100px) rotateY(0deg) scale(1)'
+  style.opacity = '1'
 }
 
 const toggleOptions = reactive({
@@ -121,9 +120,9 @@ const toggleOptions = reactive({
   status: false,
   state: true,
   style: computed(() => {
-    const [a, b, c, d] = toggleOptions.points;
+    const [a, b, c, d] = toggleOptions.points
 
-    if (!a || !b || !c || !d) return "display: none;";
+    if (!a || !b || !c || !d) return 'display: none;'
 
     // const bg = 'var(--el-fill-color)'// toggleOptions.status ? 'transparent' : 'var(--el-fill-color)'
 
@@ -131,89 +130,85 @@ const toggleOptions = reactive({
       clip-path: polygon(${a.x}% ${a.y}%, ${b.x}% ${b.y}%, ${c.x}% ${c.y}%, ${d.x}% ${d.y}%);
       --fake-opacity: .75;
       width: 100%; height: 100%;z-index: 1; transition: clip-path .35s, opacity .5s
-    `;
-  }),
-});
+    `
+  })
+})
 const toggleNewPlugin = (() => {
   let status = true,
-    _ele;
+    _ele
   return async (ele) => {
     if (ele) {
-      _ele = ele;
-      return;
+      _ele = ele
+      return
     }
-    const floatingPlus = document.getElementById("floating-plus");
+    const floatingPlus = document.getElementById('floating-plus')
 
-    status = !status;
+    status = !status
 
-    toggleOptions.status = status;
+    toggleOptions.status = status
 
     setTimeout(() => {
-      toggleOptions.state = status;
-    }, 500);
+      toggleOptions.state = status
+    }, 500)
 
     if (status) {
-      if (!_ele) return;
-      const floating = await computePosition(_ele, floatingPlus);
+      if (!_ele) return
+      const floating = await computePosition(_ele, floatingPlus as HTMLElement)
 
-      toggleOptions.x = floating.x;
-      toggleOptions.y = floating.y + 8;
+      toggleOptions.x = floating.x
+      toggleOptions.y = floating.y + 8
 
       toggleOptions.points = [
         { x: 0, y: 0 },
         { x: 100, y: 0 },
         { x: 100, y: 100 },
-        { x: 0, y: 100 },
-      ];
+        { x: 0, y: 100 }
+      ]
     } else {
-      const el = document.getElementById("newPluginBtn");
-      if (!el) return;
+      const el = document.getElementById('newPluginBtn')
+      if (!el) return
 
-      const floating = await computePosition(el, floatingPlus);
+      const floating = await computePosition(el, floatingPlus as HTMLElement)
 
-      toggleOptions.x = floating.x;
-      toggleOptions.y = floating.y;
+      toggleOptions.x = floating.x
+      toggleOptions.y = floating.y
 
       const ww =
-        window.innerWidth ||
-        document.documentElement.clientWidth ||
-        document.body.clientWidth;
+        window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
       const wh =
-        window.innerHeight ||
-        document.documentElement.clientHeight ||
-        document.body.clientHeight;
-      const { width, height } = el.getBoundingClientRect();
+        window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+      const { width, height } = el.getBoundingClientRect()
 
-      const l = floating.x + width;
-      const t = floating.y - height;
+      const l = floating.x + width
+      const t = floating.y - height
 
-      const [a, b, c, d] = [l / ww, l / ww, (t + height) / wh, (t + height) / wh];
+      const [a, b, c, d] = [l / ww, l / ww, (t + height) / wh, (t + height) / wh]
 
       toggleOptions.points = [
         { x: a * 100, y: c * 100 },
         { x: b * 100, y: c * 100 },
         { x: b * 100, y: d * 100 },
-        { x: a * 100, y: d * 100 },
-      ];
+        { x: a * 100, y: d * 100 }
+      ]
     }
-  };
-})();
+  }
+})()
 
-provide("toggleNewPlugin", toggleNewPlugin);
+provide('toggleNewPlugin', toggleNewPlugin)
 onMounted(() => {
-  setTimeout(toggleNewPlugin, 200);
-});
-window.addEventListener("resize", () => {
-  toggleNewPlugin();
-  setTimeout(toggleNewPlugin, 5);
-});
+  setTimeout(toggleNewPlugin, 200)
+})
+window.addEventListener('resize', () => {
+  toggleNewPlugin()
+  setTimeout(toggleNewPlugin, 5)
+})
 </script>
 
 <style lang="scss" scoped>
 :deep(.new-plus) {
   &:before,
   &:after {
-    content: "";
+    content: '';
     position: absolute;
 
     left: 50%;
@@ -259,7 +254,9 @@ window.addEventListener("resize", () => {
   height: 32px;
 
   cursor: pointer;
-  transition: transform 0.5s, opacity 0s;
+  transition:
+    transform 0.5s,
+    opacity 0s;
 
   transform: translate(var(--x), calc(var(--y) - 100%));
 }
@@ -272,7 +269,7 @@ window.addEventListener("resize", () => {
 
 .Plugin-EmptyBox {
   &:before {
-    content: "";
+    content: '';
     position: absolute;
 
     bottom: 20%;
@@ -287,7 +284,7 @@ window.addEventListener("resize", () => {
   }
 
   &:after {
-    content: "";
+    content: '';
     position: absolute;
 
     bottom: 20%;
@@ -445,7 +442,7 @@ window.addEventListener("resize", () => {
 
   &:after {
     z-index: -1;
-    content: "";
+    content: '';
     position: absolute;
 
     right: 0;
@@ -454,23 +451,18 @@ window.addEventListener("resize", () => {
     width: 100%;
     height: 500%;
 
-    background-image: radial-gradient(
-        circle at top right,
-        rgba(94, 74, 176, 0.2) 50%,
-        transparent 60%
-      ),
-      radial-gradient(
-        circle at top right,
-        var(--el-color-primary-light-5) 10%,
-        transparent 80%
-      ),
-      radial-gradient(
-        circle at top right,
-        rgba(94, 74, 176, 0.8) 20%,
-        rgba(94, 74, 176, 0) 100%
-      );
-    background-position: top right, top right, top right;
-    background-size: 60% 25%, 80% 30%, 100% 25%;
+    background-image:
+      radial-gradient(circle at top right, rgba(94, 74, 176, 0.2) 50%, transparent 60%),
+      radial-gradient(circle at top right, var(--el-color-primary-light-5) 10%, transparent 80%),
+      radial-gradient(circle at top right, rgba(94, 74, 176, 0.8) 20%, rgba(94, 74, 176, 0) 100%);
+    background-position:
+      top right,
+      top right,
+      top right;
+    background-size:
+      60% 25%,
+      80% 30%,
+      100% 25%;
     background-repeat: no-repeat;
 
     opacity: 0.25;
