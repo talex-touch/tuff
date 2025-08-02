@@ -1,24 +1,15 @@
-<!--
-  PluginNew Component
-
-  Handles the creation of new plugins with template selection and form validation.
-  Checks environment requirements and provides template options for plugin development.
--->
 <script setup lang="ts" name="PluginNew">
-// Import template components
 import FormTemplate from '@comp/base/template/FormTemplate.vue'
 import BlockTemplate from '@comp/base/template/BlockTemplate.vue'
 import BrickTemplate from '@comp/base/template/BrickTemplate.vue'
 import LineTemplate from '@comp/base/template/LineTemplate.vue'
 import ActionTemplate from '@comp/base/template/ActionTemplate.vue'
 
-// Import UI components
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import FlatInput from '@comp/base/input/FlatInput.vue'
 import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue'
 import TCheckBox from '@comp/base/checkbox/TCheckBox.vue'
 
-// Import utility functions
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { touchChannel } from '~/modules/channel/channel-core'
 // import { getNpmVersion } from '@talex-touch/utils/electron/env-tool'
@@ -35,7 +26,6 @@ const toggleNewPlugin: any = inject('toggleNewPlugin')
 // Lifecycle hook to initialize component
 onMounted(() => {
   toggleNewPlugin(arrow.value)
-
   envCheck()
 })
 
@@ -96,8 +86,6 @@ const envOptions = reactive<EnvOptions>({})
 
 /**
  * Check environment requirements for plugin creation
- * Verifies Node.js version and degit installation
- * @returns Promise<void>
  */
 async function envCheck(): Promise<void> {
   const res = undefined // await getNpmVersion()
@@ -132,20 +120,10 @@ async function envCheck(): Promise<void> {
     }
     return
   }
-
-  // Object.assign(envOptions, {
-  //   degit: {
-  //     type: 'success',
-  //     ...degit
-  //   }
-  // })
 }
 
 /**
  * Handle plugin creation action
- * Validates form and sends plugin data to backend
- * @param ctx - Action context containing form validation functions
- * @returns Promise<void>
  */
 async function createAction(ctx: any): Promise<void> {
   const { checkForm, setLoading } = ctx
@@ -169,8 +147,6 @@ async function createAction(ctx: any): Promise<void> {
 
 /**
  * Handle degit installation
- * Opens a terminal dialog to install degit globally
- * @returns Promise<void>
  */
 async function handleInstallDegit(): Promise<void> {
   await popperMention('', () =>
@@ -237,7 +213,7 @@ async function handleInstallDegit(): Promise<void> {
         <div>
           <div inline-block mr-2 class="i-simple-icons-vuedotjs" />
         </div>
-        <span block text-xs> Contains default dev-env, with using Vue3 and Vite. </span>
+        <span block text-xs>Contains default dev-env, with using Vue3 and Vite.</span>
         <button
           text-xs
           cursor-pointer
@@ -257,7 +233,7 @@ async function handleInstallDegit(): Promise<void> {
         <div>
           <div inline-block mr-2 class="i-simple-icons-react" />
         </div>
-        <span block text-xs> Contains default dev-env, with using React18 and Vite. </span>
+        <span block text-xs>Contains default dev-env, with using React18 and Vite.</span>
         <button
           text-xs
           cursor-pointer
@@ -277,7 +253,7 @@ async function handleInstallDegit(): Promise<void> {
         <div>
           <div inline-block mr-2 class="i-simple-icons-svelte" />
         </div>
-        <span block text-xs> Contains default dev-env, with using Svelte3 and Vite. </span>
+        <span block text-xs>Contains default dev-env, with using Svelte3 and Vite.</span>
         <button
           text-xs
           cursor-pointer
@@ -322,7 +298,6 @@ async function handleInstallDegit(): Promise<void> {
       >
         <FlatInput v-model="plugin.dev.address" w="48!" />
       </LineTemplate>
-      <!-- regex="^(?=.*[a-zA-Z]{1,})(?=.*[\d]{0,})[a-zA-Z0-9]{15,80}$" -->
       <LineTemplate
         :msg="() => 'You must input the correct plugin description.'"
         title="description"

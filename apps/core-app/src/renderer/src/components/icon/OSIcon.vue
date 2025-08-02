@@ -10,11 +10,16 @@ const _class = ref()
 
 watchEffect(() => {
   const { os } = props
-  if (os === 'Windows 10 Pro' || os === 'Windows 11 Pro' || os === 'win' || os.indexOf('Home China') !== -1 ) {
+  if (
+    os === 'Windows 10 Pro' ||
+    os === 'Windows 11 Pro' ||
+    os === 'win' ||
+    os.indexOf('Home China') !== -1
+  ) {
     _class.value = 'Windows_11'
   } else if (os.indexOf('Windows') !== -1) {
     _class.value = 'i-ri-windows-line'
-  } else if (os.indexOf('macOS') !== -1 || os === 'darwin') {
+  } else if (os.indexOf('Darwin') !== -1 || os === 'darwin') {
     _class.value = 'i-ri-apple-fill'
   } else if (os.indexOf('OS X') !== -1) {
     _class.value = 'i-ri-apple-line'
@@ -42,7 +47,7 @@ watchEffect(() => {
 
 <style>
 .Windows_11 {
-  margin-right: .25rem;
+  margin-right: 0.25rem;
 
   width: 1rem;
   height: 1rem;
@@ -50,6 +55,6 @@ watchEffect(() => {
   background-size: 1rem 1rem;
   background-repeat: no-repeat;
   background-position: center;
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMjU2IDI1NiI+PHBhdGggZmlsbD0iIzAwNzhENCIgZD0iTTAgMGgxMjEuMzI5djEyMS4zMjlIMFYwWm0xMzQuNjcxIDBIMjU2djEyMS4zMjlIMTM0LjY3MVYwWk0wIDEzNC42NzFoMTIxLjMyOVYyNTZIMFYxMzQuNjcxWm0xMzQuNjcxIDBIMjU2VjI1NkgxMzQuNjcxVjEzNC42NzFaIi8+PC9zdmc+");
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMjU2IDI1NiI+PHBhdGggZmlsbD0iIzAwNzhENCIgZD0iTTAgMGgxMjEuMzI5djEyMS4zMjlIMFYwWm0xMzQuNjcxIDBIMjU2djEyMS4zMjlIMTM0LjY3MVYwWk0wIDEzNC42NzFoMTIxLjMyOVYyNTZIMFYxMzQuNjcxWm0xMzQuNjcxIDBIMjU2VjI1NkgxMzQuNjcxVjEzNC42NzFaIi8+PC9zdmc+');
 }
 </style>

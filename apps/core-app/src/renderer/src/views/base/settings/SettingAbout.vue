@@ -8,10 +8,7 @@
 // Import UI components
 import TBlockLine from '@comp/base/group/TBlockLine.vue'
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
-import OSIcon from '@comp/icon/OSIcon.vue'
-
-// Log application information for debugging
-console.log('information aaa')
+import OSIcon from '~/components/icon/OSIcon.vue'
 
 // Define component props
 interface Props {
@@ -40,11 +37,6 @@ const startCosts = computed(() => props.env.sui && (props.env.sui.t.e - props.en
 // Get CPU and memory usage hooks
 const cpuUsage: any = []
 const memoryUsage: any = []
-
-// Lifecycle hook to clean up resources
-onBeforeUnmount(() => {
-  // Cleanup code would go here if needed
-})
 
 // Computed property for current quarter based on build time
 const currentQuarter = computed(() => {
@@ -103,9 +95,9 @@ const currentExperiencePack = computed(() => {
     <t-block-line title="V8 Engine" :description="env.process.versions?.v8"></t-block-line>
     <t-block-line title="OS">
       <template #description>
-        <span indent-1 flex items-center>
+        <span flex gap-0 items-center>
           <OSIcon ml-8 :os="env.os.version" />
-          {{ env.os.version }}
+          <span>{{ env.os.version }}</span>
         </span>
       </template>
     </t-block-line>
@@ -117,7 +109,7 @@ const currentExperiencePack = computed(() => {
       title="Experience"
       :description="`Touch Feature Experience Pack ${currentExperiencePack}`"
     ></t-block-line>
-    <t-block-line title="CPU Usage">
+    <!-- <t-block-line title="CPU Usage">
       <template #description>
         <span
           :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`"
@@ -129,8 +121,6 @@ const currentExperiencePack = computed(() => {
         </span>
       </template>
     </t-block-line>
-    <!-- <t-block-line :title="$t('settings.application.list-settings.specifications.gpu-usage')"
-      description="Touch Feature Experience Pack 2023.02.21"></t-block-line> -->
     <t-block-line title="Mem Usage">
       <template #description>
         <span
@@ -145,17 +135,12 @@ const currentExperiencePack = computed(() => {
         >
         </span>
       </template>
-    </t-block-line>
+    </t-block-line> -->
     <t-block-line :title="`TalexTouch Terms of Service`" :link="true"></t-block-line>
     <t-block-line :title="`TalexTouch Software License`" :link="true"></t-block-line>
   </t-group-block>
 </template>
 
-<!--
-  SettingAbout Component Styles
-
-  SCSS styles for the setting about section including usage visualization.
--->
 <style lang="scss">
 /** Usage visualization styles */
 .Usage {

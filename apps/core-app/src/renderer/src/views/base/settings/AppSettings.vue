@@ -3,54 +3,54 @@
     <div class="AppSettings-Container">
       <SettingHeader :dev="dev" :env="$env" />
 
-      <SettingUser :env="$env" />
+      <!-- <SettingUser :env="$env" /> -->
 
-      <SettingLanguage :env="$env" />
+      <!-- <SettingLanguage :env="$env" /> -->
 
       <SettingTools :env="$env" />
 
-      <SettingStorage />
+      <!-- <SettingStorage /> -->
 
       <SettingAbout :dev="dev" :env="$env" />
     </div>
   </ViewTemplate>
 </template>
 
-<script name="AppSettings" setup>
-import { useEnv } from "@modules/hooks/env-hooks";
-import ViewTemplate from "@comp/base/template/ViewTemplate.vue";
-import SettingHeader from "./SettingHeader.vue";
-import SettingUser from './SettingUser.vue'
-import SettingLanguage from './SettingLanguage.vue'
-import SettingTools from "./SettingTools.vue";
-import SettingStorage from './SettingStorage.vue';
-import SettingAbout from "./SettingAbout.vue";
+<script lang="ts" name="AppSettings" setup>
+import { useEnv } from '~/modules/hooks/env-hooks'
+import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
+import SettingHeader from './SettingHeader.vue'
+// import SettingUser from './SettingUser.vue'
+// import SettingLanguage from './SettingLanguage.vue'
+import SettingTools from './SettingTools.vue'
+// import SettingStorage from './SettingStorage.vue'
+import SettingAbout from './SettingAbout.vue'
 
 const $env = reactive({
   os: null,
   process: null,
   packageJson: null,
   account: window.$storage.account,
-  sui: window.$startupInfo,
-});
+  sui: window.$startupInfo
+})
 
-const dev = ref(false);
+const dev = ref(false)
 
 // initially
 onMounted(async () => {
-  dev.value = process.env.NODE_ENV === "development";
+  dev.value = process.env.NODE_ENV === 'development'
 
-  const env = useEnv();
-  $env.os = env.os;
-  $env.process = env.process;
-  $env.packageJson = env.packageJson;
-});
+  const env = useEnv()
+  $env.os = env.os
+  $env.process = env.process
+  $env.packageJson = env.packageJson
+})
 </script>
 
 <style lang="scss" scoped>
 .Usage {
   &:before {
-    content: "";
+    content: '';
     position: absolute;
 
     left: 0;
