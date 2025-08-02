@@ -1,36 +1,36 @@
 <script name="FileTag" setup lang="ts">
-import path from "path";
+import path from 'path-browserify'
 
 const props = defineProps<{
-  buffer: Uint8Array;
-  paths: string[];
-}>();
+  buffer: Uint8Array
+  paths: string[]
+}>()
 
 const image = computed(() => {
-  const bytes: any = props.buffer.buffer;
-  let storeData = "";
-  const len = bytes.byteLength;
+  const bytes: any = props.buffer.buffer
+  let storeData = ''
+  const len = bytes.byteLength
   for (let i = 0; i < len; i++) {
-    storeData += String.fromCharCode(bytes[i]);
+    storeData += String.fromCharCode(bytes[i])
   }
 
-  return "data:image/png;base64," + window.btoa(storeData);
-});
+  return 'data:image/png;base64,' + window.btoa(storeData)
+})
 
 const firstFileName = computed(() => {
-  const [firstPath] = props.paths;
+  const [firstPath] = props.paths
 
-  return path.basename(firstPath || "");
-});
+  return path.basename(firstPath || '')
+})
 
-const fileLength = computed(() => props?.paths.length || 0);
+const fileLength = computed(() => props?.paths.length || 0)
 </script>
 
 <template>
   <div class="FileTag">
     <img :src="image" alt="" />
     <span class="name">{{ firstFileName }}</span>
-    <span class="badge" v-if="fileLength - 1" v-text="fileLength" />
+    <span v-if="fileLength - 1" class="badge" v-text="fileLength" />
   </div>
 </template>
 
