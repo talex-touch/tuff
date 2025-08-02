@@ -1,4 +1,4 @@
-import { OpenDevToolsOptions } from "electron";
+import { BrowserWindowConstructorOptions, OpenDevToolsOptions } from "electron";
 
 export namespace TalexTouch {
   export interface TouchApp {
@@ -52,6 +52,10 @@ export namespace TalexTouch {
       filePath: string,
       options?: LoadFileOptions | undefined
     ): Promise<Electron.WebContents>;
+  }
+
+  export type TouchWindowConstructorOptions = BrowserWindowConstructorOptions & {
+    autoShow?: boolean
   }
 
   export type LoadFileOptions = Electron.LoadFileOptions & {

@@ -10,24 +10,27 @@
     {{ route.name ?? route.path }}
   </span>
 
-  <ul class="FlatLayout-Controller op-0">
-     Use native window control instead
+  <ul class="FlatLayout-Controller">
+    Use native window control instead
   </ul>
 </template>
 
 <script lang="ts" name="FlatController" setup>
-import { useRoute } from "vue-router";
-import { applicationUpgrade } from "~/modules/hooks/application-hooks";
+import { useRoute } from 'vue-router'
+import { applicationUpgrade } from '~/modules/hooks/application-hooks'
 
-const route = useRoute();
+const route = useRoute()
 </script>
 
 <style lang="scss">
+.FlatLayout-Controller {
+  opacity: 0;
+}
 
 .FlatLayout-Icon {
   & span {
     .has-update &:after {
-      content: "";
+      content: '';
       position: absolute;
 
       margin-left: 10px;

@@ -33,7 +33,9 @@ export function getCoreBoxWindow(): TouchWindow | null {
  *                        Receives the closed TouchWindow instance as a parameter.
  * @returns A Promise that resolves to the created TouchWindow instance.
  */
-async function createNewBoxWindow(closeCallback: (window: TouchWindow) => void): Promise<TouchWindow> {
+async function createNewBoxWindow(
+  closeCallback: (window: TouchWindow) => void
+): Promise<TouchWindow> {
   const window = new TouchWindow({ ...BoxWindowOption })
 
   windowAnimation.changeWindow(window)

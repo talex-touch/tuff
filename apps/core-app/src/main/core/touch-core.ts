@@ -1,13 +1,6 @@
 import { TalexTouch } from '../types'
 import { ChannelType, ITouchChannel } from '@talex-touch/utils/channel'
-import {
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  OpenDevToolsOptions,
-  WebContents,
-  app,
-  crashReporter
-} from 'electron'
+import { BrowserWindow, OpenDevToolsOptions, WebContents, app, crashReporter } from 'electron'
 import fse from 'fs-extra'
 import { release } from 'os'
 import path from 'path'
@@ -178,7 +171,10 @@ export class TouchApp implements TalexTouch.TouchApp {
     console.log('[TouchApp] App running under: ' + this.rootPath)
     checkDirWithCreate(this.rootPath, true)
 
-    const _windowOptions = { ...MainWindowOption }
+    const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
+      ...MainWindowOption,
+      autoShow: true
+    }
 
     this.app = app
     this.version = app.isPackaged ? TalexTouch.AppVersion.RELEASE : TalexTouch.AppVersion.DEV
@@ -278,7 +274,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
 
-  constructor(options?: BrowserWindowConstructorOptions) {
+  constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
     this.window = new BrowserWindow(options)
 
     /**
@@ -300,7 +296,10 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
         event.preventDefault()
       })
-      this.window.show()
+
+      if (options?.autoShow) {
+        this.window.show()
+      }
     })
   }
 
