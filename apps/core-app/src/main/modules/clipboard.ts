@@ -2,7 +2,6 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../core/channel-core'
 import { TalexTouch } from '../types'
 import { clipboard } from 'electron'
-import type { TouchWindow } from '../core/touch-core'
 import { ClipboardHelper, type ClipboardFileResult } from '@talex-touch/utils'
 
 /**
@@ -76,7 +75,7 @@ export class ClipboardManager {
    * Register a window for clipboard updates
    * @param window - The window to register
    */
-  registerWindow(window: TouchWindow | TalexTouch.ITouchWindow): void {
+  registerWindow(window: TalexTouch.ITouchWindow): void {
     this.windows.push(window)
 
     window.window.addListener('focus', () => this.sendClipboardMsg())
@@ -88,7 +87,7 @@ export class ClipboardManager {
    * Unregister a window from clipboard updates
    * @param window - The window to unregister
    */
-  unregisterWindow(window: TouchWindow): void {
+  unregisterWindow(window: TalexTouch.ITouchWindow): void {
     this.windows = this.windows.filter((w) => w !== window)
 
     try {

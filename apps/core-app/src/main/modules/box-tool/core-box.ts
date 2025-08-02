@@ -43,9 +43,9 @@ async function createNewBoxWindow(closeCallback: (window: TouchWindow) => void):
 
     try {
       if (app.isPackaged || touchApp.version === TalexTouch.AppVersion.RELEASE) {
-        const url = path.join(process.env.DIST!, 'index.html')
+        const url = path.join(__dirname, '..', 'renderer', 'index.html')
 
-        await window.loadFile(`${url}`, {
+        await window.loadFile(url, {
           devtools: touchApp.version === TalexTouch.AppVersion.DEV
         })
       } else {

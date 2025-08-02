@@ -208,12 +208,17 @@ export class TouchApp implements TalexTouch.TouchApp {
     checkDirWithCreate(this.rootPath, true)
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
+      console.log(
+        '[TouchApp] App is packaged or release version ' + __dirname,
+        ' | ',
+        app.getAppPath()
+      )
       const url = path.join(__dirname, '..', 'renderer', 'index.html')
 
       this.window.window.show()
       console.log('[TouchApp] Loading (mainWindow) webContents from: ' + url)
 
-      await this.window.loadFile(`${url}`, {
+      await this.window.loadFile(url, {
         devtools: this.version === TalexTouch.AppVersion.DEV
       })
     } else {
@@ -310,16 +315,24 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window.webContents.openDevTools(options)
   }
 
-  async loadURL(
-    url: string,
+  async __beforeLoad(
+    target: string,
     options?: TalexTouch.LoadURLOptions | undefined
-  ): Promise<WebContents> {
-    await this.window.loadURL(url, options)
-
-    if (options && options.devtools)
-      this.window.webContents.openDevTools({
-        mode: options.devtools === true ? 'detach' : options.devtools
-      })
+  ): Promise<void> {
+    this.window.webContents.on(
+      'did-fail-load',
+      (event: any, errorCode: number, errorDescription: string, url: string) => {
+        console.error(
+          `[TouchWindow] Failed to load from target [${target}] - [${JSON.stringify(
+            options ?? {}
+          )}] with error:`,
+          errorCode,
+          errorDescription,
+          url,
+          event
+        )
+      }
+    )
 
     this.window.webContents.addListener('render-process-gone', (event: any, details: any) => {
       console.error('[TouchWindow] Render process gone:', event, details)
@@ -338,6 +351,23 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
         console.error('[TouchWindow] Renderer process crashed unexpectedly!')
       }
     })
+
+    console.debug(`[TouchWindow] Try load webContents from target [${target}]`)
+  }
+
+  async loadURL(
+    url: string,
+    options?: TalexTouch.LoadURLOptions | undefined
+  ): Promise<WebContents> {
+    this.__beforeLoad(url, options)
+
+    await this.window.loadURL(url, options)
+
+    if (options && options.devtools) {
+      this.window.webContents.openDevTools({
+        mode: options.devtools === true ? 'detach' : options.devtools
+      })
+    }
 
     return this.window.webContents
   }
@@ -346,30 +376,14 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     filePath: string,
     options?: TalexTouch.LoadFileOptions | undefined
   ): Promise<WebContents> {
+    this.__beforeLoad(filePath, options)
+
     await this.window.loadFile(filePath, options)
 
     if (options && options.devtools)
       this.window.webContents.openDevTools({
         mode: options.devtools === true ? 'detach' : options.devtools
       })
-
-    this.window.webContents.addListener('render-process-gone', (event: any, details: any) => {
-      console.error('[TouchWindow] Render process gone:', event, details)
-      console.log('[TouchWindow] WebContents crashed!', this)
-
-      // In development mode, if the process is killed, it's likely due to a hot reload
-      if (!app.isPackaged && details.reason === 'killed') {
-        console.log(
-          '[TouchWindow] Development mode: Process killed during hot reload, this is expected.'
-        )
-        return
-      }
-
-      // Other cases of crashes
-      if (details.reason === 'crashed') {
-        console.error('[TouchWindow] Renderer process crashed unexpectedly!')
-      }
-    })
 
     return this.window.webContents
   }
