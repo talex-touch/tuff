@@ -2,7 +2,7 @@ import { TalexTouch } from '../types';
 import { Menu, Tray } from 'electron'
 import fse from 'fs-extra'
 import { APP_SCHEMA } from '../config/default'
-import { DownloadManager } from '@talex-touch/utils/electron/download-manager'
+import { DownloadManager } from '../../../../../packages/utils/electron/download-manager'
 
 interface IconItem {
   url: string;

@@ -2,7 +2,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../core/channel-core'
 import { TalexTouch } from '../types'
 import { clipboard } from 'electron'
-import { ClipboardHelper, type ClipboardFileResult } from '@talex-touch/utils'
+import { ClipboardHelper, type ClipboardFileResult } from '@talex-touch/utils/electron'
 
 /**
  * Interface representing the clipboard stash data structure

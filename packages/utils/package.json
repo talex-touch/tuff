@@ -5,39 +5,14 @@
   "module": "./index.ts",
   "license": "MPL-2.0",
   "private": false,
-  "version": "1.0.18",
-  "exports": {
-    ".": "./index.ts",
-    "./types": "./types/index.ts",
-    "./channel": "./channel/index.ts",
-    "./base": "./base/index.ts",
-    "./common": "./common/index.ts",
-    "./common/utils": "./common/utils.ts",
-    "./plugin": "./plugin/index.ts",
-    "./plugin/log/logger-manager": "./plugin/log/logger-manager.ts",
-    "./plugin/log/logger": "./plugin/log/logger.ts",
-    "./plugin/sdk": "./plugin/sdk.ts",
-    "./plugin/sdk/window": "./plugin/sdk/window.ts",
-    "./core-box": "./core-box/index.ts",
-    "./search/types": "./search/types.ts",
-    "./eventbus": "./eventbus/index.ts",
-    "./permission": "./permission/index.ts",
-    "./renderer": "./renderer/index.ts",
-    "./renderer/ref": "./renderer/ref.ts",
-    "./renderer/slots": "./renderer/slots.ts",
-    "./renderer/storage/app-settings": "./renderer/storage/app-settings.ts",
-    "./service": "./service/index.ts",
-    "./service/protocol": "./service/protocol/index.ts",
-    "./electron/env-tool": "./electron/env-tool.ts",
-    "./electron/download-manager": "./electron/download-manager.ts",
-    "./animation/": "./animation/"
-  },
+  "version": "1.0.19",
   "scripts": {
     "publish": "npm publish --access public"
   },
   "keywords": [
     "vue",
     "electron",
+    "launcher",
     "talex-touch"
   ],
   "repository": {
@@ -51,7 +26,7 @@
     "vue": "^3.5.18"
   },
   "peerDependencies": {
-    "electron": "^29.4.6",
+    "electron": "^37.2.4",
     "vue": "^3.5.15"
   }
 }
