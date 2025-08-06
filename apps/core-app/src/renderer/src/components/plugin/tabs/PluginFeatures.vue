@@ -1,77 +1,182 @@
 <template>
-  <div class="plugin-features w-full">
-    <div class="features-header">
-      <div class="stats-row">
-        <div class="stat-item">
-          <i class="i-ri-function-line" />
-          <div class="stat-info">
-            <span class="stat-number">{{ plugin.features?.length || 0 }}</span>
-            <span class="stat-label">Features</span>
+  <div class="PluginFeature w-full">
+    <!-- Stats Header -->
+    <div class="PluginFeature-Header mb-6">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="PluginFeature-StatCard bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center gap-3">
+          <i class="i-ri-function-line text-2xl text-blue-400" />
+          <div class="PluginFeature-StatInfo">
+            <span class="text-2xl font-bold text-white">{{ plugin.features?.length || 0 }}</span>
+            <span class="block text-xs text-white/60">Features</span>
           </div>
         </div>
-        <div class="stat-item">
-          <i class="i-ri-terminal-line" />
-          <div class="stat-info">
-            <span class="stat-number">{{ totalCommands }}</span>
-            <span class="stat-label">Commands</span>
+        <div class="PluginFeature-StatCard bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center gap-3">
+          <i class="i-ri-terminal-line text-2xl text-green-400" />
+          <div class="PluginFeature-StatInfo">
+            <span class="text-2xl font-bold text-white">{{ totalCommands }}</span>
+            <span class="block text-xs text-white/60">Commands</span>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="plugin.features?.length" class="features-list">
+    <!-- Features Grid -->
+    <div v-if="plugin.features?.length" class="PluginFeature-Grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div
         v-for="feature in plugin.features"
         :key="feature.id"
-        class="feature-card glass-card"
+        class="PluginFeature-Card bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 cursor-pointer"
+        @click="showFeatureDetails(feature)"
       >
-        <div class="feature-header">
-          <div class="feature-info">
-            <h4 class="feature-name">{{ feature.name }}</h4>
-            <p class="feature-desc">{{ feature.desc }}</p>
+        <div class="PluginFeature-CardHeader flex items-start justify-between mb-4">
+          <div class="PluginFeature-CardIcon w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+            <i :class="feature.icon || 'i-ri-function-line'" class="text-white text-xl" />
           </div>
-          <div class="feature-meta">
-            <span class="commands-badge">{{ feature.commands.length }}</span>
+          <div class="PluginFeature-Badge bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-lg border border-blue-400/20">
+            {{ feature.commands.length }}
           </div>
         </div>
-
-        <div class="feature-details">
-          <div class="commands-grid">
+        
+        <div class="PluginFeature-CardContent">
+          <h3 class="PluginFeature-CardTitle text-lg font-semibold text-white mb-2">{{ feature.name }}</h3>
+          <p class="PluginFeature-CardDesc text-sm text-white/70 line-clamp-2 mb-4">{{ feature.desc }}</p>
+          
+          <div class="PluginFeature-CommandsList space-y-2">
             <div
-              v-for="(command, index) in feature.commands"
+              v-for="(command, index) in feature.commands.slice(0, 2)"
               :key="index"
-              class="command-item"
-              @click="showCommandDetails(command, feature)"
+              class="PluginFeature-CommandItem bg-black/20 rounded-lg p-2 text-xs flex items-center justify-between"
             >
-              <div class="command-header">
-                <code class="command-name">{{ getCommandName(command, feature) }}</code>
-                <span v-if="getCommandShortcut(command, feature)" class="command-shortcut">{{ getCommandShortcut(command, feature) }}</span>
-              </div>
-              <p v-if="getCommandDesc(command, feature)" class="command-desc">{{ getCommandDesc(command, feature) }}</p>
+              <code class="text-yellow-300">{{ getCommandName(command, feature) }}</code>
+              <span v-if="getCommandShortcut(command, feature)" class="text-white/50 text-xs">{{ getCommandShortcut(command, feature) }}</span>
+            </div>
+            <div v-if="feature.commands.length > 2" class="text-xs text-white/50 text-center py-1">
+              +{{ feature.commands.length - 2 }} more commands
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-else class="empty-state">
-      <i class="i-ri-function-line empty-icon" />
-      <h3>No Features Available</h3>
-      <p>This plugin doesn't expose any features yet.</p>
+    <!-- Empty State -->
+    <div v-else class="PluginFeature-EmptyState flex flex-col items-center justify-center py-16 text-center">
+      <div class="PluginFeature-EmptyIcon w-20 h-20 bg-white/5 rounded-2xl flex items-center justify-center mb-6">
+        <i class="i-ri-function-line text-4xl text-white/30" />
+      </div>
+      <h3 class="text-xl font-semibold text-white mb-2">No Features Available</h3>
+      <p class="text-white/60">This plugin doesn't expose any features yet.</p>
     </div>
 
-    <CommandDetailDrawer
-      :visible="showDrawer"
-      :command="selectedCommand"
-      :command-data="selectedCommandData"
-      @close="showDrawer = false"
-    />
+    <!-- Feature Detail Drawer -->
+    <ElDrawer
+      v-model="showDrawer"
+      title="Feature Details"
+      direction="rtl"
+      size="50%"
+      :before-close="handleDrawerClose"
+    >
+      <template #header>
+        <div class="flex items-center gap-4 py-2">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+            <i :class="selectedFeature?.icon || 'i-ri-function-line'" class="text-white text-lg" />
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ selectedFeature?.name }}</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedFeature?.desc }}</p>
+          </div>
+        </div>
+      </template>
+      
+      <div v-if="selectedFeature" class="PluginFeature-DrawerContent px-4">
+        <!-- Feature Overview -->
+        <div class="PluginFeature-Overview mb-8">
+          <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <i class="i-ri-information-line text-blue-500" />
+            Overview
+          </h3>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600 dark:text-gray-400">Feature ID:</span>
+              <code class="text-sm bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">{{ selectedFeature.id }}</code>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600 dark:text-gray-400">Commands Count:</span>
+              <span class="text-sm font-medium">{{ selectedFeature.commands.length }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-600 dark:text-gray-400">Feature Type:</span>
+              <span class="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">{{ selectedFeature.type || 'Standard' }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Commands Section -->
+        <div class="PluginFeature-Commands mb-8">
+          <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <i class="i-ri-terminal-line text-green-500" />
+            Commands ({{ selectedFeature.commands.length }})
+          </h3>
+          <div class="space-y-4">
+            <div
+              v-for="(command, index) in selectedFeature.commands"
+              :key="index"
+              class="PluginFeature-CommandDetail bg-gray-50 dark:bg-gray-800 rounded-xl p-4"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                    <i class="i-ri-terminal-line text-yellow-600 dark:text-yellow-400 text-sm" />
+                  </div>
+                  <div>
+                    <h4 class="font-semibold text-gray-900 dark:text-white">{{ getCommandName(command, selectedFeature) }}</h4>
+                    <p v-if="getCommandDesc(command, selectedFeature)" class="text-sm text-gray-600 dark:text-gray-400">{{ getCommandDesc(command, selectedFeature) }}</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span v-if="getCommandShortcut(command, selectedFeature)" class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-2 py-1 rounded border">
+                    {{ getCommandShortcut(command, selectedFeature) }}
+                  </span>
+                  <span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded">
+                    {{ command.type }}
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Command JSON -->
+              <div class="mt-3">
+                <ElCollapse>
+                  <ElCollapseItem title="View JSON" :name="index">
+                    <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                      <pre class="text-xs text-gray-300">{{ JSON.stringify(command, null, 2) }}</pre>
+                    </div>
+                  </ElCollapseItem>
+                </ElCollapse>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Raw Feature JSON -->
+        <div class="PluginFeature-RawJson">
+          <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <i class="i-ri-code-line text-purple-500" />
+            Raw Feature Data
+          </h3>
+          <ElCollapse>
+            <ElCollapseItem title="View Complete Feature JSON" name="feature-json">
+              <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                <pre class="text-xs text-gray-300">{{ JSON.stringify(selectedFeature, null, 2) }}</pre>
+              </div>
+            </ElCollapseItem>
+          </ElCollapse>
+        </div>
+      </div>
+    </ElDrawer>
   </div>
 </template>
 
 <script lang="ts" setup>
 import type { ITouchPlugin, IFeatureCommand } from '@talex-touch/utils/plugin'
-import CommandDetailDrawer from './CommandDetailDrawer.vue'
 
 // Props
 const props = defineProps<{
@@ -85,8 +190,7 @@ const totalCommands = computed(() =>
 
 // Drawer state
 const showDrawer = ref(false)
-const selectedCommand = ref<IFeatureCommand | null>(null)
-const selectedCommandData = ref<any>(null)
+const selectedFeature = ref<any>(null)
 
 // Helper functions to extract command properties
 function getCommandName(command: IFeatureCommand, feature: any): string {
@@ -113,260 +217,52 @@ function getCommandDesc(command: IFeatureCommand, feature: any): string | undefi
   return undefined
 }
 
-// Command details management
-function showCommandDetails(command: IFeatureCommand, feature: any): void {
-  selectedCommand.value = command
-
-  // Create command data object with available properties
-  selectedCommandData.value = {
-    name: getCommandName(command, feature),
-    shortcut: getCommandShortcut(command, feature),
-    desc: getCommandDesc(command, feature)
-  }
-
+// Feature details management
+function showFeatureDetails(feature: any): void {
+  selectedFeature.value = feature
   showDrawer.value = true
+}
+
+function handleDrawerClose(): void {
+  showDrawer.value = false
+  selectedFeature.value = null
 }
 </script>
 
 <style lang="scss" scoped>
-.plugin-features {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-
-  width: 100%;
-}
-
-.features-header {
-  margin-bottom: 1rem;
-}
-
-.stats-row {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  background: rgba(var(--el-fill-color-extra-light-rgb), 0.6);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.2);
-  border-radius: 12px;
-  flex: 1;
-
-  i {
-    font-size: 1.5rem;
-    color: var(--el-color-primary);
-  }
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.stat-number {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-  line-height: 1;
-}
-
-.stat-label {
-  font-size: 0.75rem;
-  color: var(--el-text-color-regular);
-}
-
-.features-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.glass-card {
-  background: rgba(var(--el-fill-color-extra-light-rgb), 0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.2);
-  border-radius: 16px;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-
-  &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
-  }
-}
-
-.feature-card {
-  cursor: default;
-}
-
-.feature-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.feature-info {
-  flex: 1;
-}
-
-.feature-name {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.feature-desc {
-  margin: 0;
-  color: var(--el-text-color-regular);
-  line-height: 1.4;
-}
-
-.feature-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.commands-badge {
-  background: var(--el-color-primary-light-8);
-  color: var(--el-color-primary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  border: 1px solid rgba(var(--el-color-primary-rgb), 0.2);
-}
-
-.expand-icon {
-  font-size: 1.25rem;
-  color: var(--el-text-color-secondary);
-  transition: transform 0.3s ease;
-}
-
-.feature-details {
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid rgba(var(--el-border-color-rgb), 0.3);
-}
-
-.commands-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1rem;
-}
-
-.command-item {
-  background: rgba(var(--el-fill-color-rgb), 0.6);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.3);
-  border-radius: 8px;
-  padding: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.4);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-  }
-}
-
-.command-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.command-name {
-  font-family: 'SF Mono', Monaco, monospace;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--el-color-primary);
-  background: rgba(var(--el-color-primary-rgb), 0.1);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-}
-
-.command-shortcut {
-  font-size: 0.625rem;
-  color: var(--el-text-color-secondary);
-  background: rgba(var(--el-fill-color-rgb), 0.8);
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
-  border: 1px solid var(--el-border-color);
-}
-
-.command-desc {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--el-text-color-regular);
-  line-height: 1.3;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  text-align: center;
-
-  .empty-icon {
-    font-size: 3rem;
-    color: var(--el-text-color-disabled);
-    margin-bottom: 1rem;
-  }
-
-  h3 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.125rem;
-    color: var(--el-text-color-primary);
-  }
-
-  p {
-    margin: 0;
-    color: var(--el-text-color-regular);
-    opacity: 0.8;
-  }
-}
-
-.feature-expand-enter-active,
-.feature-expand-leave-active {
-  transition: all 0.3s ease;
+/* UnoCSS handles most styling, minimal custom styles needed */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.feature-expand-enter-from,
-.feature-expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-  transform: translateY(-10px);
+.PluginFeature-Modal {
+  animation: fadeIn 0.2s ease-out;
 }
 
-.feature-expand-enter-to,
-.feature-expand-leave-from {
-  opacity: 1;
-  max-height: 500px;
-  transform: translateY(0);
+.PluginFeature-ModalContent {
+  animation: slideUp 0.3s ease-out;
 }
 
-@media (max-width: 768px) {
-  .stats-row {
-    flex-direction: column;
-    gap: 1rem;
-  }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-  .commands-grid {
-    grid-template-columns: 1fr;
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
   }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+pre {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
 }
 </style>

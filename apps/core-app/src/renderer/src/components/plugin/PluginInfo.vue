@@ -9,8 +9,7 @@
           <div
             class="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"
           >
-            <i v-if="plugin.icon?.value" class="text-xl" />
-            <i v-else class="i-ri-puzzle-line text-xl text-blue-600 dark:text-blue-400" />
+            <PluginIcon :alt="plugin.name" :icon="plugin.icon" />
           </div>
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
@@ -46,14 +45,17 @@
         </div>
       </div>
 
-      <button
-        class="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center transition-colors disabled:opacity-50"
+      <FlatButton
+        class="h-10 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center transition-colors disabled:opacity-50"
         :disabled="loadingStates.openFolder"
         @click="handleOpenPluginFolder"
       >
         <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line text-lg" />
         <i v-else class="i-ri-loader-4-line text-lg animate-spin" />
-      </button>
+        <span class="block text-sm">{{
+          loadingStates.openFolder ? 'Opening...' : 'Open Folder'
+        }}</span>
+      </FlatButton>
     </div>
 
     <!-- Status Section -->
@@ -83,6 +85,7 @@
 </template>
 
 <script lang="ts" name="PluginInfo" setup>
+import FlatButton from '../base/button/FlatButton.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import TvTabs from '@comp/tabs/vertical/TvTabs.vue'
 import TvTabItem from '@comp/tabs/vertical/TvTabItem.vue'
@@ -93,7 +96,6 @@ import PluginLogs from './tabs/PluginLogs.vue'
 import PluginDetails from './tabs/PluginDetails.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
-import { ElTooltip } from 'element-plus'
 
 // Props
 const props = defineProps<{

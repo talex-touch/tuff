@@ -1,106 +1,125 @@
 <template>
-  <div class="plugin-details">
-    <div class="details-grid">
-      <div class="glass-card">
-        <div class="card-header">
-          <i class="i-ri-information-line" />
-          <h3>Basic Information</h3>
+  <div class="PluginDetails w-full">
+    <div class="PluginDetails-Grid grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Basic Information -->
+      <div class="PluginDetails-Card bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
+          <i class="i-ri-information-line text-xl text-blue-400" />
+          <h3 class="text-lg font-semibold text-white">Basic Information</h3>
         </div>
-        <div class="detail-list">
-          <div class="detail-row">
-            <span class="label">Plugin ID</span>
-            <div class="value-with-copy">
-              <code class="value">{{ plugin.name }}</code>
+        <div class="PluginDetails-List space-y-4">
+          <div class="PluginDetails-Row flex justify-between items-center py-3 border-b border-white/10">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Plugin ID</span>
+            <div class="PluginDetails-ValueWithCopy flex items-center gap-2">
+              <code class="PluginDetails-Value bg-black/30 text-white text-xs px-2 py-1 rounded border border-white/20">{{ plugin.name }}</code>
               <button 
-                class="copy-mini"
-                :class="{ copied: copyState.pluginId }"
+                class="PluginDetails-CopyButton w-6 h-6 bg-white/10 border border-white/20 rounded flex items-center justify-center transition-colors"
+                :class="copyState.pluginId ? 'bg-green-500/20 border-green-400/20 text-green-300' : 'text-white/60'"
                 @click="copyToClipboard(plugin.name, 'pluginId')"
                 title="Copy plugin ID"
               >
-                <i :class="copyState.pluginId ? 'i-ri-check-line' : 'i-ri-file-copy-line'" />
+                <i :class="copyState.pluginId ? 'i-ri-check-line' : 'i-ri-file-copy-line'" class="text-xs" />
               </button>
             </div>
           </div>
-          <div class="detail-row">
-            <span class="label">Version</span>
-            <span class="value version">{{ plugin.version }}</span>
+          <div class="PluginDetails-Row flex justify-between items-center py-3 border-b border-white/10">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Version</span>
+            <span class="PluginDetails-Value text-sm font-semibold text-green-300">{{ plugin.version }}</span>
           </div>
-          <div class="detail-row">
-            <span class="label">Mode</span>
-            <span v-if="plugin.dev?.enable" class="value dev-mode">Development</span>
-            <span v-else class="value prod-mode">Production</span>
+          <div class="PluginDetails-Row flex justify-between items-center py-3 border-b border-white/10">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Mode</span>
+            <span v-if="plugin.dev?.enable" class="PluginDetails-Value text-sm font-medium text-blue-300">Development</span>
+            <span v-else class="PluginDetails-Value text-sm font-medium text-green-300">Production</span>
           </div>
-          <div v-if="plugin.dev?.address" class="detail-row">
-            <span class="label">Dev Address</span>
-            <a :href="plugin.dev.address" class="value link" target="_blank">
+          <div v-if="plugin.dev?.address" class="PluginDetails-Row flex justify-between items-center py-3">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Dev Address</span>
+            <a :href="plugin.dev.address" class="PluginDetails-Link text-sm text-blue-300 flex items-center gap-1" target="_blank">
               {{ plugin.dev.address }}
-              <i class="i-ri-external-link-line" />
+              <i class="i-ri-external-link-line text-xs" />
             </a>
           </div>
         </div>
       </div>
 
-      <div class="glass-card">
-        <div class="card-header">
-          <i class="i-ri-settings-3-line" />
-          <h3>Configuration</h3>
+      <!-- Configuration -->
+      <div class="PluginDetails-Card bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
+          <i class="i-ri-settings-3-line text-xl text-purple-400" />
+          <h3 class="text-lg font-semibold text-white">Configuration</h3>
         </div>
-        <div class="detail-list">
-          <div class="detail-row">
-            <span class="label">Auto Start</span>
-            <div class="toggle-indicator enabled">
-              <div class="toggle-dot"></div>
-              <span>Enabled</span>
+        <div class="PluginDetails-List space-y-4">
+          <div class="PluginDetails-Row flex justify-between items-center py-3 border-b border-white/10">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Auto Start</span>
+            <div class="PluginDetails-Toggle flex items-center gap-2">
+              <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span class="text-sm text-green-300">Enabled</span>
             </div>
           </div>
-          <div class="detail-row">
-            <span class="label">Hot Reload</span>
-            <div class="toggle-indicator" :class="{ enabled: plugin.dev?.enable }">
-              <div class="toggle-dot"></div>
-              <span>{{ plugin.dev?.enable ? 'Enabled' : 'Disabled' }}</span>
+          <div class="PluginDetails-Row flex justify-between items-center py-3">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Hot Reload</span>
+            <div class="PluginDetails-Toggle flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full" :class="plugin.dev?.enable ? 'bg-green-400 animate-pulse' : 'bg-gray-400'" />
+              <span class="text-sm" :class="plugin.dev?.enable ? 'text-green-300' : 'text-gray-400'">{{ plugin.dev?.enable ? 'Enabled' : 'Disabled' }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="glass-card">
-        <div class="card-header">
-          <i class="i-ri-folder-line" />
-          <h3>File System</h3>
+      <!-- File System -->
+      <div class="PluginDetails-Card bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
+          <i class="i-ri-folder-line text-xl text-orange-400" />
+          <h3 class="text-lg font-semibold text-white">File System</h3>
         </div>
-        <div class="detail-list">
-          <div class="detail-row">
-            <span class="label">Plugin Path</span>
-            <span class="value code truncate">~/plugins/{{ plugin.name }}</span>
+        <div class="PluginDetails-List space-y-4">
+          <div class="PluginDetails-Row flex justify-between items-center py-3 border-b border-white/10">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Plugin Path</span>
+            <code class="PluginDetails-Value bg-black/30 text-white text-xs px-2 py-1 rounded border border-white/20 max-w-40 truncate">~/plugins/{{ plugin.name }}</code>
           </div>
-          <div class="detail-row">
-            <span class="label">Data Directory</span>
-            <span class="value code truncate">~/data/{{ plugin.name }}</span>
+          <div class="PluginDetails-Row flex justify-between items-center py-3 border-b border-white/10">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Data Directory</span>
+            <code class="PluginDetails-Value bg-black/30 text-white text-xs px-2 py-1 rounded border border-white/20 max-w-40 truncate">~/data/{{ plugin.name }}</code>
           </div>
-          <div class="detail-row">
-            <span class="label">Cache Size</span>
-            <span class="value">2.4 MB</span>
+          <div class="PluginDetails-Row flex justify-between items-center py-3">
+            <span class="PluginDetails-Label text-sm font-medium text-white/70">Cache Size</span>
+            <span class="PluginDetails-Value text-sm text-white">2.4 MB</span>
           </div>
         </div>
       </div>
 
-      <div class="glass-card">
-        <div class="card-header">
-          <i class="i-ri-time-line" />
-          <h3>Performance</h3>
+      <!-- Performance -->
+      <div class="PluginDetails-Card bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
+          <i class="i-ri-time-line text-xl text-green-400" />
+          <h3 class="text-lg font-semibold text-white">Performance</h3>
         </div>
-        <div class="performance-metrics">
-          <div class="metric">
-            <span class="metric-label">Load Time</span>
-            <span class="metric-value">156ms</span>
+        <div class="PluginDetails-Metrics space-y-3">
+          <div class="PluginDetails-Metric bg-black/20 rounded-xl p-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <i class="i-ri-timer-line text-blue-400 text-sm" />
+              </div>
+              <span class="PluginDetails-MetricLabel text-sm text-white/70">Load Time</span>
+            </div>
+            <span class="PluginDetails-MetricValue text-sm font-semibold text-white">156ms</span>
           </div>
-          <div class="metric">
-            <span class="metric-label">Memory</span>
-            <span class="metric-value">8.2 MB</span>
+          <div class="PluginDetails-Metric bg-black/20 rounded-xl p-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                <i class="i-ri-ram-line text-purple-400 text-sm" />
+              </div>
+              <span class="PluginDetails-MetricLabel text-sm text-white/70">Memory Usage</span>
+            </div>
+            <span class="PluginDetails-MetricValue text-sm font-semibold text-white">8.2 MB</span>
           </div>
-          <div class="metric">
-            <span class="metric-label">CPU</span>
-            <span class="metric-value">0.3%</span>
+          <div class="PluginDetails-Metric bg-black/20 rounded-xl p-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+                <i class="i-ri-cpu-line text-green-400 text-sm" />
+              </div>
+              <span class="PluginDetails-MetricLabel text-sm text-white/70">CPU Usage</span>
+            </div>
+            <span class="PluginDetails-MetricValue text-sm font-semibold text-white">0.3%</span>
           </div>
         </div>
       </div>
@@ -136,212 +155,21 @@ async function copyToClipboard(text: string, type: string) {
 </script>
 
 <style lang="scss" scoped>
-.plugin-details {
-  display: flex;
-  flex-direction: column;
+/* UnoCSS handles most styling, minimal custom styles needed */
+
+.PluginDetails-Row:last-child {
+  @apply border-b-0;
 }
 
-.details-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+.PluginDetails-Toggle .animate-pulse {
+  animation: pulse 2s infinite;
 }
 
-.glass-card {
-  background: rgba(var(--el-fill-color-extra-light-rgb), 0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.2);
-  border-radius: 16px;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-
-  &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
-  }
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-
-  i {
-    font-size: 1.25rem;
-    color: var(--el-color-primary);
-  }
-
-  h3 {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-  }
-}
-
-.detail-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(var(--el-border-color-rgb), 0.2);
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  .label {
-    font-weight: 500;
-    color: var(--el-text-color-regular);
-  }
-
-  .value {
-    color: var(--el-text-color-primary);
-    text-align: right;
-
-    &.code {
-      font-family: 'SF Mono', Monaco, monospace;
-      background: rgba(var(--el-fill-color-rgb), 0.6);
-      padding: 0.25rem 0.5rem;
-      border-radius: 4px;
-      border: 1px solid var(--el-border-color);
-    }
-
-    &.version {
-      font-weight: 600;
-      color: var(--el-color-success);
-    }
-
-    &.dev-mode {
-      color: var(--el-color-info);
-      font-weight: 500;
-    }
-
-    &.prod-mode {
-      color: var(--el-color-success);
-      font-weight: 500;
-    }
-
-    &.link {
-      color: var(--el-color-primary);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-
-      &:hover {
-        text-decoration: underline;
-      }
-    }
-
-    &.truncate {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 150px;
-    }
-  }
-}
-
-.value-with-copy {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  .value {
-    font-family: 'SF Mono', Monaco, monospace;
-    background: rgba(var(--el-fill-color-rgb), 0.6);
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    border: 1px solid var(--el-border-color);
-  }
-}
-
-.copy-mini {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  background: rgba(var(--el-fill-color-rgb), 0.6);
-  border: 1px solid var(--el-border-color);
-  color: var(--el-text-color-regular);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    background: var(--el-color-primary-light-9);
-    border-color: var(--el-color-primary-light-5);
-    color: var(--el-color-primary);
-  }
-
-  &.copied {
-    background: var(--el-color-success-light-9);
-    border-color: var(--el-color-success-light-5);
-    color: var(--el-color-success);
-  }
-
-  i {
-    font-size: 0.875rem;
-  }
-}
-
-.toggle-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  .toggle-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--el-text-color-disabled);
-  }
-
-  &.enabled .toggle-dot {
-    background: var(--el-color-success);
-    animation: pulse 2s infinite;
-  }
-}
-
-.performance-metrics {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.metric {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background: rgba(var(--el-fill-color-rgb), 0.4);
-  border-radius: 8px;
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.2);
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: rgba(var(--el-fill-color-rgb), 0.6);
-    border-color: rgba(var(--el-color-primary-rgb), 0.2);
-  }
-
-  .metric-label {
-    color: var(--el-text-color-regular);
-  }
-
-  .metric-value {
-    font-weight: 600;
-    color: var(--el-text-color-primary);
+.PluginDetails-CopyButton {
+  @apply transition-all duration-200;
+  
+  &:active {
+    @apply scale-95;
   }
 }
 
@@ -351,22 +179,6 @@ async function copyToClipboard(text: string, type: string) {
   }
   50% {
     opacity: 0.5;
-  }
-}
-
-@media (max-width: 768px) {
-  .details-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-
-    .value {
-      text-align: left;
-    }
   }
 }
 </style>

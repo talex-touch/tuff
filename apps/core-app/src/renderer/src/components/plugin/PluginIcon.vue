@@ -33,7 +33,7 @@ function handleImageError() {
 }
 
 function handleParse() {
-  console.log("parse", props)
+  console.log('parse', props)
 
   imageLoading.value = false
   imageError.value = false
@@ -159,7 +159,7 @@ watchEffect(handleParse)
 </script>
 
 <template>
-  <span v-if="iconOptions" role="img" class="PluginIcon-Container">
+  <span v-if="iconOptions" :title="alt" role="img" class="PluginIcon-Container">
     <remix-icon v-if="iconOptions.type === 'remix'" :name="iconOptions.value" />
     <div v-else-if="iconOptions.type === 'class'" :class="iconOptions.value" />
     <span v-else-if="iconOptions.type === 'html'" class="html" v-html="iconOptions.value" />

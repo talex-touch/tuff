@@ -47,7 +47,7 @@ const isActive = computed(() => {
     .TvTabs-Tab-Name {
       color: var(--el-color-primary);
     }
-    
+
     .TvTabs-Tab-Icon :deep(.remix-icon) {
       color: var(--el-color-primary);
     }
