@@ -5,13 +5,7 @@
   <i class="remix" :class="`ri-${name}-${style || 'line'}`"></i>
 </template>
 
-<script>
-export default {
-  name: "RemixIcon"
-}
-</script>
-
-<script setup>
+<script name="RemixIcon" setup>
 const props = defineProps({
   name: {
     type: String,
@@ -28,10 +22,13 @@ const props = defineProps({
 
 <style scoped>
 .remix {
-  /*position: relative;*/
-  /*margin-top: .25em;*/
+  display: block;
 
   width: 1em;
   height: 1em;
+
+  font-size: 1.25rem;
+
+  background-color: red;
 }
 </style>

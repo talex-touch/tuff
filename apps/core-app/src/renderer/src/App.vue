@@ -35,7 +35,7 @@ function init(): void {
     document.body.classList.add(window.$startupInfo.platform)
 
     applicationUpgrade()
-    clipBoardResolver()
+    // clipBoardResolver()
     dropperResolver()
     urlHooker()
     // screenCapture()

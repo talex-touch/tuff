@@ -79,5 +79,6 @@
     "activityBar.foreground": "#eaf6fd",
     "statusBarItem.remoteBackground": "#175191",
     "statusBarItem.remoteForeground": "#eaf6fd",
-  }
+  },
+  "java.jdt.ls.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/21.0.2"
 }

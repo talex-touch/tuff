@@ -17,7 +17,6 @@ const value = useModelWrapper(props, emits)
 <template>
   <div class="mb-12 min-h-16">
     <p class="my-4 flex justify-between items-center text-xs opacity-70">
-      <!-- For slot change style (className) -->
       <span class="PluginList-Name">
         <slot name="name" />
       </span>

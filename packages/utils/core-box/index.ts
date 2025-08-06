@@ -5,3 +5,9 @@
 
 export * from './search';
 export * from './types';
+
+// 导出 TUFF DSL 相关内容
+export * from './tuff';
+
+// 导出 TUFF Builder 相关内容
+export * from './builder';
