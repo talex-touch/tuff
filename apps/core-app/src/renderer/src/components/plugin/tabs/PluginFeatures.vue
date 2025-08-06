@@ -1,5 +1,5 @@
 <template>
-  <div class="plugin-features">
+  <div class="plugin-features w-full">
     <div class="features-header">
       <div class="stats-row">
         <div class="stat-item">

@@ -17,7 +17,9 @@ const value = useModelWrapper(props, emits)
 <template>
   <div class="mb-12 min-h-16">
     <p class="my-4 flex justify-between items-center text-xs opacity-70">
-      <span class="PluginList-Name">
+      <span class="PluginList-Name flex items-center gap-2">
+        <i v-if="shrink" class="i-ri-check-line text-base text-[var(--el-color-primary)]" />
+        <i v-else class="i-ri-puzzle-line text-base text-[var(--el-color-primary)]" />
         <slot name="name" />
       </span>
       <span class="text-[var(--el-text-color-secondary)]">

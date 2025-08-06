@@ -1,18 +1,15 @@
 <template>
-  <GlassSurface height="40" width="100" :border-radius="16">
-    <div class="TvTabItem-Container" :class="{ active: isActive, disabled }">
-      <div class="TvTabs-Tab-Icon">
-        <remix-icon :name="icon" />
-      </div>
-      <div class="TvTabs-Tab-Name">{{ name }}</div>
+  <div class="TvTabItem-Container" :class="{ active: isActive, disabled }">
+    <div class="TvTabs-Tab-Icon">
+      <remix-icon :name="icon" />
     </div>
-  </GlassSurface>
+    <div class="TvTabs-Tab-Name">{{ name }}</div>
+  </div>
 </template>
 
 <script name="TvTabItem" setup lang="ts">
-import GlassSurface from '@renderer/components/base/effect/GlassSurface.vue'
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { ref, watchEffect } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   icon: {
@@ -33,17 +30,14 @@ const props = defineProps({
   }
 })
 
-const isActive = ref(false)
-
-watchEffect(() => {
+const isActive = computed(() => {
   // 处理active prop可能为布尔值或函数的情况
   if (typeof props.active === 'boolean') {
-    isActive.value = props.active
+    return props.active
   } else if (typeof props.active === 'function') {
-    isActive.value = props.active(props.name)
-  } else {
-    isActive.value = false
+    return props.active(props.name)
   }
+  return false
 })
 </script>
 
@@ -51,6 +45,10 @@ watchEffect(() => {
 .TvTabItem-Container {
   &.active {
     .TvTabs-Tab-Name {
+      color: var(--el-color-primary);
+    }
+    
+    .TvTabs-Tab-Icon :deep(.remix-icon) {
       color: var(--el-color-primary);
     }
   }
@@ -66,12 +64,13 @@ watchEffect(() => {
   }
 
   .TvTabs-Tab-Name {
+    position: relative;
     font-size: 0.75rem;
     font-weight: 500;
-    color: var(--el-text-color-primary);
-    transition: all 0.3s ease;
     text-align: center;
     line-height: 1.2;
+    color: var(--el-text-color-primary);
+    transition: color 0.3s ease;
   }
 
   &:hover:not(.disabled) {
@@ -106,6 +105,17 @@ watchEffect(() => {
 
   &:last-child {
     margin-right: 0;
+  }
+}
+
+@keyframes fillFromDirection {
+  0% {
+    opacity: 1;
+    --fill-progress: 0%;
+  }
+  100% {
+    opacity: 1;
+    --fill-progress: 100%;
   }
 }
 
