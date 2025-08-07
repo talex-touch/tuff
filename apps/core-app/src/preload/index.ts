@@ -2,6 +2,7 @@ import appIcon from '../../public/favicon.ico?asset'
 
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { isCoreBox, isMainWindow, useArgMapper } from '@talex-touch/utils/renderer'
 
 // Custom APIs for renderer
 const api = {}
@@ -23,8 +24,8 @@ if (process.contextIsolated) {
   window.api = api
 }
 
-function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
-  return new Promise(resolve => {
+function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']): Promise<boolean> {
+  return new Promise((resolve) => {
     if (condition.includes(document.readyState)) {
       resolve(true)
     } else {
@@ -39,15 +40,15 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
 
 const safeDOM = {
   append(parent: HTMLElement, child: HTMLElement) {
-    if (!Array.from(parent.children).find(e => e === child)) {
+    if (!Array.from(parent.children).find((e) => e === child)) {
       parent.appendChild(child)
     }
   },
   remove(parent: HTMLElement, child: HTMLElement) {
-    if (Array.from(parent.children).find(e => e === child)) {
+    if (Array.from(parent.children).find((e) => e === child)) {
       parent.removeChild(child)
     }
-  },
+  }
 }
 
 /**
@@ -56,7 +57,7 @@ const safeDOM = {
  * https://projects.lukehaas.me/css-loaders
  * https://matejkustec.github.io/SpinThatShit
  */
-function useLoading() {
+function useLoading(): { appendLoading: () => void; removeLoading: () => void } {
   const className = `AppLoading`
   const styleContent = `
 .${className}__bar {
@@ -158,15 +159,19 @@ function useLoading() {
     removeLoading() {
       safeDOM.remove(document.head, oStyle)
       safeDOM.remove(document.body, oDiv)
-    },
+    }
   }
 }
 
 // ----------------------------------------------------------------------
 
 const { appendLoading, removeLoading } = useLoading()
-domReady().then(appendLoading)
+domReady().then(() => {
+  if (isMainWindow()) {
+    appendLoading()
+  }
+})
 
-window.onmessage = ev => {
+window.onmessage = (ev) => {
   ev.data.payload === 'removeLoading' && removeLoading()
 }

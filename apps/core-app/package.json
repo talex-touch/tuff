@@ -38,7 +38,6 @@
     "@milkdown/theme-nord": "^7.15.2",
     "@milkdown/transformer": "^7.15.2",
     "@talex-touch/utils": "workspace:^",
-    "@talex-touch/touch-sdk": "workspace:^",
     "@unocss/transformer-attributify-jsx": "^66.3.3",
     "@vueuse/core": "^13.6.0",
     "child_process": "^1.0.2",

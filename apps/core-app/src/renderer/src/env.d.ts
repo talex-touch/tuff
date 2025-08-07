@@ -5,6 +5,7 @@ import { StorageManager } from './modules/channel/storage'
 import { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { I18n } from 'vue-i18n'
 import { ShortconApi } from './modules/channel/main/shortcon'
+import { IArgMapperOptions } from '@talex-touch/utils/electron'
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
@@ -44,6 +45,7 @@ declare global {
   }
 
   export interface Window {
+    $argMapper: IArgMapperOptions
     $nodeApi: BaseNodeApi
     $shortconApi: ShortconApi
     $storage: StorageManager

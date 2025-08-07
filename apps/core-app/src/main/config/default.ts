@@ -28,7 +28,9 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
     nodeIntegrationInSubFrames: true,
     contextIsolation: false,
     sandbox: false,
-    webviewTag: true
+    webviewTag: true,
+    scrollBounce: true,
+    additionalArguments: ['--touch-type=main']
   }
 }
 
@@ -50,6 +52,8 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
     nodeIntegrationInSubFrames: true,
     contextIsolation: false,
     sandbox: false,
-    webviewTag: true
+    webviewTag: true,
+    scrollBounce: true,
+    additionalArguments: ['--touch-type=core-box']
   }
 }
