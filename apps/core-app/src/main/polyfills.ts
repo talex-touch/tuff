@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import fse from 'fs-extra'
 import path from 'node:path'
 import { app } from 'electron'
