@@ -11,54 +11,51 @@ import { isLocalhostUrl } from '@talex-touch/utils'
 
 export function usePlugins(): any {
   const plugins = ref()
+
   provide('plugins', plugins)
 
-  const scope = effectScope()
+  watchEffect(() => {
+    plugins.value = [...pluginAdopter.plugins.values()]
 
-  scope.run(() => {
-    watchEffect(() => {
-      plugins.value = [...pluginAdopter.plugins.values()]
-
-      if (activePlugin?.value) {
-        if (!plugins.value.filter((item) => item.name === activePlugin.value).length) {
-          lastActivePlugin.value = activePlugin.value
-          activePlugin.value = ''
-        }
-      } else if (
-        plugins.value.filter((item) => item.name === lastActivePlugin.value).length &&
-        lastActivePlugin.value
-      ) {
-        setTimeout(() => {
-          activePlugin.value = lastActivePlugin.value
-          lastActivePlugin.value = ''
-
-          const id = `touch-plugin-item-${activePlugin.value}`
-
-          setTimeout(() => {
-            const el = document.getElementById(id)
-            if (!el) return
-
-            el['$fixPointer']?.()
-          }, 200)
-        }, 200)
+    if (activePlugin?.value) {
+      if (!plugins.value.filter((item) => item.name === activePlugin.value).length) {
+        lastActivePlugin.value = activePlugin.value
+        activePlugin.value = ''
       }
-    })
-    // watch(pluginAdopter, val => {
-    //   console.log("updated", pluginAdopter, val);
-    //   plugins.value = [...val.values()];
+    } else if (
+      plugins.value.filter((item) => item.name === lastActivePlugin.value).length &&
+      lastActivePlugin.value
+    ) {
+      setTimeout(() => {
+        activePlugin.value = lastActivePlugin.value
+        lastActivePlugin.value = ''
 
-    // }, { deep: true, immediate: true })
-    // watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
+        const id = `touch-plugin-item-${activePlugin.value}`
+
+        setTimeout(() => {
+          const el = document.getElementById(id)
+          if (!el) return
+
+          el['$fixPointer']?.()
+        }, 200)
+      }, 200)
+    }
   })
+  // watch(pluginAdopter, val => {
+  //   console.log("updated", pluginAdopter, val);
+  //   plugins.value = [...val.values()];
 
-  return [plugins, scope]
+  // }, { deep: true, immediate: true })
+  // watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
+
+  return plugins
 }
 
 const activePlugin = ref('')
 const lastActivePlugin = ref('')
 
-export function usePlugin(): any {
-  const stop = watch(
+export function usePlugin(): void {
+  watch(
     () => activePlugin.value,
     (val) => {
       pluginManager.changeActivePlugin(val)
@@ -67,8 +64,6 @@ export function usePlugin(): any {
   )
 
   provide('activePlugin', activePlugin)
-
-  return stop
 }
 
 export async function urlHooker(): Promise<void> {
