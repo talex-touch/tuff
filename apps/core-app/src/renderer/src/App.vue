@@ -2,18 +2,17 @@
 import AppLayout from '~/views/layout/AppLayout.vue'
 import {
   applicationUpgrade,
-  clipBoardResolver,
+  // clipBoardResolver,
   dropperResolver,
   urlHooker,
   usePlugin,
   usePlugins
 } from '~/modules/hooks/application-hooks'
-import { useCoreBox } from '~/modules/hooks/core-box'
 import { touchChannel } from '~/modules/channel/channel-core'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import { appSetting } from '~/modules/channel/storage/index'
-import CoreBox from '~/views/box/CoreBox.vue'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
+import AppEntrance from './AppEntrance.vue'
 
 const packageJson = window.$nodeApi.getPackageJSON()
 
@@ -47,37 +46,25 @@ function init(): void {
   })
 }
 
-const _coreBox = ref(false)
-
 onMounted(() => {
   try {
-    setTimeout(init, 1000)
+    setTimeout(init, 100)
   } catch (e) {
     console.error('FATAL ERROR OCCURRED')
     console.error(e)
-  }
-
-  _coreBox.value = document.body.classList.contains('core-box')
-
-  if (_coreBox.value) {
-    useCoreBox()
-
-    console.log(
-      '%c CoreBox MODE ',
-      'background: #42b983; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;'
-    )
   }
 })
 </script>
 
 <template>
-  <AppLayout v-if="_init">
-    <template #title>
-      TalexTouch
-      <span class="tag version fake-background">{{ packageJson.version }}</span>
-    </template>
-  </AppLayout>
+  <AppEntrance>
+    <AppLayout v-if="_init">
+      <template #title>
+        TalexTouch
+        <span class="tag version fake-background">{{ packageJson.version }}</span>
+      </template>
+    </AppLayout>
 
-  <CoreBox v-if="_coreBox" />
-  <Beginner v-else-if="beginner" />
+    <Beginner v-if="beginner" />
+  </AppEntrance>
 </template>

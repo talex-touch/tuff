@@ -68,15 +68,8 @@ async function createNewBoxWindow(
 
   window.window.webContents.addListener('dom-ready', () => {
     console.log(
-      '[CoreBox] BoxWindow ' + window.window.webContents.id + ' dom loaded, injecting ...'
+      '[CoreBox] BoxWindow ' + window.window.webContents.id + ' dom loaded, registering ...'
     )
-
-    window.window.webContents.executeJavaScript(`
-    document.body.classList.add('core-box');
-    window.$coreBox = {
-      enabled: true
-    }
-  `)
 
     touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
       id: window.window.webContents.id,

@@ -17,6 +17,9 @@ import { appSetting } from '~/modules/channel/storage'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import PrefixIcon from './PrefixIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
+import { useCoreBox } from '@renderer/modules/hooks/core-box'
+
+useCoreBox()
 
 // Reactive references and variables
 const visibility = useDocumentVisibility()

@@ -2,7 +2,7 @@ import appIcon from '../../public/favicon.ico?asset'
 
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { isCoreBox, isMainWindow, useArgMapper } from '@talex-touch/utils/renderer'
+import { isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
 
 // Custom APIs for renderer
 const api = {}
@@ -167,6 +167,7 @@ function useLoading(): { appendLoading: () => void; removeLoading: () => void } 
 
 const { appendLoading, removeLoading } = useLoading()
 domReady().then(() => {
+  useInitialize()
   if (isMainWindow()) {
     appendLoading()
   }
