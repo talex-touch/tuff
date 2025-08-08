@@ -1,6 +1,6 @@
 # Sync
 
-The `Polyglot Toolbox` offers powerful synchronization capabilities to keep your data consistent across multiple devices. This guide will explain how to set up and use the sync feature.
+The `Tuff` offers powerful synchronization capabilities to keep your data consistent across multiple devices. This guide will explain how to set up and use the sync feature.
 
 ## Setting Up Sync
 

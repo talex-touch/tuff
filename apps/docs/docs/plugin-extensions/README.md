@@ -1,6 +1,6 @@
-# TalexTouch Plugin Extension APIs
+# Tuff Plugin Extension APIs
 
-This directory contains documentation for advanced plugin extension APIs that allow deep integration with TalexTouch core functionality.
+This directory contains documentation for advanced plugin extension APIs that allow deep integration with Tuff core functionality.
 
 ## Available Extensions
 
@@ -34,7 +34,7 @@ Enables plugins to create and manage custom themes.
 ### 🔌 Core Integration API
 **Status**: 📋 Planned
 
-Provides deep integration with TalexTouch core systems.
+Provides deep integration with Tuff core systems.
 
 - **Features** (Planned):
   - Custom search providers
@@ -66,7 +66,7 @@ Allows plugins to access usage analytics and metrics.
 
 ### Prerequisites
 
-- TalexTouch Core v2.0+
+- Tuff Core v2.0+
 - Plugin Development Kit
 - TypeScript knowledge
 
@@ -83,8 +83,8 @@ Currently, all extension APIs are in internal beta or planning phase. To request
 
 ```typescript
 // Example plugin with extension API usage
-import { Plugin } from '@talex-touch/plugin-sdk'
-import { SortConfigManager } from '@talex-touch/core/search-sorter-config' // Beta only
+import { Plugin } from '@tuff/plugin-sdk'
+import { SortConfigManager } from '@tuff/core/search-sorter-config' // Beta only
 
 export class MyAdvancedPlugin extends Plugin {
   async onActivate() {
@@ -93,7 +93,7 @@ export class MyAdvancedPlugin extends Plugin {
       this.setupCustomSorting()
     }
   }
-  
+
   private setupCustomSorting() {
     // Custom sorting logic
     SortConfigManager.addDynamicRule(
@@ -102,7 +102,7 @@ export class MyAdvancedPlugin extends Plugin {
       15
     )
   }
-  
+
   private shouldBoostItem(item: any): boolean {
     // Custom logic to determine if item should be boosted
     return false
@@ -192,4 +192,4 @@ Extension API development is currently internal, but we welcome:
 
 ---
 
-*Extension APIs are part of TalexTouch's commitment to providing powerful, flexible plugin development capabilities while maintaining system stability and performance.*
+*Extension APIs are part of Tuff's commitment to providing powerful, flexible plugin development while maintaining system stability and performance.*

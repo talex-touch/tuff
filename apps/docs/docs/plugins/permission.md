@@ -1,6 +1,6 @@
 # Plugin Permissions (Plugins)
 
-The `Polyglot Toolbox` implements a permission system to ensure that plugins can only access the resources and features they need, enhancing security and user control. This guide explains how plugin permissions work and how to request and manage them.
+The `Tuff` implements a permission system to ensure that plugins can only access the resources and features they need, enhancing security and user control. This guide explains how plugin permissions work and how to request and manage them.
 
 ## Permission Model
 

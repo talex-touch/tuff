@@ -1,6 +1,6 @@
 # Plugin Widgets (Plugins)
 
-Widgets are reusable UI components that can be embedded in various parts of the `Polyglot Toolbox` interface. This guide explains how to create, register, and use widgets in your plugins.
+Widgets are reusable UI components that can be embedded in various parts of the `Tuff` interface. This guide explains how to create, register, and use widgets in your plugins.
 
 ## What are Widgets?
 

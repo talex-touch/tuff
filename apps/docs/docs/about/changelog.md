@@ -1,4 +1,4 @@
-# TalexTouch
+# Tuff
 
 ## v2.0.0
 
@@ -163,13 +163,13 @@ Lastly, we would like to emphasize that our product is still in a fast iteration
 Please feel free to use our product and look forward to our upcoming 2.0.0 version, which will contain more powerful features and more beautiful interface designs with fantastic animations. We expect to release this version in the next three months, so stay tuned!
 
 ### What's Changed
-* Change\<Many\>: New features about navbar(icons for plugins) and new we… by @TalexDreamSoul in https://github.com/talex-touch/talex-touch/pull/13
-* Module\<Plugin\>: Add plugin resolver modules by @TalexDreamSoul in https://github.com/talex-touch/talex-touch/pull/14
-* Add\<Link\>: Link suffix of touch-plugin by @TalexDreamSoul in https://github.com/talex-touch/talex-touch/pull/15
-* Plugin store by @TalexDreamSoul in https://github.com/talex-touch/talex-touch/pull/16
+* Change\<Many\>: New features about navbar(icons for plugins) and new we… by @TalexDreamSoul in https://github.com/tuff/tuff/pull/13
+* Module\<Plugin\>: Add plugin resolver modules by @TalexDreamSoul in https://github.com/tuff/tuff/pull/14
+* Add\<Link\>: Link suffix of touch-plugin by @TalexDreamSoul in https://github.com/tuff/tuff/pull/15
+* Plugin store by @TalexDreamSoul in https://github.com/tuff/tuff/pull/16
 
 ### New Contributors
 
-* @TalexDreamSoul made their first contribution in https://github.com/talex-touch/talex-touch/pull/13
+* @TalexDreamSoul made their first contribution in https://github.com/tuff/tuff/pull/13
 
-**Full Changelog**: https://github.com/talex-touch/talex-touch/compare/SNAPSHOT...STARTED
+**Full Changelog**: https://github.com/tuff/tuff/compare/SNAPSHOT...STARTED

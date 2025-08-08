@@ -1,10 +1,10 @@
-# Extension Plugin (Plugins)
+# Plugins
 
 ## What are Plugins?
 
-`Polyglot Toolbox` (TalexTouch) is designed as a flexible framework that can be extended through plugins. Plugins are the core mechanism for adding new functionality to the application, allowing you to customize and enhance your experience according to your specific needs.
+Tuff is a flexible framework that can be extended through plugins. Plugins allow you to customize and enhance your experience.
 
-When the program is running, it automatically creates a `talex-touch` directory for plugin storage. To create a new plugin, simply click `Plugins` in the application interface and then click `+ Create One`. The application will automatically set up the development environment for you.
+When the program is running, it automatically creates a `tuff` directory for plugin storage. To create a new plugin, simply click `Plugins` in the application interface and then click `+ Create One`. The application will automatically set up the development environment for you.
 
 To ensure your plugin is loaded correctly, you need to provide at least an `index.html` file and an `init.json` file (which will be exported as `manifest.json`).
 
@@ -12,7 +12,7 @@ To ensure your plugin is loaded correctly, you need to provide at least an `inde
 
 ## Plugin Architecture
 
-Plugins in `Polyglot Toolbox` follow a specific architecture that allows them to integrate seamlessly with the main application:
+Plugins in `Tuff` follow a specific architecture that allows them to integrate seamlessly with the main application:
 
 1. **Manifest File** (`init.json`): Contains metadata about the plugin, including its name, version, description, and icon.
 2. **Main Entry Point** (`index.html`): The primary HTML file that defines the plugin's user interface.
@@ -49,7 +49,7 @@ The `init.json` file contains essential information about your plugin:
     "type": "remix",
     "value": "star"
   },
-  "description": "My first plugin for Polyglot Toolbox",
+  "description": "My first plugin for Tuff",
   "author": "Your Name",
   "repository": "https://github.com/yourusername/my-first-plugin"
 }
@@ -78,27 +78,27 @@ The `index.html` file defines your plugin's user interface:
         color: var(--theme-text, #000000);
         padding: 20px;
       }
-      
+
       .container {
         max-width: 600px;
         margin: 0 auto;
       }
-      
+
       .header {
         text-align: center;
         margin-bottom: 30px;
       }
-      
+
       .feature-list {
         background-color: var(--theme-surface, #f5f5f5);
         padding: 20px;
         border-radius: 8px;
       }
-      
+
       .feature-list h3 {
         margin-top: 0;
       }
-      
+
       .feature-list ul {
         padding-left: 20px;
       }
@@ -108,9 +108,9 @@ The `index.html` file defines your plugin's user interface:
     <div class="container">
       <div class="header">
         <h1>Welcome to My First Plugin</h1>
-        <p>This is a simple demonstration of a Polyglot Toolbox plugin.</p>
+        <p>This is a simple demonstration of a Tuff plugin.</p>
       </div>
-      
+
       <div class="feature-list">
         <h3>Plugin Features</h3>
         <ul>
@@ -155,7 +155,7 @@ window.myPlugin = {
 
 ## Plugin Development Workflow
 
-The plugin development workflow in `Polyglot Toolbox` is designed to be efficient and developer-friendly:
+The plugin development workflow in `Tuff` is designed to be efficient and developer-friendly:
 
 1. **Automatic Reloading**: When you modify any plugin file (`init.json`, `index.html`, `preload.js`, or `README.md`) and save it, the plugin will automatically reload to reflect your changes.
 
@@ -186,7 +186,7 @@ However, the `preload.js` script executes regardless of the plugin's enabled sta
 
 ## Plugin Best Practices
 
-When developing plugins for `Polyglot Toolbox`, consider the following best practices:
+When developing plugins for `Tuff`, consider the following best practices:
 
 1. **Follow Security Guidelines**: Only request the permissions your plugin actually needs.
 2. **Optimize Performance**: Keep your plugin lightweight and responsive.

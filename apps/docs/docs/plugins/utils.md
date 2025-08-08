@@ -1,6 +1,6 @@
 # Plugin Utilities (Plugins)
 
-The `Polyglot Toolbox` provides a comprehensive set of utility functions through the plugin SDK to help you build more efficient and robust plugins. This guide covers the most commonly used utilities.
+The `Tuff` provides a comprehensive set of utility functions through the plugin SDK to help you build more efficient and robust plugins. This guide covers the most commonly used utilities.
 
 ## String Utilities
 

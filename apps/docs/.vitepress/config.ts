@@ -10,8 +10,8 @@ import type MarkdownIt from "markdown-it";
  * @see app-configs https://vitepress.vuejs.org/config/app-configs.html
  */
 export default defineConfig({
-  title: "TalexTouch",
-  base: "/talex-touch/",
+  title: "Tuff",
+  base: "/tuff/",
   head: [["meta", { name: "theme-color", content: "#0c23ff" }]],
   lang: "en-US",
   /**
@@ -36,17 +36,17 @@ export default defineConfig({
     sidebar,
     footer: {
       message:
-        'Released under the <a style="font-weight: 600" href="https://github.com/talex-touch/talex-touch/blob/master/LICENSE">Mozilla Public License 2.0</a>.',
+        'Released under the <a style="font-weight: 600" href="https://github.com/talex-touch/tuff/blob/main/LICENSE">MIT License</a>.',
       copyright:
-        'Copyright © 2022-2025 <a style="font-weight: 600" href="https://github.com/TalexDreamSoul">TalexDreamSoul</a>',
+        'Copyright © 2022-present <a style="font-weight: 600" href="https://github.com/TalexDreamSoul">TalexDreamSoul</a>',
     },
     editLink: {
       pattern:
-        "https://github.com/talex-touch/talex-touch/edit/master/app/docs/:path",
+        "https://github.com/talex-touch/tuff/edit/main/apps/docs/:path",
       text: "Edit on GitHub",
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/talex-touch/talex-touch" },
+      { icon: "github", link: "https://github.com/talex-touch/tuff" },
     ],
     lastUpdatedText: "Last Updated",
     docFooter: {

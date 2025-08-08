@@ -14,10 +14,10 @@ Just take config into `package.json`, the manifest and whole pack will be automa
 To start it, install our official unplugin in your project.
 The `ni` is recommended to install any libs.
 
-Here is a quick avenue to see the latest version of it: [![NPM version](https://img.shields.io/npm/v/@talex-touch/unplugin-export-plugin?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-starter)
+Here is a quick avenue to see the latest version of it: [![NPM version](https://img.shields.io/npm/v/@tuff/unplugin-export-plugin?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-starter)
 
 ``` bash
-ni -D @talex-touch/unplugin-export-plugin
+ni -D @tuff/unplugin-export-plugin
 ```
 
 ### Vite
@@ -25,12 +25,12 @@ ni -D @talex-touch/unplugin-export-plugin
 In your `vite.config.js` or `vite.config.ts`
 
 ``` ts
-import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
+import TuffPluginExport from '@tuff/unplugin-export-plugin/vite'
 
 export default defineConfig({
   plugins: [
     ....,
-    TouchPluginExport()
+    TuffPluginExport()
   ],
 })
 ```
@@ -53,7 +53,7 @@ Other fields are all moved to the `touch` filed in **package.json** (As usual)
 package.json
 {
   ...,
-  "talex-touch": {
+  "tuff": {
     "icon": {
     "type": "remix",
     "value": "github"
@@ -71,7 +71,7 @@ package.json
 
 ## icon <Badge type="info" text="OPTIONAL" /> <Badge type="warning" text="Supposed" />
 
-Filed `icon` identifies the icon of a plugin, if it's empty, the default will be `TalexTouch` Logo, it will seriously affect the user's identification in the plug-in
+Filed `icon` identifies the icon of a plugin, if it's empty, the default will be `Tuff` Logo, it will seriously affect the user's identification in the plug-in
 
 ### Addon: You can use `class` as key (See UnoCSS [icones](https://icones.js.org/))
 
@@ -90,7 +90,7 @@ It is important to note that you do not need to fill out the prefix remix and st
 
 ## value <Badge type="info" text="OPTIONAL" /> <Badge type="warning" text="Supposed" />
 
-Filed `icon.value` identifies the value of a plugin-icon. If it's empty, the default will be `TalexTouch` Logo.
+Filed `icon.value` identifies the value of a plugin-icon. If it's empty, the default will be `Tuff` Logo.
 
 ## plugin <Badge type="info" text="OPTIONAL" />
 
@@ -118,7 +118,7 @@ Here is a completely demo:
     "index.html"
   ],
   "secret": {
-    "pos": "TalexTouch",
+    "pos": "Tuff",
     "addon": [
       "windows",
       "darwin",
@@ -149,7 +149,7 @@ The export root path is your plugin root path.
 
 `Field secret` describes the secret that you want to choose.
 
-If you want to upload your plugin to `OFFICIAL` you must choose pos **TalexTouch**
+If you want to upload your plugin to `OFFICIAL` you must choose pos **Tuff**
 
 Otherwise you could choose your own secret url! (Up to your deploy method)
 

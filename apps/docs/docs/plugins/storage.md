@@ -1,6 +1,6 @@
 # Plugin Storage (Plugins)
 
-The `Polyglot Toolbox` provides a unified storage API that allows plugins to persist data locally. This guide explains how to use the storage system in your plugins.
+The `Tuff` provides a unified storage API that allows plugins to persist data locally. This guide explains how to use the storage system in your plugins.
 
 ## Storage Types
 

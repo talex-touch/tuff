@@ -1,12 +1,12 @@
-# Publishing Plugins (Plugins)
+# Publishing Capabilities (Plugins)
 
-Once you've developed a plugin for the `Polyglot Toolbox`, you can publish it to the Plugin Market so that other users can discover and install it. This guide explains the process of preparing, packaging, and publishing your plugin.
+Once you've developed a plugin for the `Tuff`, you can publish it to the Plugin Market so that other users can discover and install it. This guide explains the process of preparing, packaging, and publishing your plugin.
 
 ## Preparing Your Plugin for Publication
 
 Before publishing your plugin, ensure it meets the following requirements:
 
-### 1. Complete Plugin Manifest
+### 1. Complete Manifest
 
 Your plugin must have a complete and valid `manifest.json` file:
 
@@ -67,7 +67,7 @@ Thoroughly test your plugin:
 - Test on different operating systems (Windows, macOS, Linux)
 - Verify that all features work as expected
 - Check for any errors or warnings in the console
-- Ensure the plugin doesn't conflict with other plugins
+- Ensure the plugin doesn't conflict with other capabilities
 
 ## Packaging Your Plugin
 
@@ -118,7 +118,7 @@ The resulting ZIP file is your plugin package that can be submitted to the Plugi
 
 ### Creating a Developer Account
 
-To publish plugins, you need a developer account on the Plugin Market:
+To publish capabilities, you need a developer account on the Plugin Market:
 
 1. Visit the [Plugin Market Developer Portal](https://plugins.polyglot-toolbox.com/developer)
 2. Sign up for a developer account using your email
@@ -142,7 +142,7 @@ Once you have a developer account, you can submit your plugin:
 
 ### Plugin Review Process
 
-All submitted plugins go through a review process to ensure quality and security:
+All submitted capabilities go through a review process to ensure quality and security:
 
 1. **Automated Checks**: The system performs automated checks for:
    - Valid manifest file
@@ -194,7 +194,7 @@ Keep users informed about updates:
 
 ## Plugin Marketplace Guidelines
 
-To ensure a positive experience for all users, plugins must adhere to the following guidelines:
+To ensure a positive experience for all users, capabilities must adhere to the following guidelines:
 
 ### Technical Guidelines
 
@@ -261,7 +261,7 @@ describe('My Plugin', () => {
     await plugin.init();
     expect(plugin.initialized).toBe(true);
   });
-  
+
   test('should handle errors gracefully', async () => {
     const plugin = new MyPlugin();
     await expect(plugin.loadInvalidData()).rejects.toThrow();
@@ -283,7 +283,7 @@ Provide comprehensive documentation:
 
 ## Installation
 
-1. Open the Plugin Market in Polyglot Toolbox
+1. Open the Plugin Market in Tuff
 2. Search for "My Plugin"
 3. Click "Install"
 
@@ -395,11 +395,11 @@ class HelloWorldPlugin {
   constructor() {
     this.init();
   }
-  
+
   init() {
     // Show a greeting message when the plugin is loaded
     toast.info('Hello, World! Thanks for installing this plugin.');
-    
+
     console.log('Hello World Plugin initialized');
   }
 }
@@ -413,7 +413,7 @@ new HelloWorldPlugin();
 ```markdown
 # Hello World Plugin
 
-A simple example plugin for the Polyglot Toolbox that displays a greeting message when installed.
+A simple example plugin for the Tuff that displays a greeting message when installed.
 
 ## Features
 
@@ -422,7 +422,7 @@ A simple example plugin for the Polyglot Toolbox that displays a greeting messag
 
 ## Installation
 
-1. Open the Plugin Market in Polyglot Toolbox
+1. Open the Plugin Market in Tuff
 2. Search for "Hello World Plugin"
 3. Click "Install"
 4. Restart the application if prompted

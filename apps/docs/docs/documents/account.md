@@ -1,15 +1,15 @@
-# TalexTouch
+# Tuff
 
-> The `TouchAccount` is the nickname of TalexTouch Account.
+> The `TuffAccount` is the nickname of Tuff Account.
 
 ## What's
 
-`TouchAccount` is a pass certificate in **talex-touch** series apps. You can sign in it in [Here](https://test.pvpin.net) or in our app.
+`TuffAccount` is a pass certificate in **tuff** series apps. You can sign in it in [Here](https://test.pvpin.net) or in our app.
 To use it, you must agree with our privacy policy and other policies when you try to register. Login account in different platforms and you can use `CloudDataSync` crossing your machines.
 
 ## How
 
-To have a `TouchAccount`, you must read our polices closely. And you can register it in [Here](https://test.pvpin.net) or just open our app.
+To have a `TuffAccount`, you must read our polices closely. And you can register it in [Here](https://test.pvpin.net) or just open our app.
 Click `Settings` > `App Settings` > `Account` to login or sign-up.
 
 Besides, you are supposed to complete some artificial verification to ensure you are human.

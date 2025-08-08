@@ -1,6 +1,6 @@
 # Plugin Setup
 
-This guide will walk you through the process of setting up and configuring plugins in the `Polyglot Toolbox`. Plugins are a powerful way to extend the functionality of the application.
+This guide will walk you through the process of setting up and configuring plugins in the `Tuff`. Plugins are a powerful way to extend the functionality of the application.
 
 ## Installing a Plugin
 

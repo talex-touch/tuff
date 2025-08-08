@@ -34,7 +34,7 @@ onMounted(() => {
       <Logo />
     </div>
     <div class="CoreBoxMockup-Input">
-      <input id="input" placeholder="Type what you want to search by talex-touch." />
+      <input id="input" placeholder="Type what you want to search by tuff." />
     </div>
     <div class="CoreBoxMockup-Suffix">
       <i />
