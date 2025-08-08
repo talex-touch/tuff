@@ -2,19 +2,19 @@
 
   <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="logo">
 
-  <h1>TalexTouch</h1>
+  <h1>Tuff</h1>
 
-  Design reference <b>TDesignS</b>
+  > The command bar, reimagined for those who build.
 
-  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-  [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
-  [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
+  [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
+  [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
+  [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/tuff/discussions/35)
 </div>
 
 ## 📌 Announcement
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_small)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff?ref=badge_small)
 
 > 2.0.0 version is now under development and beta testing.
 
@@ -25,21 +25,17 @@ Download it and feedback!
 
 ## 🔷 Introduction
 
-Touch (TalexTouch) is a follow-up project to TalexTouchQ (TouchQ), which involved a complete overhaul of the original project. It is a cross-platform client based on Electron, designed to provide users with a more polished UI experience.
-
-## ✏️ Goal
-
-Its primary goal is to deliver a seamless and intuitive user interface that enhances the user experience. You can access the client via the [link](https://talex-touch.github.io/talex-touch/).
+Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with Electron, TypeScript, and Vue.js. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
 
 ## 🖇️ Cross-Platform Support
 
-TalexTouch runs on mainstream platforms such as Windows, macOS, and Linux, providing users with more options. You can enjoy a consistent user experience across various devices.
+Tuff is currently available for macOS.
 
-> Soon to support Android, iOS, WearOS, and WatchOS.
+> Support for Windows and Linux is coming soon.
 
 ## 🦋 Beautiful UI Design
 
-The design style of TalexTouch is inspired by TDesignS, which is simple and elegant. The themes, fonts, and icons have been carefully adjusted to provide users with a better experience.
+The design style of Tuff is inspired by TDesignS, which is simple and elegant. The themes, fonts, and icons have been carefully adjusted to provide users with a better experience.
 
 ### The best than ever UI design
 
@@ -71,23 +67,28 @@ Thanks to the design from [@0x1021A0](https://github.com/0x1021A0) <img alt="0x1
 
 ## 🗻 Rich Functionality
 
-TalexTouch integrates a variety of practical functions to make your desktop smarter and more efficient. It supports multiple windows, shortcuts, clipboard management, screenshots, timers, and more, as well as custom plugins.
+Tuff integrates a variety of practical functions to make your desktop smarter and more efficient.
+- **Core Utilities:** Supports multiple windows, shortcuts, clipboard management, screenshots, timers, and more.
+- **AI-Powered Search:** Understands natural language to find files, apps, and actions.
+- **Contextual Intelligence:** Proactively suggests commands based on your current context.
+- **Extensible:** Supports custom plugins ("Capabilities") to extend its functionality.
+- **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
 
 ## 🍀 Simple and Easy-to-Use Operations
 
-The operation of TalexTouch is very simple and user-friendly, allowing users to easily complete various tasks. You only need to open the required function through the menu or shortcut keys to enjoy the convenience brought by TalexTouch.
+The operation of Tuff is very simple and user-friendly, allowing users to easily complete various tasks. You only need to open the required function through the menu or shortcut keys to enjoy the convenience brought by Tuff.
 
 ## 🔐 Secure and Reliable
 
 We attach great importance to the security and privacy of our users. We guarantee that user data will not be leaked or abused and provide multiple security mechanisms to protect user usage safety.
 
-If you are looking for a cross-platform and beautifully designed desktop software that is easy to use, TalexTouch is your best choice. It not only provides rich functionality but also has a good user experience with an open community ecology. Welcome to use TalexTouch and experience a new desktop experience!
+If you are looking for a cross-platform and beautifully designed desktop software that is easy to use, Tuff is your best choice. It not only provides rich functionality but also has a good user experience with an open community ecology. Welcome to use Tuff and experience a new desktop experience!
 
-## 🤝 Usage Agreement
+## 🤝 License
 
-This project is open-sourced under the Mozilla Public License 2.0 agreement.
+This project is open-sourced under the **MIT License**.
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_large)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff?ref=badge_large)
 
 ## ⁉️ Issue
 
