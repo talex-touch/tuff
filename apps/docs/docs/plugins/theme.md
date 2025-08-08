@@ -1,10 +1,10 @@
 # Plugin Themes (Plugins)
 
-The `Polyglot Toolbox` supports a flexible theming system that allows plugins to define custom themes or modify existing ones. This guide explains how to work with themes in your plugins.
+The `Tuff` supports a flexible theming system that allows plugins to define custom themes or modify existing ones. This guide explains how to work with themes in your plugins.
 
 ## Understanding Themes
 
-Themes in the `Polyglot Toolbox` are collections of styles that define the visual appearance of the application. They include color schemes, typography, spacing, and component styles.
+Themes in the `Tuff` are collections of styles that define the visual appearance of the application. They include color schemes, typography, spacing, and component styles.
 
 ## Theme Structure
 

@@ -1,20 +1,20 @@
-# TalexTouch (Polyglot Toolbox)
+# Tuff
 
-> The "`Polyglot Toolbox`" is the nickname of TalexTouch.
+> The "`Tuff`" is the original app `talex-touch`.
 
-## What is Polyglot Toolbox?
+## What is Tuff?
 
-`Polyglot Toolbox` is a powerful desktop application built with modern web technologies including `Electron`, `Vue 3`, and `Vite`. It integrates a wide range of practical tools and features designed to make your desktop experience smarter, more efficient, and more convenient, ultimately empowering your daily work and life.
+`Tuff` is a powerful desktop application built with modern web technologies including `Electron`, `Vue 3`, and `Vite`. It integrates a wide range of practical tools and features designed to make your desktop experience smarter, more efficient, and more convenient, ultimately empowering your daily work and life.
 
 ## Key Features
 
 ### Plugin Ecosystem
 
-One of the standout features of `Polyglot Toolbox` is its robust plugin ecosystem. It leverages the innovative `E-TOS` (Enhanced Tool Organization System) technology to independently package each plugin. This approach provides a more flexible and streamlined way to select and customize plugins according to your specific needs.
+One of the standout features of `Tuff` is its robust plugin ecosystem. It leverages the innovative `E-TOS` (Enhanced Tool Organization System) technology to independently package each plugin. This approach provides a more flexible and streamlined way to select and customize plugins according to your specific needs.
 
 ### Integrated Tools
 
-`Polyglot Toolbox` comes with a rich set of built-in tools and features, including:
+`Tuff` comes with a rich set of built-in tools and features, including:
 
 - **Productivity Tools**: Notes, calendar, clock, countdown timer, task manager
 - **File Management**: File manager, clipboard manager, screenshot tool
@@ -31,7 +31,7 @@ These plugins cover various aspects of life and work, allowing you to accomplish
 
 ## Comprehensive Documentation
 
-`Polyglot Toolbox` provides extensive documentation and practical examples to help you get started and master each tool and feature. Our documentation includes:
+`Tuff` provides extensive documentation and practical examples to help you get started and master each tool and feature. Our documentation includes:
 
 - **Getting Started Guides**: Step-by-step instructions to quickly set up and begin using the toolbox
 - **Detailed Tool Documentation**: In-depth explanations of each built-in tool and how to use them effectively
@@ -42,7 +42,7 @@ Whether you're a student working on academic research or a professional handling
 
 ## Ultimate Customization
 
-`Polyglot Toolbox` excels in customization, offering both default configurations and extensive customization options. This flexibility allows you to:
+`Tuff` excels in customization, offering both default configurations and extensive customization options. This flexibility allows you to:
 
 - **Personalize Your Workspace**: Choose which tools to install and how to arrange them
 - **Optimize Performance**: Install only the plugins you need to keep the application lightweight
@@ -52,10 +52,10 @@ By selecting and customizing plugins according to your preferences and needs, yo
 
 ## Cross-Platform Compatibility
 
-`Polyglot Toolbox` is designed to work seamlessly across multiple platforms, including Windows, macOS, and Linux. Key benefits include:
+`Tuff` is designed to work seamlessly across multiple platforms, including Windows, macOS, and Linux. Key benefits include:
 
 - **Consistent Experience**: Enjoy the same interface and features regardless of your operating system
 - **Data Synchronization**: Your settings and data are synchronized across devices, providing a continuous working environment
 - **Platform-Specific Optimizations**: Take advantage of native features and performance optimizations for each platform
 
-Whether you're working on a Windows PC at the office, a Mac at home, or a Linux machine on the go, `Polyglot Toolbox` ensures a consistent and productive experience.
+Whether you're working on a Windows PC at the office, a Mac at home, or a Linux machine on the go, `Tuff` ensures a consistent and productive experience.

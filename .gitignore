@@ -127,3 +127,6 @@ talex-touch/
 apps/core-app/signature.json
 apps/core-app/src/renderer/src/distinformation.json
 .kilocode/mcp.json
+
+# Local README notes
+readme.local.md

@@ -1,6 +1,6 @@
 # Get Started
 
-We believe you'll be amazed by the brilliant features of `Polyglot Toolbox`. Let's get started with the installation!
+We believe you'll be amazed by the brilliant features of `Tuff`. Let's get started with the installation!
 
 ## Choose Your Platform
 

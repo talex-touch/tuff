@@ -1,6 +1,6 @@
 # Toast Notifications (Plugins)
 
-Toast notifications are lightweight, non-intrusive messages that appear briefly on the screen to inform users about an event or action. The `Polyglot Toolbox` provides a simple API for plugins to display toast notifications.
+Toast notifications are lightweight, non-intrusive messages that appear briefly on the screen to inform users about an event or action. The `Tuff` provides a simple API for plugins to display toast notifications.
 
 ## Basic Usage
 

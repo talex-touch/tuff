@@ -25,20 +25,20 @@ To create a preload script for your plugin:
 
 ## Installing the Standard Library
 
-`Polyglot Toolbox` provides an official standard library to create a secure bridge between plugins and the main application.
+`Tuff` provides an official standard library to create a secure bridge between plugins and the main application.
 
 ::: code-group
 
 ```bash [Ni (Recommended)]
-ni @talex-touch/utils
+ni @tuff/utils
 ```
 
 ```bash [pnpm (Official)]
-pnpm install @talex-touch/utils
+pnpm install @tuff/utils
 ```
 
 ```bash [npm]
-npm install @talex-touch/utils
+npm install @tuff/utils
 ```
 
 :::
@@ -50,7 +50,7 @@ Here's a basic example of a `preload.js` script:
 ```javascript
 // preload.js
 const { ipcRenderer } = require('electron');
-const { init } = require('@talex-touch/utils');
+const { init } = require('@tuff/utils');
 const path = require('path');
 const child_process = require('child_process');
 
@@ -96,7 +96,7 @@ Here's a more advanced example that demonstrates additional capabilities:
 ```javascript
 // preload.js
 const { ipcRenderer } = require('electron');
-const { init } = require('@talex-touch/utils');
+const { init } = require('@tuff/utils');
 const path = require('path');
 
 // Initialize the bridge

@@ -4,7 +4,7 @@
 
 <template>
   <div class="touch-text-container">
-    <h1 ref="textRef" class="touch-text" data-text="TouchX">TouchX</h1>
+    <h1 ref="textRef" class="touch-text" data-text="Tuff">Tuff</h1>
   </div>
 </template>
 
@@ -24,10 +24,10 @@
 
 .touch-text {
   font-family: 'Poppins', sans-serif;
-  font-size: 6rem;
+  font-size: 8rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5vmin;
+  // text-transform: uppercase;
+  letter-spacing: 2.5vmin;
 
   -webkit-text-stroke: 1px rgba(255, 255, 255, 0.5);
   color: rgba(255, 255, 255, 0.9);

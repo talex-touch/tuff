@@ -1,6 +1,6 @@
 # Code Snippets (Plugins)
 
-Code snippets are predefined pieces of code that can be quickly inserted into your documents. The `Polyglot Toolbox` provides a powerful snippet system that allows plugins to define, manage, and insert code snippets.
+Code snippets are predefined pieces of code that can be quickly inserted into your documents. The `Tuff` provides a powerful snippet system that allows plugins to define, manage, and insert code snippets.
 
 ## What are Snippets?
 

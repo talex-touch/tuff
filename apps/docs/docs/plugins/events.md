@@ -1,6 +1,6 @@
 # Plugin Events (Plugins)
 
-The `Polyglot Toolbox` uses an event-driven architecture to facilitate communication between the core application and plugins. This guide explains how plugins can emit and listen to events.
+The `Tuff` uses an event-driven architecture to facilitate communication between the core application and plugins. This guide explains how plugins can emit and listen to events.
 
 ## Event Bus
 

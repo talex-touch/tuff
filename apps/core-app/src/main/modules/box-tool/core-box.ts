@@ -11,6 +11,8 @@ import { genPluginManager } from '../../plugins/plugin-core'
 import { getConfig } from '../../core/storage'
 import { StorageList, type AppSetting } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window.ts'
+import { SearchEngineCore } from './search-engine/search-core'
+import { ApplicationSource } from './addon/apps/get-mac-app/application-source'
 
 let touchApp: TouchApp
 let coreBoxManagerInstance: CoreBoxManager | null = null
@@ -96,6 +98,7 @@ export class CoreBoxManager {
   #_show: boolean
   #_expand: number
   windows: Array<TouchWindow>
+  searchEngine: SearchEngineCore
 
   lastWindow: Electron.Display | null
 
@@ -104,9 +107,32 @@ export class CoreBoxManager {
     this.#_expand = 0
     this.windows = []
     this.lastWindow = null
+    this.searchEngine = new SearchEngineCore()
 
     // Always match the last window => popover window
     this.init().then(() => this.register())
+
+    this.setupSearchEngine()
+  }
+
+  /**
+   * Sets up the search engine by registering sources.
+   */
+  setupSearchEngine(): void {
+    if (process.platform === 'darwin') {
+      this.searchEngine.registerSource(new ApplicationSource())
+    }
+    // Register other sources for other platforms here
+  }
+
+  /**
+   * Performs a search using the search engine.
+   * @param keyword - The search keyword.
+   * @returns A promise that resolves to the search results.
+   */
+  async search(keyword: string) {
+    const results = await this.searchEngine.search({ keyword })
+    return results
   }
 
   /**
@@ -301,54 +327,10 @@ export class CoreBoxManager {
         reply(DataCode.ERROR, [])
       }
     })
-    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box-get:features', () => {
-      const features: IPluginFeature[] = []
-      const pluginManager = genPluginManager()
-      const plugins = [...pluginManager.plugins.values()]
-
-      console.debug(`[CoreBox] Processing ${plugins.length} plugins for features`)
-
-      plugins.forEach((plugin, pluginIndex) => {
-        const pluginFeatures = [...plugin.features]
-        console.log(
-          `[CoreBox] Plugin ${pluginIndex} "${plugin.name}" has ${pluginFeatures.length} features`
-        )
-
-        pluginFeatures.forEach((feature, featureIndex) => {
-          const processedFeature = {
-            ...feature,
-            names: [feature.name],
-            keyWords: [],
-            pluginType: 'feature',
-            type: 'plugin',
-            value: plugin.name,
-            featureId: feature.id
-          }
-
-          console.debug(
-            `[CoreBox] Adding feature ${featureIndex}: "${feature.name}" (desc: "${feature.desc}") from plugin "${plugin.name}"`
-          )
-
-          // Check for potential duplicates
-          const existingFeature = features.find(
-            (f) =>
-              f.name === processedFeature.name &&
-              f.desc === processedFeature.desc &&
-              f.id === processedFeature.featureId
-          )
-
-          if (existingFeature) {
-            console.warn(
-              `[CoreBox] Potential duplicate feature detected: "${feature.name}" from "${plugin.name}"`
-            )
-          }
-
-          features.push(processedFeature)
-        })
-      })
-
-      console.log(`[CoreBox] Returning ${features.length} total features`)
-      return features
+    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:search', async ({ data, reply }) => {
+      const { keyword } = data
+      const results = await this.search(keyword)
+      reply(DataCode.SUCCESS, results)
     })
   }
 

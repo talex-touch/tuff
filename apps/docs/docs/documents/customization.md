@@ -1,6 +1,6 @@
 # Customization
 
-The `Polyglot Toolbox` is designed to be highly customizable to meet your specific needs. This guide will walk you through the various ways you can personalize your experience.
+The `Tuff` is designed to be highly customizable to meet your specific needs. This guide will walk you through the various ways you can personalize your experience.
 
 ## Themes
 

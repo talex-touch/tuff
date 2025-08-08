@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Search Sorting API allows plugins to customize how search results are ranked and sorted in TalexTouch. This powerful extension enables plugins to influence the search experience by adjusting type weights, adding dynamic rules, and creating custom sorting behaviors.
+The Search Sorting API allows plugins to customize how search results are ranked and sorted in Tuff. This powerful extension enables plugins to influence the search experience by adjusting type weights, adding dynamic rules, and creating custom sorting behaviors.
 
 ## Core Concepts
 
@@ -50,7 +50,7 @@ Main interface for managing sorting configuration.
 // Note: Advanced configuration management is planned for future releases
 // Currently, the system uses built-in default weights and dynamic rules
 
-import { calculateSortScore } from '@talex-touch/core/search-sorter'
+import { calculateSortScore } from '@tuff/core/search-sorter'
 
 // Calculate score for an item
 const score = calculateSortScore(item, searchKeyword)
@@ -81,7 +81,7 @@ Advanced configuration management is planned for future releases:
 
 ```typescript
 // Planned API (not yet available)
-import { SortConfigManager } from '@talex-touch/core/search-sorter-config'
+import { SortConfigManager } from '@tuff/core/search-sorter-config'
 
 // These features will be available in future versions:
 // - Custom weight configuration
@@ -197,7 +197,7 @@ export class ContextAwarePlugin {
 ### Custom Scoring Logic
 
 ```typescript
-import { calculateSortScore } from '@talex-touch/core/search-sorter'
+import { calculateSortScore } from '@tuff/core/search-sorter'
 
 // Calculate score for an item
 const score = calculateSortScore(item, searchKeyword)
@@ -291,4 +291,4 @@ interface SortWeightConfig {
 
 ---
 
-*This API is part of the TalexTouch Plugin Extension System and is currently in internal beta testing.*
+*This API is part of the Tuff Plugin Extension System and is currently in internal beta testing.*

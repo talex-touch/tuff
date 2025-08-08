@@ -1,20 +1,20 @@
-# TalexTouch - Docs
+# Tuff - Docs
 
 ## 💬 Introduction
 
-TalexTouch is a powerful, cross-platform desktop application built with Electron, Vue 3, and Vite. It serves as a "Polyglot Toolbox" that integrates various practical tools and features, aiming to make your desktop smarter, more efficient, and convenient.
+Tuff is a local-first, AI-powered productivity tool. It's built with Electron and Vue 3, and designed to be your second brain.
 
-This documentation is built with [Vitepress](https://vitepress.vuejs.org) using a [template](https://github.com/Tyh2001/vitepress-template).
+This documentation is built with [Vitepress](https://vitepress.vuejs.org).
 
-> Auto build - TalexTouch Document.
+> Auto build - Tuff Document.
 
-## 🌟 Features
+## 🌟 Core Features
 
-- **Plugin Ecosystem**: Utilizes innovative E-TOS technology to independently package each plugin, providing a flexible and streamlined selection and customization of plugins.
-- **Cross-Platform Support**: Available for Windows, macOS, Linux, Android, iOS, watchOS, and wearOS.
-- **Extensive Documentation**: Comprehensive documentation and examples to help you get started and deeply understand the usage methods and techniques.
-- **Customization**: Ultimate customization options to make your workflow more efficient and meet personalized needs.
-- **Cloud Sync**: Data synchronization across multiple platforms for a continuous working environment.
+- **Local-First AI**: All AI computations, from semantic search to data analysis, happen on your device. Your data remains private.
+- **Contextual Intelligence**: Tuff understands your context by tapping into OS-level APIs and building a local knowledge graph.
+- **Sandboxed Plugins**: Our plugin system, built on a sandboxed architecture, allows for safe and powerful extensions to the core functionality.
+- **Extensible**: Bring your own self-hosted or private LLMs to customize Tuff to your needs.
+- **Cross-Platform**: Currently in Public Beta for Windows, macOS, and Linux.
 
 ## 🚀 Getting Started
 
@@ -27,7 +27,7 @@ This documentation is built with [Vitepress](https://vitepress.vuejs.org) using 
 
 ```bash
 # Clone the repository
-git clone https://github.com/talex-touch/talex-touch.git
+git clone https://github.com/tuff/tuff.git
 
 # Navigate to the docs directory
 cd apps/docs
@@ -50,15 +50,16 @@ pnpm build
 
 The documentation is organized into several sections:
 
-- **Guidance**: Introduction, getting started, and account management
-- **Plugins**: Plugin development guide, API references, and configuration
-- **Q & A**: Frequently asked questions and troubleshooting
-- **About**: Changelog and team information
+- **Documents**: Introduction, getting started, and account management.
+- **Plugin Extensions**: Guides for extending Tuff with new extensions.
+- **Plugins**: In-depth guides for developing plugins.
+- **Q & A**: Frequently asked questions and troubleshooting.
+- **About**: Changelog and team information.
 
 ## 🤝 Contributing
 
-We welcome contributions to improve TalexTouch and its documentation. Please read our contributing guidelines before submitting pull requests.
+We welcome contributions to improve Tuff and its documentation. Please read our contributing guidelines before submitting pull requests.
 
 ## 📄 License
 
-TalexTouch is released under the Mozilla Public License 2.0. See the [LICENSE](https://github.com/talex-touch/talex-touch/blob/master/LICENSE) file for details.
+Tuff is released under the MIT License. See the [LICENSE](https://github.com/tuff/tuff/blob/main/LICENSE) file for details.
