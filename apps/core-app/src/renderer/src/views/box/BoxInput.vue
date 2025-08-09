@@ -1,41 +1,41 @@
 <script setup lang="ts" name="BoxInput">
-import { BoxMode } from "./search-box";
+import { BoxMode } from './adapter'
 
 interface Props {
-  modelValue: string;
+  modelValue: string
   boxOptions: {
-    mode: BoxMode;
+    mode: BoxMode
     data?: {
       feature?: {
-        desc?: string;
-        name?: string;
-      };
-    };
-  };
+        desc?: string
+        name?: string
+      }
+    }
+  }
 }
 
 interface Emits {
-  (e: "update:modelValue", value: string): void;
+  (e: 'update:modelValue', value: string): void
 }
 
 const slots = useSlots()
-const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
 
 const options = reactive({
-  focus: false,
-});
+  focus: false
+})
 
 const inputValue = computed({
   get: () => props.modelValue,
-  set: (value: string) => emit("update:modelValue", value),
-});
+  set: (value: string) => emit('update:modelValue', value)
+})
 
 const placeholder = computed(() => {
   return props.boxOptions.mode === BoxMode.FEATURE
-    ? props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name
-    : "Type what you want to search by talex-touch.";
-});
+    ? (props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name)
+    : 'Type what you want to search by tuff.'
+})
 </script>
 
 <template>
@@ -44,10 +44,10 @@ const placeholder = computed(() => {
       placeholder
     }}</span>
     <input
-      @focus="options.focus = true"
-      @blur="options.focus = false"
       id="core-box-input"
       v-model="inputValue"
+      @focus="options.focus = true"
+      @blur="options.focus = false"
     />
     <div class="BoxInput-Display">
       <span op-0>{{ modelValue }}</span>

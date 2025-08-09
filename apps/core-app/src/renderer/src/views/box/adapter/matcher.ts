@@ -1,5 +1,5 @@
 import PinyinMatch from 'pinyin-match'
-import { BoxMode, SearchItem, SearchOptions } from './search-box'
+import { BoxMode, SearchItem, SearchOptions, ISearchMiddleware } from './types'
 import type { IFeatureCommand } from '@talex-touch/utils/plugin'
 
 /**
@@ -11,12 +11,6 @@ import type { IFeatureCommand } from '@talex-touch/utils/plugin'
 function check(keyword: string, appName: string) {
   return PinyinMatch.match(appName, keyword)
 }
-
-type ISearchMiddleware = (
-  item: SearchItem,
-  keyword: string,
-  options: SearchOptions
-) => SearchItem | SearchItem[] | null
 
 const middlewares = new Array<ISearchMiddleware>()
 
