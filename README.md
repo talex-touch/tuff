@@ -10,11 +10,11 @@
   [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
   [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/tuff/discussions/35)
+  <br>
+  English | [简体中文](./README.zh-CN.md)
 </div>
 
 ## 📌 Announcement
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff?ref=badge_small)
 
 > 2.0.0 version is now under development and beta testing.
 
@@ -27,7 +27,11 @@ Download it and feedback!
 
 Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with Electron, TypeScript, and Vue.js. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
 
-## 🖇️ Cross-Platform Support
+## 🚀 Background
+
+**We believe your most powerful tool should be as adaptable as you are. Tuff is a new kind of command center—a foundational, open-source layer for your OS, crafted to anticipate your intent and seamlessly integrate with your unique workflow. Hackable to its core and open by design, it’s ready to be shaped by you.**
+
+## �️ Cross-Platform Support
 
 Tuff is currently available for macOS.
 
@@ -63,7 +67,6 @@ The design style of Tuff is inspired by TDesignS, which is simple and elegant. T
 
 ![New Plugin](https://files.catbox.moe/xksrfv.gif)
 
-Thanks to the design from [@0x1021A0](https://github.com/0x1021A0) <img alt="0x1021A0" style="border-radius: 50%;position: relative;top: 5px" src="https://github.com/0x1021A0.png?size=32" /> and the design tool from [![Figma](https://api.iconify.design/logos:figma.svg)](https://www.figma.com/)
 
 ## 🗻 Rich Functionality
 
@@ -88,7 +91,6 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 
 This project is open-sourced under the **MIT License**.
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff?ref=badge_large)
 
 ## ⁉️ Issue
 
@@ -134,13 +136,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
             <sub><b>TalexDreamSoul</b></sub>
         </a>
     </td>
-    <td align="center">
-        <a href="https://github.com/fossabot">
-            <img src="https://avatars.githubusercontent.com/u/29791463?v=4" width="100;" alt="fossabot"/>
-            <br />
-            <sub><b>Fossabot</b></sub>
-        </a>
-    </td></tr>
+</tr>
 </table>
 <!-- readme: collaborators,contributors -end -->
 

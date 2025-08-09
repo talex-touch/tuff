@@ -2,12 +2,9 @@
 
   <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="logo">
 
-  <h1>TalexTouch</h1>
-
-  设计参考 <b>TDesignS</b>
+  <h1>Tuff</h1>
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_shield)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
   [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
@@ -17,7 +14,7 @@
 
 # 贡献指南
 
-`talex-touch` 处于萌芽阶段，个人开发者的力量是微不足道的。作者并没有足够的时间来完善和维护这个项目，因此，我们非常支持并且赞同您的亲自操刀，参与到项目的研发，维护中。
+`Tuff` 处于萌芽阶段，个人开发者的力量是微不足道的。作者并没有足够的时间来完善和维护这个项目，因此，我们非常支持并且赞同您的亲自操刀，参与到项目的研发，维护中。
 
 ## 我可以对项目做出优化吗
 
@@ -51,14 +48,14 @@
 1. `Commit Message` 应当像: 前缀(范围?): 简短的描述 (范围 是可选的)
 2. 我们使用 `husky` `commitlint` 来确保您的信息符合我们的协议。
 3. 前缀 可以参考:
-   - Fix(xxx): message
-   - Feat(xxx): message
-   - Test(xxx): message
-   - Build(xxx): message
-   - Docs(xxx): message
-   - Add(xxx): message
-   - Upd(xxx): message (诸如更新dependencies的版本也可)
-   - Change(xxx): message (应当留作备选)
+   - fix(xxx): message
+   - feat(xxx): message
+   - test(xxx): message
+   - build(xxx): message
+   - docs(xxx): message
+   - add(xxx): message
+   - upd(xxx): message (诸如更新dependencies的版本也可)
+   - change(xxx): message (应当留作备选)
    - 更多请参考 `commitlint.config.js`
 4. XXX 是你更新了什么，或者是一个抽象范围、模块:
    - 抽象范围 像是 PluginModule
@@ -72,23 +69,20 @@
 > 这里仅仅列出了开发中很有可能会用到的文件。
 
 ``` yaml
-  Touch tree helper:
- > talex-touch:
-   ├── app: (主要的应用)
-   ├─── core: (Electron 应用)
-   ├─── docs: (文档应用)
-   ├─── ends: (后端应用) # 废弃
+   Tuff tree helper:
+ > tuff:
+   ├── apps: (主要的应用)
+   ├──── core: (Electron 应用)
+   ├──── docs: (文档应用)
    ├── packages: (辅助包)
-   ├─── components: (Touch 组件)
-   ├─── test: (辅助工具测试)
-   ├─── touch-view: (Touch 展示框架)
-   ├─── utils: (辅助工具)
+   ├──── components: (Tuff 组件)
+   ├──── utils: (辅助工具)
    ├── plugins: (官方插件)
 ```
 
 ## Collaborator 开发指南
 
-如果你收到了来自本仓库的神秘蓝色链接，点击它，你就成为了一名光荣的 TouchQ Collaborator！你将可以：
+如果你收到了来自本仓库的神秘蓝色链接，点击它，你就成为了一名光荣的 Tuff Collaborator！你将可以：
 
 - 在 Issues 中有一个帅气的 collaborator 标识
 - 直接推送到主仓库（你可以把之前的 fork 删掉啦）

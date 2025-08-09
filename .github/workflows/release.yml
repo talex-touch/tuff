@@ -1,4 +1,4 @@
-name: Build/release TouchCore app
+name: Build/release Tuff app
 
 on:
   push:

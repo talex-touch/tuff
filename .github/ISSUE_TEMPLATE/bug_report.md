@@ -7,7 +7,7 @@ labels: bug
 
 ---
 
-# TalexTouch
+# Tuff
 
 > Bug report template
 <!-- Thank you for reporting! -->
@@ -37,7 +37,7 @@ Type: UI-UX Error
 <!-- We don't accept dev-version bug reports! If you meet, please give us a PR instead! -->
 
 - My OS information: <Windows/MacOS/Linux> <Version>
-- My App information: TalexTouch <version> <OFFICIAL/SNAPSHOT/BETA>
+- My App information: Tuff <version> <OFFICIAL/SNAPSHOT/BETA>
 
 ## Description
 

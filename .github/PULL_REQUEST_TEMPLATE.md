@@ -1,4 +1,4 @@
-# TalexTouch
+# Tuff
 
 > Pull request template
 
@@ -29,27 +29,25 @@
 
 Please ensure your code meets these requirements before requesting a review:
 
-- [ ] Code follows the project's style guide
-- [ ] All existing tests pass
-- [ ] New code is covered by unit tests
-- [ ] No console logs or debugger statements
-- [ ] Proper error handling is implemented
-- [ ] Code is properly documented (JSDoc, TSDoc, etc.)
-- [ ] Variable and function names are self-descriptive
-- [ ] Complex logic is explained with comments
+- Code follows the project's style guide
+- All existing tests pass
+- New code is covered by unit tests
+- No console logs or debugger statements
+- Proper error handling is implemented
+- Code is properly documented (JSDoc, TSDoc, etc.)
+- Variable and function names are self-descriptive
+- Complex logic is explained with comments
 
 ## Testing
 
-- [ ] I have tested this code locally
-- [ ] I have added new tests for my changes
-- [ ] All tests pass (run `npm test` or equivalent)
-- [ ] I have updated existing tests if necessary
+- I have tested this code locally
+- I have added new tests for my changes
+- All tests pass (run `npm test` or equivalent)
+- I have updated existing tests if necessary
 
 ## Changelog
 
 <!-- Please summarize the changes in this PR -->
-
-- 
 
 ## Screenshots / GIFs (if applicable)
 
