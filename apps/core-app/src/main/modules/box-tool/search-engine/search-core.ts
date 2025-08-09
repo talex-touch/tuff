@@ -10,6 +10,7 @@ import {
 import { Sorter } from './sort/sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { TuffFactory } from '@core-box/builder/tuff-builder'
+import { appProvider } from '../addon/apps/app-provider'
 
 export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   private static _instance: SearchEngineCore
@@ -41,6 +42,8 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       }
     }
     this.sorter.register(defaultSortMiddleware)
+
+    this.registerProvider(appProvider)
   }
 
   static getInstance(): SearchEngineCore {

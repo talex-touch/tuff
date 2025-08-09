@@ -3,16 +3,12 @@ import { genTouchApp, TouchApp, TouchWindow } from '../../core/touch-core'
 import { BoxWindowOption } from '../../config/default'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { globalShortcut, screen, app } from 'electron'
-import { getAppsAsync, appDataManager } from './addon/app-addon'
 import { TalexTouch } from '../../types'
 import path from 'path'
-import type { IPluginFeature } from '@talex-touch/utils/plugin'
-import { genPluginManager } from '../../plugins/plugin-core'
 import { getConfig } from '../../core/storage'
 import { StorageList, type AppSetting } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window.ts'
 import { SearchEngineCore } from './search-engine/search-core'
-import { ApplicationSource } from './addon/apps/get-mac-app/application-source'
 
 let touchApp: TouchApp
 let coreBoxManagerInstance: CoreBoxManager | null = null
@@ -111,18 +107,6 @@ export class CoreBoxManager {
 
     // Always match the last window => popover window
     this.init().then(() => this.register())
-
-    this.setupSearchEngine()
-  }
-
-  /**
-   * Sets up the search engine by registering sources.
-   */
-  setupSearchEngine(): void {
-    if (process.platform === 'darwin') {
-      this.searchEngine.registerSource(new ApplicationSource())
-    }
-    // Register other sources for other platforms here
   }
 
   /**
@@ -130,9 +114,8 @@ export class CoreBoxManager {
    * @param keyword - The search keyword.
    * @returns A promise that resolves to the search results.
    */
-  async search(keyword: string) {
-    const results = await this.searchEngine.search({ keyword })
-    return results
+  async search(keyword: string): Promise<any> {
+    return this.searchEngine.search({ text: keyword })
   }
 
   /**
@@ -308,25 +291,6 @@ export class CoreBoxManager {
     touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) =>
       data ? this.expand(data) : this.shrink()
     )
-    touchApp.channel.regChannel(ChannelType.MAIN, 'core-box-get:apps', async ({ reply }) => {
-      try {
-        console.log('[CoreBox] Received request for apps data')
-
-        const apps = await getAppsAsync()
-        console.log(`[CoreBox] Sending ${apps.length} apps to frontend`)
-
-        const appsWithIcons = apps.filter((app) => app.icon)
-        const appsWithoutIcons = apps.filter((app) => !app.icon)
-        console.log(
-          `[CoreBox] Apps with icons: ${appsWithIcons.length}, without icons: ${appsWithoutIcons.length}`
-        )
-
-        reply(DataCode.SUCCESS, apps)
-      } catch (error) {
-        console.error('[CoreBox] Failed to get apps:', error)
-        reply(DataCode.ERROR, [])
-      }
-    })
     touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:search', async ({ data, reply }) => {
       const { keyword } = data
       const results = await this.search(keyword)
@@ -396,10 +360,6 @@ export class CoreBoxManager {
     window.window.setAlwaysOnTop(show)
 
     if (show) {
-      appDataManager.onCoreBoxShow().catch((error) => {
-        console.error('[CoreBox] Failed to refresh app data on show:', error)
-      })
-
       if (!this.#_expand) {
         window.window.setMinimumSize(900, 60)
         window.window.setSize(900, 60, false)
