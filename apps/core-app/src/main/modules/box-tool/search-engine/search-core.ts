@@ -98,7 +98,10 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       .filter((p): p is ISearchProvider => !!p)
   }
 
-  async search(query: TuffQuery): Promise<TuffSearchResult> {
+  async search(
+    query: TuffQuery,
+    onItems?: (items: TuffItem[]) => void
+  ): Promise<TuffSearchResult> {
     // Abort any ongoing search before starting a new one
     if (this.currentGatherController) {
       this.currentGatherController.abort()
@@ -115,6 +118,13 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       const gatherController = getGatheredItems(providersToSearch, query, (update) => {
         if (update.newItems.length > 0) {
           allItems.push(...update.newItems)
+          // Stream sorted items back to the caller
+          const { sortedItems } = this.sorter.sort(
+            update.newItems,
+            query,
+            gatherController.signal
+          )
+          onItems?.(sortedItems)
         }
         if (update.sourceStats) {
           finalSourceStats = update.sourceStats
@@ -159,6 +169,4 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 }
 
-export function getSearchEngineCore(): SearchEngineCore {
-  return SearchEngineCore.getInstance()
-}
+export default SearchEngineCore.getInstance()
