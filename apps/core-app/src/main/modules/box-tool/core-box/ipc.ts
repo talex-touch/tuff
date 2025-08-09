@@ -25,30 +25,24 @@ export class IpcManager {
   }
 
   public register() {
-    this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
-      'file:extract-icon',
-      async ({ data, reply }) => {
-        try {
-          const { path } = data as { path: string }
-          const fileIcon = (await import('extract-file-icon')).default
-          if (typeof fileIcon !== 'function') {
-            return
-          }
-
-          const buffer = fileIcon(path, 32)
-          reply(DataCode.SUCCESS, {
-            buffer
-          })
-        } catch (error) {
-          console.log('Cannot find target file icon:', data.path, error)
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'file:extract-icon', async ({ data, reply }) => {
+      try {
+        const { path } = data as { path: string }
+        const fileIcon = (await import('extract-file-icon')).default
+        if (typeof fileIcon !== 'function') {
+          return
         }
-      }
-    )
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () =>
-      coreBoxManager.trigger(false)
-    )
+        const buffer = fileIcon(path, 32)
+        reply(DataCode.SUCCESS, {
+          buffer
+        })
+      } catch (error) {
+        console.log('Cannot find target file icon:', data.path, error)
+      }
+    })
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () => coreBoxManager.trigger(false))
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) =>
       data ? coreBoxManager.expand(data) : coreBoxManager.shrink()
     )

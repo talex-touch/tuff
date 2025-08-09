@@ -1,4 +1,3 @@
-import { TalexTouch } from '../../../../../../../packages/utils/types/touch-app-core'
 import {
   ISearchEngine,
   ISearchProvider,
@@ -9,8 +8,8 @@ import {
 } from './types'
 import { Sorter } from './sort/sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
-import { TuffFactory } from '@core-box/builder/tuff-builder'
 import { appProvider } from '../addon/apps/app-provider'
+import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 
 export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   private static _instance: SearchEngineCore
@@ -98,10 +97,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       .filter((p): p is ISearchProvider => !!p)
   }
 
-  async search(
-    query: TuffQuery,
-    onItems?: (items: TuffItem[]) => void
-  ): Promise<TuffSearchResult> {
+  async search(query: TuffQuery, onItems?: (items: TuffItem[]) => void): Promise<TuffSearchResult> {
     // Abort any ongoing search before starting a new one
     if (this.currentGatherController) {
       this.currentGatherController.abort()
@@ -119,11 +115,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         if (update.newItems.length > 0) {
           allItems.push(...update.newItems)
           // Stream sorted items back to the caller
-          const { sortedItems } = this.sorter.sort(
-            update.newItems,
-            query,
-            gatherController.signal
-          )
+          const { sortedItems } = this.sorter.sort(update.newItems, query, gatherController.signal)
           onItems?.(sortedItems)
         }
         if (update.sourceStats) {
@@ -169,4 +161,6 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 }
 
-export default SearchEngineCore.getInstance()
+export function getSearchEngineCore(): SearchEngineCore {
+  return SearchEngineCore.getInstance()
+}
