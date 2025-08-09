@@ -103,7 +103,7 @@ export class CoreBoxManager {
     this.#_expand = 0
     this.windows = []
     this.lastWindow = null
-    this.searchEngine = new SearchEngineCore()
+    this.searchEngine = SearchEngineCore.getInstance()
 
     // Always match the last window => popover window
     this.init().then(() => this.register())

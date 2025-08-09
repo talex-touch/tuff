@@ -14,7 +14,7 @@ import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
 import Clipboard from './modules/clipboard'
-import { SearchEngineCore } from './modules/box-tool/search-engine'
+import SearchEngineCore from './modules/box-tool/search-engine/search-core'
 
 app.whenReady().then(() => {
   const app = genTouchApp()
@@ -26,8 +26,9 @@ app.whenReady().then(() => {
   app.moduleManager.loadModule(PermissionCenter)
   app.moduleManager.loadModule(ServiceCenter)
 
+  /** Ensure SearchEngineCore is load before CoreBox pls */
+  app.moduleManager.loadModule(SearchEngineCore)
   app.moduleManager.loadModule(CoreBox)
-  app.moduleManager.loadModule(SearchEngineCore.getInstance())
   app.moduleManager.loadModule(TrayHolder)
   app.moduleManager.loadModule(addonOpener)
   app.moduleManager.loadModule(DropManager)

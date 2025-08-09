@@ -9,10 +9,6 @@
             </keep-alive>
           </transition>
         </router-view>
-
-        <keep-alive>
-          <ViewPlugin />
-        </keep-alive>
       </template>
       <template #title>
         <slot name="title" />
@@ -22,24 +18,23 @@
 </template>
 
 <script lang="ts" name="AppLayout" setup>
-import FlatLayout from "./flat/FlatLayout.vue";
-import ViewPlugin from "~/views/base/plugin/ViewPlugin.vue";
-import { themeStyle, triggerThemeTransition } from "~/modules/storage/theme-style";
+import FlatLayout from './flat/FlatLayout.vue'
+import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
 
-const mica = computed(() => themeStyle.value.theme.window === "Mica");
-const coloring = computed(() => themeStyle.value.theme.addon.coloring);
-const contrast = computed(() => themeStyle.value.theme.addon.contrast);
+const mica = computed(() => themeStyle.value.theme.window === 'Mica')
+const coloring = computed(() => themeStyle.value.theme.addon.coloring)
+const contrast = computed(() => themeStyle.value.theme.addon.contrast)
 
 onMounted(() => {
   triggerThemeTransition(
     [innerWidth / 2, innerHeight / 2],
     themeStyle.value.theme.style.auto
-      ? "auto"
+      ? 'auto'
       : themeStyle.value.theme.style.dark
-      ? "dark"
-      : "light"
-  );
-});
+        ? 'dark'
+        : 'light'
+  )
+})
 </script>
 
 <style lang="scss">
@@ -69,7 +64,8 @@ onMounted(() => {
   --fake-radius: 0;
   --fake-color: var(--el-fill-color-extra-light);
 
-  transition: margin-right 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+  transition:
+    margin-right 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
     left 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
     width 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
     opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
@@ -116,7 +112,8 @@ onMounted(() => {
   --fake-radius: 8px 8px 0 0;
   --fake-color: var(--el-fill-color-extra-light);
 
-  transition: margin-bottom 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
+  transition:
+    margin-bottom 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
     top 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
     height 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
     opacity 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);

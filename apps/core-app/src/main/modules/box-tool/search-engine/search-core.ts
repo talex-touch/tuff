@@ -161,6 +161,4 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 }
 
-export function getSearchEngineCore(): SearchEngineCore {
-  return SearchEngineCore.getInstance()
-}
+export default SearchEngineCore.getInstance()
