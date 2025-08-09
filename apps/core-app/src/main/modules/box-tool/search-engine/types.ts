@@ -5,9 +5,44 @@
  * @module core-app/main/modules/box-tool/search-engine/types
  */
 
-import type { TuffItem, TuffQuery, TuffSearchResult, TuffSourceType } from '@talex-touch/utils/core-box';
+import type { TuffItem, TuffQuery, TuffSearchResult as TuffSearchResultBase, TuffSourceType } from '@talex-touch/utils/core-box';
 
-export type { TuffItem, TuffQuery, TuffSearchResult };
+export type { TuffItem, TuffQuery };
+
+/**
+ * Represents the statistics for a single sort middleware.
+ */
+export interface SortStat {
+  /** The name of the sorting middleware. */
+  name: string;
+  /** The time taken by the middleware in milliseconds. */
+  duration: number;
+}
+
+/**
+ * Extends the base TUFF search result to include sorting statistics.
+ */
+export interface TuffSearchResult extends TuffSearchResultBase {
+  /** Optional statistics about the sorting process. */
+  sort_stats?: SortStat[];
+}
+
+/**
+ * Defines the interface for a sort middleware.
+ * Each middleware receives an array of items and should return a sorted array.
+ */
+export interface ISortMiddleware {
+  /** A unique name for the middleware, used for logging and stats. */
+  readonly name: string;
+  /**
+   * The sort function that processes the items.
+   * @param items - The array of TuffItems to be sorted.
+   * @param query - The original search query for context.
+   * @param signal - An AbortSignal to cancel the sorting operation.
+   * @returns A sorted array of TuffItems.
+   */
+  sort(items: TuffItem[], query: TuffQuery, signal: AbortSignal): TuffItem[];
+}
 
 /**
  * Search Provider Interface (formerly ISearchSource)
@@ -38,9 +73,10 @@ export interface ISearchProvider {
    * The engine calls this method to get results from the provider.
    *
    * @param query - The search query object, containing text and other context.
+   * @param signal - An AbortSignal to cancel the search operation.
    * @returns A promise that resolves to an array of TuffItems.
    */
-  onSearch(query: TuffQuery): Promise<TuffItem[]>;
+  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffItem[]>;
 
   /**
    * Optional method to handle activation.
@@ -87,6 +123,29 @@ export interface ISearchEngine {
    * refreshing indexes, etc.
    */
   maintain(): void;
+}
+
+/**
+ * Represents a single update pushed from the search-gatherer.
+ * It provides a snapshot of the search progress at a point in time.
+ */
+export interface TuffUpdate {
+  /**
+   * New search result items from the current push batch.
+   */
+  newItems: TuffItem[]
+  /**
+   * Total number of results aggregated so far.
+   */
+  totalCount: number
+  /**
+   * Flag indicating whether all search tasks (both default and fallback queues) have completed.
+   */
+  isDone: boolean
+  /**
+   * Statistics about the performance of each search provider.
+   */
+  sourceStats?: TuffSearchResult['sources']
 }
 
 // This empty export statement forces the file to be treated as a module.

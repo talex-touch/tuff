@@ -1111,12 +1111,16 @@ export interface TuffSearchResult {
    * @required
    */
   sources: Array<{
-    /** 来源标识 */
-    source: string;
-    /** 结果数量 */
-    count: number;
-    /** 搜索耗时 */
+    /** Provider's unique ID. */
+    providerId: string;
+    /** Provider's display name. */
+    providerName: string;
+    /** Search duration in milliseconds. */
     duration: number;
+    /** Number of results returned. */
+    resultCount: number;
+    /** Status of the search operation. */
+    status: 'success' | 'timeout' | 'error';
   }>;
 
   /**

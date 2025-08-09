@@ -1,6 +1,13 @@
 {
   "extends": "@antfu",
   "rules": {
-    "@typescript-eslint/no-this-alias": false
+    "@typescript-eslint/no-this-alias": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ]
   }
 }

@@ -158,3 +158,54 @@ export function structuredStrictStringify(value: unknown): string {
 
   return JSON.stringify(serialize(value, 'root'));
 }
+
+/**
+ * A custom error class for timeout events.
+ * This allows for specific catching of timeout errors using `instanceof`.
+ */
+export class TimeoutError extends Error {
+    constructor(message = 'Promise timed out') {
+        super(message)
+        this.name = 'TimeoutError'
+    }
+}
+
+/**
+ * Executes a promise and throws a TimeoutError if it does not resolve within the specified time.
+ * This is a more robust alternative to a timeout that resolves with a special value,
+ * as it uses idiomatic error handling (`try...catch`).
+ *
+ * The use of a `Symbol` in the previous implementation was to create a unique value
+ * that could not conflict with any possible successful resolution value of the promise.
+ * By rejecting the promise instead, we provide a clearer and more standard way to signal an error condition.
+ *
+ * @template T The type of the promise's resolution value.
+ * @param promise - The promise to execute.
+ * @param ms - The timeout duration in milliseconds.
+ * @returns A promise that resolves with the result of the input promise, or rejects with a `TimeoutError`.
+ * @throws {TimeoutError} If the promise does not resolve within the specified time.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   const result = await withTimeout(fetch('https://api.example.com'), 5000);
+ *   console.log(result);
+ * } catch (error) {
+ *   if (error instanceof TimeoutError) {
+ *     console.error('Request timed out!');
+ *   }
+ * }
+ * ```
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    // Create a promise that rejects in <ms> milliseconds
+    const timeout = new Promise<never>((_, reject) => {
+        const id = setTimeout(() => {
+            clearTimeout(id)
+            reject(new TimeoutError(`Promise timed out after ${ms} ms`))
+        }, ms)
+    })
+
+    // Race the input promise against the timeout promise
+    return Promise.race([promise, timeout])
+}

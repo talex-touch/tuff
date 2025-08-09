@@ -12,7 +12,7 @@
  * - 类型安全：完整的 TypeScript 类型支持
  * - 便捷工厂：针对常见场景提供快捷创建方法
  *
- * @version 1.0.0
+ * @version 2.0.0
  * @module core-box/tuff-builder
  */
 
@@ -35,7 +35,10 @@ import type {
   TuffScoring,
   TuffContext,
   TuffMeta,
-  TuffPermissionLevel
+  TuffPermissionLevel,
+  TuffSearchResult,
+  TuffQuery,
+  TuffSortStats
 } from '../tuff/tuff-dsl';
 
 // ==================== Builder 类 ====================
@@ -53,11 +56,7 @@ import type {
  *   .setSource('plugin', 'my-plugin')
  *   .setTitle('我的项目')
  *   .setIcon('🚀')
- *   .addAction({
- *     id: 'open',
- *     type: 'open',
- *     label: '打开'
- *   })
+ *   .createAndAddAction('open', 'open', '打开')
  *   .build();
  * ```
  */
@@ -393,6 +392,37 @@ class TuffItemBuilder {
   }
 
   /**
+   * 创建并添加一个行为
+   *
+   * @description 便捷方法，用于快速创建并添加一个行为。
+   * 如果这是第一个被添加的行为，它将被自动设为主要行为 (primary: true)。
+   *
+   * @param id - 行为 ID
+   * @param type - 行为类型
+   * @param label - 行为标签
+   * @param payload - 可选的行为参数
+   * @returns 当前构建器实例，用于链式调用
+   */
+  createAndAddAction(
+    id: string,
+    type: TuffActionType,
+    label: string,
+    payload?: any
+  ): TuffItemBuilder {
+    const isFirstAction = !this.item.actions || this.item.actions.length === 0;
+
+    const action = TuffUtils.createAction(
+      id,
+      type,
+      label,
+      isFirstAction, // Set primary to true if it's the first action
+      payload
+    );
+
+    return this.addAction(action);
+  }
+
+  /**
    * 设置评分信息
    * 
    * @param scoring - 评分信息
@@ -404,16 +434,16 @@ class TuffItemBuilder {
   }
 
   /**
-   * 设置项目的分数
-   * 
-   * @param score 分数值（0-1之间）
+   * 设置项目的最终分数
+   *
+   * @param score - 最终分数值 (0-1之间)
    * @returns 当前构建器实例，用于链式调用
    */
-  setScore(score: number): TuffItemBuilder {
+  setFinalScore(score: number): TuffItemBuilder {
     if (score < 0 || score > 1) {
       throw new Error('Score must be between 0 and 1');
     }
-    this.scoring.score = score;
+    this.scoring.final = score;
     return this;
   }
 
@@ -446,6 +476,11 @@ class TuffItemBuilder {
    * @throws 如果缺少必要的属性（source 或 render.basic.title）
    */
   build(): TuffItem {
+    // 检查并自动生成 ID
+    if (!this.item.id) {
+      this.item.id = TuffUtils.generateId();
+    }
+    
     // 检查必要属性
     if (!this.item.source) {
       throw new Error('TuffItem 必须设置 source 属性');
@@ -457,7 +492,7 @@ class TuffItemBuilder {
     };
 
     // 根据渲染模式设置相应的渲染配置
-    if (this.renderMode === 'default' || this.renderMode === 'rich') {
+    if (this.renderMode === 'default' || this.renderMode === 'rich' || this.renderMode === 'card') {
       if (!this.basicRender.title) {
         throw new Error('默认渲染模式下 TuffItem 必须设置 title 属性');
       }
@@ -487,6 +522,63 @@ class TuffItemBuilder {
     return this.item as TuffItem;
   }
 }
+
+// ==================== SearchResult Builder ====================
+
+class TuffSearchResultBuilder {
+  private result: Partial<TuffSearchResult> = {};
+
+  constructor(query?: TuffQuery) {
+    if (query) {
+      this.result.query = query;
+    }
+  }
+
+  setQuery(query: TuffQuery): TuffSearchResultBuilder {
+    this.result.query = query;
+    return this;
+  }
+
+  setItems(items: TuffItem[]): TuffSearchResultBuilder {
+    this.result.items = items;
+    this.result.total = items.length;
+    return this;
+  }
+
+  setDuration(duration: number): TuffSearchResultBuilder {
+    this.result.duration = duration;
+    return this;
+  }
+
+  setSources(sources: TuffSearchResult['sources']): TuffSearchResultBuilder {
+    this.result.sources = sources;
+    return this;
+  }
+
+  setSortStats(sort_stats: TuffSortStats): TuffSearchResultBuilder {
+    this.result.sort_stats = sort_stats;
+    return this;
+  }
+
+  setHasMore(has_more: boolean): TuffSearchResultBuilder {
+    this.result.has_more = has_more;
+    return this;
+  }
+
+  build(): TuffSearchResult {
+    if (!this.result.items) {
+      throw new Error('TuffSearchResult 必须设置 items 属性');
+    }
+    if (this.result.total === undefined) {
+      this.result.total = this.result.items.length;
+    }
+    if (this.result.has_more === undefined) {
+      this.result.has_more = false;
+    }
+    return this.result as TuffSearchResult;
+  }
+}
+
 
 // ==================== 工厂方法 ====================
 
@@ -594,12 +686,7 @@ class TuffFactory {
           path: path
         }
       })
-      .addAction({
-        id: 'open',
-        type: 'open',
-        label: '打开',
-        primary: true
-      })
+      .createAndAddAction('open', 'open', '打开')
       .build();
   }
 
@@ -627,12 +714,7 @@ class TuffFactory {
           path: path
         }
       })
-      .addAction({
-        id: 'open',
-        type: 'open',
-        label: '打开',
-        primary: true
-      })
+      .createAndAddAction('open', 'open', '打开')
       .build();
   }
 
@@ -660,12 +742,7 @@ class TuffFactory {
           url: url
         }
       })
-      .addAction({
-        id: 'open',
-        type: 'open',
-        label: '打开',
-        primary: true
-      })
+      .createAndAddAction('open', 'open', '打开')
       .build();
   }
 
@@ -696,12 +773,7 @@ class TuffFactory {
           bundle_id: bundleId
         }
       })
-      .addAction({
-        id: 'execute',
-        type: 'execute',
-        label: '启动',
-        primary: true
-      })
+      .createAndAddAction('execute', 'execute', '启动')
       .build();
   }
 
@@ -724,13 +796,7 @@ class TuffFactory {
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('command')
-      .addAction({
-        id: 'execute',
-        type: 'execute',
-        label: '执行',
-        primary: true,
-        payload: { command }
-      })
+      .createAndAddAction('execute', 'execute', '执行', { command })
       .build();
   }
 
@@ -756,285 +822,143 @@ class TuffFactory {
       .addAction(action)
       .build();
   }
+
+  /**
+   * 创建搜索结果构建器
+   *
+   * @param query - 可选的查询对象
+   * @returns TuffSearchResultBuilder 实例
+   */
+  static createSearchResult(query?: TuffQuery): TuffSearchResultBuilder {
+    return new TuffSearchResultBuilder(query);
+  }
 }
 
 // ==================== 批量创建工具 ====================
 
 /**
- * TuffBatchBuilder - 批量构建工具
- * 
+ * TuffListBuilder - TuffItem 列表构建器
+ *
  * @description
  * 用于高效地批量创建 TuffItem 对象，适用于需要创建大量相似项目的场景。
- * 通过重用模板和共享配置，最小化对象创建开销。
+ * 通过共享配置和独立的自定义函数，简化了批量创建的过程。
+ *
+ * @example
+ * ```typescript
+ * const items = new TuffListBuilder('plugin', 'my-plugin')
+ *   .setSharedKind('file')
+ *   .addSharedAction({ id: 'open', type: 'open', label: '打开' })
+ *   .addItem(builder => {
+ *     builder.setTitle('文件 A').setMeta({ file: { path: '/path/a' } });
+ *   })
+ *   .addItemsFromData([{ name: '文件 B', path: '/path/b' }], (builder, data) => {
+ *     builder.setTitle(data.name).setMeta({ file: { path: data.path } });
+ *   })
+ *   .build();
+ * ```
  */
-class TuffBatchBuilder {
-  private template: TuffItemBuilder;
+class TuffListBuilder {
   private items: TuffItem[] = [];
-  private currentBuilder: TuffItemBuilder | null = null;
-  
-  // 用于链式调用的方法代理
-  private proxyMethods: Record<string, Function> = {};
-  
-  // 拦截方法调用
-  [key: string]: any;
-  
-  /**
-   * 从对象数组创建 TuffItem 数组
-   * 
-   * @param sourceType 来源类型
-   * @param sourceId 来源ID
-   * @param rawItems 原始对象数组
-   * @param mapper 映射函数，用于自定义每个项目的属性
-   * @returns 创建的 TuffItem 数组
-   */
-  static fromArray<T>(sourceType: TuffSourceType, sourceId: string, rawItems: T[], mapper: (builder: TuffItemBuilder, raw: T) => void): TuffItem[] {
-    const items: TuffItem[] = [];
-    
-    for (const raw of rawItems) {
-      const builder = new TuffItemBuilder().setSource(sourceType, sourceId);
-      mapper(builder, raw);
-      items.push(builder.build());
-    }
-    
-    return items;
-  }
+  private sharedSource: TuffSource;
+  private sharedKind?: TuffItemKind;
+  private sharedActions: TuffAction[] = [];
 
   /**
-   * 创建一个新的批量构建器
-   * 
+   * 创建一个新的列表构建器
+   *
    * @param sourceType - 共享的来源类型
    * @param sourceId - 共享的来源标识符
    */
   constructor(sourceType: TuffSourceType, sourceId: string) {
-    this.template = new TuffItemBuilder()
-      .setSource(sourceType, sourceId);
-    
-    // 设置方法拦截器
-    return new Proxy(this, {
-      get: (target, prop) => {
-        // 如果是自身的方法或属性，直接返回
-        if (prop in target) {
-          return target[prop];
-        }
-        
-        // 如果是代理方法，返回代理方法
-        if (prop in target.proxyMethods) {
-          return target.proxyMethods[prop];
-        }
-        
-        // 如果有当前构建器，尝试从当前构建器获取方法
-        if (target.currentBuilder && typeof target.currentBuilder[prop] === 'function') {
-          // 创建一个新的代理方法
-          target.proxyMethods[prop] = (...args: any[]) => {
-            // 调用当前构建器的方法
-            target.currentBuilder![prop](...args);
-            // 返回 this 以支持链式调用
-            return target;
-          };
-          return target.proxyMethods[prop];
-        }
-        
-        return target[prop];
-      }
-    });
+    this.sharedSource = { type: sourceType, id: sourceId };
   }
 
   /**
    * 设置共享的项目类型
-   * 
+   *
    * @param kind - 项目类型
-   * @returns 当前批量构建器实例，用于链式调用
+   * @returns 当前列表构建器实例，用于链式调用
    */
-  setKind(kind: TuffItemKind): TuffBatchBuilder {
-    this.template.setKind(kind);
-    return this;
-  }
-
-  /**
-   * 设置共享的渲染模式
-   * 
-   * @param mode - 渲染模式
-   * @returns 当前批量构建器实例，用于链式调用
-   */
-  setRenderMode(mode: TuffRenderMode): TuffBatchBuilder {
-    this.template.setRenderMode(mode);
-    return this;
-  }
-
-  /**
-   * 设置共享的布局配置
-   * 
-   * @param display - 展示方式
-   * @param size - 可选的尺寸配置
-   * @param align - 可选的对齐方式
-   * @returns 当前批量构建器实例，用于链式调用
-   */
-  setLayout(
-    display: 'list' | 'card' | 'grid' | 'compact' | 'detailed',
-    size?: 'small' | 'medium' | 'large',
-    align?: 'left' | 'center' | 'right'
-  ): TuffBatchBuilder {
-    this.template.setLayout(display, size, align);
+  setSharedKind(kind: TuffItemKind): TuffListBuilder {
+    this.sharedKind = kind;
     return this;
   }
 
   /**
    * 添加共享的行为
-   * 
-   * @param action - 要添加的行为
-   * @returns 当前批量构建器实例，用于链式调用
+   *
+   * @param action - 要添加的共享行为
+   * @returns 当前列表构建器实例，用于链式调用
    */
-  addSharedAction(action: TuffAction): TuffBatchBuilder {
-    this.template.addAction(action);
+  addSharedAction(action: TuffAction): TuffListBuilder {
+    this.sharedActions.push(action);
     return this;
   }
 
   /**
    * 添加一个项目
-   * 
-   * @param title - 项目标题（可选）
-   * @param customize - 可选的自定义函数，用于进一步配置项目
-   * @returns 当前批量构建器实例，用于链式调用
+   *
+   * @param customize - 一个函数，接收 TuffItemBuilder 实例用于配置单个项目
+   * @returns 当前列表构建器实例，用于链式调用
    */
-  addItem(title?: string, customize?: (builder: TuffItemBuilder) => void): TuffBatchBuilder {
-    // 如果还有未添加到列表的当前构建器，先添加到列表
-    if (this.currentBuilder) {
-      this.addToList();
-    }
-    
-    // 克隆模板构建器
+  addItem(customize: (builder: TuffItemBuilder) => void): TuffListBuilder {
     const builder = new TuffItemBuilder()
-      .setSource(
-        this.template.build().source.type,
-        this.template.build().source.id
-      );
-    
-    // 复制模板的其他属性
-    const template = this.template.build();
-    if (template.kind) builder.setKind(template.kind);
-    if (template.actions) builder.setActions([...template.actions]);
-    if (template.render) {
-      builder.setRenderMode(template.render.mode);
-      if (template.render.layout) {
-        builder.setLayout(
-          template.render.layout.display,
-          template.render.layout.size,
-          template.render.layout.align
-        );
-      }
-    }
-    
-    // 设置标题（如果提供）
-    if (title) {
-      builder.setTitle(title);
-    }
-    
-    // 应用自定义配置
-    if (customize) {
-      customize(builder);
-    }
-    
-    // 构建并添加到列表
-    if (title) {
-      // 如果提供了标题，直接构建并添加到列表
-      try {
-        this.items.push(builder.build());
-      } catch (error) {
-        console.error('构建项目失败:', error);
-      }
-      return this;
-    } else {
-      // 如果没有提供标题，保存当前构建器以便链式调用
-      this.currentBuilder = builder;
-      return this;
-    }
-  }
+      .setSource(this.sharedSource.type, this.sharedSource.id);
 
-  /**
-   * 批量添加项目
-   * 
-   * @param titles - 标题列表
-   * @returns 当前批量构建器实例，用于链式调用
-   */
-  addItems(titles: string[]): TuffBatchBuilder {
-    for (const title of titles) {
-      this.addItem(title);
+    // 应用共享配置
+    if (this.sharedKind) {
+      builder.setKind(this.sharedKind);
     }
+    if (this.sharedActions.length > 0) {
+      // 克隆共享操作以避免交叉污染
+      builder.setActions(JSON.parse(JSON.stringify(this.sharedActions)));
+    }
+
+    // 应用自定义配置
+    customize(builder);
+
+    try {
+      this.items.push(builder.build());
+    } catch (error) {
+      console.error('构建 TuffItem 失败:', error);
+    }
+
     return this;
   }
 
   /**
-   * 从数据对象批量创建项目
-   * 
-   * @param items - 数据对象数组
-   * @param titleField - 标题字段名
-   * @param customizeFactory - 自定义函数工厂，根据数据对象创建自定义函数
-   * @returns 当前批量构建器实例，用于链式调用
+   * 从数据对象数组批量创建项目
+   *
+   * @param dataItems - 数据对象数组
+   * @param customize - 一个函数，接收 TuffItemBuilder 实例和当前数据对象用于配置项目
+   * @returns 当前列表构建器实例，用于链式调用
    */
   addItemsFromData<T>(
-    items: T[],
-    titleField: keyof T,
-    customizeFactory?: (item: T) => (builder: TuffItemBuilder) => void
-  ): TuffBatchBuilder {
-    for (const item of items) {
-      const title = String(item[titleField]);
-      if (customizeFactory) {
-        this.addItem(title, customizeFactory(item));
-      } else {
-        this.addItem(title);
-      }
+    dataItems: T[],
+    customize: (builder: TuffItemBuilder, dataItem: T) => void
+  ): TuffListBuilder {
+    for (const dataItem of dataItems) {
+      this.addItem(builder => customize(builder, dataItem));
     }
     return this;
   }
 
   /**
-   * 获取所有创建的项目
-   * 
-   * @returns 创建的 TuffItem 对象数组
-   */
-  getItems(): TuffItem[] {
-    return this.items;
-  }
-  
-  /**
    * 构建并返回所有创建的项目
-   * 
+   *
    * @returns 创建的 TuffItem 对象数组
    */
   build(): TuffItem[] {
-    // 如果还有未添加到列表的当前构建器，先添加到列表
-    if (this.currentBuilder) {
-      this.addToList();
-    }
     return this.items;
   }
 
   /**
    * 清空已创建的项目列表
-   * 
-   * @returns 当前批量构建器实例，用于链式调用
+   *
+   * @returns 当前列表构建器实例，用于链式调用
    */
-  clear(): TuffBatchBuilder {
+  clear(): TuffListBuilder {
     this.items = [];
-    return this;
-  }
-
-  /**
-   * 将当前构建器的项目添加到列表中
-   * 用于链式调用中，在设置完项目属性后将其添加到列表
-   * 
-   * @returns 当前批量构建器实例，用于链式调用
-   */
-  addToList(): TuffBatchBuilder {
-    if (this.currentBuilder) {
-      try {
-        this.items.push(this.currentBuilder.build());
-      } catch (error) {
-        // 如果构建失败，可能是因为缺少必要的属性，如 title
-        console.error('构建项目失败:', error);
-      }
-      this.currentBuilder = null;
-    }
     return this;
   }
 }
@@ -1049,57 +973,30 @@ class TuffBatchBuilder {
  */
 class TuffUtils {
   /**
-   * 生成唯一 ID
-   * 
-   * @param title - 项目标题
-   * @param sourceType - 来源类型
-   * @param sourceId - 来源标识符
-   * @returns 生成的唯一 ID
-   */
-  static generateId(title: string, sourceType: TuffSourceType, sourceId: string): string {
-    // 简单的哈希函数，实际应用中可能需要更复杂的实现
-    const str = `${title}:${sourceType}:${sourceId}`;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // 转换为 32 位整数
-    }
-    return `tuff_${Math.abs(hash).toString(16)}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-  }
-
-  /**
-   * 生成唯一 ID
-   * 
-   * @returns 生成的唯一 ID
+   * 生成一个全局唯一的 ID
+   *
+   * @description
+   * 结合了时间戳和随机数，确保在高并发场景下也能保持唯一性。
+   * 格式: tuff_[timestamp]_[random1]_[random2]
+   *
+   * @returns {string} 生成的唯一 ID
    */
   static generateId(): string {
     return `tuff_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 5)}`;
   }
 
   /**
-   * 创建简单的图标对象
-   * 
-   * @param value - 图标值（emoji、URL 等）
+   * 创建图标对象
+   *
+   * @param value - 图标值 (emoji, URL, base64, etc.)
    * @param type - 图标类型
-   * @returns 创建的图标对象
+   * @returns {TuffIcon} 创建的图标对象
    */
   static createIcon(value: string, type: 'emoji' | 'url' | 'base64' | 'icon' | 'component' = 'emoji'): TuffIcon {
     return {
       type,
       value
     };
-  }
-  
-  /**
-   * 创建图标对象
-   * 
-   * @param value 图标值
-   * @param type 图标类型，默认为 'emoji'
-   * @returns 创建的图标对象
-   */
-  static createIcon(value: string, type: 'emoji' | 'url' | 'component' = 'emoji'): TuffIcon {
-    return { type, value };
   }
 
   /**
@@ -1181,18 +1078,13 @@ class TuffUtils {
    * @returns 匹配的项目列表
    */
   static searchByTitle(items: TuffItem[], query: string, caseSensitive: boolean = false): TuffItem[] {
-    if (!caseSensitive) {
-      query = query.toLowerCase();
-      return TuffUtils.filterItems(items, item => {
-        const title = item.render.basic?.title;
-        return title ? title.toLowerCase().includes(query) : false;
-      });
-    } else {
-      return TuffUtils.filterItems(items, item => {
-        const title = item.render.basic?.title;
-        return title ? title.includes(query) : false;
-      });
-    }
+    const normalizedQuery = caseSensitive ? query : query.toLowerCase();
+    return TuffUtils.filterItems(items, item => {
+      const title = item.render.basic?.title;
+      if (!title) return false;
+      const normalizedTitle = caseSensitive ? title : title.toLowerCase();
+      return normalizedTitle.includes(normalizedQuery);
+    });
   }
 
   /**
@@ -1204,31 +1096,9 @@ class TuffUtils {
    */
   static sortByScore(items: TuffItem[], ascending: boolean = false): TuffItem[] {
     return [...items].sort((a, b) => {
-      const scoreA = a.scoring?.final ?? 0;
-      const scoreB = b.scoring?.final ?? 0;
+      const scoreA = a.scoring?.final ?? a.scoring?.base ?? 0;
+      const scoreB = b.scoring?.final ?? b.scoring?.base ?? 0;
       return ascending ? scoreA - scoreB : scoreB - scoreA;
-    });
-  }
-
-  /**
-   * 搜索项目列表
-   * 
-   * @param items 要搜索的项目列表
-   * @param query 搜索查询字符串
-   * @returns 匹配的项目列表
-   */
-  static searchItems(items: TuffItem[], query: string): TuffItem[] {
-    if (!query || query.trim() === '') {
-      return [...items];
-    }
-    
-    const normalizedQuery = query.toLowerCase().trim();
-    
-    return items.filter(item => {
-      const title = item.render.basic?.title?.toLowerCase() || '';
-      const description = item.render.basic?.description?.toLowerCase() || '';
-      
-      return title.includes(normalizedQuery) || description.includes(normalizedQuery);
     });
   }
 
@@ -1248,49 +1118,7 @@ class TuffUtils {
         : titleB.localeCompare(titleA);
     });
   }
-
-  /**
-   * 排序项目列表（按分数）
-   * 
-   * @param items 要排序的项目列表
-   * @returns 排序后的项目列表
-   */
-  static sortItems(items: TuffItem[]): TuffItem[] {
-    return [...items].sort((a, b) => {
-      const scoreA = a.scoring?.score || 0;
-      const scoreB = b.scoring?.score || 0;
-      
-      // 按分数降序排序
-      return scoreB - scoreA;
-    });
-  }
   
-  /**
-   * 按分数排序项目列表（别名，与 sortItems 功能相同）
-   * 
-   * @param items 要排序的项目列表
-   * @returns 排序后的项目列表
-   */
-  static sortByScore(items: TuffItem[]): TuffItem[] {
-    return this.sortItems(items);
-  }
-  
-  /**
-   * 创建行为对象
-   * 
-   * @param type 行为类型
-   * @param target 行为目标
-   * @param title 行为标题
-   * @returns 创建的行为对象
-   */
-  static createAction(type: TuffActionType, target: string, title: string): TuffAction {
-    return {
-      type,
-      target,
-      title
-    };
-  }
-
   /**
    * 将普通对象转换为 TuffItem
    * 
@@ -1328,7 +1156,7 @@ class TuffUtils {
     
     // 尝试提取分数
     if (obj.score !== undefined) {
-      builder.setScore(obj.score);
+      builder.setFinalScore(obj.score);
     }
     
     // 保存原始数据
@@ -1351,4 +1179,4 @@ class TuffUtils {
 }
 
 // 导出所有工具
-export { TuffItemBuilder, TuffFactory, TuffBatchBuilder, TuffUtils };
+export { TuffItemBuilder, TuffSearchResultBuilder, TuffFactory, TuffListBuilder, TuffUtils };

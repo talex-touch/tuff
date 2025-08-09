@@ -1,6 +1,13 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@core-box/*": ["packages/utils/core-box/*"],
+      "@talex-touch/utils": ["packages/utils"],
+      "@/common/*": ["packages/utils/common/*"],
+      "@/typings/*": ["packages/typings/*"]
+    },
     "composite": true,
     "types": ["electron-vite/node"],
     "moduleResolution": "bundler",

@@ -1,10 +1,54 @@
-import { ISearchEngine, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from './types'
+import { TalexTouch } from '../../../../../../../packages/utils/types/touch-app-core'
+import {
+  ISearchEngine,
+  ISearchProvider,
+  ISortMiddleware,
+  TuffItem,
+  TuffQuery,
+  TuffSearchResult
+} from './types'
+import { Sorter } from './sort/sorter'
+import { getGatheredItems, IGatherController } from './search-gather'
+import { TuffFactory } from '@core-box/builder/tuff-builder'
 
-export class SearchEngineCore implements ISearchEngine {
+export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
+  private static _instance: SearchEngineCore
+
+  readonly name = Symbol('search-engine-core')
+
   private providers: Map<string, ISearchProvider> = new Map()
+  private sorter: Sorter
+  private activatedProviderIds: Set<string> | null = null
+  private currentGatherController: IGatherController | null = null
 
   constructor() {
-    console.log('[SearchEngineCore] constructor')
+    if (SearchEngineCore._instance) {
+      throw new Error('[SearchEngineCore] Singleton class cannot be instantiated more than once.')
+    }
+
+    SearchEngineCore._instance = this
+    this.sorter = new Sorter()
+
+    // Register a default sorting middleware
+    const defaultSortMiddleware: ISortMiddleware = {
+      name: 'default-match-sorter',
+      sort: (items: TuffItem[]) => {
+        return [...items].sort((a, b) => {
+          const scoreA = a.scoring?.match ?? 0
+          const scoreB = b.scoring?.match ?? 0
+          return scoreB - scoreA
+        })
+      }
+    }
+    this.sorter.register(defaultSortMiddleware)
+  }
+
+  static getInstance(): SearchEngineCore {
+    if (!this._instance) {
+      this._instance = new SearchEngineCore()
+    }
+
+    return this._instance
   }
 
   registerProvider(provider: ISearchProvider): void {
@@ -27,61 +71,91 @@ export class SearchEngineCore implements ISearchEngine {
     console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`)
   }
 
+  activateProviders(providerIds: string[] | null): void {
+    if (providerIds && providerIds.length > 0) {
+      this.activatedProviderIds = new Set(providerIds)
+      console.log(`[SearchEngineCore] Activated providers:`, providerIds)
+    } else {
+      this.activatedProviderIds = null
+      console.log(`[SearchEngineCore] All providers activated.`)
+    }
+  }
+
+  deactivateProviders(): void {
+    this.activatedProviderIds = null
+    console.log(`[SearchEngineCore] All providers activated.`)
+  }
+
+  getActiveProviders(): ISearchProvider[] {
+    if (!this.activatedProviderIds) {
+      return Array.from(this.providers.values())
+    }
+    return Array.from(this.activatedProviderIds)
+      .map((id) => this.providers.get(id))
+      .filter((p): p is ISearchProvider => !!p)
+  }
+
   async search(query: TuffQuery): Promise<TuffSearchResult> {
+    // Abort any ongoing search before starting a new one
+    if (this.currentGatherController) {
+      this.currentGatherController.abort()
+    }
+
     const startTime = Date.now()
     console.log('[SearchEngineCore] search', query.text)
 
-    const searchPromises: Promise<TuffItem[]>[] = []
-
-    for (const provider of this.providers.values()) {
-      searchPromises.push(provider.onSearch(query))
-    }
-
-    const resultsByProvider = await Promise.allSettled(searchPromises)
-
+    const providersToSearch = this.getActiveProviders()
     const allItems: TuffItem[] = []
-    const sourceStats: TuffSearchResult['sources'] = []
+    let finalSourceStats: TuffSearchResult['sources'] = []
 
-    resultsByProvider.forEach((result, index) => {
-      const provider = Array.from(this.providers.values())[index]
-      if (result.status === 'fulfilled') {
-        const items = result.value
-        allItems.push(...items)
-        sourceStats.push({
-          source: provider.id,
-          count: items.length,
-          duration: 0 // Placeholder, can be refined later
-        })
-      } else {
-        console.error(
-          `[SearchEngineCore] Provider '${provider.id}' failed to search:`,
-          result.reason
-        )
-      }
+    return new Promise((resolve) => {
+      const gatherController = getGatheredItems(providersToSearch, query, (update) => {
+        if (update.newItems.length > 0) {
+          allItems.push(...update.newItems)
+        }
+        if (update.sourceStats) {
+          finalSourceStats = update.sourceStats
+        }
+        if (update.isDone) {
+          this.currentGatherController = null // Clear the controller when done
+          const { sortedItems, stats: sort_stats } = this.sorter.sort(
+            allItems,
+            query,
+            gatherController.signal
+          )
+          const duration = Date.now() - startTime
+
+          const searchResult = TuffFactory.createSearchResult(query)
+            .setItems(sortedItems)
+            .setDuration(duration)
+            .setSources(finalSourceStats)
+            .setSortStats(sort_stats)
+            .build()
+          resolve(searchResult)
+        }
+      })
+      this.currentGatherController = gatherController
     })
-
-    // Simple sorting based on score (higher is better)
-    allItems.sort((a, b) => (b.scoring?.final ?? 0) - (a.scoring?.final ?? 0))
-
-    const duration = Date.now() - startTime
-
-    const searchResult: TuffSearchResult = {
-      items: allItems,
-      total: allItems.length,
-      query,
-      duration,
-      sources: sourceStats,
-      has_more: false // Placeholder for future pagination
-    }
-
-    return searchResult
   }
 
   maintain(): void {
     console.log(
       '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.'
     )
-    // The logic for refreshing indexes or caches should be handled
+    // TODO: The logic for refreshing indexes or caches should be handled
     // within the providers themselves, possibly triggered by a separate scheduler.
   }
+
+  init(): void {
+    // The core is initialized as a singleton
+  }
+
+  destroy(): void {
+    console.log('[SearchEngineCore] Destroying SearchEngineCore and aborting any ongoing search.')
+    this.currentGatherController?.abort()
+  }
+}
+
+export function getSearchEngineCore(): SearchEngineCore {
+  return SearchEngineCore.getInstance()
 }
