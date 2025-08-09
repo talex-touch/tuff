@@ -1,4 +1,4 @@
-# TalexTouch
+# Tuff
 
 > Pull request template
 
@@ -49,7 +49,7 @@ Please ensure your code meets these requirements before requesting a review:
 
 <!-- Please summarize the changes in this PR -->
 
-- 
+-
 
 ## Screenshots / GIFs (if applicable)
 

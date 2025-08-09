@@ -10,11 +10,11 @@
   [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
   [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/tuff/discussions/35)
+  <br>
+  [English](./README.md) | 简体中文
 </div>
 
 ## 📌 公告
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff?ref=badge_small)
 
 > 2.0.0 版本正在活跃开发和 Beta 测试中。
 
@@ -25,6 +25,10 @@
 ## 🔷 项目简介
 
 Tuff (原 TalexTouch) 是一个基于 Electron, TypeScript 和 Vue.js 构建的、本地优先、AI 原生、可无限扩展的桌面指令中心。它旨在成为您工作流的无缝延伸，帮助您更快地查找任何内容、执行任何指令。
+
+## 🚀 背景
+
+**我们相信，最强大的工具就应像您一样灵活多变。Tuff 是一种新型的指令中心——一个为您的操作系统打造的基础性、开源的层面，它被精心设计以预测您的意图，并与您独特的工作流无缝集成。其核心可被深度定制，设计上完全开放，随时准备好由您来塑造。**
 
 ## 🖇️ 跨平台支持
 
@@ -62,7 +66,6 @@ Tuff 的设计风格受 TDesignS 启发，简洁而优雅。主题、字体和�
 
 ![新版插件](https://files.catbox.moe/xksrfv.gif)
 
-感谢来自 [@0x1021A0](https://github.com/0x1021A0) <img alt="0x1021A0" style="border-radius: 50%;position: relative;top: 5px" src="https://github.com/0x1021A0.png?size=32" /> 的设计，以及 [![Figma](https://api.iconify.design/logos:figma.svg)](https://www.figma.com/) 提供的设计工具。
 
 ## 🗻 丰富的功能
 
@@ -87,7 +90,6 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
 
 本项目基于 **MIT 许可证** 开源。
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftuff?ref=badge_large)
 
 ## ⁉️ 问题反馈
 
@@ -133,13 +135,7 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
             <sub><b>TalexDreamSoul</b></sub>
         </a>
     </td>
-    <td align="center">
-        <a href="https://github.com/fossabot">
-            <img src="https://avatars.githubusercontent.com/u/29791463?v=4" width="100;" alt="fossabot"/>
-            <br />
-            <sub><b>Fossabot</b></sub>
-        </a>
-    </td></tr>
+</tr>
 </table>
 <!-- readme: collaborators,contributors -end -->
 

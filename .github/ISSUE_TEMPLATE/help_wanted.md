@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-# TalexTouch
+# Tuff
 
 > Help wanted template
 
@@ -28,7 +28,7 @@ assignees: ''
 
 <!-- Please provide your information! -->
 
-- My App information: TalexTouch <version> <OFFICIAL/SNAPSHOT/BETA>
+- My App information: Tuff <version> <OFFICIAL/SNAPSHOT/BETA>
 
 ## Description
 

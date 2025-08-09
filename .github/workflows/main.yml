@@ -38,14 +38,14 @@ jobs:
           publish_dir: apps/docs/.vitepress/dist
           publish_branch: gh-pages
           # dotfiles: true
-  
+
       # - name: Deploy to Pages
       #   run: |
-      #     cd app/docs/.vitepress/dist 
+      #     cd apps/docs/.vitepress/dist
       #     git init
       #     git config user.name "TalexDreamSoul"
       #     git config user.email "${{ secrets.GIT_EMAIL }}"
       #     git add -A
       #     git commit -m 'deploy github-pages automatically'
-      #     git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch/talex-touch.git master:gh-pages
+      #     git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch/tuff.git main:gh-pages
       #     cd -
