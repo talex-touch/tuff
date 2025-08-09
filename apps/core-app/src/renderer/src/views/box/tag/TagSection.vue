@@ -1,6 +1,6 @@
 <script setup lang="ts" name="TagSection">
 import FileTag from './FileTag.vue'
-import { BoxMode, IBoxOptions } from '../adapter'
+import { BoxMode, IBoxOptions } from '../../../modules/box/adapter'
 
 defineProps<{
   boxOptions: IBoxOptions

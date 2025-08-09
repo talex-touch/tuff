@@ -156,6 +156,10 @@ export class CoreBoxManager {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
+  private _getMinWidth(): number {
+    return BoxWindowOption.minWidth ?? 0
+  }
+
   /**
    * Initializes the CoreBoxManager by creating a new box window.
    * @returns A promise that resolves when initialization is complete.
@@ -225,7 +229,7 @@ export class CoreBoxManager {
       return
     }
 
-    const left = Math.round(bounds.x + bounds.width / 2 - 450)
+    const left = Math.round(bounds.x + bounds.width / 2 - this._getMinWidth() / 2)
     const top = Math.round(bounds.y + bounds.height * 0.25)
 
     if (isNaN(left) || isNaN(top)) {
@@ -306,8 +310,8 @@ export class CoreBoxManager {
 
     const currentWindow = this.nowWindow
     if (currentWindow) {
-      currentWindow.window.setMinimumSize(900, height)
-      currentWindow.window.setSize(900, height, process.platform === 'darwin')
+      currentWindow.window.setMinimumSize(this._getMinWidth(), height)
+      currentWindow.window.setSize(this._getMinWidth(), height, process.platform === 'darwin')
     } else {
       console.error('[CoreBox] No current window available for expansion')
     }

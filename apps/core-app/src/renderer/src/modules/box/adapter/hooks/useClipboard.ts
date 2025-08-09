@@ -1,7 +1,7 @@
 import { reactive, Ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
-import { BoxMode, IBoxOptions } from '../adapter'
+import { BoxMode, IBoxOptions } from '..'
 
 export function useClipboard(
   boxOptions: IBoxOptions,

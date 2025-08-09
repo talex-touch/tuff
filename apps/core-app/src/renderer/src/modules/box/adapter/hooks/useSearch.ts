@@ -1,8 +1,8 @@
 import { ref, watch, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { search, execute, appAmo, BoxMode, IBoxOptions } from '../adapter'
-import { insertSorted } from '../search-sorter'
+import { search, execute, appAmo, BoxMode, IBoxOptions } from '..'
+import { insertSorted } from '../../../../views/box/search-sorter'
 
 export function useSearch(boxOptions: IBoxOptions) {
   const searchVal = ref('')

@@ -9,9 +9,9 @@ import {
   setLastRefreshTime,
   appAmo
 } from './store'
-import { BoxMode, SearchItem, SearchOptions } from './types'
-
-export * from './types'
+import { SearchItem, SearchOptions } from './types'
+export type { IBoxOptions, SearchItem, SearchOptions, ISearchMiddleware } from './types'
+export { BoxMode } from './types'
 export { appAmo }
 
 /**

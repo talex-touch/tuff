@@ -1,7 +1,7 @@
 import { watch, Ref } from 'vue'
 import { useDocumentVisibility } from '@vueuse/core'
 import { appSetting } from '~/modules/channel/storage'
-import { BoxMode, IBoxOptions } from '../adapter'
+import { BoxMode, IBoxOptions } from '..'
 
 export function useVisibility(
   boxOptions: IBoxOptions,

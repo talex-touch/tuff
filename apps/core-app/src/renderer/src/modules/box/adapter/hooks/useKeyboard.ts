@@ -1,5 +1,5 @@
 import { onBeforeUnmount, Ref } from 'vue'
-import { IBoxOptions } from '../adapter'
+import { IBoxOptions } from '..'
 
 export function useKeyboard(
   boxOptions: IBoxOptions,

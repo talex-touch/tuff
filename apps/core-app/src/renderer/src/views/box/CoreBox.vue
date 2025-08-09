@@ -1,6 +1,6 @@
 <script setup lang="ts" name="CoreBox">
 import { reactive, ref } from 'vue'
-import { BoxMode, IBoxOptions } from './adapter'
+import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
 import BoxItem from './BoxItem.vue'
 import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
@@ -10,11 +10,11 @@ import PrefixIcon from './PrefixIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import { useCoreBox } from '@renderer/modules/hooks/core-box'
 
-import { useClipboard } from './hooks/useClipboard'
-import { useVisibility } from './hooks/useVisibility'
-import { useKeyboard } from './hooks/useKeyboard'
-import { useSearch } from './hooks/useSearch'
-import { useChannel } from './hooks/useChannel'
+import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
+import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
+import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
+import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
+import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 
 useCoreBox()
 

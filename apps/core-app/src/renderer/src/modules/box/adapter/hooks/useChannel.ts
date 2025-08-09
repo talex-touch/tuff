@@ -1,6 +1,7 @@
 import { touchChannel } from '~/modules/channel/channel-core'
-import { appAmo, BoxMode } from '../adapter'
-import { insertSorted } from '../search-sorter'
+import { appAmo, BoxMode } from '..'
+import { insertSorted } from '../../../../views/box/search-sorter'
+import { Ref } from 'vue'
 
 export function useChannel(
   boxOptions: any,
@@ -13,7 +14,7 @@ export function useChannel(
     const isOurWindow = window.$startupInfo?.id === undefined || window.$startupInfo.id === id
 
     if (show && isOurWindow) {
-      import('../adapter')
+      import('..')
         .then(({ refreshSearchList }) => {
           refreshSearchList()
             .then(() => {})
