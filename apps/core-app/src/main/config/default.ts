@@ -1,10 +1,10 @@
 import path from 'node:path'
 
-export const AppName = 'TalexTouch'
+export const AppName = 'Tuff'
 
-export const APP_FOLDER_NAME = 'talex-touch'
+export const APP_FOLDER_NAME = 'tuff'
 
-export const APP_SCHEMA = 'talextouch'
+export const APP_SCHEMA = 'tuff'
 
 export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: AppName,
