@@ -1,60 +1,87 @@
-import { AggregatedSection, ISearchEngine, ISearchSource, SearchContext, TuffItem } from './types'
+import { ISearchEngine, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from './types'
 
 export class SearchEngineCore implements ISearchEngine {
-  private sources: Map<string, ISearchSource> = new Map()
+  private providers: Map<string, ISearchProvider> = new Map()
 
   constructor() {
     console.log('[SearchEngineCore] constructor')
   }
 
-  registerSource(source: ISearchSource): void {
-    if (this.sources.has(source.name)) {
-      console.warn(`[SearchEngineCore] Search source '${source.name}' is already registered.`)
+  registerProvider(provider: ISearchProvider): void {
+    if (this.providers.has(provider.id)) {
+      console.warn(`[SearchEngineCore] Search provider '${provider.id}' is already registered.`)
       return
     }
-    this.sources.set(source.name, source)
-    source.onRegister?.(this)
-    console.log(`[SearchEngineCore] Search source '${source.name}' registered.`)
+    this.providers.set(provider.id, provider)
+    console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`)
   }
 
-  unregisterSource(name: string): void {
-    if (!this.sources.has(name)) {
-      console.warn(`[SearchEngineCore] Search source '${name}' is not registered.`)
+  unregisterProvider(providerId: string): void {
+    if (!this.providers.has(providerId)) {
+      console.warn(`[SearchEngineCore] Search provider '${providerId}' is not registered.`)
       return
     }
-    const source = this.sources.get(name)
-    source?.onDeactivate?.()
-    this.sources.delete(name)
-    console.log(`[SearchEngineCore] Search source '${name}' unregistered.`)
+    const provider = this.providers.get(providerId)
+    provider?.onDeactivate?.()
+    this.providers.delete(providerId)
+    console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`)
   }
 
-  async search(context: SearchContext): Promise<AggregatedSection[]> {
-    console.log('[SearchEngineCore] search', context.keyword)
+  async search(query: TuffQuery): Promise<TuffSearchResult> {
+    const startTime = Date.now()
+    console.log('[SearchEngineCore] search', query.text)
 
-    const allResults: TuffItem[] = []
     const searchPromises: Promise<TuffItem[]>[] = []
 
-    for (const source of this.sources.values()) {
-      searchPromises.push(source.onSearch(context))
+    for (const provider of this.providers.values()) {
+      searchPromises.push(provider.onSearch(query))
     }
 
-    const resultsBySource = await Promise.all(searchPromises)
-    resultsBySource.forEach(result => allResults.push(...result))
+    const resultsByProvider = await Promise.allSettled(searchPromises)
 
-    // TODO: Implement proper aggregation and sorting
-    const aggregatedSection: AggregatedSection = {
-      source: 'aggregated',
-      layout: 'list',
-      items: allResults
+    const allItems: TuffItem[] = []
+    const sourceStats: TuffSearchResult['sources'] = []
+
+    resultsByProvider.forEach((result, index) => {
+      const provider = Array.from(this.providers.values())[index]
+      if (result.status === 'fulfilled') {
+        const items = result.value
+        allItems.push(...items)
+        sourceStats.push({
+          source: provider.id,
+          count: items.length,
+          duration: 0 // Placeholder, can be refined later
+        })
+      } else {
+        console.error(
+          `[SearchEngineCore] Provider '${provider.id}' failed to search:`,
+          result.reason
+        )
+      }
+    })
+
+    // Simple sorting based on score (higher is better)
+    allItems.sort((a, b) => (b.scoring?.final ?? 0) - (a.scoring?.final ?? 0))
+
+    const duration = Date.now() - startTime
+
+    const searchResult: TuffSearchResult = {
+      items: allItems,
+      total: allItems.length,
+      query,
+      duration,
+      sources: sourceStats,
+      has_more: false // Placeholder for future pagination
     }
 
-    return [aggregatedSection]
+    return searchResult
   }
 
   maintain(): void {
-    console.log('[SearchEngineCore] Starting maintenance...')
-    for (const source of this.sources.values()) {
-      source.onRefresh?.()
-    }
+    console.log(
+      '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.'
+    )
+    // The logic for refreshing indexes or caches should be handled
+    // within the providers themselves, possibly triggered by a separate scheduler.
   }
 }

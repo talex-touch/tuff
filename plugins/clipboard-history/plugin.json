@@ -1,0 +1,9 @@
+{
+  "id": "clipboard-history",
+  "name": "Clipboard History",
+  "version": "1.0.0",
+  "description": "Search and manage your clipboard history.",
+  "author": "Tuff Team",
+  "main": "logic.js",
+  "icon": "icon.png"
+}
