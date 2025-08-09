@@ -90,8 +90,6 @@ export class WindowManager {
       console.log('[CoreBox] BoxWindow closed!')
     })
 
-    clipboardManager.registerWindow(window)
-
     console.log('[CoreBox] NewBox created, WebContents loaded!')
 
     this.windows.push(window)

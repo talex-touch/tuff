@@ -85,16 +85,8 @@ import PluginNew from './plugin/PluginNew.vue'
 import { computePosition } from '@floating-ui/vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
-
-// Types for better type safety
-interface Plugin {
-  name: string
-  desc: string
-  version: string
-  status: 'enabled' | 'active' | 'disabled' | 'crashed'
-  icon?: { value?: string }
-  dev?: { enable: boolean; address?: string }
-}
+import { usePluginStore } from '~/modules/adapter/plugin-adapter/store'
+import { storeToRefs } from 'pinia'
 
 interface ToggleOptions {
   points: Array<{ x: number; y: number }>
@@ -105,10 +97,14 @@ interface ToggleOptions {
   style: ComputedRef<string>
 }
 
-const plugins = inject<Ref<Plugin[]>>('plugins')!
+const pluginStore = usePluginStore()
+const { plugins: pluginMap, activePlugin } = storeToRefs(pluginStore)
+const plugins = computed(() => [...pluginMap.value.values()])
 const pluginInfoRef = ref<HTMLElement>()
 const select = ref<string>()
 const curSelect = ref<Plugin | null>(null)
+
+console.log(plugins)
 
 const touchSdk = useTouchSDK()
 
@@ -132,10 +128,11 @@ const updateSelectedPlugin = useDebounceFn(() => {
 watch(() => select.value, updateSelectedPlugin, { immediate: true })
 
 watch(
-  () => plugins.value,
+  () => plugins,
   (newPlugins, oldPlugins) => {
     if (!select.value || !newPlugins || !oldPlugins) return
-    if (newPlugins.length === oldPlugins.length) return
+    // @ts-ignore - map to array
+    if (newPlugins.size === oldPlugins.size) return
 
     const temp = select.value
     select.value = ''
@@ -162,6 +159,7 @@ async function selectPlugin(index: string): Promise<void> {
     select.value = ''
     await sleep(10)
     select.value = index
+    activePlugin.value = index
     await sleep(50)
 
     // Smooth enter animation

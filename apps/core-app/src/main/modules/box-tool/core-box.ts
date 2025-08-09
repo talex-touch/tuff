@@ -184,9 +184,6 @@ export class CoreBoxManager {
 
       if (this.#_show) this.trigger(false)
     })
-
-    // register clipboard listen in clipboard manager
-    clipboardManager.registerWindow(window)
   }
 
   /**

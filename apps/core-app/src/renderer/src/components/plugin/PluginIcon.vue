@@ -1,15 +1,10 @@
 <script lang="ts" name="PluginIcon" setup>
 import RemixIcon from '@comp/icon/RemixIcon.vue'
+import { IPluginIcon } from '@talex-touch/utils'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
-  icon:
-    | {
-        type: string
-        value: string | Buffer
-        _value: string
-      }
-    | string
+  icon: IPluginIcon | string
   alt: string
 }>()
 
@@ -33,111 +28,86 @@ function handleImageError() {
 }
 
 function handleParse() {
-  console.log('parse', props)
+  console.log(props)
+  if (!props.icon) {
+    handleImageError()
+    return
+  }
 
   imageLoading.value = false
   imageError.value = false
 
-  if (typeof props.icon === 'object' && props.icon !== null) {
-    if (props.icon.type === 'dataurl' && props.icon.value) {
-      imageLoading.value = true
-      return (iconOptions.value = {
-        type: 'url',
-        value: props.icon.value as string
-      })
-    }
-
-    if (props.icon.type === 'file' && props.icon.value) {
-      try {
-        const uint8Array = new Uint8Array(props.icon.value as Buffer)
-        const base64 = btoa(String.fromCharCode(...uint8Array))
-        const dataUrl = `data:image/png;base64,${base64}`
-        imageLoading.value = true
-        return (iconOptions.value = {
-          type: 'url',
-          value: dataUrl
-        })
-      } catch (error) {
-        console.error(`[PluginIcon] Failed to convert buffer to data URL:`, error)
-        return (iconOptions.value = {
-          type: 'html',
-          value: props.icon._value?.charAt(0) || '?'
-        })
-      }
-    }
-  }
-
+  // String handler
   if (typeof props.icon === 'string') {
     const iconPath = props.icon
-
-    if (iconPath.startsWith('image://')) {
-      const filePath = iconPath.replace('image://', 'atom:///')
-      imageLoading.value = true
-      return (iconOptions.value = {
-        type: 'url',
-        value: filePath
-      })
-    }
+    let value = iconPath.startsWith('image://')
+      ? iconPath.replace('image://', 'atom:///')
+      : iconPath
 
     imageLoading.value = true
-    return (iconOptions.value = {
+    iconOptions.value = {
       type: 'url',
-      value: iconPath
-    })
+      value
+    }
+    return
   }
 
+  // Object handler
   const { type, value, _value } = props.icon
 
   if (_value === 'error') {
     forTouchTip('Error', 'Plugin icon parse error.', [
       { content: 'Sure', type: 'error', onClick: async () => true }
     ])
-    return (iconOptions.value = {
+    iconOptions.value = {
       type: 'html',
       value: `<svg xmlns="http://www.w3.org/2000/svg" style="color: red" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M6.4 19L5 17.6l5.6-5.6L5 6.4L6.4 5l5.6 5.6L17.6 5L19 6.4L13.4 12l5.6 5.6l-1.4 1.4l-5.6-5.6z"/></svg>`
-    })
+    }
+    return
   }
 
-  if (type === 'remix') {
-    return (iconOptions.value = {
-      type: 'remix',
-      value: value as string
-    })
+  switch (type) {
+    case 'remix':
+    case 'class':
+      iconOptions.value = { type, value: value as string }
+      break
+    case 'dataurl':
+      imageLoading.value = true
+      iconOptions.value = { type: 'url', value: value as string }
+      break
+    case 'file':
+      handleFileIcon(props.icon)
+      break
+    default:
+      console.error('PluginIcon not matched --- type not exist.', props)
   }
+}
 
-  if (type === 'class') {
-    return (iconOptions.value = {
-      type: 'class',
-      value: value as string
-    })
-  }
-
-  if (type !== 'file') {
-    return console.error('PluginIcon not matched --- type not exist.', props)
-  }
-
+function handleFileIcon(icon: IPluginIcon): void {
+  const { value, _value } = icon
   if (!_value) {
-    return console.error('PluginIcon not matched --- _value not exist.', props)
+    console.error('PluginIcon not matched --- _value not exist.', icon)
+    return
   }
 
   const extName = _value.split('.').pop()
   if (extName === 'svg') {
     const htmlData = transformUint8ArrayToString(new Uint8Array(value as Buffer))
-    return (iconOptions.value = {
+    iconOptions.value = {
       type: 'html',
       value: htmlData
-    })
+    }
+  } else {
+    const dataStr = transformArrayBufferToBase64(value as Buffer)
+    imageLoading.value = true
+    iconOptions.value = {
+      type: 'base64',
+      value: `data:image/${extName};base64,${dataStr}`
+    }
   }
-
-  const dataStr = transformArrayBufferToBase64(value as Buffer)
-  imageLoading.value = true
-  return (iconOptions.value = {
-    type: 'base64',
-    value: `data:image/${extName};base64,${dataStr}`
-  })
 }
 
-function transformUint8ArrayToString(fileData: Uint8Array) {
+function transformUint8ArrayToString(fileData: Uint8Array): string {
   var dataString = ''
   for (var i = 0; i < fileData.length; i++) {
     dataString += String.fromCharCode(fileData[i])
@@ -146,7 +116,7 @@ function transformUint8ArrayToString(fileData: Uint8Array) {
   return dataString
 }
 
-function transformArrayBufferToBase64(buffer: Buffer) {
+function transformArrayBufferToBase64(buffer: Buffer): string {
   let binary = ''
   const bytes = new Uint8Array(buffer)
   for (let len = bytes.byteLength, i = 0; i < len; i++) {

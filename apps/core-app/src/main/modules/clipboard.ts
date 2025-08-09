@@ -16,38 +16,26 @@ export interface IClipboardStash {
   buffer: string | null
   /** Plain text content or null if no text */
   text: string | null
+  /** Timestamp of when the data was stashed */
+  time: number
 }
 
-/**
- * Interface for clipboard data with type and content
- */
-interface IClipboardData {
-  type: keyof IClipboardStash
-  data: (string | ClipboardFileResult)[] | string | null
-}
+const MAX_HISTORY_LENGTH = 50
+const PAGE_SIZE = 20
 
 /**
- * ClipboardManager handles clipboard monitoring and distribution across windows
+ * ClipboardManager handles clipboard monitoring and local storage
  */
 export class ClipboardManager {
-  windows: TalexTouch.ITouchWindow[]
-  clipboardStash: IClipboardStash
-  sendLastFunc: () => unknown
+  private registeredWindows: Set<TalexTouch.ITouchWindow> = new Set()
+  private clipboardHistory: IClipboardStash[] = []
+  private lastStash: Partial<IClipboardStash> = {}
   private intervalId: NodeJS.Timeout | null = null
   private isDestroyed = false
   private clipboardHelper: ClipboardHelper
 
   constructor() {
-    this.windows = []
-    this.sendLastFunc = () => void 0
-    this.clipboardStash = {
-      file: null,
-      image: null,
-      buffer: null,
-      text: null
-    }
     this.clipboardHelper = new ClipboardHelper()
-
     this.startClipboardMonitoring()
   }
 
@@ -57,13 +45,11 @@ export class ClipboardManager {
   private startClipboardMonitoring(): void {
     const intervalRead = (): void => {
       if (this.isDestroyed) return
-
       try {
-        this.sendClipboardMsg()
+        this.updateClipboardHistory()
       } catch (error) {
-        console.error('[Clipboard] Error in sendClipboardMsg:', error)
+        console.error('[Clipboard] Error in updateClipboardHistory:', error)
       }
-
       if (!this.isDestroyed) {
         this.intervalId = setTimeout(intervalRead, 1000)
       }
@@ -72,15 +58,13 @@ export class ClipboardManager {
   }
 
   /**
-   * Register a window for clipboard updates
+   * Register a window for clipboard updates (only for 'register' type windows)
    * @param window - The window to register
    */
   registerWindow(window: TalexTouch.ITouchWindow): void {
-    this.windows.push(window)
-
-    window.window.addListener('focus', () => this.sendClipboardMsg())
-
-    console.log('[Clipboard] Register window ' + window.window.id + ' success.')
+    this.registeredWindows.add(window)
+    window.window.addListener('focus', () => this.sendClipboardUpdate(window))
+    console.log(`[Clipboard] Register window ${window.window.id} success.`)
   }
 
   /**
@@ -88,15 +72,13 @@ export class ClipboardManager {
    * @param window - The window to unregister
    */
   unregisterWindow(window: TalexTouch.ITouchWindow): void {
-    this.windows = this.windows.filter((w) => w !== window)
-
+    this.registeredWindows.delete(window)
     try {
-      window.window.removeListener('focus', this.sendClipboardMsg)
+      window.window.removeListener('focus', () => this.sendClipboardUpdate(window))
     } catch (error) {
       console.warn('[Clipboard] Error removing focus listener:', error)
     }
-
-    console.log('[Clipboard] Unregister window ' + window.window.id + ' success.')
+    console.log(`[Clipboard] Unregister window ${window.window.id} success.`)
   }
 
   /**
@@ -104,138 +86,121 @@ export class ClipboardManager {
    */
   destroy(): void {
     this.isDestroyed = true
-
     if (this.intervalId) {
       clearTimeout(this.intervalId)
       this.intervalId = null
     }
-
-    // Clean up all window listeners
-    this.windows.forEach((window) => {
+    this.registeredWindows.forEach((window) => {
       try {
-        window.window.removeListener('focus', this.sendClipboardMsg)
+        window.window.removeListener('focus', () => this.sendClipboardUpdate(window))
       } catch (error) {
         console.warn('[Clipboard] Error removing focus listener during cleanup:', error)
       }
     })
-
-    this.windows = []
+    this.registeredWindows.clear()
     console.log('[Clipboard] ClipboardManager destroyed')
   }
 
-  /**
-   * Format clipboard data and check for changes
-   * @param type - The type of clipboard data
-   * @param data - The clipboard data
-   * @returns The data if changed, null otherwise
-   */
-  formatClipboard<T extends keyof IClipboardStash>(
+  private hasChanged<T extends keyof Omit<IClipboardStash, 'time'>>(
     type: T,
     data: IClipboardStash[T]
-  ): IClipboardStash[T] | null {
-    if (data && this.clipboardStash[type] !== data) {
-      this.clipboardStash[type] = data
-      return data
+  ): boolean {
+    const changed = JSON.stringify(this.lastStash[type]) !== JSON.stringify(data)
+    if (changed) {
+      this.lastStash[type] = data
     }
-    return null
+    return changed
   }
 
   /**
-   * Format multiple clipboard types and return the first changed one
-   * @param types - Object containing clipboard data for different types
-   * @returns Clipboard data object or undefined if no changes
+   * Update clipboard history with new data if changed
    */
-  formatClipboards(types: IClipboardStash): IClipboardData | undefined {
-    for (const [type, value] of Object.entries(types)) {
-      const data = this.formatClipboard(type as keyof IClipboardStash, value as any)
-      if (data) {
-        return {
-          type: type as keyof IClipboardStash,
-          data
-        }
-      }
-    }
-    return undefined
-  }
-
-  /**
-   * Send clipboard message to all registered windows
-   */
-  sendClipboardMsg(): void {
-    if (this.isDestroyed || this.windows.length === 0) {
-      return
-    }
-
-    const data: Record<string, unknown> = {
-      action: 'read',
-      time: Date.now()
-    }
-
+  private updateClipboardHistory(): void {
+    const files = this.clipboardHelper.getClipboardFiles()
+    const image = clipboard.readImage()
+    const imageData = image.isEmpty() ? null : image.toDataURL()
+    const text = clipboard.readText() || null
+    let bufferData: string | null = null
     try {
-      // Use ClipboardHelper for file operations
-      const files = this.clipboardHelper.getClipboardFiles()
+      bufferData = clipboard.readBuffer('public/utf8-plain-text').toString('base64')
+    } catch {
+      /* ignore */
+    }
 
-      // Get other clipboard data
-      const image = clipboard.readImage()
-      const imageData = image.isEmpty() ? null : image.toDataURL()
+    const stash: Omit<IClipboardStash, 'time'> = {
+      file: files.length > 0 ? files : null,
+      image: imageData,
+      buffer: bufferData,
+      text
+    }
 
-      let bufferData: string | null = null
-      try {
-        bufferData = clipboard.readBuffer('public/utf8-plain-text').toString('base64')
-      } catch {
-        // Buffer read failed, ignore
+    const changed = Object.keys(stash).some((key) =>
+      this.hasChanged(key as keyof typeof stash, stash[key as keyof typeof stash])
+    )
+
+    if (changed) {
+      const newStash: IClipboardStash = { ...stash, time: Date.now() }
+      this.clipboardHistory.unshift(newStash)
+      // TODO: Later, this will be replaced with database storage.
+      if (this.clipboardHistory.length > MAX_HISTORY_LENGTH) {
+        this.clipboardHistory.pop()
       }
+      this.registeredWindows.forEach((win) => this.sendClipboardUpdate(win, newStash))
+    }
+  }
 
-      const res = this.formatClipboards({
-        file: files.length > 0 ? files : null,
-        image: imageData,
-        buffer: bufferData,
-        text: clipboard.readText() || null
+  /**
+   * Send clipboard update to a specific window
+   * @param window - The window to send the update to
+   * @param data - The clipboard data to send
+   */
+  private sendClipboardUpdate(window: TalexTouch.ITouchWindow, data?: IClipboardStash): void {
+    if (window.window.isDestroyed() || window.window.webContents.isDestroyed()) {
+      this.unregisterWindow(window)
+      return
+    }
+    const payload = data || this.clipboardHistory[0]
+    if (!payload) return
+
+    genTouchChannel()
+      .sendTo(window.window, ChannelType.MAIN, 'clipboard:trigger', {
+        action: 'read',
+        ...payload
       })
+      .catch((error) => {
+        console.error('[Clipboard] Error sending to window:', error)
+        this.unregisterWindow(window)
+      })
+  }
 
-      if (res) {
-        Object.assign(data, res)
-      }
-    } catch (error) {
-      console.error('[Clipboard] Error reading clipboard data:', error)
-      return
-    }
-
-    // Filter out destroyed/invalid windows
-    const validWindows = this.windows.filter((w) => {
-      try {
-        return (
-          !w.window.isDestroyed() && w.window.webContents && !w.window.webContents.isDestroyed()
-        )
-      } catch (error) {
-        console.warn('[Clipboard] Window validation failed:', error)
-        return false
-      }
-    })
-
-    // Update windows list to only include valid ones
-    if (validWindows.length !== this.windows.length) {
-      this.windows = validWindows
-    }
-
-    if (validWindows.length === 0) {
-      return
-    }
-
-    // send to renderer
-    const touchChannel = genTouchChannel()
-    validWindows.forEach((w) => {
-      touchChannel
-        .sendTo(w.window, ChannelType.MAIN, 'clipboard:trigger', data)
-        .then(() => {})
-        .catch((error) => {
-          console.error('[Clipboard] Error sending to window:', error)
-          // Remove this window from the list if it's causing persistent errors
-          this.windows = this.windows.filter((win) => win !== w)
+  /**
+   * Setup IPC channel for renderer to get clipboard history
+   */
+  public setupChannel(): void {
+    genTouchChannel().regChannel(
+      ChannelType.MAIN,
+      'clipboard:get-history',
+      ({ data: payload, reply }) => {
+        const { page = 1 } = payload ?? {}
+        const start = (page - 1) * PAGE_SIZE
+        const end = start + PAGE_SIZE
+        const pagedHistory = this.clipboardHistory.slice(start, end)
+        reply(DataCode.SUCCESS, {
+          history: pagedHistory,
+          total: this.clipboardHistory.length,
+          page,
+          pageSize: PAGE_SIZE
         })
-    })
+      }
+    )
+  }
 
-    this.sendLastFunc = () => data
+  /**
+   * Get the latest clipboard data
+   * @returns The latest clipboard stash
+   */
+  public getLatest(): IClipboardStash | undefined {
+    return this.clipboardHistory[0]
   }
 }
 
@@ -246,19 +211,14 @@ export default {
   filePath: 'clipboard',
   init(touchApp: TalexTouch.TouchApp): void {
     const win = touchApp.window
+    // Default is not to register, registration is done on demand.
+    // e.g. if(win.name === 'register') clipboardManager.registerWindow(win)
 
-    clipboardManager.registerWindow(win)
-
-    // Register cleanup when window is closed
     win.window.on('closed', () => {
       clipboardManager.unregisterWindow(win)
     })
 
-    genTouchChannel().regChannel(ChannelType.MAIN, 'clipboard:got', ({ reply }) => {
-      reply(DataCode.SUCCESS, {
-        clipboard: clipboardManager.sendLastFunc?.()
-      })
-    })
+    clipboardManager.setupChannel()
   },
   destroy(): void {
     clipboardManager.destroy()

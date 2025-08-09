@@ -16,7 +16,7 @@ function close(): void {
   <div class="Forbidden">
     <LottieFrame :loop="true" :data="HelloData" />
     <div class="Forbidden-Content">
-      <p>We can't provide you with services.</p>
+      <p>We're sorry, but we are unable to provide service at this time.</p>
       <div flex gap-8>
         <FlatButton @click="close"> CLOSE </FlatButton>
         <FlatButton primary @click="back"> BACK </FlatButton>

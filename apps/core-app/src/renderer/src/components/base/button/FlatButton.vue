@@ -16,8 +16,8 @@
 
 <script name="FlatButton" lang="ts" setup>
 defineProps<{
-  primary: boolean
-  mini: boolean
+  primary?: boolean
+  mini?: boolean
 }>()
 </script>
 
