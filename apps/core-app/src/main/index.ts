@@ -14,10 +14,12 @@ import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
 import Clipboard from './modules/clipboard'
+import DatabaseModule from './modules/database'
 
 app.whenReady().then(() => {
   const app = genTouchApp()
 
+  app.moduleManager.loadModule(DatabaseModule)
   app.moduleManager.loadModule(StorageModule)
   app.moduleManager.loadModule(extensionLoader)
   app.moduleManager.loadModule(CommonChannel)
