@@ -99,7 +99,7 @@ export function getGatheredItems(
   onUpdate: TuffAggregatorCallback,
   options: ITuffGatherOptions = defaultTuffGatherOptions
 ): IGatherController {
-  console.log(`[Gather] Starting search with ${providers.length} providers.`)
+  console.debug(`[Gather] Starting search with ${providers.length} providers.`)
   const controller = new AbortController()
   const { signal } = controller
 
@@ -176,7 +176,7 @@ export function getGatheredItems(
       isFallback = false
     ): Promise<void> => {
       const queueName = isFallback ? 'Fallback' : 'Default'
-      console.log(`[Gather] Running ${queueName} queue with ${concurrency} concurrent workers.`)
+      console.debug(`[Gather] Running ${queueName} queue with ${concurrency} concurrent workers.`)
       const workers = Array(concurrency)
         .fill(0)
         .map(async () => {
@@ -261,7 +261,7 @@ export function getGatheredItems(
 
       // All tasks (default and fallback) are done. Perform a final flush.
       // This ensures that results are pushed immediately even if tasks finish within the forcePushDelay.
-      console.log('[Gather] All search tasks completed.')
+      console.debug('[Gather] All search tasks completed.')
       flushBuffer(true)
     }
 

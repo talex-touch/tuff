@@ -124,7 +124,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     }
 
     const startTime = Date.now()
-    console.log('[SearchEngineCore] search `' + query.text + '`')
+    console.debug('[SearchEngineCore] search `' + query.text + '`')
 
     const providersToSearch = this.getActiveProviders()
     const allItems: TuffItem[] = []
@@ -141,9 +141,9 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         if (update.isDone) {
           this.currentGatherController = null // Clear the controller when done
 
-          console.log(`[SearchEngineCore] Matching ${allItems.length} items...`)
+          console.debug(`[SearchEngineCore] Matching ${allItems.length} items...`)
           const matchedItems = allItems
-          console.log(`[SearchEngineCore] Sorting ${matchedItems.length} items...`)
+          console.debug(`[SearchEngineCore] Sorting ${matchedItems.length} items...`)
           const { sortedItems, stats: sort_stats } = this.sorter.sort(
             matchedItems,
             query,

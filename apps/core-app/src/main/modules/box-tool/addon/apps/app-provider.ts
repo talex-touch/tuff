@@ -5,6 +5,15 @@ import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
 import { eq, inArray } from 'drizzle-orm'
 
+interface ScannedAppInfo {
+  name: string
+  path: string
+  icon: string
+  bundleId?: string
+  uniqueId: string
+  lastModified: Date
+}
+
 class AppProvider implements ISearchProvider {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
@@ -23,23 +32,90 @@ class AppProvider implements ISearchProvider {
 
   private async _initialize(): Promise<void> {
     console.log('[AppProvider] Initializing app data...')
-    const apps = await this.getAppsByPlatform()
+    if (!this.dbUtils) return
 
-    await this.dbUtils!.clearFilesByType('app')
+    // 1. Scan file system for all apps
+    const scannedApps = await this.getAppsByPlatform()
+    const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
-    for (const app of apps) {
-      const now = new Date()
-      const fileRecord = {
+    // 2. Get all existing app records from DB
+    const dbApps = await this.dbUtils.getFilesByType('app')
+    const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
+    const dbAppsMap = new Map(
+      dbAppsWithExtensions.map((app) => {
+        const uniqueId = app.extensions.bundleId || app.path
+        return [uniqueId, app]
+      })
+    )
+
+    const toAdd: ScannedAppInfo[] = []
+    const toUpdate: { fileId: number; app: ScannedAppInfo }[] = []
+    const toDeleteIds: number[] = []
+
+    // 3. Compare and find differences
+    for (const [uniqueId, scannedApp] of scannedAppsMap.entries()) {
+      const dbApp = dbAppsMap.get(uniqueId)
+      if (!dbApp) {
+        toAdd.push(scannedApp)
+      } else {
+        // Compare last modified time
+        if (scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime()) {
+          toUpdate.push({ fileId: dbApp.id, app: scannedApp })
+        }
+        // Remove from dbAppsMap to track which ones are left (for deletion)
+        dbAppsMap.delete(uniqueId)
+      }
+    }
+
+    // Any remaining apps in dbAppsMap were not found in scan, so they are deleted
+    for (const deletedApp of dbAppsMap.values()) {
+      toDeleteIds.push(deletedApp.id)
+    }
+
+    // 4. Batch process DB operations
+    const db = this.dbUtils.getDb()
+
+    // Handle additions
+    if (toAdd.length > 0) {
+      console.log(`[AppProvider] Adding ${toAdd.length} new apps.`)
+      const newFileRecords = toAdd.map((app) => ({
         path: app.path,
         name: app.name,
         type: 'app' as const,
-        mtime: now,
-        ctime: now
+        mtime: app.lastModified,
+        ctime: new Date()
+      }))
+      const insertedFiles = await db.insert(filesSchema).values(newFileRecords).returning()
+
+      const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
+      for (let i = 0; i < toAdd.length; i++) {
+        const app = toAdd[i]
+        const fileId = insertedFiles[i].id
+        if (app.bundleId) {
+          extensionsToAdd.push({ fileId, key: 'bundleId', value: app.bundleId })
+        }
+        if (app.icon) {
+          extensionsToAdd.push({ fileId, key: 'icon', value: app.icon })
+        }
       }
-      const insertedFiles = await this.dbUtils!.addFile(fileRecord)
-      if (insertedFiles && insertedFiles.length > 0) {
-        const fileId = insertedFiles[0].id
-        await this.dbUtils!.addKeywordMapping(app.name, `file:${fileId}`)
+      if (extensionsToAdd.length > 0) {
+        await this.dbUtils.addFileExtensions(extensionsToAdd)
+      }
+    }
+
+    // Handle updates
+    if (toUpdate.length > 0) {
+      console.log(`[AppProvider] Updating ${toUpdate.length} apps.`)
+      for (const { fileId, app } of toUpdate) {
+        await db
+          .update(filesSchema)
+          .set({
+            name: app.name,
+            path: app.path,
+            mtime: app.lastModified
+          })
+          .where(eq(filesSchema.id, fileId))
+
         const extensions: { fileId: number; key: string; value: string }[] = []
         if (app.bundleId) {
           extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
@@ -48,12 +124,21 @@ class AppProvider implements ISearchProvider {
           extensions.push({ fileId, key: 'icon', value: app.icon })
         }
         if (extensions.length > 0) {
-          await this.dbUtils!.addFileExtensions(extensions)
+          await this.dbUtils.addFileExtensions(extensions)
         }
       }
     }
 
-    console.log(`[AppProvider] Cached ${apps.length} apps in the database.`)
+    // Handle deletions
+    if (toDeleteIds.length > 0) {
+      console.log(`[AppProvider] Deleting ${toDeleteIds.length} apps.`)
+      await db.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
+      await db.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
+    }
+
+    console.log(
+      `[AppProvider] Initialization complete. Added: ${toAdd.length}, Updated: ${toUpdate.length}, Deleted: ${toDeleteIds.length}`
+    )
   }
 
   onExecute(item: TuffItem): Promise<void> {
@@ -79,7 +164,8 @@ class AppProvider implements ISearchProvider {
     if (!this.dbUtils) {
       return []
     }
-    await this.isInitializing
+    // For instant response, we don't await. The background sync will catch up.
+    // await this.isInitializing
 
     const db = this.dbUtils.getDb()
 
@@ -92,8 +178,6 @@ class AppProvider implements ISearchProvider {
       const appsWithExtensions = await this.fetchExtensionsForFiles(recentApps)
       return appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
     }
-
-    // Keyword match logic remains the same
 
     // Fallback to pinyin search on all apps
     const allApps = await db.select().from(filesSchema).where(eq(filesSchema.type, 'app'))
@@ -216,9 +300,7 @@ class AppProvider implements ISearchProvider {
     }
   }
 
-  private async getAppsByPlatform(): Promise<
-    { name: string; path: string; icon: string; bundleId: string }[]
-  > {
+  private async getAppsByPlatform(): Promise<ScannedAppInfo[]> {
     switch (process.platform) {
       case 'darwin': {
         const getApps = (await import('./darwin')).default

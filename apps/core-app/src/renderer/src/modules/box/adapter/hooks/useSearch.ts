@@ -33,7 +33,7 @@ export function useSearch(boxOptions: IBoxOptions) {
     } finally {
       loading.value = false
     }
-  }, 200)
+  }, 50)
 
   async function handleSearch(): Promise<void> {
     boxOptions.focus = 0

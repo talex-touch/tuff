@@ -92,46 +92,68 @@ async function getAppIcon(app: MacApp): Promise<string | null> {
 }
 
 
-async function getApplications(): Promise<{ name: string; path: string; icon: string; bundleId: string }[]> {
+async function getApplications(): Promise<
+  {
+    name: string
+    path: string
+    icon: string
+    bundleId: string
+    uniqueId: string
+    lastModified: Date
+  }[]
+> {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
 
   return new Promise((resolve, reject) => {
-    exec('system_profiler SPApplicationsDataType -json', { maxBuffer: 1024 * 1024 * 20 }, async (error, stdout) => {
-      if (error) {
-        return reject(new Error(`system_profiler command failed: ${error.message}`))
-      }
-
-      try {
-        const data = JSON.parse(stdout)
-        const apps = data.SPApplicationsDataType as MacApp[]
-
-        if (!apps || !Array.isArray(apps)) {
-            return reject(new Error('Unexpected output from system_profiler: SPApplicationsDataType is not an array.'))
+    exec(
+      'system_profiler SPApplicationsDataType -json',
+      { maxBuffer: 1024 * 1024 * 20 },
+      async (error, stdout) => {
+        if (error) {
+          return reject(new Error(`system_profiler command failed: ${error.message}`))
         }
 
-        const appPromises = apps
-          .filter(app => app.path && (app.path.startsWith('/Applications/') || app.path.startsWith('/System/Applications/')))
-          .map(async (app) => {
-            const icon = await getAppIcon(app)
-            return {
-              name: app._name,
-              path: app.path,
-              icon: icon ? `data:image/png;base64,${icon}` : '',
-              bundleId: app.signed_by?.[0]
-            }
-          })
+        try {
+          const data = JSON.parse(stdout)
+          const apps = data.SPApplicationsDataType as MacApp[]
 
-        const settledApps = await Promise.allSettled(appPromises)
+          if (!apps || !Array.isArray(apps)) {
+            return reject(
+              new Error('Unexpected output from system_profiler: SPApplicationsDataType is not an array.')
+            )
+          }
 
-        const successfulApps = settledApps
-            .filter(result => result.status === 'fulfilled' && result.value)
-            .map(result => (result as PromiseFulfilledResult<any>).value)
+          const appPromises = apps
+            .filter(
+              (app) =>
+                app.path &&
+                (app.path.startsWith('/Applications/') || app.path.startsWith('/System/Applications/'))
+            )
+            .map(async (app) => {
+              const icon = await getAppIcon(app)
+              const bundleId = app.signed_by?.[0]
+              return {
+                name: app._name,
+                path: app.path,
+                icon: icon ? `data:image/png;base64,${icon}` : '',
+                bundleId: bundleId,
+                uniqueId: bundleId || app.path,
+                lastModified: new Date(app.lastModified)
+              }
+            })
 
-        resolve(successfulApps)
-      } catch (parseError) {
-        reject(new Error(`Failed to parse system_profiler JSON output: ${parseError}`))
+          const settledApps = await Promise.allSettled(appPromises)
+
+          const successfulApps = settledApps
+            .filter((result) => result.status === 'fulfilled' && result.value)
+            .map((result) => (result as PromiseFulfilledResult<any>).value)
+
+          resolve(successfulApps)
+        } catch (parseError) {
+          reject(new Error(`Failed to parse system_profiler JSON output: ${parseError}`))
+        }
       }
-    })
+    )
   })
 }
 
