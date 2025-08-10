@@ -2,11 +2,12 @@ import { ref, watch, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
+import { TuffItem } from '@talex-touch/utils'
 
 export function useSearch(boxOptions: IBoxOptions) {
   const searchVal = ref('')
   const select = ref(-1)
-  const res = ref<Array<any>>([])
+  const res = ref<Array<TuffItem>>([])
   const loading = ref(false)
 
   const debouncedSearch = useDebounceFn(async () => {

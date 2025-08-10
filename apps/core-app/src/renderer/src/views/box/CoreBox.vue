@@ -15,6 +15,7 @@ import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
+import CoreBoxRender from '@renderer/components/render/CoreBoxRender.vue'
 
 useCoreBox()
 
@@ -30,9 +31,9 @@ const boxOptions = reactive<IBoxOptions>({
 const { searchVal, select, res, activeItem, handleExecute, handleExit } = useSearch(boxOptions)
 const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
 
-// useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
-// useKeyboard(boxOptions, res, select, scrollbar, handleExecute, handleExit)
-// useChannel(boxOptions, res)
+useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
+useKeyboard(boxOptions, res, select, scrollbar, handleExecute, handleExit)
+useChannel(boxOptions, res)
 
 function handleTogglePin(): void {
   appSetting.tools.autoHide = !appSetting.tools.autoHide
@@ -54,7 +55,7 @@ function handleTogglePin(): void {
         v-if="searchVal.trim() && activeItem && boxOptions.mode !== BoxMode.FEATURE"
         #completion
       >
-        {{ activeItem?.name }}
+        {{ activeItem?.render?.basic?.title }}
       </template>
     </BoxInput>
 
@@ -71,14 +72,12 @@ function handleTogglePin(): void {
 
   <div class="CoreBoxRes">
     <TouchScroll ref="scrollbar">
-      <BoxItem
+      <CoreBoxRender
         v-for="(item, index) in res"
         :key="index"
-        :i="index + 1"
         :active="boxOptions.focus === index"
-        :data="item"
-        :selected="select === index"
-        @click="handleExecute(item)"
+        :item="item"
+        @trigger="handleExecute"
         @mousemove="boxOptions.focus = index"
       />
     </TouchScroll>

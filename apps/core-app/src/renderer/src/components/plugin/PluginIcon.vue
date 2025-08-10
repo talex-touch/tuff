@@ -28,7 +28,6 @@ function handleImageError() {
 }
 
 function handleParse() {
-  console.log(props)
   if (!props.icon) {
     handleImageError()
     return
