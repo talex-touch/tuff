@@ -11,10 +11,12 @@ const emits = defineEmits<{
 }>()
 
 const render = computed(() => props.item?.render)
+
+console.log(props)
 </script>
 
 <template>
-  <div class="CoreBoxRender">
+  <div class="CoreBoxRender" @click="emits('trigger', item)">
     <template v-if="render.mode === 'default'">
       <BoxItem :item="item" :active="active" :render="render" />
     </template>

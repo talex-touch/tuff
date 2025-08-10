@@ -88,11 +88,21 @@ export class CoreBoxManager {
 
   public async execute(item: TuffItem) {
     const provider = this.searchEngine.getActiveProviders().find((p) => p.id === item.from)
-    if (provider && provider.onExecute) {
-      return provider.onExecute(item)
+    if (!provider) {
+      console.warn(
+        `[CoreBoxManager] No provider found for item: ${item.from}`,
+        item,
+        this.searchEngine.getActiveProviders()
+      )
+      return null
     }
-    console.warn(`[CoreBoxManager] No provider found for item`, item)
-    return null
+
+    if (!provider.onExecute) {
+      console.warn(`[CoreBoxManager] No execute method found for provider`, provider)
+      return null
+    }
+
+    return provider.onExecute(item)
   }
 }
 

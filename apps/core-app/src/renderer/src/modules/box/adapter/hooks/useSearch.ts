@@ -21,7 +21,12 @@ export function useSearch(boxOptions: IBoxOptions) {
       const query = { text: searchVal.value, mode: boxOptions.mode }
       console.log('search', query)
       const result = await touchChannel.send('core-box:query', { query })
-      res.value = result.items
+      res.value = result.items.map((item: TuffItem) => {
+        if (item.render && !item.render.completion) {
+          item.render.completion = item.render.basic?.title ?? ''
+        }
+        return item
+      })
     } catch (error) {
       console.error('Search failed:', error)
       res.value = []
@@ -35,10 +40,10 @@ export function useSearch(boxOptions: IBoxOptions) {
     debouncedSearch()
   }
 
-  async function handleExecute(item: any): Promise<void> {
+  async function handleExecute(item: TuffItem): Promise<void> {
     loading.value = true
     try {
-      await touchChannel.send('core-box:execute', { item })
+      await touchChannel.send('core-box:execute', { item: JSON.parse(JSON.stringify(item)) })
       searchVal.value = ''
     } catch (error) {
       console.error('Execute failed:', error)
@@ -55,8 +60,11 @@ export function useSearch(boxOptions: IBoxOptions) {
         if (boxOptions.data?.pushedItemIds && boxOptions.data.pushedItemIds.size > 0) {
           const pushedIds = boxOptions.data.pushedItemIds
 
-          res.value = res.value.filter((item: any) => {
-            return !item.pushedItemId || !pushedIds.has(item.pushedItemId)
+          res.value = res.value.filter((item: TuffItem) => {
+            return (
+              !item.meta?.extension?.pushedItemId ||
+              !pushedIds.has(item.meta?.extension?.pushedItemId)
+            )
           })
         }
 

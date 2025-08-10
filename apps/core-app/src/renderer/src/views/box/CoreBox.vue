@@ -20,6 +20,7 @@ import CoreBoxRender from '@renderer/components/render/CoreBoxRender.vue'
 useCoreBox()
 
 const scrollbar = ref()
+const boxInputRef = ref()
 const boxOptions = reactive<IBoxOptions>({
   lastHidden: -1,
   mode: BoxMode.INPUT,
@@ -31,8 +32,37 @@ const boxOptions = reactive<IBoxOptions>({
 const { searchVal, select, res, activeItem, handleExecute, handleExit } = useSearch(boxOptions)
 const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
 
+const completionDisplay = computed(() => {
+  if (
+    !searchVal.value.trim() ||
+    !activeItem.value ||
+    boxOptions.mode === BoxMode.FEATURE ||
+    !activeItem.value.render
+  ) {
+    return ''
+  }
+
+  const completion =
+    activeItem.value.render.completion ?? activeItem.value.render.basic?.title ?? ''
+
+  if (completion.startsWith(searchVal.value)) {
+    return completion.substring(searchVal.value.length)
+  }
+
+  return ''
+})
+
 useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
-useKeyboard(boxOptions, res, select, scrollbar, handleExecute, handleExit)
+useKeyboard(
+  boxOptions,
+  res,
+  select,
+  scrollbar,
+  searchVal,
+  handleExecute,
+  handleExit,
+  computed(() => boxInputRef.value?.inputEl)
+)
 useChannel(boxOptions, res)
 
 function handleTogglePin(): void {
@@ -50,12 +80,9 @@ function handleTogglePin(): void {
       <PrefixIcon :feature="boxOptions.data?.feature" @close="handleExit" />
     </div>
 
-    <BoxInput v-model="searchVal" :box-options="boxOptions">
-      <template
-        v-if="searchVal.trim() && activeItem && boxOptions.mode !== BoxMode.FEATURE"
-        #completion
-      >
-        {{ activeItem?.render?.basic?.title }}
+    <BoxInput ref="boxInputRef" v-model="searchVal" :box-options="boxOptions">
+      <template #completion>
+        <div v-html="completionDisplay" />
       </template>
     </BoxInput>
 

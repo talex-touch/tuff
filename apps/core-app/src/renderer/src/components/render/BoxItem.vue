@@ -63,7 +63,7 @@ function getHighlightedHTML(text: string, matchedIndices?: [number, number]): st
         "
       />
       <p
-        class="text-xs opacity-60 truncate max-w-[80%]"
+        class="text-xs opacity-60 truncate max-w-[90%]"
         v-html="
           getHighlightedHTML(
             render.basic?.subtitle || '',

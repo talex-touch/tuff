@@ -83,8 +83,6 @@ class AppProvider implements ISearchProvider {
     }
     await this.isInitializing
 
-    console.log('[AppProvider] onSearch', query, this.cachedApps?.[0])
-
     if (!query.text) {
       return this.cachedApps.slice(0, 20) // Return some apps if query is empty
     }

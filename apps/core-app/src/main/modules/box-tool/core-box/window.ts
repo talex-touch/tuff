@@ -163,7 +163,7 @@ export class WindowManager {
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, height)
-      currentWindow.window.setSize(900, height, process.platform === 'darwin')
+      currentWindow.window.setSize(900, height)
     } else {
       console.error('[CoreBox] No current window available for expansion')
     }
