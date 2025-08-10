@@ -92,7 +92,7 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
   return results
 }
 
-export default async (): Promise<AppInfo[]> => {
+export async function getApps(): Promise<AppInfo[]> {
   const startMenuPath1 = path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs')
   const startMenuPath2 = path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
 
@@ -114,4 +114,26 @@ export default async (): Promise<AppInfo[]> => {
   const uniqueApps = Array.from(new Map(allApps.map(app => [app.uniqueId, app])).values())
   
   return uniqueApps
+}
+
+export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
+  try {
+    const stats = await fs.stat(filePath)
+    if (!stats.isFile()) return null
+
+    const appName = path.basename(filePath, path.extname(filePath))
+    const icon = await getAppIcon(filePath, appName)
+
+    return {
+      name: appName,
+      path: filePath,
+      icon: icon,
+      bundleId: '', // Windows doesn't have bundleId
+      uniqueId: filePath, // Use full path as uniqueId
+      lastModified: stats.mtime
+    }
+  } catch (error) {
+    console.warn(`[Win] Failed to get app info for ${filePath}:`, error)
+    return null
+  }
 }

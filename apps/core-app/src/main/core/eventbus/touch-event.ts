@@ -20,7 +20,12 @@ export enum TalexEvents {
   WINDOW_ALL_CLOSED = 'window-all-closed',
 
   APP_SECONDARY_LAUNCH = 'app-secondary-launch',
-  OPEN_EXTERNAL_URL = 'open-external-url'
+  OPEN_EXTERNAL_URL = 'open-external-url',
+
+  // File System Events
+  FILE_ADDED = 'file-system/file-added',
+  FILE_CHANGED = 'file-system/file-changed',
+  FILE_UNLINKED = 'file-system/file-unlinked'
 }
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
@@ -234,6 +239,34 @@ export class OpenExternalUrlEvent implements ITouchEvent<TalexEvents> {
 
   constructor(details: string) {
     this.data = details
+  }
+}
+
+// File System Event Classes
+export class FileAddedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.FILE_ADDED
+  filePath: string
+
+  constructor(filePath: string) {
+    this.filePath = filePath
+  }
+}
+
+export class FileChangedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.FILE_CHANGED
+  filePath: string
+
+  constructor(filePath: string) {
+    this.filePath = filePath
+  }
+}
+
+export class FileUnlinkedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.FILE_UNLINKED
+  filePath: string
+
+  constructor(filePath: string) {
+    this.filePath = filePath
   }
 }
 

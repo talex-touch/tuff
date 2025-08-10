@@ -4,6 +4,13 @@ import { exec } from 'child_process'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
 import { eq, inArray } from 'drizzle-orm'
+import {
+  touchEventBus,
+  TalexEvents,
+  FileAddedEvent,
+  FileChangedEvent,
+  FileUnlinkedEvent
+} from '../../../../core/eventbus/touch-event'
 
 interface ScannedAppInfo {
   name: string
@@ -27,7 +34,12 @@ class AppProvider implements ISearchProvider {
     if (!this.isInitializing) {
       this.isInitializing = this._initialize()
     }
+    this._subscribeToFSEvents()
     await this.isInitializing
+  }
+
+  async onDestroy(): Promise<void> {
+    this._unsubscribeFromFSEvents()
   }
 
   private async _initialize(): Promise<void> {
@@ -139,6 +151,98 @@ class AppProvider implements ISearchProvider {
     console.log(
       `[AppProvider] Initialization complete. Added: ${toAdd.length}, Updated: ${toUpdate.length}, Deleted: ${toDeleteIds.length}`
     )
+  }
+
+  private _subscribeToFSEvents(): void {
+    touchEventBus.on(TalexEvents.FILE_ADDED, (event) =>
+      this.handleFileAddedOrChanged(event as FileAddedEvent)
+    )
+    touchEventBus.on(TalexEvents.FILE_CHANGED, (event) =>
+      this.handleFileAddedOrChanged(event as FileChangedEvent)
+    )
+    touchEventBus.on(TalexEvents.FILE_UNLINKED, (event) =>
+      this.handleFileUnlinked(event as FileUnlinkedEvent)
+    )
+    console.log('[AppProvider] Subscribed to file system events.')
+  }
+
+  private _unsubscribeFromFSEvents(): void {
+    touchEventBus.off(TalexEvents.FILE_ADDED, (event) =>
+      this.handleFileAddedOrChanged(event as FileAddedEvent)
+    )
+    touchEventBus.off(TalexEvents.FILE_CHANGED, (event) =>
+      this.handleFileAddedOrChanged(event as FileChangedEvent)
+    )
+    touchEventBus.off(TalexEvents.FILE_UNLINKED, (event) =>
+      this.handleFileUnlinked(event as FileUnlinkedEvent)
+    )
+    console.log('[AppProvider] Unsubscribed from file system events.')
+  }
+
+  private handleFileAddedOrChanged = async (
+    event: FileAddedEvent | FileChangedEvent
+  ): Promise<void> => {
+    const { filePath } = event
+    console.log(`[AppProvider] File added or changed: ${filePath}`)
+    if (!this.dbUtils) return
+
+    const appInfo = await this.getAppInfoByPath(filePath)
+    if (!appInfo) {
+      console.warn(`[AppProvider] Could not get app info for path: ${filePath}`)
+      return
+    }
+
+    const db = this.dbUtils.getDb()
+    const existingApp = await this.dbUtils.getFileByPath(filePath)
+
+    if (existingApp) {
+      // Update existing app
+      await db
+        .update(filesSchema)
+        .set({
+          name: appInfo.name,
+          mtime: appInfo.lastModified
+        })
+        .where(eq(filesSchema.id, existingApp.id))
+      await this.dbUtils.addFileExtensions([
+        { fileId: existingApp.id, key: 'bundleId', value: appInfo.bundleId || '' },
+        { fileId: existingApp.id, key: 'icon', value: appInfo.icon }
+      ])
+      console.log(`[AppProvider] Updated app: ${appInfo.name}`)
+    } else {
+      // Add new app
+      const [newFile] = await db
+        .insert(filesSchema)
+        .values({
+          path: appInfo.path,
+          name: appInfo.name,
+          type: 'app' as const,
+          mtime: appInfo.lastModified,
+          ctime: new Date()
+        })
+        .returning()
+      await this.dbUtils.addFileExtensions([
+        { fileId: newFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
+        { fileId: newFile.id, key: 'icon', value: appInfo.icon }
+      ])
+      console.log(`[AppProvider] Added new app: ${appInfo.name}`)
+    }
+  }
+
+  private handleFileUnlinked = async (event: FileUnlinkedEvent): Promise<void> => {
+    const { filePath } = event
+    console.log(`[AppProvider] File unlinked: ${filePath}`)
+    if (!this.dbUtils) return
+
+    const fileToDelete = await this.dbUtils.getFileByPath(filePath)
+    if (fileToDelete) {
+      await this.dbUtils.getDb().delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
+      await this.dbUtils
+        .getDb()
+        .delete(fileExtensions)
+        .where(eq(fileExtensions.fileId, fileToDelete.id))
+      console.log(`[AppProvider] Deleted app from DB: ${filePath}`)
+    }
   }
 
   onExecute(item: TuffItem): Promise<void> {
@@ -303,19 +407,43 @@ class AppProvider implements ISearchProvider {
   private async getAppsByPlatform(): Promise<ScannedAppInfo[]> {
     switch (process.platform) {
       case 'darwin': {
-        const getApps = (await import('./darwin')).default
+        const { getApps } = await import('./darwin')
         return getApps()
       }
       case 'win32': {
-        const getApps = (await import('./win')).default
+        const { getApps } = await import('./win')
         return getApps()
       }
       case 'linux': {
-        const getApps = (await import('./linux')).default
+        const { getApps } = await import('./linux')
         return getApps()
       }
       default:
         return []
+    }
+  }
+
+  private async getAppInfoByPath(filePath: string): Promise<ScannedAppInfo | null> {
+    try {
+      switch (process.platform) {
+        case 'darwin': {
+          const { getAppInfo } = await import('./darwin')
+          return await getAppInfo(filePath)
+        }
+        case 'win32': {
+          const { getAppInfo } = await import('./win')
+          return await getAppInfo(filePath)
+        }
+        case 'linux': {
+          const { getAppInfo } = await import('./linux')
+          return await getAppInfo(filePath)
+        }
+        default:
+          return null
+      }
+    } catch (error) {
+      console.error(`[AppProvider] Failed to get app info for ${filePath}:`, error)
+      return null
     }
   }
 }

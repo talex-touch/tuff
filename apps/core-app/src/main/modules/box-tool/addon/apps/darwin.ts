@@ -27,8 +27,8 @@ async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<stri
   })
 }
 
-async function getAppIcon(app: MacApp): Promise<string | null> {
-  const safeName = app._name.replace(/[/\\?%*:|"<>]/g, '-')
+async function getAppIcon(app: { path: string, name: string }): Promise<string | null> {
+  const safeName = app.name.replace(/[/\\?%*:|"<>]/g, '-')
   const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeName}.png`)
   const noneMarkerPath = path.join(ICON_CACHE_DIR, `${safeName}.none`)
 
@@ -85,14 +85,14 @@ async function getAppIcon(app: MacApp): Promise<string | null> {
     return buffer.toString('base64')
 
   } catch (error) {
-    console.warn(`[Darwin] Failed to get icon for ${app._name}:`, error)
+    console.warn(`[Darwin] Failed to get icon for ${app.name}:`, error)
     await fs.writeFile(noneMarkerPath, '').catch(() => {});
     return null
   }
 }
 
 
-async function getApplications(): Promise<
+export async function getApps(): Promise<
   {
     name: string
     path: string
@@ -130,7 +130,7 @@ async function getApplications(): Promise<
                 (app.path.startsWith('/Applications/') || app.path.startsWith('/System/Applications/'))
             )
             .map(async (app) => {
-              const icon = await getAppIcon(app)
+              const icon = await getAppIcon({ name: app._name, path: app.path })
               const bundleId = app.signed_by?.[0]
               return {
                 name: app._name,
@@ -157,4 +157,52 @@ async function getApplications(): Promise<
   })
 }
 
-export default getApplications;
+export async function getAppInfo(appPath: string): Promise<{
+  name: string
+  path: string
+  icon: string
+  bundleId: string
+  uniqueId: string
+  lastModified: Date
+} | null> {
+  try {
+    const command = `mdfind "kMDItemKind == 'Application' && kMDItemPath == '${appPath}'" -attr kMDItemDisplayName -attr kMDItemFSName -attr kMDItemCFBundleIdentifier -attr kMDItemContentModificationDate`
+    const stdout = await new Promise<string>((resolve, reject) => {
+      exec(command, { maxBuffer: 1024 * 1024 * 5 }, (error, stdout) => {
+        if (error) return reject(error)
+        resolve(stdout)
+      })
+    })
+
+    const lines = stdout.trim().split('\n')
+    if (lines.length < 2) return null
+
+    const attributes: any = {}
+    for (const line of lines) {
+      const parts = line.split(' = ')
+      if (parts.length === 2) {
+        const key = parts[0].trim()
+        const value = parts[1].trim().replace(/^"|"$/g, '') // Remove quotes
+        attributes[key] = value
+      }
+    }
+    
+    const name = attributes.kMDItemDisplayName || path.basename(appPath, '.app')
+    const bundleId = attributes.kMDItemCFBundleIdentifier || ''
+    const lastModified = new Date(attributes.kMDItemContentModificationDate || Date.now())
+
+    const icon = await getAppIcon({ name, path: appPath })
+
+    return {
+      name,
+      path: appPath,
+      icon: icon ? `data:image/png;base64,${icon}` : '',
+      bundleId,
+      uniqueId: bundleId || appPath,
+      lastModified
+    }
+  } catch (error) {
+    console.error(`[Darwin] Failed to get app info for ${appPath}:`, error)
+    return null
+  }
+}

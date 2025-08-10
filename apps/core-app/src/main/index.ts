@@ -15,6 +15,7 @@ import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
 import Clipboard from './modules/clipboard'
 import DatabaseModule from './modules/database'
+import FileSystemWatcher from './modules/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 
 app.whenReady().then(async () => {
@@ -34,6 +35,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(DropManager)
   await app.moduleManager.loadModule(GlobalShortcon)
   await app.moduleManager.loadModule(Clipboard)
+  await app.moduleManager.loadModule(FileSystemWatcher)
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 

@@ -115,7 +115,7 @@ async function findDesktopFiles(dir: string): Promise<string[]> {
   return desktopFiles
 }
 
-export default async (): Promise<AppInfo[]> => {
+export async function getApps(): Promise<AppInfo[]> {
   const allDesktopFilesPromises = APP_PATHS.map(p => findDesktopFiles(p))
   const nestedDesktopFiles = await Promise.all(allDesktopFilesPromises)
   const allDesktopFiles = nestedDesktopFiles.flat()
@@ -124,4 +124,13 @@ export default async (): Promise<AppInfo[]> => {
   const results = await Promise.all(appInfoPromises)
 
   return results.filter((app): app is AppInfo => app !== null)
+}
+
+export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
+  if (!filePath.endsWith('.desktop')) {
+    // On Linux, we are primarily interested in .desktop files.
+    // The watcher might pick up other changes which we can ignore.
+    return null
+  }
+  return parseDesktopFile(filePath)
 }

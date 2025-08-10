@@ -3,6 +3,7 @@
   "compilerOptions": {
     "baseUrl": "../..",
     "paths": {
+      "@/*": ["src/main/*"],
       "@core-box/*": ["packages/utils/core-box/*"],
       "@talex-touch/utils": ["packages/utils"],
       "@/common/*": ["packages/utils/common/*"],
