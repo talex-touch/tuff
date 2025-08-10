@@ -19,13 +19,13 @@ const windowAnimation = useWindowAnimation()
 export class WindowManager {
   private static instance: WindowManager
   public windows: TouchWindow[] = []
-  private touchApp: TouchApp
+  private _touchApp: TouchApp | null = null
 
-  private constructor() {
-    this.touchApp = genTouchApp()
-    this.create().then(() => {
-      //
-    })
+  private get touchApp(): TouchApp {
+    if (!this._touchApp) {
+      this._touchApp = genTouchApp()
+    }
+    return this._touchApp
   }
 
   public static getInstance(): WindowManager {
@@ -134,7 +134,7 @@ export class WindowManager {
     }
   }
 
-  public show() {
+  public show(): void {
     const window = this.current
     if (!window) return
 
@@ -145,7 +145,7 @@ export class WindowManager {
     }, 100)
   }
 
-  public hide() {
+  public hide(): void {
     const window = this.current
     if (!window) return
 
@@ -206,3 +206,7 @@ export class WindowManager {
 }
 
 export const windowManager = WindowManager.getInstance()
+
+export function getCoreBoxWindow(): TouchWindow | null {
+  return windowManager.current || null
+}

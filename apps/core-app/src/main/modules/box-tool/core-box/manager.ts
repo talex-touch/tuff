@@ -1,5 +1,5 @@
 import { SearchEngineCore } from '../search-engine/search-core'
-import { TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import { TuffItem, TuffQuery } from '../search-engine/types'
 import { windowManager } from './window'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
@@ -22,13 +22,14 @@ export class CoreBoxManager {
     return CoreBoxManager.instance
   }
 
-  public init() {
+  public init(): void {
     windowManager.create()
     ipcManager.register()
     shortcutManager.register()
   }
 
-  public destroy() {
+  public destroy(): void {
+    ipcManager.unregister()
     shortcutManager.unregister()
   }
 
@@ -74,6 +75,24 @@ export class CoreBoxManager {
     } finally {
       ipcManager.notifySearchEnd(searchId)
     }
+  }
+
+  public async search(query: TuffQuery) {
+    try {
+      return await this.searchEngine.search(query)
+    } catch (error) {
+      console.error('[CoreBoxManager] Search failed:', error)
+      return null
+    }
+  }
+
+  public async execute(item: TuffItem) {
+    const provider = this.searchEngine.getActiveProviders().find((p) => p.id === item.from)
+    if (provider && provider.onExecute) {
+      return provider.onExecute(item)
+    }
+    console.warn(`[CoreBoxManager] No provider found for item`, item)
+    return null
   }
 }
 

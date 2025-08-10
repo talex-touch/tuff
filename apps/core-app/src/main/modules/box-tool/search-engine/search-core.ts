@@ -7,6 +7,8 @@ import {
   TuffSearchResult
 } from './types'
 import { Sorter } from './sort/sorter'
+import { tuffSorter } from './sort/tuff-sorter'
+import { applyMatching } from './matcher'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
@@ -28,20 +30,10 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
 
     SearchEngineCore._instance = this
     this.sorter = new Sorter()
+  }
 
-    // Register a default sorting middleware
-    const defaultSortMiddleware: ISortMiddleware = {
-      name: 'default-match-sorter',
-      sort: (items: TuffItem[]) => {
-        return [...items].sort((a, b) => {
-          const scoreA = a.scoring?.match ?? 0
-          const scoreB = b.scoring?.match ?? 0
-          return scoreB - scoreA
-        })
-      }
-    }
-    this.sorter.register(defaultSortMiddleware)
-
+  private registerDefaults(): void {
+    this.sorter.register(tuffSorter)
     this.registerProvider(appProvider)
   }
 
@@ -97,7 +89,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       .filter((p): p is ISearchProvider => !!p)
   }
 
-  async search(query: TuffQuery, onItems?: (items: TuffItem[]) => void): Promise<TuffSearchResult> {
+  async search(query: TuffQuery): Promise<TuffSearchResult> {
     // Abort any ongoing search before starting a new one
     if (this.currentGatherController) {
       this.currentGatherController.abort()
@@ -114,17 +106,16 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       const gatherController = getGatheredItems(providersToSearch, query, (update) => {
         if (update.newItems.length > 0) {
           allItems.push(...update.newItems)
-          // Stream sorted items back to the caller
-          const { sortedItems } = this.sorter.sort(update.newItems, query, gatherController.signal)
-          onItems?.(sortedItems)
         }
         if (update.sourceStats) {
           finalSourceStats = update.sourceStats
         }
         if (update.isDone) {
           this.currentGatherController = null // Clear the controller when done
+
+          const matchedItems = applyMatching(allItems, query)
           const { sortedItems, stats: sort_stats } = this.sorter.sort(
-            allItems,
+            matchedItems,
             query,
             gatherController.signal
           )
@@ -152,7 +143,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   init(): void {
-    // The core is initialized as a singleton
+    SearchEngineCore._instance.registerDefaults()
   }
 
   destroy(): void {

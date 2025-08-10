@@ -5,9 +5,13 @@
  * @module core-app/main/modules/box-tool/search-engine/types
  */
 
-import type { TuffItem, TuffQuery, TuffSearchResult as TuffSearchResultBase, TuffSourceType } from '@talex-touch/utils/core-box';
+import type { TuffItem as TuffItemBase, TuffQuery, TuffSearchResult as TuffSearchResultBase, TuffSourceType } from '@talex-touch/utils/core-box';
 
-export type { TuffItem, TuffQuery };
+export interface TuffItem extends TuffItemBase {
+  from?: string;
+}
+
+export type { TuffQuery };
 
 /**
  * Represents the statistics for a single sort middleware.
@@ -88,6 +92,12 @@ export interface ISearchProvider {
    * Optional method to handle deactivation.
    */
   onDeactivate?(): void;
+
+  /**
+   * Optional method to execute an item.
+   * @param item The TuffItem to execute.
+   */
+  onExecute?(item: TuffItem): any;
 }
 
 /**

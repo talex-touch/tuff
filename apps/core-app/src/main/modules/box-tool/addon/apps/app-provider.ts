@@ -1,5 +1,6 @@
 import { ISearchProvider, TuffItem, TuffQuery } from '../../search-engine/types'
 import PinyinMatch from 'pinyin-match'
+import { exec } from 'child_process'
 
 // A simple in-memory cache for the apps
 let cachedApps: TuffItem[] = []
@@ -38,6 +39,15 @@ class AppProvider implements ISearchProvider {
     // isCacheInitialized = false;
   }
 
+  onExecute(item: TuffItem) {
+    const action = `open -a "${item.key}"`
+    exec(action, (err) => {
+      if (err) {
+        console.error(`Failed to execute action: ${action}`, err)
+      }
+    })
+  }
+
   async onSearch(query: TuffQuery): Promise<TuffItem[]> {
     if (!isCacheInitialized) {
       await this.onActivate()
@@ -60,6 +70,7 @@ class AppProvider implements ISearchProvider {
           }
           return {
             ...app,
+            from: this.id, // Add provider id to item
             scoring: {
               match: score
             },

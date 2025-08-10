@@ -145,6 +145,8 @@ class TouchChannel implements ITouchClientChannel {
     return new Promise((resolve) => {
       ipcRenderer.send('@main-process-message', data)
 
+      console.debug('send', data)
+
       this.pendingMap.set(uniqueId, (res) => {
         this.pendingMap.delete(uniqueId)
 

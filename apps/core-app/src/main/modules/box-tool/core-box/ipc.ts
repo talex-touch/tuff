@@ -11,7 +11,14 @@ import { windowManager } from './window'
  */
 export class IpcManager {
   private static instance: IpcManager
-  private touchApp: TouchApp = genTouchApp()
+  private _touchApp: TouchApp | null = null
+
+  private get touchApp(): TouchApp {
+    if (!this._touchApp) {
+      this._touchApp = genTouchApp()
+    }
+    return this._touchApp
+  }
 
   private constructor() {
     //
@@ -24,25 +31,31 @@ export class IpcManager {
     return IpcManager.instance
   }
 
-  public register() {
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'file:extract-icon', async ({ data, reply }) => {
-      try {
-        const { path } = data as { path: string }
-        const fileIcon = (await import('extract-file-icon')).default
-        if (typeof fileIcon !== 'function') {
-          return
+  public register(): void {
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'file:extract-icon',
+      async ({ data, reply }) => {
+        try {
+          const { path } = data as { path: string }
+          const fileIcon = (await import('extract-file-icon')).default
+          if (typeof fileIcon !== 'function') {
+            return
+          }
+
+          const buffer = fileIcon(path, 32)
+          reply(DataCode.SUCCESS, {
+            buffer
+          })
+        } catch (error) {
+          console.log('Cannot find target file icon:', data.path, error)
         }
-
-        const buffer = fileIcon(path, 32)
-        reply(DataCode.SUCCESS, {
-          buffer
-        })
-      } catch (error) {
-        console.log('Cannot find target file icon:', data.path, error)
       }
-    })
+    )
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () => coreBoxManager.trigger(false))
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () =>
+      coreBoxManager.trigger(false)
+    )
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) =>
       data ? coreBoxManager.expand(data) : coreBoxManager.shrink()
     )
@@ -54,9 +67,32 @@ export class IpcManager {
         coreBoxManager.startSearch(query, searchId)
       }
     )
+
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:query',
+      async ({ data, reply }) => {
+        const { query } = data as { query: TuffQuery }
+        console.log('core-box:query', query)
+        const result = await coreBoxManager.search(query)
+        reply(DataCode.SUCCESS, result)
+      }
+    )
+
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:execute',
+      async ({ data, reply }) => {
+        const { item } = data as { item: TuffItem }
+        const result = await coreBoxManager.execute(item)
+        reply(DataCode.SUCCESS, result)
+      }
+    )
+
+    console.log('[CoreBox] IpcManager register')
   }
 
-  public unregister() {
+  public unregister(): void {
     // In a real scenario, we might want to unregister specific channels
     // For now, we don't have a clean way to do this with the current channel implementation
   }

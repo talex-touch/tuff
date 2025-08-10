@@ -1,5 +1,5 @@
 <script setup lang="ts" name="BoxInput">
-import { BoxMode } from './adapter'
+import { BoxMode } from '../../modules/box/adapter'
 
 interface Props {
   modelValue: string

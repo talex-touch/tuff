@@ -1,27 +1,24 @@
 import { coreBoxManager } from './manager'
-import { ipcManager } from './ipc'
-import { shortcutManager } from './shortcuts'
-import { windowManager } from './window'
+import SearchEngineCore from '../search-engine/search-core'
+import { genTouchApp } from '../../../core/touch-core'
+export { getCoreBoxWindow } from './window'
 
 export default {
   name: Symbol('CoreBox'),
-  filePath: 'corebox', // This seems to be a convention in the project
+  filePath: false,
   listeners: new Array<() => void>(),
-
   init() {
-    // The managers are singletons and will be instantiated on first call
+    const app = genTouchApp()
+
+    app.moduleManager.loadModule(SearchEngineCore)
+
     coreBoxManager.init()
-    windowManager.create() // Explicitly create the first window
-    ipcManager.register()
-    shortcutManager.register()
 
-    console.log('[CoreBox] Core box module initialized!')
+    console.log('[CoreBox] Core-box module initialized!')
   },
-
   destroy() {
-    shortcutManager.unregister()
-    ipcManager.unregister()
-    // Other cleanup tasks can be added here
+    coreBoxManager.destroy()
+
     console.log('[CoreBox] Core box module destroyed!')
   }
 }

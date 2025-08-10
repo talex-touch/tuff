@@ -1,67 +1,48 @@
 import { ref, watch, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { search, execute, appAmo, BoxMode, IBoxOptions } from '..'
-import { insertSorted } from '../../../../views/box/search-sorter'
+import { BoxMode, IBoxOptions } from '..'
 
 export function useSearch(boxOptions: IBoxOptions) {
   const searchVal = ref('')
   const select = ref(-1)
   const res = ref<Array<any>>([])
+  const loading = ref(false)
 
-  async function handleSearch(): Promise<void> {
-    boxOptions.focus = 0
-
-    if (boxOptions.mode === BoxMode.FEATURE && boxOptions.data?.pushedItemIds) {
-      const pushedIds = boxOptions.data.pushedItemIds
-      res.value = res.value.filter(
-        (item: any) => item.pushedItemId && pushedIds.has(item.pushedItemId)
-      )
-    } else {
-      res.value = []
-    }
-
+  const debouncedSearch = useDebounceFn(async () => {
     if (!searchVal.value) {
+      res.value = []
       boxOptions.data = {}
       return
     }
-
-    const info: any = {}
-
-    if (boxOptions.mode === BoxMode.FEATURE) {
-      Object.assign(info, boxOptions.data)
+    loading.value = true
+    try {
+      const query = { text: searchVal.value, mode: boxOptions.mode }
+      console.log('search', query)
+      const result = await touchChannel.send('core-box:query', { query })
+      res.value = result.items
+    } catch (error) {
+      console.error('Search failed:', error)
+      res.value = []
+    } finally {
+      loading.value = false
     }
+  }, 200)
 
-    await search(searchVal.value, { mode: boxOptions.mode }, info, (v) => {
-      const amo = appAmo[v.name] || 0
-      v.amo = amo
-
-      res.value = insertSorted(res.value, v, searchVal.value)
-    })
+  async function handleSearch(): Promise<void> {
+    boxOptions.focus = 0
+    debouncedSearch()
   }
 
-  function handleExecute(item: any): void {
-    const data = execute(item, searchVal.value)
-    if (data === 'push') {
-      boxOptions.mode = BoxMode.FEATURE
-
-      const shouldClearQuery = item.matchedByName === true
-      const queryToUse = shouldClearQuery ? '' : searchVal.value
-
-      const featureToUse = item.originFeature || item
-
-      boxOptions.data = {
-        feature: featureToUse,
-        plugin: item.value,
-        query: queryToUse,
-        pushedItemIds: new Set()
-      }
-
-      if (shouldClearQuery) {
-        searchVal.value = ''
-      }
-    } else {
+  async function handleExecute(item: any): Promise<void> {
+    loading.value = true
+    try {
+      await touchChannel.send('core-box:execute', { item })
       searchVal.value = ''
+    } catch (error) {
+      console.error('Execute failed:', error)
+    } finally {
+      loading.value = false
     }
 
     select.value = -1
@@ -94,39 +75,24 @@ export function useSearch(boxOptions: IBoxOptions) {
     }
   }
 
-  watch(
-    () => searchVal.value,
-    () => {
-      handleSearch()
-    }
-  )
-
   const debouncedExpand = useDebounceFn(() => {
     touchChannel.sendSync('core-box:expand', res.value.length)
   }, 50)
 
   watch(
-    () => searchVal.value?.length + res.value?.length,
-    () => {
-      debouncedExpand()
-    }
+    () => res.value?.length,
+    () => debouncedExpand(),
+    { deep: true }
   )
 
-  watch(
-    () => boxOptions.mode,
-    () => {
-      handleSearch()
+  watch(searchVal, (newSearchVal) => {
+    if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
+      boxOptions.mode = newSearchVal.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
     }
-  )
+  })
 
-  watch(
-    () => searchVal.value,
-    (val) => {
-      if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND)
-        boxOptions.mode = val?.at?.(0) === '/' ? BoxMode.COMMAND : BoxMode.INPUT
-    },
-    { immediate: true }
-  )
+  // 2. Watch for searchVal or mode changes to trigger the search
+  watch([searchVal], handleSearch)
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 
@@ -134,6 +100,7 @@ export function useSearch(boxOptions: IBoxOptions) {
     searchVal,
     select,
     res,
+    loading,
     activeItem,
     handleSearch,
     handleExecute,

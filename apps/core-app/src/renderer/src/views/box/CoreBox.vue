@@ -30,9 +30,9 @@ const boxOptions = reactive<IBoxOptions>({
 const { searchVal, select, res, activeItem, handleExecute, handleExit } = useSearch(boxOptions)
 const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
 
-useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
-useKeyboard(boxOptions, res, select, scrollbar, handleExecute, handleExit)
-useChannel(boxOptions, res, searchVal)
+// useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
+// useKeyboard(boxOptions, res, select, scrollbar, handleExecute, handleExit)
+// useChannel(boxOptions, res)
 
 function handleTogglePin(): void {
   appSetting.tools.autoHide = !appSetting.tools.autoHide
