@@ -1,65 +1,59 @@
-import { ISearchProvider, TuffItem, TuffQuery } from '../../search-engine/types'
+import { ISearchProvider, ProviderContext, TuffItem, TuffQuery } from '../../search-engine/types'
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
+import { createDbUtils } from '../../../../db/utils'
+import { files as filesSchema, fileExtensions } from '../../../../db/schema'
+import { eq, inArray } from 'drizzle-orm'
 
 class AppProvider implements ISearchProvider {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
   readonly type = 'system' as const // System-level provider
 
-  private cachedApps: TuffItem[] = []
+  private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
 
+  async onLoad(context: ProviderContext): Promise<void> {
+    this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    if (!this.isInitializing) {
+      this.isInitializing = this._initialize()
+    }
+    await this.isInitializing
+  }
+
   private async _initialize(): Promise<void> {
-    console.log('[AppProvider] Initializing app cache...')
+    console.log('[AppProvider] Initializing app data...')
     const apps = await this.getAppsByPlatform()
-    this.cachedApps = apps.map(
-      (app: { name: string; path: string; icon: string; bundleId: string }): TuffItem => {
-        return {
-          id: app.path,
-          source: {
-            type: this.type,
-            id: this.id,
-            name: this.name
-          },
-          kind: 'app',
-          render: {
-            mode: 'default',
-            basic: {
-              title: app.name,
-              subtitle: app.path,
-              icon: {
-                type: 'base64',
-                value: app.icon
-              }
-            }
-          },
-          actions: [
-            {
-              id: 'open-app',
-              type: 'open',
-              label: 'Open',
-              primary: true,
-              payload: {
-                path: app.path
-              }
-            }
-          ],
-          meta: {
-            app: {
-              path: app.path,
-              bundle_id: app.bundleId
-            },
-            extension: {
-              keyWords: [
-                ...new Set([app.name, app.path.split('/').pop()?.split('.')[0] || ''])
-              ].filter(Boolean)
-            }
-          }
+
+    await this.dbUtils!.clearFilesByType('app')
+
+    for (const app of apps) {
+      const now = new Date()
+      const fileRecord = {
+        path: app.path,
+        name: app.name,
+        type: 'app' as const,
+        mtime: now,
+        ctime: now
+      }
+      const insertedFiles = await this.dbUtils!.addFile(fileRecord)
+      if (insertedFiles && insertedFiles.length > 0) {
+        const fileId = insertedFiles[0].id
+        await this.dbUtils!.addKeywordMapping(app.name, `file:${fileId}`)
+        const extensions: { fileId: number; key: string; value: string }[] = []
+        if (app.bundleId) {
+          extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
+        }
+        if (app.icon) {
+          extensions.push({ fileId, key: 'icon', value: app.icon })
+        }
+        if (extensions.length > 0) {
+          await this.dbUtils!.addFileExtensions(extensions)
         }
       }
-    )
-    console.log(`[AppProvider] Cached ${this.cachedApps.length} apps.`)
+    }
+
+    console.log(`[AppProvider] Cached ${apps.length} apps in the database.`)
   }
 
   onExecute(item: TuffItem): Promise<void> {
@@ -82,37 +76,49 @@ class AppProvider implements ISearchProvider {
   }
 
   async onSearch(query: TuffQuery): Promise<TuffItem[]> {
-    if (!this.isInitializing) {
-      this.isInitializing = this._initialize()
+    if (!this.dbUtils) {
+      return []
     }
     await this.isInitializing
 
+    const db = this.dbUtils.getDb()
+
     if (!query.text) {
-      return this.cachedApps.slice(0, 20) // Return some apps if query is empty
+      const recentApps = await db
+        .select()
+        .from(filesSchema)
+        .where(eq(filesSchema.type, 'app'))
+        .limit(20)
+      const appsWithExtensions = await this.fetchExtensionsForFiles(recentApps)
+      return appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
     }
 
-    const searchResults = this.cachedApps
+    // Keyword match logic remains the same
+
+    // Fallback to pinyin search on all apps
+    const allApps = await db.select().from(filesSchema).where(eq(filesSchema.type, 'app'))
+    const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
+
+    const searchResults = appsWithExtensions
       .map((app) => {
-        const title = app.render.basic?.title
+        const title = app.name
         if (!title) return null
 
-        const keyWords = app.meta?.extension?.keyWords || []
-        const searchKeyWords = [...keyWords, title]
+        const keyWords = [app.name, app.path.split('/').pop()?.split('.')[0] || '']
+        const searchKeyWords = [...new Set(keyWords)].filter(Boolean)
+
         for (const keyWord of searchKeyWords) {
           const matchResult = PinyinMatch.match(keyWord, query.text)
           if (matchResult && matchResult.length > 0) {
-            const score = 1 - matchResult[0] / title.length // Higher score for earlier match
+            const score = 1 - matchResult[0] / title.length
+            const tuffItem = this.mapAppToTuffItem(app)
             const updatedItem: TuffItem = {
-              ...app,
-              scoring: {
-                ...app.scoring,
-                match: score,
-                final: score
-              },
+              ...tuffItem,
+              scoring: { ...tuffItem.scoring, match: score, final: score },
               meta: {
-                ...app.meta,
+                ...tuffItem.meta,
                 extension: {
-                  ...app.meta?.extension,
+                  ...tuffItem.meta?.extension,
                   matchResult: [matchResult[0], matchResult[1]],
                   from: this.id
                 }
@@ -130,6 +136,85 @@ class AppProvider implements ISearchProvider {
     return searchResults
   }
 
+  private async fetchExtensionsForFiles(
+    files: (typeof filesSchema.$inferSelect)[]
+  ): Promise<(typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[]> {
+    if (!this.dbUtils) return files.map((f) => ({ ...f, extensions: {} }))
+
+    const fileIds = files.map((f) => f.id)
+    if (fileIds.length === 0) return []
+
+    const db = this.dbUtils.getDb()
+    const extensions = await db
+      .select()
+      .from(fileExtensions)
+      .where(inArray(fileExtensions.fileId, fileIds))
+
+    const extensionsByFileId = extensions.reduce(
+      (acc, ext) => {
+        if (!acc[ext.fileId]) {
+          acc[ext.fileId] = {}
+        }
+        if (ext.value) {
+          acc[ext.fileId][ext.key] = ext.value
+        }
+        return acc
+      },
+      {} as Record<number, Record<string, string | null>>
+    )
+
+    return files.map((file) => ({
+      ...file,
+      extensions: extensionsByFileId[file.id] || {}
+    }))
+  }
+
+  private mapAppToTuffItem(
+    app: typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> }
+  ): TuffItem {
+    return {
+      id: app.path,
+      source: {
+        type: this.type,
+        id: this.id,
+        name: this.name
+      },
+      kind: 'app',
+      render: {
+        mode: 'default',
+        basic: {
+          title: app.name,
+          subtitle: app.path,
+          icon: {
+            type: 'base64',
+            value: app.extensions.icon || ''
+          }
+        }
+      },
+      actions: [
+        {
+          id: 'open-app',
+          type: 'open',
+          label: 'Open',
+          primary: true,
+          payload: {
+            path: app.path
+          }
+        }
+      ],
+      meta: {
+        app: {
+          path: app.path,
+          bundle_id: app.extensions.bundleId || ''
+        },
+        extension: {
+          keyWords: [...new Set([app.name, app.path.split('/').pop()?.split('.')[0] || ''])].filter(
+            Boolean
+          )
+        }
+      }
+    }
+  }
 
   private async getAppsByPlatform(): Promise<
     { name: string; path: string; icon: string; bundleId: string }[]

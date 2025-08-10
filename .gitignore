@@ -120,10 +120,10 @@ dist
 .pnp.*
 release/
 dist/
-talex-touch/
 .idea/
 # plugins/
 
+apps/core-app/tuff
 apps/core-app/signature.json
 apps/core-app/src/renderer/src/distinformation.json
 .kilocode/mcp.json

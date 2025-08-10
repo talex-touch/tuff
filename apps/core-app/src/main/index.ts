@@ -15,22 +15,27 @@ import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
 import Clipboard from './modules/clipboard'
 import DatabaseModule from './modules/database'
+import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const app = genTouchApp()
 
-  app.moduleManager.loadModule(DatabaseModule)
-  app.moduleManager.loadModule(StorageModule)
-  app.moduleManager.loadModule(extensionLoader)
-  app.moduleManager.loadModule(CommonChannel)
-  app.moduleManager.loadModule(PluginModule)
-  app.moduleManager.loadModule(PermissionCenter)
-  app.moduleManager.loadModule(ServiceCenter)
+  await app.moduleManager.loadModule(DatabaseModule)
+  await app.moduleManager.loadModule(StorageModule)
+  await app.moduleManager.loadModule(extensionLoader)
+  await app.moduleManager.loadModule(CommonChannel)
+  await app.moduleManager.loadModule(PluginModule)
+  await app.moduleManager.loadModule(PermissionCenter)
+  await app.moduleManager.loadModule(ServiceCenter)
 
-  app.moduleManager.loadModule(CoreBox)
-  app.moduleManager.loadModule(TrayHolder)
-  app.moduleManager.loadModule(addonOpener)
-  app.moduleManager.loadModule(DropManager)
-  app.moduleManager.loadModule(GlobalShortcon)
-  app.moduleManager.loadModule(Clipboard)
+  await app.moduleManager.loadModule(CoreBox)
+  await app.moduleManager.loadModule(TrayHolder)
+  await app.moduleManager.loadModule(addonOpener)
+  await app.moduleManager.loadModule(DropManager)
+  await app.moduleManager.loadModule(GlobalShortcon)
+  await app.moduleManager.loadModule(Clipboard)
+
+  touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
+
+  console.log('[TouchApp] All modules loaded.')
 })

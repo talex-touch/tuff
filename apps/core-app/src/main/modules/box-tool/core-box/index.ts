@@ -7,10 +7,10 @@ export default {
   name: Symbol('CoreBox'),
   filePath: false,
   listeners: new Array<() => void>(),
-  init() {
+  async init() {
     const app = genTouchApp()
 
-    app.moduleManager.loadModule(SearchEngineCore)
+    await app.moduleManager.loadModule(SearchEngineCore)
 
     coreBoxManager.init()
 

@@ -77,24 +77,22 @@ export default {
       fse.ensureDirSync(modulePath)
     })
 
-    setTimeout(() => {
-      const downloadManager = new DownloadManager(modulePath)
+    const downloadManager = new DownloadManager(modulePath)
 
-      downloadManager.addDownloads(
-        iconItems.map((item) => ({
-          ...item,
-          apply: (filePath: string) => {
-            item.apply!(app, filePath)
-          }
-        }))
-      )
-
-      const checkDownload = setInterval(() => {
-        if (downloadManager.getQueueLength() === 0) {
-          clearInterval(checkDownload)
+    downloadManager.addDownloads(
+      iconItems.map((item) => ({
+        ...item,
+        apply: (filePath: string) => {
+          item.apply!(app, filePath)
         }
-      }, 100)
-    })
+      }))
+    )
+
+    const checkDownload = setInterval(() => {
+      if (downloadManager.getQueueLength() === 0) {
+        clearInterval(checkDownload)
+      }
+    }, 100)
   },
   destroy() {}
 }

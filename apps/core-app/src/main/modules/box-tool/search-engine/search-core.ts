@@ -1,16 +1,13 @@
-import {
-  ISearchEngine,
-  ISearchProvider,
-  ISortMiddleware,
-  TuffItem,
-  TuffQuery,
-  TuffSearchResult
-} from './types'
+import { ISearchEngine, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from './types'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
+import { TouchApp } from '../../../core/touch-core'
+import { databaseManager } from '../../database'
+import storage from '../../../core/storage'
+import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 
 export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   private static _instance: SearchEngineCore
@@ -18,9 +15,12 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   readonly name = Symbol('search-engine-core')
 
   private providers: Map<string, ISearchProvider> = new Map()
+  private providersToLoad: ISearchProvider[] = []
   private sorter: Sorter
   private activatedProviderIds: Set<string> | null = null
   private currentGatherController: IGatherController | null = null
+
+  private touchApp: TouchApp | null = null
 
   constructor() {
     if (SearchEngineCore._instance) {
@@ -51,6 +51,35 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     }
     this.providers.set(provider.id, provider)
     console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`)
+
+    if (provider.onLoad) {
+      this.providersToLoad.push(provider)
+    }
+  }
+
+  private async loadProvider(provider: ISearchProvider): Promise<void> {
+    if (!this.touchApp) {
+      console.error('[SearchEngineCore] Core modules not available to load provider.')
+      return
+    }
+    const startTime = Date.now()
+    try {
+      await provider.onLoad?.({
+        touchApp: this.touchApp,
+        databaseManager: databaseManager,
+        storageManager: storage
+      })
+      const duration = Date.now() - startTime
+      console.log(
+        `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`
+      )
+    } catch (error) {
+      const duration = Date.now() - startTime
+      console.error(
+        `[SearchEngineCore] Failed to load provider '${provider.id}' after ${duration}ms.`,
+        error
+      )
+    }
   }
 
   unregisterProvider(providerId: string): void {
@@ -143,8 +172,15 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     // within the providers themselves, possibly triggered by a separate scheduler.
   }
 
-  init(): void {
+  init(touchApp: TouchApp): void {
+    SearchEngineCore._instance.touchApp = touchApp
     SearchEngineCore._instance.registerDefaults()
+
+    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
+      console.log('[SearchEngineCore] All modules loaded, start loading providers...')
+      this.providersToLoad.forEach((provider) => SearchEngineCore._instance.loadProvider(provider))
+      this.providersToLoad = []
+    })
   }
 
   destroy(): void {

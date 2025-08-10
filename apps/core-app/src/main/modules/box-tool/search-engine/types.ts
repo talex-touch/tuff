@@ -11,6 +11,15 @@ import type {
   TuffSearchResult as TuffSearchResultBase,
   TuffSourceType
 } from '@talex-touch/utils/core-box'
+import { TouchApp } from '../../../core/touch-core'
+import { DatabaseManager } from '../../database'
+import { TalexTouch } from '../../../types'
+
+export interface ProviderContext {
+  touchApp: TouchApp
+  databaseManager: DatabaseManager
+  storageManager: TalexTouch.IModule
+}
 
 export interface TuffItem extends TuffItemBase {
   from?: string
@@ -103,6 +112,12 @@ export interface ISearchProvider {
    * @param item The TuffItem to execute.
    */
   onExecute?(item: TuffItem): any
+
+  /**
+   * Optional method to load provider.
+   * @param context The context of the provider.
+   */
+  onLoad?(context: ProviderContext): Promise<void>
 }
 
 /**

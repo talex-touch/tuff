@@ -1,19 +1,27 @@
 import { drizzle, LibSQLDatabase } from 'drizzle-orm/libsql'
 import { createClient, Client } from '@libsql/client'
 import path from 'path'
+import { migrate } from 'drizzle-orm/libsql/migrator'
+import * as schema from '../../db/schema'
+import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 
 export class DatabaseManager {
-  private db: LibSQLDatabase | null = null
+  private db: LibSQLDatabase<typeof schema> | null = null
   private client: Client | null = null
 
-  public init(modulePath: string): void {
+  public async init(modulePath: string): Promise<void> {
     const dbPath = path.join(modulePath, 'database.db')
     this.client = createClient({ url: `file:${dbPath}` })
-    this.db = drizzle(this.client)
+    this.db = drizzle(this.client, { schema })
+
+    const dbFolder = path.dirname(migrationsLocator)
+    const migrationsFolder = path.join(dbFolder, 'migrations')
+    await migrate(this.db, { migrationsFolder })
+
     console.log('[Database] DatabaseManager initialized at', dbPath)
   }
 
-  public getDb(): LibSQLDatabase {
+  public getDb(): LibSQLDatabase<typeof schema> {
     if (!this.db) {
       throw new Error('Database not initialized. Call init() first.')
     }
@@ -32,9 +40,9 @@ export const databaseManager = new DatabaseManager()
 export default {
   name: Symbol('Database'),
   filePath: 'database',
-  init(): void {
+  async init(): Promise<void> {
     const modulePath = this['modulePath']!
-    databaseManager.init(modulePath)
+    await databaseManager.init(modulePath)
   },
   destroy(): void {
     databaseManager.destroy()

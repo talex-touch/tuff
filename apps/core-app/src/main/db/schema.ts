@@ -61,6 +61,7 @@ export const files = sqliteTable('files', {
   mtime: integer('mtime', { mode: 'timestamp' }).notNull(),
   ctime: integer('ctime', { mode: 'timestamp' }).notNull(),
   isDir: integer('is_dir', { mode: 'boolean' }).notNull().default(false),
+  type: text('type').notNull().default('file'), // 'file', 'app', 'url', etc.
 
   // [AI] 可选的文件内容和向量化状态，用于智能层处理
   content: text('content'), // 仅对需要深度索引的文件类型存储内容
@@ -68,6 +69,23 @@ export const files = sqliteTable('files', {
     .notNull()
     .default('none')
 })
+
+/**
+ * 存储文件的扩展属性，如应用的 bundleId, icon 等
+ */
+export const fileExtensions = sqliteTable(
+  'file_extensions',
+  {
+    fileId: integer('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: text('value')
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.fileId, table.key] })
+  })
+)
 
 // =============================================================================
 // 3. 智能层 (Intelligence Layer) - 语义向量存储
