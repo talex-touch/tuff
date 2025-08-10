@@ -28,7 +28,7 @@ function getHighlightedHTML(text: string, matchedIndices?: [number, number]): st
   let result = ''
   for (let i = 0; i < text.length; i++) {
     if (i >= start && i <= end) {
-      result += `<span class="font-semibold text-primary">${text[i]}</span>`
+      result += `<span class="font-semibold text-red">${text[i]}</span>`
     } else {
       result += text[i]
     }

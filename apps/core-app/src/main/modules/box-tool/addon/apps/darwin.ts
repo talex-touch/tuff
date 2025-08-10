@@ -92,7 +92,7 @@ async function getAppIcon(app: MacApp): Promise<string | null> {
 }
 
 
-async function getApplications(): Promise<{ name: string; path: string; icon: string }[]> {
+async function getApplications(): Promise<{ name: string; path: string; icon: string; bundleId: string }[]> {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
 
   return new Promise((resolve, reject) => {

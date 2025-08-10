@@ -1,7 +1,7 @@
 import path from "path";
 import originfs from "original-fs";
 
-export default () => {
+export default (): { name: string; path: string; icon: string; bundleId: string }[] => {
   const app_paths = [
     "/usr/share/applications",
     "/var/lib/snapd/desktop/applications",
@@ -137,16 +137,18 @@ export default () => {
       (execPath = "gnome-terminal -x " + execPath);
 
     const info = {
+      name: targetAppInfo.Name,
+      path: execPath,
+      icon: "file://" + icon,
+      bundleId: '',
       value: "plugin",
       pluginType: "app",
       type: "app",
       push: false,
       desc,
-      icon: "file://" + icon,
       keyWords: [targetAppInfo.Name],
       names: [targetAppInfo.Name],
       action: execPath,
-      name: targetAppInfo.Name,
     };
 
     if ("X-Ubuntu-Gettext-Domain" in targetAppInfo) {

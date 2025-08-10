@@ -8,7 +8,6 @@ import {
 } from './types'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
-import { applyMatching } from './matcher'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
@@ -113,7 +112,9 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         if (update.isDone) {
           this.currentGatherController = null // Clear the controller when done
 
-          const matchedItems = applyMatching(allItems, query)
+          console.log(`[SearchEngineCore] Matching ${allItems.length} items...`)
+          const matchedItems = allItems
+          console.log(`[SearchEngineCore] Sorting ${matchedItems.length} items...`)
           const { sortedItems, stats: sort_stats } = this.sorter.sort(
             matchedItems,
             query,

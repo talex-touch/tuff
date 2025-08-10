@@ -41,7 +41,7 @@ async function getIcon(app: any) {
 const fileLists: any = [];
 const fileMapper: Record<string, any> = new Map();
 
-export default () => {
+export default (): { name: string; path: string; icon: string; bundleId: string }[] => {
   const exists = fs.existsSync(iconDir);
   if (!exists) {
     fs.mkdirSync(iconDir);
@@ -102,15 +102,17 @@ export default () => {
                 );
 
                 const appInfo = {
+                  name: appName,
+                  path: appDetail.target,
+                  icon,
+                  bundleId: '',
                   value: "plugin",
                   desc: appDetail.target,
                   type: "app",
-                  icon,
                   pluginType: "app",
                   push: false,
                   action: `start "dummyclient" "${appDetail.target}"`,
                   keyWords: keyWords,
-                  name: appName,
                   names: [appName, ...keyWords], // Include app name and keywords
                 };
 
