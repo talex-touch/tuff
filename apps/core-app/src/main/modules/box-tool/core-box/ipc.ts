@@ -73,7 +73,6 @@ export class IpcManager {
       'core-box:query',
       async ({ data, reply }) => {
         const { query } = data as { query: TuffQuery }
-        console.log('core-box:query', query)
         const result = await coreBoxManager.search(query)
         reply(DataCode.SUCCESS, result)
       }
@@ -88,8 +87,6 @@ export class IpcManager {
         reply(DataCode.SUCCESS, result)
       }
     )
-
-    console.log('[CoreBox] IpcManager register')
   }
 
   public unregister(): void {

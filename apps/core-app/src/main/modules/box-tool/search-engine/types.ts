@@ -5,22 +5,27 @@
  * @module core-app/main/modules/box-tool/search-engine/types
  */
 
-import type { TuffItem as TuffItemBase, TuffQuery, TuffSearchResult as TuffSearchResultBase, TuffSourceType } from '@talex-touch/utils/core-box';
+import type {
+  TuffItem as TuffItemBase,
+  TuffQuery,
+  TuffSearchResult as TuffSearchResultBase,
+  TuffSourceType
+} from '@talex-touch/utils/core-box'
 
 export interface TuffItem extends TuffItemBase {
-  from?: string;
+  from?: string
 }
 
-export type { TuffQuery };
+export type { TuffQuery }
 
 /**
  * Represents the statistics for a single sort middleware.
  */
 export interface SortStat {
   /** The name of the sorting middleware. */
-  name: string;
+  name: string
   /** The time taken by the middleware in milliseconds. */
-  duration: number;
+  duration: number
 }
 
 /**
@@ -28,7 +33,7 @@ export interface SortStat {
  */
 export interface TuffSearchResult extends TuffSearchResultBase {
   /** Optional statistics about the sorting process. */
-  sort_stats?: SortStat[];
+  sort_stats?: SortStat[]
 }
 
 /**
@@ -37,7 +42,7 @@ export interface TuffSearchResult extends TuffSearchResultBase {
  */
 export interface ISortMiddleware {
   /** A unique name for the middleware, used for logging and stats. */
-  readonly name: string;
+  readonly name: string
   /**
    * The sort function that processes the items.
    * @param items - The array of TuffItems to be sorted.
@@ -45,7 +50,7 @@ export interface ISortMiddleware {
    * @param signal - An AbortSignal to cancel the sorting operation.
    * @returns A sorted array of TuffItems.
    */
-  sort(items: TuffItem[], query: TuffQuery, signal: AbortSignal): TuffItem[];
+  sort(items: TuffItem[], query: TuffQuery, signal: AbortSignal): TuffItem[]
 }
 
 /**
@@ -59,18 +64,18 @@ export interface ISearchProvider {
    * Unique identifier for the provider, e.g., "mac-applications", "file-system", "clipboard-history"
    * @required
    */
-  readonly id: string;
+  readonly id: string
 
   /**
    * The type of the source, used for categorization and filtering.
    * @required
    */
-  readonly type: TuffSourceType;
+  readonly type: TuffSourceType
 
   /**
    * User-friendly name for the provider, displayed in settings or logs.
    */
-  readonly name?: string;
+  readonly name?: string
 
   /**
    * Core search method (PULL mode).
@@ -80,24 +85,24 @@ export interface ISearchProvider {
    * @param signal - An AbortSignal to cancel the search operation.
    * @returns A promise that resolves to an array of TuffItems.
    */
-  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffItem[]>;
+  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffItem[]>
 
   /**
    * Optional method to handle activation.
    * Called when the provider is prioritized, e.g., via an activation keyword.
    */
-  onActivate?(): void;
+  onActivate?(): void
 
   /**
    * Optional method to handle deactivation.
    */
-  onDeactivate?(): void;
+  onDeactivate?(): void
 
   /**
    * Optional method to execute an item.
    * @param item The TuffItem to execute.
    */
-  onExecute?(item: TuffItem): any;
+  onExecute?(item: TuffItem): any
 }
 
 /**
@@ -110,13 +115,13 @@ export interface ISearchEngine {
    * Registers a search provider with the engine.
    * @param provider - An instance of ISearchProvider.
    */
-  registerProvider(provider: ISearchProvider): void;
+  registerProvider(provider: ISearchProvider): void
 
   /**
    * Unregisters a search provider by its unique ID.
    * @param providerId - The unique ID of the provider to remove.
    */
-  unregisterProvider(providerId: string): void;
+  unregisterProvider(providerId: string): void
 
   /**
    * Executes a search across all registered and relevant providers.
@@ -126,13 +131,13 @@ export interface ISearchEngine {
    * @returns A promise that resolves to a TuffSearchResult object,
    *          containing the ranked items and metadata about the search operation.
    */
-  search(query: TuffQuery): Promise<TuffSearchResult>;
+  search(query: TuffQuery): Promise<TuffSearchResult>
 
   /**
    * Performs background maintenance tasks, such as pre-heating caches,
    * refreshing indexes, etc.
    */
-  maintain(): void;
+  maintain(): void
 }
 
 /**
@@ -159,4 +164,4 @@ export interface TuffUpdate {
 }
 
 // This empty export statement forces the file to be treated as a module.
-export {};
+export {}

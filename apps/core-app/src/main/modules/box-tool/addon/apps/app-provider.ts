@@ -2,85 +2,125 @@ import { ISearchProvider, TuffItem, TuffQuery } from '../../search-engine/types'
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
 
-// A simple in-memory cache for the apps
-let cachedApps: TuffItem[] = []
-let isCacheInitialized = false
-
 class AppProvider implements ISearchProvider {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
-  readonly type = 'plugin'
+  readonly type = 'system' as const // System-level provider
 
-  async onActivate() {
-    if (isCacheInitialized) {
-      return
-    }
+  private cachedApps: TuffItem[] = []
+  private isInitializing: Promise<void> | null = null
 
+  private async _initialize(): Promise<void> {
     console.log('[AppProvider] Initializing app cache...')
-
     const apps = await this.getAppsByPlatform()
-    cachedApps = apps.map((app) => {
+    this.cachedApps = apps.map((app: any): TuffItem => {
       return {
-        key: app.path,
-        title: app.name,
-        // Pre-calculate pinyin for better performance
-        pinyin: PinyinMatch.match(app.name, '') || [],
-        ...app
+        id: app.path,
+        source: {
+          type: this.type,
+          id: this.id,
+          name: this.name
+        },
+        kind: 'app',
+        render: {
+          mode: 'default',
+          basic: {
+            title: app.name,
+            subtitle: app.path,
+            icon: {
+              type: 'base64',
+              value: app.icon
+            }
+          }
+        },
+        actions: [
+          {
+            id: 'open-app',
+            type: 'open',
+            label: 'Open',
+            primary: true,
+            payload: {
+              path: app.path
+            }
+          }
+        ],
+        meta: {
+          app: {
+            path: app.path,
+            bundle_id: app.bundleId
+          },
+          extension: {
+            pinyin: PinyinMatch.match(app.name, '') || []
+          }
+        }
       }
     })
-
-    isCacheInitialized = true
-    console.log(`[AppProvider] Cached ${cachedApps.length} apps.`)
+    console.log(`[AppProvider] Cached ${this.cachedApps.length} apps.`)
   }
 
-  onDeactivate() {
-    // Optional: Clear cache on deactivate if needed
-    // cachedApps = [];
-    // isCacheInitialized = false;
-  }
-
-  onExecute(item: TuffItem) {
-    const action = `open -a "${item.key}"`
-    exec(action, (err) => {
-      if (err) {
-        console.error(`Failed to execute action: ${action}`, err)
+  onExecute(item: TuffItem): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const appPath = item.meta?.app?.path
+      if (!appPath) {
+        const err = new Error('Application path not found in TuffItem')
+        console.error(err)
+        return reject(err)
       }
+      const action = `open -a "${appPath}"`
+      exec(action, (err) => {
+        if (err) {
+          console.error(`Failed to execute action: ${action}`, err)
+          return reject(err)
+        }
+        resolve()
+      })
     })
   }
 
   async onSearch(query: TuffQuery): Promise<TuffItem[]> {
-    if (!isCacheInitialized) {
-      await this.onActivate()
+    if (!this.isInitializing) {
+      this.isInitializing = this._initialize()
     }
+    await this.isInitializing
+
+    console.log('[AppProvider] onSearch', query, this.cachedApps?.[0])
 
     if (!query.text) {
-      return cachedApps.slice(0, 20) // Return some apps if query is empty
+      return this.cachedApps.slice(0, 20) // Return some apps if query is empty
     }
 
-    const searchResults = cachedApps
+    const searchResults = this.cachedApps
       .map((app) => {
-        const matchResult = PinyinMatch.match(app.title, query.text)
-        if (matchResult) {
-          let score = matchResult.length
-          // Bonus for consecutive matches
-          for (let i = 0; i < matchResult.length - 1; i++) {
-            if (matchResult[i + 1] === matchResult[i] + 1) {
-              score += 1
+        const title = app.render.basic?.title
+        if (!title) return null
+
+        const matchResult = PinyinMatch.match(title, query.text)
+
+        if (matchResult && matchResult.length > 0) {
+          const score = matchResult[1] // pinyin-match returns [start, end, score]
+          const updatedItem: TuffItem = {
+            ...app,
+            from: this.id,
+            scoring: {
+              ...app.scoring,
+              match: score,
+              final: score
+            },
+            meta: {
+              ...app.meta,
+              extension: {
+                ...app.meta?.extension,
+                matchResult
+              }
             }
           }
-          return {
-            ...app,
-            from: this.id, // Add provider id to item
-            scoring: {
-              match: score
-            },
-            matchResult
-          }
+          return { item: updatedItem, score }
         }
         return null
       })
-      .filter((result): result is TuffItem => result !== null)
-      .sort((a, b) => (b.scoring?.match || 0) - (a.scoring?.match || 0))
+      .filter((result): result is { item: TuffItem; score: number } => result !== null)
+      .sort((a, b) => b.score - a.score)
+      .map((result) => result.item)
 
     return searchResults
   }
@@ -88,15 +128,15 @@ class AppProvider implements ISearchProvider {
   private async getAppsByPlatform(): Promise<{ name: string; path: string }[]> {
     switch (process.platform) {
       case 'darwin': {
-        const { getApps } = await import('./darwin')
+        const getApps = (await import('./darwin')).default
         return getApps()
       }
       case 'win32': {
-        const { getApps } = await import('./win')
+        const getApps = (await import('./win')).default
         return getApps()
       }
       case 'linux': {
-        const { getApps } = await import('./linux')
+        const getApps = (await import('./linux')).default
         return getApps()
       }
       default:

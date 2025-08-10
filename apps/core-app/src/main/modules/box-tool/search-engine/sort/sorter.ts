@@ -37,8 +37,8 @@ export class Sorter {
 
     for (const middleware of this.middlewares) {
       if (signal.aborted) {
-        console.log(`[Sorter] Sorting aborted by signal during middleware: ${middleware.name}`);
-        break; // Exit the loop if sorting is aborted
+        console.log(`[Sorter] Sorting aborted by signal during middleware: ${middleware.name}`)
+        break // Exit the loop if sorting is aborted
       }
       const startTime = performance.now()
       processedItems = middleware.sort(processedItems, query, signal)

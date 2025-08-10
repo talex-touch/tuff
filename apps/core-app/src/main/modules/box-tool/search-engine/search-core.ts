@@ -96,7 +96,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     }
 
     const startTime = Date.now()
-    console.log('[SearchEngineCore] search', query.text)
+    console.log('[SearchEngineCore] search `' + query.text + '`')
 
     const providersToSearch = this.getActiveProviders()
     const allItems: TuffItem[] = []

@@ -1,39 +1,44 @@
-import { TuffItem, TuffQuery } from '@talex-touch/utils'
-import { ISortMiddleware } from '../types'
+import { TuffQuery } from '@talex-touch/utils/core-box'
+import { ISortMiddleware, TuffItem } from '../types'
 
 const DEFAULT_WEIGHTS: Record<string, number> = {
   app: 10,
   feature: 5,
-  cmd: 5,
+  command: 5,
   plugin: 3,
   file: 2,
+  url: 1,
   text: 1
 }
 
 function getWeight(item: TuffItem): number {
-  if ((item.type === 'feature' || item.type === 'feature') && (item.scoring?.amo || 0) > 10) {
+  const kind = item.kind || 'unknown'
+  // Special case for frequently used features
+  if (kind === 'feature' && (item.scoring?.frequency || 0) > 0.5) {
     return 10
   }
-
-  const type = item.type || 'unknown'
-  return DEFAULT_WEIGHTS[type] || 0
+  return DEFAULT_WEIGHTS[kind] || 0
 }
 
 function calculateMatchScore(item: TuffItem, keyword?: string): number {
-  if (!keyword) return 0
+  const title = item.render.basic?.title
+  if (!keyword || !title) return 0
 
-  const name = item.title.toLowerCase()
+  const name = title.toLowerCase()
   const searchKey = keyword.toLowerCase()
 
   if (name === searchKey) return 1000
 
-  if (item.scoring?.match) {
-    const [start, end] = item.scoring.match
+  const pinyinMatch = item.meta?.extension?.matchResult
+  if (pinyinMatch) {
+    const [start, end] = pinyinMatch
     const matchLength = end - start + 1
     const nameLength = name.length
 
+    // Higher score for matches at the beginning
     if (start === 0) return 800 + (matchLength / nameLength) * 100
 
+    // Higher score for exact length matches
     if (matchLength === searchKey.length) return 600 + (matchLength / nameLength) * 100
 
     return 400 + (matchLength / nameLength) * 100
@@ -50,9 +55,11 @@ function calculateMatchScore(item: TuffItem, keyword?: string): number {
 export function calculateSortScore(item: TuffItem, keyword?: string): number {
   const matchScore = calculateMatchScore(item, keyword)
   const weight = getWeight(item)
-  const amo = item.scoring?.amo || 0
+  const recency = item.scoring?.recency || 0
+  const frequency = item.scoring?.frequency || 0
 
-  return matchScore * 100000 + weight * 1000 + amo
+  // Final score combines match quality, item type weight, and usage stats
+  return matchScore * 10000 + weight * 1000 + recency * 100 + frequency * 10
 }
 
 export const tuffSorter: ISortMiddleware = {

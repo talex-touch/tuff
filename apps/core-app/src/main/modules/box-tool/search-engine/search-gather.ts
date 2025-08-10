@@ -99,6 +99,7 @@ export function getGatheredItems(
   onUpdate: TuffAggregatorCallback,
   options: ITuffGatherOptions = defaultTuffGatherOptions
 ): IGatherController {
+  console.log(`[Gather] Starting search with ${providers.length} providers.`)
   const controller = new AbortController()
   const { signal } = controller
 
@@ -148,7 +149,8 @@ export function getGatheredItems(
      * Handles new results from any provider.
      * @param result - The newly arrived array of results.
      */
-    const onNewResultArrived = (result: TuffItem[]): void => {
+    const onNewResultArrived = (result: TuffItem[], providerId: string): void => {
+      console.log(`[Gather] Received ${result.length} items from provider: ${providerId}`)
       allResults.push(...result)
       pushBuffer.push(...result)
 
@@ -173,6 +175,8 @@ export function getGatheredItems(
       processingTimeout: number,
       isFallback = false
     ): Promise<void> => {
+      const queueName = isFallback ? 'Fallback' : 'Default'
+      console.log(`[Gather] Running ${queueName} queue with ${concurrency} concurrent workers.`)
       const workers = Array(concurrency)
         .fill(0)
         .map(async () => {
@@ -210,7 +214,7 @@ export function getGatheredItems(
                     }))
                   : searchResult
 
-                onNewResultArrived(processedResult)
+                onNewResultArrived(processedResult, provider.id)
               }
             } catch (error) {
               if (signal.aborted) {
@@ -257,6 +261,7 @@ export function getGatheredItems(
 
       // All tasks (default and fallback) are done. Perform a final flush.
       // This ensures that results are pushed immediately even if tasks finish within the forcePushDelay.
+      console.log('[Gather] All search tasks completed.')
       flushBuffer(true)
     }
 
@@ -267,6 +272,7 @@ export function getGatheredItems(
     promise,
     abort: () => {
       if (!controller.signal.aborted) {
+        console.log('[Gather] Aborting search.')
         controller.abort()
       }
     },
