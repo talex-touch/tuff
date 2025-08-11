@@ -60,6 +60,9 @@ export const files = sqliteTable('files', {
   size: integer('size'),
   mtime: integer('mtime', { mode: 'timestamp' }).notNull(),
   ctime: integer('ctime', { mode: 'timestamp' }).notNull(),
+  lastIndexedAt: integer('last_indexed_at', { mode: 'timestamp' })
+    .notNull()
+    .default(new Date(0)),
   isDir: integer('is_dir', { mode: 'boolean' }).notNull().default(false),
   type: text('type').notNull().default('file'), // 'file', 'app', 'url', etc.
 
@@ -175,6 +178,16 @@ export const pluginData = sqliteTable(
 export const config = sqliteTable('config', {
   key: text('key').primaryKey(),
   value: text('value') // 存储为 JSON string
+})
+
+/**
+ * 记录全量扫描的进度，用于断点续传。
+ */
+export const scanProgress = sqliteTable('scan_progress', {
+  path: text('path').primaryKey(), // 已经完成全量扫描的目录路径
+  lastScanned: integer('last_scanned', { mode: 'timestamp' })
+    .notNull()
+    .default(new Date(0))
 })
 
 /*

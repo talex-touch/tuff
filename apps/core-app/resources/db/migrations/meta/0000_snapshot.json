@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ee803230-e719-4770-a4ec-8cb0e07e59c9",
+  "id": "7712daea-0a95-44ed-b8b8-24ecbb53790b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "config": {
@@ -77,7 +77,9 @@
       "indexes": {
         "contextual_embeddings_session_id_unique": {
           "name": "contextual_embeddings_session_id_unique",
-          "columns": ["session_id"],
+          "columns": [
+            "session_id"
+          ],
           "isUnique": true
         }
       },
@@ -177,15 +179,22 @@
           "name": "file_extensions_file_id_files_id_fk",
           "tableFrom": "file_extensions",
           "tableTo": "files",
-          "columnsFrom": ["file_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "file_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "file_extensions_file_id_key_pk": {
-          "columns": ["file_id", "key"],
+          "columns": [
+            "file_id",
+            "key"
+          ],
           "name": "file_extensions_file_id_key_pk"
         }
       },
@@ -244,6 +253,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "last_indexed_at": {
+          "name": "last_indexed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'\"1970-01-01T00:00:00.000Z\"'"
+        },
         "is_dir": {
           "name": "is_dir",
           "type": "integer",
@@ -279,7 +296,9 @@
       "indexes": {
         "files_path_unique": {
           "name": "files_path_unique",
-          "columns": ["path"],
+          "columns": [
+            "path"
+          ],
           "isUnique": true
         }
       },
@@ -356,10 +375,38 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "plugin_data_plugin_id_key_pk": {
-          "columns": ["plugin_id", "key"],
+          "columns": [
+            "plugin_id",
+            "key"
+          ],
           "name": "plugin_data_plugin_id_key_pk"
         }
       },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scan_progress": {
+      "name": "scan_progress",
+      "columns": {
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_scanned": {
+          "name": "last_scanned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'\"1970-01-01T00:00:00.000Z\"'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

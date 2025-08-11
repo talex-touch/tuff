@@ -39,6 +39,7 @@ CREATE TABLE `files` (
 	`size` integer,
 	`mtime` integer NOT NULL,
 	`ctime` integer NOT NULL,
+	`last_indexed_at` integer DEFAULT '"1970-01-01T00:00:00.000Z"' NOT NULL,
 	`is_dir` integer DEFAULT false NOT NULL,
 	`type` text DEFAULT 'file' NOT NULL,
 	`content` text,
@@ -58,6 +59,11 @@ CREATE TABLE `plugin_data` (
 	`key` text NOT NULL,
 	`value` text,
 	PRIMARY KEY(`plugin_id`, `key`)
+);
+--> statement-breakpoint
+CREATE TABLE `scan_progress` (
+	`path` text PRIMARY KEY NOT NULL,
+	`last_scanned` integer DEFAULT '"1970-01-01T00:00:00.000Z"' NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `usage_logs` (

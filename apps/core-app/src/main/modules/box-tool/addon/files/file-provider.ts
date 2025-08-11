@@ -7,96 +7,19 @@ import {
 } from '../../search-engine/types'
 import { app, shell } from 'electron'
 import path from 'path'
-import fs from 'fs/promises'
 import { createDbUtils } from '../../../../db/utils'
-import { files as filesSchema } from '../../../../db/schema'
-import { eq, like } from 'drizzle-orm'
+import { files as filesSchema, fileExtensions, scanProgress } from '../../../../db/schema'
+import { eq, inArray } from 'drizzle-orm'
 import PinyinMatch from 'pinyin-match'
-
-interface ScannedFileInfo {
-  path: string
-  name: string
-  mtime: Date
-}
+import extractFileIcon from 'extract-file-icon'
+import { KEYWORD_MAP } from './constants'
+import { ScannedFileInfo } from './types'
+import { mapFileToTuffItem, scanDirectory } from './utils'
 
 class FileProvider implements ISearchProvider {
   readonly id = 'file-provider'
   readonly name = 'File Provider'
   readonly type = 'file' as const
-
-  // --- V2 Filtering ---
-  private readonly BLACKLISTED_DIRS = new Set([
-    'node_modules',
-    '.git',
-    '.svn',
-    '.hg',
-    '.npm',
-    '.yarn',
-    '.m2',
-    'dist',
-    'build',
-    'target',
-    'out',
-    'bin',
-    'cache',
-    '.cache',
-    '.vscode',
-    '.idea'
-  ])
-  private readonly BLACKLISTED_FILES_PREFIX = new Set(['.'])
-  private readonly BLACKLISTED_FILES_SUFFIX = new Set(['~'])
-  private readonly BLACKLISTED_EXTENSIONS = new Set(['.tmp', '.temp', '.log'])
-
-  private readonly WHITELISTED_EXTENSIONS = new Set([
-    // Docs
-    '.txt',
-    '.pdf',
-    '.doc',
-    '.docx',
-    '.xls',
-    '.xlsx',
-    '.ppt',
-    '.pptx',
-    '.rtf',
-    '.md',
-    // Media
-    '.jpg',
-    '.jpeg',
-    '.png',
-    '.gif',
-    '.bmp',
-    '.mp4',
-    '.avi',
-    '.mkv',
-    '.mov',
-    '.wmv',
-    '.flv',
-    '.mp3',
-    '.wav',
-    '.flac',
-    // Archives
-    '.zip',
-    '.rar',
-    '.7z',
-    '.tar',
-    '.gz',
-    '.bz2',
-    // Data
-    '.csv',
-    '.json',
-    '.xml',
-    '.yaml',
-    '.yml',
-    // Ebooks
-    '.epub',
-    '.mobi',
-    // Installers
-    '.exe',
-    '.msi',
-    '.dmg',
-    '.deb',
-    '.rpm'
-  ])
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
@@ -119,7 +42,6 @@ class FileProvider implements ISearchProvider {
         return null
       }
     })
-    // Use a Set to remove duplicate paths and filter out nulls
     this.WATCH_PATHS = [...new Set(paths.filter((p): p is string => !!p))]
     console.log('[FileProvider] Watching paths:', this.WATCH_PATHS)
   }
@@ -133,97 +55,170 @@ class FileProvider implements ISearchProvider {
   }
 
   private async _initialize(): Promise<void> {
-    console.log('[FileProvider] Initializing file data...')
+    console.log('[FileProvider] Starting index process...')
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
 
-    // 1. Clear all existing file records for this provider to avoid duplicates.
-    // This is a simple approach for the MVP.
-    console.log('[FileProvider] Clearing old file records...')
-    await db.delete(filesSchema).where(eq(filesSchema.type, 'file'))
+    // --- 1. Index Cleanup (FR-IX-4) ---
+    console.log('[FileProvider] Cleaning up indexes from removed watch paths...')
+    const allDbFilePaths = await db
+      .select({ path: filesSchema.path, id: filesSchema.id })
+      .from(filesSchema)
+      .where(eq(filesSchema.type, 'file'))
+    const filesToDelete = allDbFilePaths
+      .filter((file) => !this.WATCH_PATHS.some((watchPath) => file.path.startsWith(watchPath)))
 
-    // 2. Scan all watch paths and collect files.
-    const allFiles: ScannedFileInfo[] = []
-    for (const dir of this.WATCH_PATHS) {
-      try {
-        const filesInDir = await this.scanDirectory(dir)
-        allFiles.push(...filesInDir)
-        console.log(`[FileProvider] Scanned ${filesInDir.length} files from ${dir}.`)
-      } catch (error) {
-        console.error(`[FileProvider] Error scanning directory ${dir}:`, error)
-      }
+    if (filesToDelete.length > 0) {
+      const idsToDelete = filesToDelete.map(f => f.id)
+      console.log(`[FileProvider] Deleting ${idsToDelete.length} files from removed paths. Sample:`, filesToDelete.slice(0, 5).map(f => f.path))
+      await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+      const pathsToDelete = filesToDelete.map((f) => f.path)
+      await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
     }
 
-    // 3. Batch insert all found files into the database.
-    if (allFiles.length > 0) {
-      console.log(`[FileProvider] Adding ${allFiles.length} new files to the database.`)
-      const newFileRecords = allFiles.map((file) => ({
-        ...file,
-        type: 'file' as const,
-        ctime: new Date()
-      }))
+    // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
+    const completedScans = await db.select().from(scanProgress)
+    const completedScanPaths = new Set(completedScans.map((s) => s.path))
 
-      // Drizzle doesn't support batch insert with returning on all drivers,
-      // so we'll just insert without returning IDs for the MVP.
-      // We also need to chunk the inserts to avoid "Maximum call stack size exceeded" errors.
-      const chunkSize = 1000 // Insert 1000 records at a time
-      for (let i = 0; i < newFileRecords.length; i += chunkSize) {
-        const chunk = newFileRecords.slice(i, i + chunkSize)
-        try {
-          await db.insert(filesSchema).values(chunk)
-          console.log(`[FileProvider] Inserted chunk ${i / chunkSize + 1}...`)
-        } catch (error) {
-          console.error(`[FileProvider] Error inserting chunk ${i / chunkSize + 1}:`, error)
-        }
-      }
-    }
+    const newPathsToScan = this.WATCH_PATHS.filter((p) => !completedScanPaths.has(p))
+    const reconciliationPaths = this.WATCH_PATHS.filter((p) => completedScanPaths.has(p))
 
-    console.log(`[FileProvider] Initialization complete. Total files indexed: ${allFiles.length}`)
-  }
+    console.log(`[FileProvider] Scan Strategy: ${newPathsToScan.length} new paths for full scan, ${reconciliationPaths.length} existing paths for reconciliation.`)
 
-  private async scanDirectory(dirPath: string): Promise<ScannedFileInfo[]> {
-    const dirName = path.basename(dirPath)
-    if (this.BLACKLISTED_DIRS.has(dirName) || dirName.startsWith('.')) {
-      return []
-    }
+    // --- 3. Full Scan for New Paths ---
+    if (newPathsToScan.length > 0) {
+      console.log('[FileProvider] Starting full scan for new paths:', newPathsToScan)
+      for (const newPath of newPathsToScan) {
+        console.log(`[FileProvider] Scanning new path: ${newPath}`)
+        const diskFiles = await scanDirectory(newPath)
+        const newFileRecords = diskFiles.map((file) => ({
+          ...file,
+          extension: path.extname(file.name).toLowerCase(),
+          lastIndexedAt: new Date(),
+          ctime: new Date()
+        }))
 
-    const entries = await fs.readdir(dirPath, { withFileTypes: true })
-    const files: ScannedFileInfo[] = []
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name)
-
-      if (entry.isDirectory()) {
-        files.push(...(await this.scanDirectory(fullPath)))
-      } else if (entry.isFile()) {
-        const fileName = entry.name
-        const fileExtension = path.extname(fileName).toLowerCase()
-
-        // Blacklist checks
-        if (
-          fileName.startsWith('.') ||
-          fileName.endsWith('~') ||
-          this.BLACKLISTED_EXTENSIONS.has(fileExtension)
-        ) {
-          continue
-        }
-
-        // Whitelist check
-        if (this.WHITELISTED_EXTENSIONS.has(fileExtension)) {
-          try {
-            const stats = await fs.stat(fullPath)
-            files.push({
-              path: fullPath,
-              name: fileName,
-              mtime: stats.mtime
-            })
-          } catch (error) {
-            console.error(`[FileProvider] Could not stat file ${fullPath}:`, error)
+        if (newFileRecords.length > 0) {
+          console.log(`[FileProvider] Found ${newFileRecords.length} files in ${newPath}.`)
+          const chunkSize = 500
+          for (let i = 0; i < newFileRecords.length; i += chunkSize) {
+            const chunk = newFileRecords.slice(i, i + chunkSize)
+            console.log(`[FileProvider] Full scan for ${newPath}: Inserting chunk ${i / chunkSize + 1}/${Math.ceil(newFileRecords.length / chunkSize)}...`)
+            const inserted = await db.insert(filesSchema).values(chunk).returning()
+            await this.processFileExtensions(inserted)
           }
         }
+        await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
+        console.log(`[FileProvider] Completed full scan for ${newPath}.`)
       }
     }
-    return files
+
+    // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
+    if (reconciliationPaths.length > 0) {
+      console.log('[FileProvider] Starting reconciliation scan for paths:', reconciliationPaths)
+      const dbFiles = await db.select().from(filesSchema).where(eq(filesSchema.type, 'file'))
+      const dbFileMap = new Map(dbFiles.map((file) => [file.path, file]))
+
+      console.log(`[FileProvider] Found ${dbFileMap.size} files in DB for reconciliation.`)
+
+      const diskFiles: ScannedFileInfo[] = []
+      for (const dir of reconciliationPaths) {
+        diskFiles.push(...(await scanDirectory(dir)))
+      }
+      const diskFileMap = new Map(diskFiles.map((file) => [file.path, file]))
+      console.log(`[FileProvider] Found ${diskFileMap.size} files on disk for reconciliation.`)
+
+      const filesToAdd: ScannedFileInfo[] = []
+      const filesToUpdate: (typeof filesSchema.$inferSelect)[] = []
+
+      for (const [path, diskFile] of diskFileMap.entries()) {
+        const dbFile = dbFileMap.get(path)
+        if (!dbFile) {
+          filesToAdd.push(diskFile)
+        } else if (diskFile.mtime > dbFile.mtime) {
+          filesToUpdate.push({ ...dbFile, mtime: diskFile.mtime, name: diskFile.name })
+        }
+        dbFileMap.delete(path)
+      }
+
+      const deletedFileIds = Array.from(dbFileMap.values())
+        .filter((file) => reconciliationPaths.some((p) => file.path.startsWith(p)))
+        .map((file) => file.id)
+
+      if (deletedFileIds.length > 0) {
+        console.log(`[FileProvider] Deleting ${deletedFileIds.length} missing files. Sample:`, Array.from(dbFileMap.values()).slice(0, 5).map(f => f.path))
+        await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
+      }
+
+      if (filesToUpdate.length > 0) {
+        console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files. Sample:`, filesToUpdate.slice(0, 5).map(f => f.path))
+        for (const file of filesToUpdate) {
+          await db
+            .update(filesSchema)
+            .set({
+              mtime: file.mtime,
+              name: file.name,
+              lastIndexedAt: new Date()
+            })
+            .where(eq(filesSchema.id, file.id))
+          await this.processFileExtensions([file])
+        }
+      }
+
+      if (filesToAdd.length > 0) {
+        console.log(`[FileProvider] Adding ${filesToAdd.length} new files during reconciliation. Sample:`, filesToAdd.slice(0, 5).map(f => f.path))
+        const newFileRecords = filesToAdd.map((file) => ({
+          ...file,
+          extension: path.extname(file.name).toLowerCase(),
+          lastIndexedAt: new Date(),
+          ctime: new Date()
+        }))
+
+        const chunkSize = 500
+        for (let i = 0; i < newFileRecords.length; i += chunkSize) {
+          const chunk = newFileRecords.slice(i, i + chunkSize)
+          const inserted = await db.insert(filesSchema).values(chunk).returning()
+          await this.processFileExtensions(inserted)
+        }
+      }
+    }
+
+    console.log('[FileProvider] Index process complete.')
+  }
+
+  private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
+    if (!this.dbUtils) return
+    if (files.length === 0) return
+    console.log(`[FileProvider] Processing extensions for ${files.length} files...`)
+
+    const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
+    for (const file of files) {
+      try {
+        const icon = extractFileIcon(file.path)
+        extensionsToAdd.push({
+          fileId: file.id,
+          key: 'icon',
+          value: `data:image/png;base64,${icon.toString('base64')}`
+        })
+      } catch {
+        /* ignore */
+      }
+
+      const fileExtension = file.extension || path.extname(file.name).toLowerCase()
+      const keywords = KEYWORD_MAP[fileExtension]
+      if (keywords) {
+        extensionsToAdd.push({
+          fileId: file.id,
+          key: 'keywords',
+          value: JSON.stringify(keywords)
+        })
+      }
+    }
+
+    if (extensionsToAdd.length > 0) {
+      await this.dbUtils.addFileExtensions(extensionsToAdd)
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -231,19 +226,52 @@ class FileProvider implements ISearchProvider {
     if (!this.dbUtils) return []
 
     const db = this.dbUtils.getDb()
-    const searchTerm = query.text.trim()
+    const searchTerm = query.text.trim().toLowerCase()
 
     if (!searchTerm) {
       return []
     }
 
-    const searchResults = await db
-      .select()
+    const allFilesWithExtensions = await db
+      .select({
+        file: filesSchema,
+        extensions: {
+          key: fileExtensions.key,
+          value: fileExtensions.value
+        }
+      })
       .from(filesSchema)
-      .where(like(filesSchema.name, `%${searchTerm}%`))
-      .limit(100)
+      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
+      .where(eq(filesSchema.type, 'file'))
 
-    const itemIds = searchResults.map((file) => file.path)
+    const filesMap = new Map<
+      number,
+      { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
+    >()
+    for (const row of allFilesWithExtensions) {
+      if (!filesMap.has(row.file.id)) {
+        filesMap.set(row.file.id, { file: row.file, extensions: {} })
+      }
+      if (row.extensions?.key && row.extensions?.value) {
+        filesMap.get(row.file.id)!.extensions[row.extensions.key] = row.extensions.value
+      }
+    }
+    const searchPool = Array.from(filesMap.values())
+
+    const filteredResults = searchPool.filter(({ file, extensions }) => {
+      const fileName = file.name.toLowerCase()
+      if (PinyinMatch.match(fileName, searchTerm)) {
+        return true
+      }
+      const keywords = extensions.keywords ? (JSON.parse(extensions.keywords) as string[]) : []
+      return keywords.some((keyword) => keyword.toLowerCase().includes(searchTerm))
+    })
+
+    if (filteredResults.length === 0) {
+      return []
+    }
+
+    const itemIds = filteredResults.map(({ file }) => file.path)
     const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(itemIds)
     const usageMap = new Map(usageSummaries.map((s) => [s.itemId, s]))
 
@@ -253,38 +281,30 @@ class FileProvider implements ISearchProvider {
       frequency: 0.15,
       lastModified: 0.1
     }
-
     const now = new Date().getTime()
 
-    const scoredResults = searchResults
-      .map((file) => {
+    const scoredResults = filteredResults
+      .map(({ file, extensions }) => {
         const summary = usageMap.get(file.path)
-
-        // --- Pinyin Match Score ---
         const matchResult = PinyinMatch.match(file.name, searchTerm)
         const pinyinMatchScore = matchResult ? 1 - matchResult[0] / file.name.length : 0
-
-        // --- Time-based Scores (Recency & Mtime) ---
         const lastUsed = summary ? new Date(summary.lastUsed).getTime() : 0
         const lastModified = new Date(file.mtime).getTime()
-
         const daysSinceLastUsed = (now - lastUsed) / (1000 * 3600 * 24)
         const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
-
         const lastUsedScore = lastUsed > 0 ? Math.exp(-0.1 * daysSinceLastUsed) : 0
         const lastModifiedScore = Math.exp(-0.05 * daysSinceLastModified)
-
-        // --- Frequency Score ---
         const frequencyScore = summary ? Math.log10(summary.clickCount + 1) : 0
-
-        // --- Final Score ---
+        const keywords = extensions.keywords ? (JSON.parse(extensions.keywords) as string[]) : []
+        const keywordScore = keywords.some((k) => k.toLowerCase().includes(searchTerm)) ? 1 : 0
         const finalScore =
           weights.pinyinMatch * pinyinMatchScore +
           weights.lastUsed * lastUsedScore +
           weights.frequency * frequencyScore +
-          weights.lastModified * lastModifiedScore
+          weights.lastModified * lastModifiedScore +
+          keywordScore
 
-        const tuffItem = this.mapFileToTuffItem(file)
+        const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name)
         tuffItem.scoring = {
           final: finalScore,
           match: pinyinMatchScore,
@@ -295,6 +315,7 @@ class FileProvider implements ISearchProvider {
         return tuffItem
       })
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
+      .slice(0, 50)
 
     return scoredResults
   }
@@ -312,42 +333,6 @@ class FileProvider implements ISearchProvider {
     } catch (err) {
       console.error(`[FileProvider] Failed to open file at: ${filePath}`, err)
       throw err
-    }
-  }
-
-  private mapFileToTuffItem(file: typeof filesSchema.$inferSelect): TuffItem {
-    return {
-      id: file.path,
-      source: {
-        type: this.type,
-        id: this.id,
-        name: this.name
-      },
-      kind: 'file',
-      render: {
-        mode: 'default',
-        basic: {
-          title: file.name,
-          subtitle: file.path
-          // Icon can be added later based on file type
-        }
-      },
-      actions: [
-        {
-          id: 'open-file',
-          type: 'open',
-          label: 'Open',
-          primary: true,
-          payload: {
-            path: file.path
-          }
-        }
-      ],
-      meta: {
-        file: {
-          path: file.path
-        }
-      }
     }
   }
 }
