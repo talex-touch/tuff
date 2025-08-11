@@ -8,7 +8,7 @@ const props = defineProps<{
 
 <template>
   <div class="VideoPreview">
-    <video :src="item.meta?.file?.path" controls />
+    <video :src="`tfile://${item.meta?.file?.path}`" controls />
   </div>
 </template>
 

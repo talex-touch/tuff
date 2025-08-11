@@ -64,6 +64,12 @@ export interface TuffItem {
   render: TuffRender;
 
   /**
+   * 图标定义
+   * @description 项目的视觉标识，会覆盖 render.basic.icon
+   */
+  icon?: TuffIcon;
+
+  /**
    * 交互行为定义
    * @description 定义项目支持的操作和交互方式
    */
@@ -145,7 +151,9 @@ export type TuffSourceType =
   | 'history'       // 历史记录，基于用户过往行为
   | 'notification'  // 系统通知，来自系统事件
   | 'workflow'      // 工作流，用户自定义流程
-  | 'file';         // 文件系统，本地文件
+  | 'file'         // 文件系统，本地文件
+  | 'application'  // 应用程序，可启动的软件
+  | 'service';      // 系统服务，后台运行的程序
 
 /**
  * 权限级别
@@ -375,7 +383,7 @@ export type TuffIcon =
        * @description 指定图标的数据格式和来源
        * @required
        */
-      type: 'emoji' | 'url' | 'base64' | 'icon' | 'component';
+      type: 'emoji' | 'url' | 'base64' | 'fluent' | 'component';
 
       /**
        * 图标值
@@ -857,9 +865,9 @@ export interface TuffMeta {
     /** 文件权限 */
     permissions?: string;
     /** 创建时间 */
-    created_at?: Date;
+    created_at?: string;
     /** 修改时间 */
-    modified_at?: Date;
+    modified_at?: string;
   };
 
   /**

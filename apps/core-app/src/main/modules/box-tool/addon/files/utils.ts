@@ -105,11 +105,22 @@ export function mapFileToTuffItem(
         payload: {
           path: file.path
         }
+      },
+      {
+        id: 'open-folder',
+        type: 'open',
+        label: 'Open Folder',
+        payload: {
+          path: path.dirname(file.path)
+        }
       }
     ],
     meta: {
       file: {
-        path: file.path
+        path: file.path,
+        size: file.size,
+        created_at: file.ctime.toISOString(),
+        modified_at: file.mtime.toISOString()
       }
     }
   }

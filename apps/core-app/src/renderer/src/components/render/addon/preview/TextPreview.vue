@@ -10,7 +10,7 @@ const textContent = ref('');
 
 onMounted(async () => {
   if (props.item.meta?.file?.path) {
-    const response = await fetch(props.item.meta.file.path);
+    const response = await fetch(`tfile://${props.item.meta.file.path}`);
     textContent.value = await response.text();
   }
 });

@@ -38,6 +38,7 @@ declare module 'vue' {
     FormTemplate: typeof import('./src/components/base/template/FormTemplate.vue')['default']
     GlassSurface: typeof import('./src/components/base/effect/GlassSurface.vue')['default']
     IconButton: typeof import('./src/components/base/button/IconButton.vue')['default']
+    IconPreview: typeof import('./src/components/render/addon/preview/IconPreview.vue')['default']
     IdentifiedIcon: typeof import('./src/components/icon/svg/IdentifiedIcon.vue')['default']
     ImagePreview: typeof import('./src/components/render/addon/preview/ImagePreview.vue')['default']
     InteractiveTerminal: typeof import('./src/components/terminal/InteractiveTerminal.vue')['default']

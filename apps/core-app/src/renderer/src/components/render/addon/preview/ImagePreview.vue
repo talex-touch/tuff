@@ -1,14 +1,14 @@
 <script setup lang="ts" name="ImagePreview">
-import { TuffItem } from '@talex-touch/utils';
+import { TuffItem } from '@talex-touch/utils'
 
-const props = defineProps<{
+defineProps<{
   item: TuffItem
 }>()
 </script>
 
 <template>
   <div class="ImagePreview">
-    <img :src="item.meta?.file?.path" />
+    <img :src="`tfile://${item.meta?.file?.path}`" />
   </div>
 </template>
 

@@ -29,7 +29,7 @@ interface ScannedAppInfo {
 class AppProvider implements ISearchProvider {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
-  readonly type = 'system' as const // System-level provider
+  readonly type = 'application' as const // System-level provider
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
