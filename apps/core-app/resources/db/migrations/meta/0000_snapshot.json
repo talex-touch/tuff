@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ee803230-e719-4770-a4ec-8cb0e07e59c9",
+  "id": "7712daea-0a95-44ed-b8b8-24ecbb53790b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "config": {
@@ -253,6 +253,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "last_indexed_at": {
+          "name": "last_indexed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'\"1970-01-01T00:00:00.000Z\"'"
+        },
         "is_dir": {
           "name": "is_dir",
           "type": "integer",
@@ -374,6 +382,31 @@
           "name": "plugin_data_plugin_id_key_pk"
         }
       },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scan_progress": {
+      "name": "scan_progress",
+      "columns": {
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_scanned": {
+          "name": "last_scanned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'\"1970-01-01T00:00:00.000Z\"'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

@@ -17,11 +17,11 @@ function randomString(len: number) {
 }
 
 let genSignature = () => {
-  const signaturePath = path.join(__dirname, "signature.json")
+  const signaturePath = path.join(__dirname, 'signature.json')
 
   let signatureObj = {}
   if (fse.existsSync(signaturePath)) {
-    const data = fse.readJsonSync(signaturePath, { encoding: "utf8" })
+    const data = fse.readJsonSync(signaturePath, { encoding: 'utf8' })
 
     signatureObj = JSON.parse(JSON.stringify(data))
   } else {
@@ -41,7 +41,6 @@ let genSignature = () => {
 
   return signatureObj
 }
-
 
 export default function generatorInformation(): Plugin {
   const virtualModuleId = 'talex-touch:information'
@@ -71,16 +70,19 @@ export default function generatorInformation(): Plugin {
       const isBeta = buildType === 'beta'
       const isRelease = buildType === 'release'
 
-      fse.writeFileSync(informationPath, JSON.stringify({
-        refuse: false,
-        version: pkg.version,
-        buildTime: Date.now(),
-        buildType,
-        isSnapshot,
-        isBeta,
-        isRelease,
-        signature
-      }))
+      fse.writeFileSync(
+        informationPath,
+        JSON.stringify({
+          refuse: false,
+          version: pkg.version,
+          buildTime: Date.now(),
+          buildType,
+          isSnapshot,
+          isBeta,
+          isRelease,
+          signature
+        })
+      )
 
       console.log(`[Talex-Touch] generate information.json with build type: ${buildType}`)
     },

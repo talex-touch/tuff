@@ -8,6 +8,7 @@ import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { coreBoxManager } from './manager'
 
 const windowAnimation = useWindowAnimation()
 
@@ -90,6 +91,13 @@ export class WindowManager {
       console.log('[CoreBox] BoxWindow closed!')
     })
 
+    window.window.on('blur', () => {
+      const settings = this.getAppSettingConfig()
+      if (settings.tools.autoHide) {
+        coreBoxManager.trigger(false)
+      }
+    })
+
     console.log('[CoreBox] NewBox created, WebContents loaded!')
 
     this.windows.push(window)
@@ -100,8 +108,10 @@ export class WindowManager {
   /**
    * 根据当前屏幕和鼠标位置更新窗口位置。
    */
-  public updatePosition(window: TouchWindow): void {
-    const curScreen = this.getCurScreen()
+  public updatePosition(window: TouchWindow, curScreen?: Electron.Display): void {
+    if (!curScreen) {
+      curScreen = this.getCurScreen()
+    }
     if (!curScreen || !curScreen.bounds) {
       console.error('[CoreBox] Invalid screen object:', curScreen)
       return
@@ -182,7 +192,7 @@ export class WindowManager {
     console.debug('[CoreBox] Shrunk.')
   }
 
-  private getCurScreen(): Electron.Display {
+  public getCurScreen(): Electron.Display {
     try {
       const cursorPoint = screen.getCursorScreenPoint()
       const curScreen = screen.getDisplayNearestPoint(cursorPoint)

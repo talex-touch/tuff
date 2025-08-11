@@ -92,11 +92,11 @@ const placeholder = computed(() => {
 
 .BoxInput-Display-Completion {
   position: relative;
-  //margin: 0 0.25rem;
-  //padding: 0 0.5rem;
+  margin: 0 0.25rem;
+  padding: 0 0.5rem;
 
-  //font-size: 18px;
-  //line-height: 38px;
+  font-size: 18px;
+  line-height: 38px;
   opacity: 0.4;
   --fake-inner-opacity: 0.7;
   --fake-color: var(--el-bg-color);
