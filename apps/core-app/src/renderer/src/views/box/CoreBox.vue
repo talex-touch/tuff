@@ -49,7 +49,7 @@ const completionDisplay = computed(() => {
     return completion.substring(searchVal.value.length)
   }
 
-  return ''
+  return completion
 })
 
 useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
