@@ -1,223 +1,136 @@
-import path from "path";
-import originfs from "original-fs";
+import path from 'path'
+import fs from 'fs/promises'
+import os from 'os'
 
-export default () => {
-  const app_paths = [
-    "/usr/share/applications",
-    "/var/lib/snapd/desktop/applications",
-    `${window.process.env.HOME}/.local/share/applications`,
-  ];
-  const emptyIcon = "";
+interface AppInfo {
+  name: string
+  path: string
+  icon: string
+  bundleId: string
+  uniqueId: string
+  lastModified: Date
+}
 
-  function dirAppRead(dir, target) {
-    let files: Array<string> | null = null;
-    try {
-      if (!originfs.existsSync(dir)) return;
-      files = originfs.readdirSync(dir);
-    } catch (e) {
-      return;
-    }
-    if (files.length !== 0) {
-      for (const file of files) {
-        const app = path.join(dir, file);
-        path.extname(app) === ".desktop" && target.push(app);
-      }
-    }
+const APP_PATHS = [
+  '/usr/share/applications',
+  '/var/lib/snapd/desktop/applications',
+  `${os.homedir()}/.local/share/applications`
+]
+
+async function findIconPath(iconName: string): Promise<string> {
+  if (path.isAbsolute(iconName) && (await fs.stat(iconName).catch(() => null))) {
+    return iconName
   }
 
-  function convertEntryFile2Feature(appPath) {
-    let appInfo: any = null;
-    try {
-      appInfo = originfs.readFileSync(appPath, "utf8");
-    } catch (e) {
-      return null;
-    }
-    if (!appInfo.includes("[Desktop Entry]")) {
-      return null;
-    }
-    appInfo = appInfo
-      .substr(appInfo.indexOf("[Desktop Entry]"))
-      .replace("[Desktop Entry]", "")
-      .trim();
+  const themes = ['Yaru', 'hicolor', 'Adwaita', 'ubuntu-mono-dark', 'ubuntu-mono-light', 'Humanity']
+  const sizes = ['48x48', 'scalable', '256x256', '512x512', '64x64']
+  const types = ['apps', 'categories', 'devices', 'mimetypes', 'places', 'status']
+  const exts = ['.png', '.svg']
 
-    /**
-     * appInfo eg:
-     * Version=1.0
-     * Name=FireFox
-     * Name[ar]=***
-     * Name[ast]=***
-     * [Desktop Action new-private-window]
-     * Name=***
-     */
-    const splitIndex = appInfo.indexOf("\n[");
-
-    if (splitIndex > 0) {
-      appInfo = appInfo.substr(0, splitIndex).trim();
-    }
-
-    const targetAppInfo: any = {};
-    appInfo.match(/^[\w\-[\]]+ ?=.*$/gm).forEach((e) => {
-      const index = e.indexOf("=");
-      targetAppInfo[e.substr(0, index).trim()] = e.substr(index + 1).trim();
-    });
-
-    /**
-     * targetAppInfo = {
-     * Type: "Application",
-     * Version: "1.0",
-     * Exec: "xxxx",
-     * }
-     */
-
-    if (targetAppInfo.Type !== "Application") {
-      return null;
-    }
-    if (!targetAppInfo.Exec) {
-      return null;
-    }
-    if (
-      targetAppInfo.NoDisplay === "true" &&
-      !targetAppInfo.Exec.startsWith("gnome-control-center")
-    ) {
-      return null;
-    }
-    let os = String(window.process.env.DESKTOP_SESSION).toLowerCase();
-    if (os === "ubuntu") {
-      os = "gnome";
-      if (
-        targetAppInfo.OnlyShowIn &&
-        !targetAppInfo.OnlyShowIn.toLowerCase().includes(os)
-      ) {
-        return null;
-      }
-    }
-    if (
-      targetAppInfo.NotShowIn &&
-      targetAppInfo.NotShowIn.toLowerCase().includes(os)
-    ) {
-      return null;
-    }
-    let icon = targetAppInfo.Icon;
-    if (!icon) return null;
-    if (icon.startsWith("/")) {
-      if (!originfs.existsSync(icon)) return null;
-    } else if (
-      appPath.startsWith("/usr/share/applications") ||
-      appPath.startsWith("/var/lib/snapd/desktop/applications")
-    ) {
-      icon = getIcon(icon);
-    } else {
-      if (
-        !appPath.startsWith(
-          (window as any).process.env.HOME + "/.local/share/applications"
-        )
-      )
-        return null;
-      appPath = path.join(
-        (window as any).process.env.HOME,
-        ".local/share/icons",
-        appPath + ".png"
-      );
-      originfs.existsSync(appPath) || (appPath = emptyIcon);
-    }
-    let desc = "";
-    const LANG = (window as any).process.env.LANG.split(".")[0];
-    if (`Comment[${LANG}]` in targetAppInfo) {
-      desc = targetAppInfo[`Comment[${LANG}]`];
-    } else if (targetAppInfo.Comment) {
-      desc = targetAppInfo.Comment;
-    } else {
-      desc = appPath;
-    }
-
-    let execPath = targetAppInfo.Exec.replace(/ %[A-Za-z]/g, "")
-      .replace(/"/g, "")
-      .trim();
-    targetAppInfo.Terminal === "true" &&
-      (execPath = "gnome-terminal -x " + execPath);
-
-    const info = {
-      value: "plugin",
-      pluginType: "app",
-      type: "app",
-      push: false,
-      desc,
-      icon: "file://" + icon,
-      keyWords: [targetAppInfo.Name],
-      names: [targetAppInfo.Name],
-      action: execPath,
-      name: targetAppInfo.Name,
-    };
-
-    if ("X-Ubuntu-Gettext-Domain" in targetAppInfo) {
-      const cmd = targetAppInfo["X-Ubuntu-Gettext-Domain"];
-      cmd && cmd !== targetAppInfo.Name && info.keyWords.push(cmd);
-    }
-    return info;
-  }
-
-  function getIcon(filePath) {
-    const themes = [
-      "ubuntu-mono-dark",
-      "ubuntu-mono-light",
-      "Yaru",
-      "hicolor",
-      "Adwaita",
-      "Humanity",
-    ];
-
-    const sizes = ["48x48", "48", "scalable", "256x256", "512x512", "256", "512"];
-    const types = [
-      "apps",
-      "categories",
-      "devices",
-      "mimetypes",
-      "legacy",
-      "actions",
-      "places",
-      "status",
-      "mimes",
-    ];
-    const exts = [".png", ".svg"];
-    for (const theme of themes) {
-      for (const size of sizes) {
-        for (const type of types) {
-          for (const ext of exts) {
-            let iconPath = path.join(
-              "/usr/share/icons",
-              theme,
-              size,
-              type,
-              filePath + ext
-            );
-            if (originfs.existsSync(iconPath)) return iconPath;
-            iconPath = path.join(
-              "/usr/share/icons",
-              theme,
-              type,
-              size,
-              filePath + ext
-            );
-            if (originfs.existsSync(iconPath)) return iconPath;
+  for (const theme of themes) {
+    for (const size of sizes) {
+      for (const type of types) {
+        for (const ext of exts) {
+          const iconPath = path.join('/usr/share/icons', theme, size, type, `${iconName}${ext}`)
+          if (await fs.stat(iconPath).catch(() => null)) {
+            return iconPath
           }
         }
       }
     }
-    return originfs.existsSync(path.join("/usr/share/pixmaps", filePath + ".png"))
-      ? path.join("/usr/share/pixmaps", filePath + ".png")
-      : emptyIcon;
   }
 
+  const pixmapPath = path.join('/usr/share/pixmaps', `${iconName}.png`)
+  if (await fs.stat(pixmapPath).catch(() => null)) {
+    return pixmapPath
+  }
 
+  return ''
+}
 
-  const apps: any = [];
-  const fileList = [];
-  app_paths.forEach((dir) => {
-    dirAppRead(dir, fileList);
-  });
+async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null> {
+  try {
+    const content = await fs.readFile(desktopFilePath, 'utf8')
+    if (!content.includes('[Desktop Entry]')) {
+      return null
+    }
 
-  fileList.forEach((e) => {
-    apps.push(convertEntryFile2Feature(e));
-  });
-  return apps.filter((app) => !!app);
-};
+    const entryContent = content.substring(content.indexOf('[Desktop Entry]')).split('\n[')[0]
+    const properties: Record<string, string> = {}
+    entryContent.match(/^[\w\-[\]]+ ?=.*$/gm)?.forEach((line) => {
+      const [key, ...valueParts] = line.split('=')
+      if (key && valueParts.length > 0) {
+        properties[key.trim()] = valueParts.join('=').trim()
+      }
+    })
+
+    const lang = process.env.LANG?.split('.')[0] || 'en'
+    const name = properties[`Name[${lang}]`] || properties.Name
+    const exec = properties.Exec
+    const iconName = properties.Icon
+    const noDisplay = properties.NoDisplay === 'true'
+    const type = properties.Type
+
+    if (type !== 'Application' || !name || !exec || noDisplay) {
+      return null
+    }
+
+    const execPath = exec.replace(/ %[A-Za-z]/g, '').replace(/"/g, '').trim().split(' ')[0]
+    const iconPath = iconName ? await findIconPath(iconName) : ''
+    const stats = await fs.stat(desktopFilePath)
+
+    return {
+      name,
+      path: execPath,
+      icon: iconPath ? `file://${iconPath}` : '',
+      bundleId: '',
+      uniqueId: desktopFilePath, // Use .desktop file path as uniqueId
+      lastModified: stats.mtime
+    }
+  } catch (e) {
+    return null
+  }
+}
+
+async function findDesktopFiles(dir: string): Promise<string[]> {
+  let desktopFiles: string[] = []
+  try {
+    const files = await fs.readdir(dir)
+    for (const file of files) {
+      const fullPath = path.join(dir, file)
+      try {
+        const stats = await fs.stat(fullPath)
+        if (stats.isDirectory()) {
+          desktopFiles = desktopFiles.concat(await findDesktopFiles(fullPath))
+        } else if (file.endsWith('.desktop')) {
+          desktopFiles.push(fullPath)
+        }
+      } catch {
+        // ignore individual file errors
+      }
+    }
+  } catch {
+    // ignore directory errors
+  }
+  return desktopFiles
+}
+
+export async function getApps(): Promise<AppInfo[]> {
+  const allDesktopFilesPromises = APP_PATHS.map(p => findDesktopFiles(p))
+  const nestedDesktopFiles = await Promise.all(allDesktopFilesPromises)
+  const allDesktopFiles = nestedDesktopFiles.flat()
+
+  const appInfoPromises = allDesktopFiles.map(file => parseDesktopFile(file))
+  const results = await Promise.all(appInfoPromises)
+
+  return results.filter((app): app is AppInfo => app !== null)
+}
+
+export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
+  if (!filePath.endsWith('.desktop')) {
+    // On Linux, we are primarily interested in .desktop files.
+    // The watcher might pick up other changes which we can ignore.
+    return null
+  }
+  return parseDesktopFile(filePath)
+}

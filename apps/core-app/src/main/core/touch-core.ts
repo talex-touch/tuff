@@ -23,7 +23,7 @@ import {
 import * as log4js from 'log4js'
 import { devProcessManager } from '../utils/dev-process-manager'
 
-const innerRootPath = getRootPath(app.getPath('userData'))
+const innerRootPath = getRootPath()
 
 const logs = path.join(innerRootPath, 'logs')
 checkDirWithCreate(logs)
@@ -143,10 +143,14 @@ app.on('before-quit', (event) => {
   touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
 })
 
-function getRootPath(root: string): string {
-  return app.isPackaged
-    ? path.join(root, APP_FOLDER_NAME)
-    : path.join(root, `${APP_FOLDER_NAME}-dev`)
+function getRootPath(): string {
+  if (app.isPackaged) {
+    return path.join(app.getPath('userData'), APP_FOLDER_NAME)
+  }
+
+  const appPath = app.getAppPath()
+
+  return path.join(appPath, APP_FOLDER_NAME)
 }
 
 export class TouchApp implements TalexTouch.TouchApp {
@@ -428,42 +432,42 @@ class ModuleManager implements TalexTouch.IModuleManager {
     })
   }
 
-  loadModule(module: TalexTouch.IModule): boolean | Promise<boolean> {
+  async loadModule(module: TalexTouch.IModule): Promise<boolean> {
     const _module = this.modules.get(module['name'] as symbol)
     if (_module) {
       return false
-    } else
-      return (async () => {
-        const modulePath = path.join(
-          this.modulePath,
-          (module.filePath as string) || module.name.description!
-        )
+    }
 
-        if (!Object.prototype.hasOwnProperty.call(module, 'filePath') || module.filePath)
-          await checkDirWithCreate(modulePath, true)
+    const modulePath = path.join(
+      this.modulePath,
+      (module.filePath as string) || module.name.description!
+    )
 
-        console.log(`[ModuleManager] Loading module: ${module.name.description}`)
+    if (!Object.prototype.hasOwnProperty.call(module, 'filePath') || module.filePath) {
+      await checkDirWithCreate(modulePath, true)
+    }
 
-        setTimeout(
-          module.init.bind(
-            {
-              ...module,
-              touchChannel: this.touchChannel,
-              modulePath,
-              modules: [],
-              getModule(name: symbol) {
-                return touchApp!.moduleManager.getModule(name)
-              },
-              getModules() {
-                return this.modules.values()
-              }
-            },
-            touchApp!,
-            touchApp!.moduleManager
-          )
-        )
-        return this.modules.set(module['name'] as symbol, _module!).has(module['name'] as symbol)
-      })()
+    console.log(`[ModuleManager] Loading module: ${module.name.description}`)
+
+    module.init.call(
+      {
+        ...module,
+        touchChannel: this.touchChannel,
+        modulePath,
+        modules: [],
+        getModule(name: symbol) {
+          return touchApp!.moduleManager.getModule(name)
+        },
+        getModules() {
+          return this.modules.values()
+        }
+      },
+      touchApp!,
+      touchApp!.moduleManager
+    )
+
+    this.modules.set(module['name'] as symbol, module)
+    return true
   }
 
   unloadModule(moduleName: symbol): boolean {

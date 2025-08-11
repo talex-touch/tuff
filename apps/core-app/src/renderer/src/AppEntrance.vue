@@ -4,8 +4,8 @@ import CoreBox from './views/box/CoreBox.vue'
 import { touchChannel } from './modules/channel/channel-core'
 
 const init = ref(false)
-const emits = defineEmits<{
-  (e: 'ready'): void
+const props = defineProps<{
+  onReady: () => Promise<void>
 }>()
 
 function entry(): void {
@@ -17,9 +17,9 @@ function entry(): void {
 
   useTouchSDK({ channel: touchChannel })
 
-  init.value = true
-
-  emits('ready')
+  props.onReady().then(() => {
+    init.value = true
+  })
 }
 
 setTimeout(entry, 100)

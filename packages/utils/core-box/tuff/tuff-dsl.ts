@@ -251,6 +251,12 @@ export interface TuffRender {
    * @description 应用于渲染容器的内联样式对象
    */
   style?: Record<string, string>;
+
+  /**
+   * 补全
+   * @description 用于补全的文本
+   */
+  completion?: string;
 }
 
 /**
@@ -309,6 +315,7 @@ export interface TuffBasicRender {
    * @description 显示在项目右侧的辅助信息，如快捷键、时间等
    */
   accessory?: string;
+
 }
 
 /**
@@ -1111,12 +1118,16 @@ export interface TuffSearchResult {
    * @required
    */
   sources: Array<{
-    /** 来源标识 */
-    source: string;
-    /** 结果数量 */
-    count: number;
-    /** 搜索耗时 */
+    /** Provider's unique ID. */
+    providerId: string;
+    /** Provider's display name. */
+    providerName: string;
+    /** Search duration in milliseconds. */
     duration: number;
+    /** Number of results returned. */
+    resultCount: number;
+    /** Status of the search operation. */
+    status: 'success' | 'timeout' | 'error';
   }>;
 
   /**

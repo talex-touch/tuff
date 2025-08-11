@@ -1,150 +1,139 @@
-import fs from "fs";
-import path from "path";
-import os from "os";
-import { shell } from "electron";
+import fs from 'fs/promises'
+import path from 'path'
+import os from 'os'
+import { shell } from 'electron'
 
-const filePath = path.resolve(
-  "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"
-);
-const appData = path.join(os.homedir(), "./AppData/Roaming");
-const startMenu = path.join(
-  appData,
-  "Microsoft\\Windows\\Start Menu\\Programs"
-);
-
-const isZhRegex = /[\u4e00-\u9fa5]/;
-const iconDir = path.join(os.tmpdir(), "ProcessIcon");
-
-async function getIcon(app: any) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fileIcon = (await import("extract-file-icon")).default;
-    if (typeof fileIcon !== "function") {
-      return;
-    }
-
-    const buffer = fileIcon(app.desc, 32);
-    const iconPath = path.join(iconDir, `${app.name}.png`);
-
-    fs.exists(iconPath, (exists) => {
-      if (!exists) {
-        fs.writeFile(iconPath, buffer, "base64", () => {
-          //
-        });
-      }
-    });
-  } catch (e) {
-    console.log(e, app.desc);
-  }
+// Define the structure for our app info, consistent with other platforms
+interface AppInfo {
+  name: string
+  path: string
+  icon: string
+  bundleId: string
+  uniqueId: string
+  lastModified: Date
 }
 
-const fileLists: any = [];
-const fileMapper: Record<string, any> = new Map();
+const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons-win')
 
-export default () => {
-  const exists = fs.existsSync(iconDir);
-  if (!exists) {
-    fs.mkdirSync(iconDir);
-  }
+async function getAppIcon(targetPath: string, appName: string): Promise<string> {
+  await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
+  const iconPath = path.join(ICON_CACHE_DIR, `${appName}.png`)
 
-  function fileDisplay(filePath: string) {
-    fs.readdir(filePath, async function (err, files) {
-      if (err) {
-        console.warn(err);
-      } else {
-
-        for (let fileName of files) {
-          const fileDir = path.join(filePath, fileName);
-
-          fs.stat(fileDir, function (eror, stats) {
-            if (eror) {
-              console.warn("[Win] [CoreBox] [App] Read file stats err: " + fileName, fileDir);
-            } else {
-              const isFile = stats.isFile(); // 是文件
-              const isDir = stats.isDirectory(); // 是文件夹
-              if (isFile) {
-                const appName = fileName.split(".")[0];
-                const keyWords = [appName];
-                let appDetail: any = {};
-                try {
-                  appDetail = shell.readShortcutLink(fileDir);
-                } catch (e) {
-                  //
-                }
-                if (
-                  !appDetail.target ||
-                  appDetail.target.toLowerCase().indexOf("unin") >= 0
-                )
-                  return;
-
-                // C:/program/cmd.exe => cmd
-                keyWords.push(path.basename(appDetail.target, ".exe"));
-
-                if (isZhRegex.test(appName)) {
-                  // const [, pinyinArr] = translate(appName);
-                  // const zh_firstLatter = pinyinArr.map((py) => py[0]);
-                  // // 拼音
-                  // keyWords.push(pinyinArr.join(''));
-                  // 缩写
-                  // keyWords.push(zh_firstLatter.join(''));
-                } else {
-                  const firstLatter = appName
-                    .split(" ")
-                    .map((name) => name[0])
-                    .join("");
-                  keyWords.push(firstLatter);
-                }
-
-                const icon = path.join(
-                  os.tmpdir(),
-                  "ProcessIcon",
-                  `${encodeURIComponent(appName)}.png`
-                );
-
-                const appInfo = {
-                  value: "plugin",
-                  desc: appDetail.target,
-                  type: "app",
-                  icon,
-                  pluginType: "app",
-                  push: false,
-                  action: `start "dummyclient" "${appDetail.target}"`,
-                  keyWords: keyWords,
-                  name: appName,
-                  names: [appName, ...keyWords], // Include app name and keywords
-                };
-
-                if (fileMapper.has(appName)) {
-                  const oldApp = fileMapper.get(appName);
-
-                  if (
-                    oldApp.value === appInfo.value &&
-                    oldApp.desc === appInfo.desc &&
-                    oldApp.type === appInfo.type &&
-                    oldApp.name === appInfo.name
-                  ) {
-                    return;
-                  }
-                }
-
-                fileLists.push(appInfo);
-                fileMapper.set(appName, appInfo);
-                getIcon(appInfo);
-              }
-              if (isDir) {
-                fileDisplay(fileDir);
-              }
-            }
-
-          });
-        }
+  try {
+    // Check if icon already exists
+    await fs.access(iconPath)
+    const buffer = await fs.readFile(iconPath)
+    return `data:image/png;base64,${buffer.toString('base64')}`
+  } catch {
+    // Icon does not exist, extract it
+    try {
+      const fileIcon = (await import('extract-file-icon')).default
+      if (typeof fileIcon === 'function') {
+        const buffer = fileIcon(targetPath, 32)
+        await fs.writeFile(iconPath, buffer)
+        return `data:image/png;base64,${buffer.toString('base64')}`
       }
-
-    });
+    } catch (e) {
+      console.warn(`[Win] Failed to extract icon for ${targetPath}:`, e)
+    }
   }
+  return '' // Return empty string if icon extraction fails
+}
 
-  fileDisplay(filePath);
-  fileDisplay(startMenu);
+async function fileDisplay(filePath: string): Promise<AppInfo[]> {
+  let results: AppInfo[] = []
+  try {
+    const files = await fs.readdir(filePath)
+    for (const fileName of files) {
+      const fileDir = path.join(filePath, fileName)
+      try {
+        const stats = await fs.stat(fileDir)
+        if (stats.isFile() && (fileName.endsWith('.lnk') || fileName.endsWith('.exe'))) {
+          let appDetail: { target?: string } = {}
+          if (fileName.endsWith('.lnk')) {
+            try {
+              appDetail = shell.readShortcutLink(fileDir)
+            } catch (e) {
+              continue // Ignore broken shortcuts
+            }
+          } else {
+            appDetail.target = fileDir
+          }
 
-  return fileLists;
-};
+          const targetPath = appDetail.target
+          if (!targetPath || targetPath.toLowerCase().includes('uninstall')) {
+            continue
+          }
+
+          const appName = path.basename(fileName, path.extname(fileName))
+          const icon = await getAppIcon(targetPath, appName)
+          
+          // To get the mtime of the actual executable, not the shortcut
+          const targetStats = await fs.stat(targetPath).catch(() => stats)
+
+          results.push({
+            name: appName,
+            path: targetPath,
+            icon: icon,
+            bundleId: '', // Windows doesn't have bundleId
+            uniqueId: targetPath, // Use full path as uniqueId
+            lastModified: targetStats.mtime
+          })
+        } else if (stats.isDirectory()) {
+          results = results.concat(await fileDisplay(fileDir))
+        }
+      } catch (e) {
+        // Ignore errors for individual files/directories
+      }
+    }
+  } catch (err) {
+    console.warn(`[Win] Could not read directory: ${filePath}`, err)
+  }
+  return results
+}
+
+export async function getApps(): Promise<AppInfo[]> {
+  const startMenuPath1 = path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs')
+  const startMenuPath2 = path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+
+  const allAppsPromises = [
+    fileDisplay(startMenuPath1),
+    fileDisplay(startMenuPath2)
+  ]
+
+  const results = await Promise.allSettled(allAppsPromises)
+  let allApps: AppInfo[] = []
+
+  results.forEach(result => {
+    if (result.status === 'fulfilled') {
+      allApps = allApps.concat(result.value)
+    }
+  })
+
+  // Remove duplicates based on uniqueId (the path)
+  const uniqueApps = Array.from(new Map(allApps.map(app => [app.uniqueId, app])).values())
+  
+  return uniqueApps
+}
+
+export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
+  try {
+    const stats = await fs.stat(filePath)
+    if (!stats.isFile()) return null
+
+    const appName = path.basename(filePath, path.extname(filePath))
+    const icon = await getAppIcon(filePath, appName)
+
+    return {
+      name: appName,
+      path: filePath,
+      icon: icon,
+      bundleId: '', // Windows doesn't have bundleId
+      uniqueId: filePath, // Use full path as uniqueId
+      lastModified: stats.mtime
+    }
+  } catch (error) {
+    console.warn(`[Win] Failed to get app info for ${filePath}:`, error)
+    return null
+  }
+}

@@ -1,70 +1,11 @@
 import { touchChannel } from '../channel/channel-core'
 import { blowMention, forTouchTip, popperMention } from '../mention/dialog-mention'
-import { h, ref, effectScope } from 'vue'
+import { h } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { AppUpdate } from './api/useUpdate'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
-import { pluginManager } from '../channel/plugin-core/api'
-import { pluginAdopter } from './adopters/plugin-adpoter'
 import { DataCode } from '@talex-touch/utils/channel'
 import { isLocalhostUrl } from '@talex-touch/utils'
-
-export function usePlugins(): any {
-  const plugins = ref()
-
-  provide('plugins', plugins)
-
-  watchEffect(() => {
-    plugins.value = [...pluginAdopter.plugins.values()]
-
-    if (activePlugin?.value) {
-      if (!plugins.value.filter((item) => item.name === activePlugin.value).length) {
-        lastActivePlugin.value = activePlugin.value
-        activePlugin.value = ''
-      }
-    } else if (
-      plugins.value.filter((item) => item.name === lastActivePlugin.value).length &&
-      lastActivePlugin.value
-    ) {
-      setTimeout(() => {
-        activePlugin.value = lastActivePlugin.value
-        lastActivePlugin.value = ''
-
-        const id = `touch-plugin-item-${activePlugin.value}`
-
-        setTimeout(() => {
-          const el = document.getElementById(id)
-          if (!el) return
-
-          el['$fixPointer']?.()
-        }, 200)
-      }, 200)
-    }
-  })
-  // watch(pluginAdopter, val => {
-  //   console.log("updated", pluginAdopter, val);
-  //   plugins.value = [...val.values()];
-
-  // }, { deep: true, immediate: true })
-  // watch(() => pluginAdopter.plugins.size, () => plugins.value = [...pluginAdopter.plugins.values()])
-
-  return plugins
-}
-
-const activePlugin = ref('')
-const lastActivePlugin = ref('')
-
-export function usePlugin(): void {
-  watch(
-    () => activePlugin.value,
-    (val) => {
-      pluginManager.changeActivePlugin(val)
-    },
-    { immediate: true }
-  )
-
-  provide('activePlugin', activePlugin)
-}
 
 export async function urlHooker(): Promise<void> {
   function directListener(event: any): void {

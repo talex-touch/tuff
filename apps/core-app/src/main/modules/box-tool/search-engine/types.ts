@@ -1,107 +1,189 @@
-import { AggregatedSection, IconOptions, SearchItem as TuffItem } from '@talex-touch/utils/types/touch-app-core'
+/**
+ * Tuff Search Engine Type Definitions
+ * Aligned with the TUFF DSL (Typed Unified Flex Format)
+ *
+ * @module core-app/main/modules/box-tool/search-engine/types
+ */
 
-export { TuffItem }
+import type {
+  TuffItem as TuffItemBase,
+  TuffQuery,
+  TuffSearchResult as TuffSearchResultBase,
+  TuffSourceType
+} from '@talex-touch/utils/core-box'
+import { TouchApp } from '../../../core/touch-core'
+import { DatabaseManager } from '../../database'
+import { TalexTouch } from '../../../types'
+
+export interface ProviderContext {
+  touchApp: TouchApp
+  databaseManager: DatabaseManager
+  storageManager: TalexTouch.IModule
+}
+
+export interface TuffItem extends TuffItemBase {
+  from?: string
+}
+
+export type { TuffQuery }
 
 /**
- * 搜索上下文
+ * Represents the statistics for a single sort middleware.
  */
-export interface SearchContext {
-  keyword: string
-  [key: string]: any
+export interface SortStat {
+  /** The name of the sorting middleware. */
+  name: string
+  /** The time taken by the middleware in milliseconds. */
+  duration: number
 }
 
 /**
- * 聚合后的区域
+ * Extends the base TUFF search result to include sorting statistics.
  */
-export interface AggregatedSection {
-  source: string;
-  layout: 'list' | 'card' | 'horizontal';
-  items: TuffItem[];
+export interface TuffSearchResult extends TuffSearchResultBase {
+  /** Optional statistics about the sorting process. */
+  sort_stats?: SortStat[]
+  /** Unique identifier for the search session. */
+  sessionId?: string
 }
 
-export enum SearchSourceType {
-  Application = 'application',
-  File = 'file',
-  Plugin = 'plugin',
-  System = 'system',
-  Web = 'web',
-  Custom = 'custom'
+/**
+ * Defines the interface for a sort middleware.
+ * Each middleware receives an array of items and should return a sorted array.
+ */
+export interface ISortMiddleware {
+  /** A unique name for the middleware, used for logging and stats. */
+  readonly name: string
+  /**
+   * The sort function that processes the items.
+   * @param items - The array of TuffItems to be sorted.
+   * @param query - The original search query for context.
+   * @param signal - An AbortSignal to cancel the sorting operation.
+   * @returns A sorted array of TuffItems.
+   */
+  sort(items: TuffItem[], query: TuffQuery, signal: AbortSignal): TuffItem[]
 }
 
-export interface ISearchSource {
-  // --- 基础元数据 ---
-  readonly name: string; // 唯一标识符, e.g., "mac-applications"
-  readonly type: SearchSourceType; // 源的类型
-
-  // --- 行为配置 ---
-  /**
-   * 激活关键词。当用户输入以这些词开头（加空格）时，优先调用此源。
-   * e.g., ['find', 'file:']
-   */
-  readonly activationKeywords?: string[];
-
-  /**
-   * 源的数据是否易变且需要频繁刷新。
-   * true: 比如实时汇率、剪贴板。
-   * false: 比如应用列表（变化频率低）。
-   */
-  readonly isVolatile: boolean;
-
-  // --- 生命周期与核心方法 ---
-  /**
-   * 当源被注册到 SearchEngine 时调用，可用于初始化。
-   * @param engine - SearchEngine 的实例，方便回调
-   */
-  onRegister?(engine: ISearchEngine): Promise<void>;
-
-  /**
-   * 核心搜索方法 (PULL 模式)
-   * @param context - 搜索上下文
-   * @returns 返回匹配的 TuffItem 数组
-   */
-  onSearch(context: SearchContext): Promise<TuffItem[]>;
-
-  /**
-   * 后台数据刷新 (可选)
-   * 由 SearchEngine 根据策略（如 isVolatile 和系统闲置状态）调用。
-   * 用于更新内部缓存，如重新扫描应用程序目录。
-   */
-  onRefresh?(): Promise<void>;
-
-  // --- PUSH 模式相关 (可选) ---
-  /**
-   * 当源被激活时调用 (e.g., 用户输入了 activationKeyword)
-   */
-  onActivate?(): void;
-
-  /**
-   * 当源失活时调用
-   */
-  onDeactivate?(): void;
+/**
+ * Search Provider Interface (formerly ISearchSource)
+ *
+ * Defines the contract for any module that provides search results to the engine.
+ * It's a simplified, stateless interface focused solely on providing results for a given query.
+ */
+export interface IExecuteArgs {
+  item: TuffItem
+  searchResult: TuffSearchResult
 }
 
+export interface ISearchProvider {
+  /**
+   * Unique identifier for the provider, e.g., "mac-applications", "file-system", "clipboard-history"
+   * @required
+   */
+  readonly id: string
+
+  /**
+   * The type of the source, used for categorization and filtering.
+   * @required
+   */
+  readonly type: TuffSourceType
+
+  /**
+   * User-friendly name for the provider, displayed in settings or logs.
+   */
+  readonly name?: string
+
+  /**
+   * Core search method (PULL mode).
+   * The engine calls this method to get results from the provider.
+   *
+   * @param query - The search query object, containing text and other context.
+   * @param signal - An AbortSignal to cancel the search operation.
+   * @returns A promise that resolves to an array of TuffItems.
+   */
+  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffItem[]>
+
+  /**
+   * Optional method to handle activation.
+   * Called when the provider is prioritized, e.g., via an activation keyword.
+   */
+  onActivate?(): void
+
+  /**
+   * Optional method to handle deactivation.
+   */
+  onDeactivate?(): void
+
+  /**
+   * Optional method to execute an item.
+   * @param args The arguments for execution, including the item and search context.
+   */
+  onExecute?(args: IExecuteArgs): any
+
+  /**
+   * Optional method to load provider.
+   * @param context The context of the provider.
+   */
+  onLoad?(context: ProviderContext): Promise<void>
+}
+
+/**
+ * Search Engine Interface (formerly ISearchEngine)
+ *
+ * Defines the core functionality of the search aggregator and orchestrator.
+ */
 export interface ISearchEngine {
   /**
-   * 注册一个搜索源
-   * @param source - ISearchSource 的实例
+   * Registers a search provider with the engine.
+   * @param provider - An instance of ISearchProvider.
    */
-  registerSource(source: ISearchSource): void;
+  registerProvider(provider: ISearchProvider): void
 
   /**
-   * 根据名称注销一个搜索源
-   * @param name - 搜索源的唯一名称
+   * Unregisters a search provider by its unique ID.
+   * @param providerId - The unique ID of the provider to remove.
    */
-  unregisterSource(name: string): void;
+  unregisterProvider(providerId: string): void
 
   /**
-   * 执行搜索
-   * @param context - 包含关键字等信息的搜索上下文
-   * @returns 返回聚合和排序后的结果
+   * Executes a search across all registered and relevant providers.
+   * It aggregates, scores, and ranks the results.
+   *
+   * @param query - The search query object.
+   * @returns A promise that resolves to a TuffSearchResult object,
+   *          containing the ranked items and metadata about the search operation.
    */
-  search(context: SearchContext): Promise<AggregatedSection[]>;
+  search(query: TuffQuery): Promise<TuffSearchResult>
 
   /**
-   * 负责后台数据预热、缓存清理等任务
+   * Performs background maintenance tasks, such as pre-heating caches,
+   * refreshing indexes, etc.
    */
-  maintain(): void;
+  maintain(): void
 }
+
+/**
+ * Represents a single update pushed from the search-gatherer.
+ * It provides a snapshot of the search progress at a point in time.
+ */
+export interface TuffUpdate {
+  /**
+   * New search result items from the current push batch.
+   */
+  newItems: TuffItem[]
+  /**
+   * Total number of results aggregated so far.
+   */
+  totalCount: number
+  /**
+   * Flag indicating whether all search tasks (both default and fallback queues) have completed.
+   */
+  isDone: boolean
+  /**
+   * Statistics about the performance of each search provider.
+   */
+  sourceStats?: TuffSearchResult['sources']
+}
+
+// This empty export statement forces the file to be treated as a module.
+export {}

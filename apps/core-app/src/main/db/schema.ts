@@ -1,14 +1,7 @@
 // src/db/schema.ts
 
-import { sql } from 'drizzle-orm';
-import {
-  integer,
-  sqliteTable,
-  text,
-  primaryKey,
-  real,
-  customType,
-} from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm'
+import { integer, sqliteTable, text, primaryKey, real, customType } from 'drizzle-orm/sqlite-core'
 
 // --- 自定义类型 (Custom Types) ---
 
@@ -18,17 +11,17 @@ import {
  */
 const vectorType = customType<{ data: number[]; driverData: string }>({
   dataType() {
-    return 'text'; // 在数据库中以 TEXT 类型存储
+    return 'text' // 在数据库中以 TEXT 类型存储
   },
   toDriver(value: number[]): string {
     // 将数组序列化为 JSON 字符串以便存储
-    return JSON.stringify(value);
+    return JSON.stringify(value)
   },
   fromDriver(value: string): number[] {
     // 从数据库读取时，将 JSON 字符串解析回数组
-    return JSON.parse(value);
-  },
-});
+    return JSON.parse(value)
+  }
+})
 
 // =============================================================================
 // 1. 闪电层 (Lightning Layer) - 快速关键词映射
@@ -48,9 +41,8 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
   itemId: text('item_id').notNull(),
 
   // 用于排序的静态权重，可由插件或用户定义
-  priority: real('priority').notNull().default(1.0),
-});
-
+  priority: real('priority').notNull().default(1.0)
+})
 
 // =============================================================================
 // 2. 核心内容与实体存储 (Core Content & Entities)
@@ -69,14 +61,31 @@ export const files = sqliteTable('files', {
   mtime: integer('mtime', { mode: 'timestamp' }).notNull(),
   ctime: integer('ctime', { mode: 'timestamp' }).notNull(),
   isDir: integer('is_dir', { mode: 'boolean' }).notNull().default(false),
+  type: text('type').notNull().default('file'), // 'file', 'app', 'url', etc.
 
   // [AI] 可选的文件内容和向量化状态，用于智能层处理
   content: text('content'), // 仅对需要深度索引的文件类型存储内容
   embeddingStatus: text('embedding_status', { enum: ['none', 'pending', 'completed'] })
     .notNull()
-    .default('none'),
-});
+    .default('none')
+})
 
+/**
+ * 存储文件的扩展属性，如应用的 bundleId, icon 等
+ */
+export const fileExtensions = sqliteTable(
+  'file_extensions',
+  {
+    fileId: integer('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: text('value')
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.fileId, table.key] })
+  })
+)
 
 // =============================================================================
 // 3. 智能层 (Intelligence Layer) - 语义向量存储
@@ -95,8 +104,8 @@ export const embeddings = sqliteTable('embeddings', {
   contentHash: text('content_hash'), // 源内容的哈希，用于检测变化以决定是否更新向量
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
-    .default(sql`(strftime('%s', 'now'))`),
-});
+    .default(sql`(strftime('%s', 'now'))`)
+})
 
 /**
  * 行为上下文向量表: 存储用户行为序列的语义向量，用于“意图预测”和“主动推荐”。
@@ -112,9 +121,8 @@ export const contextualEmbeddings = sqliteTable('contextual_embeddings', {
 
   embedding: vectorType('embedding').notNull(), // 行为上下文的向量表示
   model: text('model').notNull(),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
-});
-
+  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull()
+})
 
 // =============================================================================
 // 4. 用户行为原始日志与配置 (Usage Logs & Config)
@@ -133,8 +141,8 @@ export const usageLogs = sqliteTable('usage_logs', {
   keyword: text('keyword'),
   timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
   // 以JSON字符串形式存储更多上下文信息
-  context: text('context'), // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
-});
+  context: text('context') // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
+})
 
 /**
  * 行为频率汇总表，用于聚合与重排层快速获取常用项和最近使用项。
@@ -143,28 +151,31 @@ export const usageLogs = sqliteTable('usage_logs', {
 export const usageSummary = sqliteTable('usage_summary', {
   itemId: text('item_id').primaryKey(),
   clickCount: integer('click_count').notNull().default(0),
-  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull(),
-});
+  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull()
+})
 
 /**
  * 为插件提供统一的、隔离的持久化键值对存储能力。
  */
-export const pluginData = sqliteTable('plugin_data', {
+export const pluginData = sqliteTable(
+  'plugin_data',
+  {
     pluginId: text('plugin_id').notNull(),
     key: text('key').notNull(),
-    value: text('value'), // 存储为 JSON string
-  }, (table) => ({
-    pk: primaryKey({ columns: [table.pluginId, table.key] }),
+    value: text('value') // 存储为 JSON string
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.pluginId, table.key] })
   })
-);
+)
 
 /**
  * 存储 Tuff 自身的全局配置项。
  */
 export const config = sqliteTable('config', {
   key: text('key').primaryKey(),
-  value: text('value'), // 存储为 JSON string
-});
+  value: text('value') // 存储为 JSON string
+})
 
 /*
 -- =============================================================================

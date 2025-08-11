@@ -1,41 +1,47 @@
 <script setup lang="ts" name="BoxInput">
-import { BoxMode } from "./search-box";
+import { BoxMode } from '../../modules/box/adapter'
 
 interface Props {
-  modelValue: string;
+  modelValue: string
   boxOptions: {
-    mode: BoxMode;
+    mode: BoxMode
     data?: {
       feature?: {
-        desc?: string;
-        name?: string;
-      };
-    };
-  };
+        desc?: string
+        name?: string
+      }
+    }
+  }
 }
 
 interface Emits {
-  (e: "update:modelValue", value: string): void;
+  (e: 'update:modelValue', value: string): void
 }
 
 const slots = useSlots()
-const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
+
+const inputEl = ref<HTMLInputElement | null>(null)
+
+defineExpose({
+  inputEl
+})
 
 const options = reactive({
-  focus: false,
-});
+  focus: false
+})
 
 const inputValue = computed({
   get: () => props.modelValue,
-  set: (value: string) => emit("update:modelValue", value),
-});
+  set: (value: string) => emit('update:modelValue', value)
+})
 
 const placeholder = computed(() => {
   return props.boxOptions.mode === BoxMode.FEATURE
-    ? props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name
-    : "Type what you want to search by talex-touch.";
-});
+    ? (props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name)
+    : 'Type what you want to search by tuff.'
+})
 </script>
 
 <template>
@@ -44,13 +50,14 @@ const placeholder = computed(() => {
       placeholder
     }}</span>
     <input
+      id="core-box-input"
+      ref="inputEl"
+      v-model="inputValue"
       @focus="options.focus = true"
       @blur="options.focus = false"
-      id="core-box-input"
-      v-model="inputValue"
     />
     <div class="BoxInput-Display">
-      <span op-0>{{ modelValue }}</span>
+      <span class="opacity-0">{{ modelValue }}</span>
       <div v-show="slots.completion" class="BoxInput-Display-Completion fake-background">
         <slot name="completion" />
       </div>
@@ -72,24 +79,28 @@ const placeholder = computed(() => {
 .BoxInput-Display {
   position: absolute;
   display: flex;
+  align-items: center;
 
-  top: 50%;
+  top: 0;
   left: 0;
-  transform: translateY(-50%);
+  width: 100%;
+  height: 100%;
+  //transform: translateY(-50%);
 
   pointer-events: none;
 }
 
 .BoxInput-Display-Completion {
   position: relative;
-  margin: 0 0.25rem;
-  padding: 0 0.5rem;
+  //margin: 0 0.25rem;
+  //padding: 0 0.5rem;
 
-  font-size: 18px;
-  line-height: 38px;
-  opacity: 0.875;
+  //font-size: 18px;
+  //line-height: 38px;
+  opacity: 0.4;
   --fake-inner-opacity: 0.7;
   --fake-color: var(--el-bg-color);
+  color: var(--el-text-color-primary);
 }
 
 .BoxInput-Placeholder {
@@ -124,6 +135,9 @@ input {
 
   border-radius: 8px;
   background-color: transparent;
+  //color: transparent;
+
+  caret-color: var(--el-text-color-primary);
 
   // opacity: 0;
 }

@@ -1,173 +1,205 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import getMacApps from './get-mac-app';
-import fs from 'fs';
-import path from 'path';
-import { exec } from 'child_process';
-import os from 'os';
+import { exec } from 'child_process'
+import fs from 'fs/promises'
+import os from 'os'
+import path from 'path'
 
-/**
- * Get application icon base64 string
- * @param appPath Application path
- * @param appName Application name
- * @returns base64 string or null
- */
-async function getApplicationIcon(appPath: string, appName: string): Promise<string | null> {
-  const icondir = path.join(os.tmpdir(), 'ProcessIcon');
-  const iconPath = path.join(icondir, `${appName}.png`);
-  const iconNonePath = path.join(icondir, `${appName}.none`);
+const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 
-  if (fs.existsSync(iconPath)) {
-    try {
-      const iconBuffer = fs.readFileSync(iconPath);
-      return iconBuffer.toString('base64');
-    } catch (error) {
-      console.warn(`[Darwin] Failed to read cached icon for ${appName}:`, error);
-    }
-  }
+interface MacApp {
+  _name: string
+  lastModified: string
+  path: string
+  runtime_environment: string
+  signed_by: string[]
+  version: string
+  obtained_from: string
+}
 
-  if (fs.existsSync(iconNonePath)) {
-    return null;
-  }
+async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const command = `sips -s format png "${icnsPath}" --out "${pngPath}" --resampleHeightWidth 64 64`
+    exec(command, (error) => {
+      if (error) {
+        return reject(new Error(`sips command failed for ${icnsPath}: ${error.message}`))
+      }
+      resolve(pngPath)
+    })
+  })
+}
+
+async function getAppIcon(app: { path: string, name: string }): Promise<string | null> {
+  const safeName = app.name.replace(/[/\\?%*:|"<>]/g, '-')
+  const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeName}.png`)
+  const noneMarkerPath = path.join(ICON_CACHE_DIR, `${safeName}.none`)
 
   try {
-    await getMacApps.app2png(appPath, iconPath);
-    const iconBuffer = fs.readFileSync(iconPath);
-    return iconBuffer.toString('base64');
-  } catch (app2pngError) {
-    console.warn(`[Darwin] app2png failed for ${appName}, trying manual extraction`);
-  }
-
-  const appFileName = appPath.split('/').pop() || '';
-  const extname = path.extname(appFileName);
-  const appSubStr = appFileName.split(extname)[0];
-
-  const iconPaths = [
-    path.join(appPath, '/Contents/Resources/App.icns'),
-    path.join(appPath, '/Contents/Resources/AppIcon.icns'),
-    path.join(appPath, `/Contents/Resources/${appSubStr}.icns`),
-    path.join(appPath, `/Contents/Resources/${appSubStr.replace(/ /g, '')}.icns`),
-    path.join(appPath, `/Contents/Resources/${appSubStr.replace(/[^a-zA-Z0-9]/g, '')}.icns`)
-  ];
-
-  let foundIconPath: string | null = null;
-
-  for (const testPath of iconPaths) {
-    if (fs.existsSync(testPath)) {
-      foundIconPath = testPath;
-      break;
+    // 1. Check for cached PNG
+    if (await fs.stat(cachedIconPath).catch(() => false)) {
+      const buffer = await fs.readFile(cachedIconPath)
+      return buffer.toString('base64')
     }
-  }
 
-  if (!foundIconPath) {
+    // 2. Check for "none" marker
+    if (await fs.stat(noneMarkerPath).catch(() => false)) {
+      return null
+    }
+
+    // 3. Find .icns file
+    const plistPath = path.join(app.path, 'Contents', 'Info.plist')
+    const resourcesPath = path.join(app.path, 'Contents', 'Resources')
+    let icnsFile: string | undefined
+
     try {
-      const resourcesPath = path.join(appPath, '/Contents/Resources');
-      if (fs.existsSync(resourcesPath)) {
-        const resourceList = fs.readdirSync(resourcesPath);
-        const iconName = resourceList.find(file => path.extname(file) === '.icns');
-        if (iconName) {
-          foundIconPath = path.join(resourcesPath, iconName);
+      const plistContent = await fs.readFile(plistPath, 'utf-8')
+      const iconNameMatch = plistContent.match(/<key>CFBundleIconFile<\/key>\s*<string>(.*?)<\/string>/)
+      if (iconNameMatch?.[1]) {
+        let iconFile = iconNameMatch[1]
+        if (!iconFile.endsWith('.icns')) {
+          iconFile += '.icns'
+        }
+        const potentialPath = path.join(resourcesPath, iconFile)
+        if (await fs.stat(potentialPath).catch(() => false)) {
+          icnsFile = potentialPath
         }
       }
-    } catch (scanError) {
-      console.warn(`[Darwin] Failed to scan resources for ${appName}:`, scanError);
+    } catch {
+      // Plist might not exist or be readable, continue to scan directory
     }
-  }
 
-  if (!foundIconPath) {
-    fs.writeFileSync(iconNonePath, '');
-    return null;
-  }
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      exec(
-        `sips -s format png '${foundIconPath}' --out '${iconPath}' --resampleHeightWidth 64 64`,
-        (error: any) => {
-          error ? reject(error) : resolve();
+    if (!icnsFile) {
+        const files = await fs.readdir(resourcesPath).catch(() => [])
+        const found = files.find(f => f.endsWith('.icns'))
+        if(found) {
+            icnsFile = path.join(resourcesPath, found)
         }
-      );
-    });
+    }
 
-    const iconBuffer = fs.readFileSync(iconPath);
-    return iconBuffer.toString('base64');
-  } catch (sipsError) {
-    console.warn(`[Darwin] sips conversion failed for ${appName}:`, sipsError);
-    fs.writeFileSync(iconNonePath, '');
-    return null;
+    if (!icnsFile) {
+      await fs.writeFile(noneMarkerPath, '')
+      return null
+    }
+
+    // 4. Convert .icns to .png
+    await convertIcnsToPng(icnsFile, cachedIconPath)
+    const buffer = await fs.readFile(cachedIconPath)
+    return buffer.toString('base64')
+
+  } catch (error) {
+    console.warn(`[Darwin] Failed to get icon for ${app.name}:`, error)
+    await fs.writeFile(noneMarkerPath, '').catch(() => {});
+    return null
   }
 }
 
-export default async () => {
-  const icondir = path.join(os.tmpdir(), 'ProcessIcon');
-  if (!fs.existsSync(icondir)) {
-    fs.mkdirSync(icondir);
-  }
 
-  const isZhRegex = /[\u4e00-\u9fa5]/;
+export async function getApps(): Promise<
+  {
+    name: string
+    path: string
+    icon: string
+    bundleId: string
+    uniqueId: string
+    lastModified: Date
+  }[]
+> {
+  await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
 
-  let apps: any = await getMacApps.getApps();
+  return new Promise((resolve, reject) => {
+    exec(
+      'system_profiler SPApplicationsDataType -json',
+      { maxBuffer: 1024 * 1024 * 20 },
+      async (error, stdout) => {
+        if (error) {
+          return reject(new Error(`system_profiler command failed: ${error.message}`))
+        }
 
-  apps = apps.filter((app: any) => {
-    const extname = path.extname(app.path);
-    return extname === '.app' || extname === '.prefPane';
-  });
-  
-  let successCount = 0;
-  let failCount = 0;
+        try {
+          const data = JSON.parse(stdout)
+          const apps = data.SPApplicationsDataType as MacApp[]
 
-  for (const app of apps) {
-    const base64Icon = await getApplicationIcon(app.path, app._name);
-    if (base64Icon) {
-      const dataUrl = `data:image/png;base64,${base64Icon}`;
-      app.icon = {
-        type: 'dataurl',
-        value: dataUrl,
-        _value: `${app._name}.png`
-      };
-      successCount++;
-    } else {
-      app.icon = null;
-      failCount++;
-      console.log(`[Darwin] ❌ ${app._name} - no icon`);
+          if (!apps || !Array.isArray(apps)) {
+            return reject(
+              new Error('Unexpected output from system_profiler: SPApplicationsDataType is not an array.')
+            )
+          }
+
+          const appPromises = apps
+            .filter(
+              (app) =>
+                app.path &&
+                (app.path.startsWith('/Applications/') || app.path.startsWith('/System/Applications/'))
+            )
+            .map(async (app) => {
+              const icon = await getAppIcon({ name: app._name, path: app.path })
+              const bundleId = app.signed_by?.[0]
+              return {
+                name: app._name,
+                path: app.path,
+                icon: icon ? `data:image/png;base64,${icon}` : '',
+                bundleId: bundleId,
+                uniqueId: bundleId || app.path,
+                lastModified: new Date(app.lastModified)
+              }
+            })
+
+          const settledApps = await Promise.allSettled(appPromises)
+
+          const successfulApps = settledApps
+            .filter((result) => result.status === 'fulfilled' && result.value)
+            .map((result) => (result as PromiseFulfilledResult<any>).value)
+
+          resolve(successfulApps)
+        } catch (parseError) {
+          reject(new Error(`Failed to parse system_profiler JSON output: ${parseError}`))
+        }
+      }
+    )
+  })
+}
+
+// Helper to parse plist content with regex
+function getValueFromPlist(content: string, key: string): string | null {
+  const regex = new RegExp(`<key>${key}</key>\\s*<string>(.*?)</string>`)
+  const match = content.match(regex)
+  return match ? match[1] : null
+}
+
+export async function getAppInfo(appPath: string): Promise<{
+  name: string
+  path: string
+  icon: string
+  bundleId: string
+  uniqueId: string
+  lastModified: Date
+} | null> {
+  try {
+    if (!appPath.endsWith('.app')) {
+      return null
     }
-  }
 
-  console.log(`[Darwin] Icon processing complete: ${successCount} success, ${failCount} failed`);
+    const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+    const stats = await fs.stat(appPath)
+    const plistContent = await fs.readFile(plistPath, 'utf-8')
 
-  apps = apps.map((app: any) => {
-    const appName: any = app.path.split('/').pop();
-    const extname = path.extname(appName);
-    const appSubStr = appName.split(extname)[0];
-    let fileOptions = {
-      ...app,
-      type: 'app',
-      value: 'plugin',
-      desc: app.path,
-      pluginType: 'app',
-      push: false,
-      action: `open ${app.path.replace(/ /g, '\\ ') as string}`,
-      keyWords: [appSubStr],
-    };
+    const displayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
+    const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
+    const name = displayName || bundleName || path.basename(appPath, '.app')
+    
+    const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
 
-    if (app._name && isZhRegex.test(app._name)) {
-      // const [, pinyinArr] = translate(app._name);
-      // const firstLatter = pinyinArr.map((py) => py[0]);
-      // // 拼音
-      // fileOptions.keyWords.push(pinyinArr.join(''));
-      // // 缩写
-      // fileOptions.keyWords.push(firstLatter.join(''));
-      // 中文
-      fileOptions.keyWords.push(app._name);
+    const icon = await getAppIcon({ name, path: appPath })
+
+    return {
+      name,
+      path: appPath,
+      icon: icon ? `data:image/png;base64,${icon}` : '',
+      bundleId,
+      uniqueId: bundleId || appPath,
+      lastModified: stats.mtime
     }
-
-    fileOptions = {
-      ...fileOptions,
-      name: app._name,
-      names: [app._name, appSubStr], // Include both full name and name without extension
-    };
-    return fileOptions;
-  });
-
-  return apps;
-};
+  } catch (error) {
+    // This can happen if the .app bundle is incomplete during copy
+    console.warn(`[Darwin] Failed to get app info for ${appPath}, likely incomplete or invalid bundle. Error: ${error instanceof Error ? error.message : error}`)
+    return null
+  }
+}

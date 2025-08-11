@@ -1,13 +1,10 @@
 <script name="App" lang="ts" setup>
 import AppLayout from '~/views/layout/AppLayout.vue'
-import {
-  // applicationUpgrade,
-  // clipBoardResolver,
-  // dropperResolver,
-  // urlHooker,
-  usePlugin,
-  usePlugins
-} from '~/modules/hooks/application-hooks'
+import {} from // applicationUpgrade,
+// clipBoardResolver,
+// dropperResolver,
+// urlHooker,
+'~/modules/hooks/application-hooks'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import { isCoreBox } from '@talex-touch/utils/renderer'
@@ -22,8 +19,6 @@ async function init(): Promise<void> {
     return
   }
 
-  usePlugins()
-  usePlugin()
   // applicationUpgrade()
   // clipBoardResolver()
   // dropperResolver()
@@ -35,7 +30,7 @@ async function init(): Promise<void> {
 </script>
 
 <template>
-  <AppEntrance @ready="init">
+  <AppEntrance :on-ready="init">
     <AppLayout>
       <template #title>
         TalexTouch
