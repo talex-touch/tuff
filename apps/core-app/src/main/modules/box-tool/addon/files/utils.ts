@@ -12,7 +12,11 @@ import {
 } from './constants'
 import { TuffItem } from '@core-box/tuff'
 
-export async function scanDirectory(dirPath: string): Promise<ScannedFileInfo[]> {
+export async function scanDirectory(dirPath: string, excludePaths?: Set<string>): Promise<ScannedFileInfo[]> {
+  if (excludePaths?.has(dirPath)) {
+    return []
+  }
+
   const dirName = path.basename(dirPath)
   if (BLACKLISTED_DIRS.has(dirName) || dirName.startsWith('.')) {
     return []
@@ -30,8 +34,12 @@ export async function scanDirectory(dirPath: string): Promise<ScannedFileInfo[]>
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name)
 
+    if (excludePaths?.has(fullPath)) {
+      continue
+    }
+
     if (entry.isDirectory()) {
-      files.push(...(await scanDirectory(fullPath)))
+      files.push(...(await scanDirectory(fullPath, excludePaths)))
     } else if (entry.isFile()) {
       const fileName = entry.name
       const fileExtension = path.extname(fileName).toLowerCase()

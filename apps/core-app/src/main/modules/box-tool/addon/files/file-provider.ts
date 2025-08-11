@@ -24,6 +24,7 @@ class FileProvider implements ISearchProvider {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
   private readonly WATCH_PATHS: string[]
+  private databaseFilePath: string | null = null
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -48,6 +49,9 @@ class FileProvider implements ISearchProvider {
 
   async onLoad(context: ProviderContext): Promise<void> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    // Store the database file path to exclude it from scanning
+    // Assuming the database file is named 'database.db' and located in the user data directory.
+    this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
     if (!this.isInitializing) {
       this.isInitializing = this._initialize()
     }
@@ -59,6 +63,7 @@ class FileProvider implements ISearchProvider {
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
+    const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
 
     // --- 1. Index Cleanup (FR-IX-4) ---
     console.log('[FileProvider] Cleaning up indexes from removed watch paths...')
@@ -66,12 +71,16 @@ class FileProvider implements ISearchProvider {
       .select({ path: filesSchema.path, id: filesSchema.id })
       .from(filesSchema)
       .where(eq(filesSchema.type, 'file'))
-    const filesToDelete = allDbFilePaths
-      .filter((file) => !this.WATCH_PATHS.some((watchPath) => file.path.startsWith(watchPath)))
+    const filesToDelete = allDbFilePaths.filter(
+      (file) => !this.WATCH_PATHS.some((watchPath) => file.path.startsWith(watchPath))
+    )
 
     if (filesToDelete.length > 0) {
-      const idsToDelete = filesToDelete.map(f => f.id)
-      console.log(`[FileProvider] Deleting ${idsToDelete.length} files from removed paths. Sample:`, filesToDelete.slice(0, 5).map(f => f.path))
+      const idsToDelete = filesToDelete.map((f) => f.id)
+      console.log(
+        `[FileProvider] Deleting ${idsToDelete.length} files from removed paths. Sample:`,
+        filesToDelete.slice(0, 5).map((f) => f.path)
+      )
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       const pathsToDelete = filesToDelete.map((f) => f.path)
       await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
@@ -84,14 +93,16 @@ class FileProvider implements ISearchProvider {
     const newPathsToScan = this.WATCH_PATHS.filter((p) => !completedScanPaths.has(p))
     const reconciliationPaths = this.WATCH_PATHS.filter((p) => completedScanPaths.has(p))
 
-    console.log(`[FileProvider] Scan Strategy: ${newPathsToScan.length} new paths for full scan, ${reconciliationPaths.length} existing paths for reconciliation.`)
+    console.log(
+      `[FileProvider] Scan Strategy: ${newPathsToScan.length} new paths for full scan, ${reconciliationPaths.length} existing paths for reconciliation.`
+    )
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
       console.log('[FileProvider] Starting full scan for new paths:', newPathsToScan)
       for (const newPath of newPathsToScan) {
         console.log(`[FileProvider] Scanning new path: ${newPath}`)
-        const diskFiles = await scanDirectory(newPath)
+        const diskFiles = await scanDirectory(newPath, excludePathsSet)
         const newFileRecords = diskFiles.map((file) => ({
           ...file,
           extension: path.extname(file.name).toLowerCase(),
@@ -104,7 +115,9 @@ class FileProvider implements ISearchProvider {
           const chunkSize = 500
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
             const chunk = newFileRecords.slice(i, i + chunkSize)
-            console.log(`[FileProvider] Full scan for ${newPath}: Inserting chunk ${i / chunkSize + 1}/${Math.ceil(newFileRecords.length / chunkSize)}...`)
+            console.log(
+              `[FileProvider] Full scan for ${newPath}: Inserting chunk ${i / chunkSize + 1}/${Math.ceil(newFileRecords.length / chunkSize)}...`
+            )
             const inserted = await db.insert(filesSchema).values(chunk).returning()
             await this.processFileExtensions(inserted)
           }
@@ -124,7 +137,7 @@ class FileProvider implements ISearchProvider {
 
       const diskFiles: ScannedFileInfo[] = []
       for (const dir of reconciliationPaths) {
-        diskFiles.push(...(await scanDirectory(dir)))
+        diskFiles.push(...(await scanDirectory(dir, excludePathsSet)))
       }
       const diskFileMap = new Map(diskFiles.map((file) => [file.path, file]))
       console.log(`[FileProvider] Found ${diskFileMap.size} files on disk for reconciliation.`)
@@ -147,12 +160,20 @@ class FileProvider implements ISearchProvider {
         .map((file) => file.id)
 
       if (deletedFileIds.length > 0) {
-        console.log(`[FileProvider] Deleting ${deletedFileIds.length} missing files. Sample:`, Array.from(dbFileMap.values()).slice(0, 5).map(f => f.path))
+        console.log(
+          `[FileProvider] Deleting ${deletedFileIds.length} missing files. Sample:`,
+          Array.from(dbFileMap.values())
+            .slice(0, 5)
+            .map((f) => f.path)
+        )
         await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
       }
 
       if (filesToUpdate.length > 0) {
-        console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files. Sample:`, filesToUpdate.slice(0, 5).map(f => f.path))
+        console.log(
+          `[FileProvider] Updating ${filesToUpdate.length} modified files. Sample:`,
+          filesToUpdate.slice(0, 5).map((f) => f.path)
+        )
         for (const file of filesToUpdate) {
           await db
             .update(filesSchema)
@@ -167,7 +188,10 @@ class FileProvider implements ISearchProvider {
       }
 
       if (filesToAdd.length > 0) {
-        console.log(`[FileProvider] Adding ${filesToAdd.length} new files during reconciliation. Sample:`, filesToAdd.slice(0, 5).map(f => f.path))
+        console.log(
+          `[FileProvider] Adding ${filesToAdd.length} new files during reconciliation. Sample:`,
+          filesToAdd.slice(0, 5).map((f) => f.path)
+        )
         const newFileRecords = filesToAdd.map((file) => ({
           ...file,
           extension: path.extname(file.name).toLowerCase(),
@@ -190,7 +214,6 @@ class FileProvider implements ISearchProvider {
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
     if (!this.dbUtils) return
     if (files.length === 0) return
-    console.log(`[FileProvider] Processing extensions for ${files.length} files...`)
 
     const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
     for (const file of files) {
@@ -310,6 +333,17 @@ class FileProvider implements ISearchProvider {
           match: pinyinMatchScore,
           recency: lastUsedScore,
           frequency: frequencyScore
+        }
+
+        if (matchResult) {
+          tuffItem.meta = {
+            ...tuffItem.meta,
+            extension: {
+              ...tuffItem.meta?.extension,
+              matchResult: [matchResult[0], matchResult[1]],
+              from: this.id
+            }
+          }
         }
 
         return tuffItem

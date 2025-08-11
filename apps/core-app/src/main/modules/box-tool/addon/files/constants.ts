@@ -75,7 +75,14 @@ export const BLACKLISTED_DIRS = new Set([
 
 export const BLACKLISTED_FILES_PREFIX = new Set(['.'])
 export const BLACKLISTED_FILES_SUFFIX = new Set(['~'])
-export const BLACKLISTED_EXTENSIONS = new Set(['.tmp', '.temp', '.log', '.app'])
+export const BLACKLISTED_EXTENSIONS = new Set([
+  '.tmp',
+  '.temp',
+  '.log',
+  '.app',
+  '.db',
+  '.db-journal'
+])
 
 export const WHITELISTED_EXTENSIONS = new Set([
   // Docs
