@@ -77,9 +77,7 @@
       "indexes": {
         "contextual_embeddings_session_id_unique": {
           "name": "contextual_embeddings_session_id_unique",
-          "columns": [
-            "session_id"
-          ],
+          "columns": ["session_id"],
           "isUnique": true
         }
       },
@@ -179,22 +177,15 @@
           "name": "file_extensions_file_id_files_id_fk",
           "tableFrom": "file_extensions",
           "tableTo": "files",
-          "columnsFrom": [
-            "file_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["file_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "file_extensions_file_id_key_pk": {
-          "columns": [
-            "file_id",
-            "key"
-          ],
+          "columns": ["file_id", "key"],
           "name": "file_extensions_file_id_key_pk"
         }
       },
@@ -288,9 +279,7 @@
       "indexes": {
         "files_path_unique": {
           "name": "files_path_unique",
-          "columns": [
-            "path"
-          ],
+          "columns": ["path"],
           "isUnique": true
         }
       },
@@ -367,10 +356,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "plugin_data_plugin_id_key_pk": {
-          "columns": [
-            "plugin_id",
-            "key"
-          ],
+          "columns": ["plugin_id", "key"],
           "name": "plugin_data_plugin_id_key_pk"
         }
       },

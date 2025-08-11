@@ -8,6 +8,7 @@ import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { coreBoxManager } from './manager'
 
 const windowAnimation = useWindowAnimation()
 
@@ -88,6 +89,13 @@ export class WindowManager {
       this.windows = this.windows.filter((w) => w !== window)
       clipboardManager.unregisterWindow(window)
       console.log('[CoreBox] BoxWindow closed!')
+    })
+
+    window.window.on('blur', () => {
+      const settings = this.getAppSettingConfig()
+      if (settings.tools.autoHide) {
+        coreBoxManager.trigger(false)
+      }
     })
 
     console.log('[CoreBox] NewBox created, WebContents loaded!')
