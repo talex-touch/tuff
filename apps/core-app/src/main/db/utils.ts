@@ -78,14 +78,14 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
     },
 
     // Usage Summary
-    async upsertUsageSummary(itemId: string) {
+    async incrementUsageSummary(itemId: string) {
       return db
         .insert(schema.usageSummary)
         .values({ itemId, clickCount: 1, lastUsed: new Date() })
         .onConflictDoUpdate({
           target: schema.usageSummary.itemId,
           set: {
-            // clickCount: sql`${schema.usageSummary.clickCount} + 1`,
+            clickCount: sql`${schema.usageSummary.clickCount} + 1`,
             lastUsed: new Date()
           }
         })
@@ -129,7 +129,7 @@ export type DbUtils = {
   getFileExtensions: (fileId: number) => Promise<any[]>
   addEmbedding: (embedding: typeof schema.embeddings.$inferInsert) => Promise<any>
   addUsageLog: (log: typeof schema.usageLogs.$inferInsert) => Promise<any>
-  upsertUsageSummary: (itemId: string) => Promise<any>
+  incrementUsageSummary: (itemId: string) => Promise<any>
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>
 }

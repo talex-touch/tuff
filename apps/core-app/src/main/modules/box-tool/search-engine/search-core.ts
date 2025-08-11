@@ -8,6 +8,8 @@ import { TouchApp } from '../../../core/touch-core'
 import { databaseManager } from '../../database'
 import storage from '../../../core/storage'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
+import { createDbUtils, DbUtils } from '../../../db/utils'
+import crypto from 'crypto'
 
 export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   private static _instance: SearchEngineCore
@@ -19,6 +21,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   private sorter: Sorter
   private activatedProviderIds: Set<string> | null = null
   private currentGatherController: IGatherController | null = null
+  private dbUtils: DbUtils | null = null
 
   private touchApp: TouchApp | null = null
 
@@ -124,7 +127,10 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     }
 
     const startTime = Date.now()
-    console.debug('[SearchEngineCore] search `' + query.text + '`')
+    const sessionId = crypto.randomUUID()
+    console.debug(`[SearchEngineCore] search \`${query.text}\` (Session: ${sessionId})`)
+
+    this._recordSearchUsage(sessionId, query)
 
     const providersToSearch = this.getActiveProviders()
     const allItems: TuffItem[] = []
@@ -151,17 +157,74 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
           )
           const duration = Date.now() - startTime
 
-          const searchResult = TuffFactory.createSearchResult(query)
+          const searchResult: TuffSearchResult = TuffFactory.createSearchResult(query)
             .setItems(sortedItems)
             .setDuration(duration)
             .setSources(finalSourceStats)
             .setSortStats(sort_stats)
             .build()
+
+          searchResult.sessionId = sessionId
+
           resolve(searchResult)
         }
       })
       this.currentGatherController = gatherController
     })
+  }
+
+  private _getItemId(item: TuffItem): string {
+    if (!item.id) {
+      console.error('[SearchEngineCore] Item is missing a required `id` for usage tracking.', item)
+      throw new Error('Item is missing a required `id` for usage tracking.')
+    }
+    return item.id
+  }
+
+  private async _recordSearchUsage(sessionId: string, query: TuffQuery): Promise<void> {
+    if (!this.dbUtils) return
+
+    try {
+      await this.dbUtils.addUsageLog({
+        sessionId,
+        itemId: 'search_session', // Special ID for the search event itself
+        source: 'system',
+        action: 'search',
+        keyword: query.text,
+        timestamp: new Date(),
+        context: JSON.stringify(query.context || {})
+      })
+      console.debug(`[SearchEngineCore] Recorded search session ${sessionId}`)
+    } catch (error) {
+      console.error('[SearchEngineCore] Failed to record search usage.', error)
+    }
+  }
+
+  public async recordExecute(sessionId: string, item: TuffItem): Promise<void> {
+    if (!this.dbUtils) return
+
+    const itemId = this._getItemId(item)
+
+    try {
+      await this.dbUtils.addUsageLog({
+        sessionId,
+        itemId,
+        source: item.source.type,
+        action: 'execute',
+        keyword: '', // Keyword is not relevant for an execute action
+        timestamp: new Date(),
+        context: JSON.stringify({
+          scoring: item.scoring
+        })
+      })
+
+      // Atomically increment the click count and update the last used timestamp
+      await this.dbUtils.incrementUsageSummary(itemId)
+
+      console.debug(`[SearchEngineCore] Recorded execute for item ${itemId} in session ${sessionId}`)
+    } catch (error) {
+      console.error(`[SearchEngineCore] Failed to record execute usage for item ${itemId}.`, error)
+    }
   }
 
   maintain(): void {
@@ -173,13 +236,18 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   init(touchApp: TouchApp): void {
-    SearchEngineCore._instance.touchApp = touchApp
-    SearchEngineCore._instance.registerDefaults()
+    const instance = SearchEngineCore.getInstance()
+
+    instance.touchApp = touchApp
+    instance.registerDefaults()
+
+    const db = databaseManager.getDb()
+    instance.dbUtils = createDbUtils(db)
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
       console.log('[SearchEngineCore] All modules loaded, start loading providers...')
-      this.providersToLoad.forEach((provider) => SearchEngineCore._instance.loadProvider(provider))
-      this.providersToLoad = []
+      instance.providersToLoad.forEach((provider) => instance.loadProvider(provider))
+      instance.providersToLoad = []
     })
   }
 

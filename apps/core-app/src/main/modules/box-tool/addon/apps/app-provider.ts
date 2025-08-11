@@ -1,6 +1,14 @@
-import { ISearchProvider, ProviderContext, TuffItem, TuffQuery } from '../../search-engine/types'
+import {
+  IExecuteArgs,
+  ISearchProvider,
+  ProviderContext,
+  TuffItem,
+  TuffQuery
+} from '../../search-engine/types'
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
+import { shell } from 'electron'
+import searchEngineCore from '../../search-engine/search-core'
 import path from 'path'
 import fs from 'fs'
 import FileSystemWatcher from '../../../file-system-watcher'
@@ -323,23 +331,46 @@ class AppProvider implements ISearchProvider {
     }
   }
 
-  onExecute(item: TuffItem): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const appPath = item.meta?.app?.path
-      if (!appPath) {
-        const err = new Error('Application path not found in TuffItem')
-        console.error(err)
-        return reject(err)
-      }
-      const action = `open -a "${appPath}"`
-      exec(action, (err) => {
-        if (err) {
-          console.error(`Failed to execute action: ${action}`, err)
-          return reject(err)
-        }
-        resolve()
+  async onExecute(args: IExecuteArgs): Promise<void> {
+    const { item, searchResult } = args
+    const { sessionId } = searchResult
+
+    if (sessionId) {
+      // Fire-and-forget usage recording
+      searchEngineCore.recordExecute(sessionId, item).catch((err) => {
+        console.error('[AppProvider] Failed to record execution.', err)
       })
-    })
+    } else {
+      console.warn('[AppProvider] Session ID not found, cannot record execution.')
+    }
+
+    const appPath = item.meta?.app?.path
+    if (!appPath) {
+      const err = new Error('Application path not found in TuffItem')
+      console.error(err)
+      throw err
+    }
+
+    // Use Electron's shell.openPath for a more robust cross-platform way to open apps
+    try {
+      await shell.openPath(appPath)
+    } catch (err) {
+      console.error(`Failed to open application at: ${appPath}`, err)
+      // Fallback to exec for macOS if shell fails
+      if (this.isMac) {
+        return new Promise((resolve, reject) => {
+          const action = `open -a "${appPath}"`
+          exec(action, (execErr) => {
+            if (execErr) {
+              console.error(`Fallback exec failed to execute action: ${action}`, execErr)
+              return reject(execErr)
+            }
+            resolve()
+          })
+        })
+      }
+      throw err
+    }
   }
 
   async onSearch(query: TuffQuery): Promise<TuffItem[]> {

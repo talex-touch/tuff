@@ -1,7 +1,11 @@
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchApp, TouchApp } from '../../../core/touch-core'
 import { coreBoxManager } from './manager'
-import { TuffItem, TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import {
+  TuffItem,
+  TuffQuery,
+  TuffSearchResult
+} from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import { windowManager } from './window'
 
 /**
@@ -82,8 +86,12 @@ export class IpcManager {
       ChannelType.MAIN,
       'core-box:execute',
       async ({ data, reply }) => {
-        const { item } = data as { item: TuffItem }
-        const result = await coreBoxManager.execute(item)
+        const { item, searchResult } = data as { item: TuffItem; searchResult: TuffSearchResult }
+        if (!item || !searchResult) {
+          console.error('[IPC] Invalid payload for core-box:execute. `item` and `searchResult` are required.')
+          return reply(DataCode.ERROR, '`item` and `searchResult` are required.')
+        }
+        const result = await coreBoxManager.execute(item, searchResult)
         reply(DataCode.SUCCESS, result)
       }
     )

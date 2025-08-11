@@ -43,6 +43,8 @@ export interface SortStat {
 export interface TuffSearchResult extends TuffSearchResultBase {
   /** Optional statistics about the sorting process. */
   sort_stats?: SortStat[]
+  /** Unique identifier for the search session. */
+  sessionId?: string
 }
 
 /**
@@ -68,6 +70,11 @@ export interface ISortMiddleware {
  * Defines the contract for any module that provides search results to the engine.
  * It's a simplified, stateless interface focused solely on providing results for a given query.
  */
+export interface IExecuteArgs {
+  item: TuffItem
+  searchResult: TuffSearchResult
+}
+
 export interface ISearchProvider {
   /**
    * Unique identifier for the provider, e.g., "mac-applications", "file-system", "clipboard-history"
@@ -109,9 +116,9 @@ export interface ISearchProvider {
 
   /**
    * Optional method to execute an item.
-   * @param item The TuffItem to execute.
+   * @param args The arguments for execution, including the item and search context.
    */
-  onExecute?(item: TuffItem): any
+  onExecute?(args: IExecuteArgs): any
 
   /**
    * Optional method to load provider.

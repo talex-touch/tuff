@@ -104,7 +104,7 @@ function handleTogglePin(): void {
         :key="index"
         :active="boxOptions.focus === index"
         :item="item"
-        @trigger="handleExecute"
+        @trigger="handleExecute(item)"
         @mousemove="boxOptions.focus = index"
       />
     </TouchScroll>

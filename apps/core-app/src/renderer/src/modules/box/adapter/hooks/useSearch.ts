@@ -2,17 +2,19 @@ import { ref, watch, computed } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
-import { TuffItem } from '@talex-touch/utils'
+import { TuffItem, TuffSearchResult } from '@talex-touch/utils'
 
 export function useSearch(boxOptions: IBoxOptions) {
   const searchVal = ref('')
   const select = ref(-1)
   const res = ref<Array<TuffItem>>([])
+  const searchResult = ref<TuffSearchResult | null>(null)
   const loading = ref(false)
 
   const debouncedSearch = useDebounceFn(async () => {
     if (!searchVal.value) {
       res.value = []
+      searchResult.value = null
       boxOptions.data = {}
       return
     }
@@ -20,7 +22,8 @@ export function useSearch(boxOptions: IBoxOptions) {
     try {
       const query = { text: searchVal.value, mode: boxOptions.mode }
       console.log('search', query)
-      const result = await touchChannel.send('core-box:query', { query })
+      const result: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+      searchResult.value = result
       res.value = result.items.map((item: TuffItem) => {
         if (item.render && !item.render.completion) {
           item.render.completion = item.render.basic?.title ?? ''
@@ -30,6 +33,7 @@ export function useSearch(boxOptions: IBoxOptions) {
     } catch (error) {
       console.error('Search failed:', error)
       res.value = []
+      searchResult.value = null
     } finally {
       loading.value = false
     }
@@ -40,10 +44,25 @@ export function useSearch(boxOptions: IBoxOptions) {
     debouncedSearch()
   }
 
-  async function handleExecute(item: TuffItem): Promise<void> {
+  async function handleExecute(item?: TuffItem): Promise<void> {
+    const itemToExecute = item || activeItem.value
+    if (!itemToExecute) {
+      console.warn('[useSearch] handleExecute called without an item.')
+      return
+    }
+    if (!searchResult.value) {
+      console.warn('[useSearch] handleExecute called without a searchResult context.')
+      // Fallback for safety, though it won't be tracked
+      await touchChannel.send('core-box:execute', { item: JSON.parse(JSON.stringify(itemToExecute)) })
+      return
+    }
+
     loading.value = true
     try {
-      await touchChannel.send('core-box:execute', { item: JSON.parse(JSON.stringify(item)) })
+      await touchChannel.send('core-box:execute', {
+        item: JSON.parse(JSON.stringify(itemToExecute)),
+        searchResult: JSON.parse(JSON.stringify(searchResult.value))
+      })
       searchVal.value = ''
     } catch (error) {
       console.error('Execute failed:', error)

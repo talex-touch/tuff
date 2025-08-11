@@ -1,5 +1,5 @@
 import { SearchEngineCore } from '../search-engine/search-core'
-import { TuffItem, TuffQuery } from '../search-engine/types'
+import { TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { windowManager } from './window'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
@@ -86,11 +86,13 @@ export class CoreBoxManager {
     }
   }
 
-  public async execute(item: TuffItem) {
-    const provider = this.searchEngine.getActiveProviders().find((p) => p.id === item.from)
+  public async execute(item: TuffItem, searchResult: TuffSearchResult) {
+    const providerId = item.source.id
+    const provider = this.searchEngine.getActiveProviders().find((p) => p.id === providerId)
+
     if (!provider) {
       console.warn(
-        `[CoreBoxManager] No provider found for item: ${item.from}`,
+        `[CoreBoxManager] No provider found for item with source ID: ${providerId}`,
         item,
         this.searchEngine.getActiveProviders()
       )
@@ -98,11 +100,11 @@ export class CoreBoxManager {
     }
 
     if (!provider.onExecute) {
-      console.warn(`[CoreBoxManager] No execute method found for provider`, provider)
+      console.warn(`[CoreBoxManager] No onExecute method found for provider: ${provider.id}`)
       return null
     }
 
-    return provider.onExecute(item)
+    return provider.onExecute({ item, searchResult })
   }
 }
 
