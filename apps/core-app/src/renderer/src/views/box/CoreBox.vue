@@ -1,7 +1,6 @@
 <script setup lang="ts" name="CoreBox">
 import { reactive, ref } from 'vue'
 import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
-import BoxItem from './BoxItem.vue'
 import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
 import { appSetting } from '~/modules/channel/storage'
@@ -68,6 +67,18 @@ useChannel(boxOptions, res)
 function handleTogglePin(): void {
   appSetting.tools.autoHide = !appSetting.tools.autoHide
 }
+
+const addon = computed(() => {
+  if (!activeItem.value) return
+
+  const item = activeItem.value
+
+  if (item.kind === 'file') {
+    return 'preview'
+  }
+
+  return
+})
 </script>
 
 <template>
@@ -97,8 +108,8 @@ function handleTogglePin(): void {
     </div>
   </div>
 
-  <div class="CoreBoxRes">
-    <TouchScroll ref="scrollbar">
+  <div class="CoreBoxRes flex">
+    <TouchScroll ref="scrollbar" class="scroll-area" :class="{ compressed: !!addon }">
       <CoreBoxRender
         v-for="(item, index) in res"
         :key="index"
@@ -108,6 +119,7 @@ function handleTogglePin(): void {
         @mousemove="boxOptions.focus = index"
       />
     </TouchScroll>
+    <TuffItemAddon :type="addon" :item="activeItem" />
   </div>
 </template>
 
@@ -135,7 +147,7 @@ div.CoreBoxRes {
   position: absolute;
   display: none;
 
-  flex-direction: column;
+  flex-direction: row;
 
   top: 60px;
 
@@ -147,6 +159,15 @@ div.CoreBoxRes {
 
   .core-box & {
     display: flex;
+  }
+
+  .scroll-area {
+    width: 100%;
+    transition: width 0.3s ease;
+  }
+
+  .scroll-area.compressed {
+    width: 40%;
   }
 }
 
