@@ -1,6 +1,8 @@
 import { ISearchProvider, ProviderContext, TuffItem, TuffQuery } from '../../search-engine/types'
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
+import path from 'path'
+import FileSystemWatcher from '../../../file-system-watcher'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
 import { eq, inArray } from 'drizzle-orm'
@@ -28,6 +30,16 @@ class AppProvider implements ISearchProvider {
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
+  private readonly isMac = process.platform === 'darwin'
+
+  private WATCH_PATHS = this.isMac
+    ? ['/Applications', path.join(process.env.HOME || '', 'Applications')]
+    : [
+        // For Windows, common installation directories.
+        path.join(process.env.PROGRAMFILES || '', '.'),
+        path.join(process.env['PROGRAMFILES(X86)'] || '', '.'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs')
+      ]
 
   async onLoad(context: ProviderContext): Promise<void> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
@@ -35,6 +47,7 @@ class AppProvider implements ISearchProvider {
       this.isInitializing = this._initialize()
     }
     this._subscribeToFSEvents()
+    this._registerWatchPaths()
     await this.isInitializing
   }
 
@@ -179,11 +192,21 @@ class AppProvider implements ISearchProvider {
     console.log('[AppProvider] Unsubscribed from file system events.')
   }
 
+  private _registerWatchPaths(): void {
+    console.log('[AppProvider] Registering watch paths with FileSystemWatcher...')
+    for (const p of this.WATCH_PATHS) {
+      const depth = this.isMac && (p === '/Applications' || p.endsWith('/Applications')) ? 1 : 4
+      // Intentionally not awaited to not block startup
+      FileSystemWatcher.addPath(p, depth)
+    }
+  }
+
   private handleFileAddedOrChanged = async (
     event: FileAddedEvent | FileChangedEvent
   ): Promise<void> => {
+    console.log(`[AppProvider] Received ${event.constructor.name} event.`)
     const { filePath } = event
-    console.log(`[AppProvider] File added or changed: ${filePath}`)
+    console.log(`[AppProvider] Processing file added or changed: ${filePath}`)
     if (!this.dbUtils) return
 
     const appInfo = await this.getAppInfoByPath(filePath)
@@ -230,8 +253,9 @@ class AppProvider implements ISearchProvider {
   }
 
   private handleFileUnlinked = async (event: FileUnlinkedEvent): Promise<void> => {
+    console.log(`[AppProvider] Received FileUnlinkedEvent event.`)
     const { filePath } = event
-    console.log(`[AppProvider] File unlinked: ${filePath}`)
+    console.log(`[AppProvider] Processing file unlinked: ${filePath}`)
     if (!this.dbUtils) return
 
     const fileToDelete = await this.dbUtils.getFileByPath(filePath)

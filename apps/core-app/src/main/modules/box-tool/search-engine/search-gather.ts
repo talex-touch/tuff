@@ -150,7 +150,7 @@ export function getGatheredItems(
      * @param result - The newly arrived array of results.
      */
     const onNewResultArrived = (result: TuffItem[], providerId: string): void => {
-      console.log(`[Gather] Received ${result.length} items from provider: ${providerId}`)
+      console.debug(`[Gather] Received ${result.length} items from provider: ${providerId}`)
       allResults.push(...result)
       pushBuffer.push(...result)
 

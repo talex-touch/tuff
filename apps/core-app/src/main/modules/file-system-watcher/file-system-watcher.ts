@@ -1,6 +1,5 @@
 import type { TalexTouch } from '@talex-touch/utils'
 import * as chokidar from 'chokidar'
-import path from 'path'
 import fs from 'fs/promises'
 import { dialog } from 'electron'
 import {
@@ -13,34 +12,22 @@ import {
 
 const isMac = process.platform === 'darwin'
 
-// Paths to watch for application changes
-const WATCH_PATHS = isMac
-  ? ['/Applications', path.join(process.env.HOME || '', 'Applications')]
-  : [
-      // For Windows, common installation directories.
-      // Note: This is not exhaustive and might need user configuration in the future.
-      path.join(process.env.PROGRAMFILES || '', '.'),
-      path.join(process.env['PROGRAMFILES(X86)'] || '', '.'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs')
-    ]
-
 /**
  * A module that watches the file system for application installations,
  * updates, and uninstalls, and emits events on the touchEventBus.
+ * It manages multiple chokidar instances to handle different watch depths.
  */
-
 class FileSystemWatcher implements TalexTouch.IModule {
   private static _instance: FileSystemWatcher
 
   name: symbol = Symbol('FileSystemWatcher')
-  private watcher: chokidar.FSWatcher | null = null
+  private watchers: Map<number, chokidar.FSWatcher> = new Map()
   private watchedPaths: Set<string> = new Set()
 
   constructor() {
     if (FileSystemWatcher._instance) {
       throw new Error('[FileSystemWatcher] Singleton class cannot be instantiated more than once.')
     }
-
     FileSystemWatcher._instance = this
   }
 
@@ -48,7 +35,6 @@ class FileSystemWatcher implements TalexTouch.IModule {
     if (!this._instance) {
       this._instance = new FileSystemWatcher()
     }
-
     return this._instance
   }
 
@@ -71,7 +57,6 @@ class FileSystemWatcher implements TalexTouch.IModule {
       buttons: ['Open Folder Picker', 'Cancel']
     })
 
-    // response is the index of the button clicked. 0 is 'Open Folder Picker', 1 is 'Cancel'.
     if (response === 1) {
       console.warn(`[FileSystemWatcher] User cancelled access request for ${p}`)
       return false
@@ -85,9 +70,6 @@ class FileSystemWatcher implements TalexTouch.IModule {
 
     if (filePaths && filePaths.length > 0) {
       console.log(`[FileSystemWatcher] Access granted to ${filePaths[0]}`)
-      // For sandboxed apps, this grants persistent access. We don't need to
-      // verify the path, as the user granting *any* path is the point.
-      // For non-sandboxed, this is just a formality.
       return true
     }
 
@@ -95,7 +77,55 @@ class FileSystemWatcher implements TalexTouch.IModule {
     return false
   }
 
-  public async addPath(p: string): Promise<void> {
+  private getOrCreateWatcher(depth: number): chokidar.FSWatcher {
+    if (this.watchers.has(depth)) {
+      return this.watchers.get(depth)!
+    }
+
+    const newWatcher = chokidar.watch([], {
+      persistent: true,
+      ignoreInitial: true,
+      depth: depth,
+      awaitWriteFinish: {
+        stabilityThreshold: 2000,
+        pollInterval: 100
+      }
+    })
+
+    newWatcher
+      .on('add', (filePath: string) => {
+        console.log(`[FileSystemWatcher] Raw 'add' event from chokidar for path: ${filePath}`)
+        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_ADDED...`)
+        touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(filePath))
+      })
+      .on('addDir', (dirPath: string) => {
+        console.log(`[FileSystemWatcher] Raw 'addDir' event from chokidar for path: ${dirPath}`)
+        // On macOS, adding an app is adding a directory. Treat it as a file add.
+        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_ADDED for directory...`)
+        touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(dirPath))
+      })
+      .on('change', (filePath: string) => {
+        console.log(`[FileSystemWatcher] Raw 'change' event from chokidar for path: ${filePath}`)
+        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_CHANGED...`)
+        touchEventBus.emit(TalexEvents.FILE_CHANGED, new FileChangedEvent(filePath))
+      })
+      .on('unlink', (filePath: string) => {
+        console.log(`[FileSystemWatcher] Raw 'unlink' event from chokidar for path: ${filePath}`)
+        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_UNLINKED...`)
+        touchEventBus.emit(TalexEvents.FILE_UNLINKED, new FileUnlinkedEvent(filePath))
+      })
+      .on('ready', () => {
+        console.log(`[FileSystemWatcher] Watcher with depth ${depth} is ready.`)
+      })
+      .on('error', (error) => {
+        console.error(`[FileSystemWatcher] Watcher error with depth ${depth}:`, error)
+      })
+
+    this.watchers.set(depth, newWatcher)
+    return newWatcher
+  }
+
+  public async addPath(p: string, depth: number = isMac ? 1 : 4): Promise<void> {
     if (this.watchedPaths.has(p)) {
       console.log(`[FileSystemWatcher] Path already being watched: ${p}`)
       return
@@ -107,8 +137,8 @@ class FileSystemWatcher implements TalexTouch.IModule {
         console.warn(`[FileSystemWatcher] Path is not a directory, skipping: ${p}`)
         return
       }
-    } catch (error) {
-      console.warn(`[FileSystemWatcher] Path does not exist, skipping: ${p}`, error)
+    } catch {
+      // Path likely doesn't exist, ignore for now.
       return
     }
 
@@ -119,57 +149,26 @@ class FileSystemWatcher implements TalexTouch.IModule {
       }
     }
 
-    this.watcher?.add(p)
+    const watcher = this.getOrCreateWatcher(depth)
+    watcher.add(p)
     this.watchedPaths.add(p)
-    console.log(`[FileSystemWatcher] Now watching path: ${p}`)
+    console.log(`[FileSystemWatcher] Now watching path: ${p} with depth: ${depth}`)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async init(app: TalexTouch.TouchApp, manager: TalexTouch.IModuleManager): Promise<void> {
-    console.log('[FileSystemWatcher] Initializing...')
-
-    FileSystemWatcher._instance.watcher = chokidar.watch([], {
-      // Start with no paths
-      ignored: isMac ? /(^|[/\\])\../ : /^(?!.*\.exe$).*/,
-      persistent: true,
-      ignoreInitial: true,
-      depth: isMac ? 4 : undefined,
-      awaitWriteFinish: {
-        stabilityThreshold: 2000,
-        pollInterval: 100
-      }
-    })
-
-    FileSystemWatcher._instance.watcher
-      .on('add', (filePath: string) => {
-        console.log(`[FileSystemWatcher] File added: ${filePath}`)
-        touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(filePath))
-      })
-      .on('change', (filePath: string) => {
-        console.log(`[FileSystemWatcher] File changed: ${filePath}`)
-        touchEventBus.emit(TalexEvents.FILE_CHANGED, new FileChangedEvent(filePath))
-      })
-      .on('unlink', (filePath: string) => {
-        console.log(`[FileSystemWatcher] File unlinked: ${filePath}`)
-        touchEventBus.emit(TalexEvents.FILE_UNLINKED, new FileUnlinkedEvent(filePath))
-      })
-      .on('ready', () => {
-        console.log('[FileSystemWatcher] Initialized and ready to watch for changes.')
-      })
-
-    // Asynchronously add initial paths
-    for (const p of WATCH_PATHS) {
-      FileSystemWatcher._instance.addPath(p) // Intentionally not awaited
-    }
+    console.debug('[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.')
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   destroy(app: TalexTouch.TouchApp, manager: TalexTouch.IModuleManager): void {
     console.log('[FileSystemWatcher] Destroying...')
-    if (this.watcher) {
-      this.watcher.close()
-      console.log('[FileSystemWatcher] Watcher stopped.')
-    }
+    this.watchers.forEach((watcher, depth) => {
+      watcher.close()
+      console.log(`[FileSystemWatcher] Watcher with depth ${depth} stopped.`)
+    })
+    this.watchers.clear()
+    this.watchedPaths.clear()
   }
 }
 
