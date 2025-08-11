@@ -5,10 +5,11 @@ import { windowManager } from './window'
 /**
  * @class ShortcutManager
  * @description
- * 管理全局快捷键。
+ * Manage core-box global shortcuts.
  */
 export class ShortcutManager {
   private static instance: ShortcutManager
+  private lastScreenId: number | undefined
 
   private constructor() {
     //
@@ -21,28 +22,30 @@ export class ShortcutManager {
     return ShortcutManager.instance
   }
 
-  public register() {
+  public register(): void {
     globalShortcut.register('CommandOrControl+E', () => {
-      const curScreen = windowManager['getCurScreen']()
-      // This is a bit of a hack, we should expose lastWindow in a better way
-      // @ts-ignore
-      if (coreBoxManager.lastWindow && curScreen && curScreen.id !== coreBoxManager.lastWindow.id) {
-        const currentWindow = windowManager.current
-        if (currentWindow) {
-          windowManager.updatePosition(currentWindow)
-          // @ts-ignore
-          coreBoxManager.lastWindow = curScreen
+      const curScreen = windowManager.getCurScreen()
+
+      if (coreBoxManager.showCoreBox) {
+        if (this.lastScreenId === curScreen.id) {
+          coreBoxManager.trigger(false)
         } else {
-          console.error('[CoreBox] No current window available')
+          const currentWindow = windowManager.current
+          if (currentWindow) {
+            windowManager.updatePosition(currentWindow, curScreen)
+            this.lastScreenId = curScreen.id
+          } else {
+            console.error('[CoreBox] No current window available')
+          }
         }
       } else {
-        // @ts-ignore
-        coreBoxManager.trigger(!coreBoxManager.showCoreBox)
+        coreBoxManager.trigger(true)
+        this.lastScreenId = curScreen.id
       }
     })
   }
 
-  public unregister() {
+  public unregister(): void {
     globalShortcut.unregisterAll()
   }
 }

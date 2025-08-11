@@ -100,8 +100,10 @@ export class WindowManager {
   /**
    * 根据当前屏幕和鼠标位置更新窗口位置。
    */
-  public updatePosition(window: TouchWindow): void {
-    const curScreen = this.getCurScreen()
+  public updatePosition(window: TouchWindow, curScreen?: Electron.Display): void {
+    if (!curScreen) {
+      curScreen = this.getCurScreen()
+    }
     if (!curScreen || !curScreen.bounds) {
       console.error('[CoreBox] Invalid screen object:', curScreen)
       return
@@ -182,7 +184,7 @@ export class WindowManager {
     console.debug('[CoreBox] Shrunk.')
   }
 
-  private getCurScreen(): Electron.Display {
+  public getCurScreen(): Electron.Display {
     try {
       const cursorPoint = screen.getCursorScreenPoint()
       const curScreen = screen.getDisplayNearestPoint(cursorPoint)
