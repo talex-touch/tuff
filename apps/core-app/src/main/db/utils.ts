@@ -1,6 +1,6 @@
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from './schema'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 
 const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
   return {
@@ -90,6 +90,13 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           }
         })
     },
+    async getUsageSummaryByItemIds(itemIds: string[]) {
+      if (itemIds.length === 0) return []
+      return db
+        .select()
+        .from(schema.usageSummary)
+        .where(inArray(schema.usageSummary.itemId, itemIds))
+    },
 
     // Plugin Data
     async getPluginData(pluginId: string, key: string) {
@@ -130,6 +137,9 @@ export type DbUtils = {
   addEmbedding: (embedding: typeof schema.embeddings.$inferInsert) => Promise<any>
   addUsageLog: (log: typeof schema.usageLogs.$inferInsert) => Promise<any>
   incrementUsageSummary: (itemId: string) => Promise<any>
+  getUsageSummaryByItemIds: (
+    itemIds: string[]
+  ) => Promise<(typeof schema.usageSummary.$inferSelect)[]>
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>
 }

@@ -377,8 +377,6 @@ class AppProvider implements ISearchProvider {
     if (!this.dbUtils) {
       return []
     }
-    // For instant response, we don't await. The background sync will catch up.
-    // await this.isInitializing
 
     const db = this.dbUtils.getDb()
 
@@ -387,44 +385,95 @@ class AppProvider implements ISearchProvider {
         .select()
         .from(filesSchema)
         .where(eq(filesSchema.type, 'app'))
-        .limit(20)
+        .limit(20) // Consider making this configurable
       const appsWithExtensions = await this.fetchExtensionsForFiles(recentApps)
       return appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
     }
 
-    // Fallback to pinyin search on all apps
+    // 1. Get all apps and their usage data
     const allApps = await db.select().from(filesSchema).where(eq(filesSchema.type, 'app'))
     const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
+    const appItemIds = appsWithExtensions.map((app) => app.path)
 
+    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(appItemIds)
+    const usageMap = new Map(usageSummaries.map((s) => [s.itemId, s]))
+
+    // 2. Pre-calculate max values for normalization
+    const maxClickCount = Math.max(1, ...Array.from(usageMap.values()).map((s) => s.clickCount))
+
+    // 3. Define scoring weights
+    const weights = {
+      match: 0.5,
+      frequency: 0.3,
+      recency: 0.2
+    }
+
+    // 4. Map, score, and sort
     const searchResults = appsWithExtensions
       .map((app) => {
         const title = app.name
         if (!title) return null
 
+        // --- Match Score ---
         const keyWords = [app.name, app.path.split('/').pop()?.split('.')[0] || '']
         const searchKeyWords = [...new Set(keyWords)].filter(Boolean)
+        let matchResult: [number, number] | false = false
 
         for (const keyWord of searchKeyWords) {
-          const matchResult = PinyinMatch.match(keyWord, query.text)
-          if (matchResult && matchResult.length > 0) {
-            const score = 1 - matchResult[0] / title.length
-            const tuffItem = this.mapAppToTuffItem(app)
-            const updatedItem: TuffItem = {
-              ...tuffItem,
-              scoring: { ...tuffItem.scoring, match: score, final: score },
-              meta: {
-                ...tuffItem.meta,
-                extension: {
-                  ...tuffItem.meta?.extension,
-                  matchResult: [matchResult[0], matchResult[1]],
-                  from: this.id
-                }
-              }
-            }
-            return { item: updatedItem, score }
+          const res = PinyinMatch.match(keyWord, query.text)
+          if (res && res.length > 0) {
+            matchResult = res
+            break
           }
         }
-        return null
+
+        if (!matchResult) {
+          return null
+        }
+
+        const matchScore = 1 - matchResult[0] / title.length
+
+        // --- Usage Scores ---
+        const summary = usageMap.get(app.path)
+        let frequencyScore = 0
+        let recencyScore = 0
+
+        if (summary) {
+          // Frequency Score (normalized)
+          frequencyScore = Math.log(summary.clickCount + 1) / Math.log(maxClickCount + 1)
+
+          // Recency Score (exponential decay)
+          const daysSinceLastExecution =
+            (new Date().getTime() - new Date(summary.lastUsed).getTime()) / (1000 * 3600 * 24)
+          const decayConstant = 0.1
+          recencyScore = Math.exp(-decayConstant * daysSinceLastExecution)
+        }
+
+        // --- Final Score ---
+        const finalScore =
+          weights.match * matchScore +
+          weights.frequency * frequencyScore +
+          weights.recency * recencyScore
+
+        const tuffItem = this.mapAppToTuffItem(app)
+        const updatedItem: TuffItem = {
+          ...tuffItem,
+          scoring: {
+            match: matchScore,
+            frequency: frequencyScore,
+            recency: recencyScore,
+            final: finalScore
+          },
+          meta: {
+            ...tuffItem.meta,
+            extension: {
+              ...tuffItem.meta?.extension,
+              matchResult: [matchResult[0], matchResult[1]],
+              from: this.id
+            }
+          }
+        }
+        return { item: updatedItem, score: finalScore }
       })
       .filter((result): result is { item: TuffItem; score: number } => result !== null)
       .sort((a, b) => b.score - a.score)
