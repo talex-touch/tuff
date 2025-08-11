@@ -11,6 +11,7 @@ import fs from 'fs/promises'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema } from '../../../../db/schema'
 import { eq, like } from 'drizzle-orm'
+import PinyinMatch from 'pinyin-match'
 
 interface ScannedFileInfo {
   path: string
@@ -22,6 +23,80 @@ class FileProvider implements ISearchProvider {
   readonly id = 'file-provider'
   readonly name = 'File Provider'
   readonly type = 'file' as const
+
+  // --- V2 Filtering ---
+  private readonly BLACKLISTED_DIRS = new Set([
+    'node_modules',
+    '.git',
+    '.svn',
+    '.hg',
+    '.npm',
+    '.yarn',
+    '.m2',
+    'dist',
+    'build',
+    'target',
+    'out',
+    'bin',
+    'cache',
+    '.cache',
+    '.vscode',
+    '.idea'
+  ])
+  private readonly BLACKLISTED_FILES_PREFIX = new Set(['.'])
+  private readonly BLACKLISTED_FILES_SUFFIX = new Set(['~'])
+  private readonly BLACKLISTED_EXTENSIONS = new Set(['.tmp', '.temp', '.log'])
+
+  private readonly WHITELISTED_EXTENSIONS = new Set([
+    // Docs
+    '.txt',
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.xls',
+    '.xlsx',
+    '.ppt',
+    '.pptx',
+    '.rtf',
+    '.md',
+    // Media
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.bmp',
+    '.mp4',
+    '.avi',
+    '.mkv',
+    '.mov',
+    '.wmv',
+    '.flv',
+    '.mp3',
+    '.wav',
+    '.flac',
+    // Archives
+    '.zip',
+    '.rar',
+    '.7z',
+    '.tar',
+    '.gz',
+    '.bz2',
+    // Data
+    '.csv',
+    '.json',
+    '.xml',
+    '.yaml',
+    '.yml',
+    // Ebooks
+    '.epub',
+    '.mobi',
+    // Installers
+    '.exe',
+    '.msi',
+    '.dmg',
+    '.deb',
+    '.rpm'
+  ])
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
@@ -108,23 +183,43 @@ class FileProvider implements ISearchProvider {
   }
 
   private async scanDirectory(dirPath: string): Promise<ScannedFileInfo[]> {
+    const dirName = path.basename(dirPath)
+    if (this.BLACKLISTED_DIRS.has(dirName) || dirName.startsWith('.')) {
+      return []
+    }
+
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
     const files: ScannedFileInfo[] = []
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name)
+
       if (entry.isDirectory()) {
-        // Recursively scan subdirectories.
         files.push(...(await this.scanDirectory(fullPath)))
       } else if (entry.isFile()) {
-        try {
-          const stats = await fs.stat(fullPath)
-          files.push({
-            path: fullPath,
-            name: entry.name,
-            mtime: stats.mtime
-          })
-        } catch (error) {
-          console.error(`[FileProvider] Could not stat file ${fullPath}:`, error)
+        const fileName = entry.name
+        const fileExtension = path.extname(fileName).toLowerCase()
+
+        // Blacklist checks
+        if (
+          fileName.startsWith('.') ||
+          fileName.endsWith('~') ||
+          this.BLACKLISTED_EXTENSIONS.has(fileExtension)
+        ) {
+          continue
+        }
+
+        // Whitelist check
+        if (this.WHITELISTED_EXTENSIONS.has(fileExtension)) {
+          try {
+            const stats = await fs.stat(fullPath)
+            files.push({
+              path: fullPath,
+              name: fileName,
+              mtime: stats.mtime
+            })
+          } catch (error) {
+            console.error(`[FileProvider] Could not stat file ${fullPath}:`, error)
+          }
         }
       }
     }
@@ -138,7 +233,6 @@ class FileProvider implements ISearchProvider {
     const db = this.dbUtils.getDb()
     const searchTerm = query.text.trim()
 
-    // If search term is empty, we could return recent files, but for MVP let's return nothing.
     if (!searchTerm) {
       return []
     }
@@ -147,9 +241,62 @@ class FileProvider implements ISearchProvider {
       .select()
       .from(filesSchema)
       .where(like(filesSchema.name, `%${searchTerm}%`))
-      .limit(50) // Limit results for performance
+      .limit(100)
 
-    return searchResults.map((file) => this.mapFileToTuffItem(file))
+    const itemIds = searchResults.map((file) => file.path)
+    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(itemIds)
+    const usageMap = new Map(usageSummaries.map((s) => [s.itemId, s]))
+
+    const weights = {
+      pinyinMatch: 0.5,
+      lastUsed: 0.25,
+      frequency: 0.15,
+      lastModified: 0.1
+    }
+
+    const now = new Date().getTime()
+
+    const scoredResults = searchResults
+      .map((file) => {
+        const summary = usageMap.get(file.path)
+
+        // --- Pinyin Match Score ---
+        const matchResult = PinyinMatch.match(file.name, searchTerm)
+        const pinyinMatchScore = matchResult ? 1 - matchResult[0] / file.name.length : 0
+
+        // --- Time-based Scores (Recency & Mtime) ---
+        const lastUsed = summary ? new Date(summary.lastUsed).getTime() : 0
+        const lastModified = new Date(file.mtime).getTime()
+
+        const daysSinceLastUsed = (now - lastUsed) / (1000 * 3600 * 24)
+        const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
+
+        const lastUsedScore = lastUsed > 0 ? Math.exp(-0.1 * daysSinceLastUsed) : 0
+        const lastModifiedScore = Math.exp(-0.05 * daysSinceLastModified)
+
+        // --- Frequency Score ---
+        const frequencyScore = summary ? Math.log10(summary.clickCount + 1) : 0
+
+        // --- Final Score ---
+        const finalScore =
+          weights.pinyinMatch * pinyinMatchScore +
+          weights.lastUsed * lastUsedScore +
+          weights.frequency * frequencyScore +
+          weights.lastModified * lastModifiedScore
+
+        const tuffItem = this.mapFileToTuffItem(file)
+        tuffItem.scoring = {
+          final: finalScore,
+          match: pinyinMatchScore,
+          recency: lastUsedScore,
+          frequency: frequencyScore
+        }
+
+        return tuffItem
+      })
+      .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
+
+    return scoredResults
   }
 
   async onExecute(args: IExecuteArgs): Promise<void> {
