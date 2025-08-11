@@ -2,17 +2,12 @@ import { ISearchProvider, ProviderContext, TuffItem, TuffQuery } from '../../sea
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
 import path from 'path'
+import fs from 'fs'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
 import { eq, inArray } from 'drizzle-orm'
-import {
-  touchEventBus,
-  TalexEvents,
-  FileAddedEvent,
-  FileChangedEvent,
-  FileUnlinkedEvent
-} from '../../../../core/eventbus/touch-event'
+import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
 
 interface ScannedAppInfo {
   name: string
@@ -31,6 +26,7 @@ class AppProvider implements ISearchProvider {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
   private readonly isMac = process.platform === 'darwin'
+  private processingPaths: Set<string> = new Set()
 
   private WATCH_PATHS = this.isMac
     ? ['/Applications', path.join(process.env.HOME || '', 'Applications')]
@@ -167,28 +163,29 @@ class AppProvider implements ISearchProvider {
   }
 
   private _subscribeToFSEvents(): void {
-    touchEventBus.on(TalexEvents.FILE_ADDED, (event) =>
-      this.handleFileAddedOrChanged(event as FileAddedEvent)
-    )
-    touchEventBus.on(TalexEvents.FILE_CHANGED, (event) =>
-      this.handleFileAddedOrChanged(event as FileChangedEvent)
-    )
-    touchEventBus.on(TalexEvents.FILE_UNLINKED, (event) =>
-      this.handleFileUnlinked(event as FileUnlinkedEvent)
-    )
+    if (this.isMac) {
+      touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
+      touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
+    } else {
+      // For Windows/Linux, we might still care about file events
+      touchEventBus.on(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
+      touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
+    }
+
+    // Changed event can be for both files and directories (e.g., app update)
+    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
+
     console.log('[AppProvider] Subscribed to file system events.')
   }
 
   private _unsubscribeFromFSEvents(): void {
-    touchEventBus.off(TalexEvents.FILE_ADDED, (event) =>
-      this.handleFileAddedOrChanged(event as FileAddedEvent)
-    )
-    touchEventBus.off(TalexEvents.FILE_CHANGED, (event) =>
-      this.handleFileAddedOrChanged(event as FileChangedEvent)
-    )
-    touchEventBus.off(TalexEvents.FILE_UNLINKED, (event) =>
-      this.handleFileUnlinked(event as FileUnlinkedEvent)
-    )
+    // Unsubscribe from all possible events to be safe
+    touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
+    touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
+    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
+    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
+    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
+
     console.log('[AppProvider] Unsubscribed from file system events.')
   }
 
@@ -201,71 +198,128 @@ class AppProvider implements ISearchProvider {
     }
   }
 
-  private handleFileAddedOrChanged = async (
-    event: FileAddedEvent | FileChangedEvent
-  ): Promise<void> => {
-    console.log(`[AppProvider] Received ${event.constructor.name} event.`)
-    const { filePath } = event
-    console.log(`[AppProvider] Processing file added or changed: ${filePath}`)
-    if (!this.dbUtils) return
+  private async _waitForItemStable(itemPath: string, delay = 500, retries = 5): Promise<boolean> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const size1 = (await fs.promises.stat(itemPath)).size
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        const size2 = (await fs.promises.stat(itemPath)).size
 
-    const appInfo = await this.getAppInfoByPath(filePath)
-    if (!appInfo) {
-      console.warn(`[AppProvider] Could not get app info for path: ${filePath}`)
+        if (size1 === size2) {
+          console.log(`[AppProvider] Item ${itemPath} is stable.`)
+          return true
+        }
+        console.log(`[AppProvider] Item ${itemPath} is still changing size. Retrying...`)
+      } catch (error) {
+        console.warn(`[AppProvider] Error checking item stability for ${itemPath}:`, error)
+        // If file is deleted during check, stop trying
+        return false
+      }
+    }
+    console.warn(`[AppProvider] Item ${itemPath} did not stabilize after ${retries} retries.`)
+    return false
+  }
+
+  private handleItemAddedOrChanged = async (event: any): Promise<void> => {
+    if (!event || !event.filePath) {
       return
     }
+    let appPath = event.filePath
+    if (this.isMac) {
+      if (appPath.includes('.app/')) {
+        appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
+      }
+      if (!appPath.endsWith('.app')) {
+        return
+      }
+    }
 
-    const db = this.dbUtils.getDb()
-    const existingApp = await this.dbUtils.getFileByPath(filePath)
+    if (this.processingPaths.has(appPath)) {
+      return
+    }
+    this.processingPaths.add(appPath)
 
-    if (existingApp) {
-      // Update existing app
-      await db
-        .update(filesSchema)
-        .set({
-          name: appInfo.name,
-          mtime: appInfo.lastModified
-        })
-        .where(eq(filesSchema.id, existingApp.id))
-      await this.dbUtils.addFileExtensions([
-        { fileId: existingApp.id, key: 'bundleId', value: appInfo.bundleId || '' },
-        { fileId: existingApp.id, key: 'icon', value: appInfo.icon }
-      ])
-      console.log(`[AppProvider] Updated app: ${appInfo.name}`)
-    } else {
-      // Add new app
-      const [newFile] = await db
-        .insert(filesSchema)
-        .values({
-          path: appInfo.path,
-          name: appInfo.name,
-          type: 'app' as const,
-          mtime: appInfo.lastModified,
-          ctime: new Date()
-        })
-        .returning()
-      await this.dbUtils.addFileExtensions([
-        { fileId: newFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-        { fileId: newFile.id, key: 'icon', value: appInfo.icon }
-      ])
-      console.log(`[AppProvider] Added new app: ${appInfo.name}`)
+    try {
+      const isStable = await this._waitForItemStable(appPath)
+      if (!isStable) {
+        return
+      }
+
+      const appInfo = await this.getAppInfoByPath(appPath)
+      if (!appInfo) {
+        console.warn(`[AppProvider] Could not get app info for stable path: ${appPath}`)
+        return
+      }
+
+      const db = this.dbUtils!.getDb()
+      const existingApp = await this.dbUtils!.getFileByPath(appPath)
+
+      if (existingApp) {
+        await db
+          .update(filesSchema)
+          .set({ name: appInfo.name, mtime: appInfo.lastModified })
+          .where(eq(filesSchema.id, existingApp.id))
+        await this.dbUtils!.addFileExtensions([
+          { fileId: existingApp.id, key: 'bundleId', value: appInfo.bundleId || '' },
+          { fileId: existingApp.id, key: 'icon', value: appInfo.icon }
+        ])
+        console.log(`[AppProvider] Updated app: ${appInfo.name}`)
+      } else {
+        const [newFile] = await db
+          .insert(filesSchema)
+          .values({
+            path: appInfo.path,
+            name: appInfo.name,
+            type: 'app' as const,
+            mtime: appInfo.lastModified,
+            ctime: new Date()
+          })
+          .returning()
+        await this.dbUtils!.addFileExtensions([
+          { fileId: newFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
+          { fileId: newFile.id, key: 'icon', value: appInfo.icon }
+        ])
+        console.log(`[AppProvider] Added new app: ${appInfo.name}`)
+      }
+    } finally {
+      this.processingPaths.delete(appPath)
     }
   }
 
-  private handleFileUnlinked = async (event: FileUnlinkedEvent): Promise<void> => {
-    console.log(`[AppProvider] Received FileUnlinkedEvent event.`)
-    const { filePath } = event
-    console.log(`[AppProvider] Processing file unlinked: ${filePath}`)
-    if (!this.dbUtils) return
+  private handleItemUnlinked = async (event: any): Promise<void> => {
+    if (!event || !event.filePath) {
+      return
+    }
+    let appPath = event.filePath
+    if (this.isMac) {
+      if (appPath.includes('.app/')) {
+        appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
+      }
+      if (!appPath.endsWith('.app')) {
+        return // Ignore
+      }
+    }
 
-    const fileToDelete = await this.dbUtils.getFileByPath(filePath)
-    if (fileToDelete) {
-      await this.dbUtils.getDb().delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
-      await this.dbUtils
-        .getDb()
-        .delete(fileExtensions)
-        .where(eq(fileExtensions.fileId, fileToDelete.id))
-      console.log(`[AppProvider] Deleted app from DB: ${filePath}`)
+    if (this.processingPaths.has(appPath)) {
+      return
+    }
+    this.processingPaths.add(appPath)
+
+    try {
+      console.log(`[AppProvider] Processing file unlinked: ${appPath}`)
+      if (!this.dbUtils) return
+
+      const fileToDelete = await this.dbUtils.getFileByPath(appPath)
+      if (fileToDelete) {
+        await this.dbUtils.getDb().delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
+        await this.dbUtils
+          .getDb()
+          .delete(fileExtensions)
+          .where(eq(fileExtensions.fileId, fileToDelete.id))
+        console.log(`[AppProvider] Deleted app from DB: ${appPath}`)
+      }
+    } finally {
+      this.processingPaths.delete(appPath)
     }
   }
 

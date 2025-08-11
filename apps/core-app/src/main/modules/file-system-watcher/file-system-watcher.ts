@@ -7,7 +7,9 @@ import {
   TalexEvents,
   FileAddedEvent,
   FileChangedEvent,
-  FileUnlinkedEvent
+  FileUnlinkedEvent,
+  DirectoryAddedEvent,
+  DirectoryUnlinkedEvent
 } from '../../core/eventbus/touch-event'
 
 const isMac = process.platform === 'darwin'
@@ -94,28 +96,29 @@ class FileSystemWatcher implements TalexTouch.IModule {
 
     newWatcher
       .on('add', (filePath: string) => {
-        console.log(`[FileSystemWatcher] Raw 'add' event from chokidar for path: ${filePath}`)
-        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_ADDED...`)
+        console.debug(`[FileSystemWatcher] Raw 'add' event from chokidar for path: ${filePath}`)
         touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(filePath))
       })
       .on('addDir', (dirPath: string) => {
-        console.log(`[FileSystemWatcher] Raw 'addDir' event from chokidar for path: ${dirPath}`)
-        // On macOS, adding an app is adding a directory. Treat it as a file add.
-        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_ADDED for directory...`)
-        touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(dirPath))
+        console.debug(`[FileSystemWatcher] Raw 'addDir' event from chokidar for path: ${dirPath}`)
+        touchEventBus.emit(TalexEvents.DIRECTORY_ADDED, new DirectoryAddedEvent(dirPath))
       })
       .on('change', (filePath: string) => {
-        console.log(`[FileSystemWatcher] Raw 'change' event from chokidar for path: ${filePath}`)
-        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_CHANGED...`)
+        console.debug(`[FileSystemWatcher] Raw 'change' event from chokidar for path: ${filePath}`)
         touchEventBus.emit(TalexEvents.FILE_CHANGED, new FileChangedEvent(filePath))
       })
       .on('unlink', (filePath: string) => {
-        console.log(`[FileSystemWatcher] Raw 'unlink' event from chokidar for path: ${filePath}`)
-        console.log(`[FileSystemWatcher] Emitting TalexEvents.FILE_UNLINKED...`)
+        console.debug(`[FileSystemWatcher] Raw 'unlink' event from chokidar for path: ${filePath}`)
         touchEventBus.emit(TalexEvents.FILE_UNLINKED, new FileUnlinkedEvent(filePath))
       })
+      .on('unlinkDir', (dirPath: string) => {
+        console.debug(
+          `[FileSystemWatcher] Raw 'unlinkDir' event from chokidar for path: ${dirPath}`
+        )
+        touchEventBus.emit(TalexEvents.DIRECTORY_UNLINKED, new DirectoryUnlinkedEvent(dirPath))
+      })
       .on('ready', () => {
-        console.log(`[FileSystemWatcher] Watcher with depth ${depth} is ready.`)
+        console.debug(`[FileSystemWatcher] Watcher with depth ${depth} is ready.`)
       })
       .on('error', (error) => {
         console.error(`[FileSystemWatcher] Watcher error with depth ${depth}:`, error)
@@ -157,7 +160,9 @@ class FileSystemWatcher implements TalexTouch.IModule {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async init(app: TalexTouch.TouchApp, manager: TalexTouch.IModuleManager): Promise<void> {
-    console.debug('[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.')
+    console.debug(
+      '[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.'
+    )
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

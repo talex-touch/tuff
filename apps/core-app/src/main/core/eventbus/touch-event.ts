@@ -25,7 +25,9 @@ export enum TalexEvents {
   // File System Events
   FILE_ADDED = 'file-system/file-added',
   FILE_CHANGED = 'file-system/file-changed',
-  FILE_UNLINKED = 'file-system/file-unlinked'
+  FILE_UNLINKED = 'file-system/file-unlinked',
+  DIRECTORY_ADDED = 'file-system/directory-added',
+  DIRECTORY_UNLINKED = 'file-system/directory-unlinked'
 }
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
@@ -263,6 +265,24 @@ export class FileChangedEvent implements ITouchEvent<TalexEvents> {
 
 export class FileUnlinkedEvent implements ITouchEvent<TalexEvents> {
   name: TalexEvents = TalexEvents.FILE_UNLINKED
+  filePath: string
+
+  constructor(filePath: string) {
+    this.filePath = filePath
+  }
+}
+
+export class DirectoryAddedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.DIRECTORY_ADDED
+  filePath: string
+
+  constructor(filePath: string) {
+    this.filePath = filePath
+  }
+}
+
+export class DirectoryUnlinkedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.DIRECTORY_UNLINKED
   filePath: string
 
   constructor(filePath: string) {

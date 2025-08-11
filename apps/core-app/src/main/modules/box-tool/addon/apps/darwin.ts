@@ -157,6 +157,13 @@ export async function getApps(): Promise<
   })
 }
 
+// Helper to parse plist content with regex
+function getValueFromPlist(content: string, key: string): string | null {
+  const regex = new RegExp(`<key>${key}</key>\\s*<string>(.*?)</string>`)
+  const match = content.match(regex)
+  return match ? match[1] : null
+}
+
 export async function getAppInfo(appPath: string): Promise<{
   name: string
   path: string
@@ -166,30 +173,19 @@ export async function getAppInfo(appPath: string): Promise<{
   lastModified: Date
 } | null> {
   try {
-    const command = `mdfind "kMDItemKind == 'Application' && kMDItemPath == '${appPath}'" -attr kMDItemDisplayName -attr kMDItemFSName -attr kMDItemCFBundleIdentifier -attr kMDItemContentModificationDate`
-    const stdout = await new Promise<string>((resolve, reject) => {
-      exec(command, { maxBuffer: 1024 * 1024 * 5 }, (error, stdout) => {
-        if (error) return reject(error)
-        resolve(stdout)
-      })
-    })
-
-    const lines = stdout.trim().split('\n')
-    if (lines.length < 2) return null
-
-    const attributes: any = {}
-    for (const line of lines) {
-      const parts = line.split(' = ')
-      if (parts.length === 2) {
-        const key = parts[0].trim()
-        const value = parts[1].trim().replace(/^"|"$/g, '') // Remove quotes
-        attributes[key] = value
-      }
+    if (!appPath.endsWith('.app')) {
+      return null
     }
+
+    const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+    const stats = await fs.stat(appPath)
+    const plistContent = await fs.readFile(plistPath, 'utf-8')
+
+    const displayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
+    const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
+    const name = displayName || bundleName || path.basename(appPath, '.app')
     
-    const name = attributes.kMDItemDisplayName || path.basename(appPath, '.app')
-    const bundleId = attributes.kMDItemCFBundleIdentifier || ''
-    const lastModified = new Date(attributes.kMDItemContentModificationDate || Date.now())
+    const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
 
     const icon = await getAppIcon({ name, path: appPath })
 
@@ -199,10 +195,11 @@ export async function getAppInfo(appPath: string): Promise<{
       icon: icon ? `data:image/png;base64,${icon}` : '',
       bundleId,
       uniqueId: bundleId || appPath,
-      lastModified
+      lastModified: stats.mtime
     }
   } catch (error) {
-    console.error(`[Darwin] Failed to get app info for ${appPath}:`, error)
+    // This can happen if the .app bundle is incomplete during copy
+    console.warn(`[Darwin] Failed to get app info for ${appPath}, likely incomplete or invalid bundle. Error: ${error instanceof Error ? error.message : error}`)
     return null
   }
 }
