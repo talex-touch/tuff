@@ -144,7 +144,8 @@ export type TuffSourceType =
   | 'ai'            // AI 推荐，基于机器学习生成
   | 'history'       // 历史记录，基于用户过往行为
   | 'notification'  // 系统通知，来自系统事件
-  | 'workflow';     // 工作流，用户自定义流程
+  | 'workflow'      // 工作流，用户自定义流程
+  | 'file';         // 文件系统，本地文件
 
 /**
  * 权限级别
