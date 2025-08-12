@@ -22,8 +22,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Downloading PNPM
+        run: npm install -g pnpm
+
       - name: Install Dependencies
-        run: npm install
+        run: pnpm install
 
       - name: build-linux
         if: matrix.os == 'ubuntu-latest'
