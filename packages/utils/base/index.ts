@@ -125,7 +125,7 @@ export enum SupportOS {
   WINDOWS = 'Windows',
   WINDOWS_11 = 'Windows 10 Pro',
   WINDOWS_10 = 'Windows 10',
-  
+
   MACOS = 'macOS',
   MACOS_SONOMA = 'macOS Sonoma',
   MACOS_MONTEREY = 'macOS Monterey',
@@ -154,7 +154,7 @@ export enum SupportOS {
   IPADOS = 'iPadOS',
   IPADOS_17 = 'iPadOS 17',
   IPADOS_16 = 'iPadOS 16',
-  
+
   WEB = 'Web',
   WEB_CHROME = 'Web Chrome',
   WEB_FIREFOX = 'Web Firefox',

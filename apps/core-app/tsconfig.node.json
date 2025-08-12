@@ -1,0 +1,36 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": ["src/main/*"],
+      "@core-box/*": ["packages/utils/core-box/*"],
+      "@talex-touch/utils": ["packages/utils"],
+      "@/common/*": ["packages/utils/common/*"],
+      "@/typings/*": ["packages/typings/*"]
+    },
+    "composite": true,
+    "types": ["electron-vite/node"],
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    // "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noImplicitThis": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    /* Type checking */
+    // "types": ["node", "element-plus/global"],
+    "allowSyntheticDefaultImports": true,
+  },
+  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*"]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@talex-touch/docs",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "serve": "vitepress serve"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "markdown-it": "^14.1.0",
+    "ogl": "^1.0.11",
+    "typeit": "^8.8.7",
+    "vitepress": "2.0.0-alpha.9",
+    "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "fighting-design": "0.25.1",
+    "sass": "^1.89.2",
+    "vite": "^7.0.6"
+  }
+}

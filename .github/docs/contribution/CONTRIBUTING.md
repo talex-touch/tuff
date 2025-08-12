@@ -2,12 +2,9 @@
 
   <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="logo">
 
-  <h1>TalexTouch</h1>
-
-  Design reference <b>TDesignS</b>
+  <h1>Tuff</h1>
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/issues)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Ftalex-touch%2Ftalex-touch?ref=badge_shield)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/talex-touch?style=flat-square)](https://github.com/talex-touch/talex-touch/blob/main/LICENSE)
   [![GitHub release](https://img.shields.io/badge/release-1.2.0-42B883?style=flat-square)](https://github.com/talex-touch/talex-touch/releases)
   [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/talex-touch/discussions/35)
@@ -17,7 +14,7 @@
 
 # Tutorial
 
-`TalexTouch` is at the bud stage, the power of the individual developers is negligible. Therefore, we are very support and agree with you to participate in the project of research and development, maintenance.
+`Tuff` is at the bud stage, the power of the individual developers is negligible. Therefore, we are very support and agree with you to participate in the project of research and development, maintenance.
 
 ## Make a optimization to the project
 
@@ -52,14 +49,14 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
 1. `Commit Message` are supposed to like: prefix(range?): brief description (range is optional)
 2. We use `husky` `commitlint` to ensure your commit message follow our protocols.
 3. You can refer these:
-   - Fix(xxx): message
-   - Feat(xxx): message
-   - Test(xxx): message
-   - Build(xxx): message
-   - Docs(xxx): message
-   - Add(xxx): message
-   - Upd(xxx): message (Update dependencies versions)
-   - Change(xxx): message (The last one to choose) [Fallback]
+   - fix(xxx): message
+   - feat(xxx): message
+   - test(xxx): message
+   - build(xxx): message
+   - docs(xxx): message
+   - add(xxx): message
+   - upd(xxx): message (Update dependencies versions)
+   - change(xxx): message (The last one to choose) [Fallback]
    - More see `commitlint.config.js`
 4. The xxx is what you update and a area or a module:
    - Abstract range like PluginModule
@@ -73,23 +70,20 @@ Sorry! We as much as possible the current primary goal is to optimize the progra
 > Here just list the development need of large probability.
 
 ``` yaml
-  Touch tree helper:
- > talex-touch:
-   ├── app: (Main applications)
-   ├─── core: (Electron application)
-   ├─── docs: (Document application)
-   ├─── ends: (Ends Application) # Abandoned
+   Tuff tree helper:
+ > tuff:
+   ├── apps: (Main applications)
+   ├──── core: (Electron application)
+   ├──── docs: (Document application)
    ├── packages: (Assistant packages)
-   ├─── components: (Touch components)
-   ├─── test: (Util tests)
-   ├─── touch-view: (Component display)
-   ├─── utils: (Assistant Utils)
+   ├──── components: (Tuff components)
+   ├──── utils: (Assistant Utils)
    ├── plugins: (Official plugins)
 ```
 
 ## Collaborator Tutorial
 
-If you received a mysterious blue links from our warehouse，Click it，You became a glorious TalexTouch Collaborator！You could：
+If you received a mysterious blue links from our warehouse，Click it，You became a glorious Tuff Collaborator！You could：
 
 - Have a handsome collaborator in Issues identified
 - Push to the main warehouse directly (you can delete the fork before!)

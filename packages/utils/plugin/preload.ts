@@ -1,4 +1,5 @@
 import { genChannel } from './channel'
+import type { StandardChannelData } from '../channel'
 import './sdk/index'
 
 // window type
@@ -10,7 +11,7 @@ declare global {
     }
     $send: (type: string, data: any) => void
     $sendSync: (type: string, data: any) => Promise<any>
-    $regChannel: (type: string, callback: Function) => void
+    $regChannel: (eventName: string, callback: (data: StandardChannelData) => any) => () => void
     $crash: (message: string, extraData: any) => void
     $config: {
       themeStyle: any

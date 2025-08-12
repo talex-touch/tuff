@@ -1,0 +1,92 @@
+name: Build & Release Tuff App
+
+on:
+  # 手动触发（可在UI界面中选择 snapshot 或 release）
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'snapshot'
+        type: choice
+        options:
+          - snapshot
+          - release
+      target_branch:
+        description: 'Target branch to release (e.g. master)'
+        required: true
+        default: 'master'
+
+  # 监听对 master 分支的 PR
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  release:
+    name: Build and Release Tuff App
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: npm install -g pnpm && pnpm i
+
+      - name: Build Electron App
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
+            pnpm -F core run build:beta
+          elif [ "${{ github.event.inputs.release_type }}" = "snapshot" ]; then
+            pnpm -F core run build:snapshot
+          else
+            pnpm -F core run build:release
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Cleanup Artifacts for Windows
+        if: matrix.os == 'windows-latest'
+        run: npx rimraf "dist/!(*.exe)"
+
+      - name: Cleanup Artifacts for MacOS
+        if: matrix.os == 'macos-latest'
+        run: npx rimraf "dist/!(*.dmg)"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.os }}
+          path: dist
+
+      - name: Release on Tag Push or Manual Release
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_type == 'release'
+        uses: softprops/action-gh-release@v0.1.14
+        with:
+          files: dist/**
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Snapshot Tag Push
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_type == 'snapshot'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag snapshot-${{ github.run_number }}
+          git push origin snapshot-${{ github.run_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}

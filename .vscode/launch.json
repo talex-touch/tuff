@@ -1,37 +1,36 @@
 {
-  // 使用 IntelliSense 了解相关属性。 
-  // 悬停以查看现有属性的描述。
-  // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Debug Main Process",
       "type": "node",
       "request": "launch",
-      "name": "Debug Main Process",
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
-      // "program": "${file}",
-      "autoAttachChildProcesses": true,
-      "cwd": "${workspaceFolder}/app/main",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "-F",
-        "main",
-        "dev",
-        "--sourcemap"
-      ],
+      "cwd": "${workspaceRoot}/apps/core-app",
+      "runtimeExecutable": "${workspaceRoot}/apps/core-app/node_modules/.bin/electron-vite",
+      "windows": {
+        "runtimeExecutable": "${workspaceRoot}/apps/core-app/node_modules/.bin/electron-vite.cmd"
+      },
+      "runtimeArgs": ["--sourcemap"],
       "env": {
-        "REMOTE_DEBUGGING_PORT": "5173"
+        "REMOTE_DEBUGGING_PORT": "9222"
+      }
+    },
+    {
+      "name": "Debug Renderer Process",
+      "port": 9222,
+      "request": "attach",
+      "type": "chrome",
+      "webRoot": "${workspaceFolder}/apps/core-app/src/renderer",
+      "timeout": 60000,
+      "presentation": {
+        "hidden": true
       }
     }
   ],
   "compounds": [
     {
-      "name": "Launch Program",
-      "configurations": [
-        "Debug Main Process",
-      ],
+      "name": "Debug All",
+      "configurations": ["Debug Main Process", "Debug Renderer Process"],
       "presentation": {
         "order": 1
       }

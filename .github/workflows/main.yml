@@ -2,8 +2,8 @@ name: Deploy to Github Pages
 
 on:
   push:
-    branches: 
-     - master
+    branches:
+    - master
 
 
 jobs:
@@ -17,27 +17,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@main
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Install Node.js
         uses: actions/setup-node@main
         with:
-          node-version:  ${{ matrix.node }}
-          
+          node-version: 22.17.0
+
       - name: Downloading PNPM
-        run: npm install -g pnpm  
+        run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm -F docs install --no-frozen-lockfile
-    
+        run: pnpm install
+
       - name: Build VitePress
-        run: pnpm -F docs run build
-      
-      - name: Deploy to Pages
-        run: |
-          cd app/docs/.vitepress/dist 
-          git init
-          git config user.name "GITHUB_AUTO_WORKFLOWS"
-          git config user.email "${{ secrets.GIT_EMAIL }}"
-          git add -A
-          git commit -m 'deploy github-pages automatically'
-          git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch/talex-touch.git master:gh-pages
-          cd -
+        run: pnpm -F @talex-touch/docs run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.ACCESS_TOKEN }}
+          publish_dir: apps/docs/.vitepress/dist
+          publish_branch: gh-pages
+          # dotfiles: true
+
+      # - name: Deploy to Pages
+      #   run: |
+      #     cd apps/docs/.vitepress/dist
+      #     git init
+      #     git config user.name "TalexDreamSoul"
+      #     git config user.email "${{ secrets.GIT_EMAIL }}"
+      #     git add -A
+      #     git commit -m 'deploy github-pages automatically'
+      #     git push -f https://talex-touch:${{ secrets.ACCESS_TOKEN }}@github.com/talex-touch/tuff.git main:gh-pages
+      #     cd -

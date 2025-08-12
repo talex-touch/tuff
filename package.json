@@ -7,30 +7,58 @@
   "private": false,
   "type": "module",
   "engines": {
-    "node": "^14.18.0 || >=16.0.0"
+    "node": ">=22.0.0"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^0.41.0",
-    "@commitlint/cli": "^17.7.1",
-    "@commitlint/config-conventional": "^17.7.0",
-    "@typescript-eslint/parser": "^6.5.0",
-    "eslint": "^8.48.0",
-    "husky": "^8.0.3",
-    "typescript": "^5.2.2",
-    "vite": "^4.4.9",
-    "vitest": "^0.34.3"
+    "@antfu/eslint-config": "^5.0.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "^9.32.0",
+    "husky": "^9.1.7",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.6",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
-    "test:utils": "pnpm -F test run test",
-    "dev:core": "pnpm -F core run dev",
-    "build:docs": "pnpm -F docs run build",
-    "publish:utils": "pnpm -F @talex-touch/utils run publish"
+    "core:dev": "pnpm -F @talex-touch/core-app run dev",
+    "core:build": "pnpm -F @talex-touch/core-app run build",
+    "core:build:beta": "pnpm -F @talex-touch/core-app run build:beta",
+    "core:build:snapshot": "pnpm -F @talex-touch/core-app run build:snapshot",
+    "core:build:release": "pnpm -F @talex-touch/core-app run build:release",
+    "core:build:snapshot:win": "pnpm -F @talex-touch/core-app run build:snapshot:win",
+    "core:build:snapshot:mac": "pnpm -F @talex-touch/core-app run build:snapshot:mac",
+    "core:build:snapshot:linux": "pnpm -F @talex-touch/core-app run build:snapshot:linux",
+    "core:build:docs": "pnpm -F @talex-touch/core-app run build:docs",
+    "docs:dev": "pnpm -F @talex-touch/docs run dev",
+    "docs:build": "pnpm -F @talex-touch/docs run build",
+    "utils:test": " pnpm -F test run test",
+    "utils:publish": "pnpm -F @talex-touch/utils run publish"
   },
   "dependencies": {
-    "vite-plugin-electron": "^0.14.0"
+    "vite-plugin-electron": "^0.29.0"
+  },
+  "volta": {
+    "node": "22.16.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@swc/core",
+      "electron",
+      "electron-clipboard-ex",
+      "esbuild",
+      "extract-file-icon",
+      "simple-git-hooks",
+      "vue-demi"
+    ],
+    "overrides": {
+      "@types/node": "24.1.0",
+      "vite": "7.0.6"
+    }
   }
 }

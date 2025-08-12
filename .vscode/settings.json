@@ -2,26 +2,45 @@
   "cSpell.words": [
     "Adpoter",
     "antfu",
+    "appenders",
     "asar",
     "Attributify",
     "commitlint",
+    "commonmark",
+    "COOLDOWN",
+    "cprocess",
+    "dataurl",
+    "degit",
+    "demi",
     "dispalys",
+    "eventbus",
+    "fossabot",
+    "GITEE",
+    "gsap",
     "httpreferrer",
     "iconify",
+    "intlify",
     "IPADOS",
     "JOLI",
     "KNOPPIX",
     "lotties",
+    "milkdown",
     "nodeintegration",
+    "nord",
     "OPPO",
     "preinstall",
+    "remixicon",
     "saveall",
+    "Shortcon",
     "SONOMA",
+    "Talex",
     "Tencent",
     "Termius",
     "tpex",
     "TVOS",
     "undot",
+    "unocss",
+    "unplugin",
     "vanta",
     "vantajs",
     "VISIONOS",
@@ -35,11 +54,31 @@
     "XANDROS"
   ],
   "debug.console.acceptSuggestionOnEnter": "on",
-  "unocss.root": "app/core",
-  // "prettier.enable": false,
+  "unocss.root": "apps/core-app",
   "editor.formatOnSave": false,
-  "i18n-ally.localesPaths": [
-    "app/core/renderer/assets/languages"
-  ],
-  "vue.codeActions.enabled": false,
+  "i18n-ally.localesPaths": ["apps/core-app/src/renderer/src/assets/languages"],
+  "vue3snippets.enable-compile-vue-file-on-did-save-code": false,
+  "javascript.suggest.autoImports": true,
+  "typescript.suggest.autoImports": true,
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "debug.javascript.defaultRuntimeExecutable": {
+    "pwa-node": "/Users/talexdreamsoul/.local/share/mise/shims/node"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "python.defaultInterpreterPath": "/Users/talexdreamsoul/.local/share/mise/installs/python/3.11.13/bin/python",
+  "workbench.colorCustomizations": {
+    "activityBar.foreground": "#eaf6fd",
+    "statusBarItem.remoteBackground": "#175191",
+    "statusBarItem.remoteForeground": "#eaf6fd",
+  },
+  "java.jdt.ls.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/21.0.2"
 }

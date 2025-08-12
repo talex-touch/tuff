@@ -10,7 +10,7 @@ export enum DataCode {
 }
 
 export interface ITouchChannel {
-  
+
   /**
    * Register a channel
    * @description Register a channel, and return a function to cancel the registration
@@ -27,10 +27,19 @@ export interface ITouchChannel {
    * @param arg {any} The arguments of the message
    */
   send(type: ChannelType, eventName: string, arg?: any): Promise<any>
+
+  /**
+   * Send a message to a channel with settled window
+   * @param win {@link Electron.BrowserWindow} the window you want to sent
+   * @param type {@link ChannelType} The type of channel
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
+   * @param arg {any} The arguments of the message
+   */
+  sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: any): Promise<any>
 }
 
 export interface ITouchClientChannel {
-  
+
   /**
    * Register a channel
    * @description Register a channel, and return a function to cancel the registration
@@ -38,7 +47,7 @@ export interface ITouchClientChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType
    * @param callback {Function} The callback function
    */
-  regChannel(eventName: string, callback: Function): () => void
+  regChannel(eventName: string, callback: (data: StandardChannelData) => any): () => void
 
   /**
    * Send a message to a channel
@@ -72,9 +81,10 @@ export interface RawChannelSyncData {
 }
 
 export interface RawChannelHeaderData {
-  status: 'reply' | 'request'
-  type: ChannelType
-  _originData?: any
+  status: "reply" | "request";
+  type: ChannelType;
+  _originData?: any;
+  event?: Electron.IpcMainEvent | Electron.IpcRendererEvent;
 }
 
 export interface RawChannelData {
@@ -85,10 +95,14 @@ export interface RawChannelData {
 
 export interface RawStandardChannelData extends RawChannelData {
   code: DataCode
-  data?: any
+  data?: IChannelData
   plugin?: string
 }
 
 export interface StandardChannelData extends RawStandardChannelData {
-  reply: (code: DataCode, data: any) => void
+  reply: (code: DataCode, data: IChannelData) => void
 }
+
+export type IChannelData = any //boolean | number | string | null | undefined | {
+  // [prop: string]: any
+// }

@@ -6,6 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
+.DS_Store*
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -34,9 +35,6 @@ bower_components
 
 # node-waf configuration
 .lock-wscript
-
-# Compiled binary addons (https://nodejs.org/api/addons.html)
-build
 
 # Dependency directories
 node_modules/
@@ -122,9 +120,13 @@ dist
 .pnp.*
 release/
 dist/
-talex-touch/
 .idea/
-app/ends/
-plugins/
-.history/
-app/main/dist-electron
+# plugins/
+
+apps/core-app/tuff
+apps/core-app/signature.json
+apps/core-app/src/renderer/src/distinformation.json
+.kilocode/mcp.json
+
+# Local README notes
+readme.local.md
