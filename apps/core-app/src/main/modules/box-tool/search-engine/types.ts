@@ -25,7 +25,7 @@ export interface TuffItem extends TuffItemBase {
   from?: string
 }
 
-export type { TuffQuery }
+export type { TuffQuery, TuffSourceType }
 
 /**
  * Represents the statistics for a single sort middleware.
@@ -117,8 +117,9 @@ export interface ISearchProvider {
   /**
    * Optional method to execute an item.
    * @param args The arguments for execution, including the item and search context.
+   * @returns A promise that resolves to a boolean indicating whether the provider should be activated.
    */
-  onExecute?(args: IExecuteArgs): any
+  onExecute?(args: IExecuteArgs): Promise<boolean>
 
   /**
    * Optional method to load provider.

@@ -6,10 +6,10 @@
       </div>
     </template>
     <template v-else>
-      <el-scrollbar 
+      <el-scrollbar
         ref="elScrollRef"
         v-bind="$attrs"
-        class="el-scroll-wrapper"
+        class="el-scroll-wrapper w-full"
         @scroll="handleScroll"
       >
         <slot></slot>
@@ -19,11 +19,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
 import { ElScrollbar } from 'element-plus'
 
 defineOptions({
-  name: 'TouchScroll',
+  name: 'TouchScroll'
 })
 
 const props = defineProps({
@@ -34,34 +33,24 @@ const props = defineProps({
 })
 
 const emit = defineEmits<{
-  scroll: [scrollInfo: { scrollTop: number, scrollLeft: number }]
+  scroll: [scrollInfo: { scrollTop: number; scrollLeft: number }]
 }>()
 
 const scrollContainer = ref<HTMLElement | null>(null)
 const nativeScrollRef = ref<HTMLElement | null>(null)
 const elScrollRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
 
-const platform = ref<string | null>(null);
-
 const isDarwin = computed(() => {
   if (typeof window === 'undefined') return false
-  
-  if (window.$startupInfo) {
-    return window.$startupInfo.platform === 'darwin';
-  }
-  
-  if (platform.value) {
-    return platform.value === 'darwin';
-  }
-  
-  return false;
+
+  return window.$initInfo.platform === 'darwin'
 })
 
 const useNative = computed(() => {
   return props.native || isDarwin.value
 })
 
-const handleScroll = (event: Event | { scrollTop: number, scrollLeft: number }) => {
+const handleScroll = (event: Event | { scrollTop: number; scrollLeft: number }) => {
   let scrollInfo = {
     scrollTop: 0,
     scrollLeft: 0
@@ -132,33 +121,6 @@ defineExpose({
     }
   }
 })
-
-onMounted(() => {
-  if (typeof window !== 'undefined' && window.$startupInfo) {
-    platform.value = window.$startupInfo.platform;
-    return;
-  }
-  
-  let retryCount = 0;
-  const maxRetries = 5;
-  
-  const retry = () => {
-    if (typeof window !== 'undefined' && window.$startupInfo) {
-      platform.value = window.$startupInfo.platform;
-      return;
-    }
-    
-    if (retryCount < maxRetries) {
-      retryCount++;
-      setTimeout(retry, 100);
-    } else {
-      console.warn('Failed to get startupInfo after', maxRetries, 'attempts');
-      platform.value = 'unknown';
-    }
-  };
-  
-  retry();
-});
 </script>
 
 <style scoped>
@@ -172,7 +134,6 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   overflow: auto;
-  -webkit-overflow-scrolling: touch; /* For mobile devices (smooth scroll) */
 }
 
 .el-scroll-wrapper {
@@ -184,10 +145,5 @@ onMounted(() => {
   width: 0;
   height: 0;
   display: none;
-}
-
-.native-scroll-wrapper {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
 }
 </style>

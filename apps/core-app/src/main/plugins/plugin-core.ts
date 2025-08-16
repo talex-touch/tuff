@@ -18,6 +18,11 @@ import {
   createStorageManager,
   createClipboardManager
 } from '@talex-touch/utils/plugin'
+import {
+  TuffFactory,
+  TuffItemBuilder,
+  TuffUtils
+} from '@talex-touch/utils/core-box/builder/tuff-builder'
 import { TalexTouch } from '../types'
 import fse from 'fs-extra'
 import path from 'path'
@@ -29,8 +34,9 @@ import { getJs, getStyles } from '../utils/plugin-injection'
 import chokidar, { FSWatcher } from 'chokidar'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BrowserWindow, dialog, shell, clipboard, app } from 'electron'
+import { exec } from 'child_process'
 import axios from 'axios'
-import type { ISearchItem } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 import { getCoreBoxWindow } from '../modules/box-tool/core-box'
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger'
 import { loadPluginFeatureContext } from './plugin-feature'
@@ -144,7 +150,7 @@ class TouchPlugin implements ITouchPlugin {
   _windows: Map<number, TouchWindow> = new Map()
 
   // Search Result
-  _searchItems: ISearchItem[] = []
+  _searchItems: TuffItem[] = []
   _lastSearchQuery: string = ''
   _searchTimestamp: number = 0
 
@@ -216,20 +222,20 @@ class TouchPlugin implements ITouchPlugin {
   }
 
   getFeature(featureId: string): IPluginFeature | null {
-    return this.features.find((f) => f.name === featureId) || null
+    return this.features.find((f) => f.id === featureId) || null
   }
 
   getFeatures(): IPluginFeature[] {
     return this.features
   }
 
-  triggerFeature(feature: IPluginFeature, query: any) {
+  triggerFeature(feature: IPluginFeature, query: any): void {
     this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
 
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
   }
 
-  triggerInputChanged(feature: IPluginFeature, query: any) {
+  triggerInputChanged(feature: IPluginFeature, query: any): void {
     this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
 
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query))
@@ -289,7 +295,7 @@ class TouchPlugin implements ITouchPlugin {
     return Promise.resolve(true)
   }
 
-  __getInjections__() {
+  __getInjections__(): any {
     const indexPath = this.__index__()
     const preload = this.__preload__()
 
@@ -366,13 +372,13 @@ class TouchPlugin implements ITouchPlugin {
     return Promise.resolve(true)
   }
 
-  __preload__() {
+  __preload__(): string | undefined {
     const preload = path.join(this.pluginPath, 'preload.js')
 
     return fse.existsSync(preload) ? preload : undefined
   }
 
-  __index__() {
+  __index__(): string | undefined {
     const dev = this.dev && this.dev.enable
 
     if (dev) console.log('[Plugin] Plugin is now dev-mode: ' + this.name)
@@ -380,24 +386,22 @@ class TouchPlugin implements ITouchPlugin {
     return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
 
-  getFeatureEventUtil() {
-    const ins = this
-
+  getFeatureEventUtil(): any {
     return {
-      onFeatureLifeCycle(id: string, callback: ITargetFeatureLifeCycle) {
-        const listeners = ins._featureEvent.get(id) || []
+      onFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => {
+        const listeners = this._featureEvent.get(id) || []
         listeners.push(callback)
-        ins._featureEvent.set(id, listeners)
+        this._featureEvent.set(id, listeners)
       },
-      offFeatureLifeCycle(id: string, callback: ITargetFeatureLifeCycle) {
-        const listeners = ins._featureEvent.get(id) || []
+      offFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => {
+        const listeners = this._featureEvent.get(id) || []
         listeners.splice(listeners.indexOf(callback), 1)
-        ins._featureEvent.set(id, listeners)
+        this._featureEvent.set(id, listeners)
       }
     }
   }
 
-  getFeatureUtil() {
+  getFeatureUtil(): any {
     const pluginPath = this.pluginPath
 
     const http = axios
@@ -409,11 +413,11 @@ class TouchPlugin implements ITouchPlugin {
        * Pushes search items directly to the CoreBox window
        * @param items - Array of search items to display
        */
-      pushItems: (items: ISearchItem[]) => {
+      pushItems: (items: TuffItem[]) => {
         console.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`)
         console.debug(
           `[Plugin ${this.name}] Items to push:`,
-          items.map((item) => ({ name: item.name, type: item.type }))
+          items.map((item) => item.id)
         )
 
         this._searchItems = [...items]
@@ -498,7 +502,7 @@ class TouchPlugin implements ITouchPlugin {
         }
       },
 
-      getItems: (): ISearchItem[] => {
+      getItems: (): TuffItem[] => {
         return [...this._searchItems]
       },
 
@@ -579,11 +583,11 @@ class PluginManager implements IPluginManager {
     return true
   }
 
-  hasPlugin(name: string) {
+  hasPlugin(name: string): boolean {
     return this.plugins.has(name)
   }
 
-  __init__() {
+  __init__(): void {
     if (!fse.existsSync(this.pluginPath)) return
 
     // const plugins = fse.readdirSync(this.pluginPath);
@@ -594,7 +598,7 @@ class PluginManager implements IPluginManager {
     })
 
     this.watcher = chokidar.watch(this.pluginPath, {
-      ignored: /(^|[\/\\])\../,
+      ignored: /(^|[/\\])\../,
       persistent: true,
       depth: 1,
       awaitWriteFinish: {
@@ -795,7 +799,10 @@ class PluginManager implements IPluginManager {
         pkg,
         $util: featureUtil,
         $event: featureEvent,
-        URLSearchParams
+        TuffFactory,
+        TuffUtils,
+        URLSearchParams,
+        TuffItemBuilder: (id: string) => new TuffItemBuilder(id, 'plugin', touchPlugin.name)
       }
 
       const func = loadPluginFeatureContext(
@@ -853,7 +860,7 @@ class PluginManager implements IPluginManager {
 
 let pluginManager: IPluginManager | null = null
 
-export function genPluginManager(pluginPath?: string) {
+export function genPluginManager(pluginPath?: string): IPluginManager {
   if (!pluginManager) pluginManager = new PluginManager(pluginPath!)
 
   return pluginManager!
@@ -971,7 +978,6 @@ export default {
 
       const pluginPath = plugin.pluginPath
 
-      const { exec } = require('child_process')
       exec(`explorer ${pluginPath}`, (err: any) => {
         if (err) {
           console.error(err)
@@ -1025,7 +1031,7 @@ export default {
       const win = touchPlugin._windows.get(data.id)
       if (!win) return { error: 'Window not found!' }
 
-      if (data.hasOwnProperty('visible')) {
+      if (Object.prototype.hasOwnProperty.call(data, 'visible')) {
         data.visible ? win.window.show() : win.window.hide()
       } else win.window.isVisible() ? win.window.hide() : win.window.show()
 
@@ -1046,13 +1052,16 @@ export default {
       function bind2Objs<T extends object, P extends WindowProperty | WebContentsProperty>(
         obj: T,
         property: P
-      ) {
+      ): void {
         Object.keys(property).forEach((k) => {
           const key = k as keyof P
           const v = property[key]
 
-          if (v instanceof Function) (v as Function).apply(obj, v)
-          else Object.assign(obj, { [key]: v })
+          if (typeof v === 'function') {
+            ;(v as (...args: any[]) => any).apply(obj, [])
+          } else {
+            Object.assign(obj, { [key]: v })
+          }
         })
       }
 

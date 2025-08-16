@@ -170,10 +170,7 @@ class FileProvider implements ISearchProvider {
       }
 
       if (filesToUpdate.length > 0) {
-        console.log(
-          `[FileProvider] Updating ${filesToUpdate.length} modified files. Sample:`,
-          filesToUpdate.slice(0, 5).map((f) => f.path)
-        )
+        console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files.`)
         for (const file of filesToUpdate) {
           await db
             .update(filesSchema)
@@ -188,10 +185,7 @@ class FileProvider implements ISearchProvider {
       }
 
       if (filesToAdd.length > 0) {
-        console.log(
-          `[FileProvider] Adding ${filesToAdd.length} new files during reconciliation. Sample:`,
-          filesToAdd.slice(0, 5).map((f) => f.path)
-        )
+        console.log(`[FileProvider] Adding ${filesToAdd.length} new files during reconciliation.`)
         const newFileRecords = filesToAdd.map((file) => ({
           ...file,
           extension: path.extname(file.name).toLowerCase(),
@@ -354,19 +348,20 @@ class FileProvider implements ISearchProvider {
     return scoredResults
   }
 
-  async onExecute(args: IExecuteArgs): Promise<void> {
+  async onExecute(args: IExecuteArgs): Promise<boolean> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) {
       const err = new Error('File path not found in TuffItem')
       console.error(err)
-      throw err
+      return false
     }
 
     try {
       await shell.openPath(filePath)
+      return false
     } catch (err) {
       console.error(`[FileProvider] Failed to open file at: ${filePath}`, err)
-      throw err
+      return false
     }
   }
 }

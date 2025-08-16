@@ -4,6 +4,7 @@ import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { TouchApp } from '../../../core/touch-core'
 import { databaseManager } from '../../database'
@@ -39,6 +40,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     this.sorter.register(tuffSorter)
     this.registerProvider(appProvider)
     this.registerProvider(fileProvider)
+    this.registerProvider(PluginFeaturesAdapter)
   }
 
   static getInstance(): SearchEngineCore {

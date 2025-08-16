@@ -331,7 +331,7 @@ class AppProvider implements ISearchProvider {
     }
   }
 
-  async onExecute(args: IExecuteArgs): Promise<void> {
+  async onExecute(args: IExecuteArgs): Promise<boolean> {
     const { item, searchResult } = args
     const { sessionId } = searchResult
 
@@ -348,7 +348,7 @@ class AppProvider implements ISearchProvider {
     if (!appPath) {
       const err = new Error('Application path not found in TuffItem')
       console.error(err)
-      throw err
+      return false
     }
 
     // Use Electron's shell.openPath for a more robust cross-platform way to open apps
@@ -358,19 +358,19 @@ class AppProvider implements ISearchProvider {
       console.error(`Failed to open application at: ${appPath}`, err)
       // Fallback to exec for macOS if shell fails
       if (this.isMac) {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
           const action = `open -a "${appPath}"`
           exec(action, (execErr) => {
             if (execErr) {
               console.error(`Fallback exec failed to execute action: ${action}`, execErr)
-              return reject(execErr)
+              return resolve(false)
             }
-            resolve()
+            resolve(false)
           })
         })
       }
-      throw err
     }
+    return false
   }
 
   async onSearch(query: TuffQuery): Promise<TuffItem[]> {
