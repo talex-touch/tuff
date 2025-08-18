@@ -25,10 +25,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
         mode: boxOptions.mode
       }
       console.log('search with context', query)
-      
+
       // The initial call now returns a result with a session ID but likely empty items.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
-      
+
       // Store the session ID to track this specific search stream.
       currentSearchId.value = initialResult.sessionId || null
       searchResult.value = initialResult

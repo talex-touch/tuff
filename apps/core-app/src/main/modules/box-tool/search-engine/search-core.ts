@@ -11,6 +11,7 @@ import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { TouchApp } from '../../../core/touch-core'
@@ -210,6 +211,8 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   
     // Keep track of all items received for the final sort.
     let allItems: TuffItem[] = []
+    
+    const touchApp = this.touchApp; // Capture context for use in callback
   
     const gatherController = getGatheredItems(providersToSearch, query, (update) => {
       // A new batch of results has arrived.
@@ -221,15 +224,20 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         const { sortedItems } = this.sorter.sort(newItems, query, gatherController.signal)
         
         // Push incremental updates to the frontend.
-        this.touchApp?.channel.sendTo(
-          this.touchApp.windows.get('core-box')!.window,
-          ChannelType.MAIN,
-          'core-box:search-update',
-          {
-            items: sortedItems,
-            searchId: sessionId, // Use sessionId to identify the search stream
+        if (touchApp) {
+          const coreBoxWindow = windowManager.current?.window;
+          if (coreBoxWindow) {
+            touchApp.channel.sendTo(
+              coreBoxWindow,
+              ChannelType.MAIN,
+              'core-box:search-update',
+              {
+                items: sortedItems,
+                searchId: sessionId, // Use sessionId to identify the search stream
+              }
+            )
           }
-        )
+        }
       }
   
       if (update.sourceStats) {
@@ -255,16 +263,21 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         this.activatedProviders = mergedActivations.size > 0 ? mergedActivations : null
         
         // Notify frontend that the search is complete.
-        this.touchApp?.channel.sendTo(
-          this.touchApp.windows.get('core-box')!.window,
-          ChannelType.MAIN,
-          'core-box:search-end',
-          {
-            searchId: sessionId,
-            activate: this.getActivationState() ?? undefined,
-            sources: finalSourceStats,
+        if (touchApp) {
+          const coreBoxWindow = windowManager.current?.window;
+          if (coreBoxWindow) {
+            touchApp.channel.sendTo(
+              coreBoxWindow,
+              ChannelType.MAIN,
+              'core-box:search-end',
+              {
+                searchId: sessionId,
+                activate: this.getActivationState() ?? undefined,
+                sources: finalSourceStats,
+              }
+            )
           }
-        )
+        }
         console.log(`[SearchEngineCore] SEARCH END. Final activation state:`, this.getActivationState())
       }
     })
