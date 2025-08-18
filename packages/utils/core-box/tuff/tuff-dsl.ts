@@ -1170,6 +1170,9 @@ export interface TuffSearchResult {
 
 export interface IProviderActivate {
   id: string
+  name?: string
+  icon?: TuffIcon
+  time?: number
   meta?: Record<string, any>
 }
 

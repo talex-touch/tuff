@@ -6,10 +6,11 @@
  */
 
 import type {
-  TuffItem as TuffItemBase,
   TuffQuery,
   TuffSearchResult as TuffSearchResultBase,
-  TuffSourceType
+  TuffSourceType,
+  TuffIcon,
+  TuffItem
 } from '@talex-touch/utils/core-box'
 import { TouchApp } from '../../../core/touch-core'
 import { DatabaseManager } from '../../database'
@@ -21,7 +22,7 @@ export interface ProviderContext {
   storageManager: TalexTouch.IModule
 }
 
-export type { TuffItemBase as TuffItem, TuffQuery, TuffSourceType }
+export type { TuffItem, TuffQuery, TuffSourceType }
 
 /**
  * Represents the statistics for a single sort middleware.
@@ -38,6 +39,9 @@ export interface SortStat {
  */
 export interface IProviderActivate {
   id: string
+  name?: string
+  icon?: TuffIcon
+  time?: number
   meta?: Record<string, any>
 }
 

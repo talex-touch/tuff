@@ -417,6 +417,8 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
           // Create a detailed activation object
           const activation: IProviderActivate = {
             id: provider.id,
+            name: provider.name,
+            icon: provider.icon,
             meta: item.meta?.extension || {} // Pass all extension meta for deep activation
           }
           instance.activateProviders([activation])
@@ -425,6 +427,10 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         return instance.getActivationState()
       }
     )
+
+    channel.regChannel(ChannelType.MAIN, 'core-box:get-activated-providers', () => {
+      return instance.getActivationState()
+    })
 
     channel.regChannel(ChannelType.MAIN, 'core-box:deactivate-provider', ({ data }) => {
       instance.deactivateProvider(data.id)
@@ -441,9 +447,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       return providers.map((p) => ({
         id: p.id,
         name: p.name,
-        // Assuming providers have an icon property, which may need to be added.
-        // For now, this part is left as a placeholder.
-        icon: null
+        icon: p.icon
       }))
     })
   }

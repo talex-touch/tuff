@@ -9,7 +9,7 @@
 import AppIcon from '~/assets/logo.svg'
 
 // Import the SearchItem type
-import { SearchItem } from './search-box'
+import { SearchItem } from '@renderer/modules/box/adapter/types'
 
 // Define component props
 interface Props {
@@ -21,8 +21,21 @@ const props = defineProps<Props>()
 // Define component emits
 const emits = defineEmits(['close'])
 
-// Computed property for the origin feature
-const originFeature = computed(() => props.feature?.originFeature)
+const featureName = computed(() => props.feature?.render?.basic?.title)
+const featureIcon = computed(() => {
+  const icon = props.feature?.render?.basic?.icon
+  console.log("icon", icon)
+  if (typeof icon === 'string') {
+    return {
+      type: 'remix',
+      value: icon
+    }
+  }
+  if (icon) {
+    return icon.value
+  }
+  return undefined
+})
 </script>
 
 <!--
@@ -43,22 +56,13 @@ const originFeature = computed(() => props.feature?.originFeature)
       class="PrefixIcon-Feature fake-background cursor-pointer hover:op-75 flex gap-2 items-center transition-cubic"
       @click="emits('close')"
     >
-      <PluginIcon
-        v-if="originFeature"
-        :icon="originFeature.icon as any"
-        :alt="originFeature.name"
-      />
-      <span>{{ feature?.name }}</span>
+      <PluginIcon v-if="featureIcon" :icon="featureIcon" :alt="featureName ?? ''" />
+      <span>{{ featureName }}</span>
       <div i-ri-close-line />
     </div>
   </div>
 </template>
 
-<!--
-  PrefixIcon Component Styles
-
-  SCSS styles for the prefix icon including transitions and layout.
--->
 <style lang="scss" scoped>
 /** Styles for when a feature is active */
 .PrefixIcon.feature img {
@@ -80,5 +84,11 @@ const originFeature = computed(() => props.feature?.originFeature)
 
   border-radius: 12px;
   transform: scale(0);
+
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 </style>

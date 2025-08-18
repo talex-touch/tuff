@@ -1,4 +1,4 @@
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
@@ -64,6 +64,11 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     if (!itemToExecute) {
       console.warn('[useSearch] handleExecute called without an item.')
       return
+    }
+
+    if (itemToExecute.kind === 'feature') {
+      boxOptions.data.feature = itemToExecute
+      boxOptions.mode = BoxMode.FEATURE
     }
 
     // When a feature is executed, clear the current list immediately.
@@ -147,6 +152,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
             plugin: boxOptions.data.plugin
           })
         }
+        boxOptions.data.feature = undefined
       }
 
       boxOptions.mode = searchVal.value.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
@@ -163,8 +169,13 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   }, 50)
 
   watch(
-    () => res.value?.length,
-    () => debouncedExpand(),
+    () => res.value,
+    () => {
+      if (res.value.length > 0 && boxOptions.focus === -1) {
+        boxOptions.focus = 0
+      }
+      debouncedExpand()
+    },
     { deep: true }
   )
 
@@ -239,6 +250,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       }
 
       activatedProviders.value = [...constructedPluginProviders, ...fetchedProviderDetails]
+
     },
     { immediate: true }
   )
@@ -258,6 +270,14 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     } else {
       console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
+  })
+
+  onMounted(() => {
+    touchChannel.send('core-box:get-activated-providers').then((providers) => {
+      if (providers) {
+        activeActivations.value = providers
+      }
+    })
   })
 
   // Listener for when the search stream is finished.
