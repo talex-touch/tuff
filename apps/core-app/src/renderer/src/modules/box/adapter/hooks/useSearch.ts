@@ -52,7 +52,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       loading.value = false
     }
     // Do not set loading to false here; wait for the `search-end` event.
-  }, 50)
+  }, 100)
 
   async function handleSearch(): Promise<void> {
     boxOptions.focus = 0
@@ -172,6 +172,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
       boxOptions.mode = newSearchVal.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
     }
+    // If the input is cleared while a provider is active, also clear the results.
+    if (newSearchVal === '' && activeActivations.value && activeActivations.value.length > 0) {
+      res.value = []
+    }
   })
 
   // 2. Watch for searchVal or mode changes to trigger the search
@@ -266,6 +270,14 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
   // Listener for items pushed directly from an activated plugin feature.
   touchChannel.regChannel('core-box:push-items', ({ data }) => {
+    // If a provider is active but the user has cleared the input, ignore incoming pushes.
+    if (activeActivations.value && activeActivations.value.length > 0 && searchVal.value === '') {
+      console.log(
+        '[useSearch] Ignored pushed items because the query is empty while a provider is active.'
+      )
+      return
+    }
+
     console.log(`[useSearch] Received ${data.items.length} items pushed from plugin.`)
     // When a plugin pushes items, it becomes the new source of truth for results.
     res.value = data.items

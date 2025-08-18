@@ -60,7 +60,7 @@ const completionDisplay = computed(() => {
   return completion
 })
 
-useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
+useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste, boxInputRef)
 useKeyboard(
   boxOptions,
   res,

@@ -1,4 +1,4 @@
-import { watch, Ref } from 'vue'
+import { watch, Ref, nextTick } from 'vue'
 import { useDocumentVisibility } from '@vueuse/core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode, IBoxOptions } from '..'
@@ -7,7 +7,8 @@ export function useVisibility(
   boxOptions: IBoxOptions,
   searchVal: Ref<string>,
   clipboardOptions: any,
-  handleAutoPaste: () => void
+  handleAutoPaste: () => void,
+  boxInputRef: Ref<any>
 ) {
   const visibility = useDocumentVisibility()
 
@@ -19,8 +20,10 @@ export function useVisibility(
         return
       }
 
-      const inputEl = document.getElementById('core-box-input')
-      setTimeout(() => inputEl?.focus(), 200)
+      // Use nextTick to ensure the input element is available and ready.
+      nextTick(() => {
+        boxInputRef.value?.focus()
+      })
 
       if (
         appSetting.tools.autoClear !== -1 &&
