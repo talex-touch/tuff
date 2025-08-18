@@ -1,117 +1,117 @@
 <script name="AppList" setup lang="ts">
-import { appAmo } from "~/views/box/search-box";
-import PluginIcon from "~/components/plugin/PluginIcon.vue";
+import { appAmo } from '~/views/box/search-box'
+import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 const props = defineProps<{
-  list: any[];
-  index: number;
-}>();
+  list: any[]
+  index: number
+}>()
 const emits = defineEmits<{
-  (e: "search", val: string): void;
-  (e: "select", val: any, ind: number): void;
-}>();
+  (e: 'search', val: string): void
+  (e: 'select', val: any, ind: number): void
+}>()
 
 enum EOrderWay {
   SORT_DESC = 0, // default
   DIC = 1,
   D_DIC = 2,
-  FREQ = 3,
+  FREQ = 3
 }
 
-const _list = ref<any[]>([]);
-const search = ref("");
-const orderWay = ref<EOrderWay>(0);
+const _list = ref<any[]>([])
+const search = ref('')
+const orderWay = ref<EOrderWay>(0)
 
 watch(
   () => props.list,
   () => {
-    _list.value = [...props.list];
+    _list.value = [...props.list]
 
-    handleOrderWay();
+    handleOrderWay()
 
-    emits("select", null, -1);
+    emits('select', null, -1)
   },
   { immediate: true }
-);
+)
 
 function handleOrderWay() {
-  console.log("a", orderWay.value);
+  console.log('a', orderWay.value)
 
   if (orderWay.value === EOrderWay.SORT_DESC) {
-    _list.value = [...props.list];
-    return;
+    _list.value = [...props.list]
+    return
   }
 
   if (orderWay.value === EOrderWay.DIC) {
-    _list.value = _list.value!.sort((a, b) => a.name.localeCompare(b.name));
-    return;
+    _list.value = _list.value!.sort((a, b) => a.name.localeCompare(b.name))
+    return
   }
 
   if (orderWay.value === EOrderWay.D_DIC) {
-    _list.value = _list.value!.sort((a, b) => b.name.localeCompare(a.name));
-    return;
+    _list.value = _list.value!.sort((a, b) => b.name.localeCompare(a.name))
+    return
   }
 
   _list.value = _list.value!.sort((a, b) => {
-    const aI = appAmo[a.name];
-    const bI = appAmo[b.name];
+    const aI = appAmo[a.name]
+    const bI = appAmo[b.name]
 
     if (aI === undefined && bI === undefined) {
-      return 0;
+      return 0
     }
 
     if (aI === undefined) {
-      return 1;
+      return 1
     }
 
     if (bI === undefined) {
-      return -1;
+      return -1
     }
 
-    return bI - aI;
-  });
+    return bI - aI
+  })
 }
 
 function handleOrderChange() {
-  orderWay.value = (orderWay.value + 1) % 4;
+  orderWay.value = (orderWay.value + 1) % 4
 
-  handleOrderWay();
+  handleOrderWay()
 
-  emits("select", null, -1);
+  emits('select', null, -1)
 }
 
 watch(
   () => search.value,
   (val) => {
-    emits("search", val);
+    emits('search', val)
     // _list.value = props.list.filter(item => item.name.includes(val))
   }
-);
+)
 
 function highlightText(text: string, matched: Array<any>) {
-  let result = "";
+  let result = ''
 
-  const [startIndex, endIndex] = matched;
+  const [startIndex, endIndex] = matched
 
   // replace text index 2 html
   for (let i = 0; i < text.length; i++) {
     if (i >= startIndex && i <= endIndex) {
-      result += `<span class="matched">${text[i]}</span>`;
+      result += `<span class="matched">${text[i]}</span>`
     } else {
-      result += text[i];
+      result += text[i]
     }
   }
 
-  return result;
+  return result
 }
 
 function handleClick(item: any, ind: number) {
   // Repeat click => cancel
   if (props.index === ind) {
-    emits("select", null, -1);
-    return;
+    emits('select', null, -1)
+    return
   }
-  emits("select", item, ind);
+  emits('select', item, ind)
 }
 </script>
 

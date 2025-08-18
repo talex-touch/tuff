@@ -3,10 +3,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode, IBoxOptions } from '..'
 
-export function useClipboard(
-  boxOptions: IBoxOptions,
-  searchVal: Ref<string>
-) {
+export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
   const clipboardOptions = reactive<any>({
     last: null
   })
@@ -17,7 +14,11 @@ export function useClipboard(
     const time = appSetting.tools.autoPaste.time
     const timeDiff = Date.now() - clipboardOptions.last.time
 
-    if (time !== -1 && appSetting.tools.autoPaste.enable && (time === 0 || timeDiff < time * 1000)) {
+    if (
+      time !== -1 &&
+      appSetting.tools.autoPaste.enable &&
+      (time === 0 || timeDiff < time * 1000)
+    ) {
       const data = clipboardOptions.last
 
       if (data.type === 'file') {

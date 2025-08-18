@@ -167,10 +167,12 @@ function useLoading(): { appendLoading: () => void; removeLoading: () => void } 
 
 const { appendLoading, removeLoading } = useLoading()
 domReady().then(() => {
-  useInitialize()
+  const info = useInitialize()
   if (isMainWindow()) {
     appendLoading()
   }
+
+  document.body.classList.add(info.platform)
 })
 
 window.onmessage = (ev) => {

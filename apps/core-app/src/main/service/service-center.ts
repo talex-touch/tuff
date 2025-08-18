@@ -1,15 +1,19 @@
-import fse from "fs-extra";
-import path from "path";
-import { TalexTouch } from "../types";
-import type { IService, IServiceCenter, IServiceEvent, IServiceHandler } from "@talex-touch/utils/service";
-import { ChannelType } from '@talex-touch/utils/channel';
-import { TalexEvents, touchEventBus } from "../core/eventbus/touch-event";
+import fse from 'fs-extra'
+import path from 'path'
+import { TalexTouch } from '../types'
+import type {
+  IService,
+  IServiceCenter,
+  IServiceEvent,
+  IServiceHandler
+} from '@talex-touch/utils/service'
+import { ChannelType } from '@talex-touch/utils/channel'
+import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { suffix2Service } from '@talex-touch/utils/service/protocol'
-import { dialog } from "electron";
+import { dialog } from 'electron'
 import './protocol-handler'
 
 class ServiceCenter implements IServiceCenter {
-
   rootPath: string
 
   serviceMap: Map<string, IServiceHandler> = new Map()
@@ -33,7 +37,7 @@ class ServiceCenter implements IServiceCenter {
   }
 
   unRegService(service: IService): boolean {
-    if (!this.hasService(service)) return false;
+    if (!this.hasService(service)) return false
 
     this.serviceMap.delete(service.id.description!)
     return true
@@ -49,7 +53,7 @@ class ServiceCenter implements IServiceCenter {
   useService(service: IService, data: object): boolean | Promise<boolean> {
     const handler = this.serviceMap.get(service.name)
 
-    if (!handler) return false;
+    if (!handler) return false
 
     let cancelled = false
 
@@ -71,22 +75,26 @@ class ServiceCenter implements IServiceCenter {
   }
 
   hasServiceBySymbolStr(symbol: string): boolean {
-    return /* this.serviceMap.has(symbol) &&  */!!this.serviceMap.get(symbol)?.pluginScope
+    return /* this.serviceMap.has(symbol) &&  */ !!this.serviceMap.get(symbol)?.pluginScope
   }
 
   getPerPath(serviceID: string) {
-    return path.join(this.rootPath, serviceID + ".json")
+    return path.join(this.rootPath, serviceID + '.json')
   }
 
   async save() {
     const promises = new Array<Function>()
-    this.serviceMap.forEach((handler, service) => promises.push(() => {
-
-      fse.writeJSONSync(this.getPerPath(service), JSON.stringify({
-        pluginScope: handler.pluginScope,
-        service: service
-      }))
-    }))
+    this.serviceMap.forEach((handler, service) =>
+      promises.push(() => {
+        fse.writeJSONSync(
+          this.getPerPath(service),
+          JSON.stringify({
+            pluginScope: handler.pluginScope,
+            service: service
+          })
+        )
+      })
+    )
 
     await Promise.all(promises)
   }
@@ -103,9 +111,9 @@ export function genServiceCenter(rootPath?: string): IServiceCenter {
 }
 
 export default {
-  name: Symbol("ServiceCenter"),
-  filePath: "services",
-  listeners: new Array<Function>,
+  name: Symbol('ServiceCenter'),
+  filePath: 'services',
+  listeners: new Array<Function>(),
   init() {
     const touchChannel = this['touchChannel']
 
@@ -114,13 +122,13 @@ export default {
       const { argv } = event
 
       const arr = argv.slice(1)
-      if (arr.length === 0) return;
+      if (arr.length === 0) return
 
       // check each arg (if path)
-      arr.forEach(arg => {
-        if (!path.isAbsolute(arg)) return;
+      arr.forEach((arg) => {
+        if (!path.isAbsolute(arg)) return
 
-        if (!fse.pathExistsSync(arg)) return;
+        if (!fse.pathExistsSync(arg)) return
 
         if (fse.statSync(arg).isFile()) {
           let extName = path.extname(arg)
@@ -132,8 +140,11 @@ export default {
           const service = suffix2Service(extName)
 
           if (!service) {
-            dialog.showErrorBox("Error", "The type " + extName + " has no plugin to handle, please install in plugin market!")
-            return;
+            dialog.showErrorBox(
+              'Error',
+              'The type ' + extName + ' has no plugin to handle, please install in plugin market!'
+            )
+            return
           }
 
           console.log('[service] File ext protocol', service)
@@ -145,10 +156,9 @@ export default {
             extName,
             service
           })
-
         } else {
           // Folder not support
-          dialog.showErrorBox("Error", "Folder not support yet!")
+          dialog.showErrorBox('Error', 'Folder not support yet!')
         }
       })
     })
@@ -174,10 +184,12 @@ export default {
               service: event.service.name
             }
 
-            const res = touchChannel.sendSync(ChannelType.PLUGIN, 'service:handle', { plugin, data })
+            const res = touchChannel.sendSync(ChannelType.PLUGIN, 'service:handle', {
+              plugin,
+              data
+            })
 
             event.setCancelled(res === true)
-
           }
         })
 
@@ -197,8 +209,8 @@ export default {
     )
   },
   destroy() {
-    this['listeners'].forEach(listener => listener())
+    this['listeners'].forEach((listener) => listener())
 
     serviceCenter.save()
-  },
-} as TalexTouch.IModule;
+  }
+} as TalexTouch.IModule

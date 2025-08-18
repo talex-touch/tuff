@@ -31,10 +31,10 @@ defineProps<MarketItemCardProps>()
 function handleMove(event: MouseEvent): void {
   const element = event.currentTarget as HTMLElement
   const rect = element.getBoundingClientRect()
-  
+
   const distanceX = event.clientX - rect.left
   const distanceY = event.clientY - rect.top
-  
+
   element.style.setProperty('--x', distanceX + 'px')
   element.style.setProperty('--y', distanceY + 'px')
   element.style.setProperty('--op', '1')
@@ -50,14 +50,10 @@ function handleLeave(event: MouseEvent): void {
 </script>
 
 <template>
-  <div 
-    class="market-item-card"
-    @mousemove="handleMove"
-    @mouseleave="handleLeave"
-  >
+  <div class="market-item-card" @mousemove="handleMove" @mouseleave="handleLeave">
     <!-- Interactive hover effect background -->
     <div class="hover-effect" />
-    
+
     <!-- Card content -->
     <div class="market-item-content">
       <!-- Icon section -->
@@ -65,12 +61,12 @@ function handleLeave(event: MouseEvent): void {
         <i v-if="item.icon" :class="`i-${item.icon}`" />
         <i v-else class="i-ri-puzzle-line" />
       </div>
-      
+
       <!-- Info section -->
       <div class="market-item-info">
         <h3 class="market-item-title">{{ item.name || 'Unnamed Plugin' }}</h3>
         <p class="market-item-description">{{ item.description || 'No description available' }}</p>
-        
+
         <!-- Stats section -->
         <div class="market-item-stats">
           <span v-if="item.downloads" class="stat-item downloads">
@@ -88,7 +84,7 @@ function handleLeave(event: MouseEvent): void {
         </div>
       </div>
     </div>
-    
+
     <!-- Background mask -->
     <div class="background-mask" />
   </div>
@@ -103,7 +99,7 @@ function handleLeave(event: MouseEvent): void {
   cursor: pointer;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
@@ -147,7 +143,7 @@ function handleLeave(event: MouseEvent): void {
   background: var(--el-color-primary-light-9);
   border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   i {
     font-size: 24px;
     color: var(--el-color-primary);
@@ -158,7 +154,7 @@ function handleLeave(event: MouseEvent): void {
 .market-item-card:hover .market-item-icon {
   background: var(--el-color-primary-light-8);
   transform: scale(1.05);
-  
+
   i {
     color: var(--el-color-primary-dark-2);
   }
@@ -210,23 +206,23 @@ function handleLeave(event: MouseEvent): void {
   font-weight: 500;
   opacity: 0.7;
   transition: opacity 0.3s ease;
-  
+
   i {
     font-size: 12px;
   }
-  
+
   &.downloads {
     color: var(--el-color-info);
   }
-  
+
   &.rating {
     color: var(--el-color-warning);
-    
+
     i {
       color: #f7ba2a;
     }
   }
-  
+
   &.version {
     color: var(--el-color-success);
   }

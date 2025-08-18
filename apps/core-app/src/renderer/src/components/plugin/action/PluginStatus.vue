@@ -1,78 +1,64 @@
 <template>
-  <div
-    ref="dom"
-    @click="func"
-    v-wave
-    class="PluginStatus-Container"
-    :class="{ shrink }"
-  ></div>
+  <div ref="dom" @click="func" v-wave class="PluginStatus-Container" :class="{ shrink }"></div>
 </template>
 
 <script name="PluginStatus" setup>
-import { pluginManager } from "@modules/channel/plugin-core/api";
-import { ref, watchEffect, onMounted } from "vue";
+import { pluginManager } from '@modules/channel/plugin-core/api'
+import { ref, watchEffect, onMounted } from 'vue'
 
-const props = defineProps(["plugin", "shrink"]);
-const dom = ref();
+const props = defineProps(['plugin', 'shrink'])
+const dom = ref()
 
-const _PluginStatus = [
-  "DISABLED",
-  "DISABLING",
-  "CRASHED",
-  "ENABLED",
-  "ACTIVE",
-  "LOADING",
-  "LOADED",
-];
-const func = ref(() => {});
-const status = ref("DISABLED");
+const _PluginStatus = ['DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED']
+const func = ref(() => {})
+const status = ref('DISABLED')
 
 watchEffect(() => {
-  status.value = _PluginStatus[props.plugin.status];
-});
+  status.value = _PluginStatus[props.plugin.status]
+})
 
 function refresh() {
   this.$el.classList.remove(
-    "LOADED",
-    "LOADING",
-    "ACTIVE",
-    "ENABLED",
-    "CRASHED",
-    "DISABLING",
-    "DISABLED"
-  );
-  this.$el.classList.add(this.status);
+    'LOADED',
+    'LOADING',
+    'ACTIVE',
+    'ENABLED',
+    'CRASHED',
+    'DISABLING',
+    'DISABLED'
+  )
+  this.$el.classList.add(this.status)
 
-  if (this.status === "DISABLED") {
-    this.$el.innerHTML = `Click to enable plugin.`;
-
-    func.value = () => {
-      pluginManager.enablePlugin(this.pluginName);
-    };
-  } else if (this.status === "DISABLING") {
-    this.$el.innerHTML = ``;
-  } else if (this.status === "CRASHED") {
-    this.$el.innerHTML = `Plugin crashed, click to restart.`;
+  if (this.status === 'DISABLED') {
+    this.$el.innerHTML = `Click to enable plugin.`
 
     func.value = () => {
-      pluginManager.enablePlugin(this.pluginName);
-    };
-  } else if (this.status === "ENABLED") {
-    this.$el.innerHTML = `Plugin enabled, click to disable.`;
+      pluginManager.enablePlugin(this.pluginName)
+    }
+  } else if (this.status === 'DISABLING') {
+    this.$el.innerHTML = ``
+  } else if (this.status === 'CRASHED') {
+    this.$el.innerHTML = `Plugin crashed, click to restart.`
 
     func.value = () => {
-      pluginManager.disablePlugin(this.pluginName);
-    };
-  } else if (this.status === "ACTIVE") {
-    this.$el.innerHTML = ``;
-  } else if (this.status === "LOADING") {
-    this.$el.innerHTML = ``;
-  } else if (this.status === "LOADED") {
-    this.$el.innerHTML = `Plugin loaded, click to enable.`;
+      pluginManager.enablePlugin(this.pluginName)
+    }
+  } else if (this.status === 'ENABLED') {
+    this.$el.innerHTML = `Plugin enabled, click to disable.`
 
     func.value = () => {
-      pluginManager.enablePlugin(this.pluginName);
-    };
+      pluginManager.disablePlugin(this.pluginName)
+    }
+  } else if (this.status === 'ACTIVE') {
+    this.$el.innerHTML = ``
+  } else if (this.status === 'LOADING') {
+    this.$el.innerHTML = ``
+  } else if (this.status === 'LOADED') {
+    this.$el.innerHTML = `Plugin loaded, click to enable.`
+
+    func.value = () => {
+      pluginManager.enablePlugin(this.pluginName)
+    }
   }
 }
 
@@ -83,15 +69,15 @@ onMounted(() => {
       pluginName: props.plugin.name,
       ...props,
       get $el() {
-        return dom.value;
-      },
-    };
+        return dom.value
+      }
+    }
 
-    const func = refresh.bind(ctx);
+    const func = refresh.bind(ctx)
 
-    func();
-  });
-});
+    func()
+  })
+})
 </script>
 
 <style lang="scss" scoped>

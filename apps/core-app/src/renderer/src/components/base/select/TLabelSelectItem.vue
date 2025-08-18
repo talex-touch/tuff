@@ -1,11 +1,11 @@
 <script setup lang="ts">
 defineProps<{
-  value: string;
-  icon?: string;
-  label?: string;
-}>();
+  value: string
+  icon?: string
+  label?: string
+}>()
 
-const refresh: (value: string) => void = inject("refresh")!;
+const refresh: (value: string) => void = inject('refresh')!
 </script>
 
 <template>

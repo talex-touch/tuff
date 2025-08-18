@@ -6,24 +6,30 @@
         <h2>Plugin Market</h2>
         <span class="market-subtitle">Discover amazing plugins for your workflow</span>
       </div>
-      
+
       <div class="market-header-search">
         <FlatCompletion :fetch="fetch" placeholder="Search plugins..." />
-        <div :class="{ '_disabled': sourceEditorShow }" class="market-sources" flex items-center gap-2>
+        <div
+          :class="{ _disabled: sourceEditorShow }"
+          class="market-sources"
+          flex
+          items-center
+          gap-2
+        >
           <FlatButton mini @click="toggleSourceEditorShow()">
             <div class="i-carbon-list" />
           </FlatButton>
           <span class="source-count">{{ pluginSettings.source.list.length }} sources</span>
         </div>
       </div>
-      
+
       <div class="market-header-controls">
         <div class="market-tags">
           <button
             v-for="(item, index) in tags"
             :key="item.tag"
             @click="tagInd = index"
-            :class="{ 'active': tagInd === index }"
+            :class="{ active: tagInd === index }"
             class="tag-button"
           >
             {{ item.tag }}
@@ -48,8 +54,8 @@
         @enter="onEnter"
         @leave="onLeave"
       >
-        <MarketItemCard 
-          v-for="(item, index) in value" 
+        <MarketItemCard
+          v-for="(item, index) in value"
           :key="item.name || index"
           :item="item"
           :index="index"
@@ -57,7 +63,7 @@
           class="market-grid-item"
         />
       </transition-group>
-      
+
       <!-- Empty State -->
       <div v-if="value.length === 0" class="market-empty">
         <div class="empty-icon">
@@ -73,25 +79,25 @@
 </template>
 
 <script name="Market" setup>
-import { pluginSettings } from "~/modules/storage/plugin-settings"
-import gsap from "gsap"
-import FlatCompletion from "@comp/base/input/FlatCompletion.vue"
-import MarketItemCard from "@comp/market/MarketItemCard.vue"
-import MarketSourceEditor from "~/views/base/market/MarketSourceEditor.vue"
-import { useToggle } from "@vueuse/core"
+import { pluginSettings } from '~/modules/storage/plugin-settings'
+import gsap from 'gsap'
+import FlatCompletion from '@comp/base/input/FlatCompletion.vue'
+import MarketItemCard from '@comp/market/MarketItemCard.vue'
+import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
+import { useToggle } from '@vueuse/core'
 
-const orderType = ref("grid")
+const orderType = ref('grid')
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const tagInd = ref(0)
 
 const tags = reactive([
-  { tag: "All", filter: "" },
-  { tag: "Feature", filter: "feature" },
-  { tag: "UI", filter: "ui" },
-  { tag: "UX", filter: "ux" },
-  { tag: "Enhancement", filter: "enhancement" },
-  { tag: "Tools", filter: "tools" },
-  { tag: "Productivity", filter: "productivity" },
+  { tag: 'All', filter: '' },
+  { tag: 'Feature', filter: 'feature' },
+  { tag: 'UI', filter: 'ui' },
+  { tag: 'UX', filter: 'ux' },
+  { tag: 'Enhancement', filter: 'enhancement' },
+  { tag: 'Tools', filter: 'tools' },
+  { tag: 'Productivity', filter: 'productivity' }
 ])
 
 const value = ref([])
@@ -99,68 +105,73 @@ const value = ref([])
 // Enhanced fetch function with better mock data
 function fetch(key) {
   value.value = []
-  
+
   const mockPlugins = [
     {
-      name: "Smart Clipboard",
-      description: "Advanced clipboard manager with history, sync, and smart suggestions for enhanced productivity",
-      version: "2.1.0",
-      author: "TalexTeam",
-      downloads: "2.3M",
+      name: 'Smart Clipboard',
+      description:
+        'Advanced clipboard manager with history, sync, and smart suggestions for enhanced productivity',
+      version: '2.1.0',
+      author: 'TalexTeam',
+      downloads: '2.3M',
       rating: 4.8,
-      icon: "ri-clipboard-line",
-      category: "productivity"
+      icon: 'ri-clipboard-line',
+      category: 'productivity'
     },
     {
-      name: "Universal Translator",
-      description: "Real-time translation for 100+ languages with offline support and context awareness",
-      version: "1.5.2", 
-      author: "LangTech",
-      downloads: "1.8M",
+      name: 'Universal Translator',
+      description:
+        'Real-time translation for 100+ languages with offline support and context awareness',
+      version: '1.5.2',
+      author: 'LangTech',
+      downloads: '1.8M',
       rating: 4.7,
-      icon: "ri-translate-2",
-      category: "tools"
+      icon: 'ri-translate-2',
+      category: 'tools'
     },
     {
-      name: "Quick Search Pro",
-      description: "Lightning-fast search across files, web, and applications with AI-powered suggestions",
-      version: "3.0.1",
-      author: "SearchLab",
-      downloads: "3.1M",
+      name: 'Quick Search Pro',
+      description:
+        'Lightning-fast search across files, web, and applications with AI-powered suggestions',
+      version: '3.0.1',
+      author: 'SearchLab',
+      downloads: '3.1M',
       rating: 4.9,
-      icon: "ri-search-line",
-      category: "productivity"
+      icon: 'ri-search-line',
+      category: 'productivity'
     },
     {
-      name: "AI Code Assistant",
-      description: "Intelligent coding companion with auto-completion, refactoring, and bug detection",
-      version: "1.8.0",
-      author: "DevAI",
-      downloads: "1.5M",
+      name: 'AI Code Assistant',
+      description:
+        'Intelligent coding companion with auto-completion, refactoring, and bug detection',
+      version: '1.8.0',
+      author: 'DevAI',
+      downloads: '1.5M',
       rating: 4.6,
-      icon: "ri-robot-line",
-      category: "development"
+      icon: 'ri-robot-line',
+      category: 'development'
     },
     {
-      name: "Secure Vault",
-      description: "Military-grade password manager with biometric authentication and secure sharing",
-      version: "4.2.1",
-      author: "SecureTech",
-      downloads: "2.7M",
+      name: 'Secure Vault',
+      description:
+        'Military-grade password manager with biometric authentication and secure sharing',
+      version: '4.2.1',
+      author: 'SecureTech',
+      downloads: '2.7M',
       rating: 4.8,
-      icon: "ri-shield-keyhole-line",
-      category: "security"
+      icon: 'ri-shield-keyhole-line',
+      category: 'security'
     }
   ]
-  
+
   const filteredPlugins = mockPlugins.filter(
     (plugin) =>
       plugin.name.toLowerCase().includes(key.toLowerCase()) ||
       plugin.description.toLowerCase().includes(key.toLowerCase())
   )
-  
+
   value.value = filteredPlugins.slice(0, Math.min(key.length * 2, 12))
-  
+
   return []
 }
 
@@ -176,7 +187,7 @@ function onBeforeEnter(el) {
 
 function onEnter(el, done) {
   const index = parseInt(el.dataset.index) || 0
-  
+
   gsap.to(el, {
     opacity: 1,
     y: 0,
@@ -184,28 +195,28 @@ function onEnter(el, done) {
     rotateX: 0,
     duration: 0.6,
     delay: index * 0.1,
-    ease: "back.out(1.2)",
+    ease: 'back.out(1.2)',
     onComplete: done
   })
 }
 
 function onLeave(el, done) {
   const index = parseInt(el.dataset.index) || 0
-  
+
   gsap.to(el, {
     opacity: 0,
     y: -20,
     scale: 0.95,
     duration: 0.4,
     delay: index * 0.05,
-    ease: "power2.in",
+    ease: 'power2.in',
     onComplete: done
   })
 }
 
 // Initialize with some sample data
 onMounted(() => {
-  fetch("plugin")
+  fetch('plugin')
 })
 </script>
 
@@ -229,7 +240,7 @@ onMounted(() => {
 
 .market-header-title {
   margin-bottom: 2rem;
-  
+
   h2 {
     margin: 0 0 0.5rem 0;
     font-size: 2rem;
@@ -237,7 +248,7 @@ onMounted(() => {
     color: var(--el-text-color-primary);
     letter-spacing: -0.025em;
   }
-  
+
   .market-subtitle {
     font-size: 1rem;
     color: var(--el-text-color-regular);
@@ -250,24 +261,24 @@ onMounted(() => {
   align-items: center;
   gap: 1.5rem;
   margin-bottom: 1.5rem;
-  
+
   :deep(.FlatInput-Container) {
     flex: 1;
     max-width: 500px;
     margin: 0;
   }
-  
+
   .market-sources {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     transition: opacity 0.3s ease;
-    
+
     &._disabled {
       opacity: 0.5;
       pointer-events: none;
     }
-    
+
     .source-count {
       font-size: 0.875rem;
       color: var(--el-text-color-regular);
@@ -300,13 +311,13 @@ onMounted(() => {
   color: var(--el-text-color-regular);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   &:hover {
     border-color: var(--el-color-primary-light-5);
     color: var(--el-color-primary);
     transform: translateY(-1px);
   }
-  
+
   &.active {
     background: var(--el-color-primary);
     border-color: var(--el-color-primary);
@@ -332,21 +343,21 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.5rem;
-  
+
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  
+
   @media (min-width: 1400px) {
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 2rem;
   }
-  
+
   &.list-view {
     grid-template-columns: 1fr;
     gap: 1rem;
-    
+
     .market-grid-item {
       height: 100px;
     }
@@ -387,7 +398,7 @@ onMounted(() => {
   justify-content: center;
   padding: 4rem 2rem;
   text-align: center;
-  
+
   .empty-icon {
     width: 80px;
     height: 80px;
@@ -397,20 +408,20 @@ onMounted(() => {
     align-items: center;
     justify-content: center;
     margin-bottom: 1.5rem;
-    
+
     i {
       font-size: 2rem;
       color: var(--el-text-color-placeholder);
     }
   }
-  
+
   h3 {
     margin: 0 0 0.5rem 0;
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--el-text-color-primary);
   }
-  
+
   p {
     margin: 0;
     color: var(--el-text-color-regular);
@@ -424,21 +435,21 @@ onMounted(() => {
   .market-header {
     padding: 1.5rem 1rem;
   }
-  
+
   .market-content {
     padding: 1.5rem 1rem;
   }
-  
+
   .market-header-controls {
     flex-direction: column;
     align-items: stretch;
     gap: 1rem;
   }
-  
+
   .market-tags {
     order: 2;
   }
-  
+
   .market-view-toggle {
     order: 1;
     justify-content: flex-end;

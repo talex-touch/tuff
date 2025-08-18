@@ -1,19 +1,19 @@
 <script setup lang="ts" name="TextPreview">
-import { TuffItem } from '@talex-touch/utils';
-import { ref, onMounted } from 'vue';
+import { TuffItem } from '@talex-touch/utils'
+import { ref, onMounted } from 'vue'
 
 const props = defineProps<{
   item: TuffItem
 }>()
 
-const textContent = ref('');
+const textContent = ref('')
 
 onMounted(async () => {
   if (props.item.meta?.file?.path) {
-    const response = await fetch(`tfile://${props.item.meta.file.path}`);
-    textContent.value = await response.text();
+    const response = await fetch(`tfile://${props.item.meta.file.path}`)
+    textContent.value = await response.text()
   }
-});
+})
 </script>
 
 <template>

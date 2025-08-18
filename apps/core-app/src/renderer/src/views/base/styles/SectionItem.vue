@@ -14,10 +14,7 @@
     class="SectionItem-Container transition-cubic"
   >
     <div class="SectionItem-Display" :class="title">
-      <div
-        v-shared-element:[`theme-preference-${title}-img`]
-        :style="`filter: ${filter}`"
-      />
+      <div v-shared-element:[`theme-preference-${title}-img`] :style="`filter: ${filter}`" />
     </div>
     <div
       @click="goRouter"
@@ -35,67 +32,66 @@
 </template>
 
 <script name="SectionItem" setup>
-import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
-import { useRouter } from "vue-router";
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { useRouter } from 'vue-router'
 
-const router = useRouter();
+const router = useRouter()
 
 const props = defineProps({
   modelValue: {
     type: String,
-    default: false,
+    default: false
   },
   title: {
     type: String,
-    default: "Section",
+    default: 'Section'
   },
   filter: {
     type: String,
-    default: "blur(0px)",
+    default: 'blur(0px)'
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   tip: {
-    type: String,
-  },
-});
-const emits = defineEmits(["update:modelValue"]);
-const mention = inject("mention");
+    type: String
+  }
+})
+const emits = defineEmits(['update:modelValue'])
+const mention = inject('mention')
 
-const value = useModelWrapper(props, emits);
+const value = useModelWrapper(props, emits)
 
 function handleClick() {
-  if (props.disabled) return;
+  if (props.disabled) return
 
-  value.value = props.title;
+  value.value = props.title
 }
 
 function goRouter() {
   router.push({
-    name: "Theme",
+    name: 'Theme',
     query: {
-      theme: props.title,
-    },
-  });
+      theme: props.title
+    }
+  })
 }
 
 function handleEnter() {
-  if (props.tip)
-    mention("<span style='color: var(--el-color-warning)'>" + props.tip + "</span>");
+  if (props.tip) mention("<span style='color: var(--el-color-warning)'>" + props.tip + '</span>')
 
-  if (!props.disabled) return;
+  if (!props.disabled) return
 
   mention(
     "<span style='color: var(--el-color-danger)'>Your device doesn't support this feature yet.</span>"
-  );
+  )
 }
 
 function handleLeave() {
-  if (!props.disabled) return;
+  if (!props.disabled) return
 
-  mention();
+  mention()
 }
 </script>
 
@@ -113,7 +109,7 @@ function handleLeave() {
     height: 100%;
 
     background-size: cover;
-    background-image: url("@assets/bg/apparent.jpg");
+    background-image: url('@assets/bg/apparent.jpg');
   }
 }
 

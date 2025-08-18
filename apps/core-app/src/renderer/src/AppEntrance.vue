@@ -13,8 +13,6 @@ function entry(): void {
 
   window.$startupInfo = res
 
-  document.body.classList.add(window.$startupInfo.platform)
-
   useTouchSDK({ channel: touchChannel })
 
   props.onReady().then(() => {

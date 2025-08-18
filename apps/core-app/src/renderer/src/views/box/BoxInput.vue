@@ -25,7 +25,8 @@ const emit = defineEmits<Emits>()
 const inputEl = ref<HTMLInputElement | null>(null)
 
 defineExpose({
-  inputEl
+  inputEl,
+  focus: () => inputEl.value?.focus()
 })
 
 const options = reactive({

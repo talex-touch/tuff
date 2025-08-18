@@ -1,6 +1,6 @@
 <script setup name="MarketItem" lang="ts">
 interface MarketItemProps {
-  item: any;
+  item: any
 }
 
 defineProps<MarketItemProps>()

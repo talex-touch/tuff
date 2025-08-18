@@ -1,53 +1,51 @@
 import { reactive } from 'vue'
 
 export function useEnv(): {
-    packageJson: Object,
-    os: Object,
-    process: Object
+  packageJson: Object
+  os: Object
+  process: Object
 } {
-    const env = reactive({
-        packageJson: window.$nodeApi.getPackageJSON(),
-        os: window.$nodeApi.getOS(),
-        // @ts-ignore
-        process: { ...window.process  }
-    })
+  const env = reactive({
+    packageJson: window.$nodeApi.getPackageJSON(),
+    os: window.$nodeApi.getOS(),
+    // @ts-ignore
+    process: { ...window.process }
+  })
 
-    return env
+  return env
 }
 
 export function useCPUUsage() {
+  // @ts-ignore
+  const value = ref(process.getCPUUsage())
+
+  let cancel = false
+
+  function running() {
     // @ts-ignore
-    const value = ref(process.getCPUUsage())
+    value.value = process.getCPUUsage()
 
-    let cancel = false
+    if (!cancel) setTimeout(running, 1000)
+  }
 
-    function running() {
-        // @ts-ignore
-        value.value = process.getCPUUsage()
+  running()
 
-        if ( !cancel )
-            setTimeout(running, 1000)
-    }
-
-    running()
-
-    return [value, () => cancel = true]
+  return [value, () => (cancel = true)]
 }
 
 export function useMemoryUsage() {
-    const value = ref()
+  const value = ref()
 
-    let cancel = false
+  let cancel = false
 
-    function running() {
-        // @ts-ignore
-        value.value = process.memoryUsage()
+  function running() {
+    // @ts-ignore
+    value.value = process.memoryUsage()
 
-        if ( !cancel )
-            setTimeout(running, 1000)
-    }
+    if (!cancel) setTimeout(running, 1000)
+  }
 
-    running()
+  running()
 
-    return [value, () => cancel = true]
+  return [value, () => (cancel = true)]
 }

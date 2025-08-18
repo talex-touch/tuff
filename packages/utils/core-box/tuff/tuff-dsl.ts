@@ -39,9 +39,10 @@
 export interface TuffItem {
   /**
    * 唯一标识符
-   * @description 可选，未提供时使用 hash(title + source.type + source.id) 自动生成
+   * @description 唯一标识符，必须由创建者提供
+   * @required
    */
-  id?: string;
+  id: string;
 
   /**
    * 数据来源信息
@@ -846,6 +847,23 @@ export interface TuffContext {
  */
 export interface TuffMeta {
   /**
+   * For plugin items, this holds the name of the plugin that generated the item.
+   * @description The name of the plugin.
+   */
+  pluginName?: string
+
+  /**
+   * For plugin items, this holds the ID of the feature that generated the item.
+   * @description The ID of the feature.
+   */
+  featureId?: string
+  /**
+   * Defines the default action to be taken when the item is executed (e.g., by pressing Enter).
+   * This is used to distinguish simple actions (like 'copy') from feature activations.
+   * @description The default action type.
+   */
+  defaultAction?: string;
+  /**
    * 原始数据
    * @description 项目的原始数据对象，用于特殊处理
    */
@@ -1094,18 +1112,17 @@ export interface TuffQuery {
  */
 export interface TuffSearchResult {
   /**
+   * A unique identifier for this specific search operation.
+   * This is crucial for the streaming model to associate updates with the correct search instance.
+   */
+  sessionId?: string;
+
+  /**
    * 结果项目
    * @description 匹配的TuffItem列表
    * @required
    */
   items: TuffItem[];
-
-  /**
-   * 总数
-   * @description 匹配结果的总数量
-   * @required
-   */
-  total: number;
 
   /**
    * 查询信息
@@ -1146,11 +1163,17 @@ export interface TuffSearchResult {
   suggestions?: string[];
 
   /**
-   * 是否还有更多结果
-   * @description 指示是否可以加载更多结果
-   * @required
+   * The provider(s) to activate after this search result.
    */
-  has_more: boolean;
+  activate?: IProviderActivate[];
+}
+
+export interface IProviderActivate {
+  id: string
+  name?: string
+  icon?: TuffIcon
+  time?: number
+  meta?: Record<string, any>
 }
 
 // ==================== 插件接口预览 ====================

@@ -2,9 +2,10 @@ import {
   IExecuteArgs,
   ISearchProvider,
   ProviderContext,
-  TuffItem,
-  TuffQuery
+  TuffQuery,
+  TuffSearchResult
 } from '../../search-engine/types'
+import { TuffFactory } from '@talex-touch/utils'
 import { app, shell } from 'electron'
 import path from 'path'
 import { createDbUtils } from '../../../../db/utils'
@@ -170,10 +171,7 @@ class FileProvider implements ISearchProvider {
       }
 
       if (filesToUpdate.length > 0) {
-        console.log(
-          `[FileProvider] Updating ${filesToUpdate.length} modified files. Sample:`,
-          filesToUpdate.slice(0, 5).map((f) => f.path)
-        )
+        console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files.`)
         for (const file of filesToUpdate) {
           await db
             .update(filesSchema)
@@ -188,10 +186,7 @@ class FileProvider implements ISearchProvider {
       }
 
       if (filesToAdd.length > 0) {
-        console.log(
-          `[FileProvider] Adding ${filesToAdd.length} new files during reconciliation. Sample:`,
-          filesToAdd.slice(0, 5).map((f) => f.path)
-        )
+        console.log(`[FileProvider] Adding ${filesToAdd.length} new files during reconciliation.`)
         const newFileRecords = filesToAdd.map((file) => ({
           ...file,
           extension: path.extname(file.name).toLowerCase(),
@@ -245,14 +240,14 @@ class FileProvider implements ISearchProvider {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffItem[]> {
-    if (!this.dbUtils) return []
+  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+    if (!this.dbUtils) return TuffFactory.createSearchResult(query).build()
 
     const db = this.dbUtils.getDb()
     const searchTerm = query.text.trim().toLowerCase()
 
     if (!searchTerm) {
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const allFilesWithExtensions = await db
@@ -291,7 +286,7 @@ class FileProvider implements ISearchProvider {
     })
 
     if (filteredResults.length === 0) {
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const itemIds = filteredResults.map(({ file }) => file.path)
@@ -340,8 +335,7 @@ class FileProvider implements ISearchProvider {
             ...tuffItem.meta,
             extension: {
               ...tuffItem.meta?.extension,
-              matchResult: [matchResult[0], matchResult[1]],
-              from: this.id
+              matchResult: [matchResult[0], matchResult[1]]
             }
           }
         }
@@ -351,22 +345,23 @@ class FileProvider implements ISearchProvider {
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
       .slice(0, 50)
 
-    return scoredResults
+    return TuffFactory.createSearchResult(query).setItems(scoredResults).build()
   }
 
-  async onExecute(args: IExecuteArgs): Promise<void> {
+  async onExecute(args: IExecuteArgs): Promise<boolean> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) {
       const err = new Error('File path not found in TuffItem')
       console.error(err)
-      throw err
+      return false
     }
 
     try {
       await shell.openPath(filePath)
+      return false
     } catch (err) {
       console.error(`[FileProvider] Failed to open file at: ${filePath}`, err)
-      throw err
+      return false
     }
   }
 }

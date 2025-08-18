@@ -3,14 +3,14 @@
     <div class="TTabs-Tab-Icon">
       <remix-icon :non-style="nonStyle" :name="icon" />
     </div>
-<!--    :style="select(type) ? 'fill' : 'line'"-->
+    <!--    :style="select(type) ? 'fill' : 'line'"-->
     <div class="TTabs-Tab-Name">{{ name }}</div>
   </div>
 </template>
 
 <script>
 export default {
-  name: "TTabItem"
+  name: 'TTabItem'
 }
 </script>
 
@@ -68,7 +68,7 @@ watchEffect(() => {
   }
   &.disabled {
     cursor: not-allowed;
-    opacity: .5;
+    opacity: 0.5;
     --fake-color: transparent;
   }
   z-index: 0;
@@ -92,6 +92,6 @@ watchEffect(() => {
   &.active {
     --fake-color: var(--el-fill-color-lighter) !important;
   }
-  --fake-opacity: .25;
+  --fake-opacity: 0.25;
 }
 </style>

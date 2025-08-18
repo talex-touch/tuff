@@ -6,13 +6,12 @@
 
 <script>
 export default {
-  name: "LoadingIcon"
+  name: 'LoadingIcon'
 }
 </script>
 
 <style lang="scss" scoped>
 .LoadingIcon-Container {
-
   .LoadingIcon-Floater {
     position: absolute;
 
@@ -26,7 +25,7 @@ export default {
     background-color: var(--bg-color, var(--el-text-color-regular));
   }
   &:before {
-    content: "";
+    content: '';
     position: absolute;
 
     top: 0;
@@ -37,7 +36,7 @@ export default {
 
     border-radius: 50%;
     background-color: var(--bg-color, var(--el-text-color-regular));
-    animation: floater-wave .65s infinite;
+    animation: floater-wave 0.65s infinite;
   }
   position: relative;
 
@@ -46,42 +45,28 @@ export default {
 
   border-radius: 50%;
   border: 2px solid var(--bg-color, var(--el-text-color-regular));
-  animation: rotate .85s linear infinite;
-
+  animation: rotate 0.85s linear infinite;
 }
 
 @keyframes floater-wave {
-
   from {
-
     transform: scale(0);
     opacity: 1;
-
   }
 
   to {
-
     transform: scale(1);
-    opacity: .45;
-
+    opacity: 0.45;
   }
-
 }
 
 @keyframes rotate {
-
   0% {
-
     transform: rotate(0deg);
-
   }
 
   100% {
-
     transform: rotate(360deg);
-
   }
-
 }
-
 </style>

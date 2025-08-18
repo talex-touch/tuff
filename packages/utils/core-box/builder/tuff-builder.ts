@@ -38,14 +38,15 @@ import type {
   TuffPermissionLevel,
   TuffSearchResult,
   TuffQuery,
-  TuffSortStats
-} from '../tuff/tuff-dsl';
+  TuffSortStats,
+  IProviderActivate
+} from '../tuff/tuff-dsl'
 
 // ==================== Builder 类 ====================
 
 /**
  * TuffItemBuilder - TuffItem 构建器
- * 
+ *
  * @description
  * 使用 Builder 模式实现的 TuffItem 构建器，支持链式调用。
  * 提供流畅的 API 用于创建和配置 TuffItem 对象。
@@ -73,16 +74,13 @@ class TuffItemBuilder {
 
   /**
    * 创建一个新的 TuffItemBuilder 实例
-   * 
-   * @param id - 可选的项目 ID
+   *
+   * @param id - 项目 ID
    * @param sourceType - 可选的来源类型
    * @param sourceId - 可选的来源 ID
    */
-  constructor(id?: string, sourceType?: TuffSourceType, sourceId?: string) {
-    if (id) {
-      this.item.id = id;
-    }
-    
+  constructor(id: string, sourceType?: TuffSourceType, sourceId?: string) {
+    this.item.id = id
     if (sourceType && sourceId) {
       this.item.source = {
         type: sourceType,
@@ -93,7 +91,7 @@ class TuffItemBuilder {
 
   /**
    * 设置项目 ID
-   * 
+   *
    * @param id - 项目唯一标识符
    * @returns 当前构建器实例，用于链式调用
    */
@@ -104,7 +102,7 @@ class TuffItemBuilder {
 
   /**
    * 设置数据来源
-   * 
+   *
    * @param type - 来源类型
    * @param id - 来源标识符
    * @param name - 可选的来源名称
@@ -120,17 +118,17 @@ class TuffItemBuilder {
     permission?: TuffPermissionLevel
   ): TuffItemBuilder {
     this.item.source = { type, id };
-    
+
     if (name) this.item.source.name = name;
     if (version) this.item.source.version = version;
     if (permission) this.item.source.permission = permission;
-    
+
     return this;
   }
 
   /**
    * 设置项目类型
-   * 
+   *
    * @param kind - 项目类型
    * @returns 当前构建器实例，用于链式调用
    */
@@ -141,7 +139,7 @@ class TuffItemBuilder {
 
   /**
    * 设置项目标题
-   * 
+   *
    * @param title - 项目标题
    * @returns 当前构建器实例，用于链式调用
    */
@@ -152,44 +150,44 @@ class TuffItemBuilder {
 
   /**
    * 设置项目副标题
-   * 
+   *
    * @param subtitle - 项目副标题
    * @returns 当前构建器实例，用于链式调用
    */
-  setSubtitle(subtitle: string): TuffItemBuilder {
+  setSubtitle(subtitle: string): this {
     this.basicRender.subtitle = subtitle;
     return this;
   }
 
   /**
    * 设置项目描述
-   * 
+   *
    * @param description - 项目详细描述
    * @returns 当前构建器实例，用于链式调用
    */
-  setDescription(description: string): TuffItemBuilder {
+  setDescription(description: string): this {
     this.basicRender.description = description;
     return this;
   }
 
   /**
    * 设置项目图标
-   * 
+   *
    * @param icon - 项目图标
    * @returns 当前构建器实例，用于链式调用
    */
-  setIcon(icon: TuffIcon): TuffItemBuilder {
+  setIcon(icon: TuffIcon): this {
     this.basicRender.icon = icon;
     return this;
   }
 
   /**
    * 添加标签
-   * 
+   *
    * @param tag - 要添加的标签
    * @returns 当前构建器实例，用于链式调用
    */
-  addTag(tag: TuffTag): TuffItemBuilder {
+  addTag(tag: TuffTag): this {
     if (!this.basicRender.tags) {
       this.basicRender.tags = [];
     }
@@ -199,40 +197,40 @@ class TuffItemBuilder {
 
   /**
    * 设置标签列表
-   * 
+   *
    * @param tags - 标签列表
    * @returns 当前构建器实例，用于链式调用
    */
-  setTags(tags: TuffTag[]): TuffItemBuilder {
+  setTags(tags: TuffTag[]): this {
     this.basicRender.tags = tags;
     return this;
   }
 
   /**
    * 设置右侧附加信息
-   * 
+   *
    * @param accessory - 右侧附加信息
    * @returns 当前构建器实例，用于链式调用
    */
-  setAccessory(accessory: string): TuffItemBuilder {
+  setAccessory(accessory: string): this {
     this.basicRender.accessory = accessory;
     return this;
   }
 
   /**
    * 设置渲染模式
-   * 
+   *
    * @param mode - 渲染模式
    * @returns 当前构建器实例，用于链式调用
    */
-  setRenderMode(mode: TuffRenderMode): TuffItemBuilder {
+  setRenderMode(mode: TuffRenderMode): this {
     this.renderMode = mode;
     return this;
   }
 
   /**
    * 设置自定义渲染内容
-   * 
+   *
    * @param type - 渲染类型
    * @param content - 渲染内容
    * @param data - 可选的渲染数据
@@ -246,20 +244,20 @@ class TuffItemBuilder {
     data?: Record<string, any>,
     styles?: string[],
     scripts?: string[]
-  ): TuffItemBuilder {
+  ): this {
     this.renderMode = 'custom';
     this.customRender = { type, content };
-    
+
     if (data) this.customRender.data = data;
     if (styles) this.customRender.styles = styles;
     if (scripts) this.customRender.scripts = scripts;
-    
+
     return this;
   }
 
   /**
    * 设置布局配置
-   * 
+   *
    * @param display - 展示方式
    * @param size - 可选的尺寸配置
    * @param align - 可选的对齐方式
@@ -269,42 +267,42 @@ class TuffItemBuilder {
     display: 'list' | 'card' | 'grid' | 'compact' | 'detailed',
     size?: 'small' | 'medium' | 'large',
     align?: 'left' | 'center' | 'right'
-  ): TuffItemBuilder {
+  ): this {
     this.layout = { display };
-    
+
     if (size) this.layout.size = size;
     if (align) this.layout.align = align;
-    
+
     return this;
   }
 
   /**
    * 设置网格布局配置
-   * 
+   *
    * @param columns - 列数
    * @param gap - 间距
    * @returns 当前构建器实例，用于链式调用
    */
-  setGridLayout(columns: number, gap?: number): TuffItemBuilder {
+  setGridLayout(columns: number, gap?: number): this {
     if (!this.layout) {
       this.layout = { display: 'grid' };
     } else {
       this.layout.display = 'grid';
     }
-    
+
     if (!this.layout.grid) {
       this.layout.grid = {};
     }
-    
+
     this.layout.grid.columns = columns;
     if (gap !== undefined) this.layout.grid.gap = gap;
-    
+
     return this;
   }
 
   /**
    * 设置预览配置
-   * 
+   *
    * @param type - 预览类型
    * @param title - 可选的预览标题
    * @param content - 可选的预览内容
@@ -318,61 +316,61 @@ class TuffItemBuilder {
     content?: string,
     image?: string,
     lazy?: boolean
-  ): TuffItemBuilder {
+  ): this {
     this.preview = { type };
-    
+
     if (title) this.preview.title = title;
     if (content) this.preview.content = content;
     if (image) this.preview.image = image;
     if (lazy !== undefined) this.preview.lazy = lazy;
-    
+
     return this;
   }
 
   /**
    * 设置自定义预览组件
-   * 
+   *
    * @param customRender - 自定义预览渲染配置
    * @returns 当前构建器实例，用于链式调用
    */
-  setPreviewComponent(customRender: TuffCustomRender): TuffItemBuilder {
+  setPreviewComponent(customRender: TuffCustomRender): this {
     if (!this.preview) {
       this.preview = { type: 'panel' };
     }
-    
+
     this.preview.component = customRender;
     return this;
   }
 
   /**
    * 设置渲染样式类名
-   * 
+   *
    * @param className - CSS 类名
    * @returns 当前构建器实例，用于链式调用
    */
-  setClassName(className: string): TuffItemBuilder {
+  setClassName(className: string): this {
     this.renderClassName = className;
     return this;
   }
 
   /**
    * 设置渲染内联样式
-   * 
+   *
    * @param style - 内联样式对象
    * @returns 当前构建器实例，用于链式调用
    */
-  setStyle(style: Record<string, string>): TuffItemBuilder {
+  setStyle(style: Record<string, string>): this {
     this.renderStyle = style;
     return this;
   }
 
   /**
    * 添加行为
-   * 
+   *
    * @param action - 要添加的行为
    * @returns 当前构建器实例，用于链式调用
    */
-  addAction(action: TuffAction): TuffItemBuilder {
+  addAction(action: TuffAction): this {
     if (!this.item.actions) {
       this.item.actions = [];
     }
@@ -382,11 +380,11 @@ class TuffItemBuilder {
 
   /**
    * 设置行为列表
-   * 
+   *
    * @param actions - 行为列表
    * @returns 当前构建器实例，用于链式调用
    */
-  setActions(actions: TuffAction[]): TuffItemBuilder {
+  setActions(actions: TuffAction[]): this {
     this.item.actions = actions;
     return this;
   }
@@ -408,7 +406,7 @@ class TuffItemBuilder {
     type: TuffActionType,
     label: string,
     payload?: any
-  ): TuffItemBuilder {
+  ): this {
     const isFirstAction = !this.item.actions || this.item.actions.length === 0;
 
     const action = TuffUtils.createAction(
@@ -424,11 +422,11 @@ class TuffItemBuilder {
 
   /**
    * 设置评分信息
-   * 
+   *
    * @param scoring - 评分信息
    * @returns 当前构建器实例，用于链式调用
    */
-  setScoring(scoring: TuffScoring): TuffItemBuilder {
+  setScoring(scoring: TuffScoring): this {
     this.item.scoring = scoring;
     return this;
   }
@@ -439,7 +437,7 @@ class TuffItemBuilder {
    * @param score - 最终分数值 (0-1之间)
    * @returns 当前构建器实例，用于链式调用
    */
-  setFinalScore(score: number): TuffItemBuilder {
+  setFinalScore(score: number): this {
     if (score < 0 || score > 1) {
       throw new Error('Score must be between 0 and 1');
     }
@@ -449,38 +447,39 @@ class TuffItemBuilder {
 
   /**
    * 设置上下文信息
-   * 
+   *
    * @param context - 上下文信息
    * @returns 当前构建器实例，用于链式调用
    */
-  setContext(context: TuffContext): TuffItemBuilder {
+  setContext(context: TuffContext): this {
     this.item.context = context;
     return this;
   }
 
   /**
    * 设置元数据
-   * 
+   *
    * @param meta - 元数据
    * @returns 当前构建器实例，用于链式调用
    */
-  setMeta(meta: TuffMeta): TuffItemBuilder {
-    this.item.meta = meta;
+  setMeta(meta: TuffMeta): this {
+    this.item.meta = { ...this.item.meta, ...meta };
     return this;
   }
 
   /**
    * 构建 TuffItem 对象
-   * 
+   *
    * @returns 构建好的 TuffItem 对象
-   * @throws 如果缺少必要的属性（source 或 render.basic.title）
+   * @throws 如果缺少必要的属性（id, source 或 render.basic.title）
    */
   build(): TuffItem {
     // 检查并自动生成 ID
     if (!this.item.id) {
-      this.item.id = TuffUtils.generateId();
+      // this.item.id = TuffUtils.generateId();
+      throw new Error('TuffItem 必须设置 id 属性');
     }
-    
+
     // 检查必要属性
     if (!this.item.source) {
       throw new Error('TuffItem 必须设置 source 属性');
@@ -523,59 +522,52 @@ class TuffItemBuilder {
   }
 }
 
-// ==================== SearchResult Builder ====================
+// ==================== Fluent Builder ====================
 
+/**
+ * A fluent builder for creating TuffSearchResult objects.
+ */
 class TuffSearchResultBuilder {
-  private result: Partial<TuffSearchResult> = {};
+  private readonly result: TuffSearchResult;
 
-  constructor(query?: TuffQuery) {
-    if (query) {
-      this.result.query = query;
-    }
+  constructor(query: TuffQuery) {
+    this.result = {
+      query,
+      items: [],
+      duration: 0,
+      sources: [],
+      activate: []
+    };
   }
 
-  setQuery(query: TuffQuery): TuffSearchResultBuilder {
-    this.result.query = query;
-    return this;
-  }
-
-  setItems(items: TuffItem[]): TuffSearchResultBuilder {
+  public setItems(items: TuffItem[]): this {
     this.result.items = items;
-    this.result.total = items.length;
     return this;
   }
 
-  setDuration(duration: number): TuffSearchResultBuilder {
+  public setDuration(duration: number): this {
     this.result.duration = duration;
     return this;
   }
 
-  setSources(sources: TuffSearchResult['sources']): TuffSearchResultBuilder {
+  public setActivate(activate: IProviderActivate[]): this {
+    this.result.activate = activate;
+    return this;
+  }
+
+  public setSources(sources: TuffSearchResult['sources']): this {
     this.result.sources = sources;
     return this;
   }
 
-  setSortStats(sort_stats: TuffSortStats): TuffSearchResultBuilder {
-    this.result.sort_stats = sort_stats;
+  public setSortStats(stats: any[]): this {
+    // @ts-ignore
+    this.result.sort_stats = stats;
     return this;
   }
 
-  setHasMore(has_more: boolean): TuffSearchResultBuilder {
-    this.result.has_more = has_more;
-    return this;
-  }
-
-  build(): TuffSearchResult {
-    if (!this.result.items) {
-      throw new Error('TuffSearchResult 必须设置 items 属性');
-    }
-    if (this.result.total === undefined) {
-      this.result.total = this.result.items.length;
-    }
-    if (this.result.has_more === undefined) {
-      this.result.has_more = false;
-    }
-    return this.result as TuffSearchResult;
+  public build(): TuffSearchResult {
+    return this.result;
   }
 }
 
@@ -583,16 +575,12 @@ class TuffSearchResultBuilder {
 // ==================== 工厂方法 ====================
 
 /**
- * TuffFactory - TuffItem 工厂类
- * 
- * @description
- * 提供一系列静态工厂方法，用于快速创建各种类型的 TuffItem 对象。
- * 适用于常见场景，减少重复代码。
+ * Factory for creating TUFF objects using a fluent builder pattern.
  */
 class TuffFactory {
   /**
    * 创建基本项目
-   * 
+   *
    * @param title - 项目标题
    * @param sourceType - 来源类型
    * @param sourceId - 来源标识符
@@ -605,18 +593,18 @@ class TuffFactory {
     sourceId: string,
     kind?: TuffItemKind
   ): TuffItem {
-    const builder = new TuffItemBuilder()
+    const builder = new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
-      .setTitle(title);
-    
+      .setTitle(title)
+
     if (kind) builder.setKind(kind);
-    
+
     return builder.build();
   }
 
   /**
    * 创建系统项目
-   * 
+   *
    * @param title - 项目标题
    * @param id - 系统项目标识符
    * @param kind - 可选的项目类型
@@ -632,7 +620,7 @@ class TuffFactory {
 
   /**
    * 创建插件项目
-   * 
+   *
    * @param title - 项目标题
    * @param pluginId - 插件标识符
    * @param kind - 可选的项目类型
@@ -648,7 +636,7 @@ class TuffFactory {
 
   /**
    * 创建 AI 推荐项目
-   * 
+   *
    * @param title - 项目标题
    * @param aiSourceId - AI 来源标识符
    * @param kind - 可选的项目类型
@@ -664,7 +652,7 @@ class TuffFactory {
 
   /**
    * 创建文件项目
-   * 
+   *
    * @param title - 文件名称
    * @param path - 文件路径
    * @param sourceType - 来源类型
@@ -677,7 +665,7 @@ class TuffFactory {
     sourceType: TuffSourceType,
     sourceId: string
   ): TuffItem {
-    return new TuffItemBuilder()
+    return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('file')
@@ -692,7 +680,7 @@ class TuffFactory {
 
   /**
    * 创建文件夹项目
-   * 
+   *
    * @param title - 文件夹名称
    * @param path - 文件夹路径
    * @param sourceType - 来源类型
@@ -705,7 +693,7 @@ class TuffFactory {
     sourceType: TuffSourceType,
     sourceId: string
   ): TuffItem {
-    return new TuffItemBuilder()
+    return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('folder')
@@ -720,7 +708,7 @@ class TuffFactory {
 
   /**
    * 创建链接项目
-   * 
+   *
    * @param title - 链接标题
    * @param url - 链接地址
    * @param sourceType - 来源类型
@@ -733,7 +721,7 @@ class TuffFactory {
     sourceType: TuffSourceType,
     sourceId: string
   ): TuffItem {
-    return new TuffItemBuilder()
+    return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('url')
@@ -748,7 +736,7 @@ class TuffFactory {
 
   /**
    * 创建应用项目
-   * 
+   *
    * @param title - 应用名称
    * @param path - 应用路径
    * @param bundleId - 应用包标识符
@@ -763,7 +751,7 @@ class TuffFactory {
     sourceType: TuffSourceType,
     sourceId: string
   ): TuffItem {
-    return new TuffItemBuilder()
+    return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('app')
@@ -779,7 +767,7 @@ class TuffFactory {
 
   /**
    * 创建命令项目
-   * 
+   *
    * @param title - 命令标题
    * @param command - 命令内容
    * @param sourceType - 来源类型
@@ -792,7 +780,7 @@ class TuffFactory {
     sourceType: TuffSourceType,
     sourceId: string
   ): TuffItem {
-    return new TuffItemBuilder()
+    return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('command')
@@ -802,7 +790,7 @@ class TuffFactory {
 
   /**
    * 创建操作项目
-   * 
+   *
    * @param title - 操作标题
    * @param action - 操作对象
    * @param sourceType - 来源类型
@@ -815,7 +803,7 @@ class TuffFactory {
     sourceType: TuffSourceType,
     sourceId: string
   ): TuffItem {
-    return new TuffItemBuilder()
+    return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('action')
@@ -823,13 +811,7 @@ class TuffFactory {
       .build();
   }
 
-  /**
-   * 创建搜索结果构建器
-   *
-   * @param query - 可选的查询对象
-   * @returns TuffSearchResultBuilder 实例
-   */
-  static createSearchResult(query?: TuffQuery): TuffSearchResultBuilder {
+  public static createSearchResult(query: TuffQuery): TuffSearchResultBuilder {
     return new TuffSearchResultBuilder(query);
   }
 }
@@ -902,8 +884,8 @@ class TuffListBuilder {
    * @returns 当前列表构建器实例，用于链式调用
    */
   addItem(customize: (builder: TuffItemBuilder) => void): TuffListBuilder {
-    const builder = new TuffItemBuilder()
-      .setSource(this.sharedSource.type, this.sharedSource.id);
+    const builder = new TuffItemBuilder(TuffUtils.generateId())
+      .setSource(this.sharedSource.type, this.sharedSource.id)
 
     // 应用共享配置
     if (this.sharedKind) {
@@ -967,7 +949,7 @@ class TuffListBuilder {
 
 /**
  * TuffUtils - 实用工具函数集合
- * 
+ *
  * @description
  * 提供一系列实用函数，用于处理和转换 TuffItem 对象。
  */
@@ -992,7 +974,7 @@ class TuffUtils {
    * @param type - 图标类型
    * @returns {TuffIcon} 创建的图标对象
    */
-  static createIcon(value: string, type: 'emoji' | 'url' | 'base64' | 'icon' | 'component' = 'emoji'): TuffIcon {
+  static createIcon(value: string, type: 'emoji' | 'url' | 'base64' | 'component' = 'emoji'): TuffIcon {
     return {
       type,
       value
@@ -1001,7 +983,7 @@ class TuffUtils {
 
   /**
    * 创建标签对象
-   * 
+   *
    * @param text - 标签文本
    * @param color - 可选的标签颜色
    * @param variant - 可选的标签样式
@@ -1016,7 +998,7 @@ class TuffUtils {
 
   /**
    * 创建简单的行为对象
-   * 
+   *
    * @param id - 行为 ID
    * @param type - 行为类型
    * @param label - 行为标签
@@ -1038,7 +1020,7 @@ class TuffUtils {
 
   /**
    * 过滤项目列表
-   * 
+   *
    * @param items - 项目列表
    * @param predicate - 过滤函数
    * @returns 过滤后的项目列表
@@ -1049,7 +1031,7 @@ class TuffUtils {
 
   /**
    * 按类型过滤项目
-   * 
+   *
    * @param items - 项目列表
    * @param kind - 项目类型
    * @returns 过滤后的项目列表
@@ -1060,7 +1042,7 @@ class TuffUtils {
 
   /**
    * 按来源过滤项目
-   * 
+   *
    * @param items - 项目列表
    * @param sourceType - 来源类型
    * @returns 过滤后的项目列表
@@ -1071,7 +1053,7 @@ class TuffUtils {
 
   /**
    * 按标题搜索项目
-   * 
+   *
    * @param items - 项目列表
    * @param query - 搜索关键词
    * @param caseSensitive - 是否区分大小写
@@ -1089,7 +1071,7 @@ class TuffUtils {
 
   /**
    * 按评分排序项目
-   * 
+   *
    * @param items - 项目列表
    * @param ascending - 是否升序排列
    * @returns 排序后的项目列表
@@ -1104,7 +1086,7 @@ class TuffUtils {
 
   /**
    * 按标题排序项目
-   * 
+   *
    * @param items - 项目列表
    * @param ascending - 是否升序排列
    * @returns 排序后的项目列表
@@ -1113,61 +1095,61 @@ class TuffUtils {
     return [...items].sort((a, b) => {
       const titleA = a.render.basic?.title ?? '';
       const titleB = b.render.basic?.title ?? '';
-      return ascending 
-        ? titleA.localeCompare(titleB) 
+      return ascending
+        ? titleA.localeCompare(titleB)
         : titleB.localeCompare(titleA);
     });
   }
-  
+
   /**
    * 将普通对象转换为 TuffItem
-   * 
+   *
    * @param obj - 普通对象
    * @param sourceType - 来源类型
    * @param sourceId - 来源标识符
    * @returns 转换后的 TuffItem 对象
    */
   static fromObject(obj: any, sourceType: TuffSourceType, sourceId: string): TuffItem {
-    const builder = new TuffItemBuilder()
-      .setSource(sourceType, sourceId);
-    
+    const builder = new TuffItemBuilder(TuffUtils.generateId())
+      .setSource(sourceType, sourceId)
+
     // 尝试提取标题
     if (obj.title || obj.name || obj.label) {
       builder.setTitle(obj.title || obj.name || obj.label);
     } else {
       builder.setTitle(String(obj));
     }
-    
+
     // 尝试提取描述
     if (obj.description || obj.desc) {
       builder.setDescription(obj.description || obj.desc);
     }
-    
+
     // 尝试提取图标
     if (obj.icon) {
       builder.setIcon(obj.icon);
     }
-    
+
     // 尝试提取类型
     if (obj.kind || obj.type) {
       const kind = obj.kind || obj.type;
       builder.setKind(kind as TuffItemKind);
     }
-    
+
     // 尝试提取分数
     if (obj.score !== undefined) {
       builder.setFinalScore(obj.score);
     }
-    
+
     // 保存原始数据
     builder.setMeta({ raw: obj });
-    
+
     return builder.build();
   }
 
   /**
    * 从对象数组批量创建 TuffItem
-   * 
+   *
    * @param objects - 对象数组
    * @param sourceType - 来源类型
    * @param sourceId - 来源标识符

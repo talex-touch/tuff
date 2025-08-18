@@ -6,7 +6,7 @@
 
 <script>
 export default {
-  name: "RemixAnimateIcon"
+  name: 'RemixAnimateIcon'
 }
 </script>
 
@@ -22,16 +22,14 @@ const props = defineProps({
   },
   style: {
     type: String,
-    validator( value ) {
-      return ['line', 'fill'].includes( value )
+    validator(value) {
+      return ['line', 'fill'].includes(value)
     }
   }
 })
-
 </script>
 
 <style lang="scss" scoped>
-
 @keyframes move {
   0% {
     stroke-dashoffset: 8;

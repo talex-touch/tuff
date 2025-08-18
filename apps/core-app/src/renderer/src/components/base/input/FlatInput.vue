@@ -1,30 +1,23 @@
 <script name="FlatInput" setup>
-import RemixIcon from "@comp/icon/RemixIcon.vue";
-import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
-import { ref } from "vue";
+import RemixIcon from '@comp/icon/RemixIcon.vue'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { ref } from 'vue'
 
-const props = defineProps([
-  "placeholder",
-  "icon",
-  "password",
-  "modelValue",
-  "nonWin",
-  "area",
-]);
-const emit = defineEmits(["update:modelValue"]);
+const props = defineProps(['placeholder', 'icon', 'password', 'modelValue', 'nonWin', 'area'])
+const emit = defineEmits(['update:modelValue'])
 
-const lapsLock = ref(false);
-const value = useModelWrapper(props, emit);
+const lapsLock = ref(false)
+const value = useModelWrapper(props, emit)
 
 function onKeyDown(e) {
-  if (!props.password) return;
+  if (!props.password) return
 
-  const valueCapsLock = e.keyCode ? e.keyCode : e.which; // 按键
-  const valueShift = e.shiftKey ? e.shiftKey : valueCapsLock === 16; // shift键是否按住
+  const valueCapsLock = e.keyCode ? e.keyCode : e.which // 按键
+  const valueShift = e.shiftKey ? e.shiftKey : valueCapsLock === 16 // shift键是否按住
 
   lapsLock.value =
     (valueCapsLock >= 65 && valueCapsLock <= 90 && !valueShift) || // 输入了大写字母，并且shift键没有按住，说明Caps Lock打开
-    (valueCapsLock >= 97 && valueCapsLock <= 122 && valueShift);
+    (valueCapsLock >= 97 && valueCapsLock <= 122 && valueShift)
 }
 </script>
 
@@ -40,13 +33,7 @@ function onKeyDown(e) {
         <RemixIcon :name="icon" style="line" />
       </slot>
     </span>
-    <textarea
-      v-if="area"
-      v-model="value"
-      resize="false"
-      :placeholder="placeholder"
-      relative
-    />
+    <textarea v-if="area" v-model="value" resize="false" :placeholder="placeholder" relative />
     <input
       v-else
       v-model="value"
@@ -54,9 +41,7 @@ function onKeyDown(e) {
       relative
       :type="password ? 'password' : 'text'"
     />
-    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
-      Caps Lock
-    </el-tag>
+    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain"> Caps Lock </el-tag>
   </div>
 </template>
 
@@ -75,7 +60,8 @@ function onKeyDown(e) {
 
   &:focus-within {
     border-color: var(--el-color-primary);
-    box-shadow: 0 0 2px 1px var(--el-color-primary-light-3),
+    box-shadow:
+      0 0 2px 1px var(--el-color-primary-light-3),
       0 0 4px 2px var(--el-color-primary-light-5);
   }
 
@@ -137,7 +123,9 @@ function onKeyDown(e) {
   border: 1px solid var(--el-border-color);
 
   --fake-radius: 6px;
-  transition: border-color 0.25s, box-shadow 0.25s;
+  transition:
+    border-color 0.25s,
+    box-shadow 0.25s;
 }
 
 div.FlatInput-Container.win {

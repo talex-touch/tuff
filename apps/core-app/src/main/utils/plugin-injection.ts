@@ -1,9 +1,9 @@
-import { getConfig } from "../core/storage";
+import { getConfig } from '../core/storage'
 
 export function getJs(options) {
-  const [name, _path] = options;
+  const [name, _path] = options
 
-  const themeConfig = getConfig("theme-style.ini");
+  const themeConfig = getConfig('theme-style.ini')
 
   return `
         !(() => {
@@ -30,7 +30,7 @@ export function getJs(options) {
             window.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
                      
         })()
-    `;
+    `
 }
 
 export function getStyles() {
@@ -55,7 +55,7 @@ export function getStyles() {
                   --el-box-shadow: 0 0 4px 1px rgba(29, 29, 29, .2) !important;
                 }
                 
-                `;
+                `
 
   // #app {
   //     top: 2px;

@@ -27,7 +27,7 @@ async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<stri
   })
 }
 
-async function getAppIcon(app: { path: string, name: string }): Promise<string | null> {
+async function getAppIcon(app: { path: string; name: string }): Promise<string | null> {
   const safeName = app.name.replace(/[/\\?%*:|"<>]/g, '-')
   const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeName}.png`)
   const noneMarkerPath = path.join(ICON_CACHE_DIR, `${safeName}.none`)
@@ -51,7 +51,9 @@ async function getAppIcon(app: { path: string, name: string }): Promise<string |
 
     try {
       const plistContent = await fs.readFile(plistPath, 'utf-8')
-      const iconNameMatch = plistContent.match(/<key>CFBundleIconFile<\/key>\s*<string>(.*?)<\/string>/)
+      const iconNameMatch = plistContent.match(
+        /<key>CFBundleIconFile<\/key>\s*<string>(.*?)<\/string>/
+      )
       if (iconNameMatch?.[1]) {
         let iconFile = iconNameMatch[1]
         if (!iconFile.endsWith('.icns')) {
@@ -67,11 +69,11 @@ async function getAppIcon(app: { path: string, name: string }): Promise<string |
     }
 
     if (!icnsFile) {
-        const files = await fs.readdir(resourcesPath).catch(() => [])
-        const found = files.find(f => f.endsWith('.icns'))
-        if(found) {
-            icnsFile = path.join(resourcesPath, found)
-        }
+      const files = await fs.readdir(resourcesPath).catch(() => [])
+      const found = files.find((f) => f.endsWith('.icns'))
+      if (found) {
+        icnsFile = path.join(resourcesPath, found)
+      }
     }
 
     if (!icnsFile) {
@@ -83,14 +85,12 @@ async function getAppIcon(app: { path: string, name: string }): Promise<string |
     await convertIcnsToPng(icnsFile, cachedIconPath)
     const buffer = await fs.readFile(cachedIconPath)
     return buffer.toString('base64')
-
   } catch (error) {
     console.warn(`[Darwin] Failed to get icon for ${app.name}:`, error)
-    await fs.writeFile(noneMarkerPath, '').catch(() => {});
+    await fs.writeFile(noneMarkerPath, '').catch(() => {})
     return null
   }
 }
-
 
 export async function getApps(): Promise<
   {
@@ -119,7 +119,9 @@ export async function getApps(): Promise<
 
           if (!apps || !Array.isArray(apps)) {
             return reject(
-              new Error('Unexpected output from system_profiler: SPApplicationsDataType is not an array.')
+              new Error(
+                'Unexpected output from system_profiler: SPApplicationsDataType is not an array.'
+              )
             )
           }
 
@@ -127,7 +129,8 @@ export async function getApps(): Promise<
             .filter(
               (app) =>
                 app.path &&
-                (app.path.startsWith('/Applications/') || app.path.startsWith('/System/Applications/'))
+                (app.path.startsWith('/Applications/') ||
+                  app.path.startsWith('/System/Applications/'))
             )
             .map(async (app) => {
               const icon = await getAppIcon({ name: app._name, path: app.path })
@@ -184,7 +187,7 @@ export async function getAppInfo(appPath: string): Promise<{
     const displayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
     const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
     const name = displayName || bundleName || path.basename(appPath, '.app')
-    
+
     const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
 
     const icon = await getAppIcon({ name, path: appPath })
@@ -199,7 +202,9 @@ export async function getAppInfo(appPath: string): Promise<{
     }
   } catch (error) {
     // This can happen if the .app bundle is incomplete during copy
-    console.warn(`[Darwin] Failed to get app info for ${appPath}, likely incomplete or invalid bundle. Error: ${error instanceof Error ? error.message : error}`)
+    console.warn(
+      `[Darwin] Failed to get app info for ${appPath}, likely incomplete or invalid bundle. Error: ${error instanceof Error ? error.message : error}`
+    )
     return null
   }
 }

@@ -75,7 +75,7 @@ function playLaunchSound(): void {
     audio.volume = 0.5
   }
 
-  audio.play().catch(e => console.log('Audio play failed:', e))
+  audio.play().catch((e) => console.log('Audio play failed:', e))
 }
 
 // Provide step and back functions to child components

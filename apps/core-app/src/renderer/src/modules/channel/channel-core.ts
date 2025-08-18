@@ -10,7 +10,6 @@ import {
   StandardChannelData
 } from '@talex-touch/utils/channel'
 
-
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, ((data: StandardChannelData) => void)[]> = new Map()
 

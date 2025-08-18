@@ -193,7 +193,11 @@ onUnmounted(() => {
       <h1 id="dialog-title" v-text="title" />
 
       <!-- Dialog message content with line breaks -->
-      <span id="dialog-message" class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
+      <span
+        id="dialog-message"
+        class="TDialogTip-Content"
+        v-html="message.replace('\n', '<br /><br />')"
+      />
 
       <!-- Dialog buttons container -->
       <div class="TDialogTip-Btn">

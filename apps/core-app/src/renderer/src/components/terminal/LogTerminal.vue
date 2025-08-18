@@ -1,16 +1,14 @@
 <template>
-  <div ref="terminal" class="LogTerminal-Container">
-  </div>
+  <div ref="terminal" class="LogTerminal-Container"></div>
 </template>
 
 <script>
 export default {
-  name: "LogTerminal"
+  name: 'LogTerminal'
 }
 </script>
 
 <script setup>
-
 import { onMounted, reactive, ref, watchEffect } from 'vue'
 import { Terminal } from 'xterm'
 import 'xterm/css/xterm.css'
@@ -30,13 +28,12 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 12,
-  lineHeight: 1,
+  lineHeight: 1
 })
 
 watchEffect(() => {
-
   const array = props.logs
-  if ( !array || array.length < 1 ) return
+  if (!array || array.length < 1) return
 
   const last = array[array.length - 1]
 
@@ -54,11 +51,9 @@ watchEffect(() => {
 
   // write last
   term.writeln(last)
-
 })
 
 onMounted(() => {
-
   term.open(terminal.value)
 
   const fitAddon = new TerminalFit.FitAddon()
@@ -75,7 +70,6 @@ onMounted(() => {
   window.addEventListener('resize', () => {
     fitAddon.fit()
   })
-
 })
 </script>
 
@@ -104,6 +98,5 @@ onMounted(() => {
 
   text-align: left;
   overflow-y: hidden;
-
 }
 </style>

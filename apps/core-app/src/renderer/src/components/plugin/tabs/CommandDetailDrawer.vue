@@ -13,7 +13,9 @@
           <div class="command-overview glass-card">
             <div class="overview-header">
               <code class="command-name">{{ commandData?.name }}</code>
-              <span v-if="commandData?.shortcut" class="command-shortcut">{{ commandData?.shortcut }}</span>
+              <span v-if="commandData?.shortcut" class="command-shortcut">{{
+                commandData?.shortcut
+              }}</span>
             </div>
             <p v-if="commandData?.desc" class="command-description">{{ commandData?.desc }}</p>
           </div>

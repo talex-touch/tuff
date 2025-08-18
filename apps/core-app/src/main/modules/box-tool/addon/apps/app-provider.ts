@@ -3,8 +3,10 @@ import {
   ISearchProvider,
   ProviderContext,
   TuffItem,
-  TuffQuery
+  TuffQuery,
+  TuffSearchResult
 } from '../../search-engine/types'
+import { TuffFactory } from '@talex-touch/utils/core-box'
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
 import { shell } from 'electron'
@@ -14,7 +16,7 @@ import fs from 'fs'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
 
 interface ScannedAppInfo {
@@ -114,21 +116,42 @@ class AppProvider implements ISearchProvider {
         mtime: app.lastModified,
         ctime: new Date()
       }))
-      const insertedFiles = await db.insert(filesSchema).values(newFileRecords).returning()
+      // Use onConflictDoUpdate to perform an "upsert" operation.
+      // If a file with the same path already exists, it will be updated.
+      // Otherwise, a new record will be inserted.
+      const upsertedFiles = await db
+        .insert(filesSchema)
+        .values(newFileRecords)
+        .onConflictDoUpdate({
+          target: filesSchema.path,
+          set: {
+            name: sql`excluded.name`,
+            mtime: sql`excluded.mtime`
+          }
+        })
+        .returning()
 
-      const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
+      const extensionsToUpsert: { fileId: number; key: string; value: string }[] = []
       for (let i = 0; i < toAdd.length; i++) {
         const app = toAdd[i]
-        const fileId = insertedFiles[i].id
-        if (app.bundleId) {
-          extensionsToAdd.push({ fileId, key: 'bundleId', value: app.bundleId })
-        }
-        if (app.icon) {
-          extensionsToAdd.push({ fileId, key: 'icon', value: app.icon })
+        // Find the corresponding file ID from the upserted results
+        const upsertedFile = upsertedFiles.find((f) => f.path === app.path)
+        if (upsertedFile) {
+          if (app.bundleId) {
+            extensionsToUpsert.push({
+              fileId: upsertedFile.id,
+              key: 'bundleId',
+              value: app.bundleId
+            })
+          }
+          if (app.icon) {
+            extensionsToUpsert.push({ fileId: upsertedFile.id, key: 'icon', value: app.icon })
+          }
         }
       }
-      if (extensionsToAdd.length > 0) {
-        await this.dbUtils.addFileExtensions(extensionsToAdd)
+      if (extensionsToUpsert.length > 0) {
+        // Assuming addFileExtensions handles updates on conflict correctly
+        await this.dbUtils.addFileExtensions(extensionsToUpsert)
       }
     }
 
@@ -260,34 +283,31 @@ class AppProvider implements ISearchProvider {
       }
 
       const db = this.dbUtils!.getDb()
-      const existingApp = await this.dbUtils!.getFileByPath(appPath)
-
-      if (existingApp) {
-        await db
-          .update(filesSchema)
-          .set({ name: appInfo.name, mtime: appInfo.lastModified })
-          .where(eq(filesSchema.id, existingApp.id))
-        await this.dbUtils!.addFileExtensions([
-          { fileId: existingApp.id, key: 'bundleId', value: appInfo.bundleId || '' },
-          { fileId: existingApp.id, key: 'icon', value: appInfo.icon }
-        ])
-        console.log(`[AppProvider] Updated app: ${appInfo.name}`)
-      } else {
-        const [newFile] = await db
-          .insert(filesSchema)
-          .values({
-            path: appInfo.path,
+      // Use "upsert" logic for handling both new and existing apps atomically.
+      const [upsertedFile] = await db
+        .insert(filesSchema)
+        .values({
+          path: appInfo.path,
+          name: appInfo.name,
+          type: 'app' as const,
+          mtime: appInfo.lastModified,
+          ctime: new Date()
+        })
+        .onConflictDoUpdate({
+          target: filesSchema.path,
+          set: {
             name: appInfo.name,
-            type: 'app' as const,
-            mtime: appInfo.lastModified,
-            ctime: new Date()
-          })
-          .returning()
+            mtime: appInfo.lastModified
+          }
+        })
+        .returning()
+
+      if (upsertedFile) {
         await this.dbUtils!.addFileExtensions([
-          { fileId: newFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-          { fileId: newFile.id, key: 'icon', value: appInfo.icon }
+          { fileId: upsertedFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
+          { fileId: upsertedFile.id, key: 'icon', value: appInfo.icon }
         ])
-        console.log(`[AppProvider] Added new app: ${appInfo.name}`)
+        console.log(`[AppProvider] Upserted app: ${appInfo.name}`)
       }
     } finally {
       this.processingPaths.delete(appPath)
@@ -331,7 +351,7 @@ class AppProvider implements ISearchProvider {
     }
   }
 
-  async onExecute(args: IExecuteArgs): Promise<void> {
+  async onExecute(args: IExecuteArgs): Promise<boolean> {
     const { item, searchResult } = args
     const { sessionId } = searchResult
 
@@ -348,7 +368,7 @@ class AppProvider implements ISearchProvider {
     if (!appPath) {
       const err = new Error('Application path not found in TuffItem')
       console.error(err)
-      throw err
+      return false
     }
 
     // Use Electron's shell.openPath for a more robust cross-platform way to open apps
@@ -358,24 +378,24 @@ class AppProvider implements ISearchProvider {
       console.error(`Failed to open application at: ${appPath}`, err)
       // Fallback to exec for macOS if shell fails
       if (this.isMac) {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
           const action = `open -a "${appPath}"`
           exec(action, (execErr) => {
             if (execErr) {
               console.error(`Fallback exec failed to execute action: ${action}`, execErr)
-              return reject(execErr)
+              return resolve(false)
             }
-            resolve()
+            resolve(false)
           })
         })
       }
-      throw err
     }
+    return false
   }
 
-  async onSearch(query: TuffQuery): Promise<TuffItem[]> {
+  async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     if (!this.dbUtils) {
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const db = this.dbUtils.getDb()
@@ -387,7 +407,8 @@ class AppProvider implements ISearchProvider {
         .where(eq(filesSchema.type, 'app'))
         .limit(20) // Consider making this configurable
       const appsWithExtensions = await this.fetchExtensionsForFiles(recentApps)
-      return appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
+      const items = appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
+      return TuffFactory.createSearchResult(query).setItems(items).build()
     }
 
     // 1. Get all apps and their usage data
@@ -468,8 +489,7 @@ class AppProvider implements ISearchProvider {
             ...tuffItem.meta,
             extension: {
               ...tuffItem.meta?.extension,
-              matchResult: [matchResult[0], matchResult[1]],
-              from: this.id
+              matchResult: [matchResult[0], matchResult[1]]
             }
           }
         }
@@ -479,7 +499,7 @@ class AppProvider implements ISearchProvider {
       .sort((a, b) => b.score - a.score)
       .map((result) => result.item)
 
-    return searchResults
+    return TuffFactory.createSearchResult(query).setItems(searchResults).build()
   }
 
   private async fetchExtensionsForFiles(

@@ -4,8 +4,8 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 
 const emits = defineEmits(['update:modelValue'])
@@ -14,10 +14,22 @@ const value = useModelWrapper(props, emits, 'modelValue')
 </script>
 
 <template>
-  <div :class="{ select: value }" class="TCheckBox-Container" role="checkbox" @click="value = !value">
+  <div
+    :class="{ select: value }"
+    class="TCheckBox-Container"
+    role="checkbox"
+    @click="value = !value"
+  >
     <span class="TCheckBox-Inner">
       <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-        <polyline fill="none" stroke-width="24" points="88,214 173,284 304,138" stroke-linecap="round" stroke-linejoin="round" class="tick" />
+        <polyline
+          fill="none"
+          stroke-width="24"
+          points="88,214 173,284 304,138"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="tick"
+        />
       </svg>
     </span>
     <span class="TCheckBox-Text">
@@ -44,7 +56,7 @@ const value = useModelWrapper(props, emits, 'modelValue')
 
       stroke-dashoffset: 306.2691345214844;
       stroke-dasharray: 306.2691345214844;
-      transition: .5s;
+      transition: 0.5s;
     }
     position: relative;
 
@@ -53,7 +65,7 @@ const value = useModelWrapper(props, emits, 'modelValue')
 
     border-radius: 4px;
     border: var(--el-border);
-    transition: .25s;
+    transition: 0.25s;
   }
   .TCheckBox-Text {
     position: relative;
@@ -61,7 +73,7 @@ const value = useModelWrapper(props, emits, 'modelValue')
     left: 5px;
 
     margin-top: -0.17em;
-    opacity: .75;
+    opacity: 0.75;
   }
   display: flex;
   margin: 20px 0;

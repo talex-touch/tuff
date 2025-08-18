@@ -11,6 +11,8 @@ export interface IInitializationInfo {
   userAgent: string
   /** Current URL of the renderer */
   currentUrl: string
+  /** Operating system platform */
+  platform: NodeJS.Platform
   /** Screen resolution information */
   screenResolution: {
     width: number
@@ -103,6 +105,7 @@ export function useInitialize(): IInitializationInfo {
     initTime: new Date(now).toISOString(),
     userAgent: navigator.userAgent,
     currentUrl: window.location.href,
+    platform: process.platform,
     screenResolution: {
       width: screen.width,
       height: screen.height,

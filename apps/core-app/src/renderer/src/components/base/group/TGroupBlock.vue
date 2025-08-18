@@ -2,7 +2,7 @@
   <div class="TGroupBlock-Container" :class="{ expand }">
     <div class="TGroupBlock-Header fake-background index-fix" @click="expand = !expand">
       <div class="TGroupBlock-Content">
-        <remix-icon :name="icon" :style="(expand && expandFill) ? 'fill' : 'line'" />
+        <remix-icon :name="icon" :style="expand && expandFill ? 'fill' : 'line'" />
         <div class="TGroupBlock-Label">
           <h3>{{ name }}</h3>
           <p>{{ description }}</p>
@@ -36,7 +36,7 @@ const expand = ref(!props.shrink)
 
   border-radius: 0 !important;
   --fake-radius: 0 !important;
-  --fake-inner-opacity: .5;
+  --fake-inner-opacity: 0.5;
   .touch-blur & {
     &:hover {
       --fake-color: var(--el-fill-color-light) !important;
@@ -84,7 +84,7 @@ const expand = ref(!props.shrink)
         font-size: 12px;
         font-weight: 400;
 
-        opacity: .5;
+        opacity: 0.5;
       }
     }
   }
@@ -107,7 +107,7 @@ const expand = ref(!props.shrink)
   box-sizing: border-box;
   border-bottom: 1px solid var(--el-border-color-lighter);
   --fake-color: var(--el-fill-color-dark);
-  --fake-inner-opacity: .5;
+  --fake-inner-opacity: 0.5;
   &:hover {
     --fake-color: var(--el-fill-color);
     transition: all 1s; // 避免主题模式切换颜色交替时间过长
@@ -128,7 +128,7 @@ const expand = ref(!props.shrink)
 .TGroupBlock-Container {
   .TGroupBlock-Main {
     .TGroupBlock-Header {
-      --fake-inner-opacity: .65 !important;
+      --fake-inner-opacity: 0.65 !important;
     }
     border-bottom: 1px solid var(--el-border-color);
     margin-bottom: 0;
@@ -136,7 +136,7 @@ const expand = ref(!props.shrink)
     --fake-radius: 0 !important;
     :deep(.TBlockSelection) {
       &:after {
-        content: "";
+        content: '';
         position: absolute;
 
         margin-left: 35px;
@@ -152,7 +152,6 @@ const expand = ref(!props.shrink)
       }
 
       .TBlockSelection-Label > h3 {
-
         margin: 0;
 
         font-size: 14px;
@@ -163,7 +162,6 @@ const expand = ref(!props.shrink)
         font-weight: 300;
         font-size: 12px;
       }
-
     }
     .TGroupBlock-Main {
       text-indent: 64px;
@@ -175,13 +173,13 @@ const expand = ref(!props.shrink)
     transition: max-height 1.5s cubic-bezier(0.39, 0.575, 0.565, 1);
   }
   position: relative;
-  margin-bottom: .7rem;
+  margin-bottom: 0.7rem;
 
   width: 100%;
   max-height: 56px;
 
   overflow: hidden;
   border-radius: 12px;
-  transition: max-height .35s;
+  transition: max-height 0.35s;
 }
 </style>

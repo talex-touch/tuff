@@ -7,7 +7,6 @@
     <div class="plugin-wrapper">
       <p class="plugin-name">{{ plugin.pluginInfo.name }}</p>
       <p class="plugin-description">{{ plugin.pluginInfo.description }}</p>
-
     </div>
   </li>
 </template>
@@ -16,25 +15,28 @@
 import PluginIcon from '@comp/plugin/PluginIcon.vue'
 
 export default {
-  name: "PluginItem",
+  name: 'PluginItem',
   components: { PluginIcon },
   props: ['plugin', 'select'],
   mounted() {
     const { status } = this.plugin
 
     // disable
-    if ( status <= 1 ) {
+    if (status <= 1) {
       this.$el.classList.add('disable')
-    } else if ( status > 4 ) { // loading
+    } else if (status > 4) {
+      // loading
       this.$el.classList.add('loading')
-    } else if ( status === 2 ) { // crashed
+    } else if (status === 2) {
+      // crashed
       this.$el.classList.add('crashed')
-    } else if ( status === 3 ) { // enabled
+    } else if (status === 3) {
+      // enabled
       this.$el.classList.add('enable')
-    } else if ( status === 4 ) { // active
+    } else if (status === 4) {
+      // active
       this.$el.classList.add('active')
     }
-
   }
 }
 </script>
@@ -46,7 +48,7 @@ export default {
 
 .PluginItem-Container {
   &.disable {
-    opacity: .5;
+    opacity: 0.5;
   }
   &.enable {
     filter: drop-shadow(0 0 2px var(--el-color-primary-light-3));
@@ -56,7 +58,7 @@ export default {
 .PluginItem-Container {
   &.new-version {
     &:before {
-      content: "新";
+      content: '新';
       position: absolute;
       padding: 0 2px;
 
@@ -70,11 +72,11 @@ export default {
       text-align: center;
       font-size: 12px;
       background-color: var(--el-color-danger);
-      transform: rotate(-45deg) scale(.8);
+      transform: rotate(-45deg) scale(0.8);
     }
   }
   &:after {
-    content: "";
+    content: '';
     position: absolute;
 
     top: 20%;
@@ -96,7 +98,7 @@ export default {
       background-color: var(--el-border-color);
     }
 
-    opacity: .85;
+    opacity: 0.85;
     background-color: var(--el-fill-color-light);
   }
   &.select {
@@ -108,7 +110,6 @@ export default {
       .plugin-description {
         color: var(--el-fill-color);
       }
-
     }
 
     .plugin-version {
@@ -195,7 +196,7 @@ export default {
 
     background-color: var(--el-fill-color-dark);
     border-radius: 0 0 4px 4px;
-    transform: scale(.85);
+    transform: scale(0.85);
     transition: all 0.2s ease-in-out;
   }
 

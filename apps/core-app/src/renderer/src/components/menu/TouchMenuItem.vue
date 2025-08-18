@@ -1,16 +1,23 @@
 <template>
-  <div ref="dom" v-wave :data-route="props.route" @click="handleClick" class="TouchMenuItem-Container fake-background"
-    flex items-center :class="{ active, disabled }">
+  <div
+    ref="dom"
+    v-wave
+    :data-route="props.route"
+    @click="handleClick"
+    class="TouchMenuItem-Container fake-background"
+    flex
+    items-center
+    :class="{ active, disabled }"
+  >
     <slot>
-      <span :class="`${icon}`" class="TouchMenu-Tab-Icon">
-      </span>
+      <span :class="`${icon}`" class="TouchMenu-Tab-Icon"> </span>
       <span class="TouchMenu-Tab-Name">{{ name }}</span>
     </slot>
   </div>
 </template>
 
 <script name="TouchMenuItem" setup>
-import { useRouter, useRoute } from "vue-router";
+import { useRouter, useRoute } from 'vue-router'
 
 const props = defineProps({
   icon: {
@@ -31,7 +38,8 @@ const props = defineProps({
   },
   doActive: {
     type: Function,
-    default: (route, $route) => $route && $route.matched.some(record => record.path.startsWith(route))
+    default: (route, $route) =>
+      $route && $route.matched.some((record) => record.path.startsWith(route))
   }
 })
 const emit = defineEmits(['active'])
@@ -44,8 +52,7 @@ const active = computed(() => props.doActive(props.route, route))
 const changePointer = inject('changePointer')
 
 router.afterEach((to, from) => {
-  if (!to.path.startsWith(props.route))
-    return
+  if (!to.path.startsWith(props.route)) return
 
   changePointer(dom.value)
 })
@@ -57,8 +64,7 @@ onMounted(() => {
 function handleClick($event) {
   if (props.disabled) return
 
-  if (props.route)
-    router.push(props.route)
+  if (props.route) router.push(props.route)
 
   changePointer(dom.value)
   emit('active', $event)
@@ -67,20 +73,19 @@ function handleClick($event) {
 
 <style lang="scss" scoped>
 .TouchMenuItem-Container {
-
   &:hover {
-    --fake-inner-opacity: .5;
+    --fake-inner-opacity: 0.5;
     --fake-color: var(--el-fill-color-dark);
   }
 
   &.active {
-    --fake-inner-opacity: .75 !important;
+    --fake-inner-opacity: 0.75 !important;
     --fake-color: var(--el-fill-color-darker);
   }
 
   &.disabled {
     cursor: not-allowed;
-    opacity: .5;
+    opacity: 0.5;
     --fake-color: transparent;
   }
 
@@ -92,7 +97,7 @@ function handleClick($event) {
   cursor: pointer;
   user-select: none;
   border-radius: 8px;
-  text-indent: .5em;
+  text-indent: 0.5em;
   box-sizing: border-box;
 
   --fake-color: transparent;

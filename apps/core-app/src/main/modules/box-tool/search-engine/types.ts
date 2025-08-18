@@ -6,10 +6,11 @@
  */
 
 import type {
-  TuffItem as TuffItemBase,
   TuffQuery,
   TuffSearchResult as TuffSearchResultBase,
-  TuffSourceType
+  TuffSourceType,
+  TuffIcon,
+  TuffItem
 } from '@talex-touch/utils/core-box'
 import { TouchApp } from '../../../core/touch-core'
 import { DatabaseManager } from '../../database'
@@ -21,11 +22,7 @@ export interface ProviderContext {
   storageManager: TalexTouch.IModule
 }
 
-export interface TuffItem extends TuffItemBase {
-  from?: string
-}
-
-export type { TuffQuery }
+export type { TuffItem, TuffQuery, TuffSourceType }
 
 /**
  * Represents the statistics for a single sort middleware.
@@ -40,11 +37,21 @@ export interface SortStat {
 /**
  * Extends the base TUFF search result to include sorting statistics.
  */
+export interface IProviderActivate {
+  id: string
+  name?: string
+  icon?: TuffIcon
+  time?: number
+  meta?: Record<string, any>
+}
+
 export interface TuffSearchResult extends TuffSearchResultBase {
   /** Optional statistics about the sorting process. */
   sort_stats?: SortStat[]
   /** Unique identifier for the search session. */
   sessionId?: string
+  /** The provider to activate after this search result. */
+  activate?: IProviderActivate[]
 }
 
 /**
@@ -72,7 +79,7 @@ export interface ISortMiddleware {
  */
 export interface IExecuteArgs {
   item: TuffItem
-  searchResult: TuffSearchResult
+  searchResult?: TuffSearchResult
 }
 
 export interface ISearchProvider {
@@ -94,14 +101,20 @@ export interface ISearchProvider {
   readonly name?: string
 
   /**
+   * Icon for the provider.
+   */
+  readonly icon?: any
+
+  /**
    * Core search method (PULL mode).
    * The engine calls this method to get results from the provider.
    *
    * @param query - The search query object, containing text and other context.
    * @param signal - An AbortSignal to cancel the search operation.
-   * @returns A promise that resolves to an array of TuffItems.
+   * @returns A promise that resolves to a full TuffSearchResult object, allowing the provider
+   * to influence the final result, including the next activation state.
    */
-  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffItem[]>
+  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult>
 
   /**
    * Optional method to handle activation.
@@ -117,8 +130,11 @@ export interface ISearchProvider {
   /**
    * Optional method to execute an item.
    * @param args The arguments for execution, including the item and search context.
+   * @returns A promise that resolves to a boolean, indicating whether the main window should
+   * remain open after execution. For example, a plugin that shows a custom view (`push: true`)
+   * would return `true` to prevent the window from closing.
    */
-  onExecute?(args: IExecuteArgs): any
+  onExecute?(args: IExecuteArgs): Promise<boolean>
 
   /**
    * Optional method to load provider.
@@ -168,11 +184,12 @@ export interface ISearchEngine {
  */
 export interface TuffUpdate {
   /**
-   * New search result items from the current push batch.
+   * New search results from the current push batch.
+   * Each element is a complete TuffSearchResult from a provider.
    */
-  newItems: TuffItem[]
+  newResults: TuffSearchResult[]
   /**
-   * Total number of results aggregated so far.
+   * Total number of items aggregated so far.
    */
   totalCount: number
   /**

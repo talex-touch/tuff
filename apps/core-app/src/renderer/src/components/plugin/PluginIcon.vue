@@ -9,7 +9,7 @@ const props = defineProps<{
 }>()
 
 interface IIconOption {
-  type: 'remix' | 'class' | 'dataurl' | 'base64' | 'html' | 'url'
+  type: 'remix' | 'class' | 'dataurl' | 'base64' | 'html' | 'url' | 'fluent'
   value: string
 }
 
@@ -28,6 +28,7 @@ function handleImageError() {
 }
 
 function handleParse() {
+  console.log("parse", props)
   if (!props.icon) {
     handleImageError()
     return
@@ -68,6 +69,7 @@ function handleParse() {
   switch (type) {
     case 'remix':
     case 'class':
+    case 'fluent':
       iconOptions.value = { type, value: value as string }
       break
     case 'dataurl':
@@ -130,6 +132,7 @@ watchEffect(handleParse)
 <template>
   <span v-if="iconOptions" :title="alt" role="img" class="PluginIcon-Container">
     <remix-icon v-if="iconOptions.type === 'remix'" :name="iconOptions.value" />
+    <remix-icon v-if="iconOptions.type === 'fluent'" :name="iconOptions.value" />
     <div v-else-if="iconOptions.type === 'class'" :class="iconOptions.value" />
     <span v-else-if="iconOptions.type === 'html'" class="html" v-html="iconOptions.value" />
     <template v-else-if="iconOptions.type === 'base64' || iconOptions.type === 'url'">
@@ -140,6 +143,7 @@ watchEffect(handleParse)
         <i class="i-ri-image-line" />
       </div>
       <img
+        v-else
         :alt="alt"
         :src="iconOptions.value"
         :style="{ display: imageLoading ? 'none' : 'block' }"
@@ -176,7 +180,7 @@ watchEffect(handleParse)
     width: 100%;
     height: 100%;
     border-radius: 4px;
-    background: var(--el-fill-color-lighter);
+    background: var(--el-color-primary-light-9);
     position: relative;
     overflow: hidden;
 
@@ -186,7 +190,7 @@ watchEffect(handleParse)
       left: -100%;
       width: 100%;
       height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+      background: linear-gradient(90deg, transparent, rgba(205, 205, 205, 0.4), transparent);
       animation: shimmer 1.5s infinite;
     }
   }

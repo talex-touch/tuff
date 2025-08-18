@@ -2,50 +2,28 @@ import type { ISearchEngine, ISearchProvider } from '../box-tool/search-engine/t
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-/**
- * Plugin Metadata Interface
- * Describes the structure of plugin.json
- */
 export interface IPluginManifest {
   id: string
   name: string
   version: string
   description: string
   author: string
-  main: string // entry file, e.g., "logic.js"
+  main: string
   icon?: string
   activationKeywords?: string[]
 }
 
-/**
- * Plugin Manager Interface
- */
 export interface IPluginManager {
-  /**
-   * Loads all plugins from a specified directory.
-   * @param pluginsDir - The directory to scan for plugins.
-   */
   loadPlugins(pluginsDir: string): Promise<void>
-
-  /**
-   * Unloads a specific plugin by its ID.
-   * @param pluginId - The ID of the plugin to unload.
-   */
   unloadPlugin(pluginId: string): Promise<void>
-
-  /**
-   * Gets a loaded plugin's manifest by its ID.
-   * @param pluginId - The ID of the plugin.
-   */
   getPluginManifest(pluginId: string): IPluginManifest | undefined
+  getLoadedPlugins(): Map<string, ISearchProvider>
 }
 
-/**
- * PluginManager Core Implementation
- */
 export class PluginManager implements IPluginManager {
   private searchEngine: ISearchEngine
-  private loadedPlugins: Map<string, IPluginManifest> = new Map()
+  private loadedPlugins: Map<string, { manifest: IPluginManifest; instance: ISearchProvider }> =
+    new Map()
 
   constructor(searchEngine: ISearchEngine) {
     this.searchEngine = searchEngine
@@ -70,7 +48,6 @@ export class PluginManager implements IPluginManager {
   private async loadPlugin(pluginPath: string): Promise<void> {
     const manifestPath = path.join(pluginPath, 'plugin.json')
     try {
-      // 1. Read and parse manifest
       const manifestContent = await fs.readFile(manifestPath, 'utf-8')
       const manifest: IPluginManifest = JSON.parse(manifestContent)
 
@@ -84,9 +61,7 @@ export class PluginManager implements IPluginManager {
         return
       }
 
-      // 2. Load plugin logic
       const logicPath = path.join(pluginPath, manifest.main)
-      // Ensure the path is treated as a file URL for ESM compatibility
       const logicPathUrl = 'file://' + logicPath
       const module = await import(logicPathUrl)
       const ProviderClass = module.default
@@ -96,12 +71,10 @@ export class PluginManager implements IPluginManager {
         return
       }
 
-      // 3. Instantiate and register provider
       const providerInstance: ISearchProvider = new ProviderClass()
       this.searchEngine.registerProvider(providerInstance)
 
-      // 4. Store manifest
-      this.loadedPlugins.set(manifest.id, manifest)
+      this.loadedPlugins.set(manifest.id, { manifest, instance: providerInstance })
       console.log(
         `[PluginManager] Successfully loaded plugin: ${manifest.name} (v${manifest.version})`
       )
@@ -111,20 +84,25 @@ export class PluginManager implements IPluginManager {
   }
 
   public async unloadPlugin(pluginId: string): Promise<void> {
-    if (!this.loadedPlugins.has(pluginId)) {
+    const pluginData = this.loadedPlugins.get(pluginId)
+    if (!pluginData) {
       console.warn(`[PluginManager] Plugin '${pluginId}' is not loaded.`)
       return
     }
-
-    // Unregister from search engine
-    this.searchEngine.unregisterProvider(pluginId)
-
+    this.searchEngine.unregisterProvider(pluginData.instance.id)
     this.loadedPlugins.delete(pluginId)
     console.log(`[PluginManager] Plugin '${pluginId}' unloaded.`)
-    // TODO: Add logic to destroy the sandbox environment.
   }
 
   public getPluginManifest(pluginId: string): IPluginManifest | undefined {
-    return this.loadedPlugins.get(pluginId)
+    return this.loadedPlugins.get(pluginId)?.manifest
+  }
+
+  public getLoadedPlugins(): Map<string, ISearchProvider> {
+    const map = new Map<string, ISearchProvider>()
+    for (const [id, data] of this.loadedPlugins.entries()) {
+      map.set(id, data.instance)
+    }
+    return map
   }
 }

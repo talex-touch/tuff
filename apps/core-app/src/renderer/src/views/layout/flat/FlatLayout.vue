@@ -43,15 +43,15 @@
  * - view: For the main content area
  */
 
-import FlatController from "./FlatController.vue";
-import FlatNavBar from "./FlatNavBar.vue";
-import IdentifiedIcon from "@comp/icon/svg/IdentifiedIcon.vue";
+import FlatController from './FlatController.vue'
+import FlatNavBar from './FlatNavBar.vue'
+import IdentifiedIcon from '@comp/icon/svg/IdentifiedIcon.vue'
 
 // Import account store for user information
-import { storageManager } from "~/modules/channel/storage";
+import { storageManager } from '~/modules/channel/storage'
 
 // Use the account store
-const account = storageManager.account;
+const account = storageManager.account
 </script>
 
 <style lang="scss" scoped>
@@ -100,7 +100,7 @@ const account = storageManager.account;
     }
 
     &:before {
-      content: "";
+      content: '';
       position: absolute;
 
       top: -1px;

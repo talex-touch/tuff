@@ -1,8 +1,8 @@
 import '~/modules/channel/storage/base'
-import { reactive, unref } from 'vue';
-import { AccountStorage } from '~/modules/channel/storage/accounter';
-import { touchChannel } from '~/modules/channel/channel-core';
-import { storages } from '@talex-touch/utils/renderer';
+import { reactive, unref } from 'vue'
+import { AccountStorage } from '~/modules/channel/storage/accounter'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { storages } from '@talex-touch/utils/renderer'
 import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 
 /**
@@ -29,15 +29,13 @@ import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
  */
 export class StorageManager {
   /** Reactive theme configuration */
-  themeStyle: object = {};
+  themeStyle: object = {}
 
   /** Reactive user account information */
-  account: AccountStorage;
+  account: AccountStorage
 
   constructor() {
-    this.account = reactive(
-      new AccountStorage(touchChannel.sendSync('storage:get', 'account.ini'))
-    );
+    this.account = reactive(new AccountStorage(touchChannel.sendSync('storage:get', 'account.ini')))
   }
 
   /**
@@ -57,8 +55,8 @@ export class StorageManager {
     await touchChannel.send('storage:save', {
       key: name,
       content: JSON.stringify(unref(data)),
-      clear,
-    });
+      clear
+    })
   }
 }
 
@@ -68,15 +66,15 @@ window.onbeforeunload = () => {
     touchChannel.send('storage:save', {
       key: storage.getQualifiedName(),
       content: JSON.stringify(unref(storage.data) || storage.originalData),
-      clear: true,
-    });
+      clear: true
+    })
   }
-};
+}
 
 /**
  * Global instance of the StorageManager
  */
-export const storageManager = new StorageManager();
+export const storageManager = new StorageManager()
 
 /**
  * Convenient access to application settings, powered by TouchStorage
@@ -92,6 +90,6 @@ export const storageManager = new StorageManager();
  * appSetting.autoStart = true;
  * ```
  */
-export const appSetting = appSettings.data;
+export const appSetting = appSettings.data
 
 console.log(appSettings, appSetting)

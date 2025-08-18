@@ -1,34 +1,32 @@
 <script>
-import { h, nextTick, ref, Teleport } from "vue";
-import { computePosition } from "@floating-ui/vue";
+import { h, nextTick, ref, Teleport } from 'vue'
+import { computePosition } from '@floating-ui/vue'
 import { extractFromSlots } from '@talex-touch/utils/renderer/slots'
 import { onClickOutside } from '@vueuse/core'
 
-const qualifiedName = "TSelectItem";
+const qualifiedName = 'TSelectItem'
 
 export default {
-  name: "TSelect",
+  name: 'TSelect',
   props: {
     modelValue: {
       type: [String, Number],
-      required: true,
-    },
+      required: true
+    }
   },
   beforeUnmount() {
-    document.removeEventListener("click", this.clickListener);
+    document.removeEventListener('click', this.clickListener)
   },
   mounted() {
-    document.addEventListener("click", this.clickListener);
+    document.addEventListener('click', this.clickListener)
   },
   data() {
-    const activeIndex = ref(0);
-    const click = ref(false);
+    const activeIndex = ref(0)
+    const click = ref(false)
 
     function clickListener(e) {
-      if (!click.value || !e.path) return;
-      click.value = e.path.some(
-        (node) => node?.className?.indexOf("TSelectItem-Container") > -1
-      );
+      if (!click.value || !e.path) return
+      click.value = e.path.some((node) => node?.className?.indexOf('TSelectItem-Container') > -1)
       // console.log(e.path, e.path.some(node => node?.className?.indexOf('TSelectItem-Container') > -1))
       // click.value = false
     }
@@ -36,13 +34,17 @@ export default {
     return {
       activeIndex,
       click,
-      clickListener,
-    };
+      clickListener
+    }
   },
   render() {
-    this.activeIndex = this.modelValue || 0;
+    this.activeIndex = this.modelValue || 0
 
-    const slots = extractFromSlots(this.$slots, 'default', vnode => vnode.type?.name === qualifiedName);
+    const slots = extractFromSlots(
+      this.$slots,
+      'default',
+      (vnode) => vnode.type?.name === qualifiedName
+    )
 
     // function slotFlat(slot) {
     //   return slot
@@ -69,82 +71,82 @@ export default {
     function getContent() {
       if (that.click) {
         const wrapper = h(
-          "div",
+          'div',
           {
-            class: "TSelect-Wrapper",
+            class: 'TSelect-Wrapper'
           },
           slots
-        );
+        )
 
         nextTick(() => {
-          let height = 0;
+          let height = 0
 
           slots.forEach((slot, index) => {
-            if (slot.props?.hasOwnProperty("disabled")) {
-              slot.el.style.cursor = "not-allowed";
+            if (slot.props?.hasOwnProperty('disabled')) {
+              slot.el.style.cursor = 'not-allowed'
             } else {
-              slot.el.addEventListener("click", (e) => {
+              slot.el.addEventListener('click', (e) => {
                 // activeIndex.value = index //slots.indexOf(slot)
 
-                that.$emit("update:modelValue", (that.activeIndex = index));
+                that.$emit('update:modelValue', (that.activeIndex = index))
                 that.$emit(
-                  "change",
-                  slot.props?.hasOwnProperty("name") ? slot.props.name : index,
+                  'change',
+                  slot.props?.hasOwnProperty('name') ? slot.props.name : index,
                   e
-                );
+                )
 
-                that.click = false;
-              });
+                that.click = false
+              })
             }
 
             if (index <= that.activeIndex) {
-              height += slot.el?.getBoundingClientRect().height + 2;
+              height += slot.el?.getBoundingClientRect().height + 2
             }
-          });
+          })
 
           // const root = that.$el.__vnode
 
           async function adaptPosition() {
-            const floating = await computePosition(that.$el, wrapper.el);
+            const floating = await computePosition(that.$el, wrapper.el)
 
-            wrapper.el.style.setProperty("--height", `${36 * that.activeIndex + 8}px`);
+            wrapper.el.style.setProperty('--height', `${36 * that.activeIndex + 8}px`)
 
             Object.assign(wrapper.el.style, {
               top: `${floating.y}px`,
               left: `${floating.x}px`,
-              transform: `translate(0, ${-height}px)`,
-            });
+              transform: `translate(0, ${-height}px)`
+            })
           }
 
-          adaptPosition();
-        });
+          adaptPosition()
+        })
 
-        return h(Teleport, { to: "body" }, wrapper);
+        return h(Teleport, { to: 'body' }, wrapper)
       }
 
-      return slots[that.activeIndex] || slots[0];
+      return slots[that.activeIndex] || slots[0]
     }
 
-    const that = this;
+    const that = this
 
     const v = h(
-      "div",
+      'div',
       {
-        class: "TSelect-Container win" + (that.click ? "selection" : ""),
+        class: 'TSelect-Container win' + (that.click ? 'selection' : ''),
         onclick() {
-          that.click = !that.click;
-        },
+          that.click = !that.click
+        }
       },
       getContent()
     )
 
-    onClickOutside(v, event => {
-      that.click = false;
+    onClickOutside(v, (event) => {
+      that.click = false
     })
 
-    return v;
-  },
-};
+    return v
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -161,14 +163,13 @@ export default {
 }
 
 .TSelect-Wrapper {
-
   //&.selection:before {
   //  opacity: 1;
   //  transform: scaleY(1);
   //}
   &:before {
     z-index: 1;
-    content: "";
+    content: '';
     position: absolute;
 
     width: 5px;

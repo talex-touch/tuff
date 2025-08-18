@@ -10,21 +10,21 @@
 defineProps({
   loading: {
     type: Boolean,
-    default: false,
+    default: false
   },
   error: {
     type: Boolean,
-    default: false,
+    default: false
   },
   success: {
     type: Boolean,
-    default: false,
+    default: false
   },
   message: {
     type: String,
-    default: "",
-  },
-});
+    default: ''
+  }
+})
 // const props = defineProps(['loading', 'error', 'success', 'message'])
 </script>
 

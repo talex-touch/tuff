@@ -10,24 +10,21 @@ export class DatabaseManager {
   private client: Client | null = null
 
   public async init(modulePath: string): Promise<void> {
-    console.log('[Database] Database start to init ===')
     const dbPath = path.join(modulePath, 'database.db')
     this.client = createClient({ url: `file:${dbPath}` })
     this.db = drizzle(this.client, { schema })
 
     const dbFolder = path.dirname(migrationsLocator)
     const migrationsFolder = path.join(dbFolder, 'migrations')
+
     console.log(`[Database] Running migrations from: ${migrationsFolder}`)
+
     try {
       await migrate(this.db, { migrationsFolder })
     } catch (error) {
       console.error('[Database] Migration failed:', error)
       throw error // Re-throw to ensure the app doesn't continue in a broken state
     }
-
-    console.log('[Database] Database migrations completed')
-
-    console.log('[Database] DatabaseManager initialized at', dbPath)
   }
 
   public getDb(): LibSQLDatabase<typeof schema> {
@@ -50,12 +47,10 @@ export default {
   name: Symbol('Database'),
   filePath: 'database',
   async init(): Promise<void> {
-    console.log('[Database] Database start to init')
-
     const modulePath = this['modulePath']!
     await databaseManager.init(modulePath)
 
-    console.log('[Database] Database initialized')
+    console.log('[Database] Database initialized at ' + modulePath)
   },
   destroy(): void {
     databaseManager.destroy()

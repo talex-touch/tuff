@@ -1,5 +1,5 @@
 <script setup lang="ts" name="VideoPreview">
-import { TuffItem } from '@talex-touch/utils';
+import { TuffItem } from '@talex-touch/utils'
 
 const props = defineProps<{
   item: TuffItem

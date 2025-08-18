@@ -5,8 +5,8 @@ import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
 import { appSetting } from '~/modules/channel/storage'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
-import PrefixIcon from './PrefixIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
+import PrefixPart from './PrefixPart.vue'
 import { useCoreBox } from '@renderer/modules/hooks/core-box'
 
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
@@ -28,7 +28,16 @@ const boxOptions = reactive<IBoxOptions>({
   data: {}
 })
 
-const { searchVal, select, res, activeItem, handleExecute, handleExit } = useSearch(boxOptions)
+const {
+  searchVal,
+  select,
+  res,
+  activeItem,
+  activatedProviders,
+  handleExecute,
+  handleExit,
+  deactivateProvider
+} = useSearch(boxOptions)
 const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
 
 const completionDisplay = computed(() => {
@@ -51,7 +60,7 @@ const completionDisplay = computed(() => {
   return completion
 })
 
-useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste)
+useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste, boxInputRef)
 useKeyboard(
   boxOptions,
   res,
@@ -87,9 +96,12 @@ const addon = computed(() => {
   </teleport>
 
   <div class="CoreBox" @paste="handlePaste">
-    <div class="CoreBox-Icon">
-      <PrefixIcon :feature="boxOptions.data?.feature" @close="handleExit" />
-    </div>
+    <PrefixPart
+      :providers="activatedProviders"
+      :feature="boxOptions.data?.feature"
+      @close="handleExit"
+      @deactivate-provider="deactivateProvider"
+    />
 
     <BoxInput ref="boxInputRef" v-model="searchVal" :box-options="boxOptions">
       <template #completion>
@@ -130,17 +142,6 @@ const addon = computed(() => {
 
   cursor: pointer;
   font-size: 1.25em;
-}
-
-.CoreBox-Icon {
-  position: relative;
-
-  user-select: none;
-
-  img {
-    width: 52px;
-    height: 52px;
-  }
 }
 
 div.CoreBoxRes {
