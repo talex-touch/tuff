@@ -1,10 +1,5 @@
 import { SearchEngineCore } from '../search-engine/search-core'
-import {
-  IProviderActivate,
-  TuffItem,
-  TuffQuery,
-  TuffSearchResult
-} from '../search-engine/types'
+import { IProviderActivate, TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { windowManager } from './window'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
@@ -88,7 +83,10 @@ export class CoreBoxManager {
     const provider = this.searchEngine.getProvidersByIds([providerId])[0]
 
     if (!provider) {
-      console.warn(`[CoreBoxManager] No provider found for item with source ID: ${providerId}`, item)
+      console.warn(
+        `[CoreBoxManager] No provider found for item with source ID: ${providerId}`,
+        item
+      )
       return null
     }
 

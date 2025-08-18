@@ -23,7 +23,7 @@ export function getBuildInfo(): BuildInfo {
  */
 export function getBuildTypeDisplayName(): string {
   const info = getBuildInfo()
-  
+
   if (info.isBeta) {
     return 'BETA'
   } else if (info.isSnapshot) {
@@ -31,7 +31,7 @@ export function getBuildTypeDisplayName(): string {
   } else if (info.isRelease) {
     return 'RELEASE'
   }
-  
+
   return 'UNKNOWN'
 }
 
@@ -41,11 +41,11 @@ export function getBuildTypeDisplayName(): string {
 export function getFullVersionString(): string {
   const info = getBuildInfo()
   const typeDisplay = getBuildTypeDisplayName()
-  
+
   if (info.isRelease) {
     return `v${info.version}`
   }
-  
+
   return `v${info.version}-${typeDisplay}`
 }
 

@@ -75,7 +75,7 @@ class TuffItemBuilder {
   /**
    * 创建一个新的 TuffItemBuilder 实例
    *
-   * @param id - 可选的项目 ID
+   * @param id - 项目 ID
    * @param sourceType - 可选的来源类型
    * @param sourceId - 可选的来源 ID
    */
@@ -463,7 +463,7 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setMeta(meta: TuffMeta): this {
-    this.item.meta = meta;
+    this.item.meta = { ...this.item.meta, ...meta };
     return this;
   }
 
@@ -471,12 +471,13 @@ class TuffItemBuilder {
    * 构建 TuffItem 对象
    *
    * @returns 构建好的 TuffItem 对象
-   * @throws 如果缺少必要的属性（source 或 render.basic.title）
+   * @throws 如果缺少必要的属性（id, source 或 render.basic.title）
    */
   build(): TuffItem {
     // 检查并自动生成 ID
     if (!this.item.id) {
-      this.item.id = TuffUtils.generateId();
+      // this.item.id = TuffUtils.generateId();
+      throw new Error('TuffItem 必须设置 id 属性');
     }
 
     // 检查必要属性

@@ -18,11 +18,7 @@ import {
   createStorageManager,
   createClipboardManager
 } from '@talex-touch/utils/plugin'
-import {
-  TuffFactory,
-  TuffItemBuilder,
-  TuffUtils
-} from '@talex-touch/utils/core-box'
+import { TuffFactory, TuffItemBuilder, TuffUtils } from '@talex-touch/utils/core-box'
 import { TalexTouch } from '../types'
 import fse from 'fs-extra'
 import path from 'path'
@@ -41,6 +37,19 @@ import { getCoreBoxWindow } from '../modules/box-tool/core-box'
 import { PluginLogger } from '@talex-touch/utils/plugin/log/logger'
 import { loadPluginFeatureContext } from './plugin-feature'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
+import { CoreBoxManager } from '../modules/box-tool/core-box/manager'
+
+const createBuilderWithPluginContext = (
+  pluginName: string
+): typeof TuffItemBuilder => {
+  return class TuffItemBuilderWithPlugin extends TuffItemBuilder {
+    constructor(id: string) {
+      // Call the parent constructor and immediately set the pluginName in meta.
+      super(id, 'plugin', 'plugin-features')
+      this.setMeta({ pluginName })
+    }
+  }
+}
 
 class PluginIcon implements IPluginIcon {
   type: string
@@ -139,7 +148,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   pluginPath: string
 
-  _featureFunc: IFeatureLifeCycle | null = null
+  public pluginLifecycle: IFeatureLifeCycle | null = null
   _featureEvent: Map<string, ITargetFeatureLifeCycle[]> = new Map<
     string,
     ITargetFeatureLifeCycle[]
@@ -230,13 +239,13 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   triggerFeature(feature: IPluginFeature, query: any): void {
-    this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
+    this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
 
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
   }
 
   triggerInputChanged(feature: IPluginFeature, query: any): void {
-    this._featureFunc?.onFeatureTriggered(feature.id, query, feature)
+    this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
 
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query))
   }
@@ -530,7 +539,15 @@ export class TouchPlugin implements ITouchPlugin {
       clearItems: searchManager.clearItems,
       pushItems: searchManager.pushItems,
       getItems: searchManager.getItems,
-      search: searchManager
+      search: searchManager,
+      $box: {
+        hide() {
+          CoreBoxManager.getInstance().trigger(false)
+        },
+        show() {
+          CoreBoxManager.getInstance().trigger(true)
+        }
+      }
     }
   }
 }
@@ -802,7 +819,7 @@ class PluginManager implements IPluginManager {
         TuffFactory,
         TuffUtils,
         URLSearchParams,
-        TuffItemBuilder: (id: string) => new TuffItemBuilder(id, 'plugin', touchPlugin.name)
+        TuffItemBuilder: createBuilderWithPluginContext(touchPlugin.name)
       }
 
       const func = loadPluginFeatureContext(
@@ -810,7 +827,7 @@ class PluginManager implements IPluginManager {
         featureIndex,
         featureContext
       ) as IFeatureLifeCycle
-      touchPlugin._featureFunc = func
+      touchPlugin.pluginLifecycle = func
 
       console.log(
         `[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`

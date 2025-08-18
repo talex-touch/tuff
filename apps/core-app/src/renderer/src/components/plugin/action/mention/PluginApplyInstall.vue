@@ -18,7 +18,7 @@ async function install() {
   await sleep(400)
 
   const { data } = await touchChannel.send('@install-plugin', props.path, {
-    timeout: 1000 * 60 * 5,
+    timeout: 1000 * 60 * 5
   })
 
   await sleep(400)
@@ -30,12 +30,9 @@ async function install() {
   close()
 
   if (data.status === 'error') {
-    if (data.msg === '10091')
-      await blowMention('Install', '该插件已遭受不可逆破坏！')
-    else
-      await blowMention('Install', JSON.stringify(data.msg))
-  }
-  else {
+    if (data.msg === '10091') await blowMention('Install', '该插件已遭受不可逆破坏！')
+    else await blowMention('Install', JSON.stringify(data.msg))
+  } else {
     await blowMention('Install', '插件安装成功！')
   }
 }
@@ -56,12 +53,8 @@ async function install() {
       <h4>{{ manifest.description }}</h4>
       <span>{{ manifest.version }}</span>
       <div class="PluginApplyInstall-Button">
-        <FlatButton v-wave @click="close">
-          忽略
-        </FlatButton>
-        <FlatButton v-wave :primary="true" @click="install">
-          安装
-        </FlatButton>
+        <FlatButton v-wave @click="close"> 忽略 </FlatButton>
+        <FlatButton v-wave :primary="true" @click="install"> 安装 </FlatButton>
       </div>
     </div>
   </div>
@@ -110,4 +103,5 @@ async function install() {
   }
 
   transition: cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-}</style>
+}
+</style>

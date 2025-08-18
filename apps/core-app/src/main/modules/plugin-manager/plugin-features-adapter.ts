@@ -92,14 +92,49 @@ export class PluginFeaturesAdapter implements ISearchProvider {
   public readonly name = 'Plugin Features'
 
   public async onExecute(args: IExecuteArgs): Promise<boolean> {
-    console.log(
-      '[PluginFeaturesAdapter] onExecute triggered with args:',
-      JSON.stringify(args, null, 2)
-    )
-    const { pluginName, featureId } = args.item.meta?.extension || {}
+    const { item } = args
+
+    // If `defaultAction` exists, it's an "Action Item" for a plugin to handle.
+    if (item.meta?.defaultAction) {
+      const pluginName = item.meta?.pluginName
+      if (!pluginName) {
+        console.error(
+          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
+        )
+        return false
+      }
+
+      const pluginManager = genPluginManager()
+      const plugin = pluginManager.plugins.get(pluginName) as TouchPlugin | undefined
+
+      if (plugin?.pluginLifecycle?.onItemAction) {
+        console.log(
+          `[PluginFeaturesAdapter] Routing to ${pluginName}.onItemAction for default action.`
+        )
+        await plugin.pluginLifecycle.onItemAction(item)
+        // Simple actions should not activate a provider.
+        return false
+      } else {
+        console.warn(
+          `[PluginFeaturesAdapter] Plugin ${pluginName} has defaultAction but no onItemAction handler.`
+        )
+        return false
+      }
+    }
+
+    // Otherwise, it's a "Feature Item" intended to activate a feature.
+    console.log(`[PluginFeaturesAdapter] Executing as a Feature Item.`)
+    const meta = item.meta || {}
+    const extension = meta.extension || {}
+    // For feature items, the plugin name is in the payload of the 'trigger-feature' action.
+    const pluginName =
+      meta.pluginName || extension.pluginName || item.actions?.[0]?.payload?.pluginName
+    const featureId = meta.featureId || extension.featureId || item.actions?.[0]?.payload?.featureId
+
     if (!pluginName || !featureId) {
       console.error(
-        '[PluginFeaturesAdapter] onExecute: Missing pluginName or featureId in item meta.'
+        '[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.',
+        item
       )
       return false
     }
@@ -119,14 +154,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       return false
     }
 
-    // Trigger the feature execution in the legacy plugin system
-    console.log(
-      `[PluginFeaturesAdapter] onExecute: Triggering feature "${feature.id}" in plugin "${plugin.name}" with query text: "${args.searchResult.query.text}"`
-    )
-    plugin.triggerFeature(feature, args.searchResult.query.text)
-
-    // Return the 'push' property to determine if the provider should be activated
-    console.log(`[PluginFeaturesAdapter] onExecute: Returning feature.push value: ${feature.push}`)
+    plugin.triggerFeature(feature, args.searchResult?.query.text)
     return feature.push
   }
 
@@ -162,21 +190,17 @@ export class PluginFeaturesAdapter implements ISearchProvider {
           }
         }
       ],
-      from: plugin.name,
       meta: {
+        pluginName: plugin.name,
+        featureId: feature.id,
         extension: {
-          pluginName: plugin.name,
-          featureId: feature.id,
           commands: feature.commands
         }
       }
     }
   }
 
-  public async onSearch(
-    query: TuffQuery,
-    signal: AbortSignal
-  ): Promise<TuffSearchResult> {
+  public async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const activationState = searchEngineCore.getActivationState()
 
     // --- Activated Mode ---

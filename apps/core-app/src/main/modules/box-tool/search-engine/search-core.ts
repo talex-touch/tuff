@@ -20,7 +20,20 @@ import storage from '../../../core/storage'
 import { createDbUtils, DbUtils } from '../../../db/utils'
 import crypto from 'crypto'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { ChannelType, StandardChannelData } from '@talex-touch/utils/channel'
+
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
+  let timeoutId: NodeJS.Timeout | null = null
+
+  return function (this: any, ...args: Parameters<T>) {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    timeoutId = setTimeout(() => {
+      func.apply(this, args)
+    }, wait)
+  } as any
+}
 
 /**
  * Generates a unique key for an activation request.
@@ -125,16 +138,17 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
 
   activateProviders(activations: IProviderActivate[] | null): void {
     if (activations && activations.length > 0) {
-      if (!this.activatedProviders) {
-        this.activatedProviders = new Map()
+      const uniqueProviders = new Map<string, IProviderActivate>()
+      for (const activation of activations) {
+        const key = getActivationKey(activation)
+        if (!uniqueProviders.has(key)) {
+          uniqueProviders.set(key, activation)
+        }
       }
-      activations.forEach((a) => {
-        const key = getActivationKey(a)
-        this.activatedProviders!.set(key, a)
-      })
+      this.activatedProviders = uniqueProviders.size > 0 ? uniqueProviders : null
       console.log(
         `[SearchEngineCore] activateProviders SET:`,
-        Array.from(this.activatedProviders.values())
+        this.activatedProviders ? Array.from(this.activatedProviders.values()) : null
       )
     } else {
       this.deactivateProviders()
@@ -153,7 +167,10 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   deactivateProviders(): void {
-    console.log(`[SearchEngineCore] Deactivating all providers. Current state:`, this.activatedProviders)
+    console.log(
+      `[SearchEngineCore] Deactivating all providers. Current state:`,
+      this.activatedProviders
+    )
     this.activatedProviders = null
     console.log(`[SearchEngineCore] All providers deactivated. New state is null.`)
   }
@@ -184,14 +201,17 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
-    console.log(`[SearchEngineCore] SEARCH START. Query text: "${query.text}". Initial activatedProviders:`, this.activatedProviders ? Array.from(this.activatedProviders.values()) : null)
+    console.log(
+      `[SearchEngineCore] SEARCH START. Query text: "${query.text}". Initial activatedProviders:`,
+      this.activatedProviders ? Array.from(this.activatedProviders.values()) : null
+    )
     // Abort any ongoing search before starting a new one
     if (this.currentGatherController) {
       this.currentGatherController.abort()
     }
-  
+
     const sessionId = crypto.randomUUID()
-  
+
     // If the query is empty, return an empty result immediately but include activation state.
     if (!query.text) {
       const emptyResult = TuffFactory.createSearchResult(query).setItems([]).setDuration(0).build()
@@ -199,54 +219,55 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       emptyResult.sessionId = sessionId
       return Promise.resolve(emptyResult)
     }
-  
+
     const startTime = Date.now()
     console.debug(`[SearchEngineCore] search \`${query.text}\` (Session: ${sessionId})`)
-  
+
     this._recordSearchUsage(sessionId, query)
-  
+
     const providersToSearch = this.getActiveProviders()
     const allProviderResults: TuffSearchResult[] = []
     let finalSourceStats: TuffSearchResult['sources'] = []
-  
+
     // Keep track of all items received for the final sort.
-    let allItems: TuffItem[] = []
-    
-    const touchApp = this.touchApp; // Capture context for use in callback
-  
+    const allItems: TuffItem[] = []
+
+    const touchApp = this.touchApp // Capture context for use in callback
+
+    // Debounce sending updates to the frontend to avoid overwhelming the renderer.
+    const sendUpdateToFrontend = debounce((itemsToSend: TuffItem[]) => {
+      if (touchApp) {
+        const coreBoxWindow = windowManager.current?.window
+        if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+          touchApp.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-update', {
+            items: itemsToSend,
+            searchId: sessionId
+          })
+        }
+      }
+    }, 50) // 50ms debounce interval
+
     const gatherController = getGatheredItems(providersToSearch, query, (update) => {
       // A new batch of results has arrived.
       if (update.newResults.length > 0) {
         const newItems = update.newResults.flatMap((res) => res.items)
         allItems.push(...newItems)
-  
-        // Sort the new items and push them to the frontend.
-        const { sortedItems } = this.sorter.sort(newItems, query, gatherController.signal)
-        
-        // Push incremental updates to the frontend.
-        if (touchApp) {
-          const coreBoxWindow = windowManager.current?.window;
-          if (coreBoxWindow) {
-            touchApp.channel.sendTo(
-              coreBoxWindow,
-              ChannelType.MAIN,
-              'core-box:search-update',
-              {
-                items: sortedItems,
-                searchId: sessionId, // Use sessionId to identify the search stream
-              }
-            )
-          }
-        }
+
+        // Sort ALL items received so far to maintain correct order.
+        const { sortedItems } = this.sorter.sort(allItems, query, gatherController.signal)
+
+        // Instead of sending every batch, we debounce the send operation.
+        // We send the full sorted list to ensure the UI is consistent.
+        sendUpdateToFrontend(sortedItems)
       }
-  
+
       if (update.sourceStats) {
         finalSourceStats = update.sourceStats
       }
-  
+
       if (update.isDone) {
         this.currentGatherController = null
-  
+
         // --- Finalization on Done ---
         const mergedActivations = new Map<string, IProviderActivate>()
         if (this.activatedProviders) {
@@ -261,29 +282,27 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
           }
         })
         this.activatedProviders = mergedActivations.size > 0 ? mergedActivations : null
-        
+
         // Notify frontend that the search is complete.
         if (touchApp) {
-          const coreBoxWindow = windowManager.current?.window;
+          const coreBoxWindow = windowManager.current?.window
           if (coreBoxWindow) {
-            touchApp.channel.sendTo(
-              coreBoxWindow,
-              ChannelType.MAIN,
-              'core-box:search-end',
-              {
-                searchId: sessionId,
-                activate: this.getActivationState() ?? undefined,
-                sources: finalSourceStats,
-              }
-            )
+            touchApp.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
+              searchId: sessionId,
+              activate: this.getActivationState() ?? undefined,
+              sources: finalSourceStats
+            })
           }
         }
-        console.log(`[SearchEngineCore] SEARCH END. Final activation state:`, this.getActivationState())
+        console.log(
+          `[SearchEngineCore] SEARCH END. Final activation state:`,
+          this.getActivationState()
+        )
       }
     })
-  
+
     this.currentGatherController = gatherController
-  
+
     // Return an initial, empty result immediately.
     const initialResult = TuffFactory.createSearchResult(query)
       .setItems([])
@@ -342,7 +361,9 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       // Atomically increment the click count and update the last used timestamp
       await this.dbUtils.incrementUsageSummary(itemId)
 
-      console.debug(`[SearchEngineCore] Recorded execute for item ${itemId} in session ${sessionId}`)
+      console.debug(
+        `[SearchEngineCore] Recorded execute for item ${itemId} in session ${sessionId}`
+      )
     } catch (error) {
       console.error(`[SearchEngineCore] Failed to record execute usage for item ${itemId}.`, error)
     }
@@ -377,26 +398,33 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       return instance.search(data.query)
     })
 
-    channel.regChannel(ChannelType.MAIN, 'core-box:execute', async ({ data }) => {
-      const { item, searchResult } = data
-      const provider = instance.providers.get(item.source.id)
-      if (!provider || !provider.onExecute) {
-        return null
-      }
-
-      const shouldActivate = await provider.onExecute({ item, searchResult })
-
-      if (shouldActivate) {
-        // Create a detailed activation object
-        const activation: IProviderActivate = {
-          id: provider.id,
-          meta: item.meta?.extension || {} // Pass all extension meta for deep activation
+    channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:execute',
+      async (channelData: StandardChannelData) => {
+        const { item, searchResult } = channelData.data as {
+          item: TuffItem
+          searchResult?: TuffSearchResult
         }
-        instance.activateProviders([activation])
-      }
+        const provider = instance.providers.get(item.source.id)
+        if (!provider || !provider.onExecute) {
+          return null
+        }
 
-      return instance.getActivationState()
-    })
+        const shouldActivate = await provider.onExecute({ item, searchResult })
+
+        if (shouldActivate) {
+          // Create a detailed activation object
+          const activation: IProviderActivate = {
+            id: provider.id,
+            meta: item.meta?.extension || {} // Pass all extension meta for deep activation
+          }
+          instance.activateProviders([activation])
+        }
+
+        return instance.getActivationState()
+      }
+    )
 
     channel.regChannel(ChannelType.MAIN, 'core-box:deactivate-provider', ({ data }) => {
       instance.deactivateProvider(data.id)

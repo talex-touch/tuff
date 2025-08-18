@@ -1,7 +1,16 @@
 <template>
   <div ref="wrapperRef" class="WindowSection-Wrapper fake-background">
     <p font-600 text-lg>Window Preference</p>
-    <div gap-4 box-border relative w-full flex items-center justify-center class="WindowsSection-Container">
+    <div
+      gap-4
+      box-border
+      relative
+      w-full
+      flex
+      items-center
+      justify-center
+      class="WindowsSection-Container"
+    >
       <slot />
     </div>
     <div ref="pointerRef" class="Pointer">
@@ -10,12 +19,12 @@
       <div class="pointer-border left"></div>
       <div class="pointer-border right"></div>
     </div>
-    <p style="transition: .1s" ref="tipRef" />
+    <p style="transition: 0.1s" ref="tipRef" />
   </div>
 </template>
 
 <script lang="ts" name="WindowsSection" setup>
-import { sleep } from '@talex-touch/utils/common';
+import { sleep } from '@talex-touch/utils/common'
 
 const props = defineProps({
   tip: {
@@ -39,12 +48,10 @@ const pointerOptions = reactive({
 })
 
 async function mention(html: string | undefined) {
-  if (!html)
-    return props.tip ? mention(props.tip) : 0
+  if (!html) return props.tip ? mention(props.tip) : 0
 
   const el = tipRef.value
-  if (!el.innerHTML)
-    return el.innerHTML = html
+  if (!el.innerHTML) return (el.innerHTML = html)
 
   const style = el.style
 
@@ -76,8 +83,7 @@ provide('mention', mention)
 async function readSectionItems() {
   const wrapper = wrapperRef.value
 
-  if (!wrapper)
-    return
+  if (!wrapper) return
 
   function hoverEl(el: HTMLElement) {
     if (el.classList.contains('disabled')) {
@@ -89,7 +95,12 @@ async function readSectionItems() {
     pointerRef.value!.classList.remove('active')
     pointerOptions.show()
 
-    pointerOptions.pos = [el.offsetLeft + 'px', el.parentElement!.offsetTop + el.offsetTop / 3 + 'px', rect.width + 16 + 'px', rect.height + 16 + 'px']
+    pointerOptions.pos = [
+      el.offsetLeft + 'px',
+      el.parentElement!.offsetTop + el.offsetTop / 3 + 'px',
+      rect.width + 16 + 'px',
+      rect.height + 16 + 'px'
+    ]
   }
 
   function activeEl(el: HTMLElement) {
@@ -123,8 +134,7 @@ async function readSectionItems() {
     })
 
     el.addEventListener('click', () => {
-      if (!el.classList.contains('disabled'))
-        activeEl(el)
+      if (!el.classList.contains('disabled')) activeEl(el)
     })
   })
 }
@@ -146,7 +156,6 @@ onMounted(() => {
   }
 
   &.top {
-
     &:before,
     &:after {
       width: var(--len);
@@ -159,7 +168,6 @@ onMounted(() => {
   }
 
   &.bottom {
-
     &:before,
     &:after {
       width: var(--len);
@@ -174,7 +182,6 @@ onMounted(() => {
   }
 
   &.left {
-
     &:before,
     &:after {
       width: 2px;
@@ -187,7 +194,6 @@ onMounted(() => {
   }
 
   &.right {
-
     &:before,
     &:after {
       width: 2px;
@@ -203,7 +209,7 @@ onMounted(() => {
 
   &:before,
   &:after {
-    content: "";
+    content: '';
     position: absolute;
 
     width: 100%;
@@ -212,7 +218,7 @@ onMounted(() => {
     left: 2px;
     top: 2px;
 
-    transition: cubic-bezier(1,.25,.1,.5) .5s;
+    transition: cubic-bezier(1, 0.25, 0.1, 0.5) 0.5s;
     background-color: var(--c, aliceblue);
   }
 
@@ -246,7 +252,7 @@ onMounted(() => {
     opacity: 0;
     border-radius: 12px;
     overflow: hidden;
-    transition: cubic-bezier(.85,.1,1,.5) .25s;
+    transition: cubic-bezier(0.85, 0.1, 1, 0.5) 0.25s;
 
     &.disabled {
       --c: var(--el-color-error);
@@ -258,11 +264,11 @@ onMounted(() => {
   }
 
   & p {
-    margin: .5rem .25rem;
+    margin: 0.5rem 0.25rem;
   }
 
   margin: 1rem 0;
-  padding: .5rem;
+  padding: 0.5rem;
 
   --fake-inner-opacity: 0.5;
   --fake-radius: 12px;

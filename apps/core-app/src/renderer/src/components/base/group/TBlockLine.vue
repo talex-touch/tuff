@@ -14,25 +14,25 @@
 
 <script lang="ts">
 export default {
-  name: "TBlockLine",
-};
+  name: 'TBlockLine'
+}
 </script>
 
 <script lang="ts" setup>
 defineProps({
   title: {
     type: String,
-    default: "",
+    default: ''
   },
   description: {
     type: String,
-    default: "",
+    default: ''
   },
   link: {
     type: Boolean,
-    default: false,
-  },
-});
+    default: false
+  }
+})
 </script>
 
 <style lang="scss" scoped>

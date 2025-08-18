@@ -1,6 +1,6 @@
-import * as vm from "vm"
-import * as fse from "fs-extra"
-import path from "path"
+import * as vm from 'vm'
+import * as fse from 'fs-extra'
+import path from 'path'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 
 /**
@@ -9,7 +9,11 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
  * @param featurePath Path to plugin's entry file
  * @returns The sandboxed plugin lifecycle object
  */
-export function loadPluginFeatureContext(plugin: ITouchPlugin, featurePath: string, addonContext: any): any {
+export function loadPluginFeatureContext(
+  plugin: ITouchPlugin,
+  featurePath: string,
+  addonContext: any
+): any {
   const pluginLogger = plugin.logger
 
   const sandboxConsole = {
@@ -32,7 +36,7 @@ export function loadPluginFeatureContext(plugin: ITouchPlugin, featurePath: stri
     debug: (...args: any[]) => {
       console.debug(...args)
       pluginLogger.debug?.(...args) ?? pluginLogger.info(...args)
-    },
+    }
   }
 
   const context = vm.createContext({
@@ -42,10 +46,10 @@ export function loadPluginFeatureContext(plugin: ITouchPlugin, featurePath: stri
     module,
     exports,
     __dirname: path.dirname(featurePath),
-    __filename: featurePath,
+    __filename: featurePath
   })
 
-  const featureCode = fse.readFileSync(featurePath, "utf-8")
+  const featureCode = fse.readFileSync(featurePath, 'utf-8')
   const script = new vm.Script(featureCode)
 
   const result = script.runInContext(context)

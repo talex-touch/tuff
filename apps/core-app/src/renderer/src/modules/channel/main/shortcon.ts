@@ -1,12 +1,11 @@
-import { touchChannel } from "~/modules/channel/channel-core";
+import { touchChannel } from '~/modules/channel/channel-core'
 
 export class ShortconApi {
-
   regKey(_key: string, value: Function) {
     const res: {
-      registered: boolean,
+      registered: boolean
       message: string
-    } = touchChannel.sendSync('shortcon:reg', _key);
+    } = touchChannel.sendSync('shortcon:reg', _key)
 
     if (!res.registered) {
       return res
@@ -22,4 +21,4 @@ export class ShortconApi {
   }
 }
 
-export const shortconApi = new ShortconApi();
+export const shortconApi = new ShortconApi()

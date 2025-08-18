@@ -43,13 +43,12 @@ body.core-box #app {
 }
 
 ._disabled {
-  opacity: .75;
+  opacity: 0.75;
   pointer-events: none;
   cursor: not-allowed;
 }
 
 .el-scrollbar__bar {
-
   &.is-vertical,
   &.is-horizontal {
     width: 3px !important;
@@ -69,7 +68,7 @@ body.core-box #app {
 .fake-background {
   &:before {
     z-index: var(--fake-index, -1);
-    content: "";
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
@@ -253,7 +252,6 @@ html.fullscreen .Blur-Container {
 }
 
 @keyframes shaken {
-
   0%,
   100% {
     transform: translateX(0);

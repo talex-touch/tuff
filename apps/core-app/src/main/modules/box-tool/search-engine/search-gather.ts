@@ -1,4 +1,10 @@
-import { TuffItem, TuffQuery, withTimeout, TimeoutError, TuffSearchResult } from '@talex-touch/utils'
+import {
+  TuffItem,
+  TuffQuery,
+  withTimeout,
+  TimeoutError,
+  TuffSearchResult
+} from '@talex-touch/utils'
 import { IProviderActivate, ISearchProvider, TuffUpdate } from './types'
 
 /**

@@ -7,24 +7,31 @@ const emits = defineEmits(['update:modelValue', 'change'])
 
 const model = useModelWrapper(props, emits)
 
-watch(() => model, () => emits('change', model))
+watch(
+  () => model,
+  () => emits('change', model)
+)
 </script>
 
 <template>
-  <div role="radio" :class="{ select: model, disabled }" class="TSwitch-Container" @click="model = !model" />
+  <div
+    role="radio"
+    :class="{ select: model, disabled }"
+    class="TSwitch-Container"
+    @click="model = !model"
+  />
 </template>
 
 <style lang="scss" scoped>
-
 .TSwitch-Container {
   &.disabled {
-    opacity: .5;
+    opacity: 0.5;
 
     pointer-events: none;
   }
 
   &:before {
-    content: "";
+    content: '';
     position: absolute;
 
     //width: 25%;
@@ -37,7 +44,7 @@ watch(() => model, () => emits('change', model))
 
     border-radius: 5px;
     background-color: var(--el-text-color-secondary);
-    transition: all .25s ease-in-out;
+    transition: all 0.25s ease-in-out;
   }
 
   &.select {
@@ -56,7 +63,7 @@ watch(() => model, () => emits('change', model))
   }
 
   &:active:before {
-    transform: scale(.75);
+    transform: scale(0.75);
   }
 
   position: relative;
@@ -68,5 +75,6 @@ watch(() => model, () => emits('change', model))
   border-radius: 8px;
   background-color: var(--el-fill-color);
   //border: 1px solid var(--el-text-color-secondary);
-  transition: all .125s ease-in-out;
-}</style>
+  transition: all 0.125s ease-in-out;
+}
+</style>

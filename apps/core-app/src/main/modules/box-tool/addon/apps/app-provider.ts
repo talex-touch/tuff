@@ -138,7 +138,11 @@ class AppProvider implements ISearchProvider {
         const upsertedFile = upsertedFiles.find((f) => f.path === app.path)
         if (upsertedFile) {
           if (app.bundleId) {
-            extensionsToUpsert.push({ fileId: upsertedFile.id, key: 'bundleId', value: app.bundleId })
+            extensionsToUpsert.push({
+              fileId: upsertedFile.id,
+              key: 'bundleId',
+              value: app.bundleId
+            })
           }
           if (app.icon) {
             extensionsToUpsert.push({ fileId: upsertedFile.id, key: 'icon', value: app.icon })
@@ -485,8 +489,7 @@ class AppProvider implements ISearchProvider {
             ...tuffItem.meta,
             extension: {
               ...tuffItem.meta?.extension,
-              matchResult: [matchResult[0], matchResult[1]],
-              from: this.id
+              matchResult: [matchResult[0], matchResult[1]]
             }
           }
         }

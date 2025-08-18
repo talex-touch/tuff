@@ -39,9 +39,10 @@
 export interface TuffItem {
   /**
    * 唯一标识符
-   * @description 可选，未提供时使用 hash(title + source.type + source.id) 自动生成
+   * @description 唯一标识符，必须由创建者提供
+   * @required
    */
-  id?: string;
+  id: string;
 
   /**
    * 数据来源信息
@@ -845,6 +846,23 @@ export interface TuffContext {
  * 可以包含文件信息、网络信息、应用信息等。
  */
 export interface TuffMeta {
+  /**
+   * For plugin items, this holds the name of the plugin that generated the item.
+   * @description The name of the plugin.
+   */
+  pluginName?: string
+
+  /**
+   * For plugin items, this holds the ID of the feature that generated the item.
+   * @description The ID of the feature.
+   */
+  featureId?: string
+  /**
+   * Defines the default action to be taken when the item is executed (e.g., by pressing Enter).
+   * This is used to distinguish simple actions (like 'copy') from feature activations.
+   * @description The default action type.
+   */
+  defaultAction?: string;
   /**
    * 原始数据
    * @description 项目的原始数据对象，用于特殊处理

@@ -1,7 +1,5 @@
 <template>
-  <div class="LottieFrame-Container" ref="dom">
-
-  </div>
+  <div class="LottieFrame-Container" ref="dom"></div>
 </template>
 
 <script name="LottieFrame" setup>
@@ -36,6 +34,4 @@ onMounted(() => {
 })
 </script>
 
-<style lang="scss" scoped>
-
-</style>
+<style lang="scss" scoped></style>

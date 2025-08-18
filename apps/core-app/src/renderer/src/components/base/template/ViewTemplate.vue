@@ -1,18 +1,25 @@
 <template>
   <div :class="{ router: subRouterMode }" class="ViewTemplate">
-    <div :class="{ blur: subRouterMode }" class="ViewTemplate-Wrapper transition-cubic p-2 absolute w-full h-full">
+    <div
+      :class="{ blur: subRouterMode }"
+      class="ViewTemplate-Wrapper transition-cubic p-2 absolute w-full h-full"
+    >
       <el-scrollbar>
         <div class="View-Container">
-
           <slot />
         </div>
       </el-scrollbar>
     </div>
 
-    <div :class="{ visible: subRouterMode }"
-      class="ViewTemplate-Router fake-background transition-cubic absolute w-full h-full">
+    <div
+      :class="{ visible: subRouterMode }"
+      class="ViewTemplate-Router fake-background transition-cubic absolute w-full h-full"
+    >
       <view-template :len="len + 1" :title="String(route.name) ?? title" v-if="subRouterMode">
-        <div @click="router.back" class="ViewTemplate-RouterTitle cursor-pointer flex items-center text-xl">
+        <div
+          @click="router.back"
+          class="ViewTemplate-RouterTitle cursor-pointer flex items-center text-xl"
+        >
           <div i-ri-arrow-left-s-line />
           {{ title }}
         </div>
@@ -23,15 +30,18 @@
 </template>
 
 <script lang="ts" name="View" setup>
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router'
 
-const props = withDefaults(defineProps<{
-  title: string
-  len?: number
-}>(), {
-  title: 'ViewTemplate',
-  len: 1
-})
+const props = withDefaults(
+  defineProps<{
+    title: string
+    len?: number
+  }>(),
+  {
+    title: 'ViewTemplate',
+    len: 1
+  }
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -84,7 +94,7 @@ watchEffect(() => {
 
 .View-Container {
   position: relative;
-  padding: .5rem;
+  padding: 0.5rem;
 
   height: 100%;
   width: 100%;

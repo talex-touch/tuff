@@ -1,20 +1,29 @@
 <template>
   <div class="FlatCodeInput-Container">
-    <span @click="inputCode(i)" :class="{ active: codes.indexOf(i) !== -1, disabled: codes.length > 0 && codes[codes.length - 1] !== i }" class="FlatCodeInput-Item" v-for="i in 9" v-text="i" />
+    <span
+      @click="inputCode(i)"
+      :class="{
+        active: codes.indexOf(i) !== -1,
+        disabled: codes.length > 0 && codes[codes.length - 1] !== i
+      }"
+      class="FlatCodeInput-Item"
+      v-for="i in 9"
+      v-text="i"
+    />
   </div>
 </template>
 
 <script>
-import FlatButton from "@comp/base/button//FlatButton.vue";
+import FlatButton from '@comp/base/button//FlatButton.vue'
 
 export default {
-  name: "FlatCodeInput",
+  name: 'FlatCodeInput',
   components: { FlatButton }
 }
 </script>
 
 <script setup>
-import { reactive, ref, watch } from "vue";
+import { reactive, ref, watch } from 'vue'
 
 const emits = defineEmits(['input'])
 
@@ -22,7 +31,7 @@ const codes = reactive([])
 
 function inputCode(code) {
   const i = codes.indexOf(code)
-  if ( i !== -1 ) {
+  if (i !== -1) {
     codes.splice(i, 1)
   } else {
     codes.push(code)
@@ -30,7 +39,7 @@ function inputCode(code) {
 }
 
 watch(codes, (val) => {
-  if( val.length === 6 ) {
+  if (val.length === 6) {
     emits('input', val.join(''))
   }
 })
@@ -40,13 +49,13 @@ watch(codes, (val) => {
 .FlatCodeInput-Container {
   .FlatCodeInput-Item {
     &.active {
-      opacity: .5;
+      opacity: 0.5;
 
       box-shadow: var(--el-box-shadow-lighter);
       background-color: var(--el-fill-color-dark);
     }
     &.active.disabled {
-      opacity: .25;
+      opacity: 0.25;
       pointer-events: none;
     }
     position: relative;
@@ -61,10 +70,10 @@ watch(codes, (val) => {
     font-size: 18px;
     font-weight: 600;
 
-    opacity: .75;
+    opacity: 0.75;
     cursor: pointer;
     border-radius: 8px;
-    transition: .2s;
+    transition: 0.2s;
     box-shadow: var(--el-box-shadow-light);
     background-color: var(--el-fill-color-light);
   }

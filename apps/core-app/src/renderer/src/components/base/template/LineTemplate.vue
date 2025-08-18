@@ -3,63 +3,63 @@ export default defineComponent({
   props: {
     title: {
       type: String,
-      default: "Demo line",
+      default: 'Demo line'
     },
     regex: {
       type: String,
-      required: false,
+      required: false
     },
     msg: {
       type: Function,
-      default: () => "Regex mot matched.",
-    },
+      default: () => 'Regex mot matched.'
+    }
   },
   setup() {
-    const tip = ref("");
+    const tip = ref('')
 
     return {
-      tip,
-    };
+      tip
+    }
   },
   render(vnode) {
-    const regFormField = inject("regFormFiled");
+    const regFormField = inject('regFormFiled')
 
-    const { tip, $slots: slots, $props: props } = vnode;
+    const { tip, $slots: slots, $props: props } = vnode
 
-    const defaultSlot = slots.default?.() || "This is line template demo.";
-    const fieldSlot = slots.field?.() || props.title;
+    const defaultSlot = slots.default?.() || 'This is line template demo.'
+    const fieldSlot = slots.field?.() || props.title
 
     // tentative force needs `regex`
     if (props.regex && defaultSlot[0]?.dynamicProps.length > 0) {
       regFormField(vnode, () => {
-        vnode.tip = "";
+        vnode.tip = ''
 
-        const value = defaultSlot[0].component.props["modelValue"];
-        const regex = new RegExp(props.regex);
+        const value = defaultSlot[0].component.props['modelValue']
+        const regex = new RegExp(props.regex)
 
-        const access = regex.test(value);
+        const access = regex.test(value)
 
-        vnode.tip = access ? "" : props.msg();
+        vnode.tip = access ? '' : props.msg()
 
-        const el = defaultSlot[0]?.el;
+        const el = defaultSlot[0]?.el
         if (el && !access) {
           el.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-          });
+            behavior: 'smooth',
+            block: 'nearest'
+          })
 
           setTimeout(() => {
-            el.focus();
-          }, 500);
+            el.focus()
+          }, 500)
 
-          el.addEventListener("blur", () => (vnode.tip = ""));
+          el.addEventListener('blur', () => (vnode.tip = ''))
         }
 
         return {
           access,
-          msg: vnode.tip,
-        };
-      });
+          msg: vnode.tip
+        }
+      })
     }
 
     return (
@@ -69,7 +69,7 @@ export default defineComponent({
             {fieldSlot}
           </div>
 
-          <div class={tip ? "err-mention" : null} items-baseline gap-4 flex flex-1>
+          <div class={tip ? 'err-mention' : null} items-baseline gap-4 flex flex-1>
             <div>{defaultSlot}</div>
             <div class="mention">
               <span text-sm>{tip}</span>
@@ -77,9 +77,9 @@ export default defineComponent({
           </div>
         </div>
       </>
-    );
-  },
-});
+    )
+  }
+})
 </script>
 
 <style lang="scss">

@@ -14,86 +14,86 @@
  * limitations under the License.
  */
 
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/base/home/HomePage.vue'
 
 const routes: any = [
   {
-    path: "/",
-    redirect: "/home",
+    path: '/',
+    redirect: '/home'
   },
   {
-    path: "/home",
-    name: "HomePage",
+    path: '/home',
+    name: 'HomePage',
     component: Home,
     meta: {
-      index: 1,
-    },
+      index: 1
+    }
   },
   {
-    path: "/market",
-    name: "Plugin Market",
-    component: () => import("../views/base/Market.vue"),
+    path: '/market',
+    name: 'Plugin Market',
+    component: () => import('../views/base/Market.vue'),
     meta: {
-      index: 2,
-    },
+      index: 2
+    }
   },
   {
-    path: "/plugin",
-    name: "Plugin",
-    component: () => import("../views/base/Plugin.vue"),
+    path: '/plugin',
+    name: 'Plugin',
+    component: () => import('../views/base/Plugin.vue'),
     meta: {
-      index: 3,
-    },
+      index: 3
+    }
   },
   {
-    path: "/styles",
-    name: "Styles",
-    component: () => import("../views/base/styles/ThemeStyle.vue"),
+    path: '/styles',
+    name: 'Styles',
+    component: () => import('../views/base/styles/ThemeStyle.vue'),
     meta: {
-      index: 4,
-    },
+      index: 4
+    }
   },
   {
-    path: "/styles/theme",
-    name: "Theme",
-    component: () => import("../views/base/styles/sub/ThemePreference.vue"),
+    path: '/styles/theme',
+    name: 'Theme',
+    component: () => import('../views/base/styles/sub/ThemePreference.vue'),
     meta: {
-      index: 4,
-    },
+      index: 4
+    }
   },
   {
-    path: "/application",
-    name: "Application",
-    component: () => import("../views/base/application/ApplicationIndex.vue"),
+    path: '/application',
+    name: 'Application',
+    component: () => import('../views/base/application/ApplicationIndex.vue'),
     meta: {
-      index: 5,
-    },
+      index: 5
+    }
   },
   {
-    path: "/setting",
-    name: "AppSettings",
-    component: () => import("../views/base/settings/AppSettings.vue"),
+    path: '/setting',
+    name: 'AppSettings',
+    component: () => import('../views/base/settings/AppSettings.vue'),
     children: [
       {
-        path: "/setting/storage",
-        name: "Storagable",
-        component: () => import("../views/storage/Storagable.vue"),
+        path: '/setting/storage',
+        name: 'Storagable',
+        component: () => import('../views/storage/Storagable.vue'),
         meta: {
-          index: 7,
-        },
-      },
+          index: 7
+        }
+      }
     ],
     meta: {
-      index: 6,
-    },
-  },
-];
+      index: 6
+    }
+  }
+]
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes,
-});
+  routes
+})
 
 // router.beforeEach(async (to, from, next) => {
 //
@@ -135,4 +135,4 @@ const router = createRouter({
 //
 // })
 
-export default router;
+export default router

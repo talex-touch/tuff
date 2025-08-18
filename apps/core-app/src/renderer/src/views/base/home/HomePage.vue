@@ -10,8 +10,8 @@
 </template>
 
 <script name="HomePage" setup>
-import HomeBanner from "./HomeBanner.vue";
-import HomeContent from "./HomeContent.vue";
+import HomeBanner from './HomeBanner.vue'
+import HomeContent from './HomeContent.vue'
 </script>
 
 <style lang="scss" scoped>

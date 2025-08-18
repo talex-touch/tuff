@@ -13,20 +13,20 @@
 </template>
 
 <script lang="ts" name="AppUpgradationView" setup>
-import { inject } from "vue";
-import FlatMarkdown from "@comp/base/input/FlatMarkdown.vue";
-import FlatButton from "@comp/base/button//FlatButton.vue";
+import { inject } from 'vue'
+import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue'
+import FlatButton from '@comp/base/button//FlatButton.vue'
 
 const props = defineProps({
   release: {
     type: Object,
-    required: true,
-  },
-});
-const close = inject("destroy");
+    required: true
+  }
+})
+const close = inject('destroy')
 
 function upgrade() {
-  window.$nodeApi.openExternal(props.release.html_url);
+  window.$nodeApi.openExternal(props.release.html_url)
 }
 </script>
 

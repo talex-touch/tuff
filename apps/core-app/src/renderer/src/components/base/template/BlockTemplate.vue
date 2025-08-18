@@ -2,21 +2,21 @@
 const props = defineProps({
   title: {
     type: String,
-    default: "BlockTemplate",
+    default: 'BlockTemplate'
   },
   style: {
     type: String,
-    default: "",
+    default: ''
   },
   disabled: {
-    type: Boolean,
-  },
-});
+    type: Boolean
+  }
+})
 
 provide(
-  "disabled",
+  'disabled',
   computed(() => props.disabled)
-);
+)
 </script>
 
 <template>

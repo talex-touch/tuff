@@ -75,7 +75,11 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
       return null
     }
 
-    const execPath = exec.replace(/ %[A-Za-z]/g, '').replace(/"/g, '').trim().split(' ')[0]
+    const execPath = exec
+      .replace(/ %[A-Za-z]/g, '')
+      .replace(/"/g, '')
+      .trim()
+      .split(' ')[0]
     const iconPath = iconName ? await findIconPath(iconName) : ''
     const stats = await fs.stat(desktopFilePath)
 
@@ -116,11 +120,11 @@ async function findDesktopFiles(dir: string): Promise<string[]> {
 }
 
 export async function getApps(): Promise<AppInfo[]> {
-  const allDesktopFilesPromises = APP_PATHS.map(p => findDesktopFiles(p))
+  const allDesktopFilesPromises = APP_PATHS.map((p) => findDesktopFiles(p))
   const nestedDesktopFiles = await Promise.all(allDesktopFilesPromises)
   const allDesktopFiles = nestedDesktopFiles.flat()
 
-  const appInfoPromises = allDesktopFiles.map(file => parseDesktopFile(file))
+  const appInfoPromises = allDesktopFiles.map((file) => parseDesktopFile(file))
   const results = await Promise.all(appInfoPromises)
 
   return results.filter((app): app is AppInfo => app !== null)

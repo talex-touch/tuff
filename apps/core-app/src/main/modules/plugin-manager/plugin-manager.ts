@@ -22,7 +22,8 @@ export interface IPluginManager {
 
 export class PluginManager implements IPluginManager {
   private searchEngine: ISearchEngine
-  private loadedPlugins: Map<string, { manifest: IPluginManifest; instance: ISearchProvider }> = new Map()
+  private loadedPlugins: Map<string, { manifest: IPluginManifest; instance: ISearchProvider }> =
+    new Map()
 
   constructor(searchEngine: ISearchEngine) {
     this.searchEngine = searchEngine
@@ -74,7 +75,9 @@ export class PluginManager implements IPluginManager {
       this.searchEngine.registerProvider(providerInstance)
 
       this.loadedPlugins.set(manifest.id, { manifest, instance: providerInstance })
-      console.log(`[PluginManager] Successfully loaded plugin: ${manifest.name} (v${manifest.version})`)
+      console.log(
+        `[PluginManager] Successfully loaded plugin: ${manifest.name} (v${manifest.version})`
+      )
     } catch (error) {
       console.error(`[PluginManager] Failed to load plugin from ${pluginPath}`, error)
     }

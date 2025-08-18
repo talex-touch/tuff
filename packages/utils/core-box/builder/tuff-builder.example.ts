@@ -13,7 +13,7 @@ import type { TuffItem, TuffItemKind } from '../tuff/tuff-dsl';
  */
 function createSingleItem(): TuffItem {
   // 使用 Builder 模式创建一个完整的 TuffItem
-  const item = new TuffItemBuilder()
+  const item = new TuffItemBuilder('doc-1')
     .setSource('plugin', 'file-explorer')
     .setTitle('文档.docx')
     .setDescription('Word 文档')

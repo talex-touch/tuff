@@ -16,59 +16,59 @@
 </template>
 
 <script name="IconButton" lang="ts" setup>
-import RemixIcon from "@comp/icon/RemixIcon.vue";
-import { ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import RemixIcon from '@comp/icon/RemixIcon.vue'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
   icon: {
-    type: String,
+    type: String
   },
   direct: {
     type: String,
-    required: false,
+    required: false
   },
   plain: {
-    type: Boolean,
+    type: Boolean
   },
   small: {
-    type: Boolean,
+    type: Boolean
   },
   select: {
-    type: Boolean,
+    type: Boolean
   },
   undot: {
-    type: Boolean,
+    type: Boolean
   },
   scaleUpper: {
-    type: Boolean,
+    type: Boolean
   },
   middle: {
-    type: Boolean,
-  },
-});
+    type: Boolean
+  }
+})
 
-const router = useRouter();
-const route = useRoute();
+const router = useRouter()
+const route = useRoute()
 
-const hover = ref(false);
-const _select = ref(false);
+const hover = ref(false)
+const _select = ref(false)
 
 watch(
   () => route.path,
   () => {
-    if (props.hasOwnProperty("select")) _select.value = props.select;
+    if (props.hasOwnProperty('select')) _select.value = props.select
     if (props.direct) {
-      _select.value = route.path === props.direct;
+      _select.value = route.path === props.direct
 
       // if (  _select.value )
       // console.log( route, props.direct, _select.value )
     }
   }
-);
+)
 
 function handleClick() {
-  props.direct && router.push(props.direct);
+  props.direct && router.push(props.direct)
 }
 </script>
 
@@ -79,7 +79,7 @@ function handleClick() {
   }
   &.plain {
     &:after {
-      content: "";
+      content: '';
       position: absolute;
 
       top: 50%;

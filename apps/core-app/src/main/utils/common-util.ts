@@ -2,10 +2,10 @@ import path from 'path'
 import fse from 'fs-extra'
 
 export enum Platform {
-    MAC_OS,
-    WINDOWS,
-    LINUX,
-    UNKNOWN
+  MAC_OS,
+  WINDOWS,
+  LINUX,
+  UNKNOWN
 }
 
 // export enum PlatformVersion {
@@ -55,37 +55,33 @@ export enum Platform {
 //
 // }
 export function getPlatform() {
-    switch (process.platform) {
-        case 'darwin':
-            return Platform.MAC_OS
-        case 'win32':
-            return Platform.WINDOWS
-        case 'linux':
-            return Platform.LINUX
-    }
+  switch (process.platform) {
+    case 'darwin':
+      return Platform.MAC_OS
+    case 'win32':
+      return Platform.WINDOWS
+    case 'linux':
+      return Platform.LINUX
+  }
 
-    return Platform.UNKNOWN
+  return Platform.UNKNOWN
 }
 export async function sleep(time: number) {
-    return new Promise(resolve => setTimeout(() => resolve(time), time))
+  return new Promise((resolve) => setTimeout(() => resolve(time), time))
 }
 
 export async function checkDirWithCreate(url, abs = true) {
+  const p = abs ? url : path.join(process.cwd(), url)
 
-    const p = abs ? url : path.join(process.cwd(), url)
+  if (!fse.existsSync(p)) {
+    return fse.mkdirSync(p)
+  }
 
-    if( !fse.existsSync(p) ) {
-
-        return fse.mkdirSync(p)
-
-    }
-
-    return true
-
+  return true
 }
 
 // return now time with hours and minutes and seconds
 export function nowTime() {
-    const now = new Date()
-    return `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`
+  const now = new Date()
+  return `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`
 }

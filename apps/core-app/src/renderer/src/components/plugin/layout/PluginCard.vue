@@ -1,12 +1,11 @@
 <template>
   <div class="PluginCard-Container">
-
-   <p class="PluginCard-Header">
+    <p class="PluginCard-Header">
       <span class="PluginCard-Name">
         {{ plugin.pluginInfo.name }}
       </span>
       <span class="PluginCard-Version">{{ plugin.pluginInfo.version }}</span>
-   </p>
+    </p>
 
     <p class="PluginCard-Desc">
       {{ plugin.pluginInfo.description }}
@@ -20,19 +19,17 @@
 
 <script>
 export default {
-  name: "PluginCard"
+  name: 'PluginCard'
 }
 </script>
 
 <script setup>
-
 const props = defineProps({
   plugin: {
     type: Object,
     required: true
   }
 })
-
 </script>
 
 <style lang="scss" scoped>
@@ -45,7 +42,12 @@ const props = defineProps({
   text-align: center;
 
   border-radius: 5px;
-  background: linear-gradient(to right, var(--el-color-primary-light-3), var(--el-color-primary-light-5), var(--el-color-primary-light-3));
+  background: linear-gradient(
+    to right,
+    var(--el-color-primary-light-3),
+    var(--el-color-primary-light-5),
+    var(--el-color-primary-light-3)
+  );
 }
 
 .PluginCard-Desc {
@@ -58,7 +60,7 @@ const props = defineProps({
   .PluginCard-Name {
     &:after {
       z-index: -1;
-      content: "";
+      content: '';
       position: absolute;
 
       left: -2%;
@@ -67,7 +69,7 @@ const props = defineProps({
       width: 104%;
       height: 5px;
 
-      opacity: .5;
+      opacity: 0.5;
       border-radius: 5px;
       background-color: var(--el-color-primary);
     }
@@ -83,7 +85,7 @@ const props = defineProps({
   .PluginCard-Version {
     &:after {
       z-index: -1;
-      content: "";
+      content: '';
       position: absolute;
 
       left: -5%;
@@ -92,7 +94,7 @@ const props = defineProps({
       width: 110%;
       height: 120%;
 
-      opacity: .25;
+      opacity: 0.25;
       border-radius: 5px;
       background-color: var(--el-color-primary);
     }
@@ -124,7 +126,7 @@ const props = defineProps({
   //background: linear-gradient(to bottom right, var(--el-color-primary-light-7), var(--el-color-primary-light-9));
   //background-size: 200% 200%;
   //animation: waving 2.5s infinite;
-  transition: .25s;
+  transition: 0.25s;
 }
 
 @keyframes waving {

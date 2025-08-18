@@ -10,7 +10,6 @@
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
 // import { $t } from '~/modules/lang'
 import empty from '~/assets/lotties/empty.json'
-
 </script>
 
 <style lang="scss" scoped>
@@ -23,7 +22,7 @@ import empty from '~/assets/lotties/empty.json'
   //width: 240px;
   //height: 50%;
 
-  opacity: .75;
+  opacity: 0.75;
 
   .LottieFrame-Container {
     transform: translateY(-5%);
@@ -52,7 +51,7 @@ import empty from '~/assets/lotties/empty.json'
 }
 
 @keyframes mix {
-  0%{
+  0% {
     background-position-x: 0%;
   }
   100% {

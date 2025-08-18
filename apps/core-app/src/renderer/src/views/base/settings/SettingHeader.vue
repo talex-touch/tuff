@@ -2,13 +2,13 @@
 defineProps({
   env: {
     type: Object,
-    required: true,
+    required: true
   },
   dev: {
     type: Boolean,
-    required: true,
-  },
-});
+    required: true
+  }
+})
 </script>
 
 <template>
@@ -182,7 +182,7 @@ defineProps({
   .About-Image {
     &:before,
     &:after {
-      content: "";
+      content: '';
       position: absolute;
 
       left: 50%;
@@ -243,7 +243,7 @@ defineProps({
   }
 
   &:before {
-    content: "未激活";
+    content: '未激活';
     position: absolute;
     display: flex;
 

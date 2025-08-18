@@ -249,7 +249,12 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
       console.log('[useSearch] Received item update:', data.items)
-      res.value.push(...data.items)
+      // Use a Map to ensure uniqueness and efficient updates.
+      const itemsMap = new Map(res.value.map(item => [item.id, item]))
+      data.items.forEach((item: TuffItem) => {
+        itemsMap.set(item.id, item)
+      })
+      res.value = Array.from(itemsMap.values())
     } else {
       console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
@@ -279,10 +284,15 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     }
 
     console.log(`[useSearch] Received ${data.items.length} items pushed from plugin.`)
-    // When a plugin pushes items, it becomes the new source of truth for results.
-    res.value = data.items
-    // Pushed items are outside the standard search flow, so we clear the searchResult context.
-    searchResult.value = null
+
+    // Use a Map to ensure uniqueness and efficient updates.
+    const itemsMap = new Map(res.value.map(item => [item.id, item]))
+    data.items.forEach((item: TuffItem) => {
+      itemsMap.set(item.id, item)
+    })
+
+    // Assign the updated list back to the reactive ref.
+    res.value = Array.from(itemsMap.values())
     loading.value = false
   })
 

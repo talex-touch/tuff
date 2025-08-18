@@ -1,59 +1,54 @@
 <script name="ApplicationIndex" setup lang="ts">
-import AppList from "./AppList.vue";
-import AppConfigure from "./AppConfigure.vue";
-import ApplicationEmpty from "./ApplicationEmpty.vue";
-import { refreshSearchList, apps, search, appAmo, execute } from "~/views/box/search-box";
+import AppList from './AppList.vue'
+import AppConfigure from './AppConfigure.vue'
+import ApplicationEmpty from './ApplicationEmpty.vue'
+import { refreshSearchList, apps, search, appAmo, execute } from '~/views/box/search-box'
 
 defineProps<{
-  modelValue?: boolean;
-}>();
+  modelValue?: boolean
+}>()
 
-const index = ref(-1);
-const curSelect = ref();
-const appList: any = ref(apps.value);
+const index = ref(-1)
+const curSelect = ref()
+const appList: any = ref(apps.value)
 
 onMounted(() => {
   setTimeout(async () => {
-    await refreshSearchList();
-  }, 200);
-});
+    await refreshSearchList()
+  }, 200)
+})
 
 async function handleSearch(value: string) {
   if (!value.length) {
-    appList.value = apps.value;
-    return;
+    appList.value = apps.value
+    return
   }
-  appList.value = [];
+  appList.value = []
 
   await search(value, { mode: 0 }, {}, (v: any) => {
-    const amo = appAmo[v.name] || 0;
-    v.amo = amo;
+    const amo = appAmo[v.name] || 0
+    v.amo = amo
 
-    const arr = [...appList.value, v].toSorted((b: any, a: any) => a.amo - b.amo);
+    const arr = [...appList.value, v].toSorted((b: any, a: any) => a.amo - b.amo)
 
-    appList.value = arr;
-  });
+    appList.value = arr
+  })
 }
 
 function handleSelect(item: any, _index: number) {
-  curSelect.value = item;
-  index.value = _index;
+  curSelect.value = item
+  index.value = _index
 }
 
 function handleExecute(item: any) {
-  execute(item);
+  execute(item)
 }
 </script>
 
 <template>
   <div class="ApplicationIndex">
     <div class="ApplicationList">
-      <AppList
-        :index="index"
-        @select="handleSelect"
-        @search="handleSearch"
-        :list="appList"
-      />
+      <AppList :index="index" @select="handleSelect" @search="handleSearch" :list="appList" />
     </div>
     <div class="ApplicationContent">
       <ApplicationEmpty v-if="!curSelect" />

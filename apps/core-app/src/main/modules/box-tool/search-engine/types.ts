@@ -21,11 +21,7 @@ export interface ProviderContext {
   storageManager: TalexTouch.IModule
 }
 
-export interface TuffItem extends TuffItemBase {
-  from?: string
-}
-
-export type { TuffQuery, TuffSourceType }
+export type { TuffItemBase as TuffItem, TuffQuery, TuffSourceType }
 
 /**
  * Represents the statistics for a single sort middleware.
@@ -79,7 +75,7 @@ export interface ISortMiddleware {
  */
 export interface IExecuteArgs {
   item: TuffItem
-  searchResult: TuffSearchResult
+  searchResult?: TuffSearchResult
 }
 
 export interface ISearchProvider {

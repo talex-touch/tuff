@@ -1,5 +1,5 @@
 <script>
 export default {
-  name: "TvTabItemGroup"
+  name: 'TvTabItemGroup'
 }
 </script>

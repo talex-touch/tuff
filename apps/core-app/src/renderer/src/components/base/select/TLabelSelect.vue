@@ -1,61 +1,61 @@
 <script name="TLabelSelect" setup lang="ts">
-import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
-import { useDebounceFn } from "@vueuse/core";
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { useDebounceFn } from '@vueuse/core'
 
 const props = defineProps<{
-  modelValue: string;
-}>();
+  modelValue: string
+}>()
 const emits = defineEmits<{
-  (e: "update:modelValue", value: string): void;
-}>();
+  (e: 'update:modelValue', value: string): void
+}>()
 
-const pointer = ref();
-const value = useModelWrapper(props, emits);
+const pointer = ref()
+const value = useModelWrapper(props, emits)
 
 function fixPointer(el: HTMLElement) {
   const target = el.parentElement!.querySelector(
     `.TLabelSelectItem[data-type="label-select-item"][data-value="${value.value}"]`
-  );
-  if (!target) return;
+  )
+  if (!target) return
 
   Object.assign(el.style, {
     top: `0px`,
     left: `0px`,
     width: `100%`,
-    height: `100%`,
-  });
+    height: `100%`
+  })
 
   setTimeout(() => {
-    const pointerRect = pointer.value.getBoundingClientRect();
-    const rect = target.getBoundingClientRect();
+    const pointerRect = pointer.value.getBoundingClientRect()
+    const rect = target.getBoundingClientRect()
 
     Object.assign(el.style, {
       top: `${rect.top - pointerRect.top}px`,
       left: `${rect.left - pointerRect.left}px`,
       width: `${rect.width}px`,
-      height: `${rect.height}px`,
-    });
-  }, 200);
+      height: `${rect.height}px`
+    })
+  }, 200)
 }
 
 watch(
   () => value.value,
   () => {
     nextTick(() => {
-      if (!pointer.value) return;
+      if (!pointer.value) return
 
-      fixPointer(pointer.value);
-    });
+      fixPointer(pointer.value)
+    })
   },
   { immediate: true }
-);
+)
 
 provide(
-  "refresh",
+  'refresh',
   useDebounceFn((_value: string) => {
-    value.value = _value;
+    value.value = _value
   }, 200)
-);
+)
 </script>
 
 <template>

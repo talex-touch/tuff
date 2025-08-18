@@ -1,51 +1,51 @@
 <script name="FlatMarkdown" setup>
-import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from "@milkdown/core";
-import { nord } from "@milkdown/theme-nord";
-import { commonmark } from "@milkdown/preset-commonmark";
-import { replaceAll } from "@milkdown/utils";
-import { onMounted, ref } from "vue";
-import { useModelWrapper } from "@talex-touch/utils/renderer/ref";
-import "@milkdown/theme-nord/style.css";
+import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
+import { nord } from '@milkdown/theme-nord'
+import { commonmark } from '@milkdown/preset-commonmark'
+import { replaceAll } from '@milkdown/utils'
+import { onMounted, ref } from 'vue'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import '@milkdown/theme-nord/style.css'
 
-const props = defineProps(["modelValue", "readonly"]);
+const props = defineProps(['modelValue', 'readonly'])
 
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(['update:modelValue'])
 
-const value = useModelWrapper(props, emit);
+const value = useModelWrapper(props, emit)
 
-const editor = ref();
-const editorDom = ref();
+const editor = ref()
+const editorDom = ref()
 
 watch(value, () => {
   console.log('text updated', value, editor.value, replaceAll)
 
   handleInit()
   // editor.value?.action(replaceAll(value.value, true));
-});
+})
 
 async function handleInit() {
   if (editor.value) {
-    editor.value.destroy();
+    editor.value.destroy()
   }
 
   editor.value = await Editor.make()
     .config((ctx) => {
-      ctx.set(rootCtx, editorDom.value);
-      ctx.set(defaultValueCtx, value.value);
+      ctx.set(rootCtx, editorDom.value)
+      ctx.set(defaultValueCtx, value.value)
 
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
-        editable: () => !props.readonly,
-      }));
+        editable: () => !props.readonly
+      }))
     })
     .use(nord)
     .use(commonmark)
-    .create();
+    .create()
 }
 
 onMounted(async () => {
   handleInit()
-});
+})
 </script>
 
 <template>
@@ -84,7 +84,7 @@ onMounted(async () => {
   h1 {
     &:before {
       z-index: -1;
-      content: "";
+      content: '';
       position: absolute;
 
       left: 50%;

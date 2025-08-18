@@ -12,13 +12,13 @@
 
 <script>
 export default {
-  name: "TMenuItem"
+  name: 'TMenuItem'
 }
 </script>
 
 <script setup>
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { useRouter } from "vue-router";
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   icon: {
@@ -52,8 +52,10 @@ const props = defineProps({
 const router = useRouter()
 
 const active = computed(() => props?.active?.(props.name))
-watch(() => active.value, val => val && router.push(props.route))
-
+watch(
+  () => active.value,
+  (val) => val && router.push(props.route)
+)
 </script>
 
 <style lang="scss" scoped>
@@ -61,16 +63,16 @@ watch(() => active.value, val => val && router.push(props.route))
   .TMenu-Referrer {
     position: absolute;
 
-    top: .5em;
-    right: .75em;
+    top: 0.5em;
+    right: 0.75em;
 
     opacity: 0 !important;
-    transform: scale(.75) translateX(-15px);
-    transition: .25s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+    transform: scale(0.75) translateX(-15px);
+    transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
   }
   &.active {
     .TMenu-Referrer {
-      opacity: .75 !important;
+      opacity: 0.75 !important;
       transform: scale(1) translateX(0);
     }
     --fake-color: var(--el-fill-color-dark) !important;
@@ -89,7 +91,7 @@ watch(() => active.value, val => val && router.push(props.route))
   }
   &.disabled {
     cursor: not-allowed;
-    opacity: .5;
+    opacity: 0.5;
     --fake-color: transparent;
   }
   z-index: 0;
@@ -101,7 +103,7 @@ watch(() => active.value, val => val && router.push(props.route))
   cursor: pointer;
   user-select: none;
   border-radius: 4px;
-  text-indent: .5em;
+  text-indent: 0.5em;
   //transition: all .25s;
   box-sizing: border-box;
 
@@ -113,6 +115,6 @@ watch(() => active.value, val => val && router.push(props.route))
   &.active {
     --fake-color: var(--el-fill-color-lighter) !important;
   }
-  --fake-opacity: .25;
+  --fake-opacity: 0.25;
 }
 </style>

@@ -267,7 +267,6 @@ Most browsers provide users with the function to clear browser cache data, and y
 #### 6.2.1 Autonomous Control of Receiving Information
 
 - We will utilize recommendation algorithms to provide personalized recommendations and displays based on the content you browse. You can control personalized recommendations for information content through the following methods:
-
   - **Autonomously Decide to Receive Personalized Push News:** You can enable or disable the personalized recommendation feature through "Me" - "Settings" - "Personalized Recommendation Settings." You can choose to disable all personalized recommendations with one click. When you choose to disable all personalized recommendations, the "Recommendations" channel will no longer be displayed to you, and you will not be able to enjoy personalized recommendation services, but you can still browse non-personalized recommendation content such as "Followed," "Hot," "Featured Headlines," etc.
   - **Autonomously Subscribe to Desired Information:** In the "Follow" channel, information will be displayed based on the accounts you actively choose to follow, and you can choose to follow or unfollow them at your discretion.
 

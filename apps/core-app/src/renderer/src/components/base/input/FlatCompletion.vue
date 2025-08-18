@@ -4,84 +4,94 @@
   </div>
   <teleport to="body">
     <div @click="value = ''" class="FlatInput-Completion" ref="completionWrapper">
-<!--      <el-scrollbar>-->
-        <div v-wave class="FlatInput-Completion-Item fake-background" :style="`--d: ${index * 0.125}s`" v-for="(item, index) in _res" :key="item">
-          <slot :item="item">
-            {{ item }}
-          </slot>
-        </div>
-<!--      </el-scrollbar>-->
+      <!--      <el-scrollbar>-->
+      <div
+        v-wave
+        class="FlatInput-Completion-Item fake-background"
+        :style="`--d: ${index * 0.125}s`"
+        v-for="(item, index) in _res"
+        :key="item"
+      >
+        <slot :item="item">
+          {{ item }}
+        </slot>
+      </div>
+      <!--      </el-scrollbar>-->
     </div>
   </teleport>
 </template>
 
 <script setup name="FlatCompletion">
-import FlatInput from "@comp/base/input/FlatInput.vue";
-import { sleep } from "@talex-touch/utils/common/utils";
+import FlatInput from '@comp/base/input/FlatInput.vue'
+import { sleep } from '@talex-touch/utils/common/utils'
 import { computePosition } from '@floating-ui/vue'
 
 const props = defineProps({
   icon: {
     type: String,
-    default: "search",
+    default: 'search'
   },
   fetch: {
     type: Function,
     require: true
   }
-});
+})
 
 const _res = ref([])
-const res = ref([]);
+const res = ref([])
 const completionInput = ref()
 const completionWrapper = ref()
 const value = ref()
 
-watch(() => value.value, () => {
-  nextTick(blur)
-}, { deep: true, immediate: true });
+watch(
+  () => value.value,
+  () => {
+    nextTick(blur)
+  },
+  { deep: true, immediate: true }
+)
 
-watch(() => res.value, async () => {
-  const el = completionWrapper.value
+watch(
+  () => res.value,
+  async () => {
+    const el = completionWrapper.value
 
-  for ( const item of [ ...el.children ].reverse() ) {
+    for (const item of [...el.children].reverse()) {
+      setTimeout(async () => {
+        item.classList.add('remove')
+        // // opacity: 0 !important;
+        // // filter: blur(10px) !important;
+        // // transform: translateY(10px) scaleY(1.1) !important;
+        //
+        // Object.assign(item.style, {
+        //   // opacity: 0,
+        //   // filter: "blur(10px)",
+        //   // transform: "translateY(10px) scaleY(1.1)",
+        //   // reverse the animation
+        //   animationDirection: "reverse",
+        //   // remove animation forwards
+        //   animationFillMode: "none",
+        // })
 
-    setTimeout(async () => {
+        await sleep(500)
+        item?.remove()
+      })
+      await sleep(125)
+    }
 
-      item.classList.add('remove')
-      // // opacity: 0 !important;
-      // // filter: blur(10px) !important;
-      // // transform: translateY(10px) scaleY(1.1) !important;
-      //
-      // Object.assign(item.style, {
-      //   // opacity: 0,
-      //   // filter: "blur(10px)",
-      //   // transform: "translateY(10px) scaleY(1.1)",
-      //   // reverse the animation
-      //   animationDirection: "reverse",
-      //   // remove animation forwards
-      //   animationFillMode: "none",
-      // })
+    await sleep(600)
 
-      await sleep(500)
-      item?.remove()
-    })
-    await sleep(125)
+    _res.value = res.value
   }
-
-  await sleep(600)
-
-  _res.value = res.value
-})
+)
 
 function blur() {
-  if ( !value.value ) value.value = ""
+  if (!value.value) value.value = ''
   res.value = props.fetch(value.value)
 
-  if ( res.value.length > 8 )
-    res.value = res.value.slice(0, 8)
+  if (res.value.length > 8) res.value = res.value.slice(0, 8)
 
-  nextTick(async() => {
+  nextTick(async () => {
     const floating = await computePosition(completionInput.value, completionWrapper.value)
 
     Object.assign(completionWrapper.value.style, {
@@ -90,7 +100,6 @@ function blur() {
     })
   })
 }
-
 </script>
 
 <style lang="scss" scoped>
@@ -110,7 +119,7 @@ function blur() {
   //box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.2);
   overflow: hidden;
 
-  transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+  transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 
   .FlatInput-Completion-Item {
     position: relative;
@@ -122,8 +131,8 @@ function blur() {
 
     opacity: 0;
 
-    animation: fade-in .5s var(--d) cubic-bezier(0.785, 0.135, 0.150, 0.860) forwards;
-    transition: .5s cubic-bezier(0.785, 0.135, 0.150, 0.860);
+    animation: fade-in 0.5s var(--d) cubic-bezier(0.785, 0.135, 0.15, 0.86) forwards;
+    transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 
     --fake-opacity: 0.5;
     --fake-radius: 4px;
@@ -134,16 +143,16 @@ function blur() {
       --fake-opacity: 0.8;
     }
     &.remove {
-      animation: fade-out .5s cubic-bezier(0.785, 0.135, 0.150, 0.860) forwards;
+      animation: fade-out 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86) forwards;
     }
   }
 }
 
 @keyframes fade-out {
   from {
-      opacity: 1;
-      filter: blur(0);
-      transform: translateY(0) scaleY(1);
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scaleY(1);
   }
   to {
     opacity: 0;

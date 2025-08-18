@@ -204,7 +204,11 @@ const clickBtn = async (btn: { value: ButtonState }): Promise<void> => {
         <!-- Dialog title -->
         <h1 id="dialog-title" v-text="title" />
         <!-- Dialog message content with line breaks -->
-        <span id="dialog-message" class="TDialogTip-Content" v-html="message.replace('\n', '<br /><br />')" />
+        <span
+          id="dialog-message"
+          class="TDialogTip-Content"
+          v-html="message.replace('\n', '<br /><br />')"
+        />
 
         <!-- Loading indicator wrapper -->
         <div class="TDialogTip-Loading-Wrapper">

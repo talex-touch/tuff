@@ -3,12 +3,12 @@ import DarwinApp from './apps/darwin'
 import LinuxApp from './apps/linux'
 
 import PinyinMatch from 'pinyin-match'
-import PinyinMatchTw from 'pinyin-match/es/traditional.js';
-import { isAsyncFunction } from 'node:util/types';
+import PinyinMatchTw from 'pinyin-match/es/traditional.js'
+import { isAsyncFunction } from 'node:util/types'
 
 const env = process.platform
 
-let appSearch: any;
+let appSearch: any
 
 if (env === 'darwin') {
   appSearch = DarwinApp
@@ -186,7 +186,7 @@ export default async (keyword: string) => {
   const currentAppNames = currentApps?.map((app: any) => app.name) || []
 
   let res = new Array<any>()
-  let index = 0;
+  let index = 0
 
   for (let appName of currentAppNames) {
     const matched = check(keyword, appName)

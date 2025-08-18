@@ -335,8 +335,7 @@ class FileProvider implements ISearchProvider {
             ...tuffItem.meta,
             extension: {
               ...tuffItem.meta?.extension,
-              matchResult: [matchResult[0], matchResult[1]],
-              from: this.id
+              matchResult: [matchResult[0], matchResult[1]]
             }
           }
         }

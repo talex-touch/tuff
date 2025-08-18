@@ -9,39 +9,43 @@ import { nextTick, ref, watch } from 'vue'
 const props = defineProps({
   title: {
     type: String,
-    required: true,
+    required: true
   },
   description: {
     type: String,
-    required: true,
+    required: true
   },
   modelValue: {
     type: Boolean,
-    required: true,
+    required: true
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   guidance: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
 const mention = ref()
 const value = useModelWrapper(props, emits)
 
-watch(() => value.value, (v) => {
-  emits('change', value)
+watch(
+  () => value.value,
+  (v) => {
+    emits('change', value)
 
-  // refresh(v)
-}, { immediate: true })
+    // refresh(v)
+  },
+  { immediate: true }
+)
 
 // watch(() => value.value ? $t('base.status-open') : $t('base.status-close'), v => refresh(v))
 // function refresh(v) {
@@ -72,7 +76,10 @@ watch(() => value.value, (v) => {
 </script>
 
 <template>
-  <div class="TBlockSwitch-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
+  <div
+    class="TBlockSwitch-Container TBlockSelection fake-background index-fix"
+    :class="{ disabled }"
+  >
     <div class="TBlockSwitch-Content TBlockSelection-Content">
       <RemixIcon :name="icon" :style="value ? 'fill' : 'line'" />
       <div class="TBlockSwitch-Label TBlockSelection-Label">
@@ -81,7 +88,7 @@ watch(() => value.value, (v) => {
       </div>
     </div>
     <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
-      <span display-none ref="mention" style="transition: .2s" />
+      <span display-none ref="mention" style="transition: 0.2s" />
       <!--      Style sync opacity no external setting disabled -->
       <TSwitch v-model="value" />
     </div>
@@ -108,7 +115,7 @@ watch(() => value.value, (v) => {
 .TBlockSwitch-Container {
   &.disabled {
     .TBlockSwitch-Switch {
-      opacity: .5;
+      opacity: 0.5;
 
       pointer-events: none;
     }
@@ -124,7 +131,6 @@ watch(() => value.value, (v) => {
 
       font-size: 12px;
     }
-
   }
 
   .TBlockSwitch-Content {
@@ -138,29 +144,29 @@ watch(() => value.value, (v) => {
 
     cursor: pointer;
 
-    >* {
+    > * {
       margin-right: 16px;
 
       font-size: 24px;
     }
 
-    >.TBlockSwitch-Label {
+    > .TBlockSwitch-Label {
       flex: 1;
 
-      >h3 {
+      > h3 {
         margin: 0;
 
         font-size: 14px;
         font-weight: 500;
       }
 
-      >p {
+      > p {
         margin: 0;
 
         font-size: 12px;
         font-weight: 400;
 
-        opacity: .5;
+        opacity: 0.5;
       }
     }
   }
@@ -182,7 +188,7 @@ watch(() => value.value, (v) => {
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 12px;
-  --fake-inner-opacity: .5;
+  --fake-inner-opacity: 0.5;
 
   &:hover {
     --fake-color: var(--el-fill-color);

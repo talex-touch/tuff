@@ -151,7 +151,6 @@ export class IpcManager {
     // In a real scenario, we might want to unregister specific channels
     // For now, we don't have a clean way to do this with the current channel implementation
   }
-
 }
 
 export const ipcManager = IpcManager.getInstance()

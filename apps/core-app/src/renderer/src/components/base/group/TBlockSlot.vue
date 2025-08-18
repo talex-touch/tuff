@@ -17,7 +17,7 @@
 
 <script>
 export default {
-  name: "TBlockSlot"
+  name: 'TBlockSlot'
 }
 </script>
 
@@ -42,7 +42,6 @@ const props = defineProps({
     required: true
   }
 })
-
 </script>
 
 <style lang="scss" scoped>
@@ -53,7 +52,7 @@ const props = defineProps({
 .TBlockSlot-Container {
   &.disabled {
     .TBlockSlot-Switch {
-      opacity: .5;
+      opacity: 0.5;
 
       pointer-events: none;
     }
@@ -84,29 +83,29 @@ const props = defineProps({
 
     cursor: pointer;
 
-    >* {
+    > * {
       margin-right: 16px;
 
       font-size: 24px;
     }
 
-    >.TBlockSlot-Label {
+    > .TBlockSlot-Label {
       flex: 1;
 
-      >h3 {
+      > h3 {
         margin: 0;
 
         font-size: 14px;
         font-weight: 500;
       }
 
-      >p {
+      > p {
         margin: 0;
 
         font-size: 12px;
         font-weight: 400;
 
-        opacity: .5;
+        opacity: 0.5;
       }
     }
   }
@@ -128,7 +127,7 @@ const props = defineProps({
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 4px;
-  --fake-opacity: .45;
+  --fake-opacity: 0.45;
 
   &:hover {
     --fake-color: var(--el-fill-color);

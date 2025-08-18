@@ -3,43 +3,43 @@
 </template>
 
 <script name="InteractiveTerminal" setup>
-import { onMounted, reactive, ref, watchEffect } from "vue";
-import { Terminal } from "xterm";
-import "xterm/css/xterm.css";
-import "xterm/lib/xterm.js";
-import { FitAddon } from "xterm-addon-fit";
+import { onMounted, reactive, ref, watchEffect } from 'vue'
+import { Terminal } from 'xterm'
+import 'xterm/css/xterm.css'
+import 'xterm/lib/xterm.js'
+import { FitAddon } from 'xterm-addon-fit'
 // import * as TerminalFit from "xterm-addon-fit";
 
 // Terminal.applyAddon(TerminalFit);
 
-const terminal = ref();
+const terminal = ref()
 const term = new Terminal({
   // rendererType: "canvas",
   cursorBlink: true,
   disableStdin: true,
   fontSize: 16,
-  lineHeight: 1,
-});
+  lineHeight: 1
+})
 
 defineExpose({
-  getTerminal: () => terminal.value,
-});
+  getTerminal: () => terminal.value
+})
 
 onMounted(() => {
-  const fitAddon = new FitAddon();
-  term.loadAddon(fitAddon);
+  const fitAddon = new FitAddon()
+  term.loadAddon(fitAddon)
 
-  term.open(terminal.value);
+  term.open(terminal.value)
   setTimeout(() => {
-    fitAddon.fit();
-  }, 1000);
-  term.writeln("Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ");
+    fitAddon.fit()
+  }, 1000)
+  term.writeln('Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ')
 
-  term.focus();
-  window.addEventListener("resize", () => {
-    fitAddon.fit();
-  });
-});
+  term.focus()
+  window.addEventListener('resize', () => {
+    fitAddon.fit()
+  })
+})
 </script>
 
 <style lang="scss">

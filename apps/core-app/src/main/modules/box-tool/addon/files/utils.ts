@@ -12,7 +12,10 @@ import {
 } from './constants'
 import { TuffItem } from '@core-box/tuff'
 
-export async function scanDirectory(dirPath: string, excludePaths?: Set<string>): Promise<ScannedFileInfo[]> {
+export async function scanDirectory(
+  dirPath: string,
+  excludePaths?: Set<string>
+): Promise<ScannedFileInfo[]> {
   if (excludePaths?.has(dirPath)) {
     return []
   }

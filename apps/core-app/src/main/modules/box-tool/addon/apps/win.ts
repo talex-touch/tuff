@@ -67,7 +67,7 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
 
           const appName = path.basename(fileName, path.extname(fileName))
           const icon = await getAppIcon(targetPath, appName)
-          
+
           // To get the mtime of the actual executable, not the shortcut
           const targetStats = await fs.stat(targetPath).catch(() => stats)
 
@@ -94,25 +94,25 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
 
 export async function getApps(): Promise<AppInfo[]> {
   const startMenuPath1 = path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs')
-  const startMenuPath2 = path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
+  const startMenuPath2 = path.join(
+    os.homedir(),
+    'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+  )
 
-  const allAppsPromises = [
-    fileDisplay(startMenuPath1),
-    fileDisplay(startMenuPath2)
-  ]
+  const allAppsPromises = [fileDisplay(startMenuPath1), fileDisplay(startMenuPath2)]
 
   const results = await Promise.allSettled(allAppsPromises)
   let allApps: AppInfo[] = []
 
-  results.forEach(result => {
+  results.forEach((result) => {
     if (result.status === 'fulfilled') {
       allApps = allApps.concat(result.value)
     }
   })
 
   // Remove duplicates based on uniqueId (the path)
-  const uniqueApps = Array.from(new Map(allApps.map(app => [app.uniqueId, app])).values())
-  
+  const uniqueApps = Array.from(new Map(allApps.map((app) => [app.uniqueId, app])).values())
+
   return uniqueApps
 }
 

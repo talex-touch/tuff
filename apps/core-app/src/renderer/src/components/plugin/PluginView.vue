@@ -10,125 +10,125 @@
 
 <script>
 export default {
-  name: "PluginView",
-};
+  name: 'PluginView'
+}
 </script>
 
 <script setup>
-import { forDialogMention } from "@modules/mention/dialog-mention";
-import { pluginManager } from "@modules/channel/plugin-core/api";
-import Loading from "@comp/icon/LoadingIcon.vue";
+import { forDialogMention } from '@modules/mention/dialog-mention'
+import { pluginManager } from '@modules/channel/plugin-core/api'
+import Loading from '@comp/icon/LoadingIcon.vue'
 
 const props = defineProps({
   plugin: {
     type: Object,
-    required: true,
+    required: true
   },
   lists: {
     type: Object,
-    required: true,
-  },
-});
-const loadDone = ref(false);
-const status = computed(() => props.plugin?.status || 0);
-const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value);
+    required: true
+  }
+})
+const loadDone = ref(false)
+const status = computed(() => props.plugin?.status || 0)
+const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value)
 
-const webviewDom = ref();
+const webviewDom = ref()
 
 onBeforeUnmount(() => {
-  const webView = webviewDom.value;
+  const webView = webviewDom.value
 
-  webView.closeDevTools();
-});
+  webView.closeDevTools()
+})
 
 function handleListeners(viewData, webview) {
-  const { styles, js } = viewData;
+  const { styles, js } = viewData
 
-  webview.addEventListener("crashed", () => {
-    console.log("Webview crashed", props.plugin);
-  });
+  webview.addEventListener('crashed', () => {
+    console.log('Webview crashed', props.plugin)
+  })
 
-  webview.addEventListener("did-fail-load", async (e) => {
-    console.log("Webview did-fail-load", e, props.plugin);
+  webview.addEventListener('did-fail-load', async (e) => {
+    console.log('Webview did-fail-load', e, props.plugin)
 
     await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
       {
-        content: "Ignore Load",
-        type: "info",
-        onClick: () => true,
+        content: 'Ignore Load',
+        type: 'info',
+        onClick: () => true
       },
       {
-        content: "Restart plugin",
-        type: "warning",
-        onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true,
-      },
-    ]);
+        content: 'Restart plugin',
+        type: 'warning',
+        onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true
+      }
+    ])
 
     // When failed => close devtool
-    webview.closeDevTools();
-  });
+    webview.closeDevTools()
+  })
 
-  webview.addEventListener("did-finish-load", async () => {
-    if (status.value === 4) webview.openDevTools();
+  webview.addEventListener('did-finish-load', async () => {
+    if (status.value === 4) webview.openDevTools()
 
-    webview.insertCSS(`${styles}`);
-    await webview.executeJavaScript(`${js}`);
+    webview.insertCSS(`${styles}`)
+    await webview.executeJavaScript(`${js}`)
 
     // console.log("Webview did-finish-load", props.plugin);
 
-    webview.send("@loaded", { plugin: props.plugin.name, id: webview.id, type: "init" });
+    webview.send('@loaded', { plugin: props.plugin.name, id: webview.id, type: 'init' })
 
     watchEffect(async () => {
       while (props.lists.length) {
-        const { data } = props.lists.pop();
+        const { data } = props.lists.pop()
         // console.log("--->", props.plugin, data);
-        const res = await webview.send("@plugin-process-message", JSON.stringify(data));
+        const res = await webview.send('@plugin-process-message', JSON.stringify(data))
 
         // console.log("<---", props.plugin, res);
 
         if (data.reply) {
-          data.reply(res);
+          data.reply(res)
         }
       }
-    });
+    })
 
     // console.log("Webview did-finish-load", props.plugin);
-    loadDone.value = true;
-  });
+    loadDone.value = true
+  })
 }
 
 function init() {
-  const viewData = props.plugin.webview;
-  if (!viewData) return;
-  const { _, attrs } = viewData;
+  const viewData = props.plugin.webview
+  if (!viewData) return
+  const { _, attrs } = viewData
 
-  pluginManager.setPluginWebviewInit(props.plugin.name);
-  props.plugin.webViewInit = true;
+  pluginManager.setPluginWebviewInit(props.plugin.name)
+  props.plugin.webViewInit = true
 
-  const webview = webviewDom.value;
+  const webview = webviewDom.value
   // console.log(props.plugin, webview, viewData);
 
-  viewData.el = webview.parentElement;
+  viewData.el = webview.parentElement
 
   Object.keys(attrs).forEach((key) => {
-    webview.setAttribute(key, attrs[key]);
-  });
+    webview.setAttribute(key, attrs[key])
+  })
 
-  _.preload && webview.setAttribute("preload", "file://" + _.preload);
+  _.preload && webview.setAttribute('preload', 'file://' + _.preload)
 
-  handleListeners(viewData, webview);
+  handleListeners(viewData, webview)
 
-  loadDone.value = false;
-  webview.setAttribute("src", _.indexPath);
+  loadDone.value = false
+  webview.setAttribute('src', _.indexPath)
 }
 
 watch(status, (val, oldVal) => {
-  if (props.plugin?.webViewInit) return;
+  if (props.plugin?.webViewInit) return
 
-  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init();
+  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init()
   // else if ( val === 4 ) webviewDom.value.openDevTools()
   // else webviewDom.value.closeDevTools()
-});
+})
 </script>
 
 <style lang="scss" scoped>
