@@ -13,8 +13,9 @@ import {
   TuffSearchResult,
   TuffSourceType
 } from '../box-tool/search-engine/types'
-import { genPluginManager } from '../../plugins/plugin-core'
+import { genPluginManager, TouchPlugin } from '../../plugins/plugin-core'
 import { TuffFactory } from '@talex-touch/utils'
+import searchEngineCore from '../box-tool/search-engine/search-core'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
 type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
@@ -176,16 +177,45 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     query: TuffQuery,
     signal: AbortSignal
   ): Promise<TuffSearchResult> {
-    console.log(`[PluginFeaturesAdapter] onSearch started with query: "${query.text}"`)
+    const activationState = searchEngineCore.getActivationState()
+
+    // --- Activated Mode ---
+    // If there is an active feature, route the input directly to it.
+    if (activationState) {
+      const activeFeatureActivation = activationState.find((a) => a.id === this.id)
+      if (activeFeatureActivation?.meta?.pluginName) {
+        const { pluginName, featureId } = activeFeatureActivation.meta
+        const pluginManager = genPluginManager()
+        const plugin = pluginManager.plugins.get(pluginName) as TouchPlugin
+        const feature = plugin?.getFeature(featureId)
+
+        if (plugin && feature) {
+          console.log(
+            `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
+          )
+          // Trigger the input change handler for the specific feature.
+          // The feature itself is responsible for pushing results back.
+          plugin.triggerInputChanged(feature, query.text)
+
+          // In activated mode, the result is delivered via a side-channel (pushItems),
+          // so we return an empty result here.
+          return TuffFactory.createSearchResult(query)
+            .setActivate(activationState) // Preserve activation state
+            .build()
+        }
+      }
+    }
+
+    // --- Global Search Mode ---
+    // If no feature is active, perform a global search across all plugin features.
+    console.log(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
     const pluginManager = genPluginManager()
     if (!pluginManager) {
-      console.log('[PluginFeaturesAdapter] onSearch: Plugin manager not available.')
       return TuffFactory.createSearchResult(query).build()
     }
 
     const queryText = query.text.trim()
     const matchedItems: TuffItem[] = []
-
     const plugins = pluginManager.plugins.values()
 
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
@@ -193,22 +223,15 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         return TuffFactory.createSearchResult(query).build()
       }
 
-      console.log(`[PluginFeaturesAdapter] onSearch: Checking plugin "${plugin.name}"`)
       const features = plugin.getFeatures()
       for (const feature of features as IPluginFeature[]) {
         const isMatch = feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
-
         if (isMatch) {
-          console.log(
-            `[PluginFeaturesAdapter] onSearch: Feature "${feature.name}" from plugin "${plugin.name}" matched.`
-          )
           matchedItems.push(this.createTuffItem(plugin, feature))
         }
       }
     }
 
-    console.log(`[PluginFeaturesAdapter] onSearch finished. Found ${matchedItems.length} items.`)
-    // For a normal search, we don't want to affect the activation state, so we return an empty activate array.
     return TuffFactory.createSearchResult(query).setItems(matchedItems).build()
   }
 }

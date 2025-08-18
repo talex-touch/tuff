@@ -65,6 +65,11 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       console.warn('[useSearch] handleExecute called without an item.')
       return
     }
+
+    // When a feature is executed, clear the current list immediately.
+    if (itemToExecute.source.id === 'plugin-features') {
+      res.value = []
+    }
     if (!searchResult.value) {
       console.warn('[useSearch] handleExecute called without a searchResult context.')
       // Fallback for safety, though it won't be tracked
@@ -257,6 +262,24 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       activeActivations.value = data.activate || null
       loading.value = false
     }
+  })
+
+  // Listener for items pushed directly from an activated plugin feature.
+  touchChannel.regChannel('core-box:push-items', ({ data }) => {
+    console.log(`[useSearch] Received ${data.items.length} items pushed from plugin.`)
+    // When a plugin pushes items, it becomes the new source of truth for results.
+    res.value = data.items
+    // Pushed items are outside the standard search flow, so we clear the searchResult context.
+    searchResult.value = null
+    loading.value = false
+  })
+
+  // Listener for a plugin requesting to clear all items.
+  touchChannel.regChannel('core-box:clear-items', () => {
+    console.log('[useSearch] Received request to clear items from a plugin.')
+    res.value = []
+    searchResult.value = null
+    loading.value = false
   })
 
   return {

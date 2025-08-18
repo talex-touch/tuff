@@ -124,7 +124,7 @@ const disallowedArrays = [
   '排名系统'
 ]
 
-class TouchPlugin implements ITouchPlugin {
+export class TouchPlugin implements ITouchPlugin {
   dev: IPluginDev
   name: string
   readme: string
