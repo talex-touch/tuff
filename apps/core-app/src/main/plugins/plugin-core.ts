@@ -22,7 +22,7 @@ import {
   TuffFactory,
   TuffItemBuilder,
   TuffUtils
-} from '@talex-touch/utils/core-box/builder/tuff-builder'
+} from '@talex-touch/utils/core-box'
 import { TalexTouch } from '../types'
 import fse from 'fs-extra'
 import path from 'path'

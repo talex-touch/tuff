@@ -1,8 +1,14 @@
 import { SearchEngineCore } from '../search-engine/search-core'
-import { TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
+import {
+  IProviderActivate,
+  TuffItem,
+  TuffQuery,
+  TuffSearchResult
+} from '../search-engine/types'
 import { windowManager } from './window'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
+import { genPluginManager } from '../../../plugins/plugin-core'
 
 export class CoreBoxManager {
   searchEngine: SearchEngineCore
@@ -65,18 +71,6 @@ export class CoreBoxManager {
     windowManager.shrink()
   }
 
-  public async startSearch(query: TuffQuery, searchId: string) {
-    try {
-      await this.searchEngine.search(query, (items) => {
-        ipcManager.pushItems(searchId, items)
-      })
-    } catch (error) {
-      console.error('[CoreBoxManager] Search failed:', error)
-    } finally {
-      ipcManager.notifySearchEnd(searchId)
-    }
-  }
-
   public async search(query: TuffQuery) {
     try {
       return await this.searchEngine.search(query)
@@ -86,16 +80,15 @@ export class CoreBoxManager {
     }
   }
 
-  public async execute(item: TuffItem, searchResult: TuffSearchResult) {
+  public async execute(
+    item: TuffItem,
+    searchResult: TuffSearchResult
+  ): Promise<IProviderActivate[] | null> {
     const providerId = item.source.id
-    const provider = this.searchEngine.getActiveProviders().find((p) => p.id === providerId)
+    const provider = this.searchEngine.getProvidersByIds([providerId])[0]
 
     if (!provider) {
-      console.warn(
-        `[CoreBoxManager] No provider found for item with source ID: ${providerId}`,
-        item,
-        this.searchEngine.getActiveProviders()
-      )
+      console.warn(`[CoreBoxManager] No provider found for item with source ID: ${providerId}`, item)
       return null
     }
 
@@ -104,7 +97,43 @@ export class CoreBoxManager {
       return null
     }
 
-    return provider.onExecute({ item, searchResult })
+    // Record the execution before potentially changing the state
+    if (searchResult.sessionId) {
+      this.searchEngine.recordExecute(searchResult.sessionId, item)
+    }
+
+    const shouldActivate = await provider.onExecute({ item, searchResult })
+
+    if (shouldActivate) {
+      let activation: IProviderActivate
+      if (provider.id === 'plugin-features' && item.meta?.extension?.pluginName) {
+        // For the adapter, create a rich activation object from the item's meta
+        const plugin = genPluginManager().plugins.get(item.meta.extension.pluginName)
+        activation = {
+          id: provider.id,
+          meta: {
+            pluginName: item.meta.extension.pluginName,
+            pluginIcon: plugin?.icon,
+            featureId: item.meta.extension.featureId
+          }
+        }
+      } else {
+        // For regular providers, create a simple activation object
+        activation = { id: provider.id }
+      }
+
+      this.searchEngine.activateProviders([activation])
+      return this.searchEngine.getActivationState()
+    }
+
+    // If not activating, we still need to clear the search box, but no state change occurs.
+    // The frontend will handle clearing the input.
+    return null
+  }
+
+  public deactivateProvider(id: string): IProviderActivate[] | null {
+    this.searchEngine.deactivateProvider(id)
+    return this.searchEngine.getActivationState()
   }
 }
 

@@ -38,7 +38,8 @@ import type {
   TuffPermissionLevel,
   TuffSearchResult,
   TuffQuery,
-  TuffSortStats
+  TuffSortStats,
+  IProviderActivate
 } from '../tuff/tuff-dsl'
 
 // ==================== Builder 类 ====================
@@ -520,59 +521,52 @@ class TuffItemBuilder {
   }
 }
 
-// ==================== SearchResult Builder ====================
+// ==================== Fluent Builder ====================
 
+/**
+ * A fluent builder for creating TuffSearchResult objects.
+ */
 class TuffSearchResultBuilder {
-  private result: Partial<TuffSearchResult> = {};
+  private readonly result: TuffSearchResult;
 
-  constructor(query?: TuffQuery) {
-    if (query) {
-      this.result.query = query;
-    }
+  constructor(query: TuffQuery) {
+    this.result = {
+      query,
+      items: [],
+      duration: 0,
+      sources: [],
+      activate: []
+    };
   }
 
-  setQuery(query: TuffQuery): TuffSearchResultBuilder {
-    this.result.query = query;
-    return this;
-  }
-
-  setItems(items: TuffItem[]): TuffSearchResultBuilder {
+  public setItems(items: TuffItem[]): this {
     this.result.items = items;
-    this.result.total = items.length;
     return this;
   }
 
-  setDuration(duration: number): TuffSearchResultBuilder {
+  public setDuration(duration: number): this {
     this.result.duration = duration;
     return this;
   }
 
-  setSources(sources: TuffSearchResult['sources']): TuffSearchResultBuilder {
+  public setActivate(activate: IProviderActivate[]): this {
+    this.result.activate = activate;
+    return this;
+  }
+
+  public setSources(sources: TuffSearchResult['sources']): this {
     this.result.sources = sources;
     return this;
   }
 
-  setSortStats(sort_stats: TuffSortStats): TuffSearchResultBuilder {
-    this.result.sort_stats = sort_stats
-    return this
-  }
-
-  setHasMore(has_more: boolean): TuffSearchResultBuilder {
-    this.result.has_more = has_more;
+  public setSortStats(stats: any[]): this {
+    // @ts-ignore
+    this.result.sort_stats = stats;
     return this;
   }
 
-  build(): TuffSearchResult {
-    if (!this.result.items) {
-      throw new Error('TuffSearchResult 必须设置 items 属性');
-    }
-    if (this.result.total === undefined) {
-      this.result.total = this.result.items.length;
-    }
-    if (this.result.has_more === undefined) {
-      this.result.has_more = false;
-    }
-    return this.result as TuffSearchResult;
+  public build(): TuffSearchResult {
+    return this.result;
   }
 }
 
@@ -580,11 +574,7 @@ class TuffSearchResultBuilder {
 // ==================== 工厂方法 ====================
 
 /**
- * TuffFactory - TuffItem 工厂类
- *
- * @description
- * 提供一系列静态工厂方法，用于快速创建各种类型的 TuffItem 对象。
- * 适用于常见场景，减少重复代码。
+ * Factory for creating TUFF objects using a fluent builder pattern.
  */
 class TuffFactory {
   /**
@@ -820,13 +810,7 @@ class TuffFactory {
       .build();
   }
 
-  /**
-   * 创建搜索结果构建器
-   *
-   * @param query - 可选的查询对象
-   * @returns TuffSearchResultBuilder 实例
-   */
-  static createSearchResult(query?: TuffQuery): TuffSearchResultBuilder {
+  public static createSearchResult(query: TuffQuery): TuffSearchResultBuilder {
     return new TuffSearchResultBuilder(query);
   }
 }

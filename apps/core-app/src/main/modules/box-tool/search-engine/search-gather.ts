@@ -1,5 +1,5 @@
-import { TuffItem, TuffQuery, withTimeout, TimeoutError } from '@talex-touch/utils'
-import { ISearchProvider, TuffUpdate } from './types'
+import { TuffItem, TuffQuery, withTimeout, TimeoutError, TuffSearchResult } from '@talex-touch/utils'
+import { IProviderActivate, ISearchProvider, TuffUpdate } from './types'
 
 /**
  * Defines the detailed configuration options for the aggregator.
@@ -106,12 +106,12 @@ export function getGatheredItems(
   const promise = new Promise<number>((resolve) => {
     const { timeout, concurrent, forcePushDelay } = options
 
-    const allResults: TuffItem[] = []
+    const allResults: TuffSearchResult[] = []
     const sourceStats: TuffUpdate['sourceStats'] = []
     const fallbackQueue: ISearchProvider[] = []
     const defaultQueue = [...providers]
 
-    let pushBuffer: TuffItem[] = []
+    let pushBuffer: TuffSearchResult[] = []
     let forcePushTimerId: NodeJS.Timeout | null = null
 
     /**
@@ -125,37 +125,42 @@ export function getGatheredItems(
       }
 
       if (pushBuffer.length > 0) {
+        const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
         onUpdate({
-          newItems: pushBuffer,
-          totalCount: allResults.length,
-          isDone: false, // isDone is always false for intermediate pushes
+          newResults: pushBuffer,
+          totalCount: itemsCount,
+          isDone: false,
           sourceStats
         })
         pushBuffer = [] // Clear buffer after pushing
       }
 
       if (isFinalFlush) {
+        const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
         onUpdate({
-          newItems: [], // The last push might not have new items but needs to update isDone
-          totalCount: allResults.length,
+          newResults: [],
+          totalCount: itemsCount,
           isDone: true,
           sourceStats
         })
-        resolve(allResults.length) // Resolve the main promise with the total count
+        resolve(itemsCount) // Resolve the main promise with the total count
       }
     }
 
     /**
      * Handles new results from any provider.
-     * @param result - The newly arrived array of results.
+     * @param result - The newly arrived TuffSearchResult.
+     * @param providerId - The ID of the provider that returned the results.
      */
-    const onNewResultArrived = (result: TuffItem[], providerId: string): void => {
-      console.debug(`[Gather] Received ${result.length} items from provider: ${providerId}`)
-      allResults.push(...result)
-      pushBuffer.push(...result)
+    const onNewResultArrived = (result: TuffSearchResult, providerId: string): void => {
+      console.debug(`[Gather] Received ${result.items.length} items from provider: ${providerId}`)
+      allResults.push(result)
+      pushBuffer.push(result)
+
+      const totalItems = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
 
       // If this is the first batch of results and the push timer hasn't started, start it.
-      if (!forcePushTimerId && allResults.length === result.length && result.length > 0) {
+      if (!forcePushTimerId && totalItems === result.items.length && result.items.length > 0) {
         forcePushTimerId = setTimeout(() => {
           flushBuffer() // Force push all content in the buffer when the timer fires
         }, forcePushDelay)
@@ -198,24 +203,23 @@ export function getGatheredItems(
                 provider.onSearch(params, signal),
                 processingTimeout
               )
-              resultCount = searchResult.length
+              resultCount = searchResult.items.length
 
-              if (searchResult.length > 0) {
-                const processedResult = isFallback
-                  ? searchResult.map((item) => ({
-                      ...item,
-                      meta: {
-                        ...item.meta,
-                        extension: {
-                          ...item.meta?.extension,
-                          isFallback: true
-                        }
-                      }
-                    }))
-                  : searchResult
-
-                onNewResultArrived(processedResult, provider.id)
+              // Always process the result, even if items are empty, because it might contain activation info.
+              const processedResult = searchResult
+              if (isFallback) {
+                processedResult.items = processedResult.items.map((item) => ({
+                  ...item,
+                  meta: {
+                    ...item.meta,
+                    extension: {
+                      ...item.meta?.extension,
+                      isFallback: true
+                    }
+                  }
+                }))
               }
+              onNewResultArrived(processedResult, provider.id)
             } catch (error) {
               if (signal.aborted) {
                 status = 'error'

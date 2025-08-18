@@ -6,12 +6,15 @@ import {
 } from '@talex-touch/utils/plugin'
 import {
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
   TuffItem,
   TuffQuery,
+  TuffSearchResult,
   TuffSourceType
 } from '../box-tool/search-engine/types'
 import { genPluginManager } from '../../plugins/plugin-core'
+import { TuffFactory } from '@talex-touch/utils'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
 type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
@@ -126,12 +129,58 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     return feature.push
   }
 
-  public async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffItem[]> {
+  private createTuffItem(plugin: ITouchPlugin, feature: IPluginFeature): TuffItem {
+    return {
+      id: `${plugin.name}/${feature.id}`,
+      source: {
+        type: this.type,
+        id: this.id,
+        name: this.name
+      },
+      kind: 'feature',
+      render: {
+        mode: 'default',
+        basic: {
+          title: feature.name,
+          subtitle: feature.desc,
+          icon: {
+            type: mapIconType((feature.icon as IPluginIcon).type),
+            value: (feature.icon as IPluginIcon).value
+          }
+        }
+      },
+      actions: [
+        {
+          id: 'trigger-feature',
+          type: 'execute',
+          label: 'Execute',
+          primary: true,
+          payload: {
+            pluginName: plugin.name,
+            featureId: feature.id
+          }
+        }
+      ],
+      from: plugin.name,
+      meta: {
+        extension: {
+          pluginName: plugin.name,
+          featureId: feature.id,
+          commands: feature.commands
+        }
+      }
+    }
+  }
+
+  public async onSearch(
+    query: TuffQuery,
+    signal: AbortSignal
+  ): Promise<TuffSearchResult> {
     console.log(`[PluginFeaturesAdapter] onSearch started with query: "${query.text}"`)
     const pluginManager = genPluginManager()
     if (!pluginManager) {
       console.log('[PluginFeaturesAdapter] onSearch: Plugin manager not available.')
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const queryText = query.text.trim()
@@ -141,7 +190,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
 
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {
-        return []
+        return TuffFactory.createSearchResult(query).build()
       }
 
       console.log(`[PluginFeaturesAdapter] onSearch: Checking plugin "${plugin.name}"`)
@@ -153,53 +202,14 @@ export class PluginFeaturesAdapter implements ISearchProvider {
           console.log(
             `[PluginFeaturesAdapter] onSearch: Feature "${feature.name}" from plugin "${plugin.name}" matched.`
           )
-          const tuffItem: TuffItem = {
-            id: `${plugin.name}/${feature.id}`,
-            source: {
-              type: this.type,
-              id: this.id,
-              name: this.name
-            },
-            kind: 'feature',
-            render: {
-              mode: 'default',
-              basic: {
-                title: feature.name,
-                subtitle: feature.desc,
-                icon: {
-                  type: mapIconType((feature.icon as IPluginIcon).type),
-                  value: (feature.icon as IPluginIcon).value
-                }
-              }
-            },
-            actions: [
-              {
-                id: 'trigger-feature',
-                type: 'execute',
-                label: 'Execute',
-                primary: true,
-                payload: {
-                  pluginName: plugin.name,
-                  featureId: feature.id
-                }
-              }
-            ],
-            from: plugin.name,
-            meta: {
-              extension: {
-                pluginName: plugin.name,
-                featureId: feature.id,
-                commands: feature.commands
-              }
-            }
-          }
-          matchedItems.push(tuffItem)
+          matchedItems.push(this.createTuffItem(plugin, feature))
         }
       }
     }
 
     console.log(`[PluginFeaturesAdapter] onSearch finished. Found ${matchedItems.length} items.`)
-    return matchedItems
+    // For a normal search, we don't want to affect the activation state, so we return an empty activate array.
+    return TuffFactory.createSearchResult(query).setItems(matchedItems).build()
   }
 }
 

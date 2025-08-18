@@ -2,9 +2,10 @@ import {
   IExecuteArgs,
   ISearchProvider,
   ProviderContext,
-  TuffItem,
-  TuffQuery
+  TuffQuery,
+  TuffSearchResult
 } from '../../search-engine/types'
+import { TuffFactory } from '@talex-touch/utils'
 import { app, shell } from 'electron'
 import path from 'path'
 import { createDbUtils } from '../../../../db/utils'
@@ -239,14 +240,14 @@ class FileProvider implements ISearchProvider {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffItem[]> {
-    if (!this.dbUtils) return []
+  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+    if (!this.dbUtils) return TuffFactory.createSearchResult(query).build()
 
     const db = this.dbUtils.getDb()
     const searchTerm = query.text.trim().toLowerCase()
 
     if (!searchTerm) {
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const allFilesWithExtensions = await db
@@ -285,7 +286,7 @@ class FileProvider implements ISearchProvider {
     })
 
     if (filteredResults.length === 0) {
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const itemIds = filteredResults.map(({ file }) => file.path)
@@ -345,7 +346,7 @@ class FileProvider implements ISearchProvider {
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
       .slice(0, 50)
 
-    return scoredResults
+    return TuffFactory.createSearchResult(query).setItems(scoredResults).build()
   }
 
   async onExecute(args: IExecuteArgs): Promise<boolean> {

@@ -1094,18 +1094,17 @@ export interface TuffQuery {
  */
 export interface TuffSearchResult {
   /**
+   * A unique identifier for this specific search operation.
+   * This is crucial for the streaming model to associate updates with the correct search instance.
+   */
+  sessionId?: string;
+
+  /**
    * 结果项目
    * @description 匹配的TuffItem列表
    * @required
    */
   items: TuffItem[];
-
-  /**
-   * 总数
-   * @description 匹配结果的总数量
-   * @required
-   */
-  total: number;
 
   /**
    * 查询信息
@@ -1146,11 +1145,14 @@ export interface TuffSearchResult {
   suggestions?: string[];
 
   /**
-   * 是否还有更多结果
-   * @description 指示是否可以加载更多结果
-   * @required
+   * The provider(s) to activate after this search result.
    */
-  has_more: boolean;
+  activate?: IProviderActivate[];
+}
+
+export interface IProviderActivate {
+  id: string
+  meta?: Record<string, any>
 }
 
 // ==================== 插件接口预览 ====================

@@ -1,8 +1,10 @@
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchApp, TouchApp } from '../../../core/touch-core'
 import { coreBoxManager } from './manager'
+import searchEngineCore from '../search-engine/search-core'
 import { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import { windowManager } from './window'
+import { genPluginManager } from '../../../plugins/plugin-core'
 
 /**
  * @class IpcManager
@@ -61,18 +63,10 @@ export class IpcManager {
     )
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
-      'core-box:start-search',
-      async ({ data }) => {
-        const { query, searchId } = data as { query: TuffQuery; searchId: string }
-        coreBoxManager.startSearch(query, searchId)
-      }
-    )
-
-    this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
       'core-box:query',
       async ({ data, reply }) => {
         const { query } = data as { query: TuffQuery }
+        // The search engine now manages its own activation state.
         const result = await coreBoxManager.search(query)
         reply(DataCode.SUCCESS, result)
       }
@@ -89,8 +83,66 @@ export class IpcManager {
           )
           return reply(DataCode.ERROR, '`item` and `searchResult` are required.')
         }
-        const result = await coreBoxManager.execute(item, searchResult)
-        reply(DataCode.SUCCESS, result)
+        const newActivationState = await coreBoxManager.execute(item, searchResult)
+        // Reply with the new activation state so the frontend can sync up.
+        reply(DataCode.SUCCESS, newActivationState)
+      }
+    )
+
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:deactivate-provider',
+      async ({ data, reply }) => {
+        const { id } = data as { id: string }
+        const newState = coreBoxManager.deactivateProvider(id)
+        reply(DataCode.SUCCESS, newState)
+      }
+    )
+
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:deactivate-providers',
+      async ({ reply }) => {
+        searchEngineCore.deactivateProviders()
+        // Return the new, empty state for consistency
+        reply(DataCode.SUCCESS, searchEngineCore.getActivationState())
+      }
+    )
+
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:get-provider-details',
+      async ({ data, reply }) => {
+        const { providerIds } = data as { providerIds: string[] }
+        if (!providerIds || providerIds.length === 0) {
+          return reply(DataCode.SUCCESS, [])
+        }
+
+        const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
+        const nativeProviderDetails = nativeProviders.map((p) => ({
+          id: p.id,
+          name: p.name,
+          icon: p.icon
+        }))
+
+        const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
+        const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
+
+        const pluginManager = genPluginManager()
+        const pluginDetails = pluginIdsToFetch
+          .map((id) => {
+            const plugin = pluginManager.plugins.get(id)
+            if (!plugin) return null
+            return {
+              id: plugin.name, // The plugin's name is its unique ID
+              name: plugin.name,
+              icon: plugin.icon
+            }
+          })
+          .filter((p): p is { id: string; name: string; icon: any } => !!p)
+
+        const allDetails = [...nativeProviderDetails, ...pluginDetails]
+        reply(DataCode.SUCCESS, allDetails)
       }
     )
   }
@@ -100,24 +152,6 @@ export class IpcManager {
     // For now, we don't have a clean way to do this with the current channel implementation
   }
 
-  public pushItems(searchId: string, items: TuffItem[]): void {
-    const window = windowManager.current
-    if (window) {
-      this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:push-items', {
-        searchId,
-        items
-      })
-    }
-  }
-
-  public notifySearchEnd(searchId: string): void {
-    const window = windowManager.current
-    if (window) {
-      this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:search-end', {
-        searchId
-      })
-    }
-  }
 }
 
 export const ipcManager = IpcManager.getInstance()

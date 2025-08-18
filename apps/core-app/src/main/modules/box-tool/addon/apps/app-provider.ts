@@ -3,8 +3,10 @@ import {
   ISearchProvider,
   ProviderContext,
   TuffItem,
-  TuffQuery
+  TuffQuery,
+  TuffSearchResult
 } from '../../search-engine/types'
+import { TuffFactory } from '@talex-touch/utils/core-box'
 import PinyinMatch from 'pinyin-match'
 import { exec } from 'child_process'
 import { shell } from 'electron'
@@ -373,9 +375,9 @@ class AppProvider implements ISearchProvider {
     return false
   }
 
-  async onSearch(query: TuffQuery): Promise<TuffItem[]> {
+  async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     if (!this.dbUtils) {
-      return []
+      return TuffFactory.createSearchResult(query).build()
     }
 
     const db = this.dbUtils.getDb()
@@ -387,7 +389,8 @@ class AppProvider implements ISearchProvider {
         .where(eq(filesSchema.type, 'app'))
         .limit(20) // Consider making this configurable
       const appsWithExtensions = await this.fetchExtensionsForFiles(recentApps)
-      return appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
+      const items = appsWithExtensions.map((app) => this.mapAppToTuffItem(app))
+      return TuffFactory.createSearchResult(query).setItems(items).build()
     }
 
     // 1. Get all apps and their usage data
@@ -479,7 +482,7 @@ class AppProvider implements ISearchProvider {
       .sort((a, b) => b.score - a.score)
       .map((result) => result.item)
 
-    return searchResults
+    return TuffFactory.createSearchResult(query).setItems(searchResults).build()
   }
 
   private async fetchExtensionsForFiles(
