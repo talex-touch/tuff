@@ -28,7 +28,6 @@ function handleImageError() {
 }
 
 function handleParse() {
-  console.log("parse", props)
   if (!props.icon) {
     handleImageError()
     return
@@ -41,7 +40,7 @@ function handleParse() {
   if (typeof props.icon === 'string') {
     const iconPath = props.icon
     let value = iconPath.startsWith('image://')
-      ? iconPath.replace('image://', 'atom:///')
+      ? iconPath.replace('image://', 'tfile://')
       : iconPath
 
     imageLoading.value = true
@@ -93,7 +92,7 @@ function handleFileIcon(icon: IPluginIcon): void {
 
   const extName = _value.split('.').pop()
   if (extName === 'svg') {
-    const htmlData = transformUint8ArrayToString(new Uint8Array(value as Buffer))
+    const htmlData = transformUint8ArrayToString(new Uint8Array(Object.values(value as any)))
     iconOptions.value = {
       type: 'html',
       value: htmlData
@@ -109,12 +108,7 @@ function handleFileIcon(icon: IPluginIcon): void {
 }
 
 function transformUint8ArrayToString(fileData: Uint8Array): string {
-  var dataString = ''
-  for (var i = 0; i < fileData.length; i++) {
-    dataString += String.fromCharCode(fileData[i])
-  }
-
-  return dataString
+  return new TextDecoder().decode(fileData)
 }
 
 function transformArrayBufferToBase64(buffer: Buffer): string {

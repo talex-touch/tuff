@@ -67,7 +67,14 @@ class PluginIcon implements IPluginIcon {
 
   async init(): Promise<void> {
     if (this.type === 'file') {
+      // Forbidden `..` in path.
+      if (this._value.includes('..')) {
+        this._value = 'error'
+        this.value = 'Forbidden `..` in path.'
+        return
+      }
       const iconPath = path.resolve(this.rootPath, this._value)
+      console.log(iconPath)
       if (!(await fse.pathExists(iconPath))) {
         this._value = 'error'
         this.value = 'Cannot find target icon.'

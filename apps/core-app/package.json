@@ -39,6 +39,7 @@
     "@milkdown/prose": "^7.15.2",
     "@milkdown/theme-nord": "^7.15.2",
     "@milkdown/transformer": "^7.15.2",
+    "@number-flow/vue": "^0.4.8",
     "@talex-touch/utils": "workspace:^",
     "@unocss/transformer-attributify-jsx": "^66.3.3",
     "@vueuse/core": "^13.6.0",
