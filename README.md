@@ -27,6 +27,8 @@ Download it and feedback!
 
 Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with Electron, TypeScript, and Vue.js. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
 
+![Settings](./shots/SettingsSo.png)
+
 ## 🚀 Background
 
 **We believe your most powerful tool should be as adaptable as you are. Tuff is a new kind of command center—a foundational, open-source layer for your OS, crafted to anticipate your intent and seamlessly integrate with your unique workflow. Hackable to its core and open by design, it’s ready to be shaped by you.**
