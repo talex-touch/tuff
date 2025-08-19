@@ -88,6 +88,9 @@ importers:
       '@milkdown/transformer':
         specifier: ^7.15.2
         version: 7.15.2
+      '@number-flow/vue':
+        specifier: ^0.4.8
+        version: 0.4.8(vue@3.5.18(typescript@5.8.3))
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
@@ -1596,6 +1599,11 @@ packages:
     resolution: {integrity: sha512-mJd2Z5TjYWq/ttPLLGqArdtnC74J6bOzg4rMDnN+p1xTacZ2yPRCk2y0oSWQtygLR9YVQXgOcONrwtnk3JupxQ==}
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
     deprecated: This functionality has been moved to @npmcli/fs
+
+  '@number-flow/vue@0.4.8':
+    resolution: {integrity: sha512-g1kh66wndJ4MYkX5Z00GvyLxdOMbRotiTeTQujzb1XS009dL/mVH0ZRI5slXH1mzpl78yzzsjz3vjzGhTMM3CA==}
+    peerDependencies:
+      vue: ^3
 
   '@nuxt/kit@3.17.7':
     resolution: {integrity: sha512-JLno3ur7Pix2o/StxIMlEHRkMawA6h7uzjZBDgxdeKXRWTYY8ID9YekSkN4PBlEFGXBfCBOcPd5+YqcyBUAMkw==}
@@ -3758,6 +3766,9 @@ packages:
       jiti:
         optional: true
 
+  esm-env@1.2.2:
+    resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==}
+
   espree@10.4.0:
     resolution: {integrity: sha512-j6PAQ2uUr79PZhBjP5C5fhl8e39FmRnOjsD5lGnWrFU8i2G776tBK7+nP8KuQUTTyAZUwfQqXAgrVH5MbH9CYQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -5002,6 +5013,9 @@ packages:
 
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
+
+  number-flow@0.5.8:
+    resolution: {integrity: sha512-FPr1DumWyGi5Nucoug14bC6xEz70A1TnhgSHhKyfqjgji2SOTz+iLJxKtv37N5JyJbteGYCm6NQ9p1O4KZ7iiA==}
 
   nwsapi@2.2.21:
     resolution: {integrity: sha512-o6nIY3qwiSXl7/LuOU0Dmuctd34Yay0yeuZRLFmDPrrdHpXKFndPj3hM+YEPVHYC5fx2otBx4Ilc/gyYSAUaIA==}
@@ -7591,6 +7605,12 @@ snapshots:
       mkdirp: 1.0.4
       rimraf: 3.0.2
 
+  '@number-flow/vue@0.4.8(vue@3.5.18(typescript@5.8.3))':
+    dependencies:
+      esm-env: 1.2.2
+      number-flow: 0.5.8
+      vue: 3.5.18(typescript@5.8.3)
+
   '@nuxt/kit@3.17.7':
     dependencies:
       c12: 3.1.0
@@ -10104,6 +10124,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  esm-env@1.2.2: {}
+
   espree@10.4.0:
     dependencies:
       acorn: 8.15.0
@@ -11546,6 +11568,10 @@ snapshots:
   nth-check@2.1.1:
     dependencies:
       boolbase: 1.0.0
+
+  number-flow@0.5.8:
+    dependencies:
+      esm-env: 1.2.2
 
   nwsapi@2.2.21: {}
 

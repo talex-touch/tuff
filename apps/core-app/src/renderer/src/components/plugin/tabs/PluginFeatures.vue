@@ -3,81 +3,28 @@
     <!-- Stats Header -->
     <div class="PluginFeature-Header mb-6">
       <div class="grid grid-cols-2 gap-4">
-        <div
-          class="PluginFeature-StatCard relative overflow-hidden bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
-        >
-          <i
-            class="i-ri-function-line absolute -right-2 -top-4 text-6xl text-blue-500/10"
-          />
-          <span class="text-3xl font-bold text-[var(--el-text-color-primary)]">{{
-            plugin.features?.length || 0
-          }}</span>
-          <span class="block text-sm text-[var(--el-text-color-secondary)]">Features</span>
-        </div>
-        <div
-          class="PluginFeature-StatCard relative overflow-hidden bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
-        >
-          <i
-            class="i-ri-terminal-box-line absolute -right-2 -top-4 text-6xl text-green-500/10"
-          />
-          <span class="text-3xl font-bold text-[var(--el-text-color-primary)]">{{
-            totalCommands
-          }}</span>
-          <span class="block text-sm text-[var(--el-text-color-secondary)]">Commands</span>
-        </div>
+        <StatCard
+          :value="plugin.features?.length || 0"
+          label="Features"
+          icon-class="i-ri-function-line text-6xl text-blue-500"
+        />
+        <StatCard
+          :value="totalCommands"
+          label="Commands"
+          icon-class="i-ri-terminal-box-line text-6xl text-green-500"
+        />
       </div>
     </div>
 
     <!-- Features Grid -->
-    <div
-      v-if="plugin.features?.length"
-      class="PluginFeature-Grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-    >
-      <div
+    <GridLayout v-if="plugin.features?.length">
+      <FeatureCard
         v-for="feature in plugin.features"
         :key="feature.id"
-        class="PluginFeature-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-6 cursor-pointer"
+        :feature="feature"
         @click="showFeatureDetails(feature)"
-      >
-        <div class="PluginFeature-CardHeader flex items-start justify-between mb-4">
-          <div
-            class="PluginFeature-CardIcon w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
-          >
-            <i :class="feature.icon || 'i-ri-function-line'" class="text-[var(--el-color-white)] text-xl" />
-          </div>
-          <div
-            class="PluginFeature-Badge bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-lg border border-blue-400/20"
-          >
-            {{ feature.commands.length }}
-          </div>
-        </div>
-
-        <div class="PluginFeature-CardContent">
-          <h3 class="PluginFeature-CardTitle text-lg font-semibold text-[var(--el-text-color-primary)] mb-2">
-            {{ feature.name }}
-          </h3>
-          <p class="PluginFeature-CardDesc text-sm text-[var(--el-text-color-secondary)] line-clamp-2 mb-4">
-            {{ feature.desc }}
-          </p>
-
-          <div class="PluginFeature-CommandsList space-y-2">
-            <div
-              v-for="(command, index) in feature.commands.slice(0, 2)"
-              :key="index"
-              class="PluginFeature-CommandItem bg-[var(--el-fill-color-darker)] rounded-lg p-2 text-xs flex items-center justify-between"
-            >
-              <code class="text-yellow-300">{{ getCommandName(command, feature) }}</code>
-              <span v-if="getCommandShortcut(command, feature)" class="text-[var(--el-text-color-placeholder)] text-xs">{{
-                getCommandShortcut(command, feature)
-              }}</span>
-            </div>
-            <div v-if="feature.commands.length > 2" class="text-xs text-[var(--el-text-color-placeholder)] text-center py-1">
-              +{{ feature.commands.length - 2 }} more commands
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      />
+    </GridLayout>
 
     <!-- Empty State -->
     <div
@@ -89,8 +36,12 @@
       >
         <i class="i-ri-function-line text-4xl text-[var(--el-text-color-disabled)]" />
       </div>
-      <h3 class="text-xl font-semibold text-[var(--el-text-color-primary)] mb-2">No Features Available</h3>
-      <p class="text-[var(--el-text-color-secondary)]">This plugin doesn't expose any features yet.</p>
+      <h3 class="text-xl font-semibold text-[var(--el-text-color-primary)] mb-2">
+        No Features Available
+      </h3>
+      <p class="text-[var(--el-text-color-secondary)]">
+        This plugin doesn't expose any features yet.
+      </p>
     </div>
 
     <!-- Feature Detail Drawer -->
@@ -106,7 +57,10 @@
           <div
             class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
           >
-            <i :class="selectedFeature?.icon || 'i-ri-function-line'" class="text-[var(--el-color-white)] text-lg" />
+            <i
+              :class="selectedFeature?.icon || 'i-ri-function-line'"
+              class="text-[var(--el-color-white)] text-lg"
+            />
           </div>
           <div>
             <h2 class="text-xl font-bold text-[var(--el-text-color-primary)]">
@@ -228,6 +182,9 @@
 
 <script lang="ts" setup>
 import type { ITouchPlugin, IFeatureCommand } from '@talex-touch/utils/plugin'
+import StatCard from '../../base/card/StatCard.vue'
+import GridLayout from '../../base/layout/GridLayout.vue'
+import FeatureCard from '../FeatureCard.vue'
 
 // Props
 const props = defineProps<{
@@ -241,11 +198,10 @@ const totalCommands = computed(
 
 // Drawer state
 const showDrawer = ref(false)
-const selectedFeature = ref<any>(null)
+const selectedFeature = ref<any | null>(null)
 
-// Helper functions to extract command properties
+// Helper functions for drawer content
 function getCommandName(command: IFeatureCommand, feature: any): string {
-  // Try to get name from feature structure if it exists
   if (feature.commandsData && feature.commandsData[command.type]) {
     return feature.commandsData[command.type].name || command.type
   }
@@ -253,7 +209,6 @@ function getCommandName(command: IFeatureCommand, feature: any): string {
 }
 
 function getCommandShortcut(command: IFeatureCommand, feature: any): string | undefined {
-  // Try to get shortcut from feature structure if it exists
   if (feature.commandsData && feature.commandsData[command.type]) {
     return feature.commandsData[command.type].shortcut
   }
@@ -261,7 +216,6 @@ function getCommandShortcut(command: IFeatureCommand, feature: any): string | un
 }
 
 function getCommandDesc(command: IFeatureCommand, feature: any): string | undefined {
-  // Try to get description from feature structure if it exists
   if (feature.commandsData && feature.commandsData[command.type]) {
     return feature.commandsData[command.type].desc
   }
@@ -281,42 +235,6 @@ function handleDrawerClose(): void {
 </script>
 
 <style lang="scss" scoped>
-/* UnoCSS handles most styling, minimal custom styles needed */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.PluginFeature-Modal {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.PluginFeature-ModalContent {
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 pre {
   font-family:
     'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
