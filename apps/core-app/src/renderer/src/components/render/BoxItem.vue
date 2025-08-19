@@ -50,7 +50,7 @@ function getHighlightedHTML(text: string, matchedIndices?: [number, number]): st
       />
       <span
         v-if="props.item.scoring?.frequency"
-        class="absolute right-0 bottom-0 flex items-center justify-center w-12px h-12px text-10px leading-12px rounded-full bg-primary text-white"
+        class="absolute right-0 bottom-0 flex items-center justify-center w-12px h-12px text-10px leading-12px rounded-full bg-[var(--el-color-primary)] text-white"
         v-text="Math.round((props.item.scoring.frequency || 0) * 10)"
       />
     </div>

@@ -205,7 +205,7 @@ div.CoreBox {
 
   inset: 0;
 
-  opacity: 0.5;
+  opacity: 0.75;
   background-color: var(--el-mask-color-extra-light);
 }
 </style>
