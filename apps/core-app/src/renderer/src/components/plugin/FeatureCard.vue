@@ -3,12 +3,15 @@
     <div class="FeatureCard-Content">
       <div class="FeatureCard-Header flex items-start justify-between mb-4">
         <div
-          class="FeatureCard-Icon w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
+          class="FeatureCard-Icon w-12 h-12 bg-gradient-to-br from-[var(--el-color-primary)] to-[var(--el-color-primary-light-3)] rounded-xl flex items-center justify-center"
         >
-          <i :class="feature.icon || 'i-ri-function-line'" class="text-white text-xl" />
+          <i
+            :class="feature.icon || 'i-ri-function-line'"
+            class="text-[var(--el-color-white)] text-xl"
+          />
         </div>
         <div
-          class="FeatureCard-Badge bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-lg border border-blue-400/20"
+          class="FeatureCard-Badge bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] text-xs px-2 py-1 rounded-lg border border-[var(--el-color-primary-light-8)]"
         >
           {{ feature.commands.length }}
         </div>
@@ -30,7 +33,7 @@
             :key="index"
             class="FeatureCard-CommandItem bg-[var(--el-fill-color-darker)] rounded-lg p-2 text-xs flex items-center justify-between"
           >
-            <code class="text-yellow-300">{{ getCommandName(command) }}</code>
+            <code class="text-[var(--el-color-warning)]">{{ getCommandName(command) }}</code>
             <span
               v-if="getCommandShortcut(command)"
               class="text-[var(--el-text-color-placeholder)] text-xs"

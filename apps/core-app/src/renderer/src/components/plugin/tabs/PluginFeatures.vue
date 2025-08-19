@@ -11,7 +11,7 @@
         <StatCard
           :value="totalCommands"
           label="Commands"
-          icon-class="i-ri-terminal-box-line text-6xl text-green-500"
+          icon-class="i-ri-terminal-box-line text-6xl text-[var(--el-color-success)]"
         />
       </div>
     </div>
@@ -55,7 +55,7 @@
       <template #header>
         <div class="flex items-center gap-4 py-2">
           <div
-            class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
+            class="w-10 h-10 bg-gradient-to-br from-[var(--el-color-primary)] to-[var(--el-color-primary-light-3)] rounded-xl flex items-center justify-center"
           >
             <i
               :class="selectedFeature?.icon || 'i-ri-function-line'"
@@ -75,7 +75,7 @@
         <!-- Feature Overview -->
         <div class="PluginFeature-Overview mb-8">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-            <i class="i-ri-information-line text-blue-500" />
+            <i class="i-ri-information-line text-[var(--el-color-primary)]" />
             Overview
           </h3>
           <div class="bg-[var(--el-fill-color-lighter)] rounded-xl p-4 space-y-3">
@@ -92,7 +92,7 @@
             <div class="flex justify-between items-center">
               <span class="text-sm text-[var(--el-text-color-regular)]">Feature Type:</span>
               <span
-                class="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded"
+                class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
                 >{{ selectedFeature.type || 'Standard' }}</span
               >
             </div>
@@ -102,7 +102,7 @@
         <!-- Commands Section -->
         <div class="PluginFeature-Commands mb-8">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-            <i class="i-ri-terminal-line text-green-500" />
+            <i class="i-ri-terminal-line text-[var(--el-color-success)]" />
             Commands ({{ selectedFeature.commands.length }})
           </h3>
           <div class="space-y-4">
@@ -113,8 +113,8 @@
             >
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
-                    <i class="i-ri-terminal-line text-yellow-600 dark:text-yellow-400 text-sm" />
+                  <div class="w-8 h-8 bg-[var(--el-color-warning-light-9)] rounded-lg flex items-center justify-center">
+                    <i class="i-ri-terminal-line text-[var(--el-color-warning)] text-sm" />
                   </div>
                   <div>
                     <h4 class="font-semibold text-[var(--el-text-color-primary)]">
@@ -136,7 +136,7 @@
                     {{ getCommandShortcut(command, selectedFeature) }}
                   </span>
                   <span
-                    class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded"
+                    class="bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] text-xs px-2 py-1 rounded"
                   >
                     {{ command.type }}
                   </span>
@@ -162,7 +162,7 @@
         <!-- Raw Feature JSON -->
         <div class="PluginFeature-RawJson">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-            <i class="i-ri-code-line text-purple-500" />
+            <i class="i-ri-code-line text-[var(--el-color-info)]" />
             Raw Feature Data
           </h3>
           <ElCollapse>

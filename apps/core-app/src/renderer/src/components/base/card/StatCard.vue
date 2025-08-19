@@ -52,7 +52,7 @@ onMounted(() => {
     }
 
     .StatCard-Icon {
-      transform: scale(1.25);
+      transform: scale(1.25) rotate(10deg) translate(-10%, -10%);
     }
   }
 

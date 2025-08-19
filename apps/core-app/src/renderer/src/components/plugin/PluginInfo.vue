@@ -70,10 +70,10 @@
         <TvTabItem icon="function" name="Features">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="database" name="Storage">
+        <TvTabItem icon="database" name="Storage(Mock)">
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="file-text" name="Logs">
+        <TvTabItem icon="file-text" name="Logs(Mock)">
           <PluginLogs :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="information" name="Details">
