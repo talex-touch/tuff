@@ -43,7 +43,7 @@ function handleParse() {
       ? iconPath.replace('image://', 'tfile://')
       : iconPath
 
-    imageLoading.value = true
+    imageLoading.value = false
     iconOptions.value = {
       type: 'url',
       value
@@ -126,7 +126,7 @@ watchEffect(handleParse)
 <template>
   <span v-if="iconOptions" :title="alt" role="img" class="PluginIcon-Container">
     <remix-icon v-if="iconOptions.type === 'remix'" :name="iconOptions.value" />
-    <remix-icon v-if="iconOptions.type === 'fluent'" :name="iconOptions.value" />
+    <remix-icon v-else-if="iconOptions.type === 'fluent'" :name="iconOptions.value" />
     <div v-else-if="iconOptions.type === 'class'" :class="iconOptions.value" />
     <span v-else-if="iconOptions.type === 'html'" class="html" v-html="iconOptions.value" />
     <template v-else-if="iconOptions.type === 'base64' || iconOptions.type === 'url'">

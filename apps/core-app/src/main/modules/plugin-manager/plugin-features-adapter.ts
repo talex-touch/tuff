@@ -6,7 +6,6 @@ import {
 } from '@talex-touch/utils/plugin'
 import {
   IExecuteArgs,
-  IProviderActivate,
   ISearchProvider,
   TuffItem,
   TuffQuery,
@@ -32,7 +31,6 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
     JSON.stringify(command)
   )
   if (!command.type) {
-    console.log('[PluginFeaturesAdapter] isCommandMatch: No command type, returning true.')
     return true
   }
   if (!queryText && command.type !== 'over') {
@@ -41,7 +39,6 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
 
   switch (command.type) {
     case 'over':
-      console.log('[PluginFeaturesAdapter] isCommandMatch: type "over", returning true.')
       return true
     case 'match':
       if (Array.isArray(command.value)) {
@@ -56,7 +53,7 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
     case 'regex':
       return (command.value as RegExp).test(queryText)
     default:
-      console.log(
+      console.debug(
         `[PluginFeaturesAdapter] isCommandMatch: Unknown type "${command.type}", returning false.`
       )
       return false
@@ -108,7 +105,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       const plugin = pluginManager.plugins.get(pluginName) as TouchPlugin | undefined
 
       if (plugin?.pluginLifecycle?.onItemAction) {
-        console.log(
+        console.debug(
           `[PluginFeaturesAdapter] Routing to ${pluginName}.onItemAction for default action.`
         )
         await plugin.pluginLifecycle.onItemAction(item)
@@ -123,7 +120,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     }
 
     // Otherwise, it's a "Feature Item" intended to activate a feature.
-    console.log(`[PluginFeaturesAdapter] Executing as a Feature Item.`)
+    console.debug(`[PluginFeaturesAdapter] Executing as a Feature Item.`)
     const meta = item.meta || {}
     const extension = meta.extension || {}
     // For feature items, the plugin name is in the payload of the 'trigger-feature' action.
