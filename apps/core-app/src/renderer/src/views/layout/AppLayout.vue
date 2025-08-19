@@ -60,9 +60,8 @@ onMounted(() => {
 
   box-sizing: border-box;
 
-  --fake-inner-opacity: 0.125;
+  --fake-inner-opacity: 0;
   --fake-radius: 0;
-  --fake-color: var(--el-fill-color-extra-light);
 
   transition:
     margin-right 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
@@ -108,9 +107,8 @@ onMounted(() => {
 
   box-sizing: border-box;
 
-  --fake-inner-opacity: 0.125;
+  --fake-inner-opacity: 0;
   --fake-radius: 8px 8px 0 0;
-  --fake-color: var(--el-fill-color-extra-light);
 
   transition:
     margin-bottom 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86),
@@ -136,7 +134,7 @@ onMounted(() => {
 }
 
 .mica.AppLayout-Wrapper {
-  --fake-inner-opacity: 0.75;
+  --fake-inner-opacity: 0.5;
 }
 
 .AppLayout-Wrapper {
@@ -173,12 +171,6 @@ onMounted(() => {
     width: 100%;
 
     box-sizing: border-box;
-  }
-
-  &.mica {
-    &::before {
-      display: none;
-    }
   }
 
   --nav-width: 70px;
