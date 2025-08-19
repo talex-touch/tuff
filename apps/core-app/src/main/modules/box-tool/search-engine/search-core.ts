@@ -146,7 +146,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         }
       }
       this.activatedProviders = uniqueProviders.size > 0 ? uniqueProviders : null
-      console.log(
+      console.debug(
         `[SearchEngineCore] activateProviders SET:`,
         this.activatedProviders ? Array.from(this.activatedProviders.values()) : null
       )
@@ -201,7 +201,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
-    console.log(
+    console.debug(
       `[SearchEngineCore] SEARCH START. Query text: "${query.text}". Initial activatedProviders:`,
       this.activatedProviders ? Array.from(this.activatedProviders.values()) : null
     )
@@ -294,7 +294,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
             })
           }
         }
-        console.log(
+        console.debug(
           `[SearchEngineCore] SEARCH END. Final activation state:`,
           this.getActivationState()
         )

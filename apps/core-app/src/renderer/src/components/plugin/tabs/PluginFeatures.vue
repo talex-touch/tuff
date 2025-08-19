@@ -4,22 +4,26 @@
     <div class="PluginFeature-Header mb-6">
       <div class="grid grid-cols-2 gap-4">
         <div
-          class="PluginFeature-StatCard bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center gap-3"
+          class="PluginFeature-StatCard relative overflow-hidden bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
         >
-          <i class="i-ri-function-line text-2xl text-blue-400" />
-          <div class="PluginFeature-StatInfo">
-            <span class="text-2xl font-bold text-white">{{ plugin.features?.length || 0 }}</span>
-            <span class="block text-xs text-white/60">Features</span>
-          </div>
+          <i
+            class="i-ri-function-line absolute -right-2 -top-4 text-6xl text-blue-500/10"
+          />
+          <span class="text-3xl font-bold text-[var(--el-text-color-primary)]">{{
+            plugin.features?.length || 0
+          }}</span>
+          <span class="block text-sm text-[var(--el-text-color-secondary)]">Features</span>
         </div>
         <div
-          class="PluginFeature-StatCard bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center gap-3"
+          class="PluginFeature-StatCard relative overflow-hidden bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
         >
-          <i class="i-ri-terminal-line text-2xl text-green-400" />
-          <div class="PluginFeature-StatInfo">
-            <span class="text-2xl font-bold text-white">{{ totalCommands }}</span>
-            <span class="block text-xs text-white/60">Commands</span>
-          </div>
+          <i
+            class="i-ri-terminal-box-line absolute -right-2 -top-4 text-6xl text-green-500/10"
+          />
+          <span class="text-3xl font-bold text-[var(--el-text-color-primary)]">{{
+            totalCommands
+          }}</span>
+          <span class="block text-sm text-[var(--el-text-color-secondary)]">Commands</span>
         </div>
       </div>
     </div>
@@ -32,14 +36,14 @@
       <div
         v-for="feature in plugin.features"
         :key="feature.id"
-        class="PluginFeature-Card bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 cursor-pointer"
+        class="PluginFeature-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-6 cursor-pointer"
         @click="showFeatureDetails(feature)"
       >
         <div class="PluginFeature-CardHeader flex items-start justify-between mb-4">
           <div
             class="PluginFeature-CardIcon w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
           >
-            <i :class="feature.icon || 'i-ri-function-line'" class="text-white text-xl" />
+            <i :class="feature.icon || 'i-ri-function-line'" class="text-[var(--el-color-white)] text-xl" />
           </div>
           <div
             class="PluginFeature-Badge bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-lg border border-blue-400/20"
@@ -49,10 +53,10 @@
         </div>
 
         <div class="PluginFeature-CardContent">
-          <h3 class="PluginFeature-CardTitle text-lg font-semibold text-white mb-2">
+          <h3 class="PluginFeature-CardTitle text-lg font-semibold text-[var(--el-text-color-primary)] mb-2">
             {{ feature.name }}
           </h3>
-          <p class="PluginFeature-CardDesc text-sm text-white/70 line-clamp-2 mb-4">
+          <p class="PluginFeature-CardDesc text-sm text-[var(--el-text-color-secondary)] line-clamp-2 mb-4">
             {{ feature.desc }}
           </p>
 
@@ -60,14 +64,14 @@
             <div
               v-for="(command, index) in feature.commands.slice(0, 2)"
               :key="index"
-              class="PluginFeature-CommandItem bg-black/20 rounded-lg p-2 text-xs flex items-center justify-between"
+              class="PluginFeature-CommandItem bg-[var(--el-fill-color-darker)] rounded-lg p-2 text-xs flex items-center justify-between"
             >
               <code class="text-yellow-300">{{ getCommandName(command, feature) }}</code>
-              <span v-if="getCommandShortcut(command, feature)" class="text-white/50 text-xs">{{
+              <span v-if="getCommandShortcut(command, feature)" class="text-[var(--el-text-color-placeholder)] text-xs">{{
                 getCommandShortcut(command, feature)
               }}</span>
             </div>
-            <div v-if="feature.commands.length > 2" class="text-xs text-white/50 text-center py-1">
+            <div v-if="feature.commands.length > 2" class="text-xs text-[var(--el-text-color-placeholder)] text-center py-1">
               +{{ feature.commands.length - 2 }} more commands
             </div>
           </div>
@@ -81,12 +85,12 @@
       class="PluginFeature-EmptyState flex flex-col items-center justify-center py-16 text-center"
     >
       <div
-        class="PluginFeature-EmptyIcon w-20 h-20 bg-white/5 rounded-2xl flex items-center justify-center mb-6"
+        class="PluginFeature-EmptyIcon w-20 h-20 bg-[var(--el-bg-color-overlay)] rounded-2xl flex items-center justify-center mb-6"
       >
-        <i class="i-ri-function-line text-4xl text-white/30" />
+        <i class="i-ri-function-line text-4xl text-[var(--el-text-color-disabled)]" />
       </div>
-      <h3 class="text-xl font-semibold text-white mb-2">No Features Available</h3>
-      <p class="text-white/60">This plugin doesn't expose any features yet.</p>
+      <h3 class="text-xl font-semibold text-[var(--el-text-color-primary)] mb-2">No Features Available</h3>
+      <p class="text-[var(--el-text-color-secondary)]">This plugin doesn't expose any features yet.</p>
     </div>
 
     <!-- Feature Detail Drawer -->
@@ -102,13 +106,13 @@
           <div
             class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center"
           >
-            <i :class="selectedFeature?.icon || 'i-ri-function-line'" class="text-white text-lg" />
+            <i :class="selectedFeature?.icon || 'i-ri-function-line'" class="text-[var(--el-color-white)] text-lg" />
           </div>
           <div>
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 class="text-xl font-bold text-[var(--el-text-color-primary)]">
               {{ selectedFeature?.name }}
             </h2>
-            <p class="text-sm text-gray-600 dark:text-gray-400">{{ selectedFeature?.desc }}</p>
+            <p class="text-sm text-[var(--el-text-color-regular)]">{{ selectedFeature?.desc }}</p>
           </div>
         </div>
       </template>
@@ -120,19 +124,19 @@
             <i class="i-ri-information-line text-blue-500" />
             Overview
           </h3>
-          <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-3">
+          <div class="bg-[var(--el-fill-color-lighter)] rounded-xl p-4 space-y-3">
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-400">Feature ID:</span>
-              <code class="text-sm bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">{{
+              <span class="text-sm text-[var(--el-text-color-regular)]">Feature ID:</span>
+              <code class="text-sm bg-[var(--el-fill-color)] px-2 py-1 rounded">{{
                 selectedFeature.id
               }}</code>
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-400">Commands Count:</span>
+              <span class="text-sm text-[var(--el-text-color-regular)]">Commands Count:</span>
               <span class="text-sm font-medium">{{ selectedFeature.commands.length }}</span>
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-400">Feature Type:</span>
+              <span class="text-sm text-[var(--el-text-color-regular)]">Feature Type:</span>
               <span
                 class="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded"
                 >{{ selectedFeature.type || 'Standard' }}</span
@@ -151,7 +155,7 @@
             <div
               v-for="(command, index) in selectedFeature.commands"
               :key="index"
-              class="PluginFeature-CommandDetail bg-gray-50 dark:bg-gray-800 rounded-xl p-4"
+              class="PluginFeature-CommandDetail bg-[var(--el-fill-color-lighter)] rounded-xl p-4"
             >
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-3">
@@ -159,12 +163,12 @@
                     <i class="i-ri-terminal-line text-yellow-600 dark:text-yellow-400 text-sm" />
                   </div>
                   <div>
-                    <h4 class="font-semibold text-gray-900 dark:text-white">
+                    <h4 class="font-semibold text-[var(--el-text-color-primary)]">
                       {{ getCommandName(command, selectedFeature) }}
                     </h4>
                     <p
                       v-if="getCommandDesc(command, selectedFeature)"
-                      class="text-sm text-gray-600 dark:text-gray-400"
+                      class="text-sm text-[var(--el-text-color-regular)]"
                     >
                       {{ getCommandDesc(command, selectedFeature) }}
                     </p>
@@ -173,7 +177,7 @@
                 <div class="flex items-center gap-2">
                   <span
                     v-if="getCommandShortcut(command, selectedFeature)"
-                    class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-2 py-1 rounded border"
+                    class="bg-[var(--el-fill-color)] text-[var(--el-text-color-regular)] text-xs px-2 py-1 rounded border"
                   >
                     {{ getCommandShortcut(command, selectedFeature) }}
                   </span>
@@ -189,8 +193,8 @@
               <div class="mt-3">
                 <ElCollapse>
                   <ElCollapseItem title="View JSON" :name="index">
-                    <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                      <pre class="text-xs text-gray-300">{{
+                    <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
+                      <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
                         JSON.stringify(command, null, 2)
                       }}</pre>
                     </div>
@@ -209,8 +213,8 @@
           </h3>
           <ElCollapse>
             <ElCollapseItem title="View Complete Feature JSON" name="feature-json">
-              <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                <pre class="text-xs text-gray-300">{{
+              <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
+                <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
                   JSON.stringify(selectedFeature, null, 2)
                 }}</pre>
               </div>
