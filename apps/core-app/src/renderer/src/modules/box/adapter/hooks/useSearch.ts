@@ -26,12 +26,17 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       }
       console.log('search with context', query)
 
-      // The initial call now returns a result with a session ID but likely empty items.
+      // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+
+      console.log('initialResult', initialResult)
 
       // Store the session ID to track this specific search stream.
       currentSearchId.value = initialResult.sessionId || null
       searchResult.value = initialResult
+
+      // Immediately display the high-priority items.
+      res.value = initialResult.items
 
       // The initial activation state is set here.
       if (initialResult.activate && initialResult.activate.length > 0) {
@@ -41,8 +46,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
           activeActivations.value = null
         }
       }
-
-      // Items will arrive via `search-update` events.
+      // Subsequent items will arrive via `search-update` events.
       // The loading state will be managed by `search-end`.
     } catch (error) {
       console.error('Search initiation failed:', error)
@@ -166,7 +170,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
   const debouncedExpand = useDebounceFn(() => {
     touchChannel.sendSync('core-box:expand', res.value.length)
-  }, 50)
+  }, 10)
 
   watch(
     () => res.value,
@@ -259,13 +263,9 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // Listener for incremental search result updates.
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      console.log('[useSearch] Received item update:', data)
-      // Use a Map to ensure uniqueness and efficient updates.
-      const itemsMap = new Map(res.value.map((item) => [item.id, item]))
-      data.items.forEach((item: TuffItem) => {
-        itemsMap.set(item.id, item)
-      })
-      res.value = Array.from(itemsMap.values())
+      console.log('[useSearch] Received subsequent item batch:', data.items.length)
+      // Subsequent batches are already sorted and should be appended.
+      res.value.push(...data.items)
     } else {
       console.debug('[useSearch] Discarded update for old search:', data.searchId)
     }

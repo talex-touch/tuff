@@ -20,12 +20,11 @@ function getWeight(item: TuffItem): number {
   return DEFAULT_WEIGHTS[kind] || 0
 }
 
-function calculateMatchScore(item: TuffItem, keyword?: string): number {
+function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   const title = item.render.basic?.title
-  if (!keyword || !title) return 0
+  if (!searchKey || !title) return 0
 
   const name = title.toLowerCase()
-  const searchKey = keyword.toLowerCase()
 
   if (name === searchKey) return 1000
 
@@ -52,8 +51,8 @@ function calculateMatchScore(item: TuffItem, keyword?: string): number {
   return 0
 }
 
-export function calculateSortScore(item: TuffItem, keyword?: string): number {
-  const matchScore = calculateMatchScore(item, keyword)
+export function calculateSortScore(item: TuffItem, searchKey?: string): number {
+  const matchScore = calculateMatchScore(item, searchKey)
   const weight = getWeight(item)
   const recency = item.scoring?.recency || 0
   const frequency = item.scoring?.frequency || 0
@@ -65,10 +64,19 @@ export function calculateSortScore(item: TuffItem, keyword?: string): number {
 export const tuffSorter: ISortMiddleware = {
   name: 'tuff-sorter',
   sort: (items: TuffItem[], query: TuffQuery) => {
-    return items.sort((a, b) => {
-      const scoreA = calculateSortScore(a, query.text)
-      const scoreB = calculateSortScore(b, query.text)
-      return scoreB - scoreA
-    })
+    const searchKey = query.text?.toLowerCase()
+
+    // Use the Schwartzian transform (decorate-sort-undecorate) for performance.
+    // 1. Decorate: Calculate the sort score for each item once.
+    const decoratedItems = items.map((item) => ({
+      item,
+      score: calculateSortScore(item, searchKey)
+    }))
+
+    // 2. Sort: The comparison function is now a simple number comparison.
+    decoratedItems.sort((a, b) => b.score - a.score)
+
+    // 3. Undecorate: Extract the sorted items.
+    return decoratedItems.map((decorated) => decorated.item)
   }
 }

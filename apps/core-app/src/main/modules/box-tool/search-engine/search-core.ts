@@ -22,19 +22,6 @@ import crypto from 'crypto'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { ChannelType, StandardChannelData } from '@talex-touch/utils/channel'
 
-function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
-  let timeoutId: NodeJS.Timeout | null = null
-
-  return function (this: any, ...args: Parameters<T>) {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-    timeoutId = setTimeout(() => {
-      func.apply(this, args)
-    }, wait)
-  } as any
-}
-
 /**
  * Generates a unique key for an activation request.
  * For the plugin adapter, it combines the provider ID with the plugin name
@@ -74,6 +61,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
 
   private registerDefaults(): void {
     this.sorter.register(tuffSorter)
+
     this.registerProvider(appProvider)
     this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)
@@ -200,117 +188,94 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     return ids.map((id) => this.providers.get(id)).filter((p): p is ISearchProvider => !!p)
   }
 
-  async search(query: TuffQuery): Promise<TuffSearchResult> {
-    console.debug(
-      `[SearchEngineCore] SEARCH START. Query text: "${query.text}". Initial activatedProviders:`,
-      this.activatedProviders ? Array.from(this.activatedProviders.values()) : null
-    )
-    // Abort any ongoing search before starting a new one
-    if (this.currentGatherController) {
-      this.currentGatherController.abort()
+  private _updateActivationState(newResults: TuffSearchResult[]): void {
+    const allNewActivations = newResults.flatMap((res) => res.activate || [])
+
+    if (allNewActivations.length > 0) {
+      const merged = new Map<string, IProviderActivate>(this.activatedProviders || [])
+      allNewActivations.forEach((activation) => {
+        const key = getActivationKey(activation)
+        merged.set(key, activation)
+      })
+      this.activatedProviders = merged
     }
+  }
+
+  async search(query: TuffQuery): Promise<TuffSearchResult> {
+    console.log('[SearchEngineCore] search', query)
+    this.currentGatherController?.abort()
 
     const sessionId = crypto.randomUUID()
-
-    // If the query is empty, return an empty result immediately but include activation state.
     if (!query.text) {
       const emptyResult = TuffFactory.createSearchResult(query).setItems([]).setDuration(0).build()
       emptyResult.activate = this.getActivationState() ?? undefined
       emptyResult.sessionId = sessionId
-      return Promise.resolve(emptyResult)
+      return emptyResult
     }
 
     const startTime = Date.now()
-    console.debug(`[SearchEngineCore] search \`${query.text}\` (Session: ${sessionId})`)
-
     this._recordSearchUsage(sessionId, query)
 
-    const providersToSearch = this.getActiveProviders()
-    const allProviderResults: TuffSearchResult[] = []
-    let finalSourceStats: TuffSearchResult['sources'] = []
+    return new Promise((resolve) => {
+      let isFirstUpdate = true
+      const providersToSearch = this.getActiveProviders()
 
-    // Keep track of all items received for the final sort.
-    const allItems: TuffItem[] = []
-
-    const touchApp = this.touchApp // Capture context for use in callback
-
-    // Debounce sending updates to the frontend to avoid overwhelming the renderer.
-    const sendUpdateToFrontend = debounce((itemsToSend: TuffItem[]) => {
-      if (touchApp) {
+      const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-          touchApp.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-update', {
+          this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-update', {
             items: itemsToSend,
             searchId: sessionId
           })
         }
       }
-    }, 50) // 50ms debounce interval
 
-    const gatherController = getGatheredItems(providersToSearch, query, (update) => {
-      // A new batch of results has arrived.
-      if (update.newResults.length > 0) {
-        const newItems = update.newResults.flatMap((res) => res.items)
-        allItems.push(...newItems)
-
-        // Sort ALL items received so far to maintain correct order.
-        const { sortedItems } = this.sorter.sort(allItems, query, gatherController.signal)
-
-        // Instead of sending every batch, we debounce the send operation.
-        // We send the full sorted list to ensure the UI is consistent.
-        sendUpdateToFrontend(sortedItems)
-      }
-
-      if (update.sourceStats) {
-        finalSourceStats = update.sourceStats
-      }
-
-      if (update.isDone) {
-        this.currentGatherController = null
-
-        // --- Finalization on Done ---
-        const mergedActivations = new Map<string, IProviderActivate>()
-        if (this.activatedProviders) {
-          this.activatedProviders.forEach((value, key) => mergedActivations.set(key, value))
-        }
-        allProviderResults.forEach((result) => {
-          if (result.activate) {
-            result.activate.forEach((activation) => {
-              const key = getActivationKey(activation)
-              mergedActivations.set(key, activation)
-            })
-          }
-        })
-        this.activatedProviders = mergedActivations.size > 0 ? mergedActivations : null
-
-        // Notify frontend that the search is complete.
-        if (touchApp) {
+      const gatherController = getGatheredItems(providersToSearch, query, (update) => {
+        if (update.isDone) {
+          // Handle final state and notify frontend
+          this.currentGatherController = null
+          this._updateActivationState(update.newResults)
           const coreBoxWindow = windowManager.current?.window
           if (coreBoxWindow) {
-            touchApp.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
+            this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
               searchId: sessionId,
               activate: this.getActivationState() ?? undefined,
-              sources: finalSourceStats
+              sources: update.sourceStats
             })
           }
+          console.debug(
+            `[SearchEngineCore] SEARCH END. Final activation state:`,
+            this.getActivationState()
+          )
+          return
         }
-        console.debug(
-          `[SearchEngineCore] SEARCH END. Final activation state:`,
-          this.getActivationState()
-        )
-      }
+
+        if (isFirstUpdate) {
+          isFirstUpdate = false
+          const initialItems = update.newResults.flatMap((res) => res.items)
+          const { sortedItems } = this.sorter.sort(initialItems, query, gatherController.signal)
+
+          this._updateActivationState(update.newResults)
+
+          const initialResult = TuffFactory.createSearchResult(query)
+            .setItems(sortedItems)
+            .setDuration(Date.now() - startTime)
+            .setSources(update.sourceStats || [])
+            .build()
+          initialResult.sessionId = sessionId
+          initialResult.activate = this.getActivationState() ?? undefined
+          resolve(initialResult)
+        } else if (update.newResults.length > 0) {
+          // This is a subsequent update
+          const subsequentItems = update.newResults.flatMap((res) => res.items)
+          const { sortedItems } = this.sorter.sort(subsequentItems, query, gatherController.signal)
+          this._updateActivationState(update.newResults)
+          sendUpdateToFrontend(sortedItems)
+        }
+      })
+
+      this.currentGatherController = gatherController
     })
-
-    this.currentGatherController = gatherController
-
-    // Return an initial, empty result immediately.
-    const initialResult = TuffFactory.createSearchResult(query)
-      .setItems([])
-      .setDuration(Date.now() - startTime)
-      .build()
-    initialResult.sessionId = sessionId
-    initialResult.activate = this.getActivationState() ?? undefined
-    return Promise.resolve(initialResult)
   }
 
   private _getItemId(item: TuffItem): string {

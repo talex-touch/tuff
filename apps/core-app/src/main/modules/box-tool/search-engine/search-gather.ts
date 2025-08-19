@@ -113,18 +113,20 @@ export function getGatheredItems(
 
     let pushBuffer: TuffSearchResult[] = []
     let forcePushTimerId: NodeJS.Timeout | null = null
+    let hasFlushedFirstBatch = false
 
     /**
      * Core push logic. Flushes the buffer and pushes results to the caller via the onUpdate callback.
      * @param isFinalFlush - Whether this is the last push. If true, an additional `isDone: true` signal is sent.
      */
-    const flushBuffer = (isFinalFlush = false): void => {
+    const flushBuffer = (isFinalFlush = false, forcePush = false): void => {
       if (forcePushTimerId) {
         clearTimeout(forcePushTimerId)
         forcePushTimerId = null
       }
 
-      if (pushBuffer.length > 0) {
+      // For the first batch, we must push even if the buffer is empty to signal the end of the phase.
+      if (pushBuffer.length > 0 || forcePush) {
         const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
         onUpdate({
           newResults: pushBuffer,
@@ -152,18 +154,42 @@ export function getGatheredItems(
      * @param result - The newly arrived TuffSearchResult.
      * @param providerId - The ID of the provider that returned the results.
      */
+    let firstBatchTimeoutId: NodeJS.Timeout | null = null
+
+    const flushFirstBatchOnce = (): void => {
+      if (hasFlushedFirstBatch) {
+        return
+      }
+      hasFlushedFirstBatch = true
+      if (firstBatchTimeoutId) {
+        clearTimeout(firstBatchTimeoutId)
+        firstBatchTimeoutId = null
+      }
+      console.debug('[Gather] Flushing first batch.')
+      // The first flush is forced to ensure the core receives a signal.
+      flushBuffer(false, true)
+    }
+
+    /**
+     * Handles new results from any provider.
+     * @param result - The newly arrived TuffSearchResult.
+     * @param providerId - The ID of the provider that returned the results.
+     */
     const onNewResultArrived = (result: TuffSearchResult, providerId: string): void => {
       console.debug(`[Gather] Received ${result.items.length} items from provider: ${providerId}`)
       allResults.push(result)
       pushBuffer.push(result)
 
-      const totalItems = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
-
-      // If this is the first batch of results and the push timer hasn't started, start it.
-      if (!forcePushTimerId && totalItems === result.items.length && result.items.length > 0) {
-        forcePushTimerId = setTimeout(() => {
-          flushBuffer() // Force push all content in the buffer when the timer fires
-        }, forcePushDelay)
+      // If this is the first result from the default queue, flush immediately.
+      if (!hasFlushedFirstBatch) {
+        flushFirstBatchOnce()
+      } else {
+        // For subsequent results (typically from the fallback queue), use the batching delay.
+        if (!forcePushTimerId) {
+          forcePushTimerId = setTimeout(() => {
+            flushBuffer()
+          }, forcePushDelay)
+        }
       }
     }
 
@@ -255,16 +281,29 @@ export function getGatheredItems(
 
     const run = async (): Promise<void> => {
       // --- Aggregator Execution Flow ---
-      // Phase 1: Process the default queue concurrently
+      // Phase 1: Process the default queue.
+      // The first result from this queue will trigger an immediate flush via onNewResultArrived.
+      // We also set a timeout as a fallback in case no provider responds in time.
+      const firstBatchTimeout = timeout.default + 17 // Add a frame's delay
+      firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, firstBatchTimeout)
+
+      // Await the completion of the entire default queue. The first batch flush
+      // will be triggered either by the first result arriving or by the timeout.
       await runWorkerPool(defaultQueue, concurrent.default, timeout.default)
+
+      // Ensure the first batch flush is called, even if the default queue was empty or yielded no results.
+      // This is crucial for signaling the end of the high-priority phase.
+      flushFirstBatchOnce()
 
       // Phase 2: If there are demoted providers, process the fallback queue
       if (fallbackQueue.length > 0) {
+        console.debug(
+          `[Gather] Starting fallback queue with ${fallbackQueue.length} providers.`
+        )
         await runWorkerPool(fallbackQueue, concurrent.fallback, timeout.fallback, true)
       }
 
       // All tasks (default and fallback) are done. Perform a final flush.
-      // This ensures that results are pushed immediately even if tasks finish within the forcePushDelay.
       console.debug('[Gather] All search tasks completed.')
       flushBuffer(true)
     }
