@@ -211,7 +211,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature) {
-          console.log(
+          console.debug(
             `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
           )
           // Trigger the input change handler for the specific feature.
@@ -229,7 +229,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
 
     // --- Global Search Mode ---
     // If no feature is active, perform a global search across all plugin features.
-    console.log(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
+    console.debug(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
     const pluginManager = genPluginManager()
     if (!pluginManager) {
       return TuffFactory.createSearchResult(query).build()

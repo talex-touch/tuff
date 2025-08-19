@@ -250,7 +250,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       }
 
       activatedProviders.value = [...constructedPluginProviders, ...fetchedProviderDetails]
-
     },
     { immediate: true }
   )
@@ -260,15 +259,15 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // Listener for incremental search result updates.
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      console.log('[useSearch] Received item update:', data.items)
+      console.log('[useSearch] Received item update:', data)
       // Use a Map to ensure uniqueness and efficient updates.
-      const itemsMap = new Map(res.value.map(item => [item.id, item]))
+      const itemsMap = new Map(res.value.map((item) => [item.id, item]))
       data.items.forEach((item: TuffItem) => {
         itemsMap.set(item.id, item)
       })
       res.value = Array.from(itemsMap.values())
     } else {
-      console.log('[useSearch] Discarded update for old search:', data.searchId)
+      console.debug('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
 
@@ -283,7 +282,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // Listener for when the search stream is finished.
   touchChannel.regChannel('core-box:search-end', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      console.log('[useSearch] Search stream ended:', data.searchId)
+      console.debug('[useSearch] Search stream ended:', data.searchId)
       if (searchResult.value) {
         searchResult.value.activate = data.activate
         searchResult.value.sources = data.sources
@@ -303,10 +302,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       return
     }
 
-    console.log(`[useSearch] Received ${data.items.length} items pushed from plugin.`)
+    console.debug(`[useSearch] Received ${data.items.length} items pushed from plugin.`)
 
     // Use a Map to ensure uniqueness and efficient updates.
-    const itemsMap = new Map(res.value.map(item => [item.id, item]))
+    const itemsMap = new Map(res.value.map((item) => [item.id, item]))
     data.items.forEach((item: TuffItem) => {
       itemsMap.set(item.id, item)
     })
