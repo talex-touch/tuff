@@ -26,7 +26,7 @@ type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
  * @returns True if the command matches, false otherwise.
  */
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
-  console.log(
+  console.debug(
     `[PluginFeaturesAdapter] isCommandMatch: query="${queryText}", command=`,
     JSON.stringify(command)
   )

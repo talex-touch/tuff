@@ -1,11 +1,5 @@
-import {
-  TuffItem,
-  TuffQuery,
-  withTimeout,
-  TimeoutError,
-  TuffSearchResult
-} from '@talex-touch/utils'
-import { IProviderActivate, ISearchProvider, TuffUpdate } from './types'
+import { TuffQuery, withTimeout, TimeoutError, TuffSearchResult } from '@talex-touch/utils'
+import { ISearchProvider, TuffUpdate } from './types'
 
 /**
  * Defines the detailed configuration options for the aggregator.
@@ -282,7 +276,7 @@ export function getGatheredItems(
     promise,
     abort: () => {
       if (!controller.signal.aborted) {
-        console.log('[Gather] Aborting search.')
+        console.debug('[Gather] Aborting search.')
         controller.abort()
       }
     },
