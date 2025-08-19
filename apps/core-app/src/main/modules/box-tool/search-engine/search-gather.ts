@@ -287,8 +287,7 @@ export function getGatheredItems(
       const firstBatchTimeout = timeout.default + 17 // Add a frame's delay
       firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, firstBatchTimeout)
 
-      // Await the completion of the entire default queue. The first batch flush
-      // will be triggered either by the first result arriving or by the timeout.
+      // Await the completion of the entire default queue.
       await runWorkerPool(defaultQueue, concurrent.default, timeout.default)
 
       // Ensure the first batch flush is called, even if the default queue was empty or yielded no results.

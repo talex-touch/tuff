@@ -16,6 +16,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   const currentSearchId = ref<string | null>(null)
 
   const debouncedSearch = useDebounceFn(async () => {
+    boxOptions.focus = 0
     loading.value = true
     res.value = [] // Clear previous results immediately
 
@@ -59,7 +60,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   }, 100)
 
   async function handleSearch(): Promise<void> {
-    boxOptions.focus = 0
     debouncedSearch()
   }
 

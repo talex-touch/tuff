@@ -63,7 +63,8 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     this.sorter.register(tuffSorter)
 
     this.registerProvider(appProvider)
-    this.registerProvider(fileProvider)
+    // TODO refractory - this provider costs a lot of time
+    // this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)
   }
 
