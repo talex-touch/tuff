@@ -9,8 +9,8 @@ import type {
   TuffQuery,
   TuffSearchResult as TuffSearchResultBase,
   TuffSourceType,
-  TuffIcon,
-  TuffItem
+  TuffItem,
+  IProviderActivate
 } from '@talex-touch/utils/core-box'
 import { TouchApp } from '../../../core/touch-core'
 import { DatabaseManager } from '../../database'
@@ -37,13 +37,6 @@ export interface SortStat {
 /**
  * Extends the base TUFF search result to include sorting statistics.
  */
-export interface IProviderActivate {
-  id: string
-  name?: string
-  icon?: TuffIcon
-  time?: number
-  meta?: Record<string, any>
-}
 
 export interface TuffSearchResult extends TuffSearchResultBase {
   /** Optional statistics about the sorting process. */
@@ -130,11 +123,10 @@ export interface ISearchProvider {
   /**
    * Optional method to execute an item.
    * @param args The arguments for execution, including the item and search context.
-   * @returns A promise that resolves to a boolean, indicating whether the main window should
-   * remain open after execution. For example, a plugin that shows a custom view (`push: true`)
-   * would return `true` to prevent the window from closing.
+   * @returns A promise that resolves to an activation object if the provider should be
+   * activated, or `null` otherwise.
    */
-  onExecute?(args: IExecuteArgs): Promise<boolean>
+  onExecute?(args: IExecuteArgs): Promise<IProviderActivate | null>
 
   /**
    * Optional method to load provider.

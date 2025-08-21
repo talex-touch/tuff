@@ -1,5 +1,5 @@
 import { Ref } from 'vue'
-import { TuffItem } from '@talex-touch/utils'
+import { IProviderActivate, TuffItem } from '@talex-touch/utils'
 
 export enum BoxMode {
   INPUT = 'input',
@@ -22,11 +22,6 @@ export interface IBoxOptions {
   data: any
 }
 
-export interface IActivatedProvider {
-  uniqueId: string
-  name: string
-  icon?: any
-}
 
 export interface IUseSearch {
   searchVal: Ref<string>
@@ -34,9 +29,10 @@ export interface IUseSearch {
   res: Ref<TuffItem[]>
   loading: Ref<boolean>
   activeItem: Ref<TuffItem>
-  activatedProviders: Ref<IActivatedProvider[]>
+  activeActivations: Ref<IProviderActivate[] | null>
   handleSearch: () => Promise<void>
   handleExecute: (item?: TuffItem) => Promise<void>
   handleExit: () => void
   deactivateProvider: (providerId?: string) => Promise<void>
+  deactivateAllProviders: () => Promise<void>
 }

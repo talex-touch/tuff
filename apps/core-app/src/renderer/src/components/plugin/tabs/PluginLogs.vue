@@ -149,12 +149,12 @@ const logs = ref([
 
 const filteredLogs = computed(() => {
   if (activeLogLevel.value === 'all') return logs.value
-  return logs.value.filter(log => log.level === activeLogLevel.value)
+  return logs.value.filter((log) => log.level === activeLogLevel.value)
 })
 
 // Helper functions
 function getLogCount(level: string): number {
-  return logs.value.filter(log => log.level === level).length
+  return logs.value.filter((log) => log.level === level).length
 }
 
 function getLogStyle(level: string): string {

@@ -1,5 +1,6 @@
 import {
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
   ProviderContext,
   TuffItem,
@@ -351,7 +352,7 @@ class AppProvider implements ISearchProvider {
     }
   }
 
-  async onExecute(args: IExecuteArgs): Promise<boolean> {
+  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult } = args
     const { sessionId } = searchResult
 
@@ -368,7 +369,7 @@ class AppProvider implements ISearchProvider {
     if (!appPath) {
       const err = new Error('Application path not found in TuffItem')
       console.error(err)
-      return false
+      return null
     }
 
     // Use Electron's shell.openPath for a more robust cross-platform way to open apps
@@ -383,14 +384,14 @@ class AppProvider implements ISearchProvider {
           exec(action, (execErr) => {
             if (execErr) {
               console.error(`Fallback exec failed to execute action: ${action}`, execErr)
-              return resolve(false)
+              return resolve(null)
             }
-            resolve(false)
+            resolve(null)
           })
         })
       }
     }
-    return false
+    return null
   }
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {

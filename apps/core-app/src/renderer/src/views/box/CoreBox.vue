@@ -33,7 +33,7 @@ const {
   select,
   res,
   activeItem,
-  activatedProviders,
+  activeActivations,
   handleExecute,
   handleExit,
   deactivateProvider
@@ -97,8 +97,7 @@ const addon = computed(() => {
 
   <div class="CoreBox" @paste="handlePaste">
     <PrefixPart
-      :providers="activatedProviders"
-      :feature="boxOptions.data?.feature"
+      :providers="activeActivations"
       @close="handleExit"
       @deactivate-provider="deactivateProvider"
     />
@@ -205,7 +204,7 @@ div.CoreBox {
 
   inset: 0;
 
-  opacity: 0.5;
-  background-color: var(--el-mask-color-extra-light);
+  opacity: 0.75;
+  background-color: var(--el-fill-color);
 }
 </style>

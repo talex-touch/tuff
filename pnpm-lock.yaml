@@ -94,6 +94,9 @@ importers:
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
+      '@types/yauzl':
+        specifier: ^2.10.3
+        version: 2.10.3
       '@unocss/transformer-attributify-jsx':
         specifier: ^66.3.3
         version: 66.3.3
@@ -205,6 +208,9 @@ importers:
       xterm-addon-fit:
         specifier: ^0.8.0
         version: 0.8.0(xterm@5.3.0)
+      yauzl:
+        specifier: ^3.2.0
+        version: 3.2.0
     devDependencies:
       '@electron-toolkit/eslint-config-prettier':
         specifier: 3.0.0
@@ -437,6 +443,9 @@ importers:
 
   plugins/touch-translation:
     dependencies:
+      '@talex-touch/unplugin-export-plugin':
+        specifier: 1.2.3
+        version: 1.2.3(chalk@5.6.0)(cli-progress@3.12.0)(compressing@1.10.3)(debug@4.4.1)(fs-extra@11.3.1)(pathe@2.0.3)(unplugin@1.16.1)
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
@@ -1933,6 +1942,17 @@ packages:
   '@talex-touch/unplugin-export-plugin@0.2.13':
     resolution: {integrity: sha512-Jh8jwvkcreTrKhua2xbqfWE+O+kwmzzG2L1/5OSyJDN+Yc6lYsD+xNqXzEwmHuRZx08tNa2RifeWPdCD6RPt8g==}
 
+  '@talex-touch/unplugin-export-plugin@1.2.3':
+    resolution: {integrity: sha512-xsi8P4vc5GIrn929SDYWJwDPFmv5UrmO6/UoTg0k/cztUlZKTkV6puHC3uCO6fZTZLEpaLQe+ogiHDZJ4NfPBw==}
+    peerDependencies:
+      chalk: ^5.6.0
+      cli-progress: ^3.12.0
+      compressing: ^1.10.3
+      debug: ^4.3.5
+      fs-extra: ^11.3.1
+      pathe: ^1.1.2
+      unplugin: ^1.16.1
+
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
@@ -2916,6 +2936,10 @@ packages:
 
   chalk@5.4.1:
     resolution: {integrity: sha512-zgVZuo2WcZgfUEmsn6eO3kINexW8RAE4maiQ8QNs8CtpPCSyMiYsULR3HQYkm3w8FIA3SberyMJMSldGsW+U3w==}
+    engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
+
+  chalk@5.6.0:
+    resolution: {integrity: sha512-46QrSQFyVSEyYAgQ22hQ+zDa60YHA4fBstHmtSApj1Y5vKtG27fWowW03jCk5KcbXEWPZUIR894aARCA/G1kfQ==}
     engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
   change-case@5.4.4:
@@ -3952,6 +3976,10 @@ packages:
 
   fs-extra@11.3.0:
     resolution: {integrity: sha512-Z4XaCL6dUDHfP/jT25jJKMmtxvuwbkrD1vNSMFlo9lNLY2c5FHYSQgHPRZUjAB26TpDEoW9HCOgplrdbaPV/ew==}
+    engines: {node: '>=14.14'}
+
+  fs-extra@11.3.1:
+    resolution: {integrity: sha512-eXvGGwZ5CL17ZSwHWd3bbgk7UUpF6IFHtP57NYYakPvHOs8GDgDe5KJI36jIJzDkJ6eJjuzRA8eBQb6SkKue0g==}
     engines: {node: '>=14.14'}
 
   fs-extra@8.1.0:
@@ -6412,6 +6440,10 @@ packages:
   yauzl@2.10.0:
     resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
 
+  yauzl@3.2.0:
+    resolution: {integrity: sha512-Ow9nuGZE+qp1u4JIPvg+uCiUr7xGQWdff7JQSk5VGYTAZMDe2q8lxJ10ygv10qmSj031Ty/6FNJpLO4o1Sgc+w==}
+    engines: {node: '>=12'}
+
   yazl@2.5.1:
     resolution: {integrity: sha512-phENi2PLiHnHb6QBVot+dJnaAZ0xosj7p3fWl+znIjBDlnMI2PsZCJZ306BPTFOaHf5qdDEI8x5qFrSOBN5vrw==}
 
@@ -7894,6 +7926,16 @@ snapshots:
       fs: 0.0.1-security
       unplugin: 1.16.1
 
+  '@talex-touch/unplugin-export-plugin@1.2.3(chalk@5.6.0)(cli-progress@3.12.0)(compressing@1.10.3)(debug@4.4.1)(fs-extra@11.3.1)(pathe@2.0.3)(unplugin@1.16.1)':
+    dependencies:
+      chalk: 5.6.0
+      cli-progress: 3.12.0
+      compressing: 1.10.3
+      debug: 4.4.1
+      fs-extra: 11.3.1
+      pathe: 2.0.3
+      unplugin: 1.16.1
+
   '@tootallnate/once@2.0.0': {}
 
   '@tsconfig/node10@1.0.11': {}
@@ -7995,7 +8037,6 @@ snapshots:
   '@types/yauzl@2.10.3':
     dependencies:
       '@types/node': 24.1.0
-    optional: true
 
   '@typescript-eslint/eslint-plugin@8.38.0(@typescript-eslint/parser@8.38.0(eslint@9.32.0(jiti@2.5.1))(typescript@5.8.3))(eslint@9.32.0(jiti@2.5.1))(typescript@5.8.3)':
     dependencies:
@@ -9213,6 +9254,8 @@ snapshots:
 
   chalk@5.4.1: {}
 
+  chalk@5.6.0: {}
+
   change-case@5.4.4: {}
 
   character-entities-html4@2.1.0: {}
@@ -10302,6 +10345,12 @@ snapshots:
       universalify: 2.0.1
 
   fs-extra@11.3.0:
+    dependencies:
+      graceful-fs: 4.2.11
+      jsonfile: 6.1.0
+      universalify: 2.0.1
+
+  fs-extra@11.3.1:
     dependencies:
       graceful-fs: 4.2.11
       jsonfile: 6.1.0
@@ -13167,6 +13216,11 @@ snapshots:
     dependencies:
       buffer-crc32: 0.2.13
       fd-slicer: 1.1.0
+
+  yauzl@3.2.0:
+    dependencies:
+      buffer-crc32: 0.2.13
+      pend: 1.2.0
 
   yazl@2.5.1:
     dependencies:

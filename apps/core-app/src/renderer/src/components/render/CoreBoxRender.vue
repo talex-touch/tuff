@@ -12,7 +12,7 @@ const emits = defineEmits<{
 
 const render = computed(() => props.item?.render)
 
-console.log(props)
+// console.log(props)
 </script>
 
 <template>

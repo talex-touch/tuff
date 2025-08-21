@@ -6,13 +6,13 @@ import {
 } from '@talex-touch/utils/plugin'
 import {
   IExecuteArgs,
-  IProviderActivate,
   ISearchProvider,
   TuffItem,
   TuffQuery,
   TuffSearchResult,
   TuffSourceType
 } from '../box-tool/search-engine/types'
+import { IProviderActivate } from '@talex-touch/utils'
 import { genPluginManager, TouchPlugin } from '../../plugins/plugin-core'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../box-tool/search-engine/search-core'
@@ -27,12 +27,11 @@ type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
  * @returns True if the command matches, false otherwise.
  */
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
-  console.log(
+  console.debug(
     `[PluginFeaturesAdapter] isCommandMatch: query="${queryText}", command=`,
     JSON.stringify(command)
   )
   if (!command.type) {
-    console.log('[PluginFeaturesAdapter] isCommandMatch: No command type, returning true.')
     return true
   }
   if (!queryText && command.type !== 'over') {
@@ -41,7 +40,6 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
 
   switch (command.type) {
     case 'over':
-      console.log('[PluginFeaturesAdapter] isCommandMatch: type "over", returning true.')
       return true
     case 'match':
       if (Array.isArray(command.value)) {
@@ -56,7 +54,7 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
     case 'regex':
       return (command.value as RegExp).test(queryText)
     default:
-      console.log(
+      console.debug(
         `[PluginFeaturesAdapter] isCommandMatch: Unknown type "${command.type}", returning false.`
       )
       return false
@@ -91,7 +89,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
   public readonly type: TuffSourceType = 'plugin'
   public readonly name = 'Plugin Features'
 
-  public async onExecute(args: IExecuteArgs): Promise<boolean> {
+  public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
 
     // If `defaultAction` exists, it's an "Action Item" for a plugin to handle.
@@ -101,29 +99,29 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         console.error(
           '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
         )
-        return false
+        return null
       }
 
       const pluginManager = genPluginManager()
       const plugin = pluginManager.plugins.get(pluginName) as TouchPlugin | undefined
 
       if (plugin?.pluginLifecycle?.onItemAction) {
-        console.log(
+        console.debug(
           `[PluginFeaturesAdapter] Routing to ${pluginName}.onItemAction for default action.`
         )
         await plugin.pluginLifecycle.onItemAction(item)
         // Simple actions should not activate a provider.
-        return false
+        return null
       } else {
         console.warn(
           `[PluginFeaturesAdapter] Plugin ${pluginName} has defaultAction but no onItemAction handler.`
         )
-        return false
+        return null
       }
     }
 
     // Otherwise, it's a "Feature Item" intended to activate a feature.
-    console.log(`[PluginFeaturesAdapter] Executing as a Feature Item.`)
+    console.debug(`[PluginFeaturesAdapter] Executing as a Feature Item.`)
     const meta = item.meta || {}
     const extension = meta.extension || {}
     // For feature items, the plugin name is in the payload of the 'trigger-feature' action.
@@ -136,14 +134,14 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         '[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.',
         item
       )
-      return false
+      return null
     }
 
     const pluginManager = genPluginManager()
     const plugin = pluginManager.plugins.get(pluginName)
     if (!plugin) {
       console.error(`[PluginFeaturesAdapter] Plugin not found: ${pluginName}`)
-      return false
+      return null
     }
 
     const feature = plugin.getFeature(featureId)
@@ -151,11 +149,24 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       console.error(
         `[PluginFeaturesAdapter] Feature not found: ${featureId} in plugin ${pluginName}`
       )
-      return false
+      return null
     }
 
     plugin.triggerFeature(feature, args.searchResult?.query.text)
-    return feature.push
+
+    if (feature.push) {
+      return {
+        id: this.id,
+        meta: {
+          pluginName,
+          featureId,
+          pluginIcon: plugin.icon,
+          feature: item
+        }
+      }
+    }
+
+    return null
   }
 
   private createTuffItem(plugin: ITouchPlugin, feature: IPluginFeature): TuffItem {
@@ -214,7 +225,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature) {
-          console.log(
+          console.debug(
             `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
           )
           // Trigger the input change handler for the specific feature.
@@ -232,7 +243,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
 
     // --- Global Search Mode ---
     // If no feature is active, perform a global search across all plugin features.
-    console.log(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
+    console.debug(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
     const pluginManager = genPluginManager()
     if (!pluginManager) {
       return TuffFactory.createSearchResult(query).build()

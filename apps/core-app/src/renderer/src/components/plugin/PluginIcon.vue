@@ -17,17 +17,17 @@ const iconOptions = ref<IIconOption>()
 const imageLoading = ref(false)
 const imageError = ref(false)
 
-function handleImageLoad() {
+function handleImageLoad(): void {
   imageLoading.value = false
   imageError.value = false
 }
 
-function handleImageError() {
+function handleImageError(): void {
   imageLoading.value = false
   imageError.value = true
 }
 
-function handleParse() {
+function handleParse(): void {
   if (!props.icon) {
     handleImageError()
     return
@@ -43,7 +43,7 @@ function handleParse() {
       ? iconPath.replace('image://', 'tfile://')
       : iconPath
 
-    imageLoading.value = true
+    imageLoading.value = false
     iconOptions.value = {
       type: 'url',
       value
@@ -69,11 +69,8 @@ function handleParse() {
     case 'remix':
     case 'class':
     case 'fluent':
-      iconOptions.value = { type, value: value as string }
-      break
     case 'dataurl':
-      imageLoading.value = true
-      iconOptions.value = { type: 'url', value: value as string }
+      iconOptions.value = { type, value: value as string }
       break
     case 'file':
       handleFileIcon(props.icon)
@@ -92,10 +89,10 @@ function handleFileIcon(icon: IPluginIcon): void {
 
   const extName = _value.split('.').pop()
   if (extName === 'svg') {
-    const htmlData = transformUint8ArrayToString(new Uint8Array(Object.values(value as any)))
+    const svgContent = transformUint8ArrayToString(new Uint8Array(Object.values(value as any)))
     iconOptions.value = {
-      type: 'html',
-      value: htmlData
+      type: 'dataurl',
+      value: `data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`
     }
   } else {
     const dataStr = transformArrayBufferToBase64(value as Buffer)
@@ -126,8 +123,13 @@ watchEffect(handleParse)
 <template>
   <span v-if="iconOptions" :title="alt" role="img" class="PluginIcon-Container">
     <remix-icon v-if="iconOptions.type === 'remix'" :name="iconOptions.value" />
-    <remix-icon v-if="iconOptions.type === 'fluent'" :name="iconOptions.value" />
+    <remix-icon v-else-if="iconOptions.type === 'fluent'" :name="iconOptions.value" />
     <div v-else-if="iconOptions.type === 'class'" :class="iconOptions.value" />
+    <i
+      v-else-if="iconOptions.type === 'dataurl'"
+      class="dataurl"
+      :style="`--un-icon: url(${iconOptions.value});`"
+    />
     <span v-else-if="iconOptions.type === 'html'" class="html" v-html="iconOptions.value" />
     <template v-else-if="iconOptions.type === 'base64' || iconOptions.type === 'url'">
       <div v-if="imageLoading" class="PluginIcon-Skeleton">
@@ -152,8 +154,8 @@ watchEffect(handleParse)
 .PluginIcon-Container {
   position: relative;
 
-  width: 100%;
-  height: 100%;
+  // width: 100%;
+  // height: 100%;
 
   .html {
     display: flex;
@@ -168,6 +170,19 @@ watchEffect(handleParse)
     width: 100%;
     height: 100%;
     border-radius: 4px;
+  }
+
+  .dataurl {
+    display: block;
+
+    -webkit-mask: var(--un-icon) no-repeat;
+    mask: var(--un-icon) no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    background-color: currentColor;
+    color: inherit;
+    width: 1em;
+    height: 1em;
   }
 
   .PluginIcon-Skeleton {

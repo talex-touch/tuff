@@ -206,6 +206,8 @@ export interface IManifest {
   name: string
   version: string
   description: string
+  _signature?: string
+  _files?: string[]
   plugin?: {
     dev: {
       enable: boolean

@@ -39,9 +39,7 @@ import { loadPluginFeatureContext } from './plugin-feature'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
 import { CoreBoxManager } from '../modules/box-tool/core-box/manager'
 
-const createBuilderWithPluginContext = (
-  pluginName: string
-): typeof TuffItemBuilder => {
+const createBuilderWithPluginContext = (pluginName: string): typeof TuffItemBuilder => {
   return class TuffItemBuilderWithPlugin extends TuffItemBuilder {
     constructor(id: string) {
       // Call the parent constructor and immediately set the pluginName in meta.

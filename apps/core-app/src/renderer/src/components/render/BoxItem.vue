@@ -39,7 +39,7 @@ function getHighlightedHTML(text: string, matchedIndices?: [number, number]): st
 
 <template>
   <div
-    class="BoxItem group flex items-center gap-2 m-1 p-1.5 pr-3 w-[calc(100%-0.5rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
+    class="BoxItem group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
     :class="{ 'is-active': active, 'bg-[var(--el-bg-color)]': active }"
   >
     <div class="relative w-32px h-32px">
@@ -50,7 +50,7 @@ function getHighlightedHTML(text: string, matchedIndices?: [number, number]): st
       />
       <span
         v-if="props.item.scoring?.frequency"
-        class="absolute right-0 bottom-0 flex items-center justify-center w-12px h-12px text-10px leading-12px rounded-full bg-primary text-white"
+        class="absolute right-0 bottom-0 flex items-center justify-center w-12px h-12px text-10px leading-12px rounded-full bg-[var(--el-color-primary)] text-white"
         v-text="Math.round((props.item.scoring.frequency || 0) * 10)"
       />
     </div>

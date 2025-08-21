@@ -40,8 +40,8 @@ function handleMove(event: MouseEvent) {
  */
 function cancelColor() {
   if (!gridContainer.value) return
-  gridContainer.value.querySelectorAll('.element').forEach(element => {
-    (element as HTMLElement).style.setProperty('--op', '0')
+  gridContainer.value.querySelectorAll('.element').forEach((element) => {
+    ;(element as HTMLElement).style.setProperty('--op', '0')
   })
 }
 </script>

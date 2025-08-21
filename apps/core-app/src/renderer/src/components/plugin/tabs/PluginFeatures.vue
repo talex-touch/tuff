@@ -113,7 +113,9 @@
             >
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 bg-[var(--el-color-warning-light-9)] rounded-lg flex items-center justify-center">
+                  <div
+                    class="w-8 h-8 bg-[var(--el-color-warning-light-9)] rounded-lg flex items-center justify-center"
+                  >
                     <i class="i-ri-terminal-line text-[var(--el-color-warning)] text-sm" />
                   </div>
                   <div>

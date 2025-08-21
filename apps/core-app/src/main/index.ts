@@ -10,7 +10,7 @@ import CoreBox from './modules/box-tool/core-box/index'
 
 import addonOpener from './modules/addon-opener'
 import extensionLoader from './modules/extension-loader'
-import DropManager from './modules/drop-manager'
+// import DropManager from './modules/drop-manager'
 import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
 import Clipboard from './modules/clipboard'
@@ -45,7 +45,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(CoreBox)
   await app.moduleManager.loadModule(TrayHolder)
   await app.moduleManager.loadModule(addonOpener)
-  await app.moduleManager.loadModule(DropManager)
+  // await app.moduleManager.loadModule(DropManager)
   await app.moduleManager.loadModule(GlobalShortcon)
   await app.moduleManager.loadModule(Clipboard)
   await app.moduleManager.loadModule(FileSystemWatcher)

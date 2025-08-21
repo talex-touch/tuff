@@ -1,11 +1,5 @@
-import {
-  TuffItem,
-  TuffQuery,
-  withTimeout,
-  TimeoutError,
-  TuffSearchResult
-} from '@talex-touch/utils'
-import { IProviderActivate, ISearchProvider, TuffUpdate } from './types'
+import { TuffQuery, withTimeout, TimeoutError, TuffSearchResult } from '@talex-touch/utils'
+import { ISearchProvider, TuffUpdate } from './types'
 
 /**
  * Defines the detailed configuration options for the aggregator.
@@ -55,7 +49,7 @@ export interface ITuffGatherOptions {
    * of this duration. Results arriving within this window are buffered and pushed
    * all at once when the window closes, ensuring stable batch updates and preventing UI flickering.
    * If all search tasks complete before this time, results are pushed immediately.
-   * @default 217
+   * @default 50
    */
   forcePushDelay: number
 }
@@ -84,7 +78,7 @@ const defaultTuffGatherOptions: ITuffGatherOptions = {
     default: 5,
     fallback: 2
   },
-  forcePushDelay: 217
+  forcePushDelay: 50
 }
 
 /**
@@ -119,18 +113,20 @@ export function getGatheredItems(
 
     let pushBuffer: TuffSearchResult[] = []
     let forcePushTimerId: NodeJS.Timeout | null = null
+    let hasFlushedFirstBatch = false
 
     /**
      * Core push logic. Flushes the buffer and pushes results to the caller via the onUpdate callback.
      * @param isFinalFlush - Whether this is the last push. If true, an additional `isDone: true` signal is sent.
      */
-    const flushBuffer = (isFinalFlush = false): void => {
+    const flushBuffer = (isFinalFlush = false, forcePush = false): void => {
       if (forcePushTimerId) {
         clearTimeout(forcePushTimerId)
         forcePushTimerId = null
       }
 
-      if (pushBuffer.length > 0) {
+      // For the first batch, we must push even if the buffer is empty to signal the end of the phase.
+      if (pushBuffer.length > 0 || forcePush) {
         const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
         onUpdate({
           newResults: pushBuffer,
@@ -158,17 +154,39 @@ export function getGatheredItems(
      * @param result - The newly arrived TuffSearchResult.
      * @param providerId - The ID of the provider that returned the results.
      */
+    let firstBatchTimeoutId: NodeJS.Timeout | null = null
+
+    const flushFirstBatchOnce = (): void => {
+      if (hasFlushedFirstBatch) {
+        return
+      }
+      hasFlushedFirstBatch = true
+      if (firstBatchTimeoutId) {
+        clearTimeout(firstBatchTimeoutId)
+        firstBatchTimeoutId = null
+      }
+      console.debug('[Gather] Flushing first batch.')
+      // The first flush is forced to ensure the core receives a signal.
+      flushBuffer(false, true)
+    }
+
+    /**
+     * Handles new results from any provider.
+     * @param result - The newly arrived TuffSearchResult.
+     * @param providerId - The ID of the provider that returned the results.
+     */
     const onNewResultArrived = (result: TuffSearchResult, providerId: string): void => {
       console.debug(`[Gather] Received ${result.items.length} items from provider: ${providerId}`)
       allResults.push(result)
       pushBuffer.push(result)
 
-      const totalItems = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
-
-      // If this is the first batch of results and the push timer hasn't started, start it.
-      if (!forcePushTimerId && totalItems === result.items.length && result.items.length > 0) {
+      // After the first batch is flushed, use a debouncing mechanism for subsequent updates.
+      if (hasFlushedFirstBatch) {
+        if (forcePushTimerId) {
+          clearTimeout(forcePushTimerId)
+        }
         forcePushTimerId = setTimeout(() => {
-          flushBuffer() // Force push all content in the buffer when the timer fires
+          flushBuffer()
         }, forcePushDelay)
       }
     }
@@ -261,16 +279,25 @@ export function getGatheredItems(
 
     const run = async (): Promise<void> => {
       // --- Aggregator Execution Flow ---
-      // Phase 1: Process the default queue concurrently
+      // Phase 1: Process the default queue.
+      // We set a 200ms timer from the start. All results arriving within this window
+      // will be batched and flushed together.
+      firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, 200)
+
+      // Await the completion of the entire default queue.
       await runWorkerPool(defaultQueue, concurrent.default, timeout.default)
+
+      // Ensure the first batch flush is called, even if the default queue was empty or yielded no results.
+      // This is crucial for signaling the end of the high-priority phase.
+      flushFirstBatchOnce()
 
       // Phase 2: If there are demoted providers, process the fallback queue
       if (fallbackQueue.length > 0) {
+        console.debug(`[Gather] Starting fallback queue with ${fallbackQueue.length} providers.`)
         await runWorkerPool(fallbackQueue, concurrent.fallback, timeout.fallback, true)
       }
 
       // All tasks (default and fallback) are done. Perform a final flush.
-      // This ensures that results are pushed immediately even if tasks finish within the forcePushDelay.
       console.debug('[Gather] All search tasks completed.')
       flushBuffer(true)
     }
@@ -282,7 +309,7 @@ export function getGatheredItems(
     promise,
     abort: () => {
       if (!controller.signal.aborted) {
-        console.log('[Gather] Aborting search.')
+        console.debug('[Gather] Aborting search.')
         controller.abort()
       }
     },
