@@ -41,7 +41,7 @@ const inputValue = computed({
 const placeholder = computed(() => {
   return props.boxOptions.mode === BoxMode.FEATURE
     ? (props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name)
-    : 'Type what you want to search by tuff.'
+    : 'Everything in tuff.'
 })
 </script>
 

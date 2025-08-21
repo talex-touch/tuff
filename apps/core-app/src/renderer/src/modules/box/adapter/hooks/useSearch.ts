@@ -25,12 +25,12 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
         text: searchVal.value,
         mode: boxOptions.mode
       }
-      console.log('search with context', query)
+      console.debug('search with context', query)
 
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
 
-      console.log('initialResult', initialResult)
+      console.debug('initialResult', initialResult)
 
       // Store the session ID to track this specific search stream.
       currentSearchId.value = initialResult.sessionId || null
