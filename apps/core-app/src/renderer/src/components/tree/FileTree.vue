@@ -58,7 +58,6 @@ const files = useModelWrapper(props, emit)
 onMounted(() => {
   watchEffect(() => {
     if (!treeDom.value) return
-
     ;[...props.modelValue].forEach((item) => {
       const node = treeDom.value.getNode(item)
       if (node) treeDom.value.setChecked(node, true)

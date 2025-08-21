@@ -1,0 +1,38 @@
+{
+  "name": "touch-translation",
+  "version": "1.0.0-Alpha",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "一款全平台资源聚合翻译平台，支持多种翻译服务",
+  "dev": {
+    "enable": false,
+    "address": "http://127.0.0.1:5174/",
+    "source": true
+  },
+  "features": [
+    {
+      "id": "touch-translate",
+      "name": "翻译",
+      "desc": "翻译选中的文本或剪贴板内容",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "push": true,
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "value": "over",
+          "name": "翻译",
+          "key": "control+alt+t"
+        }
+      ]
+    }
+  ]
+}

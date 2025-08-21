@@ -27,9 +27,7 @@
     >
       <div class="PluginStorage-CardHeader flex items-center gap-3 mb-6">
         <i class="i-ri-pie-chart-line text-xl text-[var(--el-color-primary)]" />
-        <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-          Storage Breakdown
-        </h3>
+        <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Breakdown</h3>
       </div>
       <div class="PluginStorage-Items space-y-3">
         <div
@@ -76,9 +74,7 @@
     >
       <div class="PluginStorage-CardHeader flex items-center gap-3 mb-6">
         <i class="i-ri-bar-chart-line text-xl text-[var(--el-color-success)]" />
-        <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-          Storage Analysis
-        </h3>
+        <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Analysis</h3>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="PluginStorage-AnalysisItem">

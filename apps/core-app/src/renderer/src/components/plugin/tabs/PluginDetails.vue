@@ -15,7 +15,8 @@
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Plugin ID</span
             >
             <div class="PluginDetails-ValueWithCopy flex items-center gap-2">
@@ -43,7 +44,8 @@
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Version</span
             >
             <span
@@ -54,7 +56,8 @@
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Mode</span
             >
             <span
@@ -62,7 +65,9 @@
               class="PluginDetails-Value text-sm font-medium text-[var(--el-color-primary)]"
               >Development</span
             >
-            <span v-else class="PluginDetails-Value text-sm font-medium text-[var(--el-color-success)]"
+            <span
+              v-else
+              class="PluginDetails-Value text-sm font-medium text-[var(--el-color-success)]"
               >Production</span
             >
           </div>
@@ -70,7 +75,8 @@
             v-if="plugin.dev?.address"
             class="PluginDetails-Row flex justify-between items-center py-3"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Dev Address</span
             >
             <a
@@ -91,15 +97,14 @@
       >
         <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
           <i class="i-ri-settings-3-line text-xl text-[var(--el-color-info)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            Configuration
-          </h3>
+          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Configuration</h3>
         </div>
         <div class="PluginDetails-List space-y-4">
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Auto Start</span
             >
             <div class="PluginDetails-Toggle flex items-center gap-2">
@@ -108,7 +113,8 @@
             </div>
           </div>
           <div class="PluginDetails-Row flex justify-between items-center py-3">
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Hot Reload</span
             >
             <div class="PluginDetails-Toggle flex items-center gap-2">
@@ -146,7 +152,8 @@
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Plugin Path</span
             >
             <code
@@ -157,7 +164,8 @@
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Data Directory</span
             >
             <code
@@ -166,7 +174,8 @@
             >
           </div>
           <div class="PluginDetails-Row flex justify-between items-center py-3">
-            <span class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
+            <span
+              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
               >Cache Size</span
             >
             <span class="PluginDetails-Value text-sm text-[var(--el-text-color-primary)]"
@@ -194,12 +203,12 @@
               >
                 <i class="i-ri-timer-line text-[var(--el-color-primary)] text-sm" />
               </div>
-              <span
-                class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
+              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
                 >Load Time</span
               >
             </div>
-            <span class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
+            <span
+              class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
               >156ms</span
             >
           </div>
@@ -212,12 +221,12 @@
               >
                 <i class="i-ri-ram-line text-[var(--el-color-info)] text-sm" />
               </div>
-              <span
-                class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
+              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
                 >Memory Usage</span
               >
             </div>
-            <span class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
+            <span
+              class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
               >8.2 MB</span
             >
           </div>
@@ -230,12 +239,12 @@
               >
                 <i class="i-ri-cpu-line text-[var(--el-color-success)] text-sm" />
               </div>
-              <span
-                class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
+              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
                 >CPU Usage</span
               >
             </div>
-            <span class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
+            <span
+              class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
               >0.3%</span
             >
           </div>

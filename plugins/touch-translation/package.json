@@ -13,6 +13,7 @@
     "postinstall": "npx simple-git-hooks"
   },
   "dependencies": {
+    "@talex-touch/unplugin-export-plugin": "1.2.3",
     "@talex-touch/utils": "workspace:^",
     "@vueuse/core": "^13.6.0",
     "vue": "^3.5.18",

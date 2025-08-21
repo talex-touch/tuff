@@ -24,7 +24,7 @@ const emits = defineEmits(['close'])
 const featureName = computed(() => props.feature?.render?.basic?.title)
 const featureIcon = computed(() => {
   const icon = props.feature?.render?.basic?.icon
-  console.log("icon", icon)
+  console.log('icon', icon)
   if (typeof icon === 'string') {
     return {
       type: 'remix',

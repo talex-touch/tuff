@@ -296,9 +296,7 @@ export function getGatheredItems(
 
       // Phase 2: If there are demoted providers, process the fallback queue
       if (fallbackQueue.length > 0) {
-        console.debug(
-          `[Gather] Starting fallback queue with ${fallbackQueue.length} providers.`
-        )
+        console.debug(`[Gather] Starting fallback queue with ${fallbackQueue.length} providers.`)
         await runWorkerPool(fallbackQueue, concurrent.fallback, timeout.fallback, true)
       }
 

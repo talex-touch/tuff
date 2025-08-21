@@ -1,10 +1,9 @@
 <script name="App" lang="ts" setup>
 import AppLayout from '~/views/layout/AppLayout.vue'
-import {} from // applicationUpgrade,
-// clipBoardResolver,
-// dropperResolver,
+import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
+// applicationUpgrade,
 // urlHooker,
-'~/modules/hooks/application-hooks'
+// clipBoardResolver,
 import Beginner from '~/views/base/begin/Beginner.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import { isCoreBox } from '@talex-touch/utils/renderer'
@@ -21,9 +20,9 @@ async function init(): Promise<void> {
 
   // applicationUpgrade()
   // clipBoardResolver()
-  // dropperResolver()
   // urlHooker()
   // screenCapture()
+  useDropperResolver()
 
   if (!appSetting?.beginner?.init) beginner.value = true
 }

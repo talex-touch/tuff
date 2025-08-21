@@ -1,7 +1,6 @@
 import { touchChannel } from '../channel/channel-core'
-import { blowMention, forTouchTip, popperMention } from '../mention/dialog-mention'
+import { forTouchTip, popperMention, blowMention } from '../mention/dialog-mention'
 import { h } from 'vue'
-import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { AppUpdate } from './api/useUpdate'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { DataCode } from '@talex-touch/utils/channel'
@@ -125,88 +124,6 @@ export function screenCapture(): void {
     // video.onloadedmetadata = (e) => {
     //     video.play()
     // }
-  })
-}
-
-export function dropperResolver(): void {
-  async function dropperFile(path: string): Promise<boolean> {
-    if (path.endsWith('.touch-plugin')) {
-      await blowMention(
-        'Fatal Error',
-        'Sorry, the plugin is deprecated, we only supports .tpex now.'
-      )
-
-      return true
-    }
-
-    if (path.endsWith('.tpex')) {
-      const data = touchChannel.sendSync('drop:plugin', path)
-
-      if (data.status === 'error') {
-        if (data.msg === '10091')
-          await blowMention('Install', 'The plugin has been irreversible damage!')
-        else if (data.msg === '10092') await blowMention('Install', 'Unable to identify the file!')
-      } else {
-        const { manifest } = data
-
-        await popperMention(manifest.name, () => {
-          return h(PluginApplyInstall, { manifest, path })
-        })
-      }
-      return true
-    }
-
-    return false
-  }
-
-  document.addEventListener('drop', async (e) => {
-    console.log('A drop', e)
-    e.preventDefault()
-
-    const files = e.dataTransfer!.files
-
-    if (files && files.length === 1) {
-      // 获取文件路径
-      const { path } = files[0] as any
-
-      if (await dropperFile(path)) return
-    }
-
-    const option = {
-      shift: e.shiftKey,
-      ctrl: e.ctrlKey,
-      alt: e.altKey,
-      meta: e.metaKey,
-      pageX: e.pageX,
-      pageY: e.pageY,
-      composed: e.composed,
-      timeStamp: e.timeStamp,
-      type: e.type,
-      x: e.x,
-      y: e.y,
-      data: {
-        files: [...e.dataTransfer!.files].map(parseFile),
-        // items: e.dataTransfer.items,
-        types: e.dataTransfer!.types
-      }
-    }
-
-    // TODO: drop file to plugins (lack plugin name)
-    touchChannel.send('drop', option)
-  })
-
-  function parseFile(file: File): any {
-    return {
-      lastModified: file.lastModified,
-      name: file.name,
-      path: file['path'],
-      size: file.size,
-      type: file.type
-    }
-  }
-
-  document.addEventListener('dragover', (e) => {
-    e.preventDefault()
   })
 }
 

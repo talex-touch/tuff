@@ -4,8 +4,10 @@ import { TalexTouch } from '../types'
 import { PluginResolver, ResolverStatus } from '../plugins/plugin-resolver'
 import { genTouchChannel } from '../core/channel-core'
 import path from 'path'
+import fs from 'fs'
+import os from 'os'
 
-function windowsAdapter(touchApp: TalexTouch.TouchApp) {
+function windowsAdapter(touchApp: TalexTouch.TouchApp): void {
   const app = touchApp.app
 
   app.on('second-instance', (_, argv) => {
@@ -21,7 +23,7 @@ function windowsAdapter(touchApp: TalexTouch.TouchApp) {
   })
 }
 
-function macOSAdapter(touchApp: TalexTouch.TouchApp) {
+function macOSAdapter(touchApp: TalexTouch.TouchApp): void {
   const app = touchApp.app
 
   app.on('open-url', (_, url) => {
@@ -29,7 +31,7 @@ function macOSAdapter(touchApp: TalexTouch.TouchApp) {
   })
 }
 
-function onSchema(url: string) {
+function onSchema(url: string): void {
   console.log('[Addon] Opened schema: ' + url)
 }
 
@@ -92,36 +94,47 @@ export default {
     )
 
     this.listeners.push(
-      touchChannel.regChannel(ChannelType.MAIN, 'drop:plugin', async ({ data, reply }) => {
-        console.log('[AddonDropper] Dropped file: ' + data)
+      touchChannel.regChannel(
+        ChannelType.MAIN,
+        'drop:plugin',
+        async ({ data: { name, buffer }, reply }) => {
+          const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
 
-        new PluginResolver(data).resolve(({ event, type }: any) => {
-          if (type === 'error') {
-            if (event.msg === ResolverStatus.BROKEN_PLUGIN_FILE) {
-              return reply(DataCode.SUCCESS, {
-                status: 'error',
-                msg: '10091'
-              })
-            } else {
-              return reply(DataCode.SUCCESS, {
-                status: 'error',
-                msg: '10092'
-              })
-            }
-          } else {
-            return reply(DataCode.SUCCESS, {
-              status: 'success',
-              manifest: event.msg,
-              msg: '10090'
+          try {
+            await fs.promises.writeFile(tempFilePath, buffer)
+
+            const pluginResolver = new PluginResolver(tempFilePath)
+
+            await pluginResolver.resolve(({ event, type }: any) => {
+              if (type === 'error') {
+                console.log('[AddonDropper] Failed to resolve plugin from buffer: ', event)
+                if (
+                  event.msg === ResolverStatus.MANIFEST_NOT_FOUND ||
+                  event.msg === ResolverStatus.INVALID_MANIFEST
+                ) {
+                  reply(DataCode.SUCCESS, { status: 'error', msg: '10091' }) // Invalid plugin file
+                } else {
+                  reply(DataCode.SUCCESS, { status: 'error', msg: '10092' }) // Generic error
+                }
+              } else {
+                reply(DataCode.SUCCESS, {
+                  status: 'success',
+                  manifest: event.msg,
+                  msg: '10090'
+                })
+              }
+            })
+          } catch (e) {
+            console.error('[AddonDropper] Error processing dropped plugin:', e)
+            reply(DataCode.SUCCESS, { status: 'error', msg: 'INTERNAL_ERROR' })
+          } finally {
+            // Clean up the temporary file
+            fs.promises.unlink(tempFilePath).catch((err) => {
+              console.error(`[AddonDropper] Failed to delete temp file: ${tempFilePath}`, err)
             })
           }
-
-          /*return reply({
-                          status: 'unknown',
-                          msg: '-1'
-                      })*/
-        })
-      })
+        }
+      )
     )
   },
   destroy() {

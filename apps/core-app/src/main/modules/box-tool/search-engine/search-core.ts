@@ -203,7 +203,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
-    console.log('[SearchEngineCore] search', query)
+    console.debug('[SearchEngineCore] search', query)
     this.currentGatherController?.abort()
 
     const sessionId = crypto.randomUUID()
