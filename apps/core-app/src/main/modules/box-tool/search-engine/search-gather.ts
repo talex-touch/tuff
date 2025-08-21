@@ -49,7 +49,7 @@ export interface ITuffGatherOptions {
    * of this duration. Results arriving within this window are buffered and pushed
    * all at once when the window closes, ensuring stable batch updates and preventing UI flickering.
    * If all search tasks complete before this time, results are pushed immediately.
-   * @default 217
+   * @default 50
    */
   forcePushDelay: number
 }
@@ -78,7 +78,7 @@ const defaultTuffGatherOptions: ITuffGatherOptions = {
     default: 5,
     fallback: 2
   },
-  forcePushDelay: 217
+  forcePushDelay: 50
 }
 
 /**
@@ -180,16 +180,14 @@ export function getGatheredItems(
       allResults.push(result)
       pushBuffer.push(result)
 
-      // If this is the first result from the default queue, flush immediately.
-      if (!hasFlushedFirstBatch) {
-        flushFirstBatchOnce()
-      } else {
-        // For subsequent results (typically from the fallback queue), use the batching delay.
-        if (!forcePushTimerId) {
-          forcePushTimerId = setTimeout(() => {
-            flushBuffer()
-          }, forcePushDelay)
+      // After the first batch is flushed, use a debouncing mechanism for subsequent updates.
+      if (hasFlushedFirstBatch) {
+        if (forcePushTimerId) {
+          clearTimeout(forcePushTimerId)
         }
+        forcePushTimerId = setTimeout(() => {
+          flushBuffer()
+        }, forcePushDelay)
       }
     }
 
@@ -282,10 +280,9 @@ export function getGatheredItems(
     const run = async (): Promise<void> => {
       // --- Aggregator Execution Flow ---
       // Phase 1: Process the default queue.
-      // The first result from this queue will trigger an immediate flush via onNewResultArrived.
-      // We also set a timeout as a fallback in case no provider responds in time.
-      const firstBatchTimeout = timeout.default + 17 // Add a frame's delay
-      firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, firstBatchTimeout)
+      // We set a 200ms timer from the start. All results arriving within this window
+      // will be batched and flushed together.
+      firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, 200)
 
       // Await the completion of the entire default queue.
       await runWorkerPool(defaultQueue, concurrent.default, timeout.default)
