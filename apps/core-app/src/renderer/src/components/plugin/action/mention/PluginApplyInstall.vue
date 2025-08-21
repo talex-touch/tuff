@@ -1,19 +1,28 @@
-<script name="PluginApplyInstall" setup>
-import { inject, ref } from 'vue'
-import { blowMention } from '@modules/mention/dialog-mention'
-import Loading from '@assets/lotties/compress-loading.json'
+<script name="PluginApplyInstall" lang="ts" setup>
+import { blowMention } from '~/modules/mention/dialog-mention'
+import Loading from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
-import { sleep } from '@talex-touch/utils/common/utils'
+import { sleep } from '@talex-touch/utils'
 import FlatButton from '@comp/base/button/FlatButton.vue'
-import { touchChannel } from '@modules/channel/channel-core'
-import { getBufferedFile, clearBufferedFile } from '@modules/hooks/dropper-resolver'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { getBufferedFile, clearBufferedFile } from '~/modules/hooks/dropper-resolver'
 
-const props = defineProps(['manifest', 'path', 'fileName'])
+interface Manifest {
+  name: string
+  description: string
+  version: string
+}
+
+const props = defineProps<{
+  manifest: Manifest
+  path: string
+  fileName: string
+}>()
 
 const installing = ref(false)
-const close = inject('destroy')
+const close = inject('destroy') as () => void
 
-async function install() {
+async function install(): Promise<void> {
   installing.value = true
 
   const buffer = getBufferedFile(props.fileName)
@@ -27,13 +36,7 @@ async function install() {
   try {
     await sleep(400)
 
-    const { data } = await touchChannel.send(
-      '@install-plugin',
-      { name: props.fileName, buffer },
-      {
-        timeout: 1000 * 60 * 5
-      }
-    )
+    const { data } = await touchChannel.send('@install-plugin', { name: props.fileName, buffer })
 
     await sleep(400)
     installing.value = false
@@ -54,76 +57,41 @@ async function install() {
   }
 }
 
-function onIgnore() {
+function onIgnore(): void {
   clearBufferedFile(props.fileName)
   close()
 }
 </script>
 
 <template>
-  <div class="PluginApplyInstall-Container" :class="{ installing }">
-    <div class="PluginApplyInstall-Installing">
-      <h4>正在安装中...</h4>
+  <div
+    class="PluginApplyInstall-Container transition-all duration-300 ease-in-out"
+    :class="{
+      installing: installing
+    }"
+  >
+    <div
+      class="PluginApplyInstall-Installing -mb-[110%] opacity-0 transition-all duration-300 ease-in-out"
+      :class="{
+        '!-mb-[50%] !opacity-100': installing
+      }"
+    >
+      <h4 class="text-center">Installing...</h4>
       <LottieFrame :data="Loading" />
     </div>
-    <div class="PluginApplyInstall-Main">
-      <p>新插件</p>
-      <!-- <div class="PluginApplyInstall-Main">
-        <PluginIcon :icon="manifest.icon" />
-      </div> -->
-      <h2 text-center>{{ manifest.name }}</h2>
-      <h4>{{ manifest.description }}</h4>
-      <span>{{ manifest.version }}</span>
-      <div class="PluginApplyInstall-Button">
-        <FlatButton v-wave @click="onIgnore"> 忽略 </FlatButton>
-        <FlatButton v-wave :primary="true" @click="install"> 安装 </FlatButton>
+    <div
+      class="PluginApplyInstall-Main relative transition-all duration-300 ease-in-out"
+      :class="{
+        '!opacity-0 !-translate-y-full': installing
+      }"
+    >
+      <h2 my-4 text-2xl font-bold text-center>{{ manifest.name }}</h2>
+      <h4 class="text-center opacity-75">{{ manifest.description }}</h4>
+      <span my-2 class="block text-center text-xs text-gray-500">{{ manifest.version }}</span>
+      <div class="flex justify-between mt-16px gap-16px h-2.5rem">
+        <FlatButton flex-1 v-wave @click="onIgnore"> Ignore </FlatButton>
+        <FlatButton flex-1 v-wave :primary="true" @click="install"> Install </FlatButton>
       </div>
     </div>
   </div>
 </template>
-
-<style lang="scss" scoped>
-.PluginApplyInstall-Installing {
-  margin-bottom: -120%;
-
-  opacity: 0;
-  transition: cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-}
-
-.PluginApplyInstall-Main {
-  position: relative;
-
-  transition: cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-}
-
-.PluginApplyInstall-Container {
-  &.installing {
-    .PluginApplyInstall-Installing {
-      margin-bottom: -50%;
-
-      opacity: 1;
-    }
-
-    .PluginApplyInstall-Main {
-      opacity: 0;
-
-      transform: translateY(-100%);
-    }
-  }
-
-  .PluginApplyInstall-Button {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 16px;
-
-    gap: 16px;
-    height: 2.5rem;
-  }
-
-  h4 {
-    text-align: center;
-  }
-
-  transition: cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-}
-</style>
