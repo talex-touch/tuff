@@ -39,7 +39,7 @@ function getHighlightedHTML(text: string, matchedIndices?: [number, number]): st
 
 <template>
   <div
-    class="BoxItem group flex items-center gap-2 m-1 p-1.5 pr-3 w-[calc(100%-0.5rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
+    class="BoxItem group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
     :class="{ 'is-active': active, 'bg-[var(--el-bg-color)]': active }"
   >
     <div class="relative w-32px h-32px">
