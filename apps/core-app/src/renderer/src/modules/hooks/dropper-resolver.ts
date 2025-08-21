@@ -3,6 +3,16 @@ import { touchChannel } from '../channel/channel-core'
 import { blowMention, popperMention } from '../mention/dialog-mention'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 
+const bufferCache = new Map<string, Buffer>()
+
+export function getBufferedFile(name: string): Buffer | undefined {
+  return bufferCache.get(name)
+}
+
+export function clearBufferedFile(name: string): void {
+  bufferCache.delete(name)
+}
+
 async function handlePluginDrop(file: File): Promise<boolean> {
   console.log('[DropperResolver] Handling dropped file:', file)
 
@@ -14,16 +24,23 @@ async function handlePluginDrop(file: File): Promise<boolean> {
 
   if (file.name.endsWith('.tpex')) {
     const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
     console.log(`[DropperResolver] Resolving .tpex plugin: ${file.name}`)
+
+    // Cache the buffer before sending it to the main process
+    bufferCache.set(file.name, buffer)
 
     const data = touchChannel.sendSync('drop:plugin', {
       name: file.name,
-      buffer: Buffer.from(arrayBuffer),
+      buffer: buffer,
       size: file.size
     })
 
     if (data.status === 'error') {
       console.error(`[DropperResolver] Error resolving plugin: ${data.msg}`)
+      // Clear cache on error
+      clearBufferedFile(file.name)
       if (data.msg === '10091') {
         await blowMention('Install Error', 'The plugin has been irreversibly damaged!')
       } else if (data.msg === '10092') {
@@ -35,7 +52,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       const { manifest, path } = data
       console.log('[DropperResolver] Plugin manifest resolved:', manifest)
       await popperMention(manifest.name, () => {
-        return h(PluginApplyInstall, { manifest, path })
+        return h(PluginApplyInstall, { manifest, path, fileName: file.name })
       })
     }
     return true

@@ -80,17 +80,32 @@ export default {
     })
 
     this.listeners.push(
-      touchChannel.regChannel(ChannelType.MAIN, '@install-plugin', ({ data, reply }) => {
-        new PluginResolver(data).resolve(({ event, type }: any) => {
-          console.log('[AddonInstaller] Installed file: ' + data)
+      touchChannel.regChannel(
+        ChannelType.MAIN,
+        '@install-plugin',
+        async ({ data: { name, buffer }, reply }) => {
+          const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+          try {
+            await fs.promises.writeFile(tempFilePath, buffer)
+            await new PluginResolver(tempFilePath).resolve(({ event, type }: any) => {
+              console.log('[AddonInstaller] Installed file: ' + name)
 
-          reply(DataCode.SUCCESS, {
-            status: type,
-            msg: event.msg,
-            event
-          })
-        }, true)
-      })
+              reply(DataCode.SUCCESS, {
+                status: type,
+                msg: event.msg,
+                event
+              })
+            }, true)
+          } catch (e: any) {
+            console.error('[AddonInstaller] Error installing plugin:', e)
+            reply(DataCode.SUCCESS, { status: 'error', msg: 'INTERNAL_ERROR' })
+          } finally {
+            fs.promises.unlink(tempFilePath).catch((err) => {
+              console.error(`[AddonInstaller] Failed to delete temp file: ${tempFilePath}`, err)
+            })
+          }
+        }
+      )
     )
 
     this.listeners.push(

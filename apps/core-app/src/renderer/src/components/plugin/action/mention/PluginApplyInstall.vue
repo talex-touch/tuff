@@ -6,8 +6,9 @@ import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import { touchChannel } from '@modules/channel/channel-core'
+import { getBufferedFile, clearBufferedFile } from '@modules/hooks/dropper-resolver'
 
-const props = defineProps(['manifest', 'path'])
+const props = defineProps(['manifest', 'path', 'fileName'])
 
 const installing = ref(false)
 const close = inject('destroy')
@@ -15,26 +16,47 @@ const close = inject('destroy')
 async function install() {
   installing.value = true
 
-  await sleep(400)
-
-  const { data } = await touchChannel.send('@install-plugin', props.path, {
-    timeout: 1000 * 60 * 5
-  })
-
-  await sleep(400)
-
-  installing.value = false
-
-  await sleep(400)
-
-  close()
-
-  if (data.status === 'error') {
-    if (data.msg === '10091') await blowMention('Install', '该插件已遭受不可逆破坏！')
-    else await blowMention('Install', JSON.stringify(data.msg))
-  } else {
-    await blowMention('Install', '插件安装成功！')
+  const buffer = getBufferedFile(props.fileName)
+  if (!buffer) {
+    await blowMention('Install Error', 'Plugin file buffer not found, please try again.')
+    installing.value = false
+    close()
+    return
   }
+
+  try {
+    await sleep(400)
+
+    const { data } = await touchChannel.send(
+      '@install-plugin',
+      { name: props.fileName, buffer },
+      {
+        timeout: 1000 * 60 * 5
+      }
+    )
+
+    await sleep(400)
+    installing.value = false
+    await sleep(400)
+    close()
+
+    if (data.status === 'error') {
+      if (data.msg === '10091') {
+        await blowMention('Install', '该插件已遭受不可逆破坏！')
+      } else {
+        await blowMention('Install', JSON.stringify(data.msg))
+      }
+    } else {
+      await blowMention('Install', '插件安装成功！')
+    }
+  } finally {
+    clearBufferedFile(props.fileName)
+  }
+}
+
+function onIgnore() {
+  clearBufferedFile(props.fileName)
+  close()
 }
 </script>
 
@@ -53,7 +75,7 @@ async function install() {
       <h4>{{ manifest.description }}</h4>
       <span>{{ manifest.version }}</span>
       <div class="PluginApplyInstall-Button">
-        <FlatButton v-wave @click="close"> 忽略 </FlatButton>
+        <FlatButton v-wave @click="onIgnore"> 忽略 </FlatButton>
         <FlatButton v-wave :primary="true" @click="install"> 安装 </FlatButton>
       </div>
     </div>

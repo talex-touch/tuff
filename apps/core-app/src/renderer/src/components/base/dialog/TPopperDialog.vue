@@ -22,7 +22,7 @@
       <!-- Default content -->
       <template v-else>
         <!-- Dialog title -->
-        <p id="dialog-title" v-if="title">{{ title }}</p>
+        <p v-if="title" id="dialog-title">{{ title }}</p>
         <!-- Dialog content -->
         <div id="dialog-content" class="TPopperDialog-Content">
           <span style="position: relative; height: 100%" v-html="message"></span>
@@ -31,12 +31,12 @@
         <div
           v-wave
           class="TPopperDialog-Confirm"
-          @click="destroy"
-          @keydown.enter="destroy"
-          @keydown.space="destroy"
           role="button"
           tabindex="0"
           aria-label="Confirm and close dialog"
+          @click="destroy"
+          @keydown.enter="destroy"
+          @keydown.space="destroy"
         >
           Confirm
         </div>
