@@ -3,7 +3,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
 import { IProviderActivate, TuffItem, TuffSearchResult } from '@talex-touch/utils'
-import { IActivatedProvider, IUseSearch } from '../types'
+import { IUseSearch } from '../types'
 
 export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   const searchVal = ref('')
@@ -11,7 +11,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   const res = ref<Array<TuffItem>>([])
   const searchResult = ref<TuffSearchResult | null>(null)
   const loading = ref(false)
-  const activatedProviders = ref<IActivatedProvider[]>([])
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
@@ -119,16 +118,19 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       // Deactivate all if no ID is provided
       const newState = await touchChannel.send('core-box:deactivate-providers')
       activeActivations.value = newState
+      await handleSearch()
       return
     }
 
     const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
     activeActivations.value = newState
+    await handleSearch()
   }
 
   async function deactivateAllProviders(): Promise<void> {
     const newState = await touchChannel.send('core-box:deactivate-providers')
     activeActivations.value = newState
+    await handleSearch()
   }
 
   function handleExit(): void {
@@ -196,67 +198,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // 2. Watch for searchVal or mode changes to trigger the search
   watch([searchVal], handleSearch)
 
-  // Create a computed property that generates a stable, unique key representing the activation state.
-  const activationKey = computed(() => {
-    if (!activeActivations.value || activeActivations.value.length === 0) {
-      return ''
-    }
-    return activeActivations.value
-      .map((a) => {
-        if (a.id === 'plugin-features' && a.meta?.pluginName) {
-          return `${a.id}:${a.meta.pluginName}`
-        }
-        return a.id
-      })
-      .sort()
-      .join(',')
-  })
-
-  // Watch the computed key instead of the raw array. This prevents the watcher
-  // from firing when the array object changes but its content does not.
-  watch(
-    activationKey,
-    async (newKey) => {
-      if (!newKey) {
-        activatedProviders.value = []
-        return
-      }
-
-      // We still use the original activeActivations.value to get the data
-      const currentActivations = activeActivations.value || []
-      const providerIdsToFetch: string[] = []
-      const constructedPluginProviders: IActivatedProvider[] = []
-
-      currentActivations.forEach((activation) => {
-        if (activation.id === 'plugin-features' && activation.meta?.pluginName) {
-          constructedPluginProviders.push({
-            uniqueId: `${activation.id}:${activation.meta.pluginName}`,
-            name: activation.meta.pluginName,
-            icon: activation.meta.pluginIcon
-          })
-        } else {
-          providerIdsToFetch.push(activation.id)
-        }
-      })
-
-      let fetchedProviderDetails: IActivatedProvider[] = []
-      if (providerIdsToFetch.length > 0) {
-        const details: { id: string; name: string; icon: any }[] =
-          (await touchChannel.send('core-box:get-provider-details', {
-            providerIds: providerIdsToFetch
-          })) || []
-
-        fetchedProviderDetails = details.map((d) => ({
-          uniqueId: d.id,
-          name: d.name,
-          icon: d.icon
-        }))
-      }
-
-      activatedProviders.value = [...constructedPluginProviders, ...fetchedProviderDetails]
-    },
-    { immediate: true }
-  )
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 
@@ -329,10 +270,11 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     res,
     loading,
     activeItem,
-    activatedProviders,
+    activeActivations,
     handleSearch,
     handleExecute,
     handleExit,
-    deactivateProvider
+    deactivateProvider,
+    deactivateAllProviders
   }
 }

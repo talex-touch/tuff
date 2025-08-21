@@ -33,7 +33,7 @@ const {
   select,
   res,
   activeItem,
-  activatedProviders,
+  activeActivations,
   handleExecute,
   handleExit,
   deactivateProvider
@@ -97,8 +97,7 @@ const addon = computed(() => {
 
   <div class="CoreBox" @paste="handlePaste">
     <PrefixPart
-      :providers="activatedProviders"
-      :feature="boxOptions.data?.feature"
+      :providers="activeActivations"
       @close="handleExit"
       @deactivate-provider="deactivateProvider"
     />

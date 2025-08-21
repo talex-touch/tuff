@@ -1,16 +1,9 @@
-import {
-  IProviderActivate,
-  ISearchEngine,
-  ISearchProvider,
-  TuffItem,
-  TuffQuery,
-  TuffSearchResult
-} from './types'
+import { ISearchEngine, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from './types'
+import { IProviderActivate } from '@talex-touch/utils'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
-import { fileProvider } from '../addon/files/file-provider'
 import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'

@@ -1,9 +1,9 @@
 import { SearchEngineCore } from '../search-engine/search-core'
-import { IProviderActivate, TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
+import { TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
+import { IProviderActivate } from '@talex-touch/utils'
 import { windowManager } from './window'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
-import { genPluginManager } from '../../../plugins/plugin-core'
 
 export class CoreBoxManager {
   searchEngine: SearchEngineCore
@@ -38,7 +38,7 @@ export class CoreBoxManager {
     return this._show
   }
 
-  public trigger(show: boolean) {
+  public trigger(show: boolean): void {
     if (Date.now() - this.lastTrigger < 200) return
     this.lastTrigger = Date.now()
 
@@ -56,17 +56,17 @@ export class CoreBoxManager {
     }
   }
 
-  public expand(length: number) {
+  public expand(length: number): void {
     this._expand = length
     windowManager.expand(length)
   }
 
-  public shrink() {
+  public shrink(): void {
     this._expand = 0
     windowManager.shrink()
   }
 
-  public async search(query: TuffQuery) {
+  public async search(query: TuffQuery): Promise<TuffSearchResult | null> {
     try {
       return await this.searchEngine.search(query)
     } catch (error) {
@@ -100,26 +100,9 @@ export class CoreBoxManager {
       this.searchEngine.recordExecute(searchResult.sessionId, item)
     }
 
-    const shouldActivate = await provider.onExecute({ item, searchResult })
+    const activation = await provider.onExecute({ item, searchResult })
 
-    if (shouldActivate) {
-      let activation: IProviderActivate
-      if (provider.id === 'plugin-features' && item.meta?.extension?.pluginName) {
-        // For the adapter, create a rich activation object from the item's meta
-        const plugin = genPluginManager().plugins.get(item.meta.extension.pluginName)
-        activation = {
-          id: provider.id,
-          meta: {
-            pluginName: item.meta.extension.pluginName,
-            pluginIcon: plugin?.icon,
-            featureId: item.meta.extension.featureId
-          }
-        }
-      } else {
-        // For regular providers, create a simple activation object
-        activation = { id: provider.id }
-      }
-
+    if (activation) {
       this.searchEngine.activateProviders([activation])
       return this.searchEngine.getActivationState()
     }

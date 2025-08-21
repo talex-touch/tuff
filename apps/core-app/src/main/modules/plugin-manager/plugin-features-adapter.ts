@@ -12,6 +12,7 @@ import {
   TuffSearchResult,
   TuffSourceType
 } from '../box-tool/search-engine/types'
+import { IProviderActivate } from '@talex-touch/utils'
 import { genPluginManager, TouchPlugin } from '../../plugins/plugin-core'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../box-tool/search-engine/search-core'
@@ -88,7 +89,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
   public readonly type: TuffSourceType = 'plugin'
   public readonly name = 'Plugin Features'
 
-  public async onExecute(args: IExecuteArgs): Promise<boolean> {
+  public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
 
     // If `defaultAction` exists, it's an "Action Item" for a plugin to handle.
@@ -98,7 +99,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         console.error(
           '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
         )
-        return false
+        return null
       }
 
       const pluginManager = genPluginManager()
@@ -110,12 +111,12 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         )
         await plugin.pluginLifecycle.onItemAction(item)
         // Simple actions should not activate a provider.
-        return false
+        return null
       } else {
         console.warn(
           `[PluginFeaturesAdapter] Plugin ${pluginName} has defaultAction but no onItemAction handler.`
         )
-        return false
+        return null
       }
     }
 
@@ -133,14 +134,14 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         '[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.',
         item
       )
-      return false
+      return null
     }
 
     const pluginManager = genPluginManager()
     const plugin = pluginManager.plugins.get(pluginName)
     if (!plugin) {
       console.error(`[PluginFeaturesAdapter] Plugin not found: ${pluginName}`)
-      return false
+      return null
     }
 
     const feature = plugin.getFeature(featureId)
@@ -148,11 +149,24 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       console.error(
         `[PluginFeaturesAdapter] Feature not found: ${featureId} in plugin ${pluginName}`
       )
-      return false
+      return null
     }
 
     plugin.triggerFeature(feature, args.searchResult?.query.text)
-    return feature.push
+
+    if (feature.push) {
+      return {
+        id: this.id,
+        meta: {
+          pluginName,
+          featureId,
+          pluginIcon: plugin.icon,
+          feature: item
+        }
+      }
+    }
+
+    return null
   }
 
   private createTuffItem(plugin: ITouchPlugin, feature: IPluginFeature): TuffItem {
