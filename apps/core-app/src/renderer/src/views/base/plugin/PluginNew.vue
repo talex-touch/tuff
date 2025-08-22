@@ -155,9 +155,15 @@ async function handleInstallDegit(): Promise<void> {
 <template>
   <FormTemplate>
     <template #header>
-      <div flex items-center>
-        <div i-ri-arrow-left-s-line mr-2 text-2xl cursor-pointer hover:opacity-75 @click="emits('close')" />
-        <p font-extrabold text-2xl>New Plugin</p>
+      <div text-2xl flex items-center>
+        <div
+          i-ri-arrow-left-s-line
+          mr-2
+          cursor-pointer
+          hover:opacity-75
+          @click="emits('close')"
+        />
+        <p font-extrabold>New Plugin</p>
       </div>
       <span block text="base" op-75 font-normal>Create a new plugin.</span>
     </template>
@@ -165,7 +171,7 @@ async function handleInstallDegit(): Promise<void> {
     <BlockTemplate :disabled="envOptions.degit?.type !== 'success'">
       <template #title>
         Templates
-        <span>
+        <span ml-2>
           <span v-if="envOptions.node?.type === 'success'" color="green-2">
             <span relative top=".5" inline-block i-ri-nodejs-fill />{{
               envOptions.node?.version?.join('.')
