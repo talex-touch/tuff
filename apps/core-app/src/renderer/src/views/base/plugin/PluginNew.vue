@@ -17,15 +17,10 @@ import { popperMention } from '~/modules/mention/dialog-mention'
 import { createVNode } from 'vue'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
 
-// Reactive references
-const arrow = ref()
-
-// Inject toggle function from parent component
-const toggleNewPlugin: any = inject('toggleNewPlugin')
+const emits = defineEmits(['close'])
 
 // Lifecycle hook to initialize component
 onMounted(() => {
-  toggleNewPlugin(arrow.value)
   envCheck()
 })
 
@@ -88,38 +83,37 @@ const envOptions = reactive<EnvOptions>({})
  * Check environment requirements for plugin creation
  */
 async function envCheck(): Promise<void> {
-  const res = undefined // await getNpmVersion()
-  if (!res) {
-    envOptions.node = {
-      msg: 'Cannot find node.js, please install it first.',
-      type: 'error'
-    }
-    return
-  }
-
-  // Check if Node.js version is not less than 8
-  const nodeVersion = res.split('.').map(Number)
-  if (nodeVersion[0] < 8) {
-    envOptions.node = {
-      msg: 'Node.js version is too low, please upgrade it to 8 or higher.',
-      type: 'error'
-    }
-    return
-  }
-
-  envOptions.node = {
-    type: 'success',
-    version: nodeVersion
-  }
-
-  const degit = undefined //await checkGlobalPackageExist("degit")
-  if (!degit) {
-    envOptions.degit = {
-      msg: 'Cannot find degit, please install it first.',
-      type: 'error'
-    }
-    return
-  }
+  // const res = undefined // await getNpmVersion()
+  // if (!res) {
+  //   envOptions.node = {
+  //     msg: 'Cannot find node.js, please install it first.',
+  //     type: 'error'
+  //   }
+  //   return
+  // }
+  // // Check if Node.js version is not less than 8
+  // if (res) {
+  //   const nodeVersion = res.split('.').map(Number)
+  //   if (nodeVersion[0] < 8) {
+  //     envOptions.node = {
+  // }
+  //     msg: 'Node.js version is too low, please upgrade it to 8 or higher.',
+  //     type: 'error'
+  //   }
+  //   return
+  // }
+  // envOptions.node = {
+  //   type: 'success',
+  //   version: nodeVersion
+  // }
+  // const degit = undefined //await checkGlobalPackageExist("degit")
+  // if (!degit) {
+  //   envOptions.degit = {
+  //     msg: 'Cannot find degit, please install it first.',
+  //     type: 'error'
+  //   }
+  //   return
+  // }
 }
 
 /**
@@ -159,17 +153,11 @@ async function handleInstallDegit(): Promise<void> {
 </script>
 
 <template>
-  <FormTemplate content-style="width: calc(100% - 5rem);height: calc(100% - 10rem)">
+  <FormTemplate>
     <template #header>
-      <div items-center flex>
-        <div
-          ref="arrow"
-          px-1
-          op-0
-          class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic"
-          @click="toggleNewPlugin"
-        />
-        <p my-4 font-extrabold text-2xl>New Plugin</p>
+      <div flex items-center>
+        <div i-ri-arrow-left-s-line mr-2 text-2xl cursor-pointer hover:opacity-75 @click="emits('close')" />
+        <p font-extrabold text-2xl>New Plugin</p>
       </div>
       <span block text="base" op-75 font-normal>Create a new plugin.</span>
     </template>

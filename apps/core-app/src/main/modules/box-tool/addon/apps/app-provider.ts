@@ -19,6 +19,8 @@ import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
 import { eq, inArray, sql } from 'drizzle-orm'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
+import { sleep } from '@talex-touch/utils'
+import { createRetrier } from '@talex-touch/utils/common/utils/time'
 
 interface ScannedAppInfo {
   name: string
@@ -239,6 +241,7 @@ class AppProvider implements ISearchProvider {
 
         if (size1 === size2) {
           console.log(`[AppProvider] Item ${itemPath} is stable.`)
+          await sleep(1000)
           return true
         }
         console.log(`[AppProvider] Item ${itemPath} is still changing size. Retrying...`)
@@ -277,7 +280,13 @@ class AppProvider implements ISearchProvider {
         return
       }
 
-      const appInfo = await this.getAppInfoByPath(appPath)
+      const retrier = createRetrier({
+        maxRetries: 5,
+        onRetry(attempt, error) {
+          console.log(`[AppProvider] Retrying getAppInfoByPath for ${appPath} (attempt ${attempt}):`, error)
+        }
+      })
+      const appInfo = await retrier(async () => this.getAppInfoByPath(appPath))()
       if (!appInfo) {
         console.warn(`[AppProvider] Could not get app info for stable path: ${appPath}`)
         return
@@ -354,7 +363,7 @@ class AppProvider implements ISearchProvider {
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult } = args
-    const { sessionId } = searchResult
+    const sessionId = searchResult?.sessionId
 
     if (sessionId) {
       // Fire-and-forget usage recording

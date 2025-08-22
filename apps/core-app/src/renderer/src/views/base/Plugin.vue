@@ -1,17 +1,18 @@
 <template>
-  <div
-    class="relative flex w-full h-full transition-cubic overflow-hidden"
-    :class="{ 'blur-children': toggleOptions.status }"
-  >
+  <div class="relative flex w-full h-full transition-cubic overflow-hidden">
     <!-- Plugin List Sidebar -->
     <div
       class="relative w-76 h-full border-r border-[var(--el-border-color-lighter)] flex flex-col transition-all duration-300 ease-out"
     >
-      <PluginList :plugins="[...plugins]" @select="selectPlugin" />
+      <PluginList
+        :plugins="[...plugins]"
+        @select="selectPlugin"
+        @add-plugin="drawerVisible = true"
+      />
 
       <!-- Quick Actions -->
       <div
-        class="p-3 mt-auto flex flex-col gap-2 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-lighter)]"
+        class="p-3 mt-auto flex flex-col gap-2 border-t border-[var(--el-border-color-lighter)] fake-background"
       >
         <FlatButton
           class="action-btn folder-btn text-sm"
@@ -58,53 +59,32 @@
       </div>
     </div>
 
-    <!-- New Plugin Overlay -->
-    <div
-      class="absolute top-0 left-0 rounded-lg border border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color)] backdrop-blur-20px"
-      :style="toggleOptions.style"
-    >
-      <div
-        id="floating-plus"
-        :style="`z-index: 100;--x: ${toggleOptions.x}px;--y: ${toggleOptions.y}px`"
-        :class="{ active: toggleOptions.status }"
-        class="floating-add-btn"
-        title="Create new plugin"
-        @click="toggleNewPlugin"
-      />
-      <PluginNew class="-mt-9" />
-    </div>
+    <!-- New Plugin Drawer -->
+    <el-drawer v-model="drawerVisible" direction="ltr" size="100%" :with-header="false">
+      <PluginNew @close="drawerVisible = false" />
+    </el-drawer>
   </div>
 </template>
 
 <script lang="ts" name="Plugin" setup>
+import { ref, watch, computed, nextTick } from 'vue'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 import PluginList from '@comp/plugin/layout/PluginList.vue'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import PluginNew from './plugin/PluginNew.vue'
-import { computePosition } from '@floating-ui/vue'
-import { useDebounceFn } from '@vueuse/core'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { usePluginStore } from '~/modules/adapter/plugin-adapter/store'
 import { storeToRefs } from 'pinia'
-
-interface ToggleOptions {
-  points: Array<{ x: number; y: number }>
-  x: number
-  y: number
-  status: boolean
-  state: boolean
-  style: ComputedRef<string>
-}
+import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { useDebounceFn } from '@vueuse/core'
 
 const pluginStore = usePluginStore()
 const { plugins: pluginMap, activePlugin } = storeToRefs(pluginStore)
 const plugins = computed(() => [...pluginMap.value.values()])
 const pluginInfoRef = ref<HTMLElement>()
 const select = ref<string>()
-const curSelect = ref<Plugin | null>(null)
-
-console.log(plugins)
+const curSelect = ref<any>()
+const drawerVisible = ref(false)
 
 const touchSdk = useTouchSDK()
 
@@ -113,8 +93,6 @@ const loadingStates = ref({
   openFolder: false,
   selectPlugin: false
 })
-
-// Status mapping for better maintainability (removed since moved to PluginInfo.vue)
 
 // Watch for plugin selection changes with debouncing
 const updateSelectedPlugin = useDebounceFn(() => {
@@ -156,7 +134,7 @@ async function selectPlugin(index: string): Promise<void> {
     style.transform = 'translateX(100%) perspective(100px) rotateY(10deg) scale(.85)'
 
     await sleep(50)
-    select.value = ''
+    select.value = undefined
     await sleep(10)
     select.value = index
     activePlugin.value = index
@@ -173,7 +151,6 @@ async function selectPlugin(index: string): Promise<void> {
   }
 }
 
-// Plugin action handlers with improved error handling and individual loading states
 async function handleOpenPluginFolder(): Promise<void> {
   if (loadingStates.value.openFolder) return
 
@@ -187,104 +164,65 @@ async function handleOpenPluginFolder(): Promise<void> {
     loadingStates.value.openFolder = false
   }
 }
-
-// New plugin overlay toggle logic with better typing
-const toggleOptions = reactive<ToggleOptions>({
-  points: [],
-  x: 0,
-  y: 0,
-  status: false,
-  state: true,
-  style: computed(() => {
-    const [a, b, c, d] = toggleOptions.points
-
-    if (!a || !b || !c || !d) return 'display: none;'
-
-    return `
-      clip-path: polygon(${a.x}% ${a.y}%, ${b.x}% ${b.y}%, ${c.x}% ${c.y}%, ${d.x}% ${d.y}%);
-      --fake-opacity: .75;
-      width: 100%; height: 100%; z-index: 1;
-      transition: clip-path .35s cubic-bezier(0.4, 0, 0.2, 1), opacity .5s ease;
-    `
-  })
-})
-
-const toggleNewPlugin = (() => {
-  let status = true
-  let _ele: HTMLElement | undefined
-
-  return async (ele?: HTMLElement) => {
-    if (ele) {
-      _ele = ele
-      return
-    }
-
-    const floatingPlus = document.getElementById('floating-plus')
-    if (!floatingPlus) return
-
-    status = !status
-    toggleOptions.status = status
-
-    setTimeout(() => {
-      toggleOptions.state = status
-    }, 500)
-
-    if (status) {
-      if (!_ele) return
-      const floating = await computePosition(_ele, floatingPlus as HTMLElement)
-
-      toggleOptions.x = floating.x
-      toggleOptions.y = floating.y + 8
-
-      toggleOptions.points = [
-        { x: 0, y: 0 },
-        { x: 100, y: 0 },
-        { x: 100, y: 100 },
-        { x: 0, y: 100 }
-      ]
-    } else {
-      const el = document.getElementById('newPluginBtn')
-      if (!el) return
-
-      const floating = await computePosition(el, floatingPlus as HTMLElement)
-
-      toggleOptions.x = floating.x
-      toggleOptions.y = floating.y
-
-      const ww =
-        window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
-      const wh =
-        window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
-      const { width, height } = el.getBoundingClientRect()
-
-      const l = floating.x + width
-      const t = floating.y - height
-
-      const [a, b, c, d] = [l / ww, l / ww, (t + height) / wh, (t + height) / wh]
-
-      toggleOptions.points = [
-        { x: a * 100, y: c * 100 },
-        { x: b * 100, y: c * 100 },
-        { x: b * 100, y: d * 100 },
-        { x: a * 100, y: d * 100 }
-      ]
-    }
-  }
-})()
-
-provide('toggleNewPlugin', toggleNewPlugin)
-
-onMounted(() => {
-  setTimeout(toggleNewPlugin, 200)
-})
-
-window.addEventListener('resize', () => {
-  toggleNewPlugin()
-  setTimeout(toggleNewPlugin, 5)
-})
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+:deep(.new-plus) {
+  &:before,
+  &:after {
+    content: '';
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    width: 2px;
+    height: 50%;
+
+    filter: invert(1);
+    transform: translate(-50%, -50%);
+    background-color: var(--el-bg-color);
+    transition: all 0.75s 0.5s;
+  }
+
+  &:after {
+    width: 50%;
+    height: 2px;
+  }
+
+  &:hover {
+    opacity: 0.5;
+  }
+
+  &.active {
+    &:before {
+      height: 40%;
+      transform: translate(-50%, -50%) translateY(-4px) rotate(45deg);
+    }
+
+    &:after {
+      width: 40%;
+      transform: translate(-50%, -50%) translateY(4px) rotate(45deg);
+    }
+  }
+
+  .state & {
+    opacity: 1;
+  }
+
+  position: relative;
+
+  width: 32px;
+  height: 32px;
+
+  cursor: pointer;
+  transition:
+    transform 0.5s,
+    opacity 0s;
+
+  transform: translate(var(--x), calc(var(--y) - 100%));
+}
+
 .blur-children .plugin-sidebar,
 .blur-children .plugin-info-panel {
   filter: blur(4px);

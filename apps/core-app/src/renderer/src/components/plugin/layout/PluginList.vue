@@ -21,16 +21,17 @@
     </PluginListModule>
 
     <div class="PluginList-Add transition-cubic fake-background">
-      <div id="newPluginBtn" class="new-plus" @click="() => toggleNewPlugin()" />
+      <div id="newPluginBtn" class="new-plus" @click="() => emits('add-plugin')" />
     </div>
   </el-scrollbar>
 </template>
 
 <script lang="ts" name="PluginList" setup>
+import { ref, computed, watch } from 'vue'
 import PluginListModule from '@comp/plugin/layout/PluginListModule.vue'
 
 const props = defineProps(['plugins'])
-const emits = defineEmits(['select'])
+const emits = defineEmits(['select', 'add-plugin'])
 const target = ref(-1)
 const searchQuery = ref('')
 
@@ -67,12 +68,6 @@ watch(
   () => target.value,
   () => emits('select', target.value)
 )
-
-function search() {
-  return []
-}
-
-const toggleNewPlugin = inject('toggleNewPlugin')
 </script>
 
 <style lang="scss" scoped>
