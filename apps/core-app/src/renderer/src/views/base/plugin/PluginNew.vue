@@ -12,7 +12,7 @@ import TCheckBox from '@comp/base/checkbox/TCheckBox.vue'
 
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { touchChannel } from '~/modules/channel/channel-core'
-// import { getNpmVersion } from '@talex-touch/utils/electron/env-tool'
+import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import { createVNode } from 'vue'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
@@ -21,6 +21,7 @@ const emits = defineEmits(['close'])
 
 // Lifecycle hook to initialize component
 onMounted(() => {
+  EnvDetector.init(touchChannel)
   envCheck()
 })
 
@@ -83,37 +84,39 @@ const envOptions = reactive<EnvOptions>({})
  * Check environment requirements for plugin creation
  */
 async function envCheck(): Promise<void> {
-  // const res = undefined // await getNpmVersion()
-  // if (!res) {
-  //   envOptions.node = {
-  //     msg: 'Cannot find node.js, please install it first.',
-  //     type: 'error'
-  //   }
-  //   return
-  // }
-  // // Check if Node.js version is not less than 8
-  // if (res) {
-  //   const nodeVersion = res.split('.').map(Number)
-  //   if (nodeVersion[0] < 8) {
-  //     envOptions.node = {
-  // }
-  //     msg: 'Node.js version is too low, please upgrade it to 8 or higher.',
-  //     type: 'error'
-  //   }
-  //   return
-  // }
-  // envOptions.node = {
-  //   type: 'success',
-  //   version: nodeVersion
-  // }
-  // const degit = undefined //await checkGlobalPackageExist("degit")
-  // if (!degit) {
-  //   envOptions.degit = {
-  //     msg: 'Cannot find degit, please install it first.',
-  //     type: 'error'
-  //   }
-  //   return
-  // }
+  const nodeVersion = await EnvDetector.getNode()
+  if (nodeVersion) {
+    const versionParts = nodeVersion.split('.').map(Number)
+    if (versionParts[0] < 16) {
+      envOptions.node = {
+        msg: `Node.js version is too low (v${nodeVersion}), please upgrade it to 16 or higher.`,
+        type: 'error'
+      }
+    } else {
+      envOptions.node = {
+        type: 'success',
+        version: versionParts
+      }
+    }
+  } else {
+    envOptions.node = {
+      msg: 'Cannot find node.js, please install it first.',
+      type: 'error'
+    }
+  }
+
+  const degitExists = await EnvDetector.getDegit()
+  if (degitExists) {
+    envOptions.degit = {
+      type: 'success',
+      version: 'installed'
+    }
+  } else {
+    envOptions.degit = {
+      msg: 'Cannot find degit, please install it first.',
+      type: 'error'
+    }
+  }
 }
 
 /**

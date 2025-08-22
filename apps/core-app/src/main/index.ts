@@ -18,6 +18,7 @@ import DatabaseModule from './modules/database'
 import FileSystemWatcher from './modules/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import FileProtocolModule from './modules/file-protocol'
+import TerminalManager from './modules/terminal/terminal.manager'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -50,6 +51,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(Clipboard)
   await app.moduleManager.loadModule(FileSystemWatcher)
   await app.moduleManager.loadModule(FileProtocolModule)
+  await app.moduleManager.loadModule(TerminalManager)
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 

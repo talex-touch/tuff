@@ -17,7 +17,7 @@ import fs from 'fs'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions } from '../../../../db/schema'
-import { eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
 import { sleep } from '@talex-touch/utils'
 import { createRetrier } from '@talex-touch/utils/common/utils/time'
@@ -162,6 +162,20 @@ class AppProvider implements ISearchProvider {
     if (toUpdate.length > 0) {
       console.log(`[AppProvider] Updating ${toUpdate.length} apps.`)
       for (const { fileId, app } of toUpdate) {
+        // Check if there's already a record with the same path (but different ID)
+        const conflictingRecord = await db
+          .select()
+          .from(filesSchema)
+          .where(and(eq(filesSchema.path, app.path), ne(filesSchema.id, fileId)))
+          .limit(1)
+        
+        if (conflictingRecord.length > 0) {
+          // If there's a conflict, delete the conflicting record first
+          console.log(`[AppProvider] Resolving conflict for path ${app.path} by deleting conflicting record ID ${conflictingRecord[0].id}`)
+          await db.delete(filesSchema).where(eq(filesSchema.id, conflictingRecord[0].id))
+          await db.delete(fileExtensions).where(eq(fileExtensions.fileId, conflictingRecord[0].id))
+        }
+
         await db
           .update(filesSchema)
           .set({
@@ -286,7 +300,7 @@ class AppProvider implements ISearchProvider {
           console.log(`[AppProvider] Retrying getAppInfoByPath for ${appPath} (attempt ${attempt}):`, error)
         }
       })
-      const appInfo = await retrier(async () => this.getAppInfoByPath(appPath))()
+      const appInfo = await retrier(async () => this.getAppInfoByPath(appPath))() as ScannedAppInfo | null
       if (!appInfo) {
         console.warn(`[AppProvider] Could not get app info for stable path: ${appPath}`)
         return
