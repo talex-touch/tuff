@@ -124,15 +124,13 @@ const loadingStates = ref({
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
-const hasErrors = computed(() => props.plugin.issues?.some(issue => issue.type === 'error'))
+const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
 const tabItems = computed(() => {
   const defaultSlots = slots.default?.() || []
-  return defaultSlots.filter(
-    (vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem'
-  )
+  return defaultSlots.filter((vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem')
 })
 
 watchEffect(() => {
@@ -177,14 +175,7 @@ async function handleOpenPluginFolder(): Promise<void> {
 </script>
 
 <style lang="scss" scoped>
-@property --angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
 .plugin-info-root.has-error-glow {
-  &::before,
   &::after {
     content: '';
     position: absolute;
@@ -192,26 +183,12 @@ async function handleOpenPluginFolder(): Promise<void> {
     border-radius: 0.5rem; /* match parent */
     pointer-events: none;
   }
-
-  &::before {
-    border: 2px solid rgba(239, 68, 68, 0.5);
-    z-index: 9;
-  }
-
   &::after {
-    background: conic-gradient(
-      from var(--angle),
-      rgba(239, 68, 68, 1),
-      rgba(239, 68, 68, 0.3),
-      rgba(239, 68, 68, 1)
-    );
-    animation: spin 3s linear infinite;
+    pointer-events: none;
+    animation: spin 1s linear infinite;
     z-index: 10;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    padding: 2px; /* IMPORTANT: Must match the border width of ::before */
+    border: 1px solid rgba(239, 68, 68, 1);
+    border-radius: 2px 2px 8px 2px;
   }
 }
 
@@ -220,11 +197,14 @@ async function handleOpenPluginFolder(): Promise<void> {
 }
 
 @keyframes spin {
-  from {
-    --angle: 0deg;
+  0%,
+  100% {
+    border-width: 5px;
+    filter: blur(5px);
   }
-  to {
-    --angle: 360deg;
+  50% {
+    border-width: 2px;
+    filter: blur(2px);
   }
 }
 </style>
