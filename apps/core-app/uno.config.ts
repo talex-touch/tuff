@@ -5,6 +5,8 @@ import presetIcons from '@unocss/preset-icons'
 import type { Theme } from 'unocss/preset-uno'
 import presetTheme from 'unocss-preset-theme'
 import transformerAttributifyJsx from '@unocss/transformer-attributify-jsx'
+import ri from '@iconify-json/ri/icons.json'
+import simpleIcons from '@iconify-json/simple-icons/icons.json'
 
 export default defineConfig({
   theme: {
@@ -23,8 +25,8 @@ export default defineConfig({
     presetAttributify(),
     presetIcons({
       collections: {
-        ri: () => import('@iconify-json/ri/icons.json').then((i) => i.default),
-        'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then((i) => i.default)
+        ri: ri as any,
+        'simple-icons': simpleIcons as any
       }
     })
     // presetTheme<Theme>({

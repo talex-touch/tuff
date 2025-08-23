@@ -1,7 +1,10 @@
+
 <template>
   <div class="TvTabItem-Container" :class="{ active: isActive, disabled }">
     <div class="TvTabs-Tab-Icon">
-      <remix-icon :name="icon" />
+      <slot name="icon">
+        <remix-icon v-if="icon" :name="icon" />
+      </slot>
     </div>
     <div class="TvTabs-Tab-Name">{{ name }}</div>
   </div>
@@ -14,7 +17,7 @@ import { computed } from 'vue'
 const props = defineProps({
   icon: {
     type: String,
-    required: true
+    default: ''
   },
   name: {
     type: String,

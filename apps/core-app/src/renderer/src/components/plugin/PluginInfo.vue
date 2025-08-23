@@ -61,8 +61,8 @@
 
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">
-      <TvTabs v-model="activeTab">
-        <TvTabItem icon="dashboard" name="Overview">
+      <TvTabs v-model="tabsModel">
+        <TvTabItem icon="dashboard-line" name="Overview">
           <PluginOverview :plugin="plugin" />
         </TvTabItem>
         <TvTabItem v-if="hasIssues" name="Issues">
@@ -74,16 +74,16 @@
           </template>
           <PluginIssues :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="function" name="Features">
+        <TvTabItem icon="function-line" name="Features">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="database" name="Storage(Mock)">
+        <TvTabItem icon="database-2-line" name="Storage(Mock)">
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="file-text" name="Logs(Mock)">
+        <TvTabItem icon="file-text-line" name="Logs(Mock)">
           <PluginLogs :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="information" name="Details">
+        <TvTabItem icon="information-line" name="Details">
           <PluginDetails :plugin="plugin" />
         </TvTabItem>
       </TvTabs>
@@ -92,7 +92,7 @@
 </template>
 
 <script lang="ts" name="PluginInfo" setup>
-import { ref, computed, watchEffect } from 'vue'
+import { ref, computed, watchEffect, useSlots, VNode } from 'vue'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import FlatButton from '../base/button/FlatButton.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
@@ -116,7 +116,7 @@ const props = defineProps<{
 const touchSdk = useTouchSDK()
 
 // Tabs state
-const activeTab = ref('Overview')
+const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 
 // Loading states
 const loadingStates = ref({
@@ -124,11 +124,25 @@ const loadingStates = ref({
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
-const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
+const hasErrors = computed(() => props.plugin.issues?.some(issue => issue.type === 'error'))
+
+// Watch for errors and auto-select the 'Issues' tab
+const slots = useSlots()
+const tabItems = computed(() => {
+  const defaultSlots = slots.default?.() || []
+  return defaultSlots.filter(
+    (vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem'
+  )
+})
 
 watchEffect(() => {
   if (hasErrors.value) {
-    activeTab.value = 'Issues'
+    const issuesTabIndex = tabItems.value.findIndex(
+      (vnode: VNode) => vnode.props?.name === 'Issues'
+    )
+    if (issuesTabIndex !== -1) {
+      tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
+    }
   }
 })
 
@@ -163,6 +177,12 @@ async function handleOpenPluginFolder(): Promise<void> {
 </script>
 
 <style lang="scss" scoped>
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
 .plugin-info-root.has-error-glow {
   &::before,
   &::after {
@@ -173,12 +193,25 @@ async function handleOpenPluginFolder(): Promise<void> {
     pointer-events: none;
   }
 
+  &::before {
+    border: 2px solid rgba(239, 68, 68, 0.5);
+    z-index: 9;
+  }
+
   &::after {
-    pointer-events: none;
-    animation: spin 1s linear infinite;
+    background: conic-gradient(
+      from var(--angle),
+      rgba(239, 68, 68, 1),
+      rgba(239, 68, 68, 0.3),
+      rgba(239, 68, 68, 1)
+    );
+    animation: spin 3s linear infinite;
     z-index: 10;
-    border: 1px solid rgba(239, 68, 68, 1);
-    border-radius: 4px 8px 8px 4px;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 2px; /* IMPORTANT: Must match the border width of ::before */
   }
 }
 
@@ -187,14 +220,11 @@ async function handleOpenPluginFolder(): Promise<void> {
 }
 
 @keyframes spin {
-  0%,
-  100% {
-    border-width: 5px;
-    filter: blur(5px);
+  from {
+    --angle: 0deg;
   }
-  50% {
-    border-width: 1px;
-    filter: blur(0px);
+  to {
+    --angle: 360deg;
   }
 }
 </style>
