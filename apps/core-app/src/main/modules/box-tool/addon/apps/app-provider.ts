@@ -21,6 +21,9 @@ import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
 import { sleep } from '@talex-touch/utils'
 import { createRetrier } from '@talex-touch/utils/common/utils/time'
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { ConfigKeys } from '@talex-touch/utils/common/storage'
+import { config as configSchema } from '../../../../db/schema'
 
 interface ScannedAppInfo {
   name: string
@@ -54,10 +57,14 @@ class AppProvider implements ISearchProvider {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     if (!this.isInitializing) {
       this.isInitializing = this._initialize()
+      await this.isInitializing
     }
+
     this._subscribeToFSEvents()
     this._registerWatchPaths()
-    await this.isInitializing
+
+    // Schedule the comprehensive scan
+    this._scheduleComprehensiveScan()
   }
 
   async onDestroy(): Promise<void> {
@@ -168,7 +175,7 @@ class AppProvider implements ISearchProvider {
           .from(filesSchema)
           .where(and(eq(filesSchema.path, app.path), ne(filesSchema.id, fileId)))
           .limit(1)
-        
+
         if (conflictingRecord.length > 0) {
           // If there's a conflict, delete the conflicting record first
           console.log(`[AppProvider] Resolving conflict for path ${app.path} by deleting conflicting record ID ${conflictingRecord[0].id}`)
@@ -206,8 +213,16 @@ class AppProvider implements ISearchProvider {
     }
 
     console.log(
-      `[AppProvider] Initialization complete. Added: ${toAdd.length}, Updated: ${toUpdate.length}, Deleted: ${toDeleteIds.length}`
+      `[AppProvider] Quick scan complete. Added: ${toAdd.length}, Updated: ${toUpdate.length}, Deleted: ${toDeleteIds.length}`
     )
+
+    // Also trigger a comprehensive scan during initialization to ensure completeness from the start.
+    if (this.isMac) {
+      console.log('[AppProvider] Triggering initial comprehensive scan...')
+      await this._runComprehensiveScan()
+      await this._setLastScanTime(Date.now())
+      console.log('[AppProvider] Initial comprehensive scan finished.')
+    }
   }
 
   private _subscribeToFSEvents(): void {
@@ -647,6 +662,176 @@ class AppProvider implements ISearchProvider {
       console.error(`[AppProvider] Failed to get app info for ${filePath}:`, error)
       return null
     }
+  }
+
+  // --- Comprehensive Scan Logic ---
+
+  private _scheduleComprehensiveScan(): void {
+    // Run once shortly after startup, then on a regular schedule.
+    this._triggerComprehensiveScanIfNeeded()
+
+    pollingService.register(
+      'app-provider-comprehensive-scan',
+      () => this._triggerComprehensiveScanIfNeeded(),
+      { interval: 1, unit: 'hours' }
+    )
+  }
+
+  private async _triggerComprehensiveScanIfNeeded(): Promise<void> {
+    const lastScanTimestamp = await this._getLastScanTime()
+    const oneDay = 24 * 60 * 60 * 1000
+
+    if (!lastScanTimestamp || (Date.now() - lastScanTimestamp > oneDay)) {
+      console.log('[AppProvider] Triggering comprehensive app scan...')
+      try {
+        await this._runComprehensiveScan()
+        await this._setLastScanTime(Date.now())
+        console.log('[AppProvider] Comprehensive app scan finished successfully.')
+      } catch (error) {
+        console.error('[AppProvider] Comprehensive app scan failed:', error)
+      }
+    } else {
+      // console.log('[AppProvider] Skipping comprehensive scan, last scan was recent enough.')
+    }
+  }
+
+  private async _runComprehensiveScan(): Promise<void> {
+    if (process.platform !== 'darwin' || !this.dbUtils) {
+      return
+    }
+
+    const { getAppsViaMdfind } = await import('./darwin')
+    const scannedApps = await getAppsViaMdfind()
+    const scannedAppsMap = new Map(scannedApps.map(app => [app.uniqueId, app]))
+
+    const dbApps = await this.dbUtils.getFilesByType('app')
+    const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
+    const dbAppsMap = new Map(
+      dbAppsWithExtensions.map(app => {
+        const uniqueId = app.extensions.bundleId || app.path
+        return [uniqueId, app]
+      })
+    )
+
+    const toAdd: ScannedAppInfo[] = []
+    const toUpdate: { fileId: number; app: ScannedAppInfo }[] = []
+
+    for (const [uniqueId, scannedApp] of scannedAppsMap.entries()) {
+      const dbApp = dbAppsMap.get(uniqueId)
+      if (!dbApp) {
+        toAdd.push(scannedApp)
+      } else {
+        if (scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime()) {
+          toUpdate.push({ fileId: dbApp.id, app: scannedApp })
+        }
+      }
+    }
+
+    // Deletion logic: find apps in DB that are not in the comprehensive scan result
+    const toDeleteIds: number[] = []
+    for (const [uniqueId, dbApp] of dbAppsMap.entries()) {
+      if (!scannedAppsMap.has(uniqueId)) {
+        toDeleteIds.push(dbApp.id)
+      }
+    }
+
+    if (toAdd.length === 0 && toUpdate.length === 0 && toDeleteIds.length === 0) {
+      console.log('[AppProvider] Comprehensive scan found no changes.')
+      return
+    }
+
+    console.log(`[AppProvider] Comprehensive scan results: ${toAdd.length} new, ${toUpdate.length} updated, ${toDeleteIds.length} to delete.`)
+
+    const db = this.dbUtils.getDb()
+
+    if (toAdd.length > 0) {
+      const newFileRecords = toAdd.map(app => ({
+        path: app.path,
+        name: app.name,
+        type: 'app' as const,
+        mtime: app.lastModified,
+        ctime: new Date(),
+      }))
+
+      const upsertedFiles = await db
+        .insert(filesSchema)
+        .values(newFileRecords)
+        .onConflictDoUpdate({
+          target: filesSchema.path,
+          set: {
+            name: sql`excluded.name`,
+            mtime: sql`excluded.mtime`,
+          },
+        })
+        .returning()
+
+      const extensionsToUpsert = upsertedFiles.flatMap(upsertedFile => {
+        const app = scannedApps.find(a => a.path === upsertedFile.path)
+        if (!app) return []
+        const extensions: { fileId: number; key: string; value: string }[] = []
+        if (app.bundleId) extensions.push({ fileId: upsertedFile.id, key: 'bundleId', value: app.bundleId })
+        if (app.icon) extensions.push({ fileId: upsertedFile.id, key: 'icon', value: app.icon })
+        return extensions
+      })
+
+      if (extensionsToUpsert.length > 0) {
+        await this.dbUtils.addFileExtensions(extensionsToUpsert)
+      }
+    }
+
+    if (toUpdate.length > 0) {
+      for (const { fileId, app } of toUpdate) {
+        const conflictingRecord = await db
+          .select()
+          .from(filesSchema)
+          .where(and(eq(filesSchema.path, app.path), ne(filesSchema.id, fileId)))
+          .limit(1)
+
+        if (conflictingRecord.length > 0) {
+          await db.delete(filesSchema).where(eq(filesSchema.id, conflictingRecord[0].id))
+          await db.delete(fileExtensions).where(eq(fileExtensions.fileId, conflictingRecord[0].id))
+        }
+
+        await db
+          .update(filesSchema)
+          .set({
+            name: app.name,
+            path: app.path,
+            mtime: app.lastModified,
+          })
+          .where(eq(filesSchema.id, fileId))
+
+        const extensions: { fileId: number; key: string; value: string }[] = []
+        if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
+        if (app.icon) extensions.push({ fileId, key: 'icon', value: app.icon })
+        if (extensions.length > 0) {
+          await this.dbUtils.addFileExtensions(extensions)
+        }
+      }
+    }
+  }
+
+  private async _getLastScanTime(): Promise<number | null> {
+    if (!this.dbUtils) return null
+    const db = this.dbUtils.getDb()
+    const result = await db.select().from(configSchema).where(eq(configSchema.key, ConfigKeys.APP_PROVIDER_LAST_MDFIND_SCAN)).limit(1)
+
+    if (result.length > 0 && result[0].value) {
+      return parseInt(result[0].value, 10)
+    }
+    return null
+  }
+
+  private async _setLastScanTime(timestamp: number): Promise<void> {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+
+    await db.insert(configSchema)
+      .values({ key: ConfigKeys.APP_PROVIDER_LAST_MDFIND_SCAN, value: timestamp.toString() })
+      .onConflictDoUpdate({
+        target: configSchema.key,
+        set: { value: timestamp.toString() }
+      })
   }
 }
 

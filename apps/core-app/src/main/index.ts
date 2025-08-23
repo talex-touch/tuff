@@ -19,6 +19,7 @@ import FileSystemWatcher from './modules/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import FileProtocolModule from './modules/file-protocol'
 import TerminalManager from './modules/terminal/terminal.manager'
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -54,6 +55,9 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(TerminalManager)
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
+
+  // Start the global polling service after all modules are loaded.
+  pollingService.start()
 
   console.log('[TouchApp] All modules loaded.')
 })
