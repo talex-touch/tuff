@@ -26,21 +26,14 @@ function getUniqueKey(provider: IProviderActivate): string {
       :key="getUniqueKey(provider)"
       class="activated-provider-pill"
     >
-      <div class="Activated-Provider-PillBorder">
-        <svg xmlns="http://www.w3.org/2000/svg" class="pill-border-svg">
-          <rect class="border-bg" x="1" y="1" rx="12" />
-          <rect class="border-main" x="1" y="1" rx="12" />
-        </svg>
-      </div>
-
-      <div class="Activated-Provider-PillMajor fake-background">
+      <div class="Activated-Provider-PillMajor">
         <PluginIcon
           :icon="provider.icon || provider.meta?.pluginIcon"
           :alt="provider.name || provider.meta?.pluginName"
         />
         <span>{{ provider.name || provider.meta?.pluginName || provider.id }}</span>
       </div>
-      <div class="Activated-Provider-PillVice fake-background">
+      <div class="Activated-Provider-PillVice">
         <span v-if="provider.meta?.feature">{{ provider.meta.feature.render?.basic?.title }}</span>
         <RemixIcon
           cursor-pointer
@@ -110,55 +103,8 @@ function getUniqueKey(provider: IProviderActivate): string {
   align-items: center;
   font-size: 0.8rem;
   white-space: nowrap;
-}
-
-.Activated-Provider-PillBorder {
-  z-index: -1;
-  position: absolute;
-  inset: 0;
-  opacity: 0.25;
-  transform: scale(1.025);
   border-radius: 12px;
-
-  .pill-border-svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-  }
-
-  .border-bg,
-  .border-main {
-    width: calc(100% - 2px);
-    height: calc(100% - 2px);
-    fill: transparent;
-    stroke-width: 2;
-  }
-
-  .border-bg {
-    stroke: rgba(255, 255, 255, 0.1);
-  }
-
-  .border-main {
-    stroke: var(--el-color-primary);
-    stroke-linecap: round;
-    // 1st value: dash length. 2nd value: gap length.
-    // To prevent overlap, the gap must be >= the path length (~350).
-    stroke-dasharray: 200 250;
-    animation: cometScroll 3s linear infinite;
-    filter: drop-shadow(0 0 5px var(--el-color-primary));
-    transition: all 0.3s ease;
-  }
-}
-
-@keyframes cometScroll {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    // Animate by the total pattern length (100 + 350 = 450) for a seamless loop.
-    stroke-dashoffset: -450;
-  }
+  border: 1px solid var(--el-color-primary-light-5);
+  overflow: hidden;
 }
 </style>
