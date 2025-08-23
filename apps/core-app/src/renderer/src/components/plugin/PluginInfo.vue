@@ -1,5 +1,8 @@
 <template>
-  <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+  <div
+    class="plugin-info-root h-full flex flex-col bg-gray-50 dark:bg-gray-900 relative"
+    :class="{ 'has-error-glow': hasErrors }"
+  >
     <!-- Plugin Header -->
     <div
       class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
@@ -13,12 +16,7 @@
           </div>
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
-            :class="{
-              'bg-green-500': statusClass === 'status-active',
-              'bg-yellow-500': statusClass === 'status-disabled',
-              'bg-red-500': statusClass === 'status-error',
-              'bg-gray-400': statusClass === 'status-inactive'
-            }"
+            :class="statusClass.indicator"
           />
         </div>
 
@@ -63,9 +61,18 @@
 
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">
-      <TvTabs v-model="tabsModel">
+      <TvTabs v-model="activeTab">
         <TvTabItem icon="dashboard" name="Overview">
           <PluginOverview :plugin="plugin" />
+        </TvTabItem>
+        <TvTabItem v-if="hasIssues" name="Issues">
+          <template #icon>
+            <i
+              class="i-ri-error-warning-fill"
+              :class="{ 'text-red-500': hasErrors, 'text-yellow-500': !hasErrors }"
+            />
+          </template>
+          <PluginIssues :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="function" name="Features">
           <PluginFeatures :plugin="plugin" />
@@ -85,6 +92,8 @@
 </template>
 
 <script lang="ts" name="PluginInfo" setup>
+import { ref, computed, watchEffect } from 'vue'
+import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import FlatButton from '../base/button/FlatButton.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import TvTabs from '@comp/tabs/vertical/TvTabs.vue'
@@ -94,6 +103,7 @@ import PluginFeatures from './tabs/PluginFeatures.vue'
 import PluginStorage from './tabs/PluginStorage.vue'
 import PluginLogs from './tabs/PluginLogs.vue'
 import PluginDetails from './tabs/PluginDetails.vue'
+import PluginIssues from './tabs/PluginIssues.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 
@@ -106,24 +116,35 @@ const props = defineProps<{
 const touchSdk = useTouchSDK()
 
 // Tabs state
-const tabsModel = ref({ 1: 'Overview' })
+const activeTab = ref('Overview')
 
 // Loading states
 const loadingStates = ref({
   openFolder: false
 })
 
+const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
+const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
+
+watchEffect(() => {
+  if (hasErrors.value) {
+    activeTab.value = 'Issues'
+  }
+})
+
 // Status mapping
 const statusMap = {
-  enabled: { class: 'status-active', icon: 'i-ri-play-circle-line', text: 'Enabled' },
-  active: { class: 'status-active', icon: 'i-ri-play-circle-line', text: 'Active' },
-  disabled: { class: 'status-disabled', icon: 'i-ri-pause-circle-line', text: 'Disabled' },
-  crashed: { class: 'status-error', icon: 'i-ri-error-warning-line', text: 'Crashed' }
-} as const
+  [EPluginStatus.ACTIVE]: { indicator: 'bg-green-500' },
+  [EPluginStatus.ENABLED]: { indicator: 'bg-green-500' },
+  [EPluginStatus.DISABLED]: { indicator: 'bg-yellow-500' },
+  [EPluginStatus.CRASHED]: { indicator: 'bg-red-500' },
+  [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
+  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' }
+}
 
 const statusClass = computed(() => {
-  if (!props.plugin) return 'status-inactive'
-  return statusMap[props.plugin.status]?.class || 'status-inactive'
+  if (!props.plugin) return { indicator: 'bg-gray-400' }
+  return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
 })
 
 // Action handlers
@@ -142,16 +163,38 @@ async function handleOpenPluginFolder(): Promise<void> {
 </script>
 
 <style lang="scss" scoped>
+.plugin-info-root.has-error-glow {
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 0.5rem; /* match parent */
+    pointer-events: none;
+  }
+
+  &::after {
+    pointer-events: none;
+    animation: spin 1s linear infinite;
+    z-index: 10;
+    border: 1px solid rgba(239, 68, 68, 1);
+    border-radius: 4px 8px 8px 4px;
+  }
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
+  0%,
+  100% {
+    border-width: 5px;
+    filter: blur(5px);
   }
-  to {
-    transform: rotate(360deg);
+  50% {
+    border-width: 1px;
+    filter: blur(0px);
   }
 }
 </style>

@@ -57,6 +57,7 @@ declare module 'vue' {
     PluginFeatures: typeof import('./src/components/plugin/tabs/PluginFeatures.vue')['default']
     PluginIcon: typeof import('./src/components/plugin/PluginIcon.vue')['default']
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
+    PluginIssues: typeof import('./src/components/plugin/tabs/PluginIssues.vue')['default']
     PluginItem: typeof import('./src/components/plugin/PluginItem.vue')['default']
     PluginList: typeof import('./src/components/plugin/layout/PluginList.vue')['default']
     PluginListModule: typeof import('./src/components/plugin/layout/PluginListModule.vue')['default']
