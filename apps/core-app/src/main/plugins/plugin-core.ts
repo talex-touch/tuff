@@ -31,7 +31,6 @@ import { getJs, getStyles } from '../utils/plugin-injection'
 import chokidar, { FSWatcher } from 'chokidar'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BrowserWindow, dialog, shell, clipboard, app } from 'electron'
-import { exec } from 'child_process'
 import axios from 'axios'
 import type { TuffItem } from '@talex-touch/utils'
 import { getCoreBoxWindow } from '../modules/box-tool/core-box'
@@ -621,7 +620,16 @@ class PluginManager implements IPluginManager {
   }
 
   hasPlugin(name: string): boolean {
-    return this.plugins.has(name)
+    return !!this.getPluginByName(name)
+  }
+
+  getPluginByName(name: string): ITouchPlugin | undefined {
+    for (const plugin of this.plugins.values()) {
+      if (plugin.name === name) {
+        return plugin
+      }
+    }
+    return undefined
   }
 
   __init__(): void {
@@ -1089,17 +1097,29 @@ export default {
     // )
 
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:explorer', async ({ data }) => {
-      const plugin = pluginManager!.plugins.get(data) as TouchPlugin
-      if (!plugin) return console.error('[PluginManager] Error open plugin in explorer', data)
+      const plugin = (pluginManager as PluginManager).getPluginByName(data) as TouchPlugin
+      if (!plugin) {
+        console.error(
+          `[PluginManager] Error opening plugin folder: Plugin with name '${data}' not found.`
+        )
+        return
+      }
 
       const pluginPath = plugin.pluginPath
 
-      exec(`explorer ${pluginPath}`, (err: any) => {
+      try {
+        const err = await shell.openPath(pluginPath)
         if (err) {
-          console.error(err)
-          return
+          console.error(
+            `[PluginManager] Error opening plugin folder for '${data}' at path '${pluginPath}': ${err}`
+          )
         }
-      })
+      } catch (error) {
+        console.error(
+          `[PluginManager] Exception while opening plugin folder for '${data}' at path '${pluginPath}':`,
+          error
+        )
+      }
     })
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
