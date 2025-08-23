@@ -36,11 +36,13 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
 
 export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} CoreBox`,
+  type: 'panel',
   frame: false,
   minWidth: 720,
   minHeight: 60,
   movable: false,
   resizable: false,
+  focusable: false,
   skipTaskbar: true,
   autoHideMenuBar: true,
   show: false,

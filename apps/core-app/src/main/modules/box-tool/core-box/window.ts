@@ -46,6 +46,9 @@ export class WindowManager {
   public async create(): Promise<TouchWindow> {
     const window = new TouchWindow({ ...BoxWindowOption })
 
+    window.window.setVisibleOnAllWorkspaces(true)
+    window.window.setAlwaysOnTop(true, 'floating')
+
     windowAnimation.changeWindow(window)
 
     setTimeout(async () => {
@@ -149,7 +152,7 @@ export class WindowManager {
     if (!window) return
 
     this.updatePosition(window)
-    window.window.show()
+    window.window.showInactive()
     setTimeout(() => {
       window.window.focus()
     }, 100)
@@ -159,10 +162,11 @@ export class WindowManager {
     const window = this.current
     if (!window) return
 
-    window.window.setPosition(-1000000, -1000000)
+    if (process.platform !== 'darwin') {
+      window.window.setPosition(-1000000, -1000000)
+    }
 
     setTimeout(() => {
-      this.shrink()
       window.window.hide()
     }, 100)
   }
