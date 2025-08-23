@@ -116,8 +116,9 @@ export interface IFeatureLifeCycle {
    * @param id - Feature ID
    * @param data - The triggering payload
    * @param feature - The full feature definition
+   * @param signal - An AbortSignal to cancel the operation
    */
-  onFeatureTriggered(id: string, data: any, feature: IPluginFeature): void
+  onFeatureTriggered(id: string, data: any, feature: IPluginFeature, signal?: AbortSignal): void
 
   /**
    * Called when user input changes within this feature’s input box.

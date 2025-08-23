@@ -158,6 +158,7 @@ export class TouchPlugin implements ITouchPlugin {
     string,
     ITargetFeatureLifeCycle[]
   >()
+  private featureControllers: Map<string, AbortController> = new Map()
 
   _status: PluginStatus = PluginStatus.DISABLED
 
@@ -245,7 +246,14 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   triggerFeature(feature: IPluginFeature, query: any): void {
-    this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
+    if (this.featureControllers.has(feature.id)) {
+      this.featureControllers.get(feature.id)?.abort()
+    }
+
+    const controller = new AbortController()
+    this.featureControllers.set(feature.id, controller)
+
+    this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
 
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
   }

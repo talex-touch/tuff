@@ -14,6 +14,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
+  const debounceMs = computed(() => {
+    return activeActivations.value && activeActivations.value.length > 0 ? 350 : 100
+  })
+
   const debouncedSearch = useDebounceFn(async () => {
     boxOptions.focus = 0
     loading.value = true
@@ -56,7 +60,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       loading.value = false
     }
     // Do not set loading to false here; wait for the `search-end` event.
-  }, 100)
+  }, debounceMs)
 
   async function handleSearch(): Promise<void> {
     debouncedSearch()
