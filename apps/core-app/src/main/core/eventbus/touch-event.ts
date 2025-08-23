@@ -27,8 +27,13 @@ export enum TalexEvents {
   FILE_CHANGED = 'file-system/file-changed',
   FILE_UNLINKED = 'file-system/file-unlinked',
   DIRECTORY_ADDED = 'file-system/directory-added',
-  DIRECTORY_UNLINKED = 'file-system/directory-unlinked'
+  DIRECTORY_UNLINKED = 'file-system/directory-unlinked',
+
+  // Plugin Log Event
+  PLUGIN_LOG_APPEND = 'plugin/log-append'
 }
+
+import { LogItem } from '@talex-touch/utils/plugin/log/types'
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
   handler: EventHandler
@@ -287,6 +292,15 @@ export class DirectoryUnlinkedEvent implements ITouchEvent<TalexEvents> {
 
   constructor(filePath: string) {
     this.filePath = filePath
+  }
+}
+
+export class PluginLogAppendEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PLUGIN_LOG_APPEND
+  log: LogItem
+
+  constructor(log: LogItem) {
+    this.log = log
   }
 }
 

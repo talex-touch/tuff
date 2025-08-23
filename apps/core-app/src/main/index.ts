@@ -6,6 +6,7 @@ import CommonChannel from './channel/common'
 import PluginModule from './plugins/plugin-core'
 import PermissionCenter from './modules/permission-center'
 import ServiceCenter from './service/service-center'
+import PluginLogService from './service/plugin-log.service'
 import CoreBox from './modules/box-tool/core-box/index'
 
 import addonOpener from './modules/addon-opener'
@@ -43,6 +44,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(PluginModule)
   await app.moduleManager.loadModule(PermissionCenter)
   await app.moduleManager.loadModule(ServiceCenter)
+  await app.moduleManager.loadModule(PluginLogService)
 
   await app.moduleManager.loadModule(CoreBox)
   await app.moduleManager.loadModule(TrayHolder)

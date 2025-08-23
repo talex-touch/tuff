@@ -29,7 +29,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchApp, TouchWindow } from '../core/touch-core'
 import { getJs, getStyles } from '../utils/plugin-injection'
 import chokidar, { FSWatcher } from 'chokidar'
-import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BrowserWindow, dialog, shell, clipboard, app } from 'electron'
 import axios from 'axios'
 import type { TuffItem } from '@talex-touch/utils'
@@ -72,7 +72,6 @@ class PluginIcon implements IPluginIcon {
         return
       }
       const iconPath = path.resolve(this.rootPath, this._value)
-      console.log(iconPath)
       if (!(await fse.pathExists(iconPath))) {
         this._value = 'error'
         this.value = 'Cannot find target icon.'
@@ -279,7 +278,12 @@ export class TouchPlugin implements ITouchPlugin {
     this.features = []
     this.issues = []
 
-    this.logger = new PluginLogger(name, new PluginLoggerManager(this.pluginPath, this))
+    this.logger = new PluginLogger(
+      name,
+      new PluginLoggerManager(this.pluginPath, this, (log) => {
+        touchEventBus.emit(TalexEvents.PLUGIN_LOG_APPEND, new PluginLogAppendEvent(log))
+      })
+    )
   }
 
   async enable(): Promise<boolean> {

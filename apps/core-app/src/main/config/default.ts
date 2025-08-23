@@ -42,7 +42,6 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
   minHeight: 60,
   movable: false,
   resizable: false,
-  focusable: false,
   skipTaskbar: true,
   autoHideMenuBar: true,
   show: false,

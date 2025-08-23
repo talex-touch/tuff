@@ -31,27 +31,26 @@ const term = new Terminal({
   lineHeight: 1
 })
 
-watchEffect(() => {
-  const array = props.logs
-  if (!array || array.length < 1) return
+watch(
+  () => props.logs,
+  (newLogs, oldLogs) => {
+    if (!term || !newLogs) {
+      return
+    }
+    // If the logs array is cleared, clear the terminal
+    if (newLogs.length === 0 && oldLogs && oldLogs.length > 0) {
+      term.clear()
+      return
+    }
 
-  const last = array[array.length - 1]
-
-  // for(let i = logArray.length - 1; i < props.logs.length; i++) {
-  //   logArray.push(props.logs[i])
-  //
-  //   term.write(props.logs[i])
-  // }
-
-  // term.clear()
-
-  // props.logs.forEach(log => {
-  //   term.writeln(log)
-  // })
-
-  // write last
-  term.writeln(last)
-})
+    // Find the new logs that were added
+    const newEntries = newLogs.slice(oldLogs?.length ?? 0)
+    newEntries.forEach((log) => {
+      term.writeln(log)
+    })
+  },
+  { deep: true }
+)
 
 onMounted(() => {
   term.open(terminal.value)
@@ -75,7 +74,6 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .LogTerminal-Container {
-  padding: 5px;
   box-sizing: border-box;
   :deep(.xterm-viewport) {
     background-color: #00000011 !important;

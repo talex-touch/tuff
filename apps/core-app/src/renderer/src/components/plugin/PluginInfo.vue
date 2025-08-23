@@ -43,17 +43,17 @@
         </div>
       </div>
 
-      <FlatButton
-        class="h-10 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center transition-colors disabled:opacity-50"
-        :disabled="loadingStates.openFolder"
-        @click="handleOpenPluginFolder"
-      >
-        <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line text-lg" />
-        <i v-else class="i-ri-loader-4-line text-lg animate-spin" />
-        <span class="block text-sm">{{
-          loadingStates.openFolder ? 'Opening...' : 'Open Folder'
-        }}</span>
-      </FlatButton>
+      <div class="flex items-center gap-2">
+        <FlatButton class="action-button" @click="openHistoryDrawer">
+          <i class="i-ri-history-line" />
+          <span>历史记录</span>
+        </FlatButton>
+        <FlatButton class="action-button" :disabled="loadingStates.openFolder" @click="handleOpenPluginFolder">
+          <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
+          <i v-else class="i-ri-loader-4-line animate-spin" />
+          <span>{{ loadingStates.openFolder ? 'Opening...' : 'Open Folder' }}</span>
+        </FlatButton>
+      </div>
     </div>
 
     <!-- Status Section -->
@@ -80,8 +80,8 @@
         <TvTabItem icon="database-2-line" name="Storage(Mock)">
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="file-text-line" name="Logs(Mock)">
-          <PluginLogs :plugin="plugin" />
+        <TvTabItem icon="file-text-line" name="Logs">
+          <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="information-line" name="Details">
           <PluginDetails :plugin="plugin" />
@@ -114,6 +114,7 @@ const props = defineProps<{
 
 // SDK and state
 const touchSdk = useTouchSDK()
+const pluginLogsRef = ref<InstanceType<typeof PluginLogs> | null>(null)
 
 // Tabs state
 const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
@@ -159,6 +160,10 @@ const statusClass = computed(() => {
   return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
 })
 
+const openHistoryDrawer = (): void => {
+  pluginLogsRef.value?.openHistoryDrawer()
+}
+
 // Action handlers
 async function handleOpenPluginFolder(): Promise<void> {
   if (!props.plugin || loadingStates.value.openFolder) return
@@ -175,6 +180,18 @@ async function handleOpenPluginFolder(): Promise<void> {
 </script>
 
 <style lang="scss" scoped>
+.action-button :deep(.FlatButton-Container) {
+  @apply h-10 px-3 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center gap-2 transition-colors;
+}
+
+.action-button :deep(.FlatButton-Container i) {
+  @apply text-lg;
+}
+
+.action-button :deep(.FlatButton-Container:disabled) {
+  @apply opacity-50 cursor-not-allowed;
+}
+
 .plugin-info-root.has-error-glow {
   &::after {
     content: '';

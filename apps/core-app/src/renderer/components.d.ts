@@ -80,6 +80,7 @@ declare module 'vue' {
     TBottomDialog: typeof import('./src/components/base/dialog/TBottomDialog.vue')['default']
     TCheckBox: typeof import('./src/components/base/checkbox/TCheckBox.vue')['default']
     TDialogMention: typeof import('./src/components/base/dialog/TDialogMention.vue')['default']
+    TDrawer: typeof import('./src/components/base/dialog/TDrawer.vue')['default']
     TerminalTemplate: typeof import('./src/components/addon/TerminalTemplate.vue')['default']
     TextPreview: typeof import('./src/components/render/addon/preview/TextPreview.vue')['default']
     TGroupBlock: typeof import('./src/components/base/group/TGroupBlock.vue')['default']
