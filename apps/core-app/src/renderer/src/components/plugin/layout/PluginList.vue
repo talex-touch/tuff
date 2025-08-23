@@ -1,5 +1,5 @@
 <template>
-  <el-scrollbar v-if="plugins" class="PluginList-Container cubic-transition">
+  <TouchScroll v-if="plugins" class="PluginList-Container cubic-transition">
     <div class="PluginList-Toolbox w-full">
       <div class="search-wrapper">
         <i class="i-ri-search-line search-icon" />
@@ -23,14 +23,16 @@
     <div class="PluginList-Add transition-cubic fake-background">
       <div id="newPluginBtn" class="new-plus" @click="() => emits('add-plugin')" />
     </div>
-  </el-scrollbar>
+  </TouchScroll>
 </template>
 
 <script lang="ts" name="PluginList" setup>
-import { ref, computed, watch } from 'vue'
 import PluginListModule from '@comp/plugin/layout/PluginListModule.vue'
+import { ITouchPlugin } from '@talex-touch/utils'
 
-const props = defineProps(['plugins'])
+const props = defineProps<{
+  plugins: ITouchPlugin[]
+}>()
 const emits = defineEmits(['select', 'add-plugin'])
 const target = ref(-1)
 const searchQuery = ref('')

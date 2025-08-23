@@ -9,7 +9,8 @@ import {
   IFeatureLifeCycle,
   type IPluginFeature,
   type ITargetFeatureLifeCycle,
-  type IFeatureCommand
+  type IFeatureCommand,
+  type PluginIssue
 } from '@talex-touch/utils/plugin'
 import {
   WebContentsProperty,
@@ -150,6 +151,7 @@ export class TouchPlugin implements ITouchPlugin {
   webview: IPluginWebview = {}
   platforms: IPlatform
   features: PluginFeature[]
+  issues: PluginIssue[]
 
   pluginPath: string
 
@@ -180,7 +182,8 @@ export class TouchPlugin implements ITouchPlugin {
       webview: this.webview,
       status: this.status,
       platforms: this.platforms,
-      features: this.features.map((feature) => feature.toJSONObject())
+      features: this.features.map((feature) => feature.toJSONObject()),
+      issues: this.issues
     }
   }
 
@@ -275,11 +278,16 @@ export class TouchPlugin implements ITouchPlugin {
     this.pluginPath = pluginPath
     this.platforms = platforms
     this.features = []
+    this.issues = []
 
     this.logger = new PluginLogger(name, new PluginLoggerManager(this.pluginPath, this))
   }
 
   async enable(): Promise<boolean> {
+    if (this.status === PluginStatus.LOAD_FAILED) {
+      this.logger.warn('Attempted to enable a plugin that failed to load.')
+      return Promise.resolve(false)
+    }
     if (
       this.status !== PluginStatus.DISABLED &&
       this.status !== PluginStatus.LOADED &&
@@ -344,8 +352,15 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   async disable(): Promise<boolean> {
-    if (this.status !== PluginStatus.ENABLED && this.status !== PluginStatus.ACTIVE)
+    const stoppableStates = [
+      PluginStatus.ENABLED,
+      PluginStatus.ACTIVE,
+      PluginStatus.CRASHED,
+      PluginStatus.LOAD_FAILED
+    ]
+    if (!stoppableStates.includes(this.status)) {
       return Promise.resolve(false)
+    }
 
     this.status = PluginStatus.DISABLING
     console.log('[Plugin] Disabling plugin ' + this.name)
@@ -752,109 +767,188 @@ class PluginManager implements IPluginManager {
     const pluginPath = path.resolve(this.pluginPath, pluginName)
     const manifestPath = path.resolve(pluginPath, 'manifest.json')
 
+    // Create a placeholder plugin instance first.
+    const placeholderIcon = new PluginIcon(pluginPath, 'error', 'loading')
+    const touchPlugin = new TouchPlugin(
+      pluginName,
+      placeholderIcon,
+      '0.0.0',
+      'Loading...',
+      '',
+      { enable: false, address: '' },
+      pluginPath
+    )
+
     if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
-      console.warn(
-        '[PluginManager] IGNORE | The plugin ' +
-          pluginName +
-          " isn't loaded because it's not a valid plugin."
-      )
-      return Promise.resolve(false)
+      touchPlugin.issues.push({
+        type: 'error',
+        message: 'Plugin directory or manifest.json is missing.',
+        source: 'filesystem'
+      })
+      touchPlugin.status = PluginStatus.LOAD_FAILED
+      this.plugins.set(pluginName, touchPlugin)
+      genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
+        plugin: touchPlugin.toJSONObject()
+      })
+      console.warn(`[PluginManager] Plugin ${pluginName} failed to load: Missing manifest.json.`)
+      return Promise.resolve(true)
     }
 
-    const pluginInfo = fse.readJSONSync(manifestPath)
+    let pluginInfo
+    try {
+      pluginInfo = fse.readJSONSync(manifestPath)
+    } catch (error: any) {
+      touchPlugin.issues.push({
+        type: 'error',
+        message: `Failed to parse manifest.json: ${error.message}`,
+        source: 'manifest.json',
+        meta: { error }
+      })
+      touchPlugin.status = PluginStatus.LOAD_FAILED
+      this.plugins.set(pluginName, touchPlugin)
+      genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
+        plugin: touchPlugin.toJSONObject()
+      })
+      console.warn(`[PluginManager] Plugin ${pluginName} failed to load: Invalid manifest.json.`)
+      return Promise.resolve(true)
+    }
+
     if (pluginInfo.name !== pluginName) {
-      console.warn(
-        '[PluginManager] IGNORE | The plugin ' +
-          pluginName +
-          " isn't loaded because it's name not matched."
-      )
-      return Promise.resolve(false)
+      touchPlugin.issues.push({
+        type: 'error',
+        message: `Plugin name in manifest ('${pluginInfo.name}') does not match directory name ('${pluginName}').`,
+        source: 'manifest.json',
+        meta: { expected: pluginName, actual: pluginInfo.name }
+      })
     }
 
-    const readme = ((p) =>
+    // Update plugin instance with manifest info
+    touchPlugin.name = pluginInfo.name || pluginName
+    touchPlugin.version = pluginInfo.version || '0.0.0'
+    touchPlugin.desc = pluginInfo.description || 'No description.'
+    touchPlugin.dev = pluginInfo.dev || { enable: false, address: '' }
+    touchPlugin.platforms = pluginInfo.platforms || {}
+
+    touchPlugin.readme = ((p) =>
       fse.existsSync(p) ? (this.watcher!.add(p), fse.readFileSync(p).toString()) : '')(
       path.resolve(pluginPath, 'README.md')
     )
 
     const icon = new PluginIcon(pluginPath, pluginInfo.icon.type, pluginInfo.icon.value)
-
     await icon.init()
-
-    const touchPlugin = new TouchPlugin(
-      pluginInfo.name,
-      icon,
-      pluginInfo.version,
-      pluginInfo.description,
-      readme,
-      pluginInfo.dev,
-      pluginPath,
-      pluginInfo.platforms
-    )
+    touchPlugin.icon = icon
+    if (icon.type === 'error') {
+      touchPlugin.issues.push({
+        type: 'warning',
+        message: icon.value,
+        source: 'icon'
+      })
+    }
 
     // Read features
     if (pluginInfo.features) {
-      const pendingList = new Array<Promise<any>>()
+      const pendingList: Promise<any>[] = []
 
       ;[...pluginInfo.features].forEach((feature: IPluginFeature) => {
         const pluginFeature = new PluginFeature(pluginPath, feature)
 
-        touchPlugin.addFeature(pluginFeature)
+        if (!touchPlugin.addFeature(pluginFeature)) {
+          touchPlugin.issues.push({
+            type: 'warning',
+            message: `Feature '${feature.name}' could not be added. It might be a duplicate or have an invalid format.`,
+            source: `feature:${feature.id}`,
+            meta: { feature }
+          })
+        }
 
-        pendingList.push(new Promise((resolve) => pluginFeature.icon.init().then(resolve)))
+        pendingList.push(
+          new Promise((resolve) =>
+            pluginFeature.icon.init().then(() => {
+              if (pluginFeature.icon.type === 'error') {
+                touchPlugin.issues.push({
+                  type: 'warning',
+                  message: `Icon for feature '${pluginFeature.name}' failed to load: ${pluginFeature.icon.value}`,
+                  source: `feature:${pluginFeature.id}`
+                })
+              }
+              resolve(true)
+            })
+          )
+        )
       })
 
       await Promise.allSettled(pendingList)
 
-      // 当插件被load的时候就需要自动执行 /index.js 来完成feature注入
       const featureIndex = path.resolve(pluginPath, 'index.js')
-      const featureUtil = touchPlugin.getFeatureUtil()
-      const featureEvent = touchPlugin.getFeatureEventUtil()
-      const featureContext = {
-        plugin: touchPlugin,
-        console: {
-          log: touchPlugin.logger.info,
-          info: touchPlugin.logger.info,
-          warn: touchPlugin.logger.warn,
-          error: touchPlugin.logger.error,
-          debug: touchPlugin.logger.debug
-        },
-        pkg,
-        $util: featureUtil,
-        $event: featureEvent,
-        TuffFactory,
-        TuffUtils,
-        URLSearchParams,
-        TuffItemBuilder: createBuilderWithPluginContext(touchPlugin.name)
+      if (fse.existsSync(featureIndex)) {
+        const featureUtil = touchPlugin.getFeatureUtil()
+        const featureEvent = touchPlugin.getFeatureEventUtil()
+        const featureContext = {
+          plugin: touchPlugin,
+          console: {
+            log: touchPlugin.logger.info,
+            info: touchPlugin.logger.info,
+            warn: touchPlugin.logger.warn,
+            error: touchPlugin.logger.error,
+            debug: touchPlugin.logger.debug
+          },
+          pkg,
+          $util: featureUtil,
+          $event: featureEvent,
+          TuffFactory,
+          TuffUtils,
+          URLSearchParams,
+          TuffItemBuilder: createBuilderWithPluginContext(touchPlugin.name)
+        }
+
+        try {
+          const func = loadPluginFeatureContext(
+            touchPlugin,
+            featureIndex,
+            featureContext
+          ) as IFeatureLifeCycle
+          touchPlugin.pluginLifecycle = func
+        } catch (e: any) {
+          touchPlugin.issues.push({
+            type: 'error',
+            message: `Failed to execute index.js: ${e.message}`,
+            source: 'index.js',
+            meta: { error: e }
+          })
+        }
       }
-
-      const func = loadPluginFeatureContext(
-        touchPlugin,
-        featureIndex,
-        featureContext
-      ) as IFeatureLifeCycle
-      touchPlugin.pluginLifecycle = func
-
-      console.log(
-        `[PluginManager] Plugin ${pluginName} has ${touchPlugin.getFeatures().length} features.`
-      )
-
-      const channel = genTouchChannel()
-      const windows = BrowserWindow.getAllWindows()
-
-      windows.forEach((window) => {
-        channel.sendTo(window, ChannelType.MAIN, 'core-box-updated:features', {}).catch((error) => {
-          console.error(`Failed to notify window ${window.id} about feature updates:`, error)
-        })
-      })
     }
 
-    this.plugins.set(pluginInfo.name, touchPlugin)
+    if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
+      touchPlugin.status = PluginStatus.LOAD_FAILED
+      console.error(
+        `[PluginManager] Plugin ${pluginName} loaded with errors:`,
+        touchPlugin.issues
+      )
+    } else {
+      touchPlugin.status = PluginStatus.DISABLED
+      console.log(
+        `[PluginManager] Plugin ${pluginName} loaded successfully with ${
+          touchPlugin.issues.length
+        } warnings.`
+      )
+    }
+
+    this.plugins.set(pluginName, touchPlugin)
 
     genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
       plugin: touchPlugin.toJSONObject()
     })
-    console.log('[PluginManager] Load plugin ' + pluginName + ' done!')
 
+    const channel = genTouchChannel()
+    const windows = BrowserWindow.getAllWindows()
+    windows.forEach((window) => {
+      channel.sendTo(window, ChannelType.MAIN, 'core-box-updated:features', {}).catch((error) => {
+        console.error(`Failed to notify window ${window.id} about feature updates:`, error)
+      })
+    })
+
+    console.log('[PluginManager] Load plugin ' + pluginName + ' processing done!')
     return Promise.resolve(true)
   }
 

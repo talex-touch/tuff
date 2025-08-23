@@ -12,6 +12,14 @@ export enum PluginStatus {
 
   LOADING,
   LOADED,
+  LOAD_FAILED,
+}
+
+export interface PluginIssue {
+  type: 'error' | 'warning';
+  message: string;
+  source?: string; // e.g., 'manifest.json', 'feature:feature-id', 'icon'
+  meta?: any;
 }
 
 export interface IPluginIcon {
@@ -59,6 +67,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   logger: PluginLogger
   webview: IPluginWebview
   features: IPluginFeature[]
+  issues: PluginIssue[]
 
   addFeature(feature: IPluginFeature): boolean
   delFeature(featureId: string): boolean

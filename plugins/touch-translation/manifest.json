@@ -8,7 +8,7 @@
   },
   "description": "一款全平台资源聚合翻译平台，支持多种翻译服务",
   "dev": {
-    "enable": false,
+    "enable": true,
     "address": "http://127.0.0.1:5174/",
     "source": true
   },

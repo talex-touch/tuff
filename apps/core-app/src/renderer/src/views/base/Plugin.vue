@@ -121,6 +121,8 @@ watch(
   { deep: true }
 )
 
+console.log("plugins", plugins)
+
 // Enhanced plugin selection with smooth animation and error handling
 async function selectPlugin(index: string): Promise<void> {
   if (index === select.value || !pluginInfoRef.value || loadingStates.value.selectPlugin) return
