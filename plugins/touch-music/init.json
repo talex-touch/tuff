@@ -10,7 +10,7 @@
     "signature": "TALEX-TOUCH*AX4ED3SWE987EF1D2S3",
     "dev": {
 	  "enable": true,
-	  "address": "http://127.0.0.1:5174/",
+	  "address": "http://127.0.0.1:3333/",
 	  "source": true
 	}
   }

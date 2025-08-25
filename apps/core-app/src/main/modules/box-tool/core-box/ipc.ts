@@ -4,7 +4,7 @@ import { coreBoxManager } from './manager'
 import searchEngineCore from '../search-engine/search-core'
 import { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import { windowManager } from './window'
-import { genPluginManager } from '../../../plugins/plugin-core'
+import { genPluginManager } from '../../../plugins'
 
 /**
  * @class IpcManager
@@ -145,6 +145,17 @@ export class IpcManager {
         reply(DataCode.SUCCESS, allDetails)
       }
     )
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:enter-ui-mode', ({ data }) => {
+      const { url } = data as { url: string }
+      if (url) {
+        coreBoxManager.enterUIMode(url)
+      }
+    })
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:exit-ui-mode', () => {
+      coreBoxManager.exitUIMode()
+    })
   }
 
   public unregister(): void {

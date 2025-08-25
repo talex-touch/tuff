@@ -3,7 +3,7 @@ import { genTouchApp } from './core/touch-core'
 import { app, protocol, net, session } from 'electron'
 import StorageModule from './core/storage'
 import CommonChannel from './channel/common'
-import PluginModule from './plugins/plugin-core'
+import { PluginManagerModule } from './plugins'
 import PermissionCenter from './modules/permission-center'
 import ServiceCenter from './service/service-center'
 import PluginLogService from './service/plugin-log.service'
@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(StorageModule)
   await app.moduleManager.loadModule(extensionLoader)
   await app.moduleManager.loadModule(CommonChannel)
-  await app.moduleManager.loadModule(PluginModule)
+  await app.moduleManager.loadModule(PluginManagerModule)
   await app.moduleManager.loadModule(PermissionCenter)
   await app.moduleManager.loadModule(ServiceCenter)
   await app.moduleManager.loadModule(PluginLogService)
@@ -62,4 +62,9 @@ app.whenReady().then(async () => {
   pollingService.start()
 
   console.log('[TouchApp] All modules loaded.')
+})
+
+touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
+  console.log('[PollingService] Stopping polling service due to app quit.')
+  pollingService.stop()
 })

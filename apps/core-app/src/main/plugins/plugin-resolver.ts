@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import fse from 'fs-extra'
 import compressing from 'compressing'
-import { genPluginManager } from './plugin-core'
+import { genPluginManager } from '.'
 import { checkDirWithCreate } from '../utils/common-util'
 import { IManifest } from '@talex-touch/utils/plugin'
 

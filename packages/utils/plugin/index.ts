@@ -16,10 +16,13 @@ export enum PluginStatus {
 }
 
 export interface PluginIssue {
-  type: 'error' | 'warning';
-  message: string;
-  source?: string; // e.g., 'manifest.json', 'feature:feature-id', 'icon'
-  meta?: any;
+  type: 'error' | 'warning'
+  message: string
+  source?: string // e.g., 'manifest.json', 'feature:feature-id', 'icon'
+  meta?: any
+  code?: string
+  suggestion?: string
+  timestamp?: number
 }
 
 export interface IPluginIcon {
@@ -54,10 +57,10 @@ export interface IPluginBaseInfo {
 export interface IPluginDev {
   enable: boolean
   address: string
+  source?: boolean
 }
 
-export interface IPluginWebview {
-}
+export type IPluginWebview = Map<number, any>
 
 
 
@@ -97,6 +100,15 @@ export interface IPluginFeature {
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]
+  interaction?: IFeatureInteraction
+}
+
+export type IFeatureInteraction = {
+  type: 'view'
+  /**
+   * The relative path to the html file from the plugin root.
+   */
+  path: string
 }
 
 /**

@@ -1,6 +1,6 @@
 import { TouchApp, TouchWindow, genTouchApp } from '../../../core/touch-core'
 import { BoxWindowOption } from '../../../config/default'
-import { app, screen } from 'electron'
+import { app, screen, BrowserView } from 'electron'
 import path from 'path'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
@@ -21,6 +21,7 @@ export class WindowManager {
   private static instance: WindowManager
   public windows: TouchWindow[] = []
   private _touchApp: TouchApp | null = null
+  private uiView: BrowserView | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -171,13 +172,23 @@ export class WindowManager {
     }, 100)
   }
 
-  public expand(length: number = 100): void {
-    const height = Math.min(length * 48 + 65, 550)
+  public expand(length: number = 100, isUIMode: boolean = false): void {
+    const height = isUIMode ? 600 : Math.min(length * 48 + 65, 550)
 
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, height)
       currentWindow.window.setSize(900, height)
+
+      if (this.uiView) {
+        const bounds = currentWindow.window.getBounds()
+        this.uiView.setBounds({
+          x: 0,
+          y: 60,
+          width: bounds.width,
+          height: bounds.height - 60
+        })
+      }
     } else {
       console.error('[CoreBox] No current window available for expansion')
     }
@@ -186,6 +197,8 @@ export class WindowManager {
   }
 
   public shrink(): void {
+    this.detachUIView()
+
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, 60)
@@ -216,6 +229,42 @@ export class WindowManager {
 
   public getAppSettingConfig(): AppSetting {
     return getConfig(StorageList.APP_SETTING) as AppSetting
+  }
+
+  public attachUIView(url: string): void {
+    const currentWindow = this.current
+    if (!currentWindow) {
+      console.error('[CoreBox] Cannot attach UI view: no window available.')
+      return
+    }
+
+    if (this.uiView) {
+      this.detachUIView()
+    }
+
+    this.uiView = new BrowserView()
+    currentWindow.window.addBrowserView(this.uiView)
+
+    const bounds = currentWindow.window.getBounds()
+    this.uiView.setBounds({
+      x: 0,
+      y: 60,
+      width: bounds.width,
+      height: bounds.height - 60
+    })
+    this.uiView.webContents.loadURL(url)
+  }
+
+  public detachUIView(): void {
+    if (this.uiView) {
+      const currentWindow = this.current
+      if (currentWindow && !currentWindow.window.isDestroyed()) {
+        currentWindow.window.removeBrowserView(this.uiView)
+      }
+      // @ts-ignore
+      this.uiView.webContents.destroy()
+      this.uiView = null
+    }
   }
 }
 

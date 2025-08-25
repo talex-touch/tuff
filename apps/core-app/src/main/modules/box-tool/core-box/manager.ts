@@ -2,6 +2,9 @@ import { SearchEngineCore } from '../search-engine/search-core'
 import { TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { IProviderActivate } from '@talex-touch/utils'
 import { windowManager } from './window'
+import { genPluginManager } from '../../../plugins'
+import { IPluginFeature } from '@talex-touch/utils/plugin'
+import path from 'path'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
 
@@ -11,6 +14,8 @@ export class CoreBoxManager {
   private _show: boolean = false
   private _expand: number = 0
   private lastTrigger: number = -1
+  private isUIMode: boolean = false
+  private uiViewUrl: string | null = null
 
   private constructor() {
     this.searchEngine = SearchEngineCore.getInstance()
@@ -45,7 +50,10 @@ export class CoreBoxManager {
     this._show = show
 
     if (show) {
-      if (!this._expand) {
+      if (this.isUIMode && this.uiViewUrl) {
+        windowManager.attachUIView(this.uiViewUrl)
+        windowManager.expand(0, true)
+      } else if (!this._expand) {
         windowManager.shrink()
       } else {
         windowManager.expand(this._expand)
@@ -64,6 +72,19 @@ export class CoreBoxManager {
   public shrink(): void {
     this._expand = 0
     windowManager.shrink()
+  }
+
+  public enterUIMode(url: string): void {
+    this.isUIMode = true
+    this.uiViewUrl = url
+    this.trigger(true)
+  }
+
+  public exitUIMode(): void {
+    this.isUIMode = false
+    this.uiViewUrl = null
+    windowManager.detachUIView()
+    this.shrink()
   }
 
   public async search(query: TuffQuery): Promise<TuffSearchResult | null> {
@@ -88,6 +109,51 @@ export class CoreBoxManager {
         item
       )
       return null
+    }
+
+    // Handle UI Mode Feature
+    if (item.source.from === 'plugin-features') {
+      const pluginName = item.meta.pluginName
+      const featureId = item.id
+      const plugin = genPluginManager().getPluginByName(pluginName)
+      if (!plugin) {
+        console.error(`[CoreBoxManager] Could not find plugin: ${pluginName}`)
+        return null
+      }
+      const feature = plugin.getFeature(featureId)
+      if (!feature?.interaction || feature.interaction.type !== 'view') {
+        // This case should ideally not happen if the item is well-formed
+        // but it's good practice to check.
+        // We proceed to the default provider execution below.
+      } else {
+        const interactionPath = feature.interaction.path
+        let viewUrl: string
+
+        if (plugin.dev.enable && plugin.dev.source) {
+          // Dev source mode: load from remote dev server
+          viewUrl = new URL(interactionPath, plugin.dev.address).toString()
+        } else {
+          // Production or local dev mode: load from local file system
+          if (interactionPath.includes('..')) {
+            console.error(
+              `[CoreBoxManager] Security Alert: Aborted loading view with invalid path: ${interactionPath}`
+            )
+            plugin.issues.push({
+              type: 'error',
+              code: 'INVALID_VIEW_PATH',
+              message: `Interaction path cannot contain '..'.`,
+              source: `feature:${feature.id}`,
+              timestamp: Date.now()
+            })
+            return null
+          }
+          const viewPath = path.join(plugin.pluginPath, interactionPath)
+          viewUrl = 'file://' + viewPath
+        }
+
+        this.enterUIMode(viewUrl)
+        return null // Stop further execution
+      }
     }
 
     if (!provider.onExecute) {

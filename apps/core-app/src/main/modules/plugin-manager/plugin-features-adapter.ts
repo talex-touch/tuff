@@ -2,7 +2,8 @@ import {
   IFeatureCommand,
   ITouchPlugin,
   IPluginFeature,
-  IPluginIcon
+  IPluginIcon,
+  PluginStatus
 } from '@talex-touch/utils/plugin'
 import {
   IExecuteArgs,
@@ -13,7 +14,7 @@ import {
   TuffSourceType
 } from '../box-tool/search-engine/types'
 import { IProviderActivate } from '@talex-touch/utils'
-import { genPluginManager, TouchPlugin } from '../../plugins/plugin-core'
+import { genPluginManager, TouchPlugin } from '../../plugins'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../box-tool/search-engine/search-core'
 
@@ -139,8 +140,10 @@ export class PluginFeaturesAdapter implements ISearchProvider {
 
     const pluginManager = genPluginManager()
     const plugin = pluginManager.plugins.get(pluginName)
-    if (!plugin) {
-      console.error(`[PluginFeaturesAdapter] Plugin not found: ${pluginName}`)
+    if (!plugin || !this.isPluginActive(plugin)) {
+      console.error(
+        `[PluginFeaturesAdapter] Plugin not found or not active: ${pluginName} (status: ${plugin?.status})`
+      )
       return null
     }
 
@@ -167,6 +170,13 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     }
 
     return null
+  }
+
+  private isPluginActive(plugin: ITouchPlugin): boolean {
+    return true
+
+    // TODO: 插件状态检查
+    // return plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
   }
 
   private createTuffItem(plugin: ITouchPlugin, feature: IPluginFeature): TuffItem {
@@ -224,7 +234,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         const plugin = pluginManager.plugins.get(pluginName) as TouchPlugin
         const feature = plugin?.getFeature(featureId)
 
-        if (plugin && feature) {
+        if (plugin && feature && this.isPluginActive(plugin)) {
           console.debug(
             `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
           )
@@ -256,6 +266,10 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {
         return TuffFactory.createSearchResult(query).build()
+      }
+
+      if (!this.isPluginActive(plugin)) {
+        continue
       }
 
       const features = plugin.getFeatures()

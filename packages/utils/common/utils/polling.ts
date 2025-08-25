@@ -97,6 +97,15 @@ export class PollingService {
   }
 
   /**
+   * Checks if a task is already registered.
+   * @param id - The unique identifier of the task.
+   * @returns - True if the task is registered, false otherwise.
+   */
+  public isRegistered(id: string): boolean {
+    return this.tasks.has(id);
+  }
+
+  /**
    * Starts the polling service.
    * It's safe to call this method multiple times.
    */

@@ -1,6 +1,6 @@
 {
   "id": "com.tuffex.translation",
-  "name": "touch-translation",
+  "name": "touch-translation-inner",
   "version": "1.0.0-Alpha",
   "icon": {
     "type": "file",
@@ -9,7 +9,7 @@
   "description": "一款全平台资源聚合翻译平台，支持多种翻译服务",
   "dev": {
     "enable": true,
-    "address": "http://127.0.0.1:5174/",
+    "address": "http://localhost:3333/",
     "source": true
   },
   "features": [
@@ -29,11 +29,58 @@
       },
       "commands": [
         {
-          "value": "over",
-          "name": "翻译",
-          "key": "control+alt+t"
+          "type": "over",
+          "value": [
+            "fy",
+            "翻译"
+          ]
         }
-      ]
+      ],
+      "interaction": {
+        "type": "view",
+        "path": "index.html"
+      }
+    },
+    {
+      "id": "multi-source-translate",
+      "name": "多源翻译",
+      "desc": "同时使用多个翻译源进行翻译",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "push": true,
+      "platform": { "win32": true, "darwin": true, "linux": true },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["fy-multi", "多源翻译"]
+        }
+      ],
+      "interaction": {
+        "type": "view",
+        "path": "index.html"
+      }
+    },
+    {
+      "id": "ui-mode-tester",
+      "name": "UI模式测试",
+      "desc": "测试UI交互模式",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "push": false,
+      "platform": { "win32": true, "darwin": true, "linux": true },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["ui-test"]
+        }
+      ],
+      "interaction": {
+        "type": "ui-mode"
+      }
     }
   ]
 }

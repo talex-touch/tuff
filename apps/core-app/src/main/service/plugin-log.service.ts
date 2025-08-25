@@ -8,7 +8,7 @@ import {
   ChannelType,
   DataCode
 } from '@talex-touch/utils/channel'
-import { genPluginManager } from '../plugins/plugin-core'
+import { genPluginManager } from '../plugins'
 import fs from 'fs'
 import path from 'path'
 
