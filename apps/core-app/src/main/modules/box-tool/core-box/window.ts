@@ -97,11 +97,16 @@ export class WindowManager {
     })
 
     window.window.on('blur', () => {
-      const settings = this.getAppSettingConfig()
-      if (settings.tools.autoHide) {
-        coreBoxManager.trigger(false)
+      const settings = this.getAppSettingConfig();
+      // Access isUIMode via its public getter
+      console.log(`[CoreBox] Blur event detected. isUIMode: ${coreBoxManager.isUIMode}, autoHide setting: ${settings.tools.autoHide}`);
+      if (settings.tools.autoHide && !coreBoxManager.isUIMode) { // Only auto-hide if not in UI mode
+        console.log('[CoreBox] Auto-hiding CoreBox due to blur event (not in UI mode).');
+        coreBoxManager.trigger(false);
+      } else if (settings.tools.autoHide && coreBoxManager.isUIMode) {
+        console.log('[CoreBox] Blur event ignored in UI mode to prevent unintended hiding.');
       }
-    })
+    });
 
     console.log('[CoreBox] NewBox created, WebContents loaded!')
 

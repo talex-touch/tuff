@@ -11,7 +11,7 @@ export class CoreBoxManager {
   private _show: boolean = false
   private _expand: number = 0
   private lastTrigger: number = -1
-  private isUIMode: boolean = false
+  private _isUIMode: boolean = false // Rename to private property
 
   private constructor() {
     this.searchEngine = SearchEngineCore.getInstance()
@@ -37,6 +37,10 @@ export class CoreBoxManager {
 
   public get showCoreBox(): boolean {
     return this._show
+  }
+
+  public get isUIMode(): boolean { // Public getter for _isUIMode
+    return this._isUIMode;
   }
 
   public trigger(show: boolean): void {
@@ -68,14 +72,14 @@ export class CoreBoxManager {
   }
 
   public enterUIMode(url: string, plugin?: ITouchPlugin): void {
-    this.isUIMode = true
+    this._isUIMode = true // Use private property
     this.expand(10)
     windowManager.attachUIView(url, plugin)
     this.trigger(true)
   }
 
   public exitUIMode(): void {
-    this.isUIMode = false
+    this._isUIMode = false // Use private property
     windowManager.detachUIView()
     this.shrink()
   }
