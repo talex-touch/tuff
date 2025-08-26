@@ -39,6 +39,7 @@ app.whenReady().then(async () => {
 
   await app.moduleManager.loadModule(DatabaseModule)
   await app.moduleManager.loadModule(StorageModule)
+  await app.moduleManager.loadModule(GlobalShortcon)
   await app.moduleManager.loadModule(extensionLoader)
   await app.moduleManager.loadModule(CommonChannel)
   await app.moduleManager.loadModule(PluginManagerModule)
@@ -50,7 +51,6 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(TrayHolder)
   await app.moduleManager.loadModule(addonOpener)
   // await app.moduleManager.loadModule(DropManager)
-  await app.moduleManager.loadModule(GlobalShortcon)
   await app.moduleManager.loadModule(Clipboard)
   await app.moduleManager.loadModule(FileSystemWatcher)
   await app.moduleManager.loadModule(FileProtocolModule)

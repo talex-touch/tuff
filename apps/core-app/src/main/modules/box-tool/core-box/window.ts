@@ -314,7 +314,6 @@ export class WindowManager {
   }
 
   public detachUIView(): void {
-    console.log(`[WindowManager] detachUIView() called. Current uiView: ${!!this.uiView}.`)
     if (this.uiView) {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
@@ -329,8 +328,6 @@ export class WindowManager {
       // Explicitly destroying them here is unnecessary and causes a type error.
       this.uiView = null
       console.log('[WindowManager] uiView set to null.')
-    } else {
-      console.log('[WindowManager] No UI view to detach.')
     }
   }
 }

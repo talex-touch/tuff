@@ -73,6 +73,8 @@ class ShortcutService {
       })
     }
 
+    console.log(`[GlobalShortcon] Main shortcut registered: ${id} (${defaultAccelerator})`)
+
     this.reregisterAllShortcuts()
     return true
   }
@@ -123,7 +125,7 @@ class ShortcutService {
     for (const shortcut of allShortcuts) {
       try {
         globalShortcut.register(shortcut.accelerator, () => {
-          console.log(`[GlobalShortcon] Shortcut triggered: ${shortcut.id}`)
+          console.debug(`[GlobalShortcon] Shortcut triggered: ${shortcut.id}`)
           this.handleTrigger(shortcut)
         })
       } catch (error) {
@@ -133,6 +135,8 @@ class ShortcutService {
         )
       }
     }
+
+    console.log(`[GlobalShortcon] Successfully registered ${allShortcuts.length} shortcuts.`)
   }
 
   /**

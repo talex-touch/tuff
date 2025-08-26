@@ -19,16 +19,4 @@ export interface Shortcut {
 
 export type ShortcutSetting = Shortcut[];
 
-export const shortcutSettingOriginData: ShortcutSetting = [
-  {
-    id: 'core.system.summon',
-    accelerator: 'CommandOrControl+Shift+A',
-    type: ShortcutType.RENDERER,
-    meta: {
-      creationTime: Date.now(),
-      modificationTime: Date.now(),
-      author: 'system',
-      description: 'Summon the main application window.'
-    }
-  }
-];
+export const shortcutSettingOriginData: ShortcutSetting = [];

@@ -3,7 +3,6 @@ import { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { windowManager } from './window'
 import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { ipcManager } from './ipc'
-import { shortcutManager } from './shortcuts'
 
 export class CoreBoxManager {
   searchEngine: SearchEngineCore
@@ -27,12 +26,10 @@ export class CoreBoxManager {
   public init(): void {
     windowManager.create()
     ipcManager.register()
-    shortcutManager.register()
   }
 
   public destroy(): void {
     ipcManager.unregister()
-    shortcutManager.unregister()
   }
 
   public get showCoreBox(): boolean {
