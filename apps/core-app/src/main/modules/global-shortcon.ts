@@ -181,12 +181,6 @@ export default {
   init() {
     if (!serviceInstance) {
       serviceInstance = new ShortcutService()
-
-      // Example of registering a main process shortcut
-      // This should be moved to a more appropriate module later
-      serviceInstance.registerMainShortcut('core.main.test', 'F12', () => {
-        console.log('F12 was pressed! This is a main process action.')
-      })
     }
   },
   destroy() {

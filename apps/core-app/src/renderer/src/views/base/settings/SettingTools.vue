@@ -15,9 +15,9 @@ import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 
 // Import application settings
 import { appSetting } from '~/modules/channel/storage'
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
-import { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 // Define component props
 interface Props {
@@ -27,21 +27,16 @@ interface Props {
 defineProps<Props>()
 
 // Reactive reference for shortcut key binding
-const shortcuts = ref<ShortcutSetting | null>(null)
+const shortcuts = ref<Shortcut[] | null>(null)
 
 onMounted(async () => {
   shortcuts.value = await shortconApi.getAll()
 })
 
-// Watch for changes to the shortcut key and update settings
-watch(
-  () => shortcuts.value?.summon,
-  (val) => {
-    if (!val) return
-    shortconApi.update('summon', val)
-  },
-  { deep: true }
-)
+function updateShortcut(id: string, newAccelerator: string): void {
+  if (!id || !newAccelerator) return
+  shortconApi.update(id, newAccelerator)
+}
 </script>
 
 <!--
@@ -65,13 +60,20 @@ watch(
     />
 
     <!-- Shortcut key configuration slot -->
-    <t-block-slot
-      title="Shortcon"
-      icon="keyboard"
-      description="Define your own shortcut and use it anywhere."
-    >
-      <flat-key-input v-if="shortcuts" v-model="shortcuts.summon" />
-    </t-block-slot>
+    <template v-if="shortcuts">
+      <t-block-slot
+        v-for="shortcut in shortcuts"
+        :key="shortcut.id"
+        :title="shortcut.id"
+        icon="keyboard"
+        :description="`Define shortcut for ${shortcut.id}`"
+      >
+        <flat-key-input
+          :model-value="shortcut.accelerator"
+          @update:model-value="(newValue) => updateShortcut(shortcut.id, String(newValue))"
+        />
+      </t-block-slot>
+    </template>
 
     <!-- Auto paste time selection -->
     <t-block-select

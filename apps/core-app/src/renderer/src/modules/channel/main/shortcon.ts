@@ -6,8 +6,8 @@ export class ShortconApi {
     return touchChannel.send('shortcon:get-all')
   }
 
-  update(key: keyof ShortcutSetting, value: string): Promise<boolean> {
-    return touchChannel.send('shortcon:update', { key, value })
+  update(id: string, accelerator: string): Promise<boolean> {
+    return touchChannel.send('shortcon:update', { id, accelerator })
   }
 
   disableAll(): Promise<void> {
