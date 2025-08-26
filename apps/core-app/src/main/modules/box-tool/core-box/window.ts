@@ -6,7 +6,7 @@ import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
 import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
-import { StorageList, type AppSetting } from '@talex-touch/utils'
+import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { coreBoxManager } from './manager'
@@ -23,6 +23,7 @@ export class WindowManager {
   public windows: TouchWindow[] = []
   private _touchApp: TouchApp | null = null
   private uiView: WebContentsView | null = null
+  private uiViewFocused = false
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -96,17 +97,41 @@ export class WindowManager {
       console.log('[CoreBox] BoxWindow closed!')
     })
 
-    window.window.on('blur', () => {
-      const settings = this.getAppSettingConfig();
-      // Access isUIMode via its public getter
-      console.log(`[CoreBox] Blur event detected. isUIMode: ${coreBoxManager.isUIMode}, autoHide setting: ${settings.tools.autoHide}`);
-      if (settings.tools.autoHide && !coreBoxManager.isUIMode) { // Only auto-hide if not in UI mode
-        console.log('[CoreBox] Auto-hiding CoreBox due to blur event (not in UI mode).');
-        coreBoxManager.trigger(false);
-      } else if (settings.tools.autoHide && coreBoxManager.isUIMode) {
-        console.log('[CoreBox] Blur event ignored in UI mode to prevent unintended hiding.');
+    // window.window.on('blur', () => {
+    //   const settings = this.getAppSettingConfig()
+    //   // Access isUIMode via its public getter
+    //   console.log(
+    //     `[CoreBox] Blur event detected. isUIMode: ${coreBoxManager.isUIMode}, autoHide setting: ${settings.tools.autoHide}`
+    //   )
+    //   if (settings.tools.autoHide && !coreBoxManager.isUIMode) {
+    //     // Only auto-hide if not in UI mode
+    //     console.log('[CoreBox] Auto-hiding CoreBox due to blur event (not in UI mode).')
+    //     coreBoxManager.trigger(false)
+    //   } else if (settings.tools.autoHide && coreBoxManager.isUIMode) {
+    //     console.log('[CoreBox] Blur event ignored in UI mode to prevent unintended hiding.')
+    //   }
+    // })
+
+    window.window.on('blur', async () => {
+      const settings = this.getAppSettingConfig()
+
+      if (!settings.tools.autoHide) {
+        return
       }
-    });
+
+      const isUIMode = coreBoxManager.isUIMode
+
+      if (!isUIMode) {
+        coreBoxManager.trigger(false)
+        return
+      }
+
+      await sleep(17)
+
+      if (!this.uiViewFocused) {
+        coreBoxManager.trigger(false)
+      }
+    })
 
     console.log('[CoreBox] NewBox created, WebContents loaded!')
 
@@ -252,8 +277,29 @@ export class WindowManager {
       this.detachUIView()
     }
 
-    this.uiView = new WebContentsView()
+    const view = (this.uiView = new WebContentsView())
+    this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
+
+    this.uiView.webContents.addListener('blur', () => {
+      console.log('[CoreBox] UI view blurred.')
+
+      this.uiViewFocused = false
+    })
+
+    this.uiView.webContents.addListener('focus', () => {
+      console.log('[CoreBox] UI view focused.')
+
+      this.uiViewFocused = true
+    })
+
+    this.uiView.webContents.addListener('dom-ready', () => {
+      if (plugin && (!app.isPackaged || plugin.dev.enable)) {
+        view.webContents.openDevTools({ mode: 'detach' })
+
+        this.uiViewFocused = true
+      }
+    })
 
     const bounds = currentWindow.window.getBounds()
     this.uiView.setBounds({
@@ -264,22 +310,27 @@ export class WindowManager {
     })
     this.uiView.webContents.loadURL(url)
 
-    if (plugin && (!app.isPackaged || plugin.dev.enable)) {
-      this.uiView.webContents.openDevTools({ mode: 'detach' })
-    }
-
     console.log('[CoreBox] UI view attached.', url)
   }
 
   public detachUIView(): void {
+    console.log(`[WindowManager] detachUIView() called. Current uiView: ${!!this.uiView}.`)
     if (this.uiView) {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
+        console.log('[WindowManager] Removing child view from current window.')
         currentWindow.window.contentView.removeChildView(this.uiView)
+      } else {
+        console.warn(
+          '[WindowManager] Cannot remove child view: current window is null or destroyed.'
+        )
       }
-      // @ts-ignore The webContents may be destroyed, but we can safely ignore the error.
-      this.uiView.webContents.destroy()
+      // The WebContents are automatically destroyed when the WebContentsView is removed.
+      // Explicitly destroying them here is unnecessary and causes a type error.
       this.uiView = null
+      console.log('[WindowManager] uiView set to null.')
+    } else {
+      console.log('[WindowManager] No UI view to detach.')
     }
   }
 }

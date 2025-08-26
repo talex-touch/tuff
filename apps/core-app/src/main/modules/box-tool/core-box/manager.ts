@@ -79,9 +79,13 @@ export class CoreBoxManager {
   }
 
   public exitUIMode(): void {
-    this._isUIMode = false // Use private property
-    windowManager.detachUIView()
-    this.shrink()
+    if (this._isUIMode) {
+      this._isUIMode = false // Use private property
+      windowManager.detachUIView()
+      this.shrink()
+    } else {
+      console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')
+    }
   }
 
   public async search(query: TuffQuery): Promise<TuffSearchResult | null> {

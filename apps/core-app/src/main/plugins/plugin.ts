@@ -319,6 +319,11 @@ export class TouchPlugin implements ITouchPlugin {
       plugin: this.name
     })
 
+    // Ensure that if this plugin had an active UI view, it is unattached.
+    console.log(`[Plugin:${this.name}] disable() called. Checking if UI mode needs to be exited.`)
+    CoreBoxManager.getInstance().exitUIMode();
+    console.log(`[Plugin:${this.name}] exitUIMode() called during disable().`)
+
     this.webViewInit = false
 
     this._windows.forEach((win, id) => {
