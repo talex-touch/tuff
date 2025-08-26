@@ -15,6 +15,9 @@ import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 
 // Import application settings
 import { appSetting } from '~/modules/channel/storage'
+import { onMounted, ref, watch } from 'vue'
+import { shortconApi } from '~/modules/channel/main/shortcon'
+import { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 // Define component props
 interface Props {
@@ -24,22 +27,20 @@ interface Props {
 defineProps<Props>()
 
 // Reactive reference for shortcut key binding
-const key = ref(appSetting.keyBind.summon)
+const shortcuts = ref<ShortcutSetting | null>(null)
+
+onMounted(async () => {
+  shortcuts.value = await shortconApi.getAll()
+})
 
 // Watch for changes to the shortcut key and update settings
 watch(
-  () => key.value,
+  () => shortcuts.value?.summon,
   (val) => {
-    // Register the new shortcut key with the API
-    const res = window.$shortconApi.regKey(val, () => {
-      console.log('Shortcut triggered:', val)
-    })
-
-    console.log(res)
-
-    // Update the application settings with the new shortcut
-    appSetting.keyBind.summon = val
-  }
+    if (!val) return
+    shortconApi.update('summon', val)
+  },
+  { deep: true }
 )
 </script>
 
@@ -69,7 +70,7 @@ watch(
       icon="keyboard"
       description="Define your own shortcut and use it anywhere."
     >
-      <flat-key-input v-model="key" />
+      <flat-key-input v-if="shortcuts" v-model="shortcuts.summon" />
     </t-block-slot>
 
     <!-- Auto paste time selection -->

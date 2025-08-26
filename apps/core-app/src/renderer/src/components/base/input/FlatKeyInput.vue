@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import FlatInput from './FlatInput.vue'
 import { useVModel } from '@vueuse/core'
+import { shortconApi } from '~/modules/channel/main/shortcon'
 
 const props = defineProps<{
   modelValue: String
@@ -33,5 +34,11 @@ function startRecord(e: KeyboardEvent) {
 </script>
 
 <template>
-  <FlatInput tabindex="0" @keydown="startRecord" v-model="model" />
+  <FlatInput
+    tabindex="0"
+    @keydown="startRecord"
+    v-model="model"
+    @focus="shortconApi.disableAll"
+    @blur="shortconApi.enableAll"
+  />
 </template>
