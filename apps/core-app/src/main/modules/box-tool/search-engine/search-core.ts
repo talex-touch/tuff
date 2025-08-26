@@ -9,11 +9,12 @@ import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { TouchApp } from '../../../core/touch-core'
 import { databaseManager } from '../../database'
+import { coreBoxManager } from '../core-box/manager'; // Import coreBoxManager
 import storage from '../../../core/storage'
 import { createDbUtils, DbUtils } from '../../../db/utils'
 import crypto from 'crypto'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
-import { ChannelType, StandardChannelData } from '@talex-touch/utils/channel'
+import { ChannelType, DataCode, StandardChannelData } from '@talex-touch/utils/channel'
 
 /**
  * Generates a unique key for an activation request.
@@ -138,23 +139,41 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   deactivateProvider(uniqueKey: string): void {
+    console.log(`[SearchEngineCore] deactivateProvider() called for key: ${uniqueKey}.`)
     if (this.activatedProviders && this.activatedProviders.has(uniqueKey)) {
+      const deactivatedActivation = this.activatedProviders.get(uniqueKey);
       this.activatedProviders.delete(uniqueKey)
-      console.log(`[SearchEngineCore] Deactivated provider with key: ${uniqueKey}`)
+      console.debug(`[SearchEngineCore] Deactivated provider with key: ${uniqueKey}`)
+
+      // If the deactivated provider was a plugin feature and we are in UI mode, exit UI mode.
+      if (deactivatedActivation?.id === 'plugin-features' && coreBoxManager.isUIMode) {
+        console.log(`[SearchEngineCore] PluginFeaturesAdapter deactivated, exiting UI mode for key: ${uniqueKey}.`)
+        coreBoxManager.exitUIMode();
+      }
+
       if (this.activatedProviders.size === 0) {
         this.activatedProviders = null
-        console.log(`[SearchEngineCore] All providers deactivated.`)
+        console.debug(`[SearchEngineCore] All providers deactivated.`)
       }
+    } else {
+      console.log(`[SearchEngineCore] Provider with key ${uniqueKey} not found in activated providers.`)
     }
   }
 
   deactivateProviders(): void {
     console.log(
-      `[SearchEngineCore] Deactivating all providers. Current state:`,
+      `[SearchEngineCore] deactivateProviders() called. Current state:`,
       this.activatedProviders
     )
     this.activatedProviders = null
     console.log(`[SearchEngineCore] All providers deactivated. New state is null.`)
+
+    // When all providers are deactivated, ensure any active UI mode is exited.
+    // This addresses the issue where UI view might remain attached if not explicitly closed.
+    if (coreBoxManager.isUIMode) {
+      console.log('[SearchEngineCore] Deactivating providers, exiting UI mode.')
+      coreBoxManager.exitUIMode()
+    }
   }
 
   getActiveProviders(): ISearchProvider[] {
@@ -200,12 +219,6 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     this.currentGatherController?.abort()
 
     const sessionId = crypto.randomUUID()
-    if (!query.text) {
-      const emptyResult = TuffFactory.createSearchResult(query).setItems([]).setDuration(0).build()
-      emptyResult.activate = this.getActivationState() ?? undefined
-      emptyResult.sessionId = sessionId
-      return emptyResult
-    }
 
     const startTime = Date.now()
     this._recordSearchUsage(sessionId, query)
@@ -231,9 +244,10 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
           this._updateActivationState(update.newResults)
           const coreBoxWindow = windowManager.current?.window
           if (coreBoxWindow) {
+            const finalActivationState = this.getActivationState() ?? undefined
             this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
               searchId: sessionId,
-              activate: this.getActivationState() ?? undefined,
+              activate: finalActivationState,
               sources: update.sourceStats
             })
           }
@@ -361,29 +375,40 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
       ChannelType.MAIN,
       'core-box:execute',
       async (channelData: StandardChannelData) => {
+        const { reply } = channelData
         const { item, searchResult } = channelData.data as {
           item: TuffItem
           searchResult?: TuffSearchResult
         }
         const provider = instance.providers.get(item.source.id)
         if (!provider || !provider.onExecute) {
-          return null
+          return
         }
 
-        const shouldActivate = await provider.onExecute({ item, searchResult })
+        const activationResult = await provider.onExecute({ item, searchResult })
 
-        if (shouldActivate) {
-          // Create a detailed activation object
-          const activation: IProviderActivate = {
-            id: provider.id,
-            name: provider.name,
-            icon: provider.icon,
-            meta: item.meta?.extension || {} // Pass all extension meta for deep activation
+        if (activationResult) {
+          let activation: IProviderActivate
+          if (typeof activationResult === 'object') {
+            // If the provider returns a full activation object, use it directly.
+            activation = activationResult
+          } else {
+            // Otherwise, create a default activation object.
+            activation = {
+              id: provider.id,
+              name: provider.name,
+              icon: provider.icon,
+              meta: item.meta?.extension || {}
+            }
           }
           instance.activateProviders([activation])
+
+          // Trigger a search with an empty query to get the initial items.
+          const query: TuffQuery = { text: '' }
+          await instance.search(query)
         }
 
-        return instance.getActivationState()
+        reply(DataCode.SUCCESS, instance.getActivationState())
       }
     )
 
@@ -412,7 +437,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   destroy(): void {
-    console.log('[SearchEngineCore] Destroying SearchEngineCore and aborting any ongoing search.')
+    console.debug('[SearchEngineCore] Destroying SearchEngineCore and aborting any ongoing search.')
     this.currentGatherController?.abort()
   }
 }

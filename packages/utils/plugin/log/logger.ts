@@ -1,5 +1,6 @@
 import { LogLevel, LogItem, LogDataType } from './types'
 import { PluginLoggerManager } from './logger-manager'
+import chalk from 'chalk'
 
 /**
  * PluginLogger provides structured logging capabilities for individual plugins.
@@ -71,5 +72,17 @@ export class PluginLogger {
       data,
     }
     this.manager.append(log)
+
+    const levelColor = {
+      INFO: chalk.bgBlue,
+      WARN: chalk.bgYellow,
+      ERROR: chalk.bgRed,
+      DEBUG: chalk.bgGray,
+    }[level]
+
+    console.log(
+      `${chalk.bgMagenta('[PluginLog]')} ${levelColor(level)} ${this.pluginName} - ${message}`,
+      ...data
+    )
   }
 }

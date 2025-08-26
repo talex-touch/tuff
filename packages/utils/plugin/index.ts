@@ -12,6 +12,17 @@ export enum PluginStatus {
 
   LOADING,
   LOADED,
+  LOAD_FAILED,
+}
+
+export interface PluginIssue {
+  type: 'error' | 'warning'
+  message: string
+  source?: string // e.g., 'manifest.json', 'feature:feature-id', 'icon'
+  meta?: any
+  code?: string
+  suggestion?: string
+  timestamp?: number
 }
 
 export interface IPluginIcon {
@@ -46,19 +57,21 @@ export interface IPluginBaseInfo {
 export interface IPluginDev {
   enable: boolean
   address: string
+  source?: boolean
 }
 
-export interface IPluginWebview {
-}
+export type IPluginWebview = Map<number, any>
 
 
 
 export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
+  pluginPath: string
   webViewInit: boolean
   logger: PluginLogger
   webview: IPluginWebview
   features: IPluginFeature[]
+  issues: PluginIssue[]
 
   addFeature(feature: IPluginFeature): boolean
   delFeature(featureId: string): boolean
@@ -88,6 +101,15 @@ export interface IPluginFeature {
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]
+  interaction?: IFeatureInteraction
+}
+
+export type IFeatureInteraction = {
+  type: 'webcontent' | 'widget'
+  /**
+   * The relative path to the html file from the plugin root.
+   */
+  path?: string
 }
 
 /**
@@ -107,8 +129,9 @@ export interface IFeatureLifeCycle {
    * @param id - Feature ID
    * @param data - The triggering payload
    * @param feature - The full feature definition
+   * @param signal - An AbortSignal to cancel the operation
    */
-  onFeatureTriggered(id: string, data: any, feature: IPluginFeature): void
+  onFeatureTriggered(id: string, data: any, feature: IPluginFeature, signal?: AbortSignal): void
 
   /**
    * Called when user input changes within this feature’s input box.

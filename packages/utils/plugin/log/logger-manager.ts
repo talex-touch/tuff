@@ -13,14 +13,17 @@ export class PluginLoggerManager {
   private readonly pluginInfoPath: string
   private buffer: LogItem[] = []
   private flushInterval: NodeJS.Timeout
+  private onLogAppend?: (log: LogItem) => void
 
   /**
    * Initializes a new PluginLoggerManager instance.
    * @param baseDir - Base directory to store logs.
    * @param pluginInfo - Plugin information for logging context.
+   * @param onLogAppend - Optional callback to be invoked when a log is appended.
    */
-  constructor(baseDir: string, pluginInfo: ITouchPlugin) {
+  constructor(baseDir: string, pluginInfo: ITouchPlugin, onLogAppend?: (log: LogItem) => void) {
     this.pluginInfo = pluginInfo
+    this.onLogAppend = onLogAppend
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const sessionFolder = `${timestamp}_${pluginInfo.name.replace(/[^a-zA-Z0-9-_]/g, '_')}`
 
@@ -39,6 +42,7 @@ export class PluginLoggerManager {
    */
   append(log: LogItem): void {
     this.buffer.push(log)
+    this.onLogAppend?.(log)
   }
 
   /**
@@ -49,6 +53,22 @@ export class PluginLoggerManager {
     const lines = this.buffer.map((item) => JSON.stringify(item)).join('\n') + '\n'
     fs.appendFileSync(this.sessionLogPath, lines)
     this.buffer = []
+  }
+
+  /**
+   * Returns the path to the current session log file.
+   * @returns The path to the session log.
+   */
+  public getSessionLogPath(): string {
+    return this.sessionLogPath
+  }
+
+  /**
+   * Returns the current log buffer.
+   * @returns An array of log items.
+   */
+  public getBuffer(): LogItem[] {
+    return this.buffer
   }
 
   /**

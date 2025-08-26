@@ -1,13 +1,14 @@
 import { TouchApp, TouchWindow, genTouchApp } from '../../../core/touch-core'
 import { BoxWindowOption } from '../../../config/default'
-import { app, screen } from 'electron'
+import { app, screen, WebContentsView } from 'electron'
 import path from 'path'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
 import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
-import { StorageList, type AppSetting } from '@talex-touch/utils'
+import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { coreBoxManager } from './manager'
 
 const windowAnimation = useWindowAnimation()
@@ -21,6 +22,8 @@ export class WindowManager {
   private static instance: WindowManager
   public windows: TouchWindow[] = []
   private _touchApp: TouchApp | null = null
+  private uiView: WebContentsView | null = null
+  private uiViewFocused = false
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -45,6 +48,9 @@ export class WindowManager {
    */
   public async create(): Promise<TouchWindow> {
     const window = new TouchWindow({ ...BoxWindowOption })
+
+    window.window.setVisibleOnAllWorkspaces(true)
+    window.window.setAlwaysOnTop(true, 'floating')
 
     windowAnimation.changeWindow(window)
 
@@ -91,9 +97,38 @@ export class WindowManager {
       console.log('[CoreBox] BoxWindow closed!')
     })
 
-    window.window.on('blur', () => {
+    // window.window.on('blur', () => {
+    //   const settings = this.getAppSettingConfig()
+    //   // Access isUIMode via its public getter
+    //   console.log(
+    //     `[CoreBox] Blur event detected. isUIMode: ${coreBoxManager.isUIMode}, autoHide setting: ${settings.tools.autoHide}`
+    //   )
+    //   if (settings.tools.autoHide && !coreBoxManager.isUIMode) {
+    //     // Only auto-hide if not in UI mode
+    //     console.log('[CoreBox] Auto-hiding CoreBox due to blur event (not in UI mode).')
+    //     coreBoxManager.trigger(false)
+    //   } else if (settings.tools.autoHide && coreBoxManager.isUIMode) {
+    //     console.log('[CoreBox] Blur event ignored in UI mode to prevent unintended hiding.')
+    //   }
+    // })
+
+    window.window.on('blur', async () => {
       const settings = this.getAppSettingConfig()
-      if (settings.tools.autoHide) {
+
+      if (!settings.tools.autoHide) {
+        return
+      }
+
+      const isUIMode = coreBoxManager.isUIMode
+
+      if (!isUIMode) {
+        coreBoxManager.trigger(false)
+        return
+      }
+
+      await sleep(17)
+
+      if (!this.uiViewFocused) {
         coreBoxManager.trigger(false)
       }
     })
@@ -149,7 +184,7 @@ export class WindowManager {
     if (!window) return
 
     this.updatePosition(window)
-    window.window.show()
+    window.window.showInactive()
     setTimeout(() => {
       window.window.focus()
     }, 100)
@@ -159,21 +194,32 @@ export class WindowManager {
     const window = this.current
     if (!window) return
 
-    window.window.setPosition(-1000000, -1000000)
+    if (process.platform !== 'darwin') {
+      window.window.setPosition(-1000000, -1000000)
+    }
 
     setTimeout(() => {
-      this.shrink()
       window.window.hide()
     }, 100)
   }
 
-  public expand(length: number = 100): void {
-    const height = Math.min(length * 48 + 65, 550)
+  public expand(length: number = 100, isUIMode: boolean = false): void {
+    const height = isUIMode ? 600 : Math.min(length * 48 + 65, 550)
 
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, height)
       currentWindow.window.setSize(900, height)
+
+      if (this.uiView) {
+        const bounds = currentWindow.window.getBounds()
+        this.uiView.setBounds({
+          x: 0,
+          y: 60,
+          width: bounds.width,
+          height: bounds.height - 60
+        })
+      }
     } else {
       console.error('[CoreBox] No current window available for expansion')
     }
@@ -182,6 +228,12 @@ export class WindowManager {
   }
 
   public shrink(): void {
+    if (this.uiView) {
+      console.warn('[CoreBox] Cannot shrink window while UI view is attached.')
+      return
+    }
+    this.detachUIView()
+
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, 60)
@@ -212,6 +264,74 @@ export class WindowManager {
 
   public getAppSettingConfig(): AppSetting {
     return getConfig(StorageList.APP_SETTING) as AppSetting
+  }
+
+  public attachUIView(url: string, plugin?: ITouchPlugin): void {
+    const currentWindow = this.current
+    if (!currentWindow) {
+      console.error('[CoreBox] Cannot attach UI view: no window available.')
+      return
+    }
+
+    if (this.uiView) {
+      this.detachUIView()
+    }
+
+    const view = (this.uiView = new WebContentsView())
+    this.uiViewFocused = true
+    currentWindow.window.contentView.addChildView(this.uiView)
+
+    this.uiView.webContents.addListener('blur', () => {
+      console.log('[CoreBox] UI view blurred.')
+
+      this.uiViewFocused = false
+    })
+
+    this.uiView.webContents.addListener('focus', () => {
+      console.log('[CoreBox] UI view focused.')
+
+      this.uiViewFocused = true
+    })
+
+    this.uiView.webContents.addListener('dom-ready', () => {
+      if (plugin && (!app.isPackaged || plugin.dev.enable)) {
+        view.webContents.openDevTools({ mode: 'detach' })
+
+        this.uiViewFocused = true
+      }
+    })
+
+    const bounds = currentWindow.window.getBounds()
+    this.uiView.setBounds({
+      x: 0,
+      y: 60,
+      width: bounds.width,
+      height: bounds.height - 60
+    })
+    this.uiView.webContents.loadURL(url)
+
+    console.log('[CoreBox] UI view attached.', url)
+  }
+
+  public detachUIView(): void {
+    console.log(`[WindowManager] detachUIView() called. Current uiView: ${!!this.uiView}.`)
+    if (this.uiView) {
+      const currentWindow = this.current
+      if (currentWindow && !currentWindow.window.isDestroyed()) {
+        console.log('[WindowManager] Removing child view from current window.')
+        currentWindow.window.contentView.removeChildView(this.uiView)
+      } else {
+        console.warn(
+          '[WindowManager] Cannot remove child view: current window is null or destroyed.'
+        )
+      }
+      // The WebContents are automatically destroyed when the WebContentsView is removed.
+      // Explicitly destroying them here is unnecessary and causes a type error.
+      this.uiView = null
+      console.log('[WindowManager] uiView set to null.')
+    } else {
+      console.log('[WindowManager] No UI view to detach.')
+    }
   }
 }
 

@@ -4,7 +4,7 @@ import { coreBoxManager } from './manager'
 import searchEngineCore from '../search-engine/search-core'
 import { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import { windowManager } from './window'
-import { genPluginManager } from '../../../plugins/plugin-core'
+import { genPluginManager } from '../../../plugins'
 
 /**
  * @class IpcManager
@@ -74,28 +74,11 @@ export class IpcManager {
 
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
-      'core-box:execute',
-      async ({ data, reply }) => {
-        const { item, searchResult } = data as { item: TuffItem; searchResult: TuffSearchResult }
-        if (!item || !searchResult) {
-          console.error(
-            '[IPC] Invalid payload for core-box:execute. `item` and `searchResult` are required.'
-          )
-          return reply(DataCode.ERROR, '`item` and `searchResult` are required.')
-        }
-        const newActivationState = await coreBoxManager.execute(item, searchResult)
-        // Reply with the new activation state so the frontend can sync up.
-        reply(DataCode.SUCCESS, newActivationState)
-      }
-    )
-
-    this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
       'core-box:deactivate-provider',
       async ({ data, reply }) => {
         const { id } = data as { id: string }
-        const newState = coreBoxManager.deactivateProvider(id)
-        reply(DataCode.SUCCESS, newState)
+        searchEngineCore.deactivateProvider(id)
+        reply(DataCode.SUCCESS, searchEngineCore.getActivationState())
       }
     )
 
@@ -145,6 +128,17 @@ export class IpcManager {
         reply(DataCode.SUCCESS, allDetails)
       }
     )
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:enter-ui-mode', ({ data }) => {
+      const { url } = data as { url: string }
+      if (url) {
+        coreBoxManager.enterUIMode(url)
+      }
+    })
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:exit-ui-mode', () => {
+      coreBoxManager.exitUIMode()
+    })
   }
 
   public unregister(): void {

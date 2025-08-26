@@ -22,7 +22,7 @@ See [Manifest](./manifest.md) for more!
   "plugin": {
     "dev": {
     "enable": true,
-    "address": "http://127.0.0.1:5174/"
+    "address": "http://127.0.0.1:3333/"
  }
   }
 }

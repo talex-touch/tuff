@@ -54,6 +54,7 @@
       "esbuild",
       "extract-file-icon",
       "simple-git-hooks",
+      "typeit",
       "vue-demi"
     ],
     "overrides": {

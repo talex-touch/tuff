@@ -1,7 +1,7 @@
 import { SearchEngineCore } from '../search-engine/search-core'
-import { TuffItem, TuffQuery, TuffSearchResult } from '../search-engine/types'
-import { IProviderActivate } from '@talex-touch/utils'
+import { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { windowManager } from './window'
+import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { ipcManager } from './ipc'
 import { shortcutManager } from './shortcuts'
 
@@ -11,6 +11,7 @@ export class CoreBoxManager {
   private _show: boolean = false
   private _expand: number = 0
   private lastTrigger: number = -1
+  private _isUIMode: boolean = false // Rename to private property
 
   private constructor() {
     this.searchEngine = SearchEngineCore.getInstance()
@@ -38,6 +39,10 @@ export class CoreBoxManager {
     return this._show
   }
 
+  public get isUIMode(): boolean { // Public getter for _isUIMode
+    return this._isUIMode;
+  }
+
   public trigger(show: boolean): void {
     if (Date.now() - this.lastTrigger < 200) return
     this.lastTrigger = Date.now()
@@ -46,9 +51,9 @@ export class CoreBoxManager {
 
     if (show) {
       if (!this._expand) {
-        windowManager.shrink()
+        this.shrink()
       } else {
-        windowManager.expand(this._expand)
+        this.expand(this._expand)
       }
       windowManager.show()
     } else {
@@ -58,12 +63,29 @@ export class CoreBoxManager {
 
   public expand(length: number): void {
     this._expand = length
-    windowManager.expand(length)
+    windowManager.expand(length, this.isUIMode)
   }
 
   public shrink(): void {
     this._expand = 0
     windowManager.shrink()
+  }
+
+  public enterUIMode(url: string, plugin?: ITouchPlugin): void {
+    this._isUIMode = true // Use private property
+    this.expand(10)
+    windowManager.attachUIView(url, plugin)
+    this.trigger(true)
+  }
+
+  public exitUIMode(): void {
+    if (this._isUIMode) {
+      this._isUIMode = false // Use private property
+      windowManager.detachUIView()
+      this.shrink()
+    } else {
+      console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')
+    }
   }
 
   public async search(query: TuffQuery): Promise<TuffSearchResult | null> {
@@ -73,48 +95,6 @@ export class CoreBoxManager {
       console.error('[CoreBoxManager] Search failed:', error)
       return null
     }
-  }
-
-  public async execute(
-    item: TuffItem,
-    searchResult: TuffSearchResult
-  ): Promise<IProviderActivate[] | null> {
-    const providerId = item.source.id
-    const provider = this.searchEngine.getProvidersByIds([providerId])[0]
-
-    if (!provider) {
-      console.warn(
-        `[CoreBoxManager] No provider found for item with source ID: ${providerId}`,
-        item
-      )
-      return null
-    }
-
-    if (!provider.onExecute) {
-      console.warn(`[CoreBoxManager] No onExecute method found for provider: ${provider.id}`)
-      return null
-    }
-
-    // Record the execution before potentially changing the state
-    if (searchResult.sessionId) {
-      this.searchEngine.recordExecute(searchResult.sessionId, item)
-    }
-
-    const activation = await provider.onExecute({ item, searchResult })
-
-    if (activation) {
-      this.searchEngine.activateProviders([activation])
-      return this.searchEngine.getActivationState()
-    }
-
-    // If not activating, we still need to clear the search box, but no state change occurs.
-    // The frontend will handle clearing the input.
-    return null
-  }
-
-  public deactivateProvider(id: string): IProviderActivate[] | null {
-    this.searchEngine.deactivateProvider(id)
-    return this.searchEngine.getActivationState()
   }
 }
 

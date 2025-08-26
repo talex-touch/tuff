@@ -14,6 +14,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
+  const debounceMs = computed(() => {
+    return activeActivations.value && activeActivations.value.length > 0 ? 350 : 100
+  })
+
   const debouncedSearch = useDebounceFn(async () => {
     boxOptions.focus = 0
     loading.value = true
@@ -24,12 +28,8 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
         text: searchVal.value,
         mode: boxOptions.mode
       }
-      console.debug('search with context', query)
-
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
-
-      console.debug('initialResult', initialResult)
 
       // Store the session ID to track this specific search stream.
       currentSearchId.value = initialResult.sessionId || null
@@ -41,11 +41,8 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       // The initial activation state is set here.
       if (initialResult.activate && initialResult.activate.length > 0) {
         activeActivations.value = initialResult.activate
-      } else {
-        if (activeActivations.value) {
-          activeActivations.value = null
-        }
       }
+      // Removed else block to prevent premature clearing of activeActivations
       // Subsequent items will arrive via `search-update` events.
       // The loading state will be managed by `search-end`.
     } catch (error) {
@@ -56,7 +53,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       loading.value = false
     }
     // Do not set loading to false here; wait for the `search-end` event.
-  }, 100)
+  }, debounceMs)
 
   async function handleSearch(): Promise<void> {
     debouncedSearch()
@@ -79,11 +76,16 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       res.value = []
     }
     if (!searchResult.value) {
-      console.warn('[useSearch] handleExecute called without a searchResult context.')
-      // Fallback for safety, though it won't be tracked
-      await touchChannel.send('core-box:execute', {
-        item: JSON.parse(JSON.stringify(itemToExecute))
-      })
+      console.warn(
+        '[useSearch] handleExecute called without a searchResult context. Executing without activation state update.'
+      )
+      const fallbackActivationState: IProviderActivate[] | null = await touchChannel.send(
+        'core-box:execute',
+        {
+          item: JSON.parse(JSON.stringify(itemToExecute))
+        }
+      )
+      activeActivations.value = fallbackActivationState
       return
     }
 
@@ -133,8 +135,12 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     await handleSearch()
   }
 
+
   function handleExit(): void {
     if (activeActivations.value && activeActivations.value.length > 0) {
+      console.log(
+        '[useSearch] handleExit: activeActivations exist, calling deactivateAllProviders.'
+      )
       deactivateAllProviders()
       searchVal.value = '' // Clear search value to reset state
       return
@@ -198,17 +204,16 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // 2. Watch for searchVal or mode changes to trigger the search
   watch([searchVal], handleSearch)
 
-
   const activeItem = computed(() => res.value[boxOptions.focus])
 
   // Listener for incremental search result updates.
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      console.log('[useSearch] Received subsequent item batch:', data.items.length)
+      // console.log('[useSearch] Received subsequent item batch:', data.items.length)
       // Subsequent batches are already sorted and should be appended.
       res.value.push(...data.items)
     } else {
-      console.debug('[useSearch] Discarded update for old search:', data.searchId)
+      // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
 
@@ -223,7 +228,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // Listener for when the search stream is finished.
   touchChannel.regChannel('core-box:search-end', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      console.debug('[useSearch] Search stream ended:', data.searchId)
       if (searchResult.value) {
         searchResult.value.activate = data.activate
         searchResult.value.sources = data.sources
@@ -235,15 +239,17 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
   // Listener for items pushed directly from an activated plugin feature.
   touchChannel.regChannel('core-box:push-items', ({ data }) => {
-    // If a provider is active but the user has cleared the input, ignore incoming pushes.
-    if (activeActivations.value && activeActivations.value.length > 0 && searchVal.value === '') {
-      console.log(
-        '[useSearch] Ignored pushed items because the query is empty while a provider is active.'
-      )
-      return
+    // If a provider is active, allow incoming pushes regardless of searchVal.
+    // This ensures plugins can display items even when the user has cleared the input
+    // but the plugin is still active and pushing results.
+    if (activeActivations.value && activeActivations.value.length > 0) {
+      //
+    } else if (searchVal.value === '') {
+      // If no provider is active and searchVal is empty, ignore pushed items.
+      return;
     }
 
-    console.debug(`[useSearch] Received ${data.items.length} items pushed from plugin.`)
+    //
 
     // Use a Map to ensure uniqueness and efficient updates.
     const itemsMap = new Map(res.value.map((item) => [item.id, item]))
@@ -258,7 +264,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
   // Listener for a plugin requesting to clear all items.
   touchChannel.regChannel('core-box:clear-items', () => {
-    console.log('[useSearch] Received request to clear items from a plugin.')
     res.value = []
     searchResult.value = null
     loading.value = false

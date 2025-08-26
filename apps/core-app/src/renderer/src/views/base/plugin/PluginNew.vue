@@ -12,20 +12,16 @@ import TCheckBox from '@comp/base/checkbox/TCheckBox.vue'
 
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { touchChannel } from '~/modules/channel/channel-core'
-// import { getNpmVersion } from '@talex-touch/utils/electron/env-tool'
+import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import { createVNode } from 'vue'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
 
-// Reactive references
-const arrow = ref()
-
-// Inject toggle function from parent component
-const toggleNewPlugin: any = inject('toggleNewPlugin')
+const emits = defineEmits(['close'])
 
 // Lifecycle hook to initialize component
 onMounted(() => {
-  toggleNewPlugin(arrow.value)
+  EnvDetector.init(touchChannel)
   envCheck()
 })
 
@@ -88,37 +84,38 @@ const envOptions = reactive<EnvOptions>({})
  * Check environment requirements for plugin creation
  */
 async function envCheck(): Promise<void> {
-  const res = undefined // await getNpmVersion()
-  if (!res) {
+  const nodeVersion = await EnvDetector.getNode()
+  if (nodeVersion) {
+    const versionParts = nodeVersion.split('.').map(Number)
+    if (versionParts[0] < 16) {
+      envOptions.node = {
+        msg: `Node.js version is too low (v${nodeVersion}), please upgrade it to 16 or higher.`,
+        type: 'error'
+      }
+    } else {
+      envOptions.node = {
+        type: 'success',
+        version: versionParts
+      }
+    }
+  } else {
     envOptions.node = {
       msg: 'Cannot find node.js, please install it first.',
       type: 'error'
     }
-    return
   }
 
-  // Check if Node.js version is not less than 8
-  const nodeVersion = res.split('.').map(Number)
-  if (nodeVersion[0] < 8) {
-    envOptions.node = {
-      msg: 'Node.js version is too low, please upgrade it to 8 or higher.',
-      type: 'error'
+  const degitExists = await EnvDetector.getDegit()
+  if (degitExists) {
+    envOptions.degit = {
+      type: 'success',
+      version: 'installed'
     }
-    return
-  }
-
-  envOptions.node = {
-    type: 'success',
-    version: nodeVersion
-  }
-
-  const degit = undefined //await checkGlobalPackageExist("degit")
-  if (!degit) {
+  } else {
     envOptions.degit = {
       msg: 'Cannot find degit, please install it first.',
       type: 'error'
     }
-    return
   }
 }
 
@@ -159,17 +156,17 @@ async function handleInstallDegit(): Promise<void> {
 </script>
 
 <template>
-  <FormTemplate content-style="width: calc(100% - 5rem);height: calc(100% - 10rem)">
+  <FormTemplate>
     <template #header>
-      <div items-center flex>
+      <div text-2xl flex items-center>
         <div
-          ref="arrow"
-          px-1
-          op-0
-          class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic"
-          @click="toggleNewPlugin"
+          i-ri-arrow-left-s-line
+          mr-2
+          cursor-pointer
+          hover:opacity-75
+          @click="emits('close')"
         />
-        <p my-4 font-extrabold text-2xl>New Plugin</p>
+        <p font-extrabold>New Plugin</p>
       </div>
       <span block text="base" op-75 font-normal>Create a new plugin.</span>
     </template>
@@ -177,7 +174,7 @@ async function handleInstallDegit(): Promise<void> {
     <BlockTemplate :disabled="envOptions.degit?.type !== 'success'">
       <template #title>
         Templates
-        <span>
+        <span ml-2>
           <span v-if="envOptions.node?.type === 'success'" color="green-2">
             <span relative top=".5" inline-block i-ri-nodejs-fill />{{
               envOptions.node?.version?.join('.')

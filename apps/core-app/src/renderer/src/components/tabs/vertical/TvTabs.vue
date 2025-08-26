@@ -112,12 +112,14 @@ export default defineComponent({
         const tabIndex = index + 1 || 0
         const isActive = (): boolean => activeNodes[tabIndex] === vnode.props?.name
 
-        return h(TvTabItem, {
-          active: isActive(),
-          ...vnode.props,
-          onClick: (event: Event) => {
-            // 如果禁用则不处理点击
-            if (vnode.props && Object.hasOwn(vnode.props, 'disabled')) return
+        return h(
+          TvTabItem,
+          {
+            active: isActive(),
+            ...vnode.props,
+            onClick: (event: Event) => {
+              // 如果禁用则不处理点击
+              if (vnode.props && Object.hasOwn(vnode.props, 'disabled')) return
 
             // 获取之前激活的标签索引
             const previousActiveIndex = Object.keys(activeNodes).find((key) => activeNodes[key])
@@ -172,10 +174,14 @@ export default defineComponent({
                 nextTick(() => {
                   classList.add('slideInRight')
                 })
+                }
               }
             }
+          },
+          {
+            icon: vnode.children?.icon
           }
-        })
+        )
       }
 
       // 获取所有标签
