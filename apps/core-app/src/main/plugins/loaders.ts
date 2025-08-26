@@ -1,19 +1,12 @@
-import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
 import path from 'path'
 import axios from 'axios'
 import { TouchPlugin } from './plugin'
 import { PluginIcon } from './plugin-icon'
 import { IPluginDev } from '@talex-touch/utils/plugin'
-import {
-  IFeatureLifeCycle,
-  IPluginFeature
-} from '@talex-touch/utils/plugin'
+import { IFeatureLifeCycle, IPluginFeature } from '@talex-touch/utils/plugin'
 import { PluginFeature } from './plugin-feature'
-import {
-  loadPluginFeatureContext,
-  loadPluginFeatureContextFromContent
-} from './plugin-feature'
+import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 import { TuffFactory, TuffUtils } from '@talex-touch/utils/core-box'
 import { createBuilderWithPluginContext } from './plugin-feature'
 import pkg from '../../../package.json'
@@ -22,13 +15,14 @@ import pkg from '../../../package.json'
  * The context required for loading plugin features.
  */
 const getFeatureContext = (touchPlugin: TouchPlugin) => ({
+  scope: 'plugin',
   plugin: touchPlugin,
   console: {
-    log: touchPlugin.logger.info,
-    info: touchPlugin.logger.info,
-    warn: touchPlugin.logger.warn,
-    error: touchPlugin.logger.error,
-    debug: touchPlugin.logger.debug
+    log: touchPlugin.logger.info.bind(touchPlugin.logger),
+    info: touchPlugin.logger.info.bind(touchPlugin.logger),
+    warn: touchPlugin.logger.warn.bind(touchPlugin.logger),
+    error: touchPlugin.logger.error.bind(touchPlugin.logger),
+    debug: touchPlugin.logger.debug.bind(touchPlugin.logger)
   },
   pkg,
   $util: touchPlugin.getFeatureUtil(),
@@ -86,8 +80,7 @@ abstract class BasePluginLoader {
     this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
-    this.touchPlugin.readme = ((p) =>
-      fse.existsSync(p) ? fse.readFileSync(p).toString() : '')(
+    this.touchPlugin.readme = ((p) => (fse.existsSync(p) ? fse.readFileSync(p).toString() : ''))(
       path.resolve(this.pluginPath, 'README.md')
     )
 
@@ -206,7 +199,9 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         }
       })
       pluginInfo = response.data
-      this.touchPlugin.logger.info(`[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`)
+      this.touchPlugin.logger.info(
+        `[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`
+      )
       fse.writeJSONSync(path.resolve(this.pluginPath, 'manifest.json'), pluginInfo, { spaces: 2 })
       this.touchPlugin.logger.info(`[Dev] Wrote remote manifest to local cache.`)
       this.touchPlugin.issues.push({

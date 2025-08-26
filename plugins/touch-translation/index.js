@@ -1,4 +1,4 @@
-const { console, $util, URLSearchParams, TuffItemBuilder } = globalThis
+const { $util, console, URLSearchParams, TuffItemBuilder } = globalThis
 
 /**
  * @param {string} text
@@ -150,6 +150,7 @@ const pluginLifecycle = {
    */
   async onFeatureTriggered(featureId, query, feature, signal) {
     try {
+      console.debug(featureId, query, feature)
       if (featureId === 'touch-translate' && query && query.trim()) {
         await translateAndPushResults(query.trim(), featureId, signal)
       }

@@ -1,6 +1,6 @@
 import { TouchApp, TouchWindow, genTouchApp } from '../../../core/touch-core'
 import { BoxWindowOption } from '../../../config/default'
-import { app, screen, BrowserView } from 'electron'
+import { app, screen, WebContentsView } from 'electron'
 import path from 'path'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
@@ -8,6 +8,7 @@ import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { coreBoxManager } from './manager'
 
 const windowAnimation = useWindowAnimation()
@@ -21,7 +22,7 @@ export class WindowManager {
   private static instance: WindowManager
   public windows: TouchWindow[] = []
   private _touchApp: TouchApp | null = null
-  private uiView: BrowserView | null = null
+  private uiView: WebContentsView | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -197,6 +198,10 @@ export class WindowManager {
   }
 
   public shrink(): void {
+    if (this.uiView) {
+      console.warn('[CoreBox] Cannot shrink window while UI view is attached.')
+      return
+    }
     this.detachUIView()
 
     const currentWindow = this.current
@@ -231,7 +236,7 @@ export class WindowManager {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
-  public attachUIView(url: string): void {
+  public attachUIView(url: string, plugin?: ITouchPlugin): void {
     const currentWindow = this.current
     if (!currentWindow) {
       console.error('[CoreBox] Cannot attach UI view: no window available.')
@@ -242,8 +247,8 @@ export class WindowManager {
       this.detachUIView()
     }
 
-    this.uiView = new BrowserView()
-    currentWindow.window.addBrowserView(this.uiView)
+    this.uiView = new WebContentsView()
+    currentWindow.window.contentView.addChildView(this.uiView)
 
     const bounds = currentWindow.window.getBounds()
     this.uiView.setBounds({
@@ -253,15 +258,21 @@ export class WindowManager {
       height: bounds.height - 60
     })
     this.uiView.webContents.loadURL(url)
+
+    if (plugin && (!app.isPackaged || plugin.dev.enable)) {
+      this.uiView.webContents.openDevTools({ mode: 'detach' })
+    }
+
+    console.log('[CoreBox] UI view attached.', url)
   }
 
   public detachUIView(): void {
     if (this.uiView) {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
-        currentWindow.window.removeBrowserView(this.uiView)
+        currentWindow.window.contentView.removeChildView(this.uiView)
       }
-      // @ts-ignore
+      // @ts-ignore The webContents may be destroyed, but we can safely ignore the error.
       this.uiView.webContents.destroy()
       this.uiView = null
     }

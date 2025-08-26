@@ -66,6 +66,7 @@ export type IPluginWebview = Map<number, any>
 
 export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
+  pluginPath: string
   webViewInit: boolean
   logger: PluginLogger
   webview: IPluginWebview
@@ -104,11 +105,11 @@ export interface IPluginFeature {
 }
 
 export type IFeatureInteraction = {
-  type: 'view'
+  type: 'webcontent' | 'widget'
   /**
    * The relative path to the html file from the plugin root.
    */
-  path: string
+  path?: string
 }
 
 /**

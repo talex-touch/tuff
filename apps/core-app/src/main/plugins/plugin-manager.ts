@@ -5,12 +5,14 @@ import path from 'path'
 import chokidar, { FSWatcher } from 'chokidar'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { genTouchChannel } from '../core/channel-core'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TouchPlugin } from './plugin'
 import { PluginIcon } from './plugin-icon'
 import { createPluginLoader } from './loaders'
 import { TalexTouch } from '../types'
+import { TouchWindow } from '../core/touch-core'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { shell } from 'electron'
 
 class DevPluginWatcher {
   private readonly manager: PluginManager
@@ -61,8 +63,8 @@ class DevPluginWatcher {
       return
     }
 
-    const pollPromises = Array.from(this.watchedPlugins.entries()).map(
-      ([name, { address }]) => this.checkPluginForUpdates(name, address)
+    const pollPromises = Array.from(this.watchedPlugins.entries()).map(([name, { address }]) =>
+      this.checkPluginForUpdates(name, address)
     )
 
     await Promise.allSettled(pollPromises)
@@ -191,7 +193,9 @@ class PluginManager implements IPluginManager {
         }
         console.log(`[PluginManager] Plugin ${pluginName} reloaded successfully.`)
       } else {
-        console.error(`[PluginManager] Plugin ${pluginName} failed to reload, as it could not be loaded again.`)
+        console.error(
+          `[PluginManager] Plugin ${pluginName} failed to reload, as it could not be loaded again.`
+        )
       }
     } catch (error) {
       console.error(`[PluginManager] Error while reloading plugin ${pluginName}:`, error)
@@ -354,9 +358,20 @@ class PluginManager implements IPluginManager {
     const manifestPath = path.resolve(pluginPath, 'manifest.json')
 
     if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
-      const placeholderIcon = new PluginIcon(pluginPath, 'error', 'loading', { enable: false, address: '' })
-      const touchPlugin = new TouchPlugin(pluginName, placeholderIcon, '0.0.0', 'Loading...', '', { enable: false, address: '' }, pluginPath)
-      
+      const placeholderIcon = new PluginIcon(pluginPath, 'error', 'loading', {
+        enable: false,
+        address: ''
+      })
+      const touchPlugin = new TouchPlugin(
+        pluginName,
+        placeholderIcon,
+        '0.0.0',
+        'Loading...',
+        '',
+        { enable: false, address: '' },
+        pluginPath
+      )
+
       touchPlugin.issues.push({
         type: 'error',
         message: 'Plugin directory or manifest.json is missing.',
@@ -403,8 +418,19 @@ class PluginManager implements IPluginManager {
     } catch (error: any) {
       console.error(`[PluginManager] Unhandled error while loading plugin ${pluginName}:`, error)
       // Create a dummy plugin to show the error in the UI
-      const placeholderIcon = new PluginIcon(pluginPath, 'error', 'fatal', { enable: false, address: '' })
-      const touchPlugin = new TouchPlugin(pluginName, placeholderIcon, '0.0.0', 'Fatal Error', '', { enable: false, address: '' }, pluginPath)
+      const placeholderIcon = new PluginIcon(pluginPath, 'error', 'fatal', {
+        enable: false,
+        address: ''
+      })
+      const touchPlugin = new TouchPlugin(
+        pluginName,
+        placeholderIcon,
+        '0.0.0',
+        'Fatal Error',
+        '',
+        { enable: false, address: '' },
+        pluginPath
+      )
       touchPlugin.issues.push({
         type: 'error',
         message: `A fatal error occurred while creating the plugin loader: ${error.message}`,
@@ -444,7 +470,6 @@ class PluginManager implements IPluginManager {
 
     return Promise.resolve(true)
   }
-
 }
 
 let pluginManager: IPluginManager | null = null
@@ -530,8 +555,46 @@ export const PluginManagerModule: TalexTouch.IModule = {
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:explorer', async ({ data }) => {
       const plugin = (pluginManager as PluginManager).getPluginByName(data) as TouchPlugin
       if (!plugin) return
-      // const pluginPath = plugin.pluginPath
-      // shell.openPath(plugin.pluginPath)
+      const pluginPath = plugin.pluginPath
+      try {
+        const err = await shell.openPath(pluginPath)
+        if (err) console.error(`Error opening plugin folder: ${err}`)
+      } catch (error) {
+        console.error(`Exception while opening plugin folder:`, error)
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
+      const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin
+      if (!touchPlugin) return reply(DataCode.ERROR, { error: 'Plugin not found!' })
+
+      const win = new TouchWindow(data)
+      let webContents: Electron.WebContents
+      if (data.file) {
+        webContents = await win.loadFile(data.file)
+      } else if (data.url) {
+        webContents = await win.loadURL(data.url)
+      } else {
+        return reply(DataCode.ERROR, { error: 'No file or url provided!' })
+      }
+
+      const obj = touchPlugin.__getInjections__()
+      await webContents.insertCSS(obj.styles)
+      await webContents.executeJavaScript(obj.js)
+
+      webContents.send('@loaded', {
+        id: webContents.id,
+        plugin,
+        type: 'intend'
+      })
+
+      touchPlugin._windows.set(webContents.id, win)
+      win.window.on('closed', () => {
+        win.window.removeAllListeners()
+        touchPlugin._windows.delete(webContents.id)
+      })
+
+      return reply(DataCode.SUCCESS, { id: webContents.id })
     })
   },
   destroy() {

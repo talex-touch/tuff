@@ -9,9 +9,9 @@ import {
   PluginIssue,
   PluginLogger,
   PluginStatus,
-  TuffItem,
   IPluginFeature
 } from '@talex-touch/utils/plugin'
+import { TuffItem } from '@talex-touch/utils/core-box'
 import { TouchWindow, genTouchApp } from '../core/touch-core'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
 import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -140,7 +140,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     if (commands.length < 1) return false
 
-    return this.features.push(new PluginFeature(this.pluginPath, feature)) >= 0
+    return this.features.push(new PluginFeature(this.pluginPath, feature, this.dev)) >= 0
   }
 
   delFeature(featureId: string): boolean {
@@ -169,6 +169,48 @@ export class TouchPlugin implements ITouchPlugin {
 
     const controller = new AbortController()
     this.featureControllers.set(feature.id, controller)
+
+    if (feature.interaction?.type === 'webcontent') {
+      const interactionPath = feature.interaction.path
+      if (!interactionPath) {
+        this.logger.error(`Security Alert: Aborted loading view with invalid path: ${interactionPath}`)
+        return
+      }
+
+      let viewUrl: string
+
+      this.logger.info(`Trigger feature with WebContent interaction: ${feature.id}`)
+
+      if (this.dev.enable && this.dev.source) {
+        const baseUrl = new URL(this.dev.address)
+        baseUrl.hash = interactionPath
+        viewUrl = baseUrl.toString()
+      } else {
+        if (interactionPath.includes('..')) {
+          this.logger.error(
+            `Security Alert: Aborted loading view with invalid path: ${interactionPath}`
+          )
+          this.issues.push({
+            type: 'error',
+            code: 'INVALID_VIEW_PATH',
+            message: `Interaction path cannot contain '..'.`,
+            source: `feature:${feature.id}`,
+            timestamp: Date.now()
+          })
+          return
+        }
+        const viewPath = path.join(this.pluginPath, 'index.html')
+        viewUrl = 'file://' + viewPath + interactionPath
+      }
+      CoreBoxManager.getInstance().enterUIMode(viewUrl, this)
+      return
+    }
+
+    if (feature.interaction?.type === 'widget') {
+      // TODO: Implement widget logic
+      this.logger.warn(`Widget interaction type is not implemented yet for feature: ${feature.id}`)
+      return
+    }
 
     this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
 

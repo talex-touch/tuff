@@ -35,11 +35,7 @@
             "翻译"
           ]
         }
-      ],
-      "interaction": {
-        "type": "view",
-        "path": "index.html"
-      }
+      ]
     },
     {
       "id": "multi-source-translate",
@@ -58,14 +54,14 @@
         }
       ],
       "interaction": {
-        "type": "view",
-        "path": "index.html"
+        "type": "webcontent",
+        "path": "/multi-translate"
       }
     },
     {
-      "id": "ui-mode-tester",
-      "name": "UI模式测试",
-      "desc": "测试UI交互模式",
+      "id": "screenshot-translate",
+      "name": "截图翻译",
+      "desc": "截取屏幕进行翻译",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -75,11 +71,12 @@
       "commands": [
         {
           "type": "over",
-          "value": ["ui-test"]
+          "value": ["s-fy", "截图翻译"]
         }
       ],
       "interaction": {
-        "type": "ui-mode"
+        "type": "widget",
+        "path": "screenshot-translate"
       }
     }
   ]

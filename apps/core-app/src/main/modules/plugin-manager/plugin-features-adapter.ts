@@ -17,6 +17,8 @@ import { IProviderActivate } from '@talex-touch/utils'
 import { genPluginManager, TouchPlugin } from '../../plugins'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../box-tool/search-engine/search-core'
+import { coreBoxManager } from '../box-tool/core-box/manager'
+import path from 'path'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
 type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
@@ -140,7 +142,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
 
     const pluginManager = genPluginManager()
     const plugin = pluginManager.plugins.get(pluginName)
-    if (!plugin || !this.isPluginActive(plugin)) {
+    if (!plugin || !this.isPluginActive()) {
       console.error(
         `[PluginFeaturesAdapter] Plugin not found or not active: ${pluginName} (status: ${plugin?.status})`
       )
@@ -155,6 +157,57 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       return null
     }
 
+    // Handle view/webcontent interaction
+    if (feature.interaction && (feature.interaction.type === 'view' || feature.interaction.type === 'webcontent')) {
+      const interactionPath = feature.interaction.path
+      if (!interactionPath) {
+        console.error(`[PluginFeaturesAdapter] Feature ${feature.id} has interaction but no path.`)
+        return null
+      }
+      let viewUrl: string
+
+      if (plugin.dev.enable && plugin.dev.source && plugin.dev.address) {
+        // Dev source mode: load from remote dev server
+        viewUrl = new URL(interactionPath, plugin.dev.address).toString()
+      } else {
+        // Production or local dev mode: load from local file system
+        if (interactionPath.includes('..')) {
+          console.error(
+            `[PluginFeaturesAdapter] Security Alert: Aborted loading view with invalid path: ${interactionPath}`
+          )
+          plugin.issues.push({
+            type: 'error',
+            code: 'INVALID_VIEW_PATH',
+            message: `Interaction path cannot contain '..'.`,
+            source: `feature:${feature.id}`,
+            timestamp: Date.now()
+          })
+          return null
+        }
+        const viewPath = path.join(plugin.pluginPath, interactionPath)
+        viewUrl = 'file://' + viewPath
+      }
+
+      coreBoxManager.enterUIMode(viewUrl, plugin)
+
+      // Return an activation object to keep the plugin active
+      return {
+        id: this.id,
+        name: plugin.name,
+        icon: {
+          type: mapIconType((plugin.icon as IPluginIcon).type),
+          value: (plugin.icon as IPluginIcon).value
+        },
+        meta: {
+          pluginName,
+          featureId,
+          pluginIcon: plugin.icon,
+          feature: item
+        }
+      }
+    }
+
+    // Default feature execution
     plugin.triggerFeature(feature, args.searchResult?.query.text)
 
     if (feature.push) {
@@ -172,7 +225,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     return null
   }
 
-  private isPluginActive(plugin: ITouchPlugin): boolean {
+  private isPluginActive(): boolean {
     return true
 
     // TODO: 插件状态检查
@@ -234,7 +287,17 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         const plugin = pluginManager.plugins.get(pluginName) as TouchPlugin
         const feature = plugin?.getFeature(featureId)
 
-        if (plugin && feature && this.isPluginActive(plugin)) {
+        if (plugin && feature && this.isPluginActive()) {
+          // If query is empty, return all features of the activated plugin
+          if (!query.text) {
+            const allFeatures = plugin.getFeatures()
+            const items = allFeatures.map((f) => this.createTuffItem(plugin, f))
+            return TuffFactory.createSearchResult(query)
+              .setItems(items)
+              .setActivate(activationState)
+              .build()
+          }
+
           console.debug(
             `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
           )
@@ -268,7 +331,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         return TuffFactory.createSearchResult(query).build()
       }
 
-      if (!this.isPluginActive(plugin)) {
+      if (!this.isPluginActive()) {
         continue
       }
 
