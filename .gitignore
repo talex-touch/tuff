@@ -122,6 +122,7 @@ release/
 dist/
 .idea/
 # plugins/
+.spec/*
 
 apps/core-app/tuff
 apps/core-app/signature.json

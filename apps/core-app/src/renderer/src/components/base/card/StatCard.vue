@@ -60,6 +60,8 @@ onMounted(() => {
     transform: scale(1.5);
     filter: blur(20px) brightness(120%) saturate(180%);
   }
-  border: 1px solid var(--el-border-color-lighter);
+  & {
+    border: 1px solid var(--el-border-color-lighter);
+  }
 }
 </style>
