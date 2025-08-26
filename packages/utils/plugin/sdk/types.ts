@@ -1,6 +1,6 @@
 /**
- * @fileoverview Plugin SDK utilities and interfaces for Talex Touch plugin development
- * @author Talex Touch Team
+ * @fileoverview Plugin SDK utilities and interfaces for Tuff plugin development
+ * @author Tuff Team
  * @version 1.0.0
  */
 

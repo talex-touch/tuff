@@ -22,10 +22,10 @@ defineProps({
     <div class="About-Content">
       <div class="Home-Text">
         <svg>
-          <text x="0" y="20%">Talex-Touch</text>
+          <text x="0" y="20%">Tuff</text>
         </svg>
 
-        <p>A within easy reach of all applications.</p>
+        <p>The command bar, reimagined for those who build.</p>
       </div>
 
       <ul class="About-Footer" v-if="env.process">
@@ -49,6 +49,14 @@ defineProps({
 <style lang="scss">
 .AboutApplication {
   .About-Content {
+    & {
+      position: absolute;
+      left: 5%;
+      top: 15%;
+      width: 70%;
+      height: 70%;
+    }
+
     .About-Footer {
       position: absolute;
       padding: 0;
@@ -85,14 +93,6 @@ defineProps({
         // background-color: var(--el-fill-color-light);
       }
     }
-
-    position: absolute;
-
-    left: 5%;
-    top: 15%;
-
-    width: 70%;
-    height: 70%;
 
     .Home-Text {
       p {
@@ -180,6 +180,16 @@ defineProps({
   }
 
   .About-Image {
+    & {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      top: 20%;
+      right: 5%;
+      height: 60%;
+      aspect-ratio: 1 / 1;
+    }
+
     &:before,
     &:after {
       content: '';
@@ -204,17 +214,6 @@ defineProps({
 
       animation-delay: 0.5s;
     }
-
-    position: absolute;
-    display: flex;
-
-    align-items: center;
-
-    top: 20%;
-    right: 5%;
-
-    height: 60%;
-    aspect-ratio: 1 / 1;
 
     img {
       position: absolute;
@@ -263,27 +262,29 @@ defineProps({
     background-color: var(--el-fill-color-darker);
   }
 
-  position: relative;
-  margin-bottom: 15px;
+  & {
+    position: relative;
+    margin-bottom: 15px;
 
-  width: 100%;
-  min-height: 180px;
-  height: 30%;
+    width: 100%;
+    min-height: 180px;
+    height: 30%;
 
-  clear: both;
-  opacity: 0.45;
-  border-radius: 12px;
-  background-color: var(--el-fill-color-light);
-  background-image: linear-gradient(
-    to right,
-    var(--el-color-primary-light-3) 0%,
-    var(--el-color-info-dark-2) 50%,
-    var(--el-color-primary-light-3) 100%
-  );
-  background-size: 200% 100%;
-  // filter: drop-shadow(0 0 4px var(--el-color-primary-light-7));
+    clear: both;
+    opacity: 0.45;
+    border-radius: 12px;
+    background-color: var(--el-fill-color-light);
+    background-image: linear-gradient(
+      to right,
+      var(--el-color-primary-light-3) 0%,
+      var(--el-color-info-dark-2) 50%,
+      var(--el-color-primary-light-3) 100%
+    );
+    background-size: 200% 100%;
+    // filter: drop-shadow(0 0 4px var(--el-color-primary-light-7));
 
-  animation: waving 10s infinite linear;
+    animation: waving 10s infinite linear;
+  }
 }
 
 @keyframes header-breathing {

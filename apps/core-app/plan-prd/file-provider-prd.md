@@ -5,8 +5,8 @@
 - **文档版本**: 1.0
 - **创建日期**: 2025-08-11
 - **作者**: AI Assistant
-- **审核人**: 
-- **相关文档**: 
+- **审核人**:
+- **相关文档**:
   - 搜索引擎架构文档
   - 数据库设计文档
   - 文件系统监视器设计文档
@@ -171,13 +171,13 @@ class FileProvider implements ISearchProvider {
   // 文件系统事件处理
   private handleItemAddedOrChanged = async (event: FileAddedEvent | FileChangedEvent): Promise<void>
   private handleItemUnlinked = async (event: FileUnlinkedEvent): Promise<void>
-  
+
   // 索引管理
   private startIndexing(): Promise<void>
   private pauseIndexing(): void
   private resumeIndexing(): Promise<void>
   private cancelIndexing(): Promise<void>
-  
+
   // 进度反馈
   private reportProgress(progress: number, message: string): void
 }
@@ -188,25 +188,25 @@ class FileProvider implements ISearchProvider {
 interface FileProviderConfig {
   // 索引目录
   indexPaths: string[]
-  
+
   // 白名单文件类型
   whitelistExtensions: string[]
-  
+
   // 黑名单目录名
   blacklistDirectories: string[]
-  
+
   // 最大文件大小限制 (MB)
   maxFileSize: number
-  
+
   // 索引批处理大小
   batchSize: number
-  
+
   // 索引间隔时间 (小时)
   indexInterval: number
-  
+
   // CPU使用率阈值 (%)
   cpuThreshold: number
-  
+
   // 内存使用率阈值 (%)
   memoryThreshold: number
 }
@@ -600,7 +600,7 @@ interface FileProviderConfig {
 ## 16. 附录
 
 ### 16.1 术语表
-- **TalexTouch**: 一款高效的启动器和文件搜索工具
+- **Tuff**: 一款高效的启动器和文件搜索工具
 - **File Provider**: 文件提供者，用于索引和搜索文件系统中的文件
 - **ISearchProvider**: 搜索提供者接口
 - **白名单机制**: 只允许指定的文件类型被索引的机制

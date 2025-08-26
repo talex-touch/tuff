@@ -18,7 +18,7 @@ function goon(): void {
   <div class="Greeting">
     <LottieFrame :loop="true" :data="HelloData" />
     <div class="Greeting-Content">
-      <p>Welcome to TalexTouch</p>
+      <p>Welcome to Tuff</p>
       <FlatButton primary @click="goon">Get Started</FlatButton>
     </div>
   </div>

@@ -1,6 +1,6 @@
 # Core Box Package
 
-The Core Box package provides unified type definitions and utility functions for the Talex Touch search box system. This package contains the foundational types and tools used across the entire project for search result management and plugin integration.
+The Core Box package provides unified type definitions and utility functions for the TUFF search box system. This package contains the foundational types and tools used across the entire project for search result management and plugin integration.
 
 ## Features
 
@@ -112,14 +112,14 @@ const codeItem = SearchUtils.createDataItem({
 ```typescript
 const urlItem = SearchUtils.createSearchItem({
   name: "GitHub Repository",
-  desc: "Talex Touch project",
+  desc: "TUFF project",
   pluginName: "web-search",
   render: {
     mode: RenderMode.URL,
     content: "https://github.com/talex-touch/talex-touch", // The actual URL to load
     preview: {
       enabled: true,
-      title: "Talex Touch",                                // Preview metadata
+      title: "Tuff",                                // Preview metadata
       description: "Modern desktop application framework", // Preview description
       image: "https://github.com/talex-touch.png"         // Preview image
     }
@@ -181,11 +181,11 @@ interface IRenderConfig {
 This package is automatically exported from `@talex-touch/utils`:
 
 ```typescript
-import { 
-  ISearchItem, 
-  IDataItem, 
-  SearchUtils, 
-  RenderMode 
+import {
+  ISearchItem,
+  IDataItem,
+  SearchUtils,
+  RenderMode
 } from '@talex-touch/utils';
 ```
 
