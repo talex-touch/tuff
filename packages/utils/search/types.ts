@@ -2,7 +2,7 @@
  * @fileoverview Search Types and Utilities
  *
  * This module provides comprehensive type definitions and utility functions
- * for search result items across the Talex Touch application. It defines
+ * for search result items across the Tuff application. It defines
  * the core interfaces and factory functions used by the search system,
  * plugins, and UI components.
  *
@@ -11,7 +11,7 @@
  * - {@link IDataItem} - Extended interface for data processing results
  * - {@link createDataItem} - Factory function for creating data items
  *
- * @author Talex Touch Team
+ * @author Tuff Team
  * @since 1.0.0
  * @version 1.0.0
  */
@@ -399,7 +399,7 @@ export interface IDataItem extends ISearchItem {
  */
 export enum SearchMode {
   INPUT = 'INPUT',
-  COMMAND = 'COMMAND', 
+  COMMAND = 'COMMAND',
   IMAGE = 'IMAGE',
   FILE = 'FILE',
   FEATURE = 'FEATURE'
@@ -411,13 +411,13 @@ export enum SearchMode {
 export interface ISearchOptions {
   /** 搜索模式 */
   mode: SearchMode;
-  
+
   /** 最大结果数量 */
   maxResults?: number;
-  
+
   /** 是否启用模糊匹配 */
   fuzzyMatch?: boolean;
-  
+
   /** 搜索超时时间（毫秒） */
   timeout?: number;
 }
@@ -428,19 +428,19 @@ export interface ISearchOptions {
 export interface IPluginSearchResult {
   /** 插件名称 */
   pluginName: string;
-  
+
   /** 搜索结果列表 */
   items: ISearchItem[];
-  
+
   /** 推送时间戳 */
   timestamp: number;
-  
+
   /** 查询关键词 */
   query: string;
-  
+
   /** 结果总数 */
   total: number;
-  
+
   /** 是否有更多结果 */
   hasMore?: boolean;
 }
@@ -451,19 +451,19 @@ export interface IPluginSearchResult {
 export interface ISearchResultManager {
   /** 推送搜索结果 */
   pushItems(items: ISearchItem[]): void;
-  
+
   /** 清空搜索结果 */
   clearItems(): void;
-  
+
   /** 获取当前搜索结果 */
   getItems(): ISearchItem[];
-  
+
   /** 更新单个搜索结果 */
   updateItem(id: string, item: Partial<ISearchItem>): boolean;
-  
+
   /** 删除单个搜索结果 */
   removeItem(id: string): boolean;
-  
+
   /** 获取结果数量 */
   getCount(): number;
 }

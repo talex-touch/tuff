@@ -22,10 +22,10 @@ defineProps({
     <div class="About-Content">
       <div class="Home-Text">
         <svg>
-          <text x="0" y="20%">Talex-Touch</text>
+          <text x="0" y="20%">Tuff</text>
         </svg>
 
-        <p>A within easy reach of all applications.</p>
+        <p>The command bar, reimagined for those who build.</p>
       </div>
 
       <ul class="About-Footer" v-if="env.process">
