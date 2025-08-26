@@ -15,6 +15,9 @@ import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 
 // Import application settings
 import { appSetting } from '~/modules/channel/storage'
+import { onMounted, ref } from 'vue'
+import { shortconApi } from '~/modules/channel/main/shortcon'
+import { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 // Define component props
 interface Props {
@@ -24,23 +27,16 @@ interface Props {
 defineProps<Props>()
 
 // Reactive reference for shortcut key binding
-const key = ref(appSetting.keyBind.summon)
+const shortcuts = ref<Shortcut[] | null>(null)
 
-// Watch for changes to the shortcut key and update settings
-watch(
-  () => key.value,
-  (val) => {
-    // Register the new shortcut key with the API
-    const res = window.$shortconApi.regKey(val, () => {
-      console.log('Shortcut triggered:', val)
-    })
+onMounted(async () => {
+  shortcuts.value = await shortconApi.getAll()
+})
 
-    console.log(res)
-
-    // Update the application settings with the new shortcut
-    appSetting.keyBind.summon = val
-  }
-)
+function updateShortcut(id: string, newAccelerator: string): void {
+  if (!id || !newAccelerator) return
+  shortconApi.update(id, newAccelerator)
+}
 </script>
 
 <!--
@@ -64,13 +60,20 @@ watch(
     />
 
     <!-- Shortcut key configuration slot -->
-    <t-block-slot
-      title="Shortcon"
-      icon="keyboard"
-      description="Define your own shortcut and use it anywhere."
-    >
-      <flat-key-input v-model="key" />
-    </t-block-slot>
+    <template v-if="shortcuts">
+      <t-block-slot
+        v-for="shortcut in shortcuts"
+        :key="shortcut.id"
+        :title="shortcut.id"
+        icon="keyboard"
+        :description="`Define shortcut for ${shortcut.id}`"
+      >
+        <flat-key-input
+          :model-value="shortcut.accelerator"
+          @update:model-value="(newValue) => updateShortcut(shortcut.id, String(newValue))"
+        />
+      </t-block-slot>
+    </template>
 
     <!-- Auto paste time selection -->
     <t-block-select

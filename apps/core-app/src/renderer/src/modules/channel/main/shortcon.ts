@@ -1,23 +1,21 @@
 import { touchChannel } from '~/modules/channel/channel-core'
+import { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 export class ShortconApi {
-  regKey(_key: string, value: Function) {
-    const res: {
-      registered: boolean
-      message: string
-    } = touchChannel.sendSync('shortcon:reg', _key)
+  getAll(): Promise<ShortcutSetting> {
+    return touchChannel.send('shortcon:get-all')
+  }
 
-    if (!res.registered) {
-      return res
-    }
+  update(id: string, accelerator: string): Promise<boolean> {
+    return touchChannel.send('shortcon:update', { id, accelerator })
+  }
 
-    touchChannel.regChannel('shortcon:trigger', ({ key }: any) => {
-      if (_key !== key) return
+  disableAll(): Promise<void> {
+    return touchChannel.send('shortcon:disable-all')
+  }
 
-      value?.()
-    })
-
-    return res
+  enableAll(): Promise<void> {
+    return touchChannel.send('shortcon:enable-all')
   }
 }
 
