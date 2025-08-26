@@ -18,16 +18,17 @@ import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventb
 import { genTouchChannel } from '../core/channel-core'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getJs, getStyles } from '../utils/plugin-injection'
-import path from 'path'
-import pkg from '../../../package.json'
-import { getCoreBoxWindow } from '../modules/box-tool/core-box'
-import { createClipboardManager, createStorageManager } from '@talex-touch/utils/plugin'
-import { app, clipboard, dialog, shell } from 'electron'
-import axios from 'axios'
-import { CoreBoxManager } from '../modules/box-tool/core-box/manager'
-import fse from 'fs-extra'
-import { PluginFeature } from './plugin-feature'
-import { PluginIcon } from './plugin-icon'
+import path from 'path';
+import pkg from '../../../package.json';
+import { getCoreBoxWindow } from '../modules/box-tool/core-box';
+import { createClipboardManager, createStorageManager } from '@talex-touch/utils/plugin';
+import { app, clipboard, dialog, shell } from 'electron';
+import axios from 'axios';
+import { CoreBoxManager } from '../modules/box-tool/core-box/manager'; // Restore import
+import fse from 'fs-extra';
+import { PluginFeature } from './plugin-feature';
+import { PluginIcon } from './plugin-icon';
+import { PluginViewLoader } from '../modules/plugin-manager/plugin-view-loader';
 
 const disallowedArrays = [
   '官方',
@@ -63,7 +64,7 @@ export class TouchPlugin implements ITouchPlugin {
   icon: IPluginIcon
   logger: PluginLogger
   webViewInit: boolean = false
-  webview: IPluginWebview = {}
+  webview: IPluginWebview = new Map() // Initialize as Map
   platforms: IPlatform
   features: PluginFeature[]
   issues: PluginIssue[]
@@ -162,7 +163,7 @@ export class TouchPlugin implements ITouchPlugin {
     return this.features
   }
 
-  triggerFeature(feature: IPluginFeature, query: any): void {
+  async triggerFeature(feature: IPluginFeature, query: any): Promise<void> { // Mark as async
     if (this.featureControllers.has(feature.id)) {
       this.featureControllers.get(feature.id)?.abort()
     }
@@ -177,33 +178,11 @@ export class TouchPlugin implements ITouchPlugin {
         return
       }
 
-      let viewUrl: string
+      this.logger.info(`Trigger feature with WebContent interaction: ${feature.id}`);
 
-      this.logger.info(`Trigger feature with WebContent interaction: ${feature.id}`)
-
-      if (this.dev.enable && this.dev.source) {
-        const baseUrl = new URL(this.dev.address)
-        baseUrl.hash = interactionPath
-        viewUrl = baseUrl.toString()
-      } else {
-        if (interactionPath.includes('..')) {
-          this.logger.error(
-            `Security Alert: Aborted loading view with invalid path: ${interactionPath}`
-          )
-          this.issues.push({
-            type: 'error',
-            code: 'INVALID_VIEW_PATH',
-            message: `Interaction path cannot contain '..'.`,
-            source: `feature:${feature.id}`,
-            timestamp: Date.now()
-          })
-          return
-        }
-        const viewPath = path.join(this.pluginPath, 'index.html')
-        viewUrl = 'file://' + viewPath + interactionPath
-      }
-      CoreBoxManager.getInstance().enterUIMode(viewUrl, this)
-      return
+      // Delegate view loading to the unified PluginViewLoader
+      await PluginViewLoader.loadPluginView(this, feature);
+      return;
     }
 
     if (feature.interaction?.type === 'widget') {

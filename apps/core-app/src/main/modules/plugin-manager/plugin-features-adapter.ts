@@ -16,12 +16,11 @@ import {
 import { IProviderActivate } from '@talex-touch/utils'
 import { genPluginManager, TouchPlugin } from '../../plugins'
 import { TuffFactory } from '@talex-touch/utils'
-import searchEngineCore from '../box-tool/search-engine/search-core'
-import { coreBoxManager } from '../box-tool/core-box/manager'
-import path from 'path'
+import searchEngineCore from '../box-tool/search-engine/search-core';
+import { PluginViewLoader } from './plugin-view-loader';
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
-type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
+type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component';
 
 /**
  * Checks if a feature's command matches the given query text.
@@ -157,38 +156,17 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       return null
     }
 
-    // Handle view/webcontent interaction
-    if (feature.interaction && (feature.interaction.type === 'view' || feature.interaction.type === 'webcontent')) {
-      const interactionPath = feature.interaction.path
-      if (!interactionPath) {
-        console.error(`[PluginFeaturesAdapter] Feature ${feature.id} has interaction but no path.`)
-        return null
-      }
-      let viewUrl: string
+    // Handle webcontent interaction
+    if (feature.interaction && feature.interaction.type === 'webcontent') {
+      // Delegate view loading to the unified PluginViewLoader.
+      // The loader will add issues to plugin.issues if an error occurs.
+      await PluginViewLoader.loadPluginView(plugin, feature);
 
-      if (plugin.dev.enable && plugin.dev.source && plugin.dev.address) {
-        // Dev source mode: load from remote dev server
-        viewUrl = new URL(interactionPath, plugin.dev.address).toString()
-      } else {
-        // Production or local dev mode: load from local file system
-        if (interactionPath.includes('..')) {
-          console.error(
-            `[PluginFeaturesAdapter] Security Alert: Aborted loading view with invalid path: ${interactionPath}`
-          )
-          plugin.issues.push({
-            type: 'error',
-            code: 'INVALID_VIEW_PATH',
-            message: `Interaction path cannot contain '..'.`,
-            source: `feature:${feature.id}`,
-            timestamp: Date.now()
-          })
-          return null
-        }
-        const viewPath = path.join(plugin.pluginPath, interactionPath)
-        viewUrl = 'file://' + viewPath
+      // Check if the loader added an INVALID_VIEW_PATH issue to the plugin.
+      // If so, it means the view could not be loaded due to a security concern.
+      if (plugin.issues.some(issue => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`)) {
+         return null;
       }
-
-      coreBoxManager.enterUIMode(viewUrl, plugin)
 
       // Return an activation object to keep the plugin active
       return {
