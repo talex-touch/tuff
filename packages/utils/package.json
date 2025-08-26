@@ -19,7 +19,7 @@
     "url": "https://github.com/talex-touch/talex-touch.git",
     "type": "git"
   },
-  "description": "TalexTouch series utils",
+  "description": "Tuff series utils",
   "dependencies": {
     "@vueuse/core": "^13.6.0",
     "path-browserify": "^1.0.1",
