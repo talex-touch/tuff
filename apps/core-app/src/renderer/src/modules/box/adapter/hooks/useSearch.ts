@@ -19,6 +19,9 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   })
 
   const debouncedSearch = useDebounceFn(async () => {
+    if (!searchVal.value) {
+      return
+    }
     boxOptions.focus = 0
     loading.value = true
     res.value = [] // Clear previous results immediately
@@ -70,6 +73,8 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       boxOptions.data.feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
     }
+
+    res.value = []
 
     // When a feature is executed, clear the current list immediately.
     if (itemToExecute.source.id === 'plugin-features') {
@@ -134,7 +139,6 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     activeActivations.value = newState
     await handleSearch()
   }
-
 
   function handleExit(): void {
     if (activeActivations.value && activeActivations.value.length > 0) {
@@ -246,7 +250,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       //
     } else if (searchVal.value === '') {
       // If no provider is active and searchVal is empty, ignore pushed items.
-      return;
+      return
     }
 
     //

@@ -2,7 +2,7 @@ import { TuffQuery } from '@talex-touch/utils/core-box'
 import { ISortMiddleware, TuffItem } from '../types'
 
 const DEFAULT_WEIGHTS: Record<string, number> = {
-  app: 10,
+  app: 100,
   feature: 5,
   command: 5,
   plugin: 3,
@@ -13,10 +13,6 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
 
 function getWeight(item: TuffItem): number {
   const kind = item.kind || 'unknown'
-  // Special case for frequently used features
-  if (kind === 'feature' && (item.scoring?.frequency || 0) > 0.5) {
-    return 10
-  }
   return DEFAULT_WEIGHTS[kind] || 0
 }
 
@@ -25,22 +21,33 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   if (!searchKey || !title) return 0
 
   const name = title.toLowerCase()
+  const nameLength = name.length
+  if (nameLength === 0) return 0
 
   if (name === searchKey) return 1000
 
-  const pinyinMatch = item.meta?.extension?.matchResult
-  if (pinyinMatch) {
-    const [start, end] = pinyinMatch
-    const matchLength = end - start + 1
-    const nameLength = name.length
+  const matchRanges = item.meta?.extension?.matchResult as { start: number; end: number }[] | undefined
+  if (matchRanges && matchRanges.length > 0) {
+    // Using the first match range to calculate the score
+    const { start, end } = matchRanges[0]
+    const matchLength = end - start
 
-    // Higher score for matches at the beginning
-    if (start === 0) return 800 + (matchLength / nameLength) * 100
+    let score = 400
 
-    // Higher score for exact length matches
-    if (matchLength === searchKey.length) return 600 + (matchLength / nameLength) * 100
+    // 1. Match length reward
+    score += (matchLength / nameLength) * 100 // Match length reward
 
-    return 400 + (matchLength / nameLength) * 100
+    // 2. Beginning match reward
+    if (start === 0) {
+      score += 300 // 开头匹配，大幅加分
+    }
+
+    // 3. Continuity/relevance reward (compared to search term length)
+    if (matchLength === searchKey.length) {
+      score += 200
+    }
+
+    return Math.round(score)
   }
 
   if (name.includes(searchKey)) {
@@ -57,8 +64,15 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   const recency = item.scoring?.recency || 0
   const frequency = item.scoring?.frequency || 0
 
-  // Final score combines match quality, item type weight, and usage stats
-  return matchScore * 10000 + weight * 1000 + recency * 100 + frequency * 10
+  const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 10
+
+  // console.debug(
+  //   `[Sorter] Item: ${item.render.basic?.title?.padEnd(30)} | Kind: ${item.kind?.padEnd(10)} | Weight: ${weight
+  //     .toString()
+  //     .padEnd(5)} | MatchScore: ${matchScore.toString().padEnd(5)} | FinalScore: ${finalScore}`
+  // )
+
+  return finalScore
 }
 
 export const tuffSorter: ISortMiddleware = {
@@ -67,16 +81,16 @@ export const tuffSorter: ISortMiddleware = {
     const searchKey = query.text?.toLowerCase()
 
     // Use the Schwartzian transform (decorate-sort-undecorate) for performance.
-    // 1. Decorate: Calculate the sort score for each item once.
+    // Decorate: Calculate the sort score for each item once.
     const decoratedItems = items.map((item) => ({
       item,
       score: calculateSortScore(item, searchKey)
     }))
 
-    // 2. Sort: The comparison function is now a simple number comparison.
+    // Sort: The comparison function is now a simple number comparison.
     decoratedItems.sort((a, b) => b.score - a.score)
 
-    // 3. Undecorate: Extract the sorted items.
+    // Undecorate: Extract the sorted items.
     return decoratedItems.map((decorated) => decorated.item)
   }
 }
