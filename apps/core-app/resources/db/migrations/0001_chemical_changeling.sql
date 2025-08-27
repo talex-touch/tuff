@@ -1,0 +1,1 @@
+ALTER TABLE `files` ADD `display_name` text;
