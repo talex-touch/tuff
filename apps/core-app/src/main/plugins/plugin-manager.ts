@@ -537,7 +537,9 @@ export const PluginManagerModule: TalexTouch.IModule = {
   name: Symbol('PluginManager'),
   filePath: 'plugins',
   init(touchApp) {
-    genPluginManager(path.join(touchApp.rootPath, 'modules', 'plugins'))
+    const manager = genPluginManager(
+      path.join(touchApp.rootPath, 'modules', 'plugins')
+    ) as PluginManager
 
     const touchChannel = genTouchChannel()
 
@@ -550,10 +552,21 @@ export const PluginManagerModule: TalexTouch.IModule = {
     touchChannel.regChannel(ChannelType.MAIN, 'enable-plugin', async ({ data }) => {
       const plugin = pluginManager!.plugins.get(data!.name)
       if (!plugin) return false
+
+      if (plugin.status === PluginStatus.LOAD_FAILED) {
+        console.log(
+          `[PluginManager] Attempting to re-enable a failed plugin '${data!.name}'. Reloading...`
+        )
+        await manager.reloadPlugin(data!.name)
+        // After reloading, the plugin might be enabled automatically if it was previously.
+        // We return the current status from the manager.
+        return manager.enabledPlugins.has(data!.name)
+      }
+
       const success = await plugin.enable()
       if (success) {
-        this.enabledPlugins.add(data!.name)
-        await this.persistEnabledPlugins()
+        manager.enabledPlugins.add(data!.name)
+        await manager.persistEnabledPlugins()
       }
       return success
     })
@@ -562,8 +575,8 @@ export const PluginManagerModule: TalexTouch.IModule = {
       if (!plugin) return false
       const success = await plugin.disable()
       if (success) {
-        this.enabledPlugins.delete(data!.name)
-        await this.persistEnabledPlugins()
+        manager.enabledPlugins.delete(data!.name)
+        await manager.persistEnabledPlugins()
       }
       return success
     })

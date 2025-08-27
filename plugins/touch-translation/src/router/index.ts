@@ -7,6 +7,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('~/pages/index.vue'),
   },
   {
+    path: '/multi-translate',
+    name: 'multi-translate',
+    component: () => import('~/pages/multi-translate.vue'),
+  },
+  {
     path: '/hi/:name',
     name: 'hi-name',
     component: () => import('~/pages/hi/[name].vue'),

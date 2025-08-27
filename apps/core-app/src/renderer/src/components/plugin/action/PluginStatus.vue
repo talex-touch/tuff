@@ -9,7 +9,7 @@ import { ref, watchEffect, onMounted } from 'vue'
 const props = defineProps(['plugin', 'shrink'])
 const dom = ref()
 
-const _PluginStatus = ['DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED']
+const _PluginStatus = ['DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED', 'LOAD_FAILED']
 const func = ref(() => {})
 const status = ref('DISABLED')
 
@@ -25,7 +25,8 @@ function refresh() {
     'ENABLED',
     'CRASHED',
     'DISABLING',
-    'DISABLED'
+    'DISABLED',
+    'LOAD_FAILED'
   )
   this.$el.classList.add(this.status)
 
@@ -57,6 +58,13 @@ function refresh() {
     this.$el.innerHTML = `Plugin loaded, click to enable.`
 
     func.value = () => {
+      pluginManager.enablePlugin(this.pluginName)
+    }
+  } else if (this.status === 'LOAD_FAILED') {
+    this.$el.innerHTML = `Plugin load failed, click to restart.`
+
+    func.value = () => {
+      pluginManager.disablePlugin(this.pluginName)
       pluginManager.enablePlugin(this.pluginName)
     }
   }
@@ -124,6 +132,15 @@ onMounted(() => {
 
   cursor: pointer;
   opacity: 0.75;
+  color: var(--el-color-warning-light-7);
+  background: var(--el-color-danger);
+}
+
+.PluginStatus-Container.LOAD_FAILED {
+  height: 30px;
+
+  cursor: pointer;
+  opacity: 1;
   color: var(--el-color-warning-light-7);
   background: var(--el-color-danger);
 }
