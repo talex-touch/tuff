@@ -28,14 +28,14 @@ function getHighlightedHTML(
   matchedIndices?: Range[],
   opts: {
     className?: string
-    base?: 0 | 1 // 起始基：0 基或 1 基，默认 1 基（符合你现在的理解）
-    inclusiveEnd?: boolean // 右端是否包含，默认包含
+    base?: 0 | 1 // 起始基：0 基或 1 基，默认 0 基
+    inclusiveEnd?: boolean // 右端是否包含，默认不包含 (右开)
   } = {}
 ): string {
   if (!matchedIndices?.length) return text
 
   console.log('matchedIndices', matchedIndices, text)
-  const { className = 'font-semibold text-red', base = 1, inclusiveEnd = true } = opts
+  const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
 
   // 只取最后一个
   let { start, end } = matchedIndices[matchedIndices.length - 1]
