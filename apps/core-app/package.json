@@ -65,7 +65,7 @@
     "mousetrap": "^1.6.5",
     "original-fs": "^1.2.0",
     "pinia": "^3.0.3",
-    "pinyin-match": "^1.2.8",
+    "pinyin-pro": "^3.19.6",
     "remixicon": "^4.6.0",
     "simple-plist": "1.4.0-0",
     "v-shared-element": "^3.1.1",

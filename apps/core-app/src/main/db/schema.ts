@@ -56,6 +56,7 @@ export const files = sqliteTable('files', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   path: text('path').notNull().unique(), // 文件的绝对路径
   name: text('name').notNull(),
+  displayName: text('display_name'),
   extension: text('extension'),
   size: integer('size'),
   mtime: integer('mtime', { mode: 'timestamp' }).notNull(),

@@ -96,6 +96,8 @@ async function getAppIcon(app: { path: string; name: string }): Promise<string |
 export async function getApps(): Promise<
   {
     name: string
+    displayName: string | undefined
+    fileName: string
     path: string
     icon: string
     bundleId: string
@@ -104,61 +106,8 @@ export async function getApps(): Promise<
   }[]
 > {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
-
-  return new Promise((resolve, reject) => {
-    exec(
-      'system_profiler SPApplicationsDataType -json',
-      { maxBuffer: 1024 * 1024 * 20 },
-      async (error, stdout) => {
-        if (error) {
-          return reject(new Error(`system_profiler command failed: ${error.message}`))
-        }
-
-        try {
-          const data = JSON.parse(stdout)
-          const apps = data.SPApplicationsDataType as MacApp[]
-
-          if (!apps || !Array.isArray(apps)) {
-            return reject(
-              new Error(
-                'Unexpected output from system_profiler: SPApplicationsDataType is not an array.'
-              )
-            )
-          }
-
-          const appPromises = apps
-            .filter(
-              (app) =>
-                app.path &&
-                (app.path.startsWith('/Applications/') ||
-                  app.path.startsWith('/System/Applications/'))
-            )
-            .map(async (app) => {
-              const icon = await getAppIcon({ name: app._name, path: app.path })
-              const bundleId = app.signed_by?.[0]
-              return {
-                name: app._name,
-                path: app.path,
-                icon: icon ? `data:image/png;base64,${icon}` : '',
-                bundleId: bundleId,
-                uniqueId: bundleId || app.path,
-                lastModified: new Date(app.lastModified)
-              }
-            })
-
-          const settledApps = await Promise.allSettled(appPromises)
-
-          const successfulApps = settledApps
-            .filter((result) => result.status === 'fulfilled' && result.value)
-            .map((result) => (result as PromiseFulfilledResult<any>).value)
-
-          resolve(successfulApps)
-        } catch (parseError) {
-          reject(new Error(`Failed to parse system_profiler JSON output: ${parseError}`))
-        }
-      }
-    )
-  })
+  // Switch to mdfind as the primary method for discovering applications for better coverage.
+  return getAppsViaMdfind()
 }
 
 // Helper to parse plist content with regex
@@ -171,6 +120,8 @@ function getValueFromPlist(content: string, key: string): string | null {
 // The core logic for fetching app info, designed to throw errors on failure.
 async function getAppInfoUnstable(appPath: string): Promise<{
   name: string
+  displayName: string | undefined
+  fileName: string
   path: string
   icon: string
   bundleId: string
@@ -178,19 +129,39 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   lastModified: Date
 }> {
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+
+  // Pre-check if Info.plist exists before proceeding
+  try {
+    await fs.access(plistPath, fs.constants.F_OK)
+  } catch {
+    // If Info.plist doesn't exist, this is not a valid/complete app bundle.
+    throw new Error(`Info.plist not found at ${plistPath}`)
+  }
+
   const stats = await fs.stat(appPath)
   const plistContent = await fs.readFile(plistPath, 'utf-8')
 
+  // Get names from Info.plist
   const displayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
-  const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
-  const name = displayName || bundleName || path.basename(appPath, '.app')
+  const bundleName = getValueFromPlist(plistContent, 'CFBundleName') // Keep for icon cache
+  const fileName = path.basename(appPath, '.app')
+
+  // `name` is always the file name
+  const name = fileName
 
   const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
 
-  const icon = await getAppIcon({ name, path: appPath })
+  // Use the most definitive name for the icon cache to avoid collisions
+  const icon = await getAppIcon({ name: displayName || bundleName || name, path: appPath })
+
+  if (appPath.toLowerCase().includes('wechat')) {
+    console.log(`[Darwin Scan] Path: ${appPath}, Name: ${name}, DisplayName: ${displayName}`)
+  }
 
   return {
     name,
+    displayName: displayName || undefined,
+    fileName,
     path: appPath,
     icon: icon ? `data:image/png;base64,${icon}` : '',
     bundleId,
@@ -202,7 +173,7 @@ async function getAppInfoUnstable(appPath: string): Promise<{
 // Create a retrier instance to handle transient errors like ENOENT
 const getAppInfoRetrier = createRetrier({
   maxRetries: 2, // Total of 3 attempts
-  timeoutMs: 1000, // 1-second timeout for each attempt
+  timeoutMs: 5000, // 5-second timeout for each attempt
   shouldRetry: (error: any) => error.code === 'ENOENT' // Only retry if Info.plist is not found
 })
 
@@ -211,6 +182,8 @@ const reliableGetAppInfo: typeof getAppInfoUnstable = getAppInfoRetrier(getAppIn
 
 export async function getAppInfo(appPath: string): Promise<{
   name: string
+  displayName: string | undefined
+  fileName: string
   path: string
   icon: string
   bundleId: string
@@ -239,6 +212,8 @@ export async function getAppInfo(appPath: string): Promise<{
 export async function getAppsViaMdfind(): Promise<
   {
     name: string
+    displayName: string | undefined
+    fileName: string
     path: string
     icon: string
     bundleId: string
@@ -266,6 +241,8 @@ export async function getAppsViaMdfind(): Promise<
               result
             ): result is PromiseFulfilledResult<{
               name: string
+              displayName: string | undefined
+              fileName: string
               path: string
               icon: string
               bundleId: string

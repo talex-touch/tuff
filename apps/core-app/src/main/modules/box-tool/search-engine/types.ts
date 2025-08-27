@@ -22,7 +22,7 @@ export interface ProviderContext {
   storageManager: TalexTouch.IModule
 }
 
-export type { TuffItem, TuffQuery, TuffSourceType }
+export type { IProviderActivate, TuffItem, TuffQuery, TuffSourceType }
 
 /**
  * Represents the statistics for a single sort middleware.

@@ -21,19 +21,46 @@ const displayIcon = computed(() => {
   return 'default-icon' // or some other default
 })
 
-function getHighlightedHTML(text: string, matchedIndices?: [number, number]): string {
-  if (!matchedIndices || matchedIndices.length !== 2) return text
+type Range = { start: number; end: number }
 
-  const [start, end] = matchedIndices
-  let result = ''
-  for (let i = 0; i < text.length; i++) {
-    if (i >= start && i <= end) {
-      result += `<span class="font-semibold text-red">${text[i]}</span>`
-    } else {
-      result += text[i]
-    }
-  }
-  return result
+function getHighlightedHTML(
+  text: string,
+  matchedIndices?: Range[],
+  opts: {
+    className?: string
+    base?: 0 | 1 // 起始基：0 基或 1 基，默认 0 基
+    inclusiveEnd?: boolean // 右端是否包含，默认不包含 (右开)
+  } = {}
+): string {
+  if (!matchedIndices?.length) return text
+
+  console.log('matchedIndices', matchedIndices, text)
+  const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
+
+  // 只取最后一个
+  let { start, end } = matchedIndices[matchedIndices.length - 1]
+
+  // 统一换成 0 基坐标
+  let s0 = base === 1 ? start - 1 : start
+  let e0 = base === 1 ? end - 1 : end
+
+  // 右闭 -> 右开（slice 用）
+  let eExclusive = inclusiveEnd ? e0 + 1 : e0
+
+  // 边界裁剪
+  const n = text.length
+  s0 = Math.max(0, Math.min(s0, n))
+  eExclusive = Math.max(s0, Math.min(eExclusive, n))
+
+  if (s0 >= eExclusive) return text
+
+  return (
+    text.slice(0, s0) +
+    `<span class="${className}">` +
+    text.slice(s0, eExclusive) +
+    `</span>` +
+    text.slice(eExclusive)
+  )
 }
 </script>
 

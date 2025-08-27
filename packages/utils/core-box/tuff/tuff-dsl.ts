@@ -326,6 +326,11 @@ export interface TuffBasicRender {
    */
   accessory?: string;
 
+ /**
+  * 高亮范围
+  * @description 用于高亮显示标题中的匹配部分
+  */
+ highlights?: Array<{ start: number; end: number }>;
 }
 
 /**
