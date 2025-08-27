@@ -839,50 +839,36 @@ class AppProvider implements ISearchProvider {
 
     for (const app of allDbApps) {
       try {
-        console.log(`[MDLS_DEBUG] Processing app: ${app.path}`)
         const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-        console.log(`[MDLS_DEBUG] Executing command: ${command}`)
-
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>(
           (resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
               if (err) {
-                console.error(`[MDLS_DEBUG] Command execution error for ${app.path}:`, err)
+                console.error(`[AppProvider] MDLS command error for ${app.path}:`, err)
                 return reject(err)
               }
               if (stderr) {
-                console.warn(`[MDLS_DEBUG] Command execution stderr for ${app.path}:`, stderr)
+                console.warn(`[AppProvider] MDLS command stderr for ${app.path}:`, stderr)
               }
               resolve({ stdout, stderr })
             })
           },
         )
 
-        console.log(`[MDLS_DEBUG] Raw stdout for ${app.path}: "${stdout}"`)
         let spotlightName = stdout.trim()
-        console.log(`[MDLS_DEBUG] Trimmed spotlightName: "${spotlightName}"`)
 
-        // Remove .app suffix if it exists
         if (spotlightName.endsWith('.app')) {
           spotlightName = spotlightName.slice(0, -4)
-          console.log(`[MDLS_DEBUG] Removed .app suffix: "${spotlightName}"`)
         }
 
         const currentDisplayName = app.displayName
-        console.log(`[MDLS_DEBUG] Current displayName in DB: "${currentDisplayName}"`)
 
         if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
           console.log(
-            `[MDLS_DEBUG] Condition MET. Updating displayName for ${app.name} from "${currentDisplayName}" to "${spotlightName}"`
+            `[AppProvider] Updating displayName for ${app.name}: "${currentDisplayName || 'null'}" -> "${spotlightName}"`
           )
-          const updateQuery = db
-            .update(filesSchema)
-            .set({ displayName: spotlightName })
-            .where(eq(filesSchema.id, app.id))
-          
-          console.log(`[MDLS_DEBUG] DB Update SQL: ${updateQuery.toSQL().sql}`)
-          await updateQuery
+          await db.update(filesSchema).set({ displayName: spotlightName }).where(eq(filesSchema.id, app.id))
 
           // Re-sync keywords with the new displayName
           const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
@@ -899,20 +885,13 @@ class AppProvider implements ISearchProvider {
             }
             // Delete old keywords and re-sync
             const itemId = appInfo.uniqueId
-            const deleteQuery = db.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
-            console.log(`[MDLS_DEBUG] DB Delete Keywords SQL: ${deleteQuery.toSQL().sql}`)
-            await deleteQuery
+            await db.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
             await this._syncKeywordsForApp(appInfo)
-            console.log(`[MDLS_DEBUG] Re-synced keywords for ${appInfo.name}`)
+            console.log(`[AppProvider] Re-synced keywords for ${appInfo.name}`)
           }
-        } else {
-          console.log(`[MDLS_DEBUG] Condition NOT MET. No update for ${app.name}.`)
-          console.log(
-            `[MDLS_DEBUG] Reason: spotlightName="${spotlightName}", currentDisplayName="${currentDisplayName}"`
-          )
         }
       } catch (e) {
-        console.error(`[MDLS_DEBUG] CATCH BLOCK: Error processing app ${app.path}:`, e)
+        console.error(`[AppProvider] Error processing app ${app.path} during MDLS scan:`, e)
       }
     }
     await this._setLastScanTime(Date.now())
