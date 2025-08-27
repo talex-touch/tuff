@@ -142,26 +142,8 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
       const pluginInfo = fse.readJSONSync(manifestPath)
       await this.loadCommon(pluginInfo)
 
-      const featureIndex = path.resolve(this.pluginPath, 'index.js')
-      if (fse.existsSync(featureIndex)) {
-        try {
-          const func = loadPluginFeatureContext(
-            this.touchPlugin,
-            featureIndex,
-            getFeatureContext(this.touchPlugin)
-          ) as IFeatureLifeCycle
-          this.touchPlugin.pluginLifecycle = func
-        } catch (e: any) {
-          this.touchPlugin.issues.push({
-            type: 'error',
-            message: `Failed to execute index.js: ${e.message}`,
-            source: 'index.js',
-            code: 'LOCAL_SCRIPT_FAILED',
-            meta: { error: e.stack },
-            timestamp: Date.now()
-          })
-        }
-      }
+      // The logic for loading index.js has been moved to the `enable` method of the plugin.
+      // This loader is now only responsible for loading the manifest and basic plugin information.
     } catch (error: any) {
       this.touchPlugin.issues.push({
         type: 'error',
@@ -228,31 +210,8 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
 
     await this.loadCommon(pluginInfo)
 
-    if (this.touchPlugin.dev.source) {
-      try {
-        const remoteIndexUrl = new URL('index.js', this.touchPlugin.dev.address).toString()
-        this.touchPlugin.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
-        const response = await axios.get(remoteIndexUrl, { timeout: 5000, proxy: false })
-        const scriptContent = response.data
-        this.touchPlugin.logger.info(`[Dev] Remote script fetched successfully.`)
-        const func = loadPluginFeatureContextFromContent(
-          this.touchPlugin,
-          scriptContent,
-          getFeatureContext(this.touchPlugin)
-        ) as IFeatureLifeCycle
-        this.touchPlugin.pluginLifecycle = func
-        this.touchPlugin.logger.info(`[Dev] Remote script executed successfully.`)
-      } catch (e: any) {
-        this.touchPlugin.issues.push({
-          type: 'error',
-          message: `Failed to load or execute remote script: ${e.message}`,
-          source: 'index.js',
-          code: 'REMOTE_SCRIPT_FAILED',
-          suggestion: 'Check dev server for script errors.',
-          timestamp: Date.now()
-        })
-      }
-    }
+    // The logic for loading the remote index.js has been moved to the `enable` method of the plugin.
+    // This ensures that the script is only fetched and executed when the plugin is explicitly enabled.
 
     return this.touchPlugin
   }

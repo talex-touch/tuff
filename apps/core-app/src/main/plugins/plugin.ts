@@ -3,7 +3,6 @@ import {
   IPlatform,
   IPluginDev,
   IPluginIcon,
-  IPluginWebview,
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
@@ -12,14 +11,12 @@ import {
   IPluginFeature
 } from '@talex-touch/utils/plugin'
 import { TuffItem } from '@talex-touch/utils/core-box'
-import { TouchWindow, genTouchApp } from '../core/touch-core'
+import { TouchWindow } from '../core/touch-core'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
 import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { genTouchChannel } from '../core/channel-core'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { getJs, getStyles } from '../utils/plugin-injection'
 import path from 'path';
-import pkg from '../../../package.json';
 import { getCoreBoxWindow } from '../modules/box-tool/core-box';
 import { createClipboardManager, createStorageManager } from '@talex-touch/utils/plugin';
 import { app, clipboard, dialog, shell } from 'electron';
@@ -28,7 +25,11 @@ import { CoreBoxManager } from '../modules/box-tool/core-box/manager'; // Restor
 import fse from 'fs-extra';
 import { PluginFeature } from './plugin-feature';
 import { PluginIcon } from './plugin-icon';
-import { PluginViewLoader } from '../modules/plugin-manager/plugin-view-loader';
+import { PluginViewLoader } from '../modules/plugin-manager/plugin-view-loader'
+import {
+  loadPluginFeatureContext,
+  loadPluginFeatureContextFromContent
+} from './plugin-feature'
 
 const disallowedArrays = [
   '官方',
@@ -63,8 +64,6 @@ export class TouchPlugin implements ITouchPlugin {
   desc: string
   icon: IPluginIcon
   logger: PluginLogger
-  webViewInit: boolean = false
-  webview: IPluginWebview = new Map() // Initialize as Map
   platforms: IPlatform
   features: PluginFeature[]
   issues: PluginIssue[]
@@ -95,8 +94,6 @@ export class TouchPlugin implements ITouchPlugin {
       desc: this.desc,
       icon: this.icon,
       dev: this.dev,
-      webViewInit: this.webViewInit,
-      webview: this.webview,
       status: this.status,
       platforms: this.platforms,
       features: this.features.map((feature) => feature.toJSONObject()),
@@ -235,72 +232,72 @@ export class TouchPlugin implements ITouchPlugin {
   async enable(): Promise<boolean> {
     if (this.status === PluginStatus.LOAD_FAILED) {
       this.logger.warn('Attempted to enable a plugin that failed to load.')
-      return Promise.resolve(false)
+      return false
     }
     if (
       this.status !== PluginStatus.DISABLED &&
       this.status !== PluginStatus.LOADED &&
       this.status !== PluginStatus.CRASHED &&
       this.status !== PluginStatus.LOADING
-    )
-      return Promise.resolve(false)
+    ) {
+      return false
+    }
 
     this.status = PluginStatus.LOADING
 
-    this.webview = this.__getInjections__()
-
-    const app = genTouchApp()
-
-    await genTouchChannel(app).send(ChannelType.MAIN, 'plugin-webview', {
-      plugin: this.name,
-      data: this.webview
-    })
+    // Load plugin lifecycle from index.js if not already loaded
+    if (!this.pluginLifecycle) {
+      try {
+        if (this.dev.enable && this.dev.source && this.dev.address) {
+          // Dev mode: load from remote
+          const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
+          this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
+          const response = await axios.get(remoteIndexUrl, { timeout: 5000, proxy: false })
+          const scriptContent = response.data
+          this.pluginLifecycle = loadPluginFeatureContextFromContent(
+            this,
+            scriptContent,
+            this.getFeatureUtil()
+          ) as IFeatureLifeCycle
+          this.logger.info(`[Dev] Remote script executed successfully.`)
+        } else {
+          // Prod mode: load from local file
+          const featureIndex = path.resolve(this.pluginPath, 'index.js')
+          if (fse.existsSync(featureIndex)) {
+            this.pluginLifecycle = loadPluginFeatureContext(
+              this,
+              featureIndex,
+              this.getFeatureUtil()
+            ) as IFeatureLifeCycle
+          }
+        }
+      } catch (e: any) {
+        this.issues.push({
+          type: 'error',
+          message: `Failed to execute index.js: ${e.message}`,
+          source: 'index.js',
+          code: 'LIFECYCLE_SCRIPT_FAILED',
+          meta: { error: e.stack },
+          timestamp: Date.now()
+        })
+        this.status = PluginStatus.CRASHED
+        return false
+      }
+    }
 
     this.status = PluginStatus.ENABLED
 
-    await genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
+    genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
       ...this.toJSONObject(),
       plugin: this.name
     })
 
-    return Promise.resolve(true)
-  }
-
-  __getInjections__(): any {
-    const indexPath = this.__index__()
-    const preload = this.__preload__()
-
-    const app = genTouchApp()
-
-    const _path = {
-      relative: path.relative(app.rootPath, this.pluginPath),
-      root: app.rootPath,
-      plugin: this.pluginPath
-    }
-
-    const mainWin = app.window.window
-
-    return {
-      _: {
-        indexPath,
-        preload,
-        isWebviewInit: this.webViewInit
-      },
-      attrs: {
-        enableRemoteModule: 'false',
-        nodeintegration: 'true',
-        webpreferences: 'contextIsolation=false',
-        // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
-        websecurity: 'false',
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version} (Plugins,like ${this.name})`
-        // partition: `persist:touch/${this.name}`,
-      },
-      styles: `${getStyles()}`,
-      js: `${getJs([this.name, JSON.stringify(_path)])}`
-    }
+    return true
   }
 
   async disable(): Promise<boolean> {
+    this.pluginLifecycle = null
+
     const stoppableStates = [
       PluginStatus.ENABLED,
       PluginStatus.ACTIVE,
@@ -324,8 +321,6 @@ export class TouchPlugin implements ITouchPlugin {
     CoreBoxManager.getInstance().exitUIMode();
     console.log(`[Plugin:${this.name}] exitUIMode() called during disable().`)
 
-    this.webViewInit = false
-
     this._windows.forEach((win, id) => {
       try {
         if (!win.window.isDestroyed()) {
@@ -343,7 +338,7 @@ export class TouchPlugin implements ITouchPlugin {
           }
         }
         this._windows.delete(id)
-      } catch (error) {
+      } catch (error: any) {
         console.warn(`[Plugin] Error closing window ${id} for plugin ${this.name}:`, error)
         this._windows.delete(id)
       }
@@ -353,20 +348,6 @@ export class TouchPlugin implements ITouchPlugin {
     console.log('[Plugin] Plugin ' + this.name + ' is disabled.')
 
     return Promise.resolve(true)
-  }
-
-  __preload__(): string | undefined {
-    const preload = path.join(this.pluginPath, 'preload.js')
-
-    return fse.existsSync(preload) ? preload : undefined
-  }
-
-  __index__(): string | undefined {
-    const dev = this.dev && this.dev.enable
-
-    if (dev) console.log('[Plugin] Plugin is now dev-mode: ' + this.name)
-
-    return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
 
   getFeatureEventUtil(): any {
@@ -522,6 +503,32 @@ export class TouchPlugin implements ITouchPlugin {
           CoreBoxManager.getInstance().trigger(true)
         }
       }
+    }
+  }
+__preload__(): string | undefined {
+    const preload = path.join(this.pluginPath, 'preload.js')
+
+    return fse.existsSync(preload) ? preload : undefined
+  }
+
+  __index__(): string | undefined {
+    const dev = this.dev && this.dev.enable
+
+    if (dev) console.log('[Plugin] Plugin is now dev-mode: ' + this.name)
+
+    return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
+  }
+
+  __getInjections__(): { js: string; styles: string } {
+    const jsPath = path.join(this.pluginPath, 'inject.js')
+    const cssPath = path.join(this.pluginPath, 'inject.css')
+
+    const js = fse.existsSync(jsPath) ? fse.readFileSync(jsPath, 'utf-8') : ''
+    const styles = fse.existsSync(cssPath) ? fse.readFileSync(cssPath, 'utf-8') : ''
+
+    return {
+      js,
+      styles
     }
   }
 }
