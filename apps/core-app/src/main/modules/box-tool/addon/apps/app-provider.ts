@@ -118,7 +118,7 @@ class AppProvider implements ISearchProvider {
 
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
     this.aliases = aliases
-    console.log('[AppProvider] Aliases updated. Resyncing all app keywords...')
+    console.debug('[AppProvider] Aliases updated. Resyncing all app keywords...')
     // When aliases change, we need to re-sync keywords for all apps
     if (!this.dbUtils) return
     const allApps = await this.dbUtils.getFilesByType('app')
@@ -136,12 +136,12 @@ class AppProvider implements ISearchProvider {
       }
       await this._syncKeywordsForApp(appInfo)
     }
-    console.log('[AppProvider] Finished resyncing keywords for all apps.')
+    console.debug('[AppProvider] Finished resyncing keywords for all apps.')
   }
 
   private async _syncKeywordsForApp(appInfo: ScannedAppInfo): Promise<void> {
     if (appInfo.path.toLowerCase().includes('wechatdevtools')) {
-      console.log('[DEBUG] Syncing keywords for wechatdevtools:', JSON.stringify(appInfo, null, 2))
+      console.debug('[AppProvider] Syncing keywords for wechatdevtools:', JSON.stringify(appInfo, null, 2))
     }
     if (!this.dbUtils) {
       return
@@ -764,7 +764,7 @@ class AppProvider implements ISearchProvider {
     // dev 模式下立即执行一次
     if (is.dev) {
       this._runMdlsUpdateScan().then(() => {
-        console.log('[AppProvider] Initial mdls update scan completed in dev mode.')
+        console.debug('[AppProvider] Initial mdls update scan completed in dev mode.')
       })
     }
 
@@ -789,14 +789,14 @@ class AppProvider implements ISearchProvider {
   async _forceRebuild(): Promise<void> {
     if (!this.dbUtils || !this.context) return
     const db = this.dbUtils.getDb()
-    console.log('[AppProvider] Forcing rebuild of application database...')
+    console.debug('[AppProvider] Forcing rebuild of application database...')
     await db.delete(filesSchema)
     await db.delete(keywordMappings)
     await db.delete(fileExtensions)
-    console.log('[AppProvider] Database cleared. Rescanning...')
+    console.debug('[AppProvider] Database cleared. Rescanning...')
     this.isInitializing = null
     await this.onLoad(this.context)
-    console.log('[AppProvider] Force rebuild completed.')
+    console.debug('[AppProvider] Force rebuild completed.')
   }
 
   private async _forceSyncAllKeywords(): Promise<void> {
@@ -833,7 +833,7 @@ class AppProvider implements ISearchProvider {
     const allDbApps = await this.dbUtils.getFilesByType('app')
     if (allDbApps.length === 0) return
 
-    console.log(`[AppProvider] Running mdls update scan for ${allDbApps.length} apps.`)
+    console.debug(`[AppProvider] Running mdls update scan for ${allDbApps.length} apps.`)
 
     const { exec } = await import('child_process')
 
@@ -865,7 +865,7 @@ class AppProvider implements ISearchProvider {
         const currentDisplayName = app.displayName
 
         if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
-          console.log(
+          console.debug(
             `[AppProvider] Updating displayName for ${app.name}: "${currentDisplayName || 'null'}" -> "${spotlightName}"`
           )
           await db.update(filesSchema).set({ displayName: spotlightName }).where(eq(filesSchema.id, app.id))
@@ -887,7 +887,7 @@ class AppProvider implements ISearchProvider {
             const itemId = appInfo.uniqueId
             await db.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
             await this._syncKeywordsForApp(appInfo)
-            console.log(`[AppProvider] Re-synced keywords for ${appInfo.name}`)
+            console.debug(`[AppProvider] Re-synced keywords for ${appInfo.name}`)
           }
         }
       } catch (e) {
@@ -895,7 +895,7 @@ class AppProvider implements ISearchProvider {
       }
     }
     await this._setLastScanTime(Date.now())
-    console.log('[AppProvider] mdls update scan finished.')
+    console.debug('[AppProvider] mdls update scan finished.')
   }
 
   private async _getLastScanTime(): Promise<number | null> {
