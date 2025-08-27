@@ -8,8 +8,8 @@ import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { coreBoxManager } from './manager'
+import { TouchPlugin } from '../../../plugins'
 
 const windowAnimation = useWindowAnimation()
 
@@ -266,7 +266,7 @@ export class WindowManager {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
-  public attachUIView(url: string, plugin?: ITouchPlugin): void {
+  public attachUIView(url: string, plugin?: TouchPlugin): void {
     const currentWindow = this.current
     if (!currentWindow) {
       console.error('[CoreBox] Cannot attach UI view: no window available.')
@@ -277,7 +277,29 @@ export class WindowManager {
       this.detachUIView()
     }
 
-    const view = (this.uiView = new WebContentsView())
+    const injections = plugin?.__getInjections__()
+    const webPreferences: Electron.WebPreferences = {
+      preload: injections?._.preload || undefined,
+      webSecurity: false,
+      nodeIntegration: true,
+      nodeIntegrationInSubFrames: true,
+      contextIsolation: false,
+      sandbox: false,
+      webviewTag: true,
+      scrollBounce: true
+    }
+
+    if (plugin) {
+      const injectionCode = `
+        window.__T_PLUGIN_NAME__ = '${plugin.name}';
+        window.__T_PLUGIN_VERSION__ = '${plugin.version}';
+        window.__T_PLUGIN_DEV_MODE__ = ${plugin.dev.enable};
+      `
+      webPreferences.additionalArguments = [`--injection-code=${Buffer.from(injectionCode).toString('base64')}`]
+    }
+
+    const view = (this.uiView = new WebContentsView({ webPreferences }))
+
     this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
 
@@ -294,10 +316,18 @@ export class WindowManager {
     })
 
     this.uiView.webContents.addListener('dom-ready', () => {
-      if (plugin && (!app.isPackaged || plugin.dev.enable)) {
-        view.webContents.openDevTools({ mode: 'detach' })
+      if (plugin) {
+        if (!app.isPackaged || plugin.dev.enable) {
+          view.webContents.openDevTools({ mode: 'detach' })
+          this.uiViewFocused = true
+        }
 
-        this.uiViewFocused = true
+        if (injections.js) {
+          this.uiView?.webContents.executeJavaScript(injections.js)
+        }
+        if (injections.styles) {
+          this.uiView?.webContents.insertCSS(injections.styles)
+        }
       }
     })
 
