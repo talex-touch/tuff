@@ -481,10 +481,6 @@ export class WindowManager {
       }
     })
 
-    genTouchChannel().regChannel(ChannelType.PLUGIN, 'test', ({ reply, plugin }) => {
-      reply(DataCode.SUCCESS, 'Hello World!' + plugin)
-    })
-
     const bounds = currentWindow.window.getBounds()
     this.uiView.setBounds({
       x: 0,
