@@ -15,6 +15,9 @@ class TouchChannel implements ITouchChannel {
 
   pendingMap: Map<string, Function> = new Map()
 
+  keyToNameMap: Map<string, string> = new Map()
+  nameToKeyMap: Map<string, string> = new Map()
+
   app: TalexTouch.TouchApp
 
   constructor(app: TalexTouch.TouchApp) {
@@ -26,23 +29,51 @@ class TouchChannel implements ITouchChannel {
     ipcMain.on('@plugin-process-message', this.__handle_main.bind(this))
   }
 
+  requestKey(name: string): string {
+    if (this.nameToKeyMap.has(name)) {
+      return this.nameToKeyMap.get(name)!
+    }
+
+    const key = Math.random().toString(36).substring(2)
+    this.keyToNameMap.set(key, name)
+    this.nameToKeyMap.set(name, key)
+
+    return key
+  }
+
+  revokeKey(key: string): boolean {
+    if (!this.keyToNameMap.has(key)) {
+      return false
+    }
+
+    this.keyToNameMap.delete(key)
+    this.nameToKeyMap.delete(this.keyToNameMap.get(key)!)
+
+    return true
+  }
+
   __parse_raw_data(e: Electron.IpcMainEvent, arg: any): RawStandardChannelData {
     if (this.app.version === TalexTouch.AppVersion.DEV) console.debug('Raw data: ', arg, e)
     if (arg) {
-      const { name, header, code, plugin, data, sync } = arg
+      const { name, header, code, data, sync } = arg
 
       if (header) {
+        const { uniqueKey } = header
+
+        const pluginName = this.keyToNameMap.get(uniqueKey)
+
         return {
           header: {
             status: header.status || 'request',
-            type: plugin ? ChannelType.PLUGIN : ChannelType.MAIN,
+            type: pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
-            event: e
+            event: e,
+            uniqueKey
           },
           sync,
           code,
           data,
-          plugin,
+          plugin: pluginName,
           name: name as string
         }
       }
@@ -71,6 +102,10 @@ class TouchChannel implements ITouchChannel {
           const rData = this.__parse_sender(code, rawData, data, rawData.sync)
 
           delete rData.header.event
+
+          if (rawData.header.uniqueKey) {
+            rData.header.uniqueKey = rawData.header.uniqueKey
+          }
 
           const finalData = JSON.parse(structuredStrictStringify(rData))
 
@@ -145,11 +180,12 @@ class TouchChannel implements ITouchChannel {
     }
   }
 
-  sendTo(
+  _sendTo(
     win: Electron.BrowserWindow,
     type: ChannelType,
     eventName: string,
-    arg: any
+    arg: any,
+    header: any = {}
   ): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
 
@@ -164,7 +200,8 @@ class TouchChannel implements ITouchChannel {
       name: eventName,
       header: {
         status: 'request',
-        type
+        type,
+        ...header
       }
     } as RawStandardChannelData
 
@@ -191,12 +228,62 @@ class TouchChannel implements ITouchChannel {
     })
   }
 
+  sendTo(
+    win: Electron.BrowserWindow,
+    type: ChannelType,
+    eventName: string,
+    arg: any
+  ): Promise<any> {
+    return this._sendTo(win, type, eventName, arg)
+  }
+
+  _sendToPlugin(
+    win: Electron.BrowserWindow,
+    type: ChannelType,
+    eventName: string,
+    pluginName: string,
+    arg: any
+  ): Promise<any> {
+    const key = this.nameToKeyMap.get(pluginName)
+
+    return this._sendTo(win, type, eventName, arg, {
+      uniqueKey: key
+    })
+  }
+
   send(type: ChannelType, eventName: string, arg: any): Promise<any> {
     return this.sendTo(this.app.window.window, type, eventName, arg)
   }
 
   sendSync(type: ChannelType, eventName: string, arg: any): Promise<any> {
     return this.send(type, eventName, arg)
+  }
+
+  sendMain(eventName: string, arg?: any): Promise<any> {
+    return this.sendTo(this.app.window.window, ChannelType.MAIN, eventName, arg)
+  }
+
+  sendToMain(win: Electron.BrowserWindow, eventName: string, arg?: any): Promise<any> {
+    return this.sendTo(win, ChannelType.MAIN, eventName, arg)
+  }
+
+  sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
+    return this._sendToPlugin(
+      this.app.window.window,
+      ChannelType.PLUGIN,
+      eventName,
+      pluginName,
+      arg
+    )
+  }
+  sendToPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
+    return this._sendToPlugin(
+      this.app.window.window,
+      ChannelType.PLUGIN,
+      eventName,
+      pluginName,
+      arg
+    )
   }
 }
 

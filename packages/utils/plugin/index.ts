@@ -52,6 +52,7 @@ export interface IPluginBaseInfo {
   desc: string
   icon: IPluginIcon
   platforms: IPlatform
+  _uniqueChannelKey: string
 }
 
 export interface IPluginDev {

@@ -21,6 +21,7 @@ export interface ITouchChannel {
   regChannel(type: ChannelType, eventName: string, callback: (data: StandardChannelData) => any): () => void
 
   /**
+   * @deprecated Use sendMain instead
    * Send a message to a channel
    * @param type {@link ChannelType} The type of channel
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
@@ -29,6 +30,7 @@ export interface ITouchChannel {
   send(type: ChannelType, eventName: string, arg?: any): Promise<any>
 
   /**
+   * @deprecated Use sendToMain instead
    * Send a message to a channel with settled window
    * @param win {@link Electron.BrowserWindow} the window you want to sent
    * @param type {@link ChannelType} The type of channel
@@ -36,6 +38,51 @@ export interface ITouchChannel {
    * @param arg {any} The arguments of the message
    */
   sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: any): Promise<any>
+
+  /**
+   * Send a message to main process
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
+   * @param arg {any} The arguments of the message
+   */
+  sendMain(eventName: string, arg?: any): Promise<any>
+
+  /**
+   * Send a message to main process with settled window
+   * @param win {@link Electron.BrowserWindow} the window you want to sent
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
+   * @param arg {any} The arguments of the message
+   */
+  sendToMain(win: Electron.BrowserWindow, eventName: string, arg?: any): Promise<any>
+
+  /**
+   * Send a message to all plugin process with settled window
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
+   * @param arg {any} The arguments of the message
+   */
+  sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+
+  /**
+   * Send a message to plugin process with settled window
+   * @param pluginName {string} The name of plugin
+   * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
+   * @param arg {any} The arguments of the message
+   */
+  sendToPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+
+  /**
+   * Request a encrypted name key. This key cannot decrypted to get the original name.
+   * After use, you should revoke this key.
+   * @description Request a encrypted name key, and return the encrypted key
+   * @param name {string} The name of key
+   */
+  requestKey: (name: string) => string
+
+  /**
+   * Unregister a encrypted name key
+   * @description Unregister a encrypted name key, and return the encrypted key
+   * @param key {string} The encrypted key
+   */
+  revokeKey: (key: string) => boolean
 }
 
 export interface ITouchClientChannel {
@@ -84,6 +131,7 @@ export interface RawChannelHeaderData {
   status: "reply" | "request";
   type: ChannelType;
   _originData?: any;
+  uniqueKey?: string
   event?: Electron.IpcMainEvent | Electron.IpcRendererEvent;
 }
 

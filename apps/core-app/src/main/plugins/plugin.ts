@@ -66,6 +66,7 @@ export class TouchPlugin implements ITouchPlugin {
   platforms: IPlatform
   features: PluginFeature[]
   issues: PluginIssue[]
+  _uniqueChannelKey: string
 
   pluginPath: string
 
@@ -265,6 +266,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.platforms = platforms
     this.features = []
     this.issues = []
+    this._uniqueChannelKey = ''
 
     this.logger = new PluginLogger(
       name,
@@ -290,6 +292,8 @@ export class TouchPlugin implements ITouchPlugin {
 
     this.status = PluginStatus.LOADING
     this.status = PluginStatus.ENABLED
+
+    this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
       ...this.toJSONObject(),
@@ -347,6 +351,8 @@ export class TouchPlugin implements ITouchPlugin {
         this._windows.delete(id)
       }
     })
+
+    genTouchChannel().revokeKey(this._uniqueChannelKey)
 
     this.status = PluginStatus.DISABLED
     console.log('[Plugin] Plugin ' + this.name + ' is disabled.')

@@ -7,9 +7,10 @@ import { TalexTouch } from '../../../types'
 import { clipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { coreBoxManager } from './manager'
 import { TouchPlugin } from '../../../plugins'
+import { genTouchChannel } from '../../../core/channel-core'
 
 const windowAnimation = useWindowAnimation()
 
@@ -289,15 +290,6 @@ export class WindowManager {
       scrollBounce: true
     }
 
-    if (plugin) {
-      const injectionCode = `
-        window.__T_PLUGIN_NAME__ = '${plugin.name}';
-        window.__T_PLUGIN_VERSION__ = '${plugin.version}';
-        window.__T_PLUGIN_DEV_MODE__ = ${plugin.dev.enable};
-      `
-      webPreferences.additionalArguments = [`--injection-code=${Buffer.from(injectionCode).toString('base64')}`]
-    }
-
     const view = (this.uiView = new WebContentsView({ webPreferences }))
 
     this.uiViewFocused = true
@@ -322,13 +314,175 @@ export class WindowManager {
           this.uiViewFocused = true
         }
 
+        const channelScript = `
+        (() => {
+            const uniqueKey = "${plugin._uniqueChannelKey}";
+            const electron = require('electron')
+            const ChannelType = ${JSON.stringify(ChannelType)};
+            const DataCode = ${JSON.stringify(DataCode)};
+
+            class TouchChannel {
+              channelMap = new Map();
+              pendingMap = new Map();
+
+              constructor() {
+                electron.ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
+              }
+
+              __parse_raw_data(e, arg) {
+                if (arg) {
+                  const { name, header, code, plugin, data, sync } = arg;
+                  if (header) {
+
+                    const { uniqueKey: thisUniqueKey } = header
+                    if (!thisUniqueKey) {
+                      console.warn('[CoreBox] Plugin uniqueKey not found in header:', arg)
+                    } else if (thisUniqueKey !== uniqueKey) {
+                      console.error("[FatalError] Plugin uniqueKey not match!", e, arg, thisUniqueKey, uniqueKey)
+                      return null;
+                    }
+
+                    return {
+                      header: {
+                        status: header.status || 'request',
+                        type: ChannelType.MAIN,
+                        _originData: arg,
+                        event: e || undefined
+                      },
+                      sync,
+                      code,
+                      data,
+                      plugin,
+                      name: name
+                    };
+                  }
+                }
+                console.error(e, arg);
+                return null;
+              }
+
+              __handle_main(e, arg) {
+                const rawData = this.__parse_raw_data(e, arg);
+                if (!rawData?.header) {
+                  console.error('Invalid message: ', arg);
+                  return;
+                }
+                if (rawData.header.status === 'reply' && rawData.sync) {
+                  const { id } = rawData.sync;
+                  return this.pendingMap.get(id)?.(rawData);
+                }
+                this.channelMap.get(rawData.name)?.forEach((func) => {
+                  const handInData = {
+                    reply: (code, data) => {
+                      e.sender.send(
+                        '@main-process-message',
+                        this.__parse_sender(code, rawData, data, rawData.sync)
+                      );
+                    },
+                    ...rawData
+                  };
+                  func(handInData);
+                  handInData.reply(DataCode.SUCCESS, undefined);
+                });
+              }
+
+              __parse_sender(code, rawData, data, sync) {
+                return {
+                  code,
+                  data,
+                  sync: !sync ? undefined : {
+                    timeStamp: new Date().getTime(),
+                    timeout: sync.timeout,
+                    id: sync.id
+                  },
+                  name: rawData.name,
+                  header: {
+                    status: 'reply',
+                    type: rawData.header.type,
+                    _originData: rawData.header._originData
+                  }
+                };
+              }
+
+              regChannel(eventName, callback) {
+                const listeners = this.channelMap.get(eventName) || [];
+                if (!listeners.includes(callback)) {
+                  listeners.push(callback);
+                } else {
+                  return () => {};
+                }
+                this.channelMap.set(eventName, listeners);
+                return () => {
+                  const index = listeners.indexOf(callback);
+                  if (index !== -1) {
+                    listeners.splice(index, 1);
+                  }
+                };
+              }
+
+              send(eventName, arg) {
+                const uniqueId = \`\${new Date().getTime()}#\${eventName}@\${Math.random().toString(12)}\`;
+                const data = {
+                  code: DataCode.SUCCESS,
+                  data: arg,
+                  sync: {
+                    timeStamp: new Date().getTime(),
+                    timeout: 10000,
+                    id: uniqueId
+                  },
+                  name: eventName,
+                  header: {
+                    uniqueKey,
+                    status: 'request',
+                    type: ChannelType.PLUGIN
+                  }
+                };
+                return new Promise((resolve) => {
+                  electron.ipcRenderer.send('@plugin-process-message', data);
+                  this.pendingMap.set(uniqueId, (res) => {
+                    this.pendingMap.delete(uniqueId);
+                    resolve(res.data);
+                  });
+                });
+              }
+
+              sendSync(eventName, arg) {
+                const data = {
+                  code: DataCode.SUCCESS,
+                  data: arg,
+                  name: eventName,
+                  header: {
+                    uniqueKey,
+                    status: 'request',
+                    type: ChannelType.PLUGIN
+                  }
+                };
+                const res = this.__parse_raw_data(null, electron.ipcRenderer.sendSync('@plugin-process-message', data));
+                if (res?.header?.status === 'reply') return res.data;
+                return res;
+              }
+            }
+            window['$channel'] = new TouchChannel();
+        })();
+        `
+        this.uiView?.webContents.executeJavaScript(channelScript)
+
         if (injections.js) {
           this.uiView?.webContents.executeJavaScript(injections.js)
         }
         if (injections.styles) {
           this.uiView?.webContents.insertCSS(injections.styles)
         }
+
+        genTouchApp().channel.send(ChannelType.PLUGIN, '@plugin-lifecycle:attach-view', {
+          plugin: plugin.name,
+          feature: coreBoxManager.getCurrentFeature()
+        })
       }
+    })
+
+    genTouchChannel().regChannel(ChannelType.PLUGIN, 'test', ({ reply, plugin }) => {
+      reply(DataCode.SUCCESS, 'Hello World!' + plugin)
     })
 
     const bounds = currentWindow.window.getBounds()
@@ -358,6 +512,12 @@ export class WindowManager {
       // Explicitly destroying them here is unnecessary and causes a type error.
       this.uiView = null
       console.log('[WindowManager] uiView set to null.')
+    }
+  }
+
+  public sendToUIView(channel: string, ...args: any[]): void {
+    if (this.uiView) {
+      this.uiView.webContents.postMessage(channel, args)
     }
   }
 }
