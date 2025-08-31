@@ -116,6 +116,7 @@ class PluginManager implements IPluginManager {
   reloadingPlugins: Set<string> = new Set()
   enabledPlugins: Set<string> = new Set()
   dbUtils = createDbUtils(databaseManager.getDb())
+  private initialLoadPromises: Promise<boolean>[] = []
 
   pluginPath: string
   watcher: FSWatcher | null
@@ -130,10 +131,19 @@ class PluginManager implements IPluginManager {
   }
 
   getPluginList(): Array<object> {
+    console.log('[PluginManager] getPluginList called.')
     const list = new Array<object>()
 
-    for (const plugin of this.plugins.values()) list.push((plugin as TouchPlugin).toJSONObject())
+    for (const plugin of this.plugins.values()) {
+      console.log(
+        `[PluginManager]   - Processing plugin: ${plugin.name}, status: ${
+          PluginStatus[(plugin as TouchPlugin).status]
+        }`
+      )
+      list.push((plugin as TouchPlugin).toJSONObject())
+    }
 
+    console.log(`[PluginManager] Returning plugin list with ${list.length} items.`)
     return list
   }
 
@@ -226,7 +236,7 @@ class PluginManager implements IPluginManager {
     this.devWatcher.start()
   }
 
-  private async persistEnabledPlugins(): Promise<void> {
+  async persistEnabledPlugins(): Promise<void> {
     try {
       await this.dbUtils.setPluginData(
         'internal:plugin-manager',
@@ -240,20 +250,33 @@ class PluginManager implements IPluginManager {
   }
 
   private async loadPersistedState(): Promise<void> {
+    console.log('[PluginManager] Attempting to load persisted plugin states...')
     try {
       const data = await this.dbUtils.getPluginData('internal:plugin-manager', 'enabled_plugins')
       if (data && data.value) {
         const enabled = JSON.parse(data.value) as string[]
         this.enabledPlugins = new Set(enabled)
-        console.log(`[PluginManager] Loaded ${enabled.length} enabled plugins from database.`)
+        console.log(
+          `[PluginManager] Loaded ${
+            enabled.length
+          } enabled plugins from database: [${enabled.join(', ')}]`
+        )
 
         for (const pluginName of this.enabledPlugins) {
           const plugin = this.plugins.get(pluginName)
+          console.log(
+            `[PluginManager] Checking auto-enable for '${pluginName}': found=${!!plugin}, status=${
+              plugin ? PluginStatus[plugin.status] : 'N/A'
+            }`
+          )
           if (plugin && plugin.status === PluginStatus.DISABLED) {
-            console.log(`[PluginManager] Auto-enabling plugin: ${pluginName}`)
+            console.log(`[PluginManager] ==> Auto-enabling plugin: ${pluginName}`)
             await plugin.enable()
+            console.log(`[PluginManager] ==> Finished auto-enabling for '${pluginName}'.`)
           }
         }
+      } else {
+        console.log('[PluginManager] No persisted plugin state found in database.')
       }
     } catch (error) {
       console.error('[PluginManager] Failed to load persisted plugin state:', error)
@@ -377,7 +400,7 @@ class PluginManager implements IPluginManager {
         return
       }
 
-      this.loadPlugin(pluginName)
+      this.initialLoadPromises.push(this.loadPlugin(pluginName))
     })
 
     this.watcher.on('unlinkDir', (_path) => {
@@ -393,6 +416,10 @@ class PluginManager implements IPluginManager {
       console.log(
         '[PluginManager] Initial scan complete. Ready for changes. (' + this.pluginPath + ')'
       )
+      console.log(`[PluginManager] Waiting for ${this.initialLoadPromises.length} initial plugins to load...`)
+      // Wait for all initial plugin loading operations to complete.
+      await Promise.allSettled(this.initialLoadPromises)
+      console.log('[PluginManager] All initial plugins loaded.')
       // Once all plugins are loaded, load the persisted state and auto-enable plugins.
       await this.loadPersistedState()
     })

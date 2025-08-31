@@ -183,46 +183,7 @@ export class TouchPlugin implements ITouchPlugin {
 
       // Delegate view loading to the unified PluginViewLoader
       if (!this.pluginLifecycle) {
-        try {
-          const {
-            loadPluginFeatureContext,
-            loadPluginFeatureContextFromContent
-          } = await import('./plugin-feature')
-          if (this.dev.enable && this.dev.source && this.dev.address) {
-            // Dev mode: load from remote
-            const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
-            this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
-            const response = await axios.get(remoteIndexUrl, { timeout: 5000, proxy: false })
-            const scriptContent = response.data
-            this.pluginLifecycle = loadPluginFeatureContextFromContent(
-              this,
-              scriptContent,
-              this.getFeatureUtil()
-            ) as IFeatureLifeCycle
-            this.logger.info(`[Dev] Remote script executed successfully.`)
-          } else {
-            // Prod mode: load from local file
-            const featureIndex = path.resolve(this.pluginPath, 'index.js')
-            if (fse.existsSync(featureIndex)) {
-              this.pluginLifecycle = loadPluginFeatureContext(
-                this,
-                featureIndex,
-                this.getFeatureUtil()
-              ) as IFeatureLifeCycle
-            }
-          }
-        } catch (e: any) {
-          this.issues.push({
-            type: 'error',
-            message: `Failed to execute index.js: ${e.message}`,
-            source: 'index.js',
-            code: 'LIFECYCLE_SCRIPT_FAILED',
-            meta: { error: e.stack },
-            timestamp: Date.now()
-          })
-          this.status = PluginStatus.CRASHED
-          return
-        }
+        this.logger.warn(`Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`)
       }
       await PluginViewLoader.loadPluginView(this, feature)
       return
@@ -284,15 +245,58 @@ export class TouchPlugin implements ITouchPlugin {
     if (
       this.status !== PluginStatus.DISABLED &&
       this.status !== PluginStatus.LOADED &&
-      this.status !== PluginStatus.CRASHED &&
-      this.status !== PluginStatus.LOADING
+      this.status !== PluginStatus.CRASHED
     ) {
+      this.logger.warn(`Attempted to enable plugin with invalid status: ${this.status}`)
       return false
     }
 
     this.status = PluginStatus.LOADING
-    this.status = PluginStatus.ENABLED
 
+    try {
+      const {
+        loadPluginFeatureContext,
+        loadPluginFeatureContextFromContent
+      } = await import('./plugin-feature')
+      if (this.dev.enable && this.dev.source && this.dev.address) {
+        // Dev mode: load from remote
+        const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
+        this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
+        const response = await axios.get(remoteIndexUrl, { timeout: 5000, proxy: false })
+        const scriptContent = response.data
+        this.pluginLifecycle = loadPluginFeatureContextFromContent(
+          this,
+          scriptContent,
+          this.getFeatureUtil()
+        ) as IFeatureLifeCycle
+        this.logger.info(`[Dev] Remote script executed successfully.`)
+      } else {
+        // Prod mode: load from local file
+        const featureIndex = path.resolve(this.pluginPath, 'index.js')
+        if (fse.existsSync(featureIndex)) {
+          this.pluginLifecycle = loadPluginFeatureContext(
+            this,
+            featureIndex,
+            this.getFeatureUtil()
+          ) as IFeatureLifeCycle
+        } else {
+          this.logger.info(`No index.js found for plugin '${this.name}', running without lifecycle.`)
+        }
+      }
+    } catch (e: any) {
+      this.issues.push({
+        type: 'error',
+        message: `Failed to execute index.js: ${e.message}`,
+        source: 'index.js',
+        code: 'LIFECYCLE_SCRIPT_FAILED',
+        meta: { error: e.stack },
+        timestamp: Date.now()
+      })
+      this.status = PluginStatus.CRASHED
+      return false
+    }
+
+    this.status = PluginStatus.ENABLED
     this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
