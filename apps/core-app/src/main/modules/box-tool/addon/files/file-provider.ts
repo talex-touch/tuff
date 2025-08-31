@@ -3,7 +3,8 @@ import {
   ISearchProvider,
   ProviderContext,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  IProviderActivate
 } from '../../search-engine/types'
 import { TuffFactory } from '@talex-touch/utils'
 import { app, shell } from 'electron'
@@ -348,20 +349,20 @@ class FileProvider implements ISearchProvider {
     return TuffFactory.createSearchResult(query).setItems(scoredResults).build()
   }
 
-  async onExecute(args: IExecuteArgs): Promise<boolean> {
+  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) {
       const err = new Error('File path not found in TuffItem')
       console.error(err)
-      return false
+      return null
     }
 
     try {
       await shell.openPath(filePath)
-      return false
+      return null
     } catch (err) {
       console.error(`[FileProvider] Failed to open file at: ${filePath}`, err)
-      return false
+      return null
     }
   }
 }

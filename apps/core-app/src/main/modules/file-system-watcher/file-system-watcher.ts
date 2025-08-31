@@ -159,14 +159,14 @@ class FileSystemWatcher implements TalexTouch.IModule {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async init(app: TalexTouch.TouchApp, manager: TalexTouch.IModuleManager): Promise<void> {
+  async init(_app: TalexTouch.TouchApp, _manager: TalexTouch.IModuleManager): Promise<void> {
     console.debug(
       '[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.'
     )
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  destroy(app: TalexTouch.TouchApp, manager: TalexTouch.IModuleManager): void {
+  destroy(_app: TalexTouch.TouchApp, _manager: TalexTouch.IModuleManager): void {
     console.log('[FileSystemWatcher] Destroying...')
     this.watchers.forEach((watcher, depth) => {
       watcher.close()

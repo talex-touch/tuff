@@ -4,34 +4,15 @@ import axios from 'axios'
 import { TouchPlugin } from './plugin'
 import { PluginIcon } from './plugin-icon'
 import { IPluginDev } from '@talex-touch/utils/plugin'
-import { IFeatureLifeCycle, IPluginFeature } from '@talex-touch/utils/plugin'
+import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { PluginFeature } from './plugin-feature'
-import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
-import { TuffFactory, TuffUtils } from '@talex-touch/utils/core-box'
-import { createBuilderWithPluginContext } from './plugin-feature'
-import pkg from '../../../package.json'
+
+
 
 /**
  * The context required for loading plugin features.
  */
-const getFeatureContext = (touchPlugin: TouchPlugin) => ({
-  scope: 'plugin',
-  plugin: touchPlugin,
-  console: {
-    log: touchPlugin.logger.info.bind(touchPlugin.logger),
-    info: touchPlugin.logger.info.bind(touchPlugin.logger),
-    warn: touchPlugin.logger.warn.bind(touchPlugin.logger),
-    error: touchPlugin.logger.error.bind(touchPlugin.logger),
-    debug: touchPlugin.logger.debug.bind(touchPlugin.logger)
-  },
-  pkg,
-  $util: touchPlugin.getFeatureUtil(),
-  $event: touchPlugin.getFeatureEventUtil(),
-  TuffFactory,
-  TuffUtils,
-  URLSearchParams,
-  TuffItemBuilder: createBuilderWithPluginContext(touchPlugin.name)
-})
+
 
 export interface IPluginLoader {
   load(): Promise<TouchPlugin>

@@ -29,7 +29,7 @@ export default defineComponent({
       const pointerRect = pointerEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
 
-      const diffTop = this.$props && 'offset' in this.$props ? +this.$props.offset || 0 : 0
+      const diffTop = this.$props?.offset ? +this.$props.offset || 0 : 0
 
       if (nodeRect.top > pointerRect.top) {
         pointerStyle.height = nodeRect.height * 0.8 + 'px'

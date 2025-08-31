@@ -35,8 +35,8 @@ const versionStr = computed(
 const startCosts = computed(() => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000)
 
 // Get CPU and memory usage hooks
-const cpuUsage: any = []
-const memoryUsage: any = []
+// const cpuUsage: any = []
+// const memoryUsage: any = []
 
 // Computed property for current quarter based on build time
 const currentQuarter = computed(() => {

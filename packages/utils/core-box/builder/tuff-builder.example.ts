@@ -3,8 +3,8 @@
  * 展示如何使用 TuffBuilder 工具类创建和管理 TuffItem 对象
  */
 
-import { TuffItemBuilder, TuffFactory, TuffBatchBuilder, TuffUtils } from './tuff-builder';
-import type { TuffItem, TuffItemKind } from '../tuff/tuff-dsl';
+import { TuffItemBuilder, TuffFactory, TuffListBuilder, TuffUtils } from './tuff-builder';
+import type { TuffItem } from '../tuff/tuff-dsl';
 
 // ==================== 基本用法示例 ====================
 
@@ -28,7 +28,7 @@ function createSingleItem(): TuffItem {
       file: {
         path: '/Users/documents/文档.docx',
         size: 1024 * 1024 * 2, // 2MB
-        modified: '2023-06-15T10:30:00Z'
+        modified_at: '2023-06-15T10:30:00Z'
       }
     })
     .build();
@@ -105,38 +105,41 @@ function createCommonItems(): TuffItem[] {
  */
 function createBatchItems(): TuffItem[] {
   // 创建批量构建器，设置共享的来源信息
-  const batchBuilder = new TuffBatchBuilder('plugin', 'file-explorer')
-    .setKind('file')
-    .setLayout('list', 'medium')
+  const batchBuilder = new TuffListBuilder('plugin', 'file-explorer')
+    .setSharedKind('file')
+    
     .addSharedAction(TuffUtils.createAction('open', 'open', '打开', true));
 
   // 添加多个项目
   batchBuilder
-    .addItem('文档1.docx', builder => {
+    .addItem(builder => {
       builder
+        .setTitle('文档1.docx')
         .setIcon(TuffUtils.createIcon('📄'))
         .setDescription('Word 文档')
         .addTag(TuffUtils.createTag('文档', '#4285F4'));
     })
-    .addItem('图片.jpg', builder => {
+    .addItem(builder => {
       builder
+        .setTitle('图片.jpg')
         .setIcon(TuffUtils.createIcon('🖼️'))
         .setDescription('JPG 图片')
         .addTag(TuffUtils.createTag('图片', '#FBBC05'));
     })
-    .addItem('表格.xlsx', builder => {
+    .addItem(builder => {
       builder
+        .setTitle('表格.xlsx')
         .setIcon(TuffUtils.createIcon('📊'))
         .setDescription('Excel 表格')
         .addTag(TuffUtils.createTag('表格', '#34A853'));
     });
 
   // 批量添加简单项目
-  batchBuilder.addItems([
-    '笔记1.txt',
-    '笔记2.txt',
-    '笔记3.txt'
-  ]);
+  batchBuilder.addItemsFromData([
+    { name: '笔记1.txt' },
+    { name: '笔记2.txt' },
+    { name: '笔记3.txt' }
+  ], (builder, item) => builder.setTitle(item.name));
 
   // 从数据对象批量创建项目
   const fileData = [
@@ -145,28 +148,27 @@ function createBatchItems(): TuffItem[] {
     { name: '数据.csv', type: 'csv', size: 1024 * 512, modified: '2023-06-14' }
   ];
 
-  batchBuilder.addItemsFromData(fileData, 'name', (file) => {
-    return (builder) => {
-      let icon = '📄';
-      if (file.type === 'pdf') icon = '📕';
-      if (file.type === 'pptx') icon = '📊';
-      if (file.type === 'csv') icon = '📈';
+  batchBuilder.addItemsFromData(fileData, (builder, file) => {
+    let icon = '📄';
+    if (file.type === 'pdf') icon = '📕';
+    if (file.type === 'pptx') icon = '📊';
+    if (file.type === 'csv') icon = '📈';
 
-      builder
-        .setIcon(TuffUtils.createIcon(icon))
-        .setDescription(`${file.type.toUpperCase()} 文件`)
-        .setAccessory(file.modified)
-        .setMeta({
-          file: {
-            type: file.type,
-            size: file.size,
-            modified: file.modified
-          }
-        });
-    };
+    builder
+      .setTitle(file.name)
+      .setIcon(TuffUtils.createIcon(icon))
+      .setDescription(`${file.type.toUpperCase()} 文件`)
+      .setAccessory(file.modified)
+      .setMeta({
+        file: {
+          path: file.name,
+          size: file.size,
+          modified_at: file.modified
+        }
+      });
   });
 
-  return batchBuilder.getItems();
+  return batchBuilder.build();
 }
 
 /**

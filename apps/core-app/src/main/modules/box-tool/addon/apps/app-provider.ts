@@ -3,7 +3,7 @@ import {
   IProviderActivate,
   ISearchProvider,
   ProviderContext,
-  TuffItem,
+  
   TuffQuery,
   TuffSearchResult
 } from '../../search-engine/types'
@@ -23,7 +23,7 @@ import { sleep } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { config as configSchema } from '../../../../db/schema'
 import { is } from '@electron-toolkit/utils'
-import { Range } from './highlighting-service' // 从 highlighting-service 导入 calculateHighlights 和 Range
+
 import { processSearchResults } from './search-processing-service' // 引入精加工服务
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils';
 
@@ -523,7 +523,7 @@ class AppProvider implements ISearchProvider {
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
 
-  // Keep other methods like _subscribeToFSEvents, _registerWatchPaths, _waitForItemStable, fetchExtensionsForFiles, mapAppToTuffItem, getAppsByPlatform, getAppInfoByPath as they are.
+  // Keep other methods like _subscribeToFSEvents, _registerWatchPaths, _waitForItemStable, fetchExtensionsForFiles, mapAppTo getAppsByPlatform, getAppInfoByPath as they are.
   // The comprehensive scan logic will also be kept and updated to use the new keyword sync.
 
   private _subscribeToFSEvents(): void {
@@ -604,60 +604,6 @@ class AppProvider implements ISearchProvider {
     }))
   }
 
-  private mapAppToTuffItem(
-    app: typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> },
-    override?: {
-      title?: string
-      highlights?: Range[]
-      matchedKeyword?: string
-    }
-  ): TuffItem {
-    const title = override?.title || app.displayName || app.name
-    return {
-      id: app.path,
-      source: {
-        type: this.type,
-        id: this.id,
-        name: this.name
-      },
-      kind: 'app',
-      render: {
-        mode: 'default',
-        basic: {
-          title: title,
-          subtitle: app.path,
-          icon: {
-            type: 'base64',
-            value: app.extensions.icon || ''
-          }
-        }
-      },
-      actions: [
-        {
-          id: 'open-app',
-          type: 'open',
-          label: 'Open',
-          primary: true,
-          payload: {
-            path: app.path
-          }
-        }
-      ],
-      meta: {
-        app: {
-          path: app.path,
-          bundle_id: app.extensions.bundleId || ''
-        },
-        extension: {
-          matchResult: override?.highlights,
-          matchedKeyword: override?.matchedKeyword,
-          keyWords: [...new Set([app.name, app.path.split('/').pop()?.split('.')[0] || ''])].filter(
-            Boolean
-          )
-        }
-      }
-    }
-  }
 
   private async getAppsByPlatform(): Promise<ScannedAppInfo[]> {
     switch (process.platform) {
@@ -800,8 +746,7 @@ class AppProvider implements ISearchProvider {
     for (const app of allDbApps) {
       try {
         const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>(
+        const { stdout } = await new Promise<{ stdout: string; stderr: string }>(
           (resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
               if (err) {

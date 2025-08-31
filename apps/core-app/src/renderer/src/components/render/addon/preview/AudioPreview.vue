@@ -1,7 +1,7 @@
 <script setup lang="ts" name="AudioPreview">
 import { TuffItem } from '@talex-touch/utils'
 
-const props = defineProps<{
+ defineProps<{
   item: TuffItem
 }>()
 

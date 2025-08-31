@@ -6,15 +6,6 @@ import { createRetrier } from '@talex-touch/utils'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 
-interface MacApp {
-  _name: string
-  lastModified: string
-  path: string
-  runtime_environment: string
-  signed_by: string[]
-  version: string
-  obtained_from: string
-}
 
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
   return new Promise((resolve, reject) => {

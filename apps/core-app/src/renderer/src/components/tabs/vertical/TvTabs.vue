@@ -179,7 +179,7 @@ export default defineComponent({
             }
           },
           {
-            icon: vnode.children?.icon
+            icon: typeof vnode.children === 'object' && vnode.children && 'icon' in vnode.children ? vnode.children.icon : undefined
           }
         )
       }
@@ -226,7 +226,7 @@ export default defineComponent({
       // 获取选中插槽内容
       const getSelectSlotContent = (): VNode => {
         // 获取当前激活的内容
-        let activeContent = null
+        let activeContent: any = null
         const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
 
         if (currentActiveKey) {
@@ -234,9 +234,9 @@ export default defineComponent({
           const activeChild = children[activeIndex]
 
           if (activeChild && activeChild.children) {
-            if (typeof activeChild.children === 'object' && 'default' in activeChild.children) {
+            if (typeof activeChild.children === 'object' && activeChild.children && 'default' in activeChild.children) {
               activeContent = (activeChild.children as { default: () => any }).default?.()
-            } else {
+            } else if (typeof activeChild.children === 'object') {
               activeContent = activeChild.children
             }
           }
@@ -245,11 +245,11 @@ export default defineComponent({
         // 如果没有找到激活内容，尝试使用lastActive
         if (!activeContent && lastActive.value && lastActive.value.children) {
           if (
-            typeof lastActive.value.children === 'object' &&
+            typeof lastActive.value.children === 'object' && lastActive.value.children &&
             'default' in lastActive.value.children
           ) {
             activeContent = (lastActive.value.children as { default: () => any }).default?.()
-          } else {
+          } else if (typeof lastActive.value.children === 'object') {
             activeContent = lastActive.value.children
           }
         }

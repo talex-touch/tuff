@@ -1,6 +1,6 @@
 import { TuffItem, TuffQuery } from '../../search-engine/types'
-import { TuffFactory, TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { files as filesSchema, keywordMappings } from '../../../../db/schema'
+import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { files as filesSchema } from '../../../../db/schema'
 import path from 'path'
 import { pinyin } from 'pinyin-pro'
 import { calculateHighlights, Range } from './highlighting-service' // 复用现有的高亮服务
@@ -38,8 +38,8 @@ export async function processSearchResults(
     const displayName = app.displayName || app.name;
     const potentialTitles = [displayName, name].filter(Boolean) as string[];
 
-    let bestSource: TuffItem['source']['type'] | 'unknown' = 'unknown';
-    let bestHighlights: Range[] = [];
+    let bestSource: string = 'unknown';
+    let bestHighlights: any[] = [];
     let score = 0;
 
     // --- 1. 来源推断与区间计算 ---
@@ -67,8 +67,6 @@ export async function processSearchResults(
     } else {
       // 精确搜索：反向推断来源和计算区间
       for (const title of potentialTitles) {
-        const titleLowerCase = title.toLowerCase();
-
         // 尝试匹配首字母缩写
         const acronym = generateAcronym(title);
         if (acronym && lowerCaseQuery.includes(acronym.toLowerCase())) {
@@ -79,7 +77,7 @@ export async function processSearchResults(
           let currentPos = 0;
           for(const word of words) {
             if (word.length > 0) {
-              initialsPositions.push([currentPos, currentPos + 1]);
+              initialsPositions.push({ start: currentPos, end: currentPos + 1 });
               currentPos += word.length + 1; // +1 for space
             }
           }

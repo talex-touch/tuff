@@ -160,7 +160,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     if (feature.interaction && feature.interaction.type === 'webcontent') {
       // Delegate view loading to the unified PluginViewLoader.
       // The loader will add issues to plugin.issues if an error occurs.
-      await PluginViewLoader.loadPluginView(plugin, feature);
+      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature);
 
       // Check if the loader added an INVALID_VIEW_PATH issue to the plugin.
       // If so, it means the view could not be loaded due to a security concern.

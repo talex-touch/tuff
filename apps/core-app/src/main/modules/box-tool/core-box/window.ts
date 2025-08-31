@@ -10,7 +10,7 @@ import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { coreBoxManager } from './manager'
 import { TouchPlugin } from '../../../plugins'
-import { genTouchChannel } from '../../../core/channel-core'
+
 
 const windowAnimation = useWindowAnimation()
 

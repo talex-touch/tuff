@@ -1,5 +1,5 @@
 <script name="AppList" setup lang="ts">
-import { appAmo } from '~/views/box/search-box'
+// import { appAmo } from '~/views/box/search-box'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 const props = defineProps<{
@@ -52,24 +52,24 @@ function handleOrderWay() {
     return
   }
 
-  _list.value = _list.value!.sort((a, b) => {
-    const aI = appAmo[a.name]
-    const bI = appAmo[b.name]
-
-    if (aI === undefined && bI === undefined) {
-      return 0
-    }
-
-    if (aI === undefined) {
-      return 1
-    }
-
-    if (bI === undefined) {
-      return -1
-    }
-
-    return bI - aI
-  })
+  // _list.value = _list.value!.sort((a, b) => {
+  //   const aI = appAmo[a.name]
+  //   const bI = appAmo[b.name]
+  //
+  //   if (aI === undefined && bI === undefined) {
+  //     return 0
+  //   }
+  //
+  //   if (aI === undefined) {
+  //     return 1
+  //   }
+  //
+  //   if (bI === undefined) {
+  //     return -1
+  //   }
+  //
+  //   return bI - aI
+  // })
 }
 
 function handleOrderChange() {
