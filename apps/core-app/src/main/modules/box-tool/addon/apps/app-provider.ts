@@ -3,12 +3,12 @@ import {
   IProviderActivate,
   ISearchProvider,
   ProviderContext,
-  TuffItem,
+  
   TuffQuery,
   TuffSearchResult
 } from '../../search-engine/types'
 import { TuffFactory } from '@talex-touch/utils/core-box'
-import { pinyin, match } from 'pinyin-pro'
+import { pinyin } from 'pinyin-pro' // 只保留 pinyin
 
 import { shell } from 'electron'
 import searchEngineCore from '../../search-engine/search-core'
@@ -23,6 +23,9 @@ import { sleep } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { config as configSchema } from '../../../../db/schema'
 import { is } from '@electron-toolkit/utils'
+
+import { processSearchResults } from './search-processing-service' // 引入精加工服务
+import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils';
 
 interface ScannedAppInfo {
   name: string
@@ -49,33 +52,6 @@ function generateAcronym(name: string): string {
     .map((word) => word.charAt(0))
     .join('')
     .toLowerCase()
-}
-
-type Range = { start: number; end: number } // 右开 [start, end)
-
-/**
- * Converts an array of matching indices to an array of start/end ranges for highlighting.
- * e.g., [0, 1, 4, 5, 6] -> [{ start: 0, end: 2 }, { start: 4, end: 7 }]
- */
-function convertIndicesToRanges(indices: number[]): Range[] {
-  if (!indices?.length) return []
-  const arr = Array.from(new Set(indices)).sort((a, b) => a - b) // 去重 + 拷贝 + 排序
-
-  const ranges: Range[] = []
-  let start = arr[0]
-  let prev = arr[0]
-
-  for (let i = 1; i < arr.length; i++) {
-    const x = arr[i]
-    if (x === prev + 1) {
-      prev = x // 连续，延长
-    } else {
-      ranges.push({ start, end: prev + 1 }) // 右开
-      start = prev = x
-    }
-  }
-  ranges.push({ start, end: prev + 1 })
-  return ranges
 }
 
 class AppProvider implements ISearchProvider {
@@ -457,7 +433,6 @@ class AppProvider implements ISearchProvider {
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult } = args
     const sessionId = searchResult?.sessionId
-
     if (sessionId) {
       searchEngineCore.recordExecute(sessionId, item).catch((err) => {
         console.error('[AppProvider] Failed to record execution.', err)
@@ -482,88 +457,73 @@ class AppProvider implements ISearchProvider {
 
     const db = this.dbUtils.getDb()
     const lowerCaseQuery = query.text.toLowerCase()
+    const queryTerms = lowerCaseQuery.split(/[\s/]+/).filter(Boolean); // 按空白或 / 拆分关键词
 
-    // 1. Search in keyword_mappings
-    const matchedKeywords = await db
-      .select({
-        itemId: keywordMappings.itemId,
-        keyword: keywordMappings.keyword
-      })
-      .from(keywordMappings)
-      .where(sql`lower(keyword) LIKE ${'%' + lowerCaseQuery + '%'}`)
+    let preciseMatchedItemIds: Set<string> | null = null;
 
-    if (matchedKeywords.length === 0) {
-      return TuffFactory.createSearchResult(query).build()
+    // --- 精确查询路径 ---
+    if (queryTerms.length > 0) {
+      const allTermMatchedItemIds: Set<string>[] = [];
+
+      for (const term of queryTerms) {
+        const matchedKeywords = await db
+          .select({ itemId: keywordMappings.itemId })
+          .from(keywordMappings)
+          .where(sql`lower(keyword) LIKE ${'%' + term + '%'}`);
+        
+        allTermMatchedItemIds.push(new Set(matchedKeywords.map(k => k.itemId)));
+      }
+
+      // 对所有 term 的匹配结果取交集 (AND 语义)
+      if (allTermMatchedItemIds.length > 0) {
+        preciseMatchedItemIds = allTermMatchedItemIds.reduce((intersection, currentSet) => {
+          return new Set([...intersection].filter(id => currentSet.has(id)));
+        });
+      }
     }
 
-    // Group keywords by itemId
-    const keywordsByItemId = matchedKeywords.reduce(
-      (acc, { itemId, keyword }) => {
-        if (!acc[itemId]) {
-          acc[itemId] = []
-        }
-        acc[itemId].push(keyword)
-        return acc
-      },
-      {} as Record<string, string[]>
-    )
+    let finalApps: (typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[] = [];
+    let isFuzzySearch = false;
 
-    const itemIds = Object.keys(keywordsByItemId)
+    if (preciseMatchedItemIds && preciseMatchedItemIds.size > 0) {
+      // 精确匹配有结果
+      finalApps = await this.getItemsByIds(Array.from(preciseMatchedItemIds));
+    } else {
+      // --- 模糊查询路径 (兜底) ---
+      isFuzzySearch = true;
+      console.debug(`[AppProvider] No precise matches for '${query.text}', falling back to fuzzy search.`);
+      
+      // 假设模糊查询只对整个查询文本进行，而不是拆分的 term
+      // 1. 获取所有 app 类型的记录
+      const allApps = await db.select().from(filesSchema).where(eq(filesSchema.type, 'app'));
 
-    // 2. Fetch full app info for matched itemIds
-    const apps = await this.getItemsByIds(itemIds)
+      // 2. 在内存中进行 Levenshtein 距离计算和过滤
+      const fuzzyMatchedFiles = allApps.filter(app => {
+        const distance = levenshteinDistance(app.name.toLowerCase(), lowerCaseQuery);
+        return distance <= 2;
+      });
+      
+      finalApps = await this.fetchExtensionsForFiles(fuzzyMatchedFiles);
+    }
 
-    // 3. Score and sort the results
-    const searchResults = apps
-      .map((app) => {
-        const uniqueId = app.extensions.bundleId || app.path
-        const matchedKws = keywordsByItemId[uniqueId] || []
-        const bestKeyword = matchedKws.sort((a, b) => a.length - b.length)[0] || ''
+    // TODO: 实现 "精加工" 服务 (步骤 3) 来计算 source 和 indices
+    // TODO: 实现 "排序与返回" (步骤 4)
+    const processedResults = await processSearchResults(finalApps, query, isFuzzySearch, this.aliases);
 
-        const potentialTitles = [app.displayName, app.name].filter(Boolean) as string[]
-        let bestMatch: {
-          title: string
-          result: number[] | null
-          score: number
-        } = {
-          title: app.displayName || app.name,
-          result: null,
-          score: 0
-        }
-
-        for (const title of potentialTitles) {
-          const matchResult = match(title, query.text)
-          // The score is higher for better matches (closer to the beginning of the string)
-          const score = matchResult ? 1 - matchResult[0] / title.length : 0
-          if (score > bestMatch.score) {
-            bestMatch = { title, result: matchResult, score }
-          }
-        }
-        
-        // If no direct match on titles, use keyword match as a baseline
-        const finalScore = bestMatch.score > 0 ? bestMatch.score : 0.5
-        const highlights = bestMatch.result ? convertIndicesToRanges(bestMatch.result) : []
-
-        const tuffItem = this.mapAppToTuffItem(app, {
-          title: bestMatch.title,
-          highlights,
-          matchedKeyword: bestKeyword
-        })
-
-        const updatedItem: TuffItem = {
-          ...tuffItem,
-          scoring: { ...tuffItem.scoring, final: finalScore }
-        }
-        return { item: updatedItem, score: finalScore }
-      })
-      .filter((result): result is { item: TuffItem; score: number } => result !== null)
+    // --- 4. 排序与返回 ---
+    // 排序逻辑已在 processSearchResults 内部通过 score 完成，这里只需按 score 降序
+    const sortedItems = processedResults
       .sort((a, b) => b.score - a.score)
-      .map((result) => result.item)
+      .map(item => {
+        // 移除内部 score 字段，只保留 TuffItem 结构
+        const { score, ...rest } = item;
+        return rest;
+      });
 
-    return TuffFactory.createSearchResult(query).setItems(searchResults).build()
+    return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
 
-  // Keep other methods like _subscribeToFSEvents, _registerWatchPaths, _waitForItemStable, fetchExtensionsForFiles, mapAppToTuffItem, getAppsByPlatform, getAppInfoByPath as they are.
+  // Keep other methods like _subscribeToFSEvents, _registerWatchPaths, _waitForItemStable, fetchExtensionsForFiles, mapAppTo getAppsByPlatform, getAppInfoByPath as they are.
   // The comprehensive scan logic will also be kept and updated to use the new keyword sync.
 
   private _subscribeToFSEvents(): void {
@@ -644,60 +604,6 @@ class AppProvider implements ISearchProvider {
     }))
   }
 
-  private mapAppToTuffItem(
-    app: typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> },
-    override?: {
-      title?: string
-      highlights?: { start: number; end: number }[]
-      matchedKeyword?: string
-    }
-  ): TuffItem {
-    const title = override?.title || app.displayName || app.name
-    return {
-      id: app.path,
-      source: {
-        type: this.type,
-        id: this.id,
-        name: this.name
-      },
-      kind: 'app',
-      render: {
-        mode: 'default',
-        basic: {
-          title: title,
-          subtitle: app.path,
-          icon: {
-            type: 'base64',
-            value: app.extensions.icon || ''
-          }
-        }
-      },
-      actions: [
-        {
-          id: 'open-app',
-          type: 'open',
-          label: 'Open',
-          primary: true,
-          payload: {
-            path: app.path
-          }
-        }
-      ],
-      meta: {
-        app: {
-          path: app.path,
-          bundle_id: app.extensions.bundleId || ''
-        },
-        extension: {
-          matchResult: override?.highlights,
-          matchedKeyword: override?.matchedKeyword,
-          keyWords: [...new Set([app.name, app.path.split('/').pop()?.split('.')[0] || ''])].filter(
-            Boolean
-          )
-        }
-      }
-    }
-  }
 
   private async getAppsByPlatform(): Promise<ScannedAppInfo[]> {
     switch (process.platform) {
@@ -840,8 +746,7 @@ class AppProvider implements ISearchProvider {
     for (const app of allDbApps) {
       try {
         const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>(
+        const { stdout } = await new Promise<{ stdout: string; stderr: string }>(
           (resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
               if (err) {

@@ -43,7 +43,7 @@ interface CommandData {
   [key: string]: any
 }
 
-const props = defineProps<{
+ defineProps<{
   visible: boolean
   command: IFeatureCommand | null
   commandData?: CommandData

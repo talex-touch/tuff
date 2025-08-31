@@ -40,6 +40,7 @@
     "utils:publish": "pnpm -F @talex-touch/utils run publish"
   },
   "dependencies": {
+    "pinyin-match": "^1.2.8",
     "vite-plugin-electron": "^0.29.0"
   },
   "volta": {

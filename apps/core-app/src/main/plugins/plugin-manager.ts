@@ -13,6 +13,8 @@ import { TalexTouch } from '../types'
 import { TouchWindow } from '../core/touch-core'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { shell } from 'electron'
+import { databaseManager } from '../modules/database'
+import { createDbUtils } from '../db/utils'
 
 class DevPluginWatcher {
   private readonly manager: PluginManager
@@ -79,9 +81,23 @@ class DevPluginWatcher {
       })
 
       if (response.data.changed) {
-        console.log(`[DevWatcher] Detected change for plugin ${name}. Reloading...`)
-        // Do not await, let it run in the background
-        this.manager.reloadPlugin(name)
+        const plugin = this.manager.plugins.get(name)
+        if (!plugin) {
+          return
+        }
+
+        const isEnabled =
+          plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
+
+        if (isEnabled) {
+          console.log(`[DevWatcher] Detected change for enabled plugin ${name}. Reloading...`)
+          // Do not await, let it run in the background
+          this.manager.reloadPlugin(name)
+        } else {
+          console.log(
+            `[DevWatcher] Detected change for disabled plugin ${name}. Ignoring reload.`
+          )
+        }
       }
     } catch (error: any) {
       // Don't log ECONNRESET errors which are common during dev server restarts
@@ -98,6 +114,9 @@ class PluginManager implements IPluginManager {
   plugins: Map<string, ITouchPlugin> = new Map()
   active: string = ''
   reloadingPlugins: Set<string> = new Set()
+  enabledPlugins: Set<string> = new Set()
+  dbUtils = createDbUtils(databaseManager.getDb())
+  private initialLoadPromises: Promise<boolean>[] = []
 
   pluginPath: string
   watcher: FSWatcher | null
@@ -112,10 +131,19 @@ class PluginManager implements IPluginManager {
   }
 
   getPluginList(): Array<object> {
+    console.log('[PluginManager] getPluginList called.')
     const list = new Array<object>()
 
-    for (const plugin of this.plugins.values()) list.push((plugin as TouchPlugin).toJSONObject())
+    for (const plugin of this.plugins.values()) {
+      console.log(
+        `[PluginManager]   - Processing plugin: ${plugin.name}, status: ${
+          PluginStatus[(plugin as TouchPlugin).status]
+        }`
+      )
+      list.push((plugin as TouchPlugin).toJSONObject())
+    }
 
+    console.log(`[PluginManager] Returning plugin list with ${list.length} items.`)
     return list
   }
 
@@ -206,6 +234,53 @@ class PluginManager implements IPluginManager {
 
   __initDevWatcher(): void {
     this.devWatcher.start()
+  }
+
+  async persistEnabledPlugins(): Promise<void> {
+    try {
+      await this.dbUtils.setPluginData(
+        'internal:plugin-manager',
+        'enabled_plugins',
+        Array.from(this.enabledPlugins)
+      )
+      console.log('[PluginManager] Persisted enabled plugins state.')
+    } catch (error) {
+      console.error('[PluginManager] Failed to persist enabled plugins state:', error)
+    }
+  }
+
+  private async loadPersistedState(): Promise<void> {
+    console.log('[PluginManager] Attempting to load persisted plugin states...')
+    try {
+      const data = await this.dbUtils.getPluginData('internal:plugin-manager', 'enabled_plugins')
+      if (data && data.value) {
+        const enabled = JSON.parse(data.value) as string[]
+        this.enabledPlugins = new Set(enabled)
+        console.log(
+          `[PluginManager] Loaded ${
+            enabled.length
+          } enabled plugins from database: [${enabled.join(', ')}]`
+        )
+
+        for (const pluginName of this.enabledPlugins) {
+          const plugin = this.plugins.get(pluginName)
+          console.log(
+            `[PluginManager] Checking auto-enable for '${pluginName}': found=${!!plugin}, status=${
+              plugin ? PluginStatus[plugin.status] : 'N/A'
+            }`
+          )
+          if (plugin && plugin.status === PluginStatus.DISABLED) {
+            console.log(`[PluginManager] ==> Auto-enabling plugin: ${pluginName}`)
+            await plugin.enable()
+            console.log(`[PluginManager] ==> Finished auto-enabling for '${pluginName}'.`)
+          }
+        }
+      } else {
+        console.log('[PluginManager] No persisted plugin state found in database.')
+      }
+    } catch (error) {
+      console.error('[PluginManager] Failed to load persisted plugin state:', error)
+    }
   }
 
   __init__(): void {
@@ -325,7 +400,7 @@ class PluginManager implements IPluginManager {
         return
       }
 
-      this.loadPlugin(pluginName)
+      this.initialLoadPromises.push(this.loadPlugin(pluginName))
     })
 
     this.watcher.on('unlinkDir', (_path) => {
@@ -337,10 +412,16 @@ class PluginManager implements IPluginManager {
       this.unloadPlugin(pluginName)
     })
 
-    this.watcher.on('ready', () => {
+    this.watcher.on('ready', async () => {
       console.log(
         '[PluginManager] Initial scan complete. Ready for changes. (' + this.pluginPath + ')'
       )
+      console.log(`[PluginManager] Waiting for ${this.initialLoadPromises.length} initial plugins to load...`)
+      // Wait for all initial plugin loading operations to complete.
+      await Promise.allSettled(this.initialLoadPromises)
+      console.log('[PluginManager] All initial plugins loaded.')
+      // Once all plugins are loaded, load the persisted state and auto-enable plugins.
+      await this.loadPersistedState()
     })
 
     this.watcher.on('error', (error) => {
@@ -483,7 +564,9 @@ export const PluginManagerModule: TalexTouch.IModule = {
   name: Symbol('PluginManager'),
   filePath: 'plugins',
   init(touchApp) {
-    genPluginManager(path.join(touchApp.rootPath, 'modules', 'plugins'))
+    const manager = genPluginManager(
+      path.join(touchApp.rootPath, 'modules', 'plugins')
+    ) as PluginManager
 
     const touchChannel = genTouchChannel()
 
@@ -493,25 +576,40 @@ export const PluginManagerModule: TalexTouch.IModule = {
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
       pluginManager!.setActivePlugin(data!.name)
     )
-    touchChannel.regChannel(ChannelType.MAIN, 'enable-plugin', ({ data }) => {
+    touchChannel.regChannel(ChannelType.MAIN, 'enable-plugin', async ({ data }) => {
       const plugin = pluginManager!.plugins.get(data!.name)
       if (!plugin) return false
-      return plugin.enable()
+
+      if (plugin.status === PluginStatus.LOAD_FAILED) {
+        console.log(
+          `[PluginManager] Attempting to re-enable a failed plugin '${data!.name}'. Reloading...`
+        )
+        await manager.reloadPlugin(data!.name)
+        // After reloading, the plugin might be enabled automatically if it was previously.
+        // We return the current status from the manager.
+        return manager.enabledPlugins.has(data!.name)
+      }
+
+      const success = await plugin.enable()
+      if (success) {
+        manager.enabledPlugins.add(data!.name)
+        await manager.persistEnabledPlugins()
+      }
+      return success
     })
-    touchChannel.regChannel(ChannelType.MAIN, 'disable-plugin', ({ data }) => {
+    touchChannel.regChannel(ChannelType.MAIN, 'disable-plugin', async ({ data }) => {
       const plugin = pluginManager!.plugins.get(data!.name)
       if (!plugin) return false
-      plugin.disable()
-      return true
+      const success = await plugin.disable()
+      if (success) {
+        manager.enabledPlugins.delete(data!.name)
+        await manager.persistEnabledPlugins()
+      }
+      return success
     })
     touchChannel.regChannel(ChannelType.MAIN, 'get-plugin', ({ data }) =>
       pluginManager!.plugins.get(data!.name)
     )
-    touchChannel.regChannel(ChannelType.MAIN, 'webview-init', ({ data }) => {
-      const plugin = pluginManager!.plugins.get(data!.name)
-      if (!plugin) return false
-      return (plugin.webViewInit = true)
-    })
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'crash', async ({ data, plugin }) => {
       touchChannel.send(ChannelType.MAIN, 'plugin-crashed', {
@@ -563,8 +661,7 @@ export const PluginManagerModule: TalexTouch.IModule = {
         console.error(`Exception while opening plugin folder:`, error)
       }
     })
-
-    touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
+touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
       const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin
       if (!touchPlugin) return reply(DataCode.ERROR, { error: 'Plugin not found!' })
 

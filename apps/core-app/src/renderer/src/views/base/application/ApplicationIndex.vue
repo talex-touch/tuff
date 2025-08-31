@@ -2,7 +2,7 @@
 import AppList from './AppList.vue'
 import AppConfigure from './AppConfigure.vue'
 import ApplicationEmpty from './ApplicationEmpty.vue'
-import { refreshSearchList, apps, search, appAmo, execute } from '~/views/box/search-box'
+// import { refreshSearchList, apps, search, appAmo, execute } from '~/views/box/search-box'
 
 defineProps<{
   modelValue?: boolean
@@ -10,29 +10,29 @@ defineProps<{
 
 const index = ref(-1)
 const curSelect = ref()
-const appList: any = ref(apps.value)
+const appList: any = ref([])
 
-onMounted(() => {
-  setTimeout(async () => {
-    await refreshSearchList()
-  }, 200)
-})
+// onMounted(() => {
+//   setTimeout(async () => {
+//     await refreshSearchList()
+//   }, 200)
+// })
 
 async function handleSearch(value: string) {
   if (!value.length) {
-    appList.value = apps.value
+    // appList.value = apps.value
     return
   }
   appList.value = []
 
-  await search(value, { mode: 0 }, {}, (v: any) => {
-    const amo = appAmo[v.name] || 0
-    v.amo = amo
+  // await search(value, { mode: 0 }, {}, (v: any) => {
+  //   const amo = appAmo[v.name] || 0
+  //   v.amo = amo
 
-    const arr = [...appList.value, v].toSorted((b: any, a: any) => a.amo - b.amo)
+  //   const arr = [...appList.value, v].toSorted((b: any, a: any) => a.amo - b.amo)
 
-    appList.value = arr
-  })
+  //   appList.value = arr
+  // })
 }
 
 function handleSelect(item: any, _index: number) {
@@ -40,8 +40,8 @@ function handleSelect(item: any, _index: number) {
   index.value = _index
 }
 
-function handleExecute(item: any) {
-  execute(item)
+function handleExecute(_item: any) {
+  // execute(item)
 }
 </script>
 

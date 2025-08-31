@@ -1,4 +1,4 @@
-import { ChannelType, ITouchClientChannel } from '@talex-touch/utils/channel'
+import { ITouchClientChannel } from '@talex-touch/utils/channel'
 
 type DataCallback = (data: string) => void
 type ExitCallback = (exitCode: number | null) => void

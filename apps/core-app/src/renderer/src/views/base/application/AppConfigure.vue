@@ -4,7 +4,7 @@ import FlatButton from '@comp/base/button/FlatButton.vue'
 // import cprocess from "child_process";
 // import fs from 'fs'
 // import path from 'path'
-import { appAmo } from '~/views/box/search-box'
+// import { appAmo } from '~/views/box/search-box'
 // import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
@@ -139,7 +139,7 @@ function handleHelp(): void {
                 {{ data.keyWords }}
               </template>
             </t-block-line>
-            <t-block-line title="Trigger" :description="appAmo[data.name] || '-'"></t-block-line>
+            <!-- <t-block-line title="Trigger" :description="appAmo[data.name] || '-'"></t-block-line> -->
           </t-group-block>
 
           <t-group-block v-if="info" name="Application specification (External)" icon="apps">

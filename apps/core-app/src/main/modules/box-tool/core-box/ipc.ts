@@ -2,8 +2,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchApp, TouchApp } from '../../../core/touch-core'
 import { coreBoxManager } from './manager'
 import searchEngineCore from '../search-engine/search-core'
-import { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
-import { windowManager } from './window'
+import { TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import { genPluginManager } from '../../../plugins'
 
 /**

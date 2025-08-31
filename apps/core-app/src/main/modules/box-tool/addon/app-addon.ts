@@ -1,6 +1,6 @@
-import WinApp from './apps/win'
-import DarwinApp from './apps/darwin'
-import LinuxApp from './apps/linux'
+import { getApps as WinApp } from './apps/win'
+import { getApps as DarwinApp } from './apps/darwin'
+import { getApps as LinuxApp } from './apps/linux'
 
 import PinyinMatch from 'pinyin-match'
 import PinyinMatchTw from 'pinyin-match/es/traditional.js'

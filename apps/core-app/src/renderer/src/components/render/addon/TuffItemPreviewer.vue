@@ -7,7 +7,7 @@ import {
   AudioPreview,
   TextPreview,
   DefaultPreview,
-  IconPreview
+  
 } from './preview'
 
 const props = defineProps<{

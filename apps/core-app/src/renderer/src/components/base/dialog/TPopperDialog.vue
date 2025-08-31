@@ -53,7 +53,7 @@
 <script lang="ts" name="TPopperDialog" setup>
 import { defineComponent, type Component, onMounted, provide, ref } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
-import GlassSurface from '../effect/GlassSurface.vue'
+
 
 interface Props {
   close: () => void

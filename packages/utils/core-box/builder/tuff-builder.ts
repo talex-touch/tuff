@@ -31,14 +31,14 @@ import type {
   TuffPreview,
   TuffAction,
   TuffActionType,
-  TuffCondition,
+  
   TuffScoring,
   TuffContext,
   TuffMeta,
   TuffPermissionLevel,
   TuffSearchResult,
   TuffQuery,
-  TuffSortStats,
+  
   IProviderActivate
 } from '../tuff/tuff-dsl'
 

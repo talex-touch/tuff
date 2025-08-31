@@ -121,7 +121,7 @@ export function mapFileToTuffItem(
     meta: {
       file: {
         path: file.path,
-        size: file.size,
+        size: file.size ?? undefined,
         created_at: file.ctime.toISOString(),
         modified_at: file.mtime.toISOString()
       }

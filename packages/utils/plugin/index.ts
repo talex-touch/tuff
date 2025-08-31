@@ -52,6 +52,7 @@ export interface IPluginBaseInfo {
   desc: string
   icon: IPluginIcon
   platforms: IPlatform
+  _uniqueChannelKey: string
 }
 
 export interface IPluginDev {
@@ -60,16 +61,10 @@ export interface IPluginDev {
   source?: boolean
 }
 
-export type IPluginWebview = Map<number, any>
-
-
-
 export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
   pluginPath: string
-  webViewInit: boolean
   logger: PluginLogger
-  webview: IPluginWebview
   features: IPluginFeature[]
   issues: PluginIssue[]
 

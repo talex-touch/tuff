@@ -1,8 +1,9 @@
 import { SearchEngineCore } from '../search-engine/search-core'
 import { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { windowManager } from './window'
-import { ITouchPlugin } from '@talex-touch/utils/plugin'
+import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { ipcManager } from './ipc'
+import { TouchPlugin } from '../../../plugins'
 
 export class CoreBoxManager {
   searchEngine: SearchEngineCore
@@ -11,6 +12,7 @@ export class CoreBoxManager {
   private _expand: number = 0
   private lastTrigger: number = -1
   private _isUIMode: boolean = false // Rename to private property
+  private currentFeature: IPluginFeature | null = null
 
   private constructor() {
     this.searchEngine = SearchEngineCore.getInstance()
@@ -68,8 +70,9 @@ export class CoreBoxManager {
     windowManager.shrink()
   }
 
-  public enterUIMode(url: string, plugin?: ITouchPlugin): void {
+  public enterUIMode(url: string, plugin?: TouchPlugin, feature?: IPluginFeature): void {
     this._isUIMode = true // Use private property
+    this.currentFeature = feature || null
     this.expand(10)
     windowManager.attachUIView(url, plugin)
     this.trigger(true)
@@ -78,11 +81,16 @@ export class CoreBoxManager {
   public exitUIMode(): void {
     if (this._isUIMode) {
       this._isUIMode = false // Use private property
+      this.currentFeature = null
       windowManager.detachUIView()
       this.shrink()
     } else {
       console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')
     }
+  }
+
+  public getCurrentFeature(): IPluginFeature | null {
+    return this.currentFeature
   }
 
   public async search(query: TuffQuery): Promise<TuffSearchResult | null> {

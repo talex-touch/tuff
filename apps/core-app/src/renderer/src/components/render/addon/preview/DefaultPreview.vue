@@ -1,17 +1,24 @@
 <script setup lang="ts" name="DefaultPreview">
 import { TuffItem } from '@talex-touch/utils'
+import { computed } from 'vue'
 
 const props = defineProps<{
   item: TuffItem
 }>()
 
-console.log(props)
+const iconValue = computed(() => {
+  const icon = props.item.render?.basic?.icon
+  if (typeof icon === 'string') {
+    return icon
+  }
+  return icon?.value
+})
 </script>
 
 <template>
   <div v-if="item.render?.basic" class="DefaultPreview">
-    <div class="icon">
-      <PluginIcon :icon="item.render?.basic?.icon?.value" :alt="item.render.basic.title" />
+    <div class="icon" v-if="iconValue">
+      <PluginIcon :icon="iconValue" :alt="item.render.basic.title" />
     </div>
   </div>
 </template>
