@@ -1293,5 +1293,3 @@ export interface TuffSearchProvider {
    */
   onDeactivate?(): Promise<void>;
 }
-
-export default TuffItem;

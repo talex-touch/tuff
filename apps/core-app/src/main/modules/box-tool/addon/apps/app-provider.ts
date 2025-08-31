@@ -3,7 +3,7 @@ import {
   IProviderActivate,
   ISearchProvider,
   ProviderContext,
-  
+
   TuffQuery,
   TuffSearchResult
 } from '../../search-engine/types'
@@ -470,7 +470,7 @@ class AppProvider implements ISearchProvider {
           .select({ itemId: keywordMappings.itemId })
           .from(keywordMappings)
           .where(sql`lower(keyword) LIKE ${'%' + term + '%'}`);
-        
+
         allTermMatchedItemIds.push(new Set(matchedKeywords.map(k => k.itemId)));
       }
 
@@ -492,7 +492,7 @@ class AppProvider implements ISearchProvider {
       // --- 模糊查询路径 (兜底) ---
       isFuzzySearch = true;
       console.debug(`[AppProvider] No precise matches for '${query.text}', falling back to fuzzy search.`);
-      
+
       // 假设模糊查询只对整个查询文本进行，而不是拆分的 term
       // 1. 获取所有 app 类型的记录
       const allApps = await db.select().from(filesSchema).where(eq(filesSchema.type, 'app'));
@@ -502,7 +502,7 @@ class AppProvider implements ISearchProvider {
         const distance = levenshteinDistance(app.name.toLowerCase(), lowerCaseQuery);
         return distance <= 2;
       });
-      
+
       finalApps = await this.fetchExtensionsForFiles(fuzzyMatchedFiles);
     }
 

@@ -12,7 +12,7 @@ import path from 'path'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions, scanProgress } from '../../../../db/schema'
 import { eq, inArray } from 'drizzle-orm'
-import PinyinMatch from 'pinyin-match'
+// import PinyinMatch from 'pinyin-match'
 import extractFileIcon from 'extract-file-icon'
 import { KEYWORD_MAP } from './constants'
 import { ScannedFileInfo } from './types'
@@ -279,7 +279,8 @@ class FileProvider implements ISearchProvider {
 
     const filteredResults = searchPool.filter(({ file, extensions }) => {
       const fileName = file.name.toLowerCase()
-      if (PinyinMatch.match(fileName, searchTerm)) {
+      // if (PinyinMatch.match(fileName, searchTerm)) {
+      if (fileName.includes(searchTerm)) {
         return true
       }
       const keywords = extensions.keywords ? (JSON.parse(extensions.keywords) as string[]) : []
@@ -305,7 +306,8 @@ class FileProvider implements ISearchProvider {
     const scoredResults = filteredResults
       .map(({ file, extensions }) => {
         const summary = usageMap.get(file.path)
-        const matchResult = PinyinMatch.match(file.name, searchTerm)
+        // const matchResult = PinyinMatch.match(file.name, searchTerm)
+        const matchResult: any = null
         const pinyinMatchScore = matchResult ? 1 - matchResult[0] / file.name.length : 0
         const lastUsed = summary ? new Date(summary.lastUsed).getTime() : 0
         const lastModified = new Date(file.mtime).getTime()

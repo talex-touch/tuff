@@ -1,22 +1,6 @@
-import { getApps as WinApp } from './apps/win'
-import { getApps as DarwinApp } from './apps/darwin'
-import { getApps as LinuxApp } from './apps/linux'
-
-import PinyinMatch from 'pinyin-match'
-import PinyinMatchTw from 'pinyin-match/es/traditional.js'
+// import PinyinMatch from 'pinyin-match'
+// import PinyinMatchTw from 'pinyin-match/es/traditional.js'
 import { isAsyncFunction } from 'node:util/types'
-
-const env = process.platform
-
-let appSearch: any
-
-if (env === 'darwin') {
-  appSearch = DarwinApp
-} else if (env === 'win32') {
-  appSearch = WinApp
-} else if (env === 'linux') {
-  appSearch = LinuxApp
-}
 
 /**
  * App DataManager
@@ -39,7 +23,7 @@ class AppDataManager {
   /**
    * Start Auto Refresh Timer
    */
-  private startAutoRefresh() {
+  private startAutoRefresh(): void {
     if (this.updateTimer) {
       clearInterval(this.updateTimer)
     }
@@ -68,6 +52,21 @@ class AppDataManager {
    * Get Raw App Data
    */
   private async getRawApps(): Promise<any[]> {
+    const env = process.platform
+    let appSearch: any
+
+    if (env === 'darwin') {
+      appSearch = (await import('./apps/darwin')).getApps
+    } else if (env === 'win32') {
+      appSearch = (await import('./apps/win')).getApps
+    } else if (env === 'linux') {
+      appSearch = (await import('./apps/linux')).getApps
+    }
+
+    if (!appSearch) {
+      return []
+    }
+
     const res: any[] = []
 
     if (isAsyncFunction(appSearch)) {
@@ -122,17 +121,8 @@ class AppDataManager {
    * Get Apps（Sync）
    */
   getAppsSync(): any[] {
-    if (this.apps.length === 0 && !this.isUpdating) {
-      try {
-        if (!isAsyncFunction(appSearch)) {
-          this.apps = appSearch()
-          this.lastUpdateTime = Date.now()
-        }
-      } catch (error) {
-        console.error('[AppDataManager] Failed to get apps synchronously:', error)
-      }
-    }
-
+    // Synchronous app fetching is disabled due to module resolution issues.
+    // The list will be populated asynchronously by getApps.
     return [...this.apps]
   }
 
@@ -151,7 +141,7 @@ class AppDataManager {
   /**
    * Destroy Manager
    */
-  destroy() {
+  destroy(): void {
     if (this.updateTimer) {
       clearInterval(this.updateTimer)
       this.updateTimer = null
@@ -161,34 +151,35 @@ class AppDataManager {
 
 const appDataManager = new AppDataManager()
 
-export function getApps() {
+export function getApps(): any[] {
   return appDataManager.getAppsSync()
 }
 
-export async function getAppsAsync(forceRefresh: boolean = false) {
+export async function getAppsAsync(forceRefresh: boolean = false): Promise<any[]> {
   return await appDataManager.getApps(forceRefresh)
 }
 
 export { appDataManager }
 
-export let apps: any = getApps()
+export const apps: any = getApps()
 
-function check(keyword: string, appName: string) {
-  let res = PinyinMatch.match(appName, keyword)
-
-  if (res !== false) return res
-
-  return PinyinMatchTw.match(appName, keyword)
+function check(keyword: string, appName: string): boolean {
+  // let res = PinyinMatch.match(appName, keyword)
+  //
+  // if (res !== false) return res
+  //
+  // return PinyinMatchTw.match(appName, keyword)
+  return appName.toLowerCase().includes(keyword.toLowerCase())
 }
 
-export default async (keyword: string) => {
+export default async (keyword: string): Promise<any[]> => {
   const currentApps = appDataManager.getAppsSync()
   const currentAppNames = currentApps?.map((app: any) => app.name) || []
 
-  let res = new Array<any>()
+  const res = new Array<any>()
   let index = 0
 
-  for (let appName of currentAppNames) {
+  for (const appName of currentAppNames) {
     const matched = check(keyword, appName)
 
     if (matched !== false) {

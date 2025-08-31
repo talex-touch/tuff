@@ -2,7 +2,6 @@ import { IPluginDev, IPluginIcon } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
 import path from 'path'
 
-
 export class PluginIcon implements IPluginIcon {
   type: string
   value: any

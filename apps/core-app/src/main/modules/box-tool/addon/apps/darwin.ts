@@ -6,7 +6,6 @@ import { createRetrier } from '@talex-touch/utils'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 
-
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const command = `sips -s format png "${icnsPath}" --out "${pngPath}" --resampleHeightWidth 64 64`

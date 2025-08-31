@@ -54,7 +54,6 @@
 import { defineComponent, type Component, onMounted, provide, ref } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
 
-
 interface Props {
   close: () => void
   title?: string
