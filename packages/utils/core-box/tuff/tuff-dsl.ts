@@ -16,6 +16,10 @@
  * @module core-box/tuff-dsl
  */
 
+/**
+ * 定义高亮范围
+ * @description 右开区间 [start, end)
+ */
 // ==================== 核心数据结构 ====================
 
 /**
@@ -326,11 +330,6 @@ export interface TuffBasicRender {
    */
   accessory?: string;
 
- /**
-  * 高亮范围
-  * @description 用于高亮显示标题中的匹配部分
-  */
- highlights?: Array<{ start: number; end: number }>;
 }
 
 /**

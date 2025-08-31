@@ -66,11 +66,6 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
 
   const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 10
 
-  // console.debug(
-  //   `[Sorter] Item: ${item.render.basic?.title?.padEnd(30)} | Kind: ${item.kind?.padEnd(10)} | Weight: ${weight
-  //     .toString()
-  //     .padEnd(5)} | MatchScore: ${matchScore.toString().padEnd(5)} | FinalScore: ${finalScore}`
-  // )
 
   return finalScore
 }

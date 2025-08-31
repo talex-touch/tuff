@@ -12,6 +12,7 @@ export class DatabaseManager {
   public async init(modulePath: string): Promise<void> {
     const dbPath = path.join(modulePath, 'database.db')
     this.client = createClient({ url: `file:${dbPath}` })
+
     this.db = drizzle(this.client, { schema })
 
     const dbFolder = path.dirname(migrationsLocator)
