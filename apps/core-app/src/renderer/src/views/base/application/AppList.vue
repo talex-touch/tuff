@@ -1,5 +1,4 @@
 <script name="AppList" setup lang="ts">
-// import { appAmo } from '~/views/box/search-box'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 const props = defineProps<{
@@ -52,9 +51,11 @@ function handleOrderWay() {
     return
   }
 
+  // The sorting logic is now handled by the backend (main process).
+  // The frequency-based sorting (appAmo) is deprecated.
   // _list.value = _list.value!.sort((a, b) => {
-  //   const aI = appAmo[a.name]
-  //   const bI = appAmo[b.name]
+  //   const aI = 0 // appAmo[a.name]
+  //   const bI = 0 // appAmo[b.name]
   //
   //   if (aI === undefined && bI === undefined) {
   //     return 0

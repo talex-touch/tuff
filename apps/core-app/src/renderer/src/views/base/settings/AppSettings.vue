@@ -26,10 +26,10 @@ import SettingTools from './SettingTools.vue'
 // import SettingStorage from './SettingStorage.vue'
 import SettingAbout from './SettingAbout.vue'
 
-const $env = reactive({
-  os: null as any,
-  process: null as any,
-  packageJson: null as any,
+const $env = reactive<any>({
+  os: null,
+  process: null,
+  packageJson: null,
   account: window.$storage.account,
   sui: window.$startupInfo
 })

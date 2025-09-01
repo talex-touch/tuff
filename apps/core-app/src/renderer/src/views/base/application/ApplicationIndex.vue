@@ -2,7 +2,7 @@
 import AppList from './AppList.vue'
 import AppConfigure from './AppConfigure.vue'
 import ApplicationEmpty from './ApplicationEmpty.vue'
-// import { refreshSearchList, apps, search, appAmo, execute } from '~/views/box/search-box'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 defineProps<{
   modelValue?: boolean
@@ -11,37 +11,50 @@ defineProps<{
 const index = ref(-1)
 const curSelect = ref()
 const appList: any = ref([])
+let currentSearchId: string | null = null
 
-// onMounted(() => {
-//   setTimeout(async () => {
-//     await refreshSearchList()
-//   }, 200)
-// })
+let unregisterUpdate: (() => void) | null = null
+let unregisterEnd: (() => void) | null = null
 
-async function handleSearch(value: string) {
-  if (!value.length) {
-    // appList.value = apps.value
-    return
-  }
+onMounted(() => {
+  handleSearch('')
+
+  unregisterUpdate = touchChannel.regChannel('core-box:search-update', (channelData) => {
+    const { searchId, items } = channelData.data as any
+    if (searchId !== currentSearchId) return
+    // append to list
+    appList.value = [...appList.value, ...items]
+  })
+
+  unregisterEnd = touchChannel.regChannel('core-box:search-end', (channelData) => {
+    const { searchId } = channelData.data as any
+    if (searchId !== currentSearchId) return
+    console.log('[ApplicationIndex] Search ended', channelData)
+  })
+})
+
+onUnmounted(() => {
+  unregisterUpdate?.()
+  unregisterEnd?.()
+})
+
+async function handleSearch(value: string): Promise<void> {
   appList.value = []
+  curSelect.value = null
+  index.value = -1
 
-  // await search(value, { mode: 0 }, {}, (v: any) => {
-  //   const amo = appAmo[v.name] || 0
-  //   v.amo = amo
-
-  //   const arr = [...appList.value, v].toSorted((b: any, a: any) => a.amo - b.amo)
-
-  //   appList.value = arr
-  // })
+  const res = await touchChannel.send('core-box:query', { query: { text: value } })
+  currentSearchId = res.sessionId
+  appList.value = res.items
 }
 
-function handleSelect(item: any, _index: number) {
+function handleSelect(item: any, _index: number): void {
   curSelect.value = item
   index.value = _index
 }
 
-function handleExecute(_item: any) {
-  // execute(item)
+function handleExecute(item: any): void {
+  touchChannel.send('core-box:execute', { item })
 }
 </script>
 

@@ -179,7 +179,7 @@ export default defineComponent({
             }
           },
           {
-            icon: typeof vnode.children === 'object' && vnode.children && 'icon' in vnode.children ? vnode.children.icon : undefined
+            icon: typeof vnode.children === 'object' && vnode.children && 'icon' in vnode.children ? vnode.children.icon : null
           }
         )
       }
@@ -226,6 +226,7 @@ export default defineComponent({
       // 获取选中插槽内容
       const getSelectSlotContent = (): VNode => {
         // 获取当前激活的内容
+        let activeContent: any = null
         let activeContent: any = null
         const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
 
