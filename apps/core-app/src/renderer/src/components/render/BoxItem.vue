@@ -62,6 +62,8 @@ function getHighlightedHTML(
     text.slice(eExclusive)
   )
 }
+
+const sourceType = computed(() => props.item.source.type)
 </script>
 
 <template>
@@ -101,7 +103,12 @@ function getHighlightedHTML(
     </div>
 
     <span class="ml-auto text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold">
-      {{ props.item.source.type }}
+      <template v-if="sourceType === 'plugin'">
+        {{ props.item.meta?.pluginName }}
+      </template>
+      <template v-else>
+      {{ sourceType }}
+      </template>
     </span>
 
     <div

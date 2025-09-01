@@ -270,9 +270,13 @@ class PluginManager implements IPluginManager {
             }`
           )
           if (plugin && plugin.status === PluginStatus.DISABLED) {
-            console.log(`[PluginManager] ==> Auto-enabling plugin: ${pluginName}`)
-            await plugin.enable()
-            console.log(`[PluginManager] ==> Finished auto-enabling for '${pluginName}'.`)
+            try {
+              console.log(`[PluginManager] ==> Auto-enabling plugin: ${pluginName}`)
+              await plugin.enable()
+              console.log(`[PluginManager] ==> Finished auto-enabling for '${pluginName}'.`)
+            } catch (e) {
+              console.error(`[PluginManager] Failed to auto-enable plugin ${pluginName}:`, e)
+            }
           }
         }
       } else {

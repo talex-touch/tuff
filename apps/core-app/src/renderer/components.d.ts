@@ -50,6 +50,7 @@ declare module 'vue' {
     PluginApplyInstall: typeof import('./src/components/plugin/action/mention/PluginApplyInstall.vue')['default']
     PluginCard: typeof import('./src/components/plugin/layout/PluginCard.vue')['default']
     PluginDetails: typeof import('./src/components/plugin/tabs/PluginDetails.vue')['default']
+    PluginEmptyState: typeof import('./src/components/plugin/layout/PluginEmptyState.vue')['default']
     PluginFeatures: typeof import('./src/components/plugin/tabs/PluginFeatures.vue')['default']
     PluginIcon: typeof import('./src/components/plugin/PluginIcon.vue')['default']
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']

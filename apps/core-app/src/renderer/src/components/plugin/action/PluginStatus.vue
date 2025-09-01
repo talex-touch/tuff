@@ -2,23 +2,26 @@
   <div ref="dom" @click="func" v-wave class="PluginStatus-Container" :class="{ shrink }"></div>
 </template>
 
-<script name="PluginStatus" setup>
-import { pluginManager } from '@modules/channel/plugin-core/api'
-import { ref, watchEffect, onMounted } from 'vue'
+<script name="PluginStatus" lang="ts" setup>
+import { ITouchPlugin, PluginStatus } from '@talex-touch/utils';
+import { pluginManager } from '~/modules/channel/plugin-core/api'
 
-const props = defineProps(['plugin', 'shrink'])
+const props = defineProps<{
+  plugin: ITouchPlugin
+  shrink: boolean
+}>()
 const dom = ref()
 
-const _PluginStatus = ['DISABLED', 'DISABLING', 'CRASHED', 'ENABLED', 'ACTIVE', 'LOADING', 'LOADED', 'LOAD_FAILED']
+console.log(props)
+
 const func = ref(() => {})
-const status = ref('DISABLED')
+const status = computed(() => props.plugin.status)
 
-watchEffect(() => {
-  status.value = _PluginStatus[props.plugin.status]
-})
+function refresh(): void {
+  const el = dom.value
+  if (!el) return
 
-function refresh() {
-  this.$el.classList.remove(
+  el.classList.remove(
     'LOADED',
     'LOADING',
     'ACTIVE',
@@ -28,44 +31,46 @@ function refresh() {
     'DISABLED',
     'LOAD_FAILED'
   )
-  this.$el.classList.add(this.status)
+  el.classList.add(status.value)
 
-  if (this.status === 'DISABLED') {
-    this.$el.innerHTML = `Click to enable plugin.`
+  console.log('PluginStatus', props.plugin.name, status.value)
+
+  if (status.value === PluginStatus.DISABLED) {
+    el.innerHTML = `Click to enable plugin.`
 
     func.value = () => {
-      pluginManager.enablePlugin(this.pluginName)
+      pluginManager.enablePlugin(props.plugin.name)
     }
-  } else if (this.status === 'DISABLING') {
-    this.$el.innerHTML = ``
-  } else if (this.status === 'CRASHED') {
-    this.$el.innerHTML = `Plugin crashed, click to restart.`
+  } else if (status.value === PluginStatus.DISABLING) {
+    el.innerHTML = ``
+  } else if (status.value === PluginStatus.CRASHED) {
+    el.innerHTML = `Plugin crashed, click to restart.`
 
     func.value = () => {
-      pluginManager.enablePlugin(this.pluginName)
+      pluginManager.enablePlugin(props.plugin.name)
     }
-  } else if (this.status === 'ENABLED') {
-    this.$el.innerHTML = `Plugin enabled, click to disable.`
+  } else if (status.value === PluginStatus.ENABLED) {
+    el.innerHTML = `Plugin enabled, click to disable.`
 
     func.value = () => {
-      pluginManager.disablePlugin(this.pluginName)
+      pluginManager.disablePlugin(props.plugin.name)
     }
-  } else if (this.status === 'ACTIVE') {
-    this.$el.innerHTML = ``
-  } else if (this.status === 'LOADING') {
-    this.$el.innerHTML = ``
-  } else if (this.status === 'LOADED') {
-    this.$el.innerHTML = `Plugin loaded, click to enable.`
+  } else if (status.value === PluginStatus.ACTIVE) {
+    el.innerHTML = ``
+  } else if (status.value === PluginStatus.LOADING) {
+    el.innerHTML = ``
+  } else if (status.value === PluginStatus.LOADED) {
+    el.innerHTML = `Plugin loaded, click to enable.`
 
     func.value = () => {
-      pluginManager.enablePlugin(this.pluginName)
+      pluginManager.enablePlugin(props.plugin.name)
     }
-  } else if (this.status === 'LOAD_FAILED') {
-    this.$el.innerHTML = `Plugin load failed, click to restart.`
+  } else if (status.value === PluginStatus.LOAD_FAILED) {
+    el.innerHTML = `Plugin load failed, click to restart.`
 
     func.value = () => {
-      pluginManager.disablePlugin(this.pluginName)
-      pluginManager.enablePlugin(this.pluginName)
+      pluginManager.disablePlugin(props.plugin.name)
+      pluginManager.enablePlugin(props.plugin.name)
     }
   }
 }

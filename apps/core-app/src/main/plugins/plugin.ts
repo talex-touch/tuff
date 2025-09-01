@@ -29,6 +29,7 @@ import { PluginIcon } from './plugin-icon'
 import { PluginViewLoader } from '../modules/plugin-manager/plugin-view-loader'
 import { getJs, getStyles } from '../utils/plugin-injection'
 import pkg from '../../../../../package.json'
+import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 
 const disallowedArrays = [
   '官方',
@@ -254,10 +255,6 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.LOADING
 
     try {
-      const {
-        loadPluginFeatureContext,
-        loadPluginFeatureContextFromContent
-      } = await import('./plugin-feature')
       if (this.dev.enable && this.dev.source && this.dev.address) {
         // Dev mode: load from remote
         const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
@@ -304,6 +301,8 @@ export class TouchPlugin implements ITouchPlugin {
       plugin: this.name
     })
 
+    console.log('[Plugin] Plugin ' + this.name + ' is enabled.')
+
     return true
   }
 
@@ -328,11 +327,6 @@ export class TouchPlugin implements ITouchPlugin {
       plugin: this.name
     })
 
-    // Ensure that if this plugin had an active UI view, it is unattached.
-    console.log(`[Plugin:${this.name}] disable() called. Checking if UI mode needs to be exited.`)
-    CoreBoxManager.getInstance().exitUIMode()
-    console.log(`[Plugin:${this.name}] exitUIMode() called during disable().`)
-
     this._windows.forEach((win, id) => {
       try {
         if (!win.window.isDestroyed()) {
@@ -355,6 +349,11 @@ export class TouchPlugin implements ITouchPlugin {
         this._windows.delete(id)
       }
     })
+
+    // Ensure that if this plugin had an active UI view, it is unattached.
+    console.log(`[Plugin:${this.name}] disable() called. Checking if UI mode needs to be exited.`)
+    CoreBoxManager.getInstance().exitUIMode()
+    console.log(`[Plugin:${this.name}] exitUIMode() called during disable().`)
 
     genTouchChannel().revokeKey(this._uniqueChannelKey)
 

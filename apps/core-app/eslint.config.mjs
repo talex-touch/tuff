@@ -34,12 +34,14 @@ export default tseslint.config(
         }
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/explicit-function-return-type': 'off',
       'no-undef': 'off' // Disable no-undef for auto-imported globals since TypeScript handles this
     }
   },
   {
     files: ['**/*.{ts,mts,tsx}'],
     rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'warn'
     }
   },

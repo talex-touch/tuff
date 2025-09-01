@@ -16,7 +16,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
 
 <template>
   <div
-    class="plugin-item group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
+    class="plugin-item my-4 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
     :class="{ shrink, target: isTarget, dev: plugin.dev?.enable }"
   >
     <el-popover
