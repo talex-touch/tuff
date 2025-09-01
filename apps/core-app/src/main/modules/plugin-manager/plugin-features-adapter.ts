@@ -2,7 +2,8 @@ import {
   IFeatureCommand,
   ITouchPlugin,
   IPluginFeature,
-  IPluginIcon
+  IPluginIcon,
+  PluginStatus
 } from '@talex-touch/utils/plugin'
 import {
   IExecuteArgs,

@@ -118,12 +118,12 @@ export default defineConfig({
       Unocss(),
       vueJsx(),
       AutoImport({
-        resolvers: [ElementPlusResolver()],
+        resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
         imports: ['vue', 'vue-router'],
         dts: true
       }),
       Components({
-        resolvers: [ElementPlusResolver()]
+        resolvers: [ElementPlusResolver({ importStyle: 'sass' })]
       }),
       VueSetupExtend(),
       VueI18nPlugin({})

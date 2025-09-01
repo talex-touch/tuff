@@ -227,7 +227,6 @@ export default defineComponent({
       const getSelectSlotContent = (): VNode => {
         // 获取当前激活的内容
         let activeContent: any = null
-        let activeContent: any = null
         const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
 
         if (currentActiveKey) {

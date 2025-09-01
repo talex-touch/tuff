@@ -32,10 +32,10 @@ export class PluginResolver {
     try {
       await compressing.tar.uncompress(this.filePath, _target)
 
-      const manifestPath = path.join(_target, 'key.talex')
-      if (fse.existsSync(manifestPath)) {
-        await fse.rename(manifestPath, path.join(_target, 'manifest.json'))
-      }
+      // const manifestPath = path.join(_target, 'key.talex')
+      // if (fse.existsSync(manifestPath)) {
+      //   await fse.rename(manifestPath, path.join(_target, 'manifest.json'))
+      // }
 
       genPluginManager().loadPlugin(manifest.name)
 
