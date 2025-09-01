@@ -10,7 +10,7 @@ import {
   PluginStatus,
   IPluginFeature
 } from '@talex-touch/utils/plugin'
-import { TuffItem } from '@talex-touch/utils/core-box'
+import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { TouchWindow } from '../core/touch-core'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
 import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -253,6 +253,8 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.LOADING
+
+    this.issues.length = 0
 
     try {
       if (this.dev.enable && this.dev.source && this.dev.address) {
@@ -515,7 +517,9 @@ export class TouchPlugin implements ITouchPlugin {
         show() {
           CoreBoxManager.getInstance().trigger(true)
         }
-      }
+      },
+      TuffItemBuilder,
+      URLSearchParams
     }
   }
 

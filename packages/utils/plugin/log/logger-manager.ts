@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { LogItem } from './types'
 import { ITouchPlugin } from '..'
+import { structuredStrictStringify } from '@talex-touch/utils'
 
 /**
  * PluginLoggerManager is responsible for managing and writing logs for a specific plugin.
@@ -50,7 +51,7 @@ export class PluginLoggerManager {
    */
   flush(): void {
     if (this.buffer.length === 0) return
-    const lines = this.buffer.map((item) => JSON.stringify(item)).join('\n') + '\n'
+    const lines = this.buffer.map((item) => structuredStrictStringify(item)).join('\n') + '\n'
     fs.appendFileSync(this.sessionLogPath, lines)
     this.buffer = []
   }

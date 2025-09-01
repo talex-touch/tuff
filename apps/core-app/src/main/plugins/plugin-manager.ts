@@ -94,9 +94,7 @@ class DevPluginWatcher {
           // Do not await, let it run in the background
           this.manager.reloadPlugin(name)
         } else {
-          console.log(
-            `[DevWatcher] Detected change for disabled plugin ${name}. Ignoring reload.`
-          )
+          console.log(`[DevWatcher] Detected change for disabled plugin ${name}. Ignoring reload.`)
         }
       }
     } catch (error: any) {
@@ -420,7 +418,9 @@ class PluginManager implements IPluginManager {
       console.log(
         '[PluginManager] Initial scan complete. Ready for changes. (' + this.pluginPath + ')'
       )
-      console.log(`[PluginManager] Waiting for ${this.initialLoadPromises.length} initial plugins to load...`)
+      console.log(
+        `[PluginManager] Waiting for ${this.initialLoadPromises.length} initial plugins to load...`
+      )
       // Wait for all initial plugin loading operations to complete.
       await Promise.allSettled(this.initialLoadPromises)
       console.log('[PluginManager] All initial plugins loaded.')
@@ -441,6 +441,8 @@ class PluginManager implements IPluginManager {
   async loadPlugin(pluginName: string): Promise<boolean> {
     const pluginPath = path.resolve(this.pluginPath, pluginName)
     const manifestPath = path.resolve(pluginPath, 'manifest.json')
+
+    console.log(`[PluginManager] Ready to load ${pluginName} from ${pluginPath}`)
 
     if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
       const placeholderIcon = new PluginIcon(pluginPath, 'error', 'loading', {
@@ -665,7 +667,7 @@ export const PluginManagerModule: TalexTouch.IModule = {
         console.error(`Exception while opening plugin folder:`, error)
       }
     })
-touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
+    touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
       const touchPlugin = pluginManager!.plugins.get(plugin!) as TouchPlugin
       if (!touchPlugin) return reply(DataCode.ERROR, { error: 'Plugin not found!' })
 

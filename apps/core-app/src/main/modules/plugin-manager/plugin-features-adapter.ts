@@ -16,11 +16,11 @@ import {
 import { IProviderActivate } from '@talex-touch/utils'
 import { genPluginManager, TouchPlugin } from '../../plugins'
 import { TuffFactory } from '@talex-touch/utils'
-import searchEngineCore from '../box-tool/search-engine/search-core';
-import { PluginViewLoader } from './plugin-view-loader';
+import searchEngineCore from '../box-tool/search-engine/search-core'
+import { PluginViewLoader } from './plugin-view-loader'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
-type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component';
+type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
 
 /**
  * Checks if a feature's command matches the given query text.
@@ -160,12 +160,16 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     if (feature.interaction && feature.interaction.type === 'webcontent') {
       // Delegate view loading to the unified PluginViewLoader.
       // The loader will add issues to plugin.issues if an error occurs.
-      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature);
+      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature)
 
       // Check if the loader added an INVALID_VIEW_PATH issue to the plugin.
       // If so, it means the view could not be loaded due to a security concern.
-      if (plugin.issues.some(issue => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`)) {
-         return null;
+      if (
+        plugin.issues.some(
+          (issue) => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`
+        )
+      ) {
+        return null
       }
 
       // Return an activation object to keep the plugin active
@@ -276,6 +280,9 @@ export class PluginFeaturesAdapter implements ISearchProvider {
           console.debug(
             `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
           )
+
+          plugin.triggerFeature(feature, query.text)
+
           // Trigger the input change handler for the specific feature.
           // The feature itself is responsible for pushing results back.
           plugin.triggerInputChanged(feature, query.text)
