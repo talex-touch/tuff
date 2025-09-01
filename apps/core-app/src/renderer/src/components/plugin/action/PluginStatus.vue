@@ -12,7 +12,15 @@ const props = defineProps<{
 }>()
 const dom = ref()
 
-console.log(props)
+const mapper = [
+    'LOADED',
+    'LOADING',
+    'ACTIVE',
+    'ENABLED',
+    'CRASHED',
+    'DISABLING',
+    'DISABLED',
+    'LOAD_FAILED']
 
 const func = ref(() => {})
 const status = computed(() => props.plugin.status)
@@ -31,7 +39,7 @@ function refresh(): void {
     'DISABLED',
     'LOAD_FAILED'
   )
-  el.classList.add(status.value)
+  el.classList.add(mapper[status.value])
 
   console.log('PluginStatus', props.plugin.name, status.value)
 

@@ -18,6 +18,7 @@ export const usePluginStore = defineStore('plugin-adapter', () => {
   }
 
   function updatePluginStatus(name: string, status: number): void {
+    console.log(`[PluginStore] Attempting to update status for "${name}" to`, status);
     const plugin = getPlugin(name)
     if (plugin) {
       plugin.status = status

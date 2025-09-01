@@ -18,6 +18,9 @@ export function usePluginSelection() {
       return
     }
     curSelect.value = plugins.value.find((item) => item.name === select.value) || null
+    if (curSelect.value) {
+      console.log(`[usePluginSelection] Plugin "${curSelect.value.name}" selected. Initial status:`, curSelect.value.status);
+    }
   }, 50)
 
   watch(() => select.value, updateSelectedPlugin, { immediate: true })
