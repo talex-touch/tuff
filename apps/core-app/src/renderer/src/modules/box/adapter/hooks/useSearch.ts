@@ -20,6 +20,9 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
   const debouncedSearch = useDebounceFn(async () => {
     if (!searchVal.value) {
+      if (!activeActivations.value?.length) {
+        res.value.length = 0
+      }
       return
     }
     boxOptions.focus = 0
