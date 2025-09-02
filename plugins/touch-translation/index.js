@@ -1,11 +1,21 @@
-const { $util, console, URLSearchParams, TuffItemBuilder } = globalThis
+const {
+  clipboard,
+  http,
+  logger,
+  search,
+  pushItems,
+  clearItems,
+  URLSearchParams,
+  TuffItemBuilder,
+  $box,
+} = globalThis
 
 /**
  * @param {string} text
  * @returns {string}
  */
 function detectLanguage(text) {
-  const chineseRegex = /[\u4E00-\u9FFF]/
+  const chineseRegex = /[\u4e00-\u9fff]/
   return chineseRegex.test(text) ? 'zh' : 'en'
 }
 
@@ -28,13 +38,12 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
 
     const url = `https://translate.googleapis.com/translate_a/single?${params.toString()}`
 
-    const response = await $util.http.get(url, {
+    const response = await http.get(url, {
       signal,
-      proxy: true,
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
+      }
     })
 
     const data = response.data || response
@@ -45,9 +54,9 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
 
     let translatedText = ''
     if (Array.isArray(data[0])) {
-      translatedText = data[0].map(item => (item && item[0] ? item[0] : '')).join('')
+      translatedText = data[0].map((item) => (item && item[0] ? item[0] : '')).join('')
     }
-    else {
+ else {
       translatedText = data[0] || text
     }
 
@@ -56,16 +65,16 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
     return {
       text: translatedText.trim() || text,
       from: detectedLang,
-      to,
+      to: to,
       service: 'google',
     }
   }
-  catch (error) {
-    console.error('Google Translate error:', error)
+ catch (error) {
+    logger.error('Google Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
-      from,
-      to,
+      from: from,
+      to: to,
       service: 'google',
       error: error.message,
     }
@@ -88,7 +97,7 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
     .createAndAddAction('copy-translation', 'copy', '复制', translatedText)
     .addTag('Translation', 'blue')
     .setMeta({
-      featureId,
+      featureId: featureId,
       defaultAction: 'copy',
       pluginType: 'translation',
       originalText,
@@ -106,8 +115,8 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
  * @param {AbortSignal} signal
  */
 async function translateAndPushResults(textToTranslate, featureId, signal) {
-  $util.search.updateQuery(textToTranslate)
-  $util.clearItems()
+  search.updateQuery(textToTranslate)
+  clearItems()
 
   const detectedLang = detectLanguage(textToTranslate)
   const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
@@ -116,12 +125,12 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
     const result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
     const searchItem = createTranslationSearchItem(textToTranslate, result, featureId)
 
-    $util.pushItems([searchItem])
+    pushItems([searchItem])
 
     return [searchItem]
   }
-  catch (error) {
-    console.error('Translation failed:', error)
+ catch (error) {
+    logger.error('Translation failed:', error)
 
     const errorItem = new TuffItemBuilder('translation-error')
       .setSource('plugin', 'plugin-features')
@@ -136,7 +145,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
       })
       .build()
 
-    $util.pushItems([errorItem])
+    pushItems([errorItem])
     return [errorItem]
   }
 }
@@ -151,13 +160,12 @@ const pluginLifecycle = {
    */
   async onFeatureTriggered(featureId, query, feature, signal) {
     try {
-      console.debug(featureId, query, feature)
       if (featureId === 'touch-translate' && query && query.trim()) {
         await translateAndPushResults(query.trim(), featureId, signal)
       }
     }
-    catch (error) {
-      console.error('Error processing translation feature:', error)
+ catch (error) {
+      logger.error('Error processing translation feature:', error)
     }
   },
 
@@ -167,15 +175,15 @@ const pluginLifecycle = {
   async onItemAction(item) {
     if (item.meta?.defaultAction === 'copy') {
       // Find the action with type 'copy' from the actions array
-      const copyAction = item.actions.find(action => action.type === 'copy')
+      const copyAction = item.actions.find((action) => action.type === 'copy')
       if (copyAction && copyAction.payload) {
-        $util.clipboard.writeText(copyAction.payload)
-        console.log('Copied to clipboard:', copyAction.payload)
+        clipboard.writeText(copyAction.payload)
+        logger.log('Copied to clipboard:', copyAction.payload)
 
-        $util.$box.hide()
+        $box.hide()
       }
-      else {
-        console.warn('No copy action or payload found for item:', item)
+ else {
+        logger.warn('No copy action or payload found for item:', item)
       }
     }
   },

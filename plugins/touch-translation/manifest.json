@@ -1,6 +1,6 @@
 {
   "id": "com.tuffex.translation",
-  "name": "touch-translation-inner",
+  "name": "touch-translation",
   "version": "1.0.0-Alpha",
   "icon": {
     "type": "file",
@@ -10,7 +10,7 @@
   "dev": {
     "enable": true,
     "address": "http://localhost:3333/",
-    "source": false
+    "source": true
   },
   "features": [
     {
