@@ -19,8 +19,9 @@ import { genTouchChannel } from '../core/channel-core'
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
 import { getCoreBoxWindow } from '../modules/box-tool/core-box'
-import { createClipboardManager, createStorageManager } from '@talex-touch/utils/plugin'
+import { createClipboardManager } from '@talex-touch/utils/plugin'
 import { app, clipboard, dialog, shell } from 'electron'
+import { storageManager } from '../core/storage'
 import axios from 'axios'
 import { CoreBoxManager } from '../modules/box-tool/core-box/manager' // Restore import
 import fse from 'fs-extra'
@@ -381,10 +382,31 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   getFeatureUtil(): any {
-    const pluginPath = this.pluginPath
+    const pluginName = this.name
 
     const http = axios
-    const storage = createStorageManager(pluginPath, fse)
+    const storage = {
+      getItem: (key: string) => {
+        const config = storageManager.getPluginConfig(pluginName) as any
+        return config[key] ?? null
+      },
+      setItem: (key: string, value: any) => {
+        const config = storageManager.getPluginConfig(pluginName) as any
+        config[key] = value
+        return storageManager.savePluginConfig(pluginName, config)
+      },
+      removeItem: (key: string) => {
+        const config = storageManager.getPluginConfig(pluginName) as any
+        delete config[key]
+        return storageManager.savePluginConfig(pluginName, config)
+      },
+      clear: () => {
+        return storageManager.savePluginConfig(pluginName, {})
+      },
+      getAllItems: () => {
+        return storageManager.getPluginConfig(pluginName)
+      }
+    }
     const clipboardUtil = createClipboardManager(clipboard)
 
     const searchManager = {

@@ -218,6 +218,12 @@ class TouchChannel implements ITouchChannel {
       //   plugin: arg.plugin
       // })
       _channelCategory = '@plugin-process-message'
+      if (win.webContents.isDestroyed()) {
+        console.error(
+          `[Channel] Plugin process message for ${JSON.stringify(arg)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
+        )
+        return Promise.resolve()
+      }
     }
 
     return new Promise((resolve) => {

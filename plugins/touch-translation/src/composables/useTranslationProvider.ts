@@ -1,4 +1,5 @@
 import { ref, reactive, computed } from 'vue'
+import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
 import type { TranslationProvider } from '../types/translation'
 import { GoogleTranslateProvider } from '../providers/google-translate'
 import { DeepLTranslateProvider } from '../providers/deepl-translate'
@@ -8,15 +9,15 @@ import { BaiduTranslateProvider } from '../providers/baidu-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
 import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 
-const PROVIDERS_STORAGE_KEY = 'translation_providers_config'
-
 // 全局状态
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)
 
 export function useTranslationProvider() {
+  const storage = usePluginStorage()
+
   // 初始化所有提供者
-  const initializeProviders = () => {
+  const initializeProviders = async () => {
     if (isInitialized.value) return
 
     // 创建提供者实例
@@ -38,8 +39,8 @@ export function useTranslationProvider() {
     providers.set(mymemoryProvider.id, mymemoryProvider)
 
     // 从 localStorage 恢复配置
-    loadProvidersConfig()
-    
+    await loadProvidersConfig()
+
     isInitialized.value = true
   }
 
@@ -52,15 +53,15 @@ export function useTranslationProvider() {
         config: provider.config || {}
       }
     })
-    localStorage.setItem(PROVIDERS_STORAGE_KEY, JSON.stringify(config))
+    storage.setItem('providers_config', config)
   }
 
   // 从 localStorage 加载提供者配置
-  const loadProvidersConfig = () => {
+  const loadProvidersConfig = async () => {
     try {
-      const saved = localStorage.getItem(PROVIDERS_STORAGE_KEY)
+      const saved = await storage.getItem('providers_config')
       if (saved) {
-        const config = JSON.parse(saved)
+        const config = saved
         providers.forEach((provider, id) => {
           if (config[id]) {
             provider.enabled = config[id].enabled ?? provider.enabled

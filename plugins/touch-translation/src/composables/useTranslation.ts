@@ -1,8 +1,8 @@
-import { ref, reactive, computed, watch } from 'vue'
-import type { TranslationRequest, TranslationResponse, TranslationResult, HistoryItem, TranslationProviderRequest } from '../types/translation'
+import { ref, reactive, computed } from 'vue'
+import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+import type { TranslationRequest, TranslationResponse, TranslationResult, HistoryItem } from '../types/translation'
 import { useTranslationProvider } from './useTranslationProvider'
 
-const HISTORY_STORAGE_KEY = 'translation_history'
 const MAX_HISTORY_ITEMS = 10
 
 // 全局状态
@@ -18,13 +18,14 @@ const history = ref<HistoryItem[]>([])
 
 export function useTranslation() {
   const { enabledProviders, getProvider } = useTranslationProvider()
+  const storage = usePluginStorage()
 
   // 初始化历史记录
-  const initHistory = () => {
+  const initHistory = async () => {
     try {
-      const saved = localStorage.getItem(HISTORY_STORAGE_KEY)
+      const saved = await storage.getItem('history')
       if (saved) {
-        history.value = JSON.parse(saved)
+        history.value = saved
       }
     } catch (error) {
       console.error('Failed to load translation history:', error)
@@ -35,14 +36,11 @@ export function useTranslation() {
   // 保存历史记录
   const saveHistory = () => {
     try {
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.value))
+      storage.setItem('history', history.value)
     } catch (error) {
       console.error('Failed to save translation history:', error)
     }
   }
-
-  // 监听历史记录变化并保存
-  watch(history, saveHistory, { deep: true })
 
   // 添加到历史记录
   const addToHistory = (text: string, results?: TranslationResult[]) => {
@@ -67,6 +65,7 @@ export function useTranslation() {
     if (history.value.length > MAX_HISTORY_ITEMS) {
       history.value = history.value.slice(0, MAX_HISTORY_ITEMS)
     }
+    saveHistory()
   }
 
   // 从历史记录中删除项目
@@ -74,12 +73,14 @@ export function useTranslation() {
     const index = history.value.findIndex(item => item.id === id)
     if (index > -1) {
       history.value.splice(index, 1)
+      saveHistory()
     }
   }
 
   // 清空历史记录
   const clearHistory = () => {
     history.value = []
+    saveHistory()
   }
 
   // 翻译文本
