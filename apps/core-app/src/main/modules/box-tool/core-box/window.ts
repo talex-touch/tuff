@@ -275,7 +275,9 @@ export class WindowManager {
     }
 
     if (this.uiView) {
-      this.detachUIView()
+      // this.detachUIView()
+      console.warn('[CoreBox] UI view already attached, skipping re-attachment.')
+      return
     }
 
     const injections = plugin?.__getInjections__()
@@ -296,14 +298,10 @@ export class WindowManager {
     currentWindow.window.contentView.addChildView(this.uiView)
 
     this.uiView.webContents.addListener('blur', () => {
-      console.log('[CoreBox] UI view blurred.')
-
       this.uiViewFocused = false
     })
 
     this.uiView.webContents.addListener('focus', () => {
-      console.log('[CoreBox] UI view focused.')
-
       this.uiViewFocused = true
     })
 
@@ -489,8 +487,6 @@ export class WindowManager {
       height: bounds.height - 60
     })
     this.uiView.webContents.loadURL(url)
-
-    console.log('[CoreBox] UI view attached.', url)
   }
 
   public detachUIView(): void {
