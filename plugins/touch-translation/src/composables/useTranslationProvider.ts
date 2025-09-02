@@ -1,0 +1,154 @@
+import { ref, reactive, computed } from 'vue'
+import type { TranslationProvider } from '../types/translation'
+import { GoogleTranslateProvider } from '../providers/google-translate'
+import { DeepLTranslateProvider } from '../providers/deepl-translate'
+import { BingTranslateProvider } from '../providers/bing-translate'
+import { CustomTranslateProvider } from '../providers/custom-translate'
+
+const PROVIDERS_STORAGE_KEY = 'translation_providers_config'
+
+// 全局状态
+const providers = reactive<Map<string, TranslationProvider>>(new Map())
+const isInitialized = ref(false)
+
+export function useTranslationProvider() {
+  // 初始化所有提供者
+  const initializeProviders = () => {
+    if (isInitialized.value) return
+
+    // 创建提供者实例
+    const googleProvider = new GoogleTranslateProvider()
+    const deeplProvider = new DeepLTranslateProvider()
+    const bingProvider = new BingTranslateProvider()
+    const customProvider = new CustomTranslateProvider()
+
+    // 注册提供者
+    providers.set(googleProvider.id, googleProvider)
+    providers.set(deeplProvider.id, deeplProvider)
+    providers.set(bingProvider.id, bingProvider)
+    providers.set(customProvider.id, customProvider)
+
+    // 从 localStorage 恢复配置
+    loadProvidersConfig()
+    
+    isInitialized.value = true
+  }
+
+  // 保存提供者配置到 localStorage
+  const saveProvidersConfig = () => {
+    const config: Record<string, any> = {}
+    providers.forEach((provider, id) => {
+      config[id] = {
+        enabled: provider.enabled,
+        config: provider.config || {}
+      }
+    })
+    localStorage.setItem(PROVIDERS_STORAGE_KEY, JSON.stringify(config))
+  }
+
+  // 从 localStorage 加载提供者配置
+  const loadProvidersConfig = () => {
+    try {
+      const saved = localStorage.getItem(PROVIDERS_STORAGE_KEY)
+      if (saved) {
+        const config = JSON.parse(saved)
+        providers.forEach((provider, id) => {
+          if (config[id]) {
+            provider.enabled = config[id].enabled ?? provider.enabled
+            if (config[id].config && provider.config) {
+              provider.config = { ...provider.config, ...config[id].config }
+            }
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load providers config:', error)
+    }
+  }
+
+  // 获取所有提供者
+  const getAllProviders = computed(() => {
+    return Array.from(providers.values())
+  })
+
+  // 获取启用的提供者
+  const getEnabledProviders = computed(() => {
+    return Array.from(providers.values()).filter(p => p.enabled)
+  })
+
+  // 获取特定提供者
+  const getProvider = (id: string): TranslationProvider | undefined => {
+    return providers.get(id)
+  }
+
+  // 启用/禁用提供者
+  const toggleProvider = (id: string, enabled?: boolean) => {
+    const provider = providers.get(id)
+    if (provider) {
+      provider.enabled = enabled ?? !provider.enabled
+      saveProvidersConfig()
+    }
+  }
+
+  // 更新提供者配置
+  const updateProviderConfig = (id: string, config: Record<string, any>) => {
+    const provider = providers.get(id)
+    if (provider && provider.config) {
+      provider.config = { ...provider.config, ...config }
+      saveProvidersConfig()
+    }
+  }
+
+  // 注册新的提供者
+  const registerProvider = (provider: TranslationProvider) => {
+    providers.set(provider.id, provider)
+    saveProvidersConfig()
+  }
+
+  // 注销提供者
+  const unregisterProvider = (id: string) => {
+    providers.delete(id)
+    saveProvidersConfig()
+  }
+
+  // 重置所有提供者配置
+  const resetProvidersConfig = () => {
+    providers.forEach(provider => {
+      provider.enabled = provider.id === 'google' || provider.id === 'deepl' || provider.id === 'custom'
+      if (provider.config) {
+        // 重置为默认配置
+        if (provider.id === 'deepl') {
+          (provider as DeepLTranslateProvider).config.apiKey = ''
+        } else if (provider.id === 'bing') {
+          (provider as BingTranslateProvider).config.apiKey = ''
+        } else if (provider.id === 'custom') {
+          (provider as CustomTranslateProvider).config = {
+            apiUrl: '',
+            apiKey: '',
+            model: 'gpt-3.5-turbo',
+            prompt: '请将以下文本翻译成中文，只返回翻译结果：'
+          }
+        }
+      }
+    })
+    saveProvidersConfig()
+  }
+
+  // 自动初始化
+  if (!isInitialized.value) {
+    initializeProviders()
+  }
+
+  return {
+    providers: getAllProviders,
+    enabledProviders: getEnabledProviders,
+    isInitialized,
+    getProvider,
+    toggleProvider,
+    updateProviderConfig,
+    registerProvider,
+    unregisterProvider,
+    resetProvidersConfig,
+    saveProvidersConfig
+  }
+}
