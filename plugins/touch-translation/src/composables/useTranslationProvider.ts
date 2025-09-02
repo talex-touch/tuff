@@ -4,6 +4,9 @@ import { GoogleTranslateProvider } from '../providers/google-translate'
 import { DeepLTranslateProvider } from '../providers/deepl-translate'
 import { BingTranslateProvider } from '../providers/bing-translate'
 import { CustomTranslateProvider } from '../providers/custom-translate'
+import { BaiduTranslateProvider } from '../providers/baidu-translate'
+import { TencentTranslateProvider } from '../providers/tencent-translate'
+import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 
 const PROVIDERS_STORAGE_KEY = 'translation_providers_config'
 
@@ -21,12 +24,18 @@ export function useTranslationProvider() {
     const deeplProvider = new DeepLTranslateProvider()
     const bingProvider = new BingTranslateProvider()
     const customProvider = new CustomTranslateProvider()
+    const baiduProvider = new BaiduTranslateProvider()
+    const tencentProvider = new TencentTranslateProvider()
+    const mymemoryProvider = new MyMemoryTranslateProvider()
 
     // 注册提供者
     providers.set(googleProvider.id, googleProvider)
     providers.set(deeplProvider.id, deeplProvider)
     providers.set(bingProvider.id, bingProvider)
     providers.set(customProvider.id, customProvider)
+    providers.set(baiduProvider.id, baiduProvider)
+    providers.set(tencentProvider.id, tencentProvider)
+    providers.set(mymemoryProvider.id, mymemoryProvider)
 
     // 从 localStorage 恢复配置
     loadProvidersConfig()
@@ -114,19 +123,44 @@ export function useTranslationProvider() {
   // 重置所有提供者配置
   const resetProvidersConfig = () => {
     providers.forEach(provider => {
-      provider.enabled = provider.id === 'google' || provider.id === 'deepl' || provider.id === 'custom'
+      // 默认只启用 Google 翻译
+      provider.enabled = provider.id === 'google'
       if (provider.config) {
         // 重置为默认配置
         if (provider.id === 'deepl') {
-          (provider as DeepLTranslateProvider).config.apiKey = ''
+          (provider as DeepLTranslateProvider).config = {
+            apiKey: '',
+            apiUrl: 'https://api-free.deepl.com/v2/translate'
+          }
         } else if (provider.id === 'bing') {
-          (provider as BingTranslateProvider).config.apiKey = ''
+          (provider as BingTranslateProvider).config = {
+            apiKey: '',
+            region: 'global'
+          }
         } else if (provider.id === 'custom') {
           (provider as CustomTranslateProvider).config = {
             apiUrl: '',
             apiKey: '',
             model: 'gpt-3.5-turbo',
             prompt: '请将以下文本翻译成中文，只返回翻译结果：'
+          }
+        } else if (provider.id === 'baidu') {
+          (provider as BaiduTranslateProvider).config = {
+            appId: '',
+            secretKey: '',
+            apiUrl: 'https://fanyi-api.baidu.com/api/trans/vip/translate'
+          }
+        } else if (provider.id === 'tencent') {
+          (provider as TencentTranslateProvider).config = {
+            secretId: '',
+            secretKey: '',
+            region: 'ap-beijing',
+            apiUrl: 'https://tmt.tencentcloudapi.com'
+          }
+        } else if (provider.id === 'mymemory') {
+          (provider as MyMemoryTranslateProvider).config = {
+            apiUrl: 'https://api.mymemory.translated.net/get',
+            email: ''
           }
         }
       }

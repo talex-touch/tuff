@@ -1,4 +1,4 @@
-import type { TranslationProvider, TranslationResult } from '../types/translation'
+import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
 
 export class DeepLTranslateProvider implements TranslationProvider {
   name = 'DeepL'
@@ -7,34 +7,23 @@ export class DeepLTranslateProvider implements TranslationProvider {
   enabled = true
   config = {
     apiKey: '', // 需要用户配置
-    apiUrl: 'https://api-free.deepl.com/v2/translate' // 免费版 API
+    apiUrl: 'https://api-free.deepl.com/v2/translate', // 免费版 API
   }
 
-  async translate(text: string, targetLang = 'ZH', sourceLang = 'auto'): Promise<TranslationResult> {
+  async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
+    const { text, targetLanguage: targetLang = 'ZH', sourceLanguage: sourceLang = 'auto' } = request
     try {
-      // 如果没有 API Key，使用模拟翻译
-      if (!this.config.apiKey) {
-        await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400))
-        return {
-          text: `[DeepL AI 翻译] ${text}`,
-          sourceLanguage: sourceLang,
-          targetLanguage: targetLang,
-          provider: this.name,
-          timestamp: Date.now()
-        }
-      }
-
       const response = await fetch(this.config.apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `DeepL-Auth-Key ${this.config.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: [text],
+          text,
+          source_lang: sourceLang === 'auto' ? 'auto' : sourceLang,
           target_lang: targetLang,
-          source_lang: sourceLang === 'auto' ? undefined : sourceLang
-        })
+        }),
       })
 
       if (!response.ok) {
@@ -42,15 +31,20 @@ export class DeepLTranslateProvider implements TranslationProvider {
       }
 
       const data = await response.json()
-      
+
+      if (data.code !== 200) {
+        throw new Error(`DeepL API error: ${data.message || 'Unknown error'}`)
+      }
+
       return {
-        text: data.translations[0]?.text || text,
-        sourceLanguage: data.translations[0]?.detected_source_language || sourceLang,
+        text: data.data || text,
+        sourceLanguage: sourceLang,
         targetLanguage: targetLang,
         provider: this.name,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('DeepL Translate error:', error)
       throw new Error(`DeepL 翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }

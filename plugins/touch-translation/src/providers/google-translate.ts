@@ -1,4 +1,4 @@
-import type { TranslationProvider, TranslationResult } from '../types/translation'
+import type { TranslationProvider, TranslationResult, TranslationProviderRequest } from '../types/translation'
 
 export class GoogleTranslateProvider implements TranslationProvider {
   name = 'Google 翻译'
@@ -6,7 +6,8 @@ export class GoogleTranslateProvider implements TranslationProvider {
   type = 'web' as const
   enabled = true
 
-  async translate(text: string, targetLang = 'zh', sourceLang = 'auto'): Promise<TranslationResult> {
+  async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
+    const { text, targetLanguage: targetLang = 'zh', sourceLanguage: sourceLang = 'auto' } = request
     try {
       // 使用 Google Translate 的免费 API
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`

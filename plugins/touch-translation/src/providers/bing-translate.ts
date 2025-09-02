@@ -1,4 +1,4 @@
-import type { TranslationProvider, TranslationResult } from '../types/translation'
+import type { TranslationProvider, TranslationResult, TranslationProviderRequest } from '../types/translation'
 
 export class BingTranslateProvider implements TranslationProvider {
   name = 'Bing 翻译'
@@ -11,19 +11,9 @@ export class BingTranslateProvider implements TranslationProvider {
     apiUrl: 'https://api.cognitive.microsofttranslator.com/translate'
   }
 
-  async translate(text: string, targetLang = 'zh-Hans', sourceLang = 'auto'): Promise<TranslationResult> {
+  async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
+    const { text, targetLanguage: targetLang = 'zh-Hans', sourceLanguage: sourceLang = 'auto' } = request
     try {
-      // 如果没有 API Key，使用模拟翻译
-      if (!this.config.apiKey) {
-        await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 300))
-        return {
-          text: `[Bing 翻译] ${text}`,
-          sourceLanguage: sourceLang,
-          targetLanguage: targetLang,
-          provider: this.name,
-          timestamp: Date.now()
-        }
-      }
 
       const params = new URLSearchParams({
         'api-version': '3.0',

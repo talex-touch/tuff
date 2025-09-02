@@ -1,5 +1,5 @@
 import { ref, reactive, computed, watch } from 'vue'
-import type { TranslationRequest, TranslationResponse, TranslationResult, HistoryItem } from '../types/translation'
+import type { TranslationRequest, TranslationResponse, TranslationResult, HistoryItem, TranslationProviderRequest } from '../types/translation'
 import { useTranslationProvider } from './useTranslationProvider'
 
 const HISTORY_STORAGE_KEY = 'translation_history'
@@ -122,11 +122,11 @@ export function useTranslation() {
     // 并行执行所有翻译
     const promises = providers.map(async (provider) => {
       try {
-        const result = await provider.translate(
-          request.text,
-          request.targetLanguage,
-          request.sourceLanguage
-        )
+        const result = await provider.translate({
+          text: request.text,
+          targetLanguage: request.targetLanguage,
+          sourceLanguage: request.sourceLanguage
+        })
         currentResponse.results.set(provider.id, result)
         return result
       } catch (error) {
@@ -182,11 +182,11 @@ export function useTranslation() {
         // 清除之前的错误
         currentResponse.errors.delete(providerId)
         
-        const result = await provider.translate(
-          currentRequest.value!.text,
-          currentRequest.value!.targetLanguage,
-          currentRequest.value!.sourceLanguage
-        )
+        const result = await provider.translate({
+          text: currentRequest.value!.text,
+          targetLanguage: currentRequest.value!.targetLanguage,
+          sourceLanguage: currentRequest.value!.sourceLanguage
+        })
         currentResponse.results.set(providerId, result)
       } catch (error) {
         const err = error instanceof Error ? error : new Error('重试翻译失败')

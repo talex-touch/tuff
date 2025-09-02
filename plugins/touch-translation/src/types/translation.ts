@@ -6,13 +6,19 @@ export interface TranslationResult {
   timestamp: number
 }
 
+export interface TranslationProviderRequest {
+  text: string
+  targetLanguage: string
+  sourceLanguage?: string
+}
+
 export interface TranslationProvider {
   name: string
   id: string
   type: 'api' | 'web' | 'ai'
   enabled: boolean
   config?: Record<string, any>
-  translate: (text: string, targetLang?: string, sourceLang?: string) => Promise<TranslationResult>
+  translate: (request: TranslationProviderRequest) => Promise<TranslationResult>
 }
 
 export interface TranslationRequest {

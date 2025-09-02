@@ -1,4 +1,4 @@
-import type { TranslationProvider, TranslationResult } from '../types/translation'
+import type { TranslationProvider, TranslationResult, TranslationProviderRequest } from '../types/translation'
 
 export class CustomTranslateProvider implements TranslationProvider {
   name = '自定义翻译'
@@ -12,19 +12,9 @@ export class CustomTranslateProvider implements TranslationProvider {
     prompt: '请将以下文本翻译成中文，只返回翻译结果：'
   }
 
-  async translate(text: string, targetLang = 'zh', sourceLang = 'auto'): Promise<TranslationResult> {
+  async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
+    const { text, targetLanguage: targetLang = 'zh', sourceLanguage: sourceLang = 'auto' } = request
     try {
-      // 如果没有配置 API，使用模拟翻译
-      if (!this.config.apiUrl || !this.config.apiKey) {
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500))
-        return {
-          text: `[自定义 AI 翻译] ${text}`,
-          sourceLanguage: sourceLang,
-          targetLanguage: targetLang,
-          provider: this.name,
-          timestamp: Date.now()
-        }
-      }
 
       // 构建翻译提示词
       const targetLanguageMap: Record<string, string> = {
