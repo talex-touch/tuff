@@ -10,7 +10,7 @@ import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { coreBoxManager } from './manager'
 import { TouchPlugin } from '../../../plugins'
-
+import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
 
 const windowAnimation = useWindowAnimation()
 
@@ -360,6 +360,7 @@ export class WindowManager {
               }
 
               __handle_main(e, arg) {
+                console.debug(e, arg)
                 const rawData = this.__parse_raw_data(e, arg);
                 if (!rawData?.header) {
                   console.error('Invalid message: ', arg);
@@ -373,7 +374,7 @@ export class WindowManager {
                   const handInData = {
                     reply: (code, data) => {
                       e.sender.send(
-                        '@main-process-message',
+                        '@plugin-process-message',
                         this.__parse_sender(code, rawData, data, rawData.sync)
                       );
                     },
@@ -472,7 +473,7 @@ export class WindowManager {
           this.uiView?.webContents.insertCSS(injections.styles)
         }
 
-        genTouchApp().channel.send(ChannelType.PLUGIN, '@plugin-lifecycle:attach-view', {
+        genTouchApp().channel.sendToPlugin(plugin.name, '@lifecycle:' + LifecycleHooks.ACTIVE, {
           plugin: plugin.name,
           feature: coreBoxManager.getCurrentFeature()
         })
@@ -512,10 +513,24 @@ export class WindowManager {
       this.uiView.webContents.postMessage(channel, args)
     }
   }
+
+  public sendChannelMessageToUIView(data: any): void {
+    if (this.uiView) {
+      this.uiView.webContents.send('@plugin-process-message', data)
+    }
+  }
+
+  public getUIView(): WebContentsView | undefined {
+    if (!this.uiView) {
+      return void 0
+    }
+
+    return this.uiView
+  }
 }
 
 export const windowManager = WindowManager.getInstance()
 
-export function getCoreBoxWindow(): TouchWindow | null {
-  return windowManager.current || null
+export function getCoreBoxWindow(): TouchWindow | undefined {
+  return windowManager.current || void 0
 }

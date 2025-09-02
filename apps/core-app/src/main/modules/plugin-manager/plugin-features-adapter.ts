@@ -18,6 +18,7 @@ import { genPluginManager, TouchPlugin } from '../../plugins'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../box-tool/search-engine/search-core'
 import { PluginViewLoader } from './plugin-view-loader'
+import { genTouchChannel } from '../../core/channel-core'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
 type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
@@ -267,6 +268,10 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
+          genTouchChannel().sendToPlugin(plugin.name, 'core-box:input-change', {
+            query: query.text
+          })
+
           // If query is empty, return all features of the activated plugin
           if (!query.text) {
             const allFeatures = plugin.getFeatures()

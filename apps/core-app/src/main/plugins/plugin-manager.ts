@@ -49,7 +49,7 @@ class DevPluginWatcher {
   public addPlugin(plugin: ITouchPlugin): void {
     if (plugin.dev?.enable && plugin.dev.address) {
       this.watchedPlugins.set(plugin.name, { address: plugin.dev.address })
-      console.log(`[DevWatcher] Watching plugin: ${plugin.name} at ${plugin.dev.address}`)
+      console.debug(`[DevWatcher] Watching plugin: ${plugin.name} at ${plugin.dev.address}`)
     }
   }
 
@@ -313,7 +313,7 @@ class PluginManager implements IPluginManager {
       const pluginName = path.basename(path.dirname(_path))
 
       if (!this.hasPlugin(pluginName)) {
-        console.warn(
+        console.debug(
           '[PluginManager] IGNORE | The plugin ' +
             pluginName +
             " isn't loaded despite changes made to its file."
@@ -442,7 +442,7 @@ class PluginManager implements IPluginManager {
     const pluginPath = path.resolve(this.pluginPath, pluginName)
     const manifestPath = path.resolve(pluginPath, 'manifest.json')
 
-    console.log(`[PluginManager] Ready to load ${pluginName} from ${pluginPath}`)
+    console.debug(`[PluginManager] Ready to load ${pluginName} from ${pluginPath}`)
 
     if (!fse.existsSync(pluginPath) || !fse.existsSync(manifestPath)) {
       const placeholderIcon = new PluginIcon(pluginPath, 'error', 'loading', {
