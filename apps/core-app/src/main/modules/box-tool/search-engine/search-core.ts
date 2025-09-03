@@ -4,6 +4,7 @@ import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
+import { ClipboardProvider } from './providers/clipboard'
 import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
@@ -57,6 +58,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     this.sorter.register(tuffSorter)
 
     this.registerProvider(appProvider)
+   this.registerProvider(new ClipboardProvider())
     // TODO refractory - this provider costs a lot of time
     // this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)

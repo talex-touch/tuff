@@ -12,6 +12,9 @@ importers:
 
   .:
     dependencies:
+      mac-windows:
+        specifier: 1.0.0
+        version: 1.0.0
       pinyin-match:
         specifier: ^1.2.8
         version: 1.2.8
@@ -4830,6 +4833,10 @@ packages:
   lru-cache@7.18.3:
     resolution: {integrity: sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA==}
     engines: {node: '>=12'}
+
+  mac-windows@1.0.0:
+    resolution: {integrity: sha512-jntT8ejkd+qW8fdVvqBEALeKpAHQ1ovoSsh//PUUnHUIQz0YCkXDdmat1Vd3T31oSMbpuKpTnTUtRAo3EYLSkQ==}
+    os: [darwin, '!win32', '!linux']
 
   magic-string-ast@0.7.1:
     resolution: {integrity: sha512-ub9iytsEbT7Yw/Pd29mSo/cNQpaEu67zR1VVcXDiYjSFwzeBxNdTd0FMnSslLQXiRj8uGPzwsaoefrMD5XAmdw==}
@@ -11231,6 +11238,8 @@ snapshots:
       yallist: 4.0.0
 
   lru-cache@7.18.3: {}
+
+  mac-windows@1.0.0: {}
 
   magic-string-ast@0.7.1:
     dependencies:

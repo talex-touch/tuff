@@ -191,8 +191,30 @@ export const scanProgress = sqliteTable('scan_progress', {
     .default(new Date(0))
 })
 
+/**
+ * 存储剪贴板历史记录。
+ * 这是剪贴板增强功能（如历史搜索、自动粘贴）的核心数据来源。
+ */
+export const clipboardHistory = sqliteTable('clipboard_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+
+  // 内容核心
+  type: text('type', { enum: ['text', 'image', 'files'] }).notNull(),
+  content: text('content').notNull(), // 纯文本内容, 或文件路径的 JSON 数组
+  rawContent: text('raw_content'), // 可选的原始富文本内容 (e.g., HTML)
+  thumbnail: text('thumbnail'), // 可选的图片 Base64 缩略图 (Data URL)
+
+  // 上下文信息
+  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+  sourceApp: text('source_app'), // 来源应用 (macOS only, best-effort)
+
+  // 用户交互与元数据
+  isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
+  metadata: text('metadata') // 存储其他元数据 (JSON string)
+})
+
 /*
--- =============================================================================
+ -- =============================================================================
 -- 重要提示: FTS5 全文搜索设置 (Migration File)
 -- =============================================================================
 -- Drizzle ORM 目前没有对 SQLite FTS5 虚拟表提供原生抽象。

@@ -4,7 +4,7 @@ import { app, screen, WebContentsView } from 'electron'
 import path from 'path'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
-import { clipboardManager } from '../../clipboard'
+import { getClipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
@@ -94,7 +94,6 @@ export class WindowManager {
 
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter((w) => w !== window)
-      clipboardManager.unregisterWindow(window)
       console.log('[CoreBox] BoxWindow closed!')
     })
 

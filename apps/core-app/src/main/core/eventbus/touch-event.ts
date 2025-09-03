@@ -33,7 +33,10 @@ export enum TalexEvents {
   PLUGIN_LOG_APPEND = 'plugin/log-append',
 
   // Plugin Storage Event
-  PLUGIN_STORAGE_UPDATED = 'plugin/storage-updated'
+  PLUGIN_STORAGE_UPDATED = 'plugin/storage-updated',
+
+  // Clipboard Events
+  CLIPBOARD_CHANGE = 'clipboard/change'
 }
 
 import { LogItem } from '@talex-touch/utils/plugin/log/types'
@@ -313,6 +316,15 @@ export class PluginStorageUpdatedEvent implements ITouchEvent<TalexEvents> {
 
   constructor(pluginName: string) {
     this.pluginName = pluginName
+  }
+}
+
+export class ClipboardChangeEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.CLIPBOARD_CHANGE
+  payload: any
+
+  constructor(payload: any) {
+    this.payload = payload
   }
 }
 
