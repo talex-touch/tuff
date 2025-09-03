@@ -1,9 +1,9 @@
 <template>
-  <div ref="dom" @click="func" v-wave class="PluginStatus-Container" :class="{ shrink }"></div>
+  <div ref="dom" v-wave class="PluginStatus-Container" :class="{ shrink }" @click="func"></div>
 </template>
 
 <script name="PluginStatus" lang="ts" setup>
-import { ITouchPlugin, PluginStatus } from '@talex-touch/utils';
+import { ITouchPlugin, PluginStatus } from '@talex-touch/utils'
 import { pluginManager } from '~/modules/channel/plugin-core/api'
 
 const props = defineProps<{
@@ -13,14 +13,15 @@ const props = defineProps<{
 const dom = ref()
 
 const mapper = [
-    'LOADED',
-    'LOADING',
-    'ACTIVE',
-    'ENABLED',
-    'CRASHED',
-    'DISABLING',
-    'DISABLED',
-    'LOAD_FAILED']
+  'DISABLED',
+  'DISABLING',
+  'CRASHED',
+  'ENABLED',
+  'ACTIVE',
+  'LOADING',
+  'LOADED',
+  'LOAD_FAILED'
+]
 
 const func = ref(() => {})
 const status = computed(() => props.plugin.status)
@@ -30,13 +31,15 @@ function refresh(): void {
   if (!el) return
 
   el.classList.remove(
-    'LOADED',
-    'LOADING',
-    'ACTIVE',
-    'ENABLED',
-    'CRASHED',
-    'DISABLING',
     'DISABLED',
+    'DISABLING',
+    'CRASHED',
+
+    'ENABLED',
+    'ACTIVE',
+
+    'LOADING',
+    'LOADED',
     'LOAD_FAILED'
   )
   el.classList.add(mapper[status.value])
