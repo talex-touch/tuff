@@ -1,32 +1,26 @@
 import type { ISearchEngine, ISearchProvider } from '../box-tool/search-engine/types'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { IManifest } from '@talex-touch/utils/plugin'
+import { IPluginSource } from '@talex-touch/utils/plugin/plugin-source'
+import { TpexPluginSource, NpmPluginSource } from './plugin-source'
 
-export interface IPluginManifest {
-  id: string
-  name: string
-  version: string
-  description: string
-  author: string
-  main: string
-  icon?: string
-  activationKeywords?: string[]
-}
 
 export interface IPluginManager {
   loadPlugins(pluginsDir: string): Promise<void>
   unloadPlugin(pluginId: string): Promise<void>
-  getPluginManifest(pluginId: string): IPluginManifest | undefined
+  getPluginManifest(pluginId: string): IManifest | undefined
   getLoadedPlugins(): Map<string, ISearchProvider>
 }
 
 export class PluginManager implements IPluginManager {
   private searchEngine: ISearchEngine
-  private loadedPlugins: Map<string, { manifest: IPluginManifest; instance: ISearchProvider }> =
-    new Map()
+  private loadedPlugins: Map<string, { manifest: IManifest; instance: ISearchProvider }> = new Map()
+  private pluginSources: IPluginSource[]
 
-  constructor(searchEngine: ISearchEngine) {
+  constructor(searchEngine: ISearchEngine, pluginSources?: IPluginSource[]) {
     this.searchEngine = searchEngine
+    this.pluginSources = pluginSources || [new TpexPluginSource(), new NpmPluginSource()]
     console.log('[PluginManager] Initialized.')
   }
 
@@ -46,10 +40,22 @@ export class PluginManager implements IPluginManager {
   }
 
   private async loadPlugin(pluginPath: string): Promise<void> {
-    const manifestPath = path.join(pluginPath, 'plugin.json')
+    let manifest: IManifest | undefined
+
+    // 尝试使用不同的插件来源解析器来解析清单
+    for (const source of this.pluginSources) {
+      manifest = await source.resolveManifest(pluginPath)
+      if (manifest) {
+        break // 成功解析，跳出循环
+      }
+    }
+
+    if (!manifest) {
+      console.warn(`[PluginManager] No valid plugin manifest found for ${pluginPath} using available sources.`)
+      return
+    }
+
     try {
-      const manifestContent = await fs.readFile(manifestPath, 'utf-8')
-      const manifest: IPluginManifest = JSON.parse(manifestContent)
 
       if (!manifest.id || !manifest.main) {
         console.error(`[PluginManager] Invalid manifest in ${pluginPath}: id or main is missing.`)
@@ -78,8 +84,8 @@ export class PluginManager implements IPluginManager {
       console.log(
         `[PluginManager] Successfully loaded plugin: ${manifest.name} (v${manifest.version})`
       )
-    } catch (error) {
-      console.error(`[PluginManager] Failed to load plugin from ${pluginPath}`, error)
+    } catch (error: any) { // 捕获错误并处理
+      console.error(`[PluginManager] Failed to load plugin from ${pluginPath}:`, error)
     }
   }
 
@@ -94,7 +100,7 @@ export class PluginManager implements IPluginManager {
     console.log(`[PluginManager] Plugin '${pluginId}' unloaded.`)
   }
 
-  public getPluginManifest(pluginId: string): IPluginManifest | undefined {
+  public getPluginManifest(pluginId: string): IManifest | undefined {
     return this.loadedPlugins.get(pluginId)?.manifest
   }
 
