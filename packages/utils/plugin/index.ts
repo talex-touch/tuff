@@ -221,9 +221,14 @@ export interface IPluginManager {
 }
 
 export interface IManifest {
+  id: string // From IPluginManifest
   name: string
   version: string
   description: string
+  author: string // From IPluginManifest
+  main: string // From IPluginManifest
+  icon?: string // From IPluginManifest
+  activationKeywords?: string[] // From IPluginManifest
   _signature?: string
   _files?: string[]
   plugin?: {
