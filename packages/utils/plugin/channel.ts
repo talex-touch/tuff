@@ -16,9 +16,13 @@ if (typeof window === 'undefined') {
   ipcRenderer = require('electron').ipcRenderer
 } else {
   // @ts-ignore
-  ipcRenderer = window.electron.ipcRenderer as unknown as IpcRenderer
+  ipcRenderer = window.electron?.ipcRenderer as unknown as IpcRenderer
 }
 
+/**
+ * @deprecated This class is deprecated and will be removed in the future.
+ * Due to the new secret system, ipc message transmission should unique Key, and will inject when ui view attached.
+ */
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, Function[]> = new Map();
 

@@ -101,7 +101,7 @@ export function structuredStrictStringify(value: unknown): string {
     if (typeof Document !== 'undefined') {
       if (val instanceof Node) return 'DOMNode';
     }
-    if (val instanceof Error) return 'Error';
+    // if (val instanceof Error) return 'Error';
     if (val instanceof WeakMap) return 'WeakMap';
     if (val instanceof WeakSet) return 'WeakSet';
     if (typeof val === 'object' && val !== null && val.constructor?.name === 'Proxy') return 'Proxy';
@@ -112,7 +112,7 @@ export function structuredStrictStringify(value: unknown): string {
   function serialize(val: any, path: string): any {
     const type = getType(val);
     // Block disallowed/unsafe types and edge cases for structured-clone
-    if (badTypes.includes(typeof val) || type === 'DOMNode' || type === 'Error' || type === 'Proxy' || type === 'WeakMap' || type === 'WeakSet' || type === 'BigInt') {
+    if (badTypes.includes(typeof val) || type === 'DOMNode' || type === 'Proxy' || type === 'WeakMap' || type === 'WeakSet' || type === 'BigInt') {
       throw new Error(`Cannot serialize property at path "${path}": type "${type}"`);
     }
     // JSON doesn't support undefined, skip it for values in objects, preserve in arrays as null
@@ -130,6 +130,13 @@ export function structuredStrictStringify(value: unknown): string {
         return `[Circular ~${seen.get(val)}]`; // You could just throw if you dislike this fallback!
       }
       seen.set(val, path);
+      if (val instanceof Error) {
+        return {
+          name: val.name,
+          message: val.message,
+          stack: val.stack,
+        };
+      }
       if (Array.isArray(val)) {
         return val.map((item, idx) => serialize(item, `${path}[${idx}]`));
       }

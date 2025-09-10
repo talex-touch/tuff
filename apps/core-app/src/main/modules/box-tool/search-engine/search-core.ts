@@ -4,12 +4,13 @@ import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
+import { ClipboardProvider } from './providers/clipboard'
 import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { TouchApp } from '../../../core/touch-core'
 import { databaseManager } from '../../database'
-import { coreBoxManager } from '../core-box/manager'; // Import coreBoxManager
+import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
 import storage from '../../../core/storage'
 import { createDbUtils, DbUtils } from '../../../db/utils'
 import crypto from 'crypto'
@@ -57,6 +58,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     this.sorter.register(tuffSorter)
 
     this.registerProvider(appProvider)
+   this.registerProvider(new ClipboardProvider())
     // TODO refractory - this provider costs a lot of time
     // this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)
@@ -139,16 +141,18 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
   }
 
   deactivateProvider(uniqueKey: string): void {
-    console.log(`[SearchEngineCore] deactivateProvider() called for key: ${uniqueKey}.`)
+    console.debug(`[SearchEngineCore] deactivateProvider() called for key: ${uniqueKey}.`)
     if (this.activatedProviders && this.activatedProviders.has(uniqueKey)) {
-      const deactivatedActivation = this.activatedProviders.get(uniqueKey);
+      const deactivatedActivation = this.activatedProviders.get(uniqueKey)
       this.activatedProviders.delete(uniqueKey)
       console.debug(`[SearchEngineCore] Deactivated provider with key: ${uniqueKey}`)
 
       // If the deactivated provider was a plugin feature and we are in UI mode, exit UI mode.
       if (deactivatedActivation?.id === 'plugin-features' && coreBoxManager.isUIMode) {
-        console.log(`[SearchEngineCore] PluginFeaturesAdapter deactivated, exiting UI mode for key: ${uniqueKey}.`)
-        coreBoxManager.exitUIMode();
+        console.debug(
+          `[SearchEngineCore] PluginFeaturesAdapter deactivated, exiting UI mode for key: ${uniqueKey}.`
+        )
+        coreBoxManager.exitUIMode()
       }
 
       if (this.activatedProviders.size === 0) {
@@ -156,17 +160,14 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
         console.debug(`[SearchEngineCore] All providers deactivated.`)
       }
     } else {
-      console.log(`[SearchEngineCore] Provider with key ${uniqueKey} not found in activated providers.`)
+      console.log(
+        `[SearchEngineCore] Provider with key ${uniqueKey} not found in activated providers.`
+      )
     }
   }
 
   deactivateProviders(): void {
-    console.log(
-      `[SearchEngineCore] deactivateProviders() called. Current state:`,
-      this.activatedProviders
-    )
     this.activatedProviders = null
-    console.log(`[SearchEngineCore] All providers deactivated. New state is null.`)
 
     // When all providers are deactivated, ensure any active UI mode is exited.
     // This addresses the issue where UI view might remain attached if not explicitly closed.

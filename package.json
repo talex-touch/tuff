@@ -41,7 +41,8 @@
   },
   "dependencies": {
     "pinyin-match": "^1.2.8",
-    "vite-plugin-electron": "^0.29.0"
+    "vite-plugin-electron": "^0.29.0",
+    "mac-windows": "1.0.0"
   },
   "volta": {
     "node": "22.16.0"

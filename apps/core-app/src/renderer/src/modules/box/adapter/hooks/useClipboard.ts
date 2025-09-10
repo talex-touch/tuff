@@ -12,7 +12,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     if (!clipboardOptions.last) return
 
     const time = appSetting.tools.autoPaste.time
-    const timeDiff = Date.now() - clipboardOptions.last.time
+    const timeDiff = Date.now() - new Date(clipboardOptions.last.timestamp).getTime()
 
     if (
       time !== -1 &&
@@ -21,8 +21,8 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     ) {
       const data = clipboardOptions.last
 
-      if (data.type === 'file') {
-        const pathList = data.data
+      if (data.type === 'files') {
+       const pathList = JSON.parse(data.content)
         const [firstFile] = pathList
         if (firstFile) {
           touchChannel
@@ -38,7 +38,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
             })
         }
       } else if (data.type !== 'image') {
-        searchVal.value = data.data
+        searchVal.value = data.content
       }
 
       clipboardOptions.last = null
@@ -46,7 +46,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
   }
 
   function handlePaste(): void {
-    const { clipboard } = touchChannel.sendSync('clipboard:got')
+   const clipboard = touchChannel.sendSync('clipboard:get-latest')
 
     Object.assign(clipboardOptions, {
       last: clipboard
@@ -55,9 +55,8 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     handleAutoPaste()
   }
 
-  touchChannel.regChannel('clipboard:trigger', ({ data }: any) => {
+  touchChannel.regChannel('clipboard:new-item', (data: any) => {
     if (!data?.type) return
-
     Object.assign(clipboardOptions, {
       last: data
     })

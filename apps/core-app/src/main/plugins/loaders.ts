@@ -152,7 +152,7 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
 
     try {
       const remoteManifestUrl = new URL('manifest.json', this.devConfig.address).toString()
-      this.touchPlugin.logger.info(`[Dev] Fetching remote manifest from ${remoteManifestUrl}`)
+      this.touchPlugin.logger.debug(`[Dev] Fetching remote manifest from ${remoteManifestUrl}`)
       const response = await axios.get(remoteManifestUrl, {
         timeout: 2000,
         proxy: false,
@@ -162,11 +162,11 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         }
       })
       pluginInfo = response.data
-      this.touchPlugin.logger.info(
+      this.touchPlugin.logger.debug(
         `[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`
       )
       fse.writeJSONSync(path.resolve(this.pluginPath, 'manifest.json'), pluginInfo, { spaces: 2 })
-      this.touchPlugin.logger.info(`[Dev] Wrote remote manifest to local cache.`)
+      this.touchPlugin.logger.debug(`[Dev] Wrote remote manifest to local cache.`)
       this.touchPlugin.issues.push({
         type: 'warning',
         message: `Plugin is running in development mode, loading from ${this.devConfig.address}.`,

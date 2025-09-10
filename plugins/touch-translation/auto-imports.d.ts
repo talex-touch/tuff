@@ -6,7 +6,11 @@
 // biome-ignore lint: disable
 export {}
 declare global {
+  const BingTranslateProvider: typeof import('./src/composables/index')['BingTranslateProvider']
+  const CustomTranslateProvider: typeof import('./src/composables/index')['CustomTranslateProvider']
+  const DeepLTranslateProvider: typeof import('./src/composables/index')['DeepLTranslateProvider']
   const EffectScope: typeof import('vue')['EffectScope']
+  const GoogleTranslateProvider: typeof import('./src/composables/index')['GoogleTranslateProvider']
   const asyncComputed: typeof import('@vueuse/core')['asyncComputed']
   const autoResetRef: typeof import('@vueuse/core')['autoResetRef']
   const computed: typeof import('vue')['computed']
@@ -267,6 +271,8 @@ declare global {
   const useToString: typeof import('@vueuse/core')['useToString']
   const useToggle: typeof import('@vueuse/core')['useToggle']
   const useTransition: typeof import('@vueuse/core')['useTransition']
+  const useTranslation: typeof import('./src/composables/useTranslation')['useTranslation']
+  const useTranslationProvider: typeof import('./src/composables/useTranslationProvider')['useTranslationProvider']
   const useUrlSearchParams: typeof import('@vueuse/core')['useUrlSearchParams']
   const useUserMedia: typeof import('@vueuse/core')['useUserMedia']
   const useVModel: typeof import('@vueuse/core')['useVModel']
@@ -310,7 +316,11 @@ import { UnwrapRef } from 'vue'
 declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
+    readonly BingTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['BingTranslateProvider']>
+    readonly CustomTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['CustomTranslateProvider']>
+    readonly DeepLTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['DeepLTranslateProvider']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
+    readonly GoogleTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['GoogleTranslateProvider']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
     readonly autoResetRef: UnwrapRef<typeof import('@vueuse/core')['autoResetRef']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
@@ -570,6 +580,8 @@ declare module 'vue' {
     readonly useToString: UnwrapRef<typeof import('@vueuse/core')['useToString']>
     readonly useToggle: UnwrapRef<typeof import('@vueuse/core')['useToggle']>
     readonly useTransition: UnwrapRef<typeof import('@vueuse/core')['useTransition']>
+    readonly useTranslation: UnwrapRef<typeof import('./src/composables/useTranslation')['useTranslation']>
+    readonly useTranslationProvider: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['useTranslationProvider']>
     readonly useUrlSearchParams: UnwrapRef<typeof import('@vueuse/core')['useUrlSearchParams']>
     readonly useUserMedia: UnwrapRef<typeof import('@vueuse/core')['useUserMedia']>
     readonly useVModel: UnwrapRef<typeof import('@vueuse/core')['useVModel']>
