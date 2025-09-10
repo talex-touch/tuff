@@ -209,6 +209,25 @@ export interface ITargetFeatureLifeCycle {
   onItemAction?(item: any): Promise<any>
 }
 
+/**
+ * Defines the types of plugin sources supported by the system.
+ * This enum allows for clear identification and selection of different plugin resolution and download mechanisms.
+ */
+export enum PluginSourceType {
+  /**
+   * Represents the proprietary TPEX plugin format, typically a compressed package.
+   */
+  TPEX = 'tpex',
+  /**
+   * Represents plugins distributed as standard npm packages.
+   */
+  NPM = 'npm',
+  /**
+   * Represents a local file system plugin source, typically used for development or manual installation.
+   */
+  FILE_SYSTEM = 'file_system',
+}
+
 export interface IPluginManager {
   plugins: Map<string, ITouchPlugin>
   active: string | null
@@ -220,33 +239,124 @@ export interface IPluginManager {
   unloadPlugin(pluginName: string): Promise<boolean>
 }
 
+/**
+ * Interface representing a unified plugin manifest.
+ * This interface combines fields from the original `IManifest` and `IPluginManifest`
+ * to provide a comprehensive and consistent metadata structure for all plugin types (tpex and npm).
+ */
 export interface IManifest {
-  name: string
-  version: string
-  description: string
-  _signature?: string
-  _files?: string[]
+  /**
+   * Unique identifier for the plugin.
+   * This is typically the package name for npm plugins or a unique string for tpex plugins.
+   */
+  id: string;
+  /**
+   * Display name of the plugin.
+   * This is the human-readable name shown to users.
+   */
+  name: string;
+  /**
+   * Version of the plugin, following semantic versioning (e.g., "1.0.0").
+   */
+  version: string;
+  /**
+   * Short description of the plugin's functionality.
+   */
+  description: string;
+  /**
+   * Author of the plugin, typically a name or email.
+   */
+  author: string;
+  /**
+   * Main entry file for the plugin logic, relative to the plugin's root directory.
+   * This file will be loaded when the plugin is activated.
+   */
+  main: string;
+  /**
+   * Optional icon path or definition for the plugin.
+   * This could be a file path to an image or a specific icon class/identifier.
+   */
+  icon?: string;
+  /**
+   * Optional keywords for activating the plugin, e.g., for search or command matching.
+   * These keywords help users discover and launch the plugin.
+   */
+  activationKeywords?: string[];
+  /**
+   * Optional digital signature of the plugin package, used for verification.
+   */
+  _signature?: string;
+  /**
+   * Optional list of files included in the plugin package.
+   * This can be used for integrity checks or resource management.
+   */
+  _files?: string[];
+  /**
+   * Development-specific configuration for the plugin.
+   * This section is used during plugin development and might not be present in production builds.
+   */
   plugin?: {
     dev: {
-      enable: boolean
-      address: string
-    }
-  }
+      /**
+       * Whether development mode is enabled for the plugin.
+       * If true, specific development features or debugging tools might be activated.
+       */
+      enable: boolean;
+      /**
+       * Address for development server or resources.
+       * For example, a local URL where the plugin's frontend assets are served during development.
+       */
+      address: string;
+    };
+  };
+  /**
+   * Build-specific configuration for the plugin.
+   * This section defines how the plugin is built, packaged, and verified.
+   */
   build?: {
-    files: string[]
+    /**
+     * List of files to include in the build.
+     */
+    files: string[];
+    /**
+     * Secret configuration for the build process.
+     */
     secret: {
-      pos: string
-      addon: string[]
-    }
+      pos: string;
+      addon: string[];
+    };
+    /**
+     * Verification settings for the plugin build.
+     * Defines how the authenticity and integrity of the plugin are checked.
+     */
     verify?: {
-      enable: boolean
-      online: 'custom' | 'always' | 'once'
-    }
+      /**
+       * Whether online verification is enabled.
+       */
+      enable: boolean;
+      /**
+       * Online verification strategy.
+       */
+      online: 'custom' | 'always' | 'once';
+    };
+    /**
+     * Version update settings for the plugin.
+     * Defines how the plugin handles updates and downgrades.
+     */
     version?: {
-      update: 'auto' | 'ask' | 'readable'
-      downgrade: boolean
-    }
-  }
+      /**
+       * Update strategy for the plugin:
+       * - 'auto': Automatically updates the plugin.
+       * - 'ask': Prompts the user before updating.
+       * - 'readable': Provides a readable update notification.
+       */
+      update: 'auto' | 'ask' | 'readable';
+      /**
+       * Whether downgrading the plugin version is allowed.
+       */
+      downgrade: boolean;
+    };
+  };
 }
 
 export * from './log/logger'

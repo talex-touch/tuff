@@ -1,5 +1,3 @@
-import { genChannel } from './../../channel';
-
 export enum LifecycleHooks {
   ENABLE = 'en',
   DISABLE = 'di',
@@ -25,7 +23,7 @@ export function injectHook(type: LifecycleHooks, hook: Function, processFunc = (
 
   if (hooks.length === 0) {
 
-    genChannel().regChannel("@lifecycle:" + type, (obj: any) => {
+    window.$channel.regChannel("@lifecycle:" + type, (obj: any) => {
 
       processFunc(obj)
 

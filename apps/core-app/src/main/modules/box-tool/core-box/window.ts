@@ -4,13 +4,13 @@ import { app, screen, WebContentsView } from 'electron'
 import path from 'path'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
-import { clipboardManager } from '../../clipboard'
+import { getClipboardManager } from '../../clipboard'
 import { getConfig } from '../../../core/storage'
 import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { coreBoxManager } from './manager'
 import { TouchPlugin } from '../../../plugins'
-
+import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
 
 const windowAnimation = useWindowAnimation()
 
@@ -94,7 +94,6 @@ export class WindowManager {
 
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter((w) => w !== window)
-      clipboardManager.unregisterWindow(window)
       console.log('[CoreBox] BoxWindow closed!')
     })
 
@@ -275,7 +274,9 @@ export class WindowManager {
     }
 
     if (this.uiView) {
-      this.detachUIView()
+      // this.detachUIView()
+      console.warn('[CoreBox] UI view already attached, skipping re-attachment.')
+      return
     }
 
     const injections = plugin?.__getInjections__()
@@ -296,14 +297,10 @@ export class WindowManager {
     currentWindow.window.contentView.addChildView(this.uiView)
 
     this.uiView.webContents.addListener('blur', () => {
-      console.log('[CoreBox] UI view blurred.')
-
       this.uiViewFocused = false
     })
 
     this.uiView.webContents.addListener('focus', () => {
-      console.log('[CoreBox] UI view focused.')
-
       this.uiViewFocused = true
     })
 
@@ -362,6 +359,7 @@ export class WindowManager {
               }
 
               __handle_main(e, arg) {
+                console.debug(e, arg)
                 const rawData = this.__parse_raw_data(e, arg);
                 if (!rawData?.header) {
                   console.error('Invalid message: ', arg);
@@ -375,7 +373,7 @@ export class WindowManager {
                   const handInData = {
                     reply: (code, data) => {
                       e.sender.send(
-                        '@main-process-message',
+                        '@plugin-process-message',
                         this.__parse_sender(code, rawData, data, rawData.sync)
                       );
                     },
@@ -474,7 +472,7 @@ export class WindowManager {
           this.uiView?.webContents.insertCSS(injections.styles)
         }
 
-        genTouchApp().channel.send(ChannelType.PLUGIN, '@plugin-lifecycle:attach-view', {
+        genTouchApp().channel.sendToPlugin(plugin.name, '@lifecycle:' + LifecycleHooks.ACTIVE, {
           plugin: plugin.name,
           feature: coreBoxManager.getCurrentFeature()
         })
@@ -489,8 +487,6 @@ export class WindowManager {
       height: bounds.height - 60
     })
     this.uiView.webContents.loadURL(url)
-
-    console.log('[CoreBox] UI view attached.', url)
   }
 
   public detachUIView(): void {
@@ -516,10 +512,24 @@ export class WindowManager {
       this.uiView.webContents.postMessage(channel, args)
     }
   }
+
+  public sendChannelMessageToUIView(data: any): void {
+    if (this.uiView) {
+      this.uiView.webContents.send('@plugin-process-message', data)
+    }
+  }
+
+  public getUIView(): WebContentsView | undefined {
+    if (!this.uiView) {
+      return void 0
+    }
+
+    return this.uiView
+  }
 }
 
 export const windowManager = WindowManager.getInstance()
 
-export function getCoreBoxWindow(): TouchWindow | null {
-  return windowManager.current || null
+export function getCoreBoxWindow(): TouchWindow | undefined {
+  return windowManager.current || void 0
 }

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, WebContentsView } from 'electron'
 import {
   ChannelType,
   DataCode,
@@ -9,6 +9,7 @@ import {
 } from '@talex-touch/utils/channel'
 import { TalexTouch } from '../types'
 import { structuredStrictStringify } from '@talex-touch/utils'
+import { WindowManager } from '../modules/box-tool/core-box/window'
 
 class TouchChannel implements ITouchChannel {
   channelMap: Map<ChannelType, Map<string, Function[]>> = new Map()
@@ -181,7 +182,7 @@ class TouchChannel implements ITouchChannel {
   }
 
   _sendTo(
-    win: Electron.BrowserWindow,
+    win: Electron.BrowserWindow | WebContentsView,
     type: ChannelType,
     eventName: string,
     arg: any,
@@ -205,20 +206,28 @@ class TouchChannel implements ITouchChannel {
       }
     } as RawStandardChannelData
 
+    let _channelCategory = '@main-process-message'
     const finalData = JSON.parse(structuredStrictStringify(data))
 
     if (type === ChannelType.PLUGIN) {
       if (arg.plugin === void 0) {
         throw new Error('Invalid plugin name!')
       }
-      return this.send(ChannelType.MAIN, 'plugin:message-transport', {
-        data: finalData,
-        plugin: arg.plugin
-      })
+      // return this.send(ChannelType.MAIN, 'plugin:message-transport', {
+      //   data: finalData,
+      //   plugin: arg.plugin
+      // })
+      _channelCategory = '@plugin-process-message'
+      if (win.webContents.isDestroyed()) {
+        console.error(
+          `[Channel] Plugin process message for ${JSON.stringify(arg)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
+        )
+        return Promise.resolve()
+      }
     }
 
     return new Promise((resolve) => {
-      win.webContents.send(`@main-process-message`, finalData)
+      win.webContents.send(_channelCategory, finalData)
 
       this.pendingMap.set(uniqueId, (res) => {
         this.pendingMap.delete(uniqueId)
@@ -238,7 +247,7 @@ class TouchChannel implements ITouchChannel {
   }
 
   _sendToPlugin(
-    win: Electron.BrowserWindow,
+    win: Electron.BrowserWindow | WebContentsView,
     type: ChannelType,
     eventName: string,
     pluginName: string,
@@ -246,9 +255,15 @@ class TouchChannel implements ITouchChannel {
   ): Promise<any> {
     const key = this.nameToKeyMap.get(pluginName)
 
-    return this._sendTo(win, type, eventName, arg, {
-      uniqueKey: key
-    })
+    return this._sendTo(
+      win,
+      type,
+      eventName,
+      { ...arg, plugin: pluginName },
+      {
+        uniqueKey: key
+      }
+    )
   }
 
   send(type: ChannelType, eventName: string, arg: any): Promise<any> {
@@ -269,7 +284,7 @@ class TouchChannel implements ITouchChannel {
 
   sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
     return this._sendToPlugin(
-      this.app.window.window,
+      WindowManager.getInstance().getUIView()!,
       ChannelType.PLUGIN,
       eventName,
       pluginName,
@@ -278,7 +293,7 @@ class TouchChannel implements ITouchChannel {
   }
   sendToPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
     return this._sendToPlugin(
-      this.app.window.window,
+      WindowManager.getInstance().getUIView()!,
       ChannelType.PLUGIN,
       eventName,
       pluginName,

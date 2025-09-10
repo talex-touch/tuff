@@ -1,5 +1,4 @@
-import { genChannel } from './channel'
-import type { StandardChannelData } from '../channel'
+import type { ITouchClientChannel } from '../channel'
 import './sdk/index'
 
 // window type
@@ -9,9 +8,7 @@ declare global {
       name: string
       path: Object
     }
-    $send: (type: string, data: any) => void
-    $sendSync: (type: string, data: any) => Promise<any>
-    $regChannel: (eventName: string, callback: (data: StandardChannelData) => any) => () => void
+    $channel: ITouchClientChannel
     $crash: (message: string, extraData: any) => void
     $config: {
       themeStyle: any
@@ -19,22 +16,14 @@ declare global {
   }
 }
 
-export function init(window: Window) {
+export function initTuff(window: Window) {
   const plugin = window.$plugin
   if (!plugin)
     throw new Error('Plugin has a fatal error! Please check your plugin!')
 
   window.$crash = function (message, extraData) {
-    window.$send('crash', { message, ...extraData })
+    window.$channel.send('crash', { message, ...extraData })
   }
 
-  initBridge(window)
-}
-
-export function initBridge(window: Window) {
-  const touchChannel = genChannel()
-
-  window.$send = touchChannel.send.bind(touchChannel)
-  window.$sendSync = touchChannel.sendSync.bind(touchChannel)
-  window.$regChannel = touchChannel.regChannel.bind(touchChannel)
+  console.log(`%c[Plugin] ${plugin.name} loaded`, 'color: #42b983')
 }

@@ -80,9 +80,17 @@ export class PluginLogger {
       DEBUG: chalk.bgGray,
     }[level]
 
-    console.log(
-      `${chalk.bgMagenta('[PluginLog]')} ${levelColor(level)} ${this.pluginName} - ${message}`,
-      ...data
-    )
+    if (level === 'DEBUG') {
+      console.debug(
+        `${chalk.bgMagenta('[PluginLog]')} ${levelColor(level)} ${this.pluginName} - ${message}`,
+        ...data
+      )
+    } else {
+      console.log(
+        `${chalk.bgMagenta('[PluginLog]')} ${levelColor(level)} ${this.pluginName} - ${message}`,
+        ...data
+      )
+    }
+
   }
 }
