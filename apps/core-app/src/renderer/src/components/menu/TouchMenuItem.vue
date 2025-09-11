@@ -58,10 +58,18 @@ onMounted(() => {
   removeGuard = router.afterEach((to, from) => {
     if (!to.path.startsWith(props.route)) return
 
-    changePointer(dom.value)
+    if (changePointer && dom.value) {
+      changePointer(dom.value)
+    }
   })
 
-  dom.value['$fixPointer'] = () => changePointer(dom.value)
+  if (dom.value) {
+    dom.value['$fixPointer'] = () => {
+      if (changePointer && dom.value) {
+        changePointer(dom.value)
+      }
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -75,7 +83,9 @@ function handleClick($event) {
 
   if (props.route) router.push(props.route)
 
-  changePointer(dom.value)
+  if (changePointer && dom.value) {
+    changePointer(dom.value)
+  }
   emit('active', $event)
 }
 </script>
