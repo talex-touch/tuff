@@ -1,4 +1,8 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+</script>
 
 <template>
   <div class="ApplicationEmpty">
@@ -7,12 +11,9 @@
     </div>
 
     <div class="Describer">
-      <h4>Choose an application to configure.</h4>
+      <h4>{{ t('applicationEmpty.title') }}</h4>
       <p>
-        Unleash the power of app customization to tailor your digital space. Fine-tune settings to
-        optimize workflow and seamlessly share configurations via a personal cloud. Explore diverse
-        setups for inspiration and insights. Ready to create your perfect workspace? Select an app
-        to begin.
+        {{ t('applicationEmpty.description') }}
       </p>
     </div>
   </div>

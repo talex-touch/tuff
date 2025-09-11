@@ -1,10 +1,14 @@
 <script setup lang="ts" name="SettingUser">
+import { useI18n } from 'vue-i18n'
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
 import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
 import TBlockSelect from '@comp/base/select/TBlockSelect.vue'
 import TSelectItem from '@comp/base/select/TSelectItem.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { useLanguage, SUPPORTED_LANGUAGES } from '~/modules/lang'
 
+const { t } = useI18n()
+const { currentLanguage } = useLanguage()
 const options = appSetting
 
 defineProps({
@@ -17,24 +21,26 @@ defineProps({
 
 <template>
   <t-group-block
-    name="Language Settings"
+    :name="t('settingLanguage.groupTitle')"
     icon="earth"
-    description="Select your preferred language for the application."
+    :description="t('settingLanguage.groupDesc')"
   >
     <t-block-switch
       v-model="options.lang.followSystem"
-      title="Follow System Language"
+      :title="t('settingLanguage.followSystem')"
       icon="exchange"
-      description="Automatically match the system language setting."
+      :description="t('settingLanguage.followSystemDesc')"
     />
     <t-block-select
       :disabled="options.lang?.followSystem"
-      v-model="options.lang.locale"
-      title="Choose Language"
+      v-model="currentLanguage"
+      :title="t('settingLanguage.chooseLanguage')"
       icon="goblet"
-      description="Manually select your preferred display language."
+      :description="t('settingLanguage.chooseLanguageDesc')"
     >
-      <t-select-item v-for="lang in [{ name: 'en-US' }]">{{ lang.name }}</t-select-item>
+      <t-select-item v-for="lang in SUPPORTED_LANGUAGES" :key="lang.key" :value="lang.key">
+        {{ lang.name }}
+      </t-select-item>
     </t-block-select>
   </t-group-block>
 </template>

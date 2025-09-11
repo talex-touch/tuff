@@ -11,15 +11,17 @@
   </span>
 
   <ul class="FlatLayout-Controller">
-    Use native window control instead
+    {{ t('flatController.useNative') }}
   </ul>
 </template>
 
 <script lang="ts" name="FlatController" setup>
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { applicationUpgrade } from '~/modules/hooks/application-hooks'
 
 const route = useRoute()
+const { t } = useI18n()
 </script>
 
 <style lang="scss">

@@ -6,8 +6,14 @@ import { createI18n } from 'vue-i18n'
  * @param options - i18n options with default locale
  * @returns i18n instance
  */
-export function setupI18n(options: { locale: string } = { locale: 'en-US' }): any {
-  const i18n = createI18n(options)
+export async function setupI18n(options: { locale: string } = { locale: 'en-US' }): Promise<any> {
+  const i18n = createI18n({
+    legacy: false,
+    locale: options.locale
+  })
+
+  await loadLocaleMessages(i18n, options.locale)
+
   setI18nLanguage(i18n, options.locale)
   return i18n
 }
@@ -41,9 +47,7 @@ export function setI18nLanguage(i18n: any, locale: string): void {
  */
 export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
   // load locale messages with dynamic import
-  const messages = await import(
-    /* webpackChunkName: "locale-[request]" */ `./locales/${locale}.json`
-  )
+  const messages = await import(/* webpackChunkName: "locale-[request]" */ `./${locale}.json`)
 
   // set locale and locale message
   i18n.global.setLocaleMessage(locale, messages.default)

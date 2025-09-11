@@ -22,11 +22,11 @@
 
     <!-- Captcha title -->
     <h2 id="captcha-title" class="TouchCaptcha-Title">
-      {{ $t('base.touchCaptcha') }}
+      {{ t('base.touchCaptcha.title') }}
     </h2>
 
     <!-- Instructions for the user -->
-    <span>旋转滑块以匹配图像</span>
+    <span>{{ t('base.touchCaptcha.instruction') }}</span>
 
     <!-- Captcha content area with image -->
     <div
@@ -72,6 +72,7 @@
 -->
 <script lang="ts" name="TouchCaptcha" setup>
 import { get, post } from '~/base/axios'
+import { useI18n } from 'vue-i18n'
 // import { $t } from "@modules/lang";
 import ProgressBar from '@comp/base/ProgressBar.vue'
 import { nextTick, reactive, ref, watch } from 'vue'
@@ -91,6 +92,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   func: () => {}
 })
+
+const { t } = useI18n()
 
 /**
  * Interface for image style
@@ -199,7 +202,7 @@ async function validateCaptcha(): Promise<void> {
 
     options.img.style.transform.rotate = 90
     options.message = ''
-    // await forDialogMention('验证失败', res.error, 'error-warning')
+    // await forDialogMention(t('touchCaptcha.fail'), res.error, 'error-warning')
 
     await gen()
   } else {

@@ -3,12 +3,12 @@
     <!-- Header Section -->
     <div class="market-header">
       <div class="market-header-title">
-        <h2>Plugin Market</h2>
-        <span class="market-subtitle">Discover amazing plugins for your workflow</span>
+        <h2>{{ t('market.title') }}</h2>
+        <span class="market-subtitle">{{ t('market.subtitle') }}</span>
       </div>
 
       <div class="market-header-search">
-        <FlatCompletion :fetch="fetch" placeholder="Search plugins..." />
+        <FlatCompletion :fetch="fetch" :placeholder="t('market.searchPlaceholder')" />
         <div
           :class="{ _disabled: sourceEditorShow }"
           class="market-sources"
@@ -19,7 +19,9 @@
           <FlatButton mini @click="toggleSourceEditorShow()">
             <div class="i-carbon-list" />
           </FlatButton>
-          <span class="source-count">{{ pluginSettings.source.list.length }} sources</span>
+          <span class="source-count"
+            >{{ pluginSettings.source.list.length }} {{ t('market.sources') }}</span
+          >
         </div>
       </div>
 
@@ -32,7 +34,7 @@
             :class="{ active: tagInd === index }"
             class="tag-button"
           >
-            {{ item.tag }}
+            {{ t(item.tag) }}
           </button>
         </div>
         <div class="market-view-toggle">
@@ -69,8 +71,8 @@
         <div class="empty-icon">
           <i class="i-ri-search-line" />
         </div>
-        <h3>No plugins found</h3>
-        <p>Try adjusting your search or browse different categories</p>
+        <h3>{{ t('market.empty.title') }}</h3>
+        <p>{{ t('market.empty.subtitle') }}</p>
       </div>
     </div>
   </div>
@@ -79,6 +81,7 @@
 </template>
 
 <script name="Market" setup>
+import { useI18n } from 'vue-i18n'
 import { pluginSettings } from '~/modules/storage/plugin-settings'
 import gsap from 'gsap'
 import FlatCompletion from '@comp/base/input/FlatCompletion.vue'
@@ -86,18 +89,20 @@ import MarketItemCard from '@comp/market/MarketItemCard.vue'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 import { useToggle } from '@vueuse/core'
 
+const { t } = useI18n()
+
 const orderType = ref('grid')
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const tagInd = ref(0)
 
 const tags = reactive([
-  { tag: 'All', filter: '' },
-  { tag: 'Feature', filter: 'feature' },
-  { tag: 'UI', filter: 'ui' },
-  { tag: 'UX', filter: 'ux' },
-  { tag: 'Enhancement', filter: 'enhancement' },
-  { tag: 'Tools', filter: 'tools' },
-  { tag: 'Productivity', filter: 'productivity' }
+  { tag: 'market.tags.all', filter: '' },
+  { tag: 'market.tags.feature', filter: 'feature' },
+  { tag: 'market.tags.ui', filter: 'ui' },
+  { tag: 'market.tags.ux', filter: 'ux' },
+  { tag: 'market.tags.enhancement', filter: 'enhancement' },
+  { tag: 'market.tags.tools', filter: 'tools' },
+  { tag: 'market.tags.productivity', filter: 'productivity' }
 ])
 
 const value = ref([])

@@ -6,18 +6,22 @@
 -->
 <template>
   <!-- Main view template for styles -->
-  <ViewTemplate name="Styles">
+  <ViewTemplate :name="t('themeStyle.styles')">
     <!-- Window style section -->
     <WindowSectionVue tip="">
       <!-- Default window style option -->
-      <SectionItem v-model="themeStyle.theme.window" tip="Click to select." title="Default">
+      <SectionItem
+        v-model="themeStyle.theme.window"
+        :tip="t('themeStyle.defaultTip')"
+        title="Default"
+      >
       </SectionItem>
 
       <!-- Mica window style option -->
       <!-- :disabled="os?.version !== 'Windows 10 Pro'" -->
       <SectionItem
         v-model="themeStyle.theme.window"
-        tip="Mica style may impact device performance."
+        :tip="t('themeStyle.micaTip')"
         title="Mica"
       >
       </SectionItem>
@@ -25,7 +29,7 @@
       <!-- Filter window style option -->
       <SectionItem
         v-model="themeStyle.theme.window"
-        tip="This feature only supports Windows11."
+        :tip="t('themeStyle.filterTip')"
         title="Filter"
         :disabled="true"
       >
@@ -33,46 +37,50 @@
     </WindowSectionVue>
 
     <!-- Personalized settings group -->
-    <t-group-block name="Personalized" icon="earth" description="Personalized your app">
+    <t-group-block
+      :name="t('themeStyle.personalized')"
+      icon="earth"
+      :description="t('themeStyle.personalizedDesc')"
+    >
       <!-- Color style selection -->
       <t-block-select
         v-model="styleValue"
-        title="Color Style"
+        :title="t('themeStyle.colorStyle')"
         :icon="themeStyle.theme.style.dark ? 'moon' : 'lightbulb'"
         icon-change="line"
-        description="Set color main style"
+        :description="t('themeStyle.colorStyleDesc')"
         @change="handleThemeChange"
       >
-        <t-select-item name="light">Light Style</t-select-item>
-        <t-select-item name="dark">Dark Style</t-select-item>
-        <t-select-item name="auto">Follow System</t-select-item>
+        <t-select-item name="light">{{ t('themeStyle.lightStyle') }}</t-select-item>
+        <t-select-item name="dark">{{ t('themeStyle.darkStyle') }}</t-select-item>
+        <t-select-item name="auto">{{ t('themeStyle.followSystem') }}</t-select-item>
       </t-block-select>
 
       <!-- Homepage wallpaper source selection -->
       <t-block-select
         v-model="homeBgSource"
-        title="Homepage Wallpaper"
+        :title="t('themeStyle.homepageWallpaper')"
         icon="image-add"
         icon-change="line"
-        description="Choose the source of your homepage background wallpaper. This selection takes effect immediately."
+        :description="t('themeStyle.homepageWallpaperDesc')"
       >
-        <t-select-item name="bing">Bing</t-select-item>
-        <t-select-item name="folder">Folder</t-select-item>
+        <t-select-item name="bing">{{ t('themeStyle.bing') }}</t-select-item>
+        <t-select-item name="folder">{{ t('themeStyle.folder') }}</t-select-item>
       </t-block-select>
     </t-group-block>
 
     <!-- Emphasis settings group -->
     <t-group-switch
       :expand-fill="true"
-      name="Emphasis"
+      :name="t('themeStyle.emphasis')"
       icon="record-circle"
-      description="Different emphasis for different people. Avoid using clear colors randomly."
+      :description="t('themeStyle.emphasisDesc')"
     >
       <!-- Coloring switch -->
       <t-block-switch
         v-model="themeStyle.theme.addon.coloring"
-        title="Coloring"
-        description="As the main interface to emphasize the coloring"
+        :title="t('themeStyle.coloring')"
+        :description="t('themeStyle.coloringDesc')"
         icon="contrast-drop-2"
       />
 
@@ -80,11 +88,8 @@
       <t-block-switch
         v-model="themeStyle.theme.addon.contrast"
         disabled
-        title="High Contrast
-        "
-        description="
-          Suitable for amblyopia and light sensitive contrast pattern
-        "
+        :title="t('themeStyle.highContrast')"
+        :description="t('themeStyle.highContrastDesc')"
         icon="contrast"
       />
     </t-group-switch>
@@ -92,10 +97,8 @@
     <!-- Theme help switch -->
     <t-block-switch
       guidance
-      title="Theme Help"
-      description="
-        Find help in the official Github Discussions
-      "
+      :title="t('themeStyle.themeHelp')"
+      :description="t('themeStyle.themeHelpDesc')"
       icon="search-2"
     />
   </ViewTemplate>
@@ -107,6 +110,8 @@
   Handles theme and style settings logic including theme changes and environment detection.
 -->
 <script name="ThemeStyle" lang="ts" setup>
+import { useI18n } from 'vue-i18n'
+
 // Import UI components
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
 import TBlockSelect from '@comp/base/select/TBlockSelect.vue'
@@ -120,6 +125,8 @@ import SectionItem from './SectionItem.vue'
 // Import utility functions
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
+
+const { t } = useI18n()
 
 // Reactive references
 const os = ref()
