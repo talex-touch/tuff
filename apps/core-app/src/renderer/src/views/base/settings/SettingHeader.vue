@@ -1,4 +1,8 @@
 <script setup name="SettingHeader" lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 defineProps({
   env: {
     type: Object,
@@ -12,7 +16,10 @@ defineProps({
 </script>
 
 <template>
-  <div class="AboutApplication activate">
+  <div
+    class="AboutApplication activate"
+    :style="{ '--inactive-text': `'${t('settingHeader.inactive')}'` }"
+  >
     <div class="About-Image">
       <div class="Home-Logo-Bg"></div>
 
@@ -25,7 +32,7 @@ defineProps({
           <text x="0" y="20%">Tuff</text>
         </svg>
 
-        <p>The command bar, reimagined for those who build.</p>
+        <p>{{ t('settingHeader.subTitle') }}</p>
       </div>
 
       <ul class="About-Footer" v-if="env.process">
@@ -242,7 +249,7 @@ defineProps({
   }
 
   &:before {
-    content: '未激活';
+    content: var(--inactive-text);
     position: absolute;
     display: flex;
 

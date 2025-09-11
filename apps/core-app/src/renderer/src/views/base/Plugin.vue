@@ -17,7 +17,9 @@
         >
           <i v-if="!loadingStates.openFolder" block class="i-ri-folder-open-line" />
           <i v-else block class="i-ri-loader-4-line animate-spin" />
-          <span block>{{ loadingStates.openFolder ? 'Opening...' : 'Open Folder' }}</span>
+          <span block>{{
+            loadingStates.openFolder ? t('plugin.opening') : t('plugin.openFolder')
+          }}</span>
         </FlatButton>
       </div>
     </div>
@@ -43,6 +45,7 @@
 
 <script lang="ts" name="Plugin" setup>
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PluginInfo from '@comp/plugin/PluginInfo.vue'
 import PluginList from '@comp/plugin/layout/PluginList.vue'
 import FlatButton from '@comp/base/button/FlatButton.vue'
@@ -50,6 +53,8 @@ import PluginNew from './plugin/PluginNew.vue'
 import PluginEmptyState from '@comp/plugin/layout/PluginEmptyState.vue'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
+
+const { t } = useI18n()
 
 const { plugins, curSelect, selectPlugin } = usePluginSelection()
 

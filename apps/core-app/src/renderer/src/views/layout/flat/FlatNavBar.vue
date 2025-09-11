@@ -1,13 +1,13 @@
 <template>
   <ul class="FlatNavBar-Home">
     <TouchMenu>
-      <p class="FlatNavBar-Title">MAIN</p>
-      <TouchMenuItem route="/home" name="Dashboard" icon="i-ri-home-3-line" />
-      <TouchMenuItem route="/market" name="Market" icon="i-ri-quill-pen-line" />
-      <TouchMenuItem route="/plugin" name="Plugin" icon="i-ri-plug-2-line" />
+      <p class="FlatNavBar-Title">{{ t('flatNavBar.main') }}</p>
+      <TouchMenuItem route="/home" :name="t('flatNavBar.dashboard')" icon="i-ri-home-3-line" />
+      <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
+      <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
       <!-- <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" /> -->
-      <TouchMenuItem route="/styles" name="Style" icon="i-ri-paint-line" />
-      <TouchMenuItem route="/setting" name="Setting" icon="i-ri-settings-6-line" />
+      <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
+      <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />
     </TouchMenu>
   </ul>
 </template>
@@ -22,9 +22,12 @@
  * Features:
  * - Main navigation items (Dashboard, Market, Plugin, Application, Style, Setting)
  */
+import { useI18n } from 'vue-i18n'
 
 import TouchMenu from '@comp/menu/TouchMenu.vue'
 import TouchMenuItem from '@comp/menu/TouchMenuItem.vue'
+
+const { t } = useI18n()
 </script>
 
 <style lang="scss" scoped>

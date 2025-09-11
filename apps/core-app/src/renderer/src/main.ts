@@ -9,6 +9,7 @@ import { baseNodeApi } from '~/modules/channel/main/node'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
 import { setupPluginChannel } from '~/modules/adapter/plugin-adapter'
+import { setupI18n } from '~/modules/lang'
 import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
 
@@ -25,13 +26,21 @@ window.$storage = storageManager
 
 router.beforeEach(SharedElementRouteGuard)
 
-const app = createApp(App)
-  .use(SharedElementDirective)
-  .use(router)
-  .use(ElementPlus)
-  .use(createPinia())
-  .use(VWave, {})
+async function bootstrap() {
+  // 设置国际化
+  const i18n = await setupI18n({ locale: 'zh-CN' })
 
-setupPluginChannel()
+  const app = createApp(App)
+    .use(SharedElementDirective)
+    .use(router)
+    .use(ElementPlus)
+    .use(createPinia())
+    .use(VWave, {})
+    .use(i18n)
 
-app.mount('#app').$nextTick(() => postMessage({ payload: 'removeLoading' }, '*'))
+  setupPluginChannel()
+
+  app.mount('#app').$nextTick(() => postMessage({ payload: 'removeLoading' }, '*'))
+}
+
+bootstrap()

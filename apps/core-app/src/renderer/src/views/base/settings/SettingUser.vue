@@ -5,6 +5,8 @@
   Allows users to login or logout from their account.
 -->
 <script setup lang="ts" name="SettingUser">
+import { useI18n } from 'vue-i18n'
+
 // Import utility hooks
 import { useLogin } from '~/modules/hooks/function-hooks'
 
@@ -19,6 +21,8 @@ interface Props {
 }
 
 defineProps<Props>()
+
+const { t } = useI18n()
 
 /**
  * Handle user login action
@@ -38,9 +42,9 @@ function login(): void {
 <template>
   <!-- Account group block -->
   <t-group-block
-    name="Account"
+    :name="t('settingUser.groupTitle')"
     icon="account-box"
-    description="Manage your account information and login status."
+    :description="t('settingUser.groupDesc')"
   >
     <!-- User account information slot (shown when logged in) -->
     <t-block-slot
@@ -51,19 +55,19 @@ function login(): void {
       :description="env.account?.user.email"
     >
       <!-- Logout button -->
-      <FlatButton> Logout </FlatButton>
+      <FlatButton> {{ t('settingUser.logout') }} </FlatButton>
     </t-block-slot>
 
     <!-- No account slot (shown when not logged in) -->
     <t-block-slot
       v-else
-      title="No Account"
+      :title="t('settingUser.noAccount')"
       icon="account-circle"
       disabled
-      description="Account access is currently unavailable."
+      :description="t('settingUser.noAccountDesc')"
     >
       <!-- Login button -->
-      <FlatButton @click="login"> Login </FlatButton>
+      <FlatButton @click="login"> {{ t('settingUser.login') }} </FlatButton>
     </t-block-slot>
   </t-group-block>
 </template>

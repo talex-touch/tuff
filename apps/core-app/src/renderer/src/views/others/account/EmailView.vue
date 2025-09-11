@@ -27,10 +27,13 @@
 
 import FlatInput from '@comp/base/input/FlatInput.vue'
 import { inject, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 // import { $t } from "@modules/lang";
 import AccountView from '~/views/others/account/AccountView.vue'
 import PasswordView from '~/views/others/account/PasswordView.vue'
+
+const { t } = useI18n()
 
 // Reactive references
 const value = ref('')
@@ -73,11 +76,11 @@ const regx = /^[\w-]+(\.[\w-]+)*@[\w-]+(\.[\w-]+)+$/
  */
 async function next(): Promise<void> {
   if (!value.value) {
-    return step(() => [{ pass: false, message: '请输入邮箱!' }])
+    return step(() => [{ pass: false, message: t('email.enter') }])
   }
 
   if (!regx.test(value.value)) {
-    return step(() => [{ pass: false, message: '请输入正确的邮箱!' }])
+    return step(() => [{ pass: false, message: t('email.correct') }])
   }
 
   step(() => [{ pass: true, comp: PasswordView }, { email: value.value }])

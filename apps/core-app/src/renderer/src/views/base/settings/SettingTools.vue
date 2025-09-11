@@ -5,6 +5,8 @@
   Allows users to configure shortcuts, auto-paste, auto-clear, and auto-hide features.
 -->
 <script setup lang="ts" name="SettingUser">
+import { useI18n } from 'vue-i18n'
+
 // Import UI components
 import TBlockSlot from '@comp/base/group/TBlockSlot.vue'
 import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
@@ -25,6 +27,8 @@ interface Props {
 }
 
 defineProps<Props>()
+
+const { t } = useI18n()
 
 // Reactive reference for shortcut key binding
 const shortcuts = ref<Shortcut[] | null>(null)
@@ -47,16 +51,16 @@ function updateShortcut(id: string, newAccelerator: string): void {
 <template>
   <!-- Utilities group block -->
   <t-group-block
-    name="Utilities"
+    :name="t('settingTools.groupTitle')"
     icon="suitcase"
-    description="Practical tools provide a unified fast desktop arbitrary promoter for you to use."
+    :description="t('settingTools.groupDesc')"
   >
     <!-- Beginner usage guide switch -->
     <t-block-switch
       v-model="appSetting.beginner.init"
-      title="Usage"
+      :title="t('settingTools.usage')"
       icon="book-2"
-      description="Guide you to use app when enter."
+      :description="t('settingTools.usageDesc')"
     />
 
     <!-- Shortcut key configuration slot -->
@@ -66,7 +70,7 @@ function updateShortcut(id: string, newAccelerator: string): void {
         :key="shortcut.id"
         :title="shortcut.id"
         icon="keyboard"
-        :description="`Define shortcut for ${shortcut.id}`"
+        :description="t('settingTools.shortcutDesc', { shortcut: shortcut.id })"
       >
         <flat-key-input
           :model-value="shortcut.accelerator"
@@ -78,46 +82,46 @@ function updateShortcut(id: string, newAccelerator: string): void {
     <!-- Auto paste time selection -->
     <t-block-select
       v-model="appSetting.tools.autoPaste.time"
-      title="Auto paste"
+      :title="t('settingTools.autoPaste')"
       icon="checkbox-multiple-blank"
-      description="Paste what you copied in searchbar."
+      :description="t('settingTools.autoPasteDesc')"
     >
-      <t-select-item :model-value="-1">Disabled</t-select-item>
-      <t-select-item :model-value="0">No limit</t-select-item>
-      <t-select-item :model-value="15">15 sec</t-select-item>
-      <t-select-item :model-value="30">30 sec</t-select-item>
-      <t-select-item :model-value="60">1 min</t-select-item>
-      <t-select-item :model-value="180">3 min</t-select-item>
-      <t-select-item :model-value="300">5 min</t-select-item>
-      <t-select-item :model-value="600">10 min</t-select-item>
-      <t-select-item :model-value="750">15 min</t-select-item>
+      <t-select-item :model-value="-1">{{ t('settingTools.disabled') }}</t-select-item>
+      <t-select-item :model-value="0">{{ t('settingTools.noLimit') }}</t-select-item>
+      <t-select-item :model-value="15">15 {{ t('settingTools.sec') }}</t-select-item>
+      <t-select-item :model-value="30">30 {{ t('settingTools.sec') }}</t-select-item>
+      <t-select-item :model-value="60">1 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="180">3 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="300">5 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="600">10 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="750">15 {{ t('settingTools.min') }}</t-select-item>
     </t-block-select>
 
     <!-- Auto clear time selection -->
     <t-block-select
       v-model="appSetting.tools.autoClear"
-      title="Auto clear"
+      :title="t('settingTools.autoClear')"
       icon="format"
       icon-change="clear"
-      description="Clear searchbar after box hidden."
+      :description="t('settingTools.autoClearDesc')"
     >
-      <t-select-item :model-value="-1">Disabled</t-select-item>
-      <t-select-item :model-value="0">No limit</t-select-item>
-      <t-select-item :model-value="15">15 sec</t-select-item>
-      <t-select-item :model-value="30">30 sec</t-select-item>
-      <t-select-item :model-value="60">1 min</t-select-item>
-      <t-select-item :model-value="180">3 min</t-select-item>
-      <t-select-item :model-value="300">5 min</t-select-item>
-      <t-select-item :model-value="600">10 min</t-select-item>
-      <t-select-item :model-value="750">15 min</t-select-item>
+      <t-select-item :model-value="-1">{{ t('settingTools.disabled') }}</t-select-item>
+      <t-select-item :model-value="0">{{ t('settingTools.noLimit') }}</t-select-item>
+      <t-select-item :model-value="15">15 {{ t('settingTools.sec') }}</t-select-item>
+      <t-select-item :model-value="30">30 {{ t('settingTools.sec') }}</t-select-item>
+      <t-select-item :model-value="60">1 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="180">3 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="300">5 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="600">10 {{ t('settingTools.min') }}</t-select-item>
+      <t-select-item :model-value="750">15 {{ t('settingTools.min') }}</t-select-item>
     </t-block-select>
 
     <!-- Auto hide switch -->
     <t-block-switch
       v-model="appSetting.tools.autoHide"
-      title="Auto hide"
+      :title="t('settingTools.autoHide')"
       icon="search-eye"
-      description="Hide searchbar when blur triggered."
+      :description="t('settingTools.autoHideDesc')"
     />
   </t-group-block>
 </template>

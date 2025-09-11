@@ -1,4 +1,255 @@
 {
   "key": "zh-CN",
-  "name": "简体中文"
+  "name": "简体中文",
+  "signSucceed": {
+    "registerTitle": "注册成功!",
+    "registerContent": "您的账号已经注册成功，我们已为您自动登录TalexTouch。",
+    "loginTitle": "登录成功!",
+    "loginContent": "您的账号已经登录成功，现在即可开始畅享TalexTouch。",
+    "startButton": "开始使用"
+  },
+  "emailVerify": {
+    "title": "验证邮箱",
+    "content": "我们已经向您的邮箱发送了一封验证邮件，请输入邮箱验证码。"
+  },
+  "sign": {
+    "fail": "验证失败"
+  },
+  "email": {
+    "enter": "请输入邮箱!",
+    "correct": "请输入正确的邮箱!"
+  },
+  "account": {
+    "enter": "请输入账号!",
+    "remoteFail": "无法连接至远程服务器!",
+    "next": "下一步"
+  },
+  "error": {
+    "server": "服务器错误"
+  },
+  "themePreference": {
+    "Default": "拥抱默认窗口风格的熟悉舒适。",
+    "Mica": "沉浸在迷人的实时玻璃般背景中，点缀着愉悦的噪点纹理！",
+    "Filter": "享受窗口背景的迷人之处，采用引人入胜的跟踪模糊模态壁纸，为您的屏幕增添一丝优雅。"
+  },
+  "settingHeader": {
+    "subTitle": "为创造者们重新构想的命令栏。",
+    "inactive": "未激活"
+  },
+  "settingAbout": {
+    "groupTitle": "应用程序规范 (Touch)",
+    "version": "版本",
+    "new": "新!",
+    "latest": "最新",
+    "specification": "规格",
+    "startCosts": "启动耗时",
+    "perfect": "完美",
+    "good": "良好",
+    "bad": "差",
+    "slowly": "缓慢",
+    "electron": "Electron",
+    "v8": "V8 引擎",
+    "os": "操作系统",
+    "platform": "平台",
+    "experience": "体验",
+    "experiencePack": "Touch 功能体验包",
+    "terms": "TalexTouch 服务条款",
+    "license": "TalexTouch 软件许可证"
+  },
+  "settingLanguage": {
+    "groupTitle": "语言设置",
+    "groupDesc": "选择您喜欢的应用程序语言。",
+    "followSystem": "跟随系统语言",
+    "followSystemDesc": "自动匹配系统语言设置。",
+    "chooseLanguage": "选择语言",
+    "chooseLanguageDesc": "手动选择您喜欢的显示语言。"
+  },
+  "settingStorage": {
+    "title": "存储",
+    "description": "查看应用存储详情"
+  },
+  "settingTools": {
+    "groupTitle": "实用工具",
+    "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
+    "usage": "使用",
+    "usageDesc": "进入时引导您使用应用程序。",
+    "shortcutDesc": "为 {shortcut} 定义快捷键",
+    "autoPaste": "自动粘贴",
+    "autoPasteDesc": "在搜索栏中粘贴您复制的内容。",
+    "disabled": "禁用",
+    "noLimit": "无限制",
+    "sec": "秒",
+    "min": "分钟",
+    "autoClear": "自动清除",
+    "autoClearDesc": "隐藏框后清除搜索栏。",
+    "autoHide": "自动隐藏",
+    "autoHideDesc": "触发模糊时隐藏搜索栏。"
+  },
+  "settingUser": {
+    "groupTitle": "账户",
+    "groupDesc": "管理您的账户信息和登录状态。",
+    "logout": "登出",
+    "noAccount": "无账户",
+    "noAccountDesc": "当前无法访问账户。",
+    "login": "登录"
+  },
+  "themeStyle": {
+    "styles": "样式",
+    "defaultTip": "点击选择。",
+    "micaTip": "Mica 风格可能会影响设备性能。",
+    "filterTip": "此功能仅支持 Windows 11。",
+    "personalized": "个性化",
+    "personalizedDesc": "个性化您的应用程序",
+    "colorStyle": "色彩风格",
+    "colorStyleDesc": "设置色彩主风格",
+    "lightStyle": "浅色风格",
+    "darkStyle": "深色风格",
+    "followSystem": "跟随系统",
+    "homepageWallpaper": "主页壁纸",
+    "homepageWallpaperDesc": "选择您的主页背景壁纸来源。此选择立即生效。",
+    "bing": "必应",
+    "folder": "文件夹",
+    "emphasis": "强调",
+    "emphasisDesc": "不同的人有不同的强调。避免随意使用清晰的颜色。",
+    "coloring": "着色",
+    "coloringDesc": "作为主界面以强调着色",
+    "highContrast": "高对比度",
+    "highContrastDesc": "适用于弱视和光敏感的对比模式",
+    "themeHelp": "主题帮助",
+    "themeHelpDesc": "在官方 Github Discussions 中寻求帮助"
+  },
+  "windowSection": {
+    "title": "窗口偏好"
+  },
+  "base": {
+    "last_step": "上一步",
+    "step": "下一步",
+    "touchCaptcha": {
+      "title": "人机验证",
+      "instruction": "旋转滑块以匹配图像",
+      "fail": "验证失败"
+    }
+  },
+  "signView": {
+    "copyright": "版权所有"
+  },
+  "boxInput": {
+    "placeholder": "万物尽在塔内"
+  },
+  "tagSection": {
+    "copiedText": "已复制文本",
+    "copiedImage": "已复制图片",
+    "copiedHtml": "已复制HTML",
+    "command": "命令"
+  },
+  "flatController": {
+    "useNative": "使用原生窗口控件"
+  },
+  "flatNavBar": {
+    "main": "主要",
+    "dashboard": "仪表盘",
+    "market": "市场",
+    "plugin": "插件",
+    "style": "样式",
+    "setting": "设置"
+  },
+  "market": {
+    "title": "插件市场",
+    "subtitle": "发现适合您工作流程的优秀插件",
+    "searchPlaceholder": "搜索插件...",
+    "sources": "来源",
+    "tags": {
+      "all": "全部",
+      "feature": "功能",
+      "ui": "界面",
+      "ux": "体验",
+      "enhancement": "增强",
+      "tools": "工具",
+      "productivity": "生产力"
+    },
+    "empty": {
+      "title": "未找到插件",
+      "subtitle": "请尝试调整搜索或浏览不同类别"
+    }
+  },
+  "plugin": {
+    "opening": "打开中...",
+    "openFolder": "打开文件夹"
+  },
+  "appConfigure": {
+    "action": "应用操作",
+    "launch": "启动应用",
+    "launchBtn": "启动",
+    "openInExplorer": "在文件浏览器中打开",
+    "openBtn": "打开",
+    "uninstall": "卸载应用",
+    "danger": "(危险)",
+    "uninstallBtn": "卸载",
+    "help": "应用帮助",
+    "helpDesc": "通过搜索引擎查找帮助。",
+    "stats": "应用统计",
+    "name": "名称",
+    "type": "类型",
+    "value": "值",
+    "keywords": "关键词",
+    "spec": "应用规格 (外部)",
+    "version": "版本",
+    "size": "大小",
+    "dev": "Dev",
+    "ino": "Ino",
+    "mode": "模式",
+    "nlink": "NLink",
+    "uid": "Uid",
+    "gid": "Gid",
+    "rdev": "RDev",
+    "blksize": "BlkSize",
+    "atimeMs": "AtimeMs",
+    "ctimeMs": "CtimeMs",
+    "birthTimeMs": "BirthTimeMs",
+    "confirm": "确定要配置并在设备间同步吗？",
+    "save": "保存"
+  },
+  "applicationEmpty": {
+    "title": "选择一个应用进行配置。",
+    "description": "释放应用定制的力量，量身打造您的数字空间。微调设置以优化工作流程，并通过个人云无缝共享配置。探索多样的设置以获取灵感和见解。准备好创建您的完美工作区了吗？选择一个应用开始吧。"
+  },
+  "appList": {
+    "searchPlaceholder": "输入以搜索...",
+    "searchedOnDevice": "在此设备上搜索到 {count} 个结果。",
+    "appsOnDevice": "此设备上有 {count} 个应用。",
+    "order": {
+      "default": "默认排序",
+      "dicIn": "字典升序",
+      "dicDe": "字典降序",
+      "freq": "频率"
+    }
+  },
+  "versions": {
+    "electron": "Electron",
+    "chrome": "Chromium",
+    "node": "Node"
+  },
+  "agreement": {
+    "title": "协议",
+    "description": "请查看并接受以下条款以继续。",
+    "decline": "拒绝",
+    "accept": "接受"
+  },
+  "terminal": {
+    "title": "终端"
+  },
+  "app": {
+    "title": "TalexTouch"
+  },
+  "router": {
+    "login": "请先登录!",
+    "permission": "您没有权限!",
+    "pluginMarket": "插件市场",
+    "plugin": "插件",
+    "styles": "样式",
+    "theme": "主题",
+    "application": "应用",
+    "appSettings": "应用设置",
+    "storagable": "存储"
+  }
 }

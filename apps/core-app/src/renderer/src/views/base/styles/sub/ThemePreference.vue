@@ -1,30 +1,18 @@
 <script setup lang="ts" name="ThemePreference">
 import FormTemplate from '@comp/base/template/FormTemplate.vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 const route = useRoute()
-
-const copyWritings = reactive({
-  Default: {
-    en: 'Embrace the familiar comfort of the default window style.',
-    zh: '拥抱默认窗口风格的熟悉舒适。'
-  },
-  Mica: {
-    en: 'Immerse yourself in a mesmerizing, real-time glass-like background adorned with a delightful noise texture!',
-    zh: '沉浸在迷人的实时玻璃般背景中，点缀着愉悦的噪点纹理！'
-  },
-  Filter: {
-    en: 'Delight in a window background featuring a captivating tracked-blur modal wallpaper that adds a touch of elegance to your screen.',
-    zh: '享受窗口背景的迷人之处，采用引人入胜的跟踪模糊模态壁纸，为您的屏幕增添一丝优雅。'
-  }
-})
+const { t } = useI18n()
 
 const copyWriting = computed(() => {
   const theme: string = route.query.theme as string
+  const key = `themePreference.${theme}`
+  const fallbackKey = 'themePreference.Default'
 
-  return (
-    Object.getOwnPropertyDescriptor(copyWritings, theme)?.value.en || copyWritings['Default'].en
-  )
+  // Check if the key exists, otherwise use the fallback
+  return t(key, {}, { missing: () => t(fallbackKey) })
 })
 </script>
 
