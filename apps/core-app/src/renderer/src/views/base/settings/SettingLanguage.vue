@@ -11,12 +11,6 @@ const { t } = useI18n()
 const { currentLanguage } = useLanguage()
 const options = appSetting
 
-defineProps({
-  env: {
-    type: Object,
-    required: true
-  }
-})
 </script>
 
 <template>

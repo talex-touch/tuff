@@ -34,7 +34,9 @@
   },
   "settingHeader": {
     "subTitle": "为创造者们重新构想的命令栏。",
-    "inactive": "未激活"
+    "inactive": "未激活",
+    "version": "版本",
+    "initTime": "初始化时间"
   },
   "settingAbout": {
     "groupTitle": "应用程序规范 (Touch)",
