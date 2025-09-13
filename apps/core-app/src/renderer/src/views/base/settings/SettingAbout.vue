@@ -6,37 +6,33 @@
 -->
 <script setup lang="ts" name="SettingUser">
 import { useI18n } from 'vue-i18n'
+import { ref, onMounted, computed } from 'vue'
+import { useEnv } from '~/modules/hooks/env-hooks'
 
 // Import UI components
 import TBlockLine from '@comp/base/group/TBlockLine.vue'
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
 import OSIcon from '~/components/icon/OSIcon.vue'
 
-// Define component props
-interface Props {
-  env: any
-  dev: boolean
-}
-
-const props = defineProps<Props>()
-
 const { t } = useI18n()
+const { packageJson, os, processInfo } = useEnv()
 
-// Reactive reference for app update status
-const appUpdate = ref()
+const appUpdate = ref(window.$startupInfo.appUpdate)
+const sui = ref(window.$startupInfo)
 
-// Lifecycle hook to initialize component
+const dev = ref(false)
+
 onMounted(() => {
-  appUpdate.value = window.$startupInfo.appUpdate
+  dev.value = import.meta.env.MODE === 'development'
 })
 
 // Computed property for version string
 const versionStr = computed(
-  () => `TalexTouch ${props.dev ? 'Dev' : 'Master'} ${props.env.packageJson?.version}`
+  () => `TalexTouch ${dev.value ? 'Dev' : 'Master'} ${packageJson.value?.version}`
 )
 
 // Computed property for application start time
-const startCosts = computed(() => props.env.sui && (props.env.sui.t.e - props.env.sui.t.s) / 1000)
+const startCosts = computed(() => sui.value && (sui.value.t.e - sui.value.t.s) / 1000)
 
 // Computed property for current quarter based on build time
 const currentQuarter = computed(() => {
@@ -59,7 +55,7 @@ const currentExperiencePack = computed(() => {
 </script>
 
 <template>
-  <t-group-block v-if="env.process" :name="t('settingAbout.groupTitle')" icon="apps">
+  <t-group-block v-if="processInfo" :name="t('settingAbout.groupTitle')" icon="apps">
     <t-block-line :title="t('settingAbout.version')">
       <template #description>
         {{ versionStr }}
@@ -91,19 +87,19 @@ const currentExperiencePack = computed(() => {
         </span>
       </template>
     </t-block-line>
-    <t-block-line :title="t('settingAbout.electron')" :description="env.process.versions?.electron"></t-block-line>
-    <t-block-line :title="t('settingAbout.v8')" :description="env.process.versions?.v8"></t-block-line>
+    <t-block-line :title="t('settingAbout.electron')" :description="processInfo.versions?.electron"></t-block-line>
+    <t-block-line :title="t('settingAbout.v8')" :description="processInfo.versions?.v8"></t-block-line>
     <t-block-line :title="t('settingAbout.os')">
       <template #description>
         <span flex gap-0 items-center>
-          <OSIcon ml-8 :os="env.os.version" />
-          <span>{{ env.os.version }}</span>
+          <OSIcon ml-8 :os="os?.version" />
+          <span>{{ os?.version }}</span>
         </span>
       </template>
     </t-block-line>
     <t-block-line
       :title="t('settingAbout.platform')"
-      :description="`${env.process.platform} (${env.os.arch})`"
+      :description="`${processInfo.platform} (${os.value?.arch})`"
     ></t-block-line>
     <t-block-line
       :title="t('settingAbout.experience')"

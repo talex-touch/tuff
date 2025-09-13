@@ -22,11 +22,6 @@ import { shortconApi } from '~/modules/channel/main/shortcon'
 import { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 // Define component props
-interface Props {
-  env: any
-}
-
-defineProps<Props>()
 
 const { t } = useI18n()
 

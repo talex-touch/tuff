@@ -1,29 +1,69 @@
-import { reactive } from 'vue'
+import { ref } from 'vue'
 
-export function useEnv(): {
-  packageJson: Object
-  os: Object
-  process: Object
-} {
-  const env = reactive({
-    packageJson: window.$nodeApi.getPackageJSON(),
-    os: window.$nodeApi.getOS(),
-    // @ts-ignore
-    process: { ...window.process }
-  })
+interface PackageJson {
+  name: string
+  version: string
+  // Add other properties as needed
+  [key: string]: any
+}
 
-  return env
+interface OSInfo {
+  platform: string
+  arch: string
+  release: string
+  // Add other properties as needed
+  [key: string]: any
+}
+
+interface CPUUsage {
+  percent: number
+}
+
+interface MemoryUsage {
+  rss: number
+  heapTotal: number
+  heapUsed: number
+  external: number
+  arrayBuffers: number
+}
+
+interface NodeProcess {
+  getCPUUsage: () => CPUUsage
+  memoryUsage: () => MemoryUsage
+  platform: string
+  arch: string
+  // Add other process properties as needed
+  [key: string]: any
+}
+
+interface NodeApi {
+  getPackageJSON: () => PackageJson
+  getOS: () => OSInfo
+  // Add other NodeApi methods as needed
+}
+
+declare global {
+  interface Window {
+    $nodeApi: NodeApi
+    process: NodeProcess
+  }
+}
+
+export function useEnv() {
+  const packageJson = ref<PackageJson>(window.$nodeApi.getPackageJSON())
+  const os = ref<OSInfo>(window.$nodeApi.getOS())
+  const processInfo = ref<NodeProcess>({ ...window.process })
+
+  return { packageJson, os, processInfo }
 }
 
 export function useCPUUsage() {
-  // @ts-ignore
-  const value = ref(process.getCPUUsage())
+  const value = ref<CPUUsage>(window.process.getCPUUsage())
 
   let cancel = false
 
   function running() {
-    // @ts-ignore
-    value.value = process.getCPUUsage()
+    value.value = window.process.getCPUUsage()
 
     if (!cancel) setTimeout(running, 1000)
   }
@@ -34,13 +74,12 @@ export function useCPUUsage() {
 }
 
 export function useMemoryUsage() {
-  const value = ref()
+  const value = ref<MemoryUsage>(window.process.memoryUsage())
 
   let cancel = false
 
   function running() {
-    // @ts-ignore
-    value.value = process.memoryUsage()
+    value.value = window.process.memoryUsage()
 
     if (!cancel) setTimeout(running, 1000)
   }
