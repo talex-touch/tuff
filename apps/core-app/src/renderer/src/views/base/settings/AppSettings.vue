@@ -5,7 +5,7 @@
 
       <!-- <SettingUser :env="$env" /> -->
 
-      <!-- <SettingLanguage :env="$env" /> -->
+      <SettingLanguage :env="$env" />
 
       <SettingTools :env="$env" />
 
@@ -21,7 +21,7 @@ import { useEnv } from '~/modules/hooks/env-hooks'
 import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
 import SettingHeader from './SettingHeader.vue'
 // import SettingUser from './SettingUser.vue'
-// import SettingLanguage from './SettingLanguage.vue'
+import SettingLanguage from './SettingLanguage.vue'
 import SettingTools from './SettingTools.vue'
 // import SettingStorage from './SettingStorage.vue'
 import SettingAbout from './SettingAbout.vue'

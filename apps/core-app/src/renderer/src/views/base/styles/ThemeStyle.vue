@@ -153,7 +153,6 @@ function handleThemeChange(v: string, e: MouseEvent): void {
 
 // Lifecycle hook to initialize component
 onMounted(async () => {
-  console.log(useEnv())
   os.value = useEnv().os
 })
 </script>

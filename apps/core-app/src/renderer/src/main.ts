@@ -23,21 +23,12 @@ window.$shortconApi = shortconApi
 window.$storage = storageManager
 
 async function bootstrap() {
-  // 设置国际化
   const i18n = await setupI18n({ locale: 'zh-CN' })
-
   const app = createApp(App)
-    .use(router)
-    .use(ElementPlus)
-    .use(createPinia())
-    .use(VWave, {})
-    .use(i18n)
-
-  setupPluginChannel()
-
-  app.mount('#app').$nextTick(() => {
-    postMessage({ payload: 'removeLoading' }, '*')
-  })
+  app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
+  app.mount('#app')
 }
 
-bootstrap()
+bootstrap().catch((error) => {
+  console.error('main.ts: Bootstrap process failed:', error)
+})
