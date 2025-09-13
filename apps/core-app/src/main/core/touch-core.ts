@@ -338,8 +338,11 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     )
 
     this.window.webContents.addListener('render-process-gone', (event: any, details: any) => {
-      console.error('[TouchWindow] Render process gone:', event, details)
-      console.log('[TouchWindow] WebContents crashed!', this)
+      console.error(
+        `[TouchWindow] Render process gone! Reason: ${details.reason}, Exit Code: ${
+          details.exitCode
+        }. Details: ${JSON.stringify(details)}`
+      )
 
       // In development mode, if the process is killed, it's likely due to a hot reload
       if (!app.isPackaged && details.reason === 'killed') {
