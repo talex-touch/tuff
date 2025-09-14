@@ -8,7 +8,6 @@ import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin-module/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
-import storage from '../../../core/storage'
 import { createDbUtils, DbUtils } from '../../../db/utils'
 import crypto from 'crypto'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
@@ -16,6 +15,7 @@ import { ChannelType, DataCode, StandardChannelData } from '@talex-touch/utils/c
 import { TouchApp } from '../../../core/touch-app'
 import { databaseModule } from '../../database'
 import { ModuleInitContext } from 'packages/utils/types/modules'
+import { storageModule } from '../../storage'
 
 /**
  * Generates a unique key for an activation request.
@@ -95,7 +95,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
       await provider.onLoad?.({
         touchApp: this.touchApp,
         databaseManager: databaseModule,
-        storageManager: storage
+        storageManager: storageModule
       })
       const duration = Date.now() - startTime
       console.log(

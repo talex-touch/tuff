@@ -19,7 +19,6 @@ import path from 'path'
 import { getCoreBoxWindow } from '../modules/box-tool/core-box'
 import { createClipboardManager } from '@talex-touch/utils/plugin'
 import { app, clipboard, dialog, shell } from 'electron'
-import { storageManager } from '../core/storage'
 import axios from 'axios'
 import { CoreBoxManager } from '../modules/box-tool/core-box/manager' // Restore import
 import fse from 'fs-extra'
@@ -31,6 +30,7 @@ import pkg from '../../../../../package.json'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 import { TouchWindow } from '../core/touch-window'
 import { genTouchApp } from '../core'
+import { storageModule } from '../modules/storage'
 
 const disallowedArrays = [
   '官方',
@@ -387,24 +387,24 @@ export class TouchPlugin implements ITouchPlugin {
     const http = axios
     const storage = {
       getItem: (key: string) => {
-        const config = storageManager.getPluginConfig(pluginName) as any
+        const config = storageModule.getPluginConfig(pluginName)
         return config[key] ?? null
       },
-      setItem: (key: string, value: any) => {
-        const config = storageManager.getPluginConfig(pluginName) as any
+      setItem: (key: string, value: object) => {
+        const config = storageModule.getPluginConfig(pluginName)
         config[key] = value
-        return storageManager.savePluginConfig(pluginName, config)
+        return storageModule.savePluginConfig(pluginName, config)
       },
       removeItem: (key: string) => {
-        const config = storageManager.getPluginConfig(pluginName) as any
+        const config = storageModule.getPluginConfig(pluginName)
         delete config[key]
-        return storageManager.savePluginConfig(pluginName, config)
+        return storageModule.savePluginConfig(pluginName, config)
       },
       clear: () => {
-        return storageManager.savePluginConfig(pluginName, {})
+        return storageModule.savePluginConfig(pluginName, {})
       },
       getAllItems: () => {
-        return storageManager.getPluginConfig(pluginName)
+        return storageModule.getPluginConfig(pluginName)
       }
     }
     const clipboardUtil = createClipboardManager(clipboard)

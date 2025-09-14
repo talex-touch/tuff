@@ -1,7 +1,7 @@
 import { globalShortcut, BrowserWindow } from 'electron'
 import { ChannelType, StandardChannelData } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../core/channel-core'
-import { getConfig, saveConfig } from '../core/storage'
+import { getConfig, saveConfig } from './storage'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
 import { Shortcut, ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import type { TalexTouch } from '../types'
