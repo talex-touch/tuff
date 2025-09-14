@@ -10,7 +10,6 @@ import { storageModule } from './modules/storage'
 // import CoreBox from './modules/box-tool/core-box/index'
 
 // import addonOpener from './modules/addon-opener'
-// import extensionLoader from './modules/extension-loader'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 // import TrayHolder from './modules/tray-holder'
@@ -20,6 +19,7 @@ import { databaseModule } from './modules/database'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 // import FileProtocolModule from './modules/file-protocol'
 // import TerminalManager from './modules/terminal/terminal.manager'
+import { extensionLoaderModule } from './modules/extension-loader'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 
@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(databaseModule)
   await app.moduleManager.loadModule(storageModule)
   await app.moduleManager.loadModule(shortcutModule)
-  // await app.moduleManager.loadModule(extensionLoader)
+  await app.moduleManager.loadModule(extensionLoaderModule)
   // await app.moduleManager.loadModule(CommonChannel)
   // await app.moduleManager.loadModule(PluginManagerModule)
   // await app.moduleManager.loadModule(PermissionCenter)
