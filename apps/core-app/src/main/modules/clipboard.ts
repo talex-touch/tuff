@@ -8,11 +8,11 @@ import * as macWindows from 'mac-windows'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from '../db/schema'
 import { DataCode } from '@talex-touch/utils'
-import { databaseManager } from './database'
 import { genTouchChannel } from '../core/channel-core'
 import { windowManager } from './box-tool/core-box/window'
 // import { genPluginManager } from '../plugins'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { databaseModule } from './database'
 
 export interface IClipboardItem {
   id?: number
@@ -79,7 +79,6 @@ class ClipboardHelper {
     this.lastText = currentText
     return true
   }
-
 }
 
 export class ClipboardManager {
@@ -90,7 +89,7 @@ export class ClipboardManager {
   private db: LibSQLDatabase<typeof schema>
 
   constructor() {
-    this.db = databaseManager.getDb()
+    this.db = databaseModule.getDb()
     this.clipboardHelper = new ClipboardHelper()
     this.startClipboardMonitoring()
     this.loadInitialCache()

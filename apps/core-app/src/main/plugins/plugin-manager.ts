@@ -10,11 +10,11 @@ import { TouchPlugin } from './plugin'
 import { PluginIcon } from './plugin-icon'
 import { createPluginLoader } from './loaders'
 import { TalexTouch } from '../types'
-import { TouchWindow } from '../core/touch-core'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { shell } from 'electron'
-import { databaseManager } from '../modules/database'
 import { createDbUtils } from '../db/utils'
+import { TouchWindow } from '../core/touch-window'
+import { databaseModule } from '../modules/database'
 
 class DevPluginWatcher {
   private readonly manager: PluginManager
@@ -113,7 +113,7 @@ class PluginManager implements IPluginManager {
   active: string = ''
   reloadingPlugins: Set<string> = new Set()
   enabledPlugins: Set<string> = new Set()
-  dbUtils = createDbUtils(databaseManager.getDb())
+  dbUtils = createDbUtils(databaseModule.getDb())
   private initialLoadPromises: Promise<boolean>[] = []
 
   pluginPath: string
@@ -575,17 +575,17 @@ export function genPluginManager(pluginPath?: string): IPluginManager {
   return pluginManager!
 }
 
-export const PluginManagerModule: TalexTouch.IModule = {
+export const PluginManagerModule: TalexTouch.IModule<TalexEvents> = {
   name: Symbol('PluginManager'),
   filePath: 'plugins',
   init(touchApp) {
     const manager = genPluginManager(
-      path.join(touchApp.rootPath, 'modules', 'plugins')
+      path.join(touchApp.app.rootPath, 'modules', 'plugins')
     ) as PluginManager
 
     const touchChannel = genTouchChannel()
 
-    touchChannel.regChannel(ChannelType.MAIN, 'plugin-list', ({ reply }) => {
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin-list', () => {
       try {
         const result = (pluginManager as PluginManager).getPluginList()
         return result

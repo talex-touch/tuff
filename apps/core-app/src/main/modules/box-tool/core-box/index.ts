@@ -1,8 +1,8 @@
 import { coreBoxManager } from './manager'
 import SearchEngineCore from '../search-engine/search-core'
-import { genTouchApp } from '../../../core/touch-core'
 import { getShortcutService } from '../../global-shortcon'
 import { windowManager } from './window'
+import { genTouchApp } from '../../../core'
 export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined

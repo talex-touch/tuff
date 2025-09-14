@@ -4,18 +4,18 @@ import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
-import { ClipboardProvider } from './providers/clipboard'
 import { windowManager } from '../core-box/window'
-import PluginFeaturesAdapter from '../../plugin-manager/plugin-features-adapter'
+import PluginFeaturesAdapter from '../../plugin-module/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
-import { TouchApp } from '../../../core/touch-core'
-import { databaseManager } from '../../database'
 import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
 import storage from '../../../core/storage'
 import { createDbUtils, DbUtils } from '../../../db/utils'
 import crypto from 'crypto'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { ChannelType, DataCode, StandardChannelData } from '@talex-touch/utils/channel'
+import { TouchApp } from '../../../core/touch-app'
+import { databaseModule } from '../../database'
+import { ModuleInitContext } from 'packages/utils/types/modules'
 
 /**
  * Generates a unique key for an activation request.
@@ -31,7 +31,7 @@ function getActivationKey(activation: IProviderActivate): string {
   return activation.id
 }
 
-export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
+export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<TalexEvents> {
   private static _instance: SearchEngineCore
 
   readonly name = Symbol('search-engine-core')
@@ -94,7 +94,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     try {
       await provider.onLoad?.({
         touchApp: this.touchApp,
-        databaseManager: databaseManager,
+        databaseManager: databaseModule,
         storageManager: storage
       })
       const duration = Date.now() - startTime
@@ -351,13 +351,13 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     // within the providers themselves, possibly triggered by a separate scheduler.
   }
 
-  init(touchApp: TouchApp): void {
+  init(ctx: ModuleInitContext<TalexEvents>): void {
     const instance = SearchEngineCore.getInstance()
 
-    instance.touchApp = touchApp
+    instance.touchApp = ctx.app as TouchApp
     instance.registerDefaults()
 
-    const db = databaseManager.getDb()
+    const db = databaseModule.getDb()
     instance.dbUtils = createDbUtils(db)
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
@@ -367,7 +367,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule {
     })
 
     // Register IPC handlers
-    const channel = touchApp.channel
+    const channel = this.touchApp!.channel
     channel.regChannel(ChannelType.MAIN, 'core-box:query', async ({ data }) => {
       return instance.search(data.query)
     })
