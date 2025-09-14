@@ -1,31 +1,46 @@
 import { globalShortcut, BrowserWindow } from 'electron'
 import { ChannelType, StandardChannelData } from '@talex-touch/utils/channel'
-import { genTouchChannel } from '../core/channel-core'
-import { getConfig, saveConfig } from './storage'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
 import { Shortcut, ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import type { TalexTouch } from '../types'
+import { BaseModule } from './abstract-base-module'
+import { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import { storageModule } from './storage'
 
 // A runtime map to hold callbacks for 'main' type shortcuts
 const mainCallbackRegistry = new Map<string, () => void>()
 
-class ShortcutService {
-  private storage: ShortcutStorage
-  private channel
+export class ShortcutModule extends BaseModule {
+  static key: symbol = Symbol.for('Shortcut')
+  name: ModuleKey = ShortcutModule.key
+
+  private storage?: ShortcutStorage
   private isEnabled: boolean = true
 
   constructor() {
-    this.storage = new ShortcutStorage({ getConfig, saveConfig })
-    this.channel = genTouchChannel()
+    super(ShortcutModule.key, {
+      create: false
+    })
+  }
+
+  onInit(): MaybePromise<void> {
+    this.storage = new ShortcutStorage({
+      getConfig: storageModule.getConfig.bind(storageModule),
+      saveConfig: storageModule.saveConfig.bind(storageModule)
+    })
     this.setupIpcListeners()
     this.reregisterAllShortcuts()
+  }
+
+  onDestroy(): MaybePromise<void> {
+    globalShortcut.unregisterAll()
+    mainCallbackRegistry.clear()
   }
 
   /**
    * Sets up IPC listeners for renderer processes to call.
    */
   private setupIpcListeners(): void {
-    this.channel.regChannel(
+    $app.channel.regChannel(
       ChannelType.MAIN,
       'shortcon:update',
       ({ data }: StandardChannelData) => {
@@ -34,16 +49,16 @@ class ShortcutService {
       }
     )
 
-    this.channel.regChannel(ChannelType.MAIN, 'shortcon:disable-all', () => {
+    $app.channel.regChannel(ChannelType.MAIN, 'shortcon:disable-all', () => {
       this.disableAll()
     })
 
-    this.channel.regChannel(ChannelType.MAIN, 'shortcon:enable-all', () => {
+    $app.channel.regChannel(ChannelType.MAIN, 'shortcon:enable-all', () => {
       this.enableAll()
     })
 
-    this.channel.regChannel(ChannelType.MAIN, 'shortcon:get-all', () => {
-      return this.storage.getAllShortcuts()
+    $app.channel.regChannel(ChannelType.MAIN, 'shortcon:get-all', () => {
+      return this.storage!.getAllShortcuts()
     })
   }
 
@@ -59,9 +74,9 @@ class ShortcutService {
 
     mainCallbackRegistry.set(id, callback)
 
-    const existingShortcut = this.storage.getShortcutById(id)
+    const existingShortcut = this.storage!.getShortcutById(id)
     if (!existingShortcut) {
-      this.storage.addShortcut({
+      this.storage!.addShortcut({
         id,
         accelerator: defaultAccelerator,
         type: ShortcutType.MAIN,
@@ -83,7 +98,7 @@ class ShortcutService {
    * Updates the accelerator for a given shortcut ID.
    */
   updateShortcut(id: string, newAccelerator: string): boolean {
-    const success = this.storage.updateShortcutAccelerator(id, newAccelerator)
+    const success = this.storage!.updateShortcutAccelerator(id, newAccelerator)
     if (success) {
       this.reregisterAllShortcuts()
     }
@@ -121,7 +136,7 @@ class ShortcutService {
       return
     }
 
-    const allShortcuts = this.storage.getAllShortcuts()
+    const allShortcuts = this.storage!.getAllShortcuts()
     for (const shortcut of allShortcuts) {
       try {
         globalShortcut.register(shortcut.accelerator, () => {
@@ -158,7 +173,7 @@ class ShortcutService {
       case ShortcutType.RENDERER: {
         const allWindows = BrowserWindow.getAllWindows()
         for (const win of allWindows) {
-          this.channel.sendTo(win, ChannelType.MAIN, 'shortcon:trigger', { id: shortcut.id })
+          $app.channel.sendTo(win, ChannelType.MAIN, 'shortcon:trigger', { id: shortcut.id })
         }
         console.log(
           `[GlobalShortcon] Forwarding trigger for '${shortcut.id}' to all renderer processes.`
@@ -167,32 +182,8 @@ class ShortcutService {
       }
     }
   }
-
-  destroy(): void {
-    globalShortcut.unregisterAll()
-    mainCallbackRegistry.clear()
-  }
 }
 
-let serviceInstance: ShortcutService | null = null
+const shortcutModule = new ShortcutModule()
 
-export default {
-  name: Symbol('GlobalShortcon'),
-  init() {
-    if (!serviceInstance) {
-      serviceInstance = new ShortcutService()
-    }
-  },
-  destroy() {
-    serviceInstance?.destroy()
-    serviceInstance = null
-  }
-} as TalexTouch.IModule
-
-// Expose the service for other main-process modules
-export const getShortcutService = (): ShortcutService => {
-  if (!serviceInstance) {
-    throw new Error('ShortcutService not initialized!')
-  }
-  return serviceInstance
-}
+export { shortcutModule }
