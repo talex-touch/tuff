@@ -2,7 +2,7 @@ import './polyfills'
 import './core/precore'
 import { app, protocol } from 'electron'
 import { storageModule } from './modules/storage'
-// import CommonChannel from './channel/common'
+import { commonChannelModule } from './channel/common'
 // import { PluginManagerModule } from './modules/plugin-module/plugin-manager'
 // import PermissionCenter from './modules/permission-center'
 // import ServiceCenter from './service/service-center'
@@ -42,7 +42,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(storageModule)
   await app.moduleManager.loadModule(shortcutModule)
   await app.moduleManager.loadModule(extensionLoaderModule)
-  // await app.moduleManager.loadModule(CommonChannel)
+  await app.moduleManager.loadModule(commonChannelModule)
   // await app.moduleManager.loadModule(PluginManagerModule)
   // await app.moduleManager.loadModule(PermissionCenter)
   // await app.moduleManager.loadModule(ServiceCenter)
