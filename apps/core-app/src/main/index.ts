@@ -1,9 +1,8 @@
 import './polyfills'
-import { genTouchApp } from './core/touch-core'
 import { app, protocol } from 'electron'
 import StorageModule from './core/storage'
 import CommonChannel from './channel/common'
-import { PluginManagerModule } from './modules/plugin-manager/plugin-manager'
+import { PluginManagerModule } from './modules/plugin-module/plugin-manager'
 import PermissionCenter from './modules/permission-center'
 import ServiceCenter from './service/service-center'
 import PluginLogService from './service/plugin-log.service'
@@ -15,12 +14,13 @@ import extensionLoader from './modules/extension-loader'
 import GlobalShortcon from './modules/global-shortcon'
 import TrayHolder from './modules/tray-holder'
 import Clipboard from './modules/clipboard'
-import DatabaseModule from './modules/database'
+import { databaseModule } from './modules/database'
 import FileSystemWatcher from './modules/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import FileProtocolModule from './modules/file-protocol'
 import TerminalManager from './modules/terminal/terminal.manager'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { genTouchApp } from './core'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -37,7 +37,7 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   const app = genTouchApp()
 
-  await app.moduleManager.loadModule(DatabaseModule)
+  await app.moduleManager.loadModule(databaseModule)
   await app.moduleManager.loadModule(StorageModule)
   await app.moduleManager.loadModule(GlobalShortcon)
   await app.moduleManager.loadModule(extensionLoader)

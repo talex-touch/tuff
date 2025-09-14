@@ -11,10 +11,8 @@ import {
   IPluginFeature
 } from '@talex-touch/utils/plugin'
 import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { TouchWindow } from '../core/touch-core'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
 import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
-import { genTouchApp } from '../core/touch-core'
 import { genTouchChannel } from '../core/channel-core'
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
@@ -27,10 +25,12 @@ import { CoreBoxManager } from '../modules/box-tool/core-box/manager' // Restore
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
 import { PluginIcon } from './plugin-icon'
-import { PluginViewLoader } from '../modules/plugin-manager/plugin-view-loader'
+import { PluginViewLoader } from '../modules/plugin-module/plugin-view-loader'
 import { getJs, getStyles } from '../utils/plugin-injection'
 import pkg from '../../../../../package.json'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
+import { TouchWindow } from '../core/touch-window'
+import { genTouchApp } from '../core'
 
 const disallowedArrays = [
   '官方',
