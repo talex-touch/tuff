@@ -1,4 +1,4 @@
-import { getConfig } from '../core/storage'
+import { getConfig } from '../modules/storage'
 
 export function getJs(options) {
   const [name, _path] = options

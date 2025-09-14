@@ -1,6 +1,6 @@
 import './polyfills'
 import { app, protocol } from 'electron'
-import StorageModule from './core/storage'
+import StorageModule, { storageModule } from './modules/storage'
 import CommonChannel from './channel/common'
 import { PluginManagerModule } from './modules/plugin-module/plugin-manager'
 import PermissionCenter from './modules/permission-center'
@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
   const app = genTouchApp()
 
   await app.moduleManager.loadModule(databaseModule)
-  await app.moduleManager.loadModule(StorageModule)
+  await app.moduleManager.loadModule(storageModule)
   await app.moduleManager.loadModule(GlobalShortcon)
   await app.moduleManager.loadModule(extensionLoader)
   await app.moduleManager.loadModule(CommonChannel)

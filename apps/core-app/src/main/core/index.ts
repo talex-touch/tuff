@@ -13,6 +13,7 @@ export function genTouchApp(): TouchApp {
   if (!touchApp) {
     touchEventBus.emit(TalexEvents.BEFORE_APP_START, new BeforeAppStartEvent())
     touchApp = new TouchApp(app)
+    globalThis.$app = touchApp
     touchEventBus.emit(TalexEvents.AFTER_APP_START, new AfterAppStartEvent())
   }
   return touchApp!

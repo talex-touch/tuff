@@ -4,23 +4,25 @@ import path from 'path'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import * as schema from '../../db/schema'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
-import { TalexTouch } from '@talex-touch/utils'
+import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
-import { MaybePromise, ModuleInitContext, ModuleKey } from 'packages/utils/types/modules'
+import { BaseModule } from '../abstract-base-module'
 
-export class DatabaseModule implements TalexTouch.IModule<TalexEvents> {
+export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
   private client: Client | null = null
 
   static key: symbol = Symbol.for('Database')
   name: ModuleKey = DatabaseModule.key
 
-  file = {
-    create: true,
-    dirName: 'database'
-  } as const
+  constructor() {
+    super(DatabaseModule.key, {
+      create: true,
+      dirName: 'database'
+    })
+  }
 
-  async init({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
+  async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const { dirPath } = file
     const dbPath = path.join(dirPath!, 'database.db')
     this.client = createClient({ url: `file:${dbPath}` })
@@ -40,7 +42,7 @@ export class DatabaseModule implements TalexTouch.IModule<TalexEvents> {
     }
   }
 
-  destroy(): MaybePromise<void> {
+  onDestroy(): MaybePromise<void> {
     this.client?.close()
     this.db = null
     console.log('[Database] DatabaseManager destroyed')
