@@ -23,7 +23,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   version: TalexTouch.AppVersion
 
-  moduleManager: TalexTouch.IModuleManage<TalexEvents>
+  moduleManager: TalexTouch.IModuleManager<TalexEvents>
 
   channel: ITouchChannel
 

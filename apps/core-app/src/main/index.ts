@@ -1,24 +1,25 @@
 import './polyfills'
+import './core/precore'
 import { app, protocol } from 'electron'
-import StorageModule, { storageModule } from './modules/storage'
-import CommonChannel from './channel/common'
-import { PluginManagerModule } from './modules/plugin-module/plugin-manager'
-import PermissionCenter from './modules/permission-center'
-import ServiceCenter from './service/service-center'
-import PluginLogService from './service/plugin-log.service'
-import CoreBox from './modules/box-tool/core-box/index'
+import { storageModule } from './modules/storage'
+// import CommonChannel from './channel/common'
+// import { PluginManagerModule } from './modules/plugin-module/plugin-manager'
+// import PermissionCenter from './modules/permission-center'
+// import ServiceCenter from './service/service-center'
+// import PluginLogService from './service/plugin-log.service'
+// import CoreBox from './modules/box-tool/core-box/index'
 
-import addonOpener from './modules/addon-opener'
-import extensionLoader from './modules/extension-loader'
+// import addonOpener from './modules/addon-opener'
+// import extensionLoader from './modules/extension-loader'
 // import DropManager from './modules/drop-manager'
-import GlobalShortcon from './modules/global-shortcon'
-import TrayHolder from './modules/tray-holder'
-import Clipboard from './modules/clipboard'
+import { shortcutModule } from './modules/global-shortcon'
+// import TrayHolder from './modules/tray-holder'
+// import Clipboard from './modules/clipboard'
 import { databaseModule } from './modules/database'
-import FileSystemWatcher from './modules/file-system-watcher'
+// import FileSystemWatcher from './modules/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
-import FileProtocolModule from './modules/file-protocol'
-import TerminalManager from './modules/terminal/terminal.manager'
+// import FileProtocolModule from './modules/file-protocol'
+// import TerminalManager from './modules/terminal/terminal.manager'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 
@@ -39,22 +40,22 @@ app.whenReady().then(async () => {
 
   await app.moduleManager.loadModule(databaseModule)
   await app.moduleManager.loadModule(storageModule)
-  await app.moduleManager.loadModule(GlobalShortcon)
-  await app.moduleManager.loadModule(extensionLoader)
-  await app.moduleManager.loadModule(CommonChannel)
-  await app.moduleManager.loadModule(PluginManagerModule)
-  await app.moduleManager.loadModule(PermissionCenter)
-  await app.moduleManager.loadModule(ServiceCenter)
-  await app.moduleManager.loadModule(PluginLogService)
+  await app.moduleManager.loadModule(shortcutModule)
+  // await app.moduleManager.loadModule(extensionLoader)
+  // await app.moduleManager.loadModule(CommonChannel)
+  // await app.moduleManager.loadModule(PluginManagerModule)
+  // await app.moduleManager.loadModule(PermissionCenter)
+  // await app.moduleManager.loadModule(ServiceCenter)
+  // await app.moduleManager.loadModule(PluginLogService)
 
-  await app.moduleManager.loadModule(CoreBox)
-  await app.moduleManager.loadModule(TrayHolder)
-  await app.moduleManager.loadModule(addonOpener)
-  // await app.moduleManager.loadModule(DropManager)
-  await app.moduleManager.loadModule(Clipboard)
-  await app.moduleManager.loadModule(FileSystemWatcher)
-  await app.moduleManager.loadModule(FileProtocolModule)
-  await app.moduleManager.loadModule(TerminalManager)
+  // await app.moduleManager.loadModule(CoreBox)
+  // await app.moduleManager.loadModule(TrayHolder)
+  // await app.moduleManager.loadModule(addonOpener)
+  // // await app.moduleManager.loadModule(DropManager)
+  // await app.moduleManager.loadModule(Clipboard)
+  // await app.moduleManager.loadModule(FileSystemWatcher)
+  // await app.moduleManager.loadModule(FileProtocolModule)
+  // await app.moduleManager.loadModule(TerminalManager)
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 

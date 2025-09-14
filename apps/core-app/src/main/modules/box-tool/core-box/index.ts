@@ -1,8 +1,8 @@
 import { coreBoxManager } from './manager'
 import SearchEngineCore from '../search-engine/search-core'
-import { getShortcutService } from '../../global-shortcon'
 import { windowManager } from './window'
 import { genTouchApp } from '../../../core'
+import { shortcutModule } from '../../global-shortcon'
 export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined
@@ -18,7 +18,7 @@ export default {
 
     coreBoxManager.init()
 
-    getShortcutService().registerMainShortcut('core.box.toggle', 'CommandOrControl+E', () => {
+    shortcutModule.registerMainShortcut('core.box.toggle', 'CommandOrControl+E', () => {
       const curScreen = windowManager.getCurScreen()
 
       if (coreBoxManager.showCoreBox) {
