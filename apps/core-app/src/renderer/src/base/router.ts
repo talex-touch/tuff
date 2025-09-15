@@ -106,7 +106,7 @@ const router = createRouter({
 //     //
 //     // if( !store.local.loggedIn ) {
 //     //
-//     //     window.$tipper.tip('请先登录!', {
+//     //     window.$tipper.tip(t('router.login'), {
 //     //         stay: 4200,
 //     //         type: TipType.WARNING
 //     //     })
@@ -120,7 +120,7 @@ const router = createRouter({
 //     //     // @ts-ignore
 //     //     if( !store.local.admin  ) {
 //     //
-//     //         window.$tipper.tip('您没有全新!', {
+//     //         window.$tipper.tip(t('router.permission'), {
 //     //             stay: 4200,
 //     //             type: TipType.WARNING
 //     //         })

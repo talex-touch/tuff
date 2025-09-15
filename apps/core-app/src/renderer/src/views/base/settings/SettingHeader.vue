@@ -1,18 +1,27 @@
 <script setup name="SettingHeader" lang="ts">
-defineProps({
-  env: {
-    type: Object,
-    required: true
-  },
-  dev: {
-    type: Boolean,
-    required: true
-  }
+import { useI18n } from 'vue-i18n'
+import { useEnv } from '~/modules/hooks/env-hooks'
+import { ref, onMounted, computed } from 'vue'
+
+const { t } = useI18n()
+const { packageJson, processInfo } = useEnv()
+
+const dev = ref(false)
+
+onMounted(() => {
+  dev.value = process.env.NODE_ENV === 'development'
 })
+
+const chromeVersion = computed(() => processInfo.value?.versions?.chrome || '')
+const nodeVersion = computed(() => processInfo.value?.versions?.node || '')
+const vueVersion = computed(() => packageJson.value?.dependencies?.vue || '')
 </script>
 
 <template>
-  <div class="AboutApplication activate">
+  <div
+    class="AboutApplication activate"
+    :style="{ '--inactive-text': `'${t('settingHeader.inactive')}'` }"
+  >
     <div class="About-Image">
       <div class="Home-Logo-Bg"></div>
 
@@ -25,21 +34,21 @@ defineProps({
           <text x="0" y="20%">Tuff</text>
         </svg>
 
-        <p>The command bar, reimagined for those who build.</p>
+        <p>{{ t('settingHeader.subTitle') }}</p>
       </div>
 
-      <ul class="About-Footer" v-if="env.process">
-        <li class="fake-background" flex items-center gap-2>
-          <div inline-block class="i-ri-npmjs-line" />
-          <span>{{ env.process.versions?.node }}</span>
-        </li>
+      <ul class="About-Footer" v-if="processInfo">
         <li class="fake-background" flex items-center gap-2>
           <div inline-block class="i-ri-chrome-line" />
-          <span>{{ env.process.versions?.chrome }}</span>
+          <span>Chromium: {{ chromeVersion }}</span>
+        </li>
+        <li class="fake-background" flex items-center gap-2>
+          <div inline-block class="i-ri-node-tree" />
+          <span>Node.js: {{ nodeVersion }}</span>
         </li>
         <li class="fake-background" flex items-center gap-2>
           <div inline-block class="i-ri-vuejs-line" />
-          <span>{{ String(env.packageJson?.dependencies?.vue).substring(1) }}</span>
+          <span>Vue: {{ vueVersion }}</span>
         </li>
       </ul>
     </div>
@@ -242,7 +251,7 @@ defineProps({
   }
 
   &:before {
-    content: '未激活';
+    content: var(--inactive-text);
     position: absolute;
     display: flex;
 

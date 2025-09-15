@@ -32,7 +32,11 @@ export function setupPluginChannel() {
   ]
 
   const plugins: object = touchChannel.sendSync('plugin-list')
-  Object.values(plugins).forEach((value) => pluginStore.setPlugin(value))
+  if (plugins && typeof plugins === 'object') {
+    Object.values(plugins).forEach((value) => pluginStore.setPlugin(value))
+  } else {
+    console.warn('[PluginAdapter] Failed to load plugin list, received:', plugins)
+  }
 
   return () => {
     logouts.forEach((logout) => logout())

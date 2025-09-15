@@ -1,6 +1,6 @@
 <template>
   <div ref="wrapperRef" class="WindowSection-Wrapper fake-background">
-    <p font-600 text-lg>Window Preference</p>
+    <p font-600 text-lg>{{ t('windowSection.title') }}</p>
     <div
       gap-4
       box-border
@@ -24,7 +24,10 @@
 </template>
 
 <script lang="ts" name="WindowsSection" setup>
+import { useI18n } from 'vue-i18n'
 import { sleep } from '@talex-touch/utils/common'
+
+const { t } = useI18n()
 
 const props = defineProps({
   tip: {
@@ -78,7 +81,7 @@ async function mention(html: string | undefined) {
 provide('mention', mention)
 
 /*
- * 遍历 each SectionItem => 当点击 / hover的时候 pointerRef 变化
+ * Iterate over each SectionItem => pointerRef changes when clicked / hovered
  */
 async function readSectionItems() {
   const wrapper = wrapperRef.value

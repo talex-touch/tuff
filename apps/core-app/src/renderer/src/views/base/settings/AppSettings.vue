@@ -1,49 +1,35 @@
 <template>
   <ViewTemplate title="Settings">
     <div class="AppSettings-Container">
-      <SettingHeader :dev="dev" :env="$env" />
+      <SettingHeader />
 
-      <!-- <SettingUser :env="$env" /> -->
+      <!-- <SettingUser /> -->
 
-      <!-- <SettingLanguage :env="$env" /> -->
+      <SettingLanguage />
 
-      <SettingTools :env="$env" />
+      <SettingTools />
 
       <!-- <SettingStorage /> -->
 
-      <SettingAbout :dev="dev" :env="$env" />
+      <SettingAbout />
     </div>
   </ViewTemplate>
 </template>
 
 <script lang="ts" name="AppSettings" setup>
-import { useEnv } from '~/modules/hooks/env-hooks'
 import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
 import SettingHeader from './SettingHeader.vue'
 // import SettingUser from './SettingUser.vue'
-// import SettingLanguage from './SettingLanguage.vue'
+import SettingLanguage from './SettingLanguage.vue'
 import SettingTools from './SettingTools.vue'
 // import SettingStorage from './SettingStorage.vue'
 import SettingAbout from './SettingAbout.vue'
-
-const $env = reactive<any>({
-  os: null,
-  process: null,
-  packageJson: null,
-  account: window.$storage.account,
-  sui: window.$startupInfo
-})
 
 const dev = ref(false)
 
 // initially
 onMounted(async () => {
   dev.value = process.env.NODE_ENV === 'development'
-
-  const env = useEnv()
-  $env.os = env.os
-  $env.process = env.process
-  $env.packageJson = env.packageJson
 })
 </script>
 

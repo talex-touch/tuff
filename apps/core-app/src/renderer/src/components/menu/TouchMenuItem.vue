@@ -18,6 +18,7 @@
 
 <script name="TouchMenuItem" setup>
 import { useRouter, useRoute } from 'vue-router'
+import { onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   icon: {
@@ -51,14 +52,30 @@ const active = computed(() => props.doActive(props.route, route))
 
 const changePointer = inject('changePointer')
 
-router.afterEach((to, from) => {
-  if (!to.path.startsWith(props.route)) return
-
-  changePointer(dom.value)
-})
+let removeGuard
 
 onMounted(() => {
-  dom.value['$fixPointer'] = () => changePointer(dom.value)
+  removeGuard = router.afterEach((to, from) => {
+    if (!to.path.startsWith(props.route)) return
+
+    if (changePointer && dom.value) {
+      changePointer(dom.value)
+    }
+  })
+
+  if (dom.value) {
+    dom.value['$fixPointer'] = () => {
+      if (changePointer && dom.value) {
+        changePointer(dom.value)
+      }
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (removeGuard) {
+    removeGuard()
+  }
 })
 
 function handleClick($event) {
@@ -66,7 +83,9 @@ function handleClick($event) {
 
   if (props.route) router.push(props.route)
 
-  changePointer(dom.value)
+  if (changePointer && dom.value) {
+    changePointer(dom.value)
+  }
   emit('active', $event)
 }
 </script>

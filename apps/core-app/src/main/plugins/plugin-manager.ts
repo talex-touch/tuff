@@ -132,17 +132,26 @@ class PluginManager implements IPluginManager {
     console.log('[PluginManager] getPluginList called.')
     const list = new Array<object>()
 
-    for (const plugin of this.plugins.values()) {
-      console.log(
-        `[PluginManager]   - Processing plugin: ${plugin.name}, status: ${
-          PluginStatus[(plugin as TouchPlugin).status]
-        }`
-      )
-      list.push((plugin as TouchPlugin).toJSONObject())
-    }
+    try {
+      for (const plugin of this.plugins.values()) {
+        if (!plugin) {
+          console.warn('[PluginManager] Skipping null/undefined plugin')
+          continue
+        }
+        console.log(
+          `[PluginManager]   - Processing plugin: ${plugin.name}, status: ${
+            PluginStatus[(plugin as TouchPlugin).status]
+          }`
+        )
+        list.push((plugin as TouchPlugin).toJSONObject())
+      }
 
-    console.log(`[PluginManager] Returning plugin list with ${list.length} items.`)
-    return list
+      console.log(`[PluginManager] Returning plugin list with ${list.length} items.`)
+      return list
+    } catch (error) {
+      console.error('[PluginManager] Error in getPluginList:', error)
+      return []
+    }
   }
 
   setActivePlugin(pluginName: string): boolean {
@@ -576,9 +585,15 @@ export const PluginManagerModule: TalexTouch.IModule = {
 
     const touchChannel = genTouchChannel()
 
-    touchChannel.regChannel(ChannelType.MAIN, 'plugin-list', () =>
-      (pluginManager as PluginManager).getPluginList()
-    )
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin-list', ({ reply }) => {
+      try {
+        const result = (pluginManager as PluginManager).getPluginList()
+        return result
+      } catch (error) {
+        console.error('[PluginManager] Error in plugin-list handler:', error)
+        return []
+      }
+    })
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
       pluginManager!.setActivePlugin(data!.name)
     )

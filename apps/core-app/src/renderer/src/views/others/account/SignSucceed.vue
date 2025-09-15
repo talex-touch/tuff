@@ -3,24 +3,24 @@
   <div class="SignSucceed-Container">
     <div v-if="form()?.type === 'register'" class="SignSucceed-Register">
       <div class="SignSucceed-Register-Title">
-        <p>注册成功!</p>
+        <p>{{ t('signSucceed.registerTitle') }}</p>
       </div>
       <div class="SignSucceed-Register-Content">
-        <p>您的账号已经注册成功，我们已为您自动登录TalexTouch。</p>
+        <p>{{ t('signSucceed.registerContent') }}</p>
       </div>
       <div class="SignSucceed-Register-Button">
-        <FlatButton @click="close"> 开始使用 </FlatButton>
+        <FlatButton @click="close"> {{ t('signSucceed.startButton') }} </FlatButton>
       </div>
     </div>
     <div v-else class="SignSucceed-Login">
       <div class="SignSucceed-Login-Title">
-        <p>登录成功!</p>
+        <p>{{ t('signSucceed.loginTitle') }}</p>
       </div>
       <div class="SignSucceed-Login-Content">
-        <p>您的账号已经登录成功，现在即可开始畅享TalexTouch。</p>
+        <p>{{ t('signSucceed.loginContent') }}</p>
       </div>
       <div class="SignSucceed-Login-Button">
-        <FlatButton @click="close"> 开始使用 </FlatButton>
+        <FlatButton @click="close"> {{ t('signSucceed.startButton') }} </FlatButton>
       </div>
     </div>
   </div>
@@ -40,8 +40,11 @@
  */
 
 import { inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 // import { $t } from "@modules/lang";
+
+const { t } = useI18n()
 
 // Reactive references
 const close: any = inject('close')

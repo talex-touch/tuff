@@ -1,4 +1,255 @@
 {
   "key": "en-US",
-  "name": "English"
+  "name": "English",
+  "signSucceed": {
+    "registerTitle": "Registration successful!",
+    "registerContent": "Your account has been registered successfully, and we have automatically logged you into TalexTouch.",
+    "loginTitle": "Login successful!",
+    "loginContent": "Your account has been logged in successfully, and you can now start enjoying TalexTouch.",
+    "startButton": "Start using"
+  },
+  "emailVerify": {
+    "title": "Verify Email",
+    "content": "We have sent a verification email to your mailbox, please enter the email verification code."
+  },
+  "sign": {
+    "fail": "Verification failed"
+  },
+  "email": {
+    "enter": "Please enter your email!",
+    "correct": "Please enter a correct email!"
+  },
+  "account": {
+    "enter": "Please enter your account!",
+    "remoteFail": "Unable to connect to the remote server!",
+    "next": "Next"
+  },
+  "error": {
+    "server": "Server error"
+  },
+  "themePreference": {
+    "Default": "Embrace the familiar comfort of the default window style.",
+    "Mica": "Immerse yourself in a mesmerizing, real-time glass-like background adorned with a delightful noise texture!",
+    "Filter": "Delight in a window background featuring a captivating tracked-blur modal wallpaper that adds a touch of elegance to your screen."
+  },
+  "settingHeader": {
+    "subTitle": "The command bar, reimagined for those who build.",
+    "inactive": "Inactive"
+  },
+  "settingAbout": {
+    "groupTitle": "Application specification (Touch)",
+    "version": "Version",
+    "new": "New!",
+    "latest": "Latest",
+    "specification": "Specification",
+    "startCosts": "Start Costs",
+    "perfect": "Perfect",
+    "good": "Good",
+    "bad": "Bad",
+    "slowly": "Slowly",
+    "electron": "Electron",
+    "v8": "V8 Engine",
+    "os": "OS",
+    "platform": "Platform",
+    "experience": "Experience",
+    "experiencePack": "Touch Feature Experience Pack",
+    "terms": "TalexTouch Terms of Service",
+    "license": "TalexTouch Software License"
+  },
+  "settingLanguage": {
+    "groupTitle": "Language Settings",
+    "groupDesc": "Select your preferred language for the application.",
+    "followSystem": "Follow System Language",
+    "followSystemDesc": "Automatically match the system language setting.",
+    "chooseLanguage": "Choose Language",
+    "chooseLanguageDesc": "Manually select your preferred display language."
+  },
+  "settingStorage": {
+    "title": "Storage",
+    "description": "View app storage details"
+  },
+  "settingTools": {
+    "groupTitle": "Utilities",
+    "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
+    "usage": "Usage",
+    "usageDesc": "Guide you to use app when enter.",
+    "shortcutDesc": "Define shortcut for {shortcut}",
+    "autoPaste": "Auto paste",
+    "autoPasteDesc": "Paste what you copied in searchbar.",
+    "disabled": "Disabled",
+    "noLimit": "No limit",
+    "sec": "sec",
+    "min": "min",
+    "autoClear": "Auto clear",
+    "autoClearDesc": "Clear searchbar after box hidden.",
+    "autoHide": "Auto hide",
+    "autoHideDesc": "Hide searchbar when blur triggered."
+  },
+  "settingUser": {
+    "groupTitle": "Account",
+    "groupDesc": "Manage your account information and login status.",
+    "logout": "Logout",
+    "noAccount": "No Account",
+    "noAccountDesc": "Account access is currently unavailable.",
+    "login": "Login"
+  },
+  "themeStyle": {
+    "styles": "Styles",
+    "defaultTip": "Click to select.",
+    "micaTip": "Mica style may impact device performance.",
+    "filterTip": "This feature only supports Windows11.",
+    "personalized": "Personalized",
+    "personalizedDesc": "Personalized your app",
+    "colorStyle": "Color Style",
+    "colorStyleDesc": "Set color main style",
+    "lightStyle": "Light Style",
+    "darkStyle": "Dark Style",
+    "followSystem": "Follow System",
+    "homepageWallpaper": "Homepage Wallpaper",
+    "homepageWallpaperDesc": "Choose the source of your homepage background wallpaper. This selection takes effect immediately.",
+    "bing": "Bing",
+    "folder": "Folder",
+    "emphasis": "Emphasis",
+    "emphasisDesc": "Different emphasis for different people. Avoid using clear colors randomly.",
+    "coloring": "Coloring",
+    "coloringDesc": "As the main interface to emphasize the coloring",
+    "highContrast": "High Contrast",
+    "highContrastDesc": "Suitable for amblyopia and light sensitive contrast pattern",
+    "themeHelp": "Theme Help",
+    "themeHelpDesc": "Find help in the official Github Discussions"
+  },
+  "windowSection": {
+    "title": "Window Preference"
+  },
+  "base": {
+    "last_step": "Last Step",
+    "step": "Next",
+    "touchCaptcha": {
+      "title": "Captcha",
+      "instruction": "Rotate the slider to match the image",
+      "fail": "Verification failed"
+    }
+  },
+  "signView": {
+    "copyright": "All Rights Reserved"
+  },
+  "boxInput": {
+    "placeholder": "Everything in tuff."
+  },
+  "tagSection": {
+    "copiedText": "Copied Text",
+    "copiedImage": "Copied Image",
+    "copiedHtml": "Copied Html",
+    "command": "COMMAND"
+  },
+  "flatController": {
+    "useNative": "Use native window control instead"
+  },
+  "flatNavBar": {
+    "main": "MAIN",
+    "dashboard": "Dashboard",
+    "market": "Market",
+    "plugin": "Plugin",
+    "style": "Style",
+    "setting": "Setting"
+  },
+  "market": {
+    "title": "Plugin Market",
+    "subtitle": "Discover amazing plugins for your workflow",
+    "searchPlaceholder": "Search plugins...",
+    "sources": "sources",
+    "tags": {
+      "all": "All",
+      "feature": "Feature",
+      "ui": "UI",
+      "ux": "UX",
+      "enhancement": "Enhancement",
+      "tools": "Tools",
+      "productivity": "Productivity"
+    },
+    "empty": {
+      "title": "No plugins found",
+      "subtitle": "Try adjusting your search or browse different categories"
+    }
+  },
+  "plugin": {
+    "opening": "Opening...",
+    "openFolder": "Open Folder"
+  },
+  "appConfigure": {
+    "action": "Application action",
+    "launch": "Launch app",
+    "launchBtn": "Launch",
+    "openInExplorer": "Open in explorer",
+    "openBtn": "Open",
+    "uninstall": "Uninstall app",
+    "danger": "(danger)",
+    "uninstallBtn": "Uninstall",
+    "help": "Application Help",
+    "helpDesc": "Find help through search engine.",
+    "stats": "Application stats",
+    "name": "Name",
+    "type": "Type",
+    "value": "Value",
+    "keywords": "Keywords",
+    "spec": "Application specification (External)",
+    "version": "Version",
+    "size": "Size",
+    "dev": "Dev",
+    "ino": "Ino",
+    "mode": "Mode",
+    "nlink": "NLink",
+    "uid": "Uid",
+    "gid": "Gid",
+    "rdev": "RDev",
+    "blksize": "BlkSize",
+    "atimeMs": "AtimeMs",
+    "ctimeMs": "CtimeMs",
+    "birthTimeMs": "BirthTimeMs",
+    "confirm": "Sure to config and synchronize among devices?",
+    "save": "Save"
+  },
+  "applicationEmpty": {
+    "title": "Choose an application to configure.",
+    "description": "Unleash the power of app customization to tailor your digital space. Fine-tune settings to optimize workflow and seamlessly share configurations via a personal cloud. Explore diverse setups for inspiration and insights. Ready to create your perfect workspace? Select an app to begin."
+  },
+  "appList": {
+    "searchPlaceholder": "Type to search...",
+    "searchedOnDevice": "{count} searched on this device.",
+    "appsOnDevice": "{count} applications on this device.",
+    "order": {
+      "default": "Default Order",
+      "dicIn": "Dictionary In",
+      "dicDe": "Dictionary De",
+      "freq": "Number Frequent"
+    }
+  },
+  "versions": {
+    "electron": "Electron",
+    "chrome": "Chromium",
+    "node": "Node"
+  },
+  "agreement": {
+    "title": "Agreement",
+    "description": "Please review and accept the terms below to proceed.",
+    "decline": "Decline",
+    "accept": "Accept"
+  },
+  "terminal": {
+    "title": "TERMINAL"
+  },
+  "app": {
+    "title": "TalexTouch"
+  },
+  "router": {
+    "login": "Please login first!",
+    "permission": "You don't have permission!",
+    "pluginMarket": "Plugin Market",
+    "plugin": "Plugin",
+    "styles": "Styles",
+    "theme": "Theme",
+    "application": "Application",
+    "appSettings": "App Settings",
+    "storagable": "Storagable"
+  }
 }

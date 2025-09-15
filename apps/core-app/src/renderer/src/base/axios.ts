@@ -4,39 +4,39 @@ export function wrapperAxios(
   url = 'http://localhost:9981',
   data: CreateAxiosDefaults = { timeout: 6000 }
 ) {
-  // 封装完整的 axios 实例代码
+  // Encapsulate the complete axios instance code
   const axios = _axios.create({
     baseURL: url,
     ...data
   })
 
-  // 请求拦截器
+  // Request interceptor
   axios.interceptors.request.use(
     (config) => {
-      // 在发送请求之前做些什么
+      // Do something before sending the request
       return config
     },
     (error) => {
-      // 对请求错误做些什么
+      // Do something with request error
       return Promise.reject(error)
     }
   )
 
-  // 响应拦截器
+  // Response interceptor
   axios.interceptors.response.use(
     (response) => {
-      // 对响应数据做点什么
+      // Do something with response data
       // console.log( response )
 
       return response.data
     },
     (error) => {
-      // 对响应错误做点什么
+      // Do something with response error
       console.log(error)
 
       return {
         code: 500,
-        message: '服务器错误',
+        message: 'Server error',
         data: null,
         error
       } //Promise.reject(error)

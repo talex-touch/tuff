@@ -1,4 +1,5 @@
 <script setup lang="ts" name="BoxInput">
+import { useI18n } from 'vue-i18n'
 import { BoxMode } from '../../modules/box/adapter'
 
 interface Props {
@@ -22,6 +23,8 @@ const slots = useSlots()
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+const { t } = useI18n()
+
 const inputEl = ref<HTMLInputElement | null>(null)
 
 defineExpose({
@@ -41,7 +44,7 @@ const inputValue = computed({
 const placeholder = computed(() => {
   return props.boxOptions.mode === BoxMode.FEATURE
     ? (props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name)
-    : 'Everything in tuff.'
+    : t('boxInput.placeholder')
 })
 </script>
 
