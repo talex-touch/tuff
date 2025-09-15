@@ -1,5 +1,8 @@
 <script name="AppList" setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   list: any[]
@@ -120,7 +123,11 @@ function handleClick(item: any, ind: number) {
   <el-scrollbar>
     <TransitionGroup name="list" tag="ul" class="AppList">
       <div class="AppList-Toolbox">
-        <FlatInput v-model="search" placeholder="Type to search..." :fetch="search" />
+        <FlatInput
+          v-model="search"
+          :placeholder="t('appList.searchPlaceholder')"
+          :fetch="search"
+        />
 
         <span @click="handleOrderChange" class="order-way">
           <i v-if="orderWay === 0" class="i-ri-sort-desc" />
@@ -151,13 +158,13 @@ function handleClick(item: any, ind: number) {
       </li>
     </TransitionGroup>
     <div class="AppList-Info fake-background">
-      <span v-if="search">{{ _list!.length }} searched on this device.</span>
-      <span v-else>{{ _list!.length }} applications on this device.</span>
+      <span v-if="search">{{ t('appList.searchedOnDevice', { count: _list!.length }) }}</span>
+      <span v-else>{{ t('appList.appsOnDevice', { count: _list!.length }) }}</span>
       <span class="order">
-        <span v-if="orderWay === 0">Default Order</span>
-        <span v-if="orderWay === 1">Dictionary In</span>
-        <span v-if="orderWay === 2">Dictionary De</span>
-        <span v-if="orderWay === 3">Number Frequent</span>
+        <span v-if="orderWay === 0">{{ t('appList.order.default') }}</span>
+        <span v-if="orderWay === 1">{{ t('appList.order.dicIn') }}</span>
+        <span v-if="orderWay === 2">{{ t('appList.order.dicDe') }}</span>
+        <span v-if="orderWay === 3">{{ t('appList.order.freq') }}</span>
       </span>
     </div>
   </el-scrollbar>

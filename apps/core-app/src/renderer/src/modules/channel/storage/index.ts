@@ -91,5 +91,3 @@ export const storageManager = new StorageManager()
  * ```
  */
 export const appSetting = appSettings.data
-
-console.log(appSettings, appSetting)

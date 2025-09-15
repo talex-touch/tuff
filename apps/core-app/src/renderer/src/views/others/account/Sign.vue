@@ -20,8 +20,7 @@
       <span class="TouchSign-Copyright">
         <!--        generate a text copyright-->
         <span>©</span>
-        2022 - {{ new Date().getFullYear() }} <a href="https://tagzxia.com">TalexTouch</a> All
-        Rights Reserved.
+        2022 - {{ new Date().getFullYear() }} <a href="https://tagzxia.com">TalexTouch</a> {{ t('signView.copyright') }}
       </span>
     </div>
   </div>
@@ -43,11 +42,14 @@
  */
 
 import { onMounted, provide, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { sleep } from '@talex-touch/utils/common/utils'
 import AccountView from '~/views/others/account/AccountView.vue'
 // import AccountView from "~/views/others/account/SignSucceed.vue";
 import LoadingIcon from '@comp/icon/LoadingIcon.vue'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
+
+const { t } = useI18n()
 
 // Reactive references
 const content = ref()
@@ -91,7 +93,7 @@ async function step(func: any): Promise<void> {
     // Handle failed step
     wrapper.style.pointerEvents = 'all'
 
-    if (info.message) await forDialogMention('验证失败', info.message, '#error-warning')
+    if (info.message) await forDialogMention(t('sign.fail'), info.message, '#error-warning')
     else if (info.loading) return
   } else {
     // Handle successful step

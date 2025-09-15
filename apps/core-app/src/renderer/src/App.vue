@@ -8,6 +8,9 @@ import Beginner from '~/views/base/begin/Beginner.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import { isCoreBox } from '@talex-touch/utils/renderer'
 import AppEntrance from './AppEntrance.vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const packageJson = window.$nodeApi.getPackageJSON()
 
@@ -32,7 +35,7 @@ async function init(): Promise<void> {
   <AppEntrance :on-ready="init">
     <AppLayout>
       <template #title>
-        TalexTouch
+        {{ t('app.title') }}
         <span class="tag version fake-background">{{ packageJson.version }}</span>
       </template>
     </AppLayout>

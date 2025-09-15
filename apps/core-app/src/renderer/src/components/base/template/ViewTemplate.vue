@@ -46,10 +46,6 @@ const props = withDefaults(
 const route = useRoute()
 const router = useRouter()
 const subRouterMode = computed(() => route.matched?.length > props.len)
-
-watchEffect(() => {
-  console.log(route, route.matched)
-})
 </script>
 
 <style lang="scss" scoped>

@@ -99,7 +99,13 @@ class TouchChannel implements ITouchChannel {
 
     map.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
+        _replied: false,
         reply: (code: DataCode, data: any) => {
+          if ((handInData as any)._replied) {
+            console.warn(`[Channel] Attempted to reply twice for ${rawData.name}`)
+            return
+          }
+          
           const rData = this.__parse_sender(code, rawData, data, rawData.sync)
 
           delete rData.header.event
@@ -118,6 +124,8 @@ class TouchChannel implements ITouchChannel {
               finalData
             )
           } else e.returnValue = finalData
+          
+          ;(handInData as any)._replied = true
         },
         ...rawData
       }
@@ -126,7 +134,10 @@ class TouchChannel implements ITouchChannel {
 
       if (res && res instanceof Promise) return
 
-      handInData.reply(DataCode.SUCCESS, res)
+      // Only auto-reply if the handler hasn't already replied
+      if (!handInData._replied) {
+        handInData.reply(DataCode.SUCCESS, res)
+      }
     })
   }
 

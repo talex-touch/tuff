@@ -1,6 +1,9 @@
 <script setup lang="ts" name="TagSection">
+import { useI18n } from 'vue-i18n'
 import FileTag from './FileTag.vue'
 import { BoxMode, IBoxOptions } from '../../../modules/box/adapter'
+
+const { t } = useI18n()
 
 defineProps<{
   boxOptions: IBoxOptions
@@ -34,7 +37,7 @@ defineProps<{
 
     <!-- Command tag -->
     <template v-else-if="boxOptions.mode === BoxMode.COMMAND">
-      <span class="fake-background">COMMAND</span>
+      <span class="fake-background">{{ t('tagSection.command') }}</span>
     </template>
   </div>
 </template>

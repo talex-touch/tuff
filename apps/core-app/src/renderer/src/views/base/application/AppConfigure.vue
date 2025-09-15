@@ -1,10 +1,13 @@
 <script name="AppConfigure" setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { touchChannel } from '~/modules/channel/channel-core'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 // import cprocess from "child_process";
 // import fs from 'fs'
 // import path from 'path'
 // import { forTouchTip } from '~/modules/mention/dialog-mention'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   data: any
@@ -103,60 +106,81 @@ function handleHelp(): void {
     <div class="AppConfigure-Content">
       <el-scrollbar>
         <div class="AppConfigure-Content-Inner">
-          <t-group-block name="Application action" icon="auction">
-            <t-block-slot title="Launch app" icon="external-link">
-              <FlatButton @click="handleLaunch">Launch</FlatButton>
+          <t-group-block :name="t('appConfigure.action')" icon="auction">
+            <t-block-slot :title="t('appConfigure.launch')" icon="external-link">
+              <FlatButton @click="handleLaunch">{{ t('appConfigure.launchBtn') }}</FlatButton>
             </t-block-slot>
-            <t-block-slot title="Open in explorer" icon="folder-2">
-              <FlatButton @click="handleOpenExplorer">Open</FlatButton>
+            <t-block-slot :title="t('appConfigure.openInExplorer')" icon="folder-2">
+              <FlatButton @click="handleOpenExplorer">{{ t('appConfigure.openBtn') }}</FlatButton>
             </t-block-slot>
             <t-block-slot icon="delete-bin-2">
               <template #label>
-                <h3>Uninstall app <span color-red>(danger)</span></h3>
+                <h3>
+                  {{ t('appConfigure.uninstall') }}
+                  <span color-red>{{ t('appConfigure.danger') }}</span>
+                </h3>
               </template>
-              <FlatButton hover:bg-red @click="handleDelete">Uninstall</FlatButton>
+              <FlatButton hover:bg-red @click="handleDelete">{{
+                t('appConfigure.uninstallBtn')
+              }}</FlatButton>
             </t-block-slot>
             <t-block-switch
               guidance
-              title="Application Help"
-              description="Find help through search engine."
+              :title="t('appConfigure.help')"
+              :description="t('appConfigure.helpDesc')"
               icon="search-2"
               @click="handleHelp"
             />
           </t-group-block>
 
-          <t-group-block name="Application stats" icon="dashboard-horizontal">
-            <t-block-line title="Name">
+          <t-group-block :name="t('appConfigure.stats')" icon="dashboard-horizontal">
+            <t-block-line :title="t('appConfigure.name')">
               <template #description>
                 {{ data.names }}
               </template>
             </t-block-line>
-            <t-block-line title="Type" :description="data.type"></t-block-line>
-            <t-block-line title="Value" :description="data.value"></t-block-line>
-            <t-block-line title="Keywords">
+            <t-block-line :title="t('appConfigure.type')" :description="data.type"></t-block-line>
+            <t-block-line :title="t('appConfigure.value')" :description="data.value"></t-block-line>
+            <t-block-line :title="t('appConfigure.keywords')">
               <template #description>
                 {{ data.keyWords }}
               </template>
             </t-block-line>
           </t-group-block>
 
-          <t-group-block v-if="info" name="Application specification (External)" icon="apps">
-            <t-block-line title="Version">
+          <t-group-block
+            v-if="info"
+            :name="t('appConfigure.spec')"
+            icon="apps"
+          >
+            <t-block-line :title="t('appConfigure.version')">
               <template #description> 1 </template>
             </t-block-line>
-            <t-block-line title="Size" :description="formatSize(info.size)"></t-block-line>
-            <t-block-line title="Dev" :description="info.dev"></t-block-line>
-            <t-block-line title="Ino" :description="info.ino"></t-block-line>
-            <t-block-line title="Mode" :description="info.mode"></t-block-line>
-            <t-block-line title="NLink" :description="info.nlink"></t-block-line>
-            <t-block-line title="Uid" :description="info.uid"></t-block-line>
-            <t-block-line title="Gid" :description="info.gid"></t-block-line>
-            <t-block-line title="RDev" :description="info.rdev"></t-block-line>
-            <t-block-line title="BlkSize" :description="info.blksize"></t-block-line>
-            <t-block-line title="AtimeMs" :description="formatTime(info.atimeMs)"></t-block-line>
-            <t-block-line title="CtimeMs" :description="formatTime(info.ctimeMs)"></t-block-line>
             <t-block-line
-              title="BirthTimeMs"
+              :title="t('appConfigure.size')"
+              :description="formatSize(info.size)"
+            ></t-block-line>
+            <t-block-line :title="t('appConfigure.dev')" :description="info.dev"></t-block-line>
+            <t-block-line :title="t('appConfigure.ino')" :description="info.ino"></t-block-line>
+            <t-block-line :title="t('appConfigure.mode')" :description="info.mode"></t-block-line>
+            <t-block-line :title="t('appConfigure.nlink')" :description="info.nlink"></t-block-line>
+            <t-block-line :title="t('appConfigure.uid')" :description="info.uid"></t-block-line>
+            <t-block-line :title="t('appConfigure.gid')" :description="info.gid"></t-block-line>
+            <t-block-line :title="t('appConfigure.rdev')" :description="info.rdev"></t-block-line>
+            <t-block-line
+              :title="t('appConfigure.blksize')"
+              :description="info.blksize"
+            ></t-block-line>
+            <t-block-line
+              :title="t('appConfigure.atimeMs')"
+              :description="formatTime(info.atimeMs)"
+            ></t-block-line>
+            <t-block-line
+              :title="t('appConfigure.ctimeMs')"
+              :description="formatTime(info.ctimeMs)"
+            ></t-block-line>
+            <t-block-line
+              :title="t('appConfigure.birthTimeMs')"
               :description="formatTime(info.birthtimeMs)"
             ></t-block-line>
           </t-group-block>
@@ -164,8 +188,8 @@ function handleHelp(): void {
       </el-scrollbar>
     </div>
     <div class="AppConfigure-Ends">
-      Sure to config and synchronize among devices?
-      <FlatButton> Save </FlatButton>
+      {{ t('appConfigure.confirm') }}
+      <FlatButton> {{ t('appConfigure.save') }} </FlatButton>
     </div>
   </div>
 </template>
