@@ -26,7 +26,7 @@ import { touchChannel } from '../channel-core'
 //   reply("accepted");
 // });
 
-export interface IPluginManager {
+export interface IPluginModule {
   // Enable the plugin with the given name.
   enablePlugin: (name: string) => Promise<any>
 
@@ -49,7 +49,7 @@ export interface IPluginManager {
   exportPlugin: (name: string, manifest: string, files: string) => any
 }
 
-class PluginManager {
+class PluginModule {
   async enablePlugin(name: string): Promise<any> {
     return touchChannel.send('enable-plugin', { name })
   }
@@ -85,4 +85,4 @@ class PluginManager {
   }
 }
 
-export const pluginManager: IPluginManager = new PluginManager()
+export const pluginModule: IPluginModule = new PluginModule()

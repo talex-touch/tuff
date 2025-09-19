@@ -3,10 +3,10 @@ import './core/precore'
 import { app, protocol } from 'electron'
 import { storageModule } from './modules/storage'
 import { commonChannelModule } from './channel/common'
-// import { PluginManagerModule } from './modules/plugin-module/plugin-manager'
+import { pluginModule } from './modules/plugin/plugin-module'
 // import PermissionCenter from './modules/permission-center'
 // import ServiceCenter from './service/service-center'
-// import PluginLogService from './service/plugin-log.service'
+import { pluginLogModule } from './service/plugin-log.service'
 // import CoreBox from './modules/box-tool/core-box/index'
 
 // import addonOpener from './modules/addon-opener'
@@ -43,10 +43,10 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(shortcutModule)
   await app.moduleManager.loadModule(extensionLoaderModule)
   await app.moduleManager.loadModule(commonChannelModule)
-  // await app.moduleManager.loadModule(PluginManagerModule)
+  await app.moduleManager.loadModule(pluginModule)
   // await app.moduleManager.loadModule(PermissionCenter)
   // await app.moduleManager.loadModule(ServiceCenter)
-  // await app.moduleManager.loadModule(PluginLogService)
+  await app.moduleManager.loadModule(pluginLogModule)
 
   // await app.moduleManager.loadModule(CoreBox)
   // await app.moduleManager.loadModule(TrayHolder)

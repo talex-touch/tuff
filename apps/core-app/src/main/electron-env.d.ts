@@ -29,6 +29,7 @@ declare global {
   var logger: Logger
   var errLogger: Logger
   var $app: TouchApp
+  var $pkg: typeof import('../../../package.json')
 }
 
 // add console types

@@ -58,7 +58,7 @@ export interface IPluginBaseInfo {
 export interface IPluginDev {
   enable: boolean
   address: string
-  source?: boolean
+  source?: string // 修改此处，允许 source 为字符串或 undefined
 }
 
 export interface ITouchPlugin extends IPluginBaseInfo {
@@ -228,13 +228,26 @@ export enum PluginSourceType {
   FILE_SYSTEM = 'file_system',
 }
 
+import { FSWatcher } from 'chokidar'
+
 export interface IPluginManager {
   plugins: Map<string, ITouchPlugin>
   active: string | null
+  reloadingPlugins: Set<string>
+  enabledPlugins: Set<string>
+  dbUtils: any // Temporarily any, as DbUtils is internal to core-app
+  initialLoadPromises: Promise<boolean>[]
   pluginPath: string
+  watcher: FSWatcher | null
+  devWatcher: any // Temporarily any, as DevPluginWatcher is internal to core-app
 
+  getPluginList(): Array<object>
   setActivePlugin(pluginName: string): boolean
-
+  hasPlugin(name: string): boolean
+  getPluginByName(name: string): ITouchPlugin | undefined
+  reloadPlugin(pluginName: string): Promise<void>
+  persistEnabledPlugins(): Promise<void>
+  listPlugins(): Promise<Array<string>>
   loadPlugin(pluginName: string): Promise<boolean>
   unloadPlugin(pluginName: string): Promise<boolean>
 }
