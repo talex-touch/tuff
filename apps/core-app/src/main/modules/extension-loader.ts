@@ -1,14 +1,25 @@
 import fse from 'fs-extra'
 import path from 'path'
 import { session } from 'electron'
-import { TalexTouch } from '../types'
+import { BaseModule } from './abstract-base-module'
+import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { TalexEvents } from '../core/eventbus/touch-event'
 
-export default {
-  name: Symbol('ExtensionLoader'),
-  filePath: 'extensions',
-  extensions: new Array<string>(),
-  init(app: TalexTouch.TouchApp) {
-    const extensionPath = path.join(app.rootPath, 'modules', 'extensions')
+export class ExtensionLoaderModule extends BaseModule {
+  static key: symbol = Symbol.for('ExtensionLoader')
+  name: ModuleKey = ExtensionLoaderModule.key
+
+  private extensions: string[] = []
+
+  constructor() {
+    super(ExtensionLoaderModule.key, {
+      create: true,
+      dirName: 'extensions'
+    })
+  }
+
+  async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
+    const extensionPath = file.dirPath!
     const extensions = fse.readdirSync(extensionPath)
 
     extensions.forEach((extension) => {
@@ -17,6 +28,14 @@ export default {
       this.extensions.push(extension)
       session.defaultSession.loadExtension(path.join(extensionPath, extension))
     })
-  },
-  destroy() {}
+  }
+
+  onDestroy(): MaybePromise<void> {
+    // TODO: Implement extension unloading if necessary
+    console.log('[ExtensionLoader] ExtensionLoaderModule destroyed')
+  }
 }
+
+const extensionLoaderModule = new ExtensionLoaderModule()
+
+export { extensionLoaderModule }

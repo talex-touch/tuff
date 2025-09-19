@@ -1,16 +1,17 @@
-import { TouchApp, TouchWindow, genTouchApp } from '../../../core/touch-core'
 import { BoxWindowOption } from '../../../config/default'
 import { app, screen, WebContentsView } from 'electron'
 import path from 'path'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
-import { getClipboardManager } from '../../clipboard'
-import { getConfig } from '../../../core/storage'
+import { getConfig } from '../../storage'
 import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { coreBoxManager } from './manager'
 import { TouchPlugin } from '../../../plugins'
 import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
+import { TouchWindow } from '../../../core/touch-window'
+import { TouchApp } from '../../../core/touch-app'
+import { genTouchApp } from '../../../core'
 
 const windowAnimation = useWindowAnimation()
 

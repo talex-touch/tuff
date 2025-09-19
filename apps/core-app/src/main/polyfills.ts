@@ -4,6 +4,9 @@ import path from 'node:path'
 import { app } from 'electron'
 import log4js from 'log4js'
 import { fileURLToPath } from 'url'
+import packageJson from '../../../../../package.json'
+
+globalThis.$pkg = packageJson
 
 globalThis.__filename = fileURLToPath(import.meta.url)
 globalThis.__dirname = path.dirname(__filename)
