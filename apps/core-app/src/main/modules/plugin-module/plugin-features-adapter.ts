@@ -14,12 +14,12 @@ import {
   TuffSourceType
 } from '../box-tool/search-engine/types'
 import { IProviderActivate } from '@talex-touch/utils'
-import { genPluginModule } from '../plugin/plugin-module'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../box-tool/search-engine/search-core'
 import { genTouchChannel } from '../../core/channel-core'
 import { TouchPlugin } from '../plugin/plugin'
 import { PluginViewLoader } from './plugin-view-loader'
+import { pluginModule } from '../plugin/plugin-module'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
 type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
@@ -106,8 +106,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         return null
       }
 
-      const pluginModule = genPluginModule()
-      const plugin = pluginModule.plugins.get(pluginName) as TouchPlugin | undefined
+      const plugin = pluginModule.pluginManager!.plugins.get(pluginName) as TouchPlugin | undefined
 
       if (plugin?.pluginLifecycle?.onItemAction) {
         console.debug(
@@ -141,8 +140,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       return null
     }
 
-    const pluginModule = genPluginModule()
-    const plugin = pluginModule.plugins.get(pluginName)
+    const plugin = pluginModule.pluginManager!.plugins.get(pluginName)
     if (!plugin || !this.isPluginActive(plugin)) {
       console.error(
         `[PluginFeaturesAdapter] Plugin not found or not active: ${pluginName} (status: ${plugin?.status})`
@@ -264,8 +262,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       const activeFeatureActivation = activationState.find((a) => a.id === this.id)
       if (activeFeatureActivation?.meta?.pluginName) {
         const { pluginName, featureId } = activeFeatureActivation.meta
-        const pluginModule = genPluginModule()
-        const plugin = pluginModule.plugins.get(pluginName) as TouchPlugin
+        const plugin = pluginModule.pluginManager!.plugins.get(pluginName) as TouchPlugin
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
@@ -305,14 +302,10 @@ export class PluginFeaturesAdapter implements ISearchProvider {
     // --- Global Search Mode ---
     // If no feature is active, perform a global search across all plugin features.
     console.debug(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
-    const pluginModule = genPluginModule()
-    if (!pluginModule) {
-      return TuffFactory.createSearchResult(query).build()
-    }
 
     const queryText = query.text.trim()
     const matchedItems: TuffItem[] = []
-    const plugins = pluginModule.plugins.values()
+    const plugins = pluginModule.pluginManager!.plugins.values()
 
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {

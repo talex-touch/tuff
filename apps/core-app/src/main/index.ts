@@ -9,7 +9,7 @@ import { pluginModule } from './modules/plugin/plugin-module'
 import { pluginLogModule } from './service/plugin-log.service'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 
-// import addonOpener from './modules/addon-opener'
+import {addonOpenerModule} from './modules/addon-opener'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { trayHolderModule } from './modules/tray-holder'
@@ -50,7 +50,7 @@ app.whenReady().then(async () => {
 
   await app.moduleManager.loadModule(coreBoxModule)
   await app.moduleManager.loadModule(trayHolderModule)
-  // await app.moduleManager.loadModule(addonOpener)
+  await app.moduleManager.loadModule(addonOpenerModule)
   // // await app.moduleManager.loadModule(DropManager)
   // await app.moduleManager.loadModule(Clipboard)
   // await app.moduleManager.loadModule(FileSystemWatcher)
