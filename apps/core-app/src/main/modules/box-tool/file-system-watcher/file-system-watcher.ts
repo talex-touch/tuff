@@ -1,4 +1,4 @@
-import type { TalexTouch } from '@talex-touch/utils'
+import type { ModuleKey } from '@talex-touch/utils'
 import * as chokidar from 'chokidar'
 import fs from 'fs/promises'
 import { dialog } from 'electron'
@@ -10,7 +10,8 @@ import {
   FileUnlinkedEvent,
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent
-} from '../../core/eventbus/touch-event'
+} from '../../../core/eventbus/touch-event'
+import { BaseModule } from '../../abstract-base-module'
 
 const isMac = process.platform === 'darwin'
 
@@ -19,25 +20,16 @@ const isMac = process.platform === 'darwin'
  * updates, and uninstalls, and emits events on the touchEventBus.
  * It manages multiple chokidar instances to handle different watch depths.
  */
-class FileSystemWatcher implements TalexTouch.IModule {
-  private static _instance: FileSystemWatcher
-
-  name: symbol = Symbol('FileSystemWatcher')
+export class FileSystemWatcherModule extends BaseModule {
+  static key: symbol = Symbol.for('FileSystemWatcher')
+  name: ModuleKey = FileSystemWatcherModule.key
   private watchers: Map<number, chokidar.FSWatcher> = new Map()
   private watchedPaths: Set<string> = new Set()
 
   constructor() {
-    if (FileSystemWatcher._instance) {
-      throw new Error('[FileSystemWatcher] Singleton class cannot be instantiated more than once.')
-    }
-    FileSystemWatcher._instance = this
-  }
-
-  static getInstance(): FileSystemWatcher {
-    if (!this._instance) {
-      this._instance = new FileSystemWatcher()
-    }
-    return this._instance
+    super(FileSystemWatcherModule.key, {
+      create: false
+    })
   }
 
   private async hasAccess(p: string): Promise<boolean> {
@@ -158,15 +150,13 @@ class FileSystemWatcher implements TalexTouch.IModule {
     console.log(`[FileSystemWatcher] Now watching path: ${p} with depth: ${depth}`)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async init(_app: TalexTouch.TouchApp, _manager: TalexTouch.IModuleManager): Promise<void> {
+  async onInit(): Promise<void> {
     console.debug(
       '[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.'
     )
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  destroy(_app: TalexTouch.TouchApp, _manager: TalexTouch.IModuleManager): void {
+  onDestroy(): void {
     console.log('[FileSystemWatcher] Destroying...')
     this.watchers.forEach((watcher, depth) => {
       watcher.close()
@@ -177,4 +167,6 @@ class FileSystemWatcher implements TalexTouch.IModule {
   }
 }
 
-export default FileSystemWatcher.getInstance()
+const fileSystemWatcherModule = new FileSystemWatcherModule()
+
+export { fileSystemWatcherModule }
