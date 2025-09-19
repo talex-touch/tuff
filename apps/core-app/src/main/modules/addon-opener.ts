@@ -1,7 +1,7 @@
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { APP_SCHEMA } from '../config/default'
 import { TalexTouch } from '../types'
-import { PluginResolver, ResolverStatus } from '../plugins/plugin-resolver'
+import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
 import { genTouchChannel } from '../core/channel-core'
 import path from 'path'
 import fs from 'fs'

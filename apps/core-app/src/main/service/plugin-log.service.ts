@@ -1,28 +1,22 @@
 import { TalexTouch } from '../types'
 import { touchEventBus, TalexEvents, PluginLogAppendEvent } from '../core/eventbus/touch-event'
 import { WebContents, shell } from 'electron'
-import { genTouchChannel } from '../core/channel-core'
 import {
   ITouchChannel,
   StandardChannelData,
   ChannelType,
   DataCode
 } from '@talex-touch/utils/channel'
-import { genPluginManager } from '../plugins'
 import fs from 'fs'
 import path from 'path'
+import { BaseModule } from '../modules/abstract-base-module'
+import { ModuleKey } from '@talex-touch/utils'
 
-class PluginLogService {
-  private static instance: PluginLogService
-
+export class PluginLogModule extends BaseModule {
   private subscriptions: Map<string, Set<WebContents>> = new Map()
 
-  public static getInstance(): PluginLogService {
-    if (!PluginLogService.instance) {
-      PluginLogService.instance = new PluginLogService()
-    }
-    return PluginLogService.instance
-  }
+  static key: symbol = Symbol.for('PluginLog')
+  name: ModuleKey = PluginLogModule.key
 
   public listenToLogEvents(): void {
     touchEventBus.on(TalexEvents.PLUGIN_LOG_APPEND, (event) => {
@@ -37,7 +31,6 @@ class PluginLogService {
             // TODO: Format log before sending
             subscriber.send('plugin-log-stream', log)
           } else {
-            // Clean up destroyed subscribers
             subscribers.delete(subscriber)
           }
         })
@@ -72,14 +65,6 @@ class PluginLogService {
 
     channel.regChannel(
       ChannelType.MAIN,
-      'plugin-log:get-history',
-      // This channel is now deprecated and kept for compatibility.
-      // The new logic uses get-log-sessions and open-log-file.
-      () => {}
-    )
-
-    channel.regChannel(
-      ChannelType.MAIN,
       'plugin-log:get-sessions',
       ({ data, reply }: StandardChannelData) => {
         const pluginName = data.pluginName
@@ -87,8 +72,8 @@ class PluginLogService {
 
         console.info(`[PluginLogService] Getting log sessions for plugin: ${pluginName}`)
 
-        const pluginManager = genPluginManager()
-        const plugin = pluginManager.plugins.get(pluginName)
+        const pluginModule = genPluginModule()
+        const plugin = pluginModule.plugins.get(pluginName)
         if (!plugin) {
           console.warn(`[PluginLogService] Plugin not found: ${pluginName}`)
           return reply(DataCode.ERROR, { error: 'Plugin not found' })
@@ -110,10 +95,7 @@ class PluginLogService {
           )
           return reply(DataCode.SUCCESS, sessionFolders)
         } catch (error: any) {
-          console.error(
-            `[PluginLogService] Error reading log directory for ${pluginName}:`,
-            error
-          )
+          console.error(`[PluginLogService] Error reading log directory for ${pluginName}:`, error)
           return reply(DataCode.ERROR, { error: error.message })
         }
       }
@@ -131,8 +113,8 @@ class PluginLogService {
           `[PluginLogService] Opening log file for plugin: ${pluginName}, session: ${sessionFolder}`
         )
 
-        const pluginManager = genPluginManager()
-        const plugin = pluginManager.plugins.get(pluginName)
+        const pluginModule = genPluginModule()
+        const plugin = pluginModule.plugins.get(pluginName)
         if (!plugin) {
           console.warn(`[PluginLogService] Plugin not found: ${pluginName}`)
           return { error: 'Plugin not found' }
@@ -164,8 +146,8 @@ class PluginLogService {
 
         console.debug(`[PluginLogService] Getting log buffer for plugin: ${pluginName}`)
 
-        const pluginManager = genPluginManager()
-        const plugin = pluginManager.plugins.get(pluginName)
+        const pluginModule = genPluginModule()
+        const plugin = pluginModule.plugins.get(pluginName)
         if (!plugin) {
           console.warn(`[PluginLogService] Plugin not found: ${pluginName}`)
           return reply(DataCode.ERROR, { error: 'Plugin not found' })
@@ -204,24 +186,29 @@ class PluginLogService {
       if (subscribers.size === 0) {
         this.subscriptions.delete(pluginName)
       }
-      console.log(`[PluginLogService] WebContents ${webContents.id} unsubscribed from ${pluginName}`)
+      console.log(
+        `[PluginLogService] WebContents ${webContents.id} unsubscribed from ${pluginName}`
+      )
     }
   }
 
+  constructor() {
+    super(PluginLogModule.key, {
+      create: true,
+      dirName: 'plugin-logger'
+    })
+  }
+
+  async onInit(): Promise<void> {
+    this.listenToLogEvents()
+    this.setupIpcHandlers($app.channel)
+  }
+
+  async onDestroy(): Promise<void> {
+    console.log(`[PluginLogService] Stop to accept log sessions.`)
+  }
 }
 
-export default {
-  name: Symbol('PluginLogService'),
-  init: (app) => {
-    const service = PluginLogService.getInstance()
-    const channel = genTouchChannel(app)
+const pluginLogModule = new PluginLogModule()
 
-    service.listenToLogEvents()
-    service.setupIpcHandlers(channel)
-
-    console.log('[PluginLogService] Initialized and ready.')
-  },
-  destroy: () => {
-    // Clean up logic if needed
-  }
-} as TalexTouch.IModule
+export { pluginLogModule }

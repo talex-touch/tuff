@@ -2,7 +2,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { coreBoxManager } from './manager'
 import searchEngineCore from '../search-engine/search-core'
 import { TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
-import { genPluginManager } from '../../../plugins'
+import { genPluginModule } from '../../plugin/plugin-module'
 import { TouchApp } from '../../../core/touch-app'
 import { genTouchApp } from '../../../core'
 
@@ -111,10 +111,10 @@ export class IpcManager {
         const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
         const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
 
-        const pluginManager = genPluginManager()
+        const pluginModule = genPluginModule()
         const pluginDetails = pluginIdsToFetch
           .map((id) => {
-            const plugin = pluginManager.plugins.get(id)
+            const plugin = pluginModule.plugins.get(id)
             if (!plugin) return null
             return {
               id: plugin.name, // The plugin's name is its unique ID

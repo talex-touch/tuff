@@ -12,25 +12,23 @@ import {
 } from '@talex-touch/utils/plugin'
 import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
-import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
-import { genTouchChannel } from '../core/channel-core'
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
-import { getCoreBoxWindow } from '../modules/box-tool/core-box'
 import { createClipboardManager } from '@talex-touch/utils/plugin'
 import { app, clipboard, dialog, shell } from 'electron'
 import axios from 'axios'
-import { CoreBoxManager } from '../modules/box-tool/core-box/manager' // Restore import
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
 import { PluginIcon } from './plugin-icon'
-import { PluginViewLoader } from '../modules/plugin-module/plugin-view-loader'
-import { getJs, getStyles } from '../utils/plugin-injection'
-import pkg from '../../../../../package.json'
+import { PluginViewLoader } from '../../modules/plugin-module/plugin-view-loader'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
-import { TouchWindow } from '../core/touch-window'
-import { genTouchApp } from '../core'
-import { storageModule } from '../modules/storage'
+import { TouchWindow } from '../../core/touch-window'
+import { genTouchChannel } from '../../core/channel-core'
+import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { CoreBoxManager } from '../box-tool/core-box/manager'
+import { storageModule } from '../storage'
+import { getCoreBoxWindow } from '../box-tool/core-box'
+import { getJs, getStyles } from '../../utils/plugin-injection'
 
 const disallowedArrays = [
   '官方',
@@ -563,7 +561,7 @@ export class TouchPlugin implements ITouchPlugin {
     const indexPath = this.__index__()
     const preload = this.__preload__()
 
-    const app = genTouchApp()
+    const app = $app
 
     const _path = {
       relative: path.relative(app.rootPath, this.pluginPath),
@@ -585,7 +583,7 @@ export class TouchPlugin implements ITouchPlugin {
         webpreferences: 'contextIsolation=false',
         // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: 'false',
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${pkg.version} (Plugins,like ${this.name})`
+        useragent: `${mainWin.webContents.userAgent} TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
         // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
