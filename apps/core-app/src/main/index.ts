@@ -7,12 +7,12 @@ import { pluginModule } from './modules/plugin/plugin-module'
 // import PermissionCenter from './modules/permission-center'
 // import ServiceCenter from './service/service-center'
 import { pluginLogModule } from './service/plugin-log.service'
-import { coreBoxModule} from './modules/box-tool/core-box/index'
+import { coreBoxModule } from './modules/box-tool/core-box/index'
 
 // import addonOpener from './modules/addon-opener'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
-// import TrayHolder from './modules/tray-holder'
+import { trayHolderModule } from './modules/tray-holder'
 // import Clipboard from './modules/clipboard'
 import { databaseModule } from './modules/database'
 // import FileSystemWatcher from './modules/file-system-watcher'
@@ -49,7 +49,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(pluginLogModule)
 
   await app.moduleManager.loadModule(coreBoxModule)
-  // await app.moduleManager.loadModule(TrayHolder)
+  await app.moduleManager.loadModule(trayHolderModule)
   // await app.moduleManager.loadModule(addonOpener)
   // // await app.moduleManager.loadModule(DropManager)
   // await app.moduleManager.loadModule(Clipboard)
