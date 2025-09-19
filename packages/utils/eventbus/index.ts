@@ -71,13 +71,6 @@ export interface ITouchEventBus<E> {
   offAll(event: E): boolean;
 
   /**
-   * UnSubscribe touch-app events all matched (any kind of events extends from TouchEvent)
-   * @param event EventName (extends from TouchEvent)
-   * @returns true if the event was added, otherwise false
-   */
-  offAll(event: E): boolean;
-
-  /**
    * Emit touch-app events (any kind of events extends from TouchEvent)
    * @param event EventName (extends from TouchEvent)
    * @param data Event data (extends from TouchEvent)

@@ -4,13 +4,27 @@ import path from 'path'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import * as schema from '../../db/schema'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
+import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { TalexEvents } from '../../core/eventbus/touch-event'
+import { BaseModule } from '../abstract-base-module'
 
-export class DatabaseManager {
+export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
   private client: Client | null = null
 
-  public async init(modulePath: string): Promise<void> {
-    const dbPath = path.join(modulePath, 'database.db')
+  static key: symbol = Symbol.for('Database')
+  name: ModuleKey = DatabaseModule.key
+
+  constructor() {
+    super(DatabaseModule.key, {
+      create: true,
+      dirName: 'database'
+    })
+  }
+
+  async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
+    const { dirPath } = file
+    const dbPath = path.join(dirPath!, 'database.db')
     this.client = createClient({ url: `file:${dbPath}` })
 
     this.db = drizzle(this.client, { schema })
@@ -28,32 +42,20 @@ export class DatabaseManager {
     }
   }
 
+  onDestroy(): MaybePromise<void> {
+    this.client?.close()
+    this.db = null
+    console.log('[Database] DatabaseManager destroyed')
+  }
+
   public getDb(): LibSQLDatabase<typeof schema> {
     if (!this.db) {
       throw new Error('Database not initialized. Call init() first.')
     }
     return this.db
   }
-
-  public destroy(): void {
-    this.client?.close()
-    this.db = null
-    console.log('[Database] DatabaseManager destroyed')
-  }
 }
 
-export const databaseManager = new DatabaseManager()
+const databaseModule = new DatabaseModule()
 
-export default {
-  name: Symbol('Database'),
-  filePath: 'database',
-  async init(): Promise<void> {
-    const modulePath = this['modulePath']!
-    await databaseManager.init(modulePath)
-
-    console.log('[Database] Database initialized at ' + modulePath)
-  },
-  destroy(): void {
-    databaseManager.destroy()
-  }
-}
+export { databaseModule }

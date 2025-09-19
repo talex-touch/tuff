@@ -1,18 +1,15 @@
 import { clipboard } from 'electron'
-// import { touchChannel } from '../core/bridge/touch-channel'
-// import { IClipboardItem } from '@talex-touch/utils/types/clipboard'
 import { clipboardHistory } from '../db/schema'
 import { desc, gt, sql, eq } from 'drizzle-orm'
-// import { pluginManager } from './plugin-manager/plugin-manager'
 import * as macWindows from 'mac-windows'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from '../db/schema'
-import { DataCode } from '@talex-touch/utils'
-import { databaseManager } from './database'
+import { DataCode, MaybePromise, ModuleKey } from '@talex-touch/utils'
 import { genTouchChannel } from '../core/channel-core'
 import { windowManager } from './box-tool/core-box/window'
-// import { genPluginManager } from '../plugins'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { databaseModule } from './database'
+import { BaseModule } from './abstract-base-module'
 
 export interface IClipboardItem {
   id?: number
@@ -79,21 +76,23 @@ class ClipboardHelper {
     this.lastText = currentText
     return true
   }
-
 }
 
-export class ClipboardManager {
+export class ClipboardModule extends BaseModule {
   private memoryCache: IClipboardItem[] = []
   private intervalId: NodeJS.Timeout | null = null
   private isDestroyed = false
-  private clipboardHelper: ClipboardHelper
-  private db: LibSQLDatabase<typeof schema>
+  private clipboardHelper?: ClipboardHelper
+  private db?: LibSQLDatabase<typeof schema>
+
+  static key: symbol = Symbol.for('Clipboard')
+  name: ModuleKey = ClipboardModule.key
 
   constructor() {
-    this.db = databaseManager.getDb()
-    this.clipboardHelper = new ClipboardHelper()
-    this.startClipboardMonitoring()
-    this.loadInitialCache()
+    super(ClipboardModule.key, {
+      create: true,
+      dirName: 'clipboard'
+    })
   }
 
   private async loadInitialCache() {
@@ -216,26 +215,18 @@ export class ClipboardManager {
       }
     )
 
-    touchChannel.regChannel(
-      ChannelType.MAIN,
-      'clipboard:set-favorite',
-      async ({ data, reply }) => {
-        const { id, isFavorite } = data
-        await this.db.update(clipboardHistory).set({ isFavorite }).where(eq(clipboardHistory.id, id))
-        reply(DataCode.SUCCESS, null)
-      }
-    )
+    touchChannel.regChannel(ChannelType.MAIN, 'clipboard:set-favorite', async ({ data, reply }) => {
+      const { id, isFavorite } = data
+      await this.db.update(clipboardHistory).set({ isFavorite }).where(eq(clipboardHistory.id, id))
+      reply(DataCode.SUCCESS, null)
+    })
 
-    touchChannel.regChannel(
-      ChannelType.MAIN,
-      'clipboard:delete-item',
-      async ({ data, reply }) => {
-        const { id } = data
-        await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
-        this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
-        reply(DataCode.SUCCESS, null)
-      }
-    )
+    touchChannel.regChannel(ChannelType.MAIN, 'clipboard:delete-item', async ({ data, reply }) => {
+      const { id } = data
+      await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
+      this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
+      reply(DataCode.SUCCESS, null)
+    })
 
     touchChannel.regChannel(ChannelType.MAIN, 'clipboard:clear-history', async ({ reply }) => {
       const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
@@ -252,30 +243,19 @@ export class ClipboardManager {
       this.intervalId = null
     }
   }
-}
 
-let clipboardManager: ClipboardManager | null
+  onInit(): MaybePromise<void> {
+    this.db = databaseModule.getDb()
+    this.clipboardHelper = new ClipboardHelper()
+    this.startClipboardMonitoring()
+    this.loadInitialCache()
+  }
 
-function initClipboardManager() {
-  if (!clipboardManager) {
-    clipboardManager = new ClipboardManager()
-    console.log('[Clipboard] ClipboardManager initialized.')
+  onDestroy(): MaybePromise<void> {
+    this?.destroy()
   }
 }
 
-export default {
-  name: Symbol('Clipboard'),
-  filePath: 'clipboard',
-  async init() {
-    initClipboardManager()
-  },
-  destroy() {
-    clipboardManager?.destroy()
-    clipboardManager = null
-    console.log('[Clipboard] ClipboardManager destroyed.')
-  }
-}
+const clipboardModule = new ClipboardModule()
 
-export function getClipboardManager(): ClipboardManager | null {
-  return clipboardManager
-}
+export { clipboardModule }
