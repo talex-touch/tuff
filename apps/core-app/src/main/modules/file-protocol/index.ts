@@ -1,10 +1,19 @@
-import { TalexTouch } from '../../types'
 import { net, session } from 'electron'
 import url from 'url'
+import { BaseModule } from '../abstract-base-module'
+import { MaybePromise, ModuleKey } from '@talex-touch/utils'
 
-const FileProtocolModule: TalexTouch.IModule = {
-  name: Symbol('FileProtocolModule'),
-  init: () => {
+class FileProtocolModule extends BaseModule {
+  static key: symbol = Symbol.for('FileProtocolModule')
+  name: ModuleKey = FileProtocolModule.key
+
+  constructor() {
+    super(FileProtocolModule.key, {
+      create: false
+    })
+  }
+
+  onInit(): MaybePromise<void> {
     const ses = session.defaultSession
 
     ses.protocol.handle('tfile', (request) => {
@@ -14,10 +23,13 @@ const FileProtocolModule: TalexTouch.IModule = {
       console.debug('tfile resolved path:', fileUrl)
       return net.fetch(fileUrl)
     })
-  },
-  destroy: () => {
+  }
+
+  onDestroy(): MaybePromise<void> {
     session.defaultSession.protocol.unhandle('tfile')
   }
 }
 
-export default FileProtocolModule
+const fileProtocolModule = new FileProtocolModule()
+
+export { fileProtocolModule }
