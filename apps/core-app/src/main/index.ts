@@ -9,11 +9,11 @@ import { pluginModule } from './modules/plugin/plugin-module'
 import { pluginLogModule } from './service/plugin-log.service'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 
-import {addonOpenerModule} from './modules/addon-opener'
+import { addonOpenerModule } from './modules/addon-opener'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { trayHolderModule } from './modules/tray-holder'
-// import Clipboard from './modules/clipboard'
+import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 // import FileSystemWatcher from './modules/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(trayHolderModule)
   await app.moduleManager.loadModule(addonOpenerModule)
   // // await app.moduleManager.loadModule(DropManager)
-  // await app.moduleManager.loadModule(Clipboard)
+  await app.moduleManager.loadModule(clipboardModule)
   // await app.moduleManager.loadModule(FileSystemWatcher)
   // await app.moduleManager.loadModule(FileProtocolModule)
   // await app.moduleManager.loadModule(TerminalManager)
