@@ -7,7 +7,7 @@ import { pluginModule } from './modules/plugin/plugin-module'
 // import PermissionCenter from './modules/permission-center'
 // import ServiceCenter from './service/service-center'
 import { pluginLogModule } from './service/plugin-log.service'
-// import CoreBox from './modules/box-tool/core-box/index'
+import { coreBoxModule} from './modules/box-tool/core-box/index'
 
 // import addonOpener from './modules/addon-opener'
 // import DropManager from './modules/drop-manager'
@@ -48,7 +48,7 @@ app.whenReady().then(async () => {
   // await app.moduleManager.loadModule(ServiceCenter)
   await app.moduleManager.loadModule(pluginLogModule)
 
-  // await app.moduleManager.loadModule(CoreBox)
+  await app.moduleManager.loadModule(coreBoxModule)
   // await app.moduleManager.loadModule(TrayHolder)
   // await app.moduleManager.loadModule(addonOpener)
   // // await app.moduleManager.loadModule(DropManager)
