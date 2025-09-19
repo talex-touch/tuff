@@ -1,20 +1,25 @@
 import { coreBoxManager } from './manager'
 import SearchEngineCore from '../search-engine/search-core'
 import { windowManager } from './window'
-import { genTouchApp } from '../../../core'
 import { shortcutModule } from '../../global-shortcon'
+import { BaseModule } from '../../abstract-base-module'
+import { ModuleKey } from '@talex-touch/utils'
 export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined
 
-export default {
-  name: Symbol('CoreBox'),
-  filePath: false,
-  listeners: new Array<() => void>(),
-  async init() {
-    const app = genTouchApp()
+export class CoreBoxModule extends BaseModule {
+  static key: symbol = Symbol.for('CoreBox')
+  name: ModuleKey = CoreBoxModule.key
 
-    await app.moduleManager.loadModule(SearchEngineCore)
+  constructor() {
+    super(CoreBoxModule.key, {
+      create: false
+    })
+  }
+
+  async onInit(): Promise<void> {
+    await $app.moduleManager.loadModule(SearchEngineCore)
 
     coreBoxManager.init()
 
@@ -40,10 +45,12 @@ export default {
     })
 
     console.log('[CoreBox] Core-box module initialized!')
-  },
-  destroy() {
+  }
+  async onDestroy(): Promise<void> {
     coreBoxManager.destroy()
-
-    console.log('[CoreBox] Core box module destroyed!')
   }
 }
+
+const coreBoxModule = new CoreBoxModule()
+
+export { coreBoxModule }
