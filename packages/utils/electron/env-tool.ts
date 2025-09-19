@@ -1,4 +1,5 @@
-import { exec, ExecException } from 'child_process';
+import { exec, ExecException } from 'child_process'
+import { platform } from 'process'
 
 export interface IGlobalPkgResult {
   exist: boolean
@@ -54,4 +55,37 @@ export function getNpmVersion(): Promise<string | null> {
       resolve(stdout.trim())
     })
   })
+}
+
+export interface OSAdapter<R, T> {
+  win32?: (payload: R) => T
+  darwin?: (payload: R) => T
+  linux?: (payload: R) => T
+  /**
+   * Executed before platform-specific functions.
+   * Its return value will be passed as a parameter to the platform-specific function.
+   */
+  onBeforeExecute?: () => R
+}
+
+/**
+ * An adapter function that executes different logic depending on the operating system platform.
+ * @param options An object containing implementations for different platforms.
+ * @returns The execution result of the platform-specific function.
+ */
+export function withOSAdapter<R, T>(options: OSAdapter<R, T>): T | undefined {
+  const payload = options.onBeforeExecute?.()
+
+  const arg = payload as R
+
+  switch (platform) {
+    case 'win32':
+      return options.win32?.(arg)
+    case 'darwin':
+      return options.darwin?.(arg)
+    case 'linux':
+      return options.linux?.(arg)
+    default:
+      return undefined
+  }
 }
