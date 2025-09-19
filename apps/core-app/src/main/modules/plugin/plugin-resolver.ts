@@ -2,9 +2,9 @@ import path from 'path'
 import os from 'os'
 import fse from 'fs-extra'
 import compressing from 'compressing'
-import { genPluginModule } from './plugin-module'
-import { checkDirWithCreate } from '../utils/common-util'
 import { IManifest } from '@talex-touch/utils/plugin'
+import { pluginModule } from './plugin-module'
+import { checkDirWithCreate } from '../../utils/common-util'
 
 export enum ResolverStatus {
   UNCOMPRESS_ERROR,
@@ -22,7 +22,7 @@ export class PluginResolver {
 
   async install(manifest: IManifest, cb: (msg: string, type?: string) => void): Promise<void> {
     console.log('[PluginResolver] Installing plugin: ' + manifest.name)
-    const _target = path.join(genPluginModule().pluginPath, manifest.name)
+    const _target = path.join(pluginModule.filePath!, manifest.name)
 
     if (fse.existsSync(_target)) {
       return cb('plugin already exists')
@@ -37,7 +37,7 @@ export class PluginResolver {
       //   await fse.rename(manifestPath, path.join(_target, 'manifest.json'))
       // }
 
-      genPluginModule().loadPlugin(manifest.name)
+      pluginModule.pluginManager!.loadPlugin(manifest.name)
 
       cb('success', 'success')
     } catch (e: any) {
