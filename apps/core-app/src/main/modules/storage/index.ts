@@ -48,8 +48,11 @@ export class StorageModule extends BaseModule {
     console.log(
       `[Config] Init config path ${file.dirPath} and plugin config path ${pluginConfigPath}`
     )
+
+    this.setupListeners()
   }
   onDestroy(): MaybePromise<void> {
+    this.saveAllConfig()
     this.configs.clear()
     this.pluginConfigs.clear()
   }
@@ -62,6 +65,7 @@ export class StorageModule extends BaseModule {
     }
 
     const p = path.resolve(this.filePath!, name)
+    console.log(`[Config] Get config ${name} from ${p}`)
     const file = fse.existsSync(p) ? JSON.parse(fse.readFileSync(p, 'utf-8')) : {}
 
     this.configs.set(name, file)
@@ -160,6 +164,7 @@ export class StorageModule extends BaseModule {
 
     channel.regChannel(ChannelType.MAIN, 'storage:get', ({ data }) => {
       if (!data || typeof data !== 'string') return {}
+      console.log(`[Config] Get config ${data}`)
       return this.getConfig(data)
     })
 
