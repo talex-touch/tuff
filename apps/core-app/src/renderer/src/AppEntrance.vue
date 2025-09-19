@@ -1,5 +1,5 @@
 <script name="AppEntrance" setup lang="ts">
-import { isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
+import { initStorageChannel, isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
 import CoreBox from './views/box/CoreBox.vue'
 import { touchChannel } from './modules/channel/channel-core'
 
@@ -14,6 +14,7 @@ function entry(): void {
   window.$startupInfo = res
 
   useTouchSDK({ channel: touchChannel })
+  initStorageChannel(touchChannel)
 
   props.onReady().then(() => {
     init.value = true
