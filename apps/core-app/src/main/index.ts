@@ -15,7 +15,7 @@ import { shortcutModule } from './modules/global-shortcon'
 import { trayHolderModule } from './modules/tray-holder'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
-// import FileSystemWatcher from './modules/file-system-watcher'
+import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 // import FileProtocolModule from './modules/file-protocol'
 // import TerminalManager from './modules/terminal/terminal.manager'
@@ -53,7 +53,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(addonOpenerModule)
   // // await app.moduleManager.loadModule(DropManager)
   await app.moduleManager.loadModule(clipboardModule)
-  // await app.moduleManager.loadModule(FileSystemWatcher)
+  await app.moduleManager.loadModule(FileSystemWatcher)
   // await app.moduleManager.loadModule(FileProtocolModule)
   // await app.moduleManager.loadModule(TerminalManager)
 
