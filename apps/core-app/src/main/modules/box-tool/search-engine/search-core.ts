@@ -16,6 +16,7 @@ import { TouchApp } from '../../../core/touch-app'
 import { databaseModule } from '../../database'
 import { ModuleInitContext } from 'packages/utils/types/modules'
 import { storageModule } from '../../storage'
+import { fileProvider } from '../addon/files/file-provider'
 
 /**
  * Generates a unique key for an activation request.
@@ -58,9 +59,9 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
     this.sorter.register(tuffSorter)
 
     this.registerProvider(appProvider)
-  //  this.registerProvider(new ClipboardProvider())
+    //  this.registerProvider(new ClipboardProvider())
     // TODO refractory - this provider costs a lot of time
-    // this.registerProvider(fileProvider)
+    this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)
   }
 
