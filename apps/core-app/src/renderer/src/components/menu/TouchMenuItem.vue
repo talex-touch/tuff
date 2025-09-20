@@ -3,11 +3,11 @@
     ref="dom"
     v-wave
     :data-route="props.route"
-    @click="handleClick"
     class="TouchMenuItem-Container fake-background"
     flex
     items-center
     :class="{ active, disabled }"
+    @click="handleClick"
   >
     <slot>
       <span :class="`${icon}`" class="TouchMenu-Tab-Icon"> </span>
@@ -16,7 +16,7 @@
   </div>
 </template>
 
-<script name="TouchMenuItem" setup>
+<script lang="ts" name="TouchMenuItem" setup>
 import { useRouter, useRoute } from 'vue-router'
 import { onMounted, onUnmounted } from 'vue'
 

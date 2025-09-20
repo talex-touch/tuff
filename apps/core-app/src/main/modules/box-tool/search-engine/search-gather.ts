@@ -1,70 +1,15 @@
-import { TuffQuery, withTimeout, TimeoutError, TuffSearchResult } from '@talex-touch/utils'
-import { ISearchProvider, TuffUpdate } from './types'
-
-/**
- * Defines the detailed configuration options for the aggregator.
- */
-export interface ITuffGatherOptions {
-  /**
-   * Timeout configuration in milliseconds.
-   */
-  timeout: {
-    /**
-     * Timeout for the default queue.
-     * Search speed is critical for user experience, so the default search
-     * should not take too long to return results.
-     * @default 200
-     */
-    default: number
-
-    /**
-     * Timeout for the fallback queue.
-     * The fallback queue should have a longer timeout as its sources
-     * are often network requests or slower local I/O.
-     * @default 5000
-     */
-    fallback: number
-  }
-
-  /**
-   * Concurrency configuration.
-   */
-  concurrent: {
-    /**
-     * Number of concurrent search sources for the default queue.
-     * @default 5
-     */
-    default: number
-
-    /**
-     * Number of concurrent search sources for the fallback queue.
-     * @default 10
-     */
-    fallback: number
-  }
-
-  /**
-   * Delay in milliseconds for a forced push of results.
-   * When the aggregator receives the first search result, it opens a "push window"
-   * of this duration. Results arriving within this window are buffered and pushed
-   * all at once when the window closes, ensuring stable batch updates and preventing UI flickering.
-   * If all search tasks complete before this time, results are pushed immediately.
-   * @default 50
-   */
-  forcePushDelay: number
-}
-
-/**
- * Defines the type signature for the real-time update callback function.
- * @param update - The data object containing update information.
- */
-export type TuffAggregatorCallback = (update: TuffUpdate) => void
-
-export interface IGatherController {
-  abort: () => void
-  promise: Promise<number>
-  signal: AbortSignal
-}
+import {
+  TuffQuery,
+  withTimeout,
+  TimeoutError,
+  TuffSearchResult,
+  ITuffGatherOptions,
+  ISearchProvider,
+  TuffAggregatorCallback,
+  IGatherController,
+  TuffUpdate
+} from '@talex-touch/utils'
+import { ProviderContext } from './types'
 
 /**
  * Default configuration options for the aggregator.
@@ -94,7 +39,7 @@ const defaultTuffGatherOptions: ITuffGatherOptions = {
  * @returns A promise that resolves with the total number of aggregated results when all search tasks are finished.
  */
 export function getGatheredItems(
-  providers: ISearchProvider[],
+  providers: ISearchProvider<ProviderContext>[],
   params: TuffQuery,
   onUpdate: TuffAggregatorCallback,
   options: ITuffGatherOptions = defaultTuffGatherOptions
@@ -108,7 +53,7 @@ export function getGatheredItems(
 
     const allResults: TuffSearchResult[] = []
     const sourceStats: TuffUpdate['sourceStats'] = []
-    const fallbackQueue: ISearchProvider[] = []
+    const fallbackQueue: ISearchProvider<ProviderContext>[] = []
     const defaultQueue = [...providers]
 
     let pushBuffer: TuffSearchResult[] = []
@@ -199,7 +144,7 @@ export function getGatheredItems(
      * @param isFallback - Flag indicating if the current queue is the fallback queue.
      */
     const runWorkerPool = async (
-      queue: ISearchProvider[],
+      queue: ISearchProvider<ProviderContext>[],
       concurrency: number,
       processingTimeout: number,
       isFallback = false
