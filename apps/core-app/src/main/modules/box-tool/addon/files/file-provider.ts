@@ -1,12 +1,12 @@
+import { ProviderContext } from '../../search-engine/types'
 import {
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
-  ProviderContext,
+  TuffFactory,
   TuffQuery,
-  TuffSearchResult,
-  IProviderActivate
-} from '../../search-engine/types'
-import { TuffFactory } from '@talex-touch/utils'
+  TuffSearchResult
+} from '@talex-touch/utils'
 import { app, shell } from 'electron'
 import path from 'path'
 import { createDbUtils } from '../../../../db/utils'
@@ -18,7 +18,7 @@ import { KEYWORD_MAP } from './constants'
 import { ScannedFileInfo } from './types'
 import { mapFileToTuffItem, scanDirectory } from './utils'
 
-class FileProvider implements ISearchProvider {
+class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
   readonly name = 'File Provider'
   readonly type = 'file' as const
