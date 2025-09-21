@@ -1,7 +1,6 @@
 import {
   TuffQuery,
   withTimeout,
-  TimeoutError,
   TuffSearchResult,
   ITuffGatherOptions,
   ISearchProvider,
@@ -9,9 +8,14 @@ import {
   IGatherController
 } from '@talex-touch/utils'
 import { ProviderContext } from './types'
+import { performance } from 'perf_hooks'
+import chalk from 'chalk'
+
+import { debounce } from 'lodash'
 
 /**
- * 扩展源统计接口，添加队列类型
+ * @interface ExtendedSourceStat
+ * @description Extends the source statistics interface to include timing and status.
  */
 interface ExtendedSourceStat {
   providerId: string
@@ -19,53 +23,43 @@ interface ExtendedSourceStat {
   duration: number
   resultCount: number
   status: 'success' | 'timeout' | 'error'
-  queueType?: 'priority' | 'delayed'
 }
 
 /**
- * 聚合器的默认配置选项
+ * @constant defaultTuffGatherOptions
+ * @description Default configuration for the aggregator.
  */
-const defaultTuffGatherOptions: ITuffGatherOptions = {
-  timeout: {
-    default: 200,
-    fallback: 5000
-  },
-  concurrent: {
-    default: 5,
-    fallback: 2
-  },
-  forcePushDelay: 50
+const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
+  concurrency: 3,
+  coalesceGapMs: 100,
+  firstBatchGraceMs: 50,
+  debouncePushMs: 10,
+  taskTimeoutMs: 5000
 }
 
 /**
- * 创建搜索控制器
- * @param callback 执行搜索的回调函数
- * @returns 搜索控制器接口
+ * Creates a search controller that manages the lifecycle of a search operation.
+ * @param callback - The function that executes the search logic.
+ * @returns An `IGatherController` to manage the search.
  */
 function createGatherController(
   callback: (
     signal: AbortSignal,
     resolve: (value: number | PromiseLike<number>) => void
   ) => Promise<number>
-) {
+): IGatherController {
   const controller = new AbortController()
   const { signal } = controller
 
   const promise = new Promise<number>((resolve, reject) => {
-    callback(signal, resolve)
-      .catch(reject)
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          console.log('[Gather] Search completed.')
-        }
-      })
+    callback(signal, resolve).catch(reject)
   })
 
   return {
     promise,
     abort: () => {
       if (!controller.signal.aborted) {
-        console.debug('[Gather] Aborting search.')
+        console.debug('Aborting search.')
         controller.abort()
       }
     },
@@ -74,59 +68,62 @@ function createGatherController(
 }
 
 /**
- * Tuff 启动器的核心聚合器
- * 实现了双队列搜索机制：优先队列和延迟队列
- * - 优先队列：快速响应，有严格超时限制，达到超时立即推送结果
- * - 延迟队列：继续执行超时的任务，定期批量推送结果
+ * Creates the core search aggregator with a single-queue, concurrent worker pool, and smart batching.
+ * This implementation optimizes for speed and responsiveness by:
+ * - Using a fixed-concurrency worker pool to process all providers.
+ * - Intelligently batching results to reduce UI flicker and unnecessary re-renders.
+ * - Providing a grace period for the first batch to ensure a fast initial response.
  *
- * @param options - 聚合器的详细配置选项
- * @returns 一个函数，调用时接收 providers 和 query，返回搜索控制器
+ * @param options - Detailed configuration for the aggregator.
+ * @returns A function that executes a search with the given providers and query.
  */
-export function createGatherAggregator(options: ITuffGatherOptions = defaultTuffGatherOptions) {
-  const { timeout, concurrent, forcePushDelay } = options
+export function createGatherAggregator(options: ITuffGatherOptions = {}) {
+  const config = { ...defaultTuffGatherOptions, ...options }
+  const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
 
   /**
-   * 聚合器核心搜索函数
-   * @param providers 搜索提供者列表
-   * @param params 搜索参数
-   * @param onUpdate - 用于接收实时搜索结果更新的回调函数
-   * @returns 搜索控制器
+   * The main search execution function.
+   * @param providers - The list of search providers.
+   * @param params - The search query and parameters.
+   * @param onUpdate - The callback to receive real-time search updates.
+   * @returns An `IGatherController` to manage the search.
    */
   return function executeSearch(
     providers: ISearchProvider<ProviderContext>[],
     params: TuffQuery,
     onUpdate: TuffAggregatorCallback
   ): IGatherController {
-    console.log(`[Gather] Starting search with ${providers.length} providers.`)
+    console.log(`Starting search with ${providers.length} providers.`)
 
     /**
-     * 核心搜索实现
+     * The core search handler.
+     * @param signal - The AbortSignal to cancel the search.
+     * @param resolve - The promise resolver to call when the search is complete.
      */
     async function handleGather(
       signal: AbortSignal,
       resolve: (value: number | PromiseLike<number>) => void
     ): Promise<number> {
       const allResults: TuffSearchResult[] = []
-      const sourceStats: Array<ExtendedSourceStat> = []
-      const delayedQueue: ISearchProvider<ProviderContext>[] = []
-      const priorityQueue = [...providers]
-
+      const sourceStats: ExtendedSourceStat[] = []
+      const taskQueue = [...providers]
       let pushBuffer: TuffSearchResult[] = []
-      let forcePushTimerId: NodeJS.Timeout | null = null
+
+      let completedCount = 0
       let hasFlushedFirstBatch = false
+      let coalesceTimeoutId: NodeJS.Timeout | null = null
 
       /**
-       * 刷新结果缓冲区并通过onUpdate回调推送结果
-       * @param isFinalFlush - 是否为最终刷新。如果为true，将发送额外的`isDone: true`信号
-       * @param forcePush - 是否强制推送，即使缓冲区为空
+       * Flushes the result buffer and sends updates via the onUpdate callback.
+       * @param isFinalFlush - If true, signals that the search is complete.
        */
-      const flushBuffer = (isFinalFlush = false, forcePush = false): void => {
-        if (forcePushTimerId) {
-          clearTimeout(forcePushTimerId)
-          forcePushTimerId = null
+      const flushBuffer = (isFinalFlush = false): void => {
+        if (coalesceTimeoutId) {
+          clearTimeout(coalesceTimeoutId)
+          coalesceTimeoutId = null
         }
 
-        if (pushBuffer.length > 0 || forcePush) {
+        if (pushBuffer.length > 0) {
           const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
           onUpdate({
             newResults: pushBuffer,
@@ -149,172 +146,76 @@ export function createGatherAggregator(options: ITuffGatherOptions = defaultTuff
         }
       }
 
-      let firstBatchTimeoutId: NodeJS.Timeout | null = null
+      const debouncedFlush = debounce(flushBuffer, debouncePushMs)
 
       /**
-       * 执行首次批次刷新，确保只执行一次
+       * Handles a new result from a provider, adding it to the buffer and managing the flush logic.
+       * @param result - The search result.
        */
-      const flushFirstBatchOnce = (): void => {
-        if (hasFlushedFirstBatch) return
-
-        hasFlushedFirstBatch = true
-        if (firstBatchTimeoutId) {
-          clearTimeout(firstBatchTimeoutId)
-          firstBatchTimeoutId = null
-        }
-        console.debug('[Gather] Flushing first batch.')
-        flushBuffer(false, true)
-      }
-
-      /**
-       * 处理来自任何提供者的新结果
-       * @param result - 新到达的TuffSearchResult
-       * @param providerId - 返回结果的提供者ID
-       * @param queueType - 提供者所在的队列类型
-       */
-      const onNewResultArrived = (
-        result: TuffSearchResult,
-        providerId: string,
-        queueType: 'priority' | 'delayed'
-      ): void => {
-        console.debug(
-          `[Gather] Received ${result.items.length} items from provider: ${providerId} (${queueType} queue)`
-        )
-
-        // 为延迟队列的结果添加标记
-        if (queueType === 'delayed') {
-          result.items = result.items.map((item) => ({
-            ...item,
-            meta: {
-              ...item.meta,
-              extension: {
-                ...item.meta?.extension,
-                isDelayed: true
-              }
-            }
-          }))
-        }
-
+      const onNewResult = (result: TuffSearchResult): void => {
         allResults.push(result)
         pushBuffer.push(result)
+        completedCount++
 
-        // 第一批次刷新后，使用去抖动机制进行后续更新
-        if (hasFlushedFirstBatch) {
-          if (forcePushTimerId) {
-            clearTimeout(forcePushTimerId)
-          }
-          forcePushTimerId = setTimeout(() => flushBuffer(), forcePushDelay)
+        if (!hasFlushedFirstBatch) {
+          hasFlushedFirstBatch = true
+          // For the first result, wait a short grace period before flushing.
+          coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
+        } else {
+          // For subsequent results, reset the coalescing gap.
+          if (coalesceTimeoutId) clearTimeout(coalesceTimeoutId)
+          coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
+        }
+
+        // If all tasks are done, perform a final flush immediately.
+        if (completedCount === providers.length) {
+          debouncedFlush.flush() // Use lodash debounce's flush method
+          flushBuffer(true)
         }
       }
 
       /**
-       * 执行并发工作池
-       * @param queue - 要处理的提供者队列
-       * @param concurrency - 并发工作者数量
-       * @param processingTimeout - 单个任务的超时时间
-       * @param queueType - 队列类型，优先或延迟
+       * Runs the worker pool to process providers concurrently.
        */
-      const runWorkerPool = async (
-        queue: ISearchProvider<ProviderContext>[],
-        concurrency: number,
-        processingTimeout: number,
-        queueType: 'priority' | 'delayed'
-      ): Promise<void> => {
-        const queueName = queueType === 'delayed' ? 'Delayed' : 'Priority'
-        console.debug(`[Gather] Running ${queueName} queue with ${concurrency} concurrent workers.`)
-
+      const runWorkerPool = async (): Promise<void> => {
         const workers = Array(concurrency)
           .fill(0)
-          .map(async () => {
-            while (queue.length > 0) {
-              const provider = queue.shift()
+          .map(async (_, i) => {
+            // Stagger the start of each worker to avoid resource contention.
+            await new Promise((resolve) => setTimeout(resolve, i * 10))
+            while (taskQueue.length > 0) {
+              const provider = taskQueue.shift()
               if (!provider) continue
 
               const startTime = performance.now()
-              let resultCount = 0
               let status: 'success' | 'timeout' | 'error' = 'success'
+              let resultCount = 0
 
               try {
-                if (signal.aborted) {
-                  status = 'error'
-                  return
-                }
+                if (signal.aborted) return
 
-                // 优先队列使用timeout限制，延迟队列不使用timeout
                 const searchPromise = provider.onSearch(params, signal)
-                let searchResult: TuffSearchResult
-
-                if (queueType === 'priority') {
-                  try {
-                    searchResult = await withTimeout(searchPromise, processingTimeout)
-                  } catch (e) {
-                    if (e instanceof TimeoutError) {
-                      status = 'timeout'
-                      // 将超时的提供者移至延迟队列继续执行
-                      delayedQueue.push(provider)
-
-                      // 继续等待结果，但不阻塞优先队列
-                      searchPromise
-                        .then((result) => {
-                          resultCount = result.items.length
-                          onNewResultArrived(result, provider.id, 'delayed')
-
-                          const duration = performance.now() - startTime
-                          logProviderCompletion(provider, duration, resultCount, 'delayed')
-
-                          sourceStats.push({
-                            providerId: provider.id,
-                            providerName: provider.name || provider.constructor.name,
-                            duration,
-                            resultCount,
-                            status: 'success',
-                            queueType: 'delayed'
-                          })
-                        })
-                        .catch((err) => {
-                          console.error(
-                            `Provider [${provider.constructor.name}] encountered an error during delayed search:`,
-                            err
-                          )
-                        })
-
-                      // 跳过当前provider的后续处理
-                      continue
-                    } else {
-                      throw e
-                    }
-                  }
-                } else {
-                  // 延迟队列中的provider不使用timeout
-                  searchResult = await searchPromise
-                }
+                const searchResult = await withTimeout(searchPromise, taskTimeoutMs)
 
                 resultCount = searchResult.items.length
-                onNewResultArrived(searchResult, provider.id, queueType)
+                onNewResult(searchResult)
               } catch (error) {
-                if (signal.aborted) {
-                  status = 'error'
-                  return
-                } else {
-                  status = 'error'
-                  console.error(
-                    `Provider [${provider.constructor.name}] encountered an error during search:`,
-                    error
-                  )
+                status = 'error'
+                if (error instanceof Error && error.name === 'TimeoutError') {
+                  status = 'timeout'
                 }
+                console.error(`Provider [${provider.id}] failed:`, error)
               } finally {
                 const duration = performance.now() - startTime
-
-                if (status === 'success') {
-                  logProviderCompletion(provider, duration, resultCount, queueType)
-
+                // Do not log or record stats for aborted tasks.
+                if (!signal.aborted) {
+                  logProviderCompletion(provider, duration, resultCount, status)
                   sourceStats.push({
-                    providerId: provider.id,
-                    providerName: provider.name || provider.constructor.name,
-                    duration,
-                    resultCount,
-                    status,
-                    queueType
+                  providerId: provider.id,
+                  providerName: provider.name || provider.constructor.name,
+                  duration,
+                  resultCount,
+                  status
                   })
                 }
               }
@@ -324,54 +225,41 @@ export function createGatherAggregator(options: ITuffGatherOptions = defaultTuff
       }
 
       /**
-       * 记录提供者完成信息
+       * Logs the completion details of a provider with styled output.
+       * @param provider - The provider that finished.
+       * @param duration - The execution duration in milliseconds.
+       * @param resultCount - The number of results returned.
+       * @param status - The final status of the provider.
        */
       const logProviderCompletion = (
         provider: ISearchProvider<ProviderContext>,
         duration: number,
         resultCount: number,
-        queueType: 'priority' | 'delayed'
+        status: 'success' | 'timeout' | 'error'
       ): void => {
-        let durationStr = ''
+        let durationStr: string
         if (duration < 50) {
-          durationStr = `${duration.toFixed(1)}ms`
+          durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
         } else if (duration < 200) {
-          durationStr = `${duration.toFixed(1)}ms (!)`
+          durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
         } else {
-          durationStr = `${duration.toFixed(1)}ms (!!)`
+          durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
         }
-
-        const queueLabel = queueType === 'delayed' ? '[延迟队列]' : '[优先队列]'
         console.log(
-          `[Gather] ${queueLabel} Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results`
+          `Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
         )
       }
 
       const run = async (): Promise<number> => {
-        // 设置首批结果的超时定时器
-        firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, timeout.default)
-
-        // 处理优先队列
-        await runWorkerPool(priorityQueue, concurrent.default, timeout.default, 'priority')
-        flushFirstBatchOnce()
-
-        // 处理延迟队列中的提供者
-        if (delayedQueue.length > 0) {
-          console.debug(`[Gather] Starting delayed queue with ${delayedQueue.length} providers.`)
-          await runWorkerPool(delayedQueue, concurrent.fallback, timeout.fallback, 'delayed')
-        }
-
-        console.debug('[Gather] All search tasks completed.')
+        await runWorkerPool()
+        console.log('All search tasks completed.')
         flushBuffer(true)
-
-        // 返回总数
         return allResults.reduce((acc, curr) => acc + curr.items.length, 0)
       }
 
       return run()
     }
 
-    // 创建搜索控制器
     return createGatherController((signal, resolve) => {
       return handleGather(signal, resolve)
     })
