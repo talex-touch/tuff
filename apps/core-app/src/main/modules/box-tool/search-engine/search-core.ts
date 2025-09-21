@@ -1,8 +1,14 @@
-import { ISearchEngine, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from './types'
-import { IProviderActivate } from '@talex-touch/utils'
+import {
+  IGatherController,
+  IProviderActivate,
+  ISearchEngine,
+  ISearchProvider,
+  TuffItem,
+  TuffQuery,
+  TuffSearchResult
+} from '@talex-touch/utils'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
-import { getGatheredItems, IGatherController } from './search-gather'
 import { appProvider } from '../addon/apps/app-provider'
 import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin-module/plugin-features-adapter'
@@ -17,6 +23,8 @@ import { databaseModule } from '../../database'
 import { ModuleInitContext } from 'packages/utils/types/modules'
 import { storageModule } from '../../storage'
 import { fileProvider } from '../addon/files/file-provider'
+import { ProviderContext } from './types'
+import { gatherAggregator } from './search-gather'
 
 /**
  * Generates a unique key for an activation request.
@@ -32,13 +40,15 @@ function getActivationKey(activation: IProviderActivate): string {
   return activation.id
 }
 
-export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<TalexEvents> {
+export class SearchEngineCore
+  implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents>
+{
   private static _instance: SearchEngineCore
 
   readonly name = Symbol('search-engine-core')
 
-  private providers: Map<string, ISearchProvider> = new Map()
-  private providersToLoad: ISearchProvider[] = []
+  private providers: Map<string, ISearchProvider<ProviderContext>> = new Map()
+  private providersToLoad: ISearchProvider<ProviderContext>[] = []
   private sorter: Sorter
   private activatedProviders: Map<string, IProviderActivate> | null = null
   private currentGatherController: IGatherController | null = null
@@ -73,7 +83,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
     return this._instance
   }
 
-  registerProvider(provider: ISearchProvider): void {
+  registerProvider(provider: ISearchProvider<ProviderContext>): void {
     if (this.providers.has(provider.id)) {
       console.warn(`[SearchEngineCore] Search provider '${provider.id}' is already registered.`)
       return
@@ -86,7 +96,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
     }
   }
 
-  private async loadProvider(provider: ISearchProvider): Promise<void> {
+  private async loadProvider(provider: ISearchProvider<ProviderContext>): Promise<void> {
     if (!this.touchApp) {
       console.error('[SearchEngineCore] Core modules not available to load provider.')
       return
@@ -178,7 +188,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
     }
   }
 
-  getActiveProviders(): ISearchProvider[] {
+  getActiveProviders(): ISearchProvider<ProviderContext>[] {
     if (!this.activatedProviders) {
       return Array.from(this.providers.values())
     }
@@ -189,7 +199,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
 
     return Array.from(providerIds)
       .map((id) => this.providers.get(id))
-      .filter((p): p is ISearchProvider => !!p)
+      .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
   public getActivationState(): IProviderActivate[] | null {
@@ -199,8 +209,8 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
     return Array.from(this.activatedProviders.values())
   }
 
-  public getProvidersByIds(ids: string[]): ISearchProvider[] {
-    return ids.map((id) => this.providers.get(id)).filter((p): p is ISearchProvider => !!p)
+  public getProvidersByIds(ids: string[]): ISearchProvider<ProviderContext>[] {
+    return ids.map((id) => this.providers.get(id)).filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
   private _updateActivationState(newResults: TuffSearchResult[]): void {
@@ -239,7 +249,7 @@ export class SearchEngineCore implements ISearchEngine, TalexTouch.IModule<Talex
         }
       }
 
-      const gatherController = getGatheredItems(providersToSearch, query, (update) => {
+      const gatherController = gatherAggregator(providersToSearch, query, (update) => {
         if (update.isDone) {
           // Handle final state and notify frontend
           this.currentGatherController = null
