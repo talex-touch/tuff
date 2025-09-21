@@ -1,56 +1,35 @@
 import { TuffUpdate } from "."
 
 /**
- * Defines the detailed configuration options for the aggregator.
+ * @interface ITuffGatherOptions
+ * @description Configuration options for the search result aggregator.
  */
 export interface ITuffGatherOptions {
   /**
-   * Timeout configuration in milliseconds.
+   * The number of providers to run in parallel.
+   * @default 3
    */
-  timeout: {
-    /**
-     * Timeout for the default queue.
-     * Search speed is critical for user experience, so the default search
-     * should not take too long to return results.
-     * @default 50
-     */
-    default: number
-
-    /**
-     * Timeout for the fallback queue.
-     * The fallback queue should have a longer timeout as its sources
-     * are often network requests or slower local I/O.
-     * @default 3000
-     */
-    fallback: number
-  }
-
+  concurrency?: number
   /**
-   * Concurrency configuration.
+   * The time to wait for more results before flushing the buffer.
+   * @default 100
    */
-  concurrent: {
-    /**
-     * Number of concurrent search sources for the default queue.
-     * @default 5
-     */
-    default: number
-
-    /**
-     * Number of concurrent search sources for the fallback queue.
-     * @default 10
-     */
-    fallback: number
-  }
-
+  coalesceGapMs?: number
   /**
-   * Delay in milliseconds for a forced push of results.
-   * When the aggregator receives the first search result, it opens a "push window"
-   * of this duration. Results arriving within this window are buffered and pushed
-   * all at once when the window closes, ensuring stable batch updates and preventing UI flickering.
-   * If all search tasks complete before this time, results are pushed immediately.
+   * A shorter grace period for the first batch to ensure a quick initial response.
    * @default 50
    */
-  forcePushDelay: number
+  firstBatchGraceMs?: number
+  /**
+   * A small debounce delay for the push function to avoid rapid-fire updates.
+   * @default 10
+   */
+  debouncePushMs?: number
+  /**
+   * The maximum time to wait for a single provider to return results.
+   * @default 5000
+   */
+  taskTimeoutMs?: number
 }
 
 /**
