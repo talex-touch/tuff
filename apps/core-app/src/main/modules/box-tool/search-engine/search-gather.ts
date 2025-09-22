@@ -178,6 +178,28 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
        * Runs the worker pool to process providers concurrently.
        */
       const runWorkerPool = async (): Promise<void> => {
+        // Set up abort handler to notify about cancellation
+        signal.addEventListener('abort', () => {
+          // Clean up any pending timeouts
+          if (coalesceTimeoutId) {
+            clearTimeout(coalesceTimeoutId)
+            coalesceTimeoutId = null
+          }
+          debouncedFlush.cancel()
+
+          // Notify about cancellation
+          console.debug('[SearchGatherer] Search was cancelled. Notifying callback.')
+          onUpdate({
+            newResults: [],
+            totalCount: allResults.reduce((acc, curr) => acc + curr.items.length, 0),
+            isDone: true,
+            cancelled: true,
+            sourceStats: sourceStats as TuffSearchResult['sources']
+          })
+          resolve(0) // Resolve with 0 to indicate cancellation
+          return
+        })
+
         const workers = Array(concurrency)
           .fill(0)
           .map(async (_, i) => {
