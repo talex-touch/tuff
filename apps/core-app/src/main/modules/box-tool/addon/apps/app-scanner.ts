@@ -5,53 +5,74 @@ import chalk from 'chalk'
 import { exec } from 'child_process'
 
 /**
- * 应用扫描服务，负责应用发现和相关信息获取
+ * Service for scanning applications, responsible for app discovery and information retrieval.
+ *
+ * @export
+ * @class AppScanner
  */
 export class AppScanner {
   private isMac = process.platform === 'darwin'
   private isWindows = process.platform === 'win32'
   private isLinux = process.platform === 'linux'
 
-  // 监视路径配置
+  /**
+   * Watch paths for different platforms.
+   */
   private WATCH_PATHS = this.isMac
     ? ['/Applications', path.join(process.env.HOME || '', 'Applications')]
     : this.isWindows
-    ? [
-        path.join(process.env.PROGRAMFILES || '', '.'),
-        path.join(process.env['PROGRAMFILES(X86)'] || '', '.'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs')
-      ]
-    : [
-        '/usr/share/applications',
-        '/var/lib/snapd/desktop/applications',
-        path.join(os.homedir(), '.local/share/applications')
-      ]
+      ? [
+          path.join(process.env.PROGRAMFILES || '', '.'),
+          path.join(process.env['PROGRAMFILES(X86)'] || '', '.'),
+          path.join(process.env.LOCALAPPDATA || '', 'Programs')
+        ]
+      : [
+          '/usr/share/applications',
+          '/var/lib/snapd/desktop/applications',
+          path.join(os.homedir(), '.local/share/applications')
+        ]
 
   /**
-   * 获取平台对应的监视路径
+   * Gets the watch paths for the current platform.
+   * @returns {string[]} An array of paths to watch.
    */
   getWatchPaths(): string[] {
     return this.WATCH_PATHS
   }
 
   /**
-   * 获取指定平台的所有应用
+   * Retrieves all applications for the current platform.
+   * @returns {Promise<any[]>} A promise that resolves to an array of applications.
    */
   async getApps(): Promise<any[]> {
-    console.log(formatLog('AppScanner', '开始扫描应用...', LogStyle.process))
+    console.log(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
 
     try {
-      let apps = []
+      let apps: any[] = []
       if (this.isMac) {
-        console.log(formatLog('AppScanner', '检测到 macOS 平台，使用 mdfind 扫描应用', LogStyle.info))
+        console.log(
+          formatLog(
+            'AppScanner',
+            'macOS detected, scanning applications using mdfind',
+            LogStyle.info
+          )
+        )
         const { getApps } = await import('./darwin')
         apps = await getApps()
       } else if (this.isWindows) {
-        console.log(formatLog('AppScanner', '检测到 Windows 平台，扫描开始菜单和程序目录', LogStyle.info))
+        console.log(
+          formatLog(
+            'AppScanner',
+            'Windows detected, scanning Start Menu and Program Directories',
+            LogStyle.info
+          )
+        )
         const { getApps } = await import('./win')
         apps = await getApps()
       } else if (this.isLinux) {
-        console.log(formatLog('AppScanner', '检测到 Linux 平台，扫描 .desktop 文件', LogStyle.info))
+        console.log(
+          formatLog('AppScanner', 'Linux detected, scanning .desktop files', LogStyle.info)
+        )
         const { getApps } = await import('./linux')
         apps = await getApps()
       }
@@ -59,7 +80,7 @@ export class AppScanner {
       console.log(
         formatLog(
           'AppScanner',
-          `扫描完成，共发现 ${chalk.green(apps.length)} 个应用`,
+          `Scan complete, found ${chalk.green(apps.length)} applications`,
           LogStyle.success
         )
       )
@@ -68,7 +89,7 @@ export class AppScanner {
       console.error(
         formatLog(
           'AppScanner',
-          `扫描应用时发生错误: ${error instanceof Error ? error.message : String(error)}`,
+          `Error scanning applications: ${error instanceof Error ? error.message : String(error)}`,
           LogStyle.error
         )
       )
@@ -77,11 +98,15 @@ export class AppScanner {
   }
 
   /**
-   * 获取指定路径的应用信息
+   * Retrieves application information by its file path.
+   * @param {string} filePath - The path to the application file.
+   * @returns {Promise<any>} A promise that resolves to the application's information.
    */
   async getAppInfoByPath(filePath: string): Promise<any> {
     try {
-      console.log(formatLog('AppScanner', `获取应用信息: ${chalk.cyan(filePath)}`, LogStyle.info))
+      console.log(
+        formatLog('AppScanner', `Getting app info for: ${chalk.cyan(filePath)}`, LogStyle.info)
+      )
 
       if (this.isMac) {
         const { getAppInfo } = await import('./darwin')
@@ -99,7 +124,7 @@ export class AppScanner {
       console.error(
         formatLog(
           'AppScanner',
-          `获取应用 ${chalk.cyan(filePath)} 信息失败: ${
+          `Failed to get app info for ${chalk.cyan(filePath)}: ${
             error instanceof Error ? error.message : String(error)
           }`,
           LogStyle.error
@@ -110,25 +135,33 @@ export class AppScanner {
   }
 
   /**
-   * 运行 macOS 平台的 mdls 更新扫描
+   * Runs an `mdls` update scan on macOS to refresh application metadata.
+   * @param {any[]} apps - The list of applications to scan.
+   * @returns {Promise<{updatedApps: any[], updatedCount: number}>} A promise that resolves to the updated apps and count.
    */
-  async runMdlsUpdateScan(apps: any[]): Promise<{updatedApps: any[], updatedCount: number}> {
+  async runMdlsUpdateScan(apps: any[]): Promise<{ updatedApps: any[]; updatedCount: number }> {
     if (process.platform !== 'darwin') {
-      console.log(formatLog('AppScanner', '非 macOS 平台，跳过 mdls 扫描', LogStyle.info))
+      console.log(formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info))
       return { updatedApps: [], updatedCount: 0 }
     }
 
-    console.log(formatLog('AppScanner', '开始 mdls 更新扫描', LogStyle.process))
+    console.log(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
 
     if (apps.length === 0) {
-      console.log(formatLog('AppScanner', '应用列表为空，跳过 mdls 扫描', LogStyle.info))
+      console.log(formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info))
       return { updatedApps: [], updatedCount: 0 }
     }
 
-    console.log(formatLog('AppScanner', `为 ${chalk.cyan(apps.length)} 个应用运行 mdls 扫描`, LogStyle.process))
+    console.log(
+      formatLog(
+        'AppScanner',
+        `Running mdls scan for ${chalk.cyan(apps.length)} apps`,
+        LogStyle.process
+      )
+    )
 
     let updatedCount = 0
-    const updatedApps = []
+    const updatedApps: any[] = []
     const startTime = Date.now()
 
     for (const app of apps) {
@@ -137,7 +170,13 @@ export class AppScanner {
         const { stdout, stderr } = await this._execCommand(command)
 
         if (stderr) {
-          console.warn(formatLog('AppScanner', `mdls 命令警告 ${chalk.yellow(app.path)}: ${stderr}`, LogStyle.warning))
+          console.warn(
+            formatLog(
+              'AppScanner',
+              `mdls command warning for ${chalk.yellow(app.path)}: ${stderr}`,
+              LogStyle.warning
+            )
+          )
         }
 
         let spotlightName = stdout.trim()
@@ -151,7 +190,9 @@ export class AppScanner {
           console.log(
             formatLog(
               'AppScanner',
-              `更新应用显示名: ${chalk.cyan(app.name)}: "${currentDisplayName || 'null'}" -> "${spotlightName}"`,
+              `Updating app display name: ${chalk.cyan(app.name)}: "${
+                currentDisplayName || 'null'
+              }" -> "${spotlightName}"`,
               LogStyle.info
             )
           )
@@ -166,7 +207,9 @@ export class AppScanner {
         console.error(
           formatLog(
             'AppScanner',
-            `处理应用 ${chalk.red(app.path)} 时出错: ${error instanceof Error ? error.message : String(error)}`,
+            `Error processing app ${chalk.red(app.path)}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
             LogStyle.error
           )
         )
@@ -176,7 +219,9 @@ export class AppScanner {
     console.log(
       formatLog(
         'AppScanner',
-        `mdls 更新扫描完成，更新了 ${chalk.green(updatedCount)} 个应用的显示名，耗时 ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))} 秒`,
+        `mdls update scan finished. Updated ${chalk.green(
+          updatedCount
+        )} app display names in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
         LogStyle.success
       )
     )
@@ -185,7 +230,10 @@ export class AppScanner {
   }
 
   /**
-   * 执行命令并返回结果
+   * Executes a shell command.
+   * @param {string} command - The command to execute.
+   * @returns {Promise<{ stdout: string; stderr: string }>} A promise that resolves with stdout and stderr.
+   * @private
    */
   private _execCommand(command: string): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
@@ -200,5 +248,4 @@ export class AppScanner {
   }
 }
 
-// 导出单例
 export const appScanner = new AppScanner()
