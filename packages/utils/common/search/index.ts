@@ -21,6 +21,10 @@ export interface TuffUpdate {
    */
   isDone: boolean
   /**
+   * Flag indicating whether the search was cancelled.
+   */
+  cancelled?: boolean
+  /**
    * Statistics about the performance of each search provider.
    */
   sourceStats?: TuffSearchResult['sources']

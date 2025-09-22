@@ -226,6 +226,29 @@ export class SearchEngineCore
     }
   }
 
+  public getCurrentGatherController(): IGatherController | null {
+    return this.currentGatherController
+  }
+
+  public cancelSearch(searchId: string): void {
+    if (this.currentGatherController) {
+      console.log(`[SearchEngineCore] Cancelling search with ID: ${searchId}`)
+      this.currentGatherController.abort()
+      this.currentGatherController = null
+
+      // Notify the frontend that the search was cancelled
+      const coreBoxWindow = windowManager.current?.window
+      if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+        this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
+          searchId,
+          cancelled: true,
+          activate: this.getActivationState() ?? undefined,
+          sources: []
+        })
+      }
+    }
+  }
+
   async search(query: TuffQuery): Promise<TuffSearchResult> {
     console.debug('[SearchEngineCore] search', query)
     this.currentGatherController?.abort()
