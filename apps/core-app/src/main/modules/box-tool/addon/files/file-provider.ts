@@ -173,17 +173,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       if (filesToUpdate.length > 0) {
         console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files.`)
-        for (const file of filesToUpdate) {
-          await db
-            .update(filesSchema)
-            .set({
-              mtime: file.mtime,
-              name: file.name,
-              lastIndexedAt: new Date()
-            })
-            .where(eq(filesSchema.id, file.id))
-          await this.processFileExtensions([file])
-        }
+        await this._processFileUpdates(filesToUpdate)
       }
 
       if (filesToAdd.length > 0) {
@@ -205,6 +195,35 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     console.log('[FileProvider] Index process complete.')
+  }
+
+  private async _processFileUpdates(
+    filesToUpdate: (typeof filesSchema.$inferSelect)[],
+    chunkSize = 50
+  ) {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+
+    for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
+      const chunk = filesToUpdate.slice(i, i + chunkSize)
+      console.debug(
+        `[FileProvider] Updating chunk ${i / chunkSize + 1}/${Math.ceil(filesToUpdate.length / chunkSize)}...`
+      )
+
+      const updatePromises = chunk.map((file) =>
+        db
+          .update(filesSchema)
+          .set({
+            mtime: file.mtime,
+            name: file.name,
+            lastIndexedAt: new Date()
+          })
+          .where(eq(filesSchema.id, file.id))
+      )
+      await Promise.all(updatePromises)
+      await this.processFileExtensions(chunk)
+      await new Promise((resolve) => setTimeout(resolve, 17))
+    }
   }
 
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
