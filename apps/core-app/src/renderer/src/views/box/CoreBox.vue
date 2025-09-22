@@ -32,11 +32,13 @@ const {
   searchVal,
   select,
   res,
+  loading,
   activeItem,
   activeActivations,
   handleExecute,
   handleExit,
-  deactivateProvider
+  deactivateProvider,
+  cancelSearch
 } = useSearch(boxOptions)
 const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
 
@@ -112,6 +114,15 @@ const addon = computed(() => {
 
     <div class="CoreBox-Configure">
       <RemixIcon
+        v-if="loading"
+        style="line"
+        name="close-circle"
+        class="cancel-button"
+        @click="cancelSearch"
+        title="取消搜索"
+      />
+      <RemixIcon
+        v-else
         :style="appSetting.tools.autoHide ? 'line' : 'fill'"
         name="pushpin-2"
         @click="handleTogglePin"
@@ -141,6 +152,23 @@ const addon = computed(() => {
 
   cursor: pointer;
   font-size: 1.25em;
+
+  .cancel-button {
+    color: var(--el-color-danger);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.6;
+    }
+  }
 }
 
 div.CoreBoxRes {

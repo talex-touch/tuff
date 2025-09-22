@@ -32,3 +32,5 @@ class AppSettingsStorage extends TouchStorage<AppSetting> {
  * Global instance of the application settings
  */
 export const appSettings = new AppSettingsStorage();
+
+console.log(appSettings)

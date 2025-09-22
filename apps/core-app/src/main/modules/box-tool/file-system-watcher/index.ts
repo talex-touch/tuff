@@ -1,3 +1,3 @@
-import FileSystemWatcher from './file-system-watcher'
+import { fileSystemWatcherModule } from './file-system-watcher'
 
-export default FileSystemWatcher
+export default fileSystemWatcherModule

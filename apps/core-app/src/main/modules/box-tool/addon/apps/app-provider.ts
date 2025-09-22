@@ -1,60 +1,37 @@
+import { ProviderContext } from '../../search-engine/types'
 import {
   IExecuteArgs,
   IProviderActivate,
   ISearchProvider,
-  ProviderContext,
-
+  TuffFactory,
   TuffQuery,
   TuffSearchResult
-} from '../../search-engine/types'
-import { TuffFactory } from '@talex-touch/utils/core-box'
-import { pinyin } from 'pinyin-pro' // 只保留 pinyin
-
+} from '@talex-touch/utils/core-box'
 import { shell } from 'electron'
-import searchEngineCore from '../../search-engine/search-core'
 import path from 'path'
-import fs from 'fs'
+import fs from 'fs/promises'
 import FileSystemWatcher from '../../file-system-watcher'
-import { createDbUtils } from '../../../../db/utils'
-import { files as filesSchema, fileExtensions, keywordMappings } from '../../../../db/schema'
-import { and, eq, inArray, or, sql } from 'drizzle-orm'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
 import { sleep } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import { config as configSchema } from '../../../../db/schema'
 import { is } from '@electron-toolkit/utils'
+import chalk from 'chalk'
 
-import { processSearchResults } from './search-processing-service' // 引入精加工服务
-import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils';
+import { createDbUtils } from '../../../../db/utils'
+import { files as filesSchema, fileExtensions, keywordMappings, config as configSchema } from '../../../../db/schema'
+import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
-interface ScannedAppInfo {
-  name: string
-  displayName?: string
-  fileName: string
-  path: string
-  icon: string
-  bundleId?: string
-  uniqueId: string
-  lastModified: Date
-}
+import { appScanner } from './app-scanner'
+import { processSearchResults } from './search-processing-service'
+import { formatLog, LogStyle } from './app-utils'
+import searchEngineCore from '../../search-engine/search-core'
+import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
 
 /**
- * Generates an acronym from a given string.
- * e.g., "Visual Studio Code" -> "vsc"
+ * 应用提供者
+ * 负责应用搜索和执行功能
  */
-function generateAcronym(name: string): string {
-  if (!name || !name.includes(' ')) {
-    return ''
-  }
-  return name
-    .split(' ')
-    .filter((word) => word)
-    .map((word) => word.charAt(0))
-    .join('')
-    .toLowerCase()
-}
-
-class AppProvider implements ISearchProvider {
+class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
   readonly type = 'application' as const
@@ -66,123 +43,131 @@ class AppProvider implements ISearchProvider {
   private processingPaths: Set<string> = new Set()
   private aliases: Record<string, string[]> = {}
 
-  private WATCH_PATHS = this.isMac
-    ? ['/Applications', path.join(process.env.HOME || '', 'Applications')]
-    : [
-        path.join(process.env.PROGRAMFILES || '', '.'),
-        path.join(process.env['PROGRAMFILES(X86)'] || '', '.'),
-        path.join(process.env.LOCALAPPDATA || '', 'Programs')
-      ]
+  constructor() {
+    console.log(formatLog('AppProvider', '初始化应用提供者服务', LogStyle.info))
+  }
 
+  /**
+   * 加载应用提供者
+   */
   async onLoad(context: ProviderContext): Promise<void> {
+    console.log(formatLog('AppProvider', '开始加载应用提供者服务', LogStyle.process))
     this.context = context
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
+
     if (!this.isInitializing) {
       this.isInitializing = this._initialize()
       await this.isInitializing
     }
+
+    // 同步所有应用关键词
     await this._forceSyncAllKeywords()
 
+    // 订阅文件系统事件
     this._subscribeToFSEvents()
+
+    // 注册监视路径
     this._registerWatchPaths()
+
+    // 安排mdls更新扫描
     this._scheduleMdlsUpdateScan()
+
+    console.log(formatLog('AppProvider', '应用提供者服务加载完成', LogStyle.success))
   }
 
+  /**
+   * 卸载时清理资源
+   */
   async onDestroy(): Promise<void> {
+    console.log(formatLog('AppProvider', '卸载应用提供者服务', LogStyle.process))
     this._unsubscribeFromFSEvents()
+    console.log(formatLog('AppProvider', '应用提供者服务已卸载', LogStyle.success))
   }
 
+  /**
+   * 设置应用别名
+   */
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
+    console.log(formatLog('AppProvider', '更新应用别名', LogStyle.process))
     this.aliases = aliases
-    console.debug('[AppProvider] Aliases updated. Resyncing all app keywords...')
-    // When aliases change, we need to re-sync keywords for all apps
+
+    console.log(formatLog('AppProvider', '应用别名已更新，重新同步所有应用关键词', LogStyle.info))
+
+    // 重新同步所有应用关键词
     if (!this.dbUtils) return
+
     const allApps = await this.dbUtils.getFilesByType('app')
     const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
+
+    console.log(
+      formatLog(
+        'AppProvider',
+        `开始为 ${chalk.cyan(appsWithExtensions.length)} 个应用重新同步关键词`,
+        LogStyle.process
+      )
+    )
+
+    let processedCount = 0
     for (const app of appsWithExtensions) {
-      const appInfo: ScannedAppInfo = {
-        name: app.name,
-        displayName: app.displayName || undefined,
-        fileName: path.basename(app.path, '.app'),
-        path: app.path,
-        icon: app.extensions.icon || '',
-        bundleId: app.extensions.bundleId || undefined,
-        uniqueId: app.extensions.bundleId || app.path,
-        lastModified: app.mtime
-      }
+      const appInfo = this._mapDbAppToScannedInfo(app)
       await this._syncKeywordsForApp(appInfo)
+      processedCount++
+
+      // Track progress without console output
     }
-    console.debug('[AppProvider] Finished resyncing keywords for all apps.')
+
+    console.log(formatLog('AppProvider', '所有应用关键词同步完成', LogStyle.success))
   }
 
-  private async _syncKeywordsForApp(appInfo: ScannedAppInfo): Promise<void> {
-    if (appInfo.path.toLowerCase().includes('wechatdevtools')) {
-      console.debug('[AppProvider] Syncing keywords for wechatdevtools:', JSON.stringify(appInfo, null, 2))
+  /**
+   * 将数据库应用记录映射到扫描的应用信息
+   */
+  private _mapDbAppToScannedInfo(app: any): any {
+    return {
+      name: app.name,
+      displayName: app.displayName || undefined,
+      fileName: path.basename(app.path, '.app'),
+      path: app.path,
+      icon: app.extensions.icon || '',
+      bundleId: app.extensions.bundleId || undefined,
+      uniqueId: app.extensions.bundleId || app.path,
+      lastModified: app.mtime
     }
-    if (!this.dbUtils) {
-      return
-    }
+  }
 
+  /**
+   * 为应用同步关键词
+   */
+  private async _syncKeywordsForApp(appInfo: any): Promise<void> {
+    if (!this.dbUtils) return
+
+    // 1. 生成关键词集合
+    const keywordsSet = await this._generateKeywordsForApp(appInfo)
+
+    // 2. 获取现有关键词
     const db = this.dbUtils.getDb()
     const itemId = appInfo.bundleId || appInfo.path
 
-    // 1. Generate a comprehensive set of keywords
-    const generatedKeywords = new Set<string>()
-
-    // Collect all possible names
-    const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
-
-    const CHINESE_REGEX = /[\u4e00-\u9fa5]/
-    const INVALID_KEYWORD_REGEX = /[^a-zA-Z0-9\u4e00-\u9fa5]/
-
-    for (const name of names) {
-      const lowerCaseName = name.toLowerCase()
-      generatedKeywords.add(lowerCaseName)
-      generatedKeywords.add(lowerCaseName.replace(/\s/g, ''))
-      lowerCaseName.split(/[\s-]/).forEach((word) => {
-        if (word) generatedKeywords.add(word)
-      })
-
-      const acronym = generateAcronym(name)
-      if (acronym) generatedKeywords.add(acronym)
-
-      if (CHINESE_REGEX.test(name)) {
-        const pinyinFull = pinyin(name, { toneType: 'none' }).replace(/\s/g, '')
-        generatedKeywords.add(pinyinFull)
-
-        const pinyinFirst = pinyin(name, { pattern: 'first', toneType: 'none' }).replace(/\s/g, '')
-        generatedKeywords.add(pinyinFirst)
-      }
-    }
-
-    const aliasList = this.aliases[itemId] || this.aliases[appInfo.path]
-    if (aliasList) aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
-
-    const finalKeywords = new Set<string>()
-    for (const keyword of generatedKeywords) {
-      if (keyword.length > 1 && !INVALID_KEYWORD_REGEX.test(keyword)) {
-        finalKeywords.add(keyword)
-      }
-    }
-    // 2. Fetch existing keywords from the database
     const existingKeywords = await db
       .select({ keyword: keywordMappings.keyword })
       .from(keywordMappings)
       .where(eq(keywordMappings.itemId, itemId))
+
     const existingKeywordsSet = new Set(existingKeywords.map((k) => k.keyword))
 
-    // 3. Determine which keywords are new
-    const keywordsToInsert = Array.from(finalKeywords).filter((k) => !existingKeywordsSet.has(k))
+    // 3. 确定需要添加的新关键词
+    const keywordsToInsert = Array.from(keywordsSet).filter((k) => !existingKeywordsSet.has(k))
 
     if (keywordsToInsert.length === 0) {
       return
     }
 
-    // 4. Insert only the new keywords
+    // 4. 插入新关键词
     const insertData = keywordsToInsert.map((keyword) => {
-      // Re-generate acronym inside map to check against keyword, or check against all generated acronyms
-      const isAcronym = names.some((name) => generateAcronym(name) === keyword)
-      const isAlias = aliasList?.includes(keyword)
+      // 判断是否是首字母缩写或别名
+      const isAcronym = this._isAcronymForApp(keyword, appInfo)
+      const isAlias = this._isAliasForApp(keyword, appInfo)
+
       return {
         keyword,
         itemId,
@@ -193,23 +178,145 @@ class AppProvider implements ISearchProvider {
     await db.insert(keywordMappings).values(insertData).onConflictDoNothing()
   }
 
-  private async _initialize(): Promise<void> {
-    if (!this.dbUtils) return
+  /**
+   * 检查关键词是否为应用的首字母缩写
+   */
+  private _isAcronymForApp(keyword: string, appInfo: any): boolean {
+    const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
+    return names.some((name) => {
+      // 提取首字母缩写
+      if (!name || !name.includes(' ')) return false
+      const acronym = name
+        .split(' ')
+        .filter((word) => word)
+        .map((word) => word.charAt(0))
+        .join('')
+        .toLowerCase()
+      return acronym === keyword
+    })
+  }
 
-    // This now only gets apps from initial file scan, not mdfind
-    const scannedApps = await this.getAppsByPlatform()
+  /**
+   * 检查关键词是否为应用的别名
+   */
+  private _isAliasForApp(keyword: string, appInfo: any): boolean {
+    const uniqueId = appInfo.bundleId || appInfo.path
+    const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path] || []
+    return aliasList.includes(keyword)
+  }
+
+  /**
+   * 为应用生成搜索关键词
+   */
+  private async _generateKeywordsForApp(appInfo: any): Promise<Set<string>> {
+    // 1. 生成关键词的综合集合
+    const generatedKeywords = new Set<string>()
+
+    // 收集所有可能的名称
+    const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
+
+    // 正则表达式
+    const CHINESE_REGEX = /[\u4e00-\u9fa5]/
+    const INVALID_KEYWORD_REGEX = /[^a-zA-Z0-9\u4e00-\u9fa5]/
+
+    // 从名称生成各种形式的关键词
+    for (const name of names) {
+      const lowerCaseName = name.toLowerCase()
+
+      // 添加完整名称和无空格版本
+      generatedKeywords.add(lowerCaseName)
+      generatedKeywords.add(lowerCaseName.replace(/\s/g, ''))
+
+      // 添加单词拆分
+      lowerCaseName.split(/[\s-]/).forEach((word) => {
+        if (word) generatedKeywords.add(word)
+      })
+
+      // 添加首字母缩写
+      const acronym = this._generateAcronym(name)
+      if (acronym) generatedKeywords.add(acronym)
+
+      // 处理中文，添加拼音
+      if (CHINESE_REGEX.test(name)) {
+        try {
+          const { pinyin } = await import('pinyin-pro')
+          // 全拼
+          const pinyinFull = pinyin(name, { toneType: 'none' }).replace(/\s/g, '')
+          generatedKeywords.add(pinyinFull)
+
+          // 首字母
+          const pinyinFirst = pinyin(name, { pattern: 'first', toneType: 'none' }).replace(/\s/g, '')
+          generatedKeywords.add(pinyinFirst)
+        } catch (error) {
+          console.warn(formatLog('AppProvider', `获取拼音失败: ${name}`, LogStyle.warning))
+        }
+      }
+    }
+
+    // 添加别名
+    const uniqueId = appInfo.bundleId || appInfo.path
+    const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path]
+    if (aliasList) {
+      aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
+    }
+
+    // 过滤无效关键词
+    const finalKeywords = new Set<string>()
+    for (const keyword of generatedKeywords) {
+      if (keyword.length > 1 && !INVALID_KEYWORD_REGEX.test(keyword)) {
+        finalKeywords.add(keyword)
+      }
+    }
+
+    return finalKeywords
+  }
+
+  /**
+   * 生成首字母缩写
+   */
+  private _generateAcronym(name: string): string {
+    if (!name || !name.includes(' ')) {
+      return ''
+    }
+    return name
+      .split(' ')
+      .filter((word) => word)
+      .map((word) => word.charAt(0))
+      .join('')
+      .toLowerCase()
+  }
+
+  /**
+   * 初始化应用提供者
+   */
+  private async _initialize(): Promise<void> {
+    console.log(formatLog('AppProvider', '开始初始化应用数据', LogStyle.process))
+
+    // 使用应用扫描服务扫描应用
+    const scannedApps = await appScanner.getApps()
     const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
-    const dbApps = await this.dbUtils.getFilesByType('app')
+    // 获取数据库中的应用
+    const dbApps = await this.dbUtils!.getFilesByType('app')
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
     const dbAppsMap = new Map(
       dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
     )
 
-    const toAdd: ScannedAppInfo[] = []
-    const toUpdate: { fileId: number; app: ScannedAppInfo }[] = []
-    const toDeleteIds: number[] = []
+    // 确定需要添加、更新和删除的应用
+    const toAdd = []
+    const toUpdate = []
+    const toDeleteIds = []
 
+    console.log(
+      formatLog(
+        'AppProvider',
+        `对比扫描到的 ${chalk.cyan(scannedApps.length)} 个应用与数据库中的 ${chalk.cyan(dbApps.length)} 个应用`,
+        LogStyle.info
+      )
+    )
+
+    // 对比扫描到的和数据库中的应用
     for (const [uniqueId, scannedApp] of scannedAppsMap.entries()) {
       const dbApp = dbAppsMap.get(uniqueId)
       if (!dbApp) {
@@ -222,15 +329,28 @@ class AppProvider implements ISearchProvider {
       }
     }
 
+    // 数据库中存在但扫描不到的应用需要删除
     for (const deletedApp of dbAppsMap.values()) {
       toDeleteIds.push(deletedApp.id)
     }
 
-    const db = this.dbUtils.getDb()
+    console.log(
+      formatLog(
+        'AppProvider',
+        `需要 ${chalk.green('添加')} ${chalk.cyan(toAdd.length)} 个应用, ${chalk.yellow('更新')} ${chalk.cyan(toUpdate.length)} 个应用, ${chalk.red('删除')} ${chalk.cyan(toDeleteIds.length)} 个应用`,
+        LogStyle.info
+      )
+    )
 
+    const db = this.dbUtils!.getDb()
+
+    // 添加新应用
     if (toAdd.length > 0) {
+      console.log(formatLog('AppProvider', `开始添加 ${chalk.cyan(toAdd.length)} 个新应用`, LogStyle.process))
+      const addStartTime = Date.now()
+
       for (const app of toAdd) {
-        const [upsertedFile] = await db
+        const [insertedFile] = await db
           .insert(filesSchema)
           .values({
             path: app.path,
@@ -250,41 +370,61 @@ class AppProvider implements ISearchProvider {
           })
           .returning()
 
-        if (upsertedFile) {
-          const extensions: { fileId: number; key: string; value: string }[] = []
+        if (insertedFile) {
+          const extensions = []
           if (app.bundleId)
-            extensions.push({ fileId: upsertedFile.id, key: 'bundleId', value: app.bundleId })
-          if (app.icon) extensions.push({ fileId: upsertedFile.id, key: 'icon', value: app.icon })
-          if (extensions.length > 0) await this.dbUtils.addFileExtensions(extensions)
-          // Keyword sync will be handled by _forceSyncAllKeywords
+            extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
+          if (app.icon)
+            extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
+
+          if (extensions.length > 0)
+            await this.dbUtils!.addFileExtensions(extensions)
+
+          // 同步关键词
+          await this._syncKeywordsForApp(app)
         }
       }
+
+      console.log(formatLog('AppProvider', `新应用添加完成，耗时 ${chalk.cyan(((Date.now() - addStartTime) / 1000).toFixed(1))} 秒`, LogStyle.success))
     }
 
+    // 更新现有应用
     if (toUpdate.length > 0) {
+      console.log(formatLog('AppProvider', `开始更新 ${chalk.cyan(toUpdate.length)} 个应用`, LogStyle.process))
+      const updateStartTime = Date.now()
+
       for (const { fileId, app } of toUpdate) {
-        const dbApp = dbAppsMap.get(app.uniqueId)
-        const updateData: { name: string; path: string; mtime: Date; displayName?: string } = {
-          name: app.name,
-          path: app.path,
-          mtime: app.lastModified
-        }
-        // Only update displayName if the existing one is empty
-        if (!dbApp?.displayName && app.displayName) {
-          updateData.displayName = app.displayName
-        }
+        await db
+          .update(filesSchema)
+          .set({
+            name: app.name,
+            path: app.path,
+            mtime: app.lastModified,
+            // 仅在当前为空时更新displayName
+            ...(!dbAppsMap.get(app.uniqueId)?.displayName && app.displayName ? { displayName: app.displayName } : {})
+          })
+          .where(eq(filesSchema.id, fileId))
 
-        await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
+        const extensions = []
+        if (app.bundleId)
+          extensions.push({ fileId: fileId, key: 'bundleId', value: app.bundleId })
+        if (app.icon)
+          extensions.push({ fileId: fileId, key: 'icon', value: app.icon })
 
-        const extensions: { fileId: number; key: string; value: string }[] = []
-        if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
-        if (app.icon) extensions.push({ fileId, key: 'icon', value: app.icon })
-        if (extensions.length > 0) await this.dbUtils.addFileExtensions(extensions)
-        // Keyword sync will be handled by _forceSyncAllKeywords
+        if (extensions.length > 0)
+          await this.dbUtils!.addFileExtensions(extensions)
+
+        // 同步关键词
+        await this._syncKeywordsForApp(app)
       }
+
+      console.log(formatLog('AppProvider', `应用更新完成，耗时 ${chalk.cyan(((Date.now() - updateStartTime) / 1000).toFixed(1))} 秒`, LogStyle.success))
     }
 
+    // 删除不存在的应用
     if (toDeleteIds.length > 0) {
+      console.log(formatLog('AppProvider', `开始删除 ${chalk.cyan(toDeleteIds.length)} 个不存在的应用`, LogStyle.process))
+
       const deletedItemIds = (
         await db
           .select({ bundleId: fileExtensions.value, path: filesSchema.path })
@@ -303,11 +443,16 @@ class AppProvider implements ISearchProvider {
           await tx.delete(keywordMappings).where(inArray(keywordMappings.itemId, deletedItemIds))
         }
       })
+
+      console.log(formatLog('AppProvider', `应用删除完成`, LogStyle.success))
     }
 
-    // mdls scan is now handled separately
+    console.log(formatLog('AppProvider', '应用数据初始化完成', LogStyle.success))
   }
 
+  /**
+   * 处理文件系统中添加或修改的项目
+   */
   private handleItemAddedOrChanged = async (event: any): Promise<void> => {
     if (!event || !event.filePath || this.processingPaths.has(event.filePath)) return
 
@@ -317,36 +462,53 @@ class AppProvider implements ISearchProvider {
       if (!appPath.endsWith('.app')) return
     }
 
+    console.log(formatLog('AppProvider', `检测到应用变化: ${chalk.cyan(appPath)}`, LogStyle.info))
     this.processingPaths.add(appPath)
-    try {
-      if (!(await this._waitForItemStable(appPath))) return
 
-      const appInfo = await this.getAppInfoByPath(appPath)
-      if (!appInfo) {
+    try {
+      if (!(await this._waitForItemStable(appPath))) {
+        console.log(formatLog('AppProvider', `应用不稳定，跳过处理: ${chalk.yellow(appPath)}`, LogStyle.warning))
         return
       }
 
-      const db = this.dbUtils!.getDb()
+      console.log(formatLog('AppProvider', `获取应用信息: ${chalk.cyan(appPath)}`, LogStyle.process))
+      const appInfo = await appScanner.getAppInfoByPath(appPath)
+      if (!appInfo) {
+        console.warn(formatLog('AppProvider', `无法获取应用信息: ${chalk.yellow(appPath)}`, LogStyle.warning))
+        return
+      }
+
+      // 检查应用是否已存在
       const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
+      const db = this.dbUtils!.getDb()
 
       if (existingFile) {
-        // UPDATE
-        const updateData: { name: string; mtime: Date; displayName?: string } = {
+        // 更新现有应用
+        console.log(formatLog('AppProvider', `更新现有应用: ${chalk.cyan(appInfo.name)}`, LogStyle.process))
+
+        const updateData: any = {
           name: appInfo.name,
           mtime: appInfo.lastModified
         }
+
         if (!existingFile.displayName && appInfo.displayName) {
           updateData.displayName = appInfo.displayName
         }
+
         await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
 
         await this.dbUtils!.addFileExtensions([
           { fileId: existingFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
           { fileId: existingFile.id, key: 'icon', value: appInfo.icon }
         ])
+
+        // 同步关键词
         await this._syncKeywordsForApp(appInfo)
+        console.log(formatLog('AppProvider', `应用 ${chalk.cyan(appInfo.name)} 更新完成`, LogStyle.success))
       } else {
-        // INSERT
+        // 添加新应用
+        console.log(formatLog('AppProvider', `添加新应用: ${chalk.cyan(appInfo.name)}`, LogStyle.process))
+
         const [insertedFile] = await db
           .insert(filesSchema)
           .values({
@@ -364,14 +526,28 @@ class AppProvider implements ISearchProvider {
             { fileId: insertedFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
             { fileId: insertedFile.id, key: 'icon', value: appInfo.icon }
           ])
+
+          // 同步关键词
           await this._syncKeywordsForApp(appInfo)
+          console.log(formatLog('AppProvider', `新应用 ${chalk.cyan(appInfo.name)} 添加完成`, LogStyle.success))
         }
       }
+    } catch (error) {
+      console.error(
+        formatLog(
+          'AppProvider',
+          `处理应用变化时发生错误: ${chalk.red((error as Error).message)}`,
+          LogStyle.error
+        )
+      )
     } finally {
       this.processingPaths.delete(appPath)
     }
   }
 
+  /**
+   * 处理文件系统中删除的项目
+   */
   private handleItemUnlinked = async (event: any): Promise<void> => {
     if (!event || !event.filePath || this.processingPaths.has(event.filePath)) return
 
@@ -381,199 +557,44 @@ class AppProvider implements ISearchProvider {
       if (!appPath.endsWith('.app')) return
     }
 
+    console.log(formatLog('AppProvider', `检测到应用被删除: ${chalk.cyan(appPath)}`, LogStyle.process))
     this.processingPaths.add(appPath)
-    try {
-      if (!this.dbUtils) return
 
-      const fileToDelete = await this.dbUtils.getFileByPath(appPath)
+    try {
+      const fileToDelete = await this.dbUtils!.getFileByPath(appPath)
       if (fileToDelete) {
-        const itemId =
-          (await this.dbUtils.getFileExtensions(fileToDelete.id)).find((e) => e.key === 'bundleId')
-            ?.value || fileToDelete.path
-        await this.dbUtils.getDb().transaction(async (tx) => {
+        const extensions = await this.dbUtils!.getFileExtensions(fileToDelete.id)
+        const itemId = extensions.find((e) => e.key === 'bundleId')?.value || fileToDelete.path
+
+        await this.dbUtils!.getDb().transaction(async (tx) => {
           await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
           await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
           await tx.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
         })
+
+        console.log(formatLog('AppProvider', `应用已从数据库中删除: ${chalk.cyan(appPath)}`, LogStyle.success))
+      } else {
+        console.log(formatLog('AppProvider', `未在数据库中找到要删除的应用: ${chalk.yellow(appPath)}`, LogStyle.warning))
       }
+    } catch (error) {
+      console.error(
+        formatLog(
+          'AppProvider',
+          `删除应用时发生错误: ${chalk.red((error as Error).message)}`,
+          LogStyle.error
+        )
+      )
     } finally {
       this.processingPaths.delete(appPath)
     }
   }
 
-  private async getItemsByIds(
-    itemIds: string[]
-  ): Promise<(typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[]> {
-    if (!this.dbUtils || itemIds.length === 0) return []
-
-    const db = this.dbUtils.getDb()
-
-    // This query is complex. It needs to find apps where either the bundleId (in file_extensions)
-    // or the path (in files) is in the list of itemIds.
-    const subquery = db
-      .select({
-        fileId: fileExtensions.fileId
-      })
-      .from(fileExtensions)
-      .where(and(eq(fileExtensions.key, 'bundleId'), inArray(fileExtensions.value, itemIds)))
-
-    const files = await db
-      .select()
-      .from(filesSchema)
-      .where(
-        and(
-          eq(filesSchema.type, 'app'),
-          or(inArray(filesSchema.path, itemIds), inArray(filesSchema.id, subquery))
-        )
-      )
-
-    return this.fetchExtensionsForFiles(files)
-  }
-
-  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
-    const { item, searchResult } = args
-    const sessionId = searchResult?.sessionId
-    if (sessionId) {
-      searchEngineCore.recordExecute(sessionId, item).catch((err) => {
-        console.error('[AppProvider] Failed to record execution.', err)
-      })
-    }
-
-    const appPath = item.meta?.app?.path
-    if (!appPath) return null
-
-    try {
-      await shell.openPath(appPath)
-    } catch (err) {
-      console.error(`Failed to open application at: ${appPath}`, err)
-    }
-    return null
-  }
-
-  async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
-    if (!this.dbUtils || !query.text) {
-      return TuffFactory.createSearchResult(query).build()
-    }
-
-    const db = this.dbUtils.getDb()
-    const lowerCaseQuery = query.text.toLowerCase()
-    const queryTerms = lowerCaseQuery.split(/[\s/]+/).filter(Boolean); // 按空白或 / 拆分关键词
-
-    let preciseMatchedItemIds: Set<string> | null = null;
-
-    // --- 精确查询路径 ---
-    if (queryTerms.length > 0) {
-      const allTermMatchedItemIds: Set<string>[] = [];
-
-      for (const term of queryTerms) {
-        const matchedKeywords = await db
-          .select({ itemId: keywordMappings.itemId })
-          .from(keywordMappings)
-          .where(sql`lower(keyword) LIKE ${'%' + term + '%'}`);
-
-        allTermMatchedItemIds.push(new Set(matchedKeywords.map(k => k.itemId)));
-      }
-
-      // 对所有 term 的匹配结果取交集 (AND 语义)
-      if (allTermMatchedItemIds.length > 0) {
-        preciseMatchedItemIds = allTermMatchedItemIds.reduce((intersection, currentSet) => {
-          return new Set([...intersection].filter(id => currentSet.has(id)));
-        });
-      }
-    }
-
-    let finalApps: (typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[] = [];
-    let isFuzzySearch = false;
-
-    if (preciseMatchedItemIds && preciseMatchedItemIds.size > 0) {
-      // 精确匹配有结果
-      finalApps = await this.getItemsByIds(Array.from(preciseMatchedItemIds));
-    } else {
-      // --- 模糊查询路径 (兜底) ---
-      isFuzzySearch = true;
-      console.debug(`[AppProvider] No precise matches for '${query.text}', falling back to fuzzy search.`);
-
-      // 假设模糊查询只对整个查询文本进行，而不是拆分的 term
-      // 1. 获取所有 app 类型的记录
-      const allApps = await db.select().from(filesSchema).where(eq(filesSchema.type, 'app'));
-
-      // 2. 在内存中进行 Levenshtein 距离计算和过滤
-      const fuzzyMatchedFiles = allApps.filter(app => {
-        const distance = levenshteinDistance(app.name.toLowerCase(), lowerCaseQuery);
-        return distance <= 2;
-      });
-
-      finalApps = await this.fetchExtensionsForFiles(fuzzyMatchedFiles);
-    }
-
-    // TODO: 实现 "精加工" 服务 (步骤 3) 来计算 source 和 indices
-    // TODO: 实现 "排序与返回" (步骤 4)
-    const processedResults = await processSearchResults(finalApps, query, isFuzzySearch, this.aliases);
-
-    // --- 4. 排序与返回 ---
-    // 排序逻辑已在 processSearchResults 内部通过 score 完成，这里只需按 score 降序
-    const sortedItems = processedResults
-      .sort((a, b) => b.score - a.score)
-      .map(item => {
-        // 移除内部 score 字段，只保留 TuffItem 结构
-        const { score, ...rest } = item;
-        return rest;
-      });
-
-    return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
-  }
-
-  // Keep other methods like _subscribeToFSEvents, _registerWatchPaths, _waitForItemStable, fetchExtensionsForFiles, mapAppTo getAppsByPlatform, getAppInfoByPath as they are.
-  // The comprehensive scan logic will also be kept and updated to use the new keyword sync.
-
-  private _subscribeToFSEvents(): void {
-    if (this.isMac) {
-      touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
-      touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
-    } else {
-      touchEventBus.on(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
-      touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
-    }
-
-    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
-  }
-
-  private _unsubscribeFromFSEvents(): void {
-    touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
-    touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
-    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
-    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
-    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
-  }
-
-  private _registerWatchPaths(): void {
-    for (const p of this.WATCH_PATHS) {
-      const depth = this.isMac && (p === '/Applications' || p.endsWith('/Applications')) ? 1 : 4
-      FileSystemWatcher.addPath(p, depth)
-    }
-  }
-
-  private async _waitForItemStable(itemPath: string, delay = 500, retries = 5): Promise<boolean> {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const size1 = (await fs.promises.stat(itemPath)).size
-        await new Promise((resolve) => setTimeout(resolve, delay))
-        const size2 = (await fs.promises.stat(itemPath)).size
-
-        if (size1 === size2) {
-          await sleep(1000)
-          return true
-        }
-      } catch {
-        return false
-      }
-    }
-    return false
-  }
-
+  /**
+   * 获取扩展信息
+   */
   private async fetchExtensionsForFiles(
-    files: (typeof filesSchema.$inferSelect)[]
-  ): Promise<(typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[]> {
+    files: any[]
+  ): Promise<any[]> {
     if (!this.dbUtils) return files.map((f) => ({ ...f, extensions: {} }))
 
     const fileIds = files.map((f) => f.id)
@@ -604,218 +625,344 @@ class AppProvider implements ISearchProvider {
     }))
   }
 
+  /**
+   * 应用执行
+   */
+  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+    const { item, searchResult } = args
 
-  private async getAppsByPlatform(): Promise<ScannedAppInfo[]> {
-    switch (process.platform) {
-      case 'darwin': {
-        const { getApps } = await import('./darwin')
-        return getApps()
-      }
-      // FIXME: These need to be updated to return the full ScannedAppInfo object
-      case 'win32': {
-        const { getApps } = await import('./win')
-        const apps = await getApps()
-        return apps.map((app) => ({
-          ...app,
-          displayName: undefined,
-          fileName: path.basename(app.path)
-        }))
-      }
-      case 'linux': {
-        const { getApps } = await import('./linux')
-        const apps = await getApps()
-        return apps.map((app) => ({
-          ...app,
-          displayName: undefined,
-          fileName: path.basename(app.path)
-        }))
-      }
-      default:
-        return []
-    }
-  }
-
-  private async getAppInfoByPath(filePath: string): Promise<ScannedAppInfo | null> {
-    try {
-      switch (process.platform) {
-        case 'darwin': {
-          const { getAppInfo } = await import('./darwin')
-          return await getAppInfo(filePath)
-        }
-        // FIXME: These need to be updated to return the full ScannedAppInfo object
-        case 'win32': {
-          const { getAppInfo } = await import('./win')
-          const appInfo = await getAppInfo(filePath)
-          return appInfo
-            ? { ...appInfo, displayName: undefined, fileName: path.basename(appInfo.path) }
-            : null
-        }
-        case 'linux': {
-          const { getAppInfo } = await import('./linux')
-          const appInfo = await getAppInfo(filePath)
-          return appInfo
-            ? { ...appInfo, displayName: undefined, fileName: path.basename(appInfo.path) }
-            : null
-        }
-        default:
-          return null
-      }
-    } catch (error) {
-      console.error(`[AppProvider] Failed to get app info for ${filePath}:`, error)
-      return null
-    }
-  }
-
-  private _scheduleMdlsUpdateScan(): void {
-    // dev 模式下立即执行一次
-    if (is.dev) {
-      this._runMdlsUpdateScan().then(() => {
-        console.debug('[AppProvider] Initial mdls update scan completed in dev mode.')
+    // 记录执行
+    const sessionId = searchResult?.sessionId
+    if (sessionId) {
+      console.log(formatLog('AppProvider', `记录应用执行: ${chalk.cyan(item.id)}`, LogStyle.info))
+      searchEngineCore.recordExecute(sessionId, item).catch((err) => {
+        console.error(formatLog('AppProvider', `记录执行失败: ${chalk.red(err.message)}`, LogStyle.error))
       })
     }
 
-    // 启动一个轮询服务，每 10 分钟检查一次是否需要执行
-    pollingService.register(
-      'app_provider_mdls_update_scan',
-      async () => {
-        const lastScanTimestamp = (await this._getLastScanTime()) || 0
-        const now = Date.now()
-        // 如果距离上次扫描超过 1 小时 (在 prod 模式下)
-        if (!is.dev && now - lastScanTimestamp > 60 * 60 * 1000) {
-          await this._runMdlsUpdateScan()
-        } else if (is.dev && !lastScanTimestamp) {
-          // dev 模式下如果还没有扫描过，也执行一次
-          await this._runMdlsUpdateScan()
-        }
-      },
-      { interval: 10, unit: 'minutes' },
-    )
+    // 打开应用
+    const appPath = item.meta?.app?.path
+    if (!appPath) {
+      console.error(formatLog('AppProvider', `执行失败: 未找到应用路径`, LogStyle.error))
+      return null
+    }
+
+    console.log(formatLog('AppProvider', `打开应用: ${chalk.cyan(appPath)}`, LogStyle.process))
+    try {
+      await shell.openPath(appPath)
+      console.log(formatLog('AppProvider', `应用打开成功: ${chalk.green(appPath)}`, LogStyle.success))
+    } catch (err) {
+      console.error(formatLog('AppProvider', `打开应用失败: ${chalk.red((err as Error).message)}`, LogStyle.error))
+    }
+
+    return null
   }
 
-  async _forceRebuild(): Promise<void> {
-    if (!this.dbUtils || !this.context) return
+  /**
+   * 应用搜索
+   */
+  async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
+    console.log(formatLog('AppProvider', `执行搜索: ${chalk.cyan(query.text)}`, LogStyle.process))
+
+    if (!this.dbUtils || !query.text) {
+      console.log(formatLog('AppProvider', '搜索词为空或数据库未初始化，返回空结果', LogStyle.info))
+      return TuffFactory.createSearchResult(query).build()
+    }
+
     const db = this.dbUtils.getDb()
-    console.debug('[AppProvider] Forcing rebuild of application database...')
-    await db.delete(filesSchema)
-    await db.delete(keywordMappings)
-    await db.delete(fileExtensions)
-    console.debug('[AppProvider] Database cleared. Rescanning...')
-    this.isInitializing = null
-    await this.onLoad(this.context)
-    console.debug('[AppProvider] Force rebuild completed.')
+    const lowerCaseQuery = query.text.toLowerCase()
+    const queryTerms = lowerCaseQuery.split(/[\s/]+/).filter(Boolean) // 按空白或 / 拆分关键词
+
+    let preciseMatchedItemIds: Set<string> | null = null
+    let isFuzzySearch = false
+
+    // --- 精确查询路径 ---
+    if (queryTerms.length > 0) {
+      console.log(formatLog('AppProvider', `执行精确查询: ${chalk.cyan(queryTerms.join(', '))}`, LogStyle.info))
+      const allTermMatchedItemIds: Set<string>[] = []
+
+      for (const term of queryTerms) {
+        const matchedKeywords = await db
+          .select({ itemId: keywordMappings.itemId })
+          .from(keywordMappings)
+          .where(sql`lower(keyword) LIKE ${'%' + term + '%'}`)
+
+        allTermMatchedItemIds.push(new Set(matchedKeywords.map((k) => k.itemId)))
+      }
+
+      // 对所有 term 的匹配结果取交集 (AND 语义)
+      if (allTermMatchedItemIds.length > 0) {
+        preciseMatchedItemIds = allTermMatchedItemIds.reduce((intersection, currentSet) => {
+          return new Set([...intersection].filter((id) => currentSet.has(id)))
+        })
+      }
+    }
+
+    let finalApps = []
+
+    if (preciseMatchedItemIds && preciseMatchedItemIds.size > 0) {
+      // 精确匹配有结果
+      console.log(formatLog('AppProvider', `精确匹配找到 ${chalk.green(preciseMatchedItemIds.size)} 个结果`, LogStyle.success))
+
+      // 查询匹配项
+      const itemIds = Array.from(preciseMatchedItemIds)
+      const subquery = db
+        .select({
+          fileId: fileExtensions.fileId
+        })
+        .from(fileExtensions)
+        .where(and(eq(fileExtensions.key, 'bundleId'), inArray(fileExtensions.value, itemIds)))
+
+      const files = await db
+        .select()
+        .from(filesSchema)
+        .where(
+          and(
+            eq(filesSchema.type, 'app'),
+            or(inArray(filesSchema.path, itemIds), inArray(filesSchema.id, subquery))
+          )
+        )
+
+      finalApps = await this.fetchExtensionsForFiles(files)
+    } else {
+      // --- 模糊查询路径 (兜底) ---
+      isFuzzySearch = true
+      console.log(
+        formatLog('AppProvider', `无精确匹配结果，转为模糊搜索: ${chalk.cyan(query.text)}`, LogStyle.info)
+      )
+
+      // 获取所有应用进行模糊匹配
+      const allApps = await this.dbUtils.getFilesByType('app')
+
+      console.log(formatLog('AppProvider', `在 ${chalk.cyan(allApps.length)} 个应用中执行模糊匹配`, LogStyle.process))
+
+      // 使用 Levenshtein 距离计算和过滤
+      const fuzzyMatchedFiles = allApps.filter((app) => {
+        const distance = levenshteinDistance(app.name.toLowerCase(), lowerCaseQuery)
+        return distance <= 2
+      })
+
+      console.log(formatLog('AppProvider', `模糊匹配找到 ${chalk.green(fuzzyMatchedFiles.length)} 个结果`, LogStyle.success))
+      finalApps = await this.fetchExtensionsForFiles(fuzzyMatchedFiles)
+    }
+
+    // 处理搜索结果，计算评分和高亮
+    const processedResults = await processSearchResults(
+      finalApps,
+      query,
+      isFuzzySearch,
+      this.aliases
+    )
+
+    // 创建最终的搜索结果
+    const sortedItems = processedResults.map(item => {
+      const { score, ...rest } = item
+      return rest
+    })
+
+    console.log(formatLog('AppProvider', `搜索完成，返回 ${chalk.green(sortedItems.length)} 个结果`, LogStyle.success))
+    return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
 
+  /**
+   * 订阅文件系统事件
+   */
+  private _subscribeToFSEvents(): void {
+    console.log(formatLog('AppProvider', '订阅文件系统事件', LogStyle.info))
+
+    if (this.isMac) {
+      touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
+      touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
+    } else {
+      touchEventBus.on(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
+      touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
+    }
+
+    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
+  }
+
+  /**
+   * 取消订阅文件系统事件
+   */
+  private _unsubscribeFromFSEvents(): void {
+    console.log(formatLog('AppProvider', '取消订阅文件系统事件', LogStyle.info))
+
+    touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
+    touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
+    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
+    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
+    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
+  }
+
+  /**
+   * 注册监视路径
+   */
+  private _registerWatchPaths(): void {
+    const watchPaths = appScanner.getWatchPaths()
+    console.log(formatLog('AppProvider', `注册监视路径: ${chalk.cyan(watchPaths.join(', '))}`, LogStyle.info))
+
+    for (const p of watchPaths) {
+      const depth = this.isMac && (p === '/Applications' || p.endsWith('/Applications')) ? 1 : 4
+      FileSystemWatcher.addPath(p, depth)
+    }
+  }
+
+  /**
+   * 等待项目稳定
+   */
+  private async _waitForItemStable(itemPath: string, delay = 500, retries = 5): Promise<boolean> {
+    console.log(formatLog('AppProvider', `等待项目稳定: ${chalk.cyan(itemPath)}`, LogStyle.info))
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        const size1 = (await fs.stat(itemPath)).size
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        const size2 = (await fs.stat(itemPath)).size
+
+        if (size1 === size2) {
+          console.log(formatLog('AppProvider', `项目已稳定: ${chalk.green(itemPath)}`, LogStyle.success))
+          await sleep(1000)
+          return true
+        } else {
+          console.log(formatLog('AppProvider', `项目仍在变化: ${chalk.yellow(itemPath)}，重试 ${i+1}/${retries}`, LogStyle.info))
+        }
+      } catch (error) {
+        console.error(formatLog('AppProvider', `检查项目稳定性失败: ${chalk.red((error as Error).message)}`, LogStyle.error))
+        return false
+      }
+    }
+
+    console.warn(formatLog('AppProvider', `项目未达到稳定状态: ${chalk.yellow(itemPath)}`, LogStyle.warning))
+    return false
+  }
+
+  /**
+   * 同步所有应用的关键词
+   */
   private async _forceSyncAllKeywords(): Promise<void> {
+    console.log(formatLog('AppProvider', '开始同步所有应用的关键词', LogStyle.process))
+
     if (!this.dbUtils) {
+      console.error(formatLog('AppProvider', '数据库未初始化，无法同步关键词', LogStyle.error))
       return
     }
-    const allDbApps = await this.dbUtils.getFilesByType('app')
 
+    const allDbApps = await this.dbUtils.getFilesByType('app')
     if (allDbApps.length === 0) {
+      console.log(formatLog('AppProvider', '数据库中没有应用，跳过同步', LogStyle.info))
       return
     }
 
     const appsWithExtensions = await this.fetchExtensionsForFiles(allDbApps)
+    console.log(formatLog('AppProvider', `为 ${chalk.cyan(appsWithExtensions.length)} 个应用同步关键词`, LogStyle.process))
 
     for (const app of appsWithExtensions) {
-      const appInfo: ScannedAppInfo = {
-        name: app.name,
-        displayName: app.displayName || undefined,
-        fileName: path.basename(app.path, '.app'),
-        path: app.path,
-        icon: app.extensions.icon || '',
-        bundleId: app.extensions.bundleId || undefined,
-        uniqueId: app.extensions.bundleId || app.path,
-        lastModified: app.mtime
-      }
+      const appInfo = this._mapDbAppToScannedInfo(app)
       await this._syncKeywordsForApp(appInfo)
     }
+
+    console.log(formatLog('AppProvider', '所有应用关键词同步完成', LogStyle.success))
   }
 
-  private async _runMdlsUpdateScan(): Promise<void> {
-    if (process.platform !== 'darwin' || !this.dbUtils) return
+  /**
+   * 安排 mdls 更新扫描
+   */
+  private _scheduleMdlsUpdateScan(): void {
+    if (process.platform !== 'darwin') {
+      console.log(formatLog('AppProvider', '非 macOS 平台，跳过 mdls 扫描', LogStyle.info))
+      return
+    }
+
+    // 开发模式下立即执行一次
+    if (is.dev) {
+      console.log(formatLog('AppProvider', '开发模式下立即执行一次 mdls 扫描', LogStyle.info))
+      this._runMdlsUpdateScan().then(() => {
+        console.log(formatLog('AppProvider', '开发模式 mdls 扫描完成', LogStyle.success))
+      })
+    }
+
+    // 启动轮询服务
+    console.log(formatLog('AppProvider', '注册 mdls 更新扫描轮询服务 (10分钟间隔)', LogStyle.info))
+    pollingService.register(
+      'app_provider_mdls_update_scan',
+      async () => {
+        const lastScanTimestamp = await this._getLastScanTime() || 0
+        const now = Date.now()
+
+        // 生产模式下 1 小时执行一次，开发模式下如果没扫描过则执行一次
+        if (!is.dev && now - lastScanTimestamp > 60 * 60 * 1000) {
+          console.log(formatLog('AppProvider', '距离上次扫描超过1小时，开始 mdls 扫描', LogStyle.info))
+          await this._runMdlsUpdateScan()
+        } else if (is.dev && !lastScanTimestamp) {
+          console.log(formatLog('AppProvider', '开发模式下首次扫描', LogStyle.info))
+          await this._runMdlsUpdateScan()
+        } else {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `距离上次扫描 ${chalk.cyan(((now - lastScanTimestamp) / (60 * 1000)).toFixed(1))} 分钟，暂不执行`,
+              LogStyle.info
+            )
+          )
+        }
+      },
+      { interval: 10, unit: 'minutes' }
+    )
+  }
+
+  /**
+   * 强制重建应用数据库
+   */
+  async _forceRebuild(): Promise<void> {
+    console.log(formatLog('AppProvider', '强制重建应用数据库', LogStyle.process))
+
+    if (!this.context || !this.dbUtils) {
+      console.error(formatLog('AppProvider', '上下文或数据库未初始化，无法重建', LogStyle.error))
+      return
+    }
 
     const db = this.dbUtils.getDb()
-    const allDbApps = await this.dbUtils.getFilesByType('app')
-    if (allDbApps.length === 0) return
 
-    console.debug(`[AppProvider] Running mdls update scan for ${allDbApps.length} apps.`)
+    // 清空数据库表
+    await db.delete(filesSchema)
+    await db.delete(keywordMappings)
+    await db.delete(fileExtensions)
 
-    const { exec } = await import('child_process')
+    console.log(formatLog('AppProvider', '数据库已清空，开始重新扫描', LogStyle.info))
 
-    for (const app of allDbApps) {
-      try {
-        const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-        const { stdout } = await new Promise<{ stdout: string; stderr: string }>(
-          (resolve, reject) => {
-            exec(command, (err, stdout, stderr) => {
-              if (err) {
-                console.error(`[AppProvider] MDLS command error for ${app.path}:`, err)
-                return reject(err)
-              }
-              if (stderr) {
-                console.warn(`[AppProvider] MDLS command stderr for ${app.path}:`, stderr)
-              }
-              resolve({ stdout, stderr })
-            })
-          },
-        )
+    // 重新初始化
+    this.isInitializing = null
+    await this.onLoad(this.context)
 
-        let spotlightName = stdout.trim()
-
-        if (spotlightName.endsWith('.app')) {
-          spotlightName = spotlightName.slice(0, -4)
-        }
-
-        const currentDisplayName = app.displayName
-
-        if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
-          console.debug(
-            `[AppProvider] Updating displayName for ${app.name}: "${currentDisplayName || 'null'}" -> "${spotlightName}"`
-          )
-          await db.update(filesSchema).set({ displayName: spotlightName }).where(eq(filesSchema.id, app.id))
-
-          // Re-sync keywords with the new displayName
-          const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
-          if (appWithExtensions) {
-            const appInfo: ScannedAppInfo = {
-              name: appWithExtensions.name,
-              displayName: spotlightName, // Use the new name
-              fileName: path.basename(appWithExtensions.path, '.app'),
-              path: appWithExtensions.path,
-              icon: appWithExtensions.extensions.icon || '',
-              bundleId: appWithExtensions.extensions.bundleId || undefined,
-              uniqueId: appWithExtensions.extensions.bundleId || appWithExtensions.path,
-              lastModified: appWithExtensions.mtime
-            }
-            // Delete old keywords and re-sync
-            const itemId = appInfo.uniqueId
-            await db.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
-            await this._syncKeywordsForApp(appInfo)
-            console.debug(`[AppProvider] Re-synced keywords for ${appInfo.name}`)
-          }
-        }
-      } catch (e) {
-        console.error(`[AppProvider] Error processing app ${app.path} during MDLS scan:`, e)
-      }
-    }
-    await this._setLastScanTime(Date.now())
-    console.debug('[AppProvider] mdls update scan finished.')
+    console.log(formatLog('AppProvider', '应用数据库重建完成', LogStyle.success))
   }
 
+  /**
+   * 获取上次扫描时间
+   */
   private async _getLastScanTime(): Promise<number | null> {
     if (!this.dbUtils) return null
+
     const db = this.dbUtils.getDb()
     const result = await db
       .select()
       .from(configSchema)
       .where(eq(configSchema.key, 'app_provider_last_mdls_scan'))
       .limit(1)
-    return result.length > 0 && result[0].value ? parseInt(result[0].value, 10) : null
+
+    if (result.length > 0 && result[0].value) {
+      return parseInt(result[0].value, 10)
+    }
+
+    return null
   }
 
+  /**
+   * 设置上次扫描时间
+   */
   private async _setLastScanTime(timestamp: number): Promise<void> {
     if (!this.dbUtils) return
+
     const db = this.dbUtils.getDb()
     await db
       .insert(configSchema)
@@ -825,6 +972,65 @@ class AppProvider implements ISearchProvider {
         set: { value: timestamp.toString() }
       })
   }
+
+  /**
+   * 执行 mdls 更新扫描
+   */
+  private async _runMdlsUpdateScan(): Promise<void> {
+    if (process.platform !== 'darwin') {
+      console.log(formatLog('AppProvider', '非 macOS 平台，跳过 mdls 扫描', LogStyle.info))
+      return
+    }
+
+    if (!this.dbUtils) {
+      console.error(formatLog('AppProvider', '数据库未初始化，无法执行 mdls 扫描', LogStyle.error))
+      return
+    }
+
+    console.log(formatLog('AppProvider', '开始 mdls 更新扫描', LogStyle.process))
+
+    const allDbApps = await this.dbUtils.getFilesByType('app')
+    if (allDbApps.length === 0) {
+      console.log(formatLog('AppProvider', '数据库中没有应用，跳过 mdls 扫描', LogStyle.info))
+      return
+    }
+
+    // 使用 appScanner 执行 mdls 扫描
+    const { updatedApps, updatedCount } = await appScanner.runMdlsUpdateScan(allDbApps)
+
+    // 如果有更新，则更新数据库和关键词
+    if (updatedCount > 0 && updatedApps.length > 0) {
+      const db = this.dbUtils.getDb()
+
+      for (const app of updatedApps) {
+        // 更新显示名
+        await db
+          .update(filesSchema)
+          .set({ displayName: app.displayName })
+          .where(eq(filesSchema.id, app.id))
+
+        // 重新同步关键词
+        const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
+        if (appWithExtensions) {
+          const appInfo = this._mapDbAppToScannedInfo({
+            ...appWithExtensions,
+            displayName: app.displayName
+          })
+
+          // 删除旧关键词
+          const itemId = appInfo.uniqueId
+          await db.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
+
+          // 重新同步关键词
+          await this._syncKeywordsForApp(appInfo)
+        }
+      }
+    }
+
+    // 更新扫描时间
+    await this._setLastScanTime(Date.now())
+  }
 }
 
+// 导出单例
 export const appProvider = new AppProvider()

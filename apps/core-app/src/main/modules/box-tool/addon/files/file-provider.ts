@@ -1,24 +1,24 @@
+import { ProviderContext } from '../../search-engine/types'
 import {
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
-  ProviderContext,
+  TuffFactory,
   TuffQuery,
-  TuffSearchResult,
-  IProviderActivate
-} from '../../search-engine/types'
-import { TuffFactory } from '@talex-touch/utils'
+  TuffSearchResult
+} from '@talex-touch/utils'
 import { app, shell } from 'electron'
 import path from 'path'
 import { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, fileExtensions, scanProgress } from '../../../../db/schema'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, like } from 'drizzle-orm'
 // import PinyinMatch from 'pinyin-match'
 import extractFileIcon from 'extract-file-icon'
 import { KEYWORD_MAP } from './constants'
 import { ScannedFileInfo } from './types'
 import { mapFileToTuffItem, scanDirectory } from './utils'
 
-class FileProvider implements ISearchProvider {
+class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
   readonly name = 'File Provider'
   readonly type = 'file' as const
@@ -251,7 +251,25 @@ class FileProvider implements ISearchProvider {
       return TuffFactory.createSearchResult(query).build()
     }
 
-    const allFilesWithExtensions = await db
+    const nameMatchFiles = await db
+      .select({ id: filesSchema.id })
+      .from(filesSchema)
+      .where(and(eq(filesSchema.type, 'file'), like(filesSchema.name, `%${searchTerm}%`)))
+
+    const keywordMatchFiles = await db
+      .select({ fileId: fileExtensions.fileId })
+      .from(fileExtensions)
+      .where(and(eq(fileExtensions.key, 'keywords'), like(fileExtensions.value, `%${searchTerm}%`)))
+
+    const nameMatchIds = nameMatchFiles.map((f) => f.id)
+    const keywordMatchIds = keywordMatchFiles.map((f) => f.fileId)
+    const allIds = [...new Set([...nameMatchIds, ...keywordMatchIds])]
+
+    if (allIds.length === 0) {
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    const matchedFilesWithExtensions = await db
       .select({
         file: filesSchema,
         extensions: {
@@ -261,13 +279,13 @@ class FileProvider implements ISearchProvider {
       })
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(eq(filesSchema.type, 'file'))
+      .where(inArray(filesSchema.id, allIds))
 
     const filesMap = new Map<
       number,
       { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
     >()
-    for (const row of allFilesWithExtensions) {
+    for (const row of matchedFilesWithExtensions) {
       if (!filesMap.has(row.file.id)) {
         filesMap.set(row.file.id, { file: row.file, extensions: {} })
       }
@@ -275,17 +293,7 @@ class FileProvider implements ISearchProvider {
         filesMap.get(row.file.id)!.extensions[row.extensions.key] = row.extensions.value
       }
     }
-    const searchPool = Array.from(filesMap.values())
-
-    const filteredResults = searchPool.filter(({ file, extensions }) => {
-      const fileName = file.name.toLowerCase()
-      // if (PinyinMatch.match(fileName, searchTerm)) {
-      if (fileName.includes(searchTerm)) {
-        return true
-      }
-      const keywords = extensions.keywords ? (JSON.parse(extensions.keywords) as string[]) : []
-      return keywords.some((keyword) => keyword.toLowerCase().includes(searchTerm))
-    })
+    const filteredResults = Array.from(filesMap.values())
 
     if (filteredResults.length === 0) {
       return TuffFactory.createSearchResult(query).build()

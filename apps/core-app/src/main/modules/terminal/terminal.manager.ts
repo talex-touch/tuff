@@ -1,9 +1,9 @@
 import { spawn, ChildProcess } from 'child_process'
 import { ChannelType, DataCode, StandardChannelData } from '@talex-touch/utils/channel'
 import { WebContents } from 'electron'
-import { TalexTouch } from '@talex-touch/utils'
-import { TouchApp } from '../../core/touch-core'
+import { ModuleKey } from '@talex-touch/utils'
 import os from 'os'
+import { BaseModule } from '../abstract-base-module'
 
 // Determine the default shell based on the operating system
 const getDefaultShell = (): string => {
@@ -15,39 +15,27 @@ const getDefaultShell = (): string => {
   }
 }
 
-class TerminalManager implements TalexTouch.IModule {
-  private static _instance: TerminalManager
-
-  readonly name = Symbol('terminal-manager')
+class TerminalModule extends BaseModule {
   private processes: Map<string, ChildProcess> = new Map()
-  private touchApp: TouchApp | null = null
-  private readonly self: TerminalManager
+
+  static key = Symbol.for('terminal-manager')
+  name: ModuleKey = TerminalModule.key
 
   constructor() {
-    if (TerminalManager._instance) {
-      throw new Error('[TerminalManager] Singleton class cannot be instantiated more than once.')
-    }
-    TerminalManager._instance = this
-    this.self = this
+    super(TerminalModule.key, {
+      create: false
+    })
   }
 
-  public static getInstance(): TerminalManager {
-    if (!this._instance) {
-      this._instance = new TerminalManager()
-    }
-    return this._instance
-  }
-
-  init(touchApp: TouchApp): void {
-    this.self.touchApp = touchApp
-    const channel = this.self.touchApp.channel
+  onInit(): void {
+    const channel = $app.channel
 
     // For child_process, 'create' will be used to start a new command process.
-    channel.regChannel(ChannelType.MAIN, 'terminal:create', (data) => this.self.create(data))
+    channel.regChannel(ChannelType.MAIN, 'terminal:create', (data) => this.create(data))
     // 'write' is not applicable for non-interactive child_process, but we can keep it for API consistency
     // or repurpose it if needed in the future. For now, it will be a no-op or log a warning.
-    channel.regChannel(ChannelType.MAIN, 'terminal:write', (data) => this.self.write(data))
-    channel.regChannel(ChannelType.MAIN, 'terminal:kill', (data) => this.self.kill(data))
+    channel.regChannel(ChannelType.MAIN, 'terminal:write', (data) => this.write(data))
+    channel.regChannel(ChannelType.MAIN, 'terminal:kill', (data) => this.kill(data))
   }
 
   /**
@@ -79,7 +67,7 @@ class TerminalManager implements TalexTouch.IModule {
       })
     }
 
-    this.self.processes.set(id, proc)
+    this.processes.set(id, proc)
 
     // Listen for data from stdout and stderr
     proc.stdout?.on('data', (data) => {
@@ -112,7 +100,7 @@ class TerminalManager implements TalexTouch.IModule {
           data: { id, exitCode: code }
         })
       }
-      this.self.processes.delete(id)
+      this.processes.delete(id)
     })
 
     proc.on('error', (err) => {
@@ -129,7 +117,7 @@ class TerminalManager implements TalexTouch.IModule {
           data: { id, exitCode: -1 }
         })
       }
-      this.self.processes.delete(id)
+      this.processes.delete(id)
     })
 
     // Reply with the process ID
@@ -143,7 +131,7 @@ class TerminalManager implements TalexTouch.IModule {
    */
   private write(channelData: StandardChannelData): void {
     const { id, data } = channelData.data
-    const proc = this.self.processes.get(id)
+    const proc = this.processes.get(id)
     if (proc && proc.stdin) {
       proc.stdin.write(data)
       // Optionally, end the input stream if it's a one-off command
@@ -160,18 +148,20 @@ class TerminalManager implements TalexTouch.IModule {
    */
   private kill(channelData: StandardChannelData): void {
     const { id } = channelData.data
-    const proc = this.self.processes.get(id)
+    const proc = this.processes.get(id)
     if (proc) {
       proc.kill()
-      this.self.processes.delete(id)
+      this.processes.delete(id)
     }
   }
 
-  destroy(): void {
+  onDestroy(): void {
+    this.processes.forEach((proc) => proc.kill())
+    this.processes.clear()
     console.log('[TerminalManager] Destroying all processes.')
-    this.self.processes.forEach((proc) => proc.kill())
-    this.self.processes.clear()
   }
 }
 
-export default TerminalManager.getInstance()
+const terminalModule = new TerminalModule()
+
+export { terminalModule }
