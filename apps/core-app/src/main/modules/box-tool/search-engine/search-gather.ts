@@ -1,318 +1,291 @@
-import { TuffQuery, withTimeout, TimeoutError, TuffSearchResult } from '@talex-touch/utils'
-import { ISearchProvider, TuffUpdate } from './types'
+import {
+  TuffQuery,
+  withTimeout,
+  TuffSearchResult,
+  ITuffGatherOptions,
+  ISearchProvider,
+  TuffAggregatorCallback,
+  IGatherController
+} from '@talex-touch/utils'
+import { ProviderContext } from './types'
+import { performance } from 'perf_hooks'
+import chalk from 'chalk'
+
+import { debounce } from 'lodash'
 
 /**
- * Defines the detailed configuration options for the aggregator.
+ * @interface ExtendedSourceStat
+ * @description Extends the source statistics interface to include timing and status.
  */
-export interface ITuffGatherOptions {
-  /**
-   * Timeout configuration in milliseconds.
-   */
-  timeout: {
-    /**
-     * Timeout for the default queue.
-     * Search speed is critical for user experience, so the default search
-     * should not take too long to return results.
-     * @default 200
-     */
-    default: number
-
-    /**
-     * Timeout for the fallback queue.
-     * The fallback queue should have a longer timeout as its sources
-     * are often network requests or slower local I/O.
-     * @default 5000
-     */
-    fallback: number
-  }
-
-  /**
-   * Concurrency configuration.
-   */
-  concurrent: {
-    /**
-     * Number of concurrent search sources for the default queue.
-     * @default 5
-     */
-    default: number
-
-    /**
-     * Number of concurrent search sources for the fallback queue.
-     * @default 10
-     */
-    fallback: number
-  }
-
-  /**
-   * Delay in milliseconds for a forced push of results.
-   * When the aggregator receives the first search result, it opens a "push window"
-   * of this duration. Results arriving within this window are buffered and pushed
-   * all at once when the window closes, ensuring stable batch updates and preventing UI flickering.
-   * If all search tasks complete before this time, results are pushed immediately.
-   * @default 50
-   */
-  forcePushDelay: number
+interface ExtendedSourceStat {
+  providerId: string
+  providerName: string
+  duration: number
+  resultCount: number
+  status: 'success' | 'timeout' | 'error'
 }
 
 /**
- * Defines the type signature for the real-time update callback function.
- * @param update - The data object containing update information.
+ * @constant defaultTuffGatherOptions
+ * @description Default configuration for the aggregator.
  */
-export type TuffAggregatorCallback = (update: TuffUpdate) => void
-
-export interface IGatherController {
-  abort: () => void
-  promise: Promise<number>
-  signal: AbortSignal
+const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
+  concurrency: 3,
+  coalesceGapMs: 100,
+  firstBatchGraceMs: 50,
+  debouncePushMs: 10,
+  taskTimeoutMs: 5000
 }
 
 /**
- * Default configuration options for the aggregator.
+ * Creates a search controller that manages the lifecycle of a search operation.
+ * @param callback - The function that executes the search logic.
+ * @returns An `IGatherController` to manage the search.
  */
-const defaultTuffGatherOptions: ITuffGatherOptions = {
-  timeout: {
-    default: 200,
-    fallback: 5000
-  },
-  concurrent: {
-    default: 5,
-    fallback: 2
-  },
-  forcePushDelay: 50
-}
-
-/**
- * The core aggregator for the Tuff launcher.
- * It concurrently calls multiple search providers, handles timeouts and fallbacks,
- * and returns results in a stable, real-time manner through an intelligent batching mechanism.
- * It resolves with the total count after all tasks are completed.
- *
- * @param providers - A list of all search providers to participate in the current search.
- * @param params - The current search query parameters.
- * @param onUpdate - The callback function to receive real-time search result updates.
- * @param options - Detailed configuration options for the aggregator.
- * @returns A promise that resolves with the total number of aggregated results when all search tasks are finished.
- */
-export function getGatheredItems(
-  providers: ISearchProvider[],
-  params: TuffQuery,
-  onUpdate: TuffAggregatorCallback,
-  options: ITuffGatherOptions = defaultTuffGatherOptions
+function createGatherController(
+  callback: (
+    signal: AbortSignal,
+    resolve: (value: number | PromiseLike<number>) => void
+  ) => Promise<number>
 ): IGatherController {
-  console.debug(`[Gather] Starting search with ${providers.length} providers.`)
   const controller = new AbortController()
   const { signal } = controller
 
-  const promise = new Promise<number>((resolve) => {
-    const { timeout, concurrent, forcePushDelay } = options
-
-    const allResults: TuffSearchResult[] = []
-    const sourceStats: TuffUpdate['sourceStats'] = []
-    const fallbackQueue: ISearchProvider[] = []
-    const defaultQueue = [...providers]
-
-    let pushBuffer: TuffSearchResult[] = []
-    let forcePushTimerId: NodeJS.Timeout | null = null
-    let hasFlushedFirstBatch = false
-
-    /**
-     * Core push logic. Flushes the buffer and pushes results to the caller via the onUpdate callback.
-     * @param isFinalFlush - Whether this is the last push. If true, an additional `isDone: true` signal is sent.
-     */
-    const flushBuffer = (isFinalFlush = false, forcePush = false): void => {
-      if (forcePushTimerId) {
-        clearTimeout(forcePushTimerId)
-        forcePushTimerId = null
-      }
-
-      // For the first batch, we must push even if the buffer is empty to signal the end of the phase.
-      if (pushBuffer.length > 0 || forcePush) {
-        const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
-        onUpdate({
-          newResults: pushBuffer,
-          totalCount: itemsCount,
-          isDone: false,
-          sourceStats
-        })
-        pushBuffer = [] // Clear buffer after pushing
-      }
-
-      if (isFinalFlush) {
-        const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
-        onUpdate({
-          newResults: [],
-          totalCount: itemsCount,
-          isDone: true,
-          sourceStats
-        })
-        resolve(itemsCount) // Resolve the main promise with the total count
-      }
-    }
-
-    /**
-     * Handles new results from any provider.
-     * @param result - The newly arrived TuffSearchResult.
-     * @param providerId - The ID of the provider that returned the results.
-     */
-    let firstBatchTimeoutId: NodeJS.Timeout | null = null
-
-    const flushFirstBatchOnce = (): void => {
-      if (hasFlushedFirstBatch) {
-        return
-      }
-      hasFlushedFirstBatch = true
-      if (firstBatchTimeoutId) {
-        clearTimeout(firstBatchTimeoutId)
-        firstBatchTimeoutId = null
-      }
-      console.debug('[Gather] Flushing first batch.')
-      // The first flush is forced to ensure the core receives a signal.
-      flushBuffer(false, true)
-    }
-
-    /**
-     * Handles new results from any provider.
-     * @param result - The newly arrived TuffSearchResult.
-     * @param providerId - The ID of the provider that returned the results.
-     */
-    const onNewResultArrived = (result: TuffSearchResult, providerId: string): void => {
-      console.debug(`[Gather] Received ${result.items.length} items from provider: ${providerId}`)
-      allResults.push(result)
-      pushBuffer.push(result)
-
-      // After the first batch is flushed, use a debouncing mechanism for subsequent updates.
-      if (hasFlushedFirstBatch) {
-        if (forcePushTimerId) {
-          clearTimeout(forcePushTimerId)
-        }
-        forcePushTimerId = setTimeout(() => {
-          flushBuffer()
-        }, forcePushDelay)
-      }
-    }
-
-    /**
-     * Executes the concurrent worker pool.
-     * @param queue - The queue of providers to process.
-     * @param concurrency - The number of concurrent workers.
-     * @param processingTimeout - The timeout for a single task.
-     * @param isFallback - Flag indicating if the current queue is the fallback queue.
-     */
-    const runWorkerPool = async (
-      queue: ISearchProvider[],
-      concurrency: number,
-      processingTimeout: number,
-      isFallback = false
-    ): Promise<void> => {
-      const queueName = isFallback ? 'Fallback' : 'Default'
-      console.debug(`[Gather] Running ${queueName} queue with ${concurrency} concurrent workers.`)
-      const workers = Array(concurrency)
-        .fill(0)
-        .map(async () => {
-          while (queue.length > 0) {
-            const provider = queue.shift()
-            if (!provider) continue
-
-            const startTime = performance.now()
-            let resultCount = 0
-            let status: 'success' | 'timeout' | 'error' = 'success'
-
-            try {
-              if (signal.aborted) {
-                status = 'error'
-                // Skip processing if the search has been aborted
-                return
-              }
-              const searchResult = await withTimeout(
-                provider.onSearch(params, signal),
-                processingTimeout
-              )
-              resultCount = searchResult.items.length
-
-              // Always process the result, even if items are empty, because it might contain activation info.
-              const processedResult = searchResult
-              if (isFallback) {
-                processedResult.items = processedResult.items.map((item) => ({
-                  ...item,
-                  meta: {
-                    ...item.meta,
-                    extension: {
-                      ...item.meta?.extension,
-                      isFallback: true
-                    }
-                  }
-                }))
-              }
-              onNewResultArrived(processedResult, provider.id)
-            } catch (error) {
-              if (signal.aborted) {
-                status = 'error'
-                return
-              }
-              if (error instanceof TimeoutError) {
-                status = 'timeout'
-                if (!isFallback) {
-                  // Default queue timed out, move provider to fallback queue
-                  fallbackQueue.push(provider)
-                }
-              } else {
-                status = 'error'
-                console.error(
-                  `Provider [${provider.constructor.name}] encountered an error during search:`,
-                  error
-                )
-              }
-            } finally {
-              const duration = performance.now() - startTime
-              sourceStats.push({
-                providerId: provider.id,
-                providerName: provider.name || provider.constructor.name,
-                duration,
-                resultCount,
-                status
-              })
-            }
-          }
-        })
-      await Promise.all(workers)
-    }
-
-    const run = async (): Promise<void> => {
-      // --- Aggregator Execution Flow ---
-      // Phase 1: Process the default queue.
-      // We set a 200ms timer from the start. All results arriving within this window
-      // will be batched and flushed together.
-      firstBatchTimeoutId = setTimeout(flushFirstBatchOnce, 200)
-
-      // Await the completion of the entire default queue.
-      await runWorkerPool(defaultQueue, concurrent.default, timeout.default)
-
-      // Ensure the first batch flush is called, even if the default queue was empty or yielded no results.
-      // This is crucial for signaling the end of the high-priority phase.
-      flushFirstBatchOnce()
-
-      // Phase 2: If there are demoted providers, process the fallback queue
-      if (fallbackQueue.length > 0) {
-        console.debug(`[Gather] Starting fallback queue with ${fallbackQueue.length} providers.`)
-        await runWorkerPool(fallbackQueue, concurrent.fallback, timeout.fallback, true)
-      }
-
-      // All tasks (default and fallback) are done. Perform a final flush.
-      console.debug('[Gather] All search tasks completed.')
-      flushBuffer(true)
-    }
-
-    run()
+  const promise = new Promise<number>((resolve, reject) => {
+    callback(signal, resolve).catch(reject)
   })
 
   return {
     promise,
     abort: () => {
       if (!controller.signal.aborted) {
-        console.debug('[Gather] Aborting search.')
+        console.debug('Aborting search.')
         controller.abort()
       }
     },
     signal
   }
 }
+
+/**
+ * Creates the core search aggregator with a single-queue, concurrent worker pool, and smart batching.
+ * This implementation optimizes for speed and responsiveness by:
+ * - Using a fixed-concurrency worker pool to process all providers.
+ * - Intelligently batching results to reduce UI flicker and unnecessary re-renders.
+ * - Providing a grace period for the first batch to ensure a fast initial response.
+ *
+ * @param options - Detailed configuration for the aggregator.
+ * @returns A function that executes a search with the given providers and query.
+ */
+export function createGatherAggregator(options: ITuffGatherOptions = {}) {
+  const config = { ...defaultTuffGatherOptions, ...options }
+  const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
+
+  /**
+   * The main search execution function.
+   * @param providers - The list of search providers.
+   * @param params - The search query and parameters.
+   * @param onUpdate - The callback to receive real-time search updates.
+   * @returns An `IGatherController` to manage the search.
+   */
+  return function executeSearch(
+    providers: ISearchProvider<ProviderContext>[],
+    params: TuffQuery,
+    onUpdate: TuffAggregatorCallback
+  ): IGatherController {
+    console.log(`Starting search with ${providers.length} providers.`)
+
+    /**
+     * The core search handler.
+     * @param signal - The AbortSignal to cancel the search.
+     * @param resolve - The promise resolver to call when the search is complete.
+     */
+    async function handleGather(
+      signal: AbortSignal,
+      resolve: (value: number | PromiseLike<number>) => void
+    ): Promise<number> {
+      const allResults: TuffSearchResult[] = []
+      const sourceStats: ExtendedSourceStat[] = []
+      const taskQueue = [...providers]
+      let pushBuffer: TuffSearchResult[] = []
+
+      let completedCount = 0
+      let hasFlushedFirstBatch = false
+      let coalesceTimeoutId: NodeJS.Timeout | null = null
+
+      /**
+       * Flushes the result buffer and sends updates via the onUpdate callback.
+       * @param isFinalFlush - If true, signals that the search is complete.
+       */
+      const flushBuffer = (isFinalFlush = false): void => {
+        if (coalesceTimeoutId) {
+          clearTimeout(coalesceTimeoutId)
+          coalesceTimeoutId = null
+        }
+
+        if (pushBuffer.length > 0) {
+          const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
+          onUpdate({
+            newResults: pushBuffer,
+            totalCount: itemsCount,
+            isDone: false,
+            sourceStats: sourceStats as TuffSearchResult['sources']
+          })
+          pushBuffer = []
+        }
+
+        if (isFinalFlush) {
+          const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
+          onUpdate({
+            newResults: [],
+            totalCount: itemsCount,
+            isDone: true,
+            sourceStats: sourceStats as TuffSearchResult['sources']
+          })
+          resolve(itemsCount)
+        }
+      }
+
+      const debouncedFlush = debounce(flushBuffer, debouncePushMs)
+
+      /**
+       * Handles a new result from a provider, adding it to the buffer and managing the flush logic.
+       * @param result - The search result.
+       */
+      const onNewResult = (result: TuffSearchResult): void => {
+        allResults.push(result)
+        pushBuffer.push(result)
+        completedCount++
+
+        if (!hasFlushedFirstBatch) {
+          hasFlushedFirstBatch = true
+          // For the first result, wait a short grace period before flushing.
+          coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
+        } else {
+          // For subsequent results, reset the coalescing gap.
+          if (coalesceTimeoutId) clearTimeout(coalesceTimeoutId)
+          coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
+        }
+
+        // If all tasks are done, perform a final flush immediately.
+        if (completedCount === providers.length) {
+          debouncedFlush.flush() // Use lodash debounce's flush method
+          flushBuffer(true)
+        }
+      }
+
+      /**
+       * Runs the worker pool to process providers concurrently.
+       */
+      const runWorkerPool = async (): Promise<void> => {
+        // Set up abort handler to notify about cancellation
+        signal.addEventListener('abort', () => {
+          // Clean up any pending timeouts
+          if (coalesceTimeoutId) {
+            clearTimeout(coalesceTimeoutId)
+            coalesceTimeoutId = null
+          }
+          debouncedFlush.cancel()
+
+          // Notify about cancellation
+          console.debug('[SearchGatherer] Search was cancelled. Notifying callback.')
+          onUpdate({
+            newResults: [],
+            totalCount: allResults.reduce((acc, curr) => acc + curr.items.length, 0),
+            isDone: true,
+            cancelled: true,
+            sourceStats: sourceStats as TuffSearchResult['sources']
+          })
+          resolve(0) // Resolve with 0 to indicate cancellation
+          return
+        })
+
+        const workers = Array(concurrency)
+          .fill(0)
+          .map(async (_, i) => {
+            // Stagger the start of each worker to avoid resource contention.
+            await new Promise((resolve) => setTimeout(resolve, i * 10))
+            while (taskQueue.length > 0) {
+              const provider = taskQueue.shift()
+              if (!provider) continue
+
+              const startTime = performance.now()
+              let status: 'success' | 'timeout' | 'error' = 'success'
+              let resultCount = 0
+
+              try {
+                if (signal.aborted) return
+
+                const searchPromise = provider.onSearch(params, signal)
+                const searchResult = await withTimeout(searchPromise, taskTimeoutMs)
+
+                resultCount = searchResult.items.length
+                onNewResult(searchResult)
+              } catch (error) {
+                status = 'error'
+                if (error instanceof Error && error.name === 'TimeoutError') {
+                  status = 'timeout'
+                }
+                console.error(`Provider [${provider.id}] failed:`, error)
+              } finally {
+                const duration = performance.now() - startTime
+                // Do not log or record stats for aborted tasks.
+                if (!signal.aborted) {
+                  logProviderCompletion(provider, duration, resultCount, status)
+                  sourceStats.push({
+                  providerId: provider.id,
+                  providerName: provider.name || provider.constructor.name,
+                  duration,
+                  resultCount,
+                  status
+                  })
+                }
+              }
+            }
+          })
+        await Promise.all(workers)
+      }
+
+      /**
+       * Logs the completion details of a provider with styled output.
+       * @param provider - The provider that finished.
+       * @param duration - The execution duration in milliseconds.
+       * @param resultCount - The number of results returned.
+       * @param status - The final status of the provider.
+       */
+      const logProviderCompletion = (
+        provider: ISearchProvider<ProviderContext>,
+        duration: number,
+        resultCount: number,
+        status: 'success' | 'timeout' | 'error'
+      ): void => {
+        let durationStr: string
+        if (duration < 50) {
+          durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
+        } else if (duration < 200) {
+          durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
+        } else {
+          durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
+        }
+        console.log(
+          `Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
+        )
+      }
+
+      const run = async (): Promise<number> => {
+        await runWorkerPool()
+        console.log('All search tasks completed.')
+        flushBuffer(true)
+        return allResults.reduce((acc, curr) => acc + curr.items.length, 0)
+      }
+
+      return run()
+    }
+
+    return createGatherController((signal, resolve) => {
+      return handleGather(signal, resolve)
+    })
+  }
+}
+
+export const gatherAggregator = createGatherAggregator()

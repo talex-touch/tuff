@@ -167,3 +167,4 @@ export function structuredStrictStringify(value: unknown): string {
 }
 
 export * from './time'
+export * from './file'

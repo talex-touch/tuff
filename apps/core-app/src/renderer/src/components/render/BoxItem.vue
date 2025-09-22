@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
+import ItemSubtitle from './ItemSubtitle.vue'
 
 interface Props {
   item: TuffItem
@@ -34,20 +35,15 @@ function getHighlightedHTML(
 ): string {
   if (!matchedIndices?.length) return text
 
-  console.log('matchedIndices', matchedIndices, text)
   const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
 
-  // 只取最后一个
   let { start, end } = matchedIndices[matchedIndices.length - 1]
 
-  // 统一换成 0 基坐标
   let s0 = base === 1 ? start - 1 : start
   let e0 = base === 1 ? end - 1 : end
 
-  // 右闭 -> 右开（slice 用）
   let eExclusive = inclusiveEnd ? e0 + 1 : e0
 
-  // 边界裁剪
   const n = text.length
   s0 = Math.max(0, Math.min(s0, n))
   eExclusive = Math.max(s0, Math.min(eExclusive, n))
@@ -91,15 +87,7 @@ const sourceType = computed(() => props.item.source.type)
           getHighlightedHTML(render.basic?.title || '', props.item.meta?.extension?.matchResult)
         "
       />
-      <p
-        class="text-xs opacity-60 truncate max-w-[90%]"
-        v-html="
-          getHighlightedHTML(
-            render.basic?.subtitle || '',
-            props.item.meta?.extension?.descMatchResult
-          )
-        "
-      />
+      <ItemSubtitle :item="item" :render="render" />
     </div>
 
     <span class="ml-auto text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold">

@@ -138,6 +138,21 @@ export class IpcManager {
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:exit-ui-mode', () => {
       coreBoxManager.exitUIMode()
     })
+
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:cancel-search',
+      ({ data, reply }) => {
+        const { searchId } = data as { searchId: string }
+        if (searchId && searchEngineCore.getCurrentGatherController()) {
+          console.log(`[CoreBox] Canceling search with ID: ${searchId}`)
+          searchEngineCore.cancelSearch(searchId)
+          reply(DataCode.SUCCESS, { cancelled: true })
+        } else {
+          reply(DataCode.SUCCESS, { cancelled: false })
+        }
+      }
+    )
   }
 
   public unregister(): void {

@@ -40,6 +40,7 @@ declare module 'vue' {
     IdentifiedIcon: typeof import('./src/components/icon/svg/IdentifiedIcon.vue')['default']
     ImagePreview: typeof import('./src/components/render/addon/preview/ImagePreview.vue')['default']
     InteractiveTerminal: typeof import('./src/components/terminal/InteractiveTerminal.vue')['default']
+    ItemSubtitle: typeof import('./src/components/render/ItemSubtitle.vue')['default']
     LineTemplate: typeof import('./src/components/base/template/LineTemplate.vue')['default']
     LoadingIcon: typeof import('./src/components/icon/LoadingIcon.vue')['default']
     LogTerminal: typeof import('./src/components/terminal/LogTerminal.vue')['default']

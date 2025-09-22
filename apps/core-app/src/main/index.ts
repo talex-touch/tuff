@@ -18,7 +18,7 @@ import { databaseModule } from './modules/database'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { fileProtocolModule } from './modules/file-protocol'
-// import TerminalManager from './modules/terminal/terminal.manager'
+import { terminalModule } from './modules/terminal/terminal.manager'
 import { extensionLoaderModule } from './modules/extension-loader'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(clipboardModule)
   await app.moduleManager.loadModule(FileSystemWatcher)
   await app.moduleManager.loadModule(fileProtocolModule)
-  // await app.moduleManager.loadModule(TerminalManager)
+  await app.moduleManager.loadModule(terminalModule)
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 

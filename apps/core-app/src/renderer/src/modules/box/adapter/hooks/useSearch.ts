@@ -65,6 +65,25 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     debouncedSearch()
   }
 
+  async function cancelSearch(): Promise<void> {
+    if (!loading.value || !currentSearchId.value) return
+
+    try {
+      // Send cancellation request to main process
+      await touchChannel.send('core-box:cancel-search', { searchId: currentSearchId.value })
+
+      // Update UI state to reflect cancellation
+      loading.value = false
+      if (res.value.length === 0) {
+        // If no results yet, reset search state entirely
+        searchResult.value = null
+        currentSearchId.value = null
+      }
+    } catch (error) {
+      console.error('Failed to cancel search:', error)
+    }
+  }
+
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
     if (!itemToExecute) {
@@ -235,6 +254,13 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   // Listener for when the search stream is finished.
   touchChannel.regChannel('core-box:search-end', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
+      if (data.cancelled) {
+        console.log('[useSearch] Search was cancelled')
+        loading.value = false
+        // Don't update activeActivations or other states - keep the current results
+        return
+      }
+
       if (searchResult.value) {
         searchResult.value.activate = data.activate
         searchResult.value.sources = data.sources
@@ -287,6 +313,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     handleExecute,
     handleExit,
     deactivateProvider,
-    deactivateAllProviders
+    deactivateAllProviders,
+    cancelSearch
   }
 }

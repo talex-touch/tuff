@@ -35,4 +35,5 @@ export interface IUseSearch {
   handleExit: () => void
   deactivateProvider: (providerId?: string) => Promise<void>
   deactivateAllProviders: () => Promise<void>
+  cancelSearch: () => Promise<void>
 }

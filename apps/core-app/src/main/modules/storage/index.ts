@@ -48,8 +48,11 @@ export class StorageModule extends BaseModule {
     console.log(
       `[Config] Init config path ${file.dirPath} and plugin config path ${pluginConfigPath}`
     )
+
+    this.setupListeners()
   }
   onDestroy(): MaybePromise<void> {
+    this.saveAllConfig()
     this.configs.clear()
     this.pluginConfigs.clear()
   }
