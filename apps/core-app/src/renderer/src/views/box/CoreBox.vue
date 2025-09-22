@@ -138,8 +138,8 @@ const addon = computed(() => {
         :active="boxOptions.focus === index"
         :item="item"
         @trigger="handleExecute(item)"
-        @mousemove="boxOptions.focus = index"
       />
+        <!-- @mousemove="boxOptions.focus = index" -->
     </TouchScroll>
     <TuffItemAddon :type="addon" :item="activeItem" />
   </div>
