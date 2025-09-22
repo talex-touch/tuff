@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { getFileTypeFromPath } from '@talex-touch/utils'
 import dayjs from 'dayjs'
+import path from 'path-browserify'
 
 const props = defineProps<{
   item: TuffItem
@@ -27,25 +29,31 @@ const fileInfo = computed(() => {
   const file = meta?.file
   if (!file) return null
 
-  const parts: string[] = []
-  if (file.kind) {
-    parts.push(file.kind)
-  }
-  if (file.size) {
-    parts.push(formatBytes(file.size))
-  }
-  if (file.lastModified) {
-    parts.push(dayjs(file.lastModified).format('YYYY/MM/DD HH:mm'))
-  }
-
-  return parts.join(' · ')
+  return file
 })
 </script>
 
 <template>
   <p class="text-xs opacity-60 truncate max-w-[90%]">
     <template v-if="fileInfo">
-      {{ fileInfo }}
+      <div class="flex items-center w-full overflow-hidden gap-x-1.5">
+        <span>
+          {{ getFileTypeFromPath(fileInfo.path) }}
+        </span>
+        <span class="opacity-50">&bull;</span>
+        <span>
+          {{ formatBytes(fileInfo.size ?? 0) }}
+        </span>
+        <span class="opacity-50">&bull;</span>
+        <span>
+          {{ dayjs(fileInfo.modified_at).format('YYYY/M/D HH:mm') }}
+        </span>
+        <span class="opacity-50">&bull;</span>
+        <span class="flex flex-1 items-center gap-1">
+          <i class="i-carbon-folder" />
+          <span class="w-full truncate">{{ path.dirname(fileInfo.path).split('/').pop() }}</span>
+        </span>
+      </div>
     </template>
     <template v-else>
       {{ render.basic?.subtitle }}
