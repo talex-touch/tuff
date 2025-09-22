@@ -2,6 +2,7 @@
 import { TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import ItemSubtitle from './ItemSubtitle.vue'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 
 interface Props {
   item: TuffItem
@@ -17,9 +18,12 @@ const displayIcon = computed(() => {
     return icon
   }
   if (icon && typeof icon === 'object' && 'value' in icon) {
-    return icon.value
+    if (icon.value?.length) {
+      return icon.value
+    }
   }
-  return 'default-icon' // or some other default
+  console.log(DefaultIcon)
+  return DefaultIcon
 })
 
 type Range = { start: number; end: number }
