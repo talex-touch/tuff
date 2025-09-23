@@ -94,6 +94,31 @@ export const fileExtensions = sqliteTable(
   })
 )
 
+export const fileIndexProgress = sqliteTable(
+  'file_index_progress',
+  {
+    fileId: integer('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    status: text('status', {
+      enum: ['pending', 'processing', 'completed', 'skipped', 'failed']
+    })
+      .notNull()
+      .default('pending'),
+    progress: integer('progress').notNull().default(0),
+    processedBytes: integer('processed_bytes'),
+    totalBytes: integer('total_bytes'),
+    lastError: text('last_error'),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(new Date(0))
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.fileId] })
+  })
+)
+
 // =============================================================================
 // 3. 智能层 (Intelligence Layer) - 语义向量存储
 // =============================================================================
