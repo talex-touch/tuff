@@ -71,6 +71,7 @@ export async function runAdaptiveTaskQueue<T>(
   const currentPerformance = typeof globalThis !== 'undefined' ? (globalThis as any)?.performance : undefined
   const now = () => (currentPerformance ? currentPerformance.now() : Date.now())
 
+
   const startTime = now()
 
   logger.debug?.(
