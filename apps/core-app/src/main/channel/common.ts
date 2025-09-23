@@ -7,6 +7,7 @@ import { TalexTouch } from '../types'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import path from 'path'
 import { BaseModule } from '../modules/abstract-base-module'
+import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 
 function closeApp(app: TalexTouch.TouchApp): void {
@@ -109,6 +110,11 @@ export class CommonChannelModule extends BaseModule {
     })
 
     channel.regChannel(ChannelType.MAIN, 'url:open', ({ data }) => onOpenUrl(data as any))
+
+    channel.regChannel(ChannelType.MAIN, 'files:index-progress', async ({ data }) => {
+      const paths = Array.isArray(data?.paths) ? data.paths : undefined
+      return fileProvider.getIndexingProgress(paths)
+    })
 
     async function onOpenUrl(url: string) {
       const data = await channel.send(ChannelType.MAIN, 'url:open', url)
