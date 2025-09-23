@@ -8,9 +8,11 @@ import { TalexTouch } from '../../../types'
 import { TalexEvents } from '../../../core/eventbus/touch-event'
 import { TouchApp } from '../../../core/touch-app'
 import { DatabaseModule } from '../../database'
+import type { SearchIndexService } from './search-index-service'
 
 export interface ProviderContext {
   touchApp: TouchApp
   databaseManager: DatabaseModule
   storageManager: TalexTouch.IModule<TalexEvents>
+  searchIndex: SearchIndexService
 }

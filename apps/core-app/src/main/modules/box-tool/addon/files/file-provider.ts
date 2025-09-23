@@ -10,13 +10,18 @@ import {
 import { app, shell } from 'electron'
 import path from 'path'
 import { createDbUtils } from '../../../../db/utils'
-import { files as filesSchema, fileExtensions, scanProgress } from '../../../../db/schema'
-import { and, eq, inArray, like } from 'drizzle-orm'
+import { files as filesSchema, fileExtensions, keywordMappings, scanProgress } from '../../../../db/schema'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 // import PinyinMatch from 'pinyin-match'
 import extractFileIcon from 'extract-file-icon'
 import { KEYWORD_MAP } from './constants'
 import { ScannedFileInfo } from './types'
 import { mapFileToTuffItem, scanDirectory } from './utils'
+import {
+  SearchIndexService,
+  SearchIndexKeyword,
+  SearchIndexItem
+} from '../../search-engine/search-index-service'
 
 class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
@@ -27,6 +32,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private isInitializing: Promise<void> | null = null
   private readonly WATCH_PATHS: string[]
   private databaseFilePath: string | null = null
+  private searchIndex: SearchIndexService | null = null
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -51,6 +57,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   async onLoad(context: ProviderContext): Promise<void> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    this.searchIndex = context.searchIndex
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
@@ -86,6 +93,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       const pathsToDelete = filesToDelete.map((f) => f.path)
       await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
+      await this.searchIndex?.removeItems(pathsToDelete)
     }
 
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
@@ -122,6 +130,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             )
             const inserted = await db.insert(filesSchema).values(chunk).returning()
             await this.processFileExtensions(inserted)
+            await this.indexFilesForSearch(inserted)
           }
         }
         await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
@@ -157,9 +166,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         dbFileMap.delete(path)
       }
 
-      const deletedFileIds = Array.from(dbFileMap.values())
-        .filter((file) => reconciliationPaths.some((p) => file.path.startsWith(p)))
-        .map((file) => file.id)
+      const deletedFiles = Array.from(dbFileMap.values()).filter((file) =>
+        reconciliationPaths.some((p) => file.path.startsWith(p))
+      )
+      const deletedFileIds = deletedFiles.map((file) => file.id)
 
       if (deletedFileIds.length > 0) {
         console.log(
@@ -169,6 +179,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             .map((f) => f.path)
         )
         await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
+        if (deletedFiles.length > 0) {
+          await this.searchIndex?.removeItems(deletedFiles.map((file) => file.path))
+        }
       }
 
       if (filesToUpdate.length > 0) {
@@ -190,6 +203,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           const chunk = newFileRecords.slice(i, i + chunkSize)
           const inserted = await db.insert(filesSchema).values(chunk).returning()
           await this.processFileExtensions(inserted)
+          await this.indexFilesForSearch(inserted)
         }
       }
     }
@@ -222,8 +236,54 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
       await Promise.all(updatePromises)
       await this.processFileExtensions(chunk)
+      await this.indexFilesForSearch(chunk)
       await new Promise((resolve) => setTimeout(resolve, 17))
     }
+  }
+
+  private async indexFilesForSearch(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
+    if (!this.searchIndex) return
+    if (files.length === 0) return
+
+    const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
+    await this.searchIndex.indexItems(items)
+  }
+
+  private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
+    const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
+    const extensionKeywords = KEYWORD_MAP[extension] || []
+    const keywords: SearchIndexKeyword[] = extensionKeywords.map((keyword) => ({
+      value: keyword,
+      priority: 1.05
+    }))
+
+    return {
+      itemId: file.path,
+      providerId: this.id,
+      type: this.type,
+      name: file.name,
+      displayName: file.displayName ?? undefined,
+      path: file.path,
+      extension,
+      keywords,
+      tags: extension ? [extension.replace(/^\./, '')] : undefined
+    }
+  }
+
+  private buildFtsQuery(terms: string[]): string {
+    const tokens: string[] = []
+    for (const term of terms) {
+      const cleaned = term.replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, ' ').trim()
+      if (!cleaned) continue
+      tokens.push(...cleaned.split(/\s+/))
+    }
+
+    if (tokens.length === 0) {
+      return ''
+    }
+
+    const limitedTokens = tokens.slice(0, 5)
+    return limitedTokens.map((token) => `${token}*`).join(' AND ')
   }
 
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
@@ -259,115 +319,150 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
-    if (!this.dbUtils) return TuffFactory.createSearchResult(query).build()
+    if (!this.dbUtils || !this.searchIndex) {
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    const rawText = query.text.trim()
+    if (!rawText) {
+      return TuffFactory.createSearchResult(query).build()
+    }
 
     const db = this.dbUtils.getDb()
-    const searchTerm = query.text.trim().toLowerCase()
+    const normalizedQuery = rawText.toLowerCase()
+    const terms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
 
-    if (!searchTerm) {
+    let preciseMatchPaths: Set<string> | null = null
+    if (terms.length > 0) {
+      const termMatches: Set<string>[] = []
+      for (const term of terms) {
+        const matches = await db
+          .select({ itemId: keywordMappings.itemId })
+          .from(keywordMappings)
+          .where(sql`lower(keyword) LIKE ${'%' + term + '%'}`)
+        termMatches.push(new Set(matches.map((entry) => entry.itemId)))
+      }
+
+      if (termMatches.length > 0) {
+        preciseMatchPaths = termMatches.reduce((accumulator, current) => {
+          if (!accumulator) return current
+          return new Set([...accumulator].filter((id) => current.has(id)))
+        })
+      }
+    }
+
+    const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
+    const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
+
+    const candidateIds = new Set<string>()
+    if (preciseMatchPaths && preciseMatchPaths.size > 0) {
+      for (const id of preciseMatchPaths) {
+        candidateIds.add(id)
+      }
+    }
+    for (const match of ftsMatches) {
+      candidateIds.add(match.itemId)
+    }
+
+    if (candidateIds.size === 0) {
       return TuffFactory.createSearchResult(query).build()
     }
 
-    const nameMatchFiles = await db
-      .select({ id: filesSchema.id })
-      .from(filesSchema)
-      .where(and(eq(filesSchema.type, 'file'), like(filesSchema.name, `%${searchTerm}%`)))
+    const candidatePaths = Array.from(candidateIds)
 
-    const keywordMatchFiles = await db
-      .select({ fileId: fileExtensions.fileId })
-      .from(fileExtensions)
-      .where(and(eq(fileExtensions.key, 'keywords'), like(fileExtensions.value, `%${searchTerm}%`)))
-
-    const nameMatchIds = nameMatchFiles.map((f) => f.id)
-    const keywordMatchIds = keywordMatchFiles.map((f) => f.fileId)
-    const allIds = [...new Set([...nameMatchIds, ...keywordMatchIds])]
-
-    if (allIds.length === 0) {
-      return TuffFactory.createSearchResult(query).build()
-    }
-
-    const matchedFilesWithExtensions = await db
+    const rows = await db
       .select({
         file: filesSchema,
-        extensions: {
-          key: fileExtensions.key,
-          value: fileExtensions.value
-        }
+        extensionKey: fileExtensions.key,
+        extensionValue: fileExtensions.value
       })
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(inArray(filesSchema.id, allIds))
+      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
 
     const filesMap = new Map<
-      number,
+      string,
       { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
     >()
-    for (const row of matchedFilesWithExtensions) {
-      if (!filesMap.has(row.file.id)) {
-        filesMap.set(row.file.id, { file: row.file, extensions: {} })
+
+    for (const row of rows) {
+      if (!filesMap.has(row.file.path)) {
+        filesMap.set(row.file.path, { file: row.file, extensions: {} })
       }
-      if (row.extensions?.key && row.extensions?.value) {
-        filesMap.get(row.file.id)!.extensions[row.extensions.key] = row.extensions.value
+      if (row.extensionKey && row.extensionValue) {
+        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
       }
     }
-    const filteredResults = Array.from(filesMap.values())
 
-    if (filteredResults.length === 0) {
+    const staleIds = candidatePaths.filter((path) => !filesMap.has(path))
+    if (staleIds.length > 0) {
+      await this.searchIndex.removeItems(staleIds)
+    }
+
+    if (filesMap.size === 0) {
       return TuffFactory.createSearchResult(query).build()
     }
 
-    const itemIds = filteredResults.map(({ file }) => file.path)
-    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(itemIds)
-    const usageMap = new Map(usageSummaries.map((s) => [s.itemId, s]))
+    const validPaths = Array.from(filesMap.keys())
+    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(validPaths)
+    const usageMap = new Map(usageSummaries.map((summary) => [summary.itemId, summary]))
 
-    const weights = {
-      pinyinMatch: 0.5,
-      lastUsed: 0.25,
-      frequency: 0.15,
-      lastModified: 0.1
+    const ftsScoreMap = new Map<string, number>()
+    for (const match of ftsMatches) {
+      const normalizedScore = match.score > 0 ? 1 / (match.score + 1) : 1
+      const previous = ftsScoreMap.get(match.itemId) ?? 0
+      if (normalizedScore > previous) {
+        ftsScoreMap.set(match.itemId, normalizedScore)
+      }
     }
-    const now = new Date().getTime()
 
-    const scoredResults = filteredResults
+    const now = Date.now()
+    const weights = {
+      keyword: 0.45,
+      fts: 0.35,
+      lastUsed: 0.1,
+      frequency: 0.05,
+      lastModified: 0.05
+    }
+
+    const scoredItems = Array.from(filesMap.values())
       .map(({ file, extensions }) => {
-        const summary = usageMap.get(file.path)
-        // const matchResult = PinyinMatch.match(file.name, searchTerm)
-        const matchResult: any = null
-        const pinyinMatchScore = matchResult ? 1 - matchResult[0] / file.name.length : 0
-        const lastUsed = summary ? new Date(summary.lastUsed).getTime() : 0
-        const lastModified = new Date(file.mtime).getTime()
-        const daysSinceLastUsed = (now - lastUsed) / (1000 * 3600 * 24)
-        const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
+        const usage = usageMap.get(file.path)
+        const lastUsed = usage ? new Date(usage.lastUsed).getTime() : 0
+        const daysSinceLastUsed = lastUsed > 0 ? (now - lastUsed) / (1000 * 3600 * 24) : Infinity
         const lastUsedScore = lastUsed > 0 ? Math.exp(-0.1 * daysSinceLastUsed) : 0
+
+        const lastModified = new Date(file.mtime).getTime()
+        const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
         const lastModifiedScore = Math.exp(-0.05 * daysSinceLastModified)
-        const frequencyScore = summary ? Math.log10(summary.clickCount + 1) : 0
-        const keywords = extensions.keywords ? (JSON.parse(extensions.keywords) as string[]) : []
-        const keywordScore = keywords.some((k) => k.toLowerCase().includes(searchTerm)) ? 1 : 0
+
+        const frequencyScore = usage ? Math.log10(usage.clickCount + 1) / 2 : 0
+        const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
+        const ftsScore = ftsScoreMap.get(file.path) ?? 0
+
         const finalScore =
-          weights.pinyinMatch * pinyinMatchScore +
+          weights.keyword * keywordScore +
+          weights.fts * ftsScore +
           weights.lastUsed * lastUsedScore +
           weights.frequency * frequencyScore +
-          weights.lastModified * lastModifiedScore +
-          keywordScore
+          weights.lastModified * lastModifiedScore
 
         const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name)
         tuffItem.scoring = {
           final: finalScore,
-          match: pinyinMatchScore,
+          keyword: keywordScore,
+          semantic: ftsScore,
           recency: lastUsedScore,
           frequency: frequencyScore
         }
 
-        if (matchResult) {
-          tuffItem.meta = {
-            ...tuffItem.meta,
-            extension: {
-              ...tuffItem.meta?.extension,
-              matchResult: [matchResult[0], matchResult[1]]
-            }
-          }
+        if (!tuffItem.meta) {
+          tuffItem.meta = {}
+        }
+        tuffItem.meta.search = {
+          keywordMatch: keywordScore > 0,
+          ftsScore
         }
 
         return tuffItem
@@ -375,7 +470,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
       .slice(0, 50)
 
-    return TuffFactory.createSearchResult(query).setItems(scoredResults).build()
+    return TuffFactory.createSearchResult(query).setItems(scoredItems).build()
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
