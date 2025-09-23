@@ -1,5 +1,5 @@
 <script setup lang="ts" name="CoreBox">
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
 import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
@@ -15,6 +15,8 @@ import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import CoreBoxRender from '@renderer/components/render/CoreBoxRender.vue'
+import CoreBoxFooter from '@renderer/components/render/CoreBoxFooter.vue'
+import TuffItemAddon from '@renderer/components/render/addon/TuffItemAddon.vue'
 import type { TuffItem } from '@talex-touch/utils'
 
 useCoreBox()
@@ -143,16 +145,20 @@ const addon = computed(() => {
   </div>
 
   <div class="CoreBoxRes flex">
-    <TouchScroll ref="scrollbar" class="scroll-area" :class="{ compressed: !!addon }">
-      <CoreBoxRender
-        v-for="(item, index) in res"
-        :key="index"
-        :active="boxOptions.focus === index"
-        :item="item"
-        @trigger="handleItemTrigger(index, item)"
-      />
-        <!-- @mousemove="boxOptions.focus = index" -->
-    </TouchScroll>
+    <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
+      <TouchScroll ref="scrollbar" class="scroll-area">
+        <CoreBoxRender
+          v-for="(item, index) in res"
+          :key="index"
+          :active="boxOptions.focus === index"
+          :item="item"
+          :index="index"
+          @trigger="handleItemTrigger(index, item)"
+        />
+          <!-- @mousemove="boxOptions.focus = index" -->
+      </TouchScroll>
+      <CoreBoxFooter :item="activeItem" />
+    </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
   </div>
 </template>
@@ -201,13 +207,20 @@ div.CoreBoxRes {
     display: flex;
   }
 
-  .scroll-area {
+  .CoreBoxRes-Main {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     transition: width 0.3s ease;
   }
 
-  .scroll-area.compressed {
+  .CoreBoxRes-Main.compressed {
     width: 40%;
+  }
+
+  .scroll-area {
+    flex: 1;
+    width: 100%;
   }
 }
 
