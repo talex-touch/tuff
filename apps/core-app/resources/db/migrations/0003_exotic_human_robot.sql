@@ -1,0 +1,1 @@
+ALTER TABLE `keyword_mappings` ADD `provider_id` text DEFAULT '' NOT NULL;

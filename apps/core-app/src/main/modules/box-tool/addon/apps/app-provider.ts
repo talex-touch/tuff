@@ -14,8 +14,10 @@ import FileSystemWatcher from '../../file-system-watcher'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
 import { sleep } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { is } from '@electron-toolkit/utils'
 import chalk from 'chalk'
+import { performance } from 'perf_hooks'
 
 import { createDbUtils } from '../../../../db/utils'
 import {
@@ -30,7 +32,6 @@ import { appScanner } from './app-scanner'
 import { processSearchResults } from './search-processing-service'
 import { formatLog, LogStyle } from './app-utils'
 import searchEngineCore from '../../search-engine/search-core'
-import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
 import {
   SearchIndexService,
   SearchIndexKeyword,
@@ -86,14 +87,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
+    const loadStart = performance.now()
     console.log(formatLog('AppProvider', 'Loading AppProvider service...', LogStyle.process))
     this.context = context
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
 
     if (!this.isInitializing) {
+      const initStart = performance.now()
       this.isInitializing = this._initialize()
       await this.isInitializing
+      console.log(
+        formatLog(
+          'AppProvider',
+          `Initial data load completed in ${chalk.cyan(
+            ((performance.now() - initStart) / 1000).toFixed(2)
+          )}s`,
+          LogStyle.success
+        )
+      )
     }
 
     await this._forceSyncAllKeywords()
@@ -103,6 +115,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     console.log(
       formatLog('AppProvider', 'AppProvider service loaded successfully', LogStyle.success)
+    )
+    console.log(
+      formatLog(
+        'AppProvider',
+        `onLoad finished in ${chalk.cyan(((performance.now() - loadStart) / 1000).toFixed(2))}s`,
+        LogStyle.success
+      )
     )
   }
 
@@ -283,9 +302,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _initialize(): Promise<void> {
+    const initStart = performance.now()
     console.log(formatLog('AppProvider', 'Initializing app data...', LogStyle.process))
 
+    const scanStart = performance.now()
     const scannedApps = await appScanner.getApps()
+    console.log(
+      formatLog(
+        'AppProvider',
+        `Scanned ${chalk.cyan(scannedApps.length)} apps in ${chalk.cyan(
+          ((performance.now() - scanStart) / 1000).toFixed(2)
+        )}s`,
+        LogStyle.info
+      )
+    )
     const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
     // Log apps with missing icons once per scan
@@ -303,8 +333,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
+    const dbLoadStart = performance.now()
     const dbApps = await this.dbUtils!.getFilesByType('app')
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
+    console.log(
+      formatLog(
+        'AppProvider',
+        `Loaded ${chalk.cyan(dbApps.length)} DB app records in ${chalk.cyan(
+          ((performance.now() - dbLoadStart) / 1000).toFixed(2)
+        )}s`,
+        LogStyle.info
+      )
+    )
     const dbAppsMap = new Map(
       dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
     )
@@ -351,45 +391,62 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       console.log(
         formatLog('AppProvider', `Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process)
       )
-      const addStartTime = Date.now()
+      const addStartTime = performance.now()
 
-      for (const app of toAdd) {
-        const [insertedFile] = await db
-          .insert(filesSchema)
-          .values({
-            path: app.path,
-            name: app.name,
-            displayName: app.displayName,
-            type: 'app' as const,
-            mtime: app.lastModified,
-            ctime: new Date()
-          })
-          .onConflictDoUpdate({
-            target: filesSchema.path,
-            set: {
-              name: sql`excluded.name`,
-              displayName: sql`excluded.display_name`,
-              mtime: sql`excluded.mtime`
-            }
-          })
-          .returning()
+      await runAdaptiveTaskQueue(
+        toAdd,
+        async (app, index) => {
+          const [insertedFile] = await db
+            .insert(filesSchema)
+            .values({
+              path: app.path,
+              name: app.name,
+              displayName: app.displayName,
+              type: 'app' as const,
+              mtime: app.lastModified,
+              ctime: new Date()
+            })
+            .onConflictDoUpdate({
+              target: filesSchema.path,
+              set: {
+                name: sql`excluded.name`,
+                displayName: sql`excluded.display_name`,
+                mtime: sql`excluded.mtime`
+              }
+            })
+            .returning()
 
-        if (insertedFile) {
-          const extensions: { fileId: number; key: string; value: any }[] = []
-          if (app.bundleId)
-            extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
-          if (app.icon) extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
+          if (insertedFile) {
+            const extensions: { fileId: number; key: string; value: any }[] = []
+            if (app.bundleId)
+              extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
+            if (app.icon) extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
 
-          if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
+            if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
-          await this._syncKeywordsForApp(app)
+            await this._syncKeywordsForApp(app)
+          }
+
+          if ((index + 1) % 10 === 0 || index === toAdd.length - 1) {
+            console.log(
+              formatLog(
+                'AppProvider',
+                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
+                LogStyle.info
+              )
+            )
+          }
+        },
+        {
+          estimatedTaskTimeMs: 12,
+          label: 'AppProvider::addApps'
         }
-      }
+      )
 
       console.log(
         formatLog(
           'AppProvider',
-          `New apps added in ${chalk.cyan(((Date.now() - addStartTime) / 1000).toFixed(1))}s`,
+          `New apps added in ${chalk.cyan(((performance.now() - addStartTime) / 1000).toFixed(1))}s`,
           LogStyle.success
         )
       )
@@ -403,34 +460,51 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           LogStyle.process
         )
       )
-      const updateStartTime = Date.now()
+      const updateStartTime = performance.now()
 
-      for (const { fileId, app } of toUpdate) {
-        await db
-          .update(filesSchema)
-          .set({
-            name: app.name,
-            path: app.path,
-            mtime: app.lastModified,
-            ...(!dbAppsMap.get(app.uniqueId)?.displayName && app.displayName
-              ? { displayName: app.displayName }
-              : {})
-          })
-          .where(eq(filesSchema.id, fileId))
+      await runAdaptiveTaskQueue(
+        toUpdate,
+        async ({ fileId, app }, index) => {
+          await db
+            .update(filesSchema)
+            .set({
+              name: app.name,
+              path: app.path,
+              mtime: app.lastModified,
+              ...(!dbAppsMap.get(app.uniqueId)?.displayName && app.displayName
+                ? { displayName: app.displayName }
+                : {})
+            })
+            .where(eq(filesSchema.id, fileId))
 
-        const extensions: { fileId: any; key: string; value: any }[] = []
-        if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
-        if (app.icon) extensions.push({ fileId, key: 'icon', value: app.icon })
+          const extensions: { fileId: any; key: string; value: any }[] = []
+          if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
+          if (app.icon) extensions.push({ fileId, key: 'icon', value: app.icon })
 
-        if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
+          if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
-        await this._syncKeywordsForApp(app)
-      }
+          await this._syncKeywordsForApp(app)
+
+          if ((index + 1) % 10 === 0 || index === toUpdate.length - 1) {
+            console.log(
+              formatLog(
+                'AppProvider',
+                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdate.length)} app updates`,
+                LogStyle.info
+              )
+            )
+          }
+        },
+        {
+          estimatedTaskTimeMs: 10,
+          label: 'AppProvider::updateApps'
+        }
+      )
 
       console.log(
         formatLog(
           'AppProvider',
-          `Apps updated in ${chalk.cyan(((Date.now() - updateStartTime) / 1000).toFixed(1))}s`,
+          `Apps updated in ${chalk.cyan(((performance.now() - updateStartTime) / 1000).toFixed(1))}s`,
           LogStyle.success
         )
       )
@@ -456,6 +530,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           .where(inArray(filesSchema.id, toDeleteIds))
       ).map((row) => row.bundleId || row.path)
 
+      const deleteStart = performance.now()
       await db.transaction(async (tx) => {
         await tx.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
         await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
@@ -465,10 +540,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         await this.searchIndex?.removeItems(deletedItemIds)
       }
 
-      console.log(formatLog('AppProvider', `Apps deleted successfully`, LogStyle.success))
+      console.log(
+        formatLog(
+          'AppProvider',
+          `Apps deleted successfully in ${chalk.cyan(
+            ((performance.now() - deleteStart) / 1000).toFixed(1)
+          )}s`,
+          LogStyle.success
+        )
+      )
     }
 
-    console.log(formatLog('AppProvider', 'App data initialization complete', LogStyle.success))
+    console.log(
+      formatLog(
+        'AppProvider',
+        `App data initialization complete in ${chalk.cyan(
+          ((performance.now() - initStart) / 1000).toFixed(2)
+        )}s`,
+        LogStyle.success
+      )
+    )
   }
 
   private handleItemAddedOrChanged = async (event: any): Promise<void> => {
@@ -731,128 +822,187 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
+    const searchStart = performance.now()
     console.log(
       formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
     )
 
-    if (!this.dbUtils || !query.text) {
+    if (!this.dbUtils || !this.searchIndex) {
       console.log(
         formatLog(
           'AppProvider',
-          'Empty query or DB not initialized, returning empty result',
-          LogStyle.info
+          'Search dependencies not ready, returning empty result',
+          LogStyle.warning
         )
       )
       return TuffFactory.createSearchResult(query).build()
     }
 
+    const rawText = query.text.trim()
+    if (!rawText) {
+      return TuffFactory.createSearchResult(query).build()
+    }
+
     const db = this.dbUtils.getDb()
-    const lowerCaseQuery = query.text.toLowerCase()
-    const queryTerms = lowerCaseQuery.split(/[\s/]+/).filter(Boolean)
+    const normalizedQuery = rawText.toLowerCase()
+    const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
+    const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
 
     let preciseMatchedItemIds: Set<string> | null = null
-    let isFuzzySearch = false
-
-    if (queryTerms.length > 0) {
+    if (terms.length > 0) {
+      const preciseStart = performance.now()
       console.log(
         formatLog(
           'AppProvider',
-          `Executing precise query: ${chalk.cyan(queryTerms.join(', '))}`,
+          `Executing precise query: ${chalk.cyan(terms.join(', '))}`,
           LogStyle.info
         )
       )
-      const allTermMatchedItemIds: Set<string>[] = []
 
-      for (const term of queryTerms) {
-        const matchedKeywords = await db
-          .select({ itemId: keywordMappings.itemId })
-          .from(keywordMappings)
-          .where(sql`lower(keyword) LIKE ${'%' + term + '%'}`)
-
-        allTermMatchedItemIds.push(new Set(matchedKeywords.map((k) => k.itemId)))
-      }
-
-      if (allTermMatchedItemIds.length > 0) {
-        preciseMatchedItemIds = allTermMatchedItemIds.reduce((intersection, currentSet) => {
-          return new Set([...intersection].filter((id) => currentSet.has(id)))
-        })
-      }
-    }
-
-    let finalApps: any[] = []
-
-    if (preciseMatchedItemIds && preciseMatchedItemIds.size > 0) {
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Precise match found ${chalk.green(preciseMatchedItemIds.size)} results`,
-          LogStyle.success
+      const preciseResults = await Promise.all(
+        terms.map((term) =>
+          db
+            .select({ itemId: keywordMappings.itemId })
+            .from(keywordMappings)
+            .where(
+              and(
+                eq(keywordMappings.keyword, term),
+                eq(keywordMappings.providerId, this.id)
+              )
+            )
+            .limit(200)
         )
       )
 
-      const itemIds = Array.from(preciseMatchedItemIds)
-      const subquery = db
-        .select({
-          fileId: fileExtensions.fileId
-        })
-        .from(fileExtensions)
-        .where(and(eq(fileExtensions.key, 'bundleId'), inArray(fileExtensions.value, itemIds)))
+      const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
+      if (termMatches.length > 0) {
+        preciseMatchedItemIds = termMatches.reduce<Set<string> | null>((accumulator, current) => {
+          if (!accumulator) return current
+          return new Set([...accumulator].filter((id) => current.has(id)))
+        }, null)
+      }
+      console.debug(
+        formatLog(
+          'AppProvider',
+          `Precise term lookup finished in ${chalk.cyan(
+            (performance.now() - preciseStart).toFixed(0)
+          )}ms with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`,
+          LogStyle.info
+        )
+      )
+    }
 
-      const files = await db
-        .select()
-        .from(filesSchema)
+    const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
+    if (shouldCheckPhrase) {
+      const phraseStart = performance.now()
+      const phraseMatches = await db
+        .select({ itemId: keywordMappings.itemId })
+        .from(keywordMappings)
         .where(
           and(
-            eq(filesSchema.type, 'app'),
-            or(inArray(filesSchema.path, itemIds), inArray(filesSchema.id, subquery))
+            eq(keywordMappings.keyword, normalizedQuery),
+            eq(keywordMappings.providerId, this.id)
           )
         )
+        .limit(200)
 
-      finalApps = await this.fetchExtensionsForFiles(files)
-    } else {
-      isFuzzySearch = true
-      console.log(
+      if (phraseMatches.length > 0) {
+        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
+        preciseMatchedItemIds = preciseMatchedItemIds
+          ? new Set([...preciseMatchedItemIds, ...phraseSet])
+          : phraseSet
+      }
+      console.debug(
         formatLog(
           'AppProvider',
-          `No precise match, falling back to fuzzy search: ${chalk.cyan(query.text)}`,
+          `Phrase lookup finished in ${chalk.cyan((performance.now() - phraseStart).toFixed(0))}ms with ${chalk.cyan(
+            preciseMatchedItemIds?.size ?? 0
+          )} accumulated result(s)`,
           LogStyle.info
         )
       )
-
-      const allApps = await this.dbUtils.getFilesByType('app')
-
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Performing fuzzy match on ${chalk.cyan(allApps.length)} apps`,
-          LogStyle.process
-        )
-      )
-
-      const fuzzyMatchedFiles = allApps.filter((app) => {
-        const distance = levenshteinDistance(app.name.toLowerCase(), lowerCaseQuery)
-        return distance <= 2
-      })
-
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Fuzzy match found ${chalk.green(fuzzyMatchedFiles.length)} results`,
-          LogStyle.success
-        )
-      )
-      finalApps = await this.fetchExtensionsForFiles(fuzzyMatchedFiles)
     }
 
+    const ftsQuery = this.buildFtsQuery(terms)
+    const ftsStart = performance.now()
+    const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
+    if (ftsQuery) {
+      console.debug(
+        formatLog(
+          'AppProvider',
+          `FTS search (${ftsQuery}) returned ${chalk.cyan(ftsMatches.length)} matches in ${chalk.cyan(
+            (performance.now() - ftsStart).toFixed(0)
+          )}ms`,
+          LogStyle.info
+        )
+      )
+    }
+
+    const preciseCandidates = preciseMatchedItemIds ? Array.from(preciseMatchedItemIds) : []
+    const maxCandidateCount = 120
+    const candidateIds = new Set<string>(preciseCandidates)
+
+    for (const match of ftsMatches) {
+      if (candidateIds.size >= maxCandidateCount) break
+      candidateIds.add(match.itemId)
+    }
+
+    if (candidateIds.size === 0) {
+      console.log(
+        formatLog('AppProvider', 'No candidates found for query, returning empty result', LogStyle.info)
+      )
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    const candidateList = Array.from(candidateIds)
+    const fetchStart = performance.now()
+    const subquery = db
+      .select({ fileId: fileExtensions.fileId })
+      .from(fileExtensions)
+      .where(and(eq(fileExtensions.key, 'bundleId'), inArray(fileExtensions.value, candidateList)))
+
+    const files = await db
+      .select()
+      .from(filesSchema)
+      .where(
+        and(
+          eq(filesSchema.type, 'app'),
+          or(inArray(filesSchema.path, candidateList), inArray(filesSchema.id, subquery))
+        )
+      )
+
+    console.debug(
+      formatLog(
+        'AppProvider',
+        `Loaded ${chalk.cyan(files.length)} candidate app rows in ${chalk.cyan(
+          (performance.now() - fetchStart).toFixed(0)
+        )}ms`,
+        LogStyle.info
+      )
+    )
+
+    if (files.length === 0) {
+      console.log(
+        formatLog(
+          'AppProvider',
+          'Candidate mapping returned no rows, search result empty',
+          LogStyle.warning
+        )
+      )
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    const appsWithExtensions = await this.fetchExtensionsForFiles(files)
+    const isFuzzySearch = !preciseMatchedItemIds || preciseMatchedItemIds.size === 0
+
     const processedResults = await processSearchResults(
-      finalApps,
+      appsWithExtensions,
       query,
       isFuzzySearch,
       this.aliases
     )
 
     const sortedItems = processedResults.map((item) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { score, ...rest } = item
       return rest
     })
@@ -860,11 +1010,39 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     console.log(
       formatLog(
         'AppProvider',
-        `Search complete, returning ${chalk.green(sortedItems.length)} results`,
+        `Search complete, returning ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
+          preciseMatchedItemIds?.size ?? 0
+        )}, fts=${chalk.cyan(ftsMatches.length)})`,
         LogStyle.success
       )
     )
+    console.log(
+      formatLog(
+        'AppProvider',
+        `onSearch\u300c${chalk.cyan(rawText)}\u300d finished in ${chalk.cyan(
+          ((performance.now() - searchStart) / 1000).toFixed(2)
+        )}s`,
+        LogStyle.success
+      )
+    )
+
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
+  }
+
+  private buildFtsQuery(terms: string[]): string {
+    const tokens: string[] = []
+    for (const term of terms) {
+      const cleaned = term.replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, ' ').trim()
+      if (!cleaned) continue
+      tokens.push(...cleaned.split(/\s+/))
+    }
+
+    if (tokens.length === 0) {
+      return ''
+    }
+
+    const limitedTokens = tokens.slice(0, 5)
+    return limitedTokens.map((token) => `${token}*`).join(' AND ')
   }
 
   private _subscribeToFSEvents(): void {
