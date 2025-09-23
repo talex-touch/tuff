@@ -31,6 +31,42 @@ import { processSearchResults } from './search-processing-service'
 import { formatLog, LogStyle } from './app-utils'
 import searchEngineCore from '../../search-engine/search-core'
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
+import {
+  SearchIndexService,
+  SearchIndexKeyword,
+  SearchIndexItem
+} from '../../search-engine/search-index-service'
+import { createRetrier } from '@talex-touch/utils'
+
+const isSqliteBusyError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false
+  const { code, rawCode, message } = error as {
+    code?: string
+    rawCode?: number
+    message?: string
+  }
+  if (code === 'SQLITE_BUSY' || rawCode === 5) return true
+  return typeof message === 'string' && message.includes('SQLITE_BUSY')
+}
+
+const sqliteBusyRetrier = createRetrier({
+  maxRetries: 3,
+  timeoutMs: 2000,
+  shouldRetry: (error) => isSqliteBusyError(error),
+  onRetry: (attempt) =>
+    console.warn(
+      formatLog(
+        'AppProvider',
+        `SQLITE_BUSY encountered while updating app display name, retrying attempt ${attempt + 1}`,
+        LogStyle.warning
+      )
+    )
+})
+
+const runWithSqliteBusyRetry = <T>(operation: () => Promise<T>): Promise<T> => {
+  const wrapped = sqliteBusyRetrier(operation)
+  return wrapped()
+}
 
 class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
@@ -43,6 +79,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private readonly isMac = process.platform === 'darwin'
   private processingPaths: Set<string> = new Set()
   private aliases: Record<string, string[]> = {}
+  private searchIndex: SearchIndexService | null = null
 
   constructor() {
     console.log(formatLog('AppProvider', 'Initializing AppProvider service', LogStyle.info))
@@ -52,6 +89,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     console.log(formatLog('AppProvider', 'Loading AppProvider service...', LogStyle.process))
     this.context = context
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    this.searchIndex = context.searchIndex
 
     if (!this.isInitializing) {
       this.isInitializing = this._initialize()
@@ -119,36 +157,36 @@ class AppProvider implements ISearchProvider<ProviderContext> {
    * 为应用同步关键词
    */
   private async _syncKeywordsForApp(appInfo: any): Promise<void> {
-    if (!this.dbUtils) return
+    if (!this.searchIndex) return
 
     const keywordsSet = await this._generateKeywordsForApp(appInfo)
-    const db = this.dbUtils.getDb()
     const itemId = appInfo.bundleId || appInfo.path
 
-    const existingKeywords = await db
-      .select({ keyword: keywordMappings.keyword })
-      .from(keywordMappings)
-      .where(eq(keywordMappings.itemId, itemId))
+    const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
+      value: keyword,
+      priority: this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
+    }))
 
-    const existingKeywordsSet = new Set(existingKeywords.map((k) => k.keyword))
-    const keywordsToInsert = Array.from(keywordsSet).filter((k) => !existingKeywordsSet.has(k))
+    const aliasList = this._getAliasesForApp(appInfo)
+    const aliasEntries: SearchIndexKeyword[] = aliasList.map((alias) => ({
+      value: alias,
+      priority: 1.5
+    }))
 
-    if (keywordsToInsert.length === 0) {
-      return
+    const indexItem: SearchIndexItem = {
+      itemId,
+      providerId: this.id,
+      type: this.type,
+      name: appInfo.name,
+      displayName: appInfo.displayName || undefined,
+      path: appInfo.path,
+      extension: path.extname(appInfo.path).toLowerCase(),
+      aliases: aliasEntries,
+      keywords: keywordEntries,
+      tags: appInfo.bundleId ? [appInfo.bundleId] : undefined
     }
 
-    const insertData = keywordsToInsert.map((keyword) => {
-      const isAcronym = this._isAcronymForApp(keyword, appInfo)
-      const isAlias = this._isAliasForApp(keyword, appInfo)
-
-      return {
-        keyword,
-        itemId,
-        priority: isAcronym || isAlias ? 1.5 : 1.0
-      }
-    })
-
-    await db.insert(keywordMappings).values(insertData).onConflictDoNothing()
+    await this.searchIndex.indexItems([indexItem])
   }
 
   private _isAcronymForApp(keyword: string, appInfo: any): boolean {
@@ -169,6 +207,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const uniqueId = appInfo.bundleId || appInfo.path
     const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path] || []
     return aliasList.includes(keyword)
+  }
+
+  private _getAliasesForApp(appInfo: any): string[] {
+    const uniqueId = appInfo.bundleId || appInfo.path
+    const aliasesById = this.aliases[uniqueId] || []
+    const aliasesByPath = this.aliases[appInfo.path] || []
+    return Array.from(new Set([...aliasesById, ...aliasesByPath])).map((alias) =>
+      alias.toLowerCase()
+    )
   }
 
   private async _generateKeywordsForApp(appInfo: any): Promise<Set<string>> {
@@ -412,10 +459,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await db.transaction(async (tx) => {
         await tx.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
         await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
-        if (deletedItemIds.length > 0) {
-          await tx.delete(keywordMappings).where(inArray(keywordMappings.itemId, deletedItemIds))
-        }
       })
+
+      if (deletedItemIds.length > 0) {
+        await this.searchIndex?.removeItems(deletedItemIds)
+      }
 
       console.log(formatLog('AppProvider', `Apps deleted successfully`, LogStyle.success))
     }
@@ -568,8 +616,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         await this.dbUtils!.getDb().transaction(async (tx) => {
           await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
           await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
-          await tx.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
         })
+
+        await this.searchIndex?.removeItems([itemId])
 
         console.log(
           formatLog(
@@ -1010,8 +1059,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const db = this.dbUtils.getDb()
 
     await db.delete(filesSchema)
-    await db.delete(keywordMappings)
     await db.delete(fileExtensions)
+    await this.searchIndex?.removeByProvider(this.id)
 
     console.log(formatLog('AppProvider', 'Database cleared, re-initializing...', LogStyle.info))
 
@@ -1078,10 +1127,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const db = this.dbUtils.getDb()
 
       for (const app of updatedApps) {
-        await db
-          .update(filesSchema)
-          .set({ displayName: app.displayName })
-          .where(eq(filesSchema.id, app.id))
+        await runWithSqliteBusyRetry(() =>
+          db
+            .update(filesSchema)
+            .set({ displayName: app.displayName })
+            .where(eq(filesSchema.id, app.id))
+        )
 
         const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
         if (appWithExtensions) {
@@ -1091,8 +1142,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           })
 
           const itemId = appInfo.uniqueId
-          await db.delete(keywordMappings).where(eq(keywordMappings.itemId, itemId))
-
+          await this.searchIndex?.removeItems([itemId])
           await this._syncKeywordsForApp(appInfo)
         }
       }
