@@ -15,6 +15,7 @@ import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import CoreBoxRender from '@renderer/components/render/CoreBoxRender.vue'
+import type { TuffItem } from '@talex-touch/utils'
 
 useCoreBox()
 
@@ -79,6 +80,17 @@ function handleTogglePin(): void {
   appSetting.tools.autoHide = !appSetting.tools.autoHide
 }
 
+function handleItemTrigger(index: number, item: TuffItem): void {
+  if (item.kind === 'file') {
+    if ( boxOptions.focus !== index ) {
+      boxOptions.focus = index
+      return
+    }
+  }
+
+  handleExecute(item)
+}
+
 const addon = computed(() => {
   if (!activeItem.value) return
 
@@ -137,7 +149,7 @@ const addon = computed(() => {
         :key="index"
         :active="boxOptions.focus === index"
         :item="item"
-        @trigger="handleExecute(item)"
+        @trigger="handleItemTrigger(index, item)"
       />
         <!-- @mousemove="boxOptions.focus = index" -->
     </TouchScroll>
