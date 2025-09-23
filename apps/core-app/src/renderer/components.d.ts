@@ -17,6 +17,7 @@ declare module 'vue' {
     BoxItem: typeof import('./src/components/render/BoxItem.vue')['default']
     BrickTemplate: typeof import('./src/components/base/template/BrickTemplate.vue')['default']
     CommandDetailDrawer: typeof import('./src/components/plugin/tabs/CommandDetailDrawer.vue')['default']
+    CoreBoxFooter: typeof import('./src/components/render/CoreBoxFooter.vue')['default']
     CoreBoxRender: typeof import('./src/components/render/CoreBoxRender.vue')['default']
     DefaultPreview: typeof import('./src/components/render/addon/preview/DefaultPreview.vue')['default']
     ElCollapse: typeof import('element-plus/es')['ElCollapse']

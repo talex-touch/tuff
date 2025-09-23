@@ -141,7 +141,10 @@ export function mapFileToTuffItem(
         path: file.path,
         size: file.size ?? undefined,
         created_at: file.ctime.toISOString(),
-        modified_at: file.mtime.toISOString()
+        modified_at: file.mtime.toISOString(),
+        extension: (file.extension || path.extname(file.name) || '')
+          .replace(/^\./, '')
+          .toLowerCase()
       }
     }
   }

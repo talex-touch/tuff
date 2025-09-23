@@ -10,8 +10,12 @@ import {
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { app, shell } from 'electron'
 import path from 'path'
+import os from 'os'
 import fs from 'fs/promises'
 import { performance } from 'perf_hooks'
+import plist from 'plist'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { createDbUtils } from '../../../../db/utils'
 import {
   files as filesSchema,
@@ -54,6 +58,7 @@ import {
   FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
 import chalk from 'chalk'
+import { ChannelType } from '@talex-touch/utils/channel'
 
 const MAX_CONTENT_LENGTH = 200_000
 
@@ -120,6 +125,24 @@ const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
   design: 'design',
   designs: 'design',
   设计: 'design'
+}
+
+const execFileAsync = promisify(execFile)
+
+const LAUNCH_SERVICES_PLIST_PATH = path.join(
+  os.homedir(),
+  'Library',
+  'Preferences',
+  'com.apple.LaunchServices',
+  'com.apple.launchservices.secure.plist'
+)
+
+type ResolvedOpener = {
+  bundleId: string
+  name: string
+  logo: string
+  path?: string
+  lastResolvedAt: string
 }
 
 class ProgressLogger {
@@ -194,6 +217,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!event?.filePath) return
     this.enqueueIncrementalUpdate(event.filePath, 'delete')
   }
+  private openersChannelRegistered = false
+  private readonly openerCache = new Map<string, ResolvedOpener>()
+  private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
+  private launchServicesHandlers: any[] | null = null
+  private launchServicesMTime?: number
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -323,6 +351,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
     await this.isInitializing
     await this.ensureFileSystemWatchers()
+    this.registerOpenersChannel(context)
     this.logInfo(
       `onLoad completed in ${chalk.cyan(((performance.now() - loadStart) / 1000).toFixed(2))}s`
     )
@@ -357,6 +386,286 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.watchPathsRegistered = true
     this.subscribeToFileSystemEvents()
+  }
+
+  private registerOpenersChannel(context: ProviderContext): void {
+    if (this.openersChannelRegistered) {
+      return
+    }
+
+    const channel = context.touchApp.channel
+
+    channel.regChannel(ChannelType.MAIN, 'openers:resolve', async ({ data }) => {
+      const extension = typeof data?.extension === 'string' ? data.extension : null
+      if (!extension) {
+        return null
+      }
+
+      try {
+        return await this.getOpenerForExtension(extension)
+      } catch (error) {
+        this.logError(`Failed to resolve opener for extension ${chalk.gray(extension)}.`, error)
+        return null
+      }
+    })
+
+    this.openersChannelRegistered = true
+  }
+
+  private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
+    const normalized = rawExtension.replace(/^\./, '').toLowerCase()
+    if (!normalized) {
+      return null
+    }
+
+    if (this.openerCache.has(normalized)) {
+      return this.openerCache.get(normalized)!
+    }
+
+    let pending = this.openerPromises.get(normalized)
+    if (!pending) {
+      pending = this.resolveOpener(normalized)
+      this.openerPromises.set(normalized, pending)
+    }
+
+    const result = await pending
+    this.openerPromises.delete(normalized)
+
+    if (result) {
+      this.openerCache.set(normalized, result)
+    }
+
+    return result
+  }
+
+  private async resolveOpener(extension: string): Promise<ResolvedOpener | null> {
+    if (process.platform !== 'darwin') {
+      return null
+    }
+
+    const sanitized = extension.replace(/[^a-z0-9.+-]/gi, '')
+    if (!sanitized) {
+      return null
+    }
+
+    const bundleId = await this.getBundleIdForExtension(sanitized)
+    if (!bundleId) {
+      return null
+    }
+
+    const appInfo = await this.getAppInfoByBundleId(bundleId)
+    if (!appInfo) {
+      return null
+    }
+
+    let logo = appInfo.logo
+    if (!logo && appInfo.path) {
+      logo = await this.generateApplicationIcon(appInfo.path)
+    }
+
+    const opener: ResolvedOpener = {
+      bundleId,
+      name: appInfo.name,
+      logo,
+      path: appInfo.path,
+      lastResolvedAt: new Date().toISOString()
+    }
+
+    return opener
+  }
+
+  private async getBundleIdForExtension(extension: string): Promise<string | null> {
+    const handlers = await this.loadLaunchServicesHandlers()
+    if (handlers.length === 0) {
+      return null
+    }
+
+    const lower = extension.toLowerCase()
+
+    const directMatch = handlers.find(
+      (handler) =>
+        typeof handler?.LSHandlerContentTag === 'string' &&
+        handler.LSHandlerContentTag.toLowerCase() === lower &&
+        handler.LSHandlerContentTagClass === 'public.filename-extension'
+    )
+
+    const directBundle = this.pickBundleIdFromHandler(directMatch)
+    if (directBundle) {
+      return directBundle
+    }
+
+    const uti = await this.resolveUniformTypeIdentifier(lower)
+    if (!uti) {
+      return null
+    }
+
+    const utiMatch = handlers.find(
+      (handler) =>
+        typeof handler?.LSHandlerContentType === 'string' &&
+        handler.LSHandlerContentType.toLowerCase() === uti.toLowerCase()
+    )
+
+    return this.pickBundleIdFromHandler(utiMatch)
+  }
+
+  private pickBundleIdFromHandler(handler: any): string | null {
+    if (!handler || typeof handler !== 'object') {
+      return null
+    }
+
+    const roleKeys = ['LSHandlerRoleAll', 'LSHandlerRoleViewer', 'LSHandlerRoleEditor']
+
+    for (const key of roleKeys) {
+      const value = handler[key]
+      if (typeof value === 'string' && value.length > 0) {
+        return value
+      }
+    }
+
+    const preferred = handler.LSHandlerPreferredVersions
+    if (preferred && typeof preferred === 'object') {
+      for (const key of roleKeys) {
+        const value = preferred[key]
+        if (typeof value === 'string' && value.length > 0) {
+          return value
+        }
+      }
+    }
+
+    return null
+  }
+
+  private async loadLaunchServicesHandlers(): Promise<any[]> {
+    if (process.platform !== 'darwin') {
+      return []
+    }
+
+    try {
+      const stats = await fs.stat(LAUNCH_SERVICES_PLIST_PATH)
+      if (this.launchServicesHandlers && this.launchServicesMTime === stats.mtimeMs) {
+        return this.launchServicesHandlers
+      }
+
+      const { stdout } = await execFileAsync('plutil', [
+        '-convert',
+        'xml1',
+        '-o',
+        '-',
+        LAUNCH_SERVICES_PLIST_PATH
+      ])
+
+      const parsed = plist.parse(stdout.toString()) as { LSHandlers?: any[] }
+      const handlers = Array.isArray(parsed?.LSHandlers) ? parsed.LSHandlers : []
+
+      this.launchServicesHandlers = handlers
+      this.launchServicesMTime = stats.mtimeMs
+
+      return handlers
+    } catch (error) {
+      this.logError('Failed to load LaunchServices configuration for opener resolution.', error)
+      this.launchServicesHandlers = []
+      this.launchServicesMTime = undefined
+      return []
+    }
+  }
+
+  private async resolveUniformTypeIdentifier(extension: string): Promise<string | null> {
+    if (process.platform !== 'darwin') {
+      return null
+    }
+
+    const safeExt = extension.replace(/[^a-z0-9.+-]/gi, '')
+    if (!safeExt) {
+      return null
+    }
+
+    const tempPath = path.join(
+      os.tmpdir(),
+      `talex-touch-${Date.now()}-${Math.random().toString(16).slice(2)}.${safeExt}`
+    )
+
+    try {
+      await fs.writeFile(tempPath, '')
+      const { stdout } = await execFileAsync('mdls', ['-name', 'kMDItemContentType', tempPath])
+      const match = /"([^"\n]+)"/.exec(stdout.toString())
+      return match ? match[1] : null
+    } catch (error) {
+      this.logWarn(`Failed to resolve UTI for extension .${extension}`, error)
+      return null
+    } finally {
+      try {
+        await fs.unlink(tempPath)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private async getAppInfoByBundleId(bundleId: string): Promise<{
+    name: string
+    path: string
+    logo: string
+  } | null> {
+    if (!this.dbUtils) {
+      return null
+    }
+
+    try {
+      const db = this.dbUtils.getDb()
+
+      const mapping = await db
+        .select({ fileId: fileExtensions.fileId })
+        .from(fileExtensions)
+        .where(and(eq(fileExtensions.key, 'bundleId'), eq(fileExtensions.value, bundleId)))
+        .limit(1)
+
+      const fileId = mapping[0]?.fileId
+      if (!fileId) {
+        return null
+      }
+
+      const [fileRow] = await db
+        .select({
+          id: filesSchema.id,
+          name: filesSchema.name,
+          displayName: filesSchema.displayName,
+          path: filesSchema.path
+        })
+        .from(filesSchema)
+        .where(eq(filesSchema.id, fileId))
+        .limit(1)
+
+      if (!fileRow) {
+        return null
+      }
+
+      const [iconRow] = await db
+        .select({ value: fileExtensions.value })
+        .from(fileExtensions)
+        .where(and(eq(fileExtensions.fileId, fileId), eq(fileExtensions.key, 'icon')))
+        .limit(1)
+
+      return {
+        name: fileRow.displayName || fileRow.name,
+        path: fileRow.path,
+        logo: iconRow?.value ?? ''
+      }
+    } catch (error) {
+      this.logError(`Failed to read app info for bundle ${chalk.gray(bundleId)}.`, error)
+      return null
+    }
+  }
+
+  private async generateApplicationIcon(appPath: string): Promise<string> {
+    try {
+      const buffer = extractFileIcon(appPath)
+      if (buffer && buffer.length > 0) {
+        return `data:image/png;base64,${buffer.toString('base64')}`
+      }
+    } catch (error) {
+      this.logWarn(`Failed to extract icon for ${chalk.gray(appPath)}.`, error)
+    }
+    return ''
   }
 
   private getWatchDepthForPath(watchPath: string): number {
@@ -1657,6 +1966,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         if (!tuffItem.meta) {
           tuffItem.meta = {}
         }
+
+        if (usage) {
+          tuffItem.meta.usage = {
+            clickCount: usage.clickCount ?? 0,
+            lastUsed: usage.lastUsed ? new Date(usage.lastUsed).toISOString() : undefined
+          }
+        } else {
+          tuffItem.meta.usage = {
+            clickCount: 0
+          }
+        }
+
         const extensionMeta = tuffItem.meta.extension ?? {}
         tuffItem.meta.extension = {
           ...extensionMeta,

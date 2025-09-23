@@ -4,6 +4,7 @@ import { AccountStorage } from '~/modules/channel/storage/accounter'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { storages } from '@talex-touch/utils/renderer'
 import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
+import { openersStorage } from '@talex-touch/utils/renderer/storage/openers'
 
 /**
  * StorageManager handles the reactive data storages of the app,
@@ -91,3 +92,8 @@ export const storageManager = new StorageManager()
  * ```
  */
 export const appSetting = appSettings.data
+
+/**
+ * Cached mapping of file extensions to their preferred openers.
+ */
+export const openers = openersStorage.data

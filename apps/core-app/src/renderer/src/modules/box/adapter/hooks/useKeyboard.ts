@@ -18,6 +18,17 @@ export function useKeyboard(
 
     const lastFocus = boxOptions.focus
 
+    if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+      const key = event.key
+      const index = key === '0' ? 9 : parseInt(key, 10) - 1
+      if (!Number.isNaN(index) && index >= 0 && index < 10) {
+        if (res.value[index]) {
+          boxOptions.focus = index
+          event.preventDefault()
+        }
+      }
+    }
+
     if (event.key === 'Enter') {
       select.value = boxOptions.focus
       const target = res.value[boxOptions.focus]

@@ -3,11 +3,13 @@ import { TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import ItemSubtitle from './ItemSubtitle.vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
+import { useOpenerAutoResolve, getOpenerByExtension } from '~/modules/openers'
 
 interface Props {
   item: TuffItem
   active: boolean
   render: TuffRender
+  quickKey?: string
 }
 
 const props = defineProps<Props>()
@@ -19,12 +21,34 @@ const displayIcon = computed(() => {
   }
   if (icon && typeof icon === 'object' && 'value' in icon) {
     if (icon.value?.length) {
-      return icon.value
+      return icon.value as string
     }
   }
-  console.log(DefaultIcon)
   return DefaultIcon
 })
+
+const fileExtension = computed(() => {
+  if (props.item.kind !== 'file') return null
+  const metaExt = props.item.meta?.file?.extension
+  if (metaExt) return metaExt
+  const pathValue = props.item.meta?.file?.path || props.render.basic?.subtitle || ''
+  const match = /\.([^.\\/]+)$/i.exec(pathValue)
+  return match ? match[1].toLowerCase() : null
+})
+
+useOpenerAutoResolve(fileExtension)
+
+const opener = computed(() => getOpenerByExtension(fileExtension.value))
+const openerLogo = computed(() => opener.value?.logo || '')
+const openerName = computed(() => opener.value?.name || '')
+const showOpenerLogo = computed(() => props.item.kind === 'file' && !!openerLogo.value)
+
+const clickCount = computed(() => props.item.meta?.usage?.clickCount ?? 0)
+const showFrequency = computed(() => clickCount.value > 0)
+const frequencyLabel = computed(() => clickCount.value.toString())
+
+const quickKeyLabel = computed(() => props.quickKey || '')
+const showQuickKey = computed(() => quickKeyLabel.value.length > 0)
 
 type Range = { start: number; end: number }
 
@@ -78,10 +102,22 @@ const sourceType = computed(() => props.item.source.type)
         class="w-full h-full"
       />
       <span
-        v-if="props.item.scoring?.frequency"
-        class="absolute right-0 bottom-0 flex items-center justify-center w-12px h-12px text-10px leading-12px rounded-full bg-[var(--el-color-primary)] text-white"
-        v-text="Math.round((props.item.scoring.frequency || 0) * 10)"
-      />
+        v-if="showFrequency"
+        class="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[10px] leading-none rounded-full bg-[var(--el-color-primary)] text-white shadow-sm"
+      >
+        {{ frequencyLabel }}
+      </span>
+      <div
+        v-if="showOpenerLogo"
+        class="absolute right-0 bottom-0 flex items-center justify-center w-[14px] h-[14px] rounded-md border border-[var(--el-border-color)] bg-[var(--el-bg-color)]/90 shadow-sm overflow-hidden"
+        :title="openerName"
+      >
+        <img
+          :src="openerLogo"
+          :alt="openerName || 'Opener'"
+          class="w-[10px] h-[10px] object-contain"
+        />
+      </div>
     </div>
 
     <div class="flex-1 overflow-hidden">
@@ -94,17 +130,36 @@ const sourceType = computed(() => props.item.source.type)
       <ItemSubtitle :item="item" :render="render" />
     </div>
 
-    <span class="ml-auto text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold">
-      <template v-if="sourceType === 'plugin'">
-        {{ props.item.meta?.pluginName }}
-      </template>
-      <template v-else>
-      {{ sourceType }}
-      </template>
-    </span>
+    <div class="ml-auto flex items-center gap-2">
+      <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
+      <span class="text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold">
+        <template v-if="sourceType === 'plugin'">
+          {{ props.item.meta?.pluginName }}
+        </template>
+        <template v-else>
+        {{ sourceType }}
+        </template>
+      </span>
+    </div>
 
     <div
       class="absolute left-0 top-[25%] h-[50%] w-1 rounded-3xl bg-[var(--el-color-primary)] shadow-[0_0_2px_0_var(--el-color-primary)] transition-opacity duration-200 opacity-0 group-[.is-active]:opacity-100"
     />
   </div>
 </template>
+
+<style scoped lang="scss">
+.QuickKeyPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  min-width: 22px;
+  height: 16px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--el-fill-color-dark);
+  color: var(--el-text-color-primary);
+}
+</style>
