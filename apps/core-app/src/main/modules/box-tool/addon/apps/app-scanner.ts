@@ -4,6 +4,7 @@ import { formatLog, LogStyle } from './app-utils'
 import chalk from 'chalk'
 import { exec } from 'child_process'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
+import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 
 /**
  * Service for scanning applications, responsible for app discovery and information retrieval.
@@ -168,60 +169,90 @@ export class AppScanner {
     )
 
     let updatedCount = 0
+    let processedCount = 0
     const updatedApps: any[] = []
     const startTime = Date.now()
 
-    for (const app of apps) {
-      try {
-        const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-        const { stdout, stderr } = await this._execCommand(command)
+    await runAdaptiveTaskQueue(
+      apps,
+      async (app) => {
+        try {
+          const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
+          const { stdout, stderr } = await this._execCommand(command)
 
-        if (stderr) {
-          console.warn(
+          if (stderr) {
+            console.warn(
+              formatLog(
+                'AppScanner',
+                `mdls command warning for ${chalk.yellow(app.path)}: ${stderr}`,
+                LogStyle.warning
+              )
+            )
+          }
+
+          let spotlightName = stdout.trim()
+          if (spotlightName.endsWith('.app')) {
+            spotlightName = spotlightName.slice(0, -4)
+          }
+
+          const currentDisplayName = app.displayName
+
+          if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
+            console.log(
+              formatLog(
+                'AppScanner',
+                `Updating app display name: ${chalk.cyan(app.name)}: "${
+                  currentDisplayName || 'null'
+                }" -> "${spotlightName}"`,
+                LogStyle.info
+              )
+            )
+
+            updatedCount++
+            updatedApps.push({
+              ...app,
+              displayName: spotlightName
+            })
+          }
+        } catch (error) {
+          console.error(
             formatLog(
               'AppScanner',
-              `mdls command warning for ${chalk.yellow(app.path)}: ${stderr}`,
-              LogStyle.warning
+              `Error processing app ${chalk.red(app.path)}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              LogStyle.error
+            )
+          )
+        } finally {
+          processedCount++
+          if (processedCount % 50 === 0) {
+            console.debug(
+              formatLog(
+                'AppScanner',
+                `mdls progress: processed ${chalk.cyan(processedCount)}/${chalk.cyan(apps.length)} apps`,
+                LogStyle.info
+              )
+            )
+          }
+        }
+      },
+      {
+        estimatedTaskTimeMs: 20,
+        label: 'AppScanner::mdlsScan',
+        onYield: ({ processed, total, elapsedMs }) => {
+          console.debug(
+            formatLog(
+              'AppScanner',
+              `Yield after ${chalk.cyan(processed)}/${chalk.cyan(total)} apps, elapsed ${chalk.cyan(
+                (elapsedMs / 1000).toFixed(1)
+              )}s`,
+              LogStyle.process
             )
           )
         }
-
-        let spotlightName = stdout.trim()
-        if (spotlightName.endsWith('.app')) {
-          spotlightName = spotlightName.slice(0, -4)
-        }
-
-        const currentDisplayName = app.displayName
-
-        if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
-          console.log(
-            formatLog(
-              'AppScanner',
-              `Updating app display name: ${chalk.cyan(app.name)}: "${
-                currentDisplayName || 'null'
-              }" -> "${spotlightName}"`,
-              LogStyle.info
-            )
-          )
-
-          updatedCount++
-          updatedApps.push({
-            ...app,
-            displayName: spotlightName
-          })
-        }
-      } catch (error) {
-        console.error(
-          formatLog(
-            'AppScanner',
-            `Error processing app ${chalk.red(app.path)}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            LogStyle.error
-          )
-        )
       }
-    }
+    )
 
     console.log(
       formatLog(

@@ -2,6 +2,7 @@ import { sql, eq } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
 import * as schema from '../../../db/schema'
+import { performance } from 'perf_hooks'
 
 const CHINESE_CHAR_REGEX = /[\u4e00-\u9fa5]/
 const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4e00-\u9fa5]+/i
@@ -49,6 +50,7 @@ export class SearchIndexService {
 
   async indexItems(items: SearchIndexItem[]): Promise<void> {
     if (items.length === 0) return
+    const start = performance.now()
     await this.ensureInitialized()
 
     const preparedDocs = await Promise.all(items.map((item) => this.prepareDocument(item)))
@@ -58,10 +60,16 @@ export class SearchIndexService {
         await this.applyDocument(tx, doc)
       }
     })
+    console.debug(
+      `[SearchIndexService] Indexed ${items.length} items in ${(
+        performance.now() - start
+      ).toFixed(0)}ms`
+    )
   }
 
   async removeItems(itemIds: string[]): Promise<void> {
     if (itemIds.length === 0) return
+    const start = performance.now()
     await this.ensureInitialized()
 
     await this.db.transaction(async (tx) => {
@@ -70,6 +78,11 @@ export class SearchIndexService {
         await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
       }
     })
+    console.debug(
+      `[SearchIndexService] Removed ${itemIds.length} items in ${(
+        performance.now() - start
+      ).toFixed(0)}ms`
+    )
   }
 
   async removeByProvider(providerId: string): Promise<void> {
@@ -79,7 +92,13 @@ export class SearchIndexService {
     )
     const itemIds = rows.map((row) => row.item_id)
     if (itemIds.length === 0) return
+    const start = performance.now()
     await this.removeItems(itemIds)
+    console.debug(
+      `[SearchIndexService] removeByProvider(${providerId}) removed ${itemIds.length} items in ${(
+        performance.now() - start
+      ).toFixed(0)}ms`
+    )
   }
 
   async search(
@@ -87,6 +106,7 @@ export class SearchIndexService {
     ftsQuery: string,
     limit = 50
   ): Promise<Array<{ itemId: string; score: number }>> {
+    const start = performance.now()
     await this.ensureInitialized()
     const trimmed = ftsQuery.trim()
     if (!trimmed) return []
@@ -95,16 +115,27 @@ export class SearchIndexService {
       sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${trimmed} ORDER BY score LIMIT ${limit}`
     )
 
-    return rows.map((row) => ({ itemId: row.item_id, score: row.score }))
+    const results = rows.map((row) => ({ itemId: row.item_id, score: row.score }))
+    console.debug(
+      `[SearchIndexService] search(provider=${providerId}, limit=${limit}) returned ${results.length} matches in ${(
+        performance.now() - start
+      ).toFixed(0)}ms`
+    )
+    return results
   }
 
   private async ensureInitialized(): Promise<void> {
     if (this.initialized) return
-
+    const initStart = performance.now()
     await this.createSearchIndexTable()
     await this.createFileFtsTable()
 
     this.initialized = true
+    console.log(
+      `[SearchIndexService] Initialization completed in ${(
+        performance.now() - initStart
+      ).toFixed(0)}ms`
+    )
   }
 
   private async createSearchIndexTable(): Promise<void> {
@@ -170,6 +201,7 @@ export class SearchIndexService {
           doc.keywordEntries.map(({ value, priority }) => ({
             keyword: value,
             itemId: doc.itemId,
+            providerId: doc.providerId,
             priority: priority ?? 1
           }))
         )
@@ -327,7 +359,19 @@ export class SearchIndexService {
   private async loadPinyinModule(): Promise<typeof import('pinyin-pro')> {
     if (this.pinyinModule) return this.pinyinModule
     if (!this.pinyinPromise) {
+      const start = performance.now()
       this.pinyinPromise = import('pinyin-pro')
+      this.pinyinPromise
+        .then(() => {
+          console.log(
+            `[SearchIndexService] pinyin-pro module loaded in ${(
+              performance.now() - start
+            ).toFixed(0)}ms`
+          )
+        })
+        .catch(() => {
+          /* swallow log; caller handles */
+        })
     }
     this.pinyinModule = await this.pinyinPromise
     return this.pinyinModule

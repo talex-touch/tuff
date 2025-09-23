@@ -40,6 +40,9 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
   // 映射的目标项目ID，采用 URI 格式，保证全局唯一
   itemId: text('item_id').notNull(),
 
+  // 来源 provider，便于按提供者过滤与排查
+  providerId: text('provider_id').notNull().default(''),
+
   // 用于排序的静态权重，可由插件或用户定义
   priority: real('priority').notNull().default(1.0)
 })

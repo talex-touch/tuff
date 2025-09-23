@@ -6,6 +6,7 @@ import { calculateHighlights, Range } from './highlighting-service'
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
 import { formatLog, LogStyle, generateAcronym } from './app-utils'
 import chalk from 'chalk'
+import { performance } from 'perf_hooks'
 
 interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
@@ -17,6 +18,7 @@ export async function processSearchResults(
   isFuzzySearch: boolean,
   aliases: Record<string, string[]> // 需要传入别名数据
 ): Promise<ProcessedTuffItem[]> {
+  const processStart = performance.now()
   console.log(
     formatLog(
       'SearchProcessor',
@@ -38,8 +40,35 @@ export async function processSearchResults(
     const potentialTitles = [displayName, name].filter(Boolean) as string[]
 
     let bestSource: string = 'unknown'
-    let bestHighlights: any[] = []
+    let bestHighlights: Range[] = []
     let score = 0
+    const aliasList = aliases[uniqueId] || aliases[app.path] || []
+
+    const ensureHighlights = (raw: Range[] | null | undefined, fallbackTitle: string): Range[] => {
+      if (raw && raw.length > 0) {
+        return raw
+      }
+      const length = fallbackTitle.length
+      if (length === 0) {
+        return []
+      }
+      const highlightLength = Math.min(length, Math.max(lowerCaseQuery.length, 1))
+      return [{ start: 0, end: highlightLength }]
+    }
+
+    const updateMatch = (
+      source: string,
+      rawHighlights: Range[] | null | undefined,
+      newScore: number,
+      fallbackTitle: string
+    ): void => {
+      if (newScore <= score) return
+      const resolvedHighlights = ensureHighlights(rawHighlights, fallbackTitle)
+      if (resolvedHighlights.length === 0) return
+      bestSource = source
+      bestHighlights = resolvedHighlights
+      score = newScore
+    }
 
     // --- 1. 来源推断与区间计算 ---
     if (isFuzzySearch) {
@@ -59,64 +88,51 @@ export async function processSearchResults(
       }
 
       if (minFuzzyDist <= 2 && bestFuzzyStart !== -1) {
-        // 假设编辑距离阈值为2
-        bestSource = 'name' // 模糊匹配主要基于名称
-        bestHighlights = [[bestFuzzyStart, bestFuzzyEnd]]
-        score = 0.1 + (2 - minFuzzyDist) * 0.05 // 模糊匹配分数较低，距离越小分数越高
+        const clampedStart = Math.max(0, bestFuzzyStart)
+        const clampedEnd = Math.min(displayName.length, Math.max(clampedStart + 1, bestFuzzyEnd))
+        updateMatch('name-fuzzy', [{ start: clampedStart, end: clampedEnd }], 0.1 + (2 - minFuzzyDist) * 0.05, displayName)
       }
-    } else {
-      // 精确搜索：反向推断来源和计算区间
-      for (const title of potentialTitles) {
-        // 尝试匹配首字母缩写
-        const acronym = generateAcronym(title)
-        if (acronym && lowerCaseQuery.includes(acronym.toLowerCase())) {
-          bestSource = 'initials'
-          // 需要更复杂的逻辑来获取 initials_pos，目前只能计算大致位置
-          const initialsPositions: Range[] = []
-          const words = title.split(' ')
-          let currentPos = 0
-          for (const word of words) {
-            if (word.length > 0) {
-              initialsPositions.push({ start: currentPos, end: currentPos + 1 })
-              currentPos += word.length + 1 // +1 for space
-            }
-          }
-          bestHighlights = initialsPositions // 这是一个近似值，需要更精确的 `initials_pos`
-          score = Math.max(score, 0.8) // 首字母匹配分数较高
-          break
-        }
+    }
 
-        // 尝试匹配别名/标签
-        const aliasList = aliases[uniqueId] || aliases[app.path] || []
-        if (aliasList.some((alias) => alias.toLowerCase().includes(lowerCaseQuery))) {
-          bestSource = 'tag' // 或者 'alias'
-          bestHighlights = calculateHighlights(title, lowerCaseQuery) || []
-          score = Math.max(score, 0.7) // 别名匹配分数
-          break
-        }
+    if (aliasList.some((alias) => alias.toLowerCase().includes(lowerCaseQuery))) {
+      updateMatch('tag', calculateHighlights(displayName, lowerCaseQuery), 0.7, displayName)
+    }
 
-        // 尝试匹配名称子串
-        const highlights = calculateHighlights(title, lowerCaseQuery)
-        if (highlights && highlights.length > 0) {
-          bestSource = 'name'
-          bestHighlights = highlights
-          score = Math.max(score, 0.9) // 名称子串匹配分数最高
-          break
-        }
+    for (const title of potentialTitles) {
+      if (!title) continue
+      const normalizedTitle = title.toLowerCase()
 
-        // 尝试匹配拼音
-        const pinyinFull = pinyin(title, { toneType: 'none' }).replace(/\s/g, '')
-        if (pinyinFull.includes(lowerCaseQuery)) {
-          bestSource = 'name' // 拼音匹配也算名称来源
-          bestHighlights = calculateHighlights(title, lowerCaseQuery) || [] // 拼音高亮需要特殊处理，这里简化
-          score = Math.max(score, 0.6) // 拼音匹配分数
-          break
+      if (normalizedTitle.includes(lowerCaseQuery)) {
+        updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.9, title)
+      }
+
+      const acronym = generateAcronym(title)
+      if (acronym) {
+        const normalizedAcronym = acronym.toLowerCase()
+        if (
+          lowerCaseQuery.includes(normalizedAcronym) ||
+          normalizedAcronym.includes(lowerCaseQuery)
+        ) {
+          updateMatch('initials', calculateHighlights(title, acronym), 0.8, title)
+        }
+      }
+
+      if (/[\u4e00-\u9fa5]/.test(title)) {
+        const fullPinyin = pinyin(title, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
+        const firstPinyin = pinyin(title, { pattern: 'first', toneType: 'none' })
+          .replace(/\s/g, '')
+          .toLowerCase()
+
+        if (fullPinyin.includes(lowerCaseQuery)) {
+          updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.65, title)
+        } else if (firstPinyin.includes(lowerCaseQuery)) {
+          updateMatch('initials', calculateHighlights(title, lowerCaseQuery), 0.6, title)
         }
       }
     }
 
     // 如果没有任何匹配，跳过此项
-    if (score === 0 && bestHighlights.length === 0) {
+    if (score === 0 || bestHighlights.length === 0) {
       continue
     }
 
@@ -170,7 +186,9 @@ export async function processSearchResults(
   console.log(
     formatLog(
       'SearchProcessor',
-      `搜索结果处理完成，匹配到 ${chalk.green(sortedResults.length)} / ${chalk.cyan(apps.length)} 个项目`,
+      `搜索结果处理完成，匹配到 ${chalk.green(sortedResults.length)} / ${chalk.cyan(
+        apps.length
+      )} 个项目，用时 ${chalk.cyan(((performance.now() - processStart) / 1000).toFixed(2))}s`,
       LogStyle.success
     )
   )

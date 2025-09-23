@@ -7,8 +7,11 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
     getDb: () => db,
 
     // Keyword Mappings
-    async addKeywordMapping(keyword: string, itemId: string, priority = 1.0) {
-      return db.insert(schema.keywordMappings).values({ keyword, itemId, priority }).returning()
+    async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {
+      return db
+        .insert(schema.keywordMappings)
+        .values({ keyword, itemId, providerId, priority })
+        .returning()
     },
     async getKeywordMapping(keyword: string) {
       return db
@@ -121,7 +124,12 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
 
 export type DbUtils = {
   getDb: () => LibSQLDatabase<typeof schema>
-  addKeywordMapping: (keyword: string, itemId: string, priority?: number) => Promise<any>
+  addKeywordMapping: (
+    keyword: string,
+    itemId: string,
+    providerId: string,
+    priority?: number
+  ) => Promise<any>
   getKeywordMapping: (keyword: string) => Promise<any>
   removeKeywordMapping: (keyword: string) => Promise<any>
   addFile: (file: typeof schema.files.$inferInsert) => Promise<any>

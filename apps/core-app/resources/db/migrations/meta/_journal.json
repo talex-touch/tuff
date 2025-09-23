@@ -22,6 +22,13 @@
       "when": 1756869021351,
       "tag": "0002_eager_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1758600949204,
+      "tag": "0003_exotic_human_robot",
+      "breakpoints": true
     }
   ]
 }
