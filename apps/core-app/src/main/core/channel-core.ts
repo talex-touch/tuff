@@ -105,7 +105,7 @@ class TouchChannel implements ITouchChannel {
             console.warn(`[Channel] Attempted to reply twice for ${rawData.name}`)
             return
           }
-          
+
           const rData = this.__parse_sender(code, rawData, data, rawData.sync)
 
           delete rData.header.event
@@ -124,7 +124,6 @@ class TouchChannel implements ITouchChannel {
               finalData
             )
           } else e.returnValue = finalData
-          
           ;(handInData as any)._replied = true
         },
         ...rawData

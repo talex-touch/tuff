@@ -183,7 +183,9 @@ export class TouchPlugin implements ITouchPlugin {
 
       // Delegate view loading to the unified PluginViewLoader
       if (!this.pluginLifecycle) {
-        this.logger.warn(`Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`)
+        this.logger.warn(
+          `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
+        )
       }
       await PluginViewLoader.loadPluginView(this, feature)
       return
@@ -278,7 +280,9 @@ export class TouchPlugin implements ITouchPlugin {
             this.getFeatureUtil()
           ) as IFeatureLifeCycle
         } else {
-          this.logger.info(`No index.js found for plugin '${this.name}', running without lifecycle.`)
+          this.logger.info(
+            `No index.js found for plugin '${this.name}', running without lifecycle.`
+          )
         }
       }
     } catch (e: any) {

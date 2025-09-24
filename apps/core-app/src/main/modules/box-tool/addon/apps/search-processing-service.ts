@@ -90,7 +90,12 @@ export async function processSearchResults(
       if (minFuzzyDist <= 2 && bestFuzzyStart !== -1) {
         const clampedStart = Math.max(0, bestFuzzyStart)
         const clampedEnd = Math.min(displayName.length, Math.max(clampedStart + 1, bestFuzzyEnd))
-        updateMatch('name-fuzzy', [{ start: clampedStart, end: clampedEnd }], 0.1 + (2 - minFuzzyDist) * 0.05, displayName)
+        updateMatch(
+          'name-fuzzy',
+          [{ start: clampedStart, end: clampedEnd }],
+          0.1 + (2 - minFuzzyDist) * 0.05,
+          displayName
+        )
       }
     }
 

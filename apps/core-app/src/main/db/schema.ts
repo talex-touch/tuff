@@ -64,9 +64,7 @@ export const files = sqliteTable('files', {
   size: integer('size'),
   mtime: integer('mtime', { mode: 'timestamp' }).notNull(),
   ctime: integer('ctime', { mode: 'timestamp' }).notNull(),
-  lastIndexedAt: integer('last_indexed_at', { mode: 'timestamp' })
-    .notNull()
-    .default(new Date(0)),
+  lastIndexedAt: integer('last_indexed_at', { mode: 'timestamp' }).notNull().default(new Date(0)),
   isDir: integer('is_dir', { mode: 'boolean' }).notNull().default(false),
   type: text('type').notNull().default('file'), // 'file', 'app', 'url', etc.
 
@@ -110,9 +108,7 @@ export const fileIndexProgress = sqliteTable(
     totalBytes: integer('total_bytes'),
     lastError: text('last_error'),
     startedAt: integer('started_at', { mode: 'timestamp' }),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
-      .notNull()
-      .default(new Date(0))
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date(0))
   },
   (table) => ({
     pk: primaryKey({ columns: [table.fileId] })
@@ -214,9 +210,7 @@ export const config = sqliteTable('config', {
  */
 export const scanProgress = sqliteTable('scan_progress', {
   path: text('path').primaryKey(), // 已经完成全量扫描的目录路径
-  lastScanned: integer('last_scanned', { mode: 'timestamp' })
-    .notNull()
-    .default(new Date(0))
+  lastScanned: integer('last_scanned', { mode: 'timestamp' }).notNull().default(new Date(0))
 })
 
 /**

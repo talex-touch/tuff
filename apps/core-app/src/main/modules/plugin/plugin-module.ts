@@ -1,5 +1,8 @@
 import { IPluginManager, ITouchPlugin, PluginStatus } from '@talex-touch/utils/plugin'
-import type { PluginInstallRequest, PluginInstallSummary } from '@talex-touch/utils/plugin/providers'
+import type {
+  PluginInstallRequest,
+  PluginInstallSummary
+} from '@talex-touch/utils/plugin/providers'
 import type { FSWatcher } from 'chokidar'
 import chalk from 'chalk'
 import fse from 'fs-extra'
@@ -19,6 +22,7 @@ import { BaseModule } from '../abstract-base-module'
 import { PluginInstaller } from './plugin-installer'
 import { LocalPluginProvider } from './providers/local-provider'
 import { fileWatchService } from '../../service/file-watch.service'
+import util from 'util'
 
 const devWatcherLabel = chalk.blue('[DevPluginWatcher]')
 
@@ -99,10 +103,47 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const initialLoadPromises: Promise<boolean>[] = []
 
   const label = chalk.cyan('[PluginModule]')
-  const logInfo = (...args: any[]): void => console.log(label, ...args)
-  const logWarn = (...args: any[]): void => console.warn(chalk.yellow('[PluginModule]'), ...args)
-  const logError = (...args: any[]): void => console.error(chalk.red('[PluginModule]'), ...args)
-  const logDebug = (...args: any[]): void => console.debug(chalk.gray('[PluginModule]'), ...args)
+  const formatLogArgs = (args: unknown[]): string => {
+    const colorSupport = chalk.level > 0
+    return args
+      .map((arg) => {
+        if (typeof arg === 'string') return arg
+        if (typeof arg === 'number' || typeof arg === 'boolean' || typeof arg === 'bigint') {
+          return String(arg)
+        }
+        if (arg instanceof Error) {
+          return arg.stack || arg.message
+        }
+        if (arg === null) return 'null'
+        if (typeof arg === 'undefined') return 'undefined'
+        if (typeof arg === 'symbol') return arg.toString()
+        return util.inspect(arg, { depth: 3, colors: colorSupport })
+      })
+      .join(' ')
+      .trim()
+  }
+  const logInfo = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.log(message ? `${label} ${message}` : label)
+  }
+  const logWarn = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.warn(
+      message ? `${chalk.yellow('[PluginModule]')} ${message}` : chalk.yellow('[PluginModule]')
+    )
+  }
+  const logError = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.error(
+      message ? `${chalk.red('[PluginModule]')} ${message}` : chalk.red('[PluginModule]')
+    )
+  }
+  const logDebug = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.debug(
+      message ? `${chalk.gray('[PluginModule]')} ${message}` : chalk.gray('[PluginModule]')
+    )
+  }
   const pluginTag = (name: string): string => chalk.magenta(`[${name}]`)
 
   const installer = new PluginInstaller()
@@ -302,7 +343,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
         plugin: touchPlugin.toJSONObject()
       })
-
     } catch (error: any) {
       logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
       // Create a dummy plugin to show the error in the UI
@@ -368,7 +408,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     return summary
   }
 
-
   const managerInstance: IPluginManager = {
     plugins,
     active,
@@ -405,7 +444,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       if (data && data.value) {
         const enabled = JSON.parse(data.value) as string[]
         enabledPlugins.clear()
-        enabled.forEach(p => enabledPlugins.add(p));
+        enabled.forEach((p) => enabledPlugins.add(p))
         logInfo(
           `Loaded ${enabled.length} enabled plugin(s) from database:`,
           enabled.map(pluginTag).join(' ')
@@ -477,67 +516,69 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
           const pluginName = path.basename(path.dirname(_path))
 
-        if (!hasPlugin(pluginName)) {
-          logDebug(
-            'File changed for unknown plugin, triggering load.',
-            pluginTag(pluginName)
-          )
-          await loadPlugin(pluginName)
-          return
-        }
-        let plugin = plugins.get(pluginName) as TouchPlugin
-
-        if (plugin.dev.enable && plugin.dev.source) {
-          logDebug(
-            'Ignore disk change because plugin is in dev source mode.',
-            pluginTag(pluginName)
-          )
-          return
-        }
-
-        logInfo('Detected file change, reloading plugin', pluginTag(pluginName), 'file:', baseName)
-
-        if (
-          baseName === 'manifest.json' ||
-          baseName === 'preload.js' ||
-          baseName === 'index.html' ||
-          baseName === 'index.js'
-        ) {
-          const _enabled =
-            plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
-
-          await plugin.disable()
-          await unloadPlugin(pluginName)
-
-          await loadPlugin(pluginName)
-
-          plugin = plugins.get(pluginName) as TouchPlugin
-
-          genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
-            source: 'disk',
-            plugin: (plugin as TouchPlugin).toJSONObject()
-          })
-
-          logDebug('plugin reload event sent', pluginTag(pluginName), 'wasEnabled:', _enabled)
-
-          if (_enabled) {
-            await plugin.enable()
+          if (!hasPlugin(pluginName)) {
+            logDebug('File changed for unknown plugin, triggering load.', pluginTag(pluginName))
+            await loadPlugin(pluginName)
+            return
           }
-        } else if (baseName === 'README.md') {
-          plugin.readme = fse.readFileSync(_path, 'utf-8')
+          let plugin = plugins.get(pluginName) as TouchPlugin
 
-          genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
-            source: 'disk',
-            plugin: pluginName,
-            readme: plugin.readme
-          })
-        } else {
-          logWarn(
-            'File change detected but ignored (not a tracked file):',
+          if (plugin.dev.enable && plugin.dev.source) {
+            logDebug(
+              'Ignore disk change because plugin is in dev source mode.',
+              pluginTag(pluginName)
+            )
+            return
+          }
+
+          logInfo(
+            'Detected file change, reloading plugin',
             pluginTag(pluginName),
+            'file:',
             baseName
           )
-        }
+
+          if (
+            baseName === 'manifest.json' ||
+            baseName === 'preload.js' ||
+            baseName === 'index.html' ||
+            baseName === 'index.js'
+          ) {
+            const _enabled =
+              plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
+
+            await plugin.disable()
+            await unloadPlugin(pluginName)
+
+            await loadPlugin(pluginName)
+
+            plugin = plugins.get(pluginName) as TouchPlugin
+
+            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
+              source: 'disk',
+              plugin: (plugin as TouchPlugin).toJSONObject()
+            })
+
+            logDebug('plugin reload event sent', pluginTag(pluginName), 'wasEnabled:', _enabled)
+
+            if (_enabled) {
+              await plugin.enable()
+            }
+          } else if (baseName === 'README.md') {
+            plugin.readme = fse.readFileSync(_path, 'utf-8')
+
+            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
+              source: 'disk',
+              plugin: pluginName,
+              readme: plugin.readme
+            })
+          } else {
+            logWarn(
+              'File change detected but ignored (not a tracked file):',
+              pluginTag(pluginName),
+              baseName
+            )
+          }
         },
         onDirectoryAdd: async (_path) => {
           if (!fse.existsSync(_path + '/manifest.json')) return

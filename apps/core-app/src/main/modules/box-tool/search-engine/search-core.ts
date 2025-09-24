@@ -217,7 +217,9 @@ export class SearchEngineCore
   }
 
   public getProvidersByIds(ids: string[]): ISearchProvider<ProviderContext>[] {
-    return ids.map((id) => this.providers.get(id)).filter((p): p is ISearchProvider<ProviderContext> => !!p)
+    return ids
+      .map((id) => this.providers.get(id))
+      .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
   private _updateActivationState(newResults: TuffSearchResult[]): void {

@@ -89,8 +89,8 @@ function handleFollowSystemChange(follow: boolean) {
   <div>
     <!-- 语言选择器 -->
     <select @change="handleLanguageChange($event.target.value)">
-      <option 
-        v-for="lang in supportedLanguages" 
+      <option
+        v-for="lang in supportedLanguages"
         :key="lang.key"
         :value="lang.key"
         :selected="currentLanguage === lang.key"
@@ -98,11 +98,11 @@ function handleFollowSystemChange(follow: boolean) {
         {{ lang.name }}
       </option>
     </select>
-    
+
     <!-- 跟随系统语言开关 -->
     <label>
-      <input 
-        type="checkbox" 
+      <input
+        type="checkbox"
         :checked="followSystemLanguage"
         @change="handleFollowSystemChange($event.target.checked)"
       />
@@ -117,6 +117,7 @@ function handleFollowSystemChange(follow: boolean) {
 ### 1. 在语言文件中添加翻译键
 
 **zh-CN.json:**
+
 ```json
 {
   "newFeature": {
@@ -127,6 +128,7 @@ function handleFollowSystemChange(follow: boolean) {
 ```
 
 **en-US.json:**
+
 ```json
 {
   "newFeature": {

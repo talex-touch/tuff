@@ -69,6 +69,8 @@ const runWithSqliteBusyRetry = <T>(operation: () => Promise<T>): Promise<T> => {
   return wrapped()
 }
 
+const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
+
 class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
@@ -183,7 +185,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,
-      priority: this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
+      priority:
+        this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
     }))
 
     const aliasList = this._getAliasesForApp(appInfo)
@@ -318,19 +321,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
     const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
-    // Log apps with missing icons once per scan
-    const loggedMissingIcons = new Set<string>()
+    // Log apps with missing icons only the first time we see them
+    const knownMissingIconApps = await this._getKnownMissingIconApps()
+    let missingIconConfigUpdated = false
     for (const app of scannedApps) {
-      if (!app.icon && !loggedMissingIcons.has(app.name)) {
-        console.warn(
-          formatLog(
-            'AppProvider',
-            `Icon not found for app: ${chalk.yellow(app.name)}`,
-            LogStyle.warning
-          )
+      if (app.icon) continue
+
+      const uniqueId = app.uniqueId || app.path
+      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
+
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Icon not found for app: ${chalk.yellow(app.name)}`,
+          LogStyle.warning
         )
-        loggedMissingIcons.add(app.name)
-      }
+      )
+      knownMissingIconApps.add(uniqueId)
+      missingIconConfigUpdated = true
+    }
+
+    if (missingIconConfigUpdated) {
+      await this._saveKnownMissingIconApps(knownMissingIconApps)
     }
 
     const dbLoadStart = performance.now()
@@ -864,12 +876,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           db
             .select({ itemId: keywordMappings.itemId })
             .from(keywordMappings)
-            .where(
-              and(
-                eq(keywordMappings.keyword, term),
-                eq(keywordMappings.providerId, this.id)
-              )
-            )
+            .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
             .limit(200)
         )
       )
@@ -899,10 +906,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         .select({ itemId: keywordMappings.itemId })
         .from(keywordMappings)
         .where(
-          and(
-            eq(keywordMappings.keyword, normalizedQuery),
-            eq(keywordMappings.providerId, this.id)
-          )
+          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id))
         )
         .limit(200)
 
@@ -949,7 +953,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (candidateIds.size === 0) {
       console.log(
-        formatLog('AppProvider', 'No candidates found for query, returning empty result', LogStyle.info)
+        formatLog(
+          'AppProvider',
+          'No candidates found for query, returning empty result',
+          LogStyle.info
+        )
       )
       return TuffFactory.createSearchResult(query).build()
     }
@@ -1276,6 +1284,67 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         target: configSchema.key,
         set: { value: timestamp.toString() }
       })
+  }
+
+  private async _getKnownMissingIconApps(): Promise<Set<string>> {
+    if (!this.dbUtils) return new Set()
+
+    const db = this.dbUtils.getDb()
+
+    try {
+      const result = await db
+        .select({ value: configSchema.value })
+        .from(configSchema)
+        .where(eq(configSchema.key, MISSING_ICON_CONFIG_KEY))
+        .limit(1)
+
+      const rawValue = result[0]?.value
+      if (!rawValue) return new Set()
+
+      const parsed = JSON.parse(rawValue)
+      if (!Array.isArray(parsed)) return new Set()
+
+      const ids = parsed.filter(
+        (item): item is string => typeof item === 'string' && item.length > 0
+      )
+      return new Set(ids)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Failed to load missing icon config, continuing without cache: ${message}`,
+          LogStyle.warning
+        )
+      )
+      return new Set()
+    }
+  }
+
+  private async _saveKnownMissingIconApps(appIds: Set<string>): Promise<void> {
+    if (!this.dbUtils) return
+
+    const db = this.dbUtils.getDb()
+    const serializedIds = JSON.stringify(Array.from(appIds))
+
+    try {
+      await db
+        .insert(configSchema)
+        .values({ key: MISSING_ICON_CONFIG_KEY, value: serializedIds })
+        .onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value: serializedIds }
+        })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Failed to persist missing icon config: ${message}`,
+          LogStyle.warning
+        )
+      )
+    }
   }
 
   private async _runMdlsUpdateScan(): Promise<void> {

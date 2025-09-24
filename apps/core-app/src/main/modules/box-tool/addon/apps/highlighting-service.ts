@@ -1,6 +1,7 @@
 import { match as pinyinMatch } from 'pinyin-pro'
 
-export interface Range { // 导出 Range 接口
+export interface Range {
+  // 导出 Range 接口
   start: number
   end: number // 右开 [start, end)
 }
@@ -59,16 +60,14 @@ function matchAcronym(text: string, query: string): Range[] | null {
       textCurrentIndex = lowerText.indexOf(word, textCurrentIndex) + word.length // 跳过不匹配的单词
     }
     // 如果当前单词不匹配，且query还有字符，需要重置textCurrentIndex到下一个单词的开始
-    if (queryCharIndex < lowerQuery.length && !word.startsWith(lowerQuery[queryCharIndex-1])) {
-        textCurrentIndex = lowerText.indexOf(words[i+1], textCurrentIndex); // 尝试找到下一个单词的起始
-        if (textCurrentIndex === -1) textCurrentIndex = lowerText.length; // 如果没有下一个单词，设置为文本末尾
+    if (queryCharIndex < lowerQuery.length && !word.startsWith(lowerQuery[queryCharIndex - 1])) {
+      textCurrentIndex = lowerText.indexOf(words[i + 1], textCurrentIndex) // 尝试找到下一个单词的起始
+      if (textCurrentIndex === -1) textCurrentIndex = lowerText.length // 如果没有下一个单词，设置为文本末尾
     }
-
   }
 
   return ranges.length === lowerQuery.length ? ranges : null
 }
-
 
 /**
  * 核心高亮计算函数
@@ -114,7 +113,7 @@ export function calculateHighlights(text: string, query: string): Range[] | null
   if (acronymRanges) {
     return acronymRanges
   }
-  
+
   // 3. 拼音匹配 (使用 pinyin-pro，但只用它来获取索引)
   // 仅在查询不含非字母字符时进行，避免符号干扰
   // 检查 query 是否主要是字母，避免对特殊字符进行拼音匹配

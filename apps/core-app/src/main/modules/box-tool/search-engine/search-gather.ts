@@ -233,11 +233,11 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
                 if (!signal.aborted) {
                   logProviderCompletion(provider, duration, resultCount, status)
                   sourceStats.push({
-                  providerId: provider.id,
-                  providerName: provider.name || provider.constructor.name,
-                  duration,
-                  resultCount,
-                  status
+                    providerId: provider.id,
+                    providerName: provider.name || provider.constructor.name,
+                    duration,
+                    resultCount,
+                    status
                   })
                 }
               }
