@@ -166,5 +166,7 @@ export function structuredStrictStringify(value: unknown): string {
   return JSON.stringify(serialize(value, 'root'));
 }
 
+export { runAdaptiveTaskQueue, type AdaptiveTaskQueueOptions } from './task-queue'
+
 export * from './time'
 export * from './file'

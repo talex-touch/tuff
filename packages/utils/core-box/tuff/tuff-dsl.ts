@@ -892,6 +892,8 @@ export interface TuffMeta {
     created_at?: string;
     /** 修改时间 */
     modified_at?: string;
+    /** 文件扩展名（不带点） */
+    extension?: string;
   };
 
   /**
@@ -928,6 +930,17 @@ export interface TuffMeta {
     icon?: string;
     /** 应用类别 */
     category?: string;
+  };
+
+  /**
+   * 使用统计信息
+   * @description 用于在界面上展示触发次数等数据
+   */
+  usage?: {
+    /** 被触发的次数 */
+    clickCount?: number;
+    /** 最近一次使用时间（ISO 字符串） */
+    lastUsed?: string;
   };
 
   /**

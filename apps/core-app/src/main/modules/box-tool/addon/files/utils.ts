@@ -12,6 +12,29 @@ import {
 } from './constants'
 import { TuffItem } from '@core-box/tuff'
 
+export function isIndexableFile(fullPath: string, extension: string, fileName: string): boolean {
+  if (!extension) return false
+  if (BLACKLISTED_EXTENSIONS.has(extension)) return false
+  if (!WHITELISTED_EXTENSIONS.has(extension)) return false
+
+  if (fileName) {
+    const firstChar = fileName[0]
+    const lastChar = fileName[fileName.length - 1]
+    if (BLACKLISTED_FILES_PREFIX.has(firstChar)) return false
+    if (BLACKLISTED_FILES_SUFFIX.has(lastChar)) return false
+  }
+
+  const segments = fullPath.split(path.sep)
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i]
+    if (!segment) continue
+    if (segment.startsWith('.')) return false
+    if (BLACKLISTED_DIRS.has(segment)) return false
+  }
+
+  return true
+}
+
 export async function scanDirectory(
   dirPath: string,
   excludePaths?: Set<string>
@@ -47,27 +70,22 @@ export async function scanDirectory(
       const fileName = entry.name
       const fileExtension = path.extname(fileName).toLowerCase()
 
-      // Blacklist checks
-      if (
-        BLACKLISTED_FILES_PREFIX.has(fileName[0]) ||
-        BLACKLISTED_FILES_SUFFIX.has(fileName[fileName.length - 1]) ||
-        BLACKLISTED_EXTENSIONS.has(fileExtension)
-      ) {
+      if (!isIndexableFile(fullPath, fileExtension, fileName)) {
         continue
       }
 
-      // Whitelist check
-      if (WHITELISTED_EXTENSIONS.has(fileExtension)) {
-        try {
-          const stats = await fs.stat(fullPath)
-          files.push({
-            path: fullPath,
-            name: fileName,
-            mtime: stats.mtime
-          })
-        } catch {
-          console.error(`[FileProvider] Could not stat file ${fullPath}:`)
-        }
+      try {
+        const stats = await fs.stat(fullPath)
+        files.push({
+          path: fullPath,
+          name: fileName,
+          extension: fileExtension,
+          size: stats.size,
+          ctime: stats.birthtime ?? stats.ctime,
+          mtime: stats.mtime
+        })
+      } catch (error) {
+        console.error(`[FileProvider] Could not stat file ${fullPath}:`, error)
       }
     }
   }
@@ -123,7 +141,10 @@ export function mapFileToTuffItem(
         path: file.path,
         size: file.size ?? undefined,
         created_at: file.ctime.toISOString(),
-        modified_at: file.mtime.toISOString()
+        modified_at: file.mtime.toISOString(),
+        extension: (file.extension || path.extname(file.name) || '')
+          .replace(/^\./, '')
+          .toLowerCase()
       }
     }
   }
