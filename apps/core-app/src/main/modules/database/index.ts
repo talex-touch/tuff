@@ -36,7 +36,17 @@ export class DatabaseModule extends BaseModule {
 
     try {
       await migrate(this.db, { migrationsFolder })
-    } catch (error) {
+    } catch (error: any) {
+      const message = String(error?.message ?? '')
+      const duplicateColumn = message.includes('duplicate column name: provider_id')
+
+      if (duplicateColumn) {
+        console.warn(
+          '[Database] Migration skipped: column `provider_id` already exists. Continuing without applying duplicate migration.'
+        )
+        return
+      }
+
       console.error('[Database] Migration failed:', error)
       throw error // Re-throw to ensure the app doesn't continue in a broken state
     }

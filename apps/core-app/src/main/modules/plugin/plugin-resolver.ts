@@ -20,6 +20,32 @@ export class PluginResolver {
     this.filePath = filePath
   }
 
+  private async uncompress(source: string, target: string): Promise<void> {
+    const lower = source.toLowerCase()
+    if (lower.endsWith('.tar') || lower.endsWith('.tpex')) {
+      await compressing.tar.uncompress(source, target)
+      return
+    }
+
+    if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
+      await compressing.tgz.uncompress(source, target)
+      return
+    }
+
+    if (lower.endsWith('.zip')) {
+      await compressing.zip.uncompress(source, target)
+      return
+    }
+
+    const stat = await fse.stat(source).catch(() => null)
+    if (stat?.isDirectory()) {
+      await fse.copy(source, target, { overwrite: true })
+      return
+    }
+
+    await compressing.tar.uncompress(source, target)
+  }
+
   async install(manifest: IManifest, cb: (msg: string, type?: string) => void): Promise<void> {
     console.log('[PluginResolver] Installing plugin: ' + manifest.name)
     const _target = path.join(pluginModule.filePath!, manifest.name)
@@ -30,7 +56,7 @@ export class PluginResolver {
     await checkDirWithCreate(_target, true)
 
     try {
-      await compressing.tar.uncompress(this.filePath, _target)
+      await this.uncompress(this.filePath, _target)
 
       // const manifestPath = path.join(_target, 'key.talex')
       // if (fse.existsSync(manifestPath)) {
@@ -56,7 +82,7 @@ export class PluginResolver {
 
     try {
       await fse.ensureDir(tempDir)
-      await compressing.tar.uncompress(this.filePath, tempDir)
+      await this.uncompress(this.filePath, tempDir)
 
       const manifestPath = path.join(tempDir, 'manifest.json')
       const keyPath = path.join(tempDir, 'key.talex')

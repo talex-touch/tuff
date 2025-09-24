@@ -1,5 +1,6 @@
 import { Arch, SupportOS } from './../base/index';
 import { PluginLogger } from './log/logger';
+import type { PluginInstallRequest, PluginInstallSummary } from './providers';
 
 export enum PluginStatus {
   DISABLED,
@@ -250,6 +251,7 @@ export interface IPluginManager {
   listPlugins(): Promise<Array<string>>
   loadPlugin(pluginName: string): Promise<boolean>
   unloadPlugin(pluginName: string): Promise<boolean>
+  installFromSource(request: PluginInstallRequest): Promise<PluginInstallSummary>
 }
 
 /**
@@ -374,3 +376,5 @@ export interface IManifest {
 
 export * from './log/logger'
 export * from './sdk/index'
+export * from './providers'
+export * from './risk'
