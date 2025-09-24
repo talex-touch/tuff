@@ -7,8 +7,11 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
     getDb: () => db,
 
     // Keyword Mappings
-    async addKeywordMapping(keyword: string, itemId: string, priority = 1.0) {
-      return db.insert(schema.keywordMappings).values({ keyword, itemId, priority }).returning()
+    async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {
+      return db
+        .insert(schema.keywordMappings)
+        .values({ keyword, itemId, providerId, priority })
+        .returning()
     },
     async getKeywordMapping(keyword: string) {
       return db
@@ -67,6 +70,54 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
       return db.select().from(schema.fileExtensions).where(eq(schema.fileExtensions.fileId, fileId))
     },
 
+    async setFileIndexProgress(
+      fileId: number,
+      data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>
+    ) {
+      const updatePayload = {
+        ...data,
+        updatedAt: data.updatedAt ?? new Date()
+      }
+
+      return db
+        .insert(schema.fileIndexProgress)
+        .values({ fileId, ...updatePayload })
+        .onConflictDoUpdate({
+          target: schema.fileIndexProgress.fileId,
+          set: {
+            ...updatePayload
+          }
+        })
+    },
+
+    async getFileIndexProgressByFileIds(fileIds: number[]) {
+      if (fileIds.length === 0) return []
+      return db
+        .select()
+        .from(schema.fileIndexProgress)
+        .where(inArray(schema.fileIndexProgress.fileId, fileIds))
+    },
+
+    async getFileIndexProgressByPaths(paths: string[]) {
+      if (paths.length === 0) return []
+      return db
+        .select({
+          path: schema.files.path,
+          progress: schema.fileIndexProgress.progress,
+          status: schema.fileIndexProgress.status,
+          processedBytes: schema.fileIndexProgress.processedBytes,
+          totalBytes: schema.fileIndexProgress.totalBytes,
+          updatedAt: schema.fileIndexProgress.updatedAt,
+          lastError: schema.fileIndexProgress.lastError
+        })
+        .from(schema.files)
+        .leftJoin(
+          schema.fileIndexProgress,
+          eq(schema.files.id, schema.fileIndexProgress.fileId)
+        )
+        .where(inArray(schema.files.path, paths))
+    },
+
     // Embeddings
     async addEmbedding(embedding: typeof schema.embeddings.$inferInsert) {
       return db.insert(schema.embeddings).values(embedding).returning()
@@ -121,7 +172,12 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
 
 export type DbUtils = {
   getDb: () => LibSQLDatabase<typeof schema>
-  addKeywordMapping: (keyword: string, itemId: string, priority?: number) => Promise<any>
+  addKeywordMapping: (
+    keyword: string,
+    itemId: string,
+    providerId: string,
+    priority?: number
+  ) => Promise<any>
   getKeywordMapping: (keyword: string) => Promise<any>
   removeKeywordMapping: (keyword: string) => Promise<any>
   addFile: (file: typeof schema.files.$inferInsert) => Promise<any>
@@ -134,6 +190,24 @@ export type DbUtils = {
   addFileExtension: (fileId: number, key: string, value: string) => Promise<any>
   addFileExtensions: (extensions: { fileId: number; key: string; value: string }[]) => Promise<any>
   getFileExtensions: (fileId: number) => Promise<any[]>
+  setFileIndexProgress: (
+    fileId: number,
+    data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>
+  ) => Promise<any>
+  getFileIndexProgressByFileIds: (fileIds: number[]) => Promise<any[]>
+  getFileIndexProgressByPaths: (
+    paths: string[]
+  ) => Promise<
+    Array<{
+      path: string
+      progress: number | null
+      status: string | null
+      processedBytes: number | null
+      totalBytes: number | null
+      updatedAt: Date | null
+      lastError: string | null
+    }>
+  >
   addEmbedding: (embedding: typeof schema.embeddings.$inferInsert) => Promise<any>
   addUsageLog: (log: typeof schema.usageLogs.$inferInsert) => Promise<any>
   incrementUsageSummary: (itemId: string) => Promise<any>

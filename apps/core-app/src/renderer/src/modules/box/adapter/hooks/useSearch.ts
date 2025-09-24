@@ -4,6 +4,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
 import { IProviderActivate, TuffItem, TuffSearchResult } from '@talex-touch/utils'
 import { IUseSearch } from '../types'
+import { appSetting } from '~/modules/channel/storage'
 
 export function useSearch(boxOptions: IBoxOptions): IUseSearch {
   const searchVal = ref('')
@@ -91,6 +92,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       return
     }
 
+    const shouldRestoreAfterExecute = !appSetting.tools.autoHide
+
+    touchChannel.sendSync('core-box:hide')
+
     if (itemToExecute.kind === 'feature') {
       boxOptions.data.feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
@@ -98,38 +103,28 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
     res.value = []
 
-    // When a feature is executed, clear the current list immediately.
-    if (itemToExecute.source.id === 'plugin-features') {
-      res.value = []
-    }
-    if (!searchResult.value) {
-      console.warn(
-        '[useSearch] handleExecute called without a searchResult context. Executing without activation state update.'
-      )
-      const fallbackActivationState: IProviderActivate[] | null = await touchChannel.send(
-        'core-box:execute',
-        {
-          item: JSON.parse(JSON.stringify(itemToExecute))
-        }
-      )
-      activeActivations.value = fallbackActivationState
-      return
-    }
+    const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
+    const serializedSearchResult = searchResult.value
+      ? JSON.parse(JSON.stringify(searchResult.value))
+      : null
 
     loading.value = true
+
     try {
       const newActivationState: IProviderActivate[] | null = await touchChannel.send(
         'core-box:execute',
-        {
-          item: JSON.parse(JSON.stringify(itemToExecute)),
-          searchResult: JSON.parse(JSON.stringify(searchResult.value))
-        }
+        serializedSearchResult
+          ? {
+              item: serializedItem,
+              searchResult: serializedSearchResult
+            }
+          : {
+              item: serializedItem
+            }
       )
 
-      // Sync the frontend state with the new activation state from the backend.
       activeActivations.value = newActivationState
 
-      // Only clear the search value if the execution did not result in an activation.
       if (!newActivationState || newActivationState.length === 0) {
         searchVal.value = ''
       }
@@ -137,6 +132,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       console.error('Execute failed:', error)
     } finally {
       loading.value = false
+
+      if (shouldRestoreAfterExecute) {
+        touchChannel.sendSync('core-box:show')
+      }
     }
 
     select.value = -1
@@ -202,8 +201,10 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     }
   }
 
-  const debouncedExpand = useDebounceFn(() => {
-    touchChannel.sendSync('core-box:expand', res.value.length)
+  const debouncedResize = useDebounceFn(() => {
+    touchChannel.sendSync('core-box:expand', {
+      mode: res.value.length > 0 ? 'max' : 'collapse'
+    })
   }, 10)
 
   watch(
@@ -212,7 +213,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       if (res.value.length > 0 && boxOptions.focus === -1) {
         boxOptions.focus = 0
       }
-      debouncedExpand()
+      debouncedResize()
     },
     { deep: true }
   )

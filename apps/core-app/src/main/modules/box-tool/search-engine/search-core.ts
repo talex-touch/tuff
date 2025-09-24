@@ -25,6 +25,7 @@ import { storageModule } from '../../storage'
 import { fileProvider } from '../addon/files/file-provider'
 import { ProviderContext } from './types'
 import { gatherAggregator } from './search-gather'
+import { SearchIndexService } from './search-index-service'
 
 /**
  * Generates a unique key for an activation request.
@@ -53,6 +54,7 @@ export class SearchEngineCore
   private activatedProviders: Map<string, IProviderActivate> | null = null
   private currentGatherController: IGatherController | null = null
   private dbUtils: DbUtils | null = null
+  private searchIndexService: SearchIndexService | null = null
 
   private touchApp: TouchApp | null = null
 
@@ -101,12 +103,17 @@ export class SearchEngineCore
       console.error('[SearchEngineCore] Core modules not available to load provider.')
       return
     }
+    if (!this.searchIndexService) {
+      console.error('[SearchEngineCore] SearchIndexService not initialized.')
+      return
+    }
     const startTime = Date.now()
     try {
       await provider.onLoad?.({
         touchApp: this.touchApp,
         databaseManager: databaseModule,
-        storageManager: storageModule
+        storageManager: storageModule,
+        searchIndex: this.searchIndexService
       })
       const duration = Date.now() - startTime
       console.log(
@@ -393,6 +400,7 @@ export class SearchEngineCore
 
     const db = databaseModule.getDb()
     instance.dbUtils = createDbUtils(db)
+    instance.searchIndexService = new SearchIndexService(db)
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
       console.log('[SearchEngineCore] All modules loaded, start loading providers...')

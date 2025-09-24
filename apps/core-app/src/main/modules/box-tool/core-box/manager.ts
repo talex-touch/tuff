@@ -5,11 +5,17 @@ import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { ipcManager } from './ipc'
 import { TouchPlugin } from '../../../plugins'
 
+interface ExpandOptions {
+  length?: number
+  forceMax?: boolean
+}
+
 export class CoreBoxManager {
   searchEngine: SearchEngineCore
   private static instance: CoreBoxManager
   private _show: boolean = false
-  private _expand: number = 0
+  private _isCollapsed = true
+  private _expandState: ExpandOptions = {}
   private lastTrigger: number = -1
   private _isUIMode: boolean = false // Rename to private property
   private currentFeature: IPluginFeature | null = null
@@ -43,37 +49,38 @@ export class CoreBoxManager {
   }
 
   public trigger(show: boolean): void {
-    if (Date.now() - this.lastTrigger < 200) return
-    this.lastTrigger = Date.now()
+    const now = Date.now()
+    if (now - this.lastTrigger < 200 && this._show === show) {
+      return
+    }
+    this.lastTrigger = now
 
     this._show = show
 
     if (show) {
-      if (!this._expand) {
-        this.shrink()
-      } else {
-        this.expand(this._expand)
-      }
+      this.applyExpandState()
       windowManager.show()
     } else {
       windowManager.hide()
     }
   }
 
-  public expand(length: number): void {
-    this._expand = length
-    windowManager.expand(length, this.isUIMode)
+  public expand(options: ExpandOptions = {}): void {
+    this._isCollapsed = false
+    this._expandState = { ...options }
+    windowManager.expand(this._expandState, this.isUIMode)
   }
 
   public shrink(): void {
-    this._expand = 0
+    this._isCollapsed = true
+    this._expandState = {}
     windowManager.shrink()
   }
 
   public enterUIMode(url: string, plugin?: TouchPlugin, feature?: IPluginFeature): void {
     this._isUIMode = true // Use private property
     this.currentFeature = feature || null
-    this.expand(10)
+    this.expand({ length: 10 })
     windowManager.attachUIView(url, plugin)
     this.trigger(true)
   }
@@ -91,6 +98,15 @@ export class CoreBoxManager {
 
   public getCurrentFeature(): IPluginFeature | null {
     return this.currentFeature
+  }
+
+  private applyExpandState(): void {
+    if (this._isCollapsed) {
+      windowManager.shrink()
+      return
+    }
+
+    windowManager.expand(this._expandState, this.isUIMode)
   }
 
   public async search(query: TuffQuery): Promise<TuffSearchResult | null> {

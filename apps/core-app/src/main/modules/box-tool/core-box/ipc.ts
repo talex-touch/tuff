@@ -58,9 +58,33 @@ export class IpcManager {
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () =>
       coreBoxManager.trigger(false)
     )
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) =>
-      data ? coreBoxManager.expand(data) : coreBoxManager.shrink()
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show', () =>
+      coreBoxManager.trigger(true)
     )
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
+      if (typeof data === 'object' && data) {
+        if (data.mode === 'collapse') {
+          coreBoxManager.shrink()
+          return
+        }
+
+        if (data.mode === 'max') {
+          coreBoxManager.expand({ forceMax: true })
+          return
+        }
+
+        if (typeof data.length === 'number') {
+          coreBoxManager.expand({ length: data.length })
+          return
+        }
+      }
+
+      if (typeof data === 'number' && data > 0) {
+        coreBoxManager.expand({ length: data })
+      } else {
+        coreBoxManager.shrink()
+      }
+    })
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
       'core-box:query',

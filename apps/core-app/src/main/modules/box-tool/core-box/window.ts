@@ -204,8 +204,17 @@ export class WindowManager {
     }, 100)
   }
 
-  public expand(length: number = 100, isUIMode: boolean = false): void {
-    const height = isUIMode ? 600 : Math.min(length * 48 + 65, 550)
+  public expand(
+    options: { length?: number; forceMax?: boolean } = {},
+    isUIMode: boolean = false
+  ): void {
+    const { length = 0, forceMax = false } = options
+    const effectiveLength = length > 0 ? length : 1
+    const height = isUIMode
+      ? 600
+      : forceMax
+        ? 550
+        : Math.min(effectiveLength * 48 + 65, 550)
 
     const currentWindow = this.current
     if (currentWindow) {

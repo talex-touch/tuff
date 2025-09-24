@@ -7,16 +7,187 @@ import {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
+import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { app, shell } from 'electron'
 import path from 'path'
+import os from 'os'
+import fs from 'fs/promises'
+import { performance } from 'perf_hooks'
+import plist from 'plist'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { createDbUtils } from '../../../../db/utils'
-import { files as filesSchema, fileExtensions, scanProgress } from '../../../../db/schema'
-import { and, eq, inArray, like } from 'drizzle-orm'
+import {
+  files as filesSchema,
+  fileExtensions,
+  fileIndexProgress,
+  keywordMappings,
+  scanProgress
+} from '../../../../db/schema'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type * as schema from '../../../../db/schema'
 // import PinyinMatch from 'pinyin-match'
 import extractFileIcon from 'extract-file-icon'
-import { KEYWORD_MAP } from './constants'
+import {
+  CONTENT_INDEXABLE_EXTENSIONS,
+  KEYWORD_MAP,
+  TYPE_TAG_EXTENSION_MAP,
+  getContentSizeLimitMB,
+  getTypeTagsForExtension
+} from './constants'
+import type { FileTypeTag } from './constants'
 import { ScannedFileInfo } from './types'
-import { mapFileToTuffItem, scanDirectory } from './utils'
+import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
+import {
+  fileParserRegistry,
+  FileParserProgress,
+  FileParserResult
+} from '@talex-touch/utils/common/file-parsers'
+import {
+  SearchIndexService,
+  SearchIndexKeyword,
+  SearchIndexItem
+} from '../../search-engine/search-index-service'
+import FileSystemWatcher from '../../file-system-watcher'
+import {
+  TalexEvents,
+  touchEventBus,
+  FileAddedEvent,
+  FileChangedEvent,
+  FileUnlinkedEvent
+} from '../../../../core/eventbus/touch-event'
+import chalk from 'chalk'
+import { ChannelType } from '@talex-touch/utils/channel'
+
+const MAX_CONTENT_LENGTH = 200_000
+
+const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
+  video: 'video',
+  videos: 'video',
+  movie: 'video',
+  movies: 'video',
+  视频: 'video',
+  影片: 'video',
+  audio: 'audio',
+  audios: 'audio',
+  music: 'audio',
+  song: 'audio',
+  songs: 'audio',
+  音频: 'audio',
+  音乐: 'audio',
+  document: 'document',
+  documents: 'document',
+  doc: 'document',
+  docs: 'document',
+  pdf: 'document',
+  text: 'text',
+  texts: 'text',
+  note: 'text',
+  notes: 'text',
+  image: 'image',
+  images: 'image',
+  picture: 'image',
+  pictures: 'image',
+  photo: 'image',
+  photos: 'image',
+  图片: 'image',
+  截图: 'image',
+  spreadsheet: 'spreadsheet',
+  spreadsheets: 'spreadsheet',
+  excel: 'spreadsheet',
+  sheet: 'spreadsheet',
+  sheets: 'spreadsheet',
+  table: 'spreadsheet',
+  tables: 'spreadsheet',
+  data: 'data',
+  dataset: 'data',
+  csv: 'data',
+  code: 'code',
+  codes: 'code',
+  source: 'code',
+  sources: 'code',
+  script: 'code',
+  scripts: 'code',
+  archive: 'archive',
+  archives: 'archive',
+  zip: 'archive',
+  zips: 'archive',
+  压缩包: 'archive',
+  installer: 'installer',
+  installers: 'installer',
+  setup: 'installer',
+  安装包: 'installer',
+  ebook: 'ebook',
+  ebooks: 'ebook',
+  book: 'ebook',
+  books: 'ebook',
+  design: 'design',
+  designs: 'design',
+  设计: 'design'
+}
+
+const execFileAsync = promisify(execFile)
+
+const LAUNCH_SERVICES_PLIST_PATH = path.join(
+  os.homedir(),
+  'Library',
+  'Preferences',
+  'com.apple.LaunchServices',
+  'com.apple.launchservices.secure.plist'
+)
+
+type ResolvedOpener = {
+  bundleId: string
+  name: string
+  logo: string
+  path?: string
+  lastResolvedAt: string
+}
+
+class ProgressLogger {
+  private processed = 0
+  private lastLoggedAt = 0
+  private readonly startTime = performance.now()
+
+  constructor(
+    private readonly label: string,
+    private readonly total: number,
+    private readonly logFn: (message: string) => void,
+    private readonly intervalMs = 5_000
+  ) {}
+
+  advance(by: number): void {
+    if (by <= 0) {
+      return
+    }
+    this.processed = Math.min(this.processed + by, this.total)
+    this.maybeLog()
+  }
+
+  finish(): void {
+    this.maybeLog(true)
+  }
+
+  private maybeLog(force = false): void {
+    const now = performance.now()
+    if (!force && this.processed < this.total && now - this.lastLoggedAt < this.intervalMs) {
+      return
+    }
+
+    this.lastLoggedAt = now
+    const safeTotal = this.total || 0
+    const percent = safeTotal > 0 ? Math.min(100, (this.processed / safeTotal) * 100) : 100
+    const elapsedSec = (now - this.startTime) / 1000
+    const totalDisplay = safeTotal > 0 ? safeTotal.toString() : '–'
+
+    this.logFn(
+      `${chalk.white(this.label)} ${chalk.cyan(`${this.processed}/${totalDisplay}`)} (${chalk.green(
+        percent.toFixed(1)
+      )}%) ${chalk.gray(`elapsed ${elapsedSec.toFixed(1)}s`)}`
+    )
+  }
+}
 
 class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
@@ -26,7 +197,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
   private readonly WATCH_PATHS: string[]
+  private readonly normalizedWatchPaths: string[]
   private databaseFilePath: string | null = null
+  private searchIndex: SearchIndexService | null = null
+  private fsEventsSubscribed = false
+  private watchPathsRegistered = false
+  private incrementalTaskChain: Promise<void> = Promise.resolve()
+  private readonly pendingIncrementalPaths: Map<
+    string,
+    { action: 'add' | 'change' | 'delete'; rawPath: string }
+  > = new Map()
+  private readonly isCaseInsensitiveFs = process.platform !== 'linux'
+  private readonly timestampToleranceMs = 1_000
+  private readonly handleFsAddedOrChanged = (event: FileAddedEvent | FileChangedEvent) => {
+    if (!event?.filePath) return
+    this.enqueueIncrementalUpdate(event.filePath, event instanceof FileAddedEvent ? 'add' : 'change')
+  }
+  private readonly handleFsUnlinked = (event: FileUnlinkedEvent) => {
+    if (!event?.filePath) return
+    this.enqueueIncrementalUpdate(event.filePath, 'delete')
+  }
+  private openersChannelRegistered = false
+  private readonly openerCache = new Map<string, ResolvedOpener>()
+  private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
+  private launchServicesHandlers: any[] | null = null
+  private launchServicesMTime?: number
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -41,33 +236,696 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       try {
         return app.getPath(name)
       } catch (error) {
-        console.warn(`[FileProvider] Could not get path for '${name}', skipping.`, error)
+        this.logWarn(`Could not resolve path for '${chalk.gray(name)}'; skipping.`, error)
         return null
       }
     })
     this.WATCH_PATHS = [...new Set(paths.filter((p): p is string => !!p))]
-    console.log('[FileProvider] Watching paths:', this.WATCH_PATHS)
+    this.normalizedWatchPaths = this.WATCH_PATHS.map((p) => this.normalizePath(p))
+    this.logInfo(`Watching paths: ${chalk.gray(JSON.stringify(this.WATCH_PATHS))}`)
+  }
+
+  private logInfo(message: string): void {
+    console.log(`${chalk.blueBright('[FileProvider]')} ${message}`)
+  }
+
+  private logWarn(message: string, error?: unknown): void {
+    if (error) {
+      console.warn(`${chalk.yellowBright('[FileProvider]')} ${message}`, error)
+    } else {
+      console.warn(`${chalk.yellowBright('[FileProvider]')} ${message}`)
+    }
+  }
+
+  private logDebug(message: string): void {
+    console.debug(`${chalk.gray('[FileProvider]')} ${message}`)
+  }
+
+  private logError(message: string, error?: unknown): void {
+    if (error) {
+      console.error(`${chalk.redBright('[FileProvider]')} ${message}`, error)
+    } else {
+      console.error(`${chalk.redBright('[FileProvider]')} ${message}`)
+    }
+  }
+
+  private createProgressLogger(label: string, total: number): ProgressLogger {
+    return new ProgressLogger(label, total, (message) => this.logInfo(message))
+  }
+
+  private toTimestamp(value: Date | number | string | null | undefined): number | null {
+    if (!value) {
+      return null
+    }
+    if (value instanceof Date) {
+      return value.getTime()
+    }
+    if (typeof value === 'number') {
+      return value
+    }
+    const parsed = new Date(value)
+    const time = parsed.getTime()
+    return Number.isNaN(time) ? null : time
+  }
+
+  private timestampsEqual(a: Date | number | string | null | undefined, b: Date | number | string | null | undefined): boolean {
+    const left = this.toTimestamp(a)
+    const right = this.toTimestamp(b)
+    if (left === null || right === null) {
+      return left === right
+    }
+    return Math.abs(left - right) <= this.timestampToleranceMs
+  }
+
+  private hasDiskFileChanged(diskFile: ScannedFileInfo, dbFile: typeof filesSchema.$inferSelect): boolean {
+    if (!this.timestampsEqual(diskFile.mtime, dbFile.mtime)) {
+      return true
+    }
+    if (!this.timestampsEqual(diskFile.ctime, dbFile.ctime)) {
+      return true
+    }
+    if ((diskFile.size ?? 0) !== (dbFile.size ?? 0)) {
+      return true
+    }
+    if ((diskFile.extension ?? '') !== (dbFile.extension ?? '')) {
+      return true
+    }
+    if ((diskFile.name ?? '') !== (dbFile.name ?? '')) {
+      return true
+    }
+    return false
+  }
+
+  private hasRecordChanged(
+    incoming: typeof filesSchema.$inferInsert,
+    existing: typeof filesSchema.$inferSelect
+  ): boolean {
+    if (!this.timestampsEqual(incoming.mtime, existing.mtime)) {
+      return true
+    }
+    if (!this.timestampsEqual(incoming.ctime, existing.ctime)) {
+      return true
+    }
+    if ((incoming.size ?? 0) !== (existing.size ?? 0)) {
+      return true
+    }
+    if ((incoming.extension ?? '') !== (existing.extension ?? '')) {
+      return true
+    }
+    if ((incoming.name ?? '') !== (existing.name ?? '')) {
+      return true
+    }
+    return false
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
+    const loadStart = performance.now()
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    this.searchIndex = context.searchIndex
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
     if (!this.isInitializing) {
+      this.logInfo('onLoad: initializing provider state...')
       this.isInitializing = this._initialize()
     }
     await this.isInitializing
+    await this.ensureFileSystemWatchers()
+    this.registerOpenersChannel(context)
+    this.logInfo(
+      `onLoad completed in ${chalk.cyan(((performance.now() - loadStart) / 1000).toFixed(2))}s`
+    )
+  }
+
+  private async ensureFileSystemWatchers(): Promise<void> {
+    if (this.watchPathsRegistered) {
+      if (!this.fsEventsSubscribed) {
+        this.subscribeToFileSystemEvents()
+      }
+      return
+    }
+
+    if (this.WATCH_PATHS.length === 0) {
+      this.logWarn('No watch paths resolved; skipping watcher registration.')
+      return
+    }
+
+    this.logInfo(`Registering watch paths: ${chalk.gray(JSON.stringify(this.WATCH_PATHS))}`)
+
+    try {
+      await Promise.all(
+        this.WATCH_PATHS.map((watchPath) =>
+          FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath)).catch((error) => {
+            this.logError(`Failed to watch path ${chalk.gray(watchPath)}.`, error)
+          })
+        )
+      )
+    } catch (error) {
+      this.logError('Error while registering watch paths.', error)
+    }
+
+    this.watchPathsRegistered = true
+    this.subscribeToFileSystemEvents()
+  }
+
+  private registerOpenersChannel(context: ProviderContext): void {
+    if (this.openersChannelRegistered) {
+      return
+    }
+
+    const channel = context.touchApp.channel
+
+    channel.regChannel(ChannelType.MAIN, 'openers:resolve', async ({ data }) => {
+      const extension = typeof data?.extension === 'string' ? data.extension : null
+      if (!extension) {
+        return null
+      }
+
+      try {
+        return await this.getOpenerForExtension(extension)
+      } catch (error) {
+        this.logError(`Failed to resolve opener for extension ${chalk.gray(extension)}.`, error)
+        return null
+      }
+    })
+
+    this.openersChannelRegistered = true
+  }
+
+  private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
+    const normalized = rawExtension.replace(/^\./, '').toLowerCase()
+    if (!normalized) {
+      return null
+    }
+
+    if (this.openerCache.has(normalized)) {
+      return this.openerCache.get(normalized)!
+    }
+
+    let pending = this.openerPromises.get(normalized)
+    if (!pending) {
+      pending = this.resolveOpener(normalized)
+      this.openerPromises.set(normalized, pending)
+    }
+
+    const result = await pending
+    this.openerPromises.delete(normalized)
+
+    if (result) {
+      this.openerCache.set(normalized, result)
+    }
+
+    return result
+  }
+
+  private async resolveOpener(extension: string): Promise<ResolvedOpener | null> {
+    if (process.platform !== 'darwin') {
+      return null
+    }
+
+    const sanitized = extension.replace(/[^a-z0-9.+-]/gi, '')
+    if (!sanitized) {
+      return null
+    }
+
+    const bundleId = await this.getBundleIdForExtension(sanitized)
+    if (!bundleId) {
+      return null
+    }
+
+    const appInfo = await this.getAppInfoByBundleId(bundleId)
+    if (!appInfo) {
+      return null
+    }
+
+    let logo = appInfo.logo
+    if (!logo && appInfo.path) {
+      logo = await this.generateApplicationIcon(appInfo.path)
+    }
+
+    const opener: ResolvedOpener = {
+      bundleId,
+      name: appInfo.name,
+      logo,
+      path: appInfo.path,
+      lastResolvedAt: new Date().toISOString()
+    }
+
+    return opener
+  }
+
+  private async getBundleIdForExtension(extension: string): Promise<string | null> {
+    const handlers = await this.loadLaunchServicesHandlers()
+    if (handlers.length === 0) {
+      return null
+    }
+
+    const lower = extension.toLowerCase()
+
+    const directMatch = handlers.find(
+      (handler) =>
+        typeof handler?.LSHandlerContentTag === 'string' &&
+        handler.LSHandlerContentTag.toLowerCase() === lower &&
+        handler.LSHandlerContentTagClass === 'public.filename-extension'
+    )
+
+    const directBundle = this.pickBundleIdFromHandler(directMatch)
+    if (directBundle) {
+      return directBundle
+    }
+
+    const uti = await this.resolveUniformTypeIdentifier(lower)
+    if (!uti) {
+      return null
+    }
+
+    const utiMatch = handlers.find(
+      (handler) =>
+        typeof handler?.LSHandlerContentType === 'string' &&
+        handler.LSHandlerContentType.toLowerCase() === uti.toLowerCase()
+    )
+
+    return this.pickBundleIdFromHandler(utiMatch)
+  }
+
+  private pickBundleIdFromHandler(handler: any): string | null {
+    if (!handler || typeof handler !== 'object') {
+      return null
+    }
+
+    const roleKeys = ['LSHandlerRoleAll', 'LSHandlerRoleViewer', 'LSHandlerRoleEditor']
+
+    for (const key of roleKeys) {
+      const value = handler[key]
+      if (typeof value === 'string' && value.length > 0) {
+        return value
+      }
+    }
+
+    const preferred = handler.LSHandlerPreferredVersions
+    if (preferred && typeof preferred === 'object') {
+      for (const key of roleKeys) {
+        const value = preferred[key]
+        if (typeof value === 'string' && value.length > 0) {
+          return value
+        }
+      }
+    }
+
+    return null
+  }
+
+  private async loadLaunchServicesHandlers(): Promise<any[]> {
+    if (process.platform !== 'darwin') {
+      return []
+    }
+
+    try {
+      const stats = await fs.stat(LAUNCH_SERVICES_PLIST_PATH)
+      if (this.launchServicesHandlers && this.launchServicesMTime === stats.mtimeMs) {
+        return this.launchServicesHandlers
+      }
+
+      const { stdout } = await execFileAsync('plutil', [
+        '-convert',
+        'xml1',
+        '-o',
+        '-',
+        LAUNCH_SERVICES_PLIST_PATH
+      ])
+
+      const parsed = plist.parse(stdout.toString()) as { LSHandlers?: any[] }
+      const handlers = Array.isArray(parsed?.LSHandlers) ? parsed.LSHandlers : []
+
+      this.launchServicesHandlers = handlers
+      this.launchServicesMTime = stats.mtimeMs
+
+      return handlers
+    } catch (error) {
+      this.logError('Failed to load LaunchServices configuration for opener resolution.', error)
+      this.launchServicesHandlers = []
+      this.launchServicesMTime = undefined
+      return []
+    }
+  }
+
+  private async resolveUniformTypeIdentifier(extension: string): Promise<string | null> {
+    if (process.platform !== 'darwin') {
+      return null
+    }
+
+    const safeExt = extension.replace(/[^a-z0-9.+-]/gi, '')
+    if (!safeExt) {
+      return null
+    }
+
+    const tempPath = path.join(
+      os.tmpdir(),
+      `talex-touch-${Date.now()}-${Math.random().toString(16).slice(2)}.${safeExt}`
+    )
+
+    try {
+      await fs.writeFile(tempPath, '')
+      const { stdout } = await execFileAsync('mdls', ['-name', 'kMDItemContentType', tempPath])
+      const match = /"([^"\n]+)"/.exec(stdout.toString())
+      return match ? match[1] : null
+    } catch (error) {
+      this.logWarn(`Failed to resolve UTI for extension .${extension}`, error)
+      return null
+    } finally {
+      try {
+        await fs.unlink(tempPath)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private async getAppInfoByBundleId(bundleId: string): Promise<{
+    name: string
+    path: string
+    logo: string
+  } | null> {
+    if (!this.dbUtils) {
+      return null
+    }
+
+    try {
+      const db = this.dbUtils.getDb()
+
+      const mapping = await db
+        .select({ fileId: fileExtensions.fileId })
+        .from(fileExtensions)
+        .where(and(eq(fileExtensions.key, 'bundleId'), eq(fileExtensions.value, bundleId)))
+        .limit(1)
+
+      const fileId = mapping[0]?.fileId
+      if (!fileId) {
+        return null
+      }
+
+      const [fileRow] = await db
+        .select({
+          id: filesSchema.id,
+          name: filesSchema.name,
+          displayName: filesSchema.displayName,
+          path: filesSchema.path
+        })
+        .from(filesSchema)
+        .where(eq(filesSchema.id, fileId))
+        .limit(1)
+
+      if (!fileRow) {
+        return null
+      }
+
+      const [iconRow] = await db
+        .select({ value: fileExtensions.value })
+        .from(fileExtensions)
+        .where(and(eq(fileExtensions.fileId, fileId), eq(fileExtensions.key, 'icon')))
+        .limit(1)
+
+      return {
+        name: fileRow.displayName || fileRow.name,
+        path: fileRow.path,
+        logo: iconRow?.value ?? ''
+      }
+    } catch (error) {
+      this.logError(`Failed to read app info for bundle ${chalk.gray(bundleId)}.`, error)
+      return null
+    }
+  }
+
+  private async generateApplicationIcon(appPath: string): Promise<string> {
+    try {
+      const buffer = extractFileIcon(appPath)
+      if (buffer && buffer.length > 0) {
+        return `data:image/png;base64,${buffer.toString('base64')}`
+      }
+    } catch (error) {
+      this.logWarn(`Failed to extract icon for ${chalk.gray(appPath)}.`, error)
+    }
+    return ''
+  }
+
+  private getWatchDepthForPath(watchPath: string): number {
+    const lower = watchPath.toLowerCase()
+    if (process.platform === 'darwin') {
+      // macOS Spotlight-style directories usually shallow
+      if (lower.endsWith('/applications') || lower.endsWith('/downloads')) {
+        return 1
+      }
+      return 2
+    }
+    if (process.platform === 'win32') {
+      return 4
+    }
+    return 3
+  }
+
+  private subscribeToFileSystemEvents(): void {
+    if (this.fsEventsSubscribed) {
+      return
+    }
+
+    touchEventBus.on(TalexEvents.FILE_ADDED, this.handleFsAddedOrChanged)
+    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleFsAddedOrChanged)
+    touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleFsUnlinked)
+
+    this.fsEventsSubscribed = true
+    this.logInfo('Subscribed to file system events for incremental updates.')
+  }
+
+  private normalizePath(p: string): string {
+    const normalized = path.normalize(p)
+    return this.isCaseInsensitiveFs ? normalized.toLowerCase() : normalized
+  }
+
+  private isWithinWatchRoots(rawPath: string): boolean {
+    if (!rawPath) return false
+    const normalizedPath = this.normalizePath(rawPath)
+    for (const watchRoot of this.normalizedWatchPaths) {
+      if (normalizedPath === watchRoot) return true
+      const withSeparator = watchRoot.endsWith(path.sep) ? watchRoot : `${watchRoot}${path.sep}`
+      if (normalizedPath.startsWith(withSeparator)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  private enqueueIncrementalUpdate(rawPath: string, action: 'add' | 'change' | 'delete'): void {
+    if (!this.isWithinWatchRoots(rawPath)) {
+      return
+    }
+
+    const normalizedPath = this.normalizePath(rawPath)
+    const prev = this.pendingIncrementalPaths.get(normalizedPath)
+    if (action === 'delete') {
+      this.pendingIncrementalPaths.set(normalizedPath, { action, rawPath })
+    } else if (!prev || prev.action !== 'delete') {
+      const nextAction: 'add' | 'change' = prev?.action === 'add' ? 'add' : action
+      const nextRawPath = action === 'add' ? rawPath : prev?.rawPath ?? rawPath
+      this.pendingIncrementalPaths.set(normalizedPath, { action: nextAction, rawPath: nextRawPath })
+    }
+
+    this.scheduleIncrementalProcessing()
+  }
+
+  private scheduleIncrementalProcessing(): void {
+    if (this.pendingIncrementalPaths.size === 0) return
+
+    this.incrementalTaskChain = this.incrementalTaskChain
+      .then(() => this.flushIncrementalQueue())
+      .catch((error) => {
+        this.logError('Failed to process incremental updates.', error)
+      })
+  }
+
+  private async flushIncrementalQueue(): Promise<void> {
+    if (this.pendingIncrementalPaths.size === 0) {
+      return
+    }
+
+    if (this.isInitializing) {
+      try {
+        await this.isInitializing
+      } catch (error) {
+        this.logError('Initialization failed before processing increments.', error)
+        return
+      }
+    }
+
+    if (!this.dbUtils) {
+      this.logWarn('flushIncrementalQueue skipped: dbUtils not ready.')
+      return
+    }
+
+    const entries = Array.from(this.pendingIncrementalPaths.entries())
+    this.pendingIncrementalPaths.clear()
+
+    const deleted = entries
+      .filter(([, payload]) => payload.action === 'delete')
+      .map(([, payload]) => payload.rawPath)
+
+    const changedEntries = entries.filter(([, payload]) => payload.action !== 'delete')
+
+    if (deleted.length > 0) {
+      await this.handleIncrementalDeletes(deleted)
+    }
+
+    if (changedEntries.length > 0) {
+      await this.handleIncrementalAddsOrChanges(changedEntries)
+    }
+  }
+
+  private async handleIncrementalDeletes(paths: string[]): Promise<void> {
+    if (!this.dbUtils || paths.length === 0) return
+    const db = this.dbUtils.getDb()
+    const normalized = Array.from(new Set(paths.map((p) => path.normalize(p))))
+    const existing = await db
+      .select({ id: filesSchema.id, path: filesSchema.path })
+      .from(filesSchema)
+      .where(inArray(filesSchema.path, normalized))
+
+    if (existing.length === 0) {
+      return
+    }
+
+    const idsToDelete = existing.map((file) => file.id)
+    await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+    await this.searchIndex?.removeItems(existing.map((file) => file.path))
+    this.logInfo(
+      `${chalk.green('Incremental remove')} ${chalk.cyan(existing.length.toString())} file(s) from index.`
+    )
+  }
+
+  private async handleIncrementalAddsOrChanges(
+    entries: Array<[string, { action: 'add' | 'change'; rawPath: string }]>
+  ): Promise<void> {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+
+    const recordMap = new Map<string, typeof filesSchema.$inferInsert>()
+    for (const [, payload] of entries) {
+      const record = await this.buildFileRecord(payload.rawPath)
+      if (record) {
+        recordMap.set(record.path, record)
+      }
+    }
+
+    if (recordMap.size === 0) {
+      return
+    }
+
+    const targetPaths = Array.from(recordMap.keys())
+    const existingRows = await db
+      .select()
+      .from(filesSchema)
+      .where(inArray(filesSchema.path, targetPaths))
+    const existingMap = new Map(existingRows.map((row) => [row.path, row]))
+
+    const filesToInsert: typeof filesSchema.$inferInsert[] = []
+    const filesToUpdate: (typeof filesSchema.$inferSelect)[] = []
+    let unchangedCount = 0
+
+    for (const [filePath, record] of recordMap.entries()) {
+      const existing = existingMap.get(filePath)
+      if (existing) {
+        if (this.hasRecordChanged(record, existing)) {
+          filesToUpdate.push({
+            ...existing,
+            name: record.name,
+            extension: record.extension,
+            size: record.size,
+            mtime: record.mtime,
+            ctime: record.ctime,
+            lastIndexedAt: record.lastIndexedAt,
+            type: existing.type || 'file',
+            isDir: false
+          })
+        } else {
+          unchangedCount += 1
+        }
+      } else {
+        filesToInsert.push(record)
+      }
+    }
+
+    if (filesToInsert.length > 0) {
+      const inserted = await db.insert(filesSchema).values(filesToInsert).returning()
+      await this.processFileExtensions(inserted)
+      await this.extractContentForFiles(inserted)
+      await this.indexFilesForSearch(inserted)
+      this.logInfo(
+        `${chalk.green('Incremental index')} ${chalk.cyan(inserted.length.toString())} new file(s).`
+      )
+    }
+
+    if (filesToUpdate.length > 0) {
+      await this._processFileUpdates(filesToUpdate)
+      this.logInfo(
+        `${chalk.green('Incremental update')} ${chalk.cyan(filesToUpdate.length.toString())} file(s).`
+      )
+    }
+
+    if (unchangedCount > 0) {
+      this.logDebug(`Skipped ${unchangedCount} unchanged file(s) during incremental sync.`)
+    }
+  }
+
+  private async buildFileRecord(
+    rawPath: string
+  ): Promise<typeof filesSchema.$inferInsert | null> {
+    try {
+      const stats = await fs.stat(rawPath)
+      if (!stats.isFile()) {
+        return null
+      }
+
+      const name = path.basename(rawPath)
+      const extension = path.extname(name).toLowerCase()
+      if (!isIndexableFile(rawPath, extension, name)) {
+        return null
+      }
+      return {
+        path: rawPath,
+        name,
+        extension,
+        size: stats.size,
+        mtime: stats.mtime,
+        ctime: stats.birthtime ?? stats.ctime,
+        lastIndexedAt: new Date(),
+        isDir: false,
+        type: 'file'
+      }
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException
+      if (err?.code !== 'ENOENT') {
+        this.logError(`Failed to read file metadata for ${chalk.gray(rawPath)}.`, error)
+      }
+      return null
+    }
   }
 
   private async _initialize(): Promise<void> {
+    const initStart = performance.now()
     console.log('[FileProvider] Starting index process...')
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
+    const indexEnsuredStart = performance.now()
+    await this.ensureKeywordIndexes(db)
+    await this.ensureIndexingSupportTables(db)
+    console.log(
+      `[FileProvider] ensureKeywordIndexes completed in ${(
+        performance.now() - indexEnsuredStart
+      ).toFixed(0)}ms`
+    )
     const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
 
     // --- 1. Index Cleanup (FR-IX-4) ---
+    const cleanupStart = performance.now()
     console.log('[FileProvider] Cleaning up indexes from removed watch paths...')
     const allDbFilePaths = await db
       .select({ path: filesSchema.path, id: filesSchema.id })
@@ -86,9 +944,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       const pathsToDelete = filesToDelete.map((f) => f.path)
       await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
+      await this.searchIndex?.removeItems(pathsToDelete)
     }
+    console.log(
+      `[FileProvider] Cleanup stage finished in ${(performance.now() - cleanupStart).toFixed(0)}ms`
+    )
 
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
+    const strategyStart = performance.now()
     const completedScans = await db.select().from(scanProgress)
     const completedScanPaths = new Set(completedScans.map((s) => s.path))
 
@@ -98,49 +961,95 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     console.log(
       `[FileProvider] Scan Strategy: ${newPathsToScan.length} new paths for full scan, ${reconciliationPaths.length} existing paths for reconciliation.`
     )
+    console.log(
+      `[FileProvider] Strategy calculation completed in ${(performance.now() - strategyStart).toFixed(0)}ms`
+    )
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
       console.log('[FileProvider] Starting full scan for new paths:', newPathsToScan)
       for (const newPath of newPathsToScan) {
+        const pathScanStart = performance.now()
         console.log(`[FileProvider] Scanning new path: ${newPath}`)
         const diskFiles = await scanDirectory(newPath, excludePathsSet)
+        console.log(
+          `[FileProvider] scanDirectory completed for ${newPath} in ${(
+            performance.now() - pathScanStart
+          ).toFixed(0)}ms (found ${diskFiles.length} files)`
+        )
         const newFileRecords = diskFiles.map((file) => ({
-          ...file,
-          extension: path.extname(file.name).toLowerCase(),
+          path: file.path,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          mtime: file.mtime,
+          ctime: file.ctime,
           lastIndexedAt: new Date(),
-          ctime: new Date()
+          isDir: false,
+          type: 'file'
         }))
 
         if (newFileRecords.length > 0) {
           console.log(`[FileProvider] Found ${newFileRecords.length} files in ${newPath}.`)
           const chunkSize = 500
+          const chunks: typeof newFileRecords[] = []
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
-            const chunk = newFileRecords.slice(i, i + chunkSize)
-            console.log(
-              `[FileProvider] Full scan for ${newPath}: Inserting chunk ${i / chunkSize + 1}/${Math.ceil(newFileRecords.length / chunkSize)}...`
-            )
-            const inserted = await db.insert(filesSchema).values(chunk).returning()
-            await this.processFileExtensions(inserted)
+            chunks.push(newFileRecords.slice(i, i + chunkSize))
           }
+
+          await runAdaptiveTaskQueue(chunks, async (chunk, chunkIndex) => {
+            console.log(
+              `[FileProvider] Full scan for ${newPath}: Inserting chunk ${chunkIndex + 1}/${chunks.length}...`
+            )
+            const chunkStart = performance.now()
+            const inserted = await db.insert(filesSchema).values(chunk).returning()
+            console.log(
+              `[FileProvider] Inserted ${chunk.length} files in ${(
+                performance.now() - chunkStart
+              ).toFixed(0)}ms`
+            )
+            await this.processFileExtensions(inserted)
+            await this.extractContentForFiles(inserted)
+            await this.indexFilesForSearch(inserted)
+          }, {
+            estimatedTaskTimeMs: 8,
+            label: `FileProvider::fullScan(${newPath})`
+          })
         }
         await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
-        console.log(`[FileProvider] Completed full scan for ${newPath}.`)
+        console.log(
+          `[FileProvider] Completed full scan for ${newPath} in ${(
+            performance.now() - pathScanStart
+          ).toFixed(0)}ms`
+        )
       }
     }
 
     // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
     if (reconciliationPaths.length > 0) {
+      const reconciliationStart = performance.now()
       console.log('[FileProvider] Starting reconciliation scan for paths:', reconciliationPaths)
+      const dbReadStart = performance.now()
       const dbFiles = await db.select().from(filesSchema).where(eq(filesSchema.type, 'file'))
+      console.log(
+        `[FileProvider] Loaded ${dbFiles.length} DB file records in ${(
+          performance.now() - dbReadStart
+        ).toFixed(0)}ms`
+      )
       const dbFileMap = new Map(dbFiles.map((file) => [file.path, file]))
 
       console.log(`[FileProvider] Found ${dbFileMap.size} files in DB for reconciliation.`)
 
+      const diskScanStart = performance.now()
       const diskFiles: ScannedFileInfo[] = []
       for (const dir of reconciliationPaths) {
         diskFiles.push(...(await scanDirectory(dir, excludePathsSet)))
       }
+      console.log(
+        `[FileProvider] scanDirectory for reconciliation finished in ${(
+          performance.now() - diskScanStart
+        ).toFixed(0)}ms (found ${diskFiles.length} files)`
+      )
       const diskFileMap = new Map(diskFiles.map((file) => [file.path, file]))
       console.log(`[FileProvider] Found ${diskFileMap.size} files on disk for reconciliation.`)
 
@@ -152,14 +1061,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         if (!dbFile) {
           filesToAdd.push(diskFile)
         } else if (diskFile.mtime > dbFile.mtime) {
-          filesToUpdate.push({ ...dbFile, mtime: diskFile.mtime, name: diskFile.name })
+          filesToUpdate.push({
+            ...dbFile,
+            name: diskFile.name,
+            extension: diskFile.extension,
+            size: diskFile.size,
+            mtime: diskFile.mtime,
+            ctime: diskFile.ctime,
+            lastIndexedAt: new Date(),
+            isDir: false,
+            type: 'file'
+          })
         }
         dbFileMap.delete(path)
       }
 
-      const deletedFileIds = Array.from(dbFileMap.values())
-        .filter((file) => reconciliationPaths.some((p) => file.path.startsWith(p)))
-        .map((file) => file.id)
+      const deletedFiles = Array.from(dbFileMap.values()).filter((file) =>
+        reconciliationPaths.some((p) => file.path.startsWith(p))
+      )
+      const deletedFileIds = deletedFiles.map((file) => file.id)
 
       if (deletedFileIds.length > 0) {
         console.log(
@@ -169,185 +1089,908 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             .map((f) => f.path)
         )
         await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
+        if (deletedFiles.length > 0) {
+          await this.searchIndex?.removeItems(deletedFiles.map((file) => file.path))
+        }
       }
 
       if (filesToUpdate.length > 0) {
         console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files.`)
-        for (const file of filesToUpdate) {
-          await db
-            .update(filesSchema)
-            .set({
-              mtime: file.mtime,
-              name: file.name,
-              lastIndexedAt: new Date()
-            })
-            .where(eq(filesSchema.id, file.id))
-          await this.processFileExtensions([file])
-        }
+        await this._processFileUpdates(filesToUpdate)
       }
 
       if (filesToAdd.length > 0) {
         console.log(`[FileProvider] Adding ${filesToAdd.length} new files during reconciliation.`)
         const newFileRecords = filesToAdd.map((file) => ({
-          ...file,
-          extension: path.extname(file.name).toLowerCase(),
+          path: file.path,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          mtime: file.mtime,
+          ctime: file.ctime,
           lastIndexedAt: new Date(),
-          ctime: new Date()
+          isDir: false,
+          type: 'file'
         }))
 
         const chunkSize = 500
+        const chunks: typeof newFileRecords[] = []
         for (let i = 0; i < newFileRecords.length; i += chunkSize) {
-          const chunk = newFileRecords.slice(i, i + chunkSize)
-          const inserted = await db.insert(filesSchema).values(chunk).returning()
-          await this.processFileExtensions(inserted)
+          chunks.push(newFileRecords.slice(i, i + chunkSize))
         }
+
+        await runAdaptiveTaskQueue(
+          chunks,
+          async (chunk, chunkIndex) => {
+            const chunkStart = performance.now()
+            const inserted = await db.insert(filesSchema).values(chunk).returning()
+            console.log(
+              `[FileProvider] Reconciliation inserted ${chunk.length} files (chunk ${
+                chunkIndex + 1
+              }/${chunks.length}) in ${(performance.now() - chunkStart).toFixed(0)}ms`
+            )
+            await this.processFileExtensions(inserted)
+            await this.extractContentForFiles(inserted)
+            await this.indexFilesForSearch(inserted)
+          },
+          {
+            estimatedTaskTimeMs: 6,
+            label: 'FileProvider::reconciliationInsert'
+          }
+        )
       }
+      console.log(
+        `[FileProvider] Reconciliation completed in ${(
+          performance.now() - reconciliationStart
+        ).toFixed(0)}ms`
+      )
     }
 
-    console.log('[FileProvider] Index process complete.')
+    console.log(
+      `[FileProvider] Index process complete in ${((performance.now() - initStart) / 1000).toFixed(2)}s.`
+    )
+  }
+
+  private async _processFileUpdates(
+    filesToUpdate: (typeof filesSchema.$inferSelect)[],
+    chunkSize = 50
+  ) {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+
+    const chunks: (typeof filesSchema.$inferSelect)[][] = []
+    for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
+      chunks.push(filesToUpdate.slice(i, i + chunkSize))
+    }
+
+    await runAdaptiveTaskQueue(
+      chunks,
+      async (chunk, chunkIndex) => {
+        console.debug(
+          `[FileProvider] Updating chunk ${chunkIndex + 1}/${chunks.length}...`
+        )
+        const chunkStart = performance.now()
+
+        const updatePromises = chunk.map((file) =>
+          db
+            .update(filesSchema)
+            .set({
+              extension: file.extension,
+              size: file.size,
+              ctime: file.ctime,
+              mtime: file.mtime,
+              name: file.name,
+              type: file.type,
+              isDir: file.isDir,
+              lastIndexedAt: new Date()
+            })
+            .where(eq(filesSchema.id, file.id))
+        )
+        await Promise.all(updatePromises)
+        await this.processFileExtensions(chunk)
+        await this.extractContentForFiles(chunk)
+        await this.indexFilesForSearch(chunk)
+        console.debug(
+          `[FileProvider] Updated chunk of ${chunk.length} files in ${(
+            performance.now() - chunkStart
+          ).toFixed(0)}ms`
+        )
+      },
+      {
+        estimatedTaskTimeMs: 6,
+        label: 'FileProvider::processFileUpdates'
+      }
+    )
+  }
+
+  private async indexFilesForSearch(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
+    if (!this.searchIndex) return
+    if (files.length === 0) return
+
+    const indexStart = performance.now()
+    const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
+    await this.searchIndex.indexItems(items)
+    console.debug(
+      `[FileProvider] Indexed ${files.length} files for search in ${(
+        performance.now() - indexStart
+      ).toFixed(0)}ms`
+    )
+  }
+
+  private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
+    const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
+    const extensionKeywords = KEYWORD_MAP[extension] || []
+    const keywords: SearchIndexKeyword[] = extensionKeywords.map((keyword) => ({
+      value: keyword,
+      priority: 1.05
+    }))
+
+    const tags = new Set<string>()
+    if (extension) {
+      tags.add(extension.replace(/^\./, ''))
+    }
+    for (const tag of getTypeTagsForExtension(extension)) {
+      tags.add(tag)
+    }
+
+    return {
+      itemId: file.path,
+      providerId: this.id,
+      type: this.type,
+      name: file.name,
+      displayName: file.displayName ?? undefined,
+      path: file.path,
+      extension,
+      content: file.content ?? undefined,
+      keywords,
+      tags: tags.size > 0 ? Array.from(tags) : undefined
+    }
+  }
+
+  private buildFtsQuery(terms: string[]): string {
+    const tokens: string[] = []
+    for (const term of terms) {
+      const cleaned = term.replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, ' ').trim()
+      if (!cleaned) continue
+      tokens.push(...cleaned.split(/\s+/))
+    }
+
+    if (tokens.length === 0) {
+      return ''
+    }
+
+    const limitedTokens = tokens.slice(0, 5)
+    return limitedTokens.map((token) => `${token}*`).join(' AND ')
   }
 
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
     if (!this.dbUtils) return
     if (files.length === 0) return
 
+    const extensionsStart = performance.now()
     const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
-    for (const file of files) {
-      try {
-        const icon = extractFileIcon(file.path)
-        extensionsToAdd.push({
-          fileId: file.id,
-          key: 'icon',
-          value: `data:image/png;base64,${icon.toString('base64')}`
-        })
-      } catch {
-        /* ignore */
-      }
+    await runAdaptiveTaskQueue(
+      files,
+      async (file) => {
+        try {
+          const icon = extractFileIcon(file.path)
+          extensionsToAdd.push({
+            fileId: file.id,
+            key: 'icon',
+            value: `data:image/png;base64,${icon.toString('base64')}`
+          })
+        } catch {
+          /* ignore */
+        }
 
-      const fileExtension = file.extension || path.extname(file.name).toLowerCase()
-      const keywords = KEYWORD_MAP[fileExtension]
-      if (keywords) {
-        extensionsToAdd.push({
-          fileId: file.id,
-          key: 'keywords',
-          value: JSON.stringify(keywords)
-        })
+        const fileExtension = file.extension || path.extname(file.name).toLowerCase()
+        const keywords = KEYWORD_MAP[fileExtension]
+        if (keywords) {
+          extensionsToAdd.push({
+            fileId: file.id,
+            key: 'keywords',
+            value: JSON.stringify(keywords)
+          })
+        }
+      },
+      {
+        estimatedTaskTimeMs: 3,
+        label: 'FileProvider::processFileExtensions'
       }
-    }
+    )
 
     if (extensionsToAdd.length > 0) {
       await this.dbUtils.addFileExtensions(extensionsToAdd)
     }
+    console.debug(
+      `[FileProvider] processFileExtensions handled ${files.length} files (${extensionsToAdd.length} extensions) in ${(
+        performance.now() - extensionsStart
+      ).toFixed(0)}ms`
+    )
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
-    if (!this.dbUtils) return TuffFactory.createSearchResult(query).build()
+  private async extractContentForFiles(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
+    if (!this.dbUtils) return
+    if (files.length === 0) return
+
+    await runAdaptiveTaskQueue(
+      files,
+      async (file) => {
+        try {
+          await this.extractContentForFile(file)
+        } catch (error) {
+          console.error(`[FileProvider] Failed to extract content for ${file.path}:`, error)
+        }
+      },
+      {
+        estimatedTaskTimeMs: 20,
+        label: 'FileProvider::extractContent'
+      }
+    )
+  }
+
+  private createProgressReporter(fileId: number, totalBytes: number | null) {
+    return (progress: FileParserProgress) => {
+      if (!this.dbUtils) return
+
+      const processed = progress.processedBytes ?? 0
+      const total = progress.totalBytes ?? totalBytes ?? 0
+      const percentage = progress.percentage ?? (total > 0 ? processed / total : 0)
+
+      this.dbUtils
+        .setFileIndexProgress(fileId, {
+          progress: Math.min(99, Math.round((percentage || 0) * 100)),
+          processedBytes: processed,
+          totalBytes: total
+        })
+        .catch((error) =>
+          console.error(`[FileProvider] Failed to update content progress for ${fileId}:`, error)
+        )
+    }
+  }
+
+  private async extractContentForFile(file: typeof filesSchema.$inferSelect): Promise<void> {
+    if (!this.dbUtils) return
+    if (!file.id) return
+
+    const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
+    if (!CONTENT_INDEXABLE_EXTENSIONS.has(extension)) {
+      await this.dbUtils.setFileIndexProgress(file.id, {
+        status: 'skipped',
+        progress: 100,
+        processedBytes: 0,
+        totalBytes: file.size ?? null,
+        lastError: 'content-indexing-disabled'
+      })
+      return
+    }
+
+    const size = await this.ensureFileSize(file)
+    const maxBytes = getContentSizeLimitMB(extension) * 1024 * 1024
+
+    if (maxBytes && size !== null && size > maxBytes) {
+      await this.dbUtils.setFileIndexProgress(file.id, {
+        status: 'skipped',
+        progress: 100,
+        processedBytes: 0,
+        totalBytes: size,
+        lastError: 'file-too-large'
+      })
+      file.content = null
+      return
+    }
+
+    await this.dbUtils.setFileIndexProgress(file.id, {
+      status: 'processing',
+      progress: 5,
+      processedBytes: 0,
+      totalBytes: size ?? null,
+      startedAt: new Date(),
+      lastError: null
+    })
+
+    const progressReporter = this.createProgressReporter(file.id, size)
+    const parseStart = performance.now()
+    let result: FileParserResult | null = null
+    try {
+      result = await fileParserRegistry.parseWithBestParser(
+        {
+          filePath: file.path,
+          extension,
+          size: size ?? 0,
+          maxBytes
+        },
+        progressReporter
+      )
+    } catch (error) {
+      console.error(`[FileProvider] Parser threw for ${file.path}:`, error)
+      await this.dbUtils.setFileIndexProgress(file.id, {
+        status: 'failed',
+        progress: 100,
+        processedBytes: 0,
+        totalBytes: size ?? null,
+        lastError: error instanceof Error ? error.message : 'parser-error'
+      })
+      file.content = null
+      return
+    }
+
+    if (!result) {
+      await this.dbUtils.setFileIndexProgress(file.id, {
+        status: 'skipped',
+        progress: 100,
+        processedBytes: 0,
+        totalBytes: size ?? null,
+        lastError: 'parser-not-found'
+      })
+      file.content = null
+      return
+    }
+
+    await this.handleParserResult(file, result, size, performance.now() - parseStart)
+  }
+
+  private async handleParserResult(
+    file: typeof filesSchema.$inferSelect,
+    result: FileParserResult,
+    size: number | null,
+    durationMs: number
+  ): Promise<void> {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+    const fileId = file.id
+    if (!fileId) return
+
+    const totalBytes = result.totalBytes ?? size ?? null
+    const processedBytes = result.processedBytes ?? totalBytes ?? null
+
+    if (result.status === 'success') {
+      const rawContent = result.content ?? ''
+      const trimmedContent =
+        rawContent.length > MAX_CONTENT_LENGTH
+          ? `${rawContent.slice(0, MAX_CONTENT_LENGTH)}\n...[truncated]`
+          : rawContent
+
+      await db
+        .update(filesSchema)
+        .set({
+          content: trimmedContent,
+          embeddingStatus: result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
+        })
+        .where(eq(filesSchema.id, fileId))
+
+      file.content = trimmedContent
+
+      if (result.embeddings && result.embeddings.length > 0) {
+        // TODO: hook into embeddings table when vector storage is ready
+        console.debug(
+          `[FileProvider] Parser returned ${result.embeddings.length} embedding(s) for ${file.path}.`
+        )
+      }
+
+      await this.dbUtils.setFileIndexProgress(fileId, {
+        status: 'completed',
+        progress: 100,
+        processedBytes,
+        totalBytes,
+        lastError: null,
+        updatedAt: new Date()
+      })
+
+      console.debug(
+        `[FileProvider] Content parsed for ${file.path} in ${durationMs.toFixed(0)}ms (length=${trimmedContent.length})`
+      )
+      return
+    }
+
+    const progressPayload = {
+      progress: 100,
+      processedBytes,
+      totalBytes,
+      lastError: result.reason ?? null,
+      updatedAt: new Date()
+    }
+
+    if (result.status === 'skipped') {
+      await this.dbUtils.setFileIndexProgress(fileId, {
+        status: 'skipped',
+        ...progressPayload
+      })
+      file.content = null
+      return
+    }
+
+    await this.dbUtils.setFileIndexProgress(fileId, {
+      status: 'failed',
+      ...progressPayload
+    })
+    file.content = null
+  }
+
+  private async ensureFileSize(file: typeof filesSchema.$inferSelect): Promise<number | null> {
+    if (typeof file.size === 'number' && file.size >= 0) {
+      return file.size
+    }
+
+    try {
+      const stats = await fs.stat(file.path)
+      file.size = stats.size
+      if (file.id && this.dbUtils) {
+        await this.dbUtils
+          .getDb()
+          .update(filesSchema)
+          .set({ size: stats.size })
+          .where(eq(filesSchema.id, file.id))
+      }
+      return stats.size
+    } catch (error) {
+      console.error(`[FileProvider] Failed to stat file size for ${file.path}:`, error)
+      return null
+    }
+  }
+
+  private extractSearchFilters(rawText: string): { text: string; typeFilters: Set<FileTypeTag> } {
+    const tokens = rawText.split(/\s+/).filter(Boolean)
+    const retained: string[] = []
+    const typeFilters = new Set<FileTypeTag>()
+
+    for (const token of tokens) {
+      const trimmed = token.trim()
+      if (!trimmed) continue
+      const normalized = trimmed.toLowerCase()
+
+      if (normalized.startsWith('type:')) {
+        const resolved = this.resolveTypeTag(normalized.slice(5))
+        if (resolved) {
+          typeFilters.add(resolved)
+          continue
+        }
+      }
+
+      const aliasTag = this.resolveTypeTag(normalized)
+      if (aliasTag) {
+        typeFilters.add(aliasTag)
+      }
+
+      retained.push(trimmed)
+    }
+
+    return { text: retained.join(' ').trim(), typeFilters }
+  }
+
+  private resolveTypeTag(raw: string): FileTypeTag | null {
+    if (!raw) return null
+    const normalized = raw.toLowerCase()
+    if (TYPE_ALIAS_MAP[normalized]) {
+      return TYPE_ALIAS_MAP[normalized]
+    }
+
+    if (normalized.endsWith('s')) {
+      const singular = normalized.replace(/s$/i, '')
+      if (TYPE_ALIAS_MAP[singular]) {
+        return TYPE_ALIAS_MAP[singular]
+      }
+    }
+
+    if (normalized.endsWith('es')) {
+      const singular = normalized.replace(/es$/i, '')
+      if (TYPE_ALIAS_MAP[singular]) {
+        return TYPE_ALIAS_MAP[singular]
+      }
+    }
+
+    return null
+  }
+
+  private resolveExtensionsForTypeFilters(typeFilters: Set<FileTypeTag>): string[] {
+    const extensions = new Set<string>()
+    for (const tag of typeFilters) {
+      const mapped = TYPE_TAG_EXTENSION_MAP[tag]
+      if (!mapped) continue
+      for (const ext of mapped) {
+        extensions.add(ext)
+      }
+    }
+    return Array.from(extensions)
+  }
+
+  private matchesTypeFilters(
+    file: typeof filesSchema.$inferSelect,
+    typeFilters: Set<FileTypeTag>
+  ): boolean {
+    if (typeFilters.size === 0) return true
+    const extension = (file.extension || '').toLowerCase()
+    const tags = new Set(getTypeTagsForExtension(extension))
+    for (const tag of typeFilters) {
+      if (tags.has(tag)) return true
+    }
+    return false
+  }
+
+  private async buildTypeOnlySearchResult(
+    query: TuffQuery,
+    typeFilters: Set<FileTypeTag>
+  ): Promise<TuffSearchResult> {
+    if (!this.dbUtils) {
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    const extensions = this.resolveExtensionsForTypeFilters(typeFilters)
+    if (extensions.length === 0) {
+      return TuffFactory.createSearchResult(query).build()
+    }
 
     const db = this.dbUtils.getDb()
-    const searchTerm = query.text.trim().toLowerCase()
-
-    if (!searchTerm) {
-      return TuffFactory.createSearchResult(query).build()
-    }
-
-    const nameMatchFiles = await db
-      .select({ id: filesSchema.id })
-      .from(filesSchema)
-      .where(and(eq(filesSchema.type, 'file'), like(filesSchema.name, `%${searchTerm}%`)))
-
-    const keywordMatchFiles = await db
-      .select({ fileId: fileExtensions.fileId })
-      .from(fileExtensions)
-      .where(and(eq(fileExtensions.key, 'keywords'), like(fileExtensions.value, `%${searchTerm}%`)))
-
-    const nameMatchIds = nameMatchFiles.map((f) => f.id)
-    const keywordMatchIds = keywordMatchFiles.map((f) => f.fileId)
-    const allIds = [...new Set([...nameMatchIds, ...keywordMatchIds])]
-
-    if (allIds.length === 0) {
-      return TuffFactory.createSearchResult(query).build()
-    }
-
-    const matchedFilesWithExtensions = await db
+    const rows = await db
       .select({
         file: filesSchema,
-        extensions: {
-          key: fileExtensions.key,
-          value: fileExtensions.value
-        }
+        extensionKey: fileExtensions.key,
+        extensionValue: fileExtensions.value
       })
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(inArray(filesSchema.id, allIds))
+      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.extension, extensions)))
+      .orderBy(desc(filesSchema.mtime))
+      .limit(50)
 
     const filesMap = new Map<
-      number,
+      string,
       { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
     >()
-    for (const row of matchedFilesWithExtensions) {
-      if (!filesMap.has(row.file.id)) {
-        filesMap.set(row.file.id, { file: row.file, extensions: {} })
+
+    for (const row of rows) {
+      if (!this.matchesTypeFilters(row.file, typeFilters)) {
+        continue
       }
-      if (row.extensions?.key && row.extensions?.value) {
-        filesMap.get(row.file.id)!.extensions[row.extensions.key] = row.extensions.value
+      if (!filesMap.has(row.file.path)) {
+        filesMap.set(row.file.path, { file: row.file, extensions: {} })
+      }
+      if (row.extensionKey && row.extensionValue) {
+        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
       }
     }
-    const filteredResults = Array.from(filesMap.values())
 
-    if (filteredResults.length === 0) {
+    const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
+      const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name)
+      tuffItem.scoring = {
+        final: 0.4,
+        match: 0.4,
+        recency: 0,
+        frequency: 0,
+        base: 0
+      }
+      tuffItem.meta = {
+        ...tuffItem.meta,
+        filter: {
+          type: Array.from(typeFilters)
+        }
+      }
+      return tuffItem
+    })
+
+    return TuffFactory.createSearchResult(query).setItems(items).build()
+  }
+
+  public async getIndexingProgress(paths?: string[]): Promise<{
+    summary: Record<string, number>
+    entries: Array<{
+      path: string
+      status: string | null
+      progress: number | null
+      processedBytes: number | null
+      totalBytes: number | null
+      updatedAt: Date | null
+      lastError: string | null
+    }>
+  }> {
+    if (!this.dbUtils) {
+      return { summary: {}, entries: [] }
+    }
+
+    const db = this.dbUtils.getDb()
+    const limit = paths && paths.length > 0 ? undefined : 50
+
+    const rows = await db
+      .select({
+        path: filesSchema.path,
+        status: fileIndexProgress.status,
+        progress: fileIndexProgress.progress,
+        processedBytes: fileIndexProgress.processedBytes,
+        totalBytes: fileIndexProgress.totalBytes,
+        updatedAt: fileIndexProgress.updatedAt,
+        lastError: fileIndexProgress.lastError
+      })
+      .from(fileIndexProgress)
+      .innerJoin(filesSchema, eq(fileIndexProgress.fileId, filesSchema.id))
+      .where(
+        paths && paths.length > 0
+          ? inArray(filesSchema.path, paths)
+          : sql`1 = 1`
+      )
+      .orderBy(desc(fileIndexProgress.updatedAt))
+      .limit(limit ?? Number.MAX_SAFE_INTEGER)
+
+    const entries = rows.map((row) => ({
+      path: row.path,
+      status: row.status,
+      progress: row.progress,
+      processedBytes: row.processedBytes,
+      totalBytes: row.totalBytes,
+      updatedAt: row.updatedAt,
+      lastError: row.lastError
+    }))
+
+    let summary: Record<string, number> = {}
+
+    if (paths && paths.length > 0) {
+      summary = entries.reduce<Record<string, number>>((acc, entry) => {
+        const key = entry.status ?? 'unknown'
+        acc[key] = (acc[key] ?? 0) + 1
+        return acc
+      }, {})
+    } else {
+      const summaryRows = await db.all<{ status: string; total: number }>(
+        sql`SELECT status, COUNT(*) as total FROM file_index_progress GROUP BY status`
+      )
+      summary = summaryRows.reduce<Record<string, number>>((acc, row) => {
+        acc[row.status ?? 'unknown'] = row.total
+        return acc
+      }, {})
+    }
+
+    return { summary, entries }
+  }
+
+  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+    if (!this.dbUtils || !this.searchIndex) {
       return TuffFactory.createSearchResult(query).build()
     }
 
-    const itemIds = filteredResults.map(({ file }) => file.path)
-    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(itemIds)
-    const usageMap = new Map(usageSummaries.map((s) => [s.itemId, s]))
+    const searchStart = performance.now()
+    const rawText = query.text.trim()
+    const { text: searchText, typeFilters } = this.extractSearchFilters(rawText)
 
-    const weights = {
-      pinyinMatch: 0.5,
-      lastUsed: 0.25,
-      frequency: 0.15,
-      lastModified: 0.1
+    if (!searchText && typeFilters.size === 0) {
+      return TuffFactory.createSearchResult(query).build()
     }
-    const now = new Date().getTime()
 
-    const scoredResults = filteredResults
+    if (!searchText && typeFilters.size > 0) {
+      return this.buildTypeOnlySearchResult(query, typeFilters)
+    }
+
+    const db = this.dbUtils.getDb()
+    const normalizedQuery = searchText.toLowerCase()
+    const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
+    const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
+
+    let preciseMatchPaths: Set<string> | null = null
+    if (terms.length > 0) {
+      const preciseStart = performance.now()
+      const preciseSearchLimit = 200
+      const preciseQueries = terms.map((term) =>
+        db
+          .select({ itemId: keywordMappings.itemId })
+          .from(keywordMappings)
+          .where(
+            and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id))
+          )
+          .limit(preciseSearchLimit)
+      )
+      const preciseResults = await Promise.all(preciseQueries)
+      const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
+
+      if (termMatches.length > 0) {
+        preciseMatchPaths = termMatches.reduce((accumulator, current) => {
+          if (!accumulator) return current
+          return new Set([...accumulator].filter((id) => current.has(id)))
+        })
+      }
+      console.debug(
+        `[FileProvider] Precise keyword lookup for [${terms.join(', ')}] took ${(
+          performance.now() - preciseStart
+        ).toFixed(0)}ms`
+      )
+    }
+
+    const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
+    if (shouldCheckPhrase) {
+      const phraseStart = performance.now()
+      const phraseMatches = await db
+        .select({ itemId: keywordMappings.itemId })
+        .from(keywordMappings)
+        .where(
+          and(
+            eq(keywordMappings.keyword, normalizedQuery),
+            eq(keywordMappings.providerId, this.id)
+          )
+        )
+        .limit(200)
+      if (phraseMatches.length > 0) {
+        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
+        preciseMatchPaths = preciseMatchPaths
+          ? new Set([...preciseMatchPaths, ...phraseSet])
+          : phraseSet
+      }
+      console.debug(
+        `[FileProvider] Phrase keyword lookup for "${normalizedQuery}" took ${(
+          performance.now() - phraseStart
+        ).toFixed(0)}ms (matches: ${preciseMatchPaths?.size ?? 0})`
+      )
+    }
+
+    const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
+    const ftsStart = performance.now()
+    const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
+    if (ftsQuery) {
+      console.debug(
+        `[FileProvider] FTS search (${ftsQuery}) returned ${ftsMatches.length} matches in ${(
+          performance.now() - ftsStart
+        ).toFixed(0)}ms`
+      )
+    }
+
+    const preciseCandidates = preciseMatchPaths ? Array.from(preciseMatchPaths) : []
+    const maxCandidateCount = 120
+    const candidateIds = new Set<string>(preciseCandidates)
+
+    for (const match of ftsMatches) {
+      if (candidateIds.size >= maxCandidateCount) break
+      candidateIds.add(match.itemId)
+    }
+
+    if (candidateIds.size === 0) {
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    const candidatePaths = Array.from(candidateIds).slice(0, maxCandidateCount)
+
+    const dataFetchStart = performance.now()
+    const rows = await db
+      .select({
+        file: filesSchema,
+        extensionKey: fileExtensions.key,
+        extensionValue: fileExtensions.value
+      })
+      .from(filesSchema)
+      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
+      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
+    console.debug(
+      `[FileProvider] Loaded ${rows.length} candidate rows in ${(
+        performance.now() - dataFetchStart
+      ).toFixed(0)}ms`
+    )
+
+    const filesMap = new Map<
+      string,
+      { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
+    >()
+
+    for (const row of rows) {
+      if (!filesMap.has(row.file.path)) {
+        filesMap.set(row.file.path, { file: row.file, extensions: {} })
+      }
+      if (row.extensionKey && row.extensionValue) {
+        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
+      }
+    }
+
+    const staleIds = candidatePaths.filter((path) => !filesMap.has(path))
+    if (staleIds.length > 0) {
+      await this.searchIndex.removeItems(staleIds)
+    }
+
+    if (filesMap.size === 0) {
+      return TuffFactory.createSearchResult(query).build()
+    }
+
+    if (typeFilters.size > 0) {
+      for (const [path, entry] of Array.from(filesMap.entries())) {
+        if (!this.matchesTypeFilters(entry.file, typeFilters)) {
+          filesMap.delete(path)
+        }
+      }
+
+      if (filesMap.size === 0) {
+        return this.buildTypeOnlySearchResult(query, typeFilters)
+      }
+    }
+
+    const validPaths = Array.from(filesMap.keys())
+    const usageStart = performance.now()
+    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(validPaths)
+    console.debug(
+      `[FileProvider] Usage summary lookup for ${validPaths.length} items took ${(
+        performance.now() - usageStart
+      ).toFixed(0)}ms`
+    )
+    const usageMap = new Map(usageSummaries.map((summary) => [summary.itemId, summary]))
+
+    const ftsScoreMap = new Map<string, number>()
+    for (const match of ftsMatches) {
+      const normalizedScore = match.score > 0 ? 1 / (match.score + 1) : 1
+      const previous = ftsScoreMap.get(match.itemId) ?? 0
+      if (normalizedScore > previous) {
+        ftsScoreMap.set(match.itemId, normalizedScore)
+      }
+    }
+
+    const now = Date.now()
+    const weights = {
+      keyword: 0.45,
+      fts: 0.35,
+      lastUsed: 0.1,
+      frequency: 0.05,
+      lastModified: 0.05
+    }
+
+    const scoredItems = Array.from(filesMap.values())
       .map(({ file, extensions }) => {
-        const summary = usageMap.get(file.path)
-        // const matchResult = PinyinMatch.match(file.name, searchTerm)
-        const matchResult: any = null
-        const pinyinMatchScore = matchResult ? 1 - matchResult[0] / file.name.length : 0
-        const lastUsed = summary ? new Date(summary.lastUsed).getTime() : 0
-        const lastModified = new Date(file.mtime).getTime()
-        const daysSinceLastUsed = (now - lastUsed) / (1000 * 3600 * 24)
-        const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
+        const usage = usageMap.get(file.path)
+        const lastUsed = usage ? new Date(usage.lastUsed).getTime() : 0
+        const daysSinceLastUsed = lastUsed > 0 ? (now - lastUsed) / (1000 * 3600 * 24) : Infinity
         const lastUsedScore = lastUsed > 0 ? Math.exp(-0.1 * daysSinceLastUsed) : 0
+
+        const lastModified = new Date(file.mtime).getTime()
+        const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
         const lastModifiedScore = Math.exp(-0.05 * daysSinceLastModified)
-        const frequencyScore = summary ? Math.log10(summary.clickCount + 1) : 0
-        const keywords = extensions.keywords ? (JSON.parse(extensions.keywords) as string[]) : []
-        const keywordScore = keywords.some((k) => k.toLowerCase().includes(searchTerm)) ? 1 : 0
+
+        const frequencyScore = usage ? Math.log10(usage.clickCount + 1) / 2 : 0
+        const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
+        const ftsScore = ftsScoreMap.get(file.path) ?? 0
+
+        const typeScore = typeFilters.size > 0 ? 1 : 0
+
         const finalScore =
-          weights.pinyinMatch * pinyinMatchScore +
+          weights.keyword * keywordScore +
+          weights.fts * ftsScore +
           weights.lastUsed * lastUsedScore +
           weights.frequency * frequencyScore +
           weights.lastModified * lastModifiedScore +
-          keywordScore
+          (typeFilters.size > 0 ? 0.15 * typeScore : 0)
 
         const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name)
+        const matchScore = Math.max(keywordScore, ftsScore)
         tuffItem.scoring = {
           final: finalScore,
-          match: pinyinMatchScore,
+          match: matchScore,
           recency: lastUsedScore,
-          frequency: frequencyScore
+          frequency: frequencyScore,
+          base: lastModifiedScore,
+          match_details: keywordScore > 0
+            ? { type: 'exact', query: rawText }
+            : ftsScore > 0
+            ? { type: 'semantic', query: rawText, confidence: ftsScore }
+            : undefined
         }
 
-        if (matchResult) {
-          tuffItem.meta = {
-            ...tuffItem.meta,
-            extension: {
-              ...tuffItem.meta?.extension,
-              matchResult: [matchResult[0], matchResult[1]]
-            }
+        if (!tuffItem.meta) {
+          tuffItem.meta = {}
+        }
+
+        if (usage) {
+          tuffItem.meta.usage = {
+            clickCount: usage.clickCount ?? 0,
+            lastUsed: usage.lastUsed ? new Date(usage.lastUsed).toISOString() : undefined
+          }
+        } else {
+          tuffItem.meta.usage = {
+            clickCount: 0
+          }
+        }
+
+        const extensionMeta = tuffItem.meta.extension ?? {}
+        tuffItem.meta.extension = {
+          ...extensionMeta,
+          search: {
+            keywordMatch: keywordScore > 0,
+            ftsScore
+          }
+        }
+
+        if (typeFilters.size > 0) {
+          tuffItem.meta.filter = {
+            ...(tuffItem.meta.filter as Record<string, unknown> | undefined),
+            type: Array.from(typeFilters)
           }
         }
 
@@ -356,7 +1999,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
       .slice(0, 50)
 
-    return TuffFactory.createSearchResult(query).setItems(scoredResults).build()
+    const result = TuffFactory.createSearchResult(query).setItems(scoredItems).build()
+    console.log(
+      `[FileProvider] onSearch("${rawText}") returned ${scoredItems.length} items in ${((
+        performance.now() - searchStart
+      ) / 1000).toFixed(2)}s`
+    )
+    return result
+  }
+
+  private async ensureKeywordIndexes(db: LibSQLDatabase<typeof schema>): Promise<void> {
+    await db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`
+    )
+  }
+
+  private async ensureIndexingSupportTables(db: LibSQLDatabase<typeof schema>): Promise<void> {
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS file_index_progress (
+        file_id INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        progress INTEGER NOT NULL DEFAULT 0,
+        processed_bytes INTEGER,
+        total_bytes INTEGER,
+        last_error TEXT,
+        started_at INTEGER,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    `)
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {

@@ -40,6 +40,9 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
   // 映射的目标项目ID，采用 URI 格式，保证全局唯一
   itemId: text('item_id').notNull(),
 
+  // 来源 provider，便于按提供者过滤与排查
+  providerId: text('provider_id').notNull().default(''),
+
   // 用于排序的静态权重，可由插件或用户定义
   priority: real('priority').notNull().default(1.0)
 })
@@ -88,6 +91,31 @@ export const fileExtensions = sqliteTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.fileId, table.key] })
+  })
+)
+
+export const fileIndexProgress = sqliteTable(
+  'file_index_progress',
+  {
+    fileId: integer('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    status: text('status', {
+      enum: ['pending', 'processing', 'completed', 'skipped', 'failed']
+    })
+      .notNull()
+      .default('pending'),
+    progress: integer('progress').notNull().default(0),
+    processedBytes: integer('processed_bytes'),
+    totalBytes: integer('total_bytes'),
+    lastError: text('last_error'),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(new Date(0))
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.fileId] })
   })
 )
 
@@ -212,27 +240,3 @@ export const clipboardHistory = sqliteTable('clipboard_history', {
   isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
   metadata: text('metadata') // 存储其他元数据 (JSON string)
 })
-
-/*
- -- =============================================================================
--- 重要提示: FTS5 全文搜索设置 (Migration File)
--- =============================================================================
--- Drizzle ORM 目前没有对 SQLite FTS5 虚拟表提供原生抽象。
--- 以下 SQL 命令应该放在你的数据库迁移文件（如 0001_setup_fts.sql）中执行，
--- 而不是直接放在 schema.ts 里。
-
--- 1. 创建 FTS5 虚拟表，用于高效的文件名、拼音和内容全文检索
-CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5(
-    name,
-    pinyin,
-    content='files',
-    content_rowid='id',
-    tokenize = 'porter unicode61' -- 推荐的分词器，对中英文支持较好
-);
-
--- 2. 创建触发器，在 `files` 表发生变化时，自动同步数据到 `file_fts`
--- (此处省略了之前提供的详细触发器代码，请将其复制到迁移文件中)
--- CREATE TRIGGER IF NOT EXISTS files_ai AFTER INSERT ON files BEGIN ... END;
--- CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN ... END;
--- CREATE TRIGGER IF NOT EXISTS files_au AFTER UPDATE ON files BEGIN ... END;
-*/
