@@ -14,9 +14,10 @@ import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
-import CoreBoxRender from '@renderer/components/render/CoreBoxRender.vue'
-import CoreBoxFooter from '@renderer/components/render/CoreBoxFooter.vue'
-import TuffItemAddon from '@renderer/components/render/addon/TuffItemAddon.vue'
+import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
+import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
+import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
+import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { TuffItem } from '@talex-touch/utils'
 
 useCoreBox()
@@ -84,7 +85,7 @@ function handleTogglePin(): void {
 
 function handleItemTrigger(index: number, item: TuffItem): void {
   if (item.kind === 'file') {
-    if ( boxOptions.focus !== index ) {
+    if (boxOptions.focus !== index) {
       boxOptions.focus = index
       return
     }
@@ -127,16 +128,15 @@ const addon = computed(() => {
     <TagSection :box-options="boxOptions" :clipboard-options="clipboardOptions" />
 
     <div class="CoreBox-Configure">
-      <RemixIcon
+      <!-- <RemixIcon
         v-if="loading"
         style="line"
         name="close-circle"
         class="cancel-button"
         @click="cancelSearch"
         title="取消搜索"
-      />
+      /> -->
       <RemixIcon
-        v-else
         :style="appSetting.tools.autoHide ? 'line' : 'fill'"
         name="pushpin-2"
         @click="handleTogglePin"
@@ -155,15 +155,28 @@ const addon = computed(() => {
           :index="index"
           @trigger="handleItemTrigger(index, item)"
         />
-          <!-- @mousemove="boxOptions.focus = index" -->
+        <!-- @mousemove="boxOptions.focus = index" -->
       </TouchScroll>
-      <CoreBoxFooter :item="activeItem" />
+      <!-- <div v-if="searchVal.trim() && res.length === 0" class="CoreBoxRes-Empty">
+        <div class="placeholder-graphic">
+          <img :src="EmptySearchStatus" />
+        </div>
+        <span class="title">CoreBox</span>
+        <span class="subtitle">暂无结果，试试其他关键词</span>
+      </div> -->
+      <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
     </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
   </div>
 </template>
 
 <style lang="scss">
+.core-box {
+  .CoreBoxRes {
+    display: flex !important;
+  }
+}
+
 .CoreBox-Configure {
   display: flex;
   padding: 0 0.5rem;
@@ -208,6 +221,7 @@ div.CoreBoxRes {
   }
 
   .CoreBoxRes-Main {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -221,7 +235,49 @@ div.CoreBoxRes {
   .scroll-area {
     flex: 1;
     width: 100%;
+    display: flex;
+    flex-direction: column;
   }
+}
+
+.CoreBoxRes-Empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 24px;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+
+  .placeholder-graphic {
+    width: 120px;
+    height: 120px;
+    opacity: 0.28;
+  }
+
+  .title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+}
+
+.CoreBoxFooter-Sticky {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.CoreBoxRes-Main > .scroll-area > .CoreBoxRender:last-child {
+  margin-bottom: 40px;
 }
 
 div.CoreBox {

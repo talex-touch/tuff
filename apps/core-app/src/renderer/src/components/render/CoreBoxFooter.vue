@@ -3,10 +3,15 @@ import { computed } from 'vue'
 import { TuffItem } from '@talex-touch/utils'
 import PluginIcon from '@renderer/components/plugin/PluginIcon.vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
+import { useDebounce } from '@vueuse/core';
 
 const props = defineProps<{
+  display: boolean
   item: TuffItem | null
 }>()
+
+const displayValue = computed(() => props.display)
+const debouncedDisplay = useDebounce(displayValue, 100)
 
 const displayIcon = computed(() => {
   const icon = props.item?.render?.basic?.icon || props.item?.icon
@@ -29,7 +34,10 @@ const keyHints = computed(() => [
 </script>
 
 <template>
-  <div class="CoreBoxFooter">
+  <div
+    :class="{ display: debouncedDisplay }"
+    class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--el-border-color-lighter)] bg-transparent text-12px text-[color:var(--el-text-color-secondary)]"
+  >
     <div class="FooterInfo">
       <PluginIcon :icon="displayIcon" :alt="title" class="FooterIcon" />
       <div class="FooterText">
@@ -47,18 +55,6 @@ const keyHints = computed(() => [
 </template>
 
 <style scoped lang="scss">
-.CoreBoxFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-light);
-  backdrop-filter: blur(12px);
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
 .FooterInfo {
   display: flex;
   align-items: center;
@@ -123,5 +119,19 @@ const keyHints = computed(() => [
 
 .HintLabel {
   font-size: 11px;
+}
+
+.CoreBoxFooter {
+  &.display {
+    transform: translateY(0%);
+
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  transition: none;
+  transform: translateY(100%);
+
+  --fake-inner-opacity: 0.95;
+  --fake-radius: 0;
 }
 </style>
