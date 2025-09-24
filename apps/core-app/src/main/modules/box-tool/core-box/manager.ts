@@ -44,8 +44,9 @@ export class CoreBoxManager {
     return this._show
   }
 
-  public get isUIMode(): boolean { // Public getter for _isUIMode
-    return this._isUIMode;
+  public get isUIMode(): boolean {
+    // Public getter for _isUIMode
+    return this._isUIMode
   }
 
   public trigger(show: boolean): void {

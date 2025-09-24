@@ -26,7 +26,9 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 
   if (name === searchKey) return 1000
 
-  const matchRanges = item.meta?.extension?.matchResult as { start: number; end: number }[] | undefined
+  const matchRanges = item.meta?.extension?.matchResult as
+    | { start: number; end: number }[]
+    | undefined
   if (matchRanges && matchRanges.length > 0) {
     // Using the first match range to calculate the score
     const { start, end } = matchRanges[0]
@@ -65,7 +67,6 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   const frequency = item.scoring?.frequency || 0
 
   const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 10
-
 
   return finalScore
 }

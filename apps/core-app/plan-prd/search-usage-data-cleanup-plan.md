@@ -48,6 +48,7 @@
 ### 3.1 数据库层面实现
 
 1. 在 `db/utils.ts` 中添加清理过期使用日志的方法：
+
    ```typescript
    async clearExpiredUsageLogs(expirationDate: Date) {
      return db.delete(schema.usageLogs).where(lt(schema.usageLogs.timestamp, expirationDate))

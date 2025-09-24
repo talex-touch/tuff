@@ -10,10 +10,7 @@ export class FileWatchService {
     })
   }
 
-  watch(
-    paths: string | readonly string[] | undefined,
-    options?: WatchOptions
-  ): FSWatcher {
+  watch(paths: string | readonly string[] | undefined, options?: WatchOptions): FSWatcher {
     const watcher = chokidar.watch(paths ?? [], {
       ignoreInitial: true,
       awaitWriteFinish: {
