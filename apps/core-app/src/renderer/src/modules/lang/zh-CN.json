@@ -178,6 +178,42 @@
     "opening": "打开中...",
     "openFolder": "打开文件夹"
   },
+  "coreBox": {
+    "hints": {
+      "open": "打开",
+      "execute": "执行",
+      "actions": "操作",
+      "quickSelect": "快速选择"
+    },
+    "sourceTypes": {
+      "application": "应用",
+      "app": "应用",
+      "plugin": "插件",
+      "file": "文件",
+      "command": "命令",
+      "web": "网页",
+      "data": "数据",
+      "service": "服务",
+      "feature": "功能",
+      "system": "系统"
+    },
+    "fileTypes": {
+      "image": "图片",
+      "document": "文档",
+      "audio": "音频",
+      "video": "视频",
+      "archive": "压缩包",
+      "code": "代码",
+      "text": "文本",
+      "design": "设计",
+      "model3D": "3D 模型",
+      "font": "字体",
+      "spreadsheet": "表格",
+      "presentation": "演示",
+      "ebook": "电子书",
+      "other": "其他"
+    }
+  },
   "appConfigure": {
     "action": "应用操作",
     "launch": "启动应用",
