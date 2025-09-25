@@ -1,11 +1,11 @@
-import { LogLevel, LogItem, LogDataType } from './types'
+import { IPluginLogger, LogLevel, LogItem, LogDataType } from '../log/types'
 import { PluginLoggerManager } from './logger-manager'
 import chalk from 'chalk'
 
 /**
  * PluginLogger provides structured logging capabilities for individual plugins.
  */
-export class PluginLogger {
+export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
   private readonly pluginName: string
   private readonly manager: PluginLoggerManager
 

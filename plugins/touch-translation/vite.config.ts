@@ -39,8 +39,10 @@ export default defineConfig({
         '@vueuse/core',
       ],
       dts: true,
+      // Exclude the composables barrel file to avoid duplicate hook entries
       dirs: [
-        './src/composables',
+        'src/composables/**/!(*index).ts',
+        'src/providers/**/*.ts',
       ],
       vueTemplate: true,
     }),
