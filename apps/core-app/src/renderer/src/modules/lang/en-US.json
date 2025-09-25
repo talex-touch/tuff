@@ -176,6 +176,42 @@
     "opening": "Opening...",
     "openFolder": "Open Folder"
   },
+  "coreBox": {
+    "hints": {
+      "open": "Open",
+      "execute": "Execute",
+      "actions": "Actions",
+      "quickSelect": "Quick Select"
+    },
+    "sourceTypes": {
+      "application": "Application",
+      "app": "Application",
+      "plugin": "Plugin",
+      "file": "File",
+      "command": "Command",
+      "web": "Web",
+      "data": "Data",
+      "service": "Service",
+      "feature": "Feature",
+      "system": "System"
+    },
+    "fileTypes": {
+      "image": "Image",
+      "document": "Document",
+      "audio": "Audio",
+      "video": "Video",
+      "archive": "Archive",
+      "code": "Code",
+      "text": "Text",
+      "design": "Design",
+      "model3D": "3D Model",
+      "font": "Font",
+      "spreadsheet": "Spreadsheet",
+      "presentation": "Presentation",
+      "ebook": "E-book",
+      "other": "Other"
+    }
+  },
   "appConfigure": {
     "action": "Application action",
     "launch": "Launch app",
