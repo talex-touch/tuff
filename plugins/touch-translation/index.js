@@ -759,7 +759,10 @@ const pluginLifecycle = {
         clipboard.writeText(copyAction.payload)
         logger.log('Copied to clipboard:', copyAction.payload)
 
-        $box.hide()
+        const isFeatureExecution = Boolean(item.meta?.featureId)
+        if (!isFeatureExecution) {
+          $box.hide()
+        }
       }
       else {
         logger.warn('No copy action or payload found for item:', item)

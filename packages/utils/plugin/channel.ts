@@ -1,6 +1,4 @@
-// import { ipcRenderer } from 'electron';
-// const { ipcRenderer, IpcMainEvent } = require("electron");
-import { IpcRenderer, type IpcRendererEvent } from "electron";
+import type { IpcRenderer, IpcRendererEvent } from 'electron'
 import {
   ChannelType,
   DataCode,
@@ -10,13 +8,35 @@ import {
   StandardChannelData,
 } from "../channel";
 
-let ipcRenderer: IpcRenderer
+let cachedIpcRenderer: IpcRenderer | null = null
 
-if (typeof window === 'undefined') {
-  ipcRenderer = require('electron').ipcRenderer
-} else {
-  // @ts-ignore
-  ipcRenderer = window.electron?.ipcRenderer as unknown as IpcRenderer
+// 使用惰性解析避免在打包阶段静态引入 electron
+const resolveIpcRenderer = (): IpcRenderer | null => {
+  if (typeof window !== 'undefined') {
+    const bridge = (window as any)?.electron
+    if (bridge?.ipcRenderer) return bridge.ipcRenderer as IpcRenderer
+  }
+
+  try {
+    const electron = (globalThis as any)?.electron ?? (eval('require') as any)?.('electron')
+    if (electron?.ipcRenderer) return electron.ipcRenderer as IpcRenderer
+  } catch (error) {
+    // ignore – will throw below if no ipcRenderer is resolved
+  }
+
+  return null
+}
+
+const ensureIpcRenderer = (): IpcRenderer => {
+  if (!cachedIpcRenderer) {
+    cachedIpcRenderer = resolveIpcRenderer()
+  }
+
+  if (!cachedIpcRenderer) {
+    throw new Error('ipcRenderer is not available in the current runtime environment')
+  }
+
+  return cachedIpcRenderer
 }
 
 /**
@@ -30,10 +50,12 @@ class TouchChannel implements ITouchClientChannel {
 
   plugin: string;
 
+  private ipcRenderer: IpcRenderer
+
   constructor(pluginName: string) {
     this.plugin = pluginName;
-
-    ipcRenderer.on("@plugin-process-message", this.__handle_main.bind(this));
+    this.ipcRenderer = ensureIpcRenderer()
+    this.ipcRenderer.on("@plugin-process-message", this.__handle_main.bind(this));
   }
 
   __parse_raw_data(e: IpcRendererEvent | undefined, arg: any): RawStandardChannelData | null {
@@ -165,7 +187,7 @@ class TouchChannel implements ITouchClientChannel {
 
     return new Promise((resolve) => {
 
-      ipcRenderer.send("@plugin-process-message", data);
+      this.ipcRenderer.send("@plugin-process-message", data);
 
       this.pendingMap.set(uniqueId, (res: any) => {
         this.pendingMap.delete(uniqueId);
@@ -187,7 +209,7 @@ class TouchChannel implements ITouchClientChannel {
       },
     } as RawStandardChannelData;
 
-    const res = this.__parse_raw_data(void 0, ipcRenderer.sendSync("@plugin-process-message", data))!
+    const res = this.__parse_raw_data(void 0, this.ipcRenderer.sendSync("@plugin-process-message", data))!
 
     if ( res.header.status === 'reply' ) return res.data;
 
@@ -196,12 +218,17 @@ class TouchChannel implements ITouchClientChannel {
   }
 }
 
-let touchChannel: ITouchClientChannel
+let touchChannel: ITouchClientChannel | null = null
 
-export function genChannel() {
+export function genChannel(): ITouchClientChannel {
   if (!touchChannel) {
-    // @ts-ignore
-    touchChannel = window.$channel = new TouchChannel(window.$plugin.name)
+    if (typeof window === 'undefined' || !(window as any)?.$plugin?.name) {
+      throw new Error('TouchChannel cannot be initialized outside plugin renderer context')
+    }
+
+    const pluginName = (window as any).$plugin.name as string
+    touchChannel = new TouchChannel(pluginName)
+    ;(window as any).$channel = touchChannel
   }
 
   return touchChannel

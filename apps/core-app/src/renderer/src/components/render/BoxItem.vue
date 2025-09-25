@@ -131,15 +131,15 @@ const sourceType = computed(() => props.item.source.type)
     </div>
 
     <div class="ml-auto flex items-center gap-2">
-      <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
       <span class="text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold">
         <template v-if="sourceType === 'plugin'">
           {{ props.item.meta?.pluginName }}
         </template>
         <template v-else>
-        {{ sourceType }}
+          {{ sourceType }}
         </template>
       </span>
+      <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
     </div>
 
     <div

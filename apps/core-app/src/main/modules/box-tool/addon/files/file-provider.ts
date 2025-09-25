@@ -2004,7 +2004,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .slice(0, 50)
 
     const result = TuffFactory.createSearchResult(query).setItems(scoredItems).build()
-    console.log(
+    console.debug(
       `[FileProvider] onSearch("${rawText}") returned ${scoredItems.length} items in ${(
         (performance.now() - searchStart) /
         1000
