@@ -154,10 +154,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     )
 
-    for (const app of appsWithExtensions) {
-      const appInfo = this._mapDbAppToScannedInfo(app)
-      await this._syncKeywordsForApp(appInfo)
-    }
+    await runAdaptiveTaskQueue(
+      appsWithExtensions,
+      async (app, index) => {
+        const appInfo = this._mapDbAppToScannedInfo(app)
+        await this._syncKeywordsForApp(appInfo)
+
+        if ((index + 1) % 50 === 0 || index === appsWithExtensions.length - 1) {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
+              LogStyle.info
+            )
+          )
+        }
+      },
+      {
+        estimatedTaskTimeMs: 5,
+        yieldIntervalMs: 30,
+        maxBatchSize: 25,
+        label: 'AppProvider::aliasKeywordSync'
+      }
+    )
 
     console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
   }
@@ -1170,10 +1189,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     )
 
-    for (const app of appsWithExtensions) {
-      const appInfo = this._mapDbAppToScannedInfo(app)
-      await this._syncKeywordsForApp(appInfo)
-    }
+    await runAdaptiveTaskQueue(
+      appsWithExtensions,
+      async (app, index) => {
+        const appInfo = this._mapDbAppToScannedInfo(app)
+        await this._syncKeywordsForApp(appInfo)
+
+        if ((index + 1) % 50 === 0 || index === appsWithExtensions.length - 1) {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
+              LogStyle.info
+            )
+          )
+        }
+      },
+      {
+        estimatedTaskTimeMs: 5,
+        yieldIntervalMs: 30,
+        maxBatchSize: 25,
+        label: 'AppProvider::forceKeywordSync'
+      }
+    )
 
     console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
   }
