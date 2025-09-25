@@ -13,6 +13,8 @@ const {
 
 const crypto = require('node:crypto')
 
+const PLUGIN_NAME = 'touch-translation'
+
 /**
  * Creates an MD5 hash of the given string.
  * @param {string} string The string to hash.
@@ -567,6 +569,7 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
     .createAndAddAction('copy-translation', 'copy', '复制', translatedText)
     .addTag('Translation', 'blue')
     .setMeta({
+      pluginName: PLUGIN_NAME,
       featureId,
       defaultAction: 'copy',
       pluginType: 'translation',
@@ -599,6 +602,9 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
     // Fallback to old behavior if no config is found
     const result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
     const searchItem = createTranslationSearchItem(textToTranslate, result, featureId)
+    logger.debug(
+      '[touch-translation] pushItems fallback meta ' + JSON.stringify(searchItem.meta)
+    )
     pushItems([searchItem])
     return
   }
@@ -716,6 +722,11 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
     .filter(result => result.status === 'fulfilled' && result.value)
     .map(result => createTranslationSearchItem(textToTranslate, result.value, featureId))
 
+  logger.debug(
+    '[touch-translation] built search items meta ' +
+      JSON.stringify(searchItems.map(item => item.meta))
+  )
+
   if (searchItems.length > 0) {
     pushItems(searchItems)
   }
@@ -739,7 +750,6 @@ const pluginLifecycle = {
   async onFeatureTriggered(featureId, query, feature, signal) {
     try {
       if (featureId === 'touch-translate' && query && query.trim()) {
-        logger.info('===', storage.getAllItems())
         await translateAndPushResults(query.trim(), featureId, signal)
       }
     }
@@ -759,7 +769,10 @@ const pluginLifecycle = {
         clipboard.writeText(copyAction.payload)
         logger.log('Copied to clipboard:', copyAction.payload)
 
-        $box.hide()
+        const isFeatureExecution = Boolean(item.meta?.featureId)
+        if (!isFeatureExecution) {
+          $box.hide()
+        }
       }
       else {
         logger.warn('No copy action or payload found for item:', item)

@@ -61,9 +61,9 @@ export class SearchIndexService {
       }
     })
     console.debug(
-      `[SearchIndexService] Indexed ${items.length} items in ${(
-        performance.now() - start
-      ).toFixed(0)}ms`
+      `[SearchIndexService] Indexed ${items.length} items in ${(performance.now() - start).toFixed(
+        0
+      )}ms`
     )
   }
 
@@ -132,9 +132,9 @@ export class SearchIndexService {
 
     this.initialized = true
     console.log(
-      `[SearchIndexService] Initialization completed in ${(
-        performance.now() - initStart
-      ).toFixed(0)}ms`
+      `[SearchIndexService] Initialization completed in ${(performance.now() - initStart).toFixed(
+        0
+      )}ms`
     )
   }
 
@@ -195,16 +195,14 @@ export class SearchIndexService {
     await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, doc.itemId))
 
     if (doc.keywordEntries.length > 0) {
-      await tx
-        .insert(schema.keywordMappings)
-        .values(
-          doc.keywordEntries.map(({ value, priority }) => ({
-            keyword: value,
-            itemId: doc.itemId,
-            providerId: doc.providerId,
-            priority: priority ?? 1
-          }))
-        )
+      await tx.insert(schema.keywordMappings).values(
+        doc.keywordEntries.map(({ value, priority }) => ({
+          keyword: value,
+          itemId: doc.itemId,
+          providerId: doc.providerId,
+          priority: priority ?? 1
+        }))
+      )
     }
   }
 
@@ -329,9 +327,7 @@ export class SearchIndexService {
 
     if (words.length <= 1) return ''
 
-    return words
-      .map((word) => word.charAt(0).toLowerCase())
-      .join('')
+    return words.map((word) => word.charAt(0).toLowerCase()).join('')
   }
 
   private isKeywordValid(keyword: string): boolean {
@@ -344,10 +340,7 @@ export class SearchIndexService {
 
   private async generatePinyin(text: string): Promise<{ full: string; first: string }> {
     const module = await this.loadPinyinModule()
-    const full = module
-      .pinyin(text, { toneType: 'none' })
-      .replace(/\s/g, '')
-      .toLowerCase()
+    const full = module.pinyin(text, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
     const first = module
       .pinyin(text, { pattern: 'first', toneType: 'none' })
       .replace(/\s/g, '')
@@ -364,9 +357,9 @@ export class SearchIndexService {
       this.pinyinPromise
         .then(() => {
           console.log(
-            `[SearchIndexService] pinyin-pro module loaded in ${(
-              performance.now() - start
-            ).toFixed(0)}ms`
+            `[SearchIndexService] pinyin-pro module loaded in ${(performance.now() - start).toFixed(
+              0
+            )}ms`
           )
         })
         .catch(() => {

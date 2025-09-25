@@ -11,7 +11,7 @@ import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { appProvider } from '../addon/apps/app-provider'
 import { windowManager } from '../core-box/window'
-import PluginFeaturesAdapter from '../../plugin-module/plugin-features-adapter'
+import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
 import { createDbUtils, DbUtils } from '../../../db/utils'
@@ -217,7 +217,9 @@ export class SearchEngineCore
   }
 
   public getProvidersByIds(ids: string[]): ISearchProvider<ProviderContext>[] {
-    return ids.map((id) => this.providers.get(id)).filter((p): p is ISearchProvider<ProviderContext> => !!p)
+    return ids
+      .map((id) => this.providers.get(id))
+      .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
   private _updateActivationState(newResults: TuffSearchResult[]): void {

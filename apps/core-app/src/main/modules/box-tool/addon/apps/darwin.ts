@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { createRetrier } from '@talex-touch/utils'
+import { reportAppScanError } from './app-error-reporter'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 
@@ -189,12 +190,20 @@ export async function getAppInfo(appPath: string): Promise<{
     // Call the reliable, wrapped function
     return await reliableGetAppInfo(appPath)
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : typeof error === 'string' ? error : String(error)
     // This block will execute if all retry attempts fail
     console.warn(
       `[Darwin] Failed to get app info for ${appPath} after retries, likely incomplete or invalid bundle. Error: ${
-        error instanceof Error ? error.message : error
+        errorMessage
       }`
     )
+    reportAppScanError({
+      platform: process.platform,
+      path: appPath,
+      message: errorMessage,
+      timestamp: Date.now()
+    })
     return null
   }
 }
@@ -220,8 +229,8 @@ export async function getAppsViaMdfind(): Promise<
           return reject(new Error(`mdfind command failed: ${error.message}`))
         }
 
-        const appPaths = stdout.split('\n').filter(p => p.trim().endsWith('.app'))
-        const appPromises = appPaths.map(appPath => getAppInfo(appPath))
+        const appPaths = stdout.split('\n').filter((p) => p.trim().endsWith('.app'))
+        const appPromises = appPaths.map((appPath) => getAppInfo(appPath))
 
         const settledApps = await Promise.allSettled(appPromises)
 
@@ -240,7 +249,7 @@ export async function getAppsViaMdfind(): Promise<
               lastModified: Date
             }> => result.status === 'fulfilled' && !!result.value
           )
-          .map(result => result.value)
+          .map((result) => result.value)
 
         resolve(successfulApps)
       }

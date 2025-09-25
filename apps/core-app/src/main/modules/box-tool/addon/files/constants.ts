@@ -546,13 +546,7 @@ export const BLACKLISTED_DIRS = new Set([
 
 export const BLACKLISTED_FILES_PREFIX = new Set(['.'])
 export const BLACKLISTED_FILES_SUFFIX = new Set(['~'])
-export const BLACKLISTED_EXTENSIONS = new Set([
-  '.tmp',
-  '.temp',
-  '.app',
-  '.db',
-  '.db-journal'
-])
+export const BLACKLISTED_EXTENSIONS = new Set(['.tmp', '.temp', '.app', '.db', '.db-journal'])
 
 const typeTagExtensionMap: Record<FileTypeTag, string[]> = {
   text: [],

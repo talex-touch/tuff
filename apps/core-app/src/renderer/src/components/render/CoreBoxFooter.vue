@@ -4,6 +4,8 @@ import { TuffItem } from '@talex-touch/utils'
 import PluginIcon from '@renderer/components/plugin/PluginIcon.vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { useDebounce } from '@vueuse/core';
+import { useI18n } from 'vue-i18n'
+import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
   display: boolean
@@ -12,6 +14,8 @@ const props = defineProps<{
 
 const displayValue = computed(() => props.display)
 const debouncedDisplay = useDebounce(displayValue, 100)
+
+const { t } = useI18n()
 
 const displayIcon = computed(() => {
   const icon = props.item?.render?.basic?.icon || props.item?.icon
@@ -24,13 +28,37 @@ const displayIcon = computed(() => {
 })
 
 const title = computed(() => props.item?.render?.basic?.title || 'CoreBox')
-const subtitle = computed(() => props.item?.source?.name || props.item?.source?.type || '')
+const subtitleMeta = computed(() => resolveSourceMeta(props.item || undefined, t))
 
-const keyHints = computed(() => [
-  { key: '↵', label: 'Open' },
-  { key: '⌘K', label: 'Actions' },
-  { key: '⌘1-0', label: 'Quick Select' }
-])
+const primaryActionLabel = computed(() => {
+  const item = props.item
+  const isPluginFeature =
+    item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
+
+  const translationKey = isPluginFeature ? 'coreBox.hints.execute' : 'coreBox.hints.open'
+  const translated = t(translationKey)
+  return translated === translationKey ? (isPluginFeature ? 'Execute' : 'Open') : translated
+})
+
+const keyHints = computed(() => {
+  const actionsLabelKey = 'coreBox.hints.actions'
+  const quickSelectLabelKey = 'coreBox.hints.quickSelect'
+
+  const actionsLabel = t(actionsLabelKey)
+  const quickSelectLabel = t(quickSelectLabelKey)
+
+  return [
+    { key: '↵', label: primaryActionLabel.value },
+    {
+      key: '⌘K',
+      label: actionsLabel === actionsLabelKey ? 'Actions' : actionsLabel
+    },
+    {
+      key: '⌘1-0',
+      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel
+    }
+  ]
+})
 </script>
 
 <template>
@@ -42,7 +70,14 @@ const keyHints = computed(() => [
       <PluginIcon :icon="displayIcon" :alt="title" class="FooterIcon" />
       <div class="FooterText">
         <span class="FooterTitle" :title="title">{{ title }}</span>
-        <span v-if="subtitle" class="FooterSubtitle" :title="subtitle">{{ subtitle }}</span>
+        <span
+          v-if="subtitleMeta"
+          class="FooterSubtitle"
+          :title="subtitleMeta.label"
+        >
+          <i :class="subtitleMeta.icon" class="FooterSubtitleIcon" />
+          <span>{{ subtitleMeta.label }}</span>
+        </span>
       </div>
     </div>
     <div class="FooterHints">
@@ -85,10 +120,18 @@ const keyHints = computed(() => [
 }
 
 .FooterSubtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.FooterSubtitleIcon {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .FooterHints {

@@ -7,12 +7,9 @@ import { IPluginDev } from '@talex-touch/utils/plugin'
 import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { PluginFeature } from '../modules/plugin/plugin-feature'
 
-
-
 /**
  * The context required for loading plugin features.
  */
-
 
 export interface IPluginLoader {
   load(): Promise<TouchPlugin>

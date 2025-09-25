@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { LogItem } from './types'
+import { LogItem } from '../log/types'
 import { ITouchPlugin } from '..'
 import { structuredStrictStringify } from '@talex-touch/utils'
 

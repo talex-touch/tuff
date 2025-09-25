@@ -210,11 +210,7 @@ export class WindowManager {
   ): void {
     const { length = 0, forceMax = false } = options
     const effectiveLength = length > 0 ? length : 1
-    const height = isUIMode
-      ? 600
-      : forceMax
-        ? 550
-        : Math.min(effectiveLength * 48 + 65, 550)
+    const height = isUIMode ? 600 : forceMax ? 550 : Math.min(effectiveLength * 48 + 65, 550)
 
     const currentWindow = this.current
     if (currentWindow) {

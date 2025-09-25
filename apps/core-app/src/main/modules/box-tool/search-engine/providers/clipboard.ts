@@ -114,7 +114,8 @@ export class ClipboardProvider implements ISearchProvider {
         const files = JSON.parse(item.content)
         if (files.length === 1) {
           const filePath = files[0]
-          render.basic.title = typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
+          render.basic.title =
+            typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
         } else {
           render.basic.title = `${files.length} files`
         }

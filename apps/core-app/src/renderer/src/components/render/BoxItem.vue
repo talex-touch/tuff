@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ItemSubtitle from './ItemSubtitle.vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { useOpenerAutoResolve, getOpenerByExtension } from '~/modules/openers'
+import { resolveSourceMeta } from './sourceMeta'
 
 interface Props {
   item: TuffItem
@@ -13,6 +15,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const { t } = useI18n()
 
 const displayIcon = computed(() => {
   const icon = props.render?.basic?.icon
@@ -87,7 +91,7 @@ function getHighlightedHTML(
   )
 }
 
-const sourceType = computed(() => props.item.source.type)
+const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
 </script>
 
 <template>
@@ -131,15 +135,14 @@ const sourceType = computed(() => props.item.source.type)
     </div>
 
     <div class="ml-auto flex items-center gap-2">
-      <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
-      <span class="text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold">
-        <template v-if="sourceType === 'plugin'">
-          {{ props.item.meta?.pluginName }}
-        </template>
-        <template v-else>
-        {{ sourceType }}
-        </template>
+      <span
+        v-if="sourceMeta"
+        class="SourceBadge text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold"
+      >
+        <i :class="sourceMeta.icon" class="text-[var(--el-text-color-secondary)]" />
+        <span>{{ sourceMeta.label }}</span>
       </span>
+      <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
     </div>
 
     <div
@@ -161,5 +164,12 @@ const sourceType = computed(() => props.item.source.type)
   font-weight: 600;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-primary);
+}
+
+.SourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.4px;
 }
 </style>

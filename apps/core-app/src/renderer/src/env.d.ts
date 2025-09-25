@@ -6,6 +6,7 @@ import { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { I18n } from 'vue-i18n'
 import { ShortconApi } from './modules/channel/main/shortcon'
 import { IArgMapperOptions } from '@talex-touch/utils/electron'
+import type { PreloadAPI } from '@talex-touch/utils/preload'
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
@@ -52,5 +53,6 @@ declare global {
     $channel: ITouchClientChannel
     $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
     $startupInfo: IStartupInfo
+    api: PreloadAPI
   }
 }
