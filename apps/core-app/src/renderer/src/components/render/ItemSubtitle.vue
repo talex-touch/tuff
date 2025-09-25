@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
-import { getFileTypeFromPath } from '@talex-touch/utils'
+import { FileType, getFileTypeFromPath } from '@talex-touch/utils'
 import dayjs from 'dayjs'
 import path from 'path-browserify'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   item: TuffItem
@@ -11,6 +12,8 @@ const props = defineProps<{
 }>()
 
 const sourceType = computed(() => props.item.source.type)
+
+const { t } = useI18n()
 
 function formatBytes(bytes, decimals = 2) {
   if (bytes === 0) return '0 Bytes'
@@ -31,14 +34,44 @@ const fileInfo = computed(() => {
 
   return file
 })
+
+const FILE_TYPE_META: Record<FileType, { icon: string; key: string }> = {
+  [FileType.Image]: { icon: 'i-ri-image-2-line', key: 'coreBox.fileTypes.image' },
+  [FileType.Document]: { icon: 'i-ri-file-text-line', key: 'coreBox.fileTypes.document' },
+  [FileType.Audio]: { icon: 'i-ri-music-2-line', key: 'coreBox.fileTypes.audio' },
+  [FileType.Video]: { icon: 'i-ri-video-line', key: 'coreBox.fileTypes.video' },
+  [FileType.Archive]: { icon: 'i-ri-archive-line', key: 'coreBox.fileTypes.archive' },
+  [FileType.Code]: { icon: 'i-ri-code-line', key: 'coreBox.fileTypes.code' },
+  [FileType.Text]: { icon: 'i-ri-file-list-3-line', key: 'coreBox.fileTypes.text' },
+  [FileType.Design]: { icon: 'i-ri-palette-line', key: 'coreBox.fileTypes.design' },
+  [FileType.Model3D]: { icon: 'i-ri-cube-line', key: 'coreBox.fileTypes.model3D' },
+  [FileType.Font]: { icon: 'i-ri-english-input', key: 'coreBox.fileTypes.font' },
+  [FileType.Spreadsheet]: { icon: 'i-ri-table-line', key: 'coreBox.fileTypes.spreadsheet' },
+  [FileType.Presentation]: { icon: 'i-ri-slideshow-line', key: 'coreBox.fileTypes.presentation' },
+  [FileType.Ebook]: { icon: 'i-ri-book-3-line', key: 'coreBox.fileTypes.ebook' },
+  [FileType.Other]: { icon: 'i-ri-more-2-line', key: 'coreBox.fileTypes.other' }
+}
+
+const fileTypeMeta = computed(() => {
+  if (!fileInfo.value) return null
+  const type = getFileTypeFromPath(fileInfo.value.path) as FileType
+  const meta = FILE_TYPE_META[type] || FILE_TYPE_META[FileType.Other]
+  const translated = t(meta.key)
+  const label = translated === meta.key ? type : translated
+  return {
+    icon: meta.icon,
+    label
+  }
+})
 </script>
 
 <template>
   <p class="text-xs opacity-60 truncate max-w-[90%]">
     <template v-if="fileInfo">
       <div class="flex items-center w-full overflow-hidden gap-x-1.5">
-        <span>
-          {{ getFileTypeFromPath(fileInfo.path) }}
+        <span class="flex items-center gap-1">
+          <i :class="fileTypeMeta?.icon" />
+          <span>{{ fileTypeMeta?.label }}</span>
         </span>
         <span class="opacity-50">&bull;</span>
         <span>

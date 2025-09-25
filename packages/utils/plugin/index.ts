@@ -1,5 +1,6 @@
 import { Arch, SupportOS } from './../base/index';
-import { PluginLogger } from './log/logger';
+import type { IPluginLogger } from './log/types';
+import type { PluginInstallRequest, PluginInstallSummary } from './providers';
 
 export enum PluginStatus {
   DISABLED,
@@ -64,7 +65,7 @@ export interface IPluginDev {
 export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
   pluginPath: string
-  logger: PluginLogger
+  logger: IPluginLogger<any>
   features: IPluginFeature[]
   issues: PluginIssue[]
 
@@ -228,7 +229,7 @@ export enum PluginSourceType {
   FILE_SYSTEM = 'file_system',
 }
 
-import { FSWatcher } from 'chokidar'
+import type { FSWatcher } from 'chokidar'
 
 export interface IPluginManager {
   plugins: Map<string, ITouchPlugin>
@@ -250,6 +251,7 @@ export interface IPluginManager {
   listPlugins(): Promise<Array<string>>
   loadPlugin(pluginName: string): Promise<boolean>
   unloadPlugin(pluginName: string): Promise<boolean>
+  installFromSource(request: PluginInstallRequest): Promise<PluginInstallSummary>
 }
 
 /**
@@ -372,5 +374,7 @@ export interface IManifest {
   };
 }
 
-export * from './log/logger'
+export type { LogLevel, LogItem, LogDataType, IPluginLogger } from './log/types'
 export * from './sdk/index'
+export * from './providers'
+export * from './risk'

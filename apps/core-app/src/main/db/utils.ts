@@ -111,10 +111,7 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           lastError: schema.fileIndexProgress.lastError
         })
         .from(schema.files)
-        .leftJoin(
-          schema.fileIndexProgress,
-          eq(schema.files.id, schema.fileIndexProgress.fileId)
-        )
+        .leftJoin(schema.fileIndexProgress, eq(schema.files.id, schema.fileIndexProgress.fileId))
         .where(inArray(schema.files.path, paths))
     },
 
@@ -195,9 +192,7 @@ export type DbUtils = {
     data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>
   ) => Promise<any>
   getFileIndexProgressByFileIds: (fileIds: number[]) => Promise<any[]>
-  getFileIndexProgressByPaths: (
-    paths: string[]
-  ) => Promise<
+  getFileIndexProgressByPaths: (paths: string[]) => Promise<
     Array<{
       path: string
       progress: number | null

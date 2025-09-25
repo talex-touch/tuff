@@ -7,19 +7,19 @@ import {
 } from '@talex-touch/utils/plugin'
 import {
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
   TuffItem,
   TuffQuery,
   TuffSearchResult,
   TuffSourceType
-} from '../box-tool/search-engine/types'
-import { IProviderActivate } from '@talex-touch/utils'
+} from '@talex-touch/utils'
 import { TuffFactory } from '@talex-touch/utils'
-import searchEngineCore from '../box-tool/search-engine/search-core'
-import { genTouchChannel } from '../../core/channel-core'
-import { TouchPlugin } from '../plugin/plugin'
-import { PluginViewLoader } from './plugin-view-loader'
-import { pluginModule } from '../plugin/plugin-module'
+import searchEngineCore from '../../box-tool/search-engine/search-core'
+import { TouchPlugin } from '../plugin'
+import { PluginViewLoader } from '../view/plugin-view-loader'
+import { pluginModule } from '../plugin-module'
+import { ProviderContext } from '../../box-tool/search-engine/types'
 
 // Manually define the strict type for TuffItem icons based on compiler errors.
 type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
@@ -88,7 +88,7 @@ function mapIconType(type: string): TuffIconType {
  * An adapter that exposes features from the legacy plugin system
  * as a modern ISearchProvider.
  */
-export class PluginFeaturesAdapter implements ISearchProvider {
+export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
   public readonly name = 'Plugin Features'
@@ -101,7 +101,11 @@ export class PluginFeaturesAdapter implements ISearchProvider {
       const pluginName = item.meta?.pluginName
       if (!pluginName) {
         console.error(
-          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
+          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.',
+          {
+            meta: item.meta,
+            availablePlugins: Array.from(pluginModule.pluginManager!.plugins.keys())
+          }
         )
         return null
       }
@@ -266,7 +270,7 @@ export class PluginFeaturesAdapter implements ISearchProvider {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
-          genTouchChannel().sendToPlugin(plugin.name, 'core-box:input-change', {
+          $app.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
             query: query.text
           })
 

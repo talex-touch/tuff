@@ -39,6 +39,8 @@ import {
 } from '../../search-engine/search-index-service'
 import { createRetrier } from '@talex-touch/utils'
 
+const SLOW_SEARCH_THRESHOLD_MS = 400
+
 const isSqliteBusyError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false
   const { code, rawCode, message } = error as {
@@ -68,6 +70,8 @@ const runWithSqliteBusyRetry = <T>(operation: () => Promise<T>): Promise<T> => {
   const wrapped = sqliteBusyRetrier(operation)
   return wrapped()
 }
+
+const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
 
 class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
@@ -152,10 +156,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     )
 
-    for (const app of appsWithExtensions) {
-      const appInfo = this._mapDbAppToScannedInfo(app)
-      await this._syncKeywordsForApp(appInfo)
-    }
+    await runAdaptiveTaskQueue(
+      appsWithExtensions,
+      async (app, index) => {
+        const appInfo = this._mapDbAppToScannedInfo(app)
+        await this._syncKeywordsForApp(appInfo)
+
+        if ((index + 1) % 50 === 0 || index === appsWithExtensions.length - 1) {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
+              LogStyle.info
+            )
+          )
+        }
+      },
+      {
+        estimatedTaskTimeMs: 5,
+        yieldIntervalMs: 30,
+        maxBatchSize: 25,
+        label: 'AppProvider::aliasKeywordSync'
+      }
+    )
 
     console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
   }
@@ -183,7 +206,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,
-      priority: this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
+      priority:
+        this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
     }))
 
     const aliasList = this._getAliasesForApp(appInfo)
@@ -318,19 +342,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
     const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
-    // Log apps with missing icons once per scan
-    const loggedMissingIcons = new Set<string>()
+    // Log apps with missing icons only the first time we see them
+    const knownMissingIconApps = await this._getKnownMissingIconApps()
+    let missingIconConfigUpdated = false
     for (const app of scannedApps) {
-      if (!app.icon && !loggedMissingIcons.has(app.name)) {
-        console.warn(
-          formatLog(
-            'AppProvider',
-            `Icon not found for app: ${chalk.yellow(app.name)}`,
-            LogStyle.warning
-          )
+      if (app.icon) continue
+
+      const uniqueId = app.uniqueId || app.path
+      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
+
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Icon not found for app: ${chalk.yellow(app.name)}`,
+          LogStyle.warning
         )
-        loggedMissingIcons.add(app.name)
-      }
+      )
+      knownMissingIconApps.add(uniqueId)
+      missingIconConfigUpdated = true
+    }
+
+    if (missingIconConfigUpdated) {
+      await this._saveKnownMissingIconApps(knownMissingIconApps)
     }
 
     const dbLoadStart = performance.now()
@@ -823,12 +856,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const searchStart = performance.now()
-    console.log(
+    console.debug(
       formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
     )
 
     if (!this.dbUtils || !this.searchIndex) {
-      console.log(
+      console.warn(
         formatLog(
           'AppProvider',
           'Search dependencies not ready, returning empty result',
@@ -851,7 +884,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     let preciseMatchedItemIds: Set<string> | null = null
     if (terms.length > 0) {
       const preciseStart = performance.now()
-      console.log(
+      console.debug(
         formatLog(
           'AppProvider',
           `Executing precise query: ${chalk.cyan(terms.join(', '))}`,
@@ -864,12 +897,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           db
             .select({ itemId: keywordMappings.itemId })
             .from(keywordMappings)
-            .where(
-              and(
-                eq(keywordMappings.keyword, term),
-                eq(keywordMappings.providerId, this.id)
-              )
-            )
+            .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
             .limit(200)
         )
       )
@@ -899,10 +927,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         .select({ itemId: keywordMappings.itemId })
         .from(keywordMappings)
         .where(
-          and(
-            eq(keywordMappings.keyword, normalizedQuery),
-            eq(keywordMappings.providerId, this.id)
-          )
+          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id))
         )
         .limit(200)
 
@@ -948,8 +973,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (candidateIds.size === 0) {
-      console.log(
-        formatLog('AppProvider', 'No candidates found for query, returning empty result', LogStyle.info)
+      console.debug(
+        formatLog(
+          'AppProvider',
+          'No candidates found for query, returning empty result',
+          LogStyle.info
+        )
       )
       return TuffFactory.createSearchResult(query).build()
     }
@@ -982,7 +1011,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     if (files.length === 0) {
-      console.log(
+      console.warn(
         formatLog(
           'AppProvider',
           'Candidate mapping returned no rows, search result empty',
@@ -1007,24 +1036,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return rest
     })
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Search complete, returning ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
-          preciseMatchedItemIds?.size ?? 0
-        )}, fts=${chalk.cyan(ftsMatches.length)})`,
-        LogStyle.success
+    const elapsedMs = performance.now() - searchStart
+    if (elapsedMs > SLOW_SEARCH_THRESHOLD_MS) {
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Slow search: ${chalk.cyan(rawText)} took ${chalk.cyan((elapsedMs / 1000).toFixed(2))}s and returned ${chalk.green(
+            sortedItems.length
+          )} results (precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(ftsMatches.length)})`,
+          LogStyle.warning
+        )
       )
-    )
-    console.log(
-      formatLog(
-        'AppProvider',
-        `onSearch\u300c${chalk.cyan(rawText)}\u300d finished in ${chalk.cyan(
-          ((performance.now() - searchStart) / 1000).toFixed(2)
-        )}s`,
-        LogStyle.success
-      )
-    )
+    }
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
@@ -1162,10 +1185,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     )
 
-    for (const app of appsWithExtensions) {
-      const appInfo = this._mapDbAppToScannedInfo(app)
-      await this._syncKeywordsForApp(appInfo)
-    }
+    await runAdaptiveTaskQueue(
+      appsWithExtensions,
+      async (app, index) => {
+        const appInfo = this._mapDbAppToScannedInfo(app)
+        await this._syncKeywordsForApp(appInfo)
+
+        if ((index + 1) % 50 === 0 || index === appsWithExtensions.length - 1) {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
+              LogStyle.info
+            )
+          )
+        }
+      },
+      {
+        estimatedTaskTimeMs: 5,
+        yieldIntervalMs: 30,
+        maxBatchSize: 25,
+        label: 'AppProvider::forceKeywordSync'
+      }
+    )
 
     console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
   }
@@ -1276,6 +1318,67 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         target: configSchema.key,
         set: { value: timestamp.toString() }
       })
+  }
+
+  private async _getKnownMissingIconApps(): Promise<Set<string>> {
+    if (!this.dbUtils) return new Set()
+
+    const db = this.dbUtils.getDb()
+
+    try {
+      const result = await db
+        .select({ value: configSchema.value })
+        .from(configSchema)
+        .where(eq(configSchema.key, MISSING_ICON_CONFIG_KEY))
+        .limit(1)
+
+      const rawValue = result[0]?.value
+      if (!rawValue) return new Set()
+
+      const parsed = JSON.parse(rawValue)
+      if (!Array.isArray(parsed)) return new Set()
+
+      const ids = parsed.filter(
+        (item): item is string => typeof item === 'string' && item.length > 0
+      )
+      return new Set(ids)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Failed to load missing icon config, continuing without cache: ${message}`,
+          LogStyle.warning
+        )
+      )
+      return new Set()
+    }
+  }
+
+  private async _saveKnownMissingIconApps(appIds: Set<string>): Promise<void> {
+    if (!this.dbUtils) return
+
+    const db = this.dbUtils.getDb()
+    const serializedIds = JSON.stringify(Array.from(appIds))
+
+    try {
+      await db
+        .insert(configSchema)
+        .values({ key: MISSING_ICON_CONFIG_KEY, value: serializedIds })
+        .onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value: serializedIds }
+        })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Failed to persist missing icon config: ${message}`,
+          LogStyle.warning
+        )
+      )
+    }
   }
 
   private async _runMdlsUpdateScan(): Promise<void> {

@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import { shell } from 'electron'
+import { reportAppScanError } from './app-error-reporter'
 
 // Define the structure for our app info, consistent with other platforms
 interface AppInfo {
@@ -134,6 +135,13 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
     }
   } catch (error) {
     console.warn(`[Win] Failed to get app info for ${filePath}:`, error)
+    const message = error instanceof Error ? error.message : String(error)
+    reportAppScanError({
+      platform: process.platform,
+      path: filePath,
+      message,
+      timestamp: Date.now()
+    })
     return null
   }
 }

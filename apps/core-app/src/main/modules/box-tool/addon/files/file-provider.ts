@@ -43,7 +43,7 @@ import {
   fileParserRegistry,
   FileParserProgress,
   FileParserResult
-} from '@talex-touch/utils/common/file-parsers'
+} from '@talex-touch/utils/electron/file-parsers'
 import {
   SearchIndexService,
   SearchIndexKeyword,
@@ -211,7 +211,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly timestampToleranceMs = 1_000
   private readonly handleFsAddedOrChanged = (event: FileAddedEvent | FileChangedEvent) => {
     if (!event?.filePath) return
-    this.enqueueIncrementalUpdate(event.filePath, event instanceof FileAddedEvent ? 'add' : 'change')
+    this.enqueueIncrementalUpdate(
+      event.filePath,
+      event instanceof FileAddedEvent ? 'add' : 'change'
+    )
   }
   private readonly handleFsUnlinked = (event: FileUnlinkedEvent) => {
     if (!event?.filePath) return
@@ -288,7 +291,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return Number.isNaN(time) ? null : time
   }
 
-  private timestampsEqual(a: Date | number | string | null | undefined, b: Date | number | string | null | undefined): boolean {
+  private timestampsEqual(
+    a: Date | number | string | null | undefined,
+    b: Date | number | string | null | undefined
+  ): boolean {
     const left = this.toTimestamp(a)
     const right = this.toTimestamp(b)
     if (left === null || right === null) {
@@ -297,7 +303,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return Math.abs(left - right) <= this.timestampToleranceMs
   }
 
-  private hasDiskFileChanged(diskFile: ScannedFileInfo, dbFile: typeof filesSchema.$inferSelect): boolean {
+  private hasDiskFileChanged(
+    diskFile: ScannedFileInfo,
+    dbFile: typeof filesSchema.$inferSelect
+  ): boolean {
     if (!this.timestampsEqual(diskFile.mtime, dbFile.mtime)) {
       return true
     }
@@ -375,9 +384,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       await Promise.all(
         this.WATCH_PATHS.map((watchPath) =>
-          FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath)).catch((error) => {
-            this.logError(`Failed to watch path ${chalk.gray(watchPath)}.`, error)
-          })
+          FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath)).catch(
+            (error) => {
+              this.logError(`Failed to watch path ${chalk.gray(watchPath)}.`, error)
+            }
+          )
         )
       )
     } catch (error) {
@@ -725,7 +736,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.pendingIncrementalPaths.set(normalizedPath, { action, rawPath })
     } else if (!prev || prev.action !== 'delete') {
       const nextAction: 'add' | 'change' = prev?.action === 'add' ? 'add' : action
-      const nextRawPath = action === 'add' ? rawPath : prev?.rawPath ?? rawPath
+      const nextRawPath = action === 'add' ? rawPath : (prev?.rawPath ?? rawPath)
       this.pendingIncrementalPaths.set(normalizedPath, { action: nextAction, rawPath: nextRawPath })
     }
 
@@ -825,7 +836,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .where(inArray(filesSchema.path, targetPaths))
     const existingMap = new Map(existingRows.map((row) => [row.path, row]))
 
-    const filesToInsert: typeof filesSchema.$inferInsert[] = []
+    const filesToInsert: (typeof filesSchema.$inferInsert)[] = []
     const filesToUpdate: (typeof filesSchema.$inferSelect)[] = []
     let unchangedCount = 0
 
@@ -874,9 +885,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async buildFileRecord(
-    rawPath: string
-  ): Promise<typeof filesSchema.$inferInsert | null> {
+  private async buildFileRecord(rawPath: string): Promise<typeof filesSchema.$inferInsert | null> {
     try {
       const stats = await fs.stat(rawPath)
       if (!stats.isFile()) {
@@ -992,29 +1001,33 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         if (newFileRecords.length > 0) {
           console.log(`[FileProvider] Found ${newFileRecords.length} files in ${newPath}.`)
           const chunkSize = 500
-          const chunks: typeof newFileRecords[] = []
+          const chunks: (typeof newFileRecords)[] = []
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
             chunks.push(newFileRecords.slice(i, i + chunkSize))
           }
 
-          await runAdaptiveTaskQueue(chunks, async (chunk, chunkIndex) => {
-            console.log(
-              `[FileProvider] Full scan for ${newPath}: Inserting chunk ${chunkIndex + 1}/${chunks.length}...`
-            )
-            const chunkStart = performance.now()
-            const inserted = await db.insert(filesSchema).values(chunk).returning()
-            console.log(
-              `[FileProvider] Inserted ${chunk.length} files in ${(
-                performance.now() - chunkStart
-              ).toFixed(0)}ms`
-            )
-            await this.processFileExtensions(inserted)
-            await this.extractContentForFiles(inserted)
-            await this.indexFilesForSearch(inserted)
-          }, {
-            estimatedTaskTimeMs: 8,
-            label: `FileProvider::fullScan(${newPath})`
-          })
+          await runAdaptiveTaskQueue(
+            chunks,
+            async (chunk, chunkIndex) => {
+              console.log(
+                `[FileProvider] Full scan for ${newPath}: Inserting chunk ${chunkIndex + 1}/${chunks.length}...`
+              )
+              const chunkStart = performance.now()
+              const inserted = await db.insert(filesSchema).values(chunk).returning()
+              console.log(
+                `[FileProvider] Inserted ${chunk.length} files in ${(
+                  performance.now() - chunkStart
+                ).toFixed(0)}ms`
+              )
+              await this.processFileExtensions(inserted)
+              await this.extractContentForFiles(inserted)
+              await this.indexFilesForSearch(inserted)
+            },
+            {
+              estimatedTaskTimeMs: 8,
+              label: `FileProvider::fullScan(${newPath})`
+            }
+          )
         }
         await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
         console.log(
@@ -1114,7 +1127,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }))
 
         const chunkSize = 500
-        const chunks: typeof newFileRecords[] = []
+        const chunks: (typeof newFileRecords)[] = []
         for (let i = 0; i < newFileRecords.length; i += chunkSize) {
           chunks.push(newFileRecords.slice(i, i + chunkSize))
         }
@@ -1166,9 +1179,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await runAdaptiveTaskQueue(
       chunks,
       async (chunk, chunkIndex) => {
-        console.debug(
-          `[FileProvider] Updating chunk ${chunkIndex + 1}/${chunks.length}...`
-        )
+        console.debug(`[FileProvider] Updating chunk ${chunkIndex + 1}/${chunks.length}...`)
         const chunkStart = performance.now()
 
         const updatePromises = chunk.map((file) =>
@@ -1455,7 +1466,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         .update(filesSchema)
         .set({
           content: trimmedContent,
-          embeddingStatus: result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
+          embeddingStatus:
+            result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
         })
         .where(eq(filesSchema.id, fileId))
 
@@ -1702,11 +1714,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       .from(fileIndexProgress)
       .innerJoin(filesSchema, eq(fileIndexProgress.fileId, filesSchema.id))
-      .where(
-        paths && paths.length > 0
-          ? inArray(filesSchema.path, paths)
-          : sql`1 = 1`
-      )
+      .where(paths && paths.length > 0 ? inArray(filesSchema.path, paths) : sql`1 = 1`)
       .orderBy(desc(fileIndexProgress.updatedAt))
       .limit(limit ?? Number.MAX_SAFE_INTEGER)
 
@@ -1771,9 +1779,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         db
           .select({ itemId: keywordMappings.itemId })
           .from(keywordMappings)
-          .where(
-            and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id))
-          )
+          .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
           .limit(preciseSearchLimit)
       )
       const preciseResults = await Promise.all(preciseQueries)
@@ -1799,10 +1805,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         .select({ itemId: keywordMappings.itemId })
         .from(keywordMappings)
         .where(
-          and(
-            eq(keywordMappings.keyword, normalizedQuery),
-            eq(keywordMappings.providerId, this.id)
-          )
+          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id))
         )
         .limit(200)
       if (phraseMatches.length > 0) {
@@ -1956,11 +1959,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           recency: lastUsedScore,
           frequency: frequencyScore,
           base: lastModifiedScore,
-          match_details: keywordScore > 0
-            ? { type: 'exact', query: rawText }
-            : ftsScore > 0
-            ? { type: 'semantic', query: rawText, confidence: ftsScore }
-            : undefined
+          match_details:
+            keywordScore > 0
+              ? { type: 'exact', query: rawText }
+              : ftsScore > 0
+                ? { type: 'semantic', query: rawText, confidence: ftsScore }
+                : undefined
         }
 
         if (!tuffItem.meta) {
@@ -2000,10 +2004,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .slice(0, 50)
 
     const result = TuffFactory.createSearchResult(query).setItems(scoredItems).build()
-    console.log(
-      `[FileProvider] onSearch("${rawText}") returned ${scoredItems.length} items in ${((
-        performance.now() - searchStart
-      ) / 1000).toFixed(2)}s`
+    console.debug(
+      `[FileProvider] onSearch("${rawText}") returned ${scoredItems.length} items in ${(
+        (performance.now() - searchStart) /
+        1000
+      ).toFixed(2)}s`
     )
     return result
   }

@@ -6,11 +6,14 @@
 // biome-ignore lint: disable
 export {}
 declare global {
-  const BingTranslateProvider: typeof import('./src/composables/index')['BingTranslateProvider']
-  const CustomTranslateProvider: typeof import('./src/composables/index')['CustomTranslateProvider']
-  const DeepLTranslateProvider: typeof import('./src/composables/index')['DeepLTranslateProvider']
+  const BaiduTranslateProvider: typeof import('./src/providers/baidu-translate')['BaiduTranslateProvider']
+  const BingTranslateProvider: typeof import('./src/providers/bing-translate')['BingTranslateProvider']
+  const CustomTranslateProvider: typeof import('./src/providers/custom-translate')['CustomTranslateProvider']
+  const DeepLTranslateProvider: typeof import('./src/providers/deepl-translate')['DeepLTranslateProvider']
   const EffectScope: typeof import('vue')['EffectScope']
-  const GoogleTranslateProvider: typeof import('./src/composables/index')['GoogleTranslateProvider']
+  const GoogleTranslateProvider: typeof import('./src/providers/google-translate')['GoogleTranslateProvider']
+  const MyMemoryTranslateProvider: typeof import('./src/providers/mymemory-translate')['MyMemoryTranslateProvider']
+  const TencentTranslateProvider: typeof import('./src/providers/tencent-translate')['TencentTranslateProvider']
   const asyncComputed: typeof import('@vueuse/core')['asyncComputed']
   const autoResetRef: typeof import('@vueuse/core')['autoResetRef']
   const computed: typeof import('vue')['computed']
@@ -309,6 +312,27 @@ declare global {
   // @ts-ignore
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
+  // @ts-ignore
+  export type { BaiduTranslateProvider } from './src/providers/baidu-translate'
+  import('./src/providers/baidu-translate')
+  // @ts-ignore
+  export type { BingTranslateProvider } from './src/providers/bing-translate'
+  import('./src/providers/bing-translate')
+  // @ts-ignore
+  export type { CustomTranslateProvider } from './src/providers/custom-translate'
+  import('./src/providers/custom-translate')
+  // @ts-ignore
+  export type { DeepLTranslateProvider } from './src/providers/deepl-translate'
+  import('./src/providers/deepl-translate')
+  // @ts-ignore
+  export type { GoogleTranslateProvider } from './src/providers/google-translate'
+  import('./src/providers/google-translate')
+  // @ts-ignore
+  export type { MyMemoryTranslateProvider } from './src/providers/mymemory-translate'
+  import('./src/providers/mymemory-translate')
+  // @ts-ignore
+  export type { TencentTranslateProvider } from './src/providers/tencent-translate'
+  import('./src/providers/tencent-translate')
 }
 
 // for vue template auto import
@@ -316,11 +340,14 @@ import { UnwrapRef } from 'vue'
 declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
-    readonly BingTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['BingTranslateProvider']>
-    readonly CustomTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['CustomTranslateProvider']>
-    readonly DeepLTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['DeepLTranslateProvider']>
+    readonly BaiduTranslateProvider: UnwrapRef<typeof import('./src/providers/baidu-translate')['BaiduTranslateProvider']>
+    readonly BingTranslateProvider: UnwrapRef<typeof import('./src/providers/bing-translate')['BingTranslateProvider']>
+    readonly CustomTranslateProvider: UnwrapRef<typeof import('./src/providers/custom-translate')['CustomTranslateProvider']>
+    readonly DeepLTranslateProvider: UnwrapRef<typeof import('./src/providers/deepl-translate')['DeepLTranslateProvider']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
-    readonly GoogleTranslateProvider: UnwrapRef<typeof import('./src/composables/index')['GoogleTranslateProvider']>
+    readonly GoogleTranslateProvider: UnwrapRef<typeof import('./src/providers/google-translate')['GoogleTranslateProvider']>
+    readonly MyMemoryTranslateProvider: UnwrapRef<typeof import('./src/providers/mymemory-translate')['MyMemoryTranslateProvider']>
+    readonly TencentTranslateProvider: UnwrapRef<typeof import('./src/providers/tencent-translate')['TencentTranslateProvider']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
     readonly autoResetRef: UnwrapRef<typeof import('@vueuse/core')['autoResetRef']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>

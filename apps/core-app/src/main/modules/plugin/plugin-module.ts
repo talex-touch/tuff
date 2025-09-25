@@ -1,7 +1,12 @@
 import { IPluginManager, ITouchPlugin, PluginStatus } from '@talex-touch/utils/plugin'
+import type {
+  PluginInstallRequest,
+  PluginInstallSummary
+} from '@talex-touch/utils/plugin/providers'
+import type { FSWatcher } from 'chokidar'
+import chalk from 'chalk'
 import fse from 'fs-extra'
 import path from 'path'
-import chokidar, { FSWatcher } from 'chokidar'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TouchPlugin } from './plugin'
 import { PluginIcon } from './plugin-icon'
@@ -14,6 +19,12 @@ import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
 import { BaseModule } from '../abstract-base-module'
+import { PluginInstaller } from './plugin-installer'
+import { LocalPluginProvider } from './providers/local-provider'
+import { fileWatchService } from '../../service/file-watch.service'
+import util from 'util'
+
+const devWatcherLabel = chalk.blue('[DevPluginWatcher]')
 
 class DevPluginWatcher {
   private readonly manager: IPluginManager
@@ -29,7 +40,7 @@ class DevPluginWatcher {
       this.devPlugins.set(plugin.name, plugin)
       if (this.watcher) {
         this.watcher.add(plugin.dev.source)
-        console.log(`[DevPluginWatcher] Watching dev plugin source: ${plugin.dev.source}`)
+        console.log(devWatcherLabel, `Watching dev plugin source: ${plugin.dev.source}`)
       }
     }
   }
@@ -39,17 +50,17 @@ class DevPluginWatcher {
     if (plugin && typeof plugin.dev.source === 'string' && this.watcher) {
       this.watcher.unwatch(plugin.dev.source)
       this.devPlugins.delete(pluginName)
-      console.log(`[DevPluginWatcher] Unwatching dev plugin source: ${plugin.dev.source}`)
+      console.log(devWatcherLabel, `Unwatching dev plugin source: ${plugin.dev.source}`)
     }
   }
 
   start(): void {
     if (this.watcher) {
-      console.warn('[DevPluginWatcher] Watcher already started.')
+      console.warn(devWatcherLabel, 'Watcher already started.')
       return
     }
 
-    this.watcher = chokidar.watch([], {
+    this.watcher = fileWatchService.watch([], {
       ignored: /(^|[/\\])\../,
       persistent: true,
       ignoreInitial: true,
@@ -64,20 +75,22 @@ class DevPluginWatcher {
         (p) => typeof p.dev.source === 'string' && p.dev.source === filePath
       )?.name
       if (pluginName) {
-        console.log(`[DevPluginWatcher] Dev plugin source changed: ${filePath}, reloading ${pluginName}`)
+        console.log(
+          devWatcherLabel,
+          `Dev plugin source changed: ${filePath}, reloading ${pluginName}`
+        )
         await this.manager.reloadPlugin(pluginName)
       }
     })
 
-    console.log('[DevPluginWatcher] Started watching for dev plugin changes.')
+    console.log(devWatcherLabel, 'Started watching for dev plugin changes.')
   }
 
   stop(): void {
-    if (this.watcher) {
-      this.watcher.close()
-      this.watcher = null
-      console.log('[DevPluginWatcher] Stopped watching for dev plugin changes.')
-    }
+    if (!this.watcher) return
+    void fileWatchService.close(this.watcher)
+    this.watcher = null
+    console.log(devWatcherLabel, 'Stopped watching for dev plugin changes.')
   }
 }
 
@@ -89,30 +102,76 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
 
-  let watcher: FSWatcher | null = null
+  const label = chalk.cyan('[PluginModule]')
+  const formatLogArgs = (args: unknown[]): string => {
+    const colorSupport = chalk.level > 0
+    return args
+      .map((arg) => {
+        if (typeof arg === 'string') return arg
+        if (typeof arg === 'number' || typeof arg === 'boolean' || typeof arg === 'bigint') {
+          return String(arg)
+        }
+        if (arg instanceof Error) {
+          return arg.stack || arg.message
+        }
+        if (arg === null) return 'null'
+        if (typeof arg === 'undefined') return 'undefined'
+        if (typeof arg === 'symbol') return arg.toString()
+        return util.inspect(arg, { depth: 3, colors: colorSupport })
+      })
+      .join(' ')
+      .trim()
+  }
+  const logInfo = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.log(message ? `${label} ${message}` : label)
+  }
+  const logWarn = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.warn(
+      message ? `${chalk.yellow('[PluginModule]')} ${message}` : chalk.yellow('[PluginModule]')
+    )
+  }
+  const logError = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.error(
+      message ? `${chalk.red('[PluginModule]')} ${message}` : chalk.red('[PluginModule]')
+    )
+  }
+  const logDebug = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    console.debug(
+      message ? `${chalk.gray('[PluginModule]')} ${message}` : chalk.gray('[PluginModule]')
+    )
+  }
+  const pluginTag = (name: string): string => chalk.magenta(`[${name}]`)
+
+  const installer = new PluginInstaller()
+  const localProvider = new LocalPluginProvider(pluginPath)
 
   const getPluginList = (): Array<object> => {
-    console.log('[PluginModule] getPluginList called.')
+    logInfo('getPluginList called.')
     const list = new Array<object>()
 
     try {
       for (const plugin of plugins.values()) {
         if (!plugin) {
-          console.warn('[PluginModule] Skipping null/undefined plugin')
+          logWarn('Skipping null/undefined plugin')
           continue
         }
-        console.log(
-          `[PluginModule]   - Processing plugin: ${plugin.name}, status: ${
-            PluginStatus[(plugin as TouchPlugin).status]
-          }`
+        logDebug(
+          'Processing plugin entry',
+          pluginTag(plugin.name),
+          'status:',
+          PluginStatus[(plugin as TouchPlugin).status]
         )
         list.push((plugin as TouchPlugin).toJSONObject())
       }
 
-      console.log(`[PluginModule] Returning plugin list with ${list.length} items.`)
+      logInfo(`Returning plugin list with ${list.length} item(s).`)
       return list
     } catch (error) {
-      console.error('[PluginModule] Error in getPluginList:', error)
+      logError('Error in getPluginList:', error)
       return []
     }
   }
@@ -158,20 +217,20 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
   const reloadPlugin = async (pluginName: string): Promise<void> => {
     if (reloadingPlugins.has(pluginName)) {
-      console.log(`[PluginModule] Plugin ${pluginName} is already reloading. Skip.`)
+      logInfo('Skip reload because plugin already reloading:', pluginTag(pluginName))
       return
     }
 
     const plugin = plugins.get(pluginName)
     if (!plugin) {
-      console.error(`[PluginModule] Cannot reload plugin ${pluginName}: not found.`)
+      logError('Cannot reload plugin - not found:', pluginTag(pluginName))
       return
     }
 
     reloadingPlugins.add(pluginName)
 
     try {
-      console.log(`[PluginModule] Reloading plugin: ${pluginName}`)
+      logInfo('Reloading plugin', pluginTag(pluginName))
 
       const _enabled =
         plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
@@ -189,14 +248,12 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         if (_enabled) {
           await newPlugin.enable()
         }
-        console.log(`[PluginModule] Plugin ${pluginName} reloaded successfully.`)
+        logInfo('Plugin reloaded successfully', pluginTag(pluginName))
       } else {
-        console.error(
-          `[PluginModule] Plugin ${pluginName} failed to reload, as it could not be loaded again.`
-        )
+        logError('Plugin failed to reload, it could not be loaded again.', pluginTag(pluginName))
       }
     } catch (error) {
-      console.error(`[PluginModule] Error while reloading plugin ${pluginName}:`, error)
+      logError('Error while reloading plugin', pluginTag(pluginName), error)
     } finally {
       reloadingPlugins.delete(pluginName)
     }
@@ -209,21 +266,21 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         'enabled_plugins',
         Array.from(enabledPlugins)
       )
-      console.log('[PluginModule] Persisted enabled plugins state.')
+      logInfo('Persisted enabled plugins state.')
     } catch (error) {
-      console.error('[PluginModule] Failed to persist enabled plugins state:', error)
+      logError('Failed to persist enabled plugins state:', error)
     }
   }
 
   const listPlugins = async (): Promise<Array<string>> => {
-    return fse.readdirSync(pluginPath)
+    return localProvider.scan()
   }
 
   const loadPlugin = async (pluginName: string): Promise<boolean> => {
     const currentPluginPath = path.resolve(pluginPath, pluginName)
     const manifestPath = path.resolve(currentPluginPath, 'manifest.json')
 
-    console.debug(`[PluginModule] Ready to load ${pluginName} from ${currentPluginPath}`)
+    logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
 
     if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
       const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'loading', {
@@ -253,7 +310,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
         plugin: touchPlugin.toJSONObject()
       })
-      console.warn(`[PluginModule] Plugin ${pluginName} failed to load: Missing manifest.json.`)
+      logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
       return Promise.resolve(true)
     }
 
@@ -268,16 +325,26 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         touchPlugin.status = PluginStatus.DISABLED
       }
 
-      watcher?.add(path.resolve(currentPluginPath, 'README.md'))
+      localProvider.trackFile(path.resolve(currentPluginPath, 'README.md'))
       plugins.set(pluginName, touchPlugin)
       devWatcherInstance.addPlugin(touchPlugin)
+
+      logInfo(
+        'Plugin metadata loaded',
+        pluginTag(pluginName),
+        '| version:',
+        touchPlugin.version,
+        '| features:',
+        touchPlugin.features.length,
+        '| issues:',
+        touchPlugin.issues.length
+      )
 
       genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
         plugin: touchPlugin.toJSONObject()
       })
-
     } catch (error: any) {
-      console.error(`[PluginModule] Unhandled error while loading plugin ${pluginName}:`, error)
+      logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
       // Create a dummy plugin to show the error in the UI
       const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'fatal', {
         enable: false,
@@ -315,7 +382,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     if (!plugin) return Promise.resolve(false)
 
     const currentPluginPath = path.resolve(pluginPath, pluginName)
-    watcher?.unwatch(path.resolve(currentPluginPath, 'README.md'))
+    localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
 
     // Remove from dev watcher
     devWatcherInstance.removePlugin(pluginName)
@@ -325,6 +392,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
     plugins.delete(pluginName)
 
+    logWarn('Plugin unloaded', pluginTag(pluginName))
+
     genTouchChannel().send(ChannelType.MAIN, 'plugin:del', {
       plugin: pluginName
     })
@@ -332,6 +401,12 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     return Promise.resolve(true)
   }
 
+  const installFromSource = async (
+    request: PluginInstallRequest
+  ): Promise<PluginInstallSummary> => {
+    const summary = await installer.install(request)
+    return summary
+  }
 
   const managerInstance: IPluginManager = {
     plugins,
@@ -341,7 +416,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     dbUtils,
     initialLoadPromises,
     pluginPath,
-    watcher,
+    watcher: null,
     devWatcher: null!, // Will be set after DevPluginWatcher is created
     getPluginList,
     setActivePlugin,
@@ -351,7 +426,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     persistEnabledPlugins,
     listPlugins,
     loadPlugin,
-    unloadPlugin
+    unloadPlugin,
+    installFromSource
   }
 
   const devWatcherInstance: DevPluginWatcher = new DevPluginWatcher(managerInstance)
@@ -362,190 +438,193 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   }
 
   const loadPersistedState = async (): Promise<void> => {
-    console.log('[PluginModule] Attempting to load persisted plugin states...')
+    logInfo('Attempting to load persisted plugin states...')
     try {
       const data = await dbUtils.getPluginData('internal:plugin-module', 'enabled_plugins')
       if (data && data.value) {
         const enabled = JSON.parse(data.value) as string[]
         enabledPlugins.clear()
-        enabled.forEach(p => enabledPlugins.add(p));
-        console.log(
-          `[PluginModule] Loaded ${
-            enabled.length
-          } enabled plugins from database: [${enabled.join(', ')}]`
+        enabled.forEach((p) => enabledPlugins.add(p))
+        logInfo(
+          `Loaded ${enabled.length} enabled plugin(s) from database:`,
+          enabled.map(pluginTag).join(' ')
         )
 
         for (const pluginName of enabledPlugins) {
           const plugin = plugins.get(pluginName)
-          console.log(
-            `[PluginModule] Checking auto-enable for '${pluginName}': found=${!!plugin}, status=${
-              plugin ? PluginStatus[plugin.status] : 'N/A'
-            }`
+          logDebug(
+            'Checking auto-enable for',
+            pluginTag(pluginName),
+            '| found:',
+            !!plugin,
+            '| status:',
+            plugin ? PluginStatus[plugin.status] : 'N/A'
           )
           if (plugin && plugin.status === PluginStatus.DISABLED) {
             try {
-              console.log(`[PluginModule] ==> Auto-enabling plugin: ${pluginName}`)
+              logInfo('Auto-enabling plugin', pluginTag(pluginName))
               await plugin.enable()
-              console.log(`[PluginModule] ==> Finished auto-enabling for '${pluginName}'.`)
+              logInfo('Auto-enable complete', pluginTag(pluginName))
             } catch (e) {
-              console.error(`[PluginModule] Failed to auto-enable plugin ${pluginName}:`, e)
+              logError('Failed to auto-enable plugin', pluginTag(pluginName), e)
             }
           }
         }
       } else {
-        console.log('[PluginModule] No persisted plugin state found in database.')
+        logInfo('No persisted plugin state found in database.')
       }
     } catch (error) {
-      console.error('[PluginModule] Failed to load persisted plugin state:', error)
+      logError('Failed to load persisted plugin state:', error)
     }
   }
 
   const __init__ = (): void => {
-    if (!fse.existsSync(pluginPath)) return
-
-    __initDevWatcher()
-
-    touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
-      watcher?.close()
-      devWatcherInstance.stop()
-      console.log('[PluginModule] Watchers closed.')
-    })
-
-    watcher = chokidar.watch(pluginPath, {
-      ignored: /(^|[/\\])\../,
-      persistent: true,
-      depth: 1,
-      awaitWriteFinish: {
-        stabilityThreshold: 500,
-        pollInterval: 500
-      }
-    })
-
-    watcher.on('change', async (_path) => {
-      const baseName = path.basename(_path)
-      if (baseName.indexOf('.') === 0) return
-
-      const pluginName = path.basename(path.dirname(_path))
-
-      if (!hasPlugin(pluginName)) {
-        console.debug(
-          '[PluginModule] IGNORE | The plugin ' +
-            pluginName +
-            " isn't loaded despite changes made to its file."
-        )
-
-        loadPlugin(pluginName)
-        return
-      }
-      let plugin = plugins.get(pluginName) as TouchPlugin
-
-      if (plugin.dev.enable && plugin.dev.source) {
-        console.log(
-          `[PluginModule] IGNORE | Plugin ${pluginName} is in dev source mode, ignoring local file changes.`
-        )
+    void (async () => {
+      const exists = await fse.pathExists(pluginPath)
+      if (!exists) {
+        logWarn('Plugin directory does not exist, skip initialization.', pluginPath)
         return
       }
 
-      console.log(`[Plugin] ${pluginName}'s ${baseName} has been changed, reload it.`)
+      logInfo('Initializing plugin module with root:', chalk.blue(pluginPath))
 
-      if (
-        baseName === 'manifest.json' ||
-        baseName === 'preload.js' ||
-        baseName === 'index.html' ||
-        baseName === 'index.js'
-      ) {
-        const _enabled =
-          plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
+      __initDevWatcher()
 
-        await plugin.disable()
-        await unloadPlugin(pluginName)
+      touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
+        void localProvider.stopWatching()
+        devWatcherInstance.stop()
+        logInfo('Watchers closed.')
+      })
 
-        await loadPlugin(pluginName)
-
-        plugin = plugins.get(pluginName) as TouchPlugin
-
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
-          source: 'disk',
-          plugin: (plugin as TouchPlugin).toJSONObject()
-        })
-
-        console.log('plugin reload event sent', _enabled)
-
-        _enabled && (await plugin.enable())
-      } else if (baseName === 'README.md') {
-        plugin.readme = fse.readFileSync(_path, 'utf-8')
-
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
-          source: 'disk',
-          plugin: pluginName,
-          readme: plugin.readme
-        })
+      const initialPlugins = await localProvider.scan()
+      if (initialPlugins.length === 0) {
+        logWarn('No plugins found in directory yet.')
       } else {
-        console.warn(
-          '[PluginModule] Plugin ' +
-            pluginName +
-            "'s " +
-            baseName +
-            " has been changed, but it's not a valid file."
+        logInfo(
+          `Discovered ${initialPlugins.length} plugin(s) on startup:`,
+          initialPlugins.map(pluginTag).join(' ')
         )
-      }
-    })
-
-    watcher.on('addDir', (_path) => {
-      if (!fse.existsSync(_path + '/manifest.json')) return
-      const pluginName = path.basename(_path)
-
-      if (
-        pluginName.indexOf('.') !== -1 ||
-        pluginName.indexOf('\\') !== -1 ||
-        pluginName.indexOf('/') !== -1
-      ) {
-        console.log(
-          `[PluginModule] IGNORE | Plugin ${pluginName} has been added, but it's not a valid name.`
-        )
-        return
+        for (const pluginName of initialPlugins) {
+          initialLoadPromises.push(loadPlugin(pluginName))
+        }
       }
 
-      console.log(`[Plugin] Plugin ${pluginName} has been added`)
+      localProvider.startWatching({
+        onFileChange: async (_path) => {
+          const baseName = path.basename(_path)
+          if (baseName.indexOf('.') === 0) return
 
-      if (hasPlugin(pluginName)) {
-        console.log(`[PluginModule] Reload plugin ${pluginName}`)
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
-          source: 'disk',
-          plugin: pluginName
-        })
-        return
-      }
+          const pluginName = path.basename(path.dirname(_path))
 
-      initialLoadPromises.push(loadPlugin(pluginName))
-    })
+          if (!hasPlugin(pluginName)) {
+            logDebug('File changed for unknown plugin, triggering load.', pluginTag(pluginName))
+            await loadPlugin(pluginName)
+            return
+          }
+          let plugin = plugins.get(pluginName) as TouchPlugin
 
-    watcher.on('unlinkDir', (_path) => {
-      const pluginName = path.basename(_path)
-      console.log(`[Plugin] Plugin ${pluginName} has been removed`)
+          if (plugin.dev.enable && plugin.dev.source) {
+            logDebug(
+              'Ignore disk change because plugin is in dev source mode.',
+              pluginTag(pluginName)
+            )
+            return
+          }
 
-      if (!hasPlugin(pluginName)) return
-      unloadPlugin(pluginName)
-    })
+          logInfo(
+            'Detected file change, reloading plugin',
+            pluginTag(pluginName),
+            'file:',
+            baseName
+          )
 
-    watcher.on('ready', async () => {
-      console.log(
-        '[PluginModule] Initial scan complete. Ready for changes. (' + pluginPath + ')'
-      )
-      console.log(
-        `[PluginModule] Waiting for ${initialLoadPromises.length} initial plugins to load...`
-      )
-      // Wait for all initial plugin loading operations to complete.
-      await Promise.allSettled(initialLoadPromises)
-      console.log('[PluginModule] All initial plugins loaded.')
-      // Once all plugins are loaded, load the persisted state and auto-enable plugins.
-      await loadPersistedState()
-    })
+          if (
+            baseName === 'manifest.json' ||
+            baseName === 'preload.js' ||
+            baseName === 'index.html' ||
+            baseName === 'index.js'
+          ) {
+            const _enabled =
+              plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
-    watcher.on('error', (error) => {
-      console.error('[PluginModule] Error happened', error)
-      console.log(`[PluginModule] ${error}`)
-    })
+            await plugin.disable()
+            await unloadPlugin(pluginName)
+
+            await loadPlugin(pluginName)
+
+            plugin = plugins.get(pluginName) as TouchPlugin
+
+            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
+              source: 'disk',
+              plugin: (plugin as TouchPlugin).toJSONObject()
+            })
+
+            logDebug('plugin reload event sent', pluginTag(pluginName), 'wasEnabled:', _enabled)
+
+            if (_enabled) {
+              await plugin.enable()
+            }
+          } else if (baseName === 'README.md') {
+            plugin.readme = fse.readFileSync(_path, 'utf-8')
+
+            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
+              source: 'disk',
+              plugin: pluginName,
+              readme: plugin.readme
+            })
+          } else {
+            logWarn(
+              'File change detected but ignored (not a tracked file):',
+              pluginTag(pluginName),
+              baseName
+            )
+          }
+        },
+        onDirectoryAdd: async (_path) => {
+          if (!fse.existsSync(_path + '/manifest.json')) return
+          const pluginName = path.basename(_path)
+
+          if (
+            pluginName.indexOf('.') !== -1 ||
+            pluginName.indexOf('\\') !== -1 ||
+            pluginName.indexOf('/') !== -1
+          ) {
+            logWarn('Detected new directory with invalid plugin name, ignoring.', pluginName)
+            return
+          }
+
+          logInfo('Plugin directory added', pluginTag(pluginName))
+
+          if (hasPlugin(pluginName)) {
+            logInfo('Reload existing plugin after directory add', pluginTag(pluginName))
+            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
+              source: 'disk',
+              plugin: pluginName
+            })
+            return
+          }
+
+          initialLoadPromises.push(loadPlugin(pluginName))
+        },
+        onDirectoryRemove: async (_path) => {
+          const pluginName = path.basename(_path)
+          logWarn('Plugin directory removed', pluginTag(pluginName))
+
+          if (!hasPlugin(pluginName)) return
+          await unloadPlugin(pluginName)
+        },
+        onReady: async () => {
+          logInfo('File watcher ready for changes.', chalk.blue(pluginPath))
+          logInfo(`Waiting for ${initialLoadPromises.length} initial plugin load operation(s)...`)
+          await Promise.allSettled(initialLoadPromises)
+          logInfo('All initial plugins loaded.')
+          await loadPersistedState()
+        },
+        onError: (error) => {
+          logError('Watcher error occurred:', error)
+        }
+      })
+    })().catch((err) => logError('Failed to initialize plugin module watchers:', err))
   }
 
   __init__()
@@ -582,8 +661,34 @@ export class PluginModule extends BaseModule {
         const result = manager.getPluginList()
         return result
       } catch (error) {
-        console.error('[PluginModule] Error in plugin-list handler:', error)
+        logError('Error in plugin-list handler:', error)
         return []
+      }
+    })
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:install-source', async ({ data, reply }) => {
+      if (!data || typeof data.source !== 'string') {
+        return reply(DataCode.ERROR, { error: 'Invalid install request' })
+      }
+
+      try {
+        const request: PluginInstallRequest = {
+          source: data.source,
+          hintType: data.hintType,
+          metadata: data.metadata
+        }
+        const summary = await manager.installFromSource(request)
+        return reply(DataCode.SUCCESS, {
+          status: 'success',
+          manifest: summary.manifest,
+          provider: summary.providerResult.provider,
+          official: summary.providerResult.official ?? false
+        })
+      } catch (error: any) {
+        logError('插件安装失败:', error)
+        return reply(DataCode.ERROR, {
+          status: 'error',
+          message: error?.message || 'INSTALL_FAILED'
+        })
       }
     })
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
@@ -669,9 +774,9 @@ export class PluginModule extends BaseModule {
       const pluginPath = plugin.pluginPath
       try {
         const err = await shell.openPath(pluginPath)
-        if (err) console.error(`Error opening plugin folder: ${err}`)
+        if (err) logError('Error opening plugin folder:', err)
       } catch (error) {
-        console.error(`Exception while opening plugin folder:`, error)
+        logError('Exception while opening plugin folder:', error)
       }
     })
     touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {

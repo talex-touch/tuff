@@ -6,12 +6,11 @@ import {
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
-  PluginLogger,
   PluginStatus,
   IPluginFeature
 } from '@talex-touch/utils/plugin'
 import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
+import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
 import { createClipboardManager } from '@talex-touch/utils/plugin'
@@ -20,7 +19,7 @@ import axios from 'axios'
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
 import { PluginIcon } from './plugin-icon'
-import { PluginViewLoader } from '../../modules/plugin-module/plugin-view-loader'
+import { PluginViewLoader } from './view/plugin-view-loader'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
@@ -183,7 +182,9 @@ export class TouchPlugin implements ITouchPlugin {
 
       // Delegate view loading to the unified PluginViewLoader
       if (!this.pluginLifecycle) {
-        this.logger.warn(`Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`)
+        this.logger.warn(
+          `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
+        )
       }
       await PluginViewLoader.loadPluginView(this, feature)
       return
@@ -278,7 +279,9 @@ export class TouchPlugin implements ITouchPlugin {
             this.getFeatureUtil()
           ) as IFeatureLifeCycle
         } else {
-          this.logger.info(`No index.js found for plugin '${this.name}', running without lifecycle.`)
+          this.logger.info(
+            `No index.js found for plugin '${this.name}', running without lifecycle.`
+          )
         }
       }
     } catch (e: any) {

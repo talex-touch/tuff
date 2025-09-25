@@ -92,11 +92,15 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       return
     }
 
-    const shouldRestoreAfterExecute = !appSetting.tools.autoHide
+    const isPluginFeature =
+      itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
+    const shouldRestoreAfterExecute = isPluginFeature || !appSetting.tools.autoHide
 
-    touchChannel.sendSync('core-box:hide')
+    if (!isPluginFeature) {
+      touchChannel.sendSync('core-box:hide')
+    }
 
-    if (itemToExecute.kind === 'feature') {
+    if (isPluginFeature) {
       boxOptions.data.feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
     }

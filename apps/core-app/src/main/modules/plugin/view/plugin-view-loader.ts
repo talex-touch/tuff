@@ -1,7 +1,7 @@
 import { IPluginFeature } from '@talex-touch/utils/plugin'
 import path from 'path'
-import { coreBoxManager } from '../box-tool/core-box/manager'
-import { TouchPlugin } from '../../plugins'
+import { coreBoxManager } from '../../box-tool/core-box/manager'
+import { TouchPlugin } from '../plugin'
 
 export class PluginViewLoader {
   public static async loadPluginView(

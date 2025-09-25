@@ -86,3 +86,6 @@ class PluginModule {
 }
 
 export const pluginModule: IPluginModule = new PluginModule()
+
+// Backward-compatible alias used across UI components
+export const pluginManager = pluginModule
