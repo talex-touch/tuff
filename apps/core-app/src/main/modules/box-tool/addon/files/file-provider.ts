@@ -43,7 +43,7 @@ import {
   fileParserRegistry,
   FileParserProgress,
   FileParserResult
-} from '@talex-touch/utils/common/file-parsers'
+} from '@talex-touch/utils/electron/file-parsers'
 import {
   SearchIndexService,
   SearchIndexKeyword,
