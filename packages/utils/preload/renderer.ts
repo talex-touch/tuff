@@ -1,12 +1,12 @@
-import type { LoadingEvent, LoadingMode } from '../../../../shared/preload-loading'
+import type { LoadingEvent, LoadingMode, LoadingState, PreloadAPI } from './loading'
 
-function getApi() {
+function getPreloadApi(): PreloadAPI | null {
   if (typeof window === 'undefined') return null
   return window.api ?? null
 }
 
 export function sendPreloadEvent(event: LoadingEvent): void {
-  const api = getApi()
+  const api = getPreloadApi()
   api?.sendPreloadEvent(event)
 }
 
@@ -26,7 +26,7 @@ export function preloadSetMode(mode: LoadingMode): void {
   sendPreloadEvent({ type: 'mode', mode })
 }
 
-export function preloadState(state: 'start' | 'finish'): void {
+export function preloadState(state: LoadingState): void {
   sendPreloadEvent({ type: 'state', state })
 }
 
