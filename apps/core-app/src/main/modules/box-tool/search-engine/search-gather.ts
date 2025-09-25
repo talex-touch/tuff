@@ -93,7 +93,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
     params: TuffQuery,
     onUpdate: TuffAggregatorCallback
   ): IGatherController {
-    console.log(`Starting search with ${providers.length} providers.`)
+    console.debug(`[SearchGatherer] Starting search with ${providers.length} providers.`)
 
     /**
      * The core search handler.
@@ -226,7 +226,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
                 if (error instanceof Error && error.name === 'TimeoutError') {
                   status = 'timeout'
                 }
-                console.error(`Provider [${provider.id}] failed:`, error)
+                console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
               } finally {
                 const duration = performance.now() - startTime
                 // Do not log or record stats for aborted tasks.
@@ -267,14 +267,16 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
         } else {
           durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
         }
-        console.log(
-          `Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
+        const logMethod =
+          status === 'success' ? console.debug : status === 'timeout' ? console.warn : console.warn
+        logMethod(
+          `[SearchGatherer] Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
         )
       }
 
       const run = async (): Promise<number> => {
         await runWorkerPool()
-        console.log('All search tasks completed.')
+        console.debug('[SearchGatherer] All search tasks completed.')
         flushBuffer(true)
         return allResults.reduce((acc, curr) => acc + curr.items.length, 0)
       }

@@ -192,12 +192,22 @@ class TouchChannel implements ITouchChannel {
   }
 
   _sendTo(
-    win: Electron.BrowserWindow | WebContentsView,
+    win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
     arg: any,
     header: any = {}
   ): Promise<any> {
+    const webContents = (win as any)?.webContents as Electron.WebContents | undefined
+
+    if (!webContents) {
+      console.warn(
+        `[Channel] Skip sending "${eventName}" because the target webContents is unavailable.`
+      )
+
+      return Promise.resolve()
+    }
+
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
 
     const data = {
@@ -228,7 +238,7 @@ class TouchChannel implements ITouchChannel {
       //   plugin: arg.plugin
       // })
       _channelCategory = '@plugin-process-message'
-      if (win.webContents.isDestroyed()) {
+      if (webContents.isDestroyed()) {
         console.error(
           `[Channel] Plugin process message for ${JSON.stringify(arg)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
         )
@@ -237,7 +247,7 @@ class TouchChannel implements ITouchChannel {
     }
 
     return new Promise((resolve) => {
-      win.webContents.send(_channelCategory, finalData)
+      webContents.send(_channelCategory, finalData)
 
       this.pendingMap.set(uniqueId, (res) => {
         this.pendingMap.delete(uniqueId)
@@ -257,12 +267,20 @@ class TouchChannel implements ITouchChannel {
   }
 
   _sendToPlugin(
-    win: Electron.BrowserWindow | WebContentsView,
+    win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
     pluginName: string,
     arg: any
   ): Promise<any> {
+    if (!win) {
+      console.warn(
+        `[Channel] Skip sending "${eventName}" to plugin "${pluginName}" because UI view is not ready.`
+      )
+
+      return Promise.resolve()
+    }
+
     const key = this.nameToKeyMap.get(pluginName)
 
     return this._sendTo(
@@ -294,7 +312,7 @@ class TouchChannel implements ITouchChannel {
 
   sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
     return this._sendToPlugin(
-      WindowManager.getInstance().getUIView()!,
+      WindowManager.getInstance().getUIView(),
       ChannelType.PLUGIN,
       eventName,
       pluginName,
@@ -303,7 +321,7 @@ class TouchChannel implements ITouchChannel {
   }
   sendToPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
     return this._sendToPlugin(
-      WindowManager.getInstance().getUIView()!,
+      WindowManager.getInstance().getUIView(),
       ChannelType.PLUGIN,
       eventName,
       pluginName,

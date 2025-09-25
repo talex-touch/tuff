@@ -26,8 +26,18 @@ const displayIcon = computed(() => {
 const title = computed(() => props.item?.render?.basic?.title || 'CoreBox')
 const subtitle = computed(() => props.item?.source?.name || props.item?.source?.type || '')
 
+const primaryActionLabel = computed(() => {
+  const item = props.item
+  if (!item) return 'Open'
+
+  const isPluginFeature =
+    item.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
+
+  return isPluginFeature ? 'Execute' : 'Open'
+})
+
 const keyHints = computed(() => [
-  { key: '↵', label: 'Open' },
+  { key: '↵', label: primaryActionLabel.value },
   { key: '⌘K', label: 'Actions' },
   { key: '⌘1-0', label: 'Quick Select' }
 ])

@@ -8,6 +8,8 @@ import { formatLog, LogStyle, generateAcronym } from './app-utils'
 import chalk from 'chalk'
 import { performance } from 'perf_hooks'
 
+const SLOW_PROCESS_THRESHOLD_MS = 300
+
 interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
 }
@@ -19,19 +21,8 @@ export async function processSearchResults(
   aliases: Record<string, string[]> // 需要传入别名数据
 ): Promise<ProcessedTuffItem[]> {
   const processStart = performance.now()
-  console.log(
-    formatLog(
-      'SearchProcessor',
-      `处理 ${chalk.cyan(apps.length)} 个搜索结果，模式: ${
-        isFuzzySearch ? chalk.yellow('模糊搜索') : chalk.green('精确搜索')
-      }`,
-      LogStyle.process
-    )
-  )
-
   const lowerCaseQuery = query.text.toLowerCase()
   const processedItems: ProcessedTuffItem[] = []
-  let processedCount = 0
 
   for (const app of apps) {
     const uniqueId = app.extensions.bundleId || app.path
@@ -181,22 +172,24 @@ export async function processSearchResults(
 
     processedItems.push({ ...tuffItem, score })
 
-    processedCount++
-    // Progress tracking without console output
+    // Progress tracking removed; keep placeholder for future diagnostics if needed.
   }
 
   // 结果按分数降序排序
   const sortedResults = processedItems.sort((a, b) => b.score - a.score)
 
-  console.log(
-    formatLog(
-      'SearchProcessor',
-      `搜索结果处理完成，匹配到 ${chalk.green(sortedResults.length)} / ${chalk.cyan(
-        apps.length
-      )} 个项目，用时 ${chalk.cyan(((performance.now() - processStart) / 1000).toFixed(2))}s`,
-      LogStyle.success
+  const durationMs = performance.now() - processStart
+  if (durationMs > SLOW_PROCESS_THRESHOLD_MS) {
+    console.warn(
+      formatLog(
+        'SearchProcessor',
+        `Slow post-processing: ${chalk.green(sortedResults.length)} / ${chalk.cyan(
+          apps.length
+        )} items processed in ${chalk.cyan((durationMs / 1000).toFixed(2))}s`,
+        LogStyle.warning
+      )
     )
-  )
+  }
 
   return sortedResults
 }

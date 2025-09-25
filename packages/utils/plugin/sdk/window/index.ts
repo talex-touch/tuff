@@ -1,7 +1,9 @@
 import { genChannel } from '../../channel';
-import {
-  BrowserWindowConstructorOptions, BrowserWindow, WebContents
-} from "electron";
+import type {
+  BrowserWindowConstructorOptions,
+  BrowserWindow,
+  WebContents,
+} from 'electron'
 
 export function createWindow(options: BrowserWindowConstructorOptions & { file?: string } & { url?: string }): number {
   const res = genChannel().sendSync('window:new', options)

@@ -39,6 +39,8 @@ import {
 } from '../../search-engine/search-index-service'
 import { createRetrier } from '@talex-touch/utils'
 
+const SLOW_SEARCH_THRESHOLD_MS = 400
+
 const isSqliteBusyError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false
   const { code, rawCode, message } = error as {
@@ -854,12 +856,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const searchStart = performance.now()
-    console.log(
+    console.debug(
       formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
     )
 
     if (!this.dbUtils || !this.searchIndex) {
-      console.log(
+      console.warn(
         formatLog(
           'AppProvider',
           'Search dependencies not ready, returning empty result',
@@ -882,7 +884,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     let preciseMatchedItemIds: Set<string> | null = null
     if (terms.length > 0) {
       const preciseStart = performance.now()
-      console.log(
+      console.debug(
         formatLog(
           'AppProvider',
           `Executing precise query: ${chalk.cyan(terms.join(', '))}`,
@@ -971,7 +973,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (candidateIds.size === 0) {
-      console.log(
+      console.debug(
         formatLog(
           'AppProvider',
           'No candidates found for query, returning empty result',
@@ -1009,7 +1011,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     if (files.length === 0) {
-      console.log(
+      console.warn(
         formatLog(
           'AppProvider',
           'Candidate mapping returned no rows, search result empty',
@@ -1034,24 +1036,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return rest
     })
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Search complete, returning ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
-          preciseMatchedItemIds?.size ?? 0
-        )}, fts=${chalk.cyan(ftsMatches.length)})`,
-        LogStyle.success
+    const elapsedMs = performance.now() - searchStart
+    if (elapsedMs > SLOW_SEARCH_THRESHOLD_MS) {
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Slow search: ${chalk.cyan(rawText)} took ${chalk.cyan((elapsedMs / 1000).toFixed(2))}s and returned ${chalk.green(
+            sortedItems.length
+          )} results (precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(ftsMatches.length)})`,
+          LogStyle.warning
+        )
       )
-    )
-    console.log(
-      formatLog(
-        'AppProvider',
-        `onSearch\u300c${chalk.cyan(rawText)}\u300d finished in ${chalk.cyan(
-          ((performance.now() - searchStart) / 1000).toFixed(2)
-        )}s`,
-        LogStyle.success
-      )
-    )
+    }
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
