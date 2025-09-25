@@ -6,12 +6,11 @@ import {
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
-  PluginLogger,
   PluginStatus,
   IPluginFeature
 } from '@talex-touch/utils/plugin'
 import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { PluginLoggerManager } from '@talex-touch/utils/plugin/log/logger-manager'
+import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
 import { createClipboardManager } from '@talex-touch/utils/plugin'

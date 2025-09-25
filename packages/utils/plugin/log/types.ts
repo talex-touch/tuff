@@ -25,3 +25,14 @@ export interface LogItem {
   /** Additional log data (parameters, configs, responses) */
   data: LogDataType[]
 }
+
+/**
+ * Minimal contract for plugin loggers so web 端只依赖接口定义
+ */
+export interface IPluginLogger<TManager = unknown> {
+  info(...args: LogDataType[]): void
+  warn(...args: LogDataType[]): void
+  error(...args: LogDataType[]): void
+  debug(...args: LogDataType[]): void
+  getManager(): TManager
+}
