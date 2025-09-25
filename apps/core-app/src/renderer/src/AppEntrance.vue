@@ -7,7 +7,7 @@ import {
   preloadLog,
   preloadRemoveOverlay,
   preloadState
-} from '~/modules/utils/preload-loading'
+} from '@talex-touch/utils/preload'
 
 const init = ref(false)
 const props = defineProps<{

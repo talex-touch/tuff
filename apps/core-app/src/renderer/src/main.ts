@@ -11,7 +11,7 @@ import { setupI18n } from '~/modules/lang'
 import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
 
-import { preloadDebugStep, preloadLog, preloadState } from './modules/utils/preload-loading'
+import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
 
 import './assets/main.css'
 import '~/styles/element/index.scss'

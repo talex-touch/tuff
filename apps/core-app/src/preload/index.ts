@@ -1,14 +1,52 @@
-import appIcon from '../../public/favicon.ico?asset'
-
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+import appLogoAsset from '../../public/logo.png?asset'
+import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
 import {
   PRELOAD_LOADING_CHANNEL,
-  LoadingEvent,
-  LoadingMode,
+  type LoadingEvent,
+  type LoadingMode,
   type PreloadAPI
-} from '../shared/preload-loading'
+} from '@talex-touch/utils/preload'
+
+const resolveAssetSource = (asset: string): string => {
+  if (!asset) return asset
+
+  if (/^(?:https?:\/\/|file:|data:)/.test(asset)) {
+    return asset
+  }
+
+  if (path.isAbsolute(asset)) {
+    return pathToFileURL(asset).toString()
+  }
+
+  if (asset.startsWith('/')) {
+    if (window.location.protocol === 'file:') {
+      const publicDir = process.env.PUBLIC
+      if (publicDir) {
+        return pathToFileURL(path.join(publicDir, asset.slice(1))).toString()
+      }
+      return `file://${asset}`
+    }
+
+    return asset
+  }
+
+  if (window.location.protocol === 'file:') {
+    const publicDir = process.env.PUBLIC
+    if (publicDir) {
+      return pathToFileURL(path.join(publicDir, asset)).toString()
+    }
+  }
+
+  return asset
+}
+
+const appLogo = resolveAssetSource(appLogoAsset)
+const appIcon = resolveAssetSource(appIconAsset)
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 
@@ -88,11 +126,13 @@ function useLoading(options: LoadingOptions) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: clamp(28px, 5vw, 44px);
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at top, #2c2c34 0%, #18181c 50%, #111112 100%);
-  color: #f5f5f5;
+  --app-loading-background: radial-gradient(circle at top, #2c2c34 0%, #18181c 55%, #101014 100%);
+  --app-loading-foreground: #f5f5f5;
+  background: var(--app-loading-background);
+  color: var(--app-loading-foreground);
   z-index: 2147483000;
   font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   opacity: 0;
@@ -112,13 +152,52 @@ function useLoading(options: LoadingOptions) {
   visibility: hidden;
   pointer-events: none;
 }
-.${className}__logo {
-  width: 180px;
-  height: 180px;
-  background-size: contain;
-  background-image: url("${appIcon}");
-  animation: ${className}__logo__animation 2.8s infinite cubic-bezier(0.22, 1, 0.36, 1);
+.${className}[data-theme='light'] {
+  --app-loading-background: radial-gradient(circle at top, #f5f7ff 0%, #e2e5f2 55%, #d5d8e3 100%);
+  --app-loading-foreground: #13151a;
 }
+.${className}__brand {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: clamp(168px, 23vw, 220px);
+  height: clamp(168px, 23vw, 220px);
+}
+.${className}__brand-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 30px rgba(117, 245, 255, 0.22));
+  animation: ${className}__brand-logo__animation 2.8s infinite cubic-bezier(0.22, 1, 0.36, 1);
+}
+.${className}__brand-icon {
+  position: absolute;
+  bottom: clamp(10px, 2vw, 18px);
+  right: clamp(10px, 2vw, 18px);
+  display: grid;
+  place-items: center;
+  width: clamp(48px, 7vw, 64px);
+  height: clamp(48px, 7vw, 64px);
+  border-radius: 20px;
+  background: rgba(12, 12, 16, 0.68);
+  border: 1px solid rgba(140, 102, 255, 0.24);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+}
+.${className}[data-theme='light'] .${className}__brand-icon {
+  background: rgba(236, 239, 247, 0.82);
+  border-color: rgba(92, 141, 255, 0.28);
+  box-shadow: 0 14px 30px rgba(92, 141, 255, 0.18);
+}
+.${className}__brand-icon img {
+  display: block;
+  width: 58%;
+  height: 58%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgba(91, 141, 255, 0.35));
+}
+
 .${className}__progress {
   width: min(320px, 80vw);
   height: 8px;
@@ -137,6 +216,12 @@ function useLoading(options: LoadingOptions) {
   transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   transform: scaleX(var(--app-loading-progress, 0.08));
 }
+.${className}[data-theme='light'] .${className}__progress {
+  background: rgba(19, 21, 26, 0.12);
+}
+.${className}[data-theme='light'] .${className}__progress::before {
+  filter: drop-shadow(0 0 18px rgba(92, 141, 255, 0.24));
+}
 .${className}__bar {
   width: min(320px, 80vw);
   height: 8px;
@@ -144,6 +229,9 @@ function useLoading(options: LoadingOptions) {
   overflow: hidden;
   position: relative;
   background: rgba(255, 255, 255, 0.08);
+}
+.${className}[data-theme='light'] .${className}__bar {
+  background: rgba(19, 21, 26, 0.12);
 }
 .${className}__bar::before {
   content: '';
@@ -153,6 +241,9 @@ function useLoading(options: LoadingOptions) {
   background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0) 100%);
   transform: translateX(-100%);
   animation: ${className}__bar__animation 1.2s infinite;
+}
+.${className}[data-theme='light'] .${className}__bar::before {
+  background: linear-gradient(90deg, rgba(19,21,26,0) 0%, rgba(19,21,26,0.28) 50%, rgba(19,21,26,0) 100%);
 }
 .${className}__debug {
   width: min(360px, 86vw);
@@ -194,10 +285,14 @@ function useLoading(options: LoadingOptions) {
 }
 .${className}__message {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.76);
+  letter-spacing: 0.02em;
+}
+.${className}[data-theme='light'] .${className}__message {
+  color: rgba(19, 21, 26, 0.72);
 }
 
-@keyframes ${className}__logo__animation {
+@keyframes ${className}__brand-logo__animation {
   0%, 100% {
     filter: hue-rotate(0deg) drop-shadow(0 0 24px rgba(117, 245, 255, 0.25));
     transform: scale(1);
@@ -228,7 +323,12 @@ function useLoading(options: LoadingOptions) {
   const container = document.createElement('div')
   container.className = className
   container.innerHTML = `
-    <div class="${className}__logo" aria-hidden="true"></div>
+    <div class="${className}__brand" aria-hidden="true">
+      <img class="${className}__brand-logo" src="${appLogo}" alt="" />
+      <div class="${className}__brand-icon">
+        <img src="${appIcon}" alt="" />
+      </div>
+    </div>
     <div class="${className}__progress" role="progressbar"></div>
     <div class="${className}__message">Initializing Talex Touch...</div>
   `
@@ -250,6 +350,7 @@ function useLoading(options: LoadingOptions) {
   let finalizeTimer: number | null = null
   let fadeTimer: number | null = null
   let transitionCleanup: CleanupHandle | null = null
+  let removeColorSchemeListener: CleanupHandle | null = null
 
   const updateProgress = (value: number, force = false) => {
     const upperBound = force ? 1 : 0.97
@@ -299,12 +400,38 @@ function useLoading(options: LoadingOptions) {
     }
   }
 
+  const clearColorSchemeListener = () => {
+    if (removeColorSchemeListener) {
+      removeColorSchemeListener()
+      removeColorSchemeListener = null
+    }
+  }
+
+  const setupColorSchemeWatcher = () => {
+    clearColorSchemeListener()
+    if (typeof window.matchMedia !== 'function') {
+      container.dataset.theme = 'dark'
+      return
+    }
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyTheme = (matches: boolean) => {
+      container.dataset.theme = matches ? 'dark' : 'light'
+    }
+    applyTheme(query.matches)
+    const handleChange = (event: MediaQueryListEvent) => {
+      applyTheme(event.matches)
+    }
+    query.addEventListener('change', handleChange)
+    removeColorSchemeListener = () => query.removeEventListener('change', handleChange)
+  }
+
   const cleanupOverlay = () => {
     if (removalCompleted) return
     removalCompleted = true
     clearFinalizeTimer()
     clearFadeTimer()
     clearTransitionCleanup()
+    clearColorSchemeListener()
     window.removeEventListener('message', messageListener)
     safeDOM.remove(document.head, oStyle)
     safeDOM.remove(document.body, container)
@@ -441,6 +568,7 @@ function useLoading(options: LoadingOptions) {
 
   return {
     appendLoading() {
+      setupColorSchemeWatcher()
       safeDOM.append(document.head, oStyle)
       safeDOM.append(document.body, container)
       container.dataset.mode = options.mode
