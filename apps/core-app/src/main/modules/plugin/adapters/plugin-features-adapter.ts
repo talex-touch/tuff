@@ -101,7 +101,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       const pluginName = item.meta?.pluginName
       if (!pluginName) {
         console.error(
-          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
+          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.',
+          {
+            meta: item.meta,
+            availablePlugins: Array.from(pluginModule.pluginManager!.plugins.keys())
+          }
         )
         return null
       }
