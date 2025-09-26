@@ -1253,7 +1253,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           console.log(formatLog('AppProvider', 'First scan in dev mode', LogStyle.info))
           await this._runMdlsUpdateScan()
         } else {
-          console.log(
+          console.debug(
             formatLog(
               'AppProvider',
               `${chalk.cyan(((now - lastScanTimestamp) / (60 * 1000)).toFixed(1))} minutes since last scan, skipping`,
