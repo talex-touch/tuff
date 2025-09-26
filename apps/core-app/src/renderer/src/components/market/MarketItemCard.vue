@@ -5,7 +5,12 @@
   Based on TopPlugins design for consistency
 -->
 <script setup lang="ts" name="MarketItemCard">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '@comp/base/button/FlatButton.vue'
+
 interface MarketItem {
+  id?: string
   name: string
   description: string
   version?: string
@@ -14,15 +19,24 @@ interface MarketItem {
   rating?: number
   icon?: string
   category?: string
-  url?: string
+  official?: boolean
 }
 
 interface MarketItemCardProps {
   item: MarketItem
   index?: number
+  installing?: boolean
 }
 
-defineProps<MarketItemCardProps>()
+const props = defineProps<MarketItemCardProps>()
+
+const emits = defineEmits<{
+  (e: 'install'): void
+}>()
+
+const { t } = useI18n()
+
+const isInstalling = computed(() => props.installing === true)
 
 /**
  * Handle mouse move event to create interactive hover effect
@@ -47,6 +61,11 @@ function handleLeave(event: MouseEvent): void {
   const element = event.currentTarget as HTMLElement
   element.style.setProperty('--op', '0')
 }
+
+function handleInstall(event: MouseEvent): void {
+  event.stopPropagation()
+  emits('install')
+}
 </script>
 
 <template>
@@ -64,7 +83,10 @@ function handleLeave(event: MouseEvent): void {
 
       <!-- Info section -->
       <div class="market-item-info">
-        <h3 class="market-item-title">{{ item.name || 'Unnamed Plugin' }}</h3>
+        <div class="market-item-header">
+          <h3 class="market-item-title">{{ item.name || 'Unnamed Plugin' }}</h3>
+          <span v-if="item.official" class="official-badge">{{ t('market.officialBadge') }}</span>
+        </div>
         <p class="market-item-description">{{ item.description || 'No description available' }}</p>
 
         <!-- Stats section -->
@@ -82,6 +104,24 @@ function handleLeave(event: MouseEvent): void {
             v{{ item.version }}
           </span>
         </div>
+
+        <div class="market-item-meta">
+          <span v-if="item.author" class="meta-chip">
+            <i class="i-ri-user-line" />
+            {{ item.author }}
+          </span>
+          <span v-if="item.category" class="meta-chip">
+            <i class="i-ri-folder-3-line" />
+            {{ item.category }}
+          </span>
+        </div>
+      </div>
+
+      <div class="market-item-actions">
+        <FlatButton :primary="true" mini :disabled="isInstalling" @click="handleInstall">
+          <i v-if="isInstalling" class="i-ri-loader-4-line animate-spin" />
+          <span>{{ isInstalling ? t('market.installing') : t('market.install') }}</span>
+        </FlatButton>
       </div>
     </div>
 
@@ -93,7 +133,7 @@ function handleLeave(event: MouseEvent): void {
 <style lang="scss" scoped>
 .market-item-card {
   position: relative;
-  height: 140px;
+  min-height: 140px;
   background: var(--el-fill-color-light);
   border-radius: 16px;
   cursor: pointer;
@@ -129,7 +169,7 @@ function handleLeave(event: MouseEvent): void {
   align-items: flex-start;
   gap: 1rem;
   padding: 1.25rem;
-  height: 100%;
+  min-height: 140px;
   box-sizing: border-box;
 }
 
@@ -166,15 +206,35 @@ function handleLeave(event: MouseEvent): void {
   display: flex;
   flex-direction: column;
   height: 100%;
+  gap: 0.75rem;
+}
+
+.market-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .market-item-title {
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--el-text-color-primary);
   line-height: 1.3;
   transition: color 0.3s ease;
+}
+
+.official-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(64, 158, 255, 0.12);
+  color: var(--el-color-primary);
+  letter-spacing: 0.4px;
 }
 
 .market-item-description {
@@ -183,26 +243,23 @@ function handleLeave(event: MouseEvent): void {
   color: var(--el-text-color-regular);
   opacity: 0.8;
   line-height: 1.4;
-  flex-grow: 1;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin-bottom: 0.75rem;
 }
 
 .market-item-stats {
   display: flex;
   gap: 1rem;
   align-items: center;
-  margin-top: auto;
+  font-size: 12px;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 12px;
   font-weight: 500;
   opacity: 0.7;
   transition: opacity 0.3s ease;
@@ -232,11 +289,53 @@ function handleLeave(event: MouseEvent): void {
   opacity: 0.9;
 }
 
+.market-item-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: var(--el-fill-color);
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+
+  i {
+    font-size: 12px;
+  }
+}
+
+.market-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .background-mask {
   position: absolute;
   inset: 0;
   background: var(--el-fill-color);
   border-radius: 16px;
   z-index: 1;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

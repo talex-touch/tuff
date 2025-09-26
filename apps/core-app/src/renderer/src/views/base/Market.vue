@@ -5,10 +5,13 @@
       <div class="market-header-title">
         <h2>{{ t('market.title') }}</h2>
         <span class="market-subtitle">{{ t('market.subtitle') }}</span>
+        <span v-if="lastUpdatedLabel" class="market-last-updated">
+          {{ t('market.lastUpdated', { time: lastUpdatedLabel }) }}
+        </span>
       </div>
 
       <div class="market-header-search">
-        <FlatCompletion :fetch="fetch" :placeholder="t('market.searchPlaceholder')" />
+        <FlatCompletion :fetch="suggestionFetch" :placeholder="t('market.searchPlaceholder')" />
         <div
           :class="{ _disabled: sourceEditorShow }"
           class="market-sources"
@@ -29,12 +32,12 @@
         <div class="market-tags">
           <button
             v-for="(item, index) in tags"
-            :key="item.tag"
+            :key="item.tag || item.label || index"
             @click="tagInd = index"
             :class="{ active: tagInd === index }"
             class="tag-button"
           >
-            {{ t(item.tag) }}
+            {{ item.label ?? t(item.tag) }}
           </button>
         </div>
         <div class="market-view-toggle">
@@ -42,143 +45,391 @@
             <TLabelSelectItem value="grid" icon="i-carbon-table-split" />
             <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
           </TLabelSelect>
+          <FlatButton
+            mini
+            class="refresh-button"
+            :disabled="loading"
+            @click="loadOfficialPlugins(true)"
+          >
+            <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" />
+            <span>{{ loading ? t('market.loading') : t('market.refresh') }}</span>
+          </FlatButton>
         </div>
       </div>
     </div>
 
     <!-- Market Items Grid -->
     <div class="market-content">
-      <transition-group
-        name="market-items"
-        tag="div"
-        :class="['market-grid', { 'list-view': orderType === 'list' }]"
-        @before-enter="onBeforeEnter"
-        @enter="onEnter"
-        @leave="onLeave"
-      >
-        <MarketItemCard
-          v-for="(item, index) in value"
-          :key="item.name || index"
-          :item="item"
-          :index="index"
-          :data-index="index"
-          class="market-grid-item"
-        />
-      </transition-group>
-
-      <!-- Empty State -->
-      <div v-if="value.length === 0" class="market-empty">
-        <div class="empty-icon">
-          <i class="i-ri-search-line" />
-        </div>
-        <h3>{{ t('market.empty.title') }}</h3>
-        <p>{{ t('market.empty.subtitle') }}</p>
+      <div v-if="loading" class="market-loading">
+        <i class="i-ri-loader-4-line animate-spin" />
+        <span>{{ t('market.loading') }}</span>
       </div>
+      <template v-else>
+        <transition-group
+          name="market-items"
+          tag="div"
+          :class="['market-grid', { 'list-view': orderType === 'list' }]"
+          @before-enter="onBeforeEnter"
+          @enter="onEnter"
+          @leave="onLeave"
+        >
+          <MarketItemCard
+            v-for="(item, index) in displayedPlugins"
+            :key="item.id || item.name || index"
+            :item="item"
+            :index="index"
+            :installing="isInstalling(item.id)"
+            :data-index="index"
+            class="market-grid-item"
+            @install="handleInstall(item)"
+          />
+        </transition-group>
+
+        <!-- Empty State -->
+        <div v-if="!displayedPlugins.length" class="market-empty">
+          <div class="empty-icon">
+            <i class="i-ri-search-line" />
+          </div>
+          <h3>{{ t('market.empty.title') }}</h3>
+          <p>{{ errorMessage || t('market.empty.subtitle') }}</p>
+        </div>
+      </template>
     </div>
   </div>
 
   <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
 </template>
 
-<script name="Market" setup>
+<script lang="ts" name="Market" setup>
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { pluginSettings } from '~/modules/storage/plugin-settings'
+import { useToggle } from '@vueuse/core'
 import gsap from 'gsap'
 import FlatCompletion from '@comp/base/input/FlatCompletion.vue'
 import MarketItemCard from '@comp/market/MarketItemCard.vue'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
-import { useToggle } from '@vueuse/core'
+import { pluginSettings } from '~/modules/storage/plugin-settings'
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { forTouchTip } from '~/modules/mention/dialog-mention'
+
+interface OfficialManifestVersionEntry {
+  version: string
+  path: string
+  timestamp?: string
+}
+
+interface OfficialManifestEntry {
+  id: string
+  name: string
+  author?: string
+  version: string
+  category?: string
+  description?: string
+  path: string
+  timestamp?: string
+  metadata?: {
+    readme_path?: string
+    [key: string]: unknown
+  }
+  versions?: OfficialManifestVersionEntry[]
+}
+
+interface CategoryTag {
+  tag: string
+  filter: string
+  label?: string
+}
+
+interface OfficialPluginListItem {
+  id: string
+  name: string
+  author?: string
+  version: string
+  category?: string
+  description?: string
+  downloadUrl: string
+  readmeUrl?: string
+  official: boolean
+  metadata?: Record<string, unknown>
+  timestamp?: string
+}
 
 const { t } = useI18n()
 
-const orderType = ref('grid')
+const MANIFEST_URL =
+  'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json'
+const MANIFEST_BASE_URL =
+  'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
+
+const orderType = ref<'grid' | 'list'>('grid')
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const tagInd = ref(0)
+const tags = ref<CategoryTag[]>([{ tag: 'market.tags.all', filter: '' }])
 
-const tags = reactive([
-  { tag: 'market.tags.all', filter: '' },
-  { tag: 'market.tags.feature', filter: 'feature' },
-  { tag: 'market.tags.ui', filter: 'ui' },
-  { tag: 'market.tags.ux', filter: 'ux' },
-  { tag: 'market.tags.enhancement', filter: 'enhancement' },
-  { tag: 'market.tags.tools', filter: 'tools' },
-  { tag: 'market.tags.productivity', filter: 'productivity' }
-])
+const loading = ref(false)
+const errorMessage = ref('')
+const lastUpdated = ref<number | null>(null)
+const searchKey = ref('')
 
-const value = ref([])
+const officialPlugins = ref<OfficialPluginListItem[]>([])
+const installingState = reactive(new Map<string, boolean>())
+let rendererChannel: ITouchClientChannel | undefined
+let channelLoadFailed = false
 
-// Enhanced fetch function with better mock data
-function fetch(key) {
-  value.value = []
+const suggestionFetch = (key = ''): string[] => {
+  const normalized = key.trim()
+  searchKey.value = normalized
 
-  const mockPlugins = [
-    {
-      name: 'Smart Clipboard',
-      description:
-        'Advanced clipboard manager with history, sync, and smart suggestions for enhanced productivity',
-      version: '2.1.0',
-      author: 'TalexTeam',
-      downloads: '2.3M',
-      rating: 4.8,
-      icon: 'ri-clipboard-line',
-      category: 'productivity'
-    },
-    {
-      name: 'Universal Translator',
-      description:
-        'Real-time translation for 100+ languages with offline support and context awareness',
-      version: '1.5.2',
-      author: 'LangTech',
-      downloads: '1.8M',
-      rating: 4.7,
-      icon: 'ri-translate-2',
-      category: 'tools'
-    },
-    {
-      name: 'Quick Search Pro',
-      description:
-        'Lightning-fast search across files, web, and applications with AI-powered suggestions',
-      version: '3.0.1',
-      author: 'SearchLab',
-      downloads: '3.1M',
-      rating: 4.9,
-      icon: 'ri-search-line',
-      category: 'productivity'
-    },
-    {
-      name: 'AI Code Assistant',
-      description:
-        'Intelligent coding companion with auto-completion, refactoring, and bug detection',
-      version: '1.8.0',
-      author: 'DevAI',
-      downloads: '1.5M',
-      rating: 4.6,
-      icon: 'ri-robot-line',
-      category: 'development'
-    },
-    {
-      name: 'Secure Vault',
-      description:
-        'Military-grade password manager with biometric authentication and secure sharing',
-      version: '4.2.1',
-      author: 'SecureTech',
-      downloads: '2.7M',
-      rating: 4.8,
-      icon: 'ri-shield-keyhole-line',
-      category: 'security'
-    }
-  ]
+  if (!normalized) {
+    return officialPlugins.value.slice(0, 6).map((plugin) => plugin.name)
+  }
 
-  const filteredPlugins = mockPlugins.filter(
-    (plugin) =>
-      plugin.name.toLowerCase().includes(key.toLowerCase()) ||
-      plugin.description.toLowerCase().includes(key.toLowerCase())
+  const lower = normalized.toLowerCase()
+  return officialPlugins.value
+    .filter((plugin) => plugin.name.toLowerCase().includes(lower))
+    .map((plugin) => plugin.name)
+}
+
+const selectedTag = computed(() => tags.value[tagInd.value] ?? tags.value[0])
+
+const displayedPlugins = computed(() => {
+  const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
+  const normalizedKey = searchKey.value.trim().toLowerCase()
+
+  return officialPlugins.value.filter((plugin) => {
+    const pluginCategory = plugin.category?.toLowerCase() ?? ''
+    const matchesCategory = !categoryFilter || pluginCategory === categoryFilter
+
+    if (!matchesCategory) return false
+
+    if (!normalizedKey) return true
+
+    return (
+      plugin.name.toLowerCase().includes(normalizedKey) ||
+      (plugin.description ?? '').toLowerCase().includes(normalizedKey) ||
+      (plugin.author ?? '').toLowerCase().includes(normalizedKey) ||
+      plugin.id.toLowerCase().includes(normalizedKey)
+    )
+  })
+})
+
+const lastUpdatedLabel = computed(() => {
+  if (!lastUpdated.value) return ''
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(new Date(lastUpdated.value))
+  } catch (error) {
+    console.warn('[Market] Failed to format last updated timestamp', error)
+    return new Date(lastUpdated.value).toLocaleString()
+  }
+})
+
+const isInstalling = (id: string): boolean => installingState.get(id) === true
+
+function updateCategoryTags(): void {
+  const categories = Array.from(
+    new Set(
+      officialPlugins.value
+        .map((plugin) => plugin.category)
+        .filter((category): category is string => typeof category === 'string' && category.trim().length > 0)
+    )
   )
 
-  value.value = filteredPlugins.slice(0, Math.min(key.length * 2, 12))
+  const base: CategoryTag[] = [{ tag: 'market.tags.all', filter: '' }]
 
-  return []
+  for (const category of categories) {
+    const lower = category.toLowerCase()
+    if (lower === 'tools') {
+      base.push({ tag: 'market.tags.tools', filter: lower })
+      continue
+    }
+
+    base.push({
+      tag: '',
+      filter: lower,
+      label: category
+    })
+  }
+
+  tags.value = base
+  if (tagInd.value >= tags.value.length) tagInd.value = 0
 }
+
+function mapManifestEntry(entry: OfficialManifestEntry): OfficialPluginListItem {
+  const normalizedPath = entry.path.replace(/^\//, '')
+  const downloadUrl = new URL(normalizedPath, MANIFEST_BASE_URL).toString()
+
+  let readmeUrl: string | undefined
+  const readmePath = entry.metadata?.readme_path
+  if (readmePath && readmePath.trim().length > 0) {
+    readmeUrl = new URL(readmePath.replace(/^\//, ''), MANIFEST_BASE_URL).toString()
+  }
+
+  return {
+    id: entry.id,
+    name: entry.name,
+    author: entry.author,
+    version: entry.version,
+    category: entry.category,
+    description: entry.description,
+    downloadUrl,
+    readmeUrl,
+    official: true,
+    metadata: entry.metadata,
+    timestamp: entry.timestamp
+  }
+}
+
+async function fetchManifestDirect(): Promise<{ plugins: OfficialPluginListItem[]; fetchedAt: number }>
+{
+  const response = await fetch(MANIFEST_URL, {
+    headers: {
+      Accept: 'application/json'
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(`OFFICIAL_PLUGIN_HTTP_${response.status}`)
+  }
+
+  const body = await response.json()
+  if (!Array.isArray(body)) {
+    throw new Error('OFFICIAL_PLUGIN_INVALID_MANIFEST')
+  }
+
+  const plugins = body.map((entry: OfficialManifestEntry) => mapManifestEntry(entry))
+  return { plugins, fetchedAt: Date.now() }
+}
+
+function isElectronRenderer(): boolean {
+  return Boolean(typeof window !== 'undefined' && window.process?.type === 'renderer')
+}
+
+async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
+  if (rendererChannel) return rendererChannel
+  if (channelLoadFailed || !isElectronRenderer()) return undefined
+
+  try {
+    const module = await import('~/modules/channel/channel-core')
+    rendererChannel = module.touchChannel as ITouchClientChannel
+    return rendererChannel
+  } catch (error) {
+    channelLoadFailed = true
+    console.warn('[Market] Failed to load channel-core module:', error)
+    return undefined
+  }
+}
+
+async function loadOfficialPlugins(force = false): Promise<void> {
+  if (loading.value) return
+
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    let result: { plugins: OfficialPluginListItem[]; fetchedAt: number } | null = null
+
+    const channel = await getRendererChannel()
+    if (channel) {
+      try {
+        const response: any = await channel.send('plugin:official-list', { force })
+
+        if (!response || !Array.isArray(response.plugins)) {
+          throw new Error(response?.error || 'OFFICIAL_PLUGIN_FETCH_FAILED')
+        }
+
+        result = {
+          plugins: response.plugins as OfficialPluginListItem[],
+          fetchedAt: typeof response.fetchedAt === 'number' ? response.fetchedAt : Date.now()
+        }
+      } catch (error) {
+        console.warn('[Market] Failed to load official plugins via IPC, fallback to HTTP:', error)
+      }
+    }
+
+    if (!result) {
+      result = await fetchManifestDirect()
+    }
+
+    officialPlugins.value = result.plugins
+    lastUpdated.value = result.fetchedAt
+
+    updateCategoryTags()
+  } catch (error: any) {
+    console.error('[Market] Failed to load official plugins:', error)
+    const reason =
+      typeof error?.message === 'string' && error.message.trim().length > 0
+        ? error.message.trim()
+        : ''
+    const shouldExposeReason =
+      reason && !reason.startsWith('OFFICIAL_PLUGIN_') && reason !== 'OFFICIAL_PLUGIN_FETCH_FAILED'
+
+    errorMessage.value = shouldExposeReason ? reason : t('market.error.loadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
+  if (isInstalling(plugin.id)) return
+
+  const channel = await getRendererChannel()
+
+  if (!channel) {
+    await forTouchTip(t('market.installation.failureTitle'), t('market.installation.browserNotSupported'))
+    return
+  }
+
+  installingState.set(plugin.id, true)
+
+  try {
+    const payload: Record<string, unknown> = {
+      source: plugin.downloadUrl,
+      metadata: {
+        officialId: plugin.id,
+        officialVersion: plugin.version,
+        officialSource: 'talex-touch/tuff-official-plugins'
+      }
+    }
+
+    const result: any = await channel.send('plugin:install-source', payload)
+
+    if (result?.status === 'success') {
+      await forTouchTip(
+        t('market.installation.successTitle'),
+        t('market.installation.successMessage', { name: plugin.name })
+      )
+    } else {
+      const reason = result?.message || 'INSTALL_FAILED'
+      throw new Error(reason)
+    }
+  } catch (error: any) {
+    console.error('[Market] Plugin install failed:', error)
+    await forTouchTip(
+      t('market.installation.failureTitle'),
+      t('market.installation.failureMessage', {
+        name: plugin.name,
+        reason: error?.message || 'UNKNOWN_ERROR'
+      })
+    )
+  } finally {
+    installingState.delete(plugin.id)
+  }
+}
+
+watch(
+  () => officialPlugins.value,
+  () => {
+    updateCategoryTags()
+  },
+  { deep: true }
+)
+
+onMounted(() => {
+  void loadOfficialPlugins()
+})
 
 // Smooth animation functions using GSAP
 function onBeforeEnter(el) {
@@ -218,11 +469,6 @@ function onLeave(el, done) {
     onComplete: done
   })
 }
-
-// Initialize with some sample data
-onMounted(() => {
-  fetch('plugin')
-})
 </script>
 
 <style lang="scss" scoped>
@@ -245,6 +491,9 @@ onMounted(() => {
 
 .market-header-title {
   margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 
   h2 {
     margin: 0 0 0.5rem 0;
@@ -258,6 +507,12 @@ onMounted(() => {
     font-size: 1rem;
     color: var(--el-text-color-regular);
     opacity: 0.8;
+  }
+
+  .market-last-updated {
+    font-size: 0.8rem;
+    color: var(--el-text-color-secondary);
+    opacity: 0.85;
   }
 }
 
@@ -296,12 +551,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .market-tags {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
@@ -335,6 +590,22 @@ onMounted(() => {
 .market-view-toggle {
   display: flex;
   align-items: center;
+  gap: 0.75rem;
+
+  .refresh-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+
+    :deep(.FlatButton-Container) {
+      min-width: 0;
+      padding: 0 0.75rem;
+    }
+
+    i {
+      font-size: 1rem;
+    }
+  }
 }
 
 /* Content Styles */
@@ -342,6 +613,21 @@ onMounted(() => {
   flex: 1;
   overflow: auto;
   padding: 2rem 2.5rem;
+}
+
+.market-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 4rem 0;
+  color: var(--el-text-color-secondary);
+
+  i {
+    font-size: 2rem;
+    color: var(--el-color-primary);
+  }
 }
 
 .market-grid {
@@ -393,6 +679,19 @@ onMounted(() => {
 .market-items-leave-active {
   position: absolute;
   width: 100%;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Empty State */
