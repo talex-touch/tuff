@@ -158,6 +158,12 @@
     "subtitle": "Discover amazing plugins for your workflow",
     "searchPlaceholder": "Search plugins...",
     "sources": "sources",
+    "loading": "Loading official plugins...",
+    "refresh": "Refresh",
+    "install": "Install",
+    "installing": "Installing...",
+    "officialBadge": "Official",
+    "lastUpdated": "Last updated {time}",
     "tags": {
       "all": "All",
       "feature": "Feature",
@@ -166,6 +172,16 @@
       "enhancement": "Enhancement",
       "tools": "Tools",
       "productivity": "Productivity"
+    },
+    "error": {
+      "loadFailed": "Failed to load official plugin list."
+    },
+    "installation": {
+      "successTitle": "Install Complete",
+      "successMessage": "\"{name}\" is ready to use.",
+      "failureTitle": "Install Failed",
+      "failureMessage": "Unable to install \"{name}\": {reason}",
+      "browserNotSupported": "Official plugins can only be installed inside the desktop app."
     },
     "empty": {
       "title": "No plugins found",

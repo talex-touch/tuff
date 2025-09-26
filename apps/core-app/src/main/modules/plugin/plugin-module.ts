@@ -22,6 +22,7 @@ import { BaseModule } from '../abstract-base-module'
 import { PluginInstaller } from './plugin-installer'
 import { LocalPluginProvider } from './providers/local-provider'
 import { fileWatchService } from '../../service/file-watch.service'
+import { getOfficialPlugins } from '../../service/official-plugin.service'
 import util from 'util'
 
 const devWatcherLabel = chalk.blue('[DevPluginWatcher]')
@@ -663,6 +664,17 @@ export class PluginModule extends BaseModule {
       } catch (error) {
         logError('Error in plugin-list handler:', error)
         return []
+      }
+    })
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:official-list', async ({ data, reply }) => {
+      try {
+        const result = await getOfficialPlugins({ force: Boolean(data?.force) })
+        return reply(DataCode.SUCCESS, result)
+      } catch (error: any) {
+        logError('Failed to fetch official plugin list:', error)
+        return reply(DataCode.ERROR, {
+          error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
+        })
       }
     })
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:install-source', async ({ data, reply }) => {
