@@ -46,7 +46,7 @@
       <div class="flex items-center gap-2">
         <FlatButton class="action-button" @click="openHistoryDrawer">
           <i class="i-ri-history-line" />
-          <span>{{ t('plugin.actions.history') }}</span>
+          <span>{{ historyActionLabel }}</span>
         </FlatButton>
         <FlatButton class="action-button" :disabled="loadingStates.openFolder" @click="handleOpenPluginFolder">
           <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
@@ -130,6 +130,10 @@ const loadingStates = ref({
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
 const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
+const historyActionLabel = computed(() => {
+  const value = t('plugin.actions.history')
+  return value === 'plugin.actions.history' ? '历史日志' : value
+})
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
