@@ -725,6 +725,13 @@ export class PluginModule extends BaseModule {
       }
       return success
     })
+    touchChannel.regChannel(ChannelType.MAIN, 'reload-plugin', async ({ data }) => {
+      const pluginName = data!.name
+      if (!pluginName) return false
+      if (!manager.plugins.has(pluginName)) return false
+      await manager.reloadPlugin(pluginName)
+      return true
+    })
     touchChannel.regChannel(ChannelType.MAIN, 'get-plugin', ({ data }) =>
       manager.plugins.get(data!.name)
     )

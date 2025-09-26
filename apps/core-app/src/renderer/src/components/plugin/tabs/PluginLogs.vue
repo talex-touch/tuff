@@ -3,7 +3,7 @@
     <div class="flex-1 rounded-lg overflow-hidden">
       <LogTerminal :logs="terminalLogs" />
     </div>
-    <TDrawer v-model:visible="showHistory" title="历史记录">
+    <TDrawer v-model:visible="showHistory" :title="t('plugin.logs.historyTitle')">
       <div v-if="logSessions.length" class="p-4">
         <ul>
           <li
@@ -17,7 +17,7 @@
         </ul>
       </div>
       <div v-else class="flex items-center justify-center h-full text-gray-500">
-        <p>暂无历史日志</p>
+        <p>{{ t('plugin.logs.historyEmpty') }}</p>
       </div>
     </TDrawer>
   </div>
@@ -31,6 +31,7 @@ import LogTerminal from '@comp/terminal/LogTerminal.vue'
 import TDrawer from '@comp/base/dialog/TDrawer.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -41,6 +42,7 @@ const terminalLogs = ref<string[]>([])
 const logSessions = ref<string[]>([])
 const showHistory = ref(false)
 let unsubscribeLogStream: (() => void) | null = null
+const { t } = useI18n()
 
 const openHistoryDrawer = (): void => {
   showHistory.value = true
