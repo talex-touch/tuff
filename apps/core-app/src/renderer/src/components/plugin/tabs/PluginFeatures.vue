@@ -5,12 +5,12 @@
       <div class="grid grid-cols-2 gap-4">
         <StatCard
           :value="plugin.features?.length || 0"
-          label="Features"
+          :label="t('plugin.features.stats.features')"
           icon-class="i-ri-function-line text-6xl text-blue-500"
         />
         <StatCard
           :value="totalCommands"
-          label="Commands"
+          :label="t('plugin.features.stats.commands')"
           icon-class="i-ri-terminal-box-line text-6xl text-[var(--el-color-success)]"
         />
       </div>
@@ -37,17 +37,17 @@
         <i class="i-ri-function-line text-4xl text-[var(--el-text-color-disabled)]" />
       </div>
       <h3 class="text-xl font-semibold text-[var(--el-text-color-primary)] mb-2">
-        No Features Available
+        {{ t('plugin.features.empty.title') }}
       </h3>
       <p class="text-[var(--el-text-color-secondary)]">
-        This plugin doesn't expose any features yet.
+        {{ t('plugin.features.empty.subtitle') }}
       </p>
     </div>
 
     <!-- Feature Detail Drawer -->
     <ElDrawer
       v-model="showDrawer"
-      title="Feature Details"
+      :title="t('plugin.features.drawer.title')"
       direction="rtl"
       size="50%"
       :before-close="handleDrawerClose"
@@ -76,24 +76,30 @@
         <div class="PluginFeature-Overview mb-8">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
             <i class="i-ri-information-line text-[var(--el-color-primary)]" />
-            Overview
+            {{ t('plugin.features.drawer.overview') }}
           </h3>
           <div class="bg-[var(--el-fill-color-lighter)] rounded-xl p-4 space-y-3">
             <div class="flex justify-between items-center">
-              <span class="text-sm text-[var(--el-text-color-regular)]">Feature ID:</span>
+              <span class="text-sm text-[var(--el-text-color-regular)]">
+                {{ t('plugin.features.drawer.featureId') }}
+              </span>
               <code class="text-sm bg-[var(--el-fill-color)] px-2 py-1 rounded">{{
                 selectedFeature.id
               }}</code>
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-[var(--el-text-color-regular)]">Commands Count:</span>
+              <span class="text-sm text-[var(--el-text-color-regular)]">
+                {{ t('plugin.features.drawer.commandsCount') }}
+              </span>
               <span class="text-sm font-medium">{{ selectedFeature.commands.length }}</span>
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-[var(--el-text-color-regular)]">Feature Type:</span>
+              <span class="text-sm text-[var(--el-text-color-regular)]">
+                {{ t('plugin.features.drawer.featureType') }}
+              </span>
               <span
                 class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
-                >{{ selectedFeature.type || 'Standard' }}</span
+                >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span
               >
             </div>
           </div>
@@ -103,7 +109,9 @@
         <div class="PluginFeature-Commands mb-8">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
             <i class="i-ri-terminal-line text-[var(--el-color-success)]" />
-            Commands ({{ selectedFeature.commands.length }})
+            {{
+              t('plugin.features.drawer.commandsTitle', { count: selectedFeature.commands.length })
+            }}
           </h3>
           <div class="space-y-4">
             <div
@@ -148,7 +156,7 @@
               <!-- Command JSON -->
               <div class="mt-3">
                 <ElCollapse>
-                  <ElCollapseItem title="View JSON" :name="index">
+                  <ElCollapseItem :title="t('plugin.features.drawer.viewJson')" :name="index">
                     <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
                       <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
                         JSON.stringify(command, null, 2)
@@ -165,10 +173,13 @@
         <div class="PluginFeature-RawJson">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
             <i class="i-ri-code-line text-[var(--el-color-info)]" />
-            Raw Feature Data
+            {{ t('plugin.features.drawer.rawData') }}
           </h3>
           <ElCollapse>
-            <ElCollapseItem title="View Complete Feature JSON" name="feature-json">
+            <ElCollapseItem
+              :title="t('plugin.features.drawer.viewFullJson')"
+              name="feature-json"
+            >
               <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
                 <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
                   JSON.stringify(selectedFeature, null, 2)
@@ -187,6 +198,7 @@ import type { ITouchPlugin, IFeatureCommand } from '@talex-touch/utils/plugin'
 import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
+import { useI18n } from 'vue-i18n'
 
 // Props
 const props = defineProps<{
@@ -197,6 +209,8 @@ const props = defineProps<{
 const totalCommands = computed(
   () => props.plugin.features?.reduce((total, feature) => total + feature.commands.length, 0) || 0
 )
+
+const { t } = useI18n()
 
 // Drawer state
 const showDrawer = ref(false)

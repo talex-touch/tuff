@@ -174,7 +174,88 @@
   },
   "plugin": {
     "opening": "Opening...",
-    "openFolder": "Open Folder"
+    "openFolder": "Open Folder",
+    "actions": {
+      "history": "History",
+      "openFolder": "Open Folder",
+      "opening": "Opening..."
+    },
+    "badges": {
+      "dev": "Dev",
+      "version": "v{version}"
+    },
+    "status": {
+      "disabled": "Plugin disabled, click to enable.",
+      "crashed": "Plugin crashed, click to restart.",
+      "enabled": "Plugin enabled, click to disable.",
+      "loaded": "Plugin loaded, click to enable.",
+      "loadFailed": "Plugin load failed, click to reload."
+    },
+    "tabs": {
+      "overview": "Overview",
+      "issues": "Issues",
+      "features": "Features",
+      "storageMock": "Storage (Mock)",
+      "logs": "Logs",
+      "details": "Details"
+    },
+    "issues": {
+      "title": "Plugin Load Issues",
+      "source": "Source"
+    },
+    "overview": {
+      "environment": "Environment Support",
+      "documentation": "Documentation"
+    },
+    "features": {
+      "stats": {
+        "features": "Features",
+        "commands": "Commands"
+      },
+      "empty": {
+        "title": "No Features Available",
+        "subtitle": "This plugin doesn't expose any features yet."
+      },
+      "drawer": {
+        "title": "Feature Details",
+        "overview": "Overview",
+        "featureId": "Feature ID",
+        "commandsCount": "Commands Count",
+        "featureType": "Feature Type",
+        "standardType": "Standard",
+        "commandsTitle": "Commands ({count})",
+        "viewJson": "View JSON",
+        "rawData": "Raw Feature Data",
+        "viewFullJson": "View Complete Feature JSON"
+      }
+    },
+    "logs": {
+      "historyTitle": "History",
+      "historyEmpty": "No historical logs yet"
+    },
+    "details": {
+      "basicInfo": "Basic Information",
+      "pluginId": "Plugin ID",
+      "copyPluginId": "Copy plugin ID",
+      "version": "Version",
+      "mode": "Mode",
+      "development": "Development",
+      "production": "Production",
+      "devAddress": "Dev Address",
+      "configuration": "Configuration",
+      "autoStart": "Auto Start",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "hotReload": "Hot Reload",
+      "fileSystem": "File System",
+      "pluginPath": "Plugin Path",
+      "dataDirectory": "Data Directory",
+      "cacheSize": "Cache Size",
+      "performance": "Performance",
+      "loadTime": "Load Time",
+      "memoryUsage": "Memory Usage",
+      "cpuUsage": "CPU Usage"
+    }
   },
   "coreBox": {
     "hints": {

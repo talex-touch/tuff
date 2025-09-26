@@ -8,7 +8,7 @@
         <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
           <i class="i-ri-information-line text-xl text-[var(--el-color-primary)]" />
           <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            Basic Information
+            {{ t('plugin.details.basicInfo') }}
           </h3>
         </div>
         <div class="PluginDetails-List space-y-4">
@@ -17,7 +17,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Plugin ID</span
+              >{{ t('plugin.details.pluginId') }}</span
             >
             <div class="PluginDetails-ValueWithCopy flex items-center gap-2">
               <code
@@ -32,7 +32,7 @@
                     : 'text-[var(--el-text-color-secondary)]'
                 "
                 @click="copyToClipboard(plugin.name, 'pluginId')"
-                title="Copy plugin ID"
+                :title="t('plugin.details.copyPluginId')"
               >
                 <i
                   :class="copyState.pluginId ? 'i-ri-check-line' : 'i-ri-file-copy-line'"
@@ -46,7 +46,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Version</span
+              >{{ t('plugin.details.version') }}</span
             >
             <span
               class="PluginDetails-Value text-sm font-semibold text-[var(--el-color-success)]"
@@ -58,17 +58,17 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Mode</span
+              >{{ t('plugin.details.mode') }}</span
             >
             <span
               v-if="plugin.dev?.enable"
               class="PluginDetails-Value text-sm font-medium text-[var(--el-color-primary)]"
-              >Development</span
+              >{{ t('plugin.details.development') }}</span
             >
             <span
               v-else
               class="PluginDetails-Value text-sm font-medium text-[var(--el-color-success)]"
-              >Production</span
+              >{{ t('plugin.details.production') }}</span
             >
           </div>
           <div
@@ -77,7 +77,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Dev Address</span
+              >{{ t('plugin.details.devAddress') }}</span
             >
             <a
               :href="plugin.dev.address"
@@ -97,7 +97,9 @@
       >
         <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
           <i class="i-ri-settings-3-line text-xl text-[var(--el-color-info)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Configuration</h3>
+          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
+            {{ t('plugin.details.configuration') }}
+          </h3>
         </div>
         <div class="PluginDetails-List space-y-4">
           <div
@@ -105,17 +107,17 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Auto Start</span
+              >{{ t('plugin.details.autoStart') }}</span
             >
             <div class="PluginDetails-Toggle flex items-center gap-2">
               <div class="w-2 h-2 bg-[var(--el-color-success)] rounded-full animate-pulse" />
-              <span class="text-sm text-[var(--el-color-success)]">Enabled</span>
+              <span class="text-sm text-[var(--el-color-success)]">{{ t('plugin.details.enabled') }}</span>
             </div>
           </div>
           <div class="PluginDetails-Row flex justify-between items-center py-3">
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Hot Reload</span
+              >{{ t('plugin.details.hotReload') }}</span
             >
             <div class="PluginDetails-Toggle flex items-center gap-2">
               <div
@@ -133,7 +135,7 @@
                     ? 'text-[var(--el-color-success)]'
                     : 'text-[var(--el-text-color-placeholder)]'
                 "
-                >{{ plugin.dev?.enable ? 'Enabled' : 'Disabled' }}</span
+                >{{ plugin.dev?.enable ? t('plugin.details.enabled') : t('plugin.details.disabled') }}</span
               >
             </div>
           </div>
@@ -146,7 +148,9 @@
       >
         <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
           <i class="i-ri-folder-line text-xl text-[var(--el-color-warning)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">File System</h3>
+          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
+            {{ t('plugin.details.fileSystem') }}
+          </h3>
         </div>
         <div class="PluginDetails-List space-y-4">
           <div
@@ -154,7 +158,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Plugin Path</span
+              >{{ t('plugin.details.pluginPath') }}</span
             >
             <code
               class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)] max-w-40 truncate"
@@ -166,7 +170,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Data Directory</span
+              >{{ t('plugin.details.dataDirectory') }}</span
             >
             <code
               class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)] max-w-40 truncate"
@@ -176,7 +180,7 @@
           <div class="PluginDetails-Row flex justify-between items-center py-3">
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >Cache Size</span
+              >{{ t('plugin.details.cacheSize') }}</span
             >
             <span class="PluginDetails-Value text-sm text-[var(--el-text-color-primary)]"
               >2.4 MB</span
@@ -191,7 +195,9 @@
       >
         <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
           <i class="i-ri-time-line text-xl text-[var(--el-color-success)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Performance</h3>
+          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
+            {{ t('plugin.details.performance') }}
+          </h3>
         </div>
         <div class="PluginDetails-Metrics space-y-3">
           <div
@@ -204,7 +210,7 @@
                 <i class="i-ri-timer-line text-[var(--el-color-primary)] text-sm" />
               </div>
               <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
-                >Load Time</span
+                >{{ t('plugin.details.loadTime') }}</span
               >
             </div>
             <span
@@ -222,7 +228,7 @@
                 <i class="i-ri-ram-line text-[var(--el-color-info)] text-sm" />
               </div>
               <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
-                >Memory Usage</span
+                >{{ t('plugin.details.memoryUsage') }}</span
               >
             </div>
             <span
@@ -240,7 +246,7 @@
                 <i class="i-ri-cpu-line text-[var(--el-color-success)] text-sm" />
               </div>
               <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
-                >CPU Usage</span
+                >{{ t('plugin.details.cpuUsage') }}</span
               >
             </div>
             <span
@@ -255,17 +261,22 @@
 </template>
 
 <script lang="ts" setup>
+import { toRef } from 'vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import { useI18n } from 'vue-i18n'
 
 // Props
-defineProps<{
+const props = defineProps<{
   plugin: ITouchPlugin
 }>()
+const plugin = toRef(props, 'plugin')
 
 // Copy states
 const copyState = ref({
   pluginId: false
 })
+
+const { t } = useI18n()
 
 // Copy functionality
 async function copyToClipboard(text: string, type: keyof typeof copyState.value): Promise<void> {

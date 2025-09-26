@@ -4,7 +4,7 @@
     <div v-if="platforms && Object.keys(platforms).length" class="glass-card">
       <div class="card-header">
         <i class="i-ri-computer-line" />
-        <h3>Environment Support</h3>
+        <h3>{{ t('plugin.overview.environment') }}</h3>
       </div>
       <div class="platform-grid">
         <div
@@ -30,7 +30,7 @@
     <div v-if="plugin.readme" class="glass-card full-width">
       <div class="card-header">
         <i class="i-ri-file-text-line" />
-        <h3>Documentation</h3>
+        <h3>{{ t('plugin.overview.documentation') }}</h3>
       </div>
       <div class="readme-content">
         <FlatMarkdown v-model="readme" :readonly="true" />
@@ -43,11 +43,14 @@
 import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue'
 import OSIcon from '~/components/icon/OSIcon.vue'
 import type { ITouchPlugin, IPlatform } from '@talex-touch/utils/plugin'
+import { useI18n } from 'vue-i18n'
 
 // Props
 const props = defineProps<{
   plugin: ITouchPlugin
 }>()
+
+const { t } = useI18n()
 
 // Computed properties
 const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
