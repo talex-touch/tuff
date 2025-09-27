@@ -377,4 +377,5 @@ export interface IManifest {
 export type { LogLevel, LogItem, LogDataType, IPluginLogger } from './log/types'
 export * from './sdk/index'
 export * from './providers'
+export * from './install'
 export * from './risk'

@@ -90,7 +90,7 @@ export class NpmPluginProvider implements PluginProvider {
       throw new Error('NPM 包缺少可下载的 tarball 地址')
     }
 
-    const filePath = await downloadToTempFile(tarballUrl, '.tgz')
+    const filePath = await downloadToTempFile(tarballUrl, '.tgz', context?.downloadOptions)
 
     return {
       provider: this.type,

@@ -14,14 +14,18 @@ import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
 import { popperMention } from '~/modules/mention/dialog-mention'
-import { createVNode } from 'vue'
+import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import type { IManifest } from '@talex-touch/utils/plugin'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
+import { useI18n } from 'vue-i18n'
+import { useInstallManager } from '~/modules/install/install-manager'
 
 const emits = defineEmits(['close'])
 
 const activeTab = ref<'install' | 'create'>('install')
+const { t } = useI18n()
+const installManager = useInstallManager()
 
 const installState = reactive({
   source: '',
@@ -33,6 +37,80 @@ const installState = reactive({
   manifest: null as IManifest | undefined,
   provider: '' as '' | PluginProviderType,
   official: false
+})
+
+const currentInstallTask = computed(() => installManager.getTaskBySource(installState.source.trim()))
+const currentInstallStage = computed(() => currentInstallTask.value?.stage)
+const currentInstallProgress = computed(() => {
+  const progress = currentInstallTask.value?.progress
+  if (typeof progress === 'number') {
+    const normalized = Math.round(progress)
+    return Math.max(0, Math.min(100, normalized))
+  }
+  return null
+})
+const currentInstallLabel = computed(() => {
+  switch (currentInstallStage.value) {
+    case 'queued':
+      return t('market.installation.status.queued')
+    case 'downloading':
+      return t('market.installation.status.downloading')
+    case 'awaiting-confirmation':
+      return t('market.installation.status.awaitingConfirm')
+    case 'installing':
+      return t('market.installation.status.installing')
+    case 'completed':
+      return t('market.installation.status.completed')
+    case 'failed':
+      return t('market.installation.status.failed')
+    case 'cancelled':
+      return t('market.installation.status.cancelled')
+    default:
+      return installState.installing
+        ? t('market.installation.status.installing')
+        : t('market.install')
+  }
+})
+
+const disableManualInstall = computed(
+  () => installState.installing || installManager.isActiveStage(currentInstallStage.value)
+)
+
+const manualProgressStyle = computed(() =>
+  currentInstallStage.value === 'downloading' && currentInstallProgress.value !== null
+    ? ({ '--progress': `${currentInstallProgress.value}%` } as Record<string, string>)
+    : {}
+)
+
+const manualProgressDisplay = computed(() =>
+  currentInstallProgress.value !== null ? `${currentInstallProgress.value}` : ''
+)
+
+const manualShowProgress = computed(
+  () => currentInstallStage.value === 'downloading' && currentInstallProgress.value !== null
+)
+
+const manualShowSpinner = computed(
+  () =>
+    currentInstallStage.value === 'installing' ||
+    (!currentInstallStage.value && installState.installing)
+)
+
+const manualStatusIcon = computed(() => {
+  switch (currentInstallStage.value) {
+    case 'queued':
+      return 'i-ri-time-line'
+    case 'awaiting-confirmation':
+      return 'i-ri-shield-keyhole-line'
+    case 'completed':
+      return 'i-ri-check-line'
+    case 'failed':
+      return 'i-ri-error-warning-line'
+    case 'cancelled':
+      return 'i-ri-close-line'
+    default:
+      return ''
+  }
 })
 
 const providerOptions = computed(() =>
@@ -143,7 +221,7 @@ const plugin = reactive<Plugin>({
 const envOptions = reactive<EnvOptions>({})
 
 async function installPluginFromSource(): Promise<void> {
-  if (installState.installing) return
+  if (installState.installing || installManager.isActiveStage(currentInstallStage.value)) return
 
   const trimmedSource = installState.source.trim()
   if (!trimmedSource) {
@@ -171,7 +249,11 @@ async function installPluginFromSource(): Promise<void> {
 
   try {
     const payload: Record<string, unknown> = {
-      source: trimmedSource
+      source: trimmedSource,
+      clientMetadata: {
+        pluginName: installState.manifest?.name || trimmedSource,
+        source: trimmedSource
+      }
     }
 
     if (installState.hintType) {
@@ -381,9 +463,23 @@ async function handleInstallDegit(): Promise<void> {
         </div>
 
         <div class="InstallActions">
-          <FlatButton :primary="true" @click="installPluginFromSource">
-            <i v-if="installState.installing" class="i-ri-loader-4-line animate-spin" />
-            <span>{{ installState.installing ? 'Installing…' : 'Install Plugin' }}</span>
+          <FlatButton
+            :primary="true"
+            :disabled="disableManualInstall"
+            @click="installPluginFromSource"
+          >
+            <div class="InstallButtonContent">
+              <div
+                v-if="manualShowProgress"
+                class="InstallProgress"
+                :style="manualProgressStyle"
+              >
+                <span>{{ manualProgressDisplay }}</span>
+              </div>
+              <i v-else-if="manualShowSpinner" class="i-ri-loader-4-line animate-spin" />
+              <i v-else-if="manualStatusIcon" :class="manualStatusIcon" />
+              <span>{{ currentInstallLabel }}</span>
+            </div>
           </FlatButton>
         </div>
       </BlockTemplate>
@@ -671,6 +767,40 @@ async function handleInstallDegit(): Promise<void> {
 
 .InstallActions :deep(.FlatButton-Container) {
   min-width: 180px;
+}
+
+.InstallButtonContent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.InstallProgress {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--el-color-primary) var(--progress), rgba(var(--el-color-primary-rgb), 0.15) 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-color-primary);
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.InstallProgress::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--el-bg-color-overlay);
+}
+
+.InstallProgress span {
+  position: relative;
+  z-index: 1;
 }
 
 .animate-spin {

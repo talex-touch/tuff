@@ -20,6 +20,8 @@ import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
 import { BaseModule } from '../abstract-base-module'
 import { PluginInstaller } from './plugin-installer'
+import { PluginInstallQueue } from './install-queue'
+import type { PluginInstallConfirmResponse } from '@talex-touch/utils/plugin'
 import { LocalPluginProvider } from './providers/local-provider'
 import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
@@ -148,6 +150,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const pluginTag = (name: string): string => chalk.magenta(`[${name}]`)
 
   const installer = new PluginInstaller()
+  const installQueue = new PluginInstallQueue(installer)
   const localProvider = new LocalPluginProvider(pluginPath)
 
   const getPluginList = (): Array<object> => {
@@ -431,6 +434,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     installFromSource
   }
 
+  ;(managerInstance as any).__installQueue = installQueue
+
   const devWatcherInstance: DevPluginWatcher = new DevPluginWatcher(managerInstance)
   managerInstance.devWatcher = devWatcherInstance // Set the circular reference
 
@@ -625,7 +630,9 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           logError('Watcher error occurred:', error)
         }
       })
-    })().catch((err) => logError('Failed to initialize plugin module watchers:', err))
+    })().catch((err) => {
+      console.error(chalk.red('[PluginModule]'), 'Failed to initialize plugin module watchers:', err)
+    })
   }
 
   __init__()
@@ -635,6 +642,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
 export class PluginModule extends BaseModule {
   pluginManager?: IPluginManager
+  installQueue?: PluginInstallQueue
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -648,6 +656,7 @@ export class PluginModule extends BaseModule {
 
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     this.pluginManager = createPluginModuleInternal(file.dirPath!)
+    this.installQueue = (this.pluginManager as any).__installQueue as PluginInstallQueue
   }
   onDestroy(): MaybePromise<void> {
     this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
@@ -677,31 +686,34 @@ export class PluginModule extends BaseModule {
         })
       }
     })
+    const installQueue = this.installQueue
+
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:install-source', async ({ data, reply }) => {
+      if (!installQueue) {
+        return reply(DataCode.ERROR, { error: 'Install queue is not ready' })
+      }
+
       if (!data || typeof data.source !== 'string') {
         return reply(DataCode.ERROR, { error: 'Invalid install request' })
       }
 
-      try {
-        const request: PluginInstallRequest = {
-          source: data.source,
-          hintType: data.hintType,
-          metadata: data.metadata
-        }
-        const summary = await manager.installFromSource(request)
-        return reply(DataCode.SUCCESS, {
-          status: 'success',
-          manifest: summary.manifest,
-          provider: summary.providerResult.provider,
-          official: summary.providerResult.official ?? false
-        })
-      } catch (error: any) {
-        logError('插件安装失败:', error)
-        return reply(DataCode.ERROR, {
-          status: 'error',
-          message: error?.message || 'INSTALL_FAILED'
-        })
+      const request: PluginInstallRequest = {
+        source: data.source,
+        hintType: data.hintType,
+        metadata: data.metadata,
+        clientMetadata: data.clientMetadata
       }
+
+      installQueue.enqueue(request, reply)
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:install-confirm-response', ({ data, reply }) => {
+      if (!installQueue) {
+        return reply(DataCode.ERROR, { error: 'Install queue is not ready' })
+      }
+
+      installQueue.handleConfirmResponse(data as PluginInstallConfirmResponse)
+      reply(DataCode.SUCCESS, { status: 'received' })
     })
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
       manager.setActivePlugin(data!.name)

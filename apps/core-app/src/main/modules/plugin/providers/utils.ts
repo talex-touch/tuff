@@ -9,14 +9,14 @@ import type {
   PluginProviderType
 } from '@talex-touch/utils/plugin/providers'
 import type { RiskLevel } from '@talex-touch/utils/plugin/risk'
+import type { IDownloadOptions } from '@talex-touch/utils/plugin/plugin-source'
 
-export async function downloadToTempFile(url: string, fallbackExt = '.tar'): Promise<string> {
-  const response = await axios.get<ArrayBuffer>(url, {
-    responseType: 'arraybuffer',
-    timeout: 30_000,
-    proxy: false
-  })
-
+export async function downloadToTempFile(
+  url: string,
+  fallbackExt = '.tar',
+  options?: IDownloadOptions
+): Promise<string> {
+  const requestTimeout = options?.timeout ?? 30_000
   const resolvedExt = (() => {
     try {
       const parsed = new URL(url)
@@ -30,7 +30,62 @@ export async function downloadToTempFile(url: string, fallbackExt = '.tar'): Pro
   const fileName = `talex-plugin-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${resolvedExt}`
   const filePath = path.join(os.tmpdir(), fileName)
 
-  await fse.outputFile(filePath, Buffer.from(response.data))
+  const response = await axios.get<NodeJS.ReadableStream>(url, {
+    responseType: 'stream',
+    timeout: requestTimeout,
+    proxy: false
+  })
+
+  const totalLength = Number(response.headers['content-length'] ?? 0)
+  let downloaded = 0
+
+  const writer = fse.createWriteStream(filePath)
+
+  const reportProgress = (value: number): void => {
+    if (!options?.onProgress) return
+    try {
+      const normalized = Math.max(0, Math.min(100, value))
+      options.onProgress(normalized)
+    } catch (error) {
+      console.warn('[PluginProvider] Failed to emit download progress:', error)
+    }
+  }
+
+  if (totalLength > 0) {
+    reportProgress(0)
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    response.data
+      .on('data', (chunk: Buffer) => {
+        downloaded += chunk.length
+        if (totalLength > 0) {
+          const progress = (downloaded / totalLength) * 100
+          reportProgress(progress)
+        }
+      })
+      .on('end', () => {
+        if (totalLength === 0) {
+          reportProgress(100)
+        }
+      })
+      .on('error', (error) => {
+        reportProgress(0)
+        reject(error)
+      })
+      .pipe(writer)
+
+    writer.on('finish', resolve)
+    writer.on('error', (error) => {
+      reportProgress(0)
+      reject(error)
+    })
+  })
+
+  if (totalLength > 0) {
+    reportProgress(100)
+  }
+
   return filePath
 }
 

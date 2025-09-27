@@ -6,6 +6,7 @@ import type { IManifest } from '@talex-touch/utils/plugin'
 import {
   pluginProviderRegistry,
   type PluginInstallRequest,
+  type PluginInstallResult,
   type PluginInstallSummary,
   PluginProviderType
 } from '@talex-touch/utils/plugin/providers'
@@ -80,6 +81,17 @@ async function runResolver(
   })
 }
 
+export interface PreparedPluginInstall {
+  request: PluginInstallRequest
+  providerResult: PluginInstallResult
+  manifest?: IManifest
+}
+
+export interface PluginInstallOptions {
+  onDownloadProgress?: (progress: number) => void
+  autoResolve?: boolean
+}
+
 export class PluginInstaller {
   private readonly riskPrompt: RiskPromptHandler
 
@@ -88,9 +100,36 @@ export class PluginInstaller {
     this.riskPrompt = riskPrompt ?? createDialogRiskPrompt()
   }
 
-  async install(request: PluginInstallRequest): Promise<PluginInstallSummary> {
+  async install(
+    request: PluginInstallRequest,
+    options?: PluginInstallOptions
+  ): Promise<PluginInstallSummary> {
+    const prepared = await this.prepareInstall(request, options)
+
+    if (options?.autoResolve === false) {
+      return { manifest: prepared.manifest, providerResult: prepared.providerResult }
+    }
+
+    return this.finalizeInstall(prepared)
+  }
+
+  async prepareInstall(
+    request: PluginInstallRequest,
+    options?: PluginInstallOptions
+  ): Promise<PreparedPluginInstall> {
     const providerResult = await pluginProviderRegistry.install(request, {
-      riskPrompt: this.riskPrompt
+      riskPrompt: this.riskPrompt,
+      downloadOptions: options?.onDownloadProgress
+        ? {
+            onProgress: (value: number) => {
+              try {
+                options.onDownloadProgress?.(Math.max(0, Math.min(100, value)))
+              } catch (error) {
+                console.warn('[PluginInstaller] download progress handler failed', error)
+              }
+            }
+          }
+        : undefined
     })
 
     if (!providerResult) {
@@ -101,11 +140,34 @@ export class PluginInstaller {
       ? providerResult.manifest
       : (await this.previewManifest(providerResult.filePath!))?.manifest
 
-    await runResolver(providerResult.filePath!, true)
+    if (options?.onDownloadProgress) {
+      try {
+        options.onDownloadProgress(100)
+      } catch (error) {
+        console.warn('[PluginInstaller] failed to finalize progress update', error)
+      }
+    }
 
-    await this.cleanupIfNeeded(request.source, providerResult.filePath)
+    return {
+      request,
+      providerResult,
+      manifest
+    }
+  }
 
-    return { manifest, providerResult }
+  async finalizeInstall(prepared: PreparedPluginInstall): Promise<PluginInstallSummary> {
+    await runResolver(prepared.providerResult.filePath!, true)
+
+    await this.cleanupIfNeeded(prepared.request.source, prepared.providerResult.filePath)
+
+    return {
+      manifest: prepared.manifest,
+      providerResult: prepared.providerResult
+    }
+  }
+
+  async discardPrepared(prepared: PreparedPluginInstall): Promise<void> {
+    await this.cleanupIfNeeded(prepared.request.source, prepared.providerResult.filePath)
   }
 
   private async previewManifest(filePath: string): Promise<{ manifest?: IManifest }> {
