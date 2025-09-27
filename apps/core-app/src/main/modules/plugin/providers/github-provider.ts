@@ -153,7 +153,7 @@ export class GithubPluginProvider implements PluginProvider {
     }
 
     const { url, extension } = resolveDownloadUrl(parsed)
-    const filePath = await downloadToTempFile(url, extension)
+    const filePath = await downloadToTempFile(url, extension, context?.downloadOptions)
 
     return {
       provider: this.type,

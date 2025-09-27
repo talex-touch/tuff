@@ -183,7 +183,21 @@
       "successMessage": "插件“{name}”已准备就绪。",
       "failureTitle": "安装失败",
       "failureMessage": "未能安装“{name}”：{reason}",
-      "browserNotSupported": "请在桌面客户端中安装官方插件。"
+      "browserNotSupported": "请在桌面客户端中安装官方插件。",
+      "status": {
+        "queued": "排队中",
+        "downloading": "下载中",
+        "awaitingConfirm": "等待确认",
+        "installing": "安装中",
+        "completed": "已安装",
+        "failed": "安装失败",
+        "cancelled": "已取消"
+      },
+      "confirmTitle": "安装确认",
+      "confirmMessage": "插件“{name}”来自非官方来源，确定继续安装吗？",
+      "confirmInstall": "继续安装",
+      "confirmReject": "取消",
+      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
     },
     "empty": {
       "title": "未找到插件",

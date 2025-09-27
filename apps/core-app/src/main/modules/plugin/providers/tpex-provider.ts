@@ -47,7 +47,7 @@ export class TpexPluginProvider implements PluginProvider {
     let filePath = request.source
 
     if (isRemote(request.source)) {
-      filePath = await downloadToTempFile(request.source, '.tpex')
+      filePath = await downloadToTempFile(request.source, '.tpex', context?.downloadOptions)
     } else {
       filePath = path.resolve(request.source)
       const exists = await fse.pathExists(filePath)

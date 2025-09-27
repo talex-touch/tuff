@@ -78,7 +78,8 @@
             :key="item.id || item.name || index"
             :item="item"
             :index="index"
-            :installing="isInstalling(item.id)"
+            :installing="isPluginInstalling(item.id)"
+            :install-task="getInstallTask(item.id)"
             :data-index="index"
             class="market-grid-item"
             @install="handleInstall(item)"
@@ -208,7 +209,7 @@
 </template>
 
 <script lang="ts" name="Market" setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToggle } from '@vueuse/core'
 import gsap from 'gsap'
@@ -218,6 +219,7 @@ import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 import { pluginSettings } from '~/modules/storage/plugin-settings'
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
+import { useInstallManager } from '~/modules/install/install-manager'
 
 interface OfficialManifestVersionEntry {
   version: string
@@ -283,9 +285,15 @@ const detailVisible = ref(false)
 const activePlugin = ref<OfficialPluginListItem | null>(null)
 
 const officialPlugins = ref<OfficialPluginListItem[]>([])
-const installingState = reactive(new Map<string, boolean>())
 let rendererChannel: ITouchClientChannel | undefined
 let channelLoadFailed = false
+
+const installManager = useInstallManager()
+
+const getInstallTask = (pluginId?: string) => installManager.getTaskByPluginId(pluginId)
+
+const isPluginInstalling = (pluginId?: string) =>
+  installManager.isActiveStage(getInstallTask(pluginId)?.stage)
 
 const suggestionFetch = (key = ''): string[] => {
   const normalized = key.trim()
@@ -412,8 +420,6 @@ const detailIconClass = computed(() => {
 
   return ''
 })
-
-const isInstalling = (id: string): boolean => installingState.get(id) === true
 
 function updateCategoryTags(): void {
   const categories = Array.from(
@@ -570,7 +576,7 @@ async function loadOfficialPlugins(force = false): Promise<void> {
 }
 
 async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
-  if (isInstalling(plugin.id)) return
+  if (isPluginInstalling(plugin.id)) return
 
   const channel = await getRendererChannel()
 
@@ -579,15 +585,18 @@ async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
     return
   }
 
-  installingState.set(plugin.id, true)
-
   try {
     const payload: Record<string, unknown> = {
       source: plugin.downloadUrl,
       metadata: {
         officialId: plugin.id,
         officialVersion: plugin.version,
-        officialSource: 'talex-touch/tuff-official-plugins'
+        officialSource: 'talex-touch/tuff-official-plugins',
+        official: plugin.official === true
+      },
+      clientMetadata: {
+        pluginId: plugin.id,
+        pluginName: plugin.name
       }
     }
 
@@ -611,8 +620,6 @@ async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
         reason: error?.message || 'UNKNOWN_ERROR'
       })
     )
-  } finally {
-    installingState.delete(plugin.id)
   }
 }
 

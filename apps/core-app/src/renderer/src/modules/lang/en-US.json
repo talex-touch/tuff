@@ -181,7 +181,21 @@
       "successMessage": "\"{name}\" is ready to use.",
       "failureTitle": "Install Failed",
       "failureMessage": "Unable to install \"{name}\": {reason}",
-      "browserNotSupported": "Official plugins can only be installed inside the desktop app."
+      "browserNotSupported": "Official plugins can only be installed inside the desktop app.",
+      "status": {
+        "queued": "Queued",
+        "downloading": "Downloading",
+        "awaitingConfirm": "Awaiting Confirmation",
+        "installing": "Installing",
+        "completed": "Installed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "confirmTitle": "Install Confirmation",
+      "confirmMessage": "\"{name}\" comes from an unofficial source. Proceed with installation?",
+      "confirmInstall": "Install",
+      "confirmReject": "Cancel",
+      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?"
     },
     "empty": {
       "title": "No plugins found",
