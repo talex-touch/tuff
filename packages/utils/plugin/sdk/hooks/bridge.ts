@@ -10,6 +10,7 @@ export type BridgeHook<T = any> = (data: T) => void
 
 const __hooks: Record<BridgeEvent, Array<BridgeHook>> = {
   [BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE]: [],
+  [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: []
 }
 
 /**
@@ -66,3 +67,5 @@ export const createBridgeHook = <T>(type: BridgeEvent) => (hook: BridgeHook<T>) 
  * @param data The input change data (string).
  */
 export const onCoreBoxInputChange = createBridgeHook<{ query: string }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
+
+export const onCoreBoxClipboardChange = createBridgeHook<{ item: any }>(BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE)

@@ -182,7 +182,16 @@ export class ClipboardModule extends BaseModule {
           }
         }
 
-        // Broadcast to plugins is handled by the renderer process via IPC
+        const activePlugin = windowManager.getAttachedPlugin()
+        if (activePlugin?._uniqueChannelKey) {
+          touchChannel
+            .sendToPlugin(activePlugin.name, 'core-box:clipboard-change', { item: newItem })
+            .catch((error) => {
+              console.warn('[Clipboard] Failed to notify plugin UI view about clipboard change:', error)
+            })
+        }
+
+        // Plugin UI views are notified via the plugin channel when attached
       }
     }
   }
@@ -190,50 +199,55 @@ export class ClipboardModule extends BaseModule {
   private registerIpcHandlers(): void {
     const touchChannel = genTouchChannel()
 
-    touchChannel.regChannel(ChannelType.MAIN, 'clipboard:get-latest', async ({ reply }) => {
-      const latest = this.memoryCache.length > 0 ? this.memoryCache[0] : null
-      reply(DataCode.SUCCESS, latest)
-    })
+    const registerHandlers = (type: ChannelType) => {
+      touchChannel.regChannel(type, 'clipboard:get-latest', async ({ reply }) => {
+        const latest = this.memoryCache.length > 0 ? this.memoryCache[0] : null
+        reply(DataCode.SUCCESS, latest)
+      })
 
-    touchChannel.regChannel(
-      ChannelType.MAIN,
-      'clipboard:get-history',
-      async ({ data: payload, reply }) => {
-        const { page = 1 } = payload ?? {}
-        const offset = (page - 1) * PAGE_SIZE
-        const history = await this.db
-          .select()
-          .from(clipboardHistory)
-          .orderBy(desc(clipboardHistory.timestamp))
-          .limit(PAGE_SIZE)
-          .offset(offset)
-        const totalResult = await this.db
-          .select({ count: sql<number>`count(*)` })
-          .from(clipboardHistory)
-        const total = totalResult[0].count
-        reply(DataCode.SUCCESS, { history, total, page, pageSize: PAGE_SIZE })
-      }
-    )
+      touchChannel.regChannel(
+        type,
+        'clipboard:get-history',
+        async ({ data: payload, reply }) => {
+          const { page = 1 } = payload ?? {}
+          const offset = (page - 1) * PAGE_SIZE
+          const history = await this.db
+            .select()
+            .from(clipboardHistory)
+            .orderBy(desc(clipboardHistory.timestamp))
+            .limit(PAGE_SIZE)
+            .offset(offset)
+          const totalResult = await this.db
+            .select({ count: sql<number>`count(*)` })
+            .from(clipboardHistory)
+          const total = totalResult[0].count
+          reply(DataCode.SUCCESS, { history, total, page, pageSize: PAGE_SIZE })
+        }
+      )
 
-    touchChannel.regChannel(ChannelType.MAIN, 'clipboard:set-favorite', async ({ data, reply }) => {
-      const { id, isFavorite } = data
-      await this.db.update(clipboardHistory).set({ isFavorite }).where(eq(clipboardHistory.id, id))
-      reply(DataCode.SUCCESS, null)
-    })
+      touchChannel.regChannel(type, 'clipboard:set-favorite', async ({ data, reply }) => {
+        const { id, isFavorite } = data
+        await this.db.update(clipboardHistory).set({ isFavorite }).where(eq(clipboardHistory.id, id))
+        reply(DataCode.SUCCESS, null)
+      })
 
-    touchChannel.regChannel(ChannelType.MAIN, 'clipboard:delete-item', async ({ data, reply }) => {
-      const { id } = data
-      await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
-      this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
-      reply(DataCode.SUCCESS, null)
-    })
+      touchChannel.regChannel(type, 'clipboard:delete-item', async ({ data, reply }) => {
+        const { id } = data
+        await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
+        this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
+        reply(DataCode.SUCCESS, null)
+      })
 
-    touchChannel.regChannel(ChannelType.MAIN, 'clipboard:clear-history', async ({ reply }) => {
-      const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
-      await this.db.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
-      this.memoryCache = []
-      reply(DataCode.SUCCESS, null)
-    })
+      touchChannel.regChannel(type, 'clipboard:clear-history', async ({ reply }) => {
+        const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
+        await this.db.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
+        this.memoryCache = []
+        reply(DataCode.SUCCESS, null)
+      })
+    }
+
+    registerHandlers(ChannelType.MAIN)
+    registerHandlers(ChannelType.PLUGIN)
   }
 
   public destroy(): void {

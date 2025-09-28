@@ -17,4 +17,6 @@ export * from './window/index'
 export * from './hooks/index'
 export * from './service/index'
 
+export * from './channel'
+export * from './clipboard'
 export * from './storage'

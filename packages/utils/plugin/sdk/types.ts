@@ -4,6 +4,109 @@
  * @version 1.0.0
  */
 
+import type { ITouchChannel, ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel';
+
+/**
+ * Handler signature for plugin channel events.
+ */
+export type PluginChannelHandler = (event: StandardChannelData) => any;
+
+/**
+ * Bridge exposed to plugin backends for channel-based communication.
+ */
+export interface IPluginChannelBridge {
+  /**
+   * Sends a payload to the main renderer process.
+   * @param eventName - Channel event name.
+   * @param payload - Optional data payload.
+   */
+  sendToMain<T = any>(eventName: string, payload?: any): Promise<T>;
+
+  /**
+   * Sends a payload to this plugin's renderer view.
+   * @param eventName - Channel event name.
+   * @param payload - Optional data payload.
+   */
+  sendToRenderer<T = any>(eventName: string, payload?: any): Promise<T>;
+
+  /**
+   * Registers a handler for main renderer messages.
+   * @param eventName - Channel event name to listen for.
+   * @param handler - Handler invoked with the raw channel event.
+   * @returns Unsubscribe function.
+   */
+  onMain(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Registers a handler for renderer-originated messages scoped to this plugin.
+   * @param eventName - Channel event name to listen for.
+   * @param handler - Handler invoked with the raw channel event.
+   * @returns Unsubscribe function.
+   */
+  onRenderer(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Access to the underlying channel implementation for advanced scenarios.
+   */
+  readonly raw: ITouchChannel;
+}
+
+/**
+ * Renderer-side helper for plugin webviews to interact with the bridge channel.
+ */
+export interface IPluginRendererChannel {
+  /**
+   * Sends a message asynchronously and resolves with the reply payload.
+   */
+  send<T = any>(eventName: string, payload?: any): Promise<T>;
+
+  /**
+   * Sends a message synchronously and returns the reply payload.
+   */
+  sendSync<T = any>(eventName: string, payload?: any): T;
+
+  /**
+   * Registers a handler for renderer channel events.
+   * @returns Unsubscribe function.
+   */
+  on(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Registers a one-off handler for a renderer channel event.
+   * @returns Unsubscribe function (no-op after invocation).
+   */
+  once(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Provides access to the raw client channel.
+   */
+  readonly raw: ITouchClientChannel;
+}
+
+/**
+ * Clipboard history item shared with plugin renderers.
+ */
+export interface PluginClipboardItem {
+  id?: number
+  type: 'text' | 'image' | 'files'
+  content: string
+  thumbnail?: string | null
+  rawContent?: string | null
+  sourceApp?: string | null
+  timestamp?: string | number | Date | null
+  isFavorite?: boolean | null
+}
+
+/**
+ * Clipboard history pagination response structure.
+ */
+export interface PluginClipboardHistoryResponse {
+  history: PluginClipboardItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 /**
  * Plugin utilities interface providing core functionality for plugin development
  *
@@ -27,6 +130,12 @@ export interface IPluginUtils {
    * @see {@link IClipboardManager}
    */
   clipboard: IClipboardManager;
+
+  /**
+   * Channel bridge for communicating with renderer and main processes
+   * @see {@link IPluginChannelBridge}
+   */
+  channel: IPluginChannelBridge;
 
   /**
    * Search result manager for handling search operations

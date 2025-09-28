@@ -26,6 +26,7 @@ export class WindowManager {
   private _touchApp: TouchApp | null = null
   private uiView: WebContentsView | null = null
   private uiViewFocused = false
+  private attachedPlugin: TouchPlugin | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -43,6 +44,10 @@ export class WindowManager {
 
   public get current(): TouchWindow | undefined {
     return this.windows[this.windows.length - 1]
+  }
+
+  public getAttachedPlugin(): TouchPlugin | null {
+    return this.attachedPlugin
   }
 
   /**
@@ -298,6 +303,7 @@ export class WindowManager {
     }
 
     const view = (this.uiView = new WebContentsView({ webPreferences }))
+    this.attachedPlugin = plugin ?? null
 
     this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
@@ -499,6 +505,7 @@ export class WindowManager {
     if (this.uiView) {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
+        this.uiView.webContents.closeDevTools()
         console.log('[WindowManager] Removing child view from current window.')
         currentWindow.window.contentView.removeChildView(this.uiView)
       } else {
@@ -509,6 +516,7 @@ export class WindowManager {
       // The WebContents are automatically destroyed when the WebContentsView is removed.
       // Explicitly destroying them here is unnecessary and causes a type error.
       this.uiView = null
+      this.attachedPlugin = null
       console.log('[WindowManager] uiView set to null.')
     }
   }
