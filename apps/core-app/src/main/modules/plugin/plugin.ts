@@ -1,5 +1,6 @@
 import {
   IFeatureLifeCycle,
+  IPluginChannelBridge,
   IPlatform,
   IPluginDev,
   IPluginIcon,
@@ -384,6 +385,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   getFeatureUtil(): any {
     const pluginName = this.name
+    const appChannel = genTouchChannel()
 
     const http = axios
     const storage = {
@@ -410,6 +412,21 @@ export class TouchPlugin implements ITouchPlugin {
     }
     const clipboardUtil = createClipboardManager(clipboard)
 
+    const channelBridge: IPluginChannelBridge = {
+      sendToMain: (eventName, payload) => appChannel.sendMain(eventName, payload),
+      sendToRenderer: (eventName, payload) => appChannel.sendPlugin(pluginName, eventName, payload),
+      onMain: (eventName, handler) => appChannel.regChannel(ChannelType.MAIN, eventName, handler),
+      onRenderer: (eventName, handler) =>
+        appChannel.regChannel(ChannelType.PLUGIN, eventName, (event) => {
+          if (event.plugin && event.plugin !== pluginName) {
+            return
+          }
+
+          handler(event)
+        }),
+      raw: appChannel
+    }
+
     const searchManager = {
       /**
        * Pushes search items directly to the CoreBox window
@@ -429,7 +446,7 @@ export class TouchPlugin implements ITouchPlugin {
         console.debug(`[Plugin ${this.name}] CoreBox window available:`, !!coreBoxWindow)
 
         if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-          const channel = genTouchChannel()
+          const channel = appChannel
 
           const payload = {
             pluginName: this.name,
@@ -478,7 +495,7 @@ export class TouchPlugin implements ITouchPlugin {
         )
 
         if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-          const channel = genTouchChannel()
+          const channel = appChannel
 
           const payload = {
             pluginName: this.name,
@@ -529,6 +546,7 @@ export class TouchPlugin implements ITouchPlugin {
       http,
       storage,
       clipboard: clipboardUtil,
+      channel: channelBridge,
       clearItems: searchManager.clearItems,
       pushItems: searchManager.pushItems,
       getItems: searchManager.getItems,
