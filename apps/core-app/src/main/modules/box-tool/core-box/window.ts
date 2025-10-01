@@ -1,6 +1,8 @@
 import { BoxWindowOption } from '../../../config/default'
 import { app, screen, WebContentsView, nativeTheme } from 'electron'
 import path from 'path'
+import * as fs from 'fs'
+import { createRequire } from 'module'
 import chalk from 'chalk'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
@@ -17,6 +19,17 @@ import { genTouchApp } from '../../../core'
 const windowAnimation = useWindowAnimation()
 
 const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
+
+const require = createRequire(import.meta.url)
+
+const ELEMENT_PLUS_BASE_CSS = fs
+  .readFileSync(require.resolve('element-plus/theme-chalk/base.css'), 'utf-8')
+  .replace(/@charset\s+"UTF-8";?/, '')
+
+const ELEMENT_PLUS_DARK_CSS = fs.readFileSync(
+  require.resolve('element-plus/theme-chalk/dark/css-vars.css'),
+  'utf-8'
+)
 
 type ThemeStyleConfig = {
   theme?: {
@@ -46,6 +59,7 @@ interface ThemeTone {
   primaryRgb: string
   primaryHover: string
   primaryActive: string
+  page: string
   background: string
   surface: string
   border: string
@@ -59,25 +73,27 @@ interface ThemePalette {
   dark: ThemeTone
 }
 
-const DEFAULT_PRIMARY_COLOR = '#178cd4'
-const DEFAULT_DARK_PRIMARY_COLOR = '#63a4ff'
+const DEFAULT_PRIMARY_COLOR = '#409eff'
+const DEFAULT_DARK_PRIMARY_COLOR = '#409eff'
 
 const LIGHT_TONE_BASE = {
-  background: '#f6f7fb',
+  page: '#f2f3f5',
+  background: '#ffffff',
   surface: '#ffffff',
-  border: '#d9deea',
-  text: '#1f2329',
-  textSecondary: '#596175',
-  shadowAlpha: 0.16
+  border: '#dcdfe6',
+  text: '#303133',
+  textSecondary: '#606266',
+  shadowAlpha: 0.12
 }
 
 const DARK_TONE_BASE = {
-  background: '#0b172a',
-  surface: '#152235',
-  border: '#223044',
-  text: '#e3e9f4',
-  textSecondary: '#98a7c2',
-  shadowAlpha: 0.32
+  page: '#0a0a0a',
+  background: '#141414',
+  surface: '#1d1e1f',
+  border: '#4c4d4f',
+  text: '#e5eaf3',
+  textSecondary: '#cfd3dc',
+  shadowAlpha: 0.36
 }
 
 const PRIMARY_HOVER_OFFSET = 0.12
@@ -459,6 +475,45 @@ export class WindowManager {
     return this.rgbToHex(r, g, b)
   }
 
+  private mixColor(color: string, mixWith: string, weight: number): string | null {
+    const baseRgb = this.hexToRgb(color)
+    const mixRgb = this.hexToRgb(mixWith)
+    if (!baseRgb || !mixRgb) {
+      return null
+    }
+
+    const ratio = Math.max(0, Math.min(1, weight))
+
+    const result = baseRgb.map((channel, index) => {
+      const mixChannel = mixRgb[index]
+      return Math.round(channel * (1 - ratio) + mixChannel * ratio)
+    }) as [number, number, number]
+
+    return this.rgbToHex(result[0], result[1], result[2])
+  }
+
+  private buildPrimaryVariants(
+    tone: ThemeTone,
+    lightMixColor: string,
+    darkMixColor: string
+  ): {
+    light3: string
+    light5: string
+    light7: string
+    light8: string
+    light9: string
+    dark2: string
+  } {
+    const light3 = this.mixColor(tone.primary, lightMixColor, 0.3) ?? tone.primary
+    const light5 = this.mixColor(tone.primary, lightMixColor, 0.5) ?? tone.primary
+    const light7 = this.mixColor(tone.primary, lightMixColor, 0.7) ?? tone.primary
+    const light8 = this.mixColor(tone.primary, lightMixColor, 0.8) ?? tone.primary
+    const light9 = this.mixColor(tone.primary, lightMixColor, 0.9) ?? tone.primary
+    const dark2 = this.mixColor(tone.primary, darkMixColor, 0.2) ?? tone.primary
+
+    return { light3, light5, light7, light8, light9, dark2 }
+  }
+
   private toRgbString(color: string): string {
     const rgb = this.hexToRgb(color)
     if (!rgb) {
@@ -471,6 +526,7 @@ export class WindowManager {
     primary: string
     hoverOffset: number
     activeOffset: number
+    page: string
     background: string
     surface: string
     border: string
@@ -488,6 +544,7 @@ export class WindowManager {
       primaryRgb,
       primaryHover,
       primaryActive,
+      page: options.page,
       background: options.background,
       surface: options.surface,
       border: options.border,
@@ -505,6 +562,7 @@ export class WindowManager {
         primary: light,
         hoverOffset: PRIMARY_HOVER_OFFSET,
         activeOffset: PRIMARY_ACTIVE_OFFSET,
+        page: LIGHT_TONE_BASE.page,
         background: LIGHT_TONE_BASE.background,
         surface: LIGHT_TONE_BASE.surface,
         border: LIGHT_TONE_BASE.border,
@@ -516,6 +574,7 @@ export class WindowManager {
         primary: dark,
         hoverOffset: PRIMARY_HOVER_OFFSET,
         activeOffset: PRIMARY_ACTIVE_OFFSET,
+        page: DARK_TONE_BASE.page,
         background: DARK_TONE_BASE.background,
         surface: DARK_TONE_BASE.surface,
         border: DARK_TONE_BASE.border,
@@ -528,32 +587,41 @@ export class WindowManager {
 
   private generateThemeVariablesCSS(palette: ThemePalette): string {
     const { light, dark } = palette
-    return `
-      html {
-        --tuff-primary-color: ${light.primary};
-        --tuff-primary-color-rgb: ${light.primaryRgb};
-        --tuff-primary-hover-color: ${light.primaryHover};
-        --tuff-primary-active-color: ${light.primaryActive};
-        --tuff-bg-color: ${light.background};
-        --tuff-surface-color: ${light.surface};
-        --tuff-border-color: ${light.border};
-        --tuff-text-color: ${light.text};
-        --tuff-text-color-secondary: ${light.textSecondary};
-        --tuff-shadow-color: ${light.shadow};
-      }
+    const lightPrimaryVariants = this.buildPrimaryVariants(light, '#ffffff', '#000000')
+    const darkPrimaryVariants = this.buildPrimaryVariants(dark, dark.background, '#ffffff')
 
-      html.dark {
-        --tuff-primary-color: ${dark.primary};
-        --tuff-primary-color-rgb: ${dark.primaryRgb};
-        --tuff-primary-hover-color: ${dark.primaryHover};
-        --tuff-primary-active-color: ${dark.primaryActive};
-        --tuff-bg-color: ${dark.background};
-        --tuff-surface-color: ${dark.surface};
-        --tuff-border-color: ${dark.border};
-        --tuff-text-color: ${dark.text};
-        --tuff-text-color-secondary: ${dark.textSecondary};
-        --tuff-shadow-color: ${dark.shadow};
-      }
+    return `${ELEMENT_PLUS_BASE_CSS}
+${ELEMENT_PLUS_DARK_CSS}
+
+:root {
+  color-scheme: light;
+  --el-color-primary: ${light.primary};
+  --el-color-primary-rgb: ${light.primaryRgb};
+  --el-color-primary-light-3: ${lightPrimaryVariants.light3};
+  --el-color-primary-light-5: ${lightPrimaryVariants.light5};
+  --el-color-primary-light-7: ${lightPrimaryVariants.light7};
+  --el-color-primary-light-8: ${lightPrimaryVariants.light8};
+  --el-color-primary-light-9: ${lightPrimaryVariants.light9};
+  --el-color-primary-dark-2: ${lightPrimaryVariants.dark2};
+  --el-bg-color: ${light.background};
+  --el-bg-color-page: ${light.page};
+  --el-bg-color-overlay: ${light.surface};
+}
+
+html.dark {
+  color-scheme: dark;
+  --el-color-primary: ${dark.primary};
+  --el-color-primary-rgb: ${dark.primaryRgb};
+  --el-color-primary-light-3: ${darkPrimaryVariants.light3};
+  --el-color-primary-light-5: ${darkPrimaryVariants.light5};
+  --el-color-primary-light-7: ${darkPrimaryVariants.light7};
+  --el-color-primary-light-8: ${darkPrimaryVariants.light8};
+  --el-color-primary-light-9: ${darkPrimaryVariants.light9};
+  --el-color-primary-dark-2: ${darkPrimaryVariants.dark2};
+  --el-bg-color: ${dark.background};
+  --el-bg-color-page: ${dark.page};
+  --el-bg-color-overlay: ${dark.surface};
+}
     `
   }
 
