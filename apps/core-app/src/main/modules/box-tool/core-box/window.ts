@@ -1,6 +1,7 @@
 import { BoxWindowOption } from '../../../config/default'
-import { app, screen, WebContentsView } from 'electron'
+import { app, screen, WebContentsView, nativeTheme } from 'electron'
 import path from 'path'
+import chalk from 'chalk'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
 import { getConfig } from '../../storage'
@@ -15,6 +16,74 @@ import { genTouchApp } from '../../../core'
 
 const windowAnimation = useWindowAnimation()
 
+const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
+
+type ThemeStyleConfig = {
+  theme?: {
+    style?: {
+      dark?: boolean
+      auto?: boolean
+    }
+    palette?: {
+      primary?: string
+    }
+    colors?: {
+      primary?: string
+    }
+    primaryColor?: string
+  }
+  palette?: {
+    primary?: string
+  }
+  colors?: {
+    primary?: string
+  }
+  primaryColor?: string
+}
+
+interface ThemeTone {
+  primary: string
+  primaryRgb: string
+  primaryHover: string
+  primaryActive: string
+  background: string
+  surface: string
+  border: string
+  text: string
+  textSecondary: string
+  shadow: string
+}
+
+interface ThemePalette {
+  light: ThemeTone
+  dark: ThemeTone
+}
+
+const DEFAULT_PRIMARY_COLOR = '#178cd4'
+const DEFAULT_DARK_PRIMARY_COLOR = '#63a4ff'
+
+const LIGHT_TONE_BASE = {
+  background: '#f6f7fb',
+  surface: '#ffffff',
+  border: '#d9deea',
+  text: '#1f2329',
+  textSecondary: '#596175',
+  shadowAlpha: 0.16
+}
+
+const DARK_TONE_BASE = {
+  background: '#0b172a',
+  surface: '#152235',
+  border: '#223044',
+  text: '#e3e9f4',
+  textSecondary: '#98a7c2',
+  shadowAlpha: 0.32
+}
+
+const PRIMARY_HOVER_OFFSET = 0.12
+const PRIMARY_ACTIVE_OFFSET = -0.14
+const DARK_PRIMARY_SHIFT = 0.22
+
 /**
  * @class WindowManager
  * @description
@@ -27,6 +96,8 @@ export class WindowManager {
   private uiView: WebContentsView | null = null
   private uiViewFocused = false
   private attachedPlugin: TouchPlugin | null = null
+  private nativeThemeHandler: (() => void) | null = null
+  private currentThemeIsDark = false
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -277,6 +348,325 @@ export class WindowManager {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
+  private loadThemeStyleConfig(): ThemeStyleConfig {
+    const config = getConfig('theme-style.ini') as ThemeStyleConfig | undefined
+    if (config && typeof config === 'object') {
+      return config
+    }
+    return {}
+  }
+
+  private resolveDarkPreference(themeStyle: ThemeStyleConfig): {
+    followSystem: boolean
+    dark: boolean
+  } {
+    const style = themeStyle.theme?.style
+    const followSystem = style?.auto ?? true
+    const dark = followSystem ? nativeTheme.shouldUseDarkColors : Boolean(style?.dark)
+    return { followSystem, dark }
+  }
+
+  private resolvePrimaryColors(themeStyle: ThemeStyleConfig): { light: string; dark: string } {
+    const lightPrimary =
+      this.pickValidColor([
+        themeStyle.theme?.palette?.primary,
+        themeStyle.theme?.colors?.primary,
+        themeStyle.theme?.primaryColor,
+        themeStyle.palette?.primary,
+        themeStyle.colors?.primary,
+        themeStyle.primaryColor
+      ]) ?? DEFAULT_PRIMARY_COLOR
+
+    const darkPalette = themeStyle.theme?.palette as Record<string, string | undefined> | undefined
+    const darkColors = themeStyle.theme?.colors as Record<string, string | undefined> | undefined
+    const rootPalette = themeStyle.palette as Record<string, string | undefined> | undefined
+    const rootColors = themeStyle.colors as Record<string, string | undefined> | undefined
+    const fallbackDark = this.adjustColor(lightPrimary, DARK_PRIMARY_SHIFT) ?? undefined
+    const darkPrimaryCandidate =
+      this.pickValidColor([
+        darkPalette?.['primary-dark'],
+        darkPalette?.primaryDark,
+        darkColors?.primaryDark,
+        rootPalette?.['primary-dark'],
+        rootPalette?.primaryDark,
+        rootColors?.primaryDark,
+      ]) ?? undefined
+
+    const darkPrimary =
+      this.pickValidColor([darkPrimaryCandidate, fallbackDark]) ??
+      fallbackDark ??
+      DEFAULT_DARK_PRIMARY_COLOR
+
+    return { light: lightPrimary, dark: darkPrimary }
+  }
+
+  private pickValidColor(candidates: Array<string | undefined | null>): string | null {
+    for (const color of candidates) {
+      if (this.isValidHexColor(color)) {
+        return color
+      }
+    }
+    return null
+  }
+
+  private isValidHexColor(color?: string | null): color is string {
+    if (!color || typeof color !== 'string') return false
+    const trimmed = color.trim()
+    return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(trimmed)
+  }
+
+  private hexToRgb(color: string): [number, number, number] | null {
+    const match = color.trim().match(/^#([\da-fA-F]{3}|[\da-fA-F]{6})$/)
+    if (!match) return null
+
+    let value = match[1]
+    if (value.length === 3) {
+      value = value
+        .split('')
+        .map((char) => char + char)
+        .join('')
+    }
+
+    const numericValue = parseInt(value, 16)
+    const r = (numericValue >> 16) & 255
+    const g = (numericValue >> 8) & 255
+    const b = numericValue & 255
+    return [r, g, b]
+  }
+
+  private rgbToHex(r: number, g: number, b: number): string {
+    const toHex = (channel: number) =>
+      Math.round(Math.max(0, Math.min(255, channel))).toString(16).padStart(2, '0')
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+  }
+
+  private adjustColor(color: string, amount: number): string | null {
+    const rgb = this.hexToRgb(color)
+    if (!rgb) {
+      return null
+    }
+
+    const adjustChannel = (channel: number) => {
+      const clampedAmount = Math.max(-1, Math.min(1, amount))
+      const adjustedValue =
+        clampedAmount < 0
+          ? channel * (1 + clampedAmount)
+          : channel + (255 - channel) * clampedAmount
+      return Math.round(Math.max(0, Math.min(255, adjustedValue)))
+    }
+
+    const [r, g, b] = rgb.map((channel) => adjustChannel(channel)) as [number, number, number]
+    return this.rgbToHex(r, g, b)
+  }
+
+  private toRgbString(color: string): string {
+    const rgb = this.hexToRgb(color)
+    if (!rgb) {
+      return '0, 0, 0'
+    }
+    return rgb.join(', ')
+  }
+
+  private createThemeTone(options: {
+    primary: string
+    hoverOffset: number
+    activeOffset: number
+    background: string
+    surface: string
+    border: string
+    text: string
+    textSecondary: string
+    shadowAlpha: number
+  }): ThemeTone {
+    const primaryHover = this.adjustColor(options.primary, options.hoverOffset) ?? options.primary
+    const primaryActive = this.adjustColor(options.primary, options.activeOffset) ?? options.primary
+    const primaryRgb = this.toRgbString(options.primary)
+    const shadowAlpha = Math.max(0, Math.min(1, options.shadowAlpha))
+
+    return {
+      primary: options.primary,
+      primaryRgb,
+      primaryHover,
+      primaryActive,
+      background: options.background,
+      surface: options.surface,
+      border: options.border,
+      text: options.text,
+      textSecondary: options.textSecondary,
+      shadow: `rgba(${primaryRgb}, ${shadowAlpha})`
+    }
+  }
+
+  private buildThemePalette(themeStyle: ThemeStyleConfig): ThemePalette {
+    const { light, dark } = this.resolvePrimaryColors(themeStyle)
+
+    return {
+      light: this.createThemeTone({
+        primary: light,
+        hoverOffset: PRIMARY_HOVER_OFFSET,
+        activeOffset: PRIMARY_ACTIVE_OFFSET,
+        background: LIGHT_TONE_BASE.background,
+        surface: LIGHT_TONE_BASE.surface,
+        border: LIGHT_TONE_BASE.border,
+        text: LIGHT_TONE_BASE.text,
+        textSecondary: LIGHT_TONE_BASE.textSecondary,
+        shadowAlpha: LIGHT_TONE_BASE.shadowAlpha
+      }),
+      dark: this.createThemeTone({
+        primary: dark,
+        hoverOffset: PRIMARY_HOVER_OFFSET,
+        activeOffset: PRIMARY_ACTIVE_OFFSET,
+        background: DARK_TONE_BASE.background,
+        surface: DARK_TONE_BASE.surface,
+        border: DARK_TONE_BASE.border,
+        text: DARK_TONE_BASE.text,
+        textSecondary: DARK_TONE_BASE.textSecondary,
+        shadowAlpha: DARK_TONE_BASE.shadowAlpha
+      })
+    }
+  }
+
+  private generateThemeVariablesCSS(palette: ThemePalette): string {
+    const { light, dark } = palette
+    return `
+      html {
+        --tuff-primary-color: ${light.primary};
+        --tuff-primary-color-rgb: ${light.primaryRgb};
+        --tuff-primary-hover-color: ${light.primaryHover};
+        --tuff-primary-active-color: ${light.primaryActive};
+        --tuff-bg-color: ${light.background};
+        --tuff-surface-color: ${light.surface};
+        --tuff-border-color: ${light.border};
+        --tuff-text-color: ${light.text};
+        --tuff-text-color-secondary: ${light.textSecondary};
+        --tuff-shadow-color: ${light.shadow};
+      }
+
+      html.dark {
+        --tuff-primary-color: ${dark.primary};
+        --tuff-primary-color-rgb: ${dark.primaryRgb};
+        --tuff-primary-hover-color: ${dark.primaryHover};
+        --tuff-primary-active-color: ${dark.primaryActive};
+        --tuff-bg-color: ${dark.background};
+        --tuff-surface-color: ${dark.surface};
+        --tuff-border-color: ${dark.border};
+        --tuff-text-color: ${dark.text};
+        --tuff-text-color-secondary: ${dark.textSecondary};
+        --tuff-shadow-color: ${dark.shadow};
+      }
+    `
+  }
+
+  private applyThemeToUIView(view: WebContentsView): void {
+    const themeStyle = this.loadThemeStyleConfig()
+    const palette = this.buildThemePalette(themeStyle)
+    const css = this.generateThemeVariablesCSS(palette)
+
+    if (!view.webContents.isDestroyed()) {
+      void view.webContents.insertCSS(css).catch((error) => {
+        console.error('[CoreBox] Failed to inject theme variables into UI view:', error)
+      })
+    }
+
+    const { followSystem, dark } = this.resolveDarkPreference(themeStyle)
+    this.updateUIViewDarkClass(view, dark)
+    this.notifyThemeChange(dark)
+
+    if (this.nativeThemeHandler) {
+      nativeTheme.removeListener('updated', this.nativeThemeHandler)
+      this.nativeThemeHandler = null
+    }
+
+    if (followSystem) {
+      const handler = () => {
+        if (!this.uiView || this.uiView !== view || view.webContents.isDestroyed()) {
+          return
+        }
+        this.updateUIViewDarkClass(view, nativeTheme.shouldUseDarkColors)
+        this.notifyThemeChange(nativeTheme.shouldUseDarkColors)
+      }
+      nativeTheme.on('updated', handler)
+      this.nativeThemeHandler = handler
+    }
+  }
+
+  private updateUIViewDarkClass(view: WebContentsView, isDark: boolean): void {
+    if (view.webContents.isDestroyed()) {
+      return
+    }
+
+    const themeLabel = isDark
+      ? chalk.bgHex('#0f172a').white.bold(' DARK ')
+      : chalk.bgHex('#f8fafc').black.bold(' LIGHT ')
+    console.log(`${chalk.gray('[CoreBox]')} ${chalk.magenta('Apply UI theme')} ${themeLabel}`)
+
+    const script = `
+      (() => {
+        const root = document.documentElement;
+        if (!root) { return; }
+        root.classList.${isDark ? 'add' : 'remove'}('dark');
+      })();
+    `
+
+    void view.webContents.executeJavaScript(script).catch((error) => {
+      console.error('[CoreBox] Failed to update UI view theme class:', error)
+    })
+  }
+
+  private runUIViewDarkThemeSync(): void {
+    if (!this.uiView || this.uiView.webContents.isDestroyed()) {
+      return
+    }
+
+    const themeLabel = this.currentThemeIsDark
+      ? chalk.bgHex('#0b1120').white.bold(' DARK ')
+      : chalk.bgHex('#f1f5f9').black.bold(' LIGHT ')
+    console.log(`${chalk.gray('[CoreBox]')} ${chalk.blue('Sync UI theme')} ${themeLabel}`)
+
+    const script = `
+      (() => {
+        const root = document.documentElement;
+        if (!root) { return; }
+        const isDark = ${JSON.stringify(this.currentThemeIsDark)};
+        if (isDark) {
+          root.classList.remove('dark');
+          root.classList.add('dark');
+        } else {
+          root.classList.add('dark');
+          root.classList.remove('dark');
+        }
+        console.log('[CoreBox] Current app theme:', isDark ? 'dark' : 'light');
+      })();
+    `
+
+    void this.uiView.webContents.executeJavaScript(script).catch((error) => {
+      console.error('[CoreBox] Failed to synchronize UI view theme:', error)
+    })
+  }
+
+  private notifyThemeChange(isDark: boolean): void {
+    this.currentThemeIsDark = isDark
+    const themeLabel = isDark
+      ? chalk.bgHex('#1f2937').white.bold(' DARK ')
+      : chalk.bgHex('#e5e7eb').black.bold(' LIGHT ')
+    console.log(`${chalk.gray('[CoreBox]')} ${chalk.cyan('Theme ready')} ${themeLabel}`)
+    const payload = { dark: isDark }
+
+    const currentWindow = this.current
+    if (currentWindow && !currentWindow.window.isDestroyed()) {
+      void this.touchApp.channel.sendTo(
+        currentWindow.window,
+        ChannelType.MAIN,
+        CORE_BOX_THEME_EVENT,
+        payload
+      )
+    }
+
+    if (this.attachedPlugin) {
+      this.sendChannelMessageToUIView(CORE_BOX_THEME_EVENT, payload)
+    }
+  }
+
   public attachUIView(url: string, plugin?: TouchPlugin): void {
     const currentWindow = this.current
     if (!currentWindow) {
@@ -317,6 +707,9 @@ export class WindowManager {
     })
 
     this.uiView.webContents.addListener('dom-ready', () => {
+      this.applyThemeToUIView(view)
+      this.runUIViewDarkThemeSync()
+
       if (plugin) {
         if (!app.isPackaged || plugin.dev.enable) {
           view.webContents.openDevTools({ mode: 'detach' })
@@ -502,6 +895,11 @@ export class WindowManager {
   }
 
   public detachUIView(): void {
+    if (this.nativeThemeHandler) {
+      nativeTheme.removeListener('updated', this.nativeThemeHandler)
+      this.nativeThemeHandler = null
+    }
+
     if (this.uiView) {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
@@ -527,10 +925,12 @@ export class WindowManager {
     }
   }
 
-  public sendChannelMessageToUIView(data: any): void {
-    if (this.uiView) {
-      this.uiView.webContents.send('@plugin-process-message', data)
+  public sendChannelMessageToUIView(eventName: string, data?: any): void {
+    if (!this.attachedPlugin) {
+      return
     }
+
+    void this.touchApp.channel.sendToPlugin(this.attachedPlugin.name, eventName, data)
   }
 
   public getUIView(): WebContentsView | undefined {
