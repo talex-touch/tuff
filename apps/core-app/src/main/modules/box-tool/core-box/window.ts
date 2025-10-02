@@ -2,7 +2,7 @@ import { BoxWindowOption } from '../../../config/default'
 import { app, screen, WebContentsView, nativeTheme } from 'electron'
 import path from 'path'
 import * as fs from 'fs'
-import { createRequire } from 'module'
+import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 import chalk from 'chalk'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
@@ -20,16 +20,8 @@ const windowAnimation = useWindowAnimation()
 
 const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
 
-const require = createRequire(import.meta.url)
-
-const ELEMENT_PLUS_BASE_CSS = fs
-  .readFileSync(require.resolve('element-plus/theme-chalk/base.css'), 'utf-8')
-  .replace(/@charset\s+"UTF-8";?/, '')
-
-const ELEMENT_PLUS_DARK_CSS = fs.readFileSync(
-  require.resolve('element-plus/theme-chalk/dark/css-vars.css'),
-  'utf-8'
-)
+const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
+const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
 
 type ThemeStyleConfig = {
   theme?: {
@@ -54,52 +46,6 @@ type ThemeStyleConfig = {
   primaryColor?: string
 }
 
-interface ThemeTone {
-  primary: string
-  primaryRgb: string
-  primaryHover: string
-  primaryActive: string
-  page: string
-  background: string
-  surface: string
-  border: string
-  text: string
-  textSecondary: string
-  shadow: string
-}
-
-interface ThemePalette {
-  light: ThemeTone
-  dark: ThemeTone
-}
-
-const DEFAULT_PRIMARY_COLOR = '#409eff'
-const DEFAULT_DARK_PRIMARY_COLOR = '#409eff'
-
-const LIGHT_TONE_BASE = {
-  page: '#f2f3f5',
-  background: '#ffffff',
-  surface: '#ffffff',
-  border: '#dcdfe6',
-  text: '#303133',
-  textSecondary: '#606266',
-  shadowAlpha: 0.12
-}
-
-const DARK_TONE_BASE = {
-  page: '#0a0a0a',
-  background: '#141414',
-  surface: '#1d1e1f',
-  border: '#4c4d4f',
-  text: '#e5eaf3',
-  textSecondary: '#cfd3dc',
-  shadowAlpha: 0.36
-}
-
-const PRIMARY_HOVER_OFFSET = 0.12
-const PRIMARY_ACTIVE_OFFSET = -0.14
-const DARK_PRIMARY_SHIFT = 0.22
-
 /**
  * @class WindowManager
  * @description
@@ -114,6 +60,7 @@ export class WindowManager {
   private attachedPlugin: TouchPlugin | null = null
   private nativeThemeHandler: (() => void) | null = null
   private currentThemeIsDark = false
+  private bundledThemeCss: string | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -382,253 +329,43 @@ export class WindowManager {
     return { followSystem, dark }
   }
 
-  private resolvePrimaryColors(themeStyle: ThemeStyleConfig): { light: string; dark: string } {
-    const lightPrimary =
-      this.pickValidColor([
-        themeStyle.theme?.palette?.primary,
-        themeStyle.theme?.colors?.primary,
-        themeStyle.theme?.primaryColor,
-        themeStyle.palette?.primary,
-        themeStyle.colors?.primary,
-        themeStyle.primaryColor
-      ]) ?? DEFAULT_PRIMARY_COLOR
-
-    const darkPalette = themeStyle.theme?.palette as Record<string, string | undefined> | undefined
-    const darkColors = themeStyle.theme?.colors as Record<string, string | undefined> | undefined
-    const rootPalette = themeStyle.palette as Record<string, string | undefined> | undefined
-    const rootColors = themeStyle.colors as Record<string, string | undefined> | undefined
-    const fallbackDark = this.adjustColor(lightPrimary, DARK_PRIMARY_SHIFT) ?? undefined
-    const darkPrimaryCandidate =
-      this.pickValidColor([
-        darkPalette?.['primary-dark'],
-        darkPalette?.primaryDark,
-        darkColors?.primaryDark,
-        rootPalette?.['primary-dark'],
-        rootPalette?.primaryDark,
-        rootColors?.primaryDark,
-      ]) ?? undefined
-
-    const darkPrimary =
-      this.pickValidColor([darkPrimaryCandidate, fallbackDark]) ??
-      fallbackDark ??
-      DEFAULT_DARK_PRIMARY_COLOR
-
-    return { light: lightPrimary, dark: darkPrimary }
+  private resolveThemeStoragePath(): { directory: string; file: string } {
+    const userDataDir = app.getPath('userData')
+    const directory = path.join(userDataDir, ...CORE_BOX_THEME_SUBDIR)
+    const file = path.join(directory, CORE_BOX_THEME_FILE_NAME)
+    return { directory, file }
   }
 
-  private pickValidColor(candidates: Array<string | undefined | null>): string | null {
-    for (const color of candidates) {
-      if (this.isValidHexColor(color)) {
-        return color
+  private getBundledThemeCss(): string {
+    if (!this.bundledThemeCss) {
+      this.bundledThemeCss = defaultCoreBoxThemeCss
+    }
+    return this.bundledThemeCss
+  }
+
+  private loadInternalThemeCss(): string {
+    const defaultCss = this.getBundledThemeCss()
+    const { directory, file } = this.resolveThemeStoragePath()
+
+    try {
+      fs.mkdirSync(directory, { recursive: true })
+
+      if (!fs.existsSync(file)) {
+        fs.writeFileSync(file, defaultCss, 'utf-8')
+        return defaultCss
       }
+
+      const content = fs.readFileSync(file, 'utf-8')
+      return content.trim().length > 0 ? content : defaultCss
+    } catch (error) {
+      console.error('[CoreBox] Failed to prepare theme stylesheet, falling back to default.', error)
+      return defaultCss
     }
-    return null
-  }
-
-  private isValidHexColor(color?: string | null): color is string {
-    if (!color || typeof color !== 'string') return false
-    const trimmed = color.trim()
-    return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(trimmed)
-  }
-
-  private hexToRgb(color: string): [number, number, number] | null {
-    const match = color.trim().match(/^#([\da-fA-F]{3}|[\da-fA-F]{6})$/)
-    if (!match) return null
-
-    let value = match[1]
-    if (value.length === 3) {
-      value = value
-        .split('')
-        .map((char) => char + char)
-        .join('')
-    }
-
-    const numericValue = parseInt(value, 16)
-    const r = (numericValue >> 16) & 255
-    const g = (numericValue >> 8) & 255
-    const b = numericValue & 255
-    return [r, g, b]
-  }
-
-  private rgbToHex(r: number, g: number, b: number): string {
-    const toHex = (channel: number) =>
-      Math.round(Math.max(0, Math.min(255, channel))).toString(16).padStart(2, '0')
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`
-  }
-
-  private adjustColor(color: string, amount: number): string | null {
-    const rgb = this.hexToRgb(color)
-    if (!rgb) {
-      return null
-    }
-
-    const adjustChannel = (channel: number) => {
-      const clampedAmount = Math.max(-1, Math.min(1, amount))
-      const adjustedValue =
-        clampedAmount < 0
-          ? channel * (1 + clampedAmount)
-          : channel + (255 - channel) * clampedAmount
-      return Math.round(Math.max(0, Math.min(255, adjustedValue)))
-    }
-
-    const [r, g, b] = rgb.map((channel) => adjustChannel(channel)) as [number, number, number]
-    return this.rgbToHex(r, g, b)
-  }
-
-  private mixColor(color: string, mixWith: string, weight: number): string | null {
-    const baseRgb = this.hexToRgb(color)
-    const mixRgb = this.hexToRgb(mixWith)
-    if (!baseRgb || !mixRgb) {
-      return null
-    }
-
-    const ratio = Math.max(0, Math.min(1, weight))
-
-    const result = baseRgb.map((channel, index) => {
-      const mixChannel = mixRgb[index]
-      return Math.round(channel * (1 - ratio) + mixChannel * ratio)
-    }) as [number, number, number]
-
-    return this.rgbToHex(result[0], result[1], result[2])
-  }
-
-  private buildPrimaryVariants(
-    tone: ThemeTone,
-    lightMixColor: string,
-    darkMixColor: string
-  ): {
-    light3: string
-    light5: string
-    light7: string
-    light8: string
-    light9: string
-    dark2: string
-  } {
-    const light3 = this.mixColor(tone.primary, lightMixColor, 0.3) ?? tone.primary
-    const light5 = this.mixColor(tone.primary, lightMixColor, 0.5) ?? tone.primary
-    const light7 = this.mixColor(tone.primary, lightMixColor, 0.7) ?? tone.primary
-    const light8 = this.mixColor(tone.primary, lightMixColor, 0.8) ?? tone.primary
-    const light9 = this.mixColor(tone.primary, lightMixColor, 0.9) ?? tone.primary
-    const dark2 = this.mixColor(tone.primary, darkMixColor, 0.2) ?? tone.primary
-
-    return { light3, light5, light7, light8, light9, dark2 }
-  }
-
-  private toRgbString(color: string): string {
-    const rgb = this.hexToRgb(color)
-    if (!rgb) {
-      return '0, 0, 0'
-    }
-    return rgb.join(', ')
-  }
-
-  private createThemeTone(options: {
-    primary: string
-    hoverOffset: number
-    activeOffset: number
-    page: string
-    background: string
-    surface: string
-    border: string
-    text: string
-    textSecondary: string
-    shadowAlpha: number
-  }): ThemeTone {
-    const primaryHover = this.adjustColor(options.primary, options.hoverOffset) ?? options.primary
-    const primaryActive = this.adjustColor(options.primary, options.activeOffset) ?? options.primary
-    const primaryRgb = this.toRgbString(options.primary)
-    const shadowAlpha = Math.max(0, Math.min(1, options.shadowAlpha))
-
-    return {
-      primary: options.primary,
-      primaryRgb,
-      primaryHover,
-      primaryActive,
-      page: options.page,
-      background: options.background,
-      surface: options.surface,
-      border: options.border,
-      text: options.text,
-      textSecondary: options.textSecondary,
-      shadow: `rgba(${primaryRgb}, ${shadowAlpha})`
-    }
-  }
-
-  private buildThemePalette(themeStyle: ThemeStyleConfig): ThemePalette {
-    const { light, dark } = this.resolvePrimaryColors(themeStyle)
-
-    return {
-      light: this.createThemeTone({
-        primary: light,
-        hoverOffset: PRIMARY_HOVER_OFFSET,
-        activeOffset: PRIMARY_ACTIVE_OFFSET,
-        page: LIGHT_TONE_BASE.page,
-        background: LIGHT_TONE_BASE.background,
-        surface: LIGHT_TONE_BASE.surface,
-        border: LIGHT_TONE_BASE.border,
-        text: LIGHT_TONE_BASE.text,
-        textSecondary: LIGHT_TONE_BASE.textSecondary,
-        shadowAlpha: LIGHT_TONE_BASE.shadowAlpha
-      }),
-      dark: this.createThemeTone({
-        primary: dark,
-        hoverOffset: PRIMARY_HOVER_OFFSET,
-        activeOffset: PRIMARY_ACTIVE_OFFSET,
-        page: DARK_TONE_BASE.page,
-        background: DARK_TONE_BASE.background,
-        surface: DARK_TONE_BASE.surface,
-        border: DARK_TONE_BASE.border,
-        text: DARK_TONE_BASE.text,
-        textSecondary: DARK_TONE_BASE.textSecondary,
-        shadowAlpha: DARK_TONE_BASE.shadowAlpha
-      })
-    }
-  }
-
-  private generateThemeVariablesCSS(palette: ThemePalette): string {
-    const { light, dark } = palette
-    const lightPrimaryVariants = this.buildPrimaryVariants(light, '#ffffff', '#000000')
-    const darkPrimaryVariants = this.buildPrimaryVariants(dark, dark.background, '#ffffff')
-
-    return `${ELEMENT_PLUS_BASE_CSS}
-${ELEMENT_PLUS_DARK_CSS}
-
-:root {
-  color-scheme: light;
-  --el-color-primary: ${light.primary};
-  --el-color-primary-rgb: ${light.primaryRgb};
-  --el-color-primary-light-3: ${lightPrimaryVariants.light3};
-  --el-color-primary-light-5: ${lightPrimaryVariants.light5};
-  --el-color-primary-light-7: ${lightPrimaryVariants.light7};
-  --el-color-primary-light-8: ${lightPrimaryVariants.light8};
-  --el-color-primary-light-9: ${lightPrimaryVariants.light9};
-  --el-color-primary-dark-2: ${lightPrimaryVariants.dark2};
-  --el-bg-color: ${light.background};
-  --el-bg-color-page: ${light.page};
-  --el-bg-color-overlay: ${light.surface};
-}
-
-html.dark {
-  color-scheme: dark;
-  --el-color-primary: ${dark.primary};
-  --el-color-primary-rgb: ${dark.primaryRgb};
-  --el-color-primary-light-3: ${darkPrimaryVariants.light3};
-  --el-color-primary-light-5: ${darkPrimaryVariants.light5};
-  --el-color-primary-light-7: ${darkPrimaryVariants.light7};
-  --el-color-primary-light-8: ${darkPrimaryVariants.light8};
-  --el-color-primary-light-9: ${darkPrimaryVariants.light9};
-  --el-color-primary-dark-2: ${darkPrimaryVariants.dark2};
-  --el-bg-color: ${dark.background};
-  --el-bg-color-page: ${dark.page};
-  --el-bg-color-overlay: ${dark.surface};
-}
-    `
   }
 
   private applyThemeToUIView(view: WebContentsView): void {
     const themeStyle = this.loadThemeStyleConfig()
-    const palette = this.buildThemePalette(themeStyle)
-    const css = this.generateThemeVariablesCSS(palette)
+    const css = this.loadInternalThemeCss()
 
     if (!view.webContents.isDestroyed()) {
       void view.webContents.insertCSS(css).catch((error) => {
