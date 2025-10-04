@@ -8,6 +8,19 @@ const ensurePluginChannel = () => {
   return channel
 }
 
+const normalizeItem = (item: PluginClipboardItem | null): PluginClipboardItem | null => {
+  if (!item) return item
+  if (!item.meta && typeof item.metadata === 'string') {
+    try {
+      const parsed = JSON.parse(item.metadata)
+      return { ...item, meta: parsed }
+    } catch {
+      return { ...item, meta: null }
+    }
+  }
+  return item
+}
+
 export interface ClipboardHistoryOptions {
   page?: number
 }
@@ -26,12 +39,20 @@ export function useClipboardHistory() {
 
   return {
     async getLatest(): Promise<PluginClipboardItem | null> {
-      return channel.send('clipboard:get-latest')
+      const result = await channel.send('clipboard:get-latest')
+      return normalizeItem(result)
     },
 
     async getHistory(options: ClipboardHistoryOptions = {}): Promise<PluginClipboardHistoryResponse> {
       const { page = 1 } = options
-      return channel.send('clipboard:get-history', { page })
+      const response = await channel.send('clipboard:get-history', { page })
+      const history = Array.isArray(response?.history)
+        ? response.history.map((item: PluginClipboardItem) => normalizeItem(item) ?? item)
+        : []
+      return {
+        ...response,
+        history
+      }
     },
 
     async setFavorite(options: ClipboardFavoriteOptions): Promise<void> {
@@ -49,7 +70,7 @@ export function useClipboardHistory() {
     onDidChange(callback: (item: PluginClipboardItem) => void): () => void {
       return channel.regChannel('core-box:clipboard-change', ({ data }) => {
         const item = (data && 'item' in data ? data.item : data) as PluginClipboardItem
-        callback(item)
+        callback(normalizeItem(item) ?? item)
       })
     }
   }

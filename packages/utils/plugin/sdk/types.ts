@@ -95,6 +95,8 @@ export interface PluginClipboardItem {
   sourceApp?: string | null
   timestamp?: string | number | Date | null
   isFavorite?: boolean | null
+  metadata?: string | null
+  meta?: Record<string, unknown> | null
 }
 
 /**
@@ -105,6 +107,19 @@ export interface PluginClipboardHistoryResponse {
   total: number
   page: number
   pageSize: number
+}
+
+export interface ActiveAppSnapshot {
+  identifier: string | null
+  displayName: string | null
+  bundleId: string | null
+  processId: number | null
+  executablePath: string | null
+  platform: 'macos' | 'windows' | 'linux' | null
+  windowTitle: string | null
+  url?: string | null
+  icon?: string | null
+  lastUpdated: number
 }
 
 /**

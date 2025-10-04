@@ -631,7 +631,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         }
       })
     })().catch((err) => {
-      console.error(chalk.red('[PluginModule]'), 'Failed to initialize plugin module watchers:', err)
+      console.error(
+        chalk.red('[PluginModule]'),
+        'Failed to initialize plugin module watchers:',
+        err
+      )
     })
   }
 
@@ -707,14 +711,18 @@ export class PluginModule extends BaseModule {
       installQueue.enqueue(request, reply)
     })
 
-    touchChannel.regChannel(ChannelType.MAIN, 'plugin:install-confirm-response', ({ data, reply }) => {
-      if (!installQueue) {
-        return reply(DataCode.ERROR, { error: 'Install queue is not ready' })
-      }
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:install-confirm-response',
+      ({ data, reply }) => {
+        if (!installQueue) {
+          return reply(DataCode.ERROR, { error: 'Install queue is not ready' })
+        }
 
-      installQueue.handleConfirmResponse(data as PluginInstallConfirmResponse)
-      reply(DataCode.SUCCESS, { status: 'received' })
-    })
+        installQueue.handleConfirmResponse(data as PluginInstallConfirmResponse)
+        reply(DataCode.SUCCESS, { status: 'received' })
+      }
+    )
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
       manager.setActivePlugin(data!.name)
     )

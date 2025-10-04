@@ -23,7 +23,10 @@ interface InstallTask {
 const PROGRESS_EVENT = 'plugin:install-progress'
 const CONFIRM_EVENT = 'plugin:install-confirm'
 
-function extractClientString(meta: Record<string, unknown> | undefined, key: string): string | undefined {
+function extractClientString(
+  meta: Record<string, unknown> | undefined,
+  key: string
+): string | undefined {
   const value = meta?.[key]
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
 }
@@ -42,9 +45,10 @@ export class PluginInstallQueue {
   }
 
   enqueue(request: PluginInstallRequest, reply: StandardChannelData['reply']): InstallTask {
-    const id = request.metadata?.taskId && typeof request.metadata.taskId === 'string'
-      ? request.metadata.taskId
-      : crypto.randomUUID()
+    const id =
+      request.metadata?.taskId && typeof request.metadata.taskId === 'string'
+        ? request.metadata.taskId
+        : crypto.randomUUID()
 
     const task: InstallTask = {
       id,
@@ -52,7 +56,8 @@ export class PluginInstallQueue {
       reply,
       clientMetadata: request.clientMetadata,
       lastProgress: -1,
-      officialHint: typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined
+      officialHint:
+        typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined
     }
 
     this.queue.push(task)
@@ -147,8 +152,7 @@ export class PluginInstallQueue {
       official: Boolean(task.prepared.providerResult.official),
       pluginId: extractClientString(task.clientMetadata, 'pluginId'),
       pluginName:
-        extractClientString(task.clientMetadata, 'pluginName') ||
-        task.prepared.manifest?.name,
+        extractClientString(task.clientMetadata, 'pluginName') || task.prepared.manifest?.name,
       source: task.request.source
     }
 
@@ -181,7 +185,8 @@ export class PluginInstallQueue {
     extra: Partial<PluginInstallProgressEvent> = {}
   ): void {
     const channel = genTouchChannel()
-    const position = this.activeTask?.id === task.id ? 0 : this.queue.findIndex((item) => item.id === task.id) + 1
+    const position =
+      this.activeTask?.id === task.id ? 0 : this.queue.findIndex((item) => item.id === task.id) + 1
     const remaining = (this.activeTask ? 1 : 0) + this.queue.length
     const progress = typeof extra.progress === 'number' ? extra.progress : undefined
 

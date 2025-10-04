@@ -1,1 +1,2 @@
-ALTER TABLE `keyword_mappings` ADD `provider_id` text DEFAULT '' NOT NULL;
+-- handled via post-migration guard to prevent duplicate provider_id column
+SELECT 1 WHERE 0;
