@@ -18,8 +18,10 @@ class ActiveAppService {
   private cache: { info: ActiveAppInfo; expiresAt: number } | null = null
   private activeWinModule: typeof import('active-win') | null = null
   private readonly cacheTTL = 750
+  private importFailed = false
 
   private async resolveActiveWindow(): Promise<ActiveWindowResult | undefined> {
+    if (this.importFailed) return undefined
     try {
       if (!this.activeWinModule) {
         this.activeWinModule = await import('active-win')
@@ -27,7 +29,10 @@ class ActiveAppService {
       const { activeWindow } = this.activeWinModule
       return activeWindow({ accessibilityPermission: true, screenRecordingPermission: true })
     } catch (error) {
-      console.warn('[ActiveApp] Failed to resolve active window via active-win:', error)
+      if (!this.importFailed) {
+        console.warn('[ActiveApp] Failed to resolve active window via active-win:', error)
+      }
+      this.importFailed = true
       return undefined
     }
   }

@@ -5,6 +5,7 @@
       <TouchMenuItem route="/home" :name="t('flatNavBar.dashboard')" icon="i-ri-home-3-line" />
       <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
       <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
+      <TouchMenuItem route="/lingpan" :name="t('flatNavBar.lingpan')" icon="i-ri-apps-2-line" />
       <!-- <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" /> -->
       <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
       <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />

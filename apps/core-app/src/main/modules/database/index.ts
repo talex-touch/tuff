@@ -36,6 +36,8 @@ export class DatabaseModule extends BaseModule {
     console.log(chalk.cyan(`[Database] Preparing SQLite database at ${chalk.bold(dbPath)}`))
     console.log(chalk.cyan(`[Database] Applying migrations from ${chalk.bold(migrationsFolder)}`))
 
+    await this.ensureKeywordMappingsProviderColumn()
+
     const timing = createTiming('Database:Migrations', {
       storeHistory: false,
       formatter: (entry, stats) =>
@@ -68,6 +70,26 @@ export class DatabaseModule extends BaseModule {
 
       console.error(chalk.red('[Database] Migration failed:'), error)
       process.exit(1)
+    }
+  }
+
+  private async ensureKeywordMappingsProviderColumn(): Promise<void> {
+    if (!this.client) return
+
+    try {
+      const check = await this.client.execute(
+        "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
+      )
+      if (check.rows.length > 0) {
+        return
+      }
+
+      console.log(chalk.yellow('[Database] Adding missing column `keyword_mappings.provider_id`'))
+      await this.client.execute(
+        "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
+      )
+    } catch (error) {
+      console.warn('[Database] Failed to set up `provider_id` column pre-migration:', error)
     }
   }
 

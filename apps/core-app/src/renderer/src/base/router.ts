@@ -47,11 +47,19 @@ const routes: any = [
     }
   },
   {
+    path: '/lingpan',
+    name: '灵盘',
+    component: () => import('../views/base/LingPan.vue'),
+    meta: {
+      index: 4
+    }
+  },
+  {
     path: '/styles',
     name: 'Styles',
     component: () => import('../views/base/styles/ThemeStyle.vue'),
     meta: {
-      index: 4
+      index: 5
     }
   },
   {
@@ -59,7 +67,7 @@ const routes: any = [
     name: 'Theme',
     component: () => import('../views/base/styles/sub/ThemePreference.vue'),
     meta: {
-      index: 4
+      index: 5
     }
   },
   {
@@ -67,7 +75,7 @@ const routes: any = [
     name: 'Application',
     component: () => import('../views/base/application/ApplicationIndex.vue'),
     meta: {
-      index: 5
+      index: 6
     }
   },
   {
@@ -85,7 +93,7 @@ const routes: any = [
       }
     ],
     meta: {
-      index: 6
+      index: 7
     }
   }
 ]

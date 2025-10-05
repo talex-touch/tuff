@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 import type { IClipboardItem } from '../clipboard'
 import { databaseModule } from '../database'
@@ -17,7 +18,9 @@ import {
 } from '../../db/schema'
 import * as schema from '../../db/schema'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import chalk from 'chalk'
 
 export interface ClipboardOcrPayload {
   clipboardId: number
@@ -80,11 +83,14 @@ class OcrService {
   private clipboardMetaListener:
     | ((clipboardId: number, patch: Record<string, unknown>) => void)
     | null = null
+  private channelRegistered = false
 
   private ensureInitialized(): void {
     if (this.initialized) return
 
     this.db = databaseModule.getDb()
+
+    this.registerChannels()
 
     pollingService.register(
       this.pollTaskId,
@@ -100,6 +106,204 @@ class OcrService {
     )
 
     this.initialized = true
+  }
+
+  private registerChannels(): void {
+    if (this.channelRegistered) {
+      return
+    }
+
+    const channel = genTouchChannel()
+
+    channel.regChannel(ChannelType.MAIN, 'ocr:dashboard', async ({ reply, data }) => {
+      try {
+        const limit = typeof data?.limit === 'number' && data.limit > 0 ? data.limit : 50
+        const snapshot = await this.getDashboardSnapshot(limit)
+        reply(DataCode.SUCCESS, {
+          ok: true,
+          snapshot
+        })
+      } catch (error) {
+        console.error(chalk.red('[OCR] Failed to build dashboard snapshot:'), error)
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    })
+
+    this.channelRegistered = true
+  }
+
+  public async getDashboardSnapshot(limit = 50) {
+    this.ensureInitialized()
+    return this.buildDashboardSnapshot(limit)
+  }
+
+  private async buildDashboardSnapshot(limit: number) {
+    if (!this.db) {
+      return {
+        jobs: [],
+        stats: {
+          total: 0,
+          byStatus: {},
+          lastQueued: null,
+          lastDispatch: null,
+          lastSuccess: null,
+          lastFailure: null
+        },
+        indexes: {
+          fileSources: [],
+          dataUrlSourceCount: 0,
+          clipboardIds: [],
+          payloadHashes: []
+        }
+      }
+    }
+
+    const jobs = await this.db
+      .select()
+      .from(ocrJobs)
+      .orderBy(desc(ocrJobs.queuedAt))
+      .limit(limit)
+
+    const jobIds = jobs
+      .map((job) => job.id)
+      .filter((id): id is number => typeof id === 'number')
+
+    const resultsMap = new Map<number, (typeof ocrResults.$inferSelect) | null>()
+
+    if (jobIds.length > 0) {
+      const results = await this.db
+        .select()
+        .from(ocrResults)
+        .where(inArray(ocrResults.jobId, jobIds))
+
+      for (const result of results) {
+        resultsMap.set(result.jobId, result)
+      }
+    }
+
+    const statusCounts = await this.db
+      .select({
+        status: ocrJobs.status,
+        count: sql<number>`COUNT(*)`
+      })
+      .from(ocrJobs)
+      .groupBy(ocrJobs.status)
+
+    const statusMap: Record<string, number> = {}
+    let total = 0
+    for (const row of statusCounts) {
+      if (row.status) {
+        statusMap[row.status] = Number(row.count ?? 0)
+        total += Number(row.count ?? 0)
+      }
+    }
+
+    const configKeys = ['ocr:last-queued', 'ocr:last-dispatch', 'ocr:last-success', 'ocr:last-failure']
+
+    const configRows = await this.db
+      .select()
+      .from(config)
+      .where(inArray(config.key, configKeys))
+
+    const configMap: Record<string, unknown> = {}
+    for (const row of configRows) {
+      if (!row.key) continue
+      try {
+        configMap[row.key] = row.value ? JSON.parse(row.value) : null
+      } catch {
+        configMap[row.key] = row.value
+      }
+    }
+
+    const fileSources = new Set<string>()
+    const payloadHashes = new Set<string>()
+    const clipboardIds = new Set<number>()
+    let dataUrlSourceCount = 0
+
+    const toIsoString = (value: unknown): string | null => {
+      if (!value) return null
+      if (value instanceof Date) return value.toISOString()
+      if (typeof value === 'number') {
+        // drizzle timestamp mode returns seconds since epoch by default
+        return new Date(value * 1000).toISOString()
+      }
+      return null
+    }
+
+    const enrichedJobs = jobs.map((job) => {
+      let parsedMeta: Record<string, any> | null = null
+      if (job.meta) {
+        try {
+          parsedMeta = JSON.parse(job.meta)
+        } catch {
+          parsedMeta = null
+        }
+      }
+
+      const source = parsedMeta?.source
+      const options = parsedMeta?.options
+
+      if (source?.type === 'file' && typeof source.filePath === 'string') {
+        fileSources.add(source.filePath)
+      } else if (source?.type === 'data-url') {
+        dataUrlSourceCount += 1
+      }
+
+      if (typeof job.payloadHash === 'string' && job.payloadHash.length > 0) {
+        payloadHashes.add(job.payloadHash)
+      }
+
+      if (typeof job.clipboardId === 'number') {
+        clipboardIds.add(job.clipboardId)
+      }
+
+      const result = job.id ? resultsMap.get(job.id) ?? null : null
+
+      return {
+        id: job.id,
+        clipboardId: job.clipboardId,
+        status: job.status,
+        attempts: job.attempts,
+        priority: job.priority,
+        lastError: job.lastError,
+        payloadHash: job.payloadHash,
+        queuedAt: toIsoString(job.queuedAt),
+        startedAt: toIsoString(job.startedAt),
+        finishedAt: toIsoString(job.finishedAt),
+        source,
+        options,
+        result: result
+          ? {
+              id: result.id,
+              textSnippet: result.text?.slice(0, 280) ?? '',
+              confidence: result.confidence,
+              language: result.language,
+              createdAt: toIsoString(result.createdAt)
+            }
+          : null
+      }
+    })
+
+    return {
+      jobs: enrichedJobs,
+      stats: {
+        total,
+        byStatus: statusMap,
+        lastQueued: configMap['ocr:last-queued'] ?? null,
+        lastDispatch: configMap['ocr:last-dispatch'] ?? null,
+        lastSuccess: configMap['ocr:last-success'] ?? null,
+        lastFailure: configMap['ocr:last-failure'] ?? null
+      },
+      indexes: {
+        fileSources: Array.from(fileSources),
+        dataUrlSourceCount,
+        clipboardIds: Array.from(clipboardIds),
+        payloadHashes: Array.from(payloadHashes)
+      }
+    }
   }
 
   async start(): Promise<void> {
@@ -308,8 +512,8 @@ class OcrService {
       })
     }
 
-    const workerScript = new URL('./ocr-worker.ts', import.meta.url)
-    const worker = new Worker(workerScript, {
+    const workerUrl = this.resolveWorkerUrl()
+    const worker = new Worker(workerUrl, {
       workerData: {
         jobId,
         clipboardId: job.clipboardId ?? null,
@@ -346,6 +550,18 @@ class OcrService {
         this.processQueue().catch((error) => console.error('[OCR] Queue resume error:', error))
       })
     })
+  }
+
+  private resolveWorkerUrl(): URL {
+    const jsUrl = new URL('./ocr-worker.js', import.meta.url)
+    try {
+      const jsPath = fileURLToPath(jsUrl)
+      if (existsSync(jsPath)) {
+        return jsUrl
+      }
+    } catch {}
+
+    return new URL('./ocr-worker.ts', import.meta.url)
   }
 
   private async handleWorkerSuccess(message: WorkerSuccessMessage): Promise<void> {
@@ -438,9 +654,9 @@ class OcrService {
     }
 
     if (status === 'failed') {
-      console.warn(`[OCR] Job ${jobId} failed permanently: ${reason}`)
+      console.warn(chalk.redBright(`[OCR] Job ${jobId} failed permanently: ${reason}`))
       if (details) {
-        console.warn('[OCR] Failure details:', details)
+        console.warn(chalk.red('[OCR] Failure details:'), details)
       }
     } else {
       setImmediate(() => {
