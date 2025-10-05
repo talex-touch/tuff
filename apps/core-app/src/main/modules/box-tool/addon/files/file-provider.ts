@@ -276,6 +276,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return new ProgressLogger(label, total, (message) => this.logInfo(message))
   }
 
+  public getWatchedPaths(): string[] {
+    return [...this.WATCH_PATHS]
+  }
+
   private toTimestamp(value: Date | number | string | null | undefined): number | null {
     if (!value) {
       return null

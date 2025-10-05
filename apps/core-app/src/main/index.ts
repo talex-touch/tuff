@@ -22,6 +22,7 @@ import { terminalModule } from './modules/terminal/terminal.manager'
 import { extensionLoaderModule } from './modules/extension-loader'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
+import { tuffDashboardModule } from './modules/system/tuff-dashboard'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -53,6 +54,7 @@ app.whenReady().then(async () => {
   await app.moduleManager.loadModule(addonOpenerModule)
   // // await app.moduleManager.loadModule(DropManager)
   await app.moduleManager.loadModule(clipboardModule)
+  await app.moduleManager.loadModule(tuffDashboardModule)
   await app.moduleManager.loadModule(FileSystemWatcher)
   await app.moduleManager.loadModule(fileProtocolModule)
   await app.moduleManager.loadModule(terminalModule)

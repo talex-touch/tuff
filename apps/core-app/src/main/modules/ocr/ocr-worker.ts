@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { readFile } from 'node:fs/promises'
 import { createWorker } from 'tesseract.js'
+import chalk from 'chalk'
 
 interface WorkerData {
   jobId: number
@@ -44,6 +45,12 @@ async function run(): Promise<void> {
   const language = payload.options.language || 'eng'
   const buffer = await loadImageBuffer(payload.source)
 
+  console.log(
+    chalk.blueBright(
+      `[OCR Worker] Starting job ${payload.jobId} with language ${language} and source type ${payload.source.type}`
+    )
+  )
+
   const worker = await createWorker(language, undefined, {
     logger: (_message) => undefined,
     cacheMethod: 'read',
@@ -64,6 +71,12 @@ async function run(): Promise<void> {
 
     const { data } = await worker.recognize(buffer)
 
+    console.log(
+      chalk.greenBright(
+        `[OCR Worker] Job ${payload.jobId} completed with confidence ${data.confidence ?? 0}`
+      )
+    )
+
     parentPort?.postMessage({
       status: 'success',
       jobId: payload.jobId,
@@ -77,6 +90,11 @@ async function run(): Promise<void> {
       }
     })
   } catch (error) {
+    console.error(
+      chalk.redBright(
+        `[OCR Worker] Job ${payload.jobId} failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    )
     parentPort?.postMessage({
       status: 'error',
       jobId: payload.jobId,
@@ -88,6 +106,13 @@ async function run(): Promise<void> {
 }
 
 run().catch((error) => {
+  console.error(
+    chalk.redBright(
+      `[OCR Worker] Unhandled failure for job ${(workerData as WorkerData).jobId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  )
   parentPort?.postMessage({
     status: 'error',
     jobId: (workerData as WorkerData).jobId,
