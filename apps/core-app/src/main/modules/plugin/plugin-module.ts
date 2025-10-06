@@ -4,7 +4,6 @@ import type {
   PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
 import type { FSWatcher } from 'chokidar'
-import chalk from 'chalk'
 import fse from 'fs-extra'
 import path from 'path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
@@ -26,8 +25,10 @@ import { LocalPluginProvider } from './providers/local-provider'
 import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import util from 'util'
+import { createLogger } from '../../utils/logger'
 
-const devWatcherLabel = chalk.blue('[DevPluginWatcher]')
+const pluginLog = createLogger('PluginModule')
+const devWatcherLog = pluginLog.child('DevWatcher')
 
 class DevPluginWatcher {
   private readonly manager: IPluginManager
@@ -43,7 +44,9 @@ class DevPluginWatcher {
       this.devPlugins.set(plugin.name, plugin)
       if (this.watcher) {
         this.watcher.add(plugin.dev.source)
-        console.log(devWatcherLabel, `Watching dev plugin source: ${plugin.dev.source}`)
+        devWatcherLog.info('Watching dev plugin source', {
+          meta: { path: plugin.dev.source, plugin: plugin.name }
+        })
       }
     }
   }
@@ -53,13 +56,15 @@ class DevPluginWatcher {
     if (plugin && typeof plugin.dev.source === 'string' && this.watcher) {
       this.watcher.unwatch(plugin.dev.source)
       this.devPlugins.delete(pluginName)
-      console.log(devWatcherLabel, `Unwatching dev plugin source: ${plugin.dev.source}`)
+      devWatcherLog.info('Stopped watching dev plugin source', {
+        meta: { path: plugin.dev.source, plugin: plugin.name }
+      })
     }
   }
 
   start(): void {
     if (this.watcher) {
-      console.warn(devWatcherLabel, 'Watcher already started.')
+      devWatcherLog.warn('Watcher already started')
       return
     }
 
@@ -78,22 +83,23 @@ class DevPluginWatcher {
         (p) => typeof p.dev.source === 'string' && p.dev.source === filePath
       )?.name
       if (pluginName) {
-        console.log(
-          devWatcherLabel,
-          `Dev plugin source changed: ${filePath}, reloading ${pluginName}`
-        )
+        devWatcherLog.info('Dev plugin source changed, reloading', {
+          meta: { plugin: pluginName, file: filePath }
+        })
         await this.manager.reloadPlugin(pluginName)
       }
     })
 
-    console.log(devWatcherLabel, 'Started watching for dev plugin changes.')
+    devWatcherLog.info('Started watching for dev plugin changes', {
+      meta: { plugins: this.devPlugins.size }
+    })
   }
 
   stop(): void {
     if (!this.watcher) return
     void fileWatchService.close(this.watcher)
     this.watcher = null
-    console.log(devWatcherLabel, 'Stopped watching for dev plugin changes.')
+    devWatcherLog.info('Stopped watching for dev plugin changes')
   }
 }
 
@@ -105,9 +111,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
 
-  const label = chalk.cyan('[PluginModule]')
   const formatLogArgs = (args: unknown[]): string => {
-    const colorSupport = chalk.level > 0
     return args
       .map((arg) => {
         if (typeof arg === 'string') return arg
@@ -120,34 +124,32 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         if (arg === null) return 'null'
         if (typeof arg === 'undefined') return 'undefined'
         if (typeof arg === 'symbol') return arg.toString()
-        return util.inspect(arg, { depth: 3, colors: colorSupport })
+        return util.inspect(arg, { depth: 3, colors: false })
       })
       .join(' ')
       .trim()
   }
+  const extractError = (args: unknown[]): Error | undefined => {
+    return args.find((arg) => arg instanceof Error) as Error | undefined
+  }
   const logInfo = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
-    console.log(message ? `${label} ${message}` : label)
+    pluginLog.info(message)
   }
   const logWarn = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
-    console.warn(
-      message ? `${chalk.yellow('[PluginModule]')} ${message}` : chalk.yellow('[PluginModule]')
-    )
+    pluginLog.warn(message)
   }
   const logError = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
-    console.error(
-      message ? `${chalk.red('[PluginModule]')} ${message}` : chalk.red('[PluginModule]')
-    )
+    const error = extractError(args)
+    pluginLog.error(message, error ? { error } : undefined)
   }
   const logDebug = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
-    console.debug(
-      message ? `${chalk.gray('[PluginModule]')} ${message}` : chalk.gray('[PluginModule]')
-    )
+    pluginLog.debug(message)
   }
-  const pluginTag = (name: string): string => chalk.magenta(`[${name}]`)
+  const pluginTag = (name: string): string => `[${name}]`
 
   const installer = new PluginInstaller()
   const installQueue = new PluginInstallQueue(installer)
@@ -492,7 +494,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         return
       }
 
-      logInfo('Initializing plugin module with root:', chalk.blue(pluginPath))
+      logInfo('Initializing plugin module with root:', pluginPath)
 
       __initDevWatcher()
 
@@ -620,7 +622,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           await unloadPlugin(pluginName)
         },
         onReady: async () => {
-          logInfo('File watcher ready for changes.', chalk.blue(pluginPath))
+          logInfo('File watcher ready for changes.', pluginPath)
           logInfo(`Waiting for ${initialLoadPromises.length} initial plugin load operation(s)...`)
           await Promise.allSettled(initialLoadPromises)
           logInfo('All initial plugins loaded.')
@@ -631,11 +633,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         }
       })
     })().catch((err) => {
-      console.error(
-        chalk.red('[PluginModule]'),
-        'Failed to initialize plugin module watchers:',
-        err
-      )
+      pluginLog.error('Failed to initialize plugin module watchers', { error: err })
     })
   }
 
@@ -731,9 +729,9 @@ export class PluginModule extends BaseModule {
       if (!plugin) return false
 
       if (plugin.status === PluginStatus.LOAD_FAILED) {
-        console.log(
-          `[PluginModule] Attempting to re-enable a failed plugin '${data!.name}'. Reloading...`
-        )
+        pluginLog.info('Attempting to re-enable failed plugin, reloading', {
+          meta: { plugin: data!.name }
+        })
         await manager.reloadPlugin(data!.name)
         // After reloading, the plugin might be enabled automatically if it was previously.
         // We return the current status from the manager.

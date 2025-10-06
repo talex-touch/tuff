@@ -23,6 +23,7 @@ import { extensionLoaderModule } from './modules/extension-loader'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { mainLog } from './utils/logger'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -36,38 +37,48 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+const modulesToLoad = [
+  databaseModule,
+  storageModule,
+  shortcutModule,
+  extensionLoaderModule,
+  commonChannelModule,
+  pluginModule,
+  pluginLogModule,
+  coreBoxModule,
+  trayHolderModule,
+  addonOpenerModule,
+  clipboardModule,
+  tuffDashboardModule,
+  FileSystemWatcher,
+  fileProtocolModule,
+  terminalModule
+]
+
+const pollingLog = mainLog.child('PollingService')
+
 app.whenReady().then(async () => {
+  const startupTimer = mainLog.time('All modules loaded', 'success')
+  mainLog.info('Electron ready, bootstrapping modules')
+
   const app = genTouchApp()
 
-  await app.moduleManager.loadModule(databaseModule)
-  await app.moduleManager.loadModule(storageModule)
-  await app.moduleManager.loadModule(shortcutModule)
-  await app.moduleManager.loadModule(extensionLoaderModule)
-  await app.moduleManager.loadModule(commonChannelModule)
-  await app.moduleManager.loadModule(pluginModule)
-  // await app.moduleManager.loadModule(PermissionCenter)
-  // await app.moduleManager.loadModule(ServiceCenter)
-  await app.moduleManager.loadModule(pluginLogModule)
-
-  await app.moduleManager.loadModule(coreBoxModule)
-  await app.moduleManager.loadModule(trayHolderModule)
-  await app.moduleManager.loadModule(addonOpenerModule)
-  // // await app.moduleManager.loadModule(DropManager)
-  await app.moduleManager.loadModule(clipboardModule)
-  await app.moduleManager.loadModule(tuffDashboardModule)
-  await app.moduleManager.loadModule(FileSystemWatcher)
-  await app.moduleManager.loadModule(fileProtocolModule)
-  await app.moduleManager.loadModule(terminalModule)
+  for (const moduleCtor of modulesToLoad) {
+    await app.moduleManager.loadModule(moduleCtor)
+  }
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 
   // Start the global polling service after all modules are loaded.
   pollingService.start()
+  pollingLog.success('Polling service started')
 
-  console.log('[TouchApp] All modules loaded.')
+  startupTimer.end('All modules loaded', {
+    meta: { modules: modulesToLoad.length }
+  })
 })
 
 touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
-  console.log('[PollingService] Stopping polling service due to app quit.')
+  pollingLog.info('Stopping polling service due to app quit')
   pollingService.stop()
 })
