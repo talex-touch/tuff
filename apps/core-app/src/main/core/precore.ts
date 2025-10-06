@@ -17,6 +17,7 @@ import {
 } from './eventbus/touch-event'
 import * as log4js from 'log4js'
 import { devProcessManager } from '../utils/dev-process-manager'
+import { mainLog } from '../utils/logger'
 
 export const innerRootPath = getRootPath()
 
@@ -77,7 +78,7 @@ log4js.configure({
   }
 })
 
-console.log('TALEX TOUCH STARTED')
+mainLog.success('Talex Touch bootstrap started')
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
@@ -86,7 +87,7 @@ if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {
-  console.warn('Secondary launch, app will quit.')
+  mainLog.warn('Secondary launch detected, quitting existing process')
 
   app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
     touchEventBus.emit(
@@ -99,12 +100,12 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on('window-all-closed', () => {
-  console.log('[TouchApp] All windows closed! App starts to exit ...')
+  mainLog.info('All windows closed, preparing shutdown')
   touchEventBus.emit(TalexEvents.WINDOW_ALL_CLOSED, new WindowAllClosedEvent())
 
   if (process.platform !== 'darwin') {
     if (!app.isPackaged) {
-      console.log('[TouchApp] Development mode: Graceful shutdown initiated...')
+      mainLog.debug('Development mode: scheduling graceful shutdown')
       setTimeout(() => {
         app.quit()
         process.exit(0)
@@ -122,10 +123,10 @@ app.addListener('ready', (event, launchInfo) =>
 
 app.on('before-quit', (event) => {
   touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
-  console.log('[TouchApp] App will quit!')
+  mainLog.info('App quit requested')
 
   if (!app.isPackaged) {
-    console.log('[TouchApp] Development mode: Using DevProcessManager for cleanup...')
+    mainLog.debug('Development mode: delegating quit to DevProcessManager')
 
     // Forbidden default quit behavior, let DevProcessManager handle it
     if (!devProcessManager.isShuttingDownProcess()) {
