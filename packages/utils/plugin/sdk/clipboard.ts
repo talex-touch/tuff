@@ -34,6 +34,16 @@ export interface ClipboardDeleteOptions {
   id: number
 }
 
+export interface ClipboardApplyOptions {
+  item?: PluginClipboardItem
+  text?: string
+  html?: string | null
+  files?: string[]
+  delayMs?: number
+  hideCoreBox?: boolean
+  type?: PluginClipboardItem['type']
+}
+
 export function useClipboardHistory() {
   const channel = ensurePluginChannel()
 
@@ -72,6 +82,18 @@ export function useClipboardHistory() {
         const item = (data && 'item' in data ? data.item : data) as PluginClipboardItem
         callback(normalizeItem(item) ?? item)
       })
+    },
+
+    /**
+     * Writes the provided clipboard payload to the system clipboard and issues a paste command
+     * to the foreground application.
+     */
+    async applyToActiveApp(options: ClipboardApplyOptions = {}): Promise<boolean> {
+      const response = await channel.send('clipboard:apply-to-active-app', options)
+      if (typeof response === 'object' && response) {
+        return Boolean((response as any).success)
+      }
+      return true
     }
   }
 }
