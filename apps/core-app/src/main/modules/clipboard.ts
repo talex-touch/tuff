@@ -1,5 +1,9 @@
-import { clipboard } from 'electron'
+import { clipboard, nativeImage } from 'electron'
 import type { NativeImage } from 'electron'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { pathToFileURL } from 'node:url'
+import path from 'node:path'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { desc, gt, sql, eq, inArray } from 'drizzle-orm'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
@@ -7,6 +11,7 @@ import * as schema from '../db/schema'
 import { DataCode, MaybePromise, ModuleKey } from '@talex-touch/utils'
 import { genTouchChannel } from '../core/channel-core'
 import { windowManager } from './box-tool/core-box/window'
+import { coreBoxManager } from './box-tool/core-box/manager'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { databaseModule } from './database'
 import { BaseModule } from './abstract-base-module'
@@ -64,9 +69,21 @@ export interface IClipboardItem {
   meta?: Record<string, unknown> | null
 }
 
+type ClipboardApplyPayload = {
+  item?: Partial<IClipboardItem> & { type?: IClipboardItem['type'] }
+  text?: string
+  html?: string | null
+  type?: IClipboardItem['type']
+  files?: string[]
+  delayMs?: number
+  hideCoreBox?: boolean
+}
+
 const PAGE_SIZE = 20
 const CACHE_MAX_COUNT = 20
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
+
+const execFileAsync = promisify(execFile)
 
 class ClipboardHelper {
   private lastText: string = clipboard.readText()
@@ -115,6 +132,10 @@ class ClipboardHelper {
 
   public primeImage(image: NativeImage | null): void {
     this.lastImageHash = image && !image.isEmpty() ? image.toDataURL() : ''
+  }
+
+  public primeFiles(files: string[]): void {
+    this.lastFiles = [...files]
   }
 
   public didTextChange(text: string): boolean {
@@ -216,6 +237,173 @@ export class ClipboardModule extends BaseModule {
       const timeValue = ts instanceof Date ? ts.getTime() : new Date(ts).getTime()
       return Number.isFinite(timeValue) && timeValue > oneHourAgo
     })
+  }
+
+  private parseFileList(content?: string | null): string[] {
+    if (!content) return []
+    try {
+      const parsed = JSON.parse(content)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+      }
+    } catch (error) {
+      console.debug('[Clipboard] Failed to parse file list from clipboard item:', error)
+    }
+    return []
+  }
+
+  private normalizeApplyPayload(payload: ClipboardApplyPayload): IClipboardItem {
+    if (!payload) {
+      throw new Error('Clipboard apply payload is missing.')
+    }
+
+    const base = payload.item ?? {}
+    const derivedType = payload.type ?? base.type ?? (payload.files ? 'files' : undefined)
+    let resolvedType: IClipboardItem['type'] | null = derivedType ?? null
+
+    if (!resolvedType) {
+      if (payload.text !== undefined || payload.html !== undefined) {
+        resolvedType = 'text'
+      }
+    }
+
+    if (!resolvedType) {
+      throw new Error('Unable to resolve clipboard content type for auto paste.')
+    }
+
+    if (resolvedType === 'text') {
+      const content = payload.text ?? base.content ?? ''
+      const rawContent = payload.html ?? (base.rawContent ?? null)
+      return {
+        type: 'text',
+        content,
+        rawContent
+      }
+    }
+
+    if (resolvedType === 'image') {
+      const content = base.content ?? payload.text
+      if (!content) {
+        throw new Error('Image clipboard item is missing data URL content.')
+      }
+      return {
+        type: 'image',
+        content
+      }
+    }
+
+    const files = payload.files ?? this.parseFileList(base.content)
+    if (!files.length) {
+      throw new Error('File clipboard item has no file paths to apply.')
+    }
+
+    return {
+      type: 'files',
+      content: JSON.stringify(files)
+    }
+  }
+
+  private writeItemToClipboard(item: IClipboardItem, payload: ClipboardApplyPayload): void {
+    if (item.type === 'text') {
+      const html = item.rawContent ?? payload.html ?? undefined
+      clipboard.write({
+        text: item.content ?? '',
+        html: html ?? undefined
+      })
+      this.clipboardHelper?.markText(item.content ?? '')
+      return
+    }
+
+    if (item.type === 'image') {
+      const image = nativeImage.createFromDataURL(item.content)
+      if (image.isEmpty()) {
+        throw new Error('Image clipboard item could not be reconstructed.')
+      }
+      clipboard.writeImage(image)
+      this.clipboardHelper?.primeImage(image)
+      return
+    }
+
+    const files = this.parseFileList(item.content)
+    if (!files.length) {
+      throw new Error('File clipboard item is empty.')
+    }
+
+    const resolvedPaths = files.map((filePath) => {
+      try {
+        return path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
+      } catch {
+        return filePath
+      }
+    })
+
+    const fileUrlContent = resolvedPaths.map((filePath) => pathToFileURL(filePath).toString()).join('\n')
+    const buffer = Buffer.from(fileUrlContent, 'utf8')
+
+    try {
+      for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
+        clipboard.writeBuffer(format, buffer)
+      }
+    } catch (error) {
+      console.warn('[Clipboard] Failed to populate file clipboard formats:', error)
+    }
+
+    // Ensure at least the path text is available as a fallback.
+    clipboard.write({ text: resolvedPaths[0] ?? '' })
+    this.clipboardHelper?.primeFiles(resolvedPaths)
+  }
+
+  private async wait(ms: number): Promise<void> {
+    if (!ms || ms <= 0) return
+    await new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  private async simulatePasteCommand(): Promise<void> {
+    try {
+      if (process.platform === 'darwin') {
+        await execFileAsync('osascript', [
+          '-e',
+          'tell application "System Events" to keystroke "v" using {command down}'
+        ])
+        return
+      }
+
+      if (process.platform === 'win32') {
+        const script =
+          '$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys(\'^v\')'
+        await execFileAsync('powershell', ['-NoLogo', '-NonInteractive', '-Command', script])
+        return
+      }
+
+      if (process.platform === 'linux') {
+        await execFileAsync('xdotool', ['key', '--clearmodifiers', 'ctrl+v'])
+        return
+      }
+
+      throw new Error(`Auto paste is not supported on platform: ${process.platform}`)
+    } catch (error) {
+      console.error('[Clipboard] Failed to simulate paste command:', error)
+      throw error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  private async applyToActiveApp(payload: ClipboardApplyPayload): Promise<void> {
+    const item = this.normalizeApplyPayload(payload)
+
+    this.writeItemToClipboard(item, payload)
+
+    if (payload.hideCoreBox !== false) {
+      try {
+        coreBoxManager.trigger(false)
+      } catch (error) {
+        console.debug('[Clipboard] Failed to hide CoreBox before auto paste:', error)
+      }
+    }
+
+    const delay = Number.isFinite(payload.delayMs) ? Math.max(0, Number(payload.delayMs)) : 150
+    await this.wait(delay)
+
+    await this.simulatePasteCommand()
   }
 
   private mergeMetadataString(
@@ -478,6 +666,20 @@ export class ClipboardModule extends BaseModule {
         this.memoryCache = []
         reply(DataCode.SUCCESS, null)
       })
+
+      touchChannel.regChannel(
+        type,
+        'clipboard:apply-to-active-app',
+        async ({ data, reply }) => {
+          try {
+            await this.applyToActiveApp((data ?? {}) as ClipboardApplyPayload)
+            reply(DataCode.SUCCESS, { success: true })
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            reply(DataCode.ERROR, { success: false, message })
+          }
+        }
+      )
     }
 
     registerHandlers(ChannelType.MAIN)

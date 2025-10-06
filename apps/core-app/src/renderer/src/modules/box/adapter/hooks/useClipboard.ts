@@ -22,7 +22,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
       const data = clipboardOptions.last
 
       if (data.type === 'files') {
-       const pathList = JSON.parse(data.content)
+        const pathList = JSON.parse(data.content)
         const [firstFile] = pathList
         if (firstFile) {
           touchChannel
@@ -55,6 +55,22 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     handleAutoPaste()
   }
 
+  async function applyToActiveApp(item?: any): Promise<boolean> {
+    const target = item ?? clipboardOptions.last
+    if (!target) return false
+
+    try {
+      const result = await touchChannel.send('clipboard:apply-to-active-app', { item: target })
+      if (typeof result === 'object' && result) {
+        return Boolean(result.success)
+      }
+      return true
+    } catch (error) {
+      console.error('Failed to apply clipboard item to active app:', error)
+      return false
+    }
+  }
+
   touchChannel.regChannel('clipboard:new-item', (data: any) => {
     if (!data?.type) return
     Object.assign(clipboardOptions, {
@@ -65,6 +81,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
   return {
     clipboardOptions,
     handlePaste,
-    handleAutoPaste
+    handleAutoPaste,
+    applyToActiveApp
   }
 }
