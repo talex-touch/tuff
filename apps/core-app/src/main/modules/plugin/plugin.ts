@@ -208,6 +208,50 @@ export class TouchPlugin implements ITouchPlugin {
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query))
   }
 
+  public clearCoreBoxItems(): void {
+    console.debug(
+      `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
+    )
+
+    this._searchItems = []
+    this._searchTimestamp = Date.now()
+
+    const coreBoxWindow = getCoreBoxWindow()
+    console.debug(
+      `[Plugin ${this.name}] CoreBox window available for clearing:`,
+      !!coreBoxWindow
+    )
+
+    if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+      const channel = genTouchChannel()
+
+      const payload = {
+        pluginName: this.name,
+        timestamp: this._searchTimestamp
+      }
+
+      console.debug(
+        `[Plugin ${this.name}] Sending core-box:clear-items with payload:`,
+        payload
+      )
+
+      channel
+        .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
+        .catch((error) => {
+          console.error(
+            `[Plugin ${this.name}] Failed to clear search results from CoreBox:`,
+            error
+          )
+        })
+
+      console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
+    } else {
+      console.warn(
+        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
+      )
+    }
+  }
+
   constructor(
     name: string,
     icon: PluginIcon,
@@ -481,44 +525,7 @@ export class TouchPlugin implements ITouchPlugin {
        * Clears search items from the CoreBox window
        */
       clearItems: () => {
-        console.debug(
-          `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
-        )
-
-        this._searchItems = []
-        this._searchTimestamp = Date.now()
-
-        const coreBoxWindow = getCoreBoxWindow()
-        console.debug(
-          `[Plugin ${this.name}] CoreBox window available for clearing:`,
-          !!coreBoxWindow
-        )
-
-        if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-          const channel = appChannel
-
-          const payload = {
-            pluginName: this.name,
-            timestamp: this._searchTimestamp
-          }
-
-          console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload)
-
-          channel
-            .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
-            .catch((error) => {
-              console.error(
-                `[Plugin ${this.name}] Failed to clear search results from CoreBox:`,
-                error
-              )
-            })
-
-          console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
-        } else {
-          console.warn(
-            `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
-          )
-        }
+        this.clearCoreBoxItems()
       },
 
       getItems: (): TuffItem[] => {
