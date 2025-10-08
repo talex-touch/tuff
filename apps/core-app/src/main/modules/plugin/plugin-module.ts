@@ -789,6 +789,31 @@ export class PluginModule extends BaseModule {
       return pluginIns?.delFeature(feature)
     })
 
+    touchChannel.regChannel(ChannelType.PLUGIN, 'core-box:clear-items', ({ plugin }) => {
+      if (!plugin) {
+        logWarn('core-box:clear-items called without plugin context')
+        return false
+      }
+
+      const pluginIns = manager.plugins.get(plugin)
+      if (!pluginIns) {
+        logWarn('core-box:clear-items target plugin not found', {
+          meta: { plugin }
+        })
+        return false
+      }
+
+      if (pluginIns instanceof TouchPlugin) {
+        pluginIns.clearCoreBoxItems()
+        return true
+      }
+
+      logWarn('core-box:clear-items received for unsupported plugin instance', {
+        meta: { plugin }
+      })
+      return false
+    })
+
     touchChannel.regChannel(ChannelType.MAIN, 'trigger-plugin-feature', ({ data }) => {
       const { feature, query, plugin } = data!
       const pluginIns = manager.plugins.get(plugin!)

@@ -19,5 +19,6 @@ export * from './service/index'
 
 export * from './channel'
 export * from './clipboard'
+export * from './core-box'
 export * from './storage'
 export * from './system'
