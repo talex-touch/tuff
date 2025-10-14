@@ -1,0 +1,22 @@
+name: Update release draft
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  update-release-draft:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml

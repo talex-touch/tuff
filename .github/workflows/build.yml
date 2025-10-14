@@ -1,7 +1,6 @@
 name: Build & Release Tuff App
 
 on:
-  # 手动触发（可在UI界面中选择 snapshot 或 release）
   workflow_dispatch:
     inputs:
       release_type:
@@ -12,81 +11,153 @@ on:
         options:
           - snapshot
           - release
-      target_branch:
-        description: 'Target branch to release (e.g. master)'
-        required: true
-        default: 'master'
-
-  # 监听对 master 分支的 PR
   pull_request:
     branches:
       - master
+  push:
+    tags:
+      - v*.*.*
+
+env:
+  NODE_VERSION: '22'
 
 jobs:
-  release:
+  build:
     name: Build and Release Tuff App
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ${{ matrix.os }}
-
+    if: ${{ github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            snapshot_command: pnpm core:build:snapshot:linux
+            release_command: pnpm core:build:linux
+            artifact_patterns: |
+              dist/*.AppImage
+              dist/*.snap
+              dist/*.deb
+              dist/*.rpm
+              dist/*.tar.gz
+          - os: macos-latest
+            platform: mac
+            snapshot_command: pnpm core:build:snapshot:mac
+            release_command: pnpm core:build:mac
+            artifact_patterns: |
+              dist/*.dmg
+              dist/*.zip
+          - os: windows-latest
+            platform: windows
+            snapshot_command: pnpm core:build:snapshot:win
+            release_command: pnpm core:build:win
+            artifact_patterns: |
+              dist/*.exe
+              dist/*.zip
 
     steps:
       - name: Check out git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
       - name: Install Dependencies
-        run: npm install -g pnpm && pnpm i
+        run: npm install -g pnpm && pnpm install
+        shell: bash
+
+      - name: Determine build mode
+        id: mode
+        shell: bash
+        run: |
+          mode="ci"
+          tag_name=""
+          release_name=""
+          snapshot_tag=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            mode="${{ github.event.inputs.release_type }}"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            mode="release"
+          fi
+
+          if [[ "$mode" == "release" ]]; then
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              tag_name="v${{ github.run_number }}"
+              release_name="Release v${{ github.run_number }}"
+            else
+              tag_name="${GITHUB_REF_NAME}"
+              release_name="Release ${GITHUB_REF_NAME}"
+            fi
+          elif [[ "$mode" == "snapshot" ]]; then
+            snapshot_tag="snapshot-${{ github.run_number }}"
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
+          echo "snapshot_tag=$snapshot_tag" >> "$GITHUB_OUTPUT"
 
       - name: Build Electron App
+        shell: bash
         run: |
-          if [ "${{ github.event.inputs.release_type }}" = "beta" ]; then
-            pnpm -F core run build:beta
-          elif [ "${{ github.event.inputs.release_type }}" = "snapshot" ]; then
-            pnpm -F core run build:snapshot
-          else
-            pnpm -F core run build:release
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          case "${{ steps.mode.outputs.mode }}" in
+            release)
+              ${{ matrix.release_command }}
+              ;;
+            snapshot)
+              ${{ matrix.snapshot_command }}
+              ;;
+            *)
+              pnpm core:build
+              ;;
+          esac
 
       - name: Cleanup Artifacts for Windows
-        if: matrix.os == 'windows-latest'
-        run: npx rimraf "dist/!(*.exe)"
+        if: ${{ matrix.platform == 'windows' }}
+        shell: bash
+        run: npx rimraf "dist/!(*.exe|*.zip)"
 
-      - name: Cleanup Artifacts for MacOS
-        if: matrix.os == 'macos-latest'
-        run: npx rimraf "dist/!(*.dmg)"
+      - name: Cleanup Artifacts for macOS
+        if: ${{ matrix.platform == 'mac' }}
+        shell: bash
+        run: npx rimraf "dist/!(*.dmg|*.zip)"
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+      - name: Upload build output
+        if: ${{ steps.mode.outputs.mode != 'ci' }}
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.platform }}-${{ steps.mode.outputs.mode }}
           path: dist
 
-      - name: Release on Tag Push or Manual Release
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_type == 'release'
-        uses: softprops/action-gh-release@v0.1.14
-        with:
-          files: dist/**
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-
-      - name: Snapshot Tag Push
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_type == 'snapshot'
+      - name: Push snapshot tag
+        if: ${{ steps.mode.outputs.mode == 'snapshot' && github.event_name == 'workflow_dispatch' }}
+        shell: bash
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git tag snapshot-${{ github.run_number }}
-          git push origin snapshot-${{ github.run_number }}
+          git tag "${{ steps.mode.outputs.snapshot_tag }}"
+          git push origin "${{ steps.mode.outputs.snapshot_tag }}"
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Release on GitHub
+        if: ${{ steps.mode.outputs.mode == 'release' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact_patterns }}
+          tag_name: ${{ steps.mode.outputs.tag_name }}
+          name: ${{ steps.mode.outputs.release_name }}
+          draft: ${{ github.event_name != 'push' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Annotate missing release artifacts
+        if: ${{ steps.mode.outputs.mode == 'ci' }}
+        run: echo "CI build completed for ${{ matrix.platform }}"
+        shell: bash
