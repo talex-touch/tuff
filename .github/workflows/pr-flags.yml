@@ -1,0 +1,92 @@
+name: Parse PR template flags
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - reopened
+      - ready_for_review
+      - synchronize
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
+jobs:
+  apply-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync labels based on PR template
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = github.event.pull_request.body || '';
+            const needRelease = /☑\s*需要将此 PR 的提交包含进下一次 Release 更新日志/.test(body);
+            const needAi = /☑\s*需要触发 AI 对此 PR 的自动分析/.test(body);
+
+            const labelDefinitions = [
+              {
+                name: 'needs-release-note',
+                color: '1d76db',
+                description: 'PR 请求写入下一版 Release Notes',
+                wanted: needRelease,
+              },
+              {
+                name: 'needs-ai-review',
+                color: 'a371f7',
+                description: 'PR 请求触发 AI 自动评审',
+                wanted: needAi,
+              },
+            ];
+
+            async function ensureLabel(label) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description,
+                });
+              }
+            }
+
+            const { data: existingLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: github.event.pull_request.number,
+            });
+
+            for (const label of labelDefinitions) {
+              const hasLabel = existingLabels.some(item => item.name === label.name);
+
+              if (label.wanted && !hasLabel) {
+                await ensureLabel(label);
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: github.event.pull_request.number,
+                  labels: [label.name],
+                });
+              }
+
+              if (!label.wanted && hasLabel) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: github.event.pull_request.number,
+                  name: label.name,
+                }).catch(error => {
+                  if (error.status !== 404) throw error;
+                });
+              }
+            }
