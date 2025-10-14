@@ -30,8 +30,25 @@ jobs:
             }
 
             const body = pr.body ?? '';
-            const needRelease = /☑\s*需要将此 PR 的提交包含进下一次 Release 更新日志/.test(body);
-            const needAi = /☑\s*需要触发 AI 对此 PR 的自动分析/.test(body);
+
+            const checkboxPattern = /(?:☑|\[[xX]\])/;
+
+            function hasCheckedFlag(phrases) {
+              return phrases.some(phrase => {
+                const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const pattern = new RegExp(`-\\s*${checkboxPattern.source}\\s*${escaped}`);
+                return pattern.test(body);
+              });
+            }
+
+            const needRelease = hasCheckedFlag([
+              '需要将此 PR 的提交包含进下一次 Release 更新日志',
+              'Include commits from this PR in the next release notes',
+            ]);
+            const needAi = hasCheckedFlag([
+              '需要触发 AI 对此 PR 的自动分析（总结、风险等）',
+              'Request AI assistance for PR analysis (summary, risks, etc.)',
+            ]);
 
             const labelDefinitions = [
               {
