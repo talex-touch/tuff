@@ -11,6 +11,18 @@ on:
         options:
           - snapshot
           - release
+      version_tag:
+        description: 'Version tag (e.g. v1.2.3). Required when Release type is "release".'
+        required: false
+        type: string
+      release_title:
+        description: 'Release title. Optional; defaults to "Release <version_tag>".'
+        required: false
+        type: string
+      snapshot_tag:
+        description: 'Custom snapshot tag. Optional; defaults to snapshot-<run_number>.'
+        required: false
+        type: string
   pull_request:
     branches:
       - master
@@ -88,14 +100,25 @@ jobs:
 
           if [[ "$mode" == "release" ]]; then
             if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-              tag_name="v${{ github.run_number }}"
-              release_name="Release v${{ github.run_number }}"
+              tag_name="${{ github.event.inputs.version_tag }}"
+              release_name="${{ github.event.inputs.release_title }}"
+              if [[ -z "$tag_name" ]]; then
+                echo "::error::When release_type is 'release', 'version_tag' must be provided." >&2
+                exit 1
+              fi
+              if [[ -z "$release_name" ]]; then
+                release_name="Release $tag_name"
+              fi
             else
               tag_name="${GITHUB_REF_NAME}"
               release_name="Release ${GITHUB_REF_NAME}"
             fi
           elif [[ "$mode" == "snapshot" ]]; then
-            snapshot_tag="snapshot-${{ github.run_number }}"
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.snapshot_tag }}" ]]; then
+              snapshot_tag="${{ github.event.inputs.snapshot_tag }}"
+            else
+              snapshot_tag="snapshot-${{ github.run_number }}"
+            fi
           fi
 
           echo "mode=$mode" >> "$GITHUB_OUTPUT"

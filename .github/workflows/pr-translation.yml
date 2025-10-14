@@ -18,6 +18,11 @@ jobs:
   translate-pr-body:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Run translation script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
