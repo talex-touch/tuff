@@ -1,0 +1,33 @@
+name: PR body translation
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+      - edited
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  translate-pr-body:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run translation script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.AI_REVIEW_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.AI_REVIEW_API_BASE }}
+          OPENAI_COMPLETIONS_PATH: ${{ secrets.AI_REVIEW_COMPLETIONS_PATH }}
+          PR_TRANSLATION_MODEL: ${{ vars.PR_TRANSLATION_MODEL }}
+          PR_TRANSLATION_TEMPERATURE: ${{ vars.PR_TRANSLATION_TEMPERATURE }}
+          PR_TRANSLATION_MAX_OUTPUT_TOKENS: ${{ vars.PR_TRANSLATION_MAX_OUTPUT_TOKENS }}
+          AI_REVIEW_MODEL: ${{ vars.AI_REVIEW_MODEL }}
+          AI_REVIEW_TEMPERATURE: ${{ vars.AI_REVIEW_TEMPERATURE }}
+          AI_REVIEW_MAX_OUTPUT_TOKENS: ${{ vars.AI_REVIEW_MAX_OUTPUT_TOKENS }}
+        run: node scripts/ci/pr-translation.mjs "$GITHUB_EVENT_PATH"
