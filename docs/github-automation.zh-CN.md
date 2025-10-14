@@ -53,6 +53,22 @@ jobs:
 
 Release Drafter 的行为由 `.github/release-drafter.yml` 控制。配置里通过 `filter-by-labels.include: [needs-release-note]` 保证只有明确勾选「需要写入 Release」的 PR 才会进入草稿；同时可以结合 `categories`、`change-template` 等字段自定义展示效果。
 
+### 1.1 手动触发正式发布或快照
+
+当你需要手动发布一个版本时，可直接复用同一个 `Build & Release Tuff App` 工作流：
+
+1. 确保仓库的 `Settings → Secrets and variables → Actions` 中配置了 `ACCESS_TOKEN`（Personal Access Token，至少需要 `repo` 与 `workflow` 权限，用于推送标签并创建 Release）。
+2. 打开仓库的 **Actions** 页面，选择左侧的 **Build & Release Tuff App**，点击右上角的 **Run workflow**。
+3. 在弹出的表单中：
+   - **Release type** 选择 `release` 或 `snapshot`；
+   - 当选择 `release` 时，必填 **Version tag**（例如 `v1.4.0`），可选填 **Release title**（为空时自动使用 `Release <Version tag>`）；
+   - 当选择 `snapshot` 时，可选填 **Snapshot tag**（为空时默认为 `snapshot-<workflow run number>`）。
+4. 点击 **Run workflow** 即可。工作流会自动构建三大平台的安装包，并根据所选模式执行以下操作：
+   - `release`：使用填写的 tag 创建一个新的 GitHub Release（手动触发时为 Draft，可在检查后发布）。
+   - `snapshot`：推送指定的快照标签并上传构建产物，供测试或内部分发使用。
+
+当然，你也可以继续沿用「推送符合 `v*.*.*` 模式的 tag」这一方式触发正式发布，此时版本号由 tag 本身决定。
+
 ### 2. 基于 PR 模板的自定义解析
 
 ```yaml
