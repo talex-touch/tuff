@@ -67,10 +67,17 @@ jobs:
               }
             }
 
+            const prNumber = pr.number;
+
+            if (!prNumber) {
+              core.info('Pull request number missing from payload. Skipping label sync.');
+              return;
+            }
+
             const { data: existingLabels } = await github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: github.event.pull_request.number,
+              issue_number: prNumber,
             });
 
             for (const label of labelDefinitions) {
@@ -81,7 +88,7 @@ jobs:
                 await github.rest.issues.addLabels({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  issue_number: github.event.pull_request.number,
+                  issue_number: prNumber,
                   labels: [label.name],
                 });
               }
@@ -90,7 +97,7 @@ jobs:
                 await github.rest.issues.removeLabel({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  issue_number: github.event.pull_request.number,
+                  issue_number: prNumber,
                   name: label.name,
                 }).catch(error => {
                   if (error.status !== 404) throw error;
