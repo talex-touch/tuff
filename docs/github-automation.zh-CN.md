@@ -15,6 +15,7 @@
 - `.github/workflows/pr-flags.yml`：读取 PR 模板并自动同步 `needs-release-note`、`needs-ai-review` 标签（缺失时会自动创建标签）。
 - `.github/workflows/release-drafter.yml` + `.github/release-drafter.yml`：仅将带有 `needs-release-note` 标签的 PR 写入 Release 草稿。
 - `.github/workflows/ai-review.yml`：当作者勾选 AI 分析时调用 `scripts/ci/ai-review.mjs` 生成「AI 评审结果」评论。
+- `.github/workflows/pr-translation.yml`：自动识别 PR 描述的主要语种并在评论区附上目标语言翻译，实现中英文双语可读。
 
 启用前别忘了在仓库或组织级别配置文末列出的 Secrets / Variables。
 
@@ -199,12 +200,13 @@ jobs:
 
 在仓库或组织级别的 Secrets / Variables 中至少配置以下内容（Secrets 可在 `Actions secrets and variables > Secrets` 中新增，Variables 位于同一页面的 `Variables` 页签）：
 
-- `AI_REVIEW_API_KEY`（Secret，必填）：OpenAI 兼容服务的 API Key。
+- `AI_REVIEW_API_KEY`（Secret，必填）：OpenAI 兼容服务的 API Key，同时供 AI 评审与 PR 翻译共用。
 - `AI_REVIEW_API_BASE`（Secret，可选）：OpenAI 兼容服务的基础 URL，结尾可带或不带 `/v1`。
 - `AI_REVIEW_COMPLETIONS_PATH`（Secret，可选）：当接口路径不是默认的 `/chat/completions` 时设置，例如 Azure OpenAI 可填写 `/openai/deployments/<deployment>/chat/completions?api-version=2024-02-15-preview`。
-- `AI_REVIEW_MODEL`（Variable，可选）：默认模型名称，默认为 `gpt-4o-mini`。
+- `AI_REVIEW_MODEL`（Variable，可选）：默认模型名称，默认为 `gpt-4o-mini`，PR 翻译流程在未单独指定时同样回退到该值。
 - `AI_REVIEW_TEMPERATURE`、`AI_REVIEW_MAX_OUTPUT_TOKENS`、`AI_REVIEW_PATCH_CHARACTER_LIMIT`（Variable，可选）：调整生成风格及 diff 截断长度。
 - `AI_REVIEW_ALLOWED_ASSOCIATIONS`（Variable，可选）：允许触发 AI 评审的 `author_association` 列表，逗号分隔。默认仅允许 `MEMBER,OWNER,COLLABORATOR`，如需覆盖到外部贡献者可设置为 `MEMBER,OWNER,COLLABORATOR,CONTRIBUTOR` 或 `*`。
+- `PR_TRANSLATION_MODEL`、`PR_TRANSLATION_TEMPERATURE`、`PR_TRANSLATION_MAX_OUTPUT_TOKENS`（Variable，可选）：若希望翻译与评审使用不同的模型或采样参数，可通过这些变量覆盖。
 
 ### 2. 工作流示例
 
@@ -264,3 +266,20 @@ jobs:
 4. 合并后，Release Drafter 自动整理 changelog；如需，可追加脚本同步更新仓库内的 `CHANGELOG.md`。
 
 通过以上配置，就能把 PR 模板中的信息和 GitHub Actions 串联起来，实现「包含更新日志」与「AI 评审」的全自动闭环。
+
+## PR 描述双语翻译
+
+为保证中英文贡献者都能快速理解 PR 描述，仓库提供了 `.github/workflows/pr-translation.yml` 工作流与 `scripts/ci/pr-translation.mjs` 脚本：
+
+1. 工作流在 PR 打开、更新或重新打开时运行，读取事件载荷中的 PR 描述。无需检出仓库代码。
+2. 脚本会清理模板注释与换行符，并根据中英文字频估算主要语种：
+   - 若判定为中文，则调用模型翻译为英文；
+   - 若判定为英文，则翻译为中文；
+   - 若内容混合或无法判定，则跳过，避免生成错误翻译。
+3. 翻译结果以 `### 🌐 PR 内容翻译` 的固定标题写入（或更新） PR 评论，始终保持一条最新的翻译记录。
+
+### 自定义提示与模型
+
+- 默认沿用 AI 评审所需的 Secrets / Variables，无需重复配置。
+- 如需单独指定模型或温度，可设置 `PR_TRANSLATION_MODEL`、`PR_TRANSLATION_TEMPERATURE`、`PR_TRANSLATION_MAX_OUTPUT_TOKENS` 变量。
+- 若翻译质量需要进一步调优，可直接在脚本中调整系统提示，或在调用层新增上下文（例如自动追加 PR 标题）。
