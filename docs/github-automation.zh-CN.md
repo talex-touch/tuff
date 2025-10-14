@@ -10,6 +10,14 @@
    - 勾选「需要写入 Release」时，将 PR 信息写入 Release 草稿或专用 changelog 文件。
    - 勾选「需要 AI 分析」时，调用第三方模型（例如 OpenAI、Azure OpenAI、Moonshot 等）生成评审结果并以评论形式反馈。
 
+本仓库已经按上述思路准备好了一整套工作流，开箱即可使用：
+
+- `.github/workflows/pr-flags.yml`：读取 PR 模板并自动同步 `needs-release-note`、`needs-ai-review` 标签（缺失时会自动创建标签）。
+- `.github/workflows/release-drafter.yml` + `.github/release-drafter.yml`：仅将带有 `needs-release-note` 标签的 PR 写入 Release 草稿。
+- `.github/workflows/ai-review.yml`：当作者勾选 AI 分析时调用 `scripts/ci/ai-review.mjs` 生成「AI 评审结果」评论。
+
+启用前别忘了在仓库或组织级别配置文末列出的 Secrets / Variables。
+
 ## 自动维护 Release Notes
 
 ### 1. 配置 Release Drafter（推荐）
@@ -34,7 +42,7 @@ permissions:
 
 jobs:
   update-release-draft:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'push' || (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     steps:
       - uses: release-drafter/release-drafter@v6
@@ -42,40 +50,104 @@ jobs:
           config-name: release-drafter.yml
 ```
 
-在 `.github/release-drafter.yml` 中可以自定义 Release 草稿标题与条目格式；再结合下方的解析脚本，仅当 PR 选择了「需要写入 Release」时才写入。
+Release Drafter 的行为由 `.github/release-drafter.yml` 控制。配置里通过 `filter-by-labels.include: [needs-release-note]` 保证只有明确勾选「需要写入 Release」的 PR 才会进入草稿；同时可以结合 `categories`、`change-template` 等字段自定义展示效果。
 
 ### 2. 基于 PR 模板的自定义解析
 
 ```yaml
 # .github/workflows/pr-flags.yml
-name: Parse PR flags
+name: Parse PR template flags
 
 on:
   pull_request_target:
-    types: [opened, edited, synchronize]
+    types:
+      - opened
+      - edited
+      - reopened
+      - ready_for_review
+      - synchronize
 
 permissions:
-  contents: read
   pull-requests: write
+  issues: write
+  contents: read
 
 jobs:
-  scan-body:
+  apply-labels:
     runs-on: ubuntu-latest
     steps:
-      - name: 检查是否需要写入 Release
-        id: release
+      - name: Sync labels based on PR template
         uses: actions/github-script@v7
         with:
           script: |
-            const body = github.event.pull_request.body || "";
+            const body = github.event.pull_request.body || '';
             const needRelease = /☑\s*需要将此 PR 的提交包含进下一次 Release 更新日志/.test(body);
-            core.setOutput('need-release', needRelease);
+            const needAi = /☑\s*需要触发 AI 对此 PR 的自动分析/.test(body);
 
-      - name: 标记标签便于后续处理
-        if: steps.release.outputs['need-release'] == 'true'
-        uses: actions-ecosystem/action-add-labels@v1
-        with:
-          labels: needs-release-note
+            const labelDefinitions = [
+              {
+                name: 'needs-release-note',
+                color: '1d76db',
+                description: 'PR 请求写入下一版 Release Notes',
+                wanted: needRelease,
+              },
+              {
+                name: 'needs-ai-review',
+                color: 'a371f7',
+                description: 'PR 请求触发 AI 自动评审',
+                wanted: needAi,
+              },
+            ];
+
+            async function ensureLabel(label) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description,
+                });
+              }
+            }
+
+            const { data: existingLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: github.event.pull_request.number,
+            });
+
+            for (const label of labelDefinitions) {
+              const hasLabel = existingLabels.some(item => item.name === label.name);
+
+              if (label.wanted && !hasLabel) {
+                await ensureLabel(label);
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: github.event.pull_request.number,
+                  labels: [label.name],
+                });
+              }
+
+              if (!label.wanted && hasLabel) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: github.event.pull_request.number,
+                  name: label.name,
+                }).catch(error => {
+                  if (error.status !== 404) throw error;
+                });
+              }
+            }
 ```
 
 有了 `needs-release-note` 标签后，你可以：
@@ -119,87 +191,64 @@ jobs:
           git push
 ```
 
-`scripts/ci/append-changelog.mjs` 可以读取 PR 模板里的「Release Notes」段落，将内容插入 `CHANGELOG.md` 或 Release 草稿。
+> 提示：上述示例仅作为参考，仓库默认并未提供 `scripts/ci/append-changelog.mjs`。如需同步更新仓库内的 `CHANGELOG.md`，请按需自定义脚本并调整工作流。
 
 ## AI 评审 / 分析
 
 ### 1. 准备模型凭证
 
-在仓库或组织级别的 Secrets 中配置：
+在仓库或组织级别的 Secrets / Variables 中至少配置以下内容（Secrets 可在 `Actions secrets and variables > Secrets` 中新增，Variables 位于同一页面的 `Variables` 页签）：
 
-- `OPENAI_API_KEY`（或其他模型厂商的密钥）
-- 如果使用 Azure OpenAI，还需要 `OPENAI_ENDPOINT`、`OPENAI_DEPLOYMENT` 等。
+- `AI_REVIEW_API_KEY`（Secret，必填）：OpenAI 兼容服务的 API Key。
+- `AI_REVIEW_API_BASE`（Secret，可选）：OpenAI 兼容服务的基础 URL，结尾可带或不带 `/v1`。
+- `AI_REVIEW_COMPLETIONS_PATH`（Secret，可选）：当接口路径不是默认的 `/chat/completions` 时设置，例如 Azure OpenAI 可填写 `/openai/deployments/<deployment>/chat/completions?api-version=2024-02-15-preview`。
+- `AI_REVIEW_MODEL`（Variable，可选）：默认模型名称，默认为 `gpt-4o-mini`。
+- `AI_REVIEW_TEMPERATURE`、`AI_REVIEW_MAX_OUTPUT_TOKENS`、`AI_REVIEW_PATCH_CHARACTER_LIMIT`（Variable，可选）：调整生成风格及 diff 截断长度。
+- `AI_REVIEW_ALLOWED_ASSOCIATIONS`（Variable，可选）：允许触发 AI 评审的 `author_association` 列表，逗号分隔。默认仅允许 `MEMBER,OWNER,COLLABORATOR`，如需覆盖到外部贡献者可设置为 `MEMBER,OWNER,COLLABORATOR,CONTRIBUTOR` 或 `*`。
 
 ### 2. 工作流示例
 
-```yaml
-# .github/workflows/ai-review.yml
-name: AI review
+仓库已提供完整工作流（见 `.github/workflows/ai-review.yml`），以下节选展示关键步骤：
 
+```yaml
+# .github/workflows/ai-review.yml（节选）
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review, synchronize]
-
-permissions:
-  contents: read
-  pull-requests: write
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+      - edited
 
 jobs:
-  request-review:
+  ai-review:
     runs-on: ubuntu-latest
     steps:
-      - name: 判断是否需要 AI 评审
-        id: need
-        uses: actions/github-script@v7
+      - uses: actions/checkout@v4
         with:
-          script: |
-            const body = github.event.pull_request.body || "";
-            const needAI = /☑\s*需要触发 AI 对此 PR 的自动分析/.test(body);
-            core.setOutput('need-ai', needAI);
-
-      - name: 生成 AI 评审
-        if: steps.need.outputs['need-ai'] == 'true'
+          ref: ${{ github.event.pull_request.base.ref }}
+      - name: Run AI review script
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          npx ts-node scripts/ci/ai-review.ts \
-            --pr ${GITHUB_EVENT_PATH}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.AI_REVIEW_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.AI_REVIEW_API_BASE }}
+          OPENAI_COMPLETIONS_PATH: ${{ secrets.AI_REVIEW_COMPLETIONS_PATH }}
+          AI_REVIEW_MODEL: ${{ vars.AI_REVIEW_MODEL }}
+          AI_REVIEW_TEMPERATURE: ${{ vars.AI_REVIEW_TEMPERATURE }}
+          AI_REVIEW_MAX_OUTPUT_TOKENS: ${{ vars.AI_REVIEW_MAX_OUTPUT_TOKENS }}
+          AI_REVIEW_ALLOWED_ASSOCIATIONS: ${{ vars.AI_REVIEW_ALLOWED_ASSOCIATIONS }}
+          AI_REVIEW_PATCH_CHARACTER_LIMIT: ${{ vars.AI_REVIEW_PATCH_CHARACTER_LIMIT }}
+        run: node scripts/ci/ai-review.mjs "$GITHUB_EVENT_PATH"
 ```
 
-`scripts/ci/ai-review.ts` 大致流程：
+`scripts/ci/ai-review.mjs` 会：
 
-1. 读取触发事件 JSON（`GITHUB_EVENT_PATH`），获取 PR 编号、标题、变更文件等。
-2. 使用 `@octokit/rest` 拉取 `diff` 或 `files` 数据。
-3. 把关键信息整理成 Prompt，调用模型生成分析结论。
-4. 使用 `octokit.rest.issues.createComment` 把结果作为评论发布到 PR。
-
-示例伪代码：
-
-```ts
-import { Octokit } from "octokit";
-import OpenAI from "openai";
-
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-const { pull_request } = JSON.parse(fs.readFileSync(process.argv[2], "utf-8"));
-
-const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-  owner, repo, pull_number: pull_request.number,
-});
-
-const prompt = buildPrompt({ pull_request, files });
-const aiResult = await openai.responses.create({
-  model: "gpt-4.1-mini",
-  input: prompt,
-});
-
-await octokit.rest.issues.createComment({
-  owner, repo,
-  issue_number: pull_request.number,
-  body: formatResult(aiResult),
-});
-```
+1. 检查 PR 模板中的复选框，确认作者确实请求了 AI 评审，且作者身份在允许列表中。
+2. 调用 GitHub API 汇总文件改动，并按可配置的字符上限截取 patch 片段。
+3. 将 PR 摘要、Release Notes、作者关注点与差异片段整合为 Prompt。
+4. 通过 OpenAI 兼容接口（默认 `/chat/completions`，可用 `OPENAI_COMPLETIONS_PATH` 覆盖）生成评审结论。
+5. 在 PR 中创建或更新 `### 🤖 AI 评审结果` 评论，避免重复刷屏。
 
 ### 3. 控制频率与成本
 
@@ -210,7 +259,7 @@ await octokit.rest.issues.createComment({
 ## 整体流程回顾
 
 1. 作者在 PR 模板中勾选需要的自动化选项，并填写「Release Notes」等信息。
-2. `pr-flags` 工作流解析 PR 内容，自动加上 `needs-release-note` 等标签。
+2. `pr-flags` 工作流解析 PR 内容，自动加上 `needs-release-note`、`needs-ai-review` 等标签。
 3. 其他工作流根据标签和勾选状态触发 Release 草稿更新或 AI 评审。
 4. 合并后，Release Drafter 自动整理 changelog；如需，可追加脚本同步更新仓库内的 `CHANGELOG.md`。
 
