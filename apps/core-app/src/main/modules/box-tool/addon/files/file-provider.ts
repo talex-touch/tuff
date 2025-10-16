@@ -1047,7 +1047,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             path: newPath,
             files: newFileRecords.length
           })
-          const chunkSize = 500
+          const chunkSize = 100
           const chunks: (typeof newFileRecords)[] = []
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
             chunks.push(newFileRecords.slice(i, i + chunkSize))
@@ -1217,7 +1217,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async _processFileUpdates(
     filesToUpdate: (typeof filesSchema.$inferSelect)[],
-    chunkSize = 50
+    chunkSize = 10
   ) {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
