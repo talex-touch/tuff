@@ -369,7 +369,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.DISABLING
-    console.log('[Plugin] Disabling plugin ' + this.name)
+    this.logger.debug('Disabling plugin')
 
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:di', {
       ...this.toJSONObject(),
@@ -400,14 +400,14 @@ export class TouchPlugin implements ITouchPlugin {
     })
 
     // Ensure that if this plugin had an active UI view, it is unattached.
-    console.log(`[Plugin:${this.name}] disable() called. Checking if UI mode needs to be exited.`)
+    this.logger.debug('disable() called. Checking if UI mode needs to be exited.')
     CoreBoxManager.getInstance().exitUIMode()
-    console.log(`[Plugin:${this.name}] exitUIMode() called during disable().`)
+    this.logger.debug('exitUIMode() called during disable().')
 
     genTouchChannel().revokeKey(this._uniqueChannelKey)
 
     this.status = PluginStatus.DISABLED
-    console.log('[Plugin] Plugin ' + this.name + ' is disabled.')
+    this.logger.debug('Plugin disable lifecycle completed.')
 
     return Promise.resolve(true)
   }

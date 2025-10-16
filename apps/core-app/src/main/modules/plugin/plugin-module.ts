@@ -107,6 +107,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
   const reloadingPlugins: Set<string> = new Set()
+  const loadingPlugins: Set<string> = new Set()
   const enabledPlugins: Set<string> = new Set()
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
@@ -283,104 +284,114 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   }
 
   const loadPlugin = async (pluginName: string): Promise<boolean> => {
-    const currentPluginPath = path.resolve(pluginPath, pluginName)
-    const manifestPath = path.resolve(currentPluginPath, 'manifest.json')
-
-    logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
-
-    if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
-      const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'loading', {
-        enable: false,
-        address: ''
-      })
-      const touchPlugin = new TouchPlugin(
-        pluginName,
-        placeholderIcon,
-        '0.0.0',
-        'Loading...',
-        '',
-        { enable: false, address: '' },
-        currentPluginPath
-      )
-
-      touchPlugin.issues.push({
-        type: 'error',
-        message: 'Plugin directory or manifest.json is missing.',
-        source: 'filesystem',
-        code: 'MISSING_MANIFEST',
-        suggestion: 'Ensure the plugin folder and its manifest.json exist.',
-        timestamp: Date.now()
-      })
-      touchPlugin.status = PluginStatus.LOAD_FAILED
-      plugins.set(pluginName, touchPlugin)
-      genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
-        plugin: touchPlugin.toJSONObject()
-      })
-      logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
-      return Promise.resolve(true)
+    if (loadingPlugins.has(pluginName)) {
+      logDebug('Skip load because plugin is already loading.', pluginTag(pluginName))
+      return false
     }
 
+    loadingPlugins.add(pluginName)
     try {
-      const loader = createPluginLoader(pluginName, currentPluginPath)
-      const touchPlugin = await loader.load()
+      const currentPluginPath = path.resolve(pluginPath, pluginName)
+      const manifestPath = path.resolve(currentPluginPath, 'manifest.json')
 
-      // After all loading attempts, set final status
-      if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
+      logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
+
+      if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
+        const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'loading', {
+          enable: false,
+          address: ''
+        })
+        const touchPlugin = new TouchPlugin(
+          pluginName,
+          placeholderIcon,
+          '0.0.0',
+          'Loading...',
+          '',
+          { enable: false, address: '' },
+          currentPluginPath
+        )
+
+        touchPlugin.issues.push({
+          type: 'error',
+          message: 'Plugin directory or manifest.json is missing.',
+          source: 'filesystem',
+          code: 'MISSING_MANIFEST',
+          suggestion: 'Ensure the plugin folder and its manifest.json exist.',
+          timestamp: Date.now()
+        })
         touchPlugin.status = PluginStatus.LOAD_FAILED
-      } else {
-        touchPlugin.status = PluginStatus.DISABLED
+        plugins.set(pluginName, touchPlugin)
+        genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
+          plugin: touchPlugin.toJSONObject()
+        })
+        logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
+        return true
       }
 
-      localProvider.trackFile(path.resolve(currentPluginPath, 'README.md'))
-      plugins.set(pluginName, touchPlugin)
-      devWatcherInstance.addPlugin(touchPlugin)
+      try {
+        const loader = createPluginLoader(pluginName, currentPluginPath)
+        const touchPlugin = await loader.load()
 
-      logInfo(
-        'Plugin metadata loaded',
-        pluginTag(pluginName),
-        '| version:',
-        touchPlugin.version,
-        '| features:',
-        touchPlugin.features.length,
-        '| issues:',
-        touchPlugin.issues.length
-      )
+        // After all loading attempts, set final status
+        if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
+          touchPlugin.status = PluginStatus.LOAD_FAILED
+        } else {
+          touchPlugin.status = PluginStatus.DISABLED
+        }
 
-      genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
-        plugin: touchPlugin.toJSONObject()
-      })
-    } catch (error: any) {
-      logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
-      // Create a dummy plugin to show the error in the UI
-      const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'fatal', {
-        enable: false,
-        address: ''
-      })
-      const touchPlugin = new TouchPlugin(
-        pluginName,
-        placeholderIcon,
-        '0.0.0',
-        'Fatal Error',
-        '',
-        { enable: false, address: '' },
-        currentPluginPath
-      )
-      touchPlugin.issues.push({
-        type: 'error',
-        message: `A fatal error occurred while creating the plugin loader: ${error.message}`,
-        source: 'plugin-loader',
-        code: 'LOADER_FATAL',
-        meta: { error: error.stack },
-        timestamp: Date.now()
-      })
-      touchPlugin.status = PluginStatus.LOAD_FAILED
-      plugins.set(pluginName, touchPlugin)
-      genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
-        plugin: touchPlugin.toJSONObject()
-      })
+        localProvider.trackFile(path.resolve(currentPluginPath, 'README.md'))
+        plugins.set(pluginName, touchPlugin)
+        devWatcherInstance.addPlugin(touchPlugin)
+
+        logInfo(
+          'Plugin metadata loaded',
+          pluginTag(pluginName),
+          '| version:',
+          touchPlugin.version,
+          '| features:',
+          touchPlugin.features.length,
+          '| issues:',
+          touchPlugin.issues.length
+        )
+
+        genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
+          plugin: touchPlugin.toJSONObject()
+        })
+      } catch (error: any) {
+        logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
+        // Create a dummy plugin to show the error in the UI
+        const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'fatal', {
+          enable: false,
+          address: ''
+        })
+        const touchPlugin = new TouchPlugin(
+          pluginName,
+          placeholderIcon,
+          '0.0.0',
+          'Fatal Error',
+          '',
+          { enable: false, address: '' },
+          currentPluginPath
+        )
+        touchPlugin.issues.push({
+          type: 'error',
+          message: `A fatal error occurred while creating the plugin loader: ${error.message}`,
+          source: 'plugin-loader',
+          code: 'LOADER_FATAL',
+          meta: { error: error.stack },
+          timestamp: Date.now()
+        })
+        touchPlugin.status = PluginStatus.LOAD_FAILED
+        plugins.set(pluginName, touchPlugin)
+        genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
+          plugin: touchPlugin.toJSONObject()
+        })
+      }
+
+      return true
+    } finally {
+      loadingPlugins.delete(pluginName)
     }
-
-    return Promise.resolve(true)
   }
 
   const unloadPlugin = (pluginName: string): Promise<boolean> => {
@@ -525,6 +536,13 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           const pluginName = path.basename(path.dirname(_path))
 
           if (!hasPlugin(pluginName)) {
+            if (loadingPlugins.has(pluginName)) {
+              logDebug(
+                'File change received but plugin is still loading, skip duplicate load.',
+                pluginTag(pluginName)
+              )
+              return
+            }
             logDebug('File changed for unknown plugin, triggering load.', pluginTag(pluginName))
             await loadPlugin(pluginName)
             return
@@ -673,7 +691,7 @@ export class PluginModule extends BaseModule {
         const result = manager.getPluginList()
         return result
       } catch (error) {
-        logError('Error in plugin-list handler:', error)
+        console.error('Error in plugin-list handler:', error)
         return []
       }
     })
@@ -682,7 +700,7 @@ export class PluginModule extends BaseModule {
         const result = await getOfficialPlugins({ force: Boolean(data?.force) })
         return reply(DataCode.SUCCESS, result)
       } catch (error: any) {
-        logError('Failed to fetch official plugin list:', error)
+        console.error('Failed to fetch official plugin list:', error)
         return reply(DataCode.ERROR, {
           error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
         })
@@ -791,13 +809,13 @@ export class PluginModule extends BaseModule {
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'core-box:clear-items', ({ plugin }) => {
       if (!plugin) {
-        logWarn('core-box:clear-items called without plugin context')
+        console.warn('core-box:clear-items called without plugin context')
         return false
       }
 
       const pluginIns = manager.plugins.get(plugin)
       if (!pluginIns) {
-        logWarn('core-box:clear-items target plugin not found', {
+        console.warn('core-box:clear-items target plugin not found', {
           meta: { plugin }
         })
         return false
@@ -808,7 +826,7 @@ export class PluginModule extends BaseModule {
         return true
       }
 
-      logWarn('core-box:clear-items received for unsupported plugin instance', {
+      console.warn('core-box:clear-items received for unsupported plugin instance', {
         meta: { plugin }
       })
       return false
@@ -836,9 +854,9 @@ export class PluginModule extends BaseModule {
       const pluginPath = plugin.pluginPath
       try {
         const err = await shell.openPath(pluginPath)
-        if (err) logError('Error opening plugin folder:', err)
+        if (err) console.error('Error opening plugin folder:', err)
       } catch (error) {
-        logError('Exception while opening plugin folder:', error)
+        console.error('Exception while opening plugin folder:', error)
       }
     })
     touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
