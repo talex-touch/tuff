@@ -12,7 +12,15 @@ import path from 'path'
 import fs from 'fs/promises'
 import FileSystemWatcher from '../../file-system-watcher'
 import { touchEventBus, TalexEvents } from '../../../../core/eventbus/touch-event'
-import { sleep } from '@talex-touch/utils'
+import {
+  sleep,
+  startTiming,
+  completeTiming,
+  timingLogger,
+  type TimingOptions,
+  type TimingMeta,
+  type TimingLogLevel
+} from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { is } from '@electron-toolkit/utils'
@@ -40,6 +48,98 @@ import {
 import { createRetrier } from '@talex-touch/utils'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
+
+type AppTimingMeta = TimingMeta & {
+  label?: string
+  message?: string
+  unit?: 'ms' | 's'
+  precision?: number
+  style?: keyof typeof LogStyle
+  suffix?: string
+  stage?: string
+}
+
+const APP_TIMING_STYLE_BY_LEVEL: Record<TimingLogLevel, keyof typeof LogStyle> = {
+  none: 'info',
+  info: 'info',
+  warn: 'warning',
+  error: 'error'
+}
+
+const APP_TIMING_BASE_OPTIONS: TimingOptions = {
+  storeHistory: false,
+  logThresholds: {
+    none: 200,
+    info: 1000,
+    warn: 3000
+  },
+  formatter: (entry) => {
+    const meta = (entry.meta ?? {}) as AppTimingMeta
+    const stageLabel =
+      typeof meta.label === 'string'
+        ? meta.label
+        : typeof meta.stage === 'string'
+        ? meta.stage
+        : entry.label.split(':').slice(1).join(':') || entry.label
+    const message = typeof meta.message === 'string' ? meta.message : `${stageLabel}`
+    const unit = meta.unit ?? (entry.durationMs >= 1000 ? 's' : 'ms')
+    const precision = meta.precision ?? (unit === 's' ? 2 : 0)
+    const value =
+      unit === 's'
+        ? `${(entry.durationMs / 1000).toFixed(precision)}s`
+        : `${entry.durationMs.toFixed(precision)}ms`
+    const durationText = chalk.cyan(value)
+    const suffix = typeof meta.suffix === 'string' ? ` ${meta.suffix}` : ''
+    const styleKey =
+      (meta.style as keyof typeof LogStyle | undefined) ??
+      APP_TIMING_STYLE_BY_LEVEL[entry.logLevel ?? 'info']
+    const styleFn = LogStyle[styleKey] ?? LogStyle.info
+    return formatLog('AppProvider', `${message} in ${durationText}${suffix}`, styleFn)
+  }
+}
+
+const resolveAppTimingOptions = (overrides?: TimingOptions): TimingOptions => {
+  if (!overrides) return APP_TIMING_BASE_OPTIONS
+
+  return {
+    ...APP_TIMING_BASE_OPTIONS,
+    ...overrides,
+    logThresholds: {
+      ...(APP_TIMING_BASE_OPTIONS.logThresholds ?? {}),
+      ...(overrides.logThresholds ?? {})
+    },
+    formatter: overrides.formatter ?? APP_TIMING_BASE_OPTIONS.formatter,
+    logger: overrides.logger ?? APP_TIMING_BASE_OPTIONS.logger
+  }
+}
+
+const logAppDuration = (
+  stage: string,
+  startedAt: number,
+  meta: AppTimingMeta = {},
+  overrides?: TimingOptions
+): number => {
+  return completeTiming(
+    `AppProvider:${stage}`,
+    startedAt,
+    { ...meta, stage },
+    resolveAppTimingOptions(overrides)
+  )
+}
+
+const logAppDurationMs = (
+  stage: string,
+  durationMs: number,
+  meta: AppTimingMeta = {},
+  overrides?: TimingOptions
+): number => {
+  return timingLogger.print(
+    `AppProvider:${stage}`,
+    durationMs,
+    { ...meta, stage },
+    resolveAppTimingOptions(overrides)
+  )
+}
 
 const isSqliteBusyError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false
@@ -91,25 +191,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
-    const loadStart = performance.now()
+    const loadStart = startTiming()
     console.log(formatLog('AppProvider', 'Loading AppProvider service...', LogStyle.process))
     this.context = context
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
 
     if (!this.isInitializing) {
-      const initStart = performance.now()
+      const initStart = startTiming()
       this.isInitializing = this._initialize()
       await this.isInitializing
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Initial data load completed in ${chalk.cyan(
-            ((performance.now() - initStart) / 1000).toFixed(2)
-          )}s`,
-          LogStyle.success
-        )
-      )
+      logAppDuration('InitialDataLoad', initStart, {
+        label: 'Initial data load completed',
+        style: 'success',
+        unit: 's',
+        precision: 2
+      })
     }
 
     await this._forceSyncAllKeywords()
@@ -120,13 +217,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     console.log(
       formatLog('AppProvider', 'AppProvider service loaded successfully', LogStyle.success)
     )
-    console.log(
-      formatLog(
-        'AppProvider',
-        `onLoad finished in ${chalk.cyan(((performance.now() - loadStart) / 1000).toFixed(2))}s`,
-        LogStyle.success
-      )
-    )
+    logAppDuration('onLoad', loadStart, {
+      label: 'onLoad finished',
+      style: 'success',
+      unit: 's',
+      precision: 2
+    })
   }
 
   async onDestroy(): Promise<void> {
@@ -326,20 +422,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _initialize(): Promise<void> {
-    const initStart = performance.now()
+    const initStart = startTiming()
     console.log(formatLog('AppProvider', 'Initializing app data...', LogStyle.process))
 
-    const scanStart = performance.now()
+    const scanStart = startTiming()
     const scannedApps = await appScanner.getApps()
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Scanned ${chalk.cyan(scannedApps.length)} apps in ${chalk.cyan(
-          ((performance.now() - scanStart) / 1000).toFixed(2)
-        )}s`,
-        LogStyle.info
-      )
-    )
+    logAppDuration('ScanApps', scanStart, {
+      label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
+      style: 'info',
+      unit: 's',
+      precision: 2
+    })
     const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
     // Log apps with missing icons only the first time we see them
@@ -366,18 +459,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await this._saveKnownMissingIconApps(knownMissingIconApps)
     }
 
-    const dbLoadStart = performance.now()
+    const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Loaded ${chalk.cyan(dbApps.length)} DB app records in ${chalk.cyan(
-          ((performance.now() - dbLoadStart) / 1000).toFixed(2)
-        )}s`,
-        LogStyle.info
-      )
-    )
+    logAppDuration('LoadDbApps', dbLoadStart, {
+      label: `Loaded ${chalk.cyan(dbApps.length)} DB app records`,
+      style: 'info',
+      unit: 's',
+      precision: 2
+    })
     const dbAppsMap = new Map(
       dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
     )
@@ -424,7 +514,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       console.log(
         formatLog('AppProvider', `Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process)
       )
-      const addStartTime = performance.now()
+      const addStartTime = startTiming()
 
       await runAdaptiveTaskQueue(
         toAdd,
@@ -460,7 +550,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             await this._syncKeywordsForApp(app)
           }
 
-          if ((index + 1) % 10 === 0 || index === toAdd.length - 1) {
+          if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
             console.log(
               formatLog(
                 'AppProvider',
@@ -476,13 +566,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
       )
 
-      console.log(
-        formatLog(
-          'AppProvider',
-          `New apps added in ${chalk.cyan(((performance.now() - addStartTime) / 1000).toFixed(1))}s`,
-          LogStyle.success
-        )
-      )
+      logAppDuration('AddApps', addStartTime, {
+        label: 'New apps added',
+        style: 'success',
+        unit: 's',
+        precision: 1
+      })
     }
 
     if (toUpdate.length > 0) {
@@ -493,7 +582,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           LogStyle.process
         )
       )
-      const updateStartTime = performance.now()
+      const updateStartTime = startTiming()
 
       await runAdaptiveTaskQueue(
         toUpdate,
@@ -518,7 +607,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           await this._syncKeywordsForApp(app)
 
-          if ((index + 1) % 10 === 0 || index === toUpdate.length - 1) {
+          if ((index + 1) % 50 === 0 || index === toUpdate.length - 1) {
             console.log(
               formatLog(
                 'AppProvider',
@@ -534,13 +623,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
       )
 
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Apps updated in ${chalk.cyan(((performance.now() - updateStartTime) / 1000).toFixed(1))}s`,
-          LogStyle.success
-        )
-      )
+      logAppDuration('UpdateApps', updateStartTime, {
+        label: 'Apps updated',
+        style: 'success',
+        unit: 's',
+        precision: 1
+      })
     }
 
     if (toDeleteIds.length > 0) {
@@ -563,7 +651,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           .where(inArray(filesSchema.id, toDeleteIds))
       ).map((row) => row.bundleId || row.path)
 
-      const deleteStart = performance.now()
+      const deleteStart = startTiming()
       await db.transaction(async (tx) => {
         await tx.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
         await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
@@ -573,26 +661,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         await this.searchIndex?.removeItems(deletedItemIds)
       }
 
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Apps deleted successfully in ${chalk.cyan(
-            ((performance.now() - deleteStart) / 1000).toFixed(1)
-          )}s`,
-          LogStyle.success
-        )
-      )
+      logAppDuration('DeleteApps', deleteStart, {
+        label: 'Apps deleted successfully',
+        style: 'success',
+        unit: 's',
+        precision: 1
+      })
     }
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        `App data initialization complete in ${chalk.cyan(
-          ((performance.now() - initStart) / 1000).toFixed(2)
-        )}s`,
-        LogStyle.success
-      )
-    )
+    logAppDuration('Initialize', initStart, {
+      label: 'App data initialization complete',
+      style: 'success',
+      unit: 's',
+      precision: 2
+    })
   }
 
   private handleItemAddedOrChanged = async (event: any): Promise<void> => {
@@ -855,7 +937,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
-    const searchStart = performance.now()
+    const searchStart = startTiming()
     console.debug(
       formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
     )
@@ -883,7 +965,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     let preciseMatchedItemIds: Set<string> | null = null
     if (terms.length > 0) {
-      const preciseStart = performance.now()
+      const preciseStart = startTiming()
       console.debug(
         formatLog(
           'AppProvider',
@@ -909,20 +991,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           return new Set([...accumulator].filter((id) => current.has(id)))
         }, null)
       }
-      console.debug(
-        formatLog(
-          'AppProvider',
-          `Precise term lookup finished in ${chalk.cyan(
-            (performance.now() - preciseStart).toFixed(0)
-          )}ms with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`,
-          LogStyle.info
-        )
-      )
+      logAppDuration('PreciseLookup', preciseStart, {
+        label: 'Precise term lookup',
+        style: 'info',
+        unit: 'ms',
+        precision: 0,
+        suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
+      }, { logger: (message) => console.debug(message) })
     }
 
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
     if (shouldCheckPhrase) {
-      const phraseStart = performance.now()
+      const phraseStart = startTiming()
       const phraseMatches = await db
         .select({ itemId: keywordMappings.itemId })
         .from(keywordMappings)
@@ -937,30 +1017,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           ? new Set([...preciseMatchedItemIds, ...phraseSet])
           : phraseSet
       }
-      console.debug(
-        formatLog(
-          'AppProvider',
-          `Phrase lookup finished in ${chalk.cyan((performance.now() - phraseStart).toFixed(0))}ms with ${chalk.cyan(
-            preciseMatchedItemIds?.size ?? 0
-          )} accumulated result(s)`,
-          LogStyle.info
-        )
-      )
+      logAppDuration('PhraseLookup', phraseStart, {
+        label: 'Phrase lookup',
+        style: 'info',
+        unit: 'ms',
+        precision: 0,
+        suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} accumulated result(s)`
+      }, { logger: (message) => console.debug(message) })
     }
 
     const ftsQuery = this.buildFtsQuery(terms)
-    const ftsStart = performance.now()
+    const ftsStart = startTiming()
     const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
     if (ftsQuery) {
-      console.debug(
-        formatLog(
-          'AppProvider',
-          `FTS search (${ftsQuery}) returned ${chalk.cyan(ftsMatches.length)} matches in ${chalk.cyan(
-            (performance.now() - ftsStart).toFixed(0)
-          )}ms`,
-          LogStyle.info
-        )
-      )
+      logAppDuration('FTSSearch', ftsStart, {
+        label: 'FTS search',
+        style: 'info',
+        unit: 'ms',
+        precision: 0,
+        suffix: `(${chalk.cyan(ftsQuery)}) returned ${chalk.cyan(ftsMatches.length)} matches`
+      }, { logger: (message) => console.debug(message) })
     }
 
     const preciseCandidates = preciseMatchedItemIds ? Array.from(preciseMatchedItemIds) : []
@@ -984,7 +1060,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const candidateList = Array.from(candidateIds)
-    const fetchStart = performance.now()
+    const fetchStart = startTiming()
     const subquery = db
       .select({ fileId: fileExtensions.fileId })
       .from(fileExtensions)
@@ -1000,15 +1076,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         )
       )
 
-    console.debug(
-      formatLog(
-        'AppProvider',
-        `Loaded ${chalk.cyan(files.length)} candidate app rows in ${chalk.cyan(
-          (performance.now() - fetchStart).toFixed(0)
-        )}ms`,
-        LogStyle.info
-      )
-    )
+    logAppDuration('LoadCandidates', fetchStart, {
+      label: `Loaded ${chalk.cyan(files.length)} candidate app rows`,
+      style: 'info',
+      unit: 'ms',
+      precision: 0
+    }, { logger: (message) => console.debug(message) })
 
     if (files.length === 0) {
       console.warn(
@@ -1038,14 +1111,23 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const elapsedMs = performance.now() - searchStart
     if (elapsedMs > SLOW_SEARCH_THRESHOLD_MS) {
-      console.warn(
-        formatLog(
-          'AppProvider',
-          `Slow search: ${chalk.cyan(rawText)} took ${chalk.cyan((elapsedMs / 1000).toFixed(2))}s and returned ${chalk.green(
-            sortedItems.length
-          )} results (precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(ftsMatches.length)})`,
-          LogStyle.warning
-        )
+      logAppDurationMs(
+        'SlowSearch',
+        elapsedMs,
+        {
+          label: 'Slow search',
+          message: `Slow search: ${chalk.cyan(rawText)}`,
+          style: 'warning',
+          unit: 's',
+          precision: 2,
+          suffix: `returned ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
+            preciseMatchedItemIds?.size ?? 0
+          )}, fts=${chalk.cyan(ftsMatches.length)})`
+        },
+        {
+          logThresholds: { none: SLOW_SEARCH_THRESHOLD_MS, info: 1000, warn: 2500 },
+          logger: (message) => console.warn(message)
+        }
       )
     }
 

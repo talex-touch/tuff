@@ -5,7 +5,13 @@ import { migrate } from 'drizzle-orm/libsql/migrator'
 import chalk from 'chalk'
 import * as schema from '../../db/schema'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
-import { MaybePromise, ModuleInitContext, ModuleKey, createTiming } from '@talex-touch/utils'
+import {
+  MaybePromise,
+  ModuleInitContext,
+  ModuleKey,
+  createTiming,
+  type TimingLogLevel
+} from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { BaseModule } from '../abstract-base-module'
 
@@ -38,10 +44,28 @@ export class DatabaseModule extends BaseModule {
 
     await this.ensureKeywordMappingsProviderColumn()
 
+    const timingLevelColors: Record<TimingLogLevel, chalk.Chalk> = {
+      none: chalk.gray,
+      info: chalk.green,
+      warn: chalk.yellow,
+      error: chalk.red
+    }
+
     const timing = createTiming('Database:Migrations', {
       storeHistory: false,
-      formatter: (entry, stats) =>
-        `${chalk.dim('[Timing]')} ${chalk.blue(entry.label)} ${chalk.yellow(entry.durationMs.toFixed(2))}ms (avg ${stats.avgMs.toFixed(2)}ms, max ${stats.maxMs.toFixed(2)}ms, count ${stats.count})`
+      logThresholds: {
+        none: 200,
+        info: 800,
+        warn: 2000
+      },
+      formatter: (entry, stats) => {
+        const level = entry.logLevel ?? 'info'
+        const color = timingLevelColors[level] ?? chalk.green
+        const durationText = color(`${entry.durationMs.toFixed(2)}ms`)
+        return `${chalk.dim('[Timing]')} ${chalk.blue(entry.label)} ${durationText} (avg ${stats.avgMs.toFixed(
+          2
+        )}ms, max ${stats.maxMs.toFixed(2)}ms, count ${stats.count})`
+      }
     })
 
     try {

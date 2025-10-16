@@ -8,7 +8,43 @@ export interface TimingRecord {
   iteration?: number
   meta?: TimingMeta
   error?: unknown
+  logLevel?: TimingLogLevel
 }
+
+export type TimingLogLevel = 'none' | 'info' | 'warn' | 'error'
+
+export type TimingLogThresholdOverrides = Partial<Record<Exclude<TimingLogLevel, 'error'>, number>>
+
+type ResolvedTimingLogThresholds = Record<Exclude<TimingLogLevel, 'error'>, number>
+
+const DEFAULT_AUTO_LOG = true
+const DEFAULT_STORE_HISTORY = true
+const DEFAULT_HISTORY_LIMIT = 50
+
+export const DEFAULT_TIMING_LOG_THRESHOLDS: Readonly<ResolvedTimingLogThresholds> = Object.freeze({
+  none: 16.7,
+  info: 200,
+  warn: 500
+})
+
+export const DEFAULT_TIMING_OPTIONS: Readonly<Required<Pick<TimingOptions, 'autoLog' | 'storeHistory'>> & {
+  logThresholds: Readonly<ResolvedTimingLogThresholds>
+}> = Object.freeze({
+  autoLog: DEFAULT_AUTO_LOG,
+  storeHistory: DEFAULT_STORE_HISTORY,
+  logThresholds: DEFAULT_TIMING_LOG_THRESHOLDS
+})
+
+export const DEFAULT_TIMING_MANAGER_CONFIG: Readonly<
+  Required<Pick<TimingManagerConfig, 'autoLog' | 'storeHistory' | 'historyLimit'>> & {
+    logThresholds: Readonly<ResolvedTimingLogThresholds>
+  }
+> = Object.freeze({
+  autoLog: DEFAULT_AUTO_LOG,
+  storeHistory: DEFAULT_STORE_HISTORY,
+  historyLimit: DEFAULT_HISTORY_LIMIT,
+  logThresholds: DEFAULT_TIMING_LOG_THRESHOLDS
+})
 
 export interface TimingStats {
   label: string
@@ -22,6 +58,7 @@ export interface TimingStats {
   lastEndedAt?: number
   errorCount: number
   lastError?: unknown
+  lastLogLevel?: TimingLogLevel
 }
 
 export interface TimingSummary extends TimingStats {
@@ -30,9 +67,11 @@ export interface TimingSummary extends TimingStats {
 
 export interface TimingManagerConfig {
   autoLog?: boolean
+  storeHistory?: boolean
   historyLimit?: number
   logger?: (message: string, entry: TimingRecord, stats: TimingStats) => void
   formatter?: (entry: TimingRecord, stats: TimingStats) => string
+  logThresholds?: TimingLogThresholdOverrides
 }
 
 export interface TimingOptions {
@@ -41,39 +80,63 @@ export interface TimingOptions {
   logger?: (message: string, entry: TimingRecord, stats: TimingStats) => void
   formatter?: (entry: TimingRecord, stats: TimingStats) => string
   historyLimit?: number
+  logThresholds?: TimingLogThresholdOverrides
+}
+
+type ResolvedTimingOptions = {
+  autoLog: boolean
+  storeHistory: boolean
+  historyLimit: number
+  logThresholds: ResolvedTimingLogThresholds
+  formatter: (entry: TimingRecord, stats: TimingStats) => string
+  logger: (message: string, entry: TimingRecord, stats: TimingStats) => void
 }
 
 export class TimingManager {
   private readonly stats = new Map<string, TimingStats>()
   private readonly history = new Map<string, TimingRecord[]>()
   private readonly moduleStats = new Map<string, TimingStats>()
+  private readonly config: TimingManagerConfig
 
-  constructor(private readonly config: TimingManagerConfig = {}) {}
+  constructor(config: TimingManagerConfig = {}) {
+    const mergedThresholds: ResolvedTimingLogThresholds = {
+      ...DEFAULT_TIMING_LOG_THRESHOLDS,
+      ...(config.logThresholds ?? {})
+    }
+
+    this.config = {
+      ...DEFAULT_TIMING_MANAGER_CONFIG,
+      ...config,
+      logThresholds: mergedThresholds
+    }
+  }
 
   createTiming(label: string, options: TimingOptions = {}): TimingScope {
     return new TimingScope(this, label, options)
   }
 
   record(label: string, record: TimingRecord, options: TimingOptions = {}): void {
-    const stats = this.updateStats(this.stats, label, record)
-    const moduleKey = this.extractModuleKey(label)
-    this.updateStats(this.moduleStats, moduleKey, { ...record, label: moduleKey })
+    const resolved = this.resolveOptions(options)
+    const logLevel = determineLogLevel(record.durationMs, resolved.logThresholds)
+    const recordWithLevel: TimingRecord = { ...record, logLevel }
 
-    if (options.storeHistory ?? true) {
-      const limit = options.historyLimit ?? this.config.historyLimit ?? 50
+    const stats = this.updateStats(this.stats, label, recordWithLevel)
+    const moduleKey = this.extractModuleKey(label)
+    this.updateStats(this.moduleStats, moduleKey, { ...recordWithLevel, label: moduleKey })
+
+    if (resolved.storeHistory) {
+      const limit = resolved.historyLimit
       const list = this.history.get(label) ?? []
-      list.push(record)
+      list.push(recordWithLevel)
       if (list.length > limit) {
         list.splice(0, list.length - limit)
       }
       this.history.set(label, list)
     }
 
-    const shouldLog = options.autoLog ?? this.config.autoLog ?? true
-    if (shouldLog) {
-      const formatter = options.formatter ?? this.config.formatter ?? defaultFormatter
-      const logger = options.logger ?? this.config.logger ?? defaultLogger
-      logger(formatter(record, stats), record, stats)
+    if (resolved.autoLog && logLevel !== 'none') {
+      const message = resolved.formatter(recordWithLevel, stats)
+      resolved.logger(message, recordWithLevel, stats)
     }
   }
 
@@ -131,6 +194,7 @@ export class TimingManager {
     next.lastMs = durationMs
     next.lastStartedAt = record.startedAt
     next.lastEndedAt = record.endedAt
+    next.lastLogLevel = record.logLevel
 
     if (error) {
       next.errorCount += 1
@@ -144,6 +208,23 @@ export class TimingManager {
   private extractModuleKey(label: string): string {
     const [moduleKey] = label.split(':')
     return moduleKey || label
+  }
+
+  private resolveOptions(options: TimingOptions = {}): ResolvedTimingOptions {
+    const logThresholds: ResolvedTimingLogThresholds = {
+      ...DEFAULT_TIMING_LOG_THRESHOLDS,
+      ...(this.config.logThresholds ?? {}),
+      ...(options.logThresholds ?? {})
+    }
+
+    return {
+      autoLog: options.autoLog ?? this.config.autoLog ?? DEFAULT_AUTO_LOG,
+      storeHistory: options.storeHistory ?? this.config.storeHistory ?? DEFAULT_STORE_HISTORY,
+      historyLimit: options.historyLimit ?? this.config.historyLimit ?? DEFAULT_HISTORY_LIMIT,
+      logThresholds,
+      formatter: options.formatter ?? this.config.formatter ?? defaultFormatter,
+      logger: options.logger ?? this.config.logger ?? defaultLogger
+    }
   }
 }
 
@@ -224,11 +305,47 @@ export class TimingScope {
 
 function defaultFormatter(record: TimingRecord, stats: TimingStats): string {
   const duration = record.durationMs.toFixed(2)
-  return `⏱  [${record.label}] ${duration} ms (avg: ${stats.avgMs.toFixed(2)} ms, max: ${stats.maxMs.toFixed(2)} ms, count: ${stats.count})`
+  const levelTag =
+    record.logLevel && record.logLevel !== 'info' ? ` [${record.logLevel.toUpperCase()}]` : ''
+  return `⏱  [${record.label}] ${duration} ms${levelTag} (avg: ${stats.avgMs.toFixed(
+    2
+  )} ms, max: ${stats.maxMs.toFixed(2)} ms, count: ${stats.count})`
 }
 
-function defaultLogger(message: string): void {
+function defaultLogger(message: string, entry: TimingRecord, _stats: TimingStats): void {
+  if (entry.logLevel === 'none') {
+    return
+  }
+
+  if (entry.logLevel === 'warn') {
+    console.warn(message)
+    return
+  }
+
+  if (entry.logLevel === 'error') {
+    console.error(message)
+    return
+  }
+
+  if (typeof console.info === 'function') {
+    console.info(message)
+    return
+  }
+
   console.log(message)
+}
+
+function determineLogLevel(durationMs: number, thresholds: ResolvedTimingLogThresholds): TimingLogLevel {
+  if (durationMs <= thresholds.none) {
+    return 'none'
+  }
+  if (durationMs <= thresholds.info) {
+    return 'info'
+  }
+  if (durationMs <= thresholds.warn) {
+    return 'warn'
+  }
+  return 'error'
 }
 
 const now = (() => {
@@ -245,6 +362,133 @@ const timingManagerInstance = new TimingManager()
 
 export const timingManager = timingManagerInstance
 
+export function startTiming(): number {
+  return now()
+}
+
+export function completeTiming(
+  label: string,
+  startedAt: number,
+  meta: TimingMeta = {},
+  options: TimingOptions = {}
+): number {
+  const endedAt = now()
+  const durationMs = endedAt - startedAt
+  timingManagerInstance.record(
+    label,
+    {
+      label,
+      durationMs,
+      startedAt,
+      endedAt,
+      meta
+    },
+    options
+  )
+  return durationMs
+}
+
+export function logTiming(
+  label: string,
+  durationMs: number,
+  meta: TimingMeta = {},
+  options: TimingOptions = {}
+): void {
+  const endedAt = now()
+  const startedAt = endedAt - durationMs
+  timingManagerInstance.record(
+    label,
+    {
+      label,
+      durationMs,
+      startedAt,
+      endedAt,
+      meta
+    },
+    options
+  )
+}
+
+export interface TimingLoggerToken {
+  label: string
+  startedAt: number
+  meta: TimingMeta
+  options: TimingOptions
+}
+
+export const timingLogger = {
+  start(label: string, meta: TimingMeta = {}, options: TimingOptions = {}): TimingLoggerToken {
+    return {
+      label,
+      startedAt: startTiming(),
+      meta,
+      options
+    }
+  },
+
+  finish(
+    token: TimingLoggerToken,
+    meta: TimingMeta = {},
+    overrides: TimingOptions = {}
+  ): number {
+    const mergedMeta = { ...token.meta, ...meta }
+    const mergedOptions = mergeTimingOptions(token.options, overrides)
+    return completeTiming(token.label, token.startedAt, mergedMeta, mergedOptions)
+  },
+
+  print(
+    label: string,
+    durationMs: number,
+    meta: TimingMeta = {},
+    options: TimingOptions = {}
+  ): number {
+    logTiming(label, durationMs, meta, options)
+    return durationMs
+  },
+
+  async cost<T>(
+    label: string,
+    fn: () => Promise<T> | T,
+    meta: TimingMeta = {},
+    options: TimingOptions = {}
+  ): Promise<T> {
+    const scope = createTiming(label, options)
+    return scope.cost(fn, meta)
+  },
+
+  mark(
+    label: string,
+    durationMs: number,
+    meta: TimingMeta = {},
+    options: TimingOptions = {}
+  ): number {
+    logTiming(label, durationMs, meta, options)
+    return durationMs
+  }
+}
+
 export function createTiming(label: string, options: TimingOptions = {}): TimingScope {
   return timingManagerInstance.createTiming(label, options)
+}
+
+function mergeTimingOptions(
+  base: TimingOptions = {},
+  override: TimingOptions = {}
+): TimingOptions {
+  if (!base && !override) return {}
+  if (!override || Object.keys(override).length === 0) {
+    return { ...base }
+  }
+  if (!base || Object.keys(base).length === 0) {
+    return { ...override }
+  }
+
+  return {
+    ...base,
+    ...override,
+    logThresholds: {
+      ...(base.logThresholds ?? {}),
+      ...(override.logThresholds ?? {})
+    }
+  }
 }
