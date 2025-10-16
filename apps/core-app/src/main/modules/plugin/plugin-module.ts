@@ -209,17 +209,23 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     return true
   }
 
-  const hasPlugin = (name: string): boolean => {
-    return !!getPluginByName(name)
-  }
-
   const getPluginByName = (name: string): ITouchPlugin | undefined => {
+    const pluginByFolder = plugins.get(name)
+    if (pluginByFolder) {
+      return pluginByFolder
+    }
+
     for (const plugin of plugins.values()) {
       if (plugin.name === name) {
         return plugin
       }
     }
+
     return undefined
+  }
+
+  const hasPlugin = (name: string): boolean => {
+    return plugins.has(name) || !!getPluginByName(name)
   }
 
   const reloadPlugin = async (pluginName: string): Promise<void> => {
