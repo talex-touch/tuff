@@ -5,7 +5,11 @@ import {
   ISearchProvider,
   TuffFactory,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  timingLogger,
+  type TimingMeta,
+  type TimingOptions,
+  type TimingLogLevel
 } from '@talex-touch/utils'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { app, shell } from 'electron'
@@ -61,6 +65,65 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { fileProviderLog, Primitive, formatDuration } from '../../../../utils/logger'
 
 const MAX_CONTENT_LENGTH = 200_000
+
+type FileIndexStatus = typeof fileIndexProgress.$inferSelect['status']
+
+type FileTimingMeta = TimingMeta & {
+  stage?: string
+  message?: string
+  files?: number
+  extensions?: number
+  status?: 'success' | 'failed'
+}
+
+const FILE_TIMING_STYLE: Record<TimingLogLevel, 'debug' | 'info' | 'warn' | 'error'> = {
+  none: 'debug',
+  info: 'debug',
+  warn: 'warn',
+  error: 'error'
+}
+
+const FILE_TIMING_BASE_OPTIONS: TimingOptions = {
+  storeHistory: false,
+  logThresholds: {
+    none: 50,
+    info: 250,
+    warn: 1000
+  },
+  formatter: (entry) => {
+    const meta = (entry.meta ?? {}) as FileTimingMeta
+    const stage = meta.stage ?? entry.label.split(':').slice(1).join(':') ?? entry.label
+    const message = meta.message ?? stage
+    const durationText = formatDuration(entry.durationMs)
+    const details: string[] = []
+    if (typeof meta.files === 'number') {
+      details.push(`files=${meta.files}`)
+    }
+    if (typeof meta.extensions === 'number') {
+      details.push(`extensions=${meta.extensions}`)
+    }
+    if (meta.status && meta.status !== 'success') {
+      details.push(`status=${meta.status}`)
+    }
+    const suffix = details.length > 0 ? ` (${details.join(', ')})` : ''
+    return `[FileProvider] ${message} in ${durationText}${suffix}`
+  },
+  logger: (message, entry) => {
+    if (entry.logLevel === 'none') {
+      return
+    }
+    const level = FILE_TIMING_STYLE[entry.logLevel ?? 'info'] ?? 'debug'
+    if (level === 'warn') {
+      fileProviderLog.warn(message)
+    } else if (level === 'error') {
+      fileProviderLog.error(message)
+    } else if (level === 'info') {
+      fileProviderLog.info(message)
+    } else {
+      fileProviderLog.debug(message)
+    }
+  }
+}
 
 const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
   video: 'video',
@@ -224,6 +287,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
   private launchServicesHandlers: any[] | null = null
   private launchServicesMTime?: number
+  private readonly failedContentCache = new Map<
+    number,
+    { status: FileIndexStatus; updatedAt: number | null; lastError: string | null }
+  >()
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -294,6 +361,79 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     } else {
       fileProviderLog.error(message)
+    }
+  }
+
+  private recordContentFailure(
+    fileId: number,
+    lastError: string | null,
+    updatedAt?: number | null
+  ): void {
+    let timestamp: number | null
+    if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
+      timestamp = updatedAt
+    } else if (updatedAt === null) {
+      timestamp = null
+    } else {
+      timestamp = Date.now()
+    }
+    this.failedContentCache.set(fileId, {
+      status: 'failed',
+      updatedAt: timestamp,
+      lastError
+    })
+  }
+
+  private clearContentFailure(fileId: number): void {
+    this.failedContentCache.delete(fileId)
+  }
+
+  private async shouldSkipContentDueToFailure(
+    file: typeof filesSchema.$inferSelect
+  ): Promise<boolean> {
+    if (!this.dbUtils || !file.id) return false
+
+    const fileId = file.id
+    const fileModifiedAt = this.toTimestamp(file.mtime)
+    const cachedFailure = this.failedContentCache.get(fileId)
+
+    if (cachedFailure) {
+      if (cachedFailure.updatedAt && fileModifiedAt && fileModifiedAt > cachedFailure.updatedAt) {
+        this.failedContentCache.delete(fileId)
+        this.logDebug('Retrying content parse after file modification', {
+          path: file.path
+        })
+      } else {
+        return true
+      }
+    }
+
+    try {
+      const [progress] = await this.dbUtils.getFileIndexProgressByFileIds([fileId])
+      if (!progress || progress.status !== 'failed') {
+        return false
+      }
+
+      const progressUpdatedAt = this.toTimestamp(progress.updatedAt)
+      if (progressUpdatedAt && fileModifiedAt && fileModifiedAt > progressUpdatedAt) {
+        this.logDebug('Retrying content parse after recorded failure', {
+          path: file.path
+        })
+        return false
+      }
+
+      this.recordContentFailure(fileId, progress.lastError ?? null, progressUpdatedAt ?? null)
+      this.logDebug('Skipping content parse for previously failed file', {
+        path: file.path,
+        lastError: progress.lastError ?? 'unknown'
+      })
+      return true
+    } catch (error) {
+      this.logWarn('Failed to load previous file index status; continuing parse', error, {
+        fileId,
+        path: file.path
+      })
+      return false
     }
   }
 
@@ -1230,7 +1370,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await runAdaptiveTaskQueue(
       chunks,
       async (chunk, chunkIndex) => {
-        this.logDebug('Updating chunk during file update', {
+        console.debug('Updating chunk during file update', {
           chunk: `${chunkIndex + 1}/${chunks.length}`,
           size: chunk.length
         })
@@ -1330,46 +1470,72 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils) return
     if (files.length === 0) return
 
-    const extensionsStart = performance.now()
-    const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
-    await runAdaptiveTaskQueue(
-      files,
-      async (file) => {
-        try {
-          const icon = extractFileIcon(file.path)
-          extensionsToAdd.push({
-            fileId: file.id,
-            key: 'icon',
-            value: `data:image/png;base64,${icon.toString('base64')}`
-          })
-        } catch {
-          /* ignore */
-        }
-
-        const fileExtension = file.extension || path.extname(file.name).toLowerCase()
-        const keywords = KEYWORD_MAP[fileExtension]
-        if (keywords) {
-          extensionsToAdd.push({
-            fileId: file.id,
-            key: 'keywords',
-            value: JSON.stringify(keywords)
-          })
-        }
-      },
+    const timingToken = timingLogger.start(
+      'FileProvider:ProcessExtensions',
       {
-        estimatedTaskTimeMs: 3,
-        label: 'FileProvider::processFileExtensions'
-      }
+        stage: 'ProcessFileExtensions',
+        message: 'Processing file extensions',
+        files: files.length
+      },
+      FILE_TIMING_BASE_OPTIONS
     )
 
-    if (extensionsToAdd.length > 0) {
-      await this.dbUtils.addFileExtensions(extensionsToAdd)
+    const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
+    let status: 'success' | 'failed' = 'success'
+
+    try {
+      await runAdaptiveTaskQueue(
+        files,
+        async (file) => {
+          try {
+            const icon = extractFileIcon(file.path)
+            extensionsToAdd.push({
+              fileId: file.id,
+              key: 'icon',
+              value: `data:image/png;base64,${icon.toString('base64')}`
+            })
+          } catch {
+            /* ignore */
+          }
+
+          const fileExtension = file.extension || path.extname(file.name).toLowerCase()
+          const keywords = KEYWORD_MAP[fileExtension]
+          if (keywords) {
+            extensionsToAdd.push({
+              fileId: file.id,
+              key: 'keywords',
+              value: JSON.stringify(keywords)
+            })
+          }
+        },
+        {
+          estimatedTaskTimeMs: 3,
+          label: 'FileProvider::processFileExtensions'
+        }
+      )
+
+      if (extensionsToAdd.length > 0) {
+        await this.dbUtils.addFileExtensions(extensionsToAdd)
+      }
+    } catch (error) {
+      status = 'failed'
+      throw error
+    } finally {
+      timingLogger.finish(
+        timingToken,
+        {
+          stage: 'ProcessFileExtensions',
+          message:
+            status === 'success'
+              ? 'Processed file extensions'
+              : 'Failed to process file extensions',
+          files: files.length,
+          extensions: extensionsToAdd.length,
+          status
+        },
+        FILE_TIMING_BASE_OPTIONS
+      )
     }
-    this.logDebug('Processed file extensions', {
-      files: files.length,
-      extensions: extensionsToAdd.length,
-      duration: formatDuration(performance.now() - extensionsStart)
-    })
   }
 
   private async extractContentForFiles(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
@@ -1429,6 +1595,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: file.size ?? null,
         lastError: 'content-indexing-disabled'
       })
+      this.clearContentFailure(file.id)
       return
     }
 
@@ -1443,6 +1610,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size,
         lastError: 'file-too-large'
       })
+      this.clearContentFailure(file.id)
+      file.content = null
+      return
+    }
+
+    if (await this.shouldSkipContentDueToFailure(file)) {
       file.content = null
       return
     }
@@ -1455,6 +1628,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       startedAt: new Date(),
       lastError: null
     })
+    this.clearContentFailure(file.id)
 
     const progressReporter = this.createProgressReporter(file.id, size)
     const parseStart = performance.now()
@@ -1480,6 +1654,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size ?? null,
         lastError: error instanceof Error ? error.message : 'parser-error'
       })
+      this.recordContentFailure(
+        file.id,
+        error instanceof Error ? error.message : 'parser-error'
+      )
       file.content = null
       return
     }
@@ -1492,6 +1670,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size ?? null,
         lastError: 'parser-not-found'
       })
+      this.clearContentFailure(file.id)
       file.content = null
       return
     }
@@ -1547,6 +1726,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastError: null,
         updatedAt: new Date()
       })
+      this.clearContentFailure(fileId)
 
       this.logDebug('Content parsed for file', {
         path: file.path,
@@ -1569,6 +1749,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         status: 'skipped',
         ...progressPayload
       })
+      this.clearContentFailure(fileId)
       file.content = null
       return
     }
@@ -1577,6 +1758,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       status: 'failed',
       ...progressPayload
     })
+    this.recordContentFailure(fileId, result.reason ?? null)
     file.content = null
   }
 
