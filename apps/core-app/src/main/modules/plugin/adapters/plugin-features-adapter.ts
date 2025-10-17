@@ -251,6 +251,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         pluginName: plugin.name,
         featureId: feature.id,
         interaction: feature.interaction,
+        priority: feature.priority ?? 0,
         extension: {
           commands: feature.commands
         }
@@ -278,7 +279,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           // If query is empty, return all features of the activated plugin
           if (!query.text) {
             const allFeatures = plugin.getFeatures()
-            const items = allFeatures.map((f) => this.createTuffItem(plugin, f))
+            const items = allFeatures
+              .map((f) => this.createTuffItem(plugin, f))
+              .sort((a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0))
             return TuffFactory.createSearchResult(query)
               .setItems(items)
               .setActivate(activationState)
@@ -330,7 +333,10 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
-    return TuffFactory.createSearchResult(query).setItems(matchedItems).build()
+    // Sort matched items by priority (highest first)
+    const sortedItems = matchedItems.sort((a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0))
+
+    return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
 }
 

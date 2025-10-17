@@ -98,6 +98,12 @@ export interface IPluginFeature {
   platform: IPlatform
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
+  /**
+   * Priority of the feature for sorting in search results
+   * Higher numbers have higher priority (displayed first)
+   * Default is 0
+   */
+  priority?: number
 }
 
 export type IFeatureInteraction = {
@@ -113,6 +119,11 @@ export type IFeatureInteraction = {
  * These hooks are triggered based on real user interaction and system events.
  */
 export interface IFeatureLifeCycle {
+  /**
+   * onInit is called when the feature is initialized.
+   * Can be used to prepare data or UI specific to this session.
+   */
+  onInit?(): void
   /**
    * Called when a feature is actively launched from the launcher.
    * Can be used to prepare data or UI specific to this session.

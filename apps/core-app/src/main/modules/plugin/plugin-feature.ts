@@ -61,6 +61,7 @@ export class PluginFeature implements IPluginFeature {
   platform: IPlatform
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
+  priority: number
   dev: IPluginDev
 
   constructor(pluginPath: string, options: IPluginFeature, dev: IPluginDev) {
@@ -72,6 +73,7 @@ export class PluginFeature implements IPluginFeature {
     this.platform = options.platform
     this.commands = [...options.commands]
     this.interaction = options.interaction
+    this.priority = options.priority ?? 0
     this.dev = dev
   }
 
@@ -84,7 +86,8 @@ export class PluginFeature implements IPluginFeature {
       push: this.push,
       platform: this.platform,
       commands: this.commands,
-      interaction: this.interaction
+      interaction: this.interaction,
+      priority: this.priority
     }
   }
 }
