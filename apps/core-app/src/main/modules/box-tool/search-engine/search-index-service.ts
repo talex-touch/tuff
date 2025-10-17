@@ -1,4 +1,5 @@
 import { sql, eq } from 'drizzle-orm'
+import { searchLogger } from './search-logger'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
 import * as schema from '../../../db/schema'
@@ -106,16 +107,23 @@ export class SearchIndexService {
     ftsQuery: string,
     limit = 50
   ): Promise<Array<{ itemId: string; score: number }>> {
+    searchLogger.logSearchPhase('FTS Search', `Provider: ${providerId}, Query: "${ftsQuery}"`)
+    searchLogger.indexSearchStart(providerId, ftsQuery, limit)
     const start = performance.now()
     await this.ensureInitialized()
     const trimmed = ftsQuery.trim()
-    if (!trimmed) return []
+    if (!trimmed) {
+      searchLogger.indexSearchEmpty()
+      return []
+    }
 
+    searchLogger.indexSearchExecuting()
     const rows = await this.db.all<{ item_id: string; score: number }>(
       sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${trimmed} ORDER BY score LIMIT ${limit}`
     )
 
     const results = rows.map((row) => ({ itemId: row.item_id, score: row.score }))
+    searchLogger.indexSearchComplete(results.length, performance.now() - start)
     console.debug(
       `[SearchIndexService] search(provider=${providerId}, limit=${limit}) returned ${results.length} matches in ${(
         performance.now() - start

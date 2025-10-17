@@ -85,7 +85,9 @@
     "autoHide": "Auto hide",
     "autoHideDesc": "Hide searchbar when blur triggered.",
     "dashboard": "Details",
-    "dashboardDesc": "Enable system details page to display indexing, applications, logs and OCR status."
+    "dashboardDesc": "Enable system details page to display indexing, applications, logs and OCR status.",
+    "searchEngineLogs": "Search Engine Logs",
+    "searchEngineLogsDesc": "Enable detailed logging for search engine operations to help debug search issues."
   },
   "settingUser": {
     "groupTitle": "Account",

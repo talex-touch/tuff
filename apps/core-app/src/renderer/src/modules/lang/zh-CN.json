@@ -87,7 +87,9 @@
     "autoHide": "自动隐藏",
     "autoHideDesc": "触发模糊时隐藏搜索栏。",
     "dashboard": "详细信息",
-    "dashboardDesc": "启用系统详细信息页面，显示索引、应用、日志和OCR状态。"
+    "dashboardDesc": "启用系统详细信息页面，显示索引、应用、日志和OCR状态。",
+    "searchEngineLogs": "搜索引擎日志",
+    "searchEngineLogsDesc": "启用搜索引擎操作的详细日志记录，帮助调试搜索问题。"
   },
   "settingUser": {
     "groupTitle": "账户",

@@ -36,6 +36,9 @@ const _appSettingOriginData = {
   dashboard: {
     enable: false,
   },
+  searchEngine: {
+    logsEnabled: false,
+  },
 };
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)
