@@ -5,7 +5,12 @@
       <TouchMenuItem route="/home" :name="t('flatNavBar.dashboard')" icon="i-ri-home-3-line" />
       <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
       <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
-      <TouchMenuItem route="/lingpan" :name="t('flatNavBar.lingpan')" icon="i-ri-apps-2-line" />
+      <TouchMenuItem
+        v-if="appSetting.dashboard.enable"
+        route="/details"
+        :name="t('flatNavBar.details')"
+        icon="i-ri-dashboard-line"
+      />
       <!-- <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" /> -->
       <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
       <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />
@@ -24,6 +29,7 @@
  * - Main navigation items (Dashboard, Market, Plugin, Application, Style, Setting)
  */
 import { useI18n } from 'vue-i18n'
+import { appSetting } from '~/modules/channel/storage'
 
 import TouchMenu from '@comp/menu/TouchMenu.vue'
 import TouchMenuItem from '@comp/menu/TouchMenuItem.vue'

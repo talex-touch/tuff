@@ -83,7 +83,9 @@
     "autoClear": "Auto clear",
     "autoClearDesc": "Clear searchbar after box hidden.",
     "autoHide": "Auto hide",
-    "autoHideDesc": "Hide searchbar when blur triggered."
+    "autoHideDesc": "Hide searchbar when blur triggered.",
+    "dashboard": "Details",
+    "dashboardDesc": "Enable system details page to display indexing, applications, logs and OCR status."
   },
   "settingUser": {
     "groupTitle": "Account",
@@ -150,7 +152,7 @@
     "dashboard": "Dashboard",
     "market": "Market",
     "plugin": "Plugin",
-    "lingpan": "Lingpan",
+    "details": "Details",
     "style": "Style",
     "setting": "Setting"
   },

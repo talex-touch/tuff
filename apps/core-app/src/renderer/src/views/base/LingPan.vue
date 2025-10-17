@@ -1,254 +1,276 @@
 <template>
-  <div class="lingpan-page">
-    <header class="page-header">
-      <div>
-        <h1>{{ snapshot?.panelName ?? '灵盘' }}</h1>
-        <p class="page-subtitle">一站式掌握索引、应用、日志与 OCR 状态的系统中枢。</p>
-      </div>
-      <div class="page-actions">
-        <label class="limit-select">
-          <span>Rows</span>
-          <select v-model.number="limit" :disabled="loading">
-            <option v-for="option in limitOptions" :key="option" :value="option">
-              {{ option }}
-            </option>
-          </select>
-        </label>
-        <button class="refresh-button" type="button" :disabled="loading" @click="load">
-          <span v-if="loading" class="loader" />
-          <span>{{ loading ? 'Refreshing...' : 'Refresh' }}</span>
-        </button>
+  <div class="debug-page">
+    <header class="debug-header">
+      <div class="header-content">
+        <div class="title-section">
+          <h1 class="debug-title">{{ snapshot?.panelName ?? '详细信息' }}</h1>
+          <p class="debug-subtitle">System Status Monitor - Real-time Application Health</p>
+        </div>
+        <div class="header-controls">
+          <div class="control-group">
+            <label class="control-label">ROWS</label>
+            <select v-model.number="limit" :disabled="loading" class="debug-select">
+              <option v-for="option in limitOptions" :key="option" :value="option">
+                {{ option }}
+              </option>
+            </select>
+          </div>
+          <button class="debug-btn" type="button" :disabled="loading" @click="load">
+            <span v-if="loading" class="loading-dot"></span>
+            <span v-else class="refresh-symbol">⟳</span>
+            <span>{{ loading ? 'LOADING...' : 'REFRESH' }}</span>
+          </button>
+        </div>
       </div>
     </header>
 
-    <section v-if="error" class="error-banner">
-      <strong>无法加载灵盘信息：</strong>
-      <span>{{ error }}</span>
-    </section>
+    <div v-if="error" class="error-panel">
+      <div class="error-header">ERROR</div>
+      <div class="error-content">{{ error }}</div>
+    </div>
 
-    <section v-if="snapshot" class="summary-grid">
-      <div class="summary-card">
-        <h3>系统概览</h3>
-        <ul>
-          <li>版本：{{ snapshot.system.version }}</li>
-          <li>平台：{{ snapshot.system.platform }} {{ snapshot.system.release }}</li>
-          <li>架构：{{ snapshot.system.architecture }}</li>
-          <li>运行时长：{{ formatDuration(snapshot.system.uptime) }}</li>
-          <li>
-            内存：{{ formatBytes(snapshot.system.memory.free) }} / {{ formatBytes(snapshot.system.memory.total) }} 空闲
-          </li>
-          <li>刷新时间：{{ formatDateTime(snapshot.generatedAt) }}</li>
-        </ul>
-      </div>
+    <div v-if="snapshot" class="debug-content">
+      <!-- System Overview -->
+      <section class="debug-section">
+        <div class="section-header">
+          <h2 class="section-title">[SYSTEM_OVERVIEW]</h2>
+          <div class="timestamp">{{ formatDateTime(snapshot.generatedAt) }}</div>
+        </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-key">VERSION:</span>
+            <span class="info-value">{{ snapshot.system.version }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-key">PLATFORM:</span>
+            <span class="info-value">{{ snapshot.system.platform }} {{ snapshot.system.release }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-key">ARCHITECTURE:</span>
+            <span class="info-value">{{ snapshot.system.architecture }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-key">UPTIME:</span>
+            <span class="info-value">{{ formatDuration(snapshot.system.uptime) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-key">MEMORY_FREE:</span>
+            <span class="info-value">{{ formatBytes(snapshot.system.memory.free) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-key">MEMORY_TOTAL:</span>
+            <span class="info-value">{{ formatBytes(snapshot.system.memory.total) }}</span>
+          </div>
+        </div>
+      </section>
 
-      <div class="summary-card">
-        <h3>当前应用</h3>
-        <div v-if="snapshot.applications.activeApp" class="active-app">
-          <div class="active-app-header">
-            <img
-              v-if="snapshot.applications.activeApp.icon"
-              :src="snapshot.applications.activeApp.icon"
-              alt="App icon"
-            />
-            <div>
-              <strong>{{ snapshot.applications.activeApp.displayName ?? '未知应用' }}</strong>
-              <p>
-                {{ snapshot.applications.activeApp.windowTitle ?? '未检测到窗口标题' }}
-              </p>
+      <!-- Active Application -->
+      <section class="debug-section">
+        <div class="section-header">
+          <h2 class="section-title">[ACTIVE_APPLICATION]</h2>
+        </div>
+        <div v-if="snapshot.applications.activeApp" class="app-info">
+          <div class="app-header">
+            <div class="app-icon-placeholder">📱</div>
+            <div class="app-details">
+              <div class="app-name">{{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}</div>
+              <div class="app-title">{{ snapshot.applications.activeApp.windowTitle ?? 'NO_WINDOW_TITLE' }}</div>
             </div>
           </div>
-          <ul>
-            <li>Bundle：{{ snapshot.applications.activeApp.bundleId ?? 'N/A' }}</li>
-            <li>进程：#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</li>
-            <li>路径：{{ snapshot.applications.activeApp.executablePath ?? 'N/A' }}</li>
-            <li>更新：{{ formatDateTime(snapshot.applications.activeApp.lastUpdated) }}</li>
-          </ul>
-        </div>
-        <p v-else class="empty">未检测到活跃应用</p>
-      </div>
-
-      <div class="summary-card">
-        <h3>日志路径</h3>
-        <ul>
-          <li>UserData：{{ snapshot.logs.userDataDir }}</li>
-          <li>Logs：{{ snapshot.logs.directory }}</li>
-          <li>条目：{{ snapshot.logs.recentFiles.length }}</li>
-        </ul>
-        <div class="log-files" v-if="snapshot.logs.recentFiles.length">
-          <p>最近文件</p>
-          <ul>
-            <li v-for="file in snapshot.logs.recentFiles" :key="file.name">
-              <span>{{ file.name }}</span>
-              <small>{{ formatBytes(file.size) }} · {{ formatDateTime(file.updatedAt) }}</small>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <section v-if="snapshot" class="indexing-section">
-      <header>
-        <h2>索引进度</h2>
-        <div class="chips">
-          <span v-for="path in snapshot.indexing.watchedPaths" :key="path" class="chip">{{ path }}</span>
-        </div>
-      </header>
-      <div class="indexing-summary">
-        <div v-for="(value, key) in snapshot.indexing.summary" :key="key" class="summary-pill">
-          <span class="label">{{ key }}</span>
-          <span class="value">{{ value }}</span>
-        </div>
-      </div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>路径</th>
-              <th>状态</th>
-              <th>进度</th>
-              <th>已处理</th>
-              <th>总量</th>
-              <th>更新</th>
-              <th>错误</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in snapshot.indexing.entries" :key="entry.path">
-              <td>{{ entry.path }}</td>
-              <td>{{ entry.status ?? 'unknown' }}</td>
-              <td>{{ formatProgress(entry.progress) }}</td>
-              <td>{{ formatBytes(entry.processedBytes) }}</td>
-              <td>{{ formatBytes(entry.totalBytes) }}</td>
-              <td>{{ formatDateTime(entry.updatedAt) }}</td>
-              <td>
-                <span v-if="entry.lastError" class="error-text" :title="entry.lastError">
-                  {{ truncate(entry.lastError, 60) }}
-                </span>
-                <span v-else class="muted">无</span>
-              </td>
-            </tr>
-            <tr v-if="!snapshot.indexing.entries.length">
-              <td colspan="7" class="empty">暂无索引记录</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div v-if="snapshot.indexing.scanProgress.length" class="scan-progress">
-        <h4>目录扫描历史</h4>
-        <ul>
-          <li v-for="item in snapshot.indexing.scanProgress" :key="item.path">
-            <span>{{ item.path }}</span>
-            <small>{{ formatDateTime(item.lastScanned) }}</small>
-          </li>
-        </ul>
-      </div>
-    </section>
-
-    <section v-if="snapshot" class="ocr-section">
-      <header>
-        <h2>OCR 状态</h2>
-        <div class="ocr-stats">
-          <div class="stat">
-            <span class="label">总任务</span>
-            <span class="value">{{ snapshot.ocr.stats.total }}</span>
-          </div>
-          <div class="stat" v-for="(value, key) in snapshot.ocr.stats.byStatus" :key="key">
-            <span class="label">{{ formatStatus(key) }}</span>
-            <span class="value">{{ value }}</span>
+          <div class="app-meta">
+            <div class="meta-row">
+              <span class="meta-key">BUNDLE_ID:</span>
+              <span class="meta-value">{{ snapshot.applications.activeApp.bundleId ?? 'N/A' }}</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">PROCESS_ID:</span>
+              <span class="meta-value">#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">EXECUTABLE_PATH:</span>
+              <span class="meta-value">{{ snapshot.applications.activeApp.executablePath ?? 'N/A' }}</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">LAST_UPDATED:</span>
+              <span class="meta-value">{{ formatDateTime(snapshot.applications.activeApp.lastUpdated) }}</span>
+            </div>
           </div>
         </div>
-      </header>
-      <div class="timeline">
-        <div class="event" v-for="(value, label) in ocrTimeline" :key="label">
-          <span class="label">{{ label }}</span>
-          <span class="value">{{ formatEvent(value) }}</span>
+        <div v-else class="no-data">
+          <span class="no-data-text">NO_ACTIVE_APPLICATION_DETECTED</span>
         </div>
-      </div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>状态</th>
-              <th>来源</th>
-              <th>队列</th>
-              <th>完成</th>
-              <th>尝试</th>
-              <th>片段</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="job in ocrJobs" :key="job.id ?? job.payloadHash">
-              <td>{{ job.id ?? 'N/A' }}</td>
-              <td>{{ formatStatus(job.status) }}</td>
-              <td>{{ sourceLabel(job) }}</td>
-              <td>{{ formatDateTime(job.queuedAt) }}</td>
-              <td>{{ formatDateTime(job.finishedAt) }}</td>
-              <td>{{ job.attempts ?? 0 }}</td>
-              <td>
-                <span v-if="job.result" :title="job.result.textSnippet">
-                  {{ truncate(job.result.textSnippet, 80) }}
-                  <small>
-                    {{ job.result.language || 'N/A' }} |
-                    {{ job.result.confidence !== null ? job.result.confidence.toFixed(1) : 'N/A' }}%
-                  </small>
+      </section>
+
+      <!-- Indexing Progress -->
+      <section class="debug-section">
+        <div class="section-header">
+          <h2 class="section-title">[INDEXING_PROGRESS]</h2>
+          <div class="watched-paths">
+            <span v-for="path in snapshot.indexing.watchedPaths" :key="path" class="path-tag">
+              {{ path }}
+            </span>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div v-for="(value, key) in snapshot.indexing.summary" :key="key" class="stat-item">
+            <span class="stat-key">{{ key.toUpperCase() }}:</span>
+            <span class="stat-value">{{ value }}</span>
+          </div>
+        </div>
+
+        <div class="table-section">
+          <div class="table-header">INDEXING_ENTRIES</div>
+          <div class="table-container">
+            <table class="debug-table">
+              <thead>
+                <tr>
+                  <th>PATH</th>
+                  <th>STATUS</th>
+                  <th>PROGRESS</th>
+                  <th>PROCESSED</th>
+                  <th>TOTAL</th>
+                  <th>UPDATED</th>
+                  <th>ERROR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="entry in snapshot.indexing.entries" :key="entry.path">
+                  <td class="path-cell">{{ entry.path }}</td>
+                  <td>
+                    <span class="status-tag" :class="`status-${entry.status}`">
+                      {{ entry.status ?? 'UNKNOWN' }}
+                    </span>
+                  </td>
+                  <td>{{ formatProgress(entry.progress) }}</td>
+                  <td>{{ formatBytes(entry.processedBytes) }}</td>
+                  <td>{{ formatBytes(entry.totalBytes) }}</td>
+                  <td>{{ formatDateTime(entry.updatedAt) }}</td>
+                  <td>
+                    <span v-if="entry.lastError" class="error-text" :title="entry.lastError">
+                      {{ truncate(entry.lastError, 40) }}
+                    </span>
+                    <span v-else class="no-error">NONE</span>
+                  </td>
+                </tr>
+                <tr v-if="!snapshot.indexing.entries.length">
+                  <td colspan="7" class="empty-row">NO_INDEXING_RECORDS</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- OCR Status -->
+      <section class="debug-section">
+        <div class="section-header">
+          <h2 class="section-title">[OCR_STATUS]</h2>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-key">TOTAL_TASKS:</span>
+            <span class="stat-value">{{ snapshot.ocr.stats.total }}</span>
+          </div>
+          <div v-for="(value, key) in snapshot.ocr.stats.byStatus" :key="key" class="stat-item">
+            <span class="stat-key">{{ key.toUpperCase() }}:</span>
+            <span class="stat-value">{{ value }}</span>
+          </div>
+        </div>
+
+        <div class="timeline-section">
+          <div class="timeline-header">RECENT_ACTIVITY</div>
+          <div class="timeline-grid">
+            <div v-for="(value, label) in ocrTimeline" :key="label" class="timeline-item">
+              <span class="timeline-key">{{ label.toUpperCase() }}:</span>
+              <span class="timeline-value">{{ formatEvent(value) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-section">
+          <div class="table-header">OCR_JOBS</div>
+          <div class="table-container">
+            <table class="debug-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>STATUS</th>
+                  <th>SOURCE</th>
+                  <th>QUEUED</th>
+                  <th>FINISHED</th>
+                  <th>ATTEMPTS</th>
+                  <th>RESULT</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="job in ocrJobs" :key="job.id ?? job.payloadHash">
+                  <td>{{ job.id ?? 'N/A' }}</td>
+                  <td>
+                    <span class="status-tag" :class="`status-${job.status}`">
+                      {{ formatStatus(job.status) }}
+                    </span>
+                  </td>
+                  <td>{{ sourceLabel(job) }}</td>
+                  <td>{{ formatDateTime(job.queuedAt) }}</td>
+                  <td>{{ formatDateTime(job.finishedAt) }}</td>
+                  <td>{{ job.attempts ?? 0 }}</td>
+                  <td>
+                    <div v-if="job.result" class="result-content">
+                      <div class="result-text" :title="job.result.textSnippet">
+                        {{ truncate(job.result.textSnippet, 50) }}
+                      </div>
+                      <div class="result-meta">
+                        {{ job.result.language || 'N/A' }} | {{ job.result.confidence !== null ? job.result.confidence.toFixed(1) : 'N/A' }}%
+                      </div>
+                    </div>
+                    <span v-else class="no-result">NO_RESULT</span>
+                  </td>
+                </tr>
+                <tr v-if="!ocrJobs.length">
+                  <td colspan="7" class="empty-row">NO_OCR_TASKS</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Logs Information -->
+      <section class="debug-section">
+        <div class="section-header">
+          <h2 class="section-title">[LOGS_INFORMATION]</h2>
+        </div>
+        <div class="logs-content">
+          <div class="log-paths">
+            <div class="path-row">
+              <span class="path-key">USER_DATA_DIR:</span>
+              <span class="path-value">{{ snapshot.logs.userDataDir }}</span>
+            </div>
+            <div class="path-row">
+              <span class="path-key">LOGS_DIR:</span>
+              <span class="path-value">{{ snapshot.logs.directory }}</span>
+            </div>
+            <div class="path-row">
+              <span class="path-key">LOG_FILES_COUNT:</span>
+              <span class="path-value">{{ snapshot.logs.recentFiles.length }}</span>
+            </div>
+          </div>
+          <div v-if="snapshot.logs.recentFiles.length" class="recent-files">
+            <div class="files-header">RECENT_FILES</div>
+            <div class="files-list">
+              <div v-for="file in snapshot.logs.recentFiles" :key="file.name" class="file-item">
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-meta">
+                  {{ formatBytes(file.size) }} | {{ formatDateTime(file.updatedAt) }}
                 </span>
-                <span v-else class="muted">无结果</span>
-              </td>
-            </tr>
-            <tr v-if="!ocrJobs.length">
-              <td colspan="7" class="empty">暂无 OCR 任务</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section v-if="snapshot" class="config-section">
-      <header>
-        <h2>配置清单</h2>
-        <span>共 {{ snapshot.config.total }} 条</span>
-      </header>
-      <div class="config-list">
-        <article v-for="item in snapshot.config.entries" :key="item.key" class="config-item">
-          <h4>{{ item.key }}</h4>
-          <pre>{{ formatValue(item.value) }}</pre>
-        </article>
-        <p v-if="!snapshot.config.entries.length" class="empty">暂无配置项</p>
-      </div>
-    </section>
-
-    <section v-if="snapshot" class="metrics-section">
-      <header>
-        <h2>进程指标</h2>
-        <span>最多显示 10 条</span>
-      </header>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>PID</th>
-              <th>类型</th>
-              <th>CPU%</th>
-              <th>工作集</th>
-              <th>创建时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="metric in snapshot.applications.metrics" :key="metric.pid + metric.type">
-              <td>{{ metric.pid }}</td>
-              <td>{{ metric.type }}</td>
-              <td>{{ metric.cpu !== null ? metric.cpu.toFixed(2) : 'N/A' }}</td>
-              <td>{{ metric.memory !== null ? formatBytes(metric.memory) : 'N/A' }}</td>
-              <td>{{ formatDateTime(metric.created) }}</td>
-            </tr>
-            <tr v-if="!snapshot.applications.metrics.length">
-              <td colspan="5" class="empty">暂无指标数据</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -440,8 +462,8 @@ function truncate(value: string, max = 32): string {
 }
 
 function formatStatus(status?: string | null): string {
-  if (!status) return 'Unknown'
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  if (!status) return 'UNKNOWN'
+  return status.toUpperCase()
 }
 
 function formatEvent(entry: Record<string, unknown> | null): string {
@@ -461,15 +483,15 @@ function formatEvent(entry: Record<string, unknown> | null): string {
 }
 
 function sourceLabel(job: OcrJobEntry): string {
-  if (!job.source) return 'Unknown'
+  if (!job.source) return 'UNKNOWN'
   if (job.source.type === 'file') {
-    return job.source.filePath ? job.source.filePath.split(/\\|\//).pop() || job.source.filePath : '文件来源'
+    return job.source.filePath ? job.source.filePath.split(/\\|\//).pop() || job.source.filePath : 'FILE_SOURCE'
   }
   if (job.source.type === 'data-url') {
     const length = job.source.dataUrl?.length ?? 0
-    return `Data URL (${length.toLocaleString()} chars)`
+    return `DATA_URL (${length.toLocaleString()} chars)`
   }
-  return 'Unknown'
+  return 'UNKNOWN'
 }
 
 function formatValue(value: unknown): string {
@@ -497,356 +519,639 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.lingpan-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 28px;
-  color: var(--vt-c-text, #f5f5f5);
+.debug-page {
+  height: 100%;
+  background: #000000;
+  color: #ffffff;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-y: auto;
 }
 
-.page-header {
+.debug-header {
+  background: #111111;
+  border-bottom: 1px solid #333333;
+  padding: 1rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-content {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.page-header h1 {
+.debug-title {
+  font-size: 1.5rem;
+  font-weight: 700;
   margin: 0;
-  font-size: 28px;
-  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.5px;
 }
 
-.page-subtitle {
-  margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 14px;
+.debug-subtitle {
+  margin: 0.25rem 0 0;
+  color: #888888;
+  font-size: 0.8rem;
+  font-weight: 400;
 }
 
-.page-actions {
+.header-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 1rem;
 }
 
-.limit-select {
-  display: inline-flex;
+.control-group {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.78);
+  gap: 0.5rem;
 }
 
-.limit-select select {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 17, 24, 0.86);
-  color: inherit;
+.control-label {
+  font-size: 0.7rem;
+  color: #888888;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
-.refresh-button {
-  display: inline-flex;
+.debug-select {
+  padding: 0.25rem 0.5rem;
+  background: #000000;
+  border: 1px solid #333333;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.8rem;
+  border-radius: 2px;
+}
+
+.debug-select:focus {
+  outline: 1px solid #666666;
+  border-color: #666666;
+}
+
+.debug-btn {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: none;
-  background: linear-gradient(135deg, #7c4dff, #5c6bc0);
-  color: #fff;
-  font-weight: 500;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #000000;
+  border: 1px solid #333333;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: all 0.2s ease;
+  border-radius: 2px;
 }
 
-.refresh-button:disabled {
-  opacity: 0.6;
+.debug-btn:hover:not(:disabled) {
+  background: #111111;
+  border-color: #555555;
+}
+
+.debug-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.refresh-button:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-.loader {
-  width: 12px;
-  height: 12px;
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  animation: spin 0.8s linear infinite;
+  animation: pulse 1s infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.refresh-symbol {
+  font-size: 1rem;
+  font-weight: bold;
 }
 
-.error-banner {
-  display: flex;
-  gap: 8px;
-  padding: 12px 18px;
-  border-radius: 12px;
-  background: rgba(255, 77, 79, 0.12);
-  color: #ff6b6b;
-  font-size: 14px;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-}
-
-.summary-card {
-  padding: 18px;
-  border-radius: 18px;
-  background: rgba(17, 19, 27, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.summary-card h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.summary-card ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.active-app {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.active-app-header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.active-app-header img {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-}
-
-.log-files ul {
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.indexing-section,
-.ocr-section,
-.config-section,
-.metrics-section {
-  padding: 22px;
-  border-radius: 20px;
-  background: rgba(13, 15, 23, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.indexing-section header,
-.ocr-section header,
-.config-section header,
-.metrics-section header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-}
-
-.indexing-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.summary-pill {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  min-width: 120px;
-}
-
-.summary-pill .label {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-.summary-pill .value {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.table-wrapper {
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.error-panel {
+  margin: 1rem 2rem;
+  background: #111111;
+  border: 1px solid #ff0000;
+  border-radius: 2px;
   overflow: hidden;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.error-header {
+  background: #ff0000;
+  color: #000000;
+  padding: 0.5rem 1rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
 }
 
-th,
-td {
-  padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  vertical-align: top;
+.error-content {
+  padding: 1rem;
+  color: #ff6666;
+  font-family: inherit;
+  white-space: pre-wrap;
 }
 
-th {
-  text-align: left;
-  background: rgba(255, 255, 255, 0.05);
-  font-weight: 600;
+.debug-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
-tr:last-child td {
+.debug-section {
+  background: #111111;
+  border: 1px solid #333333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #000000;
+  border-bottom: 1px solid #333333;
+}
+
+.section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.timestamp {
+  font-size: 0.7rem;
+  color: #888888;
+  font-weight: 400;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0;
+}
+
+.info-item {
+  display: flex;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #222222;
+  align-items: center;
+  gap: 1rem;
+}
+
+.info-item:last-child {
   border-bottom: none;
 }
 
-.error-text {
-  color: #ff6b6b;
+.info-key {
+  font-weight: 600;
+  color: #888888;
+  min-width: 120px;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
 }
 
-.muted {
-  color: rgba(255, 255, 255, 0.5);
+.info-value {
+  color: #ffffff;
+  font-family: inherit;
+  word-break: break-all;
 }
 
-.empty {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.55);
+.app-info {
+  padding: 1rem;
 }
 
-.scan-progress ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #222222;
 }
 
-.scan-progress li {
+.app-icon-placeholder {
+  width: 2rem;
+  height: 2rem;
+  background: #333333;
+  border: 1px solid #555555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.app-details {
+  flex: 1;
+}
+
+.app-name {
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 0.25rem;
+}
+
+.app-title {
+  color: #888888;
+  font-size: 0.8rem;
+}
+
+.app-meta {
   display: flex;
   flex-direction: column;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 12px;
+  gap: 0.5rem;
 }
 
-.ocr-stats {
+.meta-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.meta-key {
+  font-weight: 600;
+  color: #888888;
+  min-width: 120px;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.meta-value {
+  color: #ffffff;
+  word-break: break-all;
+}
+
+.no-data {
+  padding: 2rem;
+  text-align: center;
+}
+
+.no-data-text {
+  color: #888888;
+  font-style: italic;
+  letter-spacing: 0.5px;
+}
+
+.watched-paths {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 0.5rem;
 }
 
-.stat {
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+.path-tag {
+  padding: 0.25rem 0.5rem;
+  background: #000000;
+  border: 1px solid #333333;
+  color: #888888;
+  font-size: 0.7rem;
+  border-radius: 2px;
+  font-family: inherit;
 }
 
-.stat .label {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-.stat .value {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.timeline {
+.stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0;
 }
 
-.event {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+.stat-item {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #222222;
+  border-right: 1px solid #222222;
 }
 
-.config-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+.stat-item:nth-child(odd) {
+  background: #0a0a0a;
 }
 
-.config-item {
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(17, 19, 27, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.config-item h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
+.stat-key {
   font-weight: 600;
+  color: #888888;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
 }
 
-.config-item pre {
-  margin: 0;
-  white-space: pre-wrap;
+.stat-value {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.table-section {
+  border-top: 1px solid #333333;
+}
+
+.table-header {
+  background: #000000;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #333333;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.debug-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: inherit;
+}
+
+.debug-table th,
+.debug-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #222222;
+  border-right: 1px solid #222222;
+  font-size: 0.8rem;
+}
+
+.debug-table th {
+  background: #000000;
+  color: #888888;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.debug-table td {
+  color: #ffffff;
+}
+
+.debug-table tr:nth-child(even) {
+  background: #0a0a0a;
+}
+
+.debug-table tr:hover {
+  background: #1a1a1a;
+}
+
+.path-cell {
+  max-width: 200px;
   word-break: break-all;
-  font-size: 12px;
-  line-height: 1.4;
 }
 
-.metrics-section table {
-  font-size: 12px;
+.status-tag {
+  padding: 0.125rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-completed { background: #000000; color: #00ff00; border: 1px solid #00ff00; }
+.status-failed { background: #000000; color: #ff0000; border: 1px solid #ff0000; }
+.status-skipped { background: #000000; color: #888888; border: 1px solid #888888; }
+.status-processing { background: #000000; color: #0088ff; border: 1px solid #0088ff; }
+.status-unknown { background: #000000; color: #888888; border: 1px solid #888888; }
+
+.error-text {
+  color: #ff6666;
+  font-size: 0.7rem;
+}
+
+.no-error,
+.no-result {
+  color: #888888;
+  font-style: italic;
+}
+
+.empty-row {
+  text-align: center;
+  color: #888888;
+  font-style: italic;
+  padding: 2rem;
+}
+
+.timeline-section {
+  border-top: 1px solid #333333;
+}
+
+.timeline-header {
+  background: #000000;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #333333;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.timeline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0;
+}
+
+.timeline-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #222222;
+  border-right: 1px solid #222222;
+}
+
+.timeline-item:nth-child(odd) {
+  background: #0a0a0a;
+}
+
+.timeline-key {
+  font-size: 0.7rem;
+  color: #888888;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.timeline-value {
+  color: #ffffff;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.result-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.result-text {
+  color: #ffffff;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.result-meta {
+  font-size: 0.7rem;
+  color: #888888;
+}
+
+.logs-content {
+  padding: 1rem;
+}
+
+.log-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.path-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.path-key {
+  font-weight: 600;
+  color: #888888;
+  min-width: 120px;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.path-value {
+  color: #ffffff;
+  word-break: break-all;
+}
+
+.recent-files {
+  border-top: 1px solid #333333;
+  padding-top: 1rem;
+}
+
+.files-header {
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #0a0a0a;
+  border: 1px solid #222222;
+  border-radius: 2px;
+}
+
+.file-name {
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.file-meta {
+  color: #888888;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+/* Scrollbar styling */
+.debug-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.debug-page::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+.debug-page::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+
+.debug-page::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+.table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-controls {
+    justify-content: space-between;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .path-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
 }
 </style>

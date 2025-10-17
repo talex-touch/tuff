@@ -1369,7 +1369,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     let processedCount = 0
-    const logInterval = 100 // 每100个文件输出一次日志
+    const logInterval = 200
 
     await runAdaptiveTaskQueue(
       chunks,
@@ -1394,19 +1394,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         )
         await Promise.all(updatePromises)
 
-        // 批量处理文件扩展名
         await this.processFileExtensions(chunk)
 
-        // 批量提取文件内容
         await this.extractContentForFiles(chunk)
 
-        // 批量索引文件用于搜索
         await this.indexFilesForSearch(chunk)
 
         processedCount += chunk.length
         if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {
           this.logDebug('File update chunk processed', {
-            size: chunk.length,
             processed: processedCount,
             total: filesToUpdate.length,
             duration: formatDuration(performance.now() - chunkStart)
@@ -1415,7 +1411,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       },
       {
         estimatedTaskTimeMs: 6,
-        yieldIntervalMs: 10, // 每10ms让出控制权，避免阻塞
         label: 'FileProvider::processFileUpdates'
       }
     )

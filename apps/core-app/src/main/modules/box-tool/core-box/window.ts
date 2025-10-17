@@ -96,7 +96,7 @@ export class WindowManager {
     windowAnimation.changeWindow(window)
 
     setTimeout(async () => {
-      console.log('[CoreBox] NewBox created, injecting development tools.')
+      console.debug('[CoreBox] NewBox created, injecting development tools.')
 
       try {
         if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {
@@ -122,7 +122,7 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.addListener('dom-ready', () => {
-      console.log(
+      console.debug(
         '[CoreBox] BoxWindow ' + window.window.webContents.id + ' dom loaded, registering ...'
       )
 
@@ -134,7 +134,7 @@ export class WindowManager {
 
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter((w) => w !== window)
-      console.log('[CoreBox] BoxWindow closed!')
+      console.debug('[CoreBox] BoxWindow closed!')
     })
 
     // window.window.on('blur', () => {

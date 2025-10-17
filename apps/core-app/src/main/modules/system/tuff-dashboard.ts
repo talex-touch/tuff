@@ -88,7 +88,7 @@ export class TuffDashboardModule extends BaseModule {
     ])
 
     return {
-      panelName: '灵盘',
+      panelName: '详细信息',
       generatedAt: new Date().toISOString(),
       system: this.buildSystemOverview(),
       indexing,

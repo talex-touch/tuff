@@ -96,7 +96,7 @@ export class CommonChannelModule extends BaseModule {
         )
         shell.openPath(modulePath)
 
-        console.log(
+        console.debug(
           `[Channel] Open path [${modulePath}] with module folder @${data?.name ?? 'defaults'}`
         )
       }
