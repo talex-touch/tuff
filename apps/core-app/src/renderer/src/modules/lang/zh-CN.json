@@ -85,7 +85,9 @@
     "autoClear": "自动清除",
     "autoClearDesc": "隐藏框后清除搜索栏。",
     "autoHide": "自动隐藏",
-    "autoHideDesc": "触发模糊时隐藏搜索栏。"
+    "autoHideDesc": "触发模糊时隐藏搜索栏。",
+    "dashboard": "详细信息",
+    "dashboardDesc": "启用系统详细信息页面，显示索引、应用、日志和OCR状态。"
   },
   "settingUser": {
     "groupTitle": "账户",
@@ -152,7 +154,7 @@
     "dashboard": "仪表盘",
     "market": "市场",
     "plugin": "插件",
-    "lingpan": "灵盘",
+    "details": "详细信息",
     "style": "样式",
     "setting": "设置"
   },

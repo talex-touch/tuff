@@ -118,5 +118,13 @@ function updateShortcut(id: string, newAccelerator: string): void {
       icon="search-eye"
       :description="t('settingTools.autoHideDesc')"
     />
+
+    <!-- Dashboard switch -->
+    <t-block-switch
+      v-model="appSetting.dashboard.enable"
+      :title="t('settingTools.dashboard')"
+      icon="dashboard"
+      :description="t('settingTools.dashboardDesc')"
+    />
   </t-group-block>
 </template>
