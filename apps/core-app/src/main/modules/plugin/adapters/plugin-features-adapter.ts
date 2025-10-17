@@ -116,8 +116,35 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         console.debug(
           `[PluginFeaturesAdapter] Routing to ${pluginName}.onItemAction for default action.`
         )
-        await plugin.pluginLifecycle.onItemAction(item)
-        // Simple actions should not activate a provider.
+
+        // Track action execution to prevent race conditions
+        const actionStartTime = Date.now()
+
+        try {
+          const result = await plugin.pluginLifecycle.onItemAction(item)
+
+          // Check if action was executed (e.g., opened external resource)
+          // If action took significant time or returned a specific indicator,
+          // it likely executed an external action and shouldn't activate
+          const executionTime = Date.now() - actionStartTime
+          const isExternalAction = executionTime > 100 || result?.externalAction === true
+
+          if (isExternalAction) {
+            console.debug(
+              `[PluginFeaturesAdapter] Action executed externally (${executionTime}ms), not activating feature.`
+            )
+            return null
+          }
+
+          // If action returns activation data, use it
+          if (result?.shouldActivate) {
+            return result.activation || null
+          }
+        } catch (error) {
+          console.error(`[PluginFeaturesAdapter] Error in onItemAction for ${pluginName}:`, error)
+        }
+
+        // Simple actions should not activate a provider by default
         return null
       } else {
         console.warn(
@@ -334,7 +361,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     // Sort matched items by priority (highest first)
-    const sortedItems = matchedItems.sort((a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0))
+    const sortedItems = matchedItems.sort(
+      (a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0)
+    )
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
