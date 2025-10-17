@@ -44,6 +44,10 @@ class DevPluginWatcher {
       this.devPlugins.set(plugin.name, plugin)
       if (this.watcher) {
         this.watcher.add(plugin.dev.source)
+        const manifestPath = path.join(plugin.dev.source, 'manifest.json')
+        if (fse.existsSync(manifestPath)) {
+          this.watcher.add(manifestPath)
+        }
         devWatcherLog.info('Watching dev plugin source', {
           meta: { path: plugin.dev.source, plugin: plugin.name }
         })
@@ -55,6 +59,10 @@ class DevPluginWatcher {
     const plugin = this.devPlugins.get(pluginName)
     if (plugin && typeof plugin.dev.source === 'string' && this.watcher) {
       this.watcher.unwatch(plugin.dev.source)
+      const manifestPath = path.join(plugin.dev.source, 'manifest.json')
+      if (fse.existsSync(manifestPath)) {
+        this.watcher.unwatch(manifestPath)
+      }
       this.devPlugins.delete(pluginName)
       devWatcherLog.info('Stopped watching dev plugin source', {
         meta: { path: plugin.dev.source, plugin: plugin.name }
@@ -80,12 +88,22 @@ class DevPluginWatcher {
 
     this.watcher.on('change', async (filePath) => {
       const pluginName = Array.from(this.devPlugins.values()).find(
-        (p) => typeof p.dev.source === 'string' && p.dev.source === filePath
+        (p) =>
+          typeof p.dev.source === 'string' &&
+          (p.dev.source === filePath || filePath === path.join(p.dev.source, 'manifest.json'))
       )?.name
       if (pluginName) {
+        const fileName = path.basename(filePath)
         devWatcherLog.info('Dev plugin source changed, reloading', {
-          meta: { plugin: pluginName, file: filePath }
+          meta: { plugin: pluginName, file: filePath, fileName }
         })
+
+        if (fileName === 'manifest.json') {
+          devWatcherLog.info('Manifest.json changed, reloading plugin with new configuration', {
+            meta: { plugin: pluginName }
+          })
+        }
+
         await this.manager.reloadPlugin(pluginName)
       }
     })
@@ -269,6 +287,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         })
         if (_enabled) {
           await newPlugin.enable()
+          enabledPlugins.add(pluginName)
+          await persistEnabledPlugins()
         }
         logInfo('Plugin reloaded successfully', pluginTag(pluginName))
       } else {
@@ -620,7 +640,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           }
 
           if (plugin.dev.enable) {
-            logDebug('Ignore disk change because plugin is running in dev mode.', pluginTag(pluginName))
+            logDebug(
+              'Ignore disk change because plugin is running in dev mode.',
+              pluginTag(pluginName)
+            )
             return
           }
 
