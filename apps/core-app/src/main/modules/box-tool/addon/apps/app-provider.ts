@@ -258,7 +258,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const appInfo = this._mapDbAppToScannedInfo(app)
         await this._syncKeywordsForApp(appInfo)
 
-        if ((index + 1) % 50 === 0 || index === appsWithExtensions.length - 1) {
+        if ((index + 1) % 100 === 0 || index === appsWithExtensions.length - 1) {
           console.log(
             formatLog(
               'AppProvider',
@@ -270,8 +270,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       },
       {
         estimatedTaskTimeMs: 5,
-        yieldIntervalMs: 30,
-        maxBatchSize: 25,
+        yieldIntervalMs: 10,
+        maxBatchSize: 10,
         label: 'AppProvider::aliasKeywordSync'
       }
     )
@@ -607,7 +607,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           await this._syncKeywordsForApp(app)
 
-          if ((index + 1) % 50 === 0 || index === toUpdate.length - 1) {
+          // 改为每100个输出一次，但保持10个一组的处理
+          if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
             console.log(
               formatLog(
                 'AppProvider',
@@ -619,6 +620,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         },
         {
           estimatedTaskTimeMs: 10,
+          yieldIntervalMs: 10, // 每10ms让出控制权，避免阻塞
+          maxBatchSize: 10, // 保持10个一组的批处理
           label: 'AppProvider::updateApps'
         }
       )

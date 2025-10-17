@@ -44,10 +44,6 @@ import type { FileTypeTag } from './constants'
 import { ScannedFileInfo } from './types'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
 import {
-  type FileScanOptions,
-  createScanOptions
-} from '@talex-touch/utils/common/file-scan-utils'
-import {
   fileParserRegistry,
   FileParserProgress,
   FileParserResult
@@ -1366,20 +1362,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
 
+    // 重新使用chunk方式，但优化日志输出
     const chunks: (typeof filesSchema.$inferSelect)[][] = []
     for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
       chunks.push(filesToUpdate.slice(i, i + chunkSize))
     }
 
+    let processedCount = 0
+    const logInterval = 100 // 每100个文件输出一次日志
+
     await runAdaptiveTaskQueue(
       chunks,
-      async (chunk, chunkIndex) => {
-        console.debug('Updating chunk during file update', {
-          chunk: `${chunkIndex + 1}/${chunks.length}`,
-          size: chunk.length
-        })
+      async (chunk) => {
         const chunkStart = performance.now()
 
+        // 批量更新文件信息
         const updatePromises = chunk.map((file) =>
           db
             .update(filesSchema)
@@ -1396,16 +1393,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             .where(eq(filesSchema.id, file.id))
         )
         await Promise.all(updatePromises)
+
+        // 批量处理文件扩展名
         await this.processFileExtensions(chunk)
+
+        // 批量提取文件内容
         await this.extractContentForFiles(chunk)
+
+        // 批量索引文件用于搜索
         await this.indexFilesForSearch(chunk)
-        this.logDebug('File update chunk processed', {
-          size: chunk.length,
-          duration: formatDuration(performance.now() - chunkStart)
-        })
+
+        processedCount += chunk.length
+        if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {
+          this.logDebug('File update chunk processed', {
+            size: chunk.length,
+            processed: processedCount,
+            total: filesToUpdate.length,
+            duration: formatDuration(performance.now() - chunkStart)
+          })
+        }
       },
       {
         estimatedTaskTimeMs: 6,
+        yieldIntervalMs: 10, // 每10ms让出控制权，避免阻塞
         label: 'FileProvider::processFileUpdates'
       }
     )
@@ -1418,10 +1428,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const indexStart = performance.now()
     const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
     await this.searchIndex.indexItems(items)
-    this.logDebug('Indexed files for search', {
-      count: files.length,
-      duration: formatDuration(performance.now() - indexStart)
-    })
+
+    // 只在处理大量文件时输出详细日志，减少日志噪音
+    if (files.length >= 50) {
+      this.logDebug('Indexed files for search', {
+        count: files.length,
+        duration: formatDuration(performance.now() - indexStart)
+      })
+    }
   }
 
   private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
