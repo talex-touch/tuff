@@ -96,7 +96,7 @@ export class WindowManager {
     windowAnimation.changeWindow(window)
 
     setTimeout(async () => {
-      console.log('[CoreBox] NewBox created, injecting developing tools ...')
+      console.log('[CoreBox] NewBox created, injecting development tools.')
 
       try {
         if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {

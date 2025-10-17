@@ -405,7 +405,7 @@ export class SearchEngineCore
     instance.searchIndexService = new SearchIndexService(db)
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
-      console.log('[SearchEngineCore] All modules loaded, start loading providers...')
+      console.log('[SearchEngineCore] All modules loaded, starting provider initialization...')
       instance.providersToLoad.forEach((provider) => instance.loadProvider(provider))
       instance.providersToLoad = []
     })
