@@ -86,6 +86,15 @@ export class TouchSDK {
   }
 
   /**
+   * Reloads a plugin by its name
+   * @param pluginName - The name of the plugin to reload
+   * @returns Promise that resolves when the reload operation completes
+   */
+  async reloadPlugin(pluginName: string): Promise<void> {
+    return this.channel.send('reload-plugin', { name: pluginName })
+  }
+
+  /**
    * Module Operations
    */
   async openModuleFolder(moduleName?: string): Promise<void> {

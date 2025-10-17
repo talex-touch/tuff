@@ -44,6 +44,13 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <FlatButton class="action-button" :disabled="loadingStates.reload" @click="handleReloadPlugin">
+          <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
+          <i v-else class="i-ri-loader-4-line animate-spin" />
+          <span>{{
+            loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
+          }}</span>
+        </FlatButton>
         <FlatButton class="action-button" @click="openHistoryDrawer">
           <i class="i-ri-history-line" />
           <span>{{ historyActionLabel }}</span>
@@ -125,7 +132,8 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 
 // Loading states
 const loadingStates = ref({
-  openFolder: false
+  openFolder: false,
+  reload: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
@@ -173,6 +181,19 @@ const openHistoryDrawer = (): void => {
 }
 
 // Action handlers
+async function handleReloadPlugin(): Promise<void> {
+  if (!props.plugin || loadingStates.value.reload) return
+
+  loadingStates.value.reload = true
+  try {
+    await touchSdk.reloadPlugin(props.plugin.name)
+  } catch (error) {
+    console.error('Failed to reload plugin:', error)
+  } finally {
+    loadingStates.value.reload = false
+  }
+}
+
 async function handleOpenPluginFolder(): Promise<void> {
   if (!props.plugin || loadingStates.value.openFolder) return
 
