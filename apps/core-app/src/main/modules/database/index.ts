@@ -130,35 +130,6 @@ export class DatabaseModule extends BaseModule {
     return this.db
   }
 
-  private async ensureKeywordMappingsProviderColumn(): Promise<void> {
-    if (!this.client) {
-      return
-    }
-
-    const tableExists = await this.client.execute(
-      `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'keyword_mappings' LIMIT 1`
-    )
-
-    if (!tableExists.rows.length) {
-      return
-    }
-
-    const providerExists = await this.client.execute(
-      `SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1`
-    )
-
-    if (providerExists.rows.length) {
-      return
-    }
-
-    console.log(chalk.yellow('[Database] Backfilling `provider_id` column on `keyword_mappings`...'))
-
-    await this.client.execute(
-      `ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL`
-    )
-
-    console.log(chalk.green('[Database] Added `provider_id` column on `keyword_mappings` table.'))
-  }
 }
 
 const databaseModule = new DatabaseModule()

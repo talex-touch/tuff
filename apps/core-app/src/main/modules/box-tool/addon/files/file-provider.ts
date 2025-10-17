@@ -2078,9 +2078,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const { text: searchText, typeFilters } = this.extractSearchFilters(rawText)
     searchLogger.fileSearchText(searchText, typeFilters.size)
 
-    // Log keyword analysis
-    const terms = searchText.toLowerCase().split(/[\s/]+/).filter(Boolean)
-    searchLogger.logKeywordAnalysis(searchText, terms, typeFilters.size)
+    const logTerms = searchText.toLowerCase().split(/[\s/]+/).filter(Boolean)
+    searchLogger.logKeywordAnalysis(searchText, logTerms, typeFilters.size)
 
     if (!searchText && typeFilters.size === 0) {
       return TuffFactory.createSearchResult(query).build()

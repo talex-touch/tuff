@@ -6,16 +6,28 @@ export function setupPluginChannel() {
 
   const logouts = [
     touchChannel.regChannel('plugin-status-updated', ({ data, reply }: any) => {
-      pluginStore.updatePluginStatus(data.plugin, data.status)
-      reply(1)
+      try {
+        console.log('[PluginAdapter] Received plugin status update:', data)
+        pluginStore.updatePluginStatus(data.plugin, data.status)
+        reply(1)
+      } catch (error) {
+        console.error('[PluginAdapter] Error handling plugin status update:', error)
+        reply(0)
+      }
     }),
     touchChannel.regChannel('plugin:reload-readme', ({ data, reply }: any) => {
       pluginStore.updatePluginReadme(data.plugin, data.readme)
       reply(1)
     }),
     touchChannel.regChannel('plugin:reload', ({ data, reply }: any) => {
-      pluginStore.reloadPlugin(data.plugin)
-      reply(1)
+      try {
+        console.log('[PluginAdapter] Received plugin reload event:', data)
+        pluginStore.reloadPlugin(data.plugin)
+        reply(1)
+      } catch (error) {
+        console.error('[PluginAdapter] Error handling plugin reload:', error)
+        reply(0)
+      }
     }),
     touchChannel.regChannel('plugin:add', ({ data }: any) => {
       const { plugin } = data
