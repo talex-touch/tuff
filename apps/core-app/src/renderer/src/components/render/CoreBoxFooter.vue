@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { TuffItem } from '@talex-touch/utils'
 import PluginIcon from '@renderer/components/plugin/PluginIcon.vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
-import { useDebounce } from '@vueuse/core';
+import { useDebounce } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { resolveSourceMeta } from './sourceMeta'
 
@@ -70,15 +70,16 @@ const keyHints = computed(() => {
       <PluginIcon :icon="displayIcon" :alt="title" class="FooterIcon" />
       <div class="FooterText">
         <span class="FooterTitle" :title="title">{{ title }}</span>
-        <span
-          v-if="subtitleMeta"
-          class="FooterSubtitle"
-          :title="subtitleMeta.label"
-        >
+        <span v-if="subtitleMeta" class="FooterSubtitle" :title="subtitleMeta.label">
           <i :class="subtitleMeta.icon" class="FooterSubtitleIcon" />
           <span>{{ subtitleMeta.label }}</span>
         </span>
       </div>
+      <template v-if="item?.kind === 'feature'">
+        <span v-if="item.meta?.interaction" class="InteractionType">
+          {{ item.meta.interaction.type }}
+        </span>
+      </template>
     </div>
     <div class="FooterHints">
       <div v-for="hint in keyHints" :key="hint.label" class="FooterHint">
@@ -132,6 +133,16 @@ const keyHints = computed(() => {
 .FooterSubtitleIcon {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.InteractionType {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
 }
 
 .FooterHints {
