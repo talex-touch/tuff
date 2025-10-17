@@ -213,7 +213,9 @@
     "actions": {
       "history": "History",
       "openFolder": "Open Folder",
-      "opening": "Opening..."
+      "opening": "Opening...",
+      "reload": "Reload",
+      "reloading": "Reloading..."
     },
     "badges": {
       "dev": "Dev",

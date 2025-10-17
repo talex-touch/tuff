@@ -215,7 +215,9 @@
     "actions": {
       "history": "历史记录",
       "openFolder": "打开文件夹",
-      "opening": "打开中..."
+      "opening": "打开中...",
+      "reload": "重新加载",
+      "reloading": "重新加载中..."
     },
     "badges": {
       "dev": "开发模式",

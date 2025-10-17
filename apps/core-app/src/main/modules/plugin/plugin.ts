@@ -217,10 +217,7 @@ export class TouchPlugin implements ITouchPlugin {
     this._searchTimestamp = Date.now()
 
     const coreBoxWindow = getCoreBoxWindow()
-    console.debug(
-      `[Plugin ${this.name}] CoreBox window available for clearing:`,
-      !!coreBoxWindow
-    )
+    console.debug(`[Plugin ${this.name}] CoreBox window available for clearing:`, !!coreBoxWindow)
 
     if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
       const channel = genTouchChannel()
@@ -230,18 +227,12 @@ export class TouchPlugin implements ITouchPlugin {
         timestamp: this._searchTimestamp
       }
 
-      console.debug(
-        `[Plugin ${this.name}] Sending core-box:clear-items with payload:`,
-        payload
-      )
+      console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload)
 
       channel
         .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
         .catch((error) => {
-          console.error(
-            `[Plugin ${this.name}] Failed to clear search results from CoreBox:`,
-            error
-          )
+          console.error(`[Plugin ${this.name}] Failed to clear search results from CoreBox:`, error)
         })
 
       console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
@@ -545,6 +536,96 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    const featuresManager = {
+      /**
+       * Dynamically adds a feature to the plugin
+       * @param feature - The feature definition to add
+       * @returns True if the feature was successfully added, false otherwise
+       */
+      addFeature: (feature: IPluginFeature): boolean => {
+        return this.addFeature(feature)
+      },
+
+      /**
+       * Removes a feature from the plugin
+       * @param featureId - The ID of the feature to remove
+       * @returns True if the feature was successfully removed, false otherwise
+       */
+      removeFeature: (featureId: string): boolean => {
+        return this.delFeature(featureId)
+      },
+
+      /**
+       * Gets all features of the plugin
+       * @returns Array of all plugin features
+       */
+      getFeatures: (): IPluginFeature[] => {
+        return this.getFeatures()
+      },
+
+      /**
+       * Gets a specific feature by its ID
+       * @param featureId - The ID of the feature to retrieve
+       * @returns The feature if found, null otherwise
+       */
+      getFeature: (featureId: string): IPluginFeature | null => {
+        return this.getFeature(featureId)
+      }
+    }
+
+    const pluginInfo = {
+      /**
+       * Gets comprehensive information about the current plugin
+       * @returns Object containing all plugin information including name, version, description, status, features, and issues
+       */
+      getInfo: () => {
+        return {
+          name: this.name,
+          version: this.version,
+          desc: this.desc,
+          readme: this.readme,
+          dev: this.dev,
+          status: this.status,
+          platforms: this.platforms,
+          pluginPath: this.pluginPath,
+          features: this.features.map((f) => f.toJSONObject()),
+          issues: this.issues
+        }
+      },
+
+      /**
+       * Gets the file system path of the plugin
+       * @returns The absolute path to the plugin directory
+       */
+      getPath: () => {
+        return this.pluginPath
+      },
+
+      /**
+       * Gets the current status of the plugin
+       * @returns The current plugin status (enabled, disabled, loading, etc.)
+       */
+      getStatus: () => {
+        return this.status
+      },
+
+      /**
+       * Gets the development configuration information
+       * @returns Development settings including dev mode status and source address
+       */
+      getDevInfo: () => {
+        return this.dev
+      },
+
+      /**
+       * Gets the platform support information for the plugin
+       * @returns Object containing platform compatibility information
+       */
+      getPlatforms: () => {
+        return this.platforms
+      }
+    }
+
     return {
       dialog,
       logger: this.logger,
@@ -558,6 +639,8 @@ export class TouchPlugin implements ITouchPlugin {
       pushItems: searchManager.pushItems,
       getItems: searchManager.getItems,
       search: searchManager,
+      features: featuresManager,
+      plugin: pluginInfo,
       $box: {
         hide() {
           CoreBoxManager.getInstance().trigger(false)
