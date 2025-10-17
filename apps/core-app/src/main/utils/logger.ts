@@ -103,6 +103,7 @@ function ensureString(message: unknown): string {
   return String(message)
 }
 
+
 type TimerLevel = Exclude<LogLevel, 'error'>
 
 export interface LoggerTimer {

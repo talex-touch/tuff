@@ -56,7 +56,7 @@ export class TuffDashboardModule extends BaseModule {
       }
     })
 
-    console.log('[TuffDashboard] Channel handler registered.')
+    console.log('[TuffDashboard] Channel handler registered successfully.')
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {

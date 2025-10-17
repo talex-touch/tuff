@@ -350,7 +350,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
         if (existingFolderForName && existingFolderForName !== pluginName) {
           logError(
-            '检测到重复的插件名称，加载已被阻止。',
+            'Duplicate plugin name detected, loading blocked.',
             pluginTag(pluginName),
             '| manifestName:',
             normalizedName,
@@ -359,10 +359,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           )
           touchPlugin.issues.push({
             type: 'error',
-            message: `检测到同名插件 '${normalizedName}'，已在目录 '${existingFolderForName}' 中加载。请移除重复的插件或修改名称后重试。`,
+            message: `Duplicate plugin '${normalizedName}' detected, already loaded in directory '${existingFolderForName}'. Please remove the duplicate plugin or modify the name and try again.`,
             source: 'manifest.json',
             code: 'DUPLICATE_PLUGIN_NAME',
-            suggestion: `确保插件名称在所有插件中唯一。目前目录 '${existingFolderForName}' 已占用该名称。`,
+            suggestion: `Ensure plugin names are unique across all plugins. Directory '${existingFolderForName}' currently uses this name.`,
             timestamp: Date.now()
           })
           touchPlugin.status = PluginStatus.LOAD_FAILED

@@ -39,7 +39,7 @@ export class LocalPluginProvider {
 
   startWatching(handlers: LocalWatcherHandlers): void {
     if (this.watcher) {
-      this.log.warn('重复启动本地插件目录监听')
+      this.log.warn('Duplicate local plugin directory watcher startup')
       return
     }
 
@@ -67,7 +67,7 @@ export class LocalPluginProvider {
       .on('error', (error) => handlers.onError?.(error as Error))
       .on('ready', () => void handlers.onReady?.())
 
-    this.log.info('已开始监听本地插件目录', {
+    this.log.info('Started watching local plugin directory', {
       meta: { root: this.pluginRoot }
     })
   }
@@ -76,21 +76,21 @@ export class LocalPluginProvider {
     if (!this.watcher) return
     await fileWatchService.close(this.watcher)
     this.watcher = null
-    this.log.info('已停止监听本地插件目录', {
+    this.log.info('Stopped watching local plugin directory', {
       meta: { root: this.pluginRoot }
     })
   }
 
   trackFile(filePath: string): void {
     this.watcher?.add(filePath)
-    this.log.debug('新增文件监听', {
+    this.log.debug('Added file watch', {
       meta: { filePath }
     })
   }
 
   untrackFile(filePath: string): void {
     this.watcher?.unwatch(filePath)
-    this.log.debug('取消文件监听', {
+    this.log.debug('Removed file watch', {
       meta: { filePath }
     })
   }
