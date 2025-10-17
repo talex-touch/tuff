@@ -12,6 +12,7 @@ import { performance } from 'perf_hooks'
 import chalk from 'chalk'
 
 import { debounce } from 'lodash'
+import { searchLogger } from './search-logger'
 
 /**
  * @interface ExtendedSourceStat
@@ -93,6 +94,8 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
     params: TuffQuery,
     onUpdate: TuffAggregatorCallback
   ): IGatherController {
+    searchLogger.logSearchPhase('Gatherer Setup', `Initializing ${providers.length} providers`)
+    searchLogger.gathererStart(providers.length, params.text)
     console.debug(`[SearchGatherer] Starting search with ${providers.length} providers.`)
 
     /**
@@ -153,12 +156,14 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
        * @param result - The search result.
        */
       const onNewResult = (result: TuffSearchResult): void => {
+        searchLogger.resultReceived(result.items.length)
         allResults.push(result)
         pushBuffer.push(result)
         completedCount++
 
         if (!hasFlushedFirstBatch) {
           hasFlushedFirstBatch = true
+          searchLogger.firstBatch(firstBatchGraceMs)
           // For the first result, wait a short grace period before flushing.
           coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
         } else {
@@ -169,6 +174,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
 
         // If all tasks are done, perform a final flush immediately.
         if (completedCount === providers.length) {
+          searchLogger.allProvidersComplete()
           debouncedFlush.flush() // Use lodash debounce's flush method
           flushBuffer(true)
         }
@@ -200,15 +206,19 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
           return
         })
 
+        searchLogger.logSearchPhase('Worker Pool', `Starting ${concurrency} workers`)
+
         const workers = Array(concurrency)
           .fill(0)
           .map(async (_, i) => {
             // Stagger the start of each worker to avoid resource contention.
             await new Promise((resolve) => setTimeout(resolve, i * 10))
+            searchLogger.workerStart(i)
             while (taskQueue.length > 0) {
               const provider = taskQueue.shift()
               if (!provider) continue
 
+              searchLogger.workerProcessing(i, provider.id)
               const startTime = performance.now()
               let status: 'success' | 'timeout' | 'error' = 'success'
               let resultCount = 0
@@ -216,15 +226,20 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
               try {
                 if (signal.aborted) return
 
+                searchLogger.providerCall(provider.id)
                 const searchPromise = provider.onSearch(params, signal)
                 const searchResult = await withTimeout(searchPromise, taskTimeoutMs)
 
                 resultCount = searchResult.items.length
+                searchLogger.providerResult(provider.id, resultCount)
                 onNewResult(searchResult)
               } catch (error) {
                 status = 'error'
                 if (error instanceof Error && error.name === 'TimeoutError') {
                   status = 'timeout'
+                  searchLogger.providerTimeout(provider.id, taskTimeoutMs)
+                } else {
+                  searchLogger.providerError(provider.id, error instanceof Error ? error.message : 'Unknown error')
                 }
                 console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
               } finally {
@@ -242,6 +257,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
                 }
               }
             }
+            searchLogger.workerComplete(i)
           })
         await Promise.all(workers)
       }

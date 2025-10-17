@@ -26,6 +26,7 @@ import { fileProvider } from '../addon/files/file-provider'
 import { ProviderContext } from './types'
 import { gatherAggregator } from './search-gather'
 import { SearchIndexService } from './search-index-service'
+import { searchLogger } from './search-logger'
 
 /**
  * Generates a unique key for an activation request.
@@ -259,10 +260,10 @@ export class SearchEngineCore
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
+    const sessionId = crypto.randomUUID()
+    searchLogger.searchSessionStart(query.text, sessionId)
     console.debug('[SearchEngineCore] search', query)
     this.currentGatherController?.abort()
-
-    const sessionId = crypto.randomUUID()
 
     const startTime = Date.now()
     this._recordSearchUsage(sessionId, query)
@@ -270,6 +271,7 @@ export class SearchEngineCore
     return new Promise((resolve) => {
       let isFirstUpdate = true
       const providersToSearch = this.getActiveProviders()
+      searchLogger.searchProviders(providersToSearch.map(p => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         const coreBoxWindow = windowManager.current?.window
@@ -281,9 +283,14 @@ export class SearchEngineCore
         }
       }
 
+      searchLogger.logSearchPhase('Initialization', 'Setting up search aggregator')
+
       const gatherController = gatherAggregator(providersToSearch, query, (update) => {
+        searchLogger.searchUpdate(update.isDone, update.newResults.length)
         if (update.isDone) {
           // Handle final state and notify frontend
+          const totalResults = update.newResults.reduce((acc, res) => acc + res.items.length, 0)
+          searchLogger.searchSessionEnd(sessionId, totalResults)
           this.currentGatherController = null
           this._updateActivationState(update.newResults)
           const coreBoxWindow = windowManager.current?.window

@@ -11,6 +11,7 @@ import {
   type TimingOptions,
   type TimingLogLevel
 } from '@talex-touch/utils'
+import { searchLogger } from '../../search-engine/search-logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { app, shell } from 'electron'
 import path from 'path'
@@ -2064,14 +2065,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { summary, entries }
   }
 
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+    searchLogger.logProviderSearch('file-provider', query.text, 'File System')
+    searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
+      searchLogger.fileSearchNotInitialized()
       return TuffFactory.createSearchResult(query).build()
     }
 
     const searchStart = performance.now()
     const rawText = query.text.trim()
     const { text: searchText, typeFilters } = this.extractSearchFilters(rawText)
+    searchLogger.fileSearchText(searchText, typeFilters.size)
+
+    // Log keyword analysis
+    const terms = searchText.toLowerCase().split(/[\s/]+/).filter(Boolean)
+    searchLogger.logKeywordAnalysis(searchText, terms, typeFilters.size)
 
     if (!searchText && typeFilters.size === 0) {
       return TuffFactory.createSearchResult(query).build()
@@ -2088,6 +2097,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     let preciseMatchPaths: Set<string> | null = null
     if (terms.length > 0) {
+      searchLogger.filePreciseSearch(terms)
       const preciseStart = performance.now()
       const preciseSearchLimit = 200
       const preciseQueries = terms.map((term) =>
@@ -2097,8 +2107,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
           .limit(preciseSearchLimit)
       )
+      searchLogger.filePreciseQueries(preciseQueries.length)
       const preciseResults = await Promise.all(preciseQueries)
       const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
+      searchLogger.filePreciseResults(termMatches.map((s) => s.size))
 
       if (termMatches.length > 0) {
         preciseMatchPaths = termMatches.reduce((accumulator, current) => {
@@ -2136,8 +2148,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
+    searchLogger.fileFtsQuery(ftsQuery || '')
     const ftsStart = performance.now()
     const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
+    searchLogger.fileFtsResults(ftsMatches.length, performance.now() - ftsStart)
     if (ftsQuery) {
       this.logDebug('FTS search completed', {
         query: ftsQuery,
@@ -2161,6 +2175,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const candidatePaths = Array.from(candidateIds).slice(0, maxCandidateCount)
 
+    searchLogger.fileDataFetch(candidatePaths.length)
     const dataFetchStart = performance.now()
     const rows = await db
       .select({
@@ -2171,6 +2186,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
+    searchLogger.fileDataResults(rows.length, performance.now() - dataFetchStart)
     this.logDebug('Loaded candidate rows for scoring', {
       count: rows.length,
       duration: formatDuration(performance.now() - dataFetchStart)
