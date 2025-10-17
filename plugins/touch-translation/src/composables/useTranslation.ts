@@ -1,6 +1,6 @@
-import { ref, reactive, computed } from 'vue'
+import type { HistoryItem, TranslationRequest, TranslationResponse, TranslationResult } from '../types/translation'
 import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-import type { TranslationRequest, TranslationResponse, TranslationResult, HistoryItem } from '../types/translation'
+import { computed, reactive, ref } from 'vue'
 import { useTranslationProvider } from './useTranslationProvider'
 
 const MAX_HISTORY_ITEMS = 10
@@ -12,7 +12,7 @@ const currentResponse = reactive<TranslationResponse>({
   results: new Map(),
   errors: new Map(),
   isLoading: false,
-  isComplete: false
+  isComplete: false,
 })
 const history = ref<HistoryItem[]>([])
 
@@ -27,7 +27,8 @@ export function useTranslation() {
       if (saved) {
         history.value = saved
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to load translation history:', error)
       history.value = []
     }
@@ -37,21 +38,23 @@ export function useTranslation() {
   const saveHistory = () => {
     try {
       storage.setItem('history', history.value)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to save translation history:', error)
     }
   }
 
   // 添加到历史记录
   const addToHistory = (text: string, results?: TranslationResult[]) => {
-    if (!text.trim()) return
+    if (!text.trim())
+      return
 
     const existingIndex = history.value.findIndex(item => item.text === text)
     const historyItem: HistoryItem = {
       id: Date.now(),
       text: text.trim(),
       timestamp: Date.now(),
-      results
+      results,
     }
 
     if (existingIndex > -1) {
@@ -88,7 +91,7 @@ export function useTranslation() {
     text: string,
     targetLanguage = 'zh',
     sourceLanguage = 'auto',
-    providerIds?: string[]
+    providerIds?: string[],
   ): Promise<TranslationResponse> => {
     if (!text.trim()) {
       throw new Error('翻译文本不能为空')
@@ -99,7 +102,7 @@ export function useTranslation() {
       text: text.trim(),
       targetLanguage,
       sourceLanguage,
-      providers: providerIds || enabledProviders.value.map(p => p.id)
+      providers: providerIds || enabledProviders.value.map(p => p.id),
     }
 
     // 重置响应状态
@@ -126,11 +129,12 @@ export function useTranslation() {
         const result = await provider.translate({
           text: request.text,
           targetLanguage: request.targetLanguage,
-          sourceLanguage: request.sourceLanguage
+          sourceLanguage: request.sourceLanguage,
         })
         currentResponse.results.set(provider.id, result)
         return result
-      } catch (error) {
+      }
+      catch (error) {
         const err = error instanceof Error ? error : new Error('翻译失败')
         currentResponse.errors.set(provider.id, err)
         console.error(`Provider ${provider.id} failed:`, err)
@@ -140,13 +144,13 @@ export function useTranslation() {
 
     // 等待所有翻译完成
     const results = await Promise.allSettled(promises)
-    
+
     currentResponse.isLoading = false
     currentResponse.isComplete = true
 
     // 收集成功的翻译结果
     const successfulResults: TranslationResult[] = []
-    currentResponse.results.forEach(result => {
+    currentResponse.results.forEach((result) => {
       if (result) {
         successfulResults.push(result)
       }
@@ -166,8 +170,8 @@ export function useTranslation() {
       throw new Error('没有当前翻译请求可以重试')
     }
 
-    const failedProviders = providerIds || 
-      Array.from(currentResponse.errors.keys())
+    const failedProviders = providerIds
+      || Array.from(currentResponse.errors.keys())
 
     if (failedProviders.length === 0) {
       return
@@ -177,19 +181,21 @@ export function useTranslation() {
 
     const promises = failedProviders.map(async (providerId) => {
       const provider = getProvider(providerId)
-      if (!provider) return
+      if (!provider)
+        return
 
       try {
         // 清除之前的错误
         currentResponse.errors.delete(providerId)
-        
+
         const result = await provider.translate({
           text: currentRequest.value!.text,
           targetLanguage: currentRequest.value!.targetLanguage,
-          sourceLanguage: currentRequest.value!.sourceLanguage
+          sourceLanguage: currentRequest.value!.sourceLanguage,
         })
         currentResponse.results.set(providerId, result)
-      } catch (error) {
+      }
+      catch (error) {
         const err = error instanceof Error ? error : new Error('重试翻译失败')
         currentResponse.errors.set(providerId, err)
       }
@@ -234,6 +240,6 @@ export function useTranslation() {
     addToHistory,
     removeFromHistory,
     clearHistory,
-    initHistory
+    initHistory,
   }
 }
