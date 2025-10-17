@@ -250,6 +250,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       meta: {
         pluginName: plugin.name,
         featureId: feature.id,
+        interaction: feature.interaction,
         extension: {
           commands: feature.commands
         }

@@ -863,6 +863,16 @@ export interface TuffMeta {
    * @description The ID of the feature.
    */
   featureId?: string
+
+  /**
+   * For plugin feature items, this holds the interaction configuration.
+   * @description Defines how the feature should be rendered (widget, webcontent, or index).
+   */
+  interaction?: {
+    type: 'webcontent' | 'widget' | 'index'
+    path?: string
+  }
+
   /**
    * Defines the default action to be taken when the item is executed (e.g., by pressing Enter).
    * This is used to distinguish simple actions (like 'copy') from feature activations.
