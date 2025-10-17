@@ -2,6 +2,7 @@ import fse from 'fs-extra'
 import path from 'path'
 import type { FSWatcher } from 'chokidar'
 import { fileWatchService } from '../../../service/file-watch.service'
+import { providersLog } from './logger'
 
 export interface LocalWatcherHandlers {
   onFileChange(filePath: string): Promise<void> | void
@@ -13,6 +14,7 @@ export interface LocalWatcherHandlers {
 
 export class LocalPluginProvider {
   private watcher: FSWatcher | null = null
+  private readonly log = providersLog.child('LocalWatcher')
 
   constructor(private readonly pluginRoot: string) {}
 
@@ -36,7 +38,10 @@ export class LocalPluginProvider {
   }
 
   startWatching(handlers: LocalWatcherHandlers): void {
-    if (this.watcher) return
+    if (this.watcher) {
+      this.log.warn('重复启动本地插件目录监听')
+      return
+    }
 
     this.watcher = fileWatchService.watch(this.pluginRoot, {
       ignored: /(^|[/\\])\../,
@@ -61,20 +66,33 @@ export class LocalPluginProvider {
       })
       .on('error', (error) => handlers.onError?.(error as Error))
       .on('ready', () => void handlers.onReady?.())
+
+    this.log.info('已开始监听本地插件目录', {
+      meta: { root: this.pluginRoot }
+    })
   }
 
   async stopWatching(): Promise<void> {
     if (!this.watcher) return
     await fileWatchService.close(this.watcher)
     this.watcher = null
+    this.log.info('已停止监听本地插件目录', {
+      meta: { root: this.pluginRoot }
+    })
   }
 
   trackFile(filePath: string): void {
     this.watcher?.add(filePath)
+    this.log.debug('新增文件监听', {
+      meta: { filePath }
+    })
   }
 
   untrackFile(filePath: string): void {
     this.watcher?.unwatch(filePath)
+    this.log.debug('取消文件监听', {
+      meta: { filePath }
+    })
   }
 
   getWatcher(): FSWatcher | null {

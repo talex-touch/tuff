@@ -4,36 +4,12 @@ import fse from 'fs-extra'
 import { dialog, BrowserWindow } from 'electron'
 import type { IManifest } from '@talex-touch/utils/plugin'
 import {
-  pluginProviderRegistry,
   type PluginInstallRequest,
   type PluginInstallResult,
-  type PluginInstallSummary,
-  PluginProviderType
+  type PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
 import { type RiskPromptHandler, type RiskPromptInput } from '@talex-touch/utils/plugin/risk'
-import {
-  FilePluginProvider,
-  GithubPluginProvider,
-  NpmPluginProvider,
-  TpexPluginProvider
-} from './providers'
-
-const registeredProviders = new Set<PluginProviderType>()
-
-function ensureProvidersRegistered(): void {
-  const providers = [
-    new GithubPluginProvider(),
-    new NpmPluginProvider(),
-    new TpexPluginProvider(),
-    new FilePluginProvider()
-  ]
-
-  for (const provider of providers) {
-    if (registeredProviders.has(provider.type)) continue
-    pluginProviderRegistry.register(provider)
-    registeredProviders.add(provider.type)
-  }
-}
+import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 
 function createDialogRiskPrompt(): RiskPromptHandler {
   return async (input: RiskPromptInput) => {
@@ -96,7 +72,7 @@ export class PluginInstaller {
   private readonly riskPrompt: RiskPromptHandler
 
   constructor(riskPrompt?: RiskPromptHandler) {
-    ensureProvidersRegistered()
+    ensureDefaultProvidersRegistered()
     this.riskPrompt = riskPrompt ?? createDialogRiskPrompt()
   }
 
@@ -117,7 +93,7 @@ export class PluginInstaller {
     request: PluginInstallRequest,
     options?: PluginInstallOptions
   ): Promise<PreparedPluginInstall> {
-    const providerResult = await pluginProviderRegistry.install(request, {
+    const providerResult = await installFromRegistry(request, {
       riskPrompt: this.riskPrompt,
       downloadOptions: options?.onDownloadProgress
         ? {

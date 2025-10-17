@@ -7,6 +7,7 @@ import {
   type PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
 import { ensureRiskAccepted, downloadToTempFile } from './utils'
+import { createProviderLogger } from './logger'
 
 const OFFICIAL_GITHUB_OWNERS = ['talex-touch']
 const DEFAULT_BRANCH = 'main'
@@ -126,6 +127,7 @@ function resolveDownloadUrl(parsed: ParsedGithubSource): { url: string; extensio
 
 export class GithubPluginProvider implements PluginProvider {
   readonly type = PluginProviderType.GITHUB
+  private readonly log = createProviderLogger(this.type)
 
   canHandle(request: PluginInstallRequest): boolean {
     return Boolean(parseGithubSource(request.source))
@@ -135,37 +137,67 @@ export class GithubPluginProvider implements PluginProvider {
     request: PluginInstallRequest,
     context?: PluginProviderContext
   ): Promise<PluginInstallResult> {
-    const parsed = parseGithubSource(request.source)
-    if (!parsed) {
-      throw new Error('无法解析的 GitHub 插件来源')
-    }
+    this.log.info('准备从 GitHub 安装插件', {
+      meta: { source: request.source }
+    })
 
-    const isOfficial = OFFICIAL_GITHUB_OWNERS.includes(parsed.owner)
-    if (!isOfficial) {
-      await ensureRiskAccepted(
-        this.type,
-        request,
-        context,
-        'needs_confirmation',
-        '即将下载来自自定义 GitHub 仓库的插件，存在潜在风险。',
-        { owner: parsed.owner, repo: parsed.repo }
-      )
-    }
-
-    const { url, extension } = resolveDownloadUrl(parsed)
-    const filePath = await downloadToTempFile(url, extension, context?.downloadOptions)
-
-    return {
-      provider: this.type,
-      official: isOfficial,
-      filePath,
-      metadata: {
-        owner: parsed.owner,
-        repo: parsed.repo,
-        ref: parsed.ref,
-        assetPath: parsed.assetPath,
-        downloadUrl: url
+    try {
+      const parsed = parseGithubSource(request.source)
+      if (!parsed) {
+        this.log.error('GitHub 来源解析失败', {
+          meta: { source: request.source }
+        })
+        throw new Error('无法解析的 GitHub 插件来源')
       }
+
+      const isOfficial = OFFICIAL_GITHUB_OWNERS.includes(parsed.owner)
+      if (!isOfficial) {
+        this.log.warn('检测到非官方 GitHub 仓库，执行风险确认', {
+          meta: { owner: parsed.owner, repo: parsed.repo }
+        })
+        await ensureRiskAccepted(
+          this.type,
+          request,
+          context,
+          'needs_confirmation',
+          '即将下载来自自定义 GitHub 仓库的插件，存在潜在风险。',
+          { owner: parsed.owner, repo: parsed.repo }
+        )
+      }
+
+      const { url, extension } = resolveDownloadUrl(parsed)
+      this.log.debug('解析 GitHub 下载地址', {
+        meta: { url, extension }
+      })
+      const filePath = await downloadToTempFile(url, extension, context?.downloadOptions)
+
+      this.log.success('GitHub 插件下载完成', {
+        meta: {
+          filePath,
+          owner: parsed.owner,
+          repo: parsed.repo,
+          ref: parsed.ref ?? 'default'
+        }
+      })
+
+      return {
+        provider: this.type,
+        official: isOfficial,
+        filePath,
+        metadata: {
+          owner: parsed.owner,
+          repo: parsed.repo,
+          ref: parsed.ref,
+          assetPath: parsed.assetPath,
+          downloadUrl: url
+        }
+      }
+    } catch (error) {
+      this.log.error('GitHub 插件安装流程失败', {
+        meta: { source: request.source },
+        error
+      })
+      throw error
     }
   }
 }

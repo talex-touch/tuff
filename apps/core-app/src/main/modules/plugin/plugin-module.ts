@@ -109,6 +109,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const reloadingPlugins: Set<string> = new Set()
   const loadingPlugins: Set<string> = new Set()
   const enabledPlugins: Set<string> = new Set()
+  const pluginNameIndex: Map<string, string> = new Map()
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
 
@@ -210,9 +211,14 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   }
 
   const getPluginByName = (name: string): ITouchPlugin | undefined => {
-    const pluginByFolder = plugins.get(name)
-    if (pluginByFolder) {
+    const folderKey = pluginNameIndex.get(name) ?? name
+    const pluginByFolder = plugins.get(folderKey)
+    if (pluginByFolder && pluginByFolder.name === name) {
       return pluginByFolder
+    }
+
+    if (plugins.has(name)) {
+      return plugins.get(name)
     }
 
     for (const plugin of plugins.values()) {
@@ -338,6 +344,32 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         const loader = createPluginLoader(pluginName, currentPluginPath)
         const touchPlugin = await loader.load()
 
+        const manifestName = touchPlugin.name || pluginName
+        const normalizedName = manifestName.trim()
+        const existingFolderForName = pluginNameIndex.get(normalizedName)
+
+        if (existingFolderForName && existingFolderForName !== pluginName) {
+          logError(
+            '检测到重复的插件名称，加载已被阻止。',
+            pluginTag(pluginName),
+            '| manifestName:',
+            normalizedName,
+            '| existingFolder:',
+            existingFolderForName
+          )
+          touchPlugin.issues.push({
+            type: 'error',
+            message: `检测到同名插件 '${normalizedName}'，已在目录 '${existingFolderForName}' 中加载。请移除重复的插件或修改名称后重试。`,
+            source: 'manifest.json',
+            code: 'DUPLICATE_PLUGIN_NAME',
+            suggestion: `确保插件名称在所有插件中唯一。目前目录 '${existingFolderForName}' 已占用该名称。`,
+            timestamp: Date.now()
+          })
+          touchPlugin.status = PluginStatus.LOAD_FAILED
+        } else {
+          pluginNameIndex.set(normalizedName, pluginName)
+        }
+
         // After all loading attempts, set final status
         if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
           touchPlugin.status = PluginStatus.LOAD_FAILED
@@ -409,6 +441,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
     // Remove from dev watcher
     devWatcherInstance.removePlugin(pluginName)
+
+    if (pluginNameIndex.get(plugin.name) === pluginName) {
+      pluginNameIndex.delete(plugin.name)
+    }
 
     plugin.disable()
     plugin.logger.getManager().destroy()
@@ -541,25 +577,33 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
           const pluginName = path.basename(path.dirname(_path))
 
+          if (loadingPlugins.has(pluginName)) {
+            logDebug(
+              'File change received while plugin is still loading, ignoring.',
+              pluginTag(pluginName),
+              'file:',
+              baseName
+            )
+            return
+          }
+
           if (!hasPlugin(pluginName)) {
-            if (loadingPlugins.has(pluginName)) {
-              logDebug(
-                'File change received but plugin is still loading, skip duplicate load.',
-                pluginTag(pluginName)
-              )
-              return
-            }
             logDebug('File changed for unknown plugin, triggering load.', pluginTag(pluginName))
             await loadPlugin(pluginName)
             return
           }
           let plugin = plugins.get(pluginName) as TouchPlugin
 
-          if (plugin.dev.enable && plugin.dev.source) {
-            logDebug(
-              'Ignore disk change because plugin is in dev source mode.',
+          if (plugin.status === PluginStatus.LOAD_FAILED) {
+            logWarn(
+              'File change detected but plugin previously failed to load; skipping auto reload.',
               pluginTag(pluginName)
             )
+            return
+          }
+
+          if (plugin.dev.enable) {
+            logDebug('Ignore disk change because plugin is running in dev mode.', pluginTag(pluginName))
             return
           }
 
