@@ -63,10 +63,15 @@ import {
 } from '../../../../core/eventbus/touch-event'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { fileProviderLog, Primitive, formatDuration } from '../../../../utils/logger'
+import {
+  BackgroundTaskService,
+  AppUsageActivityTracker
+} from '../../../../service/background-task-service'
+import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 
 const MAX_CONTENT_LENGTH = 200_000
 
-type FileIndexStatus = typeof fileIndexProgress.$inferSelect['status']
+type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 
 type FileTimingMeta = TimingMeta & {
   stage?: string
@@ -291,6 +296,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     number,
     { status: FileIndexStatus; updatedAt: number | null; lastError: string | null }
   >()
+  private backgroundTaskService: BackgroundTaskService | null = null
+  private activityTracker: AppUsageActivityTracker | null = null
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -386,6 +393,53 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private clearContentFailure(fileId: number): void {
     this.failedContentCache.delete(fileId)
+  }
+
+  private initializeBackgroundTaskService(): void {
+    if (!this.dbUtils) {
+      this.logWarn('Database utils not available, skipping background task service initialization')
+      return
+    }
+
+    this.activityTracker = AppUsageActivityTracker.getInstance()
+
+    this.backgroundTaskService = BackgroundTaskService.getInstance(this.activityTracker, {
+      idleThresholdMs: 60 * 60 * 1000,
+      checkIntervalMs: 5 * 60 * 1000,
+      maxConcurrentTasks: 1,
+      taskTimeoutMs: 30 * 60 * 1000
+    })
+
+    const cleanupTask = createFailedFilesCleanupTask(this.dbUtils.getDb(), {
+      maxRetryAge: 24 * 60 * 60 * 1000,
+      batchSize: 100,
+      maxRetries: 3
+    })
+
+    this.backgroundTaskService.registerTask(cleanupTask)
+
+    this.backgroundTaskService.on('taskCompleted', (data) => {
+      this.logInfo(`Background task completed: ${data.task.name}`, {
+        duration: formatDuration(data.duration)
+      })
+    })
+
+    this.backgroundTaskService.on('taskFailed', (data) => {
+      this.logError(`Background task failed: ${data.task.name}`, data.error)
+    })
+
+    this.backgroundTaskService.start()
+
+    this.logInfo('Background task service initialized')
+  }
+
+  /**
+   * Record user activity for background task scheduling
+   */
+  recordUserActivity(): void {
+    if (this.backgroundTaskService) {
+      this.backgroundTaskService.recordActivity()
+    }
   }
 
   private async shouldSkipContentDueToFailure(
@@ -523,6 +577,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
+
+    this.initializeBackgroundTaskService()
+
     if (!this.isInitializing) {
       this.logInfo('onLoad: initializing provider state...')
       this.isInitializing = this._initialize()

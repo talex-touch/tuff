@@ -25,7 +25,25 @@ export default defineConfig({
       externalizeDepsPlugin({
         exclude: ['@talex-touch/utils', 'pinyin-match']
       })
-    ]
+    ],
+    build: {
+      rollupOptions: {
+        input: {
+          index: 'src/main/index.ts',
+          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts'
+        },
+        output: {
+          entryFileNames: (chunkInfo) => {
+            if (chunkInfo.name === 'ocr-worker') {
+              return 'ocr-worker.js'
+            } else if (chunkInfo.name === 'index') {
+              return 'index.js'
+            }
+            return '[name]-[hash].js'
+          }
+        }
+      }
+    }
   },
   preload: {
     plugins: [
