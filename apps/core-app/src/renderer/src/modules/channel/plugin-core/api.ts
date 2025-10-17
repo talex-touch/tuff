@@ -62,7 +62,15 @@ class PluginModule {
   }
 
   async reloadPlugin(name: string): Promise<any> {
-    return touchChannel.send('reload-plugin', { name })
+    try {
+      console.log(`[PluginModule] Attempting to reload plugin: ${name}`)
+      const result = await touchChannel.send('reload-plugin', { name })
+      console.log(`[PluginModule] Plugin reload result for ${name}:`, result)
+      return result
+    } catch (error) {
+      console.error(`[PluginModule] Failed to reload plugin ${name}:`, error)
+      throw error
+    }
   }
 
   setPluginWebviewInit(name: string): any {

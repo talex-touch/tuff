@@ -82,7 +82,14 @@ function refresh(): void {
     el.innerHTML = t('plugin.status.loadFailed')
 
     func.value = async () => {
-      await pluginManager.reloadPlugin(props.plugin.name)
+      try {
+        console.log(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
+        await pluginManager.reloadPlugin(props.plugin.name)
+        console.log(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
+      } catch (error) {
+        console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
+        el.innerHTML = `${t('plugin.status.loadFailed')}`
+      }
     }
   }
 }

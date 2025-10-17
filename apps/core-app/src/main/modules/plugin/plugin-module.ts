@@ -254,7 +254,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       const _enabled =
         plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
-      await plugin.disable()
+      if (plugin.status !== PluginStatus.LOAD_FAILED) {
+        await plugin.disable()
+      }
+
       await unloadPlugin(pluginName)
       await loadPlugin(pluginName)
 
@@ -446,10 +449,24 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       pluginNameIndex.delete(plugin.name)
     }
 
-    plugin.disable()
-    plugin.logger.getManager().destroy()
+    try {
+      if (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE) {
+        plugin.disable().catch((error) => {
+          logWarn('Error disabling plugin during unload:', pluginTag(pluginName), error)
+        })
+      }
+    } catch (error) {
+      logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
+    }
+
+    try {
+      plugin.logger.getManager().destroy()
+    } catch (error) {
+      logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
+    }
 
     plugins.delete(pluginName)
+    enabledPlugins.delete(pluginName)
 
     logWarn('Plugin unloaded', pluginTag(pluginName))
 
