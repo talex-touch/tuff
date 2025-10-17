@@ -415,5 +415,17 @@
       "fileTooLarge": "文件过大 ({size})，无法预览",
       "loadFailed": "文件加载失败"
     }
+  },
+  "fileInfo": {
+    "title": "信息",
+    "path": "路径",
+    "source": "来源",
+    "contentType": "内容类型",
+    "characters": "字符数",
+    "words": "单词数",
+    "fileSize": "文件大小",
+    "bytes": "字节",
+    "createdAt": "创建时间",
+    "modifiedAt": "修改时间"
   }
 }

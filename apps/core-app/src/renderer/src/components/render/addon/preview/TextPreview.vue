@@ -75,9 +75,6 @@ onMounted(async () => {
     <div v-else-if="error" class="error">
       <div class="error-icon">⚠️</div>
       <div class="error-message">{{ error }}</div>
-      <div v-if="!canPreview && item.meta?.file?.size" class="file-size-info">
-        {{ t('textPreview.fileSize') }}: {{ fileSizeDescription }}
-      </div>
     </div>
     <pre v-else>{{ textContent }}</pre>
   </div>

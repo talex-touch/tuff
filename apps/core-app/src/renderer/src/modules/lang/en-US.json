@@ -413,5 +413,17 @@
       "fileTooLarge": "File too large ({size}), cannot preview",
       "loadFailed": "Failed to load file"
     }
+  },
+  "fileInfo": {
+    "title": "Information",
+    "path": "Path",
+    "source": "Source",
+    "contentType": "Content type",
+    "characters": "Characters",
+    "words": "Words",
+    "fileSize": "File Size",
+    "bytes": "bytes",
+    "createdAt": "Created At",
+    "modifiedAt": "Modified At"
   }
 }
