@@ -336,11 +336,15 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.ENABLED
     this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
+    this.pluginLifecycle?.onInit?.()
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
       ...this.toJSONObject(),
       plugin: this.name
     })
 
+    console.log(
+      '[Plugin] Plugin ' + this.name + ' with ' + this.features.length + ' features is enabled.'
+    )
     console.log('[Plugin] Plugin ' + this.name + ' is enabled.')
 
     return true
@@ -570,6 +574,39 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getFeature: (featureId: string): IPluginFeature | null => {
         return this.getFeature(featureId)
+      },
+
+      /**
+       * Sets the priority of a feature
+       * @param featureId - The ID of the feature to update
+       * @param priority - The new priority value (higher numbers = higher priority)
+       * @returns True if the feature was found and updated, false otherwise
+       */
+      setPriority: (featureId: string, priority: number): boolean => {
+        const feature = this.features.find((f) => f.id === featureId)
+        if (feature) {
+          feature.priority = priority
+          return true
+        }
+        return false
+      },
+
+      /**
+       * Gets the priority of a feature
+       * @param featureId - The ID of the feature to query
+       * @returns The priority value if found, null otherwise
+       */
+      getPriority: (featureId: string): number | null => {
+        const feature = this.features.find((f) => f.id === featureId)
+        return feature ? feature.priority : null
+      },
+
+      /**
+       * Sorts features by priority (highest first)
+       * @returns Array of features sorted by priority
+       */
+      getFeaturesByPriority: (): IPluginFeature[] => {
+        return [...this.features].sort((a, b) => b.priority - a.priority)
       }
     }
 
