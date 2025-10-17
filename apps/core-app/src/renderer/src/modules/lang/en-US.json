@@ -403,5 +403,15 @@
     "application": "Application",
     "appSettings": "App Settings",
     "storagable": "Storagable"
+  },
+  "textPreview": {
+    "loading": "Loading...",
+    "fileSize": "File Size",
+    "error": {
+      "noFile": "Unable to get file information",
+      "emptyFile": "File is empty, cannot preview",
+      "fileTooLarge": "File too large ({size}), cannot preview",
+      "loadFailed": "Failed to load file"
+    }
   }
 }
