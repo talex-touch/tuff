@@ -44,6 +44,10 @@ import type { FileTypeTag } from './constants'
 import { ScannedFileInfo } from './types'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
 import {
+  type FileScanOptions,
+  createScanOptions
+} from '@talex-touch/utils/common/file-scan-utils'
+import {
   fileParserRegistry,
   FileParserProgress,
   FileParserResult
