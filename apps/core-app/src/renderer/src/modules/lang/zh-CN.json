@@ -405,5 +405,15 @@
     "application": "应用",
     "appSettings": "应用设置",
     "storagable": "存储"
+  },
+  "textPreview": {
+    "loading": "加载中...",
+    "fileSize": "文件大小",
+    "error": {
+      "noFile": "无法获取文件信息",
+      "emptyFile": "文件为空，无法预览",
+      "fileTooLarge": "文件过大 ({size})，无法预览",
+      "loadFailed": "文件加载失败"
+    }
   }
 }
