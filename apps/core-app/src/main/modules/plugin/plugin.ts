@@ -738,4 +738,12 @@ export class TouchPlugin implements ITouchPlugin {
       js: `${getJs([this.name, JSON.stringify(_path)])}`
     }
   }
+
+  /**
+   * Get the feature life cycle object for the plugin
+   * @returns The feature life cycle object for the plugin
+   */
+  getFeatureLifeCycle(): IFeatureLifeCycle | null {
+    return this.pluginLifecycle
+  }
 }

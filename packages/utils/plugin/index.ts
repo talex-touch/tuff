@@ -124,6 +124,13 @@ export interface IFeatureLifeCycle {
    * Can be used to prepare data or UI specific to this session.
    */
   onInit?(): void
+
+  /**
+   * Called when a message is received from the main application.
+   * @param key - The key of the message
+   * @param info - The information of the message
+   */
+  onMessage?(key: string, info: any): void
   /**
    * Called when a feature is actively launched from the launcher.
    * Can be used to prepare data or UI specific to this session.

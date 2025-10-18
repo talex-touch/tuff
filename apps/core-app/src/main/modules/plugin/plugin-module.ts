@@ -885,18 +885,6 @@ export class PluginModule extends BaseModule {
       })
     })
 
-    touchChannel.regChannel(ChannelType.PLUGIN, 'feature:reg', ({ data, plugin }) => {
-      const { feature } = data!
-      const pluginIns = manager.plugins.get(plugin!)
-      return pluginIns?.addFeature(feature)
-    })
-
-    touchChannel.regChannel(ChannelType.PLUGIN, 'feature:unreg', ({ data, plugin }) => {
-      const { feature } = data!
-      const pluginIns = manager.plugins.get(plugin!)
-      return pluginIns?.delFeature(feature)
-    })
-
     touchChannel.regChannel(ChannelType.PLUGIN, 'core-box:clear-items', ({ plugin }) => {
       if (!plugin) {
         console.warn('core-box:clear-items called without plugin context')
@@ -981,6 +969,41 @@ export class PluginModule extends BaseModule {
 
       return reply(DataCode.SUCCESS, { id: webContents.id })
     })
+
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      'index:communicate',
+      async ({ data, reply, plugin: pluginName }) => {
+        try {
+          const { key, info } = data
+
+          if (!key) {
+            return reply(DataCode.ERROR, { error: 'Plugin name and key are required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName!) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const lifecycle = plugin.getFeatureLifeCycle?.()
+          if (!lifecycle || !lifecycle.onMessage) {
+            return reply(DataCode.ERROR, {
+              error: `Plugin ${pluginName} does not have onMessage handler`
+            })
+          }
+
+          lifecycle.onMessage(key, info)
+
+          return reply(DataCode.SUCCESS, { status: 'message_sent' })
+        } catch (error) {
+          console.error('Error in index:communicate handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
   }
 }
 

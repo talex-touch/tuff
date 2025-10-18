@@ -4,7 +4,8 @@ import {
   IPluginDev,
   IPluginFeature,
   IPlatform,
-  IPluginIcon
+  IPluginIcon,
+  IFeatureLifeCycle
 } from '@talex-touch/utils/plugin'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginIcon } from './plugin-icon'
@@ -27,7 +28,7 @@ export function loadPluginFeatureContextFromContent(
   plugin: ITouchPlugin,
   scriptContent: string,
   context: any
-): any {
+): IFeatureLifeCycle {
   const sandbox = {
     exports: {},
     module: { exports: {} },
@@ -47,7 +48,7 @@ export function loadPluginFeatureContext(
   plugin: ITouchPlugin,
   featureIndex: string,
   context: any
-): any {
+): IFeatureLifeCycle {
   const scriptContent = fse.readFileSync(featureIndex, 'utf-8')
   return loadPluginFeatureContextFromContent(plugin, scriptContent, context)
 }
