@@ -15,7 +15,7 @@ import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/nod
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
 import { createClipboardManager } from '@talex-touch/utils/plugin'
-import { app, clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, shell, BrowserWindow } from 'electron'
 import axios from 'axios'
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
@@ -24,9 +24,13 @@ import { PluginViewLoader } from './view/plugin-view-loader'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
-import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import {
+  PluginLogAppendEvent,
+  PluginStorageUpdatedEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../core/eventbus/touch-event'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
-import { storageModule } from '../storage'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 
@@ -272,6 +276,43 @@ export class TouchPlugin implements ITouchPlugin {
         touchEventBus.emit(TalexEvents.PLUGIN_LOG_APPEND, new PluginLogAppendEvent(log))
       })
     )
+
+    this.ensureDataDirectories()
+  }
+
+  private getDataPath(): string {
+    const userDataPath = $app.rootPath
+    return path.join(userDataPath, 'modules', 'plugins', this.name, 'data')
+  }
+
+  private getConfigPath(): string {
+    return path.join(this.getDataPath(), 'config')
+  }
+
+  private getLogsPath(): string {
+    return path.join(this.getDataPath(), 'logs')
+  }
+
+  private getVerifyPath(): string {
+    return path.join(this.getDataPath(), 'verify')
+  }
+
+  private getTempPath(): string {
+    return path.join(this.getDataPath(), 'temp')
+  }
+
+  private ensureDataDirectories(): void {
+    const directories = [
+      this.getDataPath(),
+      this.getConfigPath(),
+      this.getLogsPath(),
+      this.getVerifyPath(),
+      this.getTempPath()
+    ]
+
+    directories.forEach((dir) => {
+      fse.ensureDirSync(dir)
+    })
   }
 
   async enable(): Promise<boolean> {
@@ -429,24 +470,53 @@ export class TouchPlugin implements ITouchPlugin {
     const http = axios
     const storage = {
       getItem: (key: string) => {
-        const config = storageModule.getPluginConfig(pluginName)
+        const config = this.getPluginConfig()
         return config[key] ?? null
       },
       setItem: (key: string, value: object) => {
-        const config = storageModule.getPluginConfig(pluginName)
+        const config = this.getPluginConfig()
         config[key] = value
-        return storageModule.savePluginConfig(pluginName, config)
+        return this.savePluginConfig(config)
       },
       removeItem: (key: string) => {
-        const config = storageModule.getPluginConfig(pluginName)
+        const config = this.getPluginConfig()
         delete config[key]
-        return storageModule.savePluginConfig(pluginName, config)
+        return this.savePluginConfig(config)
       },
       clear: () => {
-        return storageModule.savePluginConfig(pluginName, {})
+        return this.savePluginConfig({})
       },
       getAllItems: () => {
-        return storageModule.getPluginConfig(pluginName)
+        return this.getPluginConfig()
+      },
+      onDidChange: (callback: (newConfig: any) => void) => {
+        const channel = genTouchChannel()
+
+        const unsubscribe = channel.regChannel(
+          ChannelType.MAIN,
+          'plugin:storage:update',
+          ({ data }) => {
+            if (data.name === pluginName) {
+              const config = this.getPluginConfig()
+              callback(config)
+            }
+          }
+        )
+
+        return unsubscribe
+      },
+
+      getFile: (fileName: string) => {
+        return this.getPluginFile(fileName)
+      },
+      saveFile: (fileName: string, content: object) => {
+        return this.savePluginFile(fileName, content)
+      },
+      deleteFile: (fileName: string) => {
+        return this.deletePluginFile(fileName)
+      },
+      listFiles: () => {
+        return this.listPluginFiles()
       }
     }
     const clipboardUtil = createClipboardManager(clipboard)
@@ -639,6 +709,46 @@ export class TouchPlugin implements ITouchPlugin {
       },
 
       /**
+       * Gets the data directory path for the plugin
+       * @returns The absolute path to the plugin's data directory
+       */
+      getDataPath: () => {
+        return this.getDataPath()
+      },
+
+      /**
+       * Gets the config directory path for the plugin
+       * @returns The absolute path to the plugin's config directory
+       */
+      getConfigPath: () => {
+        return this.getConfigPath()
+      },
+
+      /**
+       * Gets the logs directory path for the plugin
+       * @returns The absolute path to the plugin's logs directory
+       */
+      getLogsPath: () => {
+        return this.getLogsPath()
+      },
+
+      /**
+       * Gets the verify directory path for the plugin
+       * @returns The absolute path to the plugin's verify directory
+       */
+      getVerifyPath: () => {
+        return this.getVerifyPath()
+      },
+
+      /**
+       * Gets the temp directory path for the plugin
+       * @returns The absolute path to the plugin's temp directory
+       */
+      getTempPath: () => {
+        return this.getTempPath()
+      },
+
+      /**
        * Gets the current status of the plugin
        * @returns The current plugin status (enabled, disabled, loading, etc.)
        */
@@ -745,5 +855,108 @@ export class TouchPlugin implements ITouchPlugin {
    */
   getFeatureLifeCycle(): IFeatureLifeCycle | null {
     return this.pluginLifecycle
+  }
+
+  // ==================== 存储相关方法 ====================
+
+  /**
+   * 获取插件文件
+   * @param fileName 文件名
+   * @returns 文件内容
+   */
+  getPluginFile(fileName: string): object {
+    const configPath = this.getConfigPath()
+    const p = path.resolve(configPath, fileName)
+
+    // 确保目录存在
+    fse.ensureDirSync(configPath)
+
+    const file = fse.existsSync(p) ? JSON.parse(fse.readFileSync(p, 'utf-8')) : {}
+    return file
+  }
+
+  /**
+   * 保存插件文件
+   * @param fileName 文件名
+   * @param content 文件内容
+   * @returns 保存结果
+   */
+  savePluginFile(fileName: string, content: object): { success: boolean; error?: string } {
+    const configPath = this.getConfigPath()
+    const configData = JSON.stringify(content)
+
+    const PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
+    if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
+      return {
+        success: false,
+        error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`
+      }
+    }
+
+    const p = path.join(configPath, fileName)
+    fse.ensureDirSync(configPath)
+    fse.writeFileSync(p, configData)
+
+    // 发送存储更新事件
+    this.broadcastStorageUpdate()
+
+    return { success: true }
+  }
+
+  /**
+   * 删除插件文件
+   * @param fileName 文件名
+   * @returns 删除结果
+   */
+  deletePluginFile(fileName: string): { success: boolean; error?: string } {
+    const configPath = this.getConfigPath()
+    const p = path.join(configPath, fileName)
+
+    if (fse.existsSync(p)) {
+      fse.removeSync(p)
+      return { success: true }
+    }
+
+    return { success: false, error: 'File not found' }
+  }
+
+  /**
+   * 列出插件所有文件
+   * @returns 文件列表
+   */
+  listPluginFiles(): string[] {
+    const configPath = this.getConfigPath()
+    if (!fse.existsSync(configPath)) return []
+
+    return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
+  }
+
+  /**
+   * 获取插件配置（向后兼容）
+   * @returns 配置内容
+   */
+  getPluginConfig(): object {
+    return this.getPluginFile('config.json')
+  }
+
+  /**
+   * 保存插件配置（向后兼容）
+   * @param content 配置内容
+   * @returns 保存结果
+   */
+  savePluginConfig(content: object): { success: boolean; error?: string } {
+    return this.savePluginFile('config.json', content)
+  }
+
+  /**
+   * 广播存储更新事件
+   */
+  private broadcastStorageUpdate(): void {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', { name: this.name })
+    }
+
+    touchEventBus.emit(TalexEvents.PLUGIN_STORAGE_UPDATED, new PluginStorageUpdatedEvent(this.name))
   }
 }
