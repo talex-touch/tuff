@@ -33,7 +33,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the item has been stored.
      */
     setItem: async (key: string, value: any): Promise<{ success: boolean, error?: string }> => {
-      return channel.send('plugin:storage:set-item', { pluginName, key, value: JSON.parse(JSON.stringify(value)) })
+      return channel.send('plugin:storage:set-item', { pluginName, key, value: JSON.parse(JSON.stringify(value)), fileName: 'config.json' })
     },
 
     /**
@@ -42,7 +42,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the item has been removed.
      */
     removeItem: async (key: string): Promise<{ success: boolean, error?: string }> => {
-      return channel.send('plugin:storage:remove-item', { pluginName, key })
+      return channel.send('plugin:storage:remove-item', { pluginName, key, fileName: 'config.json' })
     },
 
     /**
@@ -50,7 +50,7 @@ export function usePluginStorage() {
      * @returns A promise that resolves when the storage has been cleared.
      */
     clear: async (): Promise<{ success: boolean, error?: string }> => {
-      return channel.send('plugin:storage:clear', { pluginName })
+      return channel.send('plugin:storage:clear', { pluginName, fileName: 'config.json' })
     },
 
     /**
@@ -64,12 +64,14 @@ export function usePluginStorage() {
     /**
      * Listens for changes to the storage.
      * When `clear()` is called, the key will be `__clear__`.
+     * @param fileName The file name to listen for changes
      * @param callback The function to call when the storage changes for the current plugin.
      * @returns A function to unsubscribe from the listener.
      */
-    onDidChange: (callback: (data: { name: string, key?: string }) => void) => {
-      const listener = (data: { name: string, key?: string }) => {
-        if (data.name === pluginName) {
+    onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+      const listener = (data: { name: string, fileName?: string, key?: string }) => {
+        if (data.name === pluginName &&
+            (data.fileName === fileName || data.fileName === undefined)) {
           callback(data)
         }
       }
