@@ -40,16 +40,16 @@ class DevPluginWatcher {
   }
 
   addPlugin(plugin: ITouchPlugin): void {
-    if (plugin.dev.enable && typeof plugin.dev.source === 'string') {
+    if (plugin.dev.enable && !plugin.dev.source) {
       this.devPlugins.set(plugin.name, plugin)
       if (this.watcher) {
-        this.watcher.add(plugin.dev.source)
-        const manifestPath = path.join(plugin.dev.source, 'manifest.json')
+        this.watcher.add(plugin.pluginPath)
+        const manifestPath = path.join(plugin.pluginPath, 'manifest.json')
         if (fse.existsSync(manifestPath)) {
           this.watcher.add(manifestPath)
         }
         devWatcherLog.info('Watching dev plugin source', {
-          meta: { path: plugin.dev.source, plugin: plugin.name }
+          meta: { path: plugin.pluginPath, plugin: plugin.name }
         })
       }
     }
@@ -57,15 +57,15 @@ class DevPluginWatcher {
 
   removePlugin(pluginName: string): void {
     const plugin = this.devPlugins.get(pluginName)
-    if (plugin && typeof plugin.dev.source === 'string' && this.watcher) {
-      this.watcher.unwatch(plugin.dev.source)
-      const manifestPath = path.join(plugin.dev.source, 'manifest.json')
+    if (plugin && !plugin.dev.source && this.watcher) {
+      this.watcher.unwatch(plugin.pluginPath)
+      const manifestPath = path.join(plugin.pluginPath, 'manifest.json')
       if (fse.existsSync(manifestPath)) {
         this.watcher.unwatch(manifestPath)
       }
       this.devPlugins.delete(pluginName)
       devWatcherLog.info('Stopped watching dev plugin source', {
-        meta: { path: plugin.dev.source, plugin: plugin.name }
+        meta: { path: plugin.pluginPath, plugin: plugin.name }
       })
     }
   }
@@ -89,8 +89,8 @@ class DevPluginWatcher {
     this.watcher.on('change', async (filePath) => {
       const pluginName = Array.from(this.devPlugins.values()).find(
         (p) =>
-          typeof p.dev.source === 'string' &&
-          (p.dev.source === filePath || filePath === path.join(p.dev.source, 'manifest.json'))
+          !p.dev.source &&
+          (p.pluginPath === filePath || filePath === path.join(p.pluginPath, 'manifest.json'))
       )?.name
       if (pluginName) {
         const fileName = path.basename(filePath)

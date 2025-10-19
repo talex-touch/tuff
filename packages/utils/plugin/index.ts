@@ -59,7 +59,7 @@ export interface IPluginBaseInfo {
 export interface IPluginDev {
   enable: boolean
   address: string
-  source?: string // 修改此处，允许 source 为字符串或 undefined
+  source?: boolean
 }
 
 export interface ITouchPlugin extends IPluginBaseInfo {
@@ -81,6 +81,47 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 
   enable(): Promise<boolean>
   disable(): Promise<boolean>
+
+  /**
+   * Get the plugin file.
+   * @param fileName The name of the file.
+   * @returns The content of the file.
+   */
+  getPluginFile(fileName: string): object
+
+  /**
+   * Save the plugin file.
+   * @param fileName The name of the file.
+   * @param content The content of the file.
+   * @returns The result of the save operation.
+   */
+  savePluginFile(fileName: string, content: object): { success: boolean; error?: string }
+
+  /**
+   * Delete the plugin file.
+   * @param fileName The name of the file.
+   * @returns The result of the delete operation.
+   */
+  deletePluginFile(fileName: string): { success: boolean; error?: string }
+
+  /**
+   * List all files in the plugin.
+   * @returns The list of files.
+   */
+  listPluginFiles(): string[]
+
+  /**
+   * Get the plugin configuration.
+   * @returns The configuration content.
+   */
+  getPluginConfig(): object
+
+  /**
+   * Save the plugin configuration.
+   * @param content The configuration content.
+   * @returns The result of the save operation.
+   */
+  savePluginConfig(content: object): { success: boolean; error?: string }
 }
 
 export interface IFeatureCommand {
