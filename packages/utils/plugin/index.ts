@@ -225,6 +225,13 @@ export interface IFeatureLifeCycle {
     /** Activation data if shouldActivate is true */
     activation?: any
   } | void>
+
+  /**
+   * Called when plugin storage changes.
+   * @param key - The storage key that changed
+   * @param value - The new value (undefined if key was removed)
+   */
+  onStorageChange?(key: string, value: any): void
 }
 
 /**

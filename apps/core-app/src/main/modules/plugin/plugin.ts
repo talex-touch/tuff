@@ -30,6 +30,7 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import { ITouchEvent } from '@talex-touch/utils/eventbus'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { getJs, getStyles } from '../../utils/plugin-injection'
@@ -490,13 +491,17 @@ export class TouchPlugin implements ITouchPlugin {
         return this.getPluginConfig()
       },
       onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
-        const channel = genTouchChannel()
+        console.log(`register onDidChange for ${fileName} in ${pluginName}`)
 
-        const unsubscribe = channel.regChannel(
-          ChannelType.MAIN,
-          'plugin:storage:update',
-          ({ data }) => {
-            if (data.name === pluginName && data.fileName === fileName) {
+        const unsubscribe = touchEventBus.on(
+          TalexEvents.PLUGIN_STORAGE_UPDATED,
+          (event: ITouchEvent<TalexEvents>) => {
+            console.log(`onDidChange for ${fileName} in ${pluginName}`, event)
+            const storageEvent = event as PluginStorageUpdatedEvent
+            if (
+              storageEvent.pluginName === pluginName &&
+              (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
+            ) {
               const config = this.getPluginFile(fileName)
               callback(config)
             }
@@ -962,6 +967,9 @@ export class TouchPlugin implements ITouchPlugin {
       })
     }
 
-    touchEventBus.emit(TalexEvents.PLUGIN_STORAGE_UPDATED, new PluginStorageUpdatedEvent(this.name))
+    touchEventBus.emit(
+      TalexEvents.PLUGIN_STORAGE_UPDATED,
+      new PluginStorageUpdatedEvent(this.name, fileName)
+    )
   }
 }
