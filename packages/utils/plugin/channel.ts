@@ -164,6 +164,29 @@ class TouchChannel implements ITouchClientChannel {
     };
   }
 
+  unRegChannel(eventName: string, callback: Function): boolean {
+    const listeners = this.channelMap.get(eventName);
+
+    if (!listeners) {
+      return false;
+    }
+
+    const index = listeners.indexOf(callback);
+
+    if (index === -1) {
+      return false;
+    }
+
+    listeners.splice(index, 1);
+
+    // If no listeners remain for this event, remove the event from the map
+    if (listeners.length === 0) {
+      this.channelMap.delete(eventName);
+    }
+
+    return true;
+  }
+
   send(eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(
       12

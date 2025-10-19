@@ -7,12 +7,12 @@
 // 获取SDK实例
 const sdk = window.$touchSDK
 
-// 示例1: 监听整个配置文件的变化
+// 示例1: 监听特定配置文件的变化
 function setupConfigListener() {
-  console.log('[Storage] Setting up listener for entire config changes')
+  console.log('[Storage] Setting up listener for config.json changes')
 
-  const unsubscribe = sdk.storage.onDidChange((newConfig) => {
-    console.log('[Storage] Config changed:')
+  const unsubscribe = sdk.storage.onDidChange('config.json', (newConfig) => {
+    console.log('[Storage] config.json changed:')
     console.log('  New config:', newConfig)
 
     // 处理特定键的变化
@@ -25,27 +25,43 @@ function setupConfigListener() {
   return unsubscribe
 }
 
-// 示例2: 监听配置变化并处理特定键
-function setupConfigChangeHandler() {
-  console.log('[Storage] Setting up config change handler')
+// 示例2: 监听多个配置文件的变化
+function setupMultipleFileListeners() {
+  console.log('[Storage] Setting up multiple file listeners')
 
-  const unsubscribe = sdk.storage.onDidChange((newConfig) => {
-    console.log('[Storage] Config changed:')
-    console.log('  New config:', newConfig)
+  const unsubscribers = []
 
-    // 处理特定键的变化
+  // 监听 config.json
+  const configUnsubscribe = sdk.storage.onDidChange('config.json', (newConfig) => {
+    console.log('[Storage] config.json changed:', newConfig)
     if (newConfig.user_preference) {
       handleUserPreferenceChange(newConfig.user_preference)
     }
-    if (newConfig.settings) {
-      handleSettingsChange(newConfig.settings)
-    }
-    if (newConfig.cache) {
-      handleCacheChange(newConfig.cache)
+  })
+  unsubscribers.push(configUnsubscribe)
+
+  // 监听 settings.json
+  const settingsUnsubscribe = sdk.storage.onDidChange('settings.json', (newSettings) => {
+    console.log('[Storage] settings.json changed:', newSettings)
+    if (newSettings) {
+      handleSettingsChange(newSettings)
     }
   })
+  unsubscribers.push(settingsUnsubscribe)
 
-  return unsubscribe
+  // 监听 cache.json
+  const cacheUnsubscribe = sdk.storage.onDidChange('cache.json', (newCache) => {
+    console.log('[Storage] cache.json changed:', newCache)
+    if (newCache) {
+      handleCacheChange(newCache)
+    }
+  })
+  unsubscribers.push(cacheUnsubscribe)
+
+  // 返回取消所有监听的函数
+  return () => {
+    unsubscribers.forEach(unsubscribe => unsubscribe())
+  }
 }
 
 // 示例3: 动态监听
@@ -53,16 +69,16 @@ function setupDynamicListener() {
   let currentListener = null
 
   // 开始监听
-  function startListening() {
-    console.log('[Storage] Starting to listen for config changes')
+  function startListening(fileName) {
+    console.log(`[Storage] Starting to listen for ${fileName} changes`)
 
     // 如果已有监听器，先取消
     if (currentListener) {
       currentListener()
     }
 
-    currentListener = sdk.storage.onDidChange((newConfig) => {
-      console.log('[Storage] Dynamic listener for config changes:')
+    currentListener = sdk.storage.onDidChange(fileName, (newConfig) => {
+      console.log(`[Storage] Dynamic listener for ${fileName} changes:`)
       console.log('  New config:', newConfig)
     })
   }
@@ -81,9 +97,9 @@ function setupDynamicListener() {
 
 // 示例4: 条件监听
 function setupConditionalListener() {
-  console.log('[Storage] Setting up conditional listener')
+  console.log('[Storage] Setting up conditional listener for user preferences')
 
-  const unsubscribe = sdk.storage.onDidChange((newConfig) => {
+  const unsubscribe = sdk.storage.onDidChange('config.json', (newConfig) => {
     // 处理用户偏好变化
     if (newConfig.user_preference) {
       const pref = newConfig.user_preference
@@ -109,17 +125,17 @@ function setupConditionalListener() {
 function setupBatchOperationListener() {
   console.log('[Storage] Setting up batch operation listener')
 
-  const unsubscribe = sdk.storage.onDidChange((newConfig) => {
-    console.log('[Storage] Config changed:')
-    console.log('  New config keys:', Object.keys(newConfig))
+  const unsubscribe = sdk.storage.onDidChange('batch_data.json', (newConfig) => {
+    console.log('[Storage] batch_data.json changed:')
+    console.log('  New config:', newConfig)
 
     // 处理批量数据变化
-    if (newConfig.batch_data) {
+    if (newConfig) {
       console.log('[Storage] Processing batch data changes')
-      console.log('  Batch data count:', Object.keys(newConfig.batch_data).length)
+      console.log('  Batch data count:', Object.keys(newConfig).length)
 
       // 应用变化
-      applyChanges(newConfig.batch_data)
+      applyChanges(newConfig)
     }
   })
 
@@ -166,7 +182,7 @@ function applyChanges(changes) {
 // 导出函数供外部调用
 window.storageOnDidChangeExample = {
   setupConfigListener,
-  setupConfigChangeHandler,
+  setupMultipleFileListeners,
   setupDynamicListener,
   setupConditionalListener,
   setupBatchOperationListener
@@ -179,8 +195,8 @@ if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
   // 设置配置监听
   const unsubscribe1 = setupConfigListener()
 
-  // 设置配置变化处理器
-  const unsubscribeAll = setupConfigChangeHandler()
+  // 设置多文件监听
+  const unsubscribeAll = setupMultipleFileListeners()
 
   // 设置动态监听
   const { startListening, stopListening } = setupDynamicListener()

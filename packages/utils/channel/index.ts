@@ -9,6 +9,8 @@ export enum DataCode {
   ERROR = 100
 }
 
+export type ChannelCallback = (data: StandardChannelData) => any
+
 export interface ITouchChannel {
 
   /**
@@ -18,7 +20,17 @@ export interface ITouchChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param callback {Function} The callback function
    */
-  regChannel(type: ChannelType, eventName: string, callback: (data: StandardChannelData) => any): () => void
+  regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void
+
+  /**
+   * Unregister a channel
+   * @description Unregister a channel by type, event name and callback
+   * @param type {@link ChannelType} The type of channel
+   * @param eventName {string} The name of event
+   * @param callback {Function} The callback function to unregister
+   * @returns {boolean} Returns true if the channel was successfully unregistered, false otherwise
+   */
+  unregChannel(type: ChannelType, eventName: string, callback: ChannelCallback): boolean
 
   /**
    * @deprecated Use sendMain instead
@@ -95,6 +107,15 @@ export interface ITouchClientChannel {
    * @param callback {Function} The callback function
    */
   regChannel(eventName: string, callback: (data: StandardChannelData) => any): () => void
+
+  /**
+   * Unregister a channel
+   * @description Unregister a channel by event name and callback
+   * @param eventName {string} The name of event
+   * @param callback {Function} The callback function to unregister
+   * @returns {boolean} Returns true if the channel was successfully unregistered, false otherwise
+   */
+  unRegChannel(eventName: string, callback: (data: StandardChannelData) => any): boolean
 
   /**
    * Send a message to a channel

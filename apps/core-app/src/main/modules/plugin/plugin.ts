@@ -489,15 +489,15 @@ export class TouchPlugin implements ITouchPlugin {
       getAllItems: () => {
         return this.getPluginConfig()
       },
-      onDidChange: (callback: (newConfig: any) => void) => {
+      onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
         const channel = genTouchChannel()
 
         const unsubscribe = channel.regChannel(
           ChannelType.MAIN,
           'plugin:storage:update',
           ({ data }) => {
-            if (data.name === pluginName) {
-              const config = this.getPluginConfig()
+            if (data.name === pluginName && data.fileName === fileName) {
+              const config = this.getPluginFile(fileName)
               callback(config)
             }
           }
@@ -898,7 +898,7 @@ export class TouchPlugin implements ITouchPlugin {
     fse.writeFileSync(p, configData)
 
     // 发送存储更新事件
-    this.broadcastStorageUpdate()
+    this.broadcastStorageUpdate(fileName)
 
     return { success: true }
   }
@@ -914,6 +914,8 @@ export class TouchPlugin implements ITouchPlugin {
 
     if (fse.existsSync(p)) {
       fse.removeSync(p)
+      // 发送存储更新事件
+      this.broadcastStorageUpdate(fileName)
       return { success: true }
     }
 
@@ -951,10 +953,13 @@ export class TouchPlugin implements ITouchPlugin {
   /**
    * 广播存储更新事件
    */
-  private broadcastStorageUpdate(): void {
+  private broadcastStorageUpdate(fileName?: string): void {
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
-      $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', { name: this.name })
+      $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', {
+        name: this.name,
+        fileName: fileName
+      })
     }
 
     touchEventBus.emit(TalexEvents.PLUGIN_STORAGE_UPDATED, new PluginStorageUpdatedEvent(this.name))
