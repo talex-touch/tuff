@@ -74,10 +74,10 @@ export function usePluginStorage() {
         }
       }
 
-      channel.on('plugin:storage:update', listener)
+      channel.regChannel('plugin:storage:update', listener)
 
       return () => {
-        channel.off('plugin:storage:update', listener)
+        channel.unRegChannel('plugin:storage:update', listener)
       }
     }
   }
