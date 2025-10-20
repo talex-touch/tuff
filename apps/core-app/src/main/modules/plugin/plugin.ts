@@ -290,6 +290,10 @@ export class TouchPlugin implements ITouchPlugin {
     return path.join(this.getDataPath(), 'config')
   }
 
+  getPluginDir(): string {
+    return this.getConfigPath()
+  }
+
   private getLogsPath(): string {
     return path.join(this.getDataPath(), 'logs')
   }
@@ -491,8 +495,6 @@ export class TouchPlugin implements ITouchPlugin {
         return this.getPluginConfig()
       },
       onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
-        console.log(`register onDidChange for ${fileName} in ${pluginName}`)
-
         const unsubscribe = touchEventBus.on(
           TalexEvents.PLUGIN_STORAGE_UPDATED,
           (event: ITouchEvent<TalexEvents>) => {

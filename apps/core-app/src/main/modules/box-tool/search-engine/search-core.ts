@@ -191,7 +191,7 @@ export class SearchEngineCore
     // When all providers are deactivated, ensure any active UI mode is exited.
     // This addresses the issue where UI view might remain attached if not explicitly closed.
     if (coreBoxManager.isUIMode) {
-      console.log('[SearchEngineCore] Deactivating providers, exiting UI mode.')
+      console.debug('[SearchEngineCore] Deactivating providers, exiting UI mode.')
       coreBoxManager.exitUIMode()
     }
   }
