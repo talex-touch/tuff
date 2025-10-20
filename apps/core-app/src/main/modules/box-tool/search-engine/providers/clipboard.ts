@@ -5,7 +5,7 @@ import { desc, like, or } from 'drizzle-orm'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 
-export class ClipboardProvider implements ISearchProvider {
+export class ClipboardProvider implements ISearchProvider<ProviderContext> {
   public readonly id = 'clipboard-history'
   public readonly type = 'history'
   public readonly name = 'Clipboard History'
@@ -17,7 +17,7 @@ export class ClipboardProvider implements ISearchProvider {
     this.db = context.databaseManager.getDb()
   }
 
-  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
     if (!this.db) {
       return {
         items: [],
@@ -100,43 +100,50 @@ export class ClipboardProvider implements ISearchProvider {
 
     if (item.type === 'text') {
       kind = 'document'
-      render.basic.title =
-        item.content.length > 100 ? `${item.content.substring(0, 97)}...` : item.content
-      render.basic.subtitle = `Text from ${item.sourceApp || 'Unknown'}`
-      render.basic.icon = 'ri:file-text-line'
+      if (render.basic) {
+        render.basic.title =
+          item.content.length > 100 ? `${item.content.substring(0, 97)}...` : item.content
+        render.basic.subtitle = `Text from ${item.sourceApp || 'Unknown'}`
+        render.basic.icon = 'ri:file-text-line'
+      }
       render.preview = {
         type: 'panel',
         content: item.content
       }
     } else if (item.type === 'image') {
       kind = 'image'
-      render.basic.title = `Image from ${item.sourceApp || 'Unknown'}`
-      render.basic.icon = item.thumbnail || 'ri:image-line'
+      if (render.basic) {
+        render.basic.title = `Image from ${item.sourceApp || 'Unknown'}`
+        render.basic.icon = item.thumbnail || 'ri:image-line'
+      }
       render.preview = {
         type: 'panel',
         image: item.content // Full image data URL
       }
     } else if (item.type === 'files') {
       kind = 'file'
-      try {
-        const files = JSON.parse(item.content)
-        if (files.length === 1) {
-          const filePath = files[0]
-          render.basic.title =
-            typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
-        } else {
-          render.basic.title = `${files.length} files`
+      if (render.basic) {
+        try {
+          const files = JSON.parse(item.content)
+          if (files.length === 1) {
+            const filePath = files[0]
+            render.basic.title =
+              typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
+          } else {
+            render.basic.title = `${files.length} files`
+          }
+        } catch {
+          render.basic.title = 'Files from clipboard'
         }
-      } catch {
-        render.basic.title = 'Files from clipboard'
+        render.basic.icon = 'ri:file-copy-2-line'
       }
-      render.basic.icon = 'ri:file-copy-2-line'
     }
 
     if (
       metadata?.ocr_excerpt &&
       typeof metadata.ocr_excerpt === 'string' &&
-      metadata.ocr_excerpt.trim()
+      metadata.ocr_excerpt.trim() &&
+      render.basic
     ) {
       const snippet = metadata.ocr_excerpt.trim()
       render.basic.subtitle = render.basic.subtitle
@@ -149,8 +156,7 @@ export class ClipboardProvider implements ISearchProvider {
       source: {
         id: this.id,
         type: this.type,
-        name: this.name,
-        icon: this.icon
+        name: this.name
       },
       kind,
       render,
@@ -169,8 +175,7 @@ export class ClipboardProvider implements ISearchProvider {
         }
       ],
       meta: {
-        raw: item,
-        metadata
+        raw: item
       }
     }
   }

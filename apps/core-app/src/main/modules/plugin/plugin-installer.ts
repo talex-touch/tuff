@@ -16,8 +16,8 @@ function createDialogRiskPrompt(): RiskPromptHandler {
     if (input.level === 'trusted') return true
 
     // TODO(@talex-touch): 后续在此接入 TouchID 等更高级的验证手段
-    const window = BrowserWindow.getFocusedWindow() ?? undefined
-    const { response } = await dialog.showMessageBox(window, {
+    const window = BrowserWindow.getFocusedWindow()
+    const { response } = await dialog.showMessageBox(window as any, {
       type: 'warning',
       buttons: ['继续安装', '取消'],
       defaultId: 1,

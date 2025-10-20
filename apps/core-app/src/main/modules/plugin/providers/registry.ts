@@ -141,7 +141,7 @@ export async function installFromRegistry(
       },
       error
     })
-    timer.end('install', { level: 'error' })
+    timer.end('install', { level: 'error' as any })
     throw error
   }
 }

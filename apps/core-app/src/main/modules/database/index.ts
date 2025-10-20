@@ -44,7 +44,7 @@ export class DatabaseModule extends BaseModule {
 
     await this.ensureKeywordMappingsProviderColumn()
 
-    const timingLevelColors: Record<TimingLogLevel, chalk.Chalk> = {
+    const timingLevelColors: Record<TimingLogLevel, typeof chalk.gray> = {
       none: chalk.gray,
       info: chalk.green,
       warn: chalk.yellow,

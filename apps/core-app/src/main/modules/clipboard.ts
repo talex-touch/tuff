@@ -630,23 +630,23 @@ export class ClipboardModule extends BaseModule {
       touchChannel.regChannel(type, 'clipboard:get-history', async ({ data: payload, reply }) => {
         const { page = 1 } = payload ?? {}
         const offset = (page - 1) * PAGE_SIZE
-        const historyRows = await this.db
+        const historyRows = await this.db!
           .select()
           .from(clipboardHistory)
           .orderBy(desc(clipboardHistory.timestamp))
           .limit(PAGE_SIZE)
           .offset(offset)
         const history = await this.hydrateWithMeta(historyRows)
-        const totalResult = await this.db
+        const totalResult = await this.db!
           .select({ count: sql<number>`count(*)` })
           .from(clipboardHistory)
-        const total = totalResult[0].count
+        const total = totalResult[0]?.count ?? 0
         reply(DataCode.SUCCESS, { history, total, page, pageSize: PAGE_SIZE })
       })
 
       touchChannel.regChannel(type, 'clipboard:set-favorite', async ({ data, reply }) => {
-        const { id, isFavorite } = data
-        await this.db
+        const { id, isFavorite } = data ?? {}
+        await this.db!
           .update(clipboardHistory)
           .set({ isFavorite })
           .where(eq(clipboardHistory.id, id))
@@ -654,15 +654,15 @@ export class ClipboardModule extends BaseModule {
       })
 
       touchChannel.regChannel(type, 'clipboard:delete-item', async ({ data, reply }) => {
-        const { id } = data
-        await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
+        const { id } = data ?? {}
+        await this.db!.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
         this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
         reply(DataCode.SUCCESS, null)
       })
 
       touchChannel.regChannel(type, 'clipboard:clear-history', async ({ reply }) => {
         const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
-        await this.db.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
+        await this.db!.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
         this.memoryCache = []
         reply(DataCode.SUCCESS, null)
       })
