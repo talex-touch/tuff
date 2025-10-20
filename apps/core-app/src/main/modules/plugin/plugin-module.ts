@@ -1037,147 +1037,7 @@ export class PluginModule extends BaseModule {
       }
     )
 
-    touchChannel.regChannel(
-      ChannelType.PLUGIN,
-      'plugin:storage:set-item',
-      async ({ data, reply, plugin: pluginName }) => {
-        try {
-          const { value, fileName = 'config.json' } = data
-          if (!pluginName) {
-            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
-          }
-
-          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
-          if (!plugin) {
-            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
-          }
-
-          // const content = plugin.getPluginFile(fileName)
-          const result = plugin.savePluginFile(fileName, value)
-
-          const featureLifeCycle = plugin.getFeatureLifeCycle?.()
-          if (featureLifeCycle?.onStorageChange) {
-            featureLifeCycle.onStorageChange(fileName, value)
-          }
-
-          touchEventBus.emit(
-            TalexEvents.PLUGIN_STORAGE_UPDATED,
-            new PluginStorageUpdatedEvent(pluginName, fileName)
-          )
-
-          return reply(DataCode.SUCCESS, result)
-        } catch (error) {
-          console.error('Error in plugin:storage:set-item handler:', error)
-          return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
-          })
-        }
-      }
-    )
-
-    touchChannel.regChannel(
-      ChannelType.PLUGIN,
-      'plugin:storage:remove-item',
-      async ({ data, reply, plugin: pluginName }) => {
-        try {
-          const { key, fileName = 'config.json' } = data
-          if (!pluginName || !key) {
-            return reply(DataCode.ERROR, { error: 'Plugin name and key are required' })
-          }
-
-          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
-          if (!plugin) {
-            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
-          }
-
-          const config = plugin.getPluginConfig()
-          delete config[key]
-          const result = plugin.savePluginConfig(config)
-
-          // 触发feature context的onDidChange
-          const featureLifeCycle = plugin.getFeatureLifeCycle?.()
-          if (featureLifeCycle?.onStorageChange) {
-            featureLifeCycle.onStorageChange(key, undefined)
-          }
-
-          touchEventBus.emit(
-            TalexEvents.PLUGIN_STORAGE_UPDATED,
-            new PluginStorageUpdatedEvent(pluginName, fileName)
-          )
-
-          return reply(DataCode.SUCCESS, result)
-        } catch (error) {
-          console.error('Error in plugin:storage:remove-item handler:', error)
-          return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
-          })
-        }
-      }
-    )
-
-    touchChannel.regChannel(
-      ChannelType.PLUGIN,
-      'plugin:storage:clear',
-      async ({ data, reply, plugin: pluginName }) => {
-        try {
-          const { fileName = 'config.json' } = data || {}
-          if (!pluginName) {
-            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
-          }
-
-          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
-          if (!plugin) {
-            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
-          }
-
-          const result = plugin.savePluginConfig({})
-
-          // 触发feature context的onDidChange
-          const featureLifeCycle = plugin.getFeatureLifeCycle?.()
-          if (featureLifeCycle?.onStorageChange) {
-            featureLifeCycle.onStorageChange('__clear__', {})
-          }
-
-          touchEventBus.emit(
-            TalexEvents.PLUGIN_STORAGE_UPDATED,
-            new PluginStorageUpdatedEvent(pluginName, fileName)
-          )
-
-          return reply(DataCode.SUCCESS, result)
-        } catch (error) {
-          console.error('Error in plugin:storage:clear handler:', error)
-          return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
-          })
-        }
-      }
-    )
-
-    touchChannel.regChannel(
-      ChannelType.PLUGIN,
-      'plugin:storage:get-all',
-      async ({ reply, plugin: pluginName }) => {
-        try {
-          if (!pluginName) {
-            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
-          }
-
-          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
-          if (!plugin) {
-            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
-          }
-
-          const config = plugin.getPluginConfig()
-          return reply(DataCode.SUCCESS, config)
-        } catch (error) {
-          console.error('Error in plugin:storage:get-all handler:', error)
-          return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
-          })
-        }
-      }
-    )
-
+    // 简单的文件级别存储操作
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       'plugin:storage:get-file',
@@ -1206,7 +1066,7 @@ export class PluginModule extends BaseModule {
 
     touchChannel.regChannel(
       ChannelType.PLUGIN,
-      'plugin:storage:save-file',
+      'plugin:storage:set-file',
       async ({ data, reply, plugin: pluginName }) => {
         try {
           const { fileName, content } = data
@@ -1220,20 +1080,9 @@ export class PluginModule extends BaseModule {
           }
 
           const result = plugin.savePluginFile(fileName, content)
-
-          const featureLifeCycle = plugin.getFeatureLifeCycle?.()
-          if (featureLifeCycle?.onStorageChange) {
-            featureLifeCycle.onStorageChange(fileName, content)
-          }
-
-          touchEventBus.emit(
-            TalexEvents.PLUGIN_STORAGE_UPDATED,
-            new PluginStorageUpdatedEvent(pluginName, fileName)
-          )
-
           return reply(DataCode.SUCCESS, result)
         } catch (error) {
-          console.error('Error in plugin:storage:save-file handler:', error)
+          console.error('Error in plugin:storage:set-file handler:', error)
           return reply(DataCode.ERROR, {
             error: error instanceof Error ? error.message : 'Unknown error'
           })
@@ -1243,7 +1092,7 @@ export class PluginModule extends BaseModule {
 
     touchChannel.regChannel(
       ChannelType.PLUGIN,
-      'plugin:storage:remove-file',
+      'plugin:storage:delete-file',
       async ({ data, reply, plugin: pluginName }) => {
         try {
           const { fileName } = data
@@ -1256,23 +1105,10 @@ export class PluginModule extends BaseModule {
             return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
           }
 
-          // 删除文件
           const result = plugin.deletePluginFile(fileName)
-
-          // 触发feature context的onDidChange
-          const featureLifeCycle = plugin.getFeatureLifeCycle?.()
-          if (featureLifeCycle?.onStorageChange) {
-            featureLifeCycle.onStorageChange(fileName, undefined)
-          }
-
-          touchEventBus.emit(
-            TalexEvents.PLUGIN_STORAGE_UPDATED,
-            new PluginStorageUpdatedEvent(pluginName, fileName)
-          )
-
           return reply(DataCode.SUCCESS, result)
         } catch (error) {
-          console.error('Error in plugin:storage:remove-file handler:', error)
+          console.error('Error in plugin:storage:delete-file handler:', error)
           return reply(DataCode.ERROR, {
             error: error instanceof Error ? error.message : 'Unknown error'
           })
@@ -1294,17 +1130,7 @@ export class PluginModule extends BaseModule {
             return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
           }
 
-          const pluginDir = plugin.getPluginDir()
-
-          if (!fse.existsSync(pluginDir)) {
-            return reply(DataCode.SUCCESS, [])
-          }
-
-          const files = fse
-            .readdirSync(pluginDir)
-            .filter((file: string) => file.endsWith('.json'))
-            .map((file: string) => file.replace('.json', ''))
-
+          const files = plugin.listPluginFiles()
           return reply(DataCode.SUCCESS, files)
         } catch (error) {
           console.error('Error in plugin:storage:list-files handler:', error)
