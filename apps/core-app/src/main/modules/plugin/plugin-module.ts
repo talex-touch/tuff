@@ -14,8 +14,8 @@ import { createDbUtils } from '../../db/utils'
 import { databaseModule } from '../database'
 import {
   TalexEvents,
-  touchEventBus,
-  PluginStorageUpdatedEvent
+  touchEventBus
+  // PluginStorageUpdatedEvent
 } from '../../core/eventbus/touch-event'
 import { createPluginLoader } from '../../plugins/loaders'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'

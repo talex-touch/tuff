@@ -16,7 +16,7 @@
  * @module core-box/tuff-dsl
  */
 
-import { TalexTouch } from "packages/utils/types";
+// import { TalexTouch } from "packages/utils/types";
 
 /**
  * 定义高亮范围

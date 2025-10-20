@@ -168,7 +168,7 @@ const sqliteBusyRetrier = createRetrier({
 
 const runWithSqliteBusyRetry = <T>(operation: () => Promise<T>): Promise<T> => {
   const wrapped = sqliteBusyRetrier(operation)
-  return wrapped()
+  return wrapped() as Promise<T>
 }
 
 const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'

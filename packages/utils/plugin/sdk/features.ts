@@ -121,7 +121,7 @@ export interface IFeaturesManager {
  * ```
  */
 export function createFeaturesManager(
-  pluginName: string,
+  _pluginName: string,
   utils: any
 ): IFeaturesManager {
   return {
