@@ -15,7 +15,7 @@ import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/nod
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
 import { createClipboardManager } from '@talex-touch/utils/plugin'
-import { app, clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, shell, BrowserWindow } from 'electron'
 import axios from 'axios'
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
@@ -30,6 +30,7 @@ import {
   TalexEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import { ITouchEvent } from '@talex-touch/utils/eventbus'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { getJs, getStyles } from '../../utils/plugin-injection'
@@ -484,6 +485,23 @@ export class TouchPlugin implements ITouchPlugin {
       },
       listFiles: () => {
         return this.listPluginFiles()
+      },
+      onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+        const unsubscribe = touchEventBus.on(
+          TalexEvents.PLUGIN_STORAGE_UPDATED,
+          (event: ITouchEvent<TalexEvents>) => {
+            const storageEvent = event as PluginStorageUpdatedEvent
+            if (
+              storageEvent.pluginName === pluginName &&
+              (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
+            ) {
+              const config = this.getPluginFile(fileName)
+              callback(config)
+            }
+          }
+        )
+
+        return unsubscribe
       }
     }
     const clipboardUtil = createClipboardManager(clipboard)
@@ -921,6 +939,14 @@ export class TouchPlugin implements ITouchPlugin {
    * 广播存储更新事件
    */
   private broadcastStorageUpdate(fileName?: string): void {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', {
+        name: this.name,
+        fileName: fileName
+      })
+    }
+
     touchEventBus.emit(
       TalexEvents.PLUGIN_STORAGE_UPDATED,
       new PluginStorageUpdatedEvent(this.name, fileName)

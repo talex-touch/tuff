@@ -50,6 +50,27 @@ export function usePluginStorage() {
      */
     listFiles: async (): Promise<string[]> => {
       return channel.send('plugin:storage:list-files', { pluginName })
+    },
+
+    /**
+     * Listens for changes to the storage.
+     * @param fileName The file name to listen for changes
+     * @param callback The function to call when the storage changes for the current plugin.
+     * @returns A function to unsubscribe from the listener.
+     */
+    onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+      const listener = (data: { name: string, fileName?: string }) => {
+        if (data.name === pluginName &&
+            (data.fileName === fileName || data.fileName === undefined)) {
+          callback(data)
+        }
+      }
+
+      channel.regChannel('plugin:storage:update', listener)
+
+      return () => {
+        channel.unRegChannel('plugin:storage:update', listener)
+      }
     }
   }
 }
