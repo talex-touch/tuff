@@ -234,3 +234,62 @@ export const clipboardHistory = sqliteTable('clipboard_history', {
   isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
   metadata: text('metadata') // 存储其他元数据 (JSON string)
 })
+
+/**
+ * 扩展的剪贴板元数据表。
+ * 每条记录代表一个 key-value 元数据项，用于存储 OCR 结果等扩展信息。
+ */
+export const clipboardHistoryMeta = sqliteTable('clipboard_history_meta', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clipboardId: integer('clipboard_id')
+    .notNull()
+    .references(() => clipboardHistory.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  value: text('value'),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(strftime('%s', 'now'))`)
+})
+
+/**
+ * OCR 任务队列表，用于跟踪后台识别的生命周期。
+ */
+export const ocrJobs = sqliteTable('ocr_jobs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clipboardId: integer('clipboard_id').references(() => clipboardHistory.id, {
+    onDelete: 'cascade'
+  }),
+  status: text('status', {
+    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled']
+  })
+    .notNull()
+    .default('pending'),
+  priority: integer('priority').notNull().default(0),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  payloadHash: text('payload_hash'),
+  meta: text('meta'),
+  queuedAt: integer('queued_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(strftime('%s', 'now'))`),
+  startedAt: integer('started_at', { mode: 'timestamp' }),
+  finishedAt: integer('finished_at', { mode: 'timestamp' })
+})
+
+/**
+ * OCR 结果表，存储识别文本和置信度等信息。
+ */
+export const ocrResults = sqliteTable('ocr_results', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  jobId: integer('job_id')
+    .notNull()
+    .references(() => ocrJobs.id, { onDelete: 'cascade' }),
+  text: text('text').notNull(),
+  confidence: real('confidence'),
+  language: text('language'),
+  checksum: text('checksum'),
+  extra: text('extra'),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(strftime('%s', 'now'))`)
+})

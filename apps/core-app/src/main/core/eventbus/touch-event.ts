@@ -313,9 +313,11 @@ export class PluginLogAppendEvent implements ITouchEvent<TalexEvents> {
 export class PluginStorageUpdatedEvent implements ITouchEvent<TalexEvents> {
   name: TalexEvents = TalexEvents.PLUGIN_STORAGE_UPDATED
   pluginName: string
+  fileName?: string
 
-  constructor(pluginName: string) {
+  constructor(pluginName: string, fileName?: string) {
     this.pluginName = pluginName
+    this.fileName = fileName
   }
 }
 

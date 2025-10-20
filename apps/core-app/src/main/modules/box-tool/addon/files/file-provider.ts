@@ -5,8 +5,13 @@ import {
   ISearchProvider,
   TuffFactory,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  timingLogger,
+  type TimingMeta,
+  type TimingOptions,
+  type TimingLogLevel
 } from '@talex-touch/utils'
+import { searchLogger } from '../../search-engine/search-logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { app, shell } from 'electron'
 import path from 'path'
@@ -57,10 +62,74 @@ import {
   FileChangedEvent,
   FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
-import chalk from 'chalk'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { fileProviderLog, Primitive, formatDuration } from '../../../../utils/logger'
+import {
+  BackgroundTaskService,
+  AppUsageActivityTracker
+} from '../../../../service/background-task-service'
+import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 
 const MAX_CONTENT_LENGTH = 200_000
+
+type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
+
+type FileTimingMeta = TimingMeta & {
+  stage?: string
+  message?: string
+  files?: number
+  extensions?: number
+  status?: 'success' | 'failed'
+}
+
+const FILE_TIMING_STYLE: Record<TimingLogLevel, 'debug' | 'info' | 'warn' | 'error'> = {
+  none: 'debug',
+  info: 'debug',
+  warn: 'warn',
+  error: 'error'
+}
+
+const FILE_TIMING_BASE_OPTIONS: TimingOptions = {
+  storeHistory: false,
+  logThresholds: {
+    none: 50,
+    info: 250,
+    warn: 1000
+  },
+  formatter: (entry) => {
+    const meta = (entry.meta ?? {}) as FileTimingMeta
+    const stage = meta.stage ?? entry.label.split(':').slice(1).join(':') ?? entry.label
+    const message = meta.message ?? stage
+    const durationText = formatDuration(entry.durationMs)
+    const details: string[] = []
+    if (typeof meta.files === 'number') {
+      details.push(`files=${meta.files}`)
+    }
+    if (typeof meta.extensions === 'number') {
+      details.push(`extensions=${meta.extensions}`)
+    }
+    if (meta.status && meta.status !== 'success') {
+      details.push(`status=${meta.status}`)
+    }
+    const suffix = details.length > 0 ? ` (${details.join(', ')})` : ''
+    return `[FileProvider] ${message} in ${durationText}${suffix}`
+  },
+  logger: (message, entry) => {
+    if (entry.logLevel === 'none') {
+      return
+    }
+    const level = FILE_TIMING_STYLE[entry.logLevel ?? 'info'] ?? 'debug'
+    if (level === 'warn') {
+      fileProviderLog.warn(message)
+    } else if (level === 'error') {
+      fileProviderLog.error(message)
+    } else if (level === 'info') {
+      fileProviderLog.info(message)
+    } else {
+      fileProviderLog.debug(message)
+    }
+  }
+}
 
 const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
   video: 'video',
@@ -181,11 +250,10 @@ class ProgressLogger {
     const elapsedSec = (now - this.startTime) / 1000
     const totalDisplay = safeTotal > 0 ? safeTotal.toString() : '–'
 
-    this.logFn(
-      `${chalk.white(this.label)} ${chalk.cyan(`${this.processed}/${totalDisplay}`)} (${chalk.green(
-        percent.toFixed(1)
-      )}%) ${chalk.gray(`elapsed ${elapsedSec.toFixed(1)}s`)}`
-    )
+    const progress = `${this.label} ${this.processed}/${totalDisplay} (${percent.toFixed(
+      1
+    )}%) elapsed ${elapsedSec.toFixed(1)}s`
+    this.logFn(progress)
   }
 }
 
@@ -225,6 +293,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
   private launchServicesHandlers: any[] | null = null
   private launchServicesMTime?: number
+  private readonly failedContentCache = new Map<
+    number,
+    { status: FileIndexStatus; updatedAt: number | null; lastError: string | null }
+  >()
+  private backgroundTaskService: BackgroundTaskService | null = null
+  private activityTracker: AppUsageActivityTracker | null = null
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -239,41 +313,191 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       try {
         return app.getPath(name)
       } catch (error) {
-        this.logWarn(`Could not resolve path for '${chalk.gray(name)}'; skipping.`, error)
+        this.logWarn('Could not resolve system path; skipping', error, {
+          pathKey: name
+        })
         return null
       }
     })
     this.WATCH_PATHS = [...new Set(paths.filter((p): p is string => !!p))]
     this.normalizedWatchPaths = this.WATCH_PATHS.map((p) => this.normalizePath(p))
-    this.logInfo(`Watching paths: ${chalk.gray(JSON.stringify(this.WATCH_PATHS))}`)
+    this.logInfo('Watching paths', {
+      count: this.WATCH_PATHS.length
+    })
   }
 
-  private logInfo(message: string): void {
-    console.log(`${chalk.blueBright('[FileProvider]')} ${message}`)
-  }
-
-  private logWarn(message: string, error?: unknown): void {
-    if (error) {
-      console.warn(`${chalk.yellowBright('[FileProvider]')} ${message}`, error)
+  private logInfo(message: string, meta?: Record<string, Primitive>): void {
+    if (meta) {
+      fileProviderLog.info(message, { meta })
     } else {
-      console.warn(`${chalk.yellowBright('[FileProvider]')} ${message}`)
+      fileProviderLog.info(message)
     }
   }
 
-  private logDebug(message: string): void {
-    console.debug(`${chalk.gray('[FileProvider]')} ${message}`)
+  private logWarn(
+    message: string,
+    error?: unknown,
+    meta?: Record<string, Primitive>
+  ): void {
+    if (error || meta) {
+      fileProviderLog.warn(message, {
+        ...(meta ? { meta } : {}),
+        ...(error ? { error } : {})
+      })
+    } else {
+      fileProviderLog.warn(message)
+    }
   }
 
-  private logError(message: string, error?: unknown): void {
-    if (error) {
-      console.error(`${chalk.redBright('[FileProvider]')} ${message}`, error)
+  private logDebug(message: string, meta?: Record<string, Primitive>): void {
+    if (meta) {
+      fileProviderLog.debug(message, { meta })
     } else {
-      console.error(`${chalk.redBright('[FileProvider]')} ${message}`)
+      fileProviderLog.debug(message)
+    }
+  }
+
+  private logError(
+    message: string,
+    error?: unknown,
+    meta?: Record<string, Primitive>
+  ): void {
+    if (error || meta) {
+      fileProviderLog.error(message, {
+        ...(meta ? { meta } : {}),
+        ...(error ? { error } : {})
+      })
+    } else {
+      fileProviderLog.error(message)
+    }
+  }
+
+  private recordContentFailure(
+    fileId: number,
+    lastError: string | null,
+    updatedAt?: number | null
+  ): void {
+    let timestamp: number | null
+    if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
+      timestamp = updatedAt
+    } else if (updatedAt === null) {
+      timestamp = null
+    } else {
+      timestamp = Date.now()
+    }
+    this.failedContentCache.set(fileId, {
+      status: 'failed',
+      updatedAt: timestamp,
+      lastError
+    })
+  }
+
+  private clearContentFailure(fileId: number): void {
+    this.failedContentCache.delete(fileId)
+  }
+
+  private initializeBackgroundTaskService(): void {
+    if (!this.dbUtils) {
+      this.logWarn('Database utils not available, skipping background task service initialization')
+      return
+    }
+
+    this.activityTracker = AppUsageActivityTracker.getInstance()
+
+    this.backgroundTaskService = BackgroundTaskService.getInstance(this.activityTracker, {
+      idleThresholdMs: 60 * 60 * 1000,
+      checkIntervalMs: 5 * 60 * 1000,
+      maxConcurrentTasks: 1,
+      taskTimeoutMs: 30 * 60 * 1000
+    })
+
+    const cleanupTask = createFailedFilesCleanupTask(this.dbUtils.getDb(), {
+      maxRetryAge: 24 * 60 * 60 * 1000,
+      batchSize: 100,
+      maxRetries: 3
+    })
+
+    this.backgroundTaskService.registerTask(cleanupTask)
+
+    this.backgroundTaskService.on('taskCompleted', (data) => {
+      this.logInfo(`Background task completed: ${data.task.name}`, {
+        duration: formatDuration(data.duration)
+      })
+    })
+
+    this.backgroundTaskService.on('taskFailed', (data) => {
+      this.logError(`Background task failed: ${data.task.name}`, data.error)
+    })
+
+    this.backgroundTaskService.start()
+
+    this.logInfo('Background task service initialized')
+  }
+
+  /**
+   * Record user activity for background task scheduling
+   */
+  recordUserActivity(): void {
+    if (this.backgroundTaskService) {
+      this.backgroundTaskService.recordActivity()
+    }
+  }
+
+  private async shouldSkipContentDueToFailure(
+    file: typeof filesSchema.$inferSelect
+  ): Promise<boolean> {
+    if (!this.dbUtils || !file.id) return false
+
+    const fileId = file.id
+    const fileModifiedAt = this.toTimestamp(file.mtime)
+    const cachedFailure = this.failedContentCache.get(fileId)
+
+    if (cachedFailure) {
+      if (cachedFailure.updatedAt && fileModifiedAt && fileModifiedAt > cachedFailure.updatedAt) {
+        this.failedContentCache.delete(fileId)
+        this.logDebug('Retrying content parse after file modification', {
+          path: file.path
+        })
+      } else {
+        return true
+      }
+    }
+
+    try {
+      const [progress] = await this.dbUtils.getFileIndexProgressByFileIds([fileId])
+      if (!progress || progress.status !== 'failed') {
+        return false
+      }
+
+      const progressUpdatedAt = this.toTimestamp(progress.updatedAt)
+      if (progressUpdatedAt && fileModifiedAt && fileModifiedAt > progressUpdatedAt) {
+        this.logDebug('Retrying content parse after recorded failure', {
+          path: file.path
+        })
+        return false
+      }
+
+      this.recordContentFailure(fileId, progress.lastError ?? null, progressUpdatedAt ?? null)
+      this.logDebug('Skipping content parse for previously failed file', {
+        path: file.path,
+        lastError: progress.lastError ?? 'unknown'
+      })
+      return true
+    } catch (error) {
+      this.logWarn('Failed to load previous file index status; continuing parse', error, {
+        fileId,
+        path: file.path
+      })
+      return false
     }
   }
 
   private createProgressLogger(label: string, total: number): ProgressLogger {
     return new ProgressLogger(label, total, (message) => this.logInfo(message))
+  }
+
+  public getWatchedPaths(): string[] {
+    return [...this.WATCH_PATHS]
   }
 
   private toTimestamp(value: Date | number | string | null | undefined): number | null {
@@ -354,6 +578,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
+
+    this.initializeBackgroundTaskService()
+
     if (!this.isInitializing) {
       this.logInfo('onLoad: initializing provider state...')
       this.isInitializing = this._initialize()
@@ -361,9 +588,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await this.isInitializing
     await this.ensureFileSystemWatchers()
     this.registerOpenersChannel(context)
-    this.logInfo(
-      `onLoad completed in ${chalk.cyan(((performance.now() - loadStart) / 1000).toFixed(2))}s`
-    )
+    const loadDuration = performance.now() - loadStart
+    this.logInfo('Provider onLoad completed', {
+      duration: formatDuration(loadDuration)
+    })
   }
 
   private async ensureFileSystemWatchers(): Promise<void> {
@@ -379,14 +607,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    this.logInfo(`Registering watch paths: ${chalk.gray(JSON.stringify(this.WATCH_PATHS))}`)
+    this.logInfo('Registering watch paths', {
+      count: this.WATCH_PATHS.length,
+      sample: this.WATCH_PATHS.slice(0, 3).join(', ')
+    })
 
     try {
       await Promise.all(
         this.WATCH_PATHS.map((watchPath) =>
           FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath)).catch(
             (error) => {
-              this.logError(`Failed to watch path ${chalk.gray(watchPath)}.`, error)
+              this.logError('Failed to watch path', error, {
+                path: watchPath
+              })
             }
           )
         )
@@ -415,7 +648,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       try {
         return await this.getOpenerForExtension(extension)
       } catch (error) {
-        this.logError(`Failed to resolve opener for extension ${chalk.gray(extension)}.`, error)
+        this.logError('Failed to resolve opener for extension', error, {
+          extension
+        })
         return null
       }
     })
@@ -662,7 +897,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         logo: iconRow?.value ?? ''
       }
     } catch (error) {
-      this.logError(`Failed to read app info for bundle ${chalk.gray(bundleId)}.`, error)
+      this.logError('Failed to read app info for bundle', error, {
+        bundleId
+      })
       return null
     }
   }
@@ -674,7 +911,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return `data:image/png;base64,${buffer.toString('base64')}`
       }
     } catch (error) {
-      this.logWarn(`Failed to extract icon for ${chalk.gray(appPath)}.`, error)
+      this.logWarn('Failed to extract icon', error, {
+        path: appPath
+      })
     }
     return ''
   }
@@ -806,9 +1045,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const idsToDelete = existing.map((file) => file.id)
     await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
     await this.searchIndex?.removeItems(existing.map((file) => file.path))
-    this.logInfo(
-      `${chalk.green('Incremental remove')} ${chalk.cyan(existing.length.toString())} file(s) from index.`
-    )
+    this.logInfo('Incremental remove completed', {
+      removed: existing.length
+    })
   }
 
   private async handleIncrementalAddsOrChanges(
@@ -868,16 +1107,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await this.processFileExtensions(inserted)
       await this.extractContentForFiles(inserted)
       await this.indexFilesForSearch(inserted)
-      this.logInfo(
-        `${chalk.green('Incremental index')} ${chalk.cyan(inserted.length.toString())} new file(s).`
-      )
+      this.logInfo('Incremental index completed', {
+        inserted: inserted.length
+      })
     }
 
     if (filesToUpdate.length > 0) {
       await this._processFileUpdates(filesToUpdate)
-      this.logInfo(
-        `${chalk.green('Incremental update')} ${chalk.cyan(filesToUpdate.length.toString())} file(s).`
-      )
+      this.logInfo('Incremental update completed', {
+        updated: filesToUpdate.length
+      })
     }
 
     if (unchangedCount > 0) {
@@ -911,7 +1150,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     } catch (error) {
       const err = error as NodeJS.ErrnoException
       if (err?.code !== 'ENOENT') {
-        this.logError(`Failed to read file metadata for ${chalk.gray(rawPath)}.`, error)
+        this.logError('Failed to read file metadata', error, {
+          path: rawPath
+        })
       }
       return null
     }
@@ -919,23 +1160,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async _initialize(): Promise<void> {
     const initStart = performance.now()
-    console.log('[FileProvider] Starting index process...')
+    this.logInfo('Starting index process')
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
     const indexEnsuredStart = performance.now()
     await this.ensureKeywordIndexes(db)
     await this.ensureIndexingSupportTables(db)
-    console.log(
-      `[FileProvider] ensureKeywordIndexes completed in ${(
-        performance.now() - indexEnsuredStart
-      ).toFixed(0)}ms`
-    )
+    this.logInfo('Keyword indexes ensured', {
+      duration: formatDuration(performance.now() - indexEnsuredStart)
+    })
     const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
 
     // --- 1. Index Cleanup (FR-IX-4) ---
     const cleanupStart = performance.now()
-    console.log('[FileProvider] Cleaning up indexes from removed watch paths...')
+    this.logInfo('Cleaning stale index entries from removed watch paths')
     const allDbFilePaths = await db
       .select({ path: filesSchema.path, id: filesSchema.id })
       .from(filesSchema)
@@ -946,18 +1185,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (filesToDelete.length > 0) {
       const idsToDelete = filesToDelete.map((f) => f.id)
-      console.log(
-        `[FileProvider] Deleting ${idsToDelete.length} files from removed paths. Sample:`,
-        filesToDelete.slice(0, 5).map((f) => f.path)
-      )
+      this.logInfo('Removing stale database entries', {
+        removed: idsToDelete.length
+      })
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       const pathsToDelete = filesToDelete.map((f) => f.path)
       await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
       await this.searchIndex?.removeItems(pathsToDelete)
     }
-    console.log(
-      `[FileProvider] Cleanup stage finished in ${(performance.now() - cleanupStart).toFixed(0)}ms`
-    )
+    this.logInfo('Cleanup stage finished', {
+      duration: formatDuration(performance.now() - cleanupStart),
+      removed: filesToDelete.length
+    })
 
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
     const strategyStart = performance.now()
@@ -967,25 +1206,28 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const newPathsToScan = this.WATCH_PATHS.filter((p) => !completedScanPaths.has(p))
     const reconciliationPaths = this.WATCH_PATHS.filter((p) => completedScanPaths.has(p))
 
-    console.log(
-      `[FileProvider] Scan Strategy: ${newPathsToScan.length} new paths for full scan, ${reconciliationPaths.length} existing paths for reconciliation.`
-    )
-    console.log(
-      `[FileProvider] Strategy calculation completed in ${(performance.now() - strategyStart).toFixed(0)}ms`
-    )
+    this.logInfo('Scan strategy prepared', {
+      newPaths: newPathsToScan.length,
+      reconciliationPaths: reconciliationPaths.length,
+      duration: formatDuration(performance.now() - strategyStart)
+    })
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
-      console.log('[FileProvider] Starting full scan for new paths:', newPathsToScan)
+      this.logInfo('Starting full scan for new paths', {
+        count: newPathsToScan.length,
+        sample: newPathsToScan.slice(0, 3).join(', ')
+      })
       for (const newPath of newPathsToScan) {
         const pathScanStart = performance.now()
-        console.log(`[FileProvider] Scanning new path: ${newPath}`)
+        this.logDebug('Scanning new path', { path: newPath })
         const diskFiles = await scanDirectory(newPath, excludePathsSet)
-        console.log(
-          `[FileProvider] scanDirectory completed for ${newPath} in ${(
-            performance.now() - pathScanStart
-          ).toFixed(0)}ms (found ${diskFiles.length} files)`
-        )
+        this.logDebug('Directory scan completed', {
+          path: newPath,
+          files: diskFiles.length,
+          duration: formatDuration(performance.now() - pathScanStart)
+        })
+
         const newFileRecords = diskFiles.map((file) => ({
           path: file.path,
           name: file.name,
@@ -999,8 +1241,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }))
 
         if (newFileRecords.length > 0) {
-          console.log(`[FileProvider] Found ${newFileRecords.length} files in ${newPath}.`)
-          const chunkSize = 500
+          this.logInfo('Preparing to index full-scan results', {
+            path: newPath,
+            files: newFileRecords.length
+          })
+          const chunkSize = 100
           const chunks: (typeof newFileRecords)[] = []
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
             chunks.push(newFileRecords.slice(i, i + chunkSize))
@@ -1009,16 +1254,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           await runAdaptiveTaskQueue(
             chunks,
             async (chunk, chunkIndex) => {
-              console.log(
-                `[FileProvider] Full scan for ${newPath}: Inserting chunk ${chunkIndex + 1}/${chunks.length}...`
-              )
               const chunkStart = performance.now()
               const inserted = await db.insert(filesSchema).values(chunk).returning()
-              console.log(
-                `[FileProvider] Inserted ${chunk.length} files in ${(
-                  performance.now() - chunkStart
-                ).toFixed(0)}ms`
-              )
+              this.logDebug('Full scan chunk inserted', {
+                path: newPath,
+                chunk: `${chunkIndex + 1}/${chunks.length}`,
+                size: chunk.length,
+                duration: formatDuration(performance.now() - chunkStart)
+              })
               await this.processFileExtensions(inserted)
               await this.extractContentForFiles(inserted)
               await this.indexFilesForSearch(inserted)
@@ -1028,43 +1271,46 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               label: `FileProvider::fullScan(${newPath})`
             }
           )
+        } else {
+          this.logDebug('No indexable files discovered during full scan', {
+            path: newPath
+          })
         }
+
         await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
-        console.log(
-          `[FileProvider] Completed full scan for ${newPath} in ${(
-            performance.now() - pathScanStart
-          ).toFixed(0)}ms`
-        )
+        this.logInfo('Full scan complete for path', {
+          path: newPath,
+          duration: formatDuration(performance.now() - pathScanStart),
+          files: newFileRecords.length
+        })
       }
     }
 
     // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
     if (reconciliationPaths.length > 0) {
       const reconciliationStart = performance.now()
-      console.log('[FileProvider] Starting reconciliation scan for paths:', reconciliationPaths)
+      this.logInfo('Starting reconciliation scan', {
+        count: reconciliationPaths.length,
+        sample: reconciliationPaths.slice(0, 3).join(', ')
+      })
       const dbReadStart = performance.now()
       const dbFiles = await db.select().from(filesSchema).where(eq(filesSchema.type, 'file'))
-      console.log(
-        `[FileProvider] Loaded ${dbFiles.length} DB file records in ${(
-          performance.now() - dbReadStart
-        ).toFixed(0)}ms`
-      )
+      this.logDebug('Loaded DB file records for reconciliation', {
+        count: dbFiles.length,
+        duration: formatDuration(performance.now() - dbReadStart)
+      })
       const dbFileMap = new Map(dbFiles.map((file) => [file.path, file]))
-
-      console.log(`[FileProvider] Found ${dbFileMap.size} files in DB for reconciliation.`)
 
       const diskScanStart = performance.now()
       const diskFiles: ScannedFileInfo[] = []
       for (const dir of reconciliationPaths) {
         diskFiles.push(...(await scanDirectory(dir, excludePathsSet)))
       }
-      console.log(
-        `[FileProvider] scanDirectory for reconciliation finished in ${(
-          performance.now() - diskScanStart
-        ).toFixed(0)}ms (found ${diskFiles.length} files)`
-      )
+      this.logDebug('Disk reconciliation scan finished', {
+        files: diskFiles.length,
+        duration: formatDuration(performance.now() - diskScanStart)
+      })
       const diskFileMap = new Map(diskFiles.map((file) => [file.path, file]))
-      console.log(`[FileProvider] Found ${diskFileMap.size} files on disk for reconciliation.`)
 
       const filesToAdd: ScannedFileInfo[] = []
       const filesToUpdate: (typeof filesSchema.$inferSelect)[] = []
@@ -1095,12 +1341,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const deletedFileIds = deletedFiles.map((file) => file.id)
 
       if (deletedFileIds.length > 0) {
-        console.log(
-          `[FileProvider] Deleting ${deletedFileIds.length} missing files. Sample:`,
-          Array.from(dbFileMap.values())
-            .slice(0, 5)
-            .map((f) => f.path)
-        )
+        this.logInfo('Removing files missing from disk', {
+          count: deletedFileIds.length
+        })
         await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
         if (deletedFiles.length > 0) {
           await this.searchIndex?.removeItems(deletedFiles.map((file) => file.path))
@@ -1108,12 +1351,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       if (filesToUpdate.length > 0) {
-        console.log(`[FileProvider] Updating ${filesToUpdate.length} modified files.`)
+        this.logInfo('Updating modified files during reconciliation', {
+          count: filesToUpdate.length
+        })
         await this._processFileUpdates(filesToUpdate)
       }
 
       if (filesToAdd.length > 0) {
-        console.log(`[FileProvider] Adding ${filesToAdd.length} new files during reconciliation.`)
+        this.logInfo('Indexing new files discovered during reconciliation', {
+          count: filesToAdd.length
+        })
         const newFileRecords = filesToAdd.map((file) => ({
           path: file.path,
           name: file.name,
@@ -1137,11 +1384,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           async (chunk, chunkIndex) => {
             const chunkStart = performance.now()
             const inserted = await db.insert(filesSchema).values(chunk).returning()
-            console.log(
-              `[FileProvider] Reconciliation inserted ${chunk.length} files (chunk ${
-                chunkIndex + 1
-              }/${chunks.length}) in ${(performance.now() - chunkStart).toFixed(0)}ms`
-            )
+            this.logDebug('Reconciliation chunk inserted', {
+              chunk: `${chunkIndex + 1}/${chunks.length}`,
+              size: chunk.length,
+              duration: formatDuration(performance.now() - chunkStart)
+            })
             await this.processFileExtensions(inserted)
             await this.extractContentForFiles(inserted)
             await this.indexFilesForSearch(inserted)
@@ -1152,36 +1399,42 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           }
         )
       }
-      console.log(
-        `[FileProvider] Reconciliation completed in ${(
-          performance.now() - reconciliationStart
-        ).toFixed(0)}ms`
-      )
+
+      this.logInfo('Reconciliation completed', {
+        duration: formatDuration(performance.now() - reconciliationStart),
+        added: filesToAdd.length,
+        updated: filesToUpdate.length,
+        deleted: deletedFileIds.length
+      })
     }
 
-    console.log(
-      `[FileProvider] Index process complete in ${((performance.now() - initStart) / 1000).toFixed(2)}s.`
-    )
+    this.logInfo('Index process complete', {
+      duration: formatDuration(performance.now() - initStart)
+    })
   }
 
   private async _processFileUpdates(
     filesToUpdate: (typeof filesSchema.$inferSelect)[],
-    chunkSize = 50
+    chunkSize = 10
   ) {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
 
+    // 重新使用chunk方式，但优化日志输出
     const chunks: (typeof filesSchema.$inferSelect)[][] = []
     for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
       chunks.push(filesToUpdate.slice(i, i + chunkSize))
     }
 
+    let processedCount = 0
+    const logInterval = 200
+
     await runAdaptiveTaskQueue(
       chunks,
-      async (chunk, chunkIndex) => {
-        console.debug(`[FileProvider] Updating chunk ${chunkIndex + 1}/${chunks.length}...`)
+      async (chunk) => {
         const chunkStart = performance.now()
 
+        // 批量更新文件信息
         const updatePromises = chunk.map((file) =>
           db
             .update(filesSchema)
@@ -1198,17 +1451,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             .where(eq(filesSchema.id, file.id))
         )
         await Promise.all(updatePromises)
+
         await this.processFileExtensions(chunk)
+
         await this.extractContentForFiles(chunk)
+
         await this.indexFilesForSearch(chunk)
-        console.debug(
-          `[FileProvider] Updated chunk of ${chunk.length} files in ${(
-            performance.now() - chunkStart
-          ).toFixed(0)}ms`
-        )
+
+        processedCount += chunk.length
+        if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {
+          this.logDebug('File update chunk processed', {
+            processed: processedCount,
+            total: filesToUpdate.length,
+            duration: formatDuration(performance.now() - chunkStart),
+            averageDuration: formatDuration(performance.now() - chunkStart / processedCount)
+          })
+        }
       },
       {
-        estimatedTaskTimeMs: 6,
+        estimatedTaskTimeMs: 10,
         label: 'FileProvider::processFileUpdates'
       }
     )
@@ -1221,11 +1482,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const indexStart = performance.now()
     const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
     await this.searchIndex.indexItems(items)
-    console.debug(
-      `[FileProvider] Indexed ${files.length} files for search in ${(
-        performance.now() - indexStart
-      ).toFixed(0)}ms`
-    )
+
+    // 只在处理大量文件时输出详细日志，减少日志噪音
+    if (files.length >= 50) {
+      this.logDebug('Indexed files for search', {
+        count: files.length,
+        duration: formatDuration(performance.now() - indexStart)
+      })
+    }
   }
 
   private buildSearchIndexItem(file: typeof filesSchema.$inferSelect): SearchIndexItem {
@@ -1278,46 +1542,72 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils) return
     if (files.length === 0) return
 
-    const extensionsStart = performance.now()
-    const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
-    await runAdaptiveTaskQueue(
-      files,
-      async (file) => {
-        try {
-          const icon = extractFileIcon(file.path)
-          extensionsToAdd.push({
-            fileId: file.id,
-            key: 'icon',
-            value: `data:image/png;base64,${icon.toString('base64')}`
-          })
-        } catch {
-          /* ignore */
-        }
-
-        const fileExtension = file.extension || path.extname(file.name).toLowerCase()
-        const keywords = KEYWORD_MAP[fileExtension]
-        if (keywords) {
-          extensionsToAdd.push({
-            fileId: file.id,
-            key: 'keywords',
-            value: JSON.stringify(keywords)
-          })
-        }
-      },
+    const timingToken = timingLogger.start(
+      'FileProvider:ProcessExtensions',
       {
-        estimatedTaskTimeMs: 3,
-        label: 'FileProvider::processFileExtensions'
-      }
+        stage: 'ProcessFileExtensions',
+        message: 'Processing file extensions',
+        files: files.length
+      },
+      FILE_TIMING_BASE_OPTIONS
     )
 
-    if (extensionsToAdd.length > 0) {
-      await this.dbUtils.addFileExtensions(extensionsToAdd)
+    const extensionsToAdd: { fileId: number; key: string; value: string }[] = []
+    let status: 'success' | 'failed' = 'success'
+
+    try {
+      await runAdaptiveTaskQueue(
+        files,
+        async (file) => {
+          try {
+            const icon = extractFileIcon(file.path)
+            extensionsToAdd.push({
+              fileId: file.id,
+              key: 'icon',
+              value: `data:image/png;base64,${icon.toString('base64')}`
+            })
+          } catch {
+            /* ignore */
+          }
+
+          const fileExtension = file.extension || path.extname(file.name).toLowerCase()
+          const keywords = KEYWORD_MAP[fileExtension]
+          if (keywords) {
+            extensionsToAdd.push({
+              fileId: file.id,
+              key: 'keywords',
+              value: JSON.stringify(keywords)
+            })
+          }
+        },
+        {
+          estimatedTaskTimeMs: 3,
+          label: 'FileProvider::processFileExtensions'
+        }
+      )
+
+      if (extensionsToAdd.length > 0) {
+        await this.dbUtils.addFileExtensions(extensionsToAdd)
+      }
+    } catch (error) {
+      status = 'failed'
+      throw error
+    } finally {
+      timingLogger.finish(
+        timingToken,
+        {
+          stage: 'ProcessFileExtensions',
+          message:
+            status === 'success'
+              ? 'Processed file extensions'
+              : 'Failed to process file extensions',
+          files: files.length,
+          extensions: extensionsToAdd.length,
+          status
+        },
+        FILE_TIMING_BASE_OPTIONS
+      )
     }
-    console.debug(
-      `[FileProvider] processFileExtensions handled ${files.length} files (${extensionsToAdd.length} extensions) in ${(
-        performance.now() - extensionsStart
-      ).toFixed(0)}ms`
-    )
   }
 
   private async extractContentForFiles(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
@@ -1330,7 +1620,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         try {
           await this.extractContentForFile(file)
         } catch (error) {
-          console.error(`[FileProvider] Failed to extract content for ${file.path}:`, error)
+          this.logError('Failed to extract content for file', error, {
+            path: file.path
+          })
         }
       },
       {
@@ -1355,7 +1647,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           totalBytes: total
         })
         .catch((error) =>
-          console.error(`[FileProvider] Failed to update content progress for ${fileId}:`, error)
+          this.logError('Failed to update content progress', error, {
+            fileId
+          })
         )
     }
   }
@@ -1373,6 +1667,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: file.size ?? null,
         lastError: 'content-indexing-disabled'
       })
+      this.clearContentFailure(file.id)
       return
     }
 
@@ -1387,6 +1682,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size,
         lastError: 'file-too-large'
       })
+      this.clearContentFailure(file.id)
+      file.content = null
+      return
+    }
+
+    if (await this.shouldSkipContentDueToFailure(file)) {
       file.content = null
       return
     }
@@ -1399,6 +1700,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       startedAt: new Date(),
       lastError: null
     })
+    this.clearContentFailure(file.id)
 
     const progressReporter = this.createProgressReporter(file.id, size)
     const parseStart = performance.now()
@@ -1414,7 +1716,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         progressReporter
       )
     } catch (error) {
-      console.error(`[FileProvider] Parser threw for ${file.path}:`, error)
+      this.logError('Parser threw while processing file', error, {
+        path: file.path
+      })
       await this.dbUtils.setFileIndexProgress(file.id, {
         status: 'failed',
         progress: 100,
@@ -1422,6 +1726,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size ?? null,
         lastError: error instanceof Error ? error.message : 'parser-error'
       })
+      this.recordContentFailure(
+        file.id,
+        error instanceof Error ? error.message : 'parser-error'
+      )
       file.content = null
       return
     }
@@ -1434,6 +1742,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size ?? null,
         lastError: 'parser-not-found'
       })
+      this.clearContentFailure(file.id)
       file.content = null
       return
     }
@@ -1475,9 +1784,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       if (result.embeddings && result.embeddings.length > 0) {
         // TODO: hook into embeddings table when vector storage is ready
-        console.debug(
-          `[FileProvider] Parser returned ${result.embeddings.length} embedding(s) for ${file.path}.`
-        )
+        this.logDebug('Parser returned embeddings for file', {
+          path: file.path,
+          embeddings: result.embeddings.length
+        })
       }
 
       await this.dbUtils.setFileIndexProgress(fileId, {
@@ -1488,10 +1798,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastError: null,
         updatedAt: new Date()
       })
+      this.clearContentFailure(fileId)
 
-      console.debug(
-        `[FileProvider] Content parsed for ${file.path} in ${durationMs.toFixed(0)}ms (length=${trimmedContent.length})`
-      )
+      this.logDebug('Content parsed for file', {
+        path: file.path,
+        duration: formatDuration(durationMs),
+        length: trimmedContent.length
+      })
       return
     }
 
@@ -1508,6 +1821,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         status: 'skipped',
         ...progressPayload
       })
+      this.clearContentFailure(fileId)
       file.content = null
       return
     }
@@ -1516,6 +1830,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       status: 'failed',
       ...progressPayload
     })
+    this.recordContentFailure(fileId, result.reason ?? null)
     file.content = null
   }
 
@@ -1536,7 +1851,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
       return stats.size
     } catch (error) {
-      console.error(`[FileProvider] Failed to stat file size for ${file.path}:`, error)
+      this.logError('Failed to stat file size', error, {
+        path: file.path
+      })
       return null
     }
   }
@@ -1749,14 +2066,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { summary, entries }
   }
 
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+    searchLogger.logProviderSearch('file-provider', query.text, 'File System')
+    searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
+      searchLogger.fileSearchNotInitialized()
       return TuffFactory.createSearchResult(query).build()
     }
 
     const searchStart = performance.now()
     const rawText = query.text.trim()
     const { text: searchText, typeFilters } = this.extractSearchFilters(rawText)
+    searchLogger.fileSearchText(searchText, typeFilters.size)
+
+    const logTerms = searchText.toLowerCase().split(/[\s/]+/).filter(Boolean)
+    searchLogger.logKeywordAnalysis(searchText, logTerms, typeFilters.size)
 
     if (!searchText && typeFilters.size === 0) {
       return TuffFactory.createSearchResult(query).build()
@@ -1773,6 +2097,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     let preciseMatchPaths: Set<string> | null = null
     if (terms.length > 0) {
+      searchLogger.filePreciseSearch(terms)
       const preciseStart = performance.now()
       const preciseSearchLimit = 200
       const preciseQueries = terms.map((term) =>
@@ -1782,8 +2107,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
           .limit(preciseSearchLimit)
       )
+      searchLogger.filePreciseQueries(preciseQueries.length)
       const preciseResults = await Promise.all(preciseQueries)
       const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
+      searchLogger.filePreciseResults(termMatches.map((s) => s.size))
 
       if (termMatches.length > 0) {
         preciseMatchPaths = termMatches.reduce((accumulator, current) => {
@@ -1791,11 +2118,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           return new Set([...accumulator].filter((id) => current.has(id)))
         })
       }
-      console.debug(
-        `[FileProvider] Precise keyword lookup for [${terms.join(', ')}] took ${(
-          performance.now() - preciseStart
-        ).toFixed(0)}ms`
-      )
+      this.logDebug('Precise keyword lookup completed', {
+        terms: terms.join(', '),
+        duration: formatDuration(performance.now() - preciseStart)
+      })
     }
 
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
@@ -1814,22 +2140,24 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           ? new Set([...preciseMatchPaths, ...phraseSet])
           : phraseSet
       }
-      console.debug(
-        `[FileProvider] Phrase keyword lookup for "${normalizedQuery}" took ${(
-          performance.now() - phraseStart
-        ).toFixed(0)}ms (matches: ${preciseMatchPaths?.size ?? 0})`
-      )
+      this.logDebug('Phrase keyword lookup completed', {
+        query: normalizedQuery,
+        matches: preciseMatchPaths?.size ?? 0,
+        duration: formatDuration(performance.now() - phraseStart)
+      })
     }
 
     const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
+    searchLogger.fileFtsQuery(ftsQuery || '')
     const ftsStart = performance.now()
     const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
+    searchLogger.fileFtsResults(ftsMatches.length, performance.now() - ftsStart)
     if (ftsQuery) {
-      console.debug(
-        `[FileProvider] FTS search (${ftsQuery}) returned ${ftsMatches.length} matches in ${(
-          performance.now() - ftsStart
-        ).toFixed(0)}ms`
-      )
+      this.logDebug('FTS search completed', {
+        query: ftsQuery,
+        matches: ftsMatches.length,
+        duration: formatDuration(performance.now() - ftsStart)
+      })
     }
 
     const preciseCandidates = preciseMatchPaths ? Array.from(preciseMatchPaths) : []
@@ -1847,6 +2175,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const candidatePaths = Array.from(candidateIds).slice(0, maxCandidateCount)
 
+    searchLogger.fileDataFetch(candidatePaths.length)
     const dataFetchStart = performance.now()
     const rows = await db
       .select({
@@ -1857,11 +2186,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
-    console.debug(
-      `[FileProvider] Loaded ${rows.length} candidate rows in ${(
-        performance.now() - dataFetchStart
-      ).toFixed(0)}ms`
-    )
+    searchLogger.fileDataResults(rows.length, performance.now() - dataFetchStart)
+    this.logDebug('Loaded candidate rows for scoring', {
+      count: rows.length,
+      duration: formatDuration(performance.now() - dataFetchStart)
+    })
 
     const filesMap = new Map<
       string,
@@ -1901,11 +2230,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const validPaths = Array.from(filesMap.keys())
     const usageStart = performance.now()
     const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(validPaths)
-    console.debug(
-      `[FileProvider] Usage summary lookup for ${validPaths.length} items took ${(
-        performance.now() - usageStart
-      ).toFixed(0)}ms`
-    )
+    this.logDebug('Usage summary lookup completed', {
+      items: validPaths.length,
+      duration: formatDuration(performance.now() - usageStart)
+    })
     const usageMap = new Map(usageSummaries.map((summary) => [summary.itemId, summary]))
 
     const ftsScoreMap = new Map<string, number>()
@@ -2004,12 +2332,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .slice(0, 50)
 
     const result = TuffFactory.createSearchResult(query).setItems(scoredItems).build()
-    console.debug(
-      `[FileProvider] onSearch("${rawText}") returned ${scoredItems.length} items in ${(
-        (performance.now() - searchStart) /
-        1000
-      ).toFixed(2)}s`
-    )
+    this.logDebug('Search completed', {
+      query: rawText,
+      items: scoredItems.length,
+      duration: formatDuration(performance.now() - searchStart)
+    })
     return result
   }
 
@@ -2038,7 +2365,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) {
       const err = new Error('File path not found in TuffItem')
-      console.error(err)
+      this.logError('File path missing for execution request', err)
       return null
     }
 
@@ -2046,7 +2373,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await shell.openPath(filePath)
       return null
     } catch (err) {
-      console.error(`[FileProvider] Failed to open file at: ${filePath}`, err)
+      this.logError('Failed to open file', err, { path: filePath })
       return null
     }
   }

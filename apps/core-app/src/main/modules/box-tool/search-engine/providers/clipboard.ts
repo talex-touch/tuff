@@ -1,13 +1,7 @@
-import {
-  ISearchProvider,
-  TuffItem,
-  TuffQuery,
-  TuffSearchResult,
-  ProviderContext,
-  TuffRender
-} from '../types'
+import { ISearchProvider, TuffItem, TuffQuery, TuffSearchResult, ProviderContext } from '../types'
+import { TuffRender } from '@talex-touch/utils'
 import { clipboardHistory } from '../../../../db/schema'
-import { desc, like } from 'drizzle-orm'
+import { desc, like, or } from 'drizzle-orm'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 
@@ -56,7 +50,12 @@ export class ClipboardProvider implements ISearchProvider {
       results = await this.db
         .select()
         .from(clipboardHistory)
-        .where(like(clipboardHistory.content, `%${keyword}%`))
+        .where(
+          or(
+            like(clipboardHistory.content, `%${keyword}%`),
+            like(clipboardHistory.metadata, `%${keyword}%`)
+          )
+        )
         .orderBy(desc(clipboardHistory.timestamp))
         .limit(20)
     }
@@ -81,6 +80,15 @@ export class ClipboardProvider implements ISearchProvider {
   }
 
   private transformToSearchItem(item: typeof clipboardHistory.$inferSelect): TuffItem {
+    let metadata: Record<string, unknown> | null = null
+    if (item.metadata) {
+      try {
+        metadata = JSON.parse(item.metadata)
+      } catch {
+        metadata = null
+      }
+    }
+
     const render: TuffRender = {
       mode: 'default',
       basic: {
@@ -125,6 +133,17 @@ export class ClipboardProvider implements ISearchProvider {
       render.basic.icon = 'ri:file-copy-2-line'
     }
 
+    if (
+      metadata?.ocr_excerpt &&
+      typeof metadata.ocr_excerpt === 'string' &&
+      metadata.ocr_excerpt.trim()
+    ) {
+      const snippet = metadata.ocr_excerpt.trim()
+      render.basic.subtitle = render.basic.subtitle
+        ? `${render.basic.subtitle} · ${snippet}`
+        : snippet
+    }
+
     return {
       id: `clipboard-${item.id}`,
       source: {
@@ -150,7 +169,8 @@ export class ClipboardProvider implements ISearchProvider {
         }
       ],
       meta: {
-        raw: item
+        raw: item,
+        metadata
       }
     }
   }

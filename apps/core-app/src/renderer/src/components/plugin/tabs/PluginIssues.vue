@@ -1,6 +1,8 @@
 <template>
   <div class="p-4">
-    <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200">Plugin Load Issues</h2>
+    <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200">
+      {{ t('plugin.issues.title') }}
+    </h2>
     <div class="issues-list max-h-[calc(100vh-20rem)] overflow-y-auto">
       <div
         v-for="(issue, index) in plugin.issues"
@@ -20,7 +22,7 @@
         />
         <div class="ml-3">
           <p class="font-bold text-sm text-gray-900 dark:text-gray-100">
-            Source: {{ issue.source }}
+            {{ t('plugin.issues.source') }}: {{ issue.source }}
           </p>
           <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ issue.message }}</p>
           <pre
@@ -36,8 +38,11 @@
 
 <script lang="ts" name="PluginIssues" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import { useI18n } from 'vue-i18n'
 
 defineProps<{
   plugin: ITouchPlugin
 }>()
+
+const { t } = useI18n()
 </script>

@@ -63,13 +63,22 @@ async function fixPointer(targetEl: HTMLElement): Promise<void> {
 }
 
 onMounted(() => {
-  setTimeout(() => {
+  // 立即尝试设置indicator
+  const setIndicator = () => {
     const dom = document.querySelector('.TouchMenuItem-Container.active')
-
     if (dom) {
       fixPointer(dom as HTMLElement)
     }
-  }, 500)
+  }
+
+  // 立即执行一次
+  setIndicator()
+
+  // 延迟执行一次，确保DOM完全渲染
+  setTimeout(setIndicator, 100)
+
+  // 再次延迟执行，确保路由完全加载
+  setTimeout(setIndicator, 500)
 })
 </script>
 

@@ -863,12 +863,29 @@ export interface TuffMeta {
    * @description The ID of the feature.
    */
   featureId?: string
+
+  /**
+   * For plugin feature items, this holds the interaction configuration.
+   * @description Defines how the feature should be rendered (widget, webcontent, or index).
+   */
+  interaction?: {
+    type: 'webcontent' | 'widget' | 'index'
+    path?: string
+  }
+
   /**
    * Defines the default action to be taken when the item is executed (e.g., by pressing Enter).
    * This is used to distinguish simple actions (like 'copy') from feature activations.
    * @description The default action type.
    */
   defaultAction?: string;
+
+  /**
+   * Priority of the item for sorting in search results
+   * Higher numbers have higher priority (displayed first)
+   * @description Priority value for search result ordering
+   */
+  priority?: number;
   /**
    * 原始数据
    * @description 项目的原始数据对象，用于特殊处理

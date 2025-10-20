@@ -22,6 +22,9 @@ export const usePluginStore = defineStore('plugin-adapter', () => {
     const plugin = getPlugin(name)
     if (plugin) {
       plugin.status = status
+      console.log(`[PluginStore] Status updated for "${name}": ${status}`)
+    } else {
+      console.warn(`[PluginStore] Plugin "${name}" not found when updating status`)
     }
   }
 
@@ -35,7 +38,12 @@ export const usePluginStore = defineStore('plugin-adapter', () => {
   function reloadPlugin(plugin: ITouchPlugin): void {
     const p = getPlugin(plugin.name)
     if (p) {
-      Object.assign(p, plugin)
+      const updatedPlugin = reactive(plugin)
+      plugins.set(plugin.name, updatedPlugin)
+      console.log(`[PluginStore] Plugin "${plugin.name}" reloaded successfully`)
+    } else {
+      setPlugin(plugin)
+      console.log(`[PluginStore] Plugin "${plugin.name}" added during reload`)
     }
   }
 

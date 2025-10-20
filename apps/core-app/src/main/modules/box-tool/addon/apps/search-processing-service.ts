@@ -7,6 +7,7 @@ import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils
 import { formatLog, LogStyle, generateAcronym } from './app-utils'
 import chalk from 'chalk'
 import { performance } from 'perf_hooks'
+import { timingLogger, startTiming } from '@talex-touch/utils'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
 
@@ -20,7 +21,7 @@ export async function processSearchResults(
   isFuzzySearch: boolean,
   aliases: Record<string, string[]> // 需要传入别名数据
 ): Promise<ProcessedTuffItem[]> {
-  const processStart = performance.now()
+  const processStart = startTiming()
   const lowerCaseQuery = query.text.toLowerCase()
   const processedItems: ProcessedTuffItem[] = []
 
@@ -180,14 +181,30 @@ export async function processSearchResults(
 
   const durationMs = performance.now() - processStart
   if (durationMs > SLOW_PROCESS_THRESHOLD_MS) {
-    console.warn(
-      formatLog(
-        'SearchProcessor',
-        `Slow post-processing: ${chalk.green(sortedResults.length)} / ${chalk.cyan(
+    timingLogger.print(
+      'SearchProcessor:PostProcess',
+      durationMs,
+      {
+        message: `Slow post-processing: ${chalk.green(sortedResults.length)} / ${chalk.cyan(
           apps.length
-        )} items processed in ${chalk.cyan((durationMs / 1000).toFixed(2))}s`,
-        LogStyle.warning
-      )
+        )} items processed`,
+        style: 'warning',
+        unit: 's',
+        precision: 2,
+        suffix: ''
+      },
+      {
+        logThresholds: { none: SLOW_PROCESS_THRESHOLD_MS, info: 600, warn: 1200 },
+        formatter: (entry) =>
+          formatLog(
+            'SearchProcessor',
+            `${entry.meta?.message ?? 'Post-processing'} in ${chalk.cyan(
+              (entry.durationMs / 1000).toFixed(2)
+            )}s`,
+            LogStyle.warning
+          ),
+        logger: (message) => console.warn(message)
+      }
     )
   }
 

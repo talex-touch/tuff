@@ -22,9 +22,14 @@ const IPluginSettings = {
         name: 'Gitee',
         url: 'https://gitee.com/api/v5',
         adapter: 'GITEE'
+      },
+      {
+        name: 'Talex Official',
+        url: 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json',
+        adapter: 'OFFICIAL'
       }
     ],
-    adapter: ['NPM', 'GITHUB', 'GITEE', 'GITLAB', 'FOLDER']
+    adapter: ['NPM', 'GITHUB', 'GITEE', 'GITLAB', 'FOLDER', 'OFFICIAL']
   }
 }
 

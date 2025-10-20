@@ -64,7 +64,7 @@ export class PollingService {
       console.error(`[PollingService] Task '${id}' has an invalid interval of ${intervalMs}ms. Registration aborted.`);
       return;
     }
-    
+
     const nextRunMs = options.runImmediately ? Date.now() : Date.now() + intervalMs;
 
     this.tasks.set(id, {
@@ -114,7 +114,7 @@ export class PollingService {
       return;
     }
     this.isRunning = true;
-    console.log('[PollingService] Service started.');
+    console.debug('[PollingService] Service started.');
     this._reschedule();
   }
 
@@ -161,7 +161,7 @@ export class PollingService {
         tasksToRun.push(task);
       }
     }
-    
+
     if (tasksToRun.length > 0) {
         // console.debug(`[PollingService] Executing ${tasksToRun.length} tasks.`);
         for (const task of tasksToRun) {

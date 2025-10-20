@@ -39,8 +39,13 @@ const props = defineProps({
   },
   doActive: {
     type: Function,
-    default: (route, $route) =>
-      $route && $route.matched.some((record) => record.path.startsWith(route))
+    default: (route, $route) => {
+      if (!$route) return false
+      // 精确匹配路由路径
+      if ($route.path === route) return true
+      // 检查是否匹配路由记录
+      return $route.matched.some((record) => record.path === route)
+    }
   }
 })
 const emit = defineEmits(['active'])

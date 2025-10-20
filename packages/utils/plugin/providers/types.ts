@@ -17,6 +17,8 @@ export interface PluginInstallRequest {
   hintType?: PluginProviderType
   /** 可选元数据，在调用链中透传。 */
   metadata?: Record<string, unknown>
+  /** 客户端附加信息，仅用于 UI 状态同步。 */
+  clientMetadata?: Record<string, unknown>
 }
 
 export interface PluginProviderContext {

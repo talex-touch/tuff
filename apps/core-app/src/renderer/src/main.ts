@@ -30,6 +30,7 @@ preloadLog('Bootstrapping Talex Touch renderer...')
 async function bootstrap() {
   preloadDebugStep('Loading localization resources...', 0.05)
   const i18n = await setupI18n({ locale: 'zh-CN' })
+  ;(window as any).$i18n = i18n
 
   preloadDebugStep('Creating Vue application instance', 0.05)
   const app = createApp(App)

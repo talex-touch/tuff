@@ -11,6 +11,7 @@ import { innerRootPath } from './precore'
 import { TouchWindow } from './touch-window'
 import { TouchConfig } from './touch-config'
 import { ModuleManager } from './module-manager'
+import { mainLog } from '../utils/logger'
 
 export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = innerRootPath
@@ -28,7 +29,9 @@ export class TouchApp implements TalexTouch.TouchApp {
   channel: ITouchChannel
 
   constructor(app: Electron.App) {
-    console.log('[TouchApp] App running under: ' + this.rootPath)
+    mainLog.info('Running under application root', {
+      meta: { root: this.rootPath }
+    })
     checkDirWithCreate(this.rootPath, true)
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
@@ -41,7 +44,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     if (!app.isPackaged) {
       devProcessManager.init()
-      console.log('[TouchApp] Development process manager initialized')
+      mainLog.debug('Development process manager initialized')
     }
 
     this.window = new TouchWindow(_windowOptions)
@@ -52,27 +55,28 @@ export class TouchApp implements TalexTouch.TouchApp {
     app.setAppUserModelId('com.tagzxia.talex-touch')
 
     this.__init__().then(() => {
-      console.log('[TouchApp] TouchApp initialized!')
+      mainLog.success('TouchApp runtime initialized')
     })
   }
 
   async __init__(): Promise<void> {
     const startTime = new Date().getTime()
+    const renderTimer = mainLog.time('Renderer boot', 'success')
 
     touchEventBus.emit(TalexEvents.APP_START, new AppStartEvent())
 
     checkDirWithCreate(this.rootPath, true)
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
-      console.log(
-        '[TouchApp] App is packaged or release version ' + __dirname,
-        ' | ',
-        app.getAppPath()
-      )
+      mainLog.info('Booting packaged build', {
+        meta: { appPath: app.getAppPath() }
+      })
       const url = path.join(__dirname, '..', 'renderer', 'index.html')
 
       this.window.window.show()
-      console.log('[TouchApp] Loading (mainWindow) webContents from: ' + url)
+      mainLog.info('Loading renderer from file', {
+        meta: { url }
+      })
 
       await this.window.loadFile(url, {
         devtools: this.version === TalexTouch.AppVersion.DEV
@@ -84,12 +88,16 @@ export class TouchApp implements TalexTouch.TouchApp {
       }
 
       this.window.window.show()
-      console.log('[TouchApp DEV] Loading (mainWindow) webContents from: ' + url)
+      mainLog.info('Loading renderer from dev server', {
+        meta: { url }
+      })
 
       await this.window.loadURL(url, { devtools: true })
     }
 
-    console.log('[TouchApp] WebContents loaded!')
+    renderTimer.end('Renderer ready', {
+      meta: { mode: app.isPackaged ? 'file' : 'dev-server' }
+    })
 
     this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header }) => {
       const { event } = header

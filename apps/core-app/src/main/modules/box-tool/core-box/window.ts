@@ -1,6 +1,9 @@
 import { BoxWindowOption } from '../../../config/default'
-import { app, screen, WebContentsView } from 'electron'
+import { app, screen, WebContentsView, nativeTheme } from 'electron'
 import path from 'path'
+import * as fs from 'fs'
+import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
+import chalk from 'chalk'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window'
 import { TalexTouch } from '../../../types'
 import { getConfig } from '../../storage'
@@ -15,6 +18,34 @@ import { genTouchApp } from '../../../core'
 
 const windowAnimation = useWindowAnimation()
 
+const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
+
+const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
+const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
+
+type ThemeStyleConfig = {
+  theme?: {
+    style?: {
+      dark?: boolean
+      auto?: boolean
+    }
+    palette?: {
+      primary?: string
+    }
+    colors?: {
+      primary?: string
+    }
+    primaryColor?: string
+  }
+  palette?: {
+    primary?: string
+  }
+  colors?: {
+    primary?: string
+  }
+  primaryColor?: string
+}
+
 /**
  * @class WindowManager
  * @description
@@ -26,6 +57,10 @@ export class WindowManager {
   private _touchApp: TouchApp | null = null
   private uiView: WebContentsView | null = null
   private uiViewFocused = false
+  private attachedPlugin: TouchPlugin | null = null
+  private nativeThemeHandler: (() => void) | null = null
+  private currentThemeIsDark = false
+  private bundledThemeCss: string | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -45,6 +80,10 @@ export class WindowManager {
     return this.windows[this.windows.length - 1]
   }
 
+  public getAttachedPlugin(): TouchPlugin | null {
+    return this.attachedPlugin
+  }
+
   /**
    * 创建并初始化一个新的 CoreBox 窗口。
    */
@@ -57,7 +96,7 @@ export class WindowManager {
     windowAnimation.changeWindow(window)
 
     setTimeout(async () => {
-      console.log('[CoreBox] NewBox created, injecting developing tools ...')
+      console.debug('[CoreBox] NewBox created, injecting development tools.')
 
       try {
         if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {
@@ -83,7 +122,7 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.addListener('dom-ready', () => {
-      console.log(
+      console.debug(
         '[CoreBox] BoxWindow ' + window.window.webContents.id + ' dom loaded, registering ...'
       )
 
@@ -95,7 +134,7 @@ export class WindowManager {
 
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter((w) => w !== window)
-      console.log('[CoreBox] BoxWindow closed!')
+      console.debug('[CoreBox] BoxWindow closed!')
     })
 
     // window.window.on('blur', () => {
@@ -235,7 +274,7 @@ export class WindowManager {
 
   public shrink(): void {
     if (this.uiView) {
-      console.warn('[CoreBox] Cannot shrink window while UI view is attached.')
+      console.debug('[CoreBox] Cannot shrink window while UI view is attached.')
       return
     }
     this.detachUIView()
@@ -272,6 +311,167 @@ export class WindowManager {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
+  private loadThemeStyleConfig(): ThemeStyleConfig {
+    const config = getConfig('theme-style.ini') as ThemeStyleConfig | undefined
+    if (config && typeof config === 'object') {
+      return config
+    }
+    return {}
+  }
+
+  private resolveDarkPreference(themeStyle: ThemeStyleConfig): {
+    followSystem: boolean
+    dark: boolean
+  } {
+    const style = themeStyle.theme?.style
+    const followSystem = style?.auto ?? true
+    const dark = followSystem ? nativeTheme.shouldUseDarkColors : Boolean(style?.dark)
+    return { followSystem, dark }
+  }
+
+  private resolveThemeStoragePath(): { directory: string; file: string } {
+    const userDataDir = app.getPath('userData')
+    const directory = path.join(userDataDir, ...CORE_BOX_THEME_SUBDIR)
+    const file = path.join(directory, CORE_BOX_THEME_FILE_NAME)
+    return { directory, file }
+  }
+
+  private getBundledThemeCss(): string {
+    if (!this.bundledThemeCss) {
+      this.bundledThemeCss = defaultCoreBoxThemeCss
+    }
+    return this.bundledThemeCss
+  }
+
+  private loadInternalThemeCss(): string {
+    const defaultCss = this.getBundledThemeCss()
+    const { directory, file } = this.resolveThemeStoragePath()
+
+    try {
+      fs.mkdirSync(directory, { recursive: true })
+
+      if (!fs.existsSync(file)) {
+        fs.writeFileSync(file, defaultCss, 'utf-8')
+        return defaultCss
+      }
+
+      const content = fs.readFileSync(file, 'utf-8')
+      return content.trim().length > 0 ? content : defaultCss
+    } catch (error) {
+      console.error('[CoreBox] Failed to prepare theme stylesheet, falling back to default.', error)
+      return defaultCss
+    }
+  }
+
+  private applyThemeToUIView(view: WebContentsView): void {
+    const themeStyle = this.loadThemeStyleConfig()
+    const css = this.loadInternalThemeCss()
+
+    if (!view.webContents.isDestroyed()) {
+      void view.webContents.insertCSS(css).catch((error) => {
+        console.error('[CoreBox] Failed to inject theme variables into UI view:', error)
+      })
+    }
+
+    const { followSystem, dark } = this.resolveDarkPreference(themeStyle)
+    this.updateUIViewDarkClass(view, dark)
+    this.notifyThemeChange(dark)
+
+    if (this.nativeThemeHandler) {
+      nativeTheme.removeListener('updated', this.nativeThemeHandler)
+      this.nativeThemeHandler = null
+    }
+
+    if (followSystem) {
+      const handler = () => {
+        if (!this.uiView || this.uiView !== view || view.webContents.isDestroyed()) {
+          return
+        }
+        this.updateUIViewDarkClass(view, nativeTheme.shouldUseDarkColors)
+        this.notifyThemeChange(nativeTheme.shouldUseDarkColors)
+      }
+      nativeTheme.on('updated', handler)
+      this.nativeThemeHandler = handler
+    }
+  }
+
+  private updateUIViewDarkClass(view: WebContentsView, isDark: boolean): void {
+    if (view.webContents.isDestroyed()) {
+      return
+    }
+
+    const themeLabel = isDark
+      ? chalk.bgHex('#0f172a').white.bold(' DARK ')
+      : chalk.bgHex('#f8fafc').black.bold(' LIGHT ')
+    console.log(`${chalk.gray('[CoreBox]')} ${chalk.magenta('Apply UI theme')} ${themeLabel}`)
+
+    const script = `
+      (() => {
+        const root = document.documentElement;
+        if (!root) { return; }
+        root.classList.${isDark ? 'add' : 'remove'}('dark');
+      })();
+    `
+
+    void view.webContents.executeJavaScript(script).catch((error) => {
+      console.error('[CoreBox] Failed to update UI view theme class:', error)
+    })
+  }
+
+  private runUIViewDarkThemeSync(): void {
+    if (!this.uiView || this.uiView.webContents.isDestroyed()) {
+      return
+    }
+
+    const themeLabel = this.currentThemeIsDark
+      ? chalk.bgHex('#0b1120').white.bold(' DARK ')
+      : chalk.bgHex('#f1f5f9').black.bold(' LIGHT ')
+    console.log(`${chalk.gray('[CoreBox]')} ${chalk.blue('Sync UI theme')} ${themeLabel}`)
+
+    const script = `
+      (() => {
+        const root = document.documentElement;
+        if (!root) { return; }
+        const isDark = ${JSON.stringify(this.currentThemeIsDark)};
+        if (isDark) {
+          root.classList.remove('dark');
+          root.classList.add('dark');
+        } else {
+          root.classList.add('dark');
+          root.classList.remove('dark');
+        }
+        console.log('[CoreBox] Current app theme:', isDark ? 'dark' : 'light');
+      })();
+    `
+
+    void this.uiView.webContents.executeJavaScript(script).catch((error) => {
+      console.error('[CoreBox] Failed to synchronize UI view theme:', error)
+    })
+  }
+
+  private notifyThemeChange(isDark: boolean): void {
+    this.currentThemeIsDark = isDark
+    const themeLabel = isDark
+      ? chalk.bgHex('#1f2937').white.bold(' DARK ')
+      : chalk.bgHex('#e5e7eb').black.bold(' LIGHT ')
+    console.log(`${chalk.gray('[CoreBox]')} ${chalk.cyan('Theme ready')} ${themeLabel}`)
+    const payload = { dark: isDark }
+
+    const currentWindow = this.current
+    if (currentWindow && !currentWindow.window.isDestroyed()) {
+      void this.touchApp.channel.sendTo(
+        currentWindow.window,
+        ChannelType.MAIN,
+        CORE_BOX_THEME_EVENT,
+        payload
+      )
+    }
+
+    if (this.attachedPlugin) {
+      this.sendChannelMessageToUIView(CORE_BOX_THEME_EVENT, payload)
+    }
+  }
+
   public attachUIView(url: string, plugin?: TouchPlugin): void {
     const currentWindow = this.current
     if (!currentWindow) {
@@ -298,6 +498,7 @@ export class WindowManager {
     }
 
     const view = (this.uiView = new WebContentsView({ webPreferences }))
+    this.attachedPlugin = plugin ?? null
 
     this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
@@ -311,6 +512,9 @@ export class WindowManager {
     })
 
     this.uiView.webContents.addListener('dom-ready', () => {
+      this.applyThemeToUIView(view)
+      this.runUIViewDarkThemeSync()
+
       if (plugin) {
         if (!app.isPackaged || plugin.dev.enable) {
           view.webContents.openDevTools({ mode: 'detach' })
@@ -496,10 +700,15 @@ export class WindowManager {
   }
 
   public detachUIView(): void {
+    if (this.nativeThemeHandler) {
+      nativeTheme.removeListener('updated', this.nativeThemeHandler)
+      this.nativeThemeHandler = null
+    }
+
     if (this.uiView) {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
-        console.log('[WindowManager] Removing child view from current window.')
+        this.uiView.webContents.closeDevTools()
         currentWindow.window.contentView.removeChildView(this.uiView)
       } else {
         console.warn(
@@ -509,7 +718,7 @@ export class WindowManager {
       // The WebContents are automatically destroyed when the WebContentsView is removed.
       // Explicitly destroying them here is unnecessary and causes a type error.
       this.uiView = null
-      console.log('[WindowManager] uiView set to null.')
+      this.attachedPlugin = null
     }
   }
 
@@ -519,10 +728,12 @@ export class WindowManager {
     }
   }
 
-  public sendChannelMessageToUIView(data: any): void {
-    if (this.uiView) {
-      this.uiView.webContents.send('@plugin-process-message', data)
+  public sendChannelMessageToUIView(eventName: string, data?: any): void {
+    if (!this.attachedPlugin) {
+      return
     }
+
+    void this.touchApp.channel.sendToPlugin(this.attachedPlugin.name, eventName, data)
   }
 
   public getUIView(): WebContentsView | undefined {

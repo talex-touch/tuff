@@ -82,5 +82,6 @@
     "statusBarItem.remoteBackground": "#175191",
     "statusBarItem.remoteForeground": "#eaf6fd",
   },
-  "java.jdt.ls.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/21.0.2"
+  "java.jdt.ls.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/17.0.2",
+  "java.import.gradle.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/17.0.2"
 }

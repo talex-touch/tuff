@@ -33,6 +33,9 @@ export interface IPluginModule {
   // Disable the plugin with the given name.
   disablePlugin: (name: string) => Promise<any>
 
+  // Reload the plugin with the given name.
+  reloadPlugin: (name: string) => Promise<any>
+
   // Set the webviewInit flag of the plugin with the given name.
   setPluginWebviewInit: (name: string) => any
 
@@ -56,6 +59,18 @@ class PluginModule {
 
   async disablePlugin(name: string): Promise<any> {
     return touchChannel.send('disable-plugin', { name })
+  }
+
+  async reloadPlugin(name: string): Promise<any> {
+    try {
+      console.log(`[PluginModule] Attempting to reload plugin: ${name}`)
+      const result = await touchChannel.send('reload-plugin', { name })
+      console.log(`[PluginModule] Plugin reload result for ${name}:`, result)
+      return result
+    } catch (error) {
+      console.error(`[PluginModule] Failed to reload plugin ${name}:`, error)
+      throw error
+    }
   }
 
   setPluginWebviewInit(name: string): any {
