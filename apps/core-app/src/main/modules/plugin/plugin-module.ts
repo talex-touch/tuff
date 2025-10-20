@@ -1042,9 +1042,9 @@ export class PluginModule extends BaseModule {
       'plugin:storage:set-item',
       async ({ data, reply, plugin: pluginName }) => {
         try {
-          const { key, value, fileName = 'config.json' } = data
-          if (!pluginName || !key) {
-            return reply(DataCode.ERROR, { error: 'Plugin name and key are required' })
+          const { value, fileName = 'config.json' } = data
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
           }
 
           const plugin = manager.getPluginByName(pluginName) as TouchPlugin
@@ -1052,14 +1052,12 @@ export class PluginModule extends BaseModule {
             return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
           }
 
-          const config = plugin.getPluginConfig()
-          config[key] = value
-          const result = plugin.savePluginConfig(config)
+          // const content = plugin.getPluginFile(fileName)
+          const result = plugin.savePluginFile(fileName, value)
 
-          // 触发feature context的onDidChange
           const featureLifeCycle = plugin.getFeatureLifeCycle?.()
           if (featureLifeCycle?.onStorageChange) {
-            featureLifeCycle.onStorageChange(key, value)
+            featureLifeCycle.onStorageChange(fileName, value)
           }
 
           touchEventBus.emit(
