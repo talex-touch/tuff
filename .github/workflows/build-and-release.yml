@@ -12,10 +12,10 @@ on:
         options:
           - snapshot
           - release
-      target_branch:
-        description: 'Target branch to release (e.g. master)'
+      version:
+        description: 'Version number (e.g. 1.0.0)'
         required: true
-        default: 'master'
+        default: '1.0.0'
 
   # 标签触发
   push:
@@ -41,6 +41,12 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install Python dependencies
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            python3 -m pip install setuptools
+          fi
+
       - name: Install Dependencies
         run: npm install -g pnpm && pnpm i
 
@@ -52,7 +58,7 @@ jobs:
             echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           else
             echo "type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
-            echo "tag=v${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Build Electron App
@@ -102,8 +108,8 @@ jobs:
             echo "name=Release ${{ github.ref_name }}" >> $GITHUB_OUTPUT
           else
             echo "type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
-            echo "tag=v${{ github.run_number }}" >> $GITHUB_OUTPUT
-            echo "name=Release v${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "name=Release v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Release
@@ -120,12 +126,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
 
-      - name: Create Snapshot Tag (for manual snapshot)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_type == 'snapshot'
+      - name: Create Git Tag (for manual trigger)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git tag snapshot-${{ github.run_number }}
-          git push origin snapshot-${{ github.run_number }}
+          git tag v${{ github.event.inputs.version }}
+          git push origin v${{ github.event.inputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
