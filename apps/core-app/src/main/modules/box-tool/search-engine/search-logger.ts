@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import { storageModule } from '../../storage'
-import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
+// import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 
 /**
  * Search Engine Logger
@@ -9,8 +9,8 @@ import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 export class SearchLogger {
   private static instance: SearchLogger
   private enabled: boolean = false
-  private readonly storageKey = 'search-engine-logs-enabled'
-  private currentSession: string | null = null
+  // private readonly storageKey = 'search-engine-logs-enabled'
+  // private currentSession: string | null = null
   private searchStartTime: number = 0
   private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
 
@@ -26,9 +26,9 @@ export class SearchLogger {
     // Watch for app settings changes
     setInterval(async () => {
       try {
-        const appSettingsData = await storageModule.get('app-setting.ini')
+        const appSettingsData = await storageModule.getConfig('app-setting.ini') as unknown as string
         if (appSettingsData) {
-          const parsed = JSON.parse(appSettingsData)
+          const parsed = JSON.parse(appSettingsData as unknown as string)
           const newEnabled = parsed.searchEngine?.logsEnabled === true
           if (newEnabled !== this.enabled) {
             this.enabled = newEnabled
@@ -54,16 +54,16 @@ export class SearchLogger {
   private async loadSettings(): Promise<void> {
     try {
       // Try to get from app settings first
-      const appSettingsData = await storageModule.get('app-setting.ini')
+      const appSettingsData = await storageModule.getConfig('app-setting.ini')
       if (appSettingsData) {
-        const parsed = JSON.parse(appSettingsData)
+        const parsed = JSON.parse(appSettingsData as unknown as string)
         this.enabled = parsed.searchEngine?.logsEnabled === true
         return
       }
 
       // Fallback to legacy setting
-      const settings = await storageModule.get('search-engine-logs-enabled')
-      this.enabled = settings === true
+      const settings = await storageModule.getConfig('search-engine-logs-enabled')
+      this.enabled = (settings as unknown as string) === 'true'
     } catch (error) {
       console.debug('[SearchLogger] Failed to load settings, using default:', error)
       this.enabled = false
@@ -77,17 +77,17 @@ export class SearchLogger {
     this.enabled = enabled
     try {
       // Update app settings
-      const appSettingsData = await storageModule.get('app-setting.ini')
+      const appSettingsData = await storageModule.getConfig('app-setting.ini')
       if (appSettingsData) {
-        const parsed = JSON.parse(appSettingsData)
+        const parsed = JSON.parse(appSettingsData as unknown as string)
         if (!parsed.searchEngine) {
           parsed.searchEngine = {}
         }
         parsed.searchEngine.logsEnabled = enabled
-        await storageModule.set('app-setting.ini', JSON.stringify(parsed))
+        await storageModule.saveConfig('app-setting.ini', JSON.stringify(parsed))
       } else {
         // Fallback to legacy setting
-        await storageModule.set('search-engine-logs-enabled', enabled)
+        await storageModule.saveConfig('search-engine-logs-enabled', JSON.stringify(enabled))
       }
       console.log(`[SearchLogger] Search engine logging ${enabled ? 'enabled' : 'disabled'}`)
     } catch (error) {
@@ -108,7 +108,7 @@ export class SearchLogger {
   searchSessionStart(query: string, sessionId: string): void {
     if (!this.enabled) return
 
-    this.currentSession = sessionId
+    // this.currentSession = sessionId
     this.searchStartTime = Date.now()
     this.searchSteps = []
 
@@ -170,7 +170,7 @@ export class SearchLogger {
     console.log('='.repeat(80) + '\n')
 
     // Reset session data
-    this.currentSession = null
+    // this.currentSession = null
     this.searchStartTime = 0
     this.searchSteps = []
   }
