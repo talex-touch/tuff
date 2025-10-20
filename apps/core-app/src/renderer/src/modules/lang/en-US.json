@@ -83,7 +83,11 @@
     "autoClear": "Auto clear",
     "autoClearDesc": "Clear searchbar after box hidden.",
     "autoHide": "Auto hide",
-    "autoHideDesc": "Hide searchbar when blur triggered."
+    "autoHideDesc": "Hide searchbar when blur triggered.",
+    "dashboard": "Details",
+    "dashboardDesc": "Enable system details page to display indexing, applications, logs and OCR status.",
+    "searchEngineLogs": "Search Engine Logs",
+    "searchEngineLogsDesc": "Enable detailed logging for search engine operations to help debug search issues."
   },
   "settingUser": {
     "groupTitle": "Account",
@@ -150,6 +154,7 @@
     "dashboard": "Dashboard",
     "market": "Market",
     "plugin": "Plugin",
+    "details": "Details",
     "style": "Style",
     "setting": "Setting"
   },
@@ -158,6 +163,12 @@
     "subtitle": "Discover amazing plugins for your workflow",
     "searchPlaceholder": "Search plugins...",
     "sources": "sources",
+    "loading": "Loading official plugins...",
+    "refresh": "Refresh",
+    "install": "Install",
+    "installing": "Installing...",
+    "officialBadge": "Official",
+    "lastUpdated": "Last updated {time}",
     "tags": {
       "all": "All",
       "feature": "Feature",
@@ -167,6 +178,30 @@
       "tools": "Tools",
       "productivity": "Productivity"
     },
+    "error": {
+      "loadFailed": "Failed to load official plugin list."
+    },
+    "installation": {
+      "successTitle": "Install Complete",
+      "successMessage": "\"{name}\" is ready to use.",
+      "failureTitle": "Install Failed",
+      "failureMessage": "Unable to install \"{name}\": {reason}",
+      "browserNotSupported": "Official plugins can only be installed inside the desktop app.",
+      "status": {
+        "queued": "Queued",
+        "downloading": "Downloading",
+        "awaitingConfirm": "Awaiting Confirmation",
+        "installing": "Installing",
+        "completed": "Installed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "confirmTitle": "Install Confirmation",
+      "confirmMessage": "\"{name}\" comes from an unofficial source. Proceed with installation?",
+      "confirmInstall": "Install",
+      "confirmReject": "Cancel",
+      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?"
+    },
     "empty": {
       "title": "No plugins found",
       "subtitle": "Try adjusting your search or browse different categories"
@@ -174,7 +209,90 @@
   },
   "plugin": {
     "opening": "Opening...",
-    "openFolder": "Open Folder"
+    "openFolder": "Open Folder",
+    "actions": {
+      "history": "History",
+      "openFolder": "Open Folder",
+      "opening": "Opening...",
+      "reload": "Reload",
+      "reloading": "Reloading..."
+    },
+    "badges": {
+      "dev": "Dev",
+      "version": "v{version}"
+    },
+    "status": {
+      "disabled": "Plugin disabled, click to enable.",
+      "crashed": "Plugin crashed, click to restart.",
+      "enabled": "Plugin enabled, click to disable.",
+      "loaded": "Plugin loaded, click to enable.",
+      "loadFailed": "Plugin load failed, click to reload."
+    },
+    "tabs": {
+      "overview": "Overview",
+      "issues": "Issues",
+      "features": "Features",
+      "storageMock": "Storage (Mock)",
+      "logs": "Logs",
+      "details": "Details"
+    },
+    "issues": {
+      "title": "Plugin Load Issues",
+      "source": "Source"
+    },
+    "overview": {
+      "environment": "Environment Support",
+      "documentation": "Documentation"
+    },
+    "features": {
+      "stats": {
+        "features": "Features",
+        "commands": "Commands"
+      },
+      "empty": {
+        "title": "No Features Available",
+        "subtitle": "This plugin doesn't expose any features yet."
+      },
+      "drawer": {
+        "title": "Feature Details",
+        "overview": "Overview",
+        "featureId": "Feature ID",
+        "commandsCount": "Commands Count",
+        "featureType": "Feature Type",
+        "standardType": "Standard",
+        "commandsTitle": "Commands ({count})",
+        "viewJson": "View JSON",
+        "rawData": "Raw Feature Data",
+        "viewFullJson": "View Complete Feature JSON"
+      }
+    },
+    "logs": {
+      "historyTitle": "History",
+      "historyEmpty": "No historical logs yet"
+    },
+    "details": {
+      "basicInfo": "Basic Information",
+      "pluginId": "Plugin ID",
+      "copyPluginId": "Copy plugin ID",
+      "version": "Version",
+      "mode": "Mode",
+      "development": "Development",
+      "production": "Production",
+      "devAddress": "Dev Address",
+      "configuration": "Configuration",
+      "autoStart": "Auto Start",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "hotReload": "Hot Reload",
+      "fileSystem": "File System",
+      "pluginPath": "Plugin Path",
+      "dataDirectory": "Data Directory",
+      "cacheSize": "Cache Size",
+      "performance": "Performance",
+      "loadTime": "Load Time",
+      "memoryUsage": "Memory Usage",
+      "cpuUsage": "CPU Usage"
+    }
   },
   "coreBox": {
     "hints": {
@@ -287,5 +405,27 @@
     "application": "Application",
     "appSettings": "App Settings",
     "storagable": "Storagable"
+  },
+  "textPreview": {
+    "loading": "Loading...",
+    "fileSize": "File Size",
+    "error": {
+      "noFile": "Unable to get file information",
+      "emptyFile": "File is empty, cannot preview",
+      "fileTooLarge": "File too large ({size}), cannot preview",
+      "loadFailed": "Failed to load file"
+    }
+  },
+  "fileInfo": {
+    "title": "Information",
+    "path": "Path",
+    "source": "Source",
+    "contentType": "Content type",
+    "characters": "Characters",
+    "words": "Words",
+    "fileSize": "File Size",
+    "bytes": "bytes",
+    "createdAt": "Created At",
+    "modifiedAt": "Modified At"
   }
 }

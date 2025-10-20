@@ -1,0 +1,131 @@
+name: Build and Release
+
+on:
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'snapshot'
+        type: choice
+        options:
+          - snapshot
+          - release
+      target_branch:
+        description: 'Target branch to release (e.g. master)'
+        required: true
+        default: 'master'
+
+  # 标签触发
+  push:
+    tags:
+      - v*.*.*
+
+jobs:
+  build-and-release:
+    name: Build and Release Tuff App
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        run: npm install -g pnpm && pnpm i
+
+      - name: Determine Release Type
+        id: release-type
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "type=release" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Electron App
+        run: |
+          if [ "${{ steps.release-type.outputs.type }}" = "beta" ]; then
+            pnpm -F core run build:beta
+          elif [ "${{ steps.release-type.outputs.type }}" = "snapshot" ]; then
+            pnpm -F core run build:snapshot
+          else
+            pnpm -F core run build:release
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Cleanup Artifacts for Windows
+        if: matrix.os == 'windows-latest'
+        run: npx rimraf "dist/!(*.exe)"
+
+      - name: Cleanup Artifacts for MacOS
+        if: matrix.os == 'macos-latest'
+        run: npx rimraf "dist/!(*.dmg)"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: dist
+
+  create-release:
+    name: Create Release
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    if: always() && (needs.build-and-release.result == 'success' || needs.build-and-release.result == 'skipped')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Determine Release Type and Tag
+        id: release-info
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "type=release" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "name=Release ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "name=Release v${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.release-info.outputs.tag }}
+          name: ${{ steps.release-info.outputs.name }}
+          draft: false
+          prerelease: ${{ steps.release-info.outputs.type == 'snapshot' }}
+          files: |
+            artifacts/windows-latest/*
+            artifacts/macos-latest/*
+            artifacts/ubuntu-latest/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Create Snapshot Tag (for manual snapshot)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_type == 'snapshot'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag snapshot-${{ github.run_number }}
+          git push origin snapshot-${{ github.run_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}

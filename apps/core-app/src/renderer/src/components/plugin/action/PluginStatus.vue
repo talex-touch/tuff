@@ -5,12 +5,14 @@
 <script name="PluginStatus" lang="ts" setup>
 import { ITouchPlugin, PluginStatus } from '@talex-touch/utils'
 import { pluginManager } from '~/modules/channel/plugin-core/api'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   plugin: ITouchPlugin
   shrink: boolean
 }>()
 const dom = ref()
+const { t } = useI18n()
 
 const mapper = [
   'DISABLED',
@@ -47,41 +49,47 @@ function refresh(): void {
   console.log('PluginStatus', props.plugin.name, status.value)
 
   if (status.value === PluginStatus.DISABLED) {
-    el.innerHTML = `Click to enable plugin.`
+    el.innerHTML = t('plugin.status.disabled')
 
-    func.value = () => {
-      pluginManager.enablePlugin(props.plugin.name)
+    func.value = async () => {
+      await pluginManager.enablePlugin(props.plugin.name)
     }
   } else if (status.value === PluginStatus.DISABLING) {
     el.innerHTML = ``
   } else if (status.value === PluginStatus.CRASHED) {
-    el.innerHTML = `Plugin crashed, click to restart.`
+    el.innerHTML = t('plugin.status.crashed')
 
-    func.value = () => {
-      pluginManager.enablePlugin(props.plugin.name)
+    func.value = async () => {
+      await pluginManager.enablePlugin(props.plugin.name)
     }
   } else if (status.value === PluginStatus.ENABLED) {
-    el.innerHTML = `Plugin enabled, click to disable.`
+    el.innerHTML = t('plugin.status.enabled')
 
-    func.value = () => {
-      pluginManager.disablePlugin(props.plugin.name)
+    func.value = async () => {
+      await pluginManager.disablePlugin(props.plugin.name)
     }
   } else if (status.value === PluginStatus.ACTIVE) {
     el.innerHTML = ``
   } else if (status.value === PluginStatus.LOADING) {
     el.innerHTML = ``
   } else if (status.value === PluginStatus.LOADED) {
-    el.innerHTML = `Plugin loaded, click to enable.`
+    el.innerHTML = t('plugin.status.loaded')
 
-    func.value = () => {
-      pluginManager.enablePlugin(props.plugin.name)
+    func.value = async () => {
+      await pluginManager.enablePlugin(props.plugin.name)
     }
   } else if (status.value === PluginStatus.LOAD_FAILED) {
-    el.innerHTML = `Plugin load failed, click to restart.`
+    el.innerHTML = t('plugin.status.loadFailed')
 
-    func.value = () => {
-      pluginManager.disablePlugin(props.plugin.name)
-      pluginManager.enablePlugin(props.plugin.name)
+    func.value = async () => {
+      try {
+        console.log(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
+        await pluginManager.reloadPlugin(props.plugin.name)
+        console.log(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
+      } catch (error) {
+        console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
+        el.innerHTML = `${t('plugin.status.loadFailed')}`
+      }
     }
   }
 }

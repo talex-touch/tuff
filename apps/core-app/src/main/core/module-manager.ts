@@ -18,7 +18,7 @@ import {
 } from '@talex-touch/utils/types/modules'
 import { TalexEvents } from './eventbus/touch-event'
 import { TalexTouch } from '@talex-touch/utils'
-import chalk from 'chalk'
+import { moduleLog } from '../utils/logger'
 
 /**
  * Minimal file system-backed implementation of the `ModuleDirectory` interface.
@@ -217,7 +217,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
           try {
             await this.unloadModule(key, 'normal')
           } catch (err) {
-            console.warn(`[ModuleManager] Error unloading ${String(key.description)}:`, err)
+            moduleLog.warn('Failed to unload module during shutdown', {
+              meta: { module: key.description ?? 'anonymous' },
+              error: err
+            })
           }
         }
       })
@@ -288,15 +291,13 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       return false
     }
 
-    console.log(
-      chalk.bgCyanBright('[ModuleManager]') +
-        ' ' +
-        chalk.cyan('Starting to load module ') +
-        chalk.yellow(key.description)
-    )
+    const moduleName = key.description ?? key.toString()
 
-    // --- start timer ---
-    const startTime = performance.now()
+    moduleLog.info('Loading module', {
+      meta: { module: moduleName }
+    })
+
+    const timer = moduleLog.time('Module ready', 'success')
 
     const fileCfg = this.resolveFileConfig(instance)
     const directory = await this.ensureDirectoryIfNeeded(fileCfg)
@@ -317,28 +318,9 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     this.modules.set(key, instance)
 
-    // --- end timer ---
-    const duration = performance.now() - startTime
-    let durationStr: string
-    if (duration < 80) {
-      durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
-    } else if (duration < 300) {
-      durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
-    } else {
-      durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
-    }
-
-    console.log(
-      chalk.bgCyanBright('[ModuleManager]') +
-        ' ' +
-        chalk.green('Successfully loaded module ') +
-        chalk.yellow(key.description) +
-        chalk.green(' (took ') +
-        durationStr +
-        chalk.green(')')
-    )
-
-    return true
+    timer.end('Module loaded', {
+      meta: { module: moduleName }
+    })
 
     return true
   }

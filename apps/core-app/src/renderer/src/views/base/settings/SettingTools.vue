@@ -118,5 +118,21 @@ function updateShortcut(id: string, newAccelerator: string): void {
       icon="search-eye"
       :description="t('settingTools.autoHideDesc')"
     />
+
+    <!-- Dashboard switch -->
+    <t-block-switch
+      v-model="appSetting.dashboard.enable"
+      :title="t('settingTools.dashboard')"
+      icon="dashboard"
+      :description="t('settingTools.dashboardDesc')"
+    />
+
+    <!-- Search Engine Logs switch -->
+    <t-block-switch
+      v-model="appSetting.searchEngine.logsEnabled"
+      :title="t('settingTools.searchEngineLogs')"
+      icon="bug"
+      :description="t('settingTools.searchEngineLogsDesc')"
+    />
   </t-group-block>
 </template>

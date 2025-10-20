@@ -1,3 +1,5 @@
+export * from './logger'
+export * from './registry'
 export * from './file-provider'
 export * from './github-provider'
 export * from './local-provider'

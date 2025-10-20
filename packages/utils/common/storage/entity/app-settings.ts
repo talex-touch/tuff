@@ -33,6 +33,12 @@ const _appSettingOriginData = {
     autoHide: true,
     autoClear: 600,
   },
+  dashboard: {
+    enable: false,
+  },
+  searchEngine: {
+    logsEnabled: false,
+  },
 };
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)

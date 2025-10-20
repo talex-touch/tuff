@@ -16,6 +16,7 @@
 
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/base/home/HomePage.vue'
+import { appSetting } from '~/modules/channel/storage'
 
 const routes: any = [
   {
@@ -47,11 +48,20 @@ const routes: any = [
     }
   },
   {
+    path: '/details',
+    name: '详细信息',
+    component: () => import('../views/base/LingPan.vue'),
+    meta: {
+      index: 4,
+      requiresDashboard: true
+    }
+  },
+  {
     path: '/styles',
     name: 'Styles',
     component: () => import('../views/base/styles/ThemeStyle.vue'),
     meta: {
-      index: 4
+      index: 5
     }
   },
   {
@@ -59,7 +69,7 @@ const routes: any = [
     name: 'Theme',
     component: () => import('../views/base/styles/sub/ThemePreference.vue'),
     meta: {
-      index: 4
+      index: 5
     }
   },
   {
@@ -67,7 +77,7 @@ const routes: any = [
     name: 'Application',
     component: () => import('../views/base/application/ApplicationIndex.vue'),
     meta: {
-      index: 5
+      index: 6
     }
   },
   {
@@ -85,7 +95,7 @@ const routes: any = [
       }
     ],
     meta: {
-      index: 6
+      index: 7
     }
   }
 ]
@@ -93,6 +103,14 @@ const routes: any = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  if (to.meta?.requiresDashboard && !appSetting.dashboard.enable) {
+    next('/home')
+  } else {
+    next()
+  }
 })
 
 // router.beforeEach(async (to, from, next) => {

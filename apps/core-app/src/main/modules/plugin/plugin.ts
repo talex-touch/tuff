@@ -1,5 +1,6 @@
 import {
   IFeatureLifeCycle,
+  IPluginChannelBridge,
   IPlatform,
   IPluginDev,
   IPluginIcon,
@@ -14,7 +15,7 @@ import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/nod
 import { ChannelType } from '@talex-touch/utils/channel'
 import path from 'path'
 import { createClipboardManager } from '@talex-touch/utils/plugin'
-import { app, clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, shell, BrowserWindow } from 'electron'
 import axios from 'axios'
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
@@ -23,9 +24,14 @@ import { PluginViewLoader } from './view/plugin-view-loader'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
-import { PluginLogAppendEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import {
+  PluginLogAppendEvent,
+  PluginStorageUpdatedEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../core/eventbus/touch-event'
+import { ITouchEvent } from '@talex-touch/utils/eventbus'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
-import { storageModule } from '../storage'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 
@@ -207,6 +213,41 @@ export class TouchPlugin implements ITouchPlugin {
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query))
   }
 
+  public clearCoreBoxItems(): void {
+    console.debug(
+      `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
+    )
+
+    this._searchItems = []
+    this._searchTimestamp = Date.now()
+
+    const coreBoxWindow = getCoreBoxWindow()
+    console.debug(`[Plugin ${this.name}] CoreBox window available for clearing:`, !!coreBoxWindow)
+
+    if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+      const channel = genTouchChannel()
+
+      const payload = {
+        pluginName: this.name,
+        timestamp: this._searchTimestamp
+      }
+
+      console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload)
+
+      channel
+        .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
+        .catch((error) => {
+          console.error(`[Plugin ${this.name}] Failed to clear search results from CoreBox:`, error)
+        })
+
+      console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
+    } else {
+      console.warn(
+        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
+      )
+    }
+  }
+
   constructor(
     name: string,
     icon: PluginIcon,
@@ -236,6 +277,47 @@ export class TouchPlugin implements ITouchPlugin {
         touchEventBus.emit(TalexEvents.PLUGIN_LOG_APPEND, new PluginLogAppendEvent(log))
       })
     )
+
+    this.ensureDataDirectories()
+  }
+
+  private getDataPath(): string {
+    const userDataPath = $app.rootPath
+    return path.join(userDataPath, 'modules', 'plugins', this.name, 'data')
+  }
+
+  private getConfigPath(): string {
+    return path.join(this.getDataPath(), 'config')
+  }
+
+  getPluginDir(): string {
+    return this.getConfigPath()
+  }
+
+  private getLogsPath(): string {
+    return path.join(this.getDataPath(), 'logs')
+  }
+
+  private getVerifyPath(): string {
+    return path.join(this.getDataPath(), 'verify')
+  }
+
+  private getTempPath(): string {
+    return path.join(this.getDataPath(), 'temp')
+  }
+
+  private ensureDataDirectories(): void {
+    const directories = [
+      this.getDataPath(),
+      this.getConfigPath(),
+      this.getLogsPath(),
+      this.getVerifyPath(),
+      this.getTempPath()
+    ]
+
+    directories.forEach((dir) => {
+      fse.ensureDirSync(dir)
+    })
   }
 
   async enable(): Promise<boolean> {
@@ -300,11 +382,15 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.ENABLED
     this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
+    this.pluginLifecycle?.onInit?.()
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
       ...this.toJSONObject(),
       plugin: this.name
     })
 
+    console.log(
+      '[Plugin] Plugin ' + this.name + ' with ' + this.features.length + ' features is enabled.'
+    )
     console.log('[Plugin] Plugin ' + this.name + ' is enabled.')
 
     return true
@@ -324,7 +410,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.DISABLING
-    console.log('[Plugin] Disabling plugin ' + this.name)
+    this.logger.debug('Disabling plugin')
 
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:di', {
       ...this.toJSONObject(),
@@ -355,14 +441,14 @@ export class TouchPlugin implements ITouchPlugin {
     })
 
     // Ensure that if this plugin had an active UI view, it is unattached.
-    console.log(`[Plugin:${this.name}] disable() called. Checking if UI mode needs to be exited.`)
+    this.logger.debug('disable() called. Checking if UI mode needs to be exited.')
     CoreBoxManager.getInstance().exitUIMode()
-    console.log(`[Plugin:${this.name}] exitUIMode() called during disable().`)
+    this.logger.debug('exitUIMode() called during disable().')
 
     genTouchChannel().revokeKey(this._uniqueChannelKey)
 
     this.status = PluginStatus.DISABLED
-    console.log('[Plugin] Plugin ' + this.name + ' is disabled.')
+    this.logger.debug('Plugin disable lifecycle completed.')
 
     return Promise.resolve(true)
   }
@@ -384,31 +470,56 @@ export class TouchPlugin implements ITouchPlugin {
 
   getFeatureUtil(): any {
     const pluginName = this.name
+    const appChannel = genTouchChannel()
 
     const http = axios
     const storage = {
-      getItem: (key: string) => {
-        const config = storageModule.getPluginConfig(pluginName)
-        return config[key] ?? null
+      getFile: (fileName: string) => {
+        return this.getPluginFile(fileName)
       },
-      setItem: (key: string, value: object) => {
-        const config = storageModule.getPluginConfig(pluginName)
-        config[key] = value
-        return storageModule.savePluginConfig(pluginName, config)
+      setFile: (fileName: string, content: object) => {
+        return this.savePluginFile(fileName, content)
       },
-      removeItem: (key: string) => {
-        const config = storageModule.getPluginConfig(pluginName)
-        delete config[key]
-        return storageModule.savePluginConfig(pluginName, config)
+      deleteFile: (fileName: string) => {
+        return this.deletePluginFile(fileName)
       },
-      clear: () => {
-        return storageModule.savePluginConfig(pluginName, {})
+      listFiles: () => {
+        return this.listPluginFiles()
       },
-      getAllItems: () => {
-        return storageModule.getPluginConfig(pluginName)
+      onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+        const unsubscribe = touchEventBus.on(
+          TalexEvents.PLUGIN_STORAGE_UPDATED,
+          (event: ITouchEvent<TalexEvents>) => {
+            const storageEvent = event as PluginStorageUpdatedEvent
+            if (
+              storageEvent.pluginName === pluginName &&
+              (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
+            ) {
+              const config = this.getPluginFile(fileName)
+              callback(config)
+            }
+          }
+        )
+
+        return unsubscribe
       }
     }
     const clipboardUtil = createClipboardManager(clipboard)
+
+    const channelBridge: IPluginChannelBridge = {
+      sendToMain: (eventName, payload) => appChannel.sendMain(eventName, payload),
+      sendToRenderer: (eventName, payload) => appChannel.sendPlugin(pluginName, eventName, payload),
+      onMain: (eventName, handler) => appChannel.regChannel(ChannelType.MAIN, eventName, handler),
+      onRenderer: (eventName, handler) =>
+        appChannel.regChannel(ChannelType.PLUGIN, eventName, (event) => {
+          if (event.plugin && event.plugin !== pluginName) {
+            return
+          }
+
+          handler(event)
+        }),
+      raw: appChannel
+    }
 
     const searchManager = {
       /**
@@ -429,7 +540,7 @@ export class TouchPlugin implements ITouchPlugin {
         console.debug(`[Plugin ${this.name}] CoreBox window available:`, !!coreBoxWindow)
 
         if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-          const channel = genTouchChannel()
+          const channel = appChannel
 
           const payload = {
             pluginName: this.name,
@@ -464,44 +575,7 @@ export class TouchPlugin implements ITouchPlugin {
        * Clears search items from the CoreBox window
        */
       clearItems: () => {
-        console.debug(
-          `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
-        )
-
-        this._searchItems = []
-        this._searchTimestamp = Date.now()
-
-        const coreBoxWindow = getCoreBoxWindow()
-        console.debug(
-          `[Plugin ${this.name}] CoreBox window available for clearing:`,
-          !!coreBoxWindow
-        )
-
-        if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-          const channel = genTouchChannel()
-
-          const payload = {
-            pluginName: this.name,
-            timestamp: this._searchTimestamp
-          }
-
-          console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload)
-
-          channel
-            .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
-            .catch((error) => {
-              console.error(
-                `[Plugin ${this.name}] Failed to clear search results from CoreBox:`,
-                error
-              )
-            })
-
-          console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
-        } else {
-          console.warn(
-            `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
-          )
-        }
+        this.clearCoreBoxItems()
       },
 
       getItems: (): TuffItem[] => {
@@ -521,6 +595,169 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    const featuresManager = {
+      /**
+       * Dynamically adds a feature to the plugin
+       * @param feature - The feature definition to add
+       * @returns True if the feature was successfully added, false otherwise
+       */
+      addFeature: (feature: IPluginFeature): boolean => {
+        return this.addFeature(feature)
+      },
+
+      /**
+       * Removes a feature from the plugin
+       * @param featureId - The ID of the feature to remove
+       * @returns True if the feature was successfully removed, false otherwise
+       */
+      removeFeature: (featureId: string): boolean => {
+        return this.delFeature(featureId)
+      },
+
+      /**
+       * Gets all features of the plugin
+       * @returns Array of all plugin features
+       */
+      getFeatures: (): IPluginFeature[] => {
+        return this.getFeatures()
+      },
+
+      /**
+       * Gets a specific feature by its ID
+       * @param featureId - The ID of the feature to retrieve
+       * @returns The feature if found, null otherwise
+       */
+      getFeature: (featureId: string): IPluginFeature | null => {
+        return this.getFeature(featureId)
+      },
+
+      /**
+       * Sets the priority of a feature
+       * @param featureId - The ID of the feature to update
+       * @param priority - The new priority value (higher numbers = higher priority)
+       * @returns True if the feature was found and updated, false otherwise
+       */
+      setPriority: (featureId: string, priority: number): boolean => {
+        const feature = this.features.find((f) => f.id === featureId)
+        if (feature) {
+          feature.priority = priority
+          return true
+        }
+        return false
+      },
+
+      /**
+       * Gets the priority of a feature
+       * @param featureId - The ID of the feature to query
+       * @returns The priority value if found, null otherwise
+       */
+      getPriority: (featureId: string): number | null => {
+        const feature = this.features.find((f) => f.id === featureId)
+        return feature ? feature.priority : null
+      },
+
+      /**
+       * Sorts features by priority (highest first)
+       * @returns Array of features sorted by priority
+       */
+      getFeaturesByPriority: (): IPluginFeature[] => {
+        return [...this.features].sort((a, b) => b.priority - a.priority)
+      }
+    }
+
+    const pluginInfo = {
+      /**
+       * Gets comprehensive information about the current plugin
+       * @returns Object containing all plugin information including name, version, description, status, features, and issues
+       */
+      getInfo: () => {
+        return {
+          name: this.name,
+          version: this.version,
+          desc: this.desc,
+          readme: this.readme,
+          dev: this.dev,
+          status: this.status,
+          platforms: this.platforms,
+          pluginPath: this.pluginPath,
+          features: this.features.map((f) => f.toJSONObject()),
+          issues: this.issues
+        }
+      },
+
+      /**
+       * Gets the file system path of the plugin
+       * @returns The absolute path to the plugin directory
+       */
+      getPath: () => {
+        return this.pluginPath
+      },
+
+      /**
+       * Gets the data directory path for the plugin
+       * @returns The absolute path to the plugin's data directory
+       */
+      getDataPath: () => {
+        return this.getDataPath()
+      },
+
+      /**
+       * Gets the config directory path for the plugin
+       * @returns The absolute path to the plugin's config directory
+       */
+      getConfigPath: () => {
+        return this.getConfigPath()
+      },
+
+      /**
+       * Gets the logs directory path for the plugin
+       * @returns The absolute path to the plugin's logs directory
+       */
+      getLogsPath: () => {
+        return this.getLogsPath()
+      },
+
+      /**
+       * Gets the verify directory path for the plugin
+       * @returns The absolute path to the plugin's verify directory
+       */
+      getVerifyPath: () => {
+        return this.getVerifyPath()
+      },
+
+      /**
+       * Gets the temp directory path for the plugin
+       * @returns The absolute path to the plugin's temp directory
+       */
+      getTempPath: () => {
+        return this.getTempPath()
+      },
+
+      /**
+       * Gets the current status of the plugin
+       * @returns The current plugin status (enabled, disabled, loading, etc.)
+       */
+      getStatus: () => {
+        return this.status
+      },
+
+      /**
+       * Gets the development configuration information
+       * @returns Development settings including dev mode status and source address
+       */
+      getDevInfo: () => {
+        return this.dev
+      },
+
+      /**
+       * Gets the platform support information for the plugin
+       * @returns Object containing platform compatibility information
+       */
+      getPlatforms: () => {
+        return this.platforms
+      }
+    }
+
     return {
       dialog,
       logger: this.logger,
@@ -529,10 +766,13 @@ export class TouchPlugin implements ITouchPlugin {
       http,
       storage,
       clipboard: clipboardUtil,
+      channel: channelBridge,
       clearItems: searchManager.clearItems,
       pushItems: searchManager.pushItems,
       getItems: searchManager.getItems,
       search: searchManager,
+      features: featuresManager,
+      plugin: pluginInfo,
       $box: {
         hide() {
           CoreBoxManager.getInstance().trigger(false)
@@ -592,5 +832,124 @@ export class TouchPlugin implements ITouchPlugin {
       styles: `${getStyles()}`,
       js: `${getJs([this.name, JSON.stringify(_path)])}`
     }
+  }
+
+  /**
+   * Get the feature life cycle object for the plugin
+   * @returns The feature life cycle object for the plugin
+   */
+  getFeatureLifeCycle(): IFeatureLifeCycle | null {
+    return this.pluginLifecycle
+  }
+
+  // ==================== 存储相关方法 ====================
+
+  /**
+   * 获取插件文件
+   * @param fileName 文件名
+   * @returns 文件内容
+   */
+  getPluginFile(fileName: string): object {
+    const configPath = this.getConfigPath()
+    const p = path.resolve(configPath, fileName)
+
+    // 确保目录存在
+    fse.ensureDirSync(configPath)
+
+    const file = fse.existsSync(p) ? JSON.parse(fse.readFileSync(p, 'utf-8')) : {}
+    return file
+  }
+
+  /**
+   * 保存插件文件
+   * @param fileName 文件名
+   * @param content 文件内容
+   * @returns 保存结果
+   */
+  savePluginFile(fileName: string, content: object): { success: boolean; error?: string } {
+    const configPath = this.getConfigPath()
+    const configData = JSON.stringify(content)
+
+    const PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
+    if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
+      return {
+        success: false,
+        error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`
+      }
+    }
+
+    const p = path.join(configPath, fileName)
+    fse.ensureDirSync(configPath)
+    fse.writeFileSync(p, configData)
+
+    // 发送存储更新事件
+    this.broadcastStorageUpdate(fileName)
+
+    return { success: true }
+  }
+
+  /**
+   * 删除插件文件
+   * @param fileName 文件名
+   * @returns 删除结果
+   */
+  deletePluginFile(fileName: string): { success: boolean; error?: string } {
+    const configPath = this.getConfigPath()
+    const p = path.join(configPath, fileName)
+
+    if (fse.existsSync(p)) {
+      fse.removeSync(p)
+      // 发送存储更新事件
+      this.broadcastStorageUpdate(fileName)
+      return { success: true }
+    }
+
+    return { success: false, error: 'File not found' }
+  }
+
+  /**
+   * 列出插件所有文件
+   * @returns 文件列表
+   */
+  listPluginFiles(): string[] {
+    const configPath = this.getConfigPath()
+    if (!fse.existsSync(configPath)) return []
+
+    return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
+  }
+
+  /**
+   * 获取插件配置（向后兼容）
+   * @returns 配置内容
+   */
+  getPluginConfig(): object {
+    return this.getPluginFile('config.json')
+  }
+
+  /**
+   * 保存插件配置（向后兼容）
+   * @param content 配置内容
+   * @returns 保存结果
+   */
+  savePluginConfig(content: object): { success: boolean; error?: string } {
+    return this.savePluginFile('config.json', content)
+  }
+
+  /**
+   * 广播存储更新事件
+   */
+  private broadcastStorageUpdate(fileName?: string): void {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', {
+        name: this.name,
+        fileName: fileName
+      })
+    }
+
+    touchEventBus.emit(
+      TalexEvents.PLUGIN_STORAGE_UPDATED,
+      new PluginStorageUpdatedEvent(this.name, fileName)
+    )
   }
 }

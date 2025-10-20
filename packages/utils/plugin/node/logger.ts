@@ -63,9 +63,29 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
    */
   private log(level: LogLevel, ...args: LogDataType[]): void {
     const [message, ...data] = args
+
+    const normalizedLevel = (typeof level === 'string' ? level.toUpperCase() : level) as string
+    const allowedLevels: LogLevel[] = ['INFO', 'WARN', 'ERROR', 'DEBUG']
+    const resolvedLevel = (allowedLevels.includes(normalizedLevel as LogLevel)
+      ? (normalizedLevel as LogLevel)
+      : 'INFO')
+    if (resolvedLevel === 'INFO' && normalizedLevel !== 'INFO') {
+      console.warn(
+        `${chalk.bgMagenta('[PluginLog]')} ${chalk.bgYellow('WARN')} ${this.pluginName} - Unknown log level "${String(level)}", fallback to INFO`
+      )
+    }
+
+    const levelColorMap: Record<LogLevel, (input: string) => string> = {
+      INFO: chalk.bgBlue,
+      WARN: chalk.bgYellow,
+      ERROR: chalk.bgRed,
+      DEBUG: chalk.bgGray
+    }
+    const colorize = levelColorMap[resolvedLevel] ?? ((input: string) => input)
+
     const log: LogItem = {
       timestamp: new Date().toISOString(),
-      level,
+      level: resolvedLevel,
       plugin: this.pluginName,
       message: String(message),
       tags: [],
@@ -73,21 +93,14 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
     }
     this.manager.append(log)
 
-    const levelColor = {
-      INFO: chalk.bgBlue,
-      WARN: chalk.bgYellow,
-      ERROR: chalk.bgRed,
-      DEBUG: chalk.bgGray,
-    }[level]
-
-    if (level === 'DEBUG') {
+    if (resolvedLevel === 'DEBUG') {
       console.debug(
-        `${chalk.bgMagenta('[PluginLog]')} ${levelColor(level)} ${this.pluginName} - ${message}`,
+        `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
         ...data
       )
     } else {
       console.log(
-        `${chalk.bgMagenta('[PluginLog]')} ${levelColor(level)} ${this.pluginName} - ${message}`,
+        `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
         ...data
       )
     }

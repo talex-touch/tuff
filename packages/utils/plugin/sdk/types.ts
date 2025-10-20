@@ -4,6 +4,125 @@
  * @version 1.0.0
  */
 
+import type { ITouchChannel, ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel';
+import type { IPluginFeature } from '../index';
+
+/**
+ * Handler signature for plugin channel events.
+ */
+export type PluginChannelHandler = (event: StandardChannelData) => any;
+
+/**
+ * Bridge exposed to plugin backends for channel-based communication.
+ */
+export interface IPluginChannelBridge {
+  /**
+   * Sends a payload to the main renderer process.
+   * @param eventName - Channel event name.
+   * @param payload - Optional data payload.
+   */
+  sendToMain<T = any>(eventName: string, payload?: any): Promise<T>;
+
+  /**
+   * Sends a payload to this plugin's renderer view.
+   * @param eventName - Channel event name.
+   * @param payload - Optional data payload.
+   */
+  sendToRenderer<T = any>(eventName: string, payload?: any): Promise<T>;
+
+  /**
+   * Registers a handler for main renderer messages.
+   * @param eventName - Channel event name to listen for.
+   * @param handler - Handler invoked with the raw channel event.
+   * @returns Unsubscribe function.
+   */
+  onMain(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Registers a handler for renderer-originated messages scoped to this plugin.
+   * @param eventName - Channel event name to listen for.
+   * @param handler - Handler invoked with the raw channel event.
+   * @returns Unsubscribe function.
+   */
+  onRenderer(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Access to the underlying channel implementation for advanced scenarios.
+   */
+  readonly raw: ITouchChannel;
+}
+
+/**
+ * Renderer-side helper for plugin webviews to interact with the bridge channel.
+ */
+export interface IPluginRendererChannel {
+  /**
+   * Sends a message asynchronously and resolves with the reply payload.
+   */
+  send<T = any>(eventName: string, payload?: any): Promise<T>;
+
+  /**
+   * Sends a message synchronously and returns the reply payload.
+   */
+  sendSync<T = any>(eventName: string, payload?: any): T;
+
+  /**
+   * Registers a handler for renderer channel events.
+   * @returns Unsubscribe function.
+   */
+  on(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Registers a one-off handler for a renderer channel event.
+   * @returns Unsubscribe function (no-op after invocation).
+   */
+  once(eventName: string, handler: PluginChannelHandler): () => void;
+
+  /**
+   * Provides access to the raw client channel.
+   */
+  readonly raw: ITouchClientChannel;
+}
+
+/**
+ * Clipboard history item shared with plugin renderers.
+ */
+export interface PluginClipboardItem {
+  id?: number
+  type: 'text' | 'image' | 'files'
+  content: string
+  thumbnail?: string | null
+  rawContent?: string | null
+  sourceApp?: string | null
+  timestamp?: string | number | Date | null
+  isFavorite?: boolean | null
+  metadata?: string | null
+  meta?: Record<string, unknown> | null
+}
+
+/**
+ * Clipboard history pagination response structure.
+ */
+export interface PluginClipboardHistoryResponse {
+  history: PluginClipboardItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface ActiveAppSnapshot {
+  identifier: string | null
+  displayName: string | null
+  bundleId: string | null
+  processId: number | null
+  executablePath: string | null
+  platform: 'macos' | 'windows' | 'linux' | null
+  windowTitle: string | null
+  url?: string | null
+  icon?: string | null
+  lastUpdated: number
+}
+
 /**
  * Plugin utilities interface providing core functionality for plugin development
  *
@@ -27,6 +146,12 @@ export interface IPluginUtils {
    * @see {@link IClipboardManager}
    */
   clipboard: IClipboardManager;
+
+  /**
+   * Channel bridge for communicating with renderer and main processes
+   * @see {@link IPluginChannelBridge}
+   */
+  channel: IPluginChannelBridge;
 
   /**
    * Search result manager for handling search operations
@@ -74,6 +199,18 @@ export interface IPluginUtils {
    * @returns Array of current search result items
    */
   getItems: () => any[];
+
+  /**
+   * Features manager for dynamic feature management
+   * @see {@link IFeaturesManager}
+   */
+  features: IFeaturesManager;
+
+  /**
+   * Plugin information manager
+   * @see {@link IPluginInfoManager}
+   */
+  plugin: IPluginInfoManager;
 }
 
 /**
@@ -575,4 +712,133 @@ export function createSearchManager(): ISearchManager {
       return timestamp;
     }
   };
+}
+
+/**
+ * Features管理器接口
+ *
+ * @description
+ * 提供完整的features管理功能，包括CRUD操作和优先级管理
+ */
+export interface IFeaturesManager {
+  /**
+   * 动态添加功能到插件
+   * @param feature - 功能定义
+   * @returns 是否添加成功
+   */
+  addFeature(feature: IPluginFeature): boolean
+
+  /**
+   * 删除功能
+   * @param featureId - 功能ID
+   * @returns 是否删除成功
+   */
+  removeFeature(featureId: string): boolean
+
+  /**
+   * 获取所有功能
+   * @returns 所有功能列表
+   */
+  getFeatures(): IPluginFeature[]
+
+  /**
+   * 获取指定功能
+   * @param featureId - 功能ID
+   * @returns 功能对象，如果不存在返回null
+   */
+  getFeature(featureId: string): IPluginFeature | null
+
+  /**
+   * 设置功能优先级
+   * @param featureId - 功能ID
+   * @param priority - 优先级值（数字越大优先级越高）
+   * @returns 是否设置成功
+   */
+  setPriority(featureId: string, priority: number): boolean
+
+  /**
+   * 获取功能优先级
+   * @param featureId - 功能ID
+   * @returns 优先级值，如果功能不存在返回null
+   */
+  getPriority(featureId: string): number | null
+
+  /**
+   * 按优先级排序获取所有功能
+   * @returns 按优先级排序的功能列表（高优先级在前）
+   */
+  getFeaturesByPriority(): IPluginFeature[]
+
+  /**
+   * 批量设置功能优先级
+   * @param priorities - 优先级映射对象 {featureId: priority}
+   * @returns 设置成功的功能数量
+   */
+  setPriorities(priorities: Record<string, number>): number
+
+  /**
+   * 重置功能优先级为默认值（0）
+   * @param featureId - 功能ID
+   * @returns 是否重置成功
+   */
+  resetPriority(featureId: string): boolean
+
+  /**
+   * 获取功能统计信息
+   * @returns 功能统计对象
+   */
+  getStats(): {
+    total: number
+    byPriority: Record<number, number>
+    averagePriority: number
+  }
+}
+
+/**
+ * 插件信息管理器接口
+ *
+ * @description
+ * 提供插件信息查询功能
+ */
+export interface IPluginInfoManager {
+  /**
+   * 获取完整插件信息
+   * @returns 包含所有插件信息的对象
+   */
+  getInfo(): {
+    name: string
+    version: string
+    desc: string
+    readme: string
+    dev: any
+    status: number
+    platforms: any
+    pluginPath: string
+    features: any[]
+    issues: any[]
+  }
+
+  /**
+   * 获取插件路径
+   * @returns 插件文件系统路径
+   */
+  getPath(): string
+
+  /**
+   * 获取插件状态
+   * @returns 当前插件状态
+   */
+  getStatus(): number
+
+  /**
+   * 获取开发信息
+   * @returns 开发配置信息
+   */
+  getDevInfo(): any
+
+  /**
+   * 获取平台支持信息
+   * @returns 平台兼容性信息
+   */
+  getPlatforms(): any
 }

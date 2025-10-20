@@ -31,27 +31,36 @@
               class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded"
             >
               <i class="i-ri-code-line" />
-              Dev
+              {{ t('plugin.badges.dev') }}
             </span>
             <span
               class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded"
             >
               <i class="i-ri-price-tag-3-line" />
-              v{{ plugin.version }}
+              {{ t('plugin.badges.version', { version: plugin.version }) }}
             </span>
           </div>
         </div>
       </div>
 
       <div class="flex items-center gap-2">
+        <FlatButton class="action-button" :disabled="loadingStates.reload" @click="handleReloadPlugin">
+          <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
+          <i v-else class="i-ri-loader-4-line animate-spin" />
+          <span>{{
+            loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
+          }}</span>
+        </FlatButton>
         <FlatButton class="action-button" @click="openHistoryDrawer">
           <i class="i-ri-history-line" />
-          <span>历史记录</span>
+          <span>{{ historyActionLabel }}</span>
         </FlatButton>
         <FlatButton class="action-button" :disabled="loadingStates.openFolder" @click="handleOpenPluginFolder">
           <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
           <i v-else class="i-ri-loader-4-line animate-spin" />
-          <span>{{ loadingStates.openFolder ? 'Opening...' : 'Open Folder' }}</span>
+          <span>{{
+            loadingStates.openFolder ? t('plugin.actions.opening') : t('plugin.actions.openFolder')
+          }}</span>
         </FlatButton>
       </div>
     </div>
@@ -62,10 +71,10 @@
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">
       <TvTabs v-model="tabsModel">
-        <TvTabItem icon="dashboard-line" name="Overview">
+        <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
           <PluginOverview :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem v-if="hasIssues" name="Issues">
+        <TvTabItem v-if="hasIssues" name="Issues" :label="t('plugin.tabs.issues')">
           <template #icon>
             <i
               class="i-ri-error-warning-fill"
@@ -74,16 +83,16 @@
           </template>
           <PluginIssues :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="function-line" name="Features">
+        <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="database-2-line" name="Storage(Mock)">
+        <TvTabItem icon="database-2-line" name="Storage(Mock)" :label="t('plugin.tabs.storageMock')">
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="file-text-line" name="Logs">
+        <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
           <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="information-line" name="Details">
+        <TvTabItem icon="information-line" name="Details" :label="t('plugin.tabs.details')">
           <PluginDetails :plugin="plugin" />
         </TvTabItem>
       </TvTabs>
@@ -106,6 +115,7 @@ import PluginDetails from './tabs/PluginDetails.vue'
 import PluginIssues from './tabs/PluginIssues.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { useI18n } from 'vue-i18n'
 
 // Props
 const props = defineProps<{
@@ -115,17 +125,23 @@ const props = defineProps<{
 // SDK and state
 const touchSdk = useTouchSDK()
 const pluginLogsRef = ref<InstanceType<typeof PluginLogs> | null>(null)
+const { t } = useI18n()
 
 // Tabs state
 const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 
 // Loading states
 const loadingStates = ref({
-  openFolder: false
+  openFolder: false,
+  reload: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
 const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
+const historyActionLabel = computed(() => {
+  const value = t('plugin.actions.history')
+  return value === 'plugin.actions.history' ? '历史日志' : value
+})
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
@@ -165,6 +181,19 @@ const openHistoryDrawer = (): void => {
 }
 
 // Action handlers
+async function handleReloadPlugin(): Promise<void> {
+  if (!props.plugin || loadingStates.value.reload) return
+
+  loadingStates.value.reload = true
+  try {
+    await touchSdk.reloadPlugin(props.plugin.name)
+  } catch (error) {
+    console.error('Failed to reload plugin:', error)
+  } finally {
+    loadingStates.value.reload = false
+  }
+}
+
 async function handleOpenPluginFolder(): Promise<void> {
   if (!props.plugin || loadingStates.value.openFolder) return
 

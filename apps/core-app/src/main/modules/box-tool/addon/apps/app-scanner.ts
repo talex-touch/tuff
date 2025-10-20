@@ -198,7 +198,7 @@ export class AppScanner {
           const currentDisplayName = app.displayName
 
           if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
-            console.log(
+            console.debug(
               formatLog(
                 'AppScanner',
                 `Updating app display name: ${chalk.cyan(app.name)}: "${

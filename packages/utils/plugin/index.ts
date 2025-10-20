@@ -59,7 +59,7 @@ export interface IPluginBaseInfo {
 export interface IPluginDev {
   enable: boolean
   address: string
-  source?: string // 修改此处，允许 source 为字符串或 undefined
+  source?: boolean
 }
 
 export interface ITouchPlugin extends IPluginBaseInfo {
@@ -81,6 +81,47 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 
   enable(): Promise<boolean>
   disable(): Promise<boolean>
+
+  /**
+   * Get the plugin file.
+   * @param fileName The name of the file.
+   * @returns The content of the file.
+   */
+  getPluginFile(fileName: string): object
+
+  /**
+   * Save the plugin file.
+   * @param fileName The name of the file.
+   * @param content The content of the file.
+   * @returns The result of the save operation.
+   */
+  savePluginFile(fileName: string, content: object): { success: boolean; error?: string }
+
+  /**
+   * Delete the plugin file.
+   * @param fileName The name of the file.
+   * @returns The result of the delete operation.
+   */
+  deletePluginFile(fileName: string): { success: boolean; error?: string }
+
+  /**
+   * List all files in the plugin.
+   * @returns The list of files.
+   */
+  listPluginFiles(): string[]
+
+  /**
+   * Get the plugin configuration.
+   * @returns The configuration content.
+   */
+  getPluginConfig(): object
+
+  /**
+   * Save the plugin configuration.
+   * @param content The configuration content.
+   * @returns The result of the save operation.
+   */
+  savePluginConfig(content: object): { success: boolean; error?: string }
 }
 
 export interface IFeatureCommand {
@@ -98,6 +139,12 @@ export interface IPluginFeature {
   platform: IPlatform
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
+  /**
+   * Priority of the feature for sorting in search results
+   * Higher numbers have higher priority (displayed first)
+   * Default is 0
+   */
+  priority?: number
 }
 
 export type IFeatureInteraction = {
@@ -113,6 +160,18 @@ export type IFeatureInteraction = {
  * These hooks are triggered based on real user interaction and system events.
  */
 export interface IFeatureLifeCycle {
+  /**
+   * onInit is called when the feature is initialized.
+   * Can be used to prepare data or UI specific to this session.
+   */
+  onInit?(): void
+
+  /**
+   * Called when a message is received from the main application.
+   * @param key - The key of the message
+   * @param info - The information of the message
+   */
+  onMessage?(key: string, info: any): void
   /**
    * Called when a feature is actively launched from the launcher.
    * Can be used to prepare data or UI specific to this session.
@@ -156,8 +215,23 @@ export interface IFeatureLifeCycle {
    * This is used for handling actions on the items themselves,
    * rather than triggering a new feature.
    * @param item The TuffItem that was executed.
+   * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?(item: any): Promise<any>
+  onItemAction?(item: any): Promise<{
+    /** Whether the action executed an external operation (e.g., opened browser) */
+    externalAction?: boolean
+    /** Whether the feature should be activated after this action */
+    shouldActivate?: boolean
+    /** Activation data if shouldActivate is true */
+    activation?: any
+  } | void>
+
+  /**
+   * Called when plugin storage changes.
+   * @param key - The storage key that changed
+   * @param value - The new value (undefined if key was removed)
+   */
+  onStorageChange?(key: string, value: any): void
 }
 
 /**
@@ -206,8 +280,16 @@ export interface ITargetFeatureLifeCycle {
    * This is used for handling actions on the items themselves,
    * rather than triggering a new feature.
    * @param item The TuffItem that was executed.
+   * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?(item: any): Promise<any>
+  onItemAction?(item: any): Promise<{
+    /** Whether the action executed an external operation (e.g., opened browser) */
+    externalAction?: boolean
+    /** Whether the feature should be activated after this action */
+    shouldActivate?: boolean
+    /** Activation data if shouldActivate is true */
+    activation?: any
+  } | void>
 }
 
 /**
@@ -377,4 +459,5 @@ export interface IManifest {
 export type { LogLevel, LogItem, LogDataType, IPluginLogger } from './log/types'
 export * from './sdk/index'
 export * from './providers'
+export * from './install'
 export * from './risk'

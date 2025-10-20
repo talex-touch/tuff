@@ -6,7 +6,7 @@
         <remix-icon v-if="icon" :name="icon" />
       </slot>
     </div>
-    <div class="TvTabs-Tab-Name">{{ name }}</div>
+    <div class="TvTabs-Tab-Name">{{ label || name }}</div>
   </div>
 </template>
 
@@ -22,6 +22,10 @@ const props = defineProps({
   name: {
     type: String,
     required: true
+  },
+  label: {
+    type: String,
+    default: ''
   },
   active: {
     type: [Boolean, Function],

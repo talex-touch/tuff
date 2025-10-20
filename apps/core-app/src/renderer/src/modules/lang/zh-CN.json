@@ -85,7 +85,11 @@
     "autoClear": "自动清除",
     "autoClearDesc": "隐藏框后清除搜索栏。",
     "autoHide": "自动隐藏",
-    "autoHideDesc": "触发模糊时隐藏搜索栏。"
+    "autoHideDesc": "触发模糊时隐藏搜索栏。",
+    "dashboard": "详细信息",
+    "dashboardDesc": "启用系统详细信息页面，显示索引、应用、日志和OCR状态。",
+    "searchEngineLogs": "搜索引擎日志",
+    "searchEngineLogsDesc": "启用搜索引擎操作的详细日志记录，帮助调试搜索问题。"
   },
   "settingUser": {
     "groupTitle": "账户",
@@ -152,6 +156,7 @@
     "dashboard": "仪表盘",
     "market": "市场",
     "plugin": "插件",
+    "details": "详细信息",
     "style": "样式",
     "setting": "设置"
   },
@@ -160,6 +165,12 @@
     "subtitle": "发现适合您工作流程的优秀插件",
     "searchPlaceholder": "搜索插件...",
     "sources": "来源",
+    "loading": "正在加载官方插件...",
+    "refresh": "刷新",
+    "install": "安装",
+    "installing": "安装中...",
+    "officialBadge": "官方",
+    "lastUpdated": "上次更新 {time}",
     "tags": {
       "all": "全部",
       "feature": "功能",
@@ -169,6 +180,30 @@
       "tools": "工具",
       "productivity": "生产力"
     },
+    "error": {
+      "loadFailed": "官方插件列表加载失败。"
+    },
+    "installation": {
+      "successTitle": "安装完成",
+      "successMessage": "插件“{name}”已准备就绪。",
+      "failureTitle": "安装失败",
+      "failureMessage": "未能安装“{name}”：{reason}",
+      "browserNotSupported": "请在桌面客户端中安装官方插件。",
+      "status": {
+        "queued": "排队中",
+        "downloading": "下载中",
+        "awaitingConfirm": "等待确认",
+        "installing": "安装中",
+        "completed": "已安装",
+        "failed": "安装失败",
+        "cancelled": "已取消"
+      },
+      "confirmTitle": "安装确认",
+      "confirmMessage": "插件“{name}”来自非官方来源，确定继续安装吗？",
+      "confirmInstall": "继续安装",
+      "confirmReject": "取消",
+      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
+    },
     "empty": {
       "title": "未找到插件",
       "subtitle": "请尝试调整搜索或浏览不同类别"
@@ -176,7 +211,90 @@
   },
   "plugin": {
     "opening": "打开中...",
-    "openFolder": "打开文件夹"
+    "openFolder": "打开文件夹",
+    "actions": {
+      "history": "历史记录",
+      "openFolder": "打开文件夹",
+      "opening": "打开中...",
+      "reload": "重新加载",
+      "reloading": "重新加载中..."
+    },
+    "badges": {
+      "dev": "开发模式",
+      "version": "v{version}"
+    },
+    "status": {
+      "disabled": "插件已禁用，点击开启。",
+      "crashed": "插件已崩溃，点击重启。",
+      "enabled": "插件已启用，点击禁用。",
+      "loaded": "插件已加载，点击启用。",
+      "loadFailed": "插件加载失败，点击重新加载。"
+    },
+    "tabs": {
+      "overview": "概览",
+      "issues": "问题",
+      "features": "功能",
+      "storageMock": "存储（模拟）",
+      "logs": "日志",
+      "details": "详情"
+    },
+    "issues": {
+      "title": "插件加载问题",
+      "source": "来源"
+    },
+    "overview": {
+      "environment": "环境支持",
+      "documentation": "文档"
+    },
+    "features": {
+      "stats": {
+        "features": "功能数",
+        "commands": "命令数"
+      },
+      "empty": {
+        "title": "暂无功能",
+        "subtitle": "该插件尚未提供任何功能。"
+      },
+      "drawer": {
+        "title": "功能详情",
+        "overview": "概览",
+        "featureId": "功能 ID",
+        "commandsCount": "命令数量",
+        "featureType": "功能类型",
+        "standardType": "标准",
+        "commandsTitle": "命令（{count}）",
+        "viewJson": "查看 JSON",
+        "rawData": "功能原始数据",
+        "viewFullJson": "查看完整功能 JSON"
+      }
+    },
+    "logs": {
+      "historyTitle": "历史记录",
+      "historyEmpty": "暂无历史日志"
+    },
+    "details": {
+      "basicInfo": "基础信息",
+      "pluginId": "插件 ID",
+      "copyPluginId": "复制插件 ID",
+      "version": "版本",
+      "mode": "模式",
+      "development": "开发模式",
+      "production": "生产模式",
+      "devAddress": "开发地址",
+      "configuration": "配置",
+      "autoStart": "自动启动",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "hotReload": "热重载",
+      "fileSystem": "文件系统",
+      "pluginPath": "插件路径",
+      "dataDirectory": "数据目录",
+      "cacheSize": "缓存大小",
+      "performance": "性能",
+      "loadTime": "加载时间",
+      "memoryUsage": "内存占用",
+      "cpuUsage": "CPU 使用率"
+    }
   },
   "coreBox": {
     "hints": {
@@ -289,5 +407,27 @@
     "application": "应用",
     "appSettings": "应用设置",
     "storagable": "存储"
+  },
+  "textPreview": {
+    "loading": "加载中...",
+    "fileSize": "文件大小",
+    "error": {
+      "noFile": "无法获取文件信息",
+      "emptyFile": "文件为空，无法预览",
+      "fileTooLarge": "文件过大 ({size})，无法预览",
+      "loadFailed": "文件加载失败"
+    }
+  },
+  "fileInfo": {
+    "title": "信息",
+    "path": "路径",
+    "source": "来源",
+    "contentType": "内容类型",
+    "characters": "字符数",
+    "words": "单词数",
+    "fileSize": "文件大小",
+    "bytes": "字节",
+    "createdAt": "创建时间",
+    "modifiedAt": "修改时间"
   }
 }

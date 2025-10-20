@@ -2,9 +2,16 @@ import { drizzle, LibSQLDatabase } from 'drizzle-orm/libsql'
 import { createClient, Client } from '@libsql/client'
 import path from 'path'
 import { migrate } from 'drizzle-orm/libsql/migrator'
+import chalk from 'chalk'
 import * as schema from '../../db/schema'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
-import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import {
+  MaybePromise,
+  ModuleInitContext,
+  ModuleKey,
+  createTiming,
+  type TimingLogLevel
+} from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { BaseModule } from '../abstract-base-module'
 
@@ -32,23 +39,81 @@ export class DatabaseModule extends BaseModule {
     const dbFolder = path.dirname(migrationsLocator)
     const migrationsFolder = path.join(dbFolder, 'migrations')
 
-    console.log(`[Database] Running migrations from: ${migrationsFolder}`)
+    console.log(chalk.cyan(`[Database] Preparing SQLite database at ${chalk.bold(dbPath)}`))
+    console.log(chalk.cyan(`[Database] Applying migrations from ${chalk.bold(migrationsFolder)}`))
+
+    await this.ensureKeywordMappingsProviderColumn()
+
+    const timingLevelColors: Record<TimingLogLevel, chalk.Chalk> = {
+      none: chalk.gray,
+      info: chalk.green,
+      warn: chalk.yellow,
+      error: chalk.red
+    }
+
+    const timing = createTiming('Database:Migrations', {
+      storeHistory: false,
+      logThresholds: {
+        none: 200,
+        info: 800,
+        warn: 2000
+      },
+      formatter: (entry, stats) => {
+        const level = entry.logLevel ?? 'info'
+        const color = timingLevelColors[level] ?? chalk.green
+        const durationText = color(`${entry.durationMs.toFixed(2)}ms`)
+        return `${chalk.dim('[Timing]')} ${chalk.blue(entry.label)} ${durationText} (avg ${stats.avgMs.toFixed(
+          2
+        )}ms, max ${stats.maxMs.toFixed(2)}ms, count ${stats.count})`
+      }
+    })
 
     try {
-      await migrate(this.db, { migrationsFolder })
+      await timing.cost(async () => migrate(this.db!, { migrationsFolder }), {
+        folder: migrationsFolder
+      })
+
+      await this.ensureKeywordMappingsProviderColumn()
+
+      const stats = timing.getStats()
+      const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
+      console.log(chalk.green(`[Database] Migrations completed successfully in ${duration} ms.`))
     } catch (error: any) {
       const message = String(error?.message ?? '')
       const duplicateColumn = message.includes('duplicate column name: provider_id')
 
       if (duplicateColumn) {
         console.warn(
-          '[Database] Migration skipped: column `provider_id` already exists. Continuing without applying duplicate migration.'
+          chalk.yellow(
+            '[Database] Migration skipped: column `provider_id` already exists. Continuing without applying duplicate migration.'
+          )
         )
+        console.error(error)
         return
       }
 
-      console.error('[Database] Migration failed:', error)
-      throw error // Re-throw to ensure the app doesn't continue in a broken state
+      console.error(chalk.red('[Database] Migration failed:'), error)
+      process.exit(1)
+    }
+  }
+
+  private async ensureKeywordMappingsProviderColumn(): Promise<void> {
+    if (!this.client) return
+
+    try {
+      const check = await this.client.execute(
+        "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
+      )
+      if (check.rows.length > 0) {
+        return
+      }
+
+      console.log(chalk.yellow('[Database] Adding missing column `keyword_mappings.provider_id`'))
+      await this.client.execute(
+        "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
+      )
+    } catch (error) {
+      console.warn('[Database] Failed to set up `provider_id` column pre-migration:', error)
     }
   }
 
@@ -64,6 +129,7 @@ export class DatabaseModule extends BaseModule {
     }
     return this.db
   }
+
 }
 
 const databaseModule = new DatabaseModule()

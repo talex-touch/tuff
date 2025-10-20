@@ -1,7 +1,9 @@
 import { ipcMain, WebContentsView } from 'electron'
 import {
+  ChannelCallback,
   ChannelType,
   DataCode,
+  IChannelData,
   ITouchChannel,
   RawChannelSyncData,
   RawStandardChannelData,
@@ -12,9 +14,9 @@ import { structuredStrictStringify } from '@talex-touch/utils'
 import { WindowManager } from '../modules/box-tool/core-box/window'
 
 class TouchChannel implements ITouchChannel {
-  channelMap: Map<ChannelType, Map<string, Function[]>> = new Map()
+  channelMap: Map<ChannelType, Map<string, ChannelCallback[]>> = new Map()
 
-  pendingMap: Map<string, Function> = new Map()
+  pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
 
   keyToNameMap: Map<string, string> = new Map()
   nameToKeyMap: Map<string, string> = new Map()
@@ -53,27 +55,28 @@ class TouchChannel implements ITouchChannel {
     return true
   }
 
-  __parse_raw_data(e: Electron.IpcMainEvent, arg: any): RawStandardChannelData {
+  __parse_raw_data(e: Electron.IpcMainEvent, arg: unknown): RawStandardChannelData {
     if (this.app.version === TalexTouch.AppVersion.DEV) console.debug('Raw data: ', arg, e)
-    if (arg) {
-      const { name, header, code, data, sync } = arg
+    if (arg && typeof arg === 'object' && arg !== null) {
+      const { name, header, code, data, sync } = arg as Record<string, unknown>
 
-      if (header) {
-        const { uniqueKey } = header
+      if (header && typeof header === 'object' && header !== null) {
+        const { uniqueKey } = header as Record<string, unknown>
 
-        const pluginName = this.keyToNameMap.get(uniqueKey)
+        const pluginName = this.keyToNameMap.get(uniqueKey as string)
 
         return {
           header: {
-            status: header.status || 'request',
+            status:
+              ((header as Record<string, unknown>).status as 'reply' | 'request') || 'request',
             type: pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
             event: e,
-            uniqueKey
+            uniqueKey: uniqueKey as string
           },
-          sync,
-          code,
-          data,
+          sync: sync as RawChannelSyncData | undefined,
+          code: code as DataCode,
+          data: data as IChannelData,
           plugin: pluginName,
           name: name as string
         }
@@ -84,7 +87,7 @@ class TouchChannel implements ITouchChannel {
     throw new Error('Invalid message!')
   }
 
-  __handle_main(e: Electron.IpcMainEvent, arg: any) {
+  __handle_main(e: Electron.IpcMainEvent, arg: unknown) {
     const rawData = this.__parse_raw_data(e, arg)
 
     if (rawData.header.status === 'reply' && rawData.sync) {
@@ -98,10 +101,10 @@ class TouchChannel implements ITouchChannel {
     if (!map) throw new Error('Invalid channel type!')
 
     map.get(rawData.name)?.forEach((func) => {
+      let _replied = false
       const handInData: StandardChannelData = {
-        _replied: false,
-        reply: (code: DataCode, data: any) => {
-          if ((handInData as any)._replied) {
+        reply: (code: DataCode, data: unknown) => {
+          if (_replied) {
             console.warn(`[Channel] Attempted to reply twice for ${rawData.name}`)
             return
           }
@@ -124,7 +127,7 @@ class TouchChannel implements ITouchChannel {
               finalData
             )
           } else e.returnValue = finalData
-          ;(handInData as any)._replied = true
+          _replied = true
         },
         ...rawData
       }
@@ -134,7 +137,7 @@ class TouchChannel implements ITouchChannel {
       if (res && res instanceof Promise) return
 
       // Only auto-reply if the handler hasn't already replied
-      if (!handInData._replied) {
+      if (!_replied) {
         handInData.reply(DataCode.SUCCESS, res)
       }
     })
@@ -143,7 +146,7 @@ class TouchChannel implements ITouchChannel {
   __parse_sender(
     code: DataCode,
     rawData: RawStandardChannelData,
-    data: any,
+    data: unknown,
     sync?: RawChannelSyncData
   ): RawStandardChannelData {
     if (!rawData || !rawData.header) throw new Error('Invalid data!' + JSON.stringify(rawData))
@@ -169,7 +172,7 @@ class TouchChannel implements ITouchChannel {
     }
   }
 
-  regChannel(type: ChannelType, eventName: string, callback: Function): () => void {
+  regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void {
     const map = this.channelMap.get(type)!
 
     const listeners = map.get(eventName) || []
@@ -189,6 +192,35 @@ class TouchChannel implements ITouchChannel {
         listeners.splice(index, 1)
       }
     }
+  }
+
+  unregChannel(type: ChannelType, eventName: string, callback: ChannelCallback): boolean {
+    const map = this.channelMap.get(type)
+
+    if (!map) {
+      return false
+    }
+
+    const listeners = map.get(eventName)
+
+    if (!listeners) {
+      return false
+    }
+
+    const index = listeners.indexOf(callback)
+
+    if (index === -1) {
+      return false
+    }
+
+    listeners.splice(index, 1)
+
+    // If no listeners remain for this event, remove the event from the map
+    if (listeners.length === 0) {
+      map.delete(eventName)
+    }
+
+    return true
   }
 
   _sendTo(

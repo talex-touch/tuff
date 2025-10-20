@@ -4,35 +4,12 @@ import fse from 'fs-extra'
 import { dialog, BrowserWindow } from 'electron'
 import type { IManifest } from '@talex-touch/utils/plugin'
 import {
-  pluginProviderRegistry,
   type PluginInstallRequest,
-  type PluginInstallSummary,
-  PluginProviderType
+  type PluginInstallResult,
+  type PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
 import { type RiskPromptHandler, type RiskPromptInput } from '@talex-touch/utils/plugin/risk'
-import {
-  FilePluginProvider,
-  GithubPluginProvider,
-  NpmPluginProvider,
-  TpexPluginProvider
-} from './providers'
-
-const registeredProviders = new Set<PluginProviderType>()
-
-function ensureProvidersRegistered(): void {
-  const providers = [
-    new GithubPluginProvider(),
-    new NpmPluginProvider(),
-    new TpexPluginProvider(),
-    new FilePluginProvider()
-  ]
-
-  for (const provider of providers) {
-    if (registeredProviders.has(provider.type)) continue
-    pluginProviderRegistry.register(provider)
-    registeredProviders.add(provider.type)
-  }
-}
+import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 
 function createDialogRiskPrompt(): RiskPromptHandler {
   return async (input: RiskPromptInput) => {
@@ -80,17 +57,55 @@ async function runResolver(
   })
 }
 
+export interface PreparedPluginInstall {
+  request: PluginInstallRequest
+  providerResult: PluginInstallResult
+  manifest?: IManifest
+}
+
+export interface PluginInstallOptions {
+  onDownloadProgress?: (progress: number) => void
+  autoResolve?: boolean
+}
+
 export class PluginInstaller {
   private readonly riskPrompt: RiskPromptHandler
 
   constructor(riskPrompt?: RiskPromptHandler) {
-    ensureProvidersRegistered()
+    ensureDefaultProvidersRegistered()
     this.riskPrompt = riskPrompt ?? createDialogRiskPrompt()
   }
 
-  async install(request: PluginInstallRequest): Promise<PluginInstallSummary> {
-    const providerResult = await pluginProviderRegistry.install(request, {
-      riskPrompt: this.riskPrompt
+  async install(
+    request: PluginInstallRequest,
+    options?: PluginInstallOptions
+  ): Promise<PluginInstallSummary> {
+    const prepared = await this.prepareInstall(request, options)
+
+    if (options?.autoResolve === false) {
+      return { manifest: prepared.manifest, providerResult: prepared.providerResult }
+    }
+
+    return this.finalizeInstall(prepared)
+  }
+
+  async prepareInstall(
+    request: PluginInstallRequest,
+    options?: PluginInstallOptions
+  ): Promise<PreparedPluginInstall> {
+    const providerResult = await installFromRegistry(request, {
+      riskPrompt: this.riskPrompt,
+      downloadOptions: options?.onDownloadProgress
+        ? {
+            onProgress: (value: number) => {
+              try {
+                options.onDownloadProgress?.(Math.max(0, Math.min(100, value)))
+              } catch (error) {
+                console.warn('[PluginInstaller] download progress handler failed', error)
+              }
+            }
+          }
+        : undefined
     })
 
     if (!providerResult) {
@@ -101,11 +116,34 @@ export class PluginInstaller {
       ? providerResult.manifest
       : (await this.previewManifest(providerResult.filePath!))?.manifest
 
-    await runResolver(providerResult.filePath!, true)
+    if (options?.onDownloadProgress) {
+      try {
+        options.onDownloadProgress(100)
+      } catch (error) {
+        console.warn('[PluginInstaller] failed to finalize progress update', error)
+      }
+    }
 
-    await this.cleanupIfNeeded(request.source, providerResult.filePath)
+    return {
+      request,
+      providerResult,
+      manifest
+    }
+  }
 
-    return { manifest, providerResult }
+  async finalizeInstall(prepared: PreparedPluginInstall): Promise<PluginInstallSummary> {
+    await runResolver(prepared.providerResult.filePath!, true)
+
+    await this.cleanupIfNeeded(prepared.request.source, prepared.providerResult.filePath)
+
+    return {
+      manifest: prepared.manifest,
+      providerResult: prepared.providerResult
+    }
+  }
+
+  async discardPrepared(prepared: PreparedPluginInstall): Promise<void> {
+    await this.cleanupIfNeeded(prepared.request.source, prepared.providerResult.filePath)
   }
 
   private async previewManifest(filePath: string): Promise<{ manifest?: IManifest }> {

@@ -9,6 +9,7 @@ import path from 'path'
 import { BaseModule } from '../modules/abstract-base-module'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { activeAppService } from '../modules/system/active-app'
 
 function closeApp(app: TalexTouch.TouchApp): void {
   app.window.close()
@@ -73,6 +74,10 @@ export class CommonChannelModule extends BaseModule {
     )
 
     channel.regChannel(ChannelType.MAIN, 'get-os', () => getOSInformation())
+    const systemGetActiveApp = async ({ data }: { data?: { forceRefresh?: boolean } }) =>
+      activeAppService.getActiveApp(Boolean(data?.forceRefresh))
+    channel.regChannel(ChannelType.MAIN, 'system:get-active-app', systemGetActiveApp)
+    channel.regChannel(ChannelType.PLUGIN, 'system:get-active-app', systemGetActiveApp)
 
     channel.regChannel(ChannelType.MAIN, 'common:cwd', process.cwd)
 
@@ -91,7 +96,7 @@ export class CommonChannelModule extends BaseModule {
         )
         shell.openPath(modulePath)
 
-        console.log(
+        console.debug(
           `[Channel] Open path [${modulePath}] with module folder @${data?.name ?? 'defaults'}`
         )
       }
