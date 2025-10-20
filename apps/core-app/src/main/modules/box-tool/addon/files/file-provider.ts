@@ -1463,12 +1463,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.logDebug('File update chunk processed', {
             processed: processedCount,
             total: filesToUpdate.length,
-            duration: formatDuration(performance.now() - chunkStart)
+            duration: formatDuration(performance.now() - chunkStart),
+            averageDuration: formatDuration(performance.now() - chunkStart / processedCount)
           })
         }
       },
       {
-        estimatedTaskTimeMs: 6,
+        estimatedTaskTimeMs: 10,
         label: 'FileProvider::processFileUpdates'
       }
     )

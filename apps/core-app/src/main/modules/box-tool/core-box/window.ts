@@ -274,7 +274,7 @@ export class WindowManager {
 
   public shrink(): void {
     if (this.uiView) {
-      console.warn('[CoreBox] Cannot shrink window while UI view is attached.')
+      console.debug('[CoreBox] Cannot shrink window while UI view is attached.')
       return
     }
     this.detachUIView()
@@ -709,7 +709,6 @@ export class WindowManager {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         this.uiView.webContents.closeDevTools()
-        console.log('[WindowManager] Removing child view from current window.')
         currentWindow.window.contentView.removeChildView(this.uiView)
       } else {
         console.warn(
@@ -720,7 +719,6 @@ export class WindowManager {
       // Explicitly destroying them here is unnecessary and causes a type error.
       this.uiView = null
       this.attachedPlugin = null
-      console.log('[WindowManager] uiView set to null.')
     }
   }
 
