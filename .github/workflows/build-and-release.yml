@@ -42,7 +42,7 @@ jobs:
           node-version: '22'
 
       - name: Install Dependencies
-        run: npm install -g pnpm && pnpm i
+        run: npm install -g pnpm && pnpm i && pnpm approve-builds
 
       - name: Determine Release Type
         id: release-type
