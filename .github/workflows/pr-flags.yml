@@ -30,8 +30,25 @@ jobs:
             }
 
             const body = pr.body ?? '';
-            const needRelease = /☑\s*需要将此 PR 的提交包含进下一次 Release 更新日志/.test(body);
-            const needAi = /☑\s*需要触发 AI 对此 PR 的自动分析/.test(body);
+
+            const checkboxPattern = /(?:☑|\[[xX]\])/;
+
+            function hasCheckedFlag(phrases) {
+              return phrases.some(phrase => {
+                const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const pattern = new RegExp(`-\\s*${checkboxPattern.source}\\s*${escaped}`);
+                return pattern.test(body);
+              });
+            }
+
+            const needRelease = hasCheckedFlag([
+              '需要将此 PR 的提交包含进下一次 Release 更新日志',
+              'Include commits from this PR in the next release notes',
+            ]);
+            const needAi = hasCheckedFlag([
+              '需要触发 AI 对此 PR 的自动分析（总结、风险等）',
+              'Request AI assistance for PR analysis (summary, risks, etc.)',
+            ]);
 
             const labelDefinitions = [
               {
@@ -67,10 +84,17 @@ jobs:
               }
             }
 
+            const prNumber = pr.number;
+
+            if (!prNumber) {
+              core.info('Pull request number missing from payload. Skipping label sync.');
+              return;
+            }
+
             const { data: existingLabels } = await github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: github.event.pull_request.number,
+              issue_number: prNumber,
             });
 
             for (const label of labelDefinitions) {
@@ -81,7 +105,7 @@ jobs:
                 await github.rest.issues.addLabels({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  issue_number: github.event.pull_request.number,
+                  issue_number: prNumber,
                   labels: [label.name],
                 });
               }
@@ -90,7 +114,7 @@ jobs:
                 await github.rest.issues.removeLabel({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  issue_number: github.event.pull_request.number,
+                  issue_number: prNumber,
                   name: label.name,
                 }).catch(error => {
                   if (error.status !== 404) throw error;
