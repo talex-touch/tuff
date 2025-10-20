@@ -94,7 +94,7 @@ export class PluginInstallQueue {
   }
 
   private async runTask(task: InstallTask): Promise<void> {
-    const channel = genTouchChannel()
+    // const channel = genTouchChannel()
     try {
       const prepared = await this.installer.prepareInstall(task.request, {
         autoResolve: false,

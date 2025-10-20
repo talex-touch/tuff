@@ -9,7 +9,8 @@ import {
   timingLogger,
   type TimingMeta,
   type TimingOptions,
-  type TimingLogLevel
+  type TimingLogLevel,
+  ITouchEvent
 } from '@talex-touch/utils'
 import { searchLogger } from '../../search-engine/search-logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
@@ -214,48 +215,48 @@ type ResolvedOpener = {
   lastResolvedAt: string
 }
 
-class ProgressLogger {
-  private processed = 0
-  private lastLoggedAt = 0
-  private readonly startTime = performance.now()
+// class ProgressLogger {
+//   private processed = 0
+//   private lastLoggedAt = 0
+//   private readonly startTime = performance.now()
 
-  constructor(
-    private readonly label: string,
-    private readonly total: number,
-    private readonly logFn: (message: string) => void,
-    private readonly intervalMs = 5_000
-  ) {}
+//   constructor(
+//     private readonly label: string,
+//     private readonly total: number,
+//     private readonly logFn: (message: string) => void,
+//     private readonly intervalMs = 5_000
+//   ) {}
 
-  advance(by: number): void {
-    if (by <= 0) {
-      return
-    }
-    this.processed = Math.min(this.processed + by, this.total)
-    this.maybeLog()
-  }
+//   advance(by: number): void {
+//     if (by <= 0) {
+//       return
+//     }
+//     this.processed = Math.min(this.processed + by, this.total)
+//     this.maybeLog()
+//   }
 
-  finish(): void {
-    this.maybeLog(true)
-  }
+//   finish(): void {
+//     this.maybeLog(true)
+//   }
 
-  private maybeLog(force = false): void {
-    const now = performance.now()
-    if (!force && this.processed < this.total && now - this.lastLoggedAt < this.intervalMs) {
-      return
-    }
+//   private maybeLog(force = false): void {
+//     const now = performance.now()
+//     if (!force && this.processed < this.total && now - this.lastLoggedAt < this.intervalMs) {
+//       return
+//     }
 
-    this.lastLoggedAt = now
-    const safeTotal = this.total || 0
-    const percent = safeTotal > 0 ? Math.min(100, (this.processed / safeTotal) * 100) : 100
-    const elapsedSec = (now - this.startTime) / 1000
-    const totalDisplay = safeTotal > 0 ? safeTotal.toString() : '–'
+//     this.lastLoggedAt = now
+//     const safeTotal = this.total || 0
+//     const percent = safeTotal > 0 ? Math.min(100, (this.processed / safeTotal) * 100) : 100
+//     const elapsedSec = (now - this.startTime) / 1000
+//     const totalDisplay = safeTotal > 0 ? safeTotal.toString() : '–'
 
-    const progress = `${this.label} ${this.processed}/${totalDisplay} (${percent.toFixed(
-      1
-    )}%) elapsed ${elapsedSec.toFixed(1)}s`
-    this.logFn(progress)
-  }
-}
+//     const progress = `${this.label} ${this.processed}/${totalDisplay} (${percent.toFixed(
+//       1
+//     )}%) elapsed ${elapsedSec.toFixed(1)}s`
+//     this.logFn(progress)
+//   }
+// }
 
 class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
@@ -277,16 +278,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   > = new Map()
   private readonly isCaseInsensitiveFs = process.platform !== 'linux'
   private readonly timestampToleranceMs = 1_000
-  private readonly handleFsAddedOrChanged = (event: FileAddedEvent | FileChangedEvent) => {
-    if (!event?.filePath) return
+  private readonly handleFsAddedOrChanged = (event: ITouchEvent) => {
+    const fileEvent = event as FileAddedEvent | FileChangedEvent
+    if (!fileEvent?.filePath) return
     this.enqueueIncrementalUpdate(
-      event.filePath,
-      event instanceof FileAddedEvent ? 'add' : 'change'
+      fileEvent.filePath,
+      fileEvent instanceof FileAddedEvent ? 'add' : 'change'
     )
   }
-  private readonly handleFsUnlinked = (event: FileUnlinkedEvent) => {
-    if (!event?.filePath) return
-    this.enqueueIncrementalUpdate(event.filePath, 'delete')
+  private readonly handleFsUnlinked = (event: ITouchEvent) => {
+    const fileEvent = event as FileUnlinkedEvent
+    if (!fileEvent?.filePath) return
+    this.enqueueIncrementalUpdate(fileEvent.filePath, 'delete')
   }
   private openersChannelRegistered = false
   private readonly openerCache = new Map<string, ResolvedOpener>()
@@ -492,9 +495,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private createProgressLogger(label: string, total: number): ProgressLogger {
-    return new ProgressLogger(label, total, (message) => this.logInfo(message))
-  }
+  // private createProgressLogger(_label: string, _total: number): ProgressLogger {
+  //   return new ProgressLogger(_label, _total, (message) => this.logInfo(message))
+  // }
 
   public getWatchedPaths(): string[] {
     return [...this.WATCH_PATHS]
@@ -527,27 +530,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return Math.abs(left - right) <= this.timestampToleranceMs
   }
 
-  private hasDiskFileChanged(
-    diskFile: ScannedFileInfo,
-    dbFile: typeof filesSchema.$inferSelect
-  ): boolean {
-    if (!this.timestampsEqual(diskFile.mtime, dbFile.mtime)) {
-      return true
-    }
-    if (!this.timestampsEqual(diskFile.ctime, dbFile.ctime)) {
-      return true
-    }
-    if ((diskFile.size ?? 0) !== (dbFile.size ?? 0)) {
-      return true
-    }
-    if ((diskFile.extension ?? '') !== (dbFile.extension ?? '')) {
-      return true
-    }
-    if ((diskFile.name ?? '') !== (dbFile.name ?? '')) {
-      return true
-    }
-    return false
-  }
+  // private hasDiskFileChanged(
+  //   _diskFile: ScannedFileInfo,
+  //   _dbFile: typeof filesSchema.$inferSelect
+  // ): boolean {
+  //   if (!this.timestampsEqual(_diskFile.mtime, _dbFile.mtime)) {
+  //     return true
+  //   }
+  //   if (!this.timestampsEqual(_diskFile.ctime, _dbFile.ctime)) {
+  //     return true
+  //   }
+  //   if ((_diskFile.size ?? 0) !== (_dbFile.size ?? 0)) {
+  //     return true
+  //   }
+  //   if ((_diskFile.extension ?? '') !== (_dbFile.extension ?? '')) {
+  //     return true
+  //   }
+  //   if ((_diskFile.name ?? '') !== (_dbFile.name ?? '')) {
+  //     return true
+  //   }
+  //   return false
+  // }
 
   private hasRecordChanged(
     incoming: typeof filesSchema.$inferInsert,
@@ -1018,7 +1021,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .filter(([, payload]) => payload.action === 'delete')
       .map(([, payload]) => payload.rawPath)
 
-    const changedEntries = entries.filter(([, payload]) => payload.action !== 'delete')
+    const changedEntries = entries.filter(([, payload]) => payload.action !== 'delete') as Array<
+      [string, { action: 'add' | 'change'; rawPath: string }]
+    >
 
     if (deleted.length > 0) {
       await this.handleIncrementalDeletes(deleted)
@@ -1086,11 +1091,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           filesToUpdate.push({
             ...existing,
             name: record.name,
-            extension: record.extension,
-            size: record.size,
+            extension: record.extension || null,
+            size: record.size || null,
             mtime: record.mtime,
             ctime: record.ctime,
-            lastIndexedAt: record.lastIndexedAt,
+            lastIndexedAt: record.lastIndexedAt || new Date(),
             type: existing.type || 'file',
             isDir: false
           })
@@ -1990,8 +1995,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
       tuffItem.meta = {
         ...tuffItem.meta,
-        filter: {
-          type: Array.from(typeFilters)
+        file: {
+          path: tuffItem.meta?.file?.path || '',
+          ...tuffItem.meta?.file
         }
       }
       return tuffItem
@@ -2066,7 +2072,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { summary, entries }
   }
 
-  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
     searchLogger.logProviderSearch('file-provider', query.text, 'File System')
     searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
@@ -2320,10 +2326,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
 
         if (typeFilters.size > 0) {
-          tuffItem.meta.filter = {
-            ...(tuffItem.meta.filter as Record<string, unknown> | undefined),
-            type: Array.from(typeFilters)
-          }
+          // tuffItem.meta.file = {
+          //   ...(tuffItem.meta.file as Record<string, unknown> | undefined),
+          //   fileTypes: Array.from(typeFilters)
+          // }
         }
 
         return tuffItem

@@ -39,7 +39,7 @@ const namespacePalette = [
   chalk.yellowBright
 ]
 
-const namespaceColorCache = new Map<string, chalk.Chalk>()
+const namespaceColorCache = new Map<string, typeof chalk.gray>()
 
 const debugEnabled =
   typeof process !== 'undefined' &&
@@ -55,7 +55,7 @@ function formatTimestamp(date = new Date()): string {
   return `${hours}:${minutes}:${seconds}.${millis}`
 }
 
-function pickNamespaceColor(namespace: string): chalk.Chalk {
+function pickNamespaceColor(namespace: string): typeof chalk.gray {
   const cached = namespaceColorCache.get(namespace)
   if (cached) return cached
   const seed = namespace

@@ -2,7 +2,7 @@ import type { LoadingEvent, LoadingMode, LoadingState, PreloadAPI } from './load
 
 function getPreloadApi(): PreloadAPI | null {
   if (typeof window === 'undefined') return null
-  return window.api ?? null
+  return (window as any).api ?? null
 }
 
 export function sendPreloadEvent(event: LoadingEvent): void {

@@ -236,9 +236,7 @@ export class BackgroundTaskService extends EventEmitter {
       this.emit('taskCompleted', { task, duration })
     } catch (error) {
       const duration = performance.now() - startTime
-      this.logError(`Background task failed: ${task.name}`, error, {
-        duration: formatDuration(duration)
-      })
+      this.logError(`Background task failed: ${task.name}`, error as Error)
       this.emit('taskFailed', { task, error, duration })
     } finally {
       clearTimeout(timeoutId)

@@ -1,4 +1,4 @@
-import chokidar, { type FSWatcher, type WatchOptions } from 'chokidar'
+import chokidar, { type FSWatcher } from 'chokidar'
 import { touchEventBus, TalexEvents } from '../core/eventbus/touch-event'
 
 export class FileWatchService {
@@ -10,7 +10,7 @@ export class FileWatchService {
     })
   }
 
-  watch(paths: string | readonly string[] | undefined, options?: WatchOptions): FSWatcher {
+  watch(paths: string | string[] | undefined, options?: any): FSWatcher {
     const watcher = chokidar.watch(paths ?? [], {
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -21,7 +21,9 @@ export class FileWatchService {
     })
 
     this.watchers.add(watcher)
-    watcher.on('close', () => this.watchers.delete(watcher))
+    // watcher.on('close', () => {
+    //   this.watchers.delete(watcher)
+    // })
     return watcher
   }
 
