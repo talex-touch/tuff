@@ -93,6 +93,12 @@ console.log(`Building ${buildType} version for Windows`);
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
 process.env.ELECTRON_BUILDER_CACHE = path.join(__dirname, '../.electron-builder-cache');
 process.env.ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES = 'true';
+// 完全禁用签名相关功能
+process.env.CSC_LINK = '';
+process.env.CSC_KEY_PASSWORD = '';
+process.env.APPLE_ID = '';
+process.env.APPLE_ID_PASSWORD = '';
+process.env.APPLE_TEAM_ID = '';
 
 // 检查磁盘空间和权限
 function checkBuildEnvironment() {
