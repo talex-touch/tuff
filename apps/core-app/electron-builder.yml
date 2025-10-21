@@ -59,7 +59,6 @@ linux:
   maintainer: tagzxia.com
   category: Utility
 snap:
-  executable: "talex-touch"
   confinement: strict
   grade: stable
   summary: "A powerful productivity launcher and automation tool"
