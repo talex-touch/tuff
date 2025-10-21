@@ -203,29 +203,33 @@ function retryBuild(maxRetries = 3) {
       });
 
       console.log('Step 2: Running electron-builder --mac...');
-
+      
       // 检查必要的文件是否存在
       const packageJsonPath = path.join(workingDir, 'package.json');
       const electronBuilderConfigPath = path.join(workingDir, 'electron-builder.yml');
       const outDir = path.join(workingDir, 'out');
-
+      const buildDir = path.join(workingDir, 'build');
+      const distDir = path.join(workingDir, 'dist');
+      
       console.log('Checking required files:');
       console.log('- package.json exists:', fs.existsSync(packageJsonPath));
       console.log('- electron-builder.yml exists:', fs.existsSync(electronBuilderConfigPath));
       console.log('- out directory exists:', fs.existsSync(outDir));
-
+      console.log('- build directory exists:', fs.existsSync(buildDir));
+      console.log('- dist directory exists:', fs.existsSync(distDir));
+      
       if (!fs.existsSync(packageJsonPath)) {
         throw new Error('package.json not found');
       }
-
+      
       if (!fs.existsSync(electronBuilderConfigPath)) {
         throw new Error('electron-builder.yml not found');
       }
-
+      
       if (!fs.existsSync(outDir)) {
         throw new Error('out directory not found - build may have failed');
       }
-
+      
       // 列出 out 目录内容
       console.log('Contents of out directory:');
       try {
@@ -238,6 +242,42 @@ function retryBuild(maxRetries = 3) {
       } catch (error) {
         console.warn('Could not list out directory contents:', error.message);
       }
+      
+      // 检查 build 目录内容
+      console.log('Contents of build directory:');
+      try {
+        const buildContents = fs.readdirSync(buildDir);
+        buildContents.forEach(item => {
+          const itemPath = path.join(buildDir, item);
+          const stats = fs.statSync(itemPath);
+          console.log(`  ${item} (${stats.isDirectory() ? 'directory' : 'file'})`);
+        });
+      } catch (error) {
+        console.warn('Could not list build directory contents:', error.message);
+      }
+      
+      // 检查当前工作目录
+      console.log('Current working directory:', process.cwd());
+      console.log('Working directory:', workingDir);
+      
+      // 检查是否有任何文件被误认为是目录
+      const suspiciousPaths = [
+        path.join(workingDir, 'package.json'),
+        path.join(workingDir, 'electron-builder.yml'),
+        path.join(workingDir, 'out'),
+        path.join(workingDir, 'build'),
+        path.join(workingDir, 'dist')
+      ];
+      
+      console.log('Path type checks:');
+      suspiciousPaths.forEach(p => {
+        if (fs.existsSync(p)) {
+          const stats = fs.statSync(p);
+          console.log(`  ${p}: ${stats.isDirectory() ? 'directory' : 'file'}`);
+        } else {
+          console.log(`  ${p}: does not exist`);
+        }
+      });
 
       execSync('electron-builder --mac', {
         stdio: 'inherit',

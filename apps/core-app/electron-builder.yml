@@ -4,6 +4,7 @@ asar: false
 compression: maximum
 directories:
   buildResources: build
+  output: dist
 files:
   - out/**/*
   - node_modules/**/*
