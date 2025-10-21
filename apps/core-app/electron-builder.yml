@@ -1,7 +1,7 @@
 appId: com.tagzxia.app.talex-touch
 productName: talex-touch
-asar: true
-compression: maximum
+asar: false
+compression: normal
 directories:
   app: out
   buildResources: build
@@ -17,6 +17,7 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - "node_modules/**/build/Release/*.node"
 
 win:
   executableName: talex-touch
@@ -24,7 +25,6 @@ win:
     - target: nsis
       arch:
         - x64
-  sign: false
   verifyUpdateCodeSignature: false
   requestedExecutionLevel: asInvoker
   artifactName: ${name}-${version}-setup.${ext}
@@ -54,18 +54,15 @@ mac:
   notarize: false
   sign: false
   gatekeeperAssess: false
+  executableName: talex-touch
   target:
     - target: zip
       arch: [arm64]
-  # 修复路径问题
   icon: build/icon.icns
   category: public.app-category.productivity
-  # 强制重新构建
   forceCodeSigning: false
-  # 完全禁用代码签名
   identity: null
   hardenedRuntime: false
-  # 确保路径正确
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
@@ -89,7 +86,6 @@ snap:
   # 修复 app-builder 执行问题
   useTemplateApp: false
   desktop:
-    X-MultipleArgs: false
 appImage:
   artifactName: ${name}-${version}.${ext}
   category: Utility
@@ -99,8 +95,6 @@ deb:
   category: Utility
   synopsis: "A powerful productivity launcher and automation tool"
 npmRebuild: false
-includeSubNodeModules: false
-# 全局禁用签名相关功能
 forceCodeSigning: false
 publish:
   provider: generic
