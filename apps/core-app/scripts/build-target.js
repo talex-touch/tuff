@@ -93,6 +93,16 @@ function build() {
     fs.rmSync(distDir, { recursive: true, force: true });
   }
 
+  fs.mkdirSync(distDir, { recursive: true });
+
+  if (normalizedTarget === 'linux') {
+    fs.mkdirSync(path.join(distDir, '@talex-touch'), { recursive: true });
+    fs.mkdirSync(path.join(distDir, '__appImage-x64'), { recursive: true });
+    fs.mkdirSync(path.join(distDir, '__deb-x64'), { recursive: true });
+  } else if (normalizedTarget === 'win') {
+    fs.mkdirSync(path.join(distDir, '@talex-touch'), { recursive: true });
+  }
+
   process.env.BUILD_TYPE = buildType;
   console.log('Running application build (npm run build)...');
   execSync('npm run build', { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
