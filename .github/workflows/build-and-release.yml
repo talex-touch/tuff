@@ -264,6 +264,13 @@ jobs:
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
           RUNNER_OS: ${{ runner.os }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 完全禁用签名相关功能
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_LINK: ''
+          CSC_KEY_PASSWORD: ''
+          APPLE_ID: ''
+          APPLE_ID_PASSWORD: ''
+          APPLE_TEAM_ID: ''
 
       - name: Verify Build Artifacts
         shell: bash
