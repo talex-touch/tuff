@@ -258,7 +258,7 @@ function retryBuild(maxRetries = 3) {
       console.log('Step 2: Creating minimal package.json for out directory...');
       const copyOutDir = path.join(workingDir, 'out');
       const outPackageJsonPath = path.join(copyOutDir, 'package.json');
-      
+
       if (fs.existsSync(copyOutDir)) {
         const minimalPackageJson = {
           "name": "@talex-touch/core-app",
@@ -267,7 +267,7 @@ function retryBuild(maxRetries = 3) {
           "author": "TalexDreamSoul",
           "homepage": "https://talex-touch.tagzxia.com"
         };
-        
+
         fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2));
         console.log('✓ minimal package.json created in out directory');
       } else {
