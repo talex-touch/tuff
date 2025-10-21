@@ -67,7 +67,7 @@ const keyHints = computed(() => {
     class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--el-border-color-lighter)] bg-transparent text-12px text-[color:var(--el-text-color-secondary)]"
   >
     <div class="FooterInfo">
-      <PluginIcon :icon="displayIcon" :alt="title" class="FooterIcon" />
+      <PluginIcon :icon="displayIcon as any" :alt="title" class="FooterIcon" />
       <div class="FooterText">
         <span class="FooterTitle" :title="title">{{ title }}</span>
         <span v-if="subtitleMeta" class="FooterSubtitle" :title="subtitleMeta.label">
