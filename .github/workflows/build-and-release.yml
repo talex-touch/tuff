@@ -55,6 +55,7 @@ jobs:
 
       - name: Determine Release Type
         id: release-type
+        shell: bash
         run: |
           if [ "$EVENT_NAME" = "push" ]; then
             echo "type=release" >> $GITHUB_OUTPUT
@@ -72,6 +73,7 @@ jobs:
           VERSION: ${{ github.event.inputs.version }}
 
       - name: Update Version Numbers
+        shell: bash
         run: |
           VERSION=${{ steps.release-type.outputs.version }}
           if [ -n "$VERSION" ]; then
@@ -88,6 +90,7 @@ jobs:
           fi
 
       - name: Build Tuff App
+        shell: bash
         run: |
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
@@ -118,19 +121,28 @@ jobs:
 
       - name: Cleanup Artifacts for Windows
         if: matrix.os == 'windows-latest'
+        shell: bash
         run: npx rimraf "apps/core-app/dist/!(*.exe)"
 
       - name: Cleanup Artifacts for MacOS
         if: matrix.os == 'macos-latest'
+        shell: bash
         run: npx rimraf "apps/core-app/dist/!(*.dmg)"
 
   create-release:
     name: Create Release
     needs: build-and-release
     runs-on: ubuntu-latest
-    if: always() && (needs.build-and-release.result == 'success' || needs.build-and-release.result == 'skipped')
+    if: always() && (needs.build-and-release.result == 'success' || needs.build-and-release.result == 'skipped' || needs.build-and-release.result == 'failure')
 
     steps:
+      - name: Check Build Results
+        run: |
+          echo "Build results:"
+          echo "Windows: ${{ needs.build-and-release.result == 'success' && matrix.os == 'windows-latest' }}"
+          echo "macOS: ${{ needs.build-and-release.result == 'success' && matrix.os == 'macos-latest' }}"
+          echo "Linux: ${{ needs.build-and-release.result == 'success' && matrix.os == 'ubuntu-latest' }}"
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -159,7 +171,7 @@ jobs:
         with:
           tag_name: ${{ steps.release-info.outputs.tag }}
           name: ${{ steps.release-info.outputs.name }}
-          draft: false
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ steps.release-info.outputs.type == 'snapshot' }}
           files: |
             artifacts/windows-latest/*
