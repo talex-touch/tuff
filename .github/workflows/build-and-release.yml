@@ -150,10 +150,23 @@ jobs:
           sudo snap install snapcraft --classic
           echo "Linux build dependencies installed"
 
+      - name: Install macOS Dependencies
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          # macOS 通常不需要额外依赖，但可以检查 Xcode Command Line Tools
+          xcode-select --install || echo "Xcode Command Line Tools already installed"
+          echo "macOS build environment ready"
+
       - name: Build Tuff App
         shell: bash
         run: |
           echo "Starting build process for $RUNNER_OS..."
+          echo "Current directory: $(pwd)"
+          echo "Available pnpm commands:"
+          pnpm run --help || echo "pnpm run command not available"
+          echo "Checking package.json scripts:"
+          cat package.json | grep -A 20 '"scripts"' || echo "No scripts found"
 
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
