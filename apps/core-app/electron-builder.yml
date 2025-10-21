@@ -61,6 +61,11 @@ mac:
   category: public.app-category.productivity
   # 强制重新构建
   forceCodeSigning: false
+  # 完全禁用代码签名
+  identity: null
+  hardenedRuntime: false
+  # 确保路径正确
+  artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage
