@@ -15,7 +15,9 @@ function cleanupPreviousBuilds() {
     '**/*-setup.exe',
     '**/*.exe',
     '**/*.msi',
-    '**/win-unpacked/**'
+    '**/win-unpacked/**',
+    '**/__uninstaller-*',
+    '**/*.7z'
   ];
 
   let glob;
@@ -90,6 +92,13 @@ console.log(`Building ${buildType} version for Windows`);
 // 设置环境变量跳过下载和签名
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
 process.env.ELECTRON_BUILDER_CACHE = path.join(__dirname, '../.electron-builder-cache');
+process.env.ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES = 'true';
+// 完全禁用签名相关功能
+process.env.CSC_LINK = '';
+process.env.CSC_KEY_PASSWORD = '';
+process.env.APPLE_ID = '';
+process.env.APPLE_ID_PASSWORD = '';
+process.env.APPLE_TEAM_ID = '';
 
 // 检查磁盘空间和权限
 function checkBuildEnvironment() {
@@ -115,8 +124,39 @@ function checkBuildEnvironment() {
   }
 }
 
+// 确保输出目录结构正确
+function ensureOutputDirectoryStructure() {
+  console.log('Ensuring output directory structure...');
+
+  const distDir = path.join(__dirname, '../dist');
+  const outputDir = path.join(distDir, '@talex-touch');
+
+  // 确保目录存在
+  if (!fs.existsSync(distDir)) {
+    fs.mkdirSync(distDir, { recursive: true });
+  }
+
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  // 设置权限（Windows 上可能不适用，但确保目录可写）
+  try {
+    const testFile = path.join(outputDir, 'permission-test.tmp');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    console.log('Output directory permissions verified');
+  } catch (error) {
+    console.error('Output directory permission test failed:', error.message);
+    throw new Error('Cannot write to output directory');
+  }
+}
+
 // 检查构建环境
 checkBuildEnvironment();
+
+// 确保输出目录结构
+ensureOutputDirectoryStructure();
 
 try {
   // 运行构建命令
