@@ -89,35 +89,138 @@ jobs:
             echo "No version specified, using existing version"
           fi
 
+      - name: Prepare Build Environment
+        shell: bash
+        run: |
+          # 确保输出目录存在
+          mkdir -p apps/core-app/dist
+          mkdir -p apps/core-app/dist/__appImage-x64
+          mkdir -p apps/core-app/dist/__snap-x64
+          mkdir -p apps/core-app/dist/__deb-x64
+          echo "Build directories prepared"
+
+      - name: Clean Windows Build Artifacts
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Write-Host "Cleaning previous Windows build artifacts..."
+          $distPath = "apps/core-app/dist"
+          if (Test-Path $distPath) {
+            # 删除可能存在的安装程序文件
+            Get-ChildItem -Path $distPath -Recurse -Include "*.exe", "*.msi" | Remove-Item -Force -ErrorAction SilentlyContinue
+            # 删除 win-unpacked 目录
+            $unpackedPath = Join-Path $distPath "win-unpacked"
+            if (Test-Path $unpackedPath) {
+              Remove-Item -Path $unpackedPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            # 删除 @talex-touch 输出目录
+            $outputPath = Join-Path $distPath "@talex-touch"
+            if (Test-Path $outputPath) {
+              Remove-Item -Path $outputPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+          Write-Host "Windows build artifacts cleaned"
+
+      - name: Check Windows Disk Space and Write Permission
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Write-Host "Checking disk space and write permission..."
+          Get-PSDrive -PSProvider 'FileSystem' | Select-Object Name, Free, Used, @{Name='FreeGB';Expression={[math]::Round($_.Free/1GB,2)}}
+          $distPath = "apps/core-app/dist"
+          if (-not (Test-Path $distPath)) { New-Item -ItemType Directory -Force -Path $distPath | Out-Null }
+          $testFile = Join-Path $distPath "test-write.tmp"
+          try {
+            Set-Content -Path $testFile -Value "test" -Encoding ASCII
+            Remove-Item -Path $testFile -Force
+            Write-Host "Write permission verified"
+          } catch {
+            Write-Error "Write permission check failed: $($_.Exception.Message)"
+            exit 1
+          }
+
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # 安装构建 Linux 包所需的依赖
+          sudo apt-get update
+          sudo apt-get install -y squashfs-tools snapcraft
+          echo "Linux build dependencies installed"
+
       - name: Build Tuff App
         shell: bash
         run: |
+          cd apps/core-app
+          echo "Starting build process for $RUNNER_OS..."
+
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
+              echo "Building Windows snapshot..."
               pnpm core:build:snapshot:win
             elif [ "$RUNNER_OS" = "macOS" ]; then
+              echo "Building macOS snapshot..."
               pnpm core:build:snapshot:mac
             else
+              echo "Building Linux snapshot..."
               pnpm core:build:snapshot:linux
             fi
           else
+            echo "Building release version..."
             pnpm core:build
           fi
-          # 将构建文件移动到正确的位置
+
+          # 验证构建输出
           if [ -d "dist" ]; then
-            mkdir -p apps/core-app
-            mv dist apps/core-app/
+            echo "Build artifacts found:"
+            ls -la dist/
+            echo "Build completed successfully"
+          else
+            echo "ERROR: Build artifacts not found!"
+            exit 1
           fi
         env:
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
           RUNNER_OS: ${{ runner.os }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify Build Artifacts
+        shell: bash
+        run: |
+          cd apps/core-app
+          echo "Verifying build artifacts for $RUNNER_OS..."
+          if [ -d "dist" ]; then
+            echo "Build artifacts found:"
+            find dist -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | head -10
+            echo "Total files in dist:"
+            find dist -type f | wc -l
+          else
+            echo "ERROR: No dist directory found!"
+            exit 1
+          fi
+
+      - name: Assert Windows Installer Exists
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          $distPath = "apps/core-app/dist"
+          $exists = Get-ChildItem -Path $distPath -Recurse -Include "*.exe" | Where-Object { $_.Name -like "*-setup.exe" }
+          if (-not $exists) {
+            Write-Error "NSIS installer not found (*.exe with -setup) in $distPath"
+            Write-Host "Listing .exe files:"
+            Get-ChildItem -Path $distPath -Recurse -Include "*.exe" | Select-Object FullName
+            exit 1
+          } else {
+            Write-Host "Found installer(s):"
+            $exists | Select-Object FullName
+          }
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}
+          name: ${{ matrix.os }}-${{ steps.release-type.outputs.type }}
           path: apps/core-app/dist
+          retention-days: 30
 
       - name: Cleanup Artifacts for Windows
         if: matrix.os == 'windows-latest'
@@ -139,9 +242,9 @@ jobs:
       - name: Check Build Results
         run: |
           echo "Build results:"
-          echo "Windows: ${{ needs.build-and-release.result == 'success' && matrix.os == 'windows-latest' }}"
-          echo "macOS: ${{ needs.build-and-release.result == 'success' && matrix.os == 'macos-latest' }}"
-          echo "Linux: ${{ needs.build-and-release.result == 'success' && matrix.os == 'ubuntu-latest' }}"
+          echo "Windows: ${{ needs.build-and-release.result == 'success' }}"
+          echo "macOS: ${{ needs.build-and-release.result == 'success' }}"
+          echo "Linux: ${{ needs.build-and-release.result == 'success' }}"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -166,6 +269,13 @@ jobs:
           RELEASE_TYPE: ${{ github.event.inputs.release_type }}
           VERSION: ${{ github.event.inputs.version }}
 
+      - name: List Available Artifacts
+        run: |
+          echo "Available artifacts:"
+          find artifacts -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | sort
+          echo "Total artifacts:"
+          find artifacts -type f | wc -l
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -174,9 +284,24 @@ jobs:
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ steps.release-info.outputs.type == 'snapshot' }}
           files: |
-            artifacts/windows-latest/*
-            artifacts/macos-latest/*
-            artifacts/ubuntu-latest/*
+            artifacts/windows-latest-*/*
+            artifacts/macos-latest-*/*
+            artifacts/ubuntu-latest-*/*
+          body: |
+            ## Release ${{ steps.release-info.outputs.name }}
+
+            ### Downloads
+            - **Windows**: Installer (.exe)
+            - **macOS**: Disk Image (.dmg)
+            - **Linux**: AppImage, Snap, and Debian packages
+
+            ### Installation
+            - **Windows**: Run the installer executable
+            - **macOS**: Mount the DMG and drag to Applications
+            - **Linux**:
+              - AppImage: Make executable and run
+              - Snap: `sudo snap install --dangerous *.snap`
+              - Debian: `sudo dpkg -i *.deb`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
