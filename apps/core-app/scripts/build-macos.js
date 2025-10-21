@@ -113,6 +113,13 @@ process.env.APPLE_ID = '';
 process.env.APPLE_ID_PASSWORD = '';
 process.env.APPLE_TEAM_ID = '';
 process.env.FORCE_COLOR = '0';
+// 强制禁用所有签名相关功能
+process.env.CSC_NAME = '';
+process.env.CSC_INSTALLER_NAME = '';
+process.env.CSC_INSTALLER_PASSWORD = '';
+process.env.APPLE_CERTIFICATE = '';
+process.env.APPLE_CERTIFICATE_PASSWORD = '';
+process.env.APPLE_PROVISIONING_PROFILE = '';
 
 // 检查构建环境
 function checkBuildEnvironment() {
@@ -188,6 +195,47 @@ function retryBuild(maxRetries = 3) {
       console.log(`Working directory exists: ${fs.existsSync(workingDir)}`);
       console.log(`Package.json exists: ${fs.existsSync(path.join(workingDir, 'package.json'))}`);
 
+      // 添加详细的文件结构调试信息
+      console.log('=== File Structure Debug ===');
+      console.log('Current working directory:', process.cwd());
+      console.log('Script directory:', __dirname);
+      console.log('Working directory:', workingDir);
+
+      // 检查关键目录和文件
+      const keyPaths = [
+        workingDir,
+        path.join(workingDir, 'package.json'),
+        path.join(workingDir, 'electron-builder.yml'),
+        path.join(workingDir, 'out'),
+        path.join(workingDir, 'dist'),
+        path.join(workingDir, 'build')
+      ];
+
+      keyPaths.forEach(p => {
+        if (fs.existsSync(p)) {
+          const stats = fs.statSync(p);
+          console.log(`✓ ${p}: ${stats.isDirectory() ? 'directory' : 'file'}`);
+        } else {
+          console.log(`✗ ${p}: does not exist`);
+        }
+      });
+
+      // 检查 dist 目录内容
+      const debugDistDir = path.join(workingDir, 'dist');
+      if (fs.existsSync(debugDistDir)) {
+        console.log('Dist directory contents:');
+        try {
+          const distContents = fs.readdirSync(debugDistDir);
+          distContents.forEach(item => {
+            const itemPath = path.join(debugDistDir, item);
+            const stats = fs.statSync(itemPath);
+            console.log(`  ${item}: ${stats.isDirectory() ? 'directory' : 'file'}`);
+          });
+        } catch (error) {
+          console.log('  Could not read dist directory:', error.message);
+        }
+      }
+
       if (!fs.existsSync(workingDir)) {
         throw new Error(`Working directory does not exist: ${workingDir}`);
       }
@@ -207,23 +255,34 @@ function retryBuild(maxRetries = 3) {
         }
       });
 
+      console.log('Step 1.5: Copying package.json to out directory...');
+      const copyOutDir = path.join(workingDir, 'out');
+      const packageJsonPath = path.join(workingDir, 'package.json');
+      const outPackageJsonPath = path.join(copyOutDir, 'package.json');
+
+      if (fs.existsSync(packageJsonPath) && fs.existsSync(copyOutDir)) {
+        fs.copyFileSync(packageJsonPath, outPackageJsonPath);
+        console.log('✓ package.json copied to out directory');
+      } else {
+        console.log('⚠ Could not copy package.json - missing source or target directory');
+      }
+
       console.log('Step 2: Running electron-builder --mac...');
 
       // 检查必要的文件是否存在
-      const packageJsonPath = path.join(workingDir, 'package.json');
       const electronBuilderConfigPath = path.join(workingDir, 'electron-builder.yml');
       const outDir = path.join(workingDir, 'out');
       const buildDir = path.join(workingDir, 'build');
       const distDir = path.join(workingDir, 'dist');
 
       console.log('Checking required files:');
-      console.log('- package.json exists:', fs.existsSync(packageJsonPath));
+      console.log('- package.json exists:', fs.existsSync(path.join(workingDir, 'package.json')));
       console.log('- electron-builder.yml exists:', fs.existsSync(electronBuilderConfigPath));
       console.log('- out directory exists:', fs.existsSync(outDir));
       console.log('- build directory exists:', fs.existsSync(buildDir));
       console.log('- dist directory exists:', fs.existsSync(distDir));
 
-      if (!fs.existsSync(packageJsonPath)) {
+      if (!fs.existsSync(path.join(workingDir, 'package.json'))) {
         throw new Error('package.json not found');
       }
 
@@ -302,7 +361,12 @@ function retryBuild(maxRetries = 3) {
         ELECTRON_BUILDER_WORKING_DIR: workingDir,
         // 禁用一些可能导致路径问题的功能
         ELECTRON_BUILDER_USE_HARD_LINKS: 'false',
-        ELECTRON_BUILDER_COMPRESSION: 'maximum'
+        ELECTRON_BUILDER_COMPRESSION: 'maximum',
+        // 添加路径修复相关的环境变量
+        ELECTRON_BUILDER_APP_DIR: workingDir,
+        ELECTRON_BUILDER_OUT_DIR: path.join(workingDir, 'dist'),
+        // 强制 electron-builder 使用绝对路径
+        ELECTRON_BUILDER_USE_ABSOLUTE_PATHS: 'true'
       };
 
       console.log('Running electron-builder with environment:');
@@ -325,6 +389,11 @@ function retryBuild(maxRetries = 3) {
 
       // 运行 electron-builder
       try {
+        console.log('Executing electron-builder command...');
+        console.log('Command: electron-builder --mac');
+        console.log('Working directory:', workingDir);
+        console.log('Environment variables set:', Object.keys(electronBuilderEnv).length);
+
         execSync('electron-builder --mac', {
           stdio: 'inherit',
           cwd: workingDir,
