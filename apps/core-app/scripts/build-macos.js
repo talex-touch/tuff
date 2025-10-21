@@ -6,7 +6,6 @@ const path = require('path');
 const projectRoot = path.join(__dirname, '..');
 process.chdir(projectRoot);
 
-// 设置环境变量
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
 process.env.NODE_ENV = 'production';
 
