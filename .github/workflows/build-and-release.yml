@@ -145,14 +145,28 @@ jobs:
         run: |
           # 安装构建 Linux 包所需的依赖
           sudo apt-get update
-          sudo apt-get install -y squashfs-tools snapcraft
+          sudo apt-get install -y squashfs-tools
+          # 安装 snapcraft (通过 snap 而不是 apt)
+          sudo snap install snapcraft --classic
           echo "Linux build dependencies installed"
+
+      - name: Install macOS Dependencies
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          # macOS 通常不需要额外依赖，但可以检查 Xcode Command Line Tools
+          xcode-select --install || echo "Xcode Command Line Tools already installed"
+          echo "macOS build environment ready"
 
       - name: Build Tuff App
         shell: bash
         run: |
-          cd apps/core-app
           echo "Starting build process for $RUNNER_OS..."
+          echo "Current directory: $(pwd)"
+          echo "Available pnpm commands:"
+          pnpm run --help || echo "pnpm run command not available"
+          echo "Checking package.json scripts:"
+          cat package.json | grep -A 20 '"scripts"' || echo "No scripts found"
 
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
@@ -171,9 +185,9 @@ jobs:
           fi
 
           # 验证构建输出
-          if [ -d "dist" ]; then
+          if [ -d "apps/core-app/dist" ]; then
             echo "Build artifacts found:"
-            ls -la dist/
+            ls -la apps/core-app/dist/
             echo "Build completed successfully"
           else
             echo "ERROR: Build artifacts not found!"
@@ -187,13 +201,12 @@ jobs:
       - name: Verify Build Artifacts
         shell: bash
         run: |
-          cd apps/core-app
           echo "Verifying build artifacts for $RUNNER_OS..."
-          if [ -d "dist" ]; then
+          if [ -d "apps/core-app/dist" ]; then
             echo "Build artifacts found:"
-            find dist -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | head -10
+            find apps/core-app/dist -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | head -10
             echo "Total files in dist:"
-            find dist -type f | wc -l
+            find apps/core-app/dist -type f | wc -l
           else
             echo "ERROR: No dist directory found!"
             exit 1
