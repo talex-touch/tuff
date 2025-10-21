@@ -86,6 +86,15 @@ console.log('Working directory:', process.cwd());
 console.log('Dist directory:', distDir);
 console.log('Package.json exists:', fs.existsSync(path.join(__dirname, '../package.json')));
 
+// 修复：确保工作目录正确
+const projectRoot = path.join(__dirname, '..');
+console.log('Project root:', projectRoot);
+console.log('Project root exists:', fs.existsSync(projectRoot));
+
+// 切换到项目根目录
+process.chdir(projectRoot);
+console.log('Changed working directory to:', process.cwd());
+
 // 清理之前的构建产物
 cleanupPreviousBuilds();
 
@@ -173,10 +182,6 @@ function retryBuild(maxRetries = 3) {
         }
       }
 
-      // 运行构建命令
-      const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --mac`;
-      console.log(`Executing: ${command}`);
-
       // 确保工作目录存在且正确
       const workingDir = path.join(__dirname, '..');
       console.log(`Working directory: ${workingDir}`);
@@ -203,33 +208,33 @@ function retryBuild(maxRetries = 3) {
       });
 
       console.log('Step 2: Running electron-builder --mac...');
-      
+
       // 检查必要的文件是否存在
       const packageJsonPath = path.join(workingDir, 'package.json');
       const electronBuilderConfigPath = path.join(workingDir, 'electron-builder.yml');
       const outDir = path.join(workingDir, 'out');
       const buildDir = path.join(workingDir, 'build');
       const distDir = path.join(workingDir, 'dist');
-      
+
       console.log('Checking required files:');
       console.log('- package.json exists:', fs.existsSync(packageJsonPath));
       console.log('- electron-builder.yml exists:', fs.existsSync(electronBuilderConfigPath));
       console.log('- out directory exists:', fs.existsSync(outDir));
       console.log('- build directory exists:', fs.existsSync(buildDir));
       console.log('- dist directory exists:', fs.existsSync(distDir));
-      
+
       if (!fs.existsSync(packageJsonPath)) {
         throw new Error('package.json not found');
       }
-      
+
       if (!fs.existsSync(electronBuilderConfigPath)) {
         throw new Error('electron-builder.yml not found');
       }
-      
+
       if (!fs.existsSync(outDir)) {
         throw new Error('out directory not found - build may have failed');
       }
-      
+
       // 列出 out 目录内容
       console.log('Contents of out directory:');
       try {
@@ -242,7 +247,7 @@ function retryBuild(maxRetries = 3) {
       } catch (error) {
         console.warn('Could not list out directory contents:', error.message);
       }
-      
+
       // 检查 build 目录内容
       console.log('Contents of build directory:');
       try {
@@ -255,11 +260,11 @@ function retryBuild(maxRetries = 3) {
       } catch (error) {
         console.warn('Could not list build directory contents:', error.message);
       }
-      
+
       // 检查当前工作目录
       console.log('Current working directory:', process.cwd());
       console.log('Working directory:', workingDir);
-      
+
       // 检查是否有任何文件被误认为是目录
       const suspiciousPaths = [
         path.join(workingDir, 'package.json'),
@@ -268,7 +273,7 @@ function retryBuild(maxRetries = 3) {
         path.join(workingDir, 'build'),
         path.join(workingDir, 'dist')
       ];
-      
+
       console.log('Path type checks:');
       suspiciousPaths.forEach(p => {
         if (fs.existsSync(p)) {
@@ -279,17 +284,50 @@ function retryBuild(maxRetries = 3) {
         }
       });
 
+      // 修复：确保在正确的工作目录中运行 electron-builder
+      // 并且设置正确的环境变量
+      const electronBuilderEnv = {
+        ...process.env,
+        NODE_ENV: 'production',
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+        ELECTRON_BUILDER_CACHE: path.join(workingDir, '.electron-builder-cache'),
+        ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true',
+        ELECTRON_BUILDER_OFFLINE: 'false',
+        // 添加更多环境变量来避免路径问题
+        ELECTRON_BUILDER_CURRENT_PLATFORM: 'darwin',
+        ELECTRON_BUILDER_CURRENT_ARCH: 'arm64',
+        // 确保 electron-builder 能找到正确的配置文件
+        ELECTRON_BUILDER_CONFIG: path.join(workingDir, 'electron-builder.yml'),
+        // 强制设置工作目录
+        ELECTRON_BUILDER_WORKING_DIR: workingDir,
+        // 禁用一些可能导致路径问题的功能
+        ELECTRON_BUILDER_USE_HARD_LINKS: 'false',
+        ELECTRON_BUILDER_COMPRESSION: 'maximum'
+      };
+
+      console.log('Running electron-builder with environment:');
+      console.log('- CSC_IDENTITY_AUTO_DISCOVERY:', electronBuilderEnv.CSC_IDENTITY_AUTO_DISCOVERY);
+      console.log('- ELECTRON_BUILDER_CACHE:', electronBuilderEnv.ELECTRON_BUILDER_CACHE);
+      console.log('- ELECTRON_BUILDER_CONFIG:', electronBuilderEnv.ELECTRON_BUILDER_CONFIG);
+      console.log('- ELECTRON_BUILDER_WORKING_DIR:', electronBuilderEnv.ELECTRON_BUILDER_WORKING_DIR);
+
+      // 验证 electron-builder 命令是否可用
+      try {
+        execSync('electron-builder --version', { 
+          stdio: 'pipe', 
+          cwd: workingDir,
+          env: electronBuilderEnv 
+        });
+        console.log('electron-builder is available');
+      } catch (versionError) {
+        console.warn('Could not get electron-builder version:', versionError.message);
+      }
+
+      // 运行 electron-builder
       execSync('electron-builder --mac', {
         stdio: 'inherit',
         cwd: workingDir,
-        env: {
-          ...process.env,
-          NODE_ENV: 'production',
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-          ELECTRON_BUILDER_CACHE: path.join(workingDir, '.electron-builder-cache'),
-          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true',
-          ELECTRON_BUILDER_OFFLINE: 'false'
-        }
+        env: electronBuilderEnv
       });
 
       // 如果成功，跳出重试循环
