@@ -324,11 +324,42 @@ function retryBuild(maxRetries = 3) {
       }
 
       // 运行 electron-builder
-      execSync('electron-builder --mac', {
-        stdio: 'inherit',
-        cwd: workingDir,
-        env: electronBuilderEnv
-      });
+      try {
+        execSync('electron-builder --mac', {
+          stdio: 'inherit',
+          cwd: workingDir,
+          env: electronBuilderEnv
+        });
+      } catch (error) {
+        // 如果构建失败，尝试修复 Electron 可执行文件问题
+        if (error.message.includes('ENOENT') && error.message.includes('Electron')) {
+          console.log('Detected Electron executable missing, attempting to fix...');
+          
+          const electronAppPath = path.join(workingDir, 'dist/mac-arm64/Electron.app/Contents/MacOS');
+          const electronSourcePath = path.join(workingDir, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+          
+          if (fs.existsSync(electronSourcePath) && fs.existsSync(electronAppPath)) {
+            try {
+              fs.copyFileSync(electronSourcePath, path.join(electronAppPath, 'Electron'));
+              console.log('Copied Electron executable to fix the issue');
+              
+              // 再次尝试构建
+              execSync('electron-builder --mac', {
+                stdio: 'inherit',
+                cwd: workingDir,
+                env: electronBuilderEnv
+              });
+            } catch (copyError) {
+              console.error('Failed to copy Electron executable:', copyError.message);
+              throw error; // 重新抛出原始错误
+            }
+          } else {
+            throw error; // 重新抛出原始错误
+          }
+        } else {
+          throw error; // 重新抛出原始错误
+        }
+      }
 
       // 如果成功，跳出重试循环
       break;
