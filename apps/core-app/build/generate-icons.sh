@@ -28,10 +28,10 @@ sizes=(16 32 48 64 128 256 512 1024)
 for size in "${sizes[@]}"; do
     output_file="$OUTPUT_DIR/icon-${size}x${size}.png"
     echo "生成 ${size}x${size} 图标..."
-    
+
     # 使用 sips 转换
     sips -s format png -z $size $size "$SVG_FILE" --out "$output_file"
-    
+
     if [ $? -eq 0 ]; then
         echo "✓ 成功生成 $output_file"
     else
@@ -43,5 +43,6 @@ echo ""
 echo "所有图标已生成到 $OUTPUT_DIR 目录"
 echo "文件列表:"
 ls -la "$OUTPUT_DIR"
+
 
 
