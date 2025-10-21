@@ -3,6 +3,7 @@ productName: talex-touch
 asar: true
 compression: maximum
 directories:
+  app: out
   buildResources: build
   output: dist
 files:

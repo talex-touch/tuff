@@ -255,16 +255,24 @@ function retryBuild(maxRetries = 3) {
         }
       });
 
-      console.log('Step 1.5: Copying package.json to out directory...');
+      console.log('Step 1.5: Creating minimal package.json for out directory...');
       const copyOutDir = path.join(workingDir, 'out');
-      const packageJsonPath = path.join(workingDir, 'package.json');
       const outPackageJsonPath = path.join(copyOutDir, 'package.json');
-
-      if (fs.existsSync(packageJsonPath) && fs.existsSync(copyOutDir)) {
-        fs.copyFileSync(packageJsonPath, outPackageJsonPath);
-        console.log('✓ package.json copied to out directory');
+      
+      if (fs.existsSync(copyOutDir)) {
+        // 创建一个简化的 package.json，不包含 build 配置
+        const minimalPackageJson = {
+          "name": "@talex-touch/core-app",
+          "version": "2.0.0",
+          "main": "./main/index.js",
+          "author": "TalexDreamSoul",
+          "homepage": "https://talex-touch.tagzxia.com"
+        };
+        
+        fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2));
+        console.log('✓ minimal package.json created in out directory');
       } else {
-        console.log('⚠ Could not copy package.json - missing source or target directory');
+        console.log('⚠ Could not create package.json - out directory does not exist');
       }
 
       console.log('Step 2: Running electron-builder --mac...');
@@ -394,7 +402,7 @@ function retryBuild(maxRetries = 3) {
         console.log('Working directory:', workingDir);
         console.log('Environment variables set:', Object.keys(electronBuilderEnv).length);
 
-        execSync('electron-builder --mac', {
+        execSync('electron-builder --mac --config electron-builder.yml', {
           stdio: 'inherit',
           cwd: workingDir,
           env: electronBuilderEnv
