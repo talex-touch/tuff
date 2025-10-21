@@ -102,6 +102,23 @@ jobs:
           chmod -R 755 apps/core-app/dist
           echo "Build directories prepared"
 
+      - name: Clean Previous Build Artifacts
+        shell: bash
+        run: |
+          echo "Cleaning previous build artifacts..."
+          # 清理可能存在的构建产物
+          rm -rf apps/core-app/dist/__*
+          rm -rf apps/core-app/dist/@talex-touch
+          rm -rf apps/core-app/out
+          # 清理 node_modules 中的缓存
+          rm -rf node_modules/.cache
+          rm -rf apps/core-app/node_modules/.cache
+          # 清理 electron-builder 和 Wine 缓存
+          rm -rf apps/core-app/.electron-builder-cache
+          rm -rf ~/.cache/electron-builder
+          rm -rf ~/.electron-builder-cache
+          echo "Build artifacts and caches cleaned"
+
       - name: Clean Windows Build Artifacts
         if: matrix.os == 'windows-latest'
         shell: powershell
@@ -211,19 +228,6 @@ jobs:
           # macOS 通常不需要额外依赖，但可以检查 Xcode Command Line Tools
           xcode-select --install || echo "Xcode Command Line Tools already installed"
           echo "macOS build environment ready"
-
-      - name: Clean Previous Build Artifacts
-        shell: bash
-        run: |
-          echo "Cleaning previous build artifacts..."
-          # 清理可能存在的构建产物
-          rm -rf apps/core-app/dist/__*
-          rm -rf apps/core-app/dist/@talex-touch
-          rm -rf apps/core-app/out
-          # 清理 node_modules 中的缓存
-          rm -rf node_modules/.cache
-          rm -rf apps/core-app/node_modules/.cache
-          echo "Build artifacts cleaned"
 
       - name: Build Tuff App
         shell: bash
