@@ -5,6 +5,11 @@
   "main": "./out/main/index.js",
   "author": "TalexDreamSoul",
   "homepage": "https://talex-touch.tagzxia.com",
+  "build": {
+    "directories": {
+      "app": "out"
+    }
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
