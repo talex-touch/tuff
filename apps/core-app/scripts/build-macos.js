@@ -12,7 +12,6 @@ process.env.NODE_ENV = 'production';
 console.log('Building macOS application...');
 
 try {
-  // 1. 构建应用
   console.log('Step 1: Building application...');
   execSync('npm run build', { stdio: 'inherit' });
 
