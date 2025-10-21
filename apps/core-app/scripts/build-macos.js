@@ -80,6 +80,12 @@ if (!fs.existsSync(distDir)) {
   console.log('Created dist directory');
 }
 
+// 添加路径调试信息
+console.log('Script directory:', __dirname);
+console.log('Working directory:', process.cwd());
+console.log('Dist directory:', distDir);
+console.log('Package.json exists:', fs.existsSync(path.join(__dirname, '../package.json')));
+
 // 清理之前的构建产物
 cleanupPreviousBuilds();
 
@@ -170,15 +176,34 @@ function retryBuild(maxRetries = 3) {
       // 运行构建命令
       const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --mac`;
       console.log(`Executing: ${command}`);
-      console.log(`Working directory: ${path.join(__dirname, '..')}`);
-
+      
       // 确保工作目录存在且正确
       const workingDir = path.join(__dirname, '..');
+      console.log(`Working directory: ${workingDir}`);
+      console.log(`Working directory exists: ${fs.existsSync(workingDir)}`);
+      console.log(`Package.json exists: ${fs.existsSync(path.join(workingDir, 'package.json'))}`);
+      
       if (!fs.existsSync(workingDir)) {
         throw new Error(`Working directory does not exist: ${workingDir}`);
       }
+      
+      if (!fs.existsSync(path.join(workingDir, 'package.json'))) {
+        throw new Error(`Package.json not found in working directory: ${workingDir}`);
+      }
 
-      execSync(command, {
+      // 分步执行构建命令
+      console.log('Step 1: Running npm run build...');
+      execSync(`cross-env BUILD_TYPE=${buildType} npm run build`, {
+        stdio: 'inherit',
+        cwd: workingDir,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production'
+        }
+      });
+      
+      console.log('Step 2: Running electron-builder --mac...');
+      execSync('electron-builder --mac', {
         stdio: 'inherit',
         cwd: workingDir,
         env: {
@@ -187,7 +212,6 @@ function retryBuild(maxRetries = 3) {
           CSC_IDENTITY_AUTO_DISCOVERY: 'false',
           ELECTRON_BUILDER_CACHE: path.join(workingDir, '.electron-builder-cache'),
           ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true',
-          // 添加更多环境变量来避免问题
           ELECTRON_BUILDER_OFFLINE: 'false'
         }
       });

@@ -217,23 +217,9 @@ jobs:
           # 安装基础构建工具
           sudo apt-get install -y squashfs-tools fakeroot dpkg-dev
 
-          # 检查并重启 snapd 服务
-          echo "Checking snapd service status..."
-          sudo systemctl status snapd || true
-
-          # 重启 snapd 服务以确保稳定
-          sudo systemctl restart snapd
-          sleep 5
-
-          # 等待 snapd 完全启动
-          timeout 60 bash -c 'until snap version; do echo "Waiting for snapd..."; sleep 2; done'
-
-          # 安装 snapcraft
-          echo "Installing snapcraft..."
-          sudo snap install snapcraft --classic
-
-          # 验证安装
-          snapcraft --version
+          # 跳过 snapcraft 安装，只构建 AppImage 和 Debian 包
+          echo "Skipping snapcraft installation to avoid snapd issues"
+          echo "Will build AppImage and Debian packages only"
 
           echo "Linux build dependencies installed successfully"
 
@@ -243,9 +229,8 @@ jobs:
         run: |
           echo "Preparing Linux build environment..."
 
-          # 确保所有必要的目录存在
+          # 确保所有必要的目录存在（只创建需要的目录）
           mkdir -p apps/core-app/dist/__appImage-x64
-          mkdir -p apps/core-app/dist/__snap-x64
           mkdir -p apps/core-app/dist/__deb-x64
           mkdir -p apps/core-app/dist/@talex-touch
 
@@ -261,19 +246,7 @@ jobs:
           echo "Disk space check:"
           df -h
 
-          # 检查 snapd 服务状态
-          echo "Snapd service status:"
-          sudo systemctl status snapd --no-pager || true
-
-          # 验证 snapcraft 安装
-          echo "Verifying snapcraft installation:"
-          snapcraft --version || echo "Snapcraft not available"
-
-          # 检查 snap 环境
-          echo "Snap environment:"
-          snap list || echo "No snaps installed"
-
-          echo "Linux build environment prepared successfully"
+          echo "Linux build environment prepared successfully (AppImage + Debian only)"
 
       - name: Install macOS Dependencies
         if: matrix.os == 'macos-latest'
