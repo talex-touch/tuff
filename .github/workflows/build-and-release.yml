@@ -82,6 +82,11 @@ jobs:
           else
             pnpm core:build
           fi
+          # 将构建文件移动到正确的位置
+          if [ -d "dist" ]; then
+            mkdir -p apps/core-app
+            mv dist apps/core-app/
+          fi
         env:
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
           RUNNER_OS: ${{ runner.os }}
