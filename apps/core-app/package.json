@@ -18,10 +18,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
+    "build:win": "node scripts/pre-build.js && npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
-    "build:snapshot:win": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --win",
+    "build:snapshot:win": "node scripts/build-windows.js",
     "build:snapshot:mac": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --mac",
     "build:snapshot:linux": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --linux"
   },

@@ -1,6 +1,7 @@
 appId: com.tagzxia.app.talex-touch
 productName: talex-touch
 asar: false
+compression: maximum
 directories:
   buildResources: build
 files:
@@ -17,6 +18,10 @@ files:
 
 win:
   executableName: talex-touch
+  target:
+    - target: nsis
+      arch:
+        - x64
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -28,6 +33,12 @@ nsis:
   deleteAppDataOnUninstall: false
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
+  outputDirectory: dist
+  include: build/installer.nsh
+  warningsAsErrors: false
+  runAfterFinish: true
+  createStartMenuShortcut: true
+  menuCategory: false
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
