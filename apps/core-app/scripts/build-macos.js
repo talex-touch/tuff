@@ -24,16 +24,7 @@ try {
   console.log('Step 1: Building application...');
   execSync('npm run build', { stdio: 'inherit' });
 
-  const outPackageJsonPath = path.join(projectRoot, 'out/package.json');
-  const minimalPackageJson = {
-    "name": "@talex-touch/core-app",
-    "version": "2.0.0",
-    "description": "A powerful productivity launcher and automation tool",
-    "main": "./main/index.js",
-    "author": "TalexDreamSoul",
-    "homepage": "https://talex-touch.tagzxia.com"
-  };
-  fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2));
+  require(path.join(__dirname, 'prepare-out-package-json.js'));
 
   const distDir = path.join(projectRoot, 'dist');
   if (fs.existsSync(distDir)) {
