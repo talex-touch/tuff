@@ -150,15 +150,15 @@
               <FlatButton
                 :primary="true"
                 class="detail-install"
-                :disabled="isInstalling(activePlugin.id)"
+                :disabled="(this as any).isInstalling(activePlugin.id)"
                 @click="handleInstall(activePlugin)"
               >
                 <i
-                  v-if="isInstalling(activePlugin.id)"
+                  v-if="(this as any).isInstalling(activePlugin.id)"
                   class="i-ri-loader-4-line animate-spin"
                 />
                 <span>
-                  {{ isInstalling(activePlugin.id) ? t('market.installing') : t('market.install') }}
+                  {{ (this as any).isInstalling(activePlugin.id) ? t('market.installing') : t('market.install') }}
                 </span>
               </FlatButton>
             </div>

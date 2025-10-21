@@ -1,4 +1,4 @@
-import { ITouchEventBus } from "packages/utils/eventbus";
+import { ITouchEventBus } from "../../eventbus";
 import { ModuleKey } from ".";
 import { TalexTouch } from "../touch-app-core";
 import { ModuleDirectory, ResolvedModuleFileConfig } from "./base";
