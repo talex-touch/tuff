@@ -3,7 +3,6 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// 切换到项目根目录
 const projectRoot = path.join(__dirname, '..');
 process.chdir(projectRoot);
 
