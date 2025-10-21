@@ -14,6 +14,7 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "postbuild": "node scripts/prepare-out-package-json.js",
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
