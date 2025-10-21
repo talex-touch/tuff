@@ -230,7 +230,7 @@ jobs:
 
           # 安装 snapcraft
           echo "Installing snapcraft..."
-          sudo snap install snapcraft --classic --timeout=300
+          sudo snap install snapcraft --classic
 
           # 验证安装
           snapcraft --version
@@ -438,14 +438,13 @@ jobs:
             ### Downloads
             - **Windows**: Installer (.exe)
             - **macOS**: Disk Image (.dmg)
-            - **Linux**: AppImage, Snap, and Debian packages
+            - **Linux**: AppImage and Debian packages
 
             ### Installation
             - **Windows**: Run the installer executable
             - **macOS**: Mount the DMG and drag to Applications
             - **Linux**:
               - AppImage: Make executable and run
-              - Snap: `sudo snap install --dangerous *.snap`
               - Debian: `sudo dpkg -i *.deb`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
