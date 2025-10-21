@@ -33,7 +33,6 @@ nsis:
   deleteAppDataOnUninstall: false
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
-  outputDirectory: dist
   include: build/installer.nsh
   warningsAsErrors: false
   runAfterFinish: true
