@@ -43,3 +43,5 @@ echo ""
 echo "所有图标已生成到 $OUTPUT_DIR 目录"
 echo "文件列表:"
 ls -la "$OUTPUT_DIR"
+
+

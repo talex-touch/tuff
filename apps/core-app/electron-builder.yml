@@ -22,6 +22,8 @@ win:
     - target: nsis
       arch:
         - x64
+  sign: false
+  verifyUpdateCodeSignature: false
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

@@ -13,6 +13,10 @@ if (!fs.existsSync(distDir)) {
 const buildType = process.env.BUILD_TYPE || 'snapshot';
 console.log(`Building ${buildType} version for Windows`);
 
+// 设置环境变量跳过下载和签名
+process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
+process.env.ELECTRON_BUILDER_CACHE = path.join(__dirname, '../.electron-builder-cache');
+
 try {
   // 运行构建命令
   const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --win`;
@@ -23,10 +27,12 @@ try {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env,
-      NODE_ENV: 'production'
+      NODE_ENV: 'production',
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+      ELECTRON_BUILDER_CACHE: path.join(__dirname, '../.electron-builder-cache')
     }
   });
-  
+
   console.log('Windows build completed successfully');
 } catch (error) {
   console.error('Build failed:', error.message);
