@@ -1,6 +1,6 @@
 appId: com.tagzxia.app.talex-touch
 productName: talex-touch
-asar: false
+asar: true
 compression: maximum
 directories:
   buildResources: build
