@@ -24,8 +24,8 @@ win:
         - x64
   sign: false
   verifyUpdateCodeSignature: false
-nsis:
   artifactName: ${name}-${version}-setup.${ext}
+nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -40,6 +40,7 @@ nsis:
   runAfterFinish: true
   createStartMenuShortcut: true
   menuCategory: false
+  differentialPackage: false
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
@@ -65,8 +66,20 @@ snap:
   description: |
     Talex Touch is a modern productivity launcher that helps you quickly access applications,
     files, and perform various automation tasks with a clean, efficient interface.
+  plugs:
+    - home
+    - network
+    - removable-media
+  environment:
+    DISABLE_WAYLAND: "1"
 appImage:
   artifactName: ${name}-${version}.${ext}
+  category: Utility
+  synopsis: "A powerful productivity launcher and automation tool"
+deb:
+  artifactName: ${name}-${version}.${ext}
+  category: Utility
+  synopsis: "A powerful productivity launcher and automation tool"
 npmRebuild: false
 includeSubNodeModules: false
 publish:
