@@ -80,6 +80,12 @@ if (!fs.existsSync(distDir)) {
   console.log('Created dist directory');
 }
 
+// 添加路径调试信息
+console.log('Script directory:', __dirname);
+console.log('Working directory:', process.cwd());
+console.log('Dist directory:', distDir);
+console.log('Package.json exists:', fs.existsSync(path.join(__dirname, '../package.json')));
+
 // 清理之前的构建产物
 cleanupPreviousBuilds();
 
