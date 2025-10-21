@@ -82,17 +82,17 @@ jobs:
 
       - name: Cleanup Artifacts for Windows
         if: matrix.os == 'windows-latest'
-        run: npx rimraf "dist/!(*.exe)"
+        run: npx rimraf "apps/core-app/dist/!(*.exe)"
 
       - name: Cleanup Artifacts for MacOS
         if: matrix.os == 'macos-latest'
-        run: npx rimraf "dist/!(*.dmg)"
+        run: npx rimraf "apps/core-app/dist/!(*.dmg)"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
-          path: dist
+          path: apps/core-app/dist
 
   create-release:
     name: Create Release
