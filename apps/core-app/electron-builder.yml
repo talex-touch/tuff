@@ -7,17 +7,14 @@ directories:
   buildResources: build
   output: dist
 files:
-  - out/**/*
-  - node_modules/**/*
-  - resources/**/*
-  - package.json
-  - '!**/.vscode/*'
-  - '!src/*'
+  - '**/*'
+  - '!**/.DS_Store'
+  - '!**/.vscode/**'
+  - '!src/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - "node_modules/**/build/Release/*.node"
 
 win:
   executableName: talex-touch
@@ -54,7 +51,6 @@ mac:
   notarize: false
   sign: false
   gatekeeperAssess: false
-  executableName: talex-touch
   target:
     - target: zip
       arch: [arm64]

@@ -11,6 +11,15 @@ process.env.NODE_ENV = 'production';
 
 console.log('Building macOS application...');
 
+// 预检查
+console.log('Pre-check: Verifying dependencies...');
+const electronPath = path.join(projectRoot, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+if (!fs.existsSync(electronPath)) {
+  console.error('Electron not found. Please run: npm install');
+  process.exit(1);
+}
+console.log('✓ Electron found');
+
 try {
   console.log('Step 1: Building application...');
   execSync('npm run build', { stdio: 'inherit' });
@@ -19,6 +28,7 @@ try {
   const minimalPackageJson = {
     "name": "@talex-touch/core-app",
     "version": "2.0.0",
+    "description": "A powerful productivity launcher and automation tool",
     "main": "./main/index.js",
     "author": "TalexDreamSoul",
     "homepage": "https://talex-touch.tagzxia.com"
@@ -31,36 +41,101 @@ try {
     console.log('Cleaned previous build artifacts');
   }
 
-  console.log('Step 2: Running electron-builder...');
+  console.log('Step 2: Using alternative build approach...');
+
+  // 尝试使用更简单的配置，避免重命名问题
+  const tempConfigPath = path.join(projectRoot, 'electron-builder-temp.yml');
+  const tempConfig = `appId: com.tagzxia.app.talex-touch
+productName: talex-touch
+asar: false
+compression: normal
+directories:
+  app: out
+  buildResources: build
+  output: dist
+files:
+  - '**/*'
+  - '!**/.DS_Store'
+  - '!**/.vscode/**'
+  - '!src/**'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+  sign: false
+  gatekeeperAssess: false
+  target:
+    - target: zip
+      arch: [arm64]
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  forceCodeSigning: false
+  identity: null
+  hardenedRuntime: false
+  artifactName: \${name}-\${version}-\${arch}.\${ext}
+
+npmRebuild: false
+forceCodeSigning: false`;
+
+  fs.writeFileSync(tempConfigPath, tempConfig);
 
   try {
-    execSync('electron-builder --mac --config electron-builder.yml', { stdio: 'inherit' });
-  } catch (error) {
-    // 如果构建失败且是因为 Electron 可执行文件缺失，尝试修复
-    if (error.message.includes('ENOENT') && error.message.includes('Electron')) {
-      console.log('Detected Electron executable missing, attempting to fix...');
+    execSync(`electron-builder --mac --config ${tempConfigPath}`, {
+      stdio: 'inherit'
+    });
 
-      const electronAppPath = path.join(projectRoot, 'dist/mac-arm64/Electron.app/Contents/MacOS');
-      const electronSourcePath = path.join(projectRoot, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+    // 构建成功后，手动重命名可执行文件
+    console.log('Step 3: Renaming executable...');
+    const buildOutputPath = path.join(projectRoot, 'dist/mac-arm64');
+    const electronAppPath = path.join(buildOutputPath, 'Electron.app');
+    const macosPath = path.join(electronAppPath, 'Contents/MacOS');
+    const electronPath = path.join(macosPath, 'Electron');
+    const talexTouchPath = path.join(macosPath, 'talex-touch');
 
-      // 确保目标目录存在
-      if (!fs.existsSync(electronAppPath)) {
-        fs.mkdirSync(electronAppPath, { recursive: true });
-      }
-
-      // 复制 Electron 可执行文件
-      if (fs.existsSync(electronSourcePath)) {
-        fs.copyFileSync(electronSourcePath, path.join(electronAppPath, 'Electron'));
-        console.log('Electron executable copied successfully');
-
-        // 再次尝试构建
-        console.log('Retrying electron-builder...');
-        execSync('electron-builder --mac --config electron-builder.yml', { stdio: 'inherit' });
-      } else {
-        throw error;
-      }
+    if (fs.existsSync(electronPath)) {
+      fs.renameSync(electronPath, talexTouchPath);
+      console.log('Successfully renamed Electron to talex-touch');
     } else {
-      throw error;
+      console.log('Electron executable not found, but build may have succeeded');
+    }
+
+  } catch (error) {
+    console.log('Alternative config failed, trying with --dir...');
+
+    try {
+      execSync(`electron-builder --mac --dir --config ${tempConfigPath}`, {
+        stdio: 'inherit'
+      });
+
+      // 即使使用 --dir，也尝试重命名
+      const buildOutputPath = path.join(projectRoot, 'dist/mac-arm64');
+      const electronAppPath = path.join(buildOutputPath, 'Electron.app');
+      const macosPath = path.join(electronAppPath, 'Contents/MacOS');
+      const electronPath = path.join(macosPath, 'Electron');
+      const talexTouchPath = path.join(macosPath, 'talex-touch');
+
+      if (fs.existsSync(electronPath)) {
+        fs.renameSync(electronPath, talexTouchPath);
+        console.log('Successfully renamed Electron to talex-touch');
+      }
+
+    } catch (secondError) {
+      console.log('All approaches failed');
+      throw secondError;
+    }
+  } finally {
+    // 清理临时配置文件
+    if (fs.existsSync(tempConfigPath)) {
+      fs.unlinkSync(tempConfigPath);
     }
   }
 
@@ -68,5 +143,18 @@ try {
 
 } catch (error) {
   console.error('Build failed:', error.message);
+  console.error('Error details:', error);
+
+  // 清理可能损坏的构建文件
+  const distDir = path.join(projectRoot, 'dist');
+  if (fs.existsSync(distDir)) {
+    console.log('Cleaning up build artifacts...');
+    try {
+      fs.rmSync(distDir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      console.warn('Failed to clean up build artifacts:', cleanupError.message);
+    }
+  }
+
   process.exit(1);
 }
