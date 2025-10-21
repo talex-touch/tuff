@@ -58,6 +58,14 @@ linux:
     - deb
   maintainer: tagzxia.com
   category: Utility
+snap:
+  executable: "talex-touch"
+  confinement: strict
+  grade: stable
+  summary: "A powerful productivity launcher and automation tool"
+  description: |
+    Talex Touch is a modern productivity launcher that helps you quickly access applications,
+    files, and perform various automation tasks with a clean, efficient interface.
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
