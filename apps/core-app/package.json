@@ -19,12 +19,12 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "node scripts/pre-build.js && npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux",
-    "build:snapshot:win": "node scripts/build-windows.js",
-    "build:snapshot:mac": "node scripts/build-macos.js",
-    "build:snapshot:linux": "node scripts/build-linux.js"
+    "build:win": "node scripts/build-target.js --target=win --type=release",
+    "build:mac": "node scripts/build-target.js --target=mac --type=release",
+    "build:linux": "node scripts/build-target.js --target=linux --type=release",
+    "build:snapshot:win": "node scripts/build-target.js --target=win --type=snapshot",
+    "build:snapshot:mac": "node scripts/build-target.js --target=mac --type=snapshot",
+    "build:snapshot:linux": "node scripts/build-target.js --target=linux --type=snapshot"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
