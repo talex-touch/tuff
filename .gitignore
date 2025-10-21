@@ -126,6 +126,7 @@ dist/
 
 apps/core-app/tuff
 apps/core-app/signature.json
+apps/core-app/.electron-builder-cache/
 apps/core-app/src/renderer/src/distinformation.json
 .kilocode/mcp.json
 
