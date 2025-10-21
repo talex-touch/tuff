@@ -22,8 +22,8 @@
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
     "build:snapshot:win": "node scripts/build-windows.js",
-    "build:snapshot:mac": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --mac",
-    "build:snapshot:linux": "cross-env BUILD_TYPE=snapshot && npm run build && electron-builder --linux"
+    "build:snapshot:mac": "node scripts/build-macos.js",
+    "build:snapshot:linux": "node scripts/build-linux.js"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
