@@ -58,7 +58,6 @@ mac:
 linux:
   target:
     - AppImage
-    - snap
     - deb
   maintainer: tagzxia.com
   category: Utility
@@ -75,6 +74,10 @@ snap:
     - removable-media
   environment:
     DISABLE_WAYLAND: "1"
+  # 修复 app-builder 执行问题
+  useTemplateApp: false
+  desktop:
+    X-MultipleArgs: false
 appImage:
   artifactName: ${name}-${version}.${ext}
   category: Utility

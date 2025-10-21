@@ -53,6 +53,18 @@ jobs:
       - name: Install Dependencies
         run: npm install -g pnpm && pnpm i && pnpm approve-builds
 
+      - name: Fix Binary Permissions
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          echo "Fixing binary permissions for Linux build..."
+          # 修复所有可能的二进制文件权限
+          find . -name "app-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find . -name "app-builder-bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find . -name "electron-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find . -name "snapcraft" -type f -exec chmod +x {} \; 2>/dev/null || true
+          echo "Binary permissions fixed"
+
       - name: Determine Release Type
         id: release-type
         shell: bash
@@ -197,29 +209,71 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          # 安装构建 Linux 包所需的依赖
-          sudo apt-get update
-          sudo apt-get install -y squashfs-tools
-          # 安装 snapcraft (通过 snap 而不是 apt)
-          sudo snap install snapcraft --classic
-          # 安装额外的构建工具
-          sudo apt-get install -y fakeroot dpkg-dev
-          echo "Linux build dependencies installed"
+          echo "Installing Linux build dependencies..."
+
+          # 更新包列表
+          sudo apt-get update -y
+
+          # 安装基础构建工具
+          sudo apt-get install -y squashfs-tools fakeroot dpkg-dev
+
+          # 检查并重启 snapd 服务
+          echo "Checking snapd service status..."
+          sudo systemctl status snapd || true
+
+          # 重启 snapd 服务以确保稳定
+          sudo systemctl restart snapd
+          sleep 5
+
+          # 等待 snapd 完全启动
+          timeout 60 bash -c 'until snap version; do echo "Waiting for snapd..."; sleep 2; done'
+
+          # 安装 snapcraft
+          echo "Installing snapcraft..."
+          sudo snap install snapcraft --classic --timeout=300
+
+          # 验证安装
+          snapcraft --version
+
+          echo "Linux build dependencies installed successfully"
 
       - name: Prepare Linux Build Environment
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
+          echo "Preparing Linux build environment..."
+
           # 确保所有必要的目录存在
           mkdir -p apps/core-app/dist/__appImage-x64
           mkdir -p apps/core-app/dist/__snap-x64
           mkdir -p apps/core-app/dist/__deb-x64
           mkdir -p apps/core-app/dist/@talex-touch
+
           # 设置正确的权限
           chmod -R 755 apps/core-app/dist
+
+          # 修复 app-builder 二进制文件权限
+          echo "Fixing app-builder permissions..."
+          find node_modules -name "app-builder" -type f -exec chmod +x {} \; 2>/dev/null || true
+          find node_modules -name "app-builder-bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+
           # 检查磁盘空间
+          echo "Disk space check:"
           df -h
-          echo "Linux build environment prepared"
+
+          # 检查 snapd 服务状态
+          echo "Snapd service status:"
+          sudo systemctl status snapd --no-pager || true
+
+          # 验证 snapcraft 安装
+          echo "Verifying snapcraft installation:"
+          snapcraft --version || echo "Snapcraft not available"
+
+          # 检查 snap 环境
+          echo "Snap environment:"
+          snap list || echo "No snaps installed"
+
+          echo "Linux build environment prepared successfully"
 
       - name: Install macOS Dependencies
         if: matrix.os == 'macos-latest'
