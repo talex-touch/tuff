@@ -173,6 +173,18 @@ class TouchChannel implements ITouchClientChannel {
 
     return res
   }
+
+  unRegChannel(eventName: string, callback: (data: StandardChannelData) => any): boolean {
+    const callbacks = this.channelMap.get(eventName)
+    if (callbacks) {
+      const index = callbacks.indexOf(callback)
+      if (index > -1) {
+        callbacks.splice(index, 1)
+        return true
+      }
+    }
+    return false
+  }
 }
 
 export const touchChannel: ITouchClientChannel = (window['$channel'] = new TouchChannel())

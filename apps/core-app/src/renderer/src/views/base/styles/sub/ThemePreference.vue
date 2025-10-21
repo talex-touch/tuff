@@ -12,7 +12,7 @@ const copyWriting = computed(() => {
   const fallbackKey = 'themePreference.Default'
 
   // Check if the key exists, otherwise use the fallback
-  return t(key, {}, { missing: () => t(fallbackKey) })
+  return t(key, {}, { missing: () => t(fallbackKey) } as any)
 })
 </script>
 

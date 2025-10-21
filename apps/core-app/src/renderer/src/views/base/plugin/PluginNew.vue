@@ -34,7 +34,7 @@ const installState = reactive({
   installing: false,
   status: 'idle' as 'idle' | 'success' | 'error',
   message: '',
-  manifest: null as IManifest | undefined,
+  manifest: undefined as IManifest | undefined,
   provider: '' as '' | PluginProviderType,
   official: false
 })
@@ -251,7 +251,7 @@ async function installPluginFromSource(): Promise<void> {
     const payload: Record<string, unknown> = {
       source: trimmedSource,
       clientMetadata: {
-        pluginName: installState.manifest?.name || trimmedSource,
+        pluginName: (installState.manifest as any)?.name || trimmedSource,
         source: trimmedSource
       }
     }
