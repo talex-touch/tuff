@@ -97,6 +97,9 @@ jobs:
           mkdir -p apps/core-app/dist/__appImage-x64
           mkdir -p apps/core-app/dist/__snap-x64
           mkdir -p apps/core-app/dist/__deb-x64
+          mkdir -p apps/core-app/dist/@talex-touch
+          # 设置正确的权限
+          chmod -R 755 apps/core-app/dist
           echo "Build directories prepared"
 
       - name: Clean Windows Build Artifacts
@@ -107,7 +110,7 @@ jobs:
           $distPath = "apps/core-app/dist"
           if (Test-Path $distPath) {
             # 删除可能存在的安装程序文件
-            Get-ChildItem -Path $distPath -Recurse -Include "*.exe", "*.msi" | Remove-Item -Force -ErrorAction SilentlyContinue
+            Get-ChildItem -Path $distPath -Recurse -Include "*.exe", "*.msi", "*.7z" | Remove-Item -Force -ErrorAction SilentlyContinue
             # 删除 win-unpacked 目录
             $unpackedPath = Join-Path $distPath "win-unpacked"
             if (Test-Path $unpackedPath) {
@@ -117,6 +120,13 @@ jobs:
             $outputPath = Join-Path $distPath "@talex-touch"
             if (Test-Path $outputPath) {
               Remove-Item -Path $outputPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            # 删除 NSIS 临时文件
+            Get-ChildItem -Path $distPath -Recurse -Include "__uninstaller-*" | Remove-Item -Force -ErrorAction SilentlyContinue
+            # 删除缓存目录
+            $cachePath = Join-Path $distPath ".electron-builder-cache"
+            if (Test-Path $cachePath) {
+              Remove-Item -Path $cachePath -Recurse -Force -ErrorAction SilentlyContinue
             }
           }
           Write-Host "Windows build artifacts cleaned"
@@ -139,6 +149,33 @@ jobs:
             exit 1
           }
 
+      - name: Prepare Windows Build Environment
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Write-Host "Preparing Windows build environment..."
+          $distPath = "apps/core-app/dist"
+          $outputPath = Join-Path $distPath "@talex-touch"
+
+          # 确保输出目录存在
+          if (-not (Test-Path $outputPath)) {
+            New-Item -ItemType Directory -Force -Path $outputPath | Out-Null
+            Write-Host "Created output directory: $outputPath"
+          }
+
+          # 设置目录权限（Windows 上确保可写）
+          try {
+            $testFile = Join-Path $outputPath "permission-test.tmp"
+            Set-Content -Path $testFile -Value "test" -Encoding ASCII
+            Remove-Item -Path $testFile -Force
+            Write-Host "Output directory permissions verified"
+          } catch {
+            Write-Error "Output directory permission test failed: $($_.Exception.Message)"
+            exit 1
+          }
+
+          Write-Host "Windows build environment prepared"
+
       - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
         shell: bash
@@ -148,7 +185,24 @@ jobs:
           sudo apt-get install -y squashfs-tools
           # 安装 snapcraft (通过 snap 而不是 apt)
           sudo snap install snapcraft --classic
+          # 安装额外的构建工具
+          sudo apt-get install -y fakeroot dpkg-dev
           echo "Linux build dependencies installed"
+
+      - name: Prepare Linux Build Environment
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # 确保所有必要的目录存在
+          mkdir -p apps/core-app/dist/__appImage-x64
+          mkdir -p apps/core-app/dist/__snap-x64
+          mkdir -p apps/core-app/dist/__deb-x64
+          mkdir -p apps/core-app/dist/@talex-touch
+          # 设置正确的权限
+          chmod -R 755 apps/core-app/dist
+          # 检查磁盘空间
+          df -h
+          echo "Linux build environment prepared"
 
       - name: Install macOS Dependencies
         if: matrix.os == 'macos-latest'
@@ -157,6 +211,19 @@ jobs:
           # macOS 通常不需要额外依赖，但可以检查 Xcode Command Line Tools
           xcode-select --install || echo "Xcode Command Line Tools already installed"
           echo "macOS build environment ready"
+
+      - name: Clean Previous Build Artifacts
+        shell: bash
+        run: |
+          echo "Cleaning previous build artifacts..."
+          # 清理可能存在的构建产物
+          rm -rf apps/core-app/dist/__*
+          rm -rf apps/core-app/dist/@talex-touch
+          rm -rf apps/core-app/out
+          # 清理 node_modules 中的缓存
+          rm -rf node_modules/.cache
+          rm -rf apps/core-app/node_modules/.cache
+          echo "Build artifacts cleaned"
 
       - name: Build Tuff App
         shell: bash
@@ -197,6 +264,13 @@ jobs:
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
           RUNNER_OS: ${{ runner.os }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 完全禁用签名相关功能
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_LINK: ''
+          CSC_KEY_PASSWORD: ''
+          APPLE_ID: ''
+          APPLE_ID_PASSWORD: ''
+          APPLE_TEAM_ID: ''
 
       - name: Verify Build Artifacts
         shell: bash
