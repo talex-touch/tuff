@@ -176,17 +176,17 @@ function retryBuild(maxRetries = 3) {
       // 运行构建命令
       const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --mac`;
       console.log(`Executing: ${command}`);
-      
+
       // 确保工作目录存在且正确
       const workingDir = path.join(__dirname, '..');
       console.log(`Working directory: ${workingDir}`);
       console.log(`Working directory exists: ${fs.existsSync(workingDir)}`);
       console.log(`Package.json exists: ${fs.existsSync(path.join(workingDir, 'package.json'))}`);
-      
+
       if (!fs.existsSync(workingDir)) {
         throw new Error(`Working directory does not exist: ${workingDir}`);
       }
-      
+
       if (!fs.existsSync(path.join(workingDir, 'package.json'))) {
         throw new Error(`Package.json not found in working directory: ${workingDir}`);
       }
@@ -201,8 +201,44 @@ function retryBuild(maxRetries = 3) {
           NODE_ENV: 'production'
         }
       });
-      
+
       console.log('Step 2: Running electron-builder --mac...');
+
+      // 检查必要的文件是否存在
+      const packageJsonPath = path.join(workingDir, 'package.json');
+      const electronBuilderConfigPath = path.join(workingDir, 'electron-builder.yml');
+      const outDir = path.join(workingDir, 'out');
+
+      console.log('Checking required files:');
+      console.log('- package.json exists:', fs.existsSync(packageJsonPath));
+      console.log('- electron-builder.yml exists:', fs.existsSync(electronBuilderConfigPath));
+      console.log('- out directory exists:', fs.existsSync(outDir));
+
+      if (!fs.existsSync(packageJsonPath)) {
+        throw new Error('package.json not found');
+      }
+
+      if (!fs.existsSync(electronBuilderConfigPath)) {
+        throw new Error('electron-builder.yml not found');
+      }
+
+      if (!fs.existsSync(outDir)) {
+        throw new Error('out directory not found - build may have failed');
+      }
+
+      // 列出 out 目录内容
+      console.log('Contents of out directory:');
+      try {
+        const outContents = fs.readdirSync(outDir);
+        outContents.forEach(item => {
+          const itemPath = path.join(outDir, item);
+          const stats = fs.statSync(itemPath);
+          console.log(`  ${item} (${stats.isDirectory() ? 'directory' : 'file'})`);
+        });
+      } catch (error) {
+        console.warn('Could not list out directory contents:', error.message);
+      }
+
       execSync('electron-builder --mac', {
         stdio: 'inherit',
         cwd: workingDir,
