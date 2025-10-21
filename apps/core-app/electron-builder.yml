@@ -55,6 +55,9 @@ mac:
   target:
     - target: zip
       arch: [arm64]
+  # 修复路径问题
+  icon: build/icon.icns
+  category: public.app-category.productivity
 linux:
   target:
     - AppImage
