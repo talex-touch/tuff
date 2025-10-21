@@ -7,6 +7,7 @@ const path = require('path');
 function cleanupPreviousBuilds() {
   const distDir = path.join(__dirname, '../dist');
   const outputDir = path.join(distDir, '@talex-touch');
+  const cacheDir = path.join(__dirname, '../.electron-builder-cache');
 
   console.log('Cleaning up previous build artifacts...');
 
@@ -19,6 +20,27 @@ function cleanupPreviousBuilds() {
     '**/__uninstaller-*',
     '**/*.7z'
   ];
+
+  // 清理 electron-builder 缓存
+  if (fs.existsSync(cacheDir)) {
+    try {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+      console.log('Cleaned electron-builder cache');
+    } catch (error) {
+      console.warn(`Could not clean cache directory: ${error.message}`);
+    }
+  }
+
+  // 清理 Wine 相关缓存
+  const wineCacheDir = path.join(__dirname, '../.cache');
+  if (fs.existsSync(wineCacheDir)) {
+    try {
+      fs.rmSync(wineCacheDir, { recursive: true, force: true });
+      console.log('Cleaned Wine cache');
+    } catch (error) {
+      console.warn(`Could not clean Wine cache: ${error.message}`);
+    }
+  }
 
   let glob;
   try {
@@ -99,6 +121,12 @@ process.env.CSC_KEY_PASSWORD = '';
 process.env.APPLE_ID = '';
 process.env.APPLE_ID_PASSWORD = '';
 process.env.APPLE_TEAM_ID = '';
+// 强制重新下载 Wine 工具
+process.env.ELECTRON_BUILDER_CACHE = '';
+process.env.FORCE_COLOR = '0';
+// 禁用 rcedit 相关功能以避免校验和问题
+process.env.ELECTRON_BUILDER_CACHE_DIR = path.join(__dirname, '../.electron-builder-cache');
+process.env.ELECTRON_BUILDER_OFFLINE = 'false';
 
 // 检查磁盘空间和权限
 function checkBuildEnvironment() {
@@ -158,23 +186,77 @@ checkBuildEnvironment();
 // 确保输出目录结构
 ensureOutputDirectoryStructure();
 
-try {
-  // 运行构建命令
-  const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --win`;
-  console.log(`Executing: ${command}`);
+// Wine 工具下载重试机制
+function retryWineDownload() {
+  console.log('Attempting to clear Wine cache and retry download...');
 
-  execSync(command, {
-    stdio: 'inherit',
-    cwd: path.join(__dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'production',
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-      ELECTRON_BUILDER_CACHE: path.join(__dirname, '../.electron-builder-cache'),
-      // 添加额外的环境变量来避免文件锁定
-      ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true'
+  // 清理可能的 Wine 缓存
+  const possibleCacheDirs = [
+    path.join(__dirname, '../.electron-builder-cache'),
+    path.join(__dirname, '../.cache'),
+    path.join(process.env.HOME || process.env.USERPROFILE, '.cache/electron-builder'),
+    path.join(process.env.HOME || process.env.USERPROFILE, '.electron-builder-cache')
+  ];
+
+  possibleCacheDirs.forEach(cacheDir => {
+    if (fs.existsSync(cacheDir)) {
+      try {
+        fs.rmSync(cacheDir, { recursive: true, force: true });
+        console.log(`Cleared cache: ${cacheDir}`);
+      } catch (error) {
+        console.warn(`Could not clear ${cacheDir}: ${error.message}`);
+      }
     }
   });
+}
+
+// 重试构建函数
+function retryBuild(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Build attempt ${attempt}/${maxRetries}`);
+
+      if (attempt > 1) {
+        console.log('Retrying with cleared cache...');
+        retryWineDownload();
+      }
+
+      // 运行构建命令
+      const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --win`;
+      console.log(`Executing: ${command}`);
+
+      execSync(command, {
+        stdio: 'inherit',
+        cwd: path.join(__dirname, '..'),
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+          ELECTRON_BUILDER_CACHE: path.join(__dirname, '../.electron-builder-cache'),
+          // 添加额外的环境变量来避免文件锁定
+          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true'
+        }
+      });
+
+      // 如果成功，跳出重试循环
+      break;
+
+    } catch (error) {
+      console.error(`Build attempt ${attempt} failed:`, error.message);
+
+      if (attempt === maxRetries) {
+        throw error; // 最后一次尝试失败，抛出错误
+      }
+
+      console.log(`Retrying in 5 seconds... (${attempt}/${maxRetries})`);
+      // 等待 5 秒后重试
+      setTimeout(() => {}, 5000);
+    }
+  }
+}
+
+try {
+  retryBuild();
 
   console.log('Windows build completed successfully');
 
