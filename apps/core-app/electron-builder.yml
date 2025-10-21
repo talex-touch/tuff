@@ -1,6 +1,6 @@
 appId: com.tagzxia.app.talex-touch
 productName: talex-touch
-asar: false
+asar: true
 compression: maximum
 directories:
   buildResources: build
@@ -59,6 +59,8 @@ mac:
   # 修复路径问题
   icon: build/icon.icns
   category: public.app-category.productivity
+  # 强制重新构建
+  forceCodeSigning: false
 linux:
   target:
     - AppImage
