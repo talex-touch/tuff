@@ -145,13 +145,14 @@ jobs:
         run: |
           # 安装构建 Linux 包所需的依赖
           sudo apt-get update
-          sudo apt-get install -y squashfs-tools snapcraft
+          sudo apt-get install -y squashfs-tools
+          # 安装 snapcraft (通过 snap 而不是 apt)
+          sudo snap install snapcraft --classic
           echo "Linux build dependencies installed"
 
       - name: Build Tuff App
         shell: bash
         run: |
-          cd apps/core-app
           echo "Starting build process for $RUNNER_OS..."
 
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
@@ -171,9 +172,9 @@ jobs:
           fi
 
           # 验证构建输出
-          if [ -d "dist" ]; then
+          if [ -d "apps/core-app/dist" ]; then
             echo "Build artifacts found:"
-            ls -la dist/
+            ls -la apps/core-app/dist/
             echo "Build completed successfully"
           else
             echo "ERROR: Build artifacts not found!"
@@ -187,13 +188,12 @@ jobs:
       - name: Verify Build Artifacts
         shell: bash
         run: |
-          cd apps/core-app
           echo "Verifying build artifacts for $RUNNER_OS..."
-          if [ -d "dist" ]; then
+          if [ -d "apps/core-app/dist" ]; then
             echo "Build artifacts found:"
-            find dist -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | head -10
+            find apps/core-app/dist -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | head -10
             echo "Total files in dist:"
-            find dist -type f | wc -l
+            find apps/core-app/dist -type f | wc -l
           else
             echo "ERROR: No dist directory found!"
             exit 1
