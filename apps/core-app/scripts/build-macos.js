@@ -244,8 +244,8 @@ function retryBuild(maxRetries = 3) {
         throw new Error(`Package.json not found in working directory: ${workingDir}`);
       }
 
-      // 分步执行构建命令
-      console.log('Step 1: Running npm run build...');
+      // 精简构建流程
+      console.log('Step 1: Building application...');
       execSync(`cross-env BUILD_TYPE=${buildType} npm run build`, {
         stdio: 'inherit',
         cwd: workingDir,
@@ -255,12 +255,11 @@ function retryBuild(maxRetries = 3) {
         }
       });
 
-      console.log('Step 1.5: Creating minimal package.json for out directory...');
+      console.log('Step 2: Creating minimal package.json for out directory...');
       const copyOutDir = path.join(workingDir, 'out');
       const outPackageJsonPath = path.join(copyOutDir, 'package.json');
 
       if (fs.existsSync(copyOutDir)) {
-        // 创建一个简化的 package.json，不包含 build 配置
         const minimalPackageJson = {
           "name": "@talex-touch/core-app",
           "version": "2.0.0",
@@ -272,7 +271,7 @@ function retryBuild(maxRetries = 3) {
         fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2));
         console.log('✓ minimal package.json created in out directory');
       } else {
-        console.log('⚠ Could not create package.json - out directory does not exist');
+        throw new Error('out directory does not exist after build');
       }
 
       console.log('Step 2: Running electron-builder --mac...');
@@ -351,37 +350,14 @@ function retryBuild(maxRetries = 3) {
         }
       });
 
-      // 修复：确保在正确的工作目录中运行 electron-builder
-      // 并且设置正确的环境变量
+      // 简化的环境变量设置
       const electronBuilderEnv = {
         ...process.env,
         NODE_ENV: 'production',
-        CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-        ELECTRON_BUILDER_CACHE: path.join(workingDir, '.electron-builder-cache'),
-        ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true',
-        ELECTRON_BUILDER_OFFLINE: 'false',
-        // 添加更多环境变量来避免路径问题
-        ELECTRON_BUILDER_CURRENT_PLATFORM: 'darwin',
-        ELECTRON_BUILDER_CURRENT_ARCH: 'arm64',
-        // 确保 electron-builder 能找到正确的配置文件
-        ELECTRON_BUILDER_CONFIG: path.join(workingDir, 'electron-builder.yml'),
-        // 强制设置工作目录
-        ELECTRON_BUILDER_WORKING_DIR: workingDir,
-        // 禁用一些可能导致路径问题的功能
-        ELECTRON_BUILDER_USE_HARD_LINKS: 'false',
-        ELECTRON_BUILDER_COMPRESSION: 'maximum',
-        // 添加路径修复相关的环境变量
-        ELECTRON_BUILDER_APP_DIR: workingDir,
-        ELECTRON_BUILDER_OUT_DIR: path.join(workingDir, 'dist'),
-        // 强制 electron-builder 使用绝对路径
-        ELECTRON_BUILDER_USE_ABSOLUTE_PATHS: 'true'
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       };
 
-      console.log('Running electron-builder with environment:');
-      console.log('- CSC_IDENTITY_AUTO_DISCOVERY:', electronBuilderEnv.CSC_IDENTITY_AUTO_DISCOVERY);
-      console.log('- ELECTRON_BUILDER_CACHE:', electronBuilderEnv.ELECTRON_BUILDER_CACHE);
-      console.log('- ELECTRON_BUILDER_CONFIG:', electronBuilderEnv.ELECTRON_BUILDER_CONFIG);
-      console.log('- ELECTRON_BUILDER_WORKING_DIR:', electronBuilderEnv.ELECTRON_BUILDER_WORKING_DIR);
+      console.log('Running electron-builder...');
 
       // 验证 electron-builder 命令是否可用
       try {
