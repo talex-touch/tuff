@@ -334,15 +334,15 @@ function retryBuild(maxRetries = 3) {
         // 如果构建失败，尝试修复 Electron 可执行文件问题
         if (error.message.includes('ENOENT') && error.message.includes('Electron')) {
           console.log('Detected Electron executable missing, attempting to fix...');
-          
+
           const electronAppPath = path.join(workingDir, 'dist/mac-arm64/Electron.app/Contents/MacOS');
           const electronSourcePath = path.join(workingDir, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
-          
+
           if (fs.existsSync(electronSourcePath) && fs.existsSync(electronAppPath)) {
             try {
               fs.copyFileSync(electronSourcePath, path.join(electronAppPath, 'Electron'));
               console.log('Copied Electron executable to fix the issue');
-              
+
               // 再次尝试构建
               execSync('electron-builder --mac', {
                 stdio: 'inherit',
