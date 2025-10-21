@@ -157,7 +157,7 @@ function retryBuild(maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Build attempt ${attempt}/${maxRetries}`);
-      
+
       if (attempt > 1) {
         console.log('Retrying with cleared cache...');
         // 清理缓存
@@ -166,33 +166,42 @@ function retryBuild(maxRetries = 3) {
           fs.rmSync(cacheDir, { recursive: true, force: true });
         }
       }
-      
+
       // 运行构建命令
       const command = `cross-env BUILD_TYPE=${buildType} npm run build && electron-builder --mac`;
       console.log(`Executing: ${command}`);
+      console.log(`Working directory: ${path.join(__dirname, '..')}`);
+
+      // 确保工作目录存在且正确
+      const workingDir = path.join(__dirname, '..');
+      if (!fs.existsSync(workingDir)) {
+        throw new Error(`Working directory does not exist: ${workingDir}`);
+      }
 
       execSync(command, {
         stdio: 'inherit',
-        cwd: path.join(__dirname, '..'),
+        cwd: workingDir,
         env: {
           ...process.env,
           NODE_ENV: 'production',
           CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-          ELECTRON_BUILDER_CACHE: path.join(__dirname, '../.electron-builder-cache'),
-          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true'
+          ELECTRON_BUILDER_CACHE: path.join(workingDir, '.electron-builder-cache'),
+          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: 'true',
+          // 添加更多环境变量来避免问题
+          ELECTRON_BUILDER_OFFLINE: 'false'
         }
       });
-      
+
       // 如果成功，跳出重试循环
       break;
-      
+
     } catch (error) {
       console.error(`Build attempt ${attempt} failed:`, error.message);
-      
+
       if (attempt === maxRetries) {
         throw error; // 最后一次尝试失败，抛出错误
       }
-      
+
       console.log(`Retrying in 5 seconds... (${attempt}/${maxRetries})`);
       // 等待 5 秒后重试
       setTimeout(() => {}, 5000);
