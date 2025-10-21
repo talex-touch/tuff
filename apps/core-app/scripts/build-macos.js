@@ -15,7 +15,6 @@ try {
   console.log('Step 1: Building application...');
   execSync('npm run build', { stdio: 'inherit' });
 
-  // 2. 确保 out 目录有正确的 package.json
   const outPackageJsonPath = path.join(projectRoot, 'out/package.json');
   const minimalPackageJson = {
     "name": "@talex-touch/core-app",
@@ -26,14 +25,12 @@ try {
   };
   fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2));
 
-  // 3. 清理之前的构建产物
   const distDir = path.join(projectRoot, 'dist');
   if (fs.existsSync(distDir)) {
     fs.rmSync(distDir, { recursive: true, force: true });
     console.log('Cleaned previous build artifacts');
   }
 
-  // 4. 运行 electron-builder
   console.log('Step 2: Running electron-builder...');
 
   try {
