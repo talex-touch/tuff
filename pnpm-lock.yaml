@@ -104,7 +104,7 @@ importers:
         specifier: ^0.4.8
         version: 0.4.8(vue@3.5.20(typescript@5.9.2))
       '@talex-touch/utils':
-        specifier: workspace:^
+        specifier: file:../../packages/utils
         version: link:../../packages/utils
       '@types/yauzl':
         specifier: ^2.10.3
