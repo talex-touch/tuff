@@ -313,10 +313,10 @@ function retryBuild(maxRetries = 3) {
 
       // 验证 electron-builder 命令是否可用
       try {
-        execSync('electron-builder --version', { 
-          stdio: 'pipe', 
+        execSync('electron-builder --version', {
+          stdio: 'pipe',
           cwd: workingDir,
-          env: electronBuilderEnv 
+          env: electronBuilderEnv
         });
         console.log('electron-builder is available');
       } catch (versionError) {
