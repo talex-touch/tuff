@@ -17,7 +17,7 @@ import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
-import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
+// import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { TuffItem } from '@talex-touch/utils'
 
 useCoreBox()
@@ -36,13 +36,13 @@ const {
   searchVal,
   select,
   res,
-  loading,
+  // loading,
   activeItem,
   activeActivations,
   handleExecute,
   handleExit,
   deactivateProvider,
-  cancelSearch
+  // cancelSearch
 } = useSearch(boxOptions)
 const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
 

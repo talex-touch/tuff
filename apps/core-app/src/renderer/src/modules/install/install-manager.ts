@@ -10,7 +10,7 @@ import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 declare global {
   interface Window {
-    $i18n?: any
+    // $i18n?: any
   }
 }
 

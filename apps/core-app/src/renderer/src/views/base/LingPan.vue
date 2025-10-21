@@ -205,7 +205,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="job in ocrJobs" :key="job.id ?? job.payloadHash">
+                <tr v-for="job in ocrJobs" :key="(job.id ?? job.payloadHash) || Math.random()">
                   <td>{{ job.id ?? 'N/A' }}</td>
                   <td>
                     <span class="status-tag" :class="`status-${job.status}`">
@@ -494,20 +494,20 @@ function sourceLabel(job: OcrJobEntry): string {
   return 'UNKNOWN'
 }
 
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return 'null'
-  if (typeof value === 'object') {
-    try {
-      return JSON.stringify(value, null, 2)
-    } catch {
-      return String(value)
-    }
-  }
-  if (typeof value === 'string') {
-    return value
-  }
-  return JSON.stringify(value)
-}
+// function _formatValue(value: unknown): string {
+//   if (value === null || value === undefined) return 'null'
+//   if (typeof value === 'object') {
+//     try {
+//       return JSON.stringify(value, null, 2)
+//     } catch {
+//       return String(value)
+//     }
+//   }
+//   if (typeof value === 'string') {
+//     return value
+//   }
+//   return JSON.stringify(value)
+// }
 
 watch(limit, () => {
   load().catch(() => void 0)
