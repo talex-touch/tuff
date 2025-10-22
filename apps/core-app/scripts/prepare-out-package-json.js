@@ -2,12 +2,14 @@ const fs = require('fs');
 const path = require('path');
 
 const projectRoot = path.join(__dirname, '..');
+const appPackageJson = require('../package.json');
+
 const outDir = path.join(projectRoot, 'out');
 const outPackageJsonPath = path.join(outDir, 'package.json');
 
 const minimalPackageJson = {
   name: '@talex-touch/core-app',
-  version: '2.0.0',
+  version: appPackageJson.version || '0.0.0',
   description: 'A powerful productivity launcher and automation tool',
   main: './main/index.js',
   author: 'TalexDreamSoul',
