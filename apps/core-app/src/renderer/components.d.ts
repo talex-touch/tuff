@@ -51,6 +51,7 @@ declare module 'vue' {
     MarketItem: typeof import('./src/components/market/MarketItem.vue')['default']
     MarketItemCard: typeof import('./src/components/market/MarketItemCard.vue')['default']
     OSIcon: typeof import('./src/components/icon/OSIcon.vue')['default']
+    PlatformCompatibilityWarning: typeof import('./src/components/base/dialog/PlatformCompatibilityWarning.vue')['default']
     PluginApplyInstall: typeof import('./src/components/plugin/action/mention/PluginApplyInstall.vue')['default']
     PluginCard: typeof import('./src/components/plugin/layout/PluginCard.vue')['default']
     PluginDetails: typeof import('./src/components/plugin/tabs/PluginDetails.vue')['default']

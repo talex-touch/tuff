@@ -3,7 +3,7 @@ import { ChannelType, ITouchChannel } from '@talex-touch/utils/channel'
 import { app } from 'electron'
 import path from 'path'
 import { MainWindowOption } from '../config/default'
-import { checkDirWithCreate } from '../utils/common-util'
+import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-util'
 import { genTouchChannel } from './channel-core'
 import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 import { devProcessManager } from '../utils/dev-process-manager'
@@ -127,6 +127,7 @@ export class TouchApp implements TalexTouch.TouchApp {
         isRelease: this.version === TalexTouch.AppVersion.RELEASE,
         platform: process.platform,
         arch: process.arch,
+        platformWarning: checkPlatformCompatibility(),
         t: {
           _s: process.getCreationTime(),
           s: startTime,

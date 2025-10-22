@@ -66,6 +66,51 @@ export function getPlatform() {
 
   return Platform.UNKNOWN
 }
+
+/**
+ * Gets the macOS version number
+ * @returns The macOS version number, or null if not running on macOS
+ */
+export function getMacOSVersion(): number | null {
+  if (process.platform !== 'darwin') {
+    return null
+  }
+
+  try {
+    const os = require('os')
+    const release = os.release()
+    // macOS version format: 23.0.0 (corresponds to macOS 14.0)
+    // Version mapping: 20.x = macOS 11, 21.x = macOS 12, 22.x = macOS 13, 23.x = macOS 14
+    const majorVersion = parseInt(release.split('.')[0])
+    return majorVersion - 9 // Convert to actual macOS version number
+  } catch (error) {
+    console.warn('Failed to get macOS version:', error)
+    return null
+  }
+}
+
+/**
+ * Checks if platform compatibility warning should be displayed
+ * @returns Warning message if warning should be shown, null otherwise
+ */
+export function checkPlatformCompatibility(): string | null {
+  const platform = getPlatform()
+
+  // Check non-macOS platforms
+  if (platform === Platform.WINDOWS || platform === Platform.LINUX) {
+    return 'Tuff 正在 Windows 和 Linux 下测试，你可能会遇到 bug'
+  }
+
+  // Check macOS version
+  if (platform === Platform.MAC_OS) {
+    const macVersion = getMacOSVersion()
+    if (macVersion !== null && macVersion < 14) {
+      return 'Tuff 在低版本 macOS 下可能工作不正常'
+    }
+  }
+
+  return null
+}
 export async function sleep(time: number) {
   return new Promise((resolve) => setTimeout(() => resolve(time), time))
 }
