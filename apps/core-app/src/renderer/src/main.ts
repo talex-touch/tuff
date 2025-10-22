@@ -59,7 +59,7 @@ async function checkPlatformCompatibility() {
   try {
     // 等待应用准备就绪
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     // 检查是否应该显示警告
     if (!shouldShowPlatformWarning()) {
       return
@@ -67,7 +67,7 @@ async function checkPlatformCompatibility() {
 
     // 获取平台信息
     const appInfo = await window.$nodeApi.send('app-ready')
-    
+
     if (appInfo?.platformWarning) {
       await showPlatformCompatibilityWarning(appInfo.platformWarning)
     }

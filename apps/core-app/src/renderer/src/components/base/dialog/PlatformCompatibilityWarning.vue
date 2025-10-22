@@ -108,7 +108,7 @@ function handleDontShowAgain() {
 <style lang="scss" scoped>
 .PlatformCompatibilityWarning-Wrapper {
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  
+
   &.close {
     opacity: 0;
     transform: scale(0.9);
@@ -128,12 +128,12 @@ function handleDontShowAgain() {
 // 按钮悬停效果
 button {
   transition: all 0.2s ease-in-out;
-  
+
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   }
-  
+
   &:active {
     transform: translateY(0);
   }
