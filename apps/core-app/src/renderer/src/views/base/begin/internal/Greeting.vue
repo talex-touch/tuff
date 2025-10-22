@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import HelloData from '~/assets/lotties/hello.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
-import Protocol from './Protocol.vue'
+// import Protocol from './Protocol.vue'
+import AccountDo from './AccountDo.vue'
 
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
@@ -9,7 +10,8 @@ const step: StepFunction = inject('step')!
 
 function goon(): void {
   step({
-    comp: Protocol
+    comp: AccountDo
+    //Protocol
   })
 }
 </script>

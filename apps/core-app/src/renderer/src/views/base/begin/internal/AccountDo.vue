@@ -1,6 +1,7 @@
 <script setup lang="ts" name="AccountDo">
 import Forbidden from './Forbidden.vue'
-import OptionMode from './OptionMode.vue'
+// import OptionMode from './OptionMode.vue'
+import Done from './Done.vue'
 import { Ref } from 'vue'
 
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
@@ -10,7 +11,8 @@ const step: StepFunction = inject('step')!
 
 function handleAgree(): void {
   step({
-    comp: !choice.value ? Forbidden : OptionMode
+    comp: !choice.value ? Forbidden : Done
+    //OptionMode
   })
 }
 </script>
