@@ -9,8 +9,10 @@ import { appSetting } from '~/modules/channel/storage/index'
 import { isCoreBox } from '@talex-touch/utils/renderer'
 import AppEntrance from './AppEntrance.vue'
 import { useI18n } from 'vue-i18n'
+import { useLanguage } from '~/modules/lang'
 
 const { t } = useI18n()
+const { initializeLanguage } = useLanguage()
 
 const packageJson = window.$nodeApi.getPackageJSON()
 
@@ -20,6 +22,9 @@ async function init(): Promise<void> {
   if (isCoreBox()) {
     return
   }
+
+  // 初始化语言设置
+  await initializeLanguage()
 
   // applicationUpgrade()
   // clipBoardResolver()

@@ -50,8 +50,11 @@ export function useLanguage() {
 
       // 保存到本地存储
       localStorage.setItem('app-language', lang)
-      localStorage.setItem('app-follow-system-language', 'false')
-      followSystemLanguage.value = false
+
+      // 只有在手动切换语言时才关闭跟随系统
+      if (!followSystemLanguage.value) {
+        localStorage.setItem('app-follow-system-language', 'false')
+      }
 
       console.log(`[useLanguage] Language switched to: ${lang}`)
     } catch (error) {

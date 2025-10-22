@@ -30,7 +30,29 @@ preloadLog('Bootstrapping Talex Touch renderer...')
 
 async function bootstrap() {
   preloadDebugStep('Loading localization resources...', 0.05)
-  const i18n = await setupI18n({ locale: 'zh-CN' })
+
+  // 从本地存储获取语言设置，如果没有则使用系统语言或默认中文
+  let initialLanguage = localStorage.getItem('app-language')
+
+  // 如果没有保存的语言设置，检查是否跟随系统语言
+  if (!initialLanguage) {
+    const followSystem = localStorage.getItem('app-follow-system-language') === 'true'
+    if (followSystem) {
+      // 检测系统语言
+      const systemLang = navigator.language || 'en-US'
+      if (systemLang.startsWith('zh')) {
+        initialLanguage = 'zh-CN'
+      } else if (systemLang.startsWith('en')) {
+        initialLanguage = 'en-US'
+      } else {
+        initialLanguage = 'zh-CN' // 默认中文
+      }
+    } else {
+      initialLanguage = 'zh-CN' // 默认中文
+    }
+  }
+
+  const i18n = await setupI18n({ locale: initialLanguage })
   ;(window as any).$i18n = i18n
 
   preloadDebugStep('Creating Vue application instance', 0.05)
