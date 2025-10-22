@@ -100,7 +100,10 @@ function build() {
     fs.mkdirSync(path.join(distDir, '__appImage-x64'), { recursive: true });
     fs.mkdirSync(path.join(distDir, '__deb-x64'), { recursive: true });
   } else if (normalizedTarget === 'win') {
-    fs.mkdirSync(path.join(distDir, '@talex-touch'), { recursive: true });
+    const winDirs = ['@talex-touch', '@talex-touchcore-app-updater'];
+    winDirs.forEach(dirName => {
+      fs.mkdirSync(path.join(distDir, dirName), { recursive: true });
+    });
   }
 
   process.env.BUILD_TYPE = buildType;
