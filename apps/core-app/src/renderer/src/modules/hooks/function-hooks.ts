@@ -6,8 +6,9 @@ import Login from '~/views/others/account/Sign.vue'
 /**
  * Creates and mounts a login dialog component
  * @returns {App<Element> | undefined} The Vue app instance or undefined if already mounted
+ * @deprecated 请使用新的 useLogin hook，支持多种认证方式
  */
-export function useLogin(): App<Element> | undefined {
+export function useLoginDialog(): App<Element> | undefined {
   // Check if login dialog is already mounted
   if (document.getElementById('Touch-Login')) return undefined
 
@@ -36,3 +37,6 @@ export function useLogin(): App<Element> | undefined {
 
   return app
 }
+
+// 为了向后兼容，保留原有的 useLogin 函数名
+export const useLogin = useLoginDialog

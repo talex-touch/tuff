@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "The core app of talex-touch. A strong adaptation more platform all-tool program.",
   "main": "./out/main/index.js",
   "author": "TalexDreamSoul",
@@ -27,6 +27,8 @@
     "build:snapshot:linux": "node scripts/build-target.js --target=linux --type=snapshot"
   },
   "dependencies": {
+    "@clerk/clerk-js": "^5.102.0",
+    "@clerk/types": "^4.95.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.2",

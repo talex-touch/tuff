@@ -34,7 +34,7 @@ function getSystemLanguage(): SupportedLanguage {
  * 语言管理 composable
  */
 export function useLanguage() {
-  const { locale: _locale } = useI18n()
+  const i18n = useI18n()
 
   /**
    * 切换语言
@@ -42,10 +42,10 @@ export function useLanguage() {
   async function switchLanguage(lang: SupportedLanguage) {
     try {
       // 加载语言包
-      await loadLocaleMessages(useI18n() as any, lang)
+      await loadLocaleMessages(i18n as any, lang)
 
       // 设置语言
-      setI18nLanguage(useI18n() as any, lang)
+      setI18nLanguage(i18n as any, lang)
       currentLanguage.value = lang
 
       // 保存到本地存储
