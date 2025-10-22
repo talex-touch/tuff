@@ -462,6 +462,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Checkout Repository (for manual tag push)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Create Git Tag (for manual trigger)
         if: github.event_name == 'workflow_dispatch'
         run: |
