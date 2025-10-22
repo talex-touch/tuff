@@ -1,7 +1,6 @@
 <script name="App" lang="ts" setup>
 import AppLayout from '~/views/layout/AppLayout.vue'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
-// applicationUpgrade,
 // urlHooker,
 // clipBoardResolver,
 import Beginner from '~/views/base/begin/Beginner.vue'
@@ -23,10 +22,8 @@ async function init(): Promise<void> {
     return
   }
 
-  // 初始化语言设置
   await initializeLanguage()
 
-  // applicationUpgrade()
   // clipBoardResolver()
   // urlHooker()
   // screenCapture()
