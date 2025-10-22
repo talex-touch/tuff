@@ -397,15 +397,42 @@ jobs:
       - name: Collect Release Assets
         id: release-files
         run: |
-          set -e
-          FILES=$(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
-          if [ -z "$FILES" ]; then
+          set -euo pipefail
+
+          mapfile -t FILES < <(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
+
+          if [ "${#FILES[@]}" -eq 0 ]; then
             echo "No release files found in artifacts/"
             exit 1
           fi
+
+          mkdir -p release-assets
+          declare -a OUTPUT_PATHS=()
+
+          for file in "${FILES[@]}"; do
+            relative=${file#artifacts/}
+            platform=${relative%%/*}
+            if [[ "$platform" == "$relative" ]]; then
+              platform="common"
+            fi
+
+            base=$(basename "$file")
+            target="release-assets/${platform}-${base}"
+            counter=1
+            while [ -e "$target" ]; do
+              counter=$((counter + 1))
+              target="release-assets/${platform}-${counter}-${base}"
+            done
+
+            cp "$file" "$target"
+            OUTPUT_PATHS+=("$target")
+          done
+
           {
             echo "files<<EOF"
-            printf '%s\n' "$FILES"
+            for path in "${OUTPUT_PATHS[@]}"; do
+              echo "$path"
+            done
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
