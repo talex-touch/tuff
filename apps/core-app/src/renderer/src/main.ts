@@ -12,6 +12,7 @@ import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
 
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
+import { showPlatformCompatibilityWarning, shouldShowPlatformWarning } from '~/modules/mention/platform-warning'
 
 import './assets/main.css'
 import '~/styles/element/index.scss'
@@ -44,7 +45,35 @@ async function bootstrap() {
   preloadDebugStep('Mounting renderer root container', 0.05)
   app.mount('#app')
 
-  preloadDebugStep('Renderer shell mounted', 0.04)
+  preloadDebugStep('Checking platform compatibility', 0.02)
+  // 检查平台兼容性并显示警告
+  checkPlatformCompatibility()
+
+  preloadDebugStep('Renderer shell mounted', 0.02)
+}
+
+/**
+ * 检查平台兼容性并显示警告
+ */
+async function checkPlatformCompatibility() {
+  try {
+    // 等待应用准备就绪
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // 检查是否应该显示警告
+    if (!shouldShowPlatformWarning()) {
+      return
+    }
+
+    // 获取平台信息
+    const appInfo = await window.$nodeApi.send('app-ready')
+    
+    if (appInfo?.platformWarning) {
+      await showPlatformCompatibilityWarning(appInfo.platformWarning)
+    }
+  } catch (error) {
+    console.warn('Failed to check platform compatibility:', error)
+  }
 }
 
 bootstrap().catch((error) => {
