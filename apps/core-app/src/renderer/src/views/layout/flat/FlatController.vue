@@ -1,7 +1,7 @@
 <template>
   <div class="FlatLayout-Icon">
     <img src="../../../assets/logo.svg" alt="logo" />
-    <span @click="applicationUpgrade">
+    <span @click="checkApplicationUpgrade">
       <slot name="title" />
     </span>
   </div>
@@ -11,17 +11,20 @@
   </span>
 
   <ul class="FlatLayout-Controller">
-    {{ t('flatController.useNative') }}
+    {{
+      t('flatController.useNative')
+    }}
   </ul>
 </template>
 
 <script lang="ts" name="FlatController" setup>
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { applicationUpgrade } from '~/modules/hooks/application-hooks'
+import { useApplicationUpgrade } from '~/modules/hooks/useApplicationUpgrade'
 
 const route = useRoute()
 const { t } = useI18n()
+const { checkApplicationUpgrade } = useApplicationUpgrade()
 </script>
 
 <style lang="scss">

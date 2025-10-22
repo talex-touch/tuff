@@ -1,19 +1,18 @@
 import { touchChannel } from '../channel/channel-core'
-import { forTouchTip, popperMention, blowMention } from '../mention/dialog-mention'
-import { h } from 'vue'
-import { AppUpdate } from './api/useUpdate'
-import AppUpdateView from '~/components/base/AppUpgradationView.vue'
+import { forTouchTip, blowMention } from '../mention/dialog-mention'
 import { DataCode } from '@talex-touch/utils/channel'
 import { isLocalhostUrl } from '@talex-touch/utils'
 
 export async function urlHooker(): Promise<void> {
-  function directListener(event: any): void {
-    const target = event.target
+  function directListener(event: Event): void {
+    const target = event.target as HTMLElement
 
     if (target.nodeName.toLocaleLowerCase() === 'a') {
       if (target.getAttribute('ignoreSafeCheck') === 'true') return
 
       const url = target.getAttribute('href')
+
+      if (!url) return
 
       const regex =
         /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
@@ -70,19 +69,6 @@ export async function urlHooker(): Promise<void> {
   })
 }
 
-export async function applicationUpgrade(): Promise<void> {
-  const res = await AppUpdate.getInstance().check()
-  console.log(res)
-  window.$startupInfo.appUpdate = res ? true : false
-  if (res) {
-    document.body.classList.add('has-update')
-
-    await popperMention('New Version Available', () => {
-      return h(AppUpdateView, { release: res })
-    })
-  }
-}
-
 export function screenCapture(): void {
   const widthStr = document.body.style.getPropertyValue('--winWidth')
   const heightStr = document.body.style.getPropertyValue('--winHeight')
@@ -128,13 +114,18 @@ export function screenCapture(): void {
 }
 
 export function clipBoardResolver(): void {
-  touchChannel.regChannel('clipboard:trigger', ({ data }: any) => {
-    if (data.type === 'text') {
-      blowMention('Clipboard', `You may copied "${data.data}"`)
-    } else if (data.type === 'image') {
-      blowMention('Clipboard', data.data)
-    } else if (data.type === 'html') {
-      blowMention('Clipboard', data.data)
+  touchChannel.regChannel(
+    'clipboard:trigger',
+    ({ data }: { data?: { type: string; data: string } }) => {
+      if (!data) return
+
+      if (data.type === 'text') {
+        blowMention('Clipboard', `You may copied "${data.data}"`)
+      } else if (data.type === 'image') {
+        blowMention('Clipboard', data.data)
+      } else if (data.type === 'html') {
+        blowMention('Clipboard', data.data)
+      }
     }
-  })
+  )
 }
