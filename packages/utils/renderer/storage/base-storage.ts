@@ -327,7 +327,6 @@ export class TouchStorage<T extends object> {
     }
 
     const result = channel.sendSync('storage:get', this.#qualifiedName)
-    console.log("result", result)
     const parsed = result ? (result as Partial<T>) : {};
     this.assignData(parsed, true);
 

@@ -1,19 +1,58 @@
 <script setup lang="ts" name="AccountDo">
-import Forbidden from './Forbidden.vue'
+// import Forbidden from './Forbidden.vue'
 // import OptionMode from './OptionMode.vue'
 import Done from './Done.vue'
-import { Ref } from 'vue'
+import { Ref, ref, inject, watch } from 'vue'
+import { useAuth } from '~/modules/auth/useAuth'
+import { ElMessage } from 'element-plus'
 
-type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
+type StepFunction = (call: { comp: unknown; rect?: { width: number; height: number } }) => void
 
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
 
+// 集成认证
+const { signIn, isAuthenticated, isLoading } = useAuth()
+
+// 监听认证状态变化
+watch(isAuthenticated, (authenticated) => {
+  if (authenticated) {
+    ElMessage.success('登录成功！')
+    // 登录成功后跳转到完成页面
+    step({
+      comp: Done
+    })
+  }
+})
+
+async function handleClerkSignIn(): Promise<void> {
+  try {
+    await signIn()
+  } catch (error) {
+    console.error('Clerk sign in failed:', error)
+    ElMessage.error('登录失败，请重试')
+  }
+}
+
+// async function handleClerkSignUp(): Promise<void> {
+//   try {
+//     await signUp()
+//   } catch (error) {
+//     console.error('Clerk sign up failed:', error)
+//     ElMessage.error('注册失败，请重试')
+//   }
+// }
+
 function handleAgree(): void {
-  step({
-    comp: !choice.value ? Forbidden : Done
-    //OptionMode
-  })
+  if (choice.value === 0) {
+    // 选择登录，使用 Clerk
+    handleClerkSignIn()
+  } else {
+    // 选择离线模式
+    step({
+      comp: Done
+    })
+  }
 }
 </script>
 
@@ -63,7 +102,9 @@ function handleAgree(): void {
     </div>
 
     <div class="AccountDo-Next">
-      <FlatButton primary @click="handleAgree">Continue</FlatButton>
+      <FlatButton primary :loading="isLoading" @click="handleAgree">
+        {{ choice === 0 ? 'Sign In with Clerk' : 'Continue Offline' }}
+      </FlatButton>
     </div>
   </div>
 </template>

@@ -22,7 +22,11 @@ async function init(): Promise<void> {
     return
   }
 
-  await initializeLanguage()
+  try {
+    await initializeLanguage()
+  } catch (error) {
+    console.error('[App] Failed to initialize language:', error)
+  }
 
   // clipBoardResolver()
   // urlHooker()

@@ -894,7 +894,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const sessionId = searchResult?.sessionId
     if (sessionId) {
-      console.log(
+      console.debug(
         formatLog('AppProvider', `Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
       )
       searchEngineCore.recordExecute(sessionId, item).catch((err) => {
@@ -916,10 +916,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return null
     }
 
-    console.log(formatLog('AppProvider', `Opening app: ${chalk.cyan(appPath)}`, LogStyle.process))
+    console.debug(formatLog('AppProvider', `Opening app: ${chalk.cyan(appPath)}`, LogStyle.process))
     try {
       await shell.openPath(appPath)
-      console.log(
+      console.debug(
         formatLog(
           'AppProvider',
           `App opened successfully: ${chalk.green(appPath)}`,

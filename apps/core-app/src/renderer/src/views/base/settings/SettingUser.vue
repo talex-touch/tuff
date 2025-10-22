@@ -1,64 +1,58 @@
-<!--
-  SettingUser Component
-
-  Displays account information and login status in the settings page.
-  Allows users to login or logout from their account.
--->
 <script setup lang="ts" name="SettingUser">
 import { useI18n } from 'vue-i18n'
-
-// Import utility hooks
-import { useLogin } from '~/modules/hooks/function-hooks'
-
-// Import UI components
+import { useAuth } from '~/modules/auth/useAuth'
 import TBlockSlot from '@comp/base/group/TBlockSlot.vue'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
-
-// Define component props
-interface Props {
-  env: any
-}
-
-defineProps<Props>()
+// import { appSetting } from '~/modules/channel/storage'
+import { ElMessage } from 'element-plus'
 
 const { t } = useI18n()
 
-/**
- * Handle user login action
- * Calls the useLogin hook to initiate the login process
- * @returns void
- */
-function login(): void {
-  useLogin()
+const { isLoggedIn, currentUser, login, logout } = useAuth()
+
+async function handleLogin() {
+  try {
+    const result = await login()
+
+    if (result.success) {
+      console.log('登录结果:', result)
+    }
+  } catch (error) {
+    console.error('登录过程出错:', error)
+    ElMessage.error('登录过程中发生错误')
+  }
+}
+
+async function handleLogout() {
+  try {
+    await logout()
+    ElMessage.success('已登出')
+  } catch (error) {
+    console.error('登出失败:', error)
+    ElMessage.error('登出失败')
+  }
 }
 </script>
 
-<!--
-  SettingUser Component Template
-
-  Displays account information and login/logout options in a structured layout.
--->
 <template>
-  <!-- Account group block -->
   <t-group-block
     :name="t('settingUser.groupTitle')"
     icon="account-box"
     :description="t('settingUser.groupDesc')"
   >
-    <!-- User account information slot (shown when logged in) -->
     <t-block-slot
-      v-if="env.account?.user"
-      :title="env.account?.user.username"
+      v-if="isLoggedIn"
+      :title="currentUser?.name || '用户'"
       icon="account-circle"
       disabled
-      :description="env.account?.user.email"
+      :description="currentUser?.email || '已登录'"
     >
-      <!-- Logout button -->
-      <FlatButton> {{ t('settingUser.logout') }} </FlatButton>
+      <FlatButton type="danger" @click="handleLogout">
+        {{ t('settingUser.logout') }}
+      </FlatButton>
     </t-block-slot>
 
-    <!-- No account slot (shown when not logged in) -->
     <t-block-slot
       v-else
       :title="t('settingUser.noAccount')"
@@ -66,8 +60,9 @@ function login(): void {
       disabled
       :description="t('settingUser.noAccountDesc')"
     >
-      <!-- Login button -->
-      <FlatButton @click="login"> {{ t('settingUser.login') }} </FlatButton>
+      <FlatButton type="primary" @click="handleLogin">
+        {{ t('settingUser.login') }}
+      </FlatButton>
     </t-block-slot>
   </t-group-block>
 </template>

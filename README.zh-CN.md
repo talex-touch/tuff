@@ -8,8 +8,8 @@
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-2.0.0-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
-  [![GitHub release](https://img.shields.io/badge/dev-2.0.0-64391A?style=flat-square)](https://github.com/talex-touch/tuff/discussions/35)
+  [![GitHub release](https://img.shields.io/badge/release-2.1.0-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![GitHub release](https://img.shields.io/badge/dev-2.1.0-64391A?style=flat-square)](https://github.com/talex-touch/tuff/discussions/35)
   <br>
   [English](./README.md) | 简体中文
 </div>
