@@ -1,201 +1,78 @@
-import { computed, watch, onMounted, onUnmounted, shallowReactive } from 'vue'
+import { computed, watch, onMounted, onUnmounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { createGlobalState } from '@vueuse/core'
-import { Clerk } from '@clerk/clerk-js'
-
-export interface ClerkUser {
-  id: string
-  emailAddresses: Array<{
-    emailAddress: string
-    id: string
-  }>
-  firstName?: string
-  lastName?: string
-  username?: string
-  imageUrl?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ClerkAuthState {
-  isLoaded: boolean
-  isSignedIn: boolean
-  user: ClerkUser | null
-  sessionId: string | null
-}
-
-export interface LoginOptions {
-  onSuccess?: (user: any) => void
-  onError?: (error: any) => void
-}
-
-export interface LoginResult {
-  success: boolean
-  user?: any
-  error?: any
-}
-
-export interface CurrentUser {
-  id: string
-  name: string
-  email: string
-  avatar?: string
-  provider: string
-}
-
-/**
- * Clerk 认证配置
- */
-export interface ClerkConfig {
-  publishableKey: string
-  domain?: string
-  signInUrl?: string
-  signUpUrl?: string
-  afterSignInUrl?: string
-  afterSignUpUrl?: string
-}
-
-/**
- * 默认 Clerk 配置
- */
-export const defaultClerkConfig: ClerkConfig = {
-  publishableKey: import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_your-publishable-key-here',
-  domain: import.meta.env.VITE_CLERK_DOMAIN,
-  signInUrl: '/sign-in',
-  signUpUrl: '/sign-up',
-  afterSignInUrl: '/home',
-  afterSignUpUrl: '/home'
-}
-
-// Clerk 实例管理
-let clerkInstance: Clerk | null = null
-
-/**
- * Clerk 配置 Hook
- */
-export function useClerkConfig() {
-  const getClerkConfig = (): ClerkConfig => {
-    return {
-      ...defaultClerkConfig,
-      publishableKey:
-        localStorage.getItem('clerk-publishable-key') || defaultClerkConfig.publishableKey
-    }
-  }
-
-  const setClerkConfig = (config: Partial<ClerkConfig>): void => {
-    if (config.publishableKey) {
-      localStorage.setItem('clerk-publishable-key', config.publishableKey)
-    }
-  }
-
-  return {
-    getClerkConfig,
-    setClerkConfig
-  }
-}
-
-/**
- * Clerk 提供者 Hook
- */
-export function useClerkProvider() {
-  const initializeClerk = async (): Promise<Clerk> => {
-    if (clerkInstance) {
-      return clerkInstance
-    }
-
-    const { getClerkConfig } = useClerkConfig()
-    const config = getClerkConfig()
-
-    if (!config.publishableKey) {
-      throw new Error('Clerk publishable key is required')
-    }
-
-    try {
-      clerkInstance = new Clerk(config.publishableKey)
-      await clerkInstance.load()
-
-      console.log('Clerk initialized successfully')
-      return clerkInstance
-    } catch (error) {
-      console.error('Failed to initialize Clerk:', error)
-      throw error
-    }
-  }
-
-  const getClerk = (): Clerk | null => {
-    return clerkInstance
-  }
-
-  const isClerkInitialized = (): boolean => {
-    return clerkInstance !== null
-  }
-
-  const cleanupClerk = (): void => {
-    if (clerkInstance) {
-      clerkInstance = null
-    }
-  }
-
-  return {
-    initializeClerk,
-    getClerk,
-    isClerkInitialized,
-    cleanupClerk
-  }
-}
-
-// 使用 createGlobalState 创建全局认证状态，参考 useAppState 模式
-export const useAuthState = createGlobalState(() => {
-  const authState = shallowReactive<ClerkAuthState>({
-    isLoaded: false,
-    isSignedIn: false,
-    user: null,
-    sessionId: null
-  })
-
-  return { authState }
-})
+import {
+  ClerkUser,
+  ClerkResourceSnapshot,
+  useClerkProvider,
+  useAuthState,
+  useCurrentUser,
+  LoginResult,
+  LoginOptions
+} from '@talex-touch/utils'
 
 let eventListenerCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
 
-// 获取全局认证状态
+// 认证操作加载状态
+const authLoadingState = reactive({
+  isSigningIn: false,
+  isSigningUp: false,
+  isSigningOut: false,
+  isLoggingIn: false,
+  loginProgress: 0, // 登录进度 0-100
+  loginTimeRemaining: 0 // 剩余时间（秒）
+})
+
+// 错误消息映射
+const ERROR_MESSAGES = {
+  INITIALIZATION_FAILED: '认证系统初始化失败，请检查网络连接或稍后重试',
+  CLERK_NOT_INITIALIZED: '认证服务未就绪，请稍后重试',
+  SIGN_IN_FAILED: '登录失败，请检查网络连接或稍后重试',
+  SIGN_UP_FAILED: '注册失败，请检查网络连接或稍后重试',
+  SIGN_OUT_FAILED: '登出失败，请重试',
+  LOGIN_TIMEOUT: '登录超时，请重试',
+  NETWORK_ERROR: '网络连接失败，请检查网络设置',
+  AUTH_ERROR: '认证失败，请重试',
+  UNKNOWN_ERROR: '发生未知错误，请重试'
+}
+
+// 获取用户友好的错误消息
+function getErrorMessage(error: unknown, defaultType: string): string {
+  if (!error) return ERROR_MESSAGES[defaultType as keyof typeof ERROR_MESSAGES]
+
+  const errorMessage = (error as Error).message || String(error)
+
+  // 网络相关错误
+  if (
+    errorMessage.includes('network') ||
+    errorMessage.includes('fetch') ||
+    errorMessage.includes('timeout')
+  ) {
+    return ERROR_MESSAGES.NETWORK_ERROR
+  }
+
+  // Clerk 特定错误
+  if (errorMessage.includes('Clerk') || errorMessage.includes('clerk')) {
+    return ERROR_MESSAGES.AUTH_ERROR
+  }
+
+  // 超时错误
+  if (errorMessage.includes('timeout') || errorMessage.includes('Login timeout')) {
+    return ERROR_MESSAGES.LOGIN_TIMEOUT
+  }
+
+  // 返回默认错误消息
+  return ERROR_MESSAGES[defaultType as keyof typeof ERROR_MESSAGES] || ERROR_MESSAGES.UNKNOWN_ERROR
+}
+
 const { authState } = useAuthState()
+const { currentUser } = useCurrentUser()
 
 const isLoading = computed(() => !authState.isLoaded)
 const isAuthenticated = computed(() => authState.isSignedIn)
 const user = computed(() => authState.user)
 const isLoggedIn = computed(() => authState.isSignedIn)
-
-const currentUser = computed((): CurrentUser | null => {
-  if (!authState.isSignedIn || !authState.user) {
-    return null
-  }
-
-  const { firstName, lastName, username, imageUrl } = authState.user
-  let name = ''
-  if (firstName || lastName) {
-    name = [firstName, lastName].filter(Boolean).join(' ')
-  } else {
-    name = username || ''
-  }
-
-  const email = authState.user.emailAddresses?.[0]?.emailAddress || ''
-
-  return {
-    id: authState.user.id,
-    name,
-    email,
-    avatar: imageUrl,
-    provider: 'clerk'
-  }
-})
-
-type ClerkResourceSnapshot = {
-  user?: any | null
-  session?: { id?: string | null } | null
-}
 
 function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
   const { getClerk } = useClerkProvider()
@@ -284,6 +161,10 @@ async function initializeAuth() {
     authState.isSignedIn = false
     authState.user = null
     authState.sessionId = null
+
+    // 显示用户友好的错误消息
+    const errorMessage = getErrorMessage(error, 'INITIALIZATION_FAILED')
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -291,14 +172,22 @@ async function signIn() {
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
-    throw new Error('Clerk not initialized')
+    const error = new Error('Clerk not initialized')
+    const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
+    ElMessage.error(errorMessage)
+    throw error
   }
 
+  authLoadingState.isSigningIn = true
   try {
     await clerk.openSignIn()
   } catch (error) {
     console.error('Sign in failed:', error)
+    const errorMessage = getErrorMessage(error, 'SIGN_IN_FAILED')
+    ElMessage.error(errorMessage)
     throw error
+  } finally {
+    authLoadingState.isSigningIn = false
   }
 }
 
@@ -306,14 +195,22 @@ async function signUp() {
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
-    throw new Error('Clerk not initialized')
+    const error = new Error('Clerk not initialized')
+    const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
+    ElMessage.error(errorMessage)
+    throw error
   }
 
+  authLoadingState.isSigningUp = true
   try {
     await clerk.openSignUp()
   } catch (error) {
     console.error('Sign up failed:', error)
+    const errorMessage = getErrorMessage(error, 'SIGN_UP_FAILED')
+    ElMessage.error(errorMessage)
     throw error
+  } finally {
+    authLoadingState.isSigningUp = false
   }
 }
 
@@ -321,9 +218,13 @@ async function signOut() {
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
-    throw new Error('Clerk not initialized')
+    const error = new Error('Clerk not initialized')
+    const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
+    ElMessage.error(errorMessage)
+    throw error
   }
 
+  authLoadingState.isSigningOut = true
   try {
     await clerk.signOut()
 
@@ -333,7 +234,11 @@ async function signOut() {
     authState.sessionId = null
   } catch (error) {
     console.error('Sign out failed:', error)
+    const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
+    ElMessage.error(errorMessage)
     throw error
+  } finally {
+    authLoadingState.isSigningOut = false
   }
 }
 
@@ -362,12 +267,33 @@ function cleanup() {
 }
 
 async function loginWithClerk(): Promise<LoginResult> {
+  authLoadingState.isLoggingIn = true
+  authLoadingState.loginProgress = 0
+  authLoadingState.loginTimeRemaining = 10
+
   try {
     await signIn()
 
     return new Promise((resolve) => {
       let timeoutId: NodeJS.Timeout | null = null
+      let progressId: NodeJS.Timeout | null = null
       let isResolved = false
+
+      // 启动进度更新
+      const startTime = Date.now()
+      const updateProgress = () => {
+        if (isResolved) return
+
+        const elapsed = (Date.now() - startTime) / 1000
+        const progress = Math.min((elapsed / 10) * 100, 95) // 最多到95%，等待认证完成
+        authLoadingState.loginProgress = progress
+        authLoadingState.loginTimeRemaining = Math.max(0, 10 - elapsed)
+
+        if (elapsed < 10) {
+          progressId = setTimeout(updateProgress, 100)
+        }
+      }
+      updateProgress()
 
       const stopWatcher = watch(isAuthenticated, (authenticated) => {
         if (authenticated && !isResolved) {
@@ -376,6 +302,13 @@ async function loginWithClerk(): Promise<LoginResult> {
           if (timeoutId) {
             clearTimeout(timeoutId)
           }
+          if (progressId) {
+            clearTimeout(progressId)
+          }
+
+          // 登录成功，完成进度
+          authLoadingState.loginProgress = 100
+          authLoadingState.loginTimeRemaining = 0
 
           // 登录成功后，手动更新状态确保数据同步
           const { getClerk } = useClerkProvider()
@@ -396,7 +329,14 @@ async function loginWithClerk(): Promise<LoginResult> {
         if (!isResolved) {
           isResolved = true
           stopWatcher()
+          if (progressId) {
+            clearTimeout(progressId)
+          }
           const error = new Error('Login timeout')
+          const errorMessage = getErrorMessage(error, 'LOGIN_TIMEOUT')
+          ElMessage.error(errorMessage)
+          authLoadingState.loginProgress = 0
+          authLoadingState.loginTimeRemaining = 0
           resolve({
             success: false,
             error
@@ -405,10 +345,14 @@ async function loginWithClerk(): Promise<LoginResult> {
       }, 10000)
     })
   } catch (error) {
+    authLoadingState.loginProgress = 0
+    authLoadingState.loginTimeRemaining = 0
     return {
       success: false,
       error
     }
+  } finally {
+    authLoadingState.isLoggingIn = false
   }
 }
 
@@ -444,7 +388,8 @@ async function logout(): Promise<void> {
     ElMessage.success('已登出')
   } catch (error) {
     console.error('Logout failed:', error)
-    ElMessage.error('登出失败')
+    const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -478,6 +423,9 @@ export function useAuth() {
     user,
     isLoggedIn,
     currentUser,
+
+    // 加载状态
+    authLoadingState,
 
     // 认证方法
     signIn,
