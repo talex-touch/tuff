@@ -20,7 +20,7 @@
 <script lang="ts" name="FlatController" setup>
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useApplicationUpgrade } from '~/modules/hooks/useApplicationUpgrade'
+import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 
 const route = useRoute()
 const { t } = useI18n()

@@ -1,5 +1,9 @@
-import { wrapperAxios } from '../../../base/axios'
-const { get } = wrapperAxios('https://api.github.com/repos/talex-touch/talex-touch')
+import { wrapperAxios } from '../../base/axios'
+import { popperMention } from '../mention/dialog-mention'
+import AppUpdateView from '~/components/base/AppUpgradationView.vue'
+import { useAppState } from './useAppStates'
+
+const { get } = wrapperAxios('https://api.github.com/repos/talex-touch/tuff')
 
 export function getReleases(): Promise<any> {
   return get('/releases')
@@ -163,5 +167,35 @@ export class AppUpdate {
   public async download(): Promise<void> {
     // TODO: Implement download functionality
     console.warn('Download functionality not implemented yet')
+  }
+}
+
+/**
+ * Application upgrade related hooks
+ */
+export function useApplicationUpgrade() {
+  const appUpdate = AppUpdate.getInstance()
+  const { appStates } = useAppState()
+
+  /**
+   * Check application update
+   * @returns Promise<void>
+   */
+  async function checkApplicationUpgrade(): Promise<void> {
+    const res = await appUpdate.check()
+    console.log(res)
+    window.$startupInfo.appUpdate = res ? true : false
+
+    if (res) {
+      appStates.hasUpdate = true
+
+      await popperMention('New Version Available', () => {
+        return h(AppUpdateView, { release: res })
+      })
+    }
+  }
+
+  return {
+    checkApplicationUpgrade
   }
 }

@@ -9,7 +9,7 @@ import {
   preloadState
 } from '@talex-touch/utils/preload'
 import { useAppState } from './modules/hooks/useAppStates'
-import { useApplicationUpgrade } from './modules/hooks/useApplicationUpgrade'
+import { useApplicationUpgrade } from './modules/hooks/useUpdate'
 import { Toaster } from 'vue-sonner'
 
 const init = ref(false)
@@ -39,13 +39,21 @@ async function entry(): Promise<void> {
     preloadLog('Tuff is ready.')
     preloadRemoveOverlay()
 
-    checkApplicationUpgrade()
+    isCoreBox() ? executeCoreboxTask() : executeMainTask()
 
     init.value = true
   } catch (error) {
     console.error('[AppEntrance] Initialization failed', error)
     preloadLog('Renderer initialization failed. Check console output.')
   }
+}
+
+async function executeMainTask(): Promise<void> {
+  await checkApplicationUpgrade()
+}
+
+function executeCoreboxTask(): Promise<void> {
+  console.log('executeCoreboxTask')
 }
 
 setTimeout(() => {
