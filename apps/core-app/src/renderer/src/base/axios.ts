@@ -2,7 +2,7 @@ import _axios, { AxiosRequestConfig, CreateAxiosDefaults } from 'axios'
 
 export function wrapperAxios(
   url = 'http://localhost:9981',
-  data: CreateAxiosDefaults = { timeout: 6000 }
+  data: CreateAxiosDefaults = { timeout: 6000, proxy: false }
 ) {
   // Encapsulate the complete axios instance code
   const axios = _axios.create({
