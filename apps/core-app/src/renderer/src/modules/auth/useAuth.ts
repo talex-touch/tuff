@@ -1,7 +1,7 @@
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, watch, onMounted, onUnmounted, shallowReactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { initializeClerk, getClerk, isClerkInitialized } from './clerk-provider'
-import { clerkAccountStorage } from './clerk-account-storage'
+import { createGlobalState } from '@vueuse/core'
+import { Clerk } from '@clerk/clerk-js'
 
 export interface ClerkUser {
   id: string
@@ -43,61 +43,203 @@ export interface CurrentUser {
   provider: string
 }
 
-// 全局状态
-const authState = ref<ClerkAuthState>({
-  isLoaded: false,
-  isSignedIn: false,
-  user: null,
-  sessionId: null
+/**
+ * Clerk 认证配置
+ */
+export interface ClerkConfig {
+  publishableKey: string
+  domain?: string
+  signInUrl?: string
+  signUpUrl?: string
+  afterSignInUrl?: string
+  afterSignUpUrl?: string
+}
+
+/**
+ * 默认 Clerk 配置
+ */
+export const defaultClerkConfig: ClerkConfig = {
+  publishableKey: import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_your-publishable-key-here',
+  domain: import.meta.env.VITE_CLERK_DOMAIN,
+  signInUrl: '/sign-in',
+  signUpUrl: '/sign-up',
+  afterSignInUrl: '/home',
+  afterSignUpUrl: '/home'
+}
+
+// Clerk 实例管理
+let clerkInstance: Clerk | null = null
+
+/**
+ * Clerk 配置 Hook
+ */
+export function useClerkConfig() {
+  const getClerkConfig = (): ClerkConfig => {
+    return {
+      ...defaultClerkConfig,
+      publishableKey:
+        localStorage.getItem('clerk-publishable-key') || defaultClerkConfig.publishableKey
+    }
+  }
+
+  const setClerkConfig = (config: Partial<ClerkConfig>): void => {
+    if (config.publishableKey) {
+      localStorage.setItem('clerk-publishable-key', config.publishableKey)
+    }
+  }
+
+  return {
+    getClerkConfig,
+    setClerkConfig
+  }
+}
+
+/**
+ * Clerk 提供者 Hook
+ */
+export function useClerkProvider() {
+  const initializeClerk = async (): Promise<Clerk> => {
+    if (clerkInstance) {
+      return clerkInstance
+    }
+
+    const { getClerkConfig } = useClerkConfig()
+    const config = getClerkConfig()
+
+    if (!config.publishableKey) {
+      throw new Error('Clerk publishable key is required')
+    }
+
+    try {
+      clerkInstance = new Clerk(config.publishableKey)
+      await clerkInstance.load()
+
+      console.log('Clerk initialized successfully')
+      return clerkInstance
+    } catch (error) {
+      console.error('Failed to initialize Clerk:', error)
+      throw error
+    }
+  }
+
+  const getClerk = (): Clerk | null => {
+    return clerkInstance
+  }
+
+  const isClerkInitialized = (): boolean => {
+    return clerkInstance !== null
+  }
+
+  const cleanupClerk = (): void => {
+    if (clerkInstance) {
+      clerkInstance = null
+    }
+  }
+
+  return {
+    initializeClerk,
+    getClerk,
+    isClerkInitialized,
+    cleanupClerk
+  }
+}
+
+// 使用 createGlobalState 创建全局认证状态，参考 useAppState 模式
+export const useAuthState = createGlobalState(() => {
+  const authState = shallowReactive<ClerkAuthState>({
+    isLoaded: false,
+    isSignedIn: false,
+    user: null,
+    sessionId: null
+  })
+
+  return { authState }
 })
 
 let eventListenerCleanup: (() => void) | null = null
 let isInitialized = false
+let activeConsumers = 0
 
-// 计算属性
-const isLoading = computed(() => !authState.value.isLoaded)
-const isAuthenticated = computed(() => authState.value.isSignedIn)
-const user = computed(() => authState.value.user)
-const isLoggedIn = computed(() => authState.value.isSignedIn || clerkAccountStorage.isSignedIn())
+// 获取全局认证状态
+const { authState } = useAuthState()
+
+const isLoading = computed(() => !authState.isLoaded)
+const isAuthenticated = computed(() => authState.isSignedIn)
+const user = computed(() => authState.user)
+const isLoggedIn = computed(() => authState.isSignedIn)
 
 const currentUser = computed((): CurrentUser | null => {
-  if (authState.value.isSignedIn && authState.value.user) {
-    const { firstName, lastName, username, imageUrl } = authState.value.user
-    let name = ''
-    if (firstName || lastName) {
-      name = [firstName, lastName].filter(Boolean).join(' ')
-    } else {
-      name = username || ''
-    }
-
-    const email = authState.value.user.emailAddresses?.[0]?.emailAddress || ''
-
-    return {
-      id: authState.value.user.id,
-      name,
-      email,
-      avatar: imageUrl,
-      provider: 'clerk'
-    }
+  if (!authState.isSignedIn || !authState.user) {
+    return null
   }
-  return null
+
+  const { firstName, lastName, username, imageUrl } = authState.user
+  let name = ''
+  if (firstName || lastName) {
+    name = [firstName, lastName].filter(Boolean).join(' ')
+  } else {
+    name = username || ''
+  }
+
+  const email = authState.user.emailAddresses?.[0]?.emailAddress || ''
+
+  return {
+    id: authState.user.id,
+    name,
+    email,
+    avatar: imageUrl,
+    provider: 'clerk'
+  }
 })
 
-function updateAuthState(clerk: any) {
-  authState.value = {
-    isLoaded: true,
-    isSignedIn: clerk.user !== null,
-    user: clerk.user,
-    sessionId: clerk.session?.id || null
-  }
+type ClerkResourceSnapshot = {
+  user?: any | null
+  session?: { id?: string | null } | null
+}
 
-  clerkAccountStorage.updateFromClerkUser(clerk.user, clerk.session?.id || null)
+function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
+  const { getClerk } = useClerkProvider()
+  const clerk = getClerk()
+  const snapshotHasUser = snapshot ? Object.prototype.hasOwnProperty.call(snapshot, 'user') : false
+  const snapshotHasSession = snapshot
+    ? Object.prototype.hasOwnProperty.call(snapshot, 'session')
+    : false
+
+  const candidateUser = snapshotHasUser ? (snapshot?.user ?? null) : (clerk?.user ?? null)
+  const candidateSession = snapshotHasSession
+    ? (snapshot?.session ?? null)
+    : (clerk?.session ?? null)
+
+  const isUserValid =
+    !!candidateUser &&
+    typeof candidateUser === 'object' &&
+    'id' in candidateUser &&
+    !!candidateUser.id
+  const isSessionValid =
+    !!candidateSession &&
+    typeof candidateSession === 'object' &&
+    'id' in candidateSession &&
+    !!candidateSession.id
+
+  console.log('updateAuthState resolved state:', {
+    user: candidateUser,
+    session: candidateSession,
+    isUserValid,
+    isSessionValid
+  })
+
+  const resolvedSessionId = isSessionValid ? (candidateSession as { id: string }).id : null
+
+  authState.isLoaded = true
+  authState.isSignedIn = isUserValid && isSessionValid
+  authState.user = isUserValid ? (candidateUser as ClerkUser) : null
+  authState.sessionId = resolvedSessionId
 }
 
 function getDisplayName(): string {
-  if (!authState.value.user) return ''
+  if (!authState.user) return ''
 
-  const { firstName, lastName, username } = authState.value.user
+  const { firstName, lastName, username } = authState.user
   if (firstName || lastName) {
     return [firstName, lastName].filter(Boolean).join(' ')
   }
@@ -105,14 +247,15 @@ function getDisplayName(): string {
 }
 
 function getPrimaryEmail(): string {
-  if (!authState.value.user?.emailAddresses?.length) return ''
-  return authState.value.user.emailAddresses[0].emailAddress
+  if (!authState.user?.emailAddresses?.length) return ''
+  return authState.user.emailAddresses[0].emailAddress
 }
 
 async function initializeAuth() {
   if (isInitialized) return
 
   try {
+    const { initializeClerk } = useClerkProvider()
     const clerk = await initializeClerk()
 
     if (eventListenerCleanup) {
@@ -120,36 +263,32 @@ async function initializeAuth() {
       eventListenerCleanup = null
     }
 
-    eventListenerCleanup = clerk.addListener((event: any) => {
-      console.log('Clerk auth event:', event)
+    eventListenerCleanup = clerk.addListener((resources: ClerkResourceSnapshot) => {
+      console.log('Clerk auth resources emitted:', resources)
+      console.log('Clerk object structure:', {
+        hasUser: 'user' in clerk,
+        hasSession: 'session' in clerk,
+        userType: typeof clerk.user,
+        sessionType: typeof clerk.session,
+        clerkKeys: Object.keys(clerk)
+      })
 
-      if (event.type === 'session:created' || event.type === 'session:updated') {
-        updateAuthState(clerk)
-      } else if (event.type === 'session:removed') {
-        authState.value = {
-          isLoaded: true,
-          isSignedIn: false,
-          user: null,
-          sessionId: null
-        }
-      }
+      updateAuthState(resources)
     })
 
     updateAuthState(clerk)
     isInitialized = true
-
   } catch (error) {
     console.error('Failed to initialize Clerk auth:', error)
-    authState.value = {
-      isLoaded: true,
-      isSignedIn: false,
-      user: null,
-      sessionId: null
-    }
+    authState.isLoaded = true
+    authState.isSignedIn = false
+    authState.user = null
+    authState.sessionId = null
   }
 }
 
 async function signIn() {
+  const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
     throw new Error('Clerk not initialized')
@@ -164,6 +303,7 @@ async function signIn() {
 }
 
 async function signUp() {
+  const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
     throw new Error('Clerk not initialized')
@@ -178,6 +318,7 @@ async function signUp() {
 }
 
 async function signOut() {
+  const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
     throw new Error('Clerk not initialized')
@@ -185,7 +326,11 @@ async function signOut() {
 
   try {
     await clerk.signOut()
-    clerkAccountStorage.clear()
+
+    authState.isLoaded = true
+    authState.isSignedIn = false
+    authState.user = null
+    authState.sessionId = null
   } catch (error) {
     console.error('Sign out failed:', error)
     throw error
@@ -193,6 +338,7 @@ async function signOut() {
 }
 
 function checkAuthStatus() {
+  const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (clerk) {
     updateAuthState(clerk)
@@ -200,10 +346,19 @@ function checkAuthStatus() {
 }
 
 function cleanup() {
+  if (activeConsumers > 0) {
+    activeConsumers -= 1
+  }
+
+  if (activeConsumers > 0) {
+    return
+  }
+
   if (eventListenerCleanup) {
     eventListenerCleanup()
     eventListenerCleanup = null
   }
+  isInitialized = false
 }
 
 async function loginWithClerk(): Promise<LoginResult> {
@@ -221,6 +376,14 @@ async function loginWithClerk(): Promise<LoginResult> {
           if (timeoutId) {
             clearTimeout(timeoutId)
           }
+
+          // 登录成功后，手动更新状态确保数据同步
+          const { getClerk } = useClerkProvider()
+          const clerk = getClerk()
+          if (clerk) {
+            updateAuthState(clerk)
+          }
+
           const user = currentUser.value
           resolve({
             success: true,
@@ -285,13 +448,22 @@ async function logout(): Promise<void> {
   }
 }
 
-export function useAuth(options: LoginOptions = {}) {
+export function useAuth() {
   onMounted(() => {
+    activeConsumers += 1
+
+    if (!isInitialized) {
+      initializeAuth()
+      return
+    }
+
+    const { isClerkInitialized } = useClerkProvider()
     if (!isClerkInitialized()) {
       initializeAuth()
-    } else {
-      checkAuthStatus()
+      return
     }
+
+    checkAuthStatus()
   })
 
   onUnmounted(() => {
@@ -319,7 +491,6 @@ export function useAuth(options: LoginOptions = {}) {
     checkAuthStatus,
     initializeAuth,
     getDisplayName,
-    getPrimaryEmail,
-    getAccountStorage: () => clerkAccountStorage
+    getPrimaryEmail
   }
 }
