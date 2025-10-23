@@ -110,14 +110,23 @@ const { isLoggedIn, currentUser } = useAuth()
     &:before {
       content: '';
       position: absolute;
+      padding: 0 5%;
 
-      top: -1px;
-      left: 5%;
+      top: 0;
+      left: 0;
 
-      width: 90%;
-      height: 0;
+      width: 100%;
+      height: 1px;
 
-      border-top: 1px solid var(--el-border-color);
+      opacity: 0.5;
+      background:
+        linear-gradient(to left, var(--el-border-color) 90%, transparent 50%),
+        linear-gradient(to right, var(--el-border-color) 50%, transparent 90%);
+      background-repeat: no-repeat;
+      background-size: 50% 100%;
+      background-position:
+        left center,
+        right center;
     }
 
     :deep(.AppLayout-Icon) {
@@ -210,8 +219,8 @@ const { isLoggedIn, currentUser } = useAuth()
     width: 100%;
     height: 50px;
 
-    --webkit-app-region: drag;
-    // transform: translate(-100%, 0%);
+    -webkit-app-region: drag;
+    transform: translate(0%, 100%);
     transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
   }
 }
