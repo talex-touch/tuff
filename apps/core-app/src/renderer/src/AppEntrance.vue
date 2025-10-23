@@ -10,6 +10,7 @@ import {
 } from '@talex-touch/utils/preload'
 import { useAppState } from './modules/hooks/useAppStates'
 import { useApplicationUpgrade } from './modules/hooks/useApplicationUpgrade'
+import { Toaster } from 'vue-sonner'
 
 const init = ref(false)
 const props = defineProps<{
@@ -54,6 +55,7 @@ setTimeout(() => {
 
 <template>
   <div class="AppEntrance absolute inset-0" :class="{ 'has-update': appStates.hasUpdate }">
+    <Toaster theme="system" rich-colors />
     <template v-if="isCoreBox()">
       <CoreBox />
     </template>

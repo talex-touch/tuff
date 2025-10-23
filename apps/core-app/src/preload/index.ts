@@ -171,33 +171,6 @@ function useLoading(options: LoadingOptions) {
   filter: drop-shadow(0 0 30px rgba(117, 245, 255, 0.22));
   animation: ${className}__brand-logo__animation 2.8s infinite cubic-bezier(0.22, 1, 0.36, 1);
 }
-.${className}__brand-icon {
-  position: absolute;
-  bottom: clamp(10px, 2vw, 18px);
-  right: clamp(10px, 2vw, 18px);
-  display: grid;
-  place-items: center;
-  width: clamp(48px, 7vw, 64px);
-  height: clamp(48px, 7vw, 64px);
-  border-radius: 20px;
-  background: rgba(12, 12, 16, 0.68);
-  border: 1px solid rgba(140, 102, 255, 0.24);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(10px);
-}
-.${className}[data-theme='light'] .${className}__brand-icon {
-  background: rgba(236, 239, 247, 0.82);
-  border-color: rgba(92, 141, 255, 0.28);
-  box-shadow: 0 14px 30px rgba(92, 141, 255, 0.18);
-}
-.${className}__brand-icon img {
-  display: block;
-  width: 58%;
-  height: 58%;
-  object-fit: contain;
-  filter: drop-shadow(0 0 12px rgba(91, 141, 255, 0.35));
-}
-
 .${className}__progress {
   width: min(320px, 80vw);
   height: 8px;
@@ -325,9 +298,6 @@ function useLoading(options: LoadingOptions) {
   container.innerHTML = `
     <div class="${className}__brand" aria-hidden="true">
       <img class="${className}__brand-logo" src="${appLogo}" alt="" />
-      <div class="${className}__brand-icon">
-        <img src="${appIcon}" alt="" />
-      </div>
     </div>
     <div class="${className}__progress" role="progressbar"></div>
     <div class="${className}__message">Initializing Talex Touch...</div>
