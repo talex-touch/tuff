@@ -20,6 +20,7 @@ import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventb
 import { fileProtocolModule } from './modules/file-protocol'
 import { terminalModule } from './modules/terminal/terminal.manager'
 import { extensionLoaderModule } from './modules/extension-loader'
+import { downloadCenterModule } from './modules/download/download-center'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
@@ -52,7 +53,8 @@ const modulesToLoad = [
   tuffDashboardModule,
   FileSystemWatcher,
   fileProtocolModule,
-  terminalModule
+  terminalModule,
+  downloadCenterModule
 ]
 
 const pollingLog = mainLog.child('PollingService')
