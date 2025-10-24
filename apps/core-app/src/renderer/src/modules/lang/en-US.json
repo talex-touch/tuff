@@ -547,5 +547,35 @@
     "success": "Success",
     "warning": "Warning",
     "info": "Info"
+  },
+  "tray": {
+    "showWindow": "Show Main Window",
+    "hideWindow": "Hide Main Window",
+    "openCoreBox": "Open CoreBox",
+    "downloadCenter": "Download Center",
+    "downloadCenterWithCount": "Download Center ({count} tasks)",
+    "clipboardHistory": "Clipboard History",
+    "terminal": "Terminal",
+    "settings": "Settings",
+    "about": "About Talex Touch",
+    "version": "Version {version}",
+    "checkUpdate": "Check for Updates",
+    "checkUpdateAvailable": "Check for Updates • New Version Available",
+    "viewLogs": "View Logs",
+    "openDataDir": "Open Data Directory",
+    "visitWebsite": "Visit Website",
+    "restart": "Restart Application",
+    "quit": "Quit Talex Touch",
+    "tooltip": "Talex Touch"
+  },
+  "settings": {
+    "window": {
+      "groupTitle": "Window Behavior",
+      "groupDesc": "Configure window closing and minimizing behavior",
+      "closeToTray": "Minimize to tray when closing window",
+      "closeToTrayDesc": "Hide window instead of quitting when clicking close button",
+      "startMinimized": "Start minimized to tray",
+      "startMinimizedDesc": "Launch application minimized to system tray"
+    }
   }
 }

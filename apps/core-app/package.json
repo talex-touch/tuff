@@ -4,7 +4,7 @@
   "description": "The core app of talex-touch. A strong adaptation more platform all-tool program.",
   "main": "./out/main/index.js",
   "author": "TalexDreamSoul",
-  "homepage": "https://talex-touch.tagzxia.com",
+  "homepage": "https://tuff.tagzxia.com",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

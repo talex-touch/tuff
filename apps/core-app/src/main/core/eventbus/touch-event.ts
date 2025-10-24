@@ -36,7 +36,20 @@ export enum TalexEvents {
   PLUGIN_STORAGE_UPDATED = 'plugin/storage-updated',
 
   // Clipboard Events
-  CLIPBOARD_CHANGE = 'clipboard/change'
+  CLIPBOARD_CHANGE = 'clipboard/change',
+
+  // Window Events
+  WINDOW_HIDDEN = 'window/hidden',
+  WINDOW_SHOWN = 'window/shown',
+
+  // Language Events
+  LANGUAGE_CHANGED = 'language/changed',
+
+  // Download Events
+  DOWNLOAD_TASK_CHANGED = 'download/task-changed',
+
+  // Update Events
+  UPDATE_AVAILABLE = 'update/available'
 }
 
 import { LogItem } from '@talex-touch/utils/plugin/log/types'
@@ -327,6 +340,49 @@ export class ClipboardChangeEvent implements ITouchEvent<TalexEvents> {
 
   constructor(payload: any) {
     this.payload = payload
+  }
+}
+
+// Window Event Classes
+export class WindowHiddenEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.WINDOW_HIDDEN
+
+  constructor() {}
+}
+
+export class WindowShownEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.WINDOW_SHOWN
+
+  constructor() {}
+}
+
+// Language Event Classes
+export class LanguageChangedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.LANGUAGE_CHANGED
+  language: string
+
+  constructor(language: string) {
+    this.language = language
+  }
+}
+
+// Download Event Classes
+export class DownloadTaskChangedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.DOWNLOAD_TASK_CHANGED
+  activeCount: number
+
+  constructor(activeCount: number) {
+    this.activeCount = activeCount
+  }
+}
+
+// Update Event Classes
+export class UpdateAvailableEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.UPDATE_AVAILABLE
+  version: string
+
+  constructor(version: string) {
+    this.version = version
   }
 }
 
