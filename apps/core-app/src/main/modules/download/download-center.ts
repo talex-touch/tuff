@@ -39,11 +39,12 @@ export class DownloadCenterModule extends BaseModule {
   private config!: DownloadConfig
   private isRunning = false
   private progressUpdateInterval: NodeJS.Timeout | null = null
-  private channel = genTouchChannel()
 
   async onInit(ctx: ModuleInitContext<any>): Promise<void> {
-    // 获取模块目录
-    const moduleDir = (ctx as any).moduleDir
+    const moduleDir = ctx.file.dirPath
+    if (!moduleDir) {
+      throw new Error('DownloadCenterModule requires a module directory but none was provided')
+    }
 
     // 初始化配置
     this.config = {
@@ -87,12 +88,11 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     // 停止所有下载工作器
-    for (const _worker of this.downloadWorkers) {
+    for (const worker of this.downloadWorkers) {
       // 这里需要实现停止工作器的逻辑
+      // TODO: 实现工作器停止逻辑
+      console.log('Stopping worker:', worker)
     }
-
-    // 清理数据库连接
-    // DatabaseService会自动清理
 
     console.log('DownloadCenterModule destroyed')
   }
@@ -218,43 +218,59 @@ export class DownloadCenterModule extends BaseModule {
 
   // 注册IPC通道
   private registerChannels(): void {
-    this.channel.regChannel(ChannelType.MAIN, 'download:add-task', async ({ data: request }: any) => {
-      try {
-        const taskId = await this.addTask(request)
-        return { success: true, taskId }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:add-task',
+      async ({ data: request }: any) => {
+        try {
+          const taskId = await this.addTask(request)
+          return { success: true, taskId }
+        } catch (error: any) {
+          return { success: false, error: error.message }
+        }
       }
-    })
+    )
 
-    this.channel.regChannel(ChannelType.MAIN, 'download:pause-task', async ({ data: taskId }: any) => {
-      try {
-        await this.pauseTask(taskId)
-        return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:pause-task',
+      async ({ data: taskId }: any) => {
+        try {
+          await this.pauseTask(taskId)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error.message }
+        }
       }
-    })
+    )
 
-    this.channel.regChannel(ChannelType.MAIN, 'download:resume-task', async ({ data: taskId }: any) => {
-      try {
-        await this.resumeTask(taskId)
-        return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:resume-task',
+      async ({ data: taskId }: any) => {
+        try {
+          await this.resumeTask(taskId)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error.message }
+        }
       }
-    })
+    )
 
-    this.channel.regChannel(ChannelType.MAIN, 'download:cancel-task', async ({ data: taskId }: any) => {
-      try {
-        await this.cancelTask(taskId)
-        return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:cancel-task',
+      async ({ data: taskId }: any) => {
+        try {
+          await this.cancelTask(taskId)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error.message }
+        }
       }
-    })
+    )
 
-    this.channel.regChannel(ChannelType.MAIN, 'download:get-tasks', async () => {
+    $app.channel.regChannel(ChannelType.MAIN, 'download:get-tasks', async () => {
       try {
         const tasks = this.getAllTasks()
         return { success: true, tasks }
@@ -263,30 +279,38 @@ export class DownloadCenterModule extends BaseModule {
       }
     })
 
-    this.channel.regChannel(ChannelType.MAIN, 'download:get-task-status', async ({ data: taskId }: any) => {
-      try {
-        const task = this.getTaskStatus(taskId)
-        return { success: true, task }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:get-task-status',
+      async ({ data: taskId }: any) => {
+        try {
+          const task = this.getTaskStatus(taskId)
+          return { success: true, task }
+        } catch (error: any) {
+          return { success: false, error: error.message }
+        }
       }
-    })
+    )
 
-    this.channel.regChannel(ChannelType.MAIN, 'download:update-config', async ({ data: config }: any) => {
-      try {
-        this.config = { ...this.config, ...config }
-        this.concurrencyAdjuster.setMaxConcurrency(this.config.concurrency.maxConcurrent)
-        return { success: true }
-      } catch (error: any) {
-        return { success: false, error: error.message }
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:update-config',
+      async ({ data: config }: any) => {
+        try {
+          this.config = { ...this.config, ...config }
+          this.concurrencyAdjuster.setMaxConcurrency(this.config.concurrency.maxConcurrent)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error.message }
+        }
       }
-    })
+    )
   }
 
   // 启动网络监控
   private startNetworkMonitoring(): void {
     // 初始网络状态检查
-    this.networkMonitor.monitorNetwork().then(status => {
+    this.networkMonitor.monitorNetwork().then((status) => {
       this.priorityCalculator.setNetworkStatus(status)
     })
 
@@ -332,17 +356,17 @@ export class DownloadCenterModule extends BaseModule {
         }
 
         // 等待一段时间再检查
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       } catch (error) {
         console.error('Task scheduler error:', error)
-        await new Promise(resolve => setTimeout(resolve, 5000))
+        await new Promise((resolve) => setTimeout(resolve, 5000))
       }
     }
   }
 
   // 查找可用的工作器
   private findAvailableWorker(): DownloadWorker | null {
-    return this.downloadWorkers.find(worker => worker.canAcceptTask()) || null
+    return this.downloadWorkers.find((worker) => worker.canAcceptTask()) || null
   }
 
   // 启动下载任务
@@ -407,27 +431,27 @@ export class DownloadCenterModule extends BaseModule {
 
   // 广播任务添加事件
   private broadcastTaskAdded(task: DownloadTask): void {
-    this.channel.send(ChannelType.MAIN, 'download:task-added', task)
+    $app.channel.send(ChannelType.MAIN, 'download:task-added', task)
   }
 
   // 广播任务进度更新
   private broadcastTaskProgress(task: DownloadTask): void {
-    this.channel.send(ChannelType.MAIN, 'download:task-progress', task)
+    $app.channel.send(ChannelType.MAIN, 'download:task-progress', task)
   }
 
   // 广播任务完成
   private broadcastTaskCompleted(task: DownloadTask): void {
-    this.channel.send(ChannelType.MAIN, 'download:task-completed', task)
+    $app.channel.send(ChannelType.MAIN, 'download:task-completed', task)
   }
 
   // 广播任务失败
   private broadcastTaskFailed(task: DownloadTask): void {
-    this.channel.send(ChannelType.MAIN, 'download:task-failed', task)
+    $app.channel.send(ChannelType.MAIN, 'download:task-failed', task)
   }
 
   // 广播任务更新
   private broadcastTaskUpdated(task: DownloadTask): void {
-    this.channel.send(ChannelType.MAIN, 'download:task-updated', task)
+    $app.channel.send(ChannelType.MAIN, 'download:task-updated', task)
   }
 }
 
