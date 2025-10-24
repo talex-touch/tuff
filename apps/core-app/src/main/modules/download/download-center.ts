@@ -398,7 +398,6 @@ export class DownloadCenterModule extends BaseModule {
     }
   }
 
-  // 处理任务进度更新
   private handleTaskProgress(taskId: string, progress: any): void {
     const task = this.taskQueue.getTask(taskId)
     if (!task) return
@@ -413,13 +412,11 @@ export class DownloadCenterModule extends BaseModule {
 
     task.updatedAt = new Date()
 
-    // 更新数据库
     this.databaseService.updateProgress(taskId, progress.downloadedSize, progress.totalSize)
 
     this.broadcastTaskProgress(task)
   }
 
-  // 更新进度
   private updateProgress(): void {
     const activeTasks = this.taskQueue.getActiveTasks()
 
@@ -429,31 +426,25 @@ export class DownloadCenterModule extends BaseModule {
     }
   }
 
-  // 广播任务添加事件
   private broadcastTaskAdded(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-added', task)
   }
 
-  // 广播任务进度更新
   private broadcastTaskProgress(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-progress', task)
   }
 
-  // 广播任务完成
   private broadcastTaskCompleted(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-completed', task)
   }
 
-  // 广播任务失败
   private broadcastTaskFailed(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-failed', task)
   }
 
-  // 广播任务更新
   private broadcastTaskUpdated(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-updated', task)
   }
 }
 
-// 创建模块实例
 export const downloadCenterModule = new DownloadCenterModule()

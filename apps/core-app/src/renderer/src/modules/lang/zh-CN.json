@@ -549,5 +549,35 @@
     "success": "成功",
     "warning": "警告",
     "info": "信息"
+  },
+  "tray": {
+    "showWindow": "显示主窗口",
+    "hideWindow": "隐藏主窗口",
+    "openCoreBox": "打开 CoreBox",
+    "downloadCenter": "下载中心",
+    "downloadCenterWithCount": "下载中心 ({count} 个任务)",
+    "clipboardHistory": "剪贴板历史",
+    "terminal": "终端",
+    "settings": "设置",
+    "about": "关于 Talex Touch",
+    "version": "版本 {version}",
+    "checkUpdate": "检查更新",
+    "checkUpdateAvailable": "检查更新 • 有新版本",
+    "viewLogs": "查看日志",
+    "openDataDir": "打开数据目录",
+    "visitWebsite": "访问官网",
+    "restart": "重启应用",
+    "quit": "退出 Talex Touch",
+    "tooltip": "Talex Touch"
+  },
+  "settings": {
+    "window": {
+      "groupTitle": "窗口行为",
+      "groupDesc": "配置窗口关闭和最小化行为",
+      "closeToTray": "关闭窗口时最小化到托盘",
+      "closeToTrayDesc": "点击关闭按钮时隐藏窗口而非退出应用",
+      "startMinimized": "启动时最小化到托盘",
+      "startMinimizedDesc": "应用启动时直接最小化到系统托盘"
+    }
   }
 }

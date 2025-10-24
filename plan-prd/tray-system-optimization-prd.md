@@ -49,11 +49,16 @@ const trayIconPath = app.isPackaged
 
 #### 2.1.2 平台适配
 - **macOS**: 使用 Template Image（支持深色模式自动反色）
-  - 文件命名：`mac_tray_iconTemplate.png`
+  - 文件命名：`mac_tray_iconTemplate.png`（需要新建）
+  - 当前文件：`mac_tray_icon.png`（可以直接使用，但不支持模板模式）
   - 尺寸：16x16@1x, 32x32@2x
+  - **注意**：如果使用非 Template 命名，图标在深色模式下可能不够清晰
+  - **建议**：后续制作符合 macOS 规范的模板图标（黑白单色，透明背景）
 - **Windows**: 使用 ICO 格式或高分辨率 PNG
+  - 当前文件：`tray_icon.png`（可直接使用）
   - 尺寸：16x16, 32x32
 - **Linux**: 使用 PNG 格式
+  - 当前文件：`tray_icon.png`（可直接使用）
   - 尺寸：22x22 或 24x24
 
 ---
@@ -870,10 +875,27 @@ export class TrayIconProvider {
   private static getIconFileName(): string {
     switch (process.platform) {
       case 'darwin':
-        // macOS: 使用 Template Image 支持深色模式
-        return 'mac_tray_iconTemplate.png'
+        // macOS: 优先使用 Template Image（如果存在）
+        // 当前使用普通 PNG，后续可制作模板图标
+        const templatePath = 'mac_tray_iconTemplate.png'
+        const normalPath = 'mac_tray_icon.png'
+
+        // 检查模板图标是否存在
+        const checkPath = app.isPackaged
+          ? path.join(process.resourcesPath, templatePath)
+          : path.join(__dirname, '../../../public', templatePath)
+
+        return fs.existsSync(checkPath) ? templatePath : normalPath
       case 'win32':
-        return 'tray_icon.ico'
+        // Windows: 优先使用 ICO，fallback 到 PNG
+        const icoPath = 'tray_icon.ico'
+        const pngPath = 'tray_icon.png'
+
+        const checkIcoPath = app.isPackaged
+          ? path.join(process.resourcesPath, icoPath)
+          : path.join(__dirname, '../../../resources', icoPath)
+
+        return fs.existsSync(checkIcoPath) ? icoPath : pngPath
       default:
         return 'tray_icon.png'
     }
@@ -1162,7 +1184,8 @@ private registerEventListeners(): void {
 - [ ] 创建新的模块文件结构
 - [ ] 实现 `TrayIconProvider` - 本地图标资源加载
 - [ ] 实现 `TrayStateManager` - 状态管理
-- [ ] 移除远程图标下载逻辑
+- [ ] 标记远程图标下载逻辑为 `@deprecated`（保留代码不删除）
+- [ ] 可选：制作 macOS Template 图标（黑白单色版本）
 
 #### Phase 2: 菜单系统 (3-4 天)
 - [ ] 实现 `TrayMenuBuilder` - 菜单构建器
@@ -1217,6 +1240,10 @@ private registerEventListeners(): void {
    - 风险：菜单项过多导致混乱
    - 缓解：合理分组，使用子菜单
 
+3. **macOS 图标显示**
+   - 风险：当前普通 PNG 在深色模式下可能不够清晰
+   - 缓解：先使用现有图标，后续优化为 Template 图标
+
 ---
 
 ## 7. 后续优化方向
@@ -1242,6 +1269,16 @@ private registerEventListeners(): void {
 2. **图标缓存**
    - 缓存图标资源
    - 减少文件系统访问
+
+### 7.3 图标优化
+1. **macOS Template 图标制作**
+   - 设计黑白单色图标
+   - 支持深色模式自动反色
+   - 符合 macOS 设计规范
+
+2. **多分辨率支持**
+   - 提供 @1x, @2x, @3x 版本
+   - 适配高 DPI 显示器
 
 ---
 
