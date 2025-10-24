@@ -13,7 +13,7 @@ import { addonOpenerModule } from './modules/addon-opener'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { trayHolderModule } from './modules/tray-holder'
-import { trayManagerModule } from './modules/tray/tray-manager'
+// import { trayManagerModule } from './modules/tray/tray-manager'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
@@ -48,7 +48,8 @@ const modulesToLoad = [
   pluginModule,
   pluginLogModule,
   coreBoxModule,
-  trayManagerModule,
+  trayHolderModule,
+  // trayManagerModule,
   addonOpenerModule,
   clipboardModule,
   tuffDashboardModule,
