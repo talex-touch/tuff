@@ -55,6 +55,8 @@ export function usePluginSelection() {
     loading.value = false
   }
 
+  console.log(plugins)
+
   return {
     plugins,
     select,
