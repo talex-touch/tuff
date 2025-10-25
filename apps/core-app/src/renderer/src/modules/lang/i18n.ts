@@ -9,7 +9,8 @@ import { createI18n } from 'vue-i18n'
 export async function setupI18n(options: { locale: string } = { locale: 'en-US' }): Promise<any> {
   const i18n = createI18n({
     legacy: false,
-    locale: options.locale
+    locale: options.locale,
+    messages: {}
   })
 
   await loadLocaleMessages(i18n, options.locale)
@@ -50,7 +51,17 @@ export async function loadLocaleMessages(i18n: any, locale: string): Promise<voi
   const messages = await import(/* webpackChunkName: "locale-[request]" */ `./${locale}.json`)
 
   // set locale and locale message
-  i18n.global.setLocaleMessage(locale, messages.default)
+  // Vue I18n 11.x 在 Composition API 模式中的正确用法
+  console.log('[loadLocaleMessages] i18n.global:', i18n.global)
+  console.log('[loadLocaleMessages] setLocaleMessage exists:', typeof i18n.global.setLocaleMessage)
+
+  // 直接设置 messages 对象（Composition API 模式）
+  if (i18n.global.messages && i18n.global.messages.value) {
+    i18n.global.messages.value[locale] = messages.default
+    console.log('[loadLocaleMessages] Set messages for locale:', locale)
+  } else {
+    console.error('[loadLocaleMessages] i18n.global.messages is not available')
+  }
 
   return nextTick()
 }

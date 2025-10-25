@@ -3,7 +3,7 @@ import { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { windowManager } from './window'
 import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { ipcManager } from './ipc'
-import { TouchPlugin } from '../../../plugins'
+import { TouchPlugin } from '../../plugin/plugin'
 
 interface ExpandOptions {
   length?: number

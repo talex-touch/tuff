@@ -4,7 +4,7 @@ import path from 'path'
 
 export class PluginIcon implements IPluginIcon {
   type: string
-  value: any
+  value: string
 
   _value: string
   rootPath: string
@@ -32,8 +32,7 @@ export class PluginIcon implements IPluginIcon {
         this.type = 'error'
         this.value = 'Cannot find target icon.'
       } else {
-        const buffer = await fse.readFile(iconPath)
-        this.value = `data:image/png;base64,${buffer.toString('base64')}`
+        this.value = `tfile://${iconPath}`
       }
     }
   }
