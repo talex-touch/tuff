@@ -14,6 +14,9 @@ export enum PluginStatus {
   LOADING,
   LOADED,
   LOAD_FAILED,
+
+  DEV_DISCONNECTED,  // Dev Server 断连
+  DEV_RECONNECTING,  // 正在重连
 }
 
 export interface PluginIssue {
@@ -24,6 +27,13 @@ export interface PluginIssue {
   code?: string
   suggestion?: string
   timestamp?: number
+}
+
+export interface DevServerHealthCheckResult {
+  healthy: boolean
+  version?: string
+  timestamp: number
+  error?: string
 }
 
 import type { ITuffIcon } from '../types/icon'
