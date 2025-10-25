@@ -531,6 +531,14 @@
       "retry_delay": "重试延迟",
       "retry_delay_help": "重试请求前的等待时间",
       "max_retries_help": "下载失败时的最大重试次数"
+    },
+    "window": {
+      "groupTitle": "窗口行为",
+      "groupDesc": "配置窗口关闭和最小化行为",
+      "closeToTray": "关闭窗口时最小化到托盘",
+      "closeToTrayDesc": "点击关闭按钮时隐藏窗口而非退出应用",
+      "startMinimized": "启动时最小化到托盘",
+      "startMinimizedDesc": "应用启动时直接最小化到系统托盘"
     }
   },
   "common": {
@@ -569,15 +577,5 @@
     "restart": "重启应用",
     "quit": "退出 Talex Touch",
     "tooltip": "Talex Touch"
-  },
-  "settings": {
-    "window": {
-      "groupTitle": "窗口行为",
-      "groupDesc": "配置窗口关闭和最小化行为",
-      "closeToTray": "关闭窗口时最小化到托盘",
-      "closeToTrayDesc": "点击关闭按钮时隐藏窗口而非退出应用",
-      "startMinimized": "启动时最小化到托盘",
-      "startMinimizedDesc": "应用启动时直接最小化到系统托盘"
-    }
   }
 }

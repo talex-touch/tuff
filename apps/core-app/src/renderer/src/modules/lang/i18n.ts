@@ -47,18 +47,17 @@ export function setI18nLanguage(i18n: any, locale: string): void {
  * @returns Promise that resolves when messages are loaded
  */
 export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
-  // load locale messages with dynamic import
   const messages = await import(/* webpackChunkName: "locale-[request]" */ `./${locale}.json`)
 
-  // set locale and locale message
-  // Vue I18n 11.x 在 Composition API 模式中的正确用法
   console.log('[loadLocaleMessages] i18n.global:', i18n.global)
   console.log('[loadLocaleMessages] setLocaleMessage exists:', typeof i18n.global.setLocaleMessage)
 
-  // 直接设置 messages 对象（Composition API 模式）
-  if (i18n.global.messages && i18n.global.messages.value) {
+  if (typeof i18n.global.setLocaleMessage === 'function') {
+    i18n.global.setLocaleMessage(locale, messages.default)
+    console.log('[loadLocaleMessages] Set messages for locale using setLocaleMessage:', locale)
+  } else if (i18n.global.messages && i18n.global.messages.value) {
     i18n.global.messages.value[locale] = messages.default
-    console.log('[loadLocaleMessages] Set messages for locale:', locale)
+    console.log('[loadLocaleMessages] Set messages for locale using direct assignment:', locale)
   } else {
     console.error('[loadLocaleMessages] i18n.global.messages is not available')
   }
