@@ -34,7 +34,9 @@
   },
   "settingHeader": {
     "subTitle": "The command bar, reimagined for those who build.",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "version": "Version",
+    "initTime": "Initialization Time"
   },
   "settingAbout": {
     "groupTitle": "Application specification (Touch)",
@@ -529,6 +531,14 @@
       "retry_delay": "Retry Delay",
       "retry_delay_help": "Wait time before retrying requests",
       "max_retries_help": "Maximum number of retries when download fails"
+    },
+    "window": {
+      "groupTitle": "Window Behavior",
+      "groupDesc": "Configure window closing and minimizing behavior",
+      "closeToTray": "Minimize to tray when closing window",
+      "closeToTrayDesc": "Hide window instead of quitting when clicking close button",
+      "startMinimized": "Start minimized to tray",
+      "startMinimizedDesc": "Launch application minimized to system tray"
     }
   },
   "common": {
@@ -567,15 +577,5 @@
     "restart": "Restart Application",
     "quit": "Quit Talex Touch",
     "tooltip": "Talex Touch"
-  },
-  "settings": {
-    "window": {
-      "groupTitle": "Window Behavior",
-      "groupDesc": "Configure window closing and minimizing behavior",
-      "closeToTray": "Minimize to tray when closing window",
-      "closeToTrayDesc": "Hide window instead of quitting when clicking close button",
-      "startMinimized": "Start minimized to tray",
-      "startMinimizedDesc": "Launch application minimized to system tray"
-    }
   }
 }
