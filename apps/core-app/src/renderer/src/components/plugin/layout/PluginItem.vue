@@ -57,7 +57,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
       </div>
     </el-popover>
 
-    <PluginIcon class="flex-shrink-0" :icon="plugin.icon" :alt="plugin.name" />
+    <PluginIcon class="flex-shrink-0 text-2xl" :icon="plugin.icon" :alt="plugin.name" />
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">
       <p class="font-semibold text-base truncate">{{ plugin.name }}</p>

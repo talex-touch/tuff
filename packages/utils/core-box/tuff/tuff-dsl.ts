@@ -375,55 +375,15 @@ export interface TuffCustomRender {
   scripts?: string[];
 }
 
+import type { ITuffIcon } from '../../types/icon'
+
 /**
- * 图标定义
+ * Icon definition
  *
  * @description
- * 支持多种图标类型，从简单的emoji到复杂的组件。
- * 可以是简单字符串或包含详细配置的对象。
+ * Unified icon type supporting only ITuffIcon object format
  */
-export type TuffIcon =
-  | string  // 简单字符串：emoji、URL、组件名
-  | {
-      /**
-       * 图标类型
-       * @description 指定图标的数据格式和来源
-       * @required
-       */
-      type: 'emoji' | 'url' | 'base64' | 'fluent' | 'component';
-
-      /**
-       * 图标值
-       * @description 根据type不同，可能是emoji字符、URL地址、Base64编码或组件名
-       * @required
-       */
-      value: string;
-
-      /**
-       * 备用图标
-       * @description 当主图标无法加载时显示的替代图标
-       */
-      fallback?: string;
-
-      /**
-       * 动态加载函数
-       * @description 用于异步加载图标资源的函数
-       */
-      loader?: () => Promise<string>;
-
-      /**
-       * 样式配置
-       * @description 控制图标的视觉效果
-       */
-      style?: {
-        /** 图标尺寸 */
-        size?: number;
-        /** 图标颜色 */
-        color?: string;
-        /** 动画效果 */
-        animation?: 'spin' | 'pulse' | 'bounce';
-      };
-    };
+export type TuffIcon = ITuffIcon
 
 /**
  * 标签定义

@@ -1,12 +1,10 @@
 <template>
   <div class="relative flex w-full h-full transition-cubic overflow-hidden">
-    <!-- Plugin List Sidebar -->
     <div
       class="relative w-76 h-full border-r border-[var(--el-border-color-lighter)] flex flex-col transition-all duration-300 ease-out"
     >
       <PluginList :plugins="plugins" @select="selectPlugin" @add-plugin="drawerVisible = true" />
 
-      <!-- Quick Actions -->
       <div
         class="p-3 mt-auto flex flex-col gap-2 border-t border-[var(--el-border-color-lighter)] fake-background"
       >
