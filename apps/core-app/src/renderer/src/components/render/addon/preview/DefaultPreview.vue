@@ -1,14 +1,14 @@
 <script setup lang="ts" name="DefaultPreview">
 import { computed } from 'vue'
 import { TuffItem, TuffIcon } from '@talex-touch/utils'
-import { IPluginIcon } from '@talex-touch/utils'
+import { ITuffIcon } from '@talex-touch/utils'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 const props = defineProps<{
   item: TuffItem
 }>()
 
-function transformTuffIcon(icon: TuffIcon | undefined): IPluginIcon | string {
+function transformTuffIcon(icon: TuffIcon | undefined): ITuffIcon | string {
   if (!icon) {
     return ''
   }

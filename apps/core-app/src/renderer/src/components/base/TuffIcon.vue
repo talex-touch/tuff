@@ -39,7 +39,9 @@ console.log(props)
       </span>
     </span>
 
-    <span v-else-if="icon.type === 'emoji'" class="emoji">{{ icon.value }}</span>
+    <span v-else-if="icon.type === 'emoji'" class="emoji">
+      {{ icon.value || '⚠️' }}
+    </span>
 
     <template v-else-if="icon.type === 'url' || icon.type === 'file'">
       <img :alt="alt" :src="url" />

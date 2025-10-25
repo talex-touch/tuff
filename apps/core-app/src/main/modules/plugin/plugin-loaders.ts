@@ -2,7 +2,7 @@ import fse from 'fs-extra'
 import path from 'path'
 import axios from 'axios'
 import { TouchPlugin } from './plugin'
-import { PluginIcon } from './plugin-icon'
+import { TuffIconImpl } from '../../core/tuff-icon'
 import { IPluginDev } from '@talex-touch/utils/plugin'
 import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { PluginFeature } from './plugin-feature'
@@ -24,10 +24,8 @@ abstract class BasePluginLoader {
     this.pluginName = pluginName
     this.pluginPath = pluginPath
 
-    const placeholderIcon = new PluginIcon(this.pluginPath, 'error', 'loading', {
-      enable: false,
-      address: ''
-    })
+    const placeholderIcon = new TuffIconImpl(this.pluginPath, 'emoji', '')
+    placeholderIcon.status = 'error'
     this.touchPlugin = new TouchPlugin(
       this.pluginName,
       placeholderIcon,
@@ -62,18 +60,17 @@ abstract class BasePluginLoader {
       path.resolve(this.pluginPath, 'README.md')
     )
 
-    const icon = new PluginIcon(
+    const icon = new TuffIconImpl(
       this.pluginPath,
       pluginInfo.icon.type,
-      pluginInfo.icon.value,
-      this.touchPlugin.dev
+      pluginInfo.icon.value
     )
     await icon.init()
     this.touchPlugin.icon = icon
-    if (icon.type === 'error') {
+    if (icon.status === 'error') {
       this.touchPlugin.issues.push({
         type: 'warning',
-        message: icon.value,
+        message: 'Icon loading failed',
         source: 'icon',
         timestamp: Date.now()
       })
@@ -92,21 +89,15 @@ abstract class BasePluginLoader {
             timestamp: Date.now()
           })
         }
-        pendingList.push(
-          new Promise((resolve) =>
-            pluginFeature.icon.init().then(() => {
-              if (pluginFeature.icon.type === 'error') {
-                this.touchPlugin.issues.push({
-                  type: 'warning',
-                  message: `Icon for feature '${pluginFeature.name}' failed to load: ${pluginFeature.icon.value}`,
-                  source: `feature:${pluginFeature.id}`,
-                  timestamp: Date.now()
-                })
-              }
-              resolve(true)
-            })
-          )
-        )
+        // Check icon status after creation
+        if (pluginFeature.icon.status === 'error') {
+          this.touchPlugin.issues.push({
+            type: 'warning',
+            message: `Icon for feature '${pluginFeature.name}' failed to load`,
+            source: `feature:${pluginFeature.id}`,
+            timestamp: Date.now()
+          })
+        }
       })
       await Promise.allSettled(pendingList)
     }

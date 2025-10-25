@@ -28,13 +28,6 @@ export interface PluginIssue {
 
 import type { ITuffIcon } from '../types/icon'
 
-/**
- * Plugin icon interface
- *
- * @description
- * Plugin icons use the unified ITuffIcon interface
- */
-export type IPluginIcon = ITuffIcon
 
 export interface IPlatformInfo {
   enable: boolean
@@ -53,7 +46,7 @@ export interface IPluginBaseInfo {
   readme: string
   version: string
   desc: string
-  icon: IPluginIcon
+  icon: ITuffIcon
   platforms: IPlatform
   _uniqueChannelKey: string
 }
@@ -136,7 +129,7 @@ export interface IPluginFeature {
   id: string
   name: string
   desc: string
-  icon: IPluginIcon
+  icon: ITuffIcon
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]

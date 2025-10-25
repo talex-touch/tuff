@@ -140,7 +140,7 @@ The core interface for all search results:
 interface ISearchItem {
   name: string;                    // Display name
   desc: string;                    // Description
-  icon: IPluginIcon;              // Icon configuration
+  icon: ITuffIcon;              // Icon configuration
   push: boolean;                   // Push mode support
   names: string[];                 // Searchable names
   keyWords: string[];             // Search keywords

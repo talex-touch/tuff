@@ -12,15 +12,12 @@ export class TuffIconImpl implements ITuffIcon {
   type: TuffIconType
   value: string
   status?: 'normal' | 'loading' | 'error'
-  error?: string
 
   private rootPath: string
-  private originalValue: string
 
   constructor(rootPath: string, type: TuffIconType, value: string) {
     this.rootPath = rootPath
     this.type = type
-    this.originalValue = value
     this.value = value
     this.status = 'normal'
   }
@@ -33,17 +30,17 @@ export class TuffIconImpl implements ITuffIcon {
    */
   async init(): Promise<void> {
     if (this.type === 'file') {
-      if (this.originalValue.includes('..')) {
+      if (this.value.includes('..')) {
         this.status = 'error'
-        this.error = 'Forbidden `..` in path.'
+        this.value = ''
         return
       }
 
-      const iconPath = path.resolve(this.rootPath, this.originalValue)
+      const iconPath = path.resolve(this.rootPath, this.value)
 
       if (!(await fse.pathExists(iconPath))) {
         this.status = 'error'
-        this.error = 'Cannot find target icon.'
+        this.value = ''
       } else {
         this.value = iconPath
         this.status = 'normal'

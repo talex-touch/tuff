@@ -3,13 +3,13 @@ import {
   IPluginChannelBridge,
   IPlatform,
   IPluginDev,
-  IPluginIcon,
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
   PluginStatus,
   IPluginFeature
 } from '@talex-touch/utils/plugin'
+import { ITuffIcon } from '@talex-touch/utils'
 import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { ChannelType } from '@talex-touch/utils/channel'
@@ -19,7 +19,6 @@ import { app, clipboard, dialog, shell, BrowserWindow } from 'electron'
 import axios from 'axios'
 import fse from 'fs-extra'
 import { PluginFeature } from './plugin-feature'
-import { PluginIcon } from './plugin-icon'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
 import { TouchWindow } from '../../core/touch-window'
@@ -66,7 +65,7 @@ export class TouchPlugin implements ITouchPlugin {
   readme: string
   version: string
   desc: string
-  icon: IPluginIcon
+  icon: ITuffIcon
   logger: PluginLogger
   platforms: IPlatform
   features: PluginFeature[]
@@ -250,7 +249,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   constructor(
     name: string,
-    icon: PluginIcon,
+    icon: ITuffIcon,
     version: string,
     desc: string,
     readme: string,
