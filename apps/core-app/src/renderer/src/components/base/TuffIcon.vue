@@ -5,6 +5,7 @@ const props = defineProps<{
   icon: ITuffIcon
   alt?: string
   size?: number
+  empty?: string
 }>()
 
 const loading = computed(() => props.icon.status === 'loading')
@@ -29,7 +30,11 @@ console.log(props)
     :class="{ 'TuffIcon-Loading': loading }"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
-    <span v-if="error" class="TuffIcon-Error">
+    <span v-if="!icon?.value && empty" class="TuffIcon-Empty">
+      <img :alt="alt" :src="empty" />
+    </span>
+
+    <span v-else-if="error" class="TuffIcon-Error">
       <i class="i-ri-image-line" />
     </span>
 
