@@ -16,7 +16,8 @@
  * @version 1.0.0
  */
 
-import type { IPluginIcon, IFeatureCommand } from '../plugin';
+import type { IFeatureCommand } from '../plugin';
+import type { ITuffIcon } from '../types/icon';
 
 /**
  * Search Result Item Interface
@@ -59,9 +60,9 @@ export interface ISearchItem {
    * Defines how the item's icon should be displayed in the UI.
    * Supports various icon types including files, remix icons, and data URLs.
    *
-   * @see {@link IPluginIcon} for icon configuration options
+   * @see {@link ITuffIcon} for icon configuration options
    */
-  icon: IPluginIcon;
+  icon: ITuffIcon;
 
   /**
    * Whether this item supports push mode functionality
@@ -592,7 +593,7 @@ export function createDataItem(options: {
     icon: {
       type: iconType,
       value: iconValue,
-      init: async () => {} // Required by IPluginIcon interface
+      init: async () => {} // Required by ITuffIcon interface
     },
     push: false,                    // Data items don't support push mode
     names: [name],                  // Include name in searchable names
@@ -675,7 +676,7 @@ export function createSearchItem(options: {
   /** Description or subtitle text */
   desc: string;
   /** Icon configuration object */
-  icon: IPluginIcon;
+  icon: ITuffIcon;
   /** Name of the plugin creating this item */
   pluginName: string;
   /** Plugin type (defaults to "feature") */

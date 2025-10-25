@@ -8,7 +8,7 @@ import fse from 'fs-extra'
 import path from 'path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TouchPlugin } from './plugin'
-import { PluginIcon } from './plugin-icon'
+import { TuffIconImpl } from '../../core/tuff-icon'
 import { shell } from 'electron'
 import { createDbUtils } from '../../db/utils'
 import { databaseModule } from '../database'
@@ -336,10 +336,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
 
       if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
-        const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'loading', {
-          enable: false,
-          address: ''
-        })
+        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
+        placeholderIcon.status = 'error'
         const touchPlugin = new TouchPlugin(
           pluginName,
           placeholderIcon,
@@ -425,10 +423,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       } catch (error: any) {
         logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
         // Create a dummy plugin to show the error in the UI
-        const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'fatal', {
-          enable: false,
-          address: ''
-        })
+        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
+        placeholderIcon.status = 'error'
         const touchPlugin = new TouchPlugin(
           pluginName,
           placeholderIcon,

@@ -2,9 +2,9 @@ import {
   IFeatureCommand,
   ITouchPlugin,
   IPluginFeature,
-  IPluginIcon,
   PluginStatus
 } from '@talex-touch/utils/plugin'
+import { ITuffIcon } from '@talex-touch/utils'
 import {
   IExecuteArgs,
   IProviderActivate,
@@ -21,8 +21,7 @@ import { PluginViewLoader } from '../view/plugin-view-loader'
 import { pluginModule } from '../plugin-module'
 import { ProviderContext } from '../../box-tool/search-engine/types'
 
-// Manually define the strict type for TuffItem icons based on compiler errors.
-type TuffIconType = 'url' | 'emoji' | 'base64' | 'fluent' | 'component'
+import type { TuffIconType } from '@talex-touch/utils'
 
 /**
  * Checks if a feature's command matches the given query text.
@@ -67,20 +66,20 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
 
 /**
  * Maps the legacy plugin icon type to the new TuffIconType.
- * @param type - The icon type from IPluginIcon.
+ * @param type - The icon type from ITuffIcon.
  * @returns The corresponding TuffIconType.
  */
 function mapIconType(type: string): TuffIconType {
   switch (type) {
     case 'file':
-      return 'base64'
+      return 'file'
     case 'remixicon':
-      return 'fluent' // Assuming remixicon can be mapped to a font icon like fluent
+      return 'emoji' // Map remixicon to emoji as fallback
     case 'class':
-      return 'fluent' // Assuming class-based icons are font icons
+      return 'emoji' // Map class-based icons to emoji as fallback
     default:
-      // Fallback for any other type to a default icon type.
-      return 'fluent'
+      // Fallback for any other type to emoji
+      return 'emoji'
   }
 }
 
@@ -208,8 +207,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         id: this.id,
         name: plugin.name,
         icon: {
-          type: mapIconType((plugin.icon as IPluginIcon).type),
-          value: (plugin.icon as IPluginIcon).value
+          type: mapIconType((plugin.icon as ITuffIcon).type),
+          value: (plugin.icon as ITuffIcon).value
         },
         meta: {
           pluginName,
@@ -257,8 +256,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           title: feature.name,
           subtitle: feature.desc,
           icon: {
-            type: mapIconType((feature.icon as IPluginIcon).type),
-            value: (feature.icon as IPluginIcon).value
+            type: mapIconType((feature.icon as ITuffIcon).type),
+            value: (feature.icon as ITuffIcon).value
           }
         }
       },
