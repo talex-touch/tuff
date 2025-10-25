@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { TuffItem, TuffRender } from '@talex-touch/utils'
+import { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ItemSubtitle from './ItemSubtitle.vue'
-import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import { useOpenerAutoResolve, getOpenerByExtension } from '~/modules/openers'
 import { resolveSourceMeta } from './sourceMeta'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 interface Props {
   item: TuffItem
@@ -20,15 +21,23 @@ const { t } = useI18n()
 
 const displayIcon = computed(() => {
   const icon = props.render?.basic?.icon
+  const defaultIcon = {
+    type: 'url',
+    value: DefaultIcon,
+    status: 'normal'
+  } as ITuffIcon
+
   if (typeof icon === 'string') {
-    return icon
+    defaultIcon.value = icon
   }
+
   if (icon && typeof icon === 'object' && 'value' in icon) {
     if (icon.value?.length) {
-      return icon.value as string
+      defaultIcon.value = icon.value
     }
   }
-  return DefaultIcon
+
+  return defaultIcon
 })
 
 const fileExtension = computed(() => {
@@ -100,11 +109,7 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
     :class="{ 'is-active': active, '!bg-[var(--el-bg-color)]': active }"
   >
     <div class="relative w-32px h-32px">
-      <PluginIcon
-        :icon="displayIcon"
-        :alt="render.basic?.title || 'Tuff Item'"
-        class="w-full h-full"
-      />
+      <TuffIcon :icon="displayIcon" :alt="render.basic?.title || 'Tuff Item'" :size="25.6" />
       <span
         v-if="showFrequency"
         class="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[10px] leading-none rounded-full bg-[var(--el-color-primary)] text-white shadow-sm"
