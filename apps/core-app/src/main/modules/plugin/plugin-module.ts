@@ -17,7 +17,7 @@ import {
   touchEventBus
   // PluginStorageUpdatedEvent
 } from '../../core/eventbus/touch-event'
-import { createPluginLoader } from '../../plugins/loaders'
+import { createPluginLoader } from './plugin-loaders'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'

@@ -14,7 +14,7 @@ const _appSettingOriginData = {
   },
   lang: {
     followSystem: true,
-    locale: 0,
+    locale: 'zh-CN',
   },
   keyBind: {
     summon: 'CTRL + E',

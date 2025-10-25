@@ -73,48 +73,14 @@ function handleParse(): void {
       iconOptions.value = { type, value: value as string }
       break
     case 'file':
-      handleFileIcon(props.icon)
+      iconOptions.value = {
+        type: 'url',
+        value: value as string
+      }
       break
     default:
       console.error('PluginIcon not matched --- type not exist.', props)
   }
-}
-
-function handleFileIcon(icon: IPluginIcon): void {
-  const { value, _value } = icon
-  if (!_value) {
-    console.error('PluginIcon not matched --- _value not exist.', icon)
-    return
-  }
-
-  const extName = _value.split('.').pop()
-  if (extName === 'svg') {
-    const svgContent = transformUint8ArrayToString(new Uint8Array(Object.values(value as any)))
-    iconOptions.value = {
-      type: 'dataurl',
-      value: `data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`
-    }
-  } else {
-    const dataStr = transformArrayBufferToBase64(value as Buffer)
-    imageLoading.value = true
-    iconOptions.value = {
-      type: 'base64',
-      value: `data:image/${extName};base64,${dataStr}`
-    }
-  }
-}
-
-function transformUint8ArrayToString(fileData: Uint8Array): string {
-  return new TextDecoder().decode(fileData)
-}
-
-function transformArrayBufferToBase64(buffer: Buffer): string {
-  let binary = ''
-  const bytes = new Uint8Array(buffer)
-  for (let len = bytes.byteLength, i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return window.btoa(binary)
 }
 
 watchEffect(handleParse)

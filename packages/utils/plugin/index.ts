@@ -26,6 +26,16 @@ export interface PluginIssue {
   timestamp?: number
 }
 
+/**
+ * 插件图标接口
+ *
+ * @description
+ * 定义插件图标的数据结构和行为。支持多种图标类型：
+ * - 'file': 文件图标，value 为 tfile:// URL
+ * - 'remixicon': Remix 图标，value 为图标名称
+ * - 'class': CSS 类图标，value 为 CSS 类名
+ * - 其他类型: 自定义图标类型
+ */
 export interface IPluginIcon {
   type: string | 'remixicon' | 'class'
   value: any

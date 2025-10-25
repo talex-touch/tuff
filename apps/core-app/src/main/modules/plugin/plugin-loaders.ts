@@ -1,11 +1,11 @@
 import fse from 'fs-extra'
 import path from 'path'
 import axios from 'axios'
-import { TouchPlugin } from '../modules/plugin/plugin'
-import { PluginIcon } from '../modules/plugin/plugin-icon'
+import { TouchPlugin } from './plugin'
+import { PluginIcon } from './plugin-icon'
 import { IPluginDev } from '@talex-touch/utils/plugin'
 import { IPluginFeature } from '@talex-touch/utils/plugin'
-import { PluginFeature } from '../modules/plugin/plugin-feature'
+import { PluginFeature } from './plugin-feature'
 
 /**
  * The context required for loading plugin features.
