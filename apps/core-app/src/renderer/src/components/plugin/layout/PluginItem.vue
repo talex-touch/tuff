@@ -1,9 +1,10 @@
 <script lang="ts" name="PluginItem" setup>
 import { computed } from 'vue'
 import { ElPopover } from 'element-plus'
-import PluginIcon from '@comp/plugin/PluginIcon.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import { ITouchPlugin } from '@talex-touch/utils'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -57,7 +58,12 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
       </div>
     </el-popover>
 
-    <PluginIcon class="flex-shrink-0 text-2xl" :icon="plugin.icon" :alt="plugin.name" />
+    <TuffIcon
+      class="flex-shrink-0 text-2xl"
+      :empty="DefaultIcon"
+      :icon="plugin.icon"
+      :alt="plugin.name"
+    />
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">
       <p class="font-semibold text-base truncate">{{ plugin.name }}</p>

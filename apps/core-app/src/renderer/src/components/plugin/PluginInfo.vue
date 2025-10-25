@@ -3,17 +3,12 @@
     class="plugin-info-root h-full flex flex-col bg-gray-50 dark:bg-gray-900 relative"
     :class="{ 'has-error-glow': hasErrors }"
   >
-    <!-- Plugin Header -->
     <div
       class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
     >
       <div class="flex items-center gap-3">
         <div class="relative">
-          <div
-            class="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"
-          >
-            <PluginIcon :alt="plugin.name" :icon="plugin.icon" />
-          </div>
+          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="32" />
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
             :class="statusClass.indicator"
@@ -24,7 +19,9 @@
           <h1 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
             {{ plugin.name }}
           </h1>
-          <p class="text-sm text-gray-600 dark:text-gray-400 truncate">{{ plugin.desc }}</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">
+            {{ plugin.desc }}
+          </p>
           <div class="flex gap-2 mt-1">
             <span
               v-if="plugin.dev?.enable"
@@ -44,7 +41,11 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <FlatButton class="action-button" :disabled="loadingStates.reload" @click="handleReloadPlugin">
+        <FlatButton
+          class="action-button"
+          :disabled="loadingStates.reload"
+          @click="handleReloadPlugin"
+        >
           <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
           <i v-else class="i-ri-loader-4-line animate-spin" />
           <span>{{
@@ -55,7 +56,11 @@
           <i class="i-ri-history-line" />
           <span>{{ historyActionLabel }}</span>
         </FlatButton>
-        <FlatButton class="action-button" :disabled="loadingStates.openFolder" @click="handleOpenPluginFolder">
+        <FlatButton
+          class="action-button"
+          :disabled="loadingStates.openFolder"
+          @click="handleOpenPluginFolder"
+        >
           <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
           <i v-else class="i-ri-loader-4-line animate-spin" />
           <span>{{
@@ -86,7 +91,11 @@
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="database-2-line" name="Storage(Mock)" :label="t('plugin.tabs.storageMock')">
+        <TvTabItem
+          icon="database-2-line"
+          name="Storage(Mock)"
+          :label="t('plugin.tabs.storageMock')"
+        >
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
@@ -116,6 +125,8 @@ import PluginIssues from './tabs/PluginIssues.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 // Props
 const props = defineProps<{
