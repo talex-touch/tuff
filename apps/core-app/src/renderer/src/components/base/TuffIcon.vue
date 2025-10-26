@@ -1,4 +1,5 @@
 <script lang="ts" name="TuffIcon" setup>
+import { useSvgContent } from '~/modules/hooks/useSvgContent'
 import type { ITuffIcon } from '@talex-touch/utils'
 
 const props = defineProps<{
@@ -11,6 +12,8 @@ const props = defineProps<{
 const loading = computed(() => props.icon.status === 'loading')
 const error = computed(() => props.icon.status === 'error')
 
+const addressable = computed(() => props.icon.type === 'url' || props.icon.type === 'file')
+
 const url = computed(() => {
   if (props.icon.type === 'file') {
     return `tfile://${props.icon.value}`
@@ -19,7 +22,30 @@ const url = computed(() => {
   return props.icon.value
 })
 
-console.log(props)
+const {
+  content: svgContent,
+  // loading: svgLoading,
+  // error: svgError,
+  fetchSvgContent,
+  setUrl
+} = useSvgContent()
+
+const isSvg = computed(() => url.value?.endsWith('.svg'))
+
+const dataurl = computed(
+  () => `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
+)
+
+watch(
+  () => isSvg.value,
+  (newIsSvg) => {
+    if (newIsSvg) {
+      setUrl(url.value)
+      fetchSvgContent()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -48,13 +74,29 @@ console.log(props)
       {{ icon.value || '⚠️' }}
     </span>
 
-    <template v-else-if="icon.type === 'url' || icon.type === 'file'">
-      <img :alt="alt" :src="url" />
+    <template v-else-if="addressable">
+      <template v-if="isSvg">
+        <i class="TuffIcon-Svg" :alt="alt" :style="{ '--un-icon': `url(${dataurl})` }" />
+      </template>
+      <template v-else>
+        <img :alt="alt" :src="url" />
+      </template>
     </template>
   </span>
 </template>
 
 <style lang="scss" scoped>
+.TuffIcon-Svg {
+  -webkit-mask: var(--un-icon) no-repeat;
+  mask: var(--un-icon) no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  background-color: currentColor;
+  color: inherit;
+  width: 1em;
+  height: 1em;
+}
+
 .TuffIcon {
   position: relative;
   display: flex;
