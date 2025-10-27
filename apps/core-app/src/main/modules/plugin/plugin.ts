@@ -111,7 +111,25 @@ export class TouchPlugin implements ITouchPlugin {
       dev: this.dev,
       status: this.status,
       platforms: this.platforms,
-      features: this.features.map((feature) => feature.toJSONObject()),
+      features: this.features.map((feature) => {
+        // 防御性检查：确保 feature 有 toJSONObject 方法
+        if (typeof feature.toJSONObject === 'function') {
+          return feature.toJSONObject()
+        }
+        // 如果不是 PluginFeature 实例，尝试手动构造对象
+        console.warn(`[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`)
+        return {
+          id: feature.id,
+          name: feature.name,
+          desc: feature.desc,
+          icon: feature.icon,
+          push: feature.push,
+          platform: feature.platform,
+          commands: feature.commands,
+          interaction: feature.interaction,
+          priority: feature.priority || 0
+        }
+      }),
       issues: this.issues
     }
   }
@@ -153,7 +171,13 @@ export class TouchPlugin implements ITouchPlugin {
 
     if (commands.length < 1) return false
 
-    return this.features.push(new PluginFeature(this.pluginPath, feature, this.dev)) >= 0
+    // 如果已经是 PluginFeature 实例，直接使用；否则创建新实例
+    const pluginFeature =
+      feature instanceof PluginFeature
+        ? feature
+        : new PluginFeature(this.pluginPath, feature, this.dev)
+
+    return this.features.push(pluginFeature) >= 0
   }
 
   delFeature(featureId: string): boolean {

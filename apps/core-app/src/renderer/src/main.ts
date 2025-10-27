@@ -13,6 +13,7 @@ import VWave from 'v-wave'
 
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
 import { showPlatformCompatibilityWarning, shouldShowPlatformWarning } from '~/modules/mention/platform-warning'
+import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 
 import './assets/main.css'
 import '~/styles/element/index.scss'
@@ -61,9 +62,12 @@ async function bootstrap() {
   preloadDebugStep('Registering plugins and global modules', 0.05)
   app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
 
-  preloadDebugStep('Initializing plugin store', 0.05)
-  const pluginStore = usePluginStore()
-  await pluginStore.initialize()
+  // CoreBox 窗口不需要初始化插件列表
+  if (!isCoreBox()) {
+    preloadDebugStep('Initializing plugin store', 0.05)
+    const pluginStore = usePluginStore()
+    await pluginStore.initialize()
+  }
 
   preloadDebugStep('Mounting renderer root container', 0.05)
   app.mount('#app')
