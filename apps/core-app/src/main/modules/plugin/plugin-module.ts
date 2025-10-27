@@ -12,11 +12,7 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { shell } from 'electron'
 import { createDbUtils } from '../../db/utils'
 import { databaseModule } from '../database'
-import {
-  TalexEvents,
-  touchEventBus
-  // PluginStorageUpdatedEvent
-} from '../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createPluginLoader } from './plugin-loaders'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { TouchWindow } from '../../core/touch-window'
@@ -35,6 +31,9 @@ import { DevServerHealthMonitor } from './dev-server-monitor'
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
 
+/**
+ * Watches development plugins for file changes and triggers hot reload
+ */
 class DevPluginWatcher {
   private readonly manager: IPluginManager
   private readonly devPlugins: Map<string, ITouchPlugin> = new Map()
@@ -44,6 +43,10 @@ class DevPluginWatcher {
     this.manager = manager
   }
 
+  /**
+   * Add a plugin to be watched for changes
+   * @param plugin - Plugin to watch
+   */
   addPlugin(plugin: ITouchPlugin): void {
     if (plugin.dev.enable && !plugin.dev.source) {
       this.devPlugins.set(plugin.name, plugin)
@@ -60,6 +63,10 @@ class DevPluginWatcher {
     }
   }
 
+  /**
+   * Remove a plugin from being watched
+   * @param pluginName - Name of the plugin to stop watching
+   */
   removePlugin(pluginName: string): void {
     const plugin = this.devPlugins.get(pluginName)
     if (plugin && !plugin.dev.source && this.watcher) {
@@ -75,6 +82,9 @@ class DevPluginWatcher {
     }
   }
 
+  /**
+   * Start watching for file changes
+   */
   start(): void {
     if (this.watcher) {
       devWatcherLog.warn('Watcher already started')
@@ -118,6 +128,9 @@ class DevPluginWatcher {
     })
   }
 
+  /**
+   * Stop watching for file changes
+   */
   stop(): void {
     if (!this.watcher) return
     void fileWatchService.close(this.watcher)
@@ -126,6 +139,11 @@ class DevPluginWatcher {
   }
 }
 
+/**
+ * Create plugin manager instance
+ * @param pluginPath - Base directory for plugins
+ * @returns Plugin manager instance
+ */
 const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
@@ -136,6 +154,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
 
+  /**
+   * Format log arguments for plugin logging
+   * @param args - Arguments to format
+   * @returns Formatted string
+   */
   const formatLogArgs = (args: unknown[]): string => {
     return args
       .map((arg) => {
@@ -362,6 +385,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
           plugin: touchPlugin.toJSONObject()
         })
+        // Emit new state change event
+        genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+          type: 'added',
+          plugin: touchPlugin.toJSONObject()
+        })
         logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
         return true
       }
@@ -421,6 +449,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
           plugin: touchPlugin.toJSONObject()
         })
+        // Emit new state change event
+        genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+          type: 'added',
+          plugin: touchPlugin.toJSONObject()
+        })
       } catch (error: any) {
         logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
         // Create a dummy plugin to show the error in the UI
@@ -446,6 +479,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
         genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
+          plugin: touchPlugin.toJSONObject()
+        })
+        // Emit new state change event
+        genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+          type: 'added',
           plugin: touchPlugin.toJSONObject()
         })
       }
@@ -493,6 +531,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
     genTouchChannel().send(ChannelType.MAIN, 'plugin:del', {
       plugin: pluginName
+    })
+    // Emit new state change event
+    genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+      type: 'removed',
+      name: pluginName
     })
 
     return Promise.resolve(true)
@@ -694,6 +737,12 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
               source: 'disk',
               plugin: pluginName,
+              readme: plugin.readme
+            })
+            // Emit new state change event
+            genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+              type: 'readme-updated',
+              name: pluginName,
               readme: plugin.readme
             })
           } else {
@@ -1215,6 +1264,332 @@ export class PluginModule extends BaseModule {
     manager.plugins.forEach((plugin) => {
       if (plugin.status === PluginStatus.ENABLED && plugin.dev.enable && plugin.dev.source) {
         this.healthMonitor?.startMonitoring(plugin)
+      }
+    })
+
+  /**
+   * RESTful Plugin API handlers (plugin:api:*)
+   */
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:list', ({ data, reply }) => {
+      try {
+        const filters = data?.filters || {}
+        let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
+
+        if (filters.status !== undefined) {
+          plugins = plugins.filter(p => p.status === filters.status)
+        }
+        if (filters.enabled !== undefined) {
+          const enabledNames = manager.enabledPlugins
+          plugins = plugins.filter(p => enabledNames.has(p.name) === filters.enabled)
+        }
+        if (filters.dev !== undefined) {
+          plugins = plugins.filter(p => p.dev?.enable === filters.dev)
+        }
+
+        const result = plugins.map(p => p.toJSONObject())
+        return reply(DataCode.SUCCESS, result)
+      } catch (error) {
+        console.error('Error in plugin:api:list handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get', ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin | undefined
+        if (!plugin) {
+          return reply(DataCode.SUCCESS, null)
+        }
+
+        return reply(DataCode.SUCCESS, plugin.toJSONObject())
+      } catch (error) {
+        console.error('Error in plugin:api:get handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-status', ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name)
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        return reply(DataCode.SUCCESS, plugin.status)
+      } catch (error) {
+        console.error('Error in plugin:api:get-status handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Operation APIs
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:enable', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name)
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        if (plugin.status === PluginStatus.LOAD_FAILED) {
+          pluginLog.info('Attempting to re-enable failed plugin, reloading', {
+            meta: { plugin: name }
+          })
+          await manager.reloadPlugin(name)
+          const success = manager.enabledPlugins.has(name)
+          return reply(DataCode.SUCCESS, { success })
+        }
+
+        const success = await plugin.enable()
+        if (success) {
+          manager.enabledPlugins.add(name)
+          await manager.persistEnabledPlugins()
+
+          if (plugin.dev.enable && plugin.dev.source) {
+            this.healthMonitor?.startMonitoring(plugin)
+          }
+
+          // Emit state change event
+          touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+            type: 'status-changed',
+            name,
+            status: plugin.status
+          })
+        }
+
+        return reply(DataCode.SUCCESS, { success })
+      } catch (error) {
+        console.error('Error in plugin:api:enable handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:disable', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name)
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        this.healthMonitor?.stopMonitoring(name)
+
+        const success = await plugin.disable()
+        if (success) {
+          manager.enabledPlugins.delete(name)
+          await manager.persistEnabledPlugins()
+
+          // Emit state change event
+          touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+            type: 'status-changed',
+            name,
+            status: plugin.status
+          })
+        }
+
+        return reply(DataCode.SUCCESS, { success })
+      } catch (error) {
+        console.error('Error in plugin:api:disable handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:reload', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        if (!manager.plugins.has(name)) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        this.healthMonitor?.stopMonitoring(name)
+
+        await manager.reloadPlugin(name)
+
+        const plugin = manager.plugins.get(name) as TouchPlugin | undefined
+        if (plugin && plugin.status === PluginStatus.ENABLED && plugin.dev.enable && plugin.dev.source) {
+          this.healthMonitor?.startMonitoring(plugin)
+        }
+
+        if (plugin) {
+          touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+            type: 'updated',
+            name,
+            changes: plugin.toJSONObject()
+          })
+        }
+
+        return reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('Error in plugin:api:reload handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Install/Uninstall APIs
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:install', async ({ data, reply }) => {
+      if (!this.installQueue) {
+        return reply(DataCode.ERROR, { error: 'Install queue is not ready' })
+      }
+
+      if (!data || typeof data.source !== 'string') {
+        return reply(DataCode.ERROR, { error: 'Invalid install request' })
+      }
+
+      const request: PluginInstallRequest = {
+        source: data.source,
+        hintType: data.hintType,
+        metadata: data.metadata,
+        clientMetadata: data.clientMetadata
+      }
+
+      this.installQueue.enqueue(request, reply)
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:uninstall', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        // TODO: Implement uninstall logic
+        return reply(DataCode.ERROR, { error: 'Uninstall not yet implemented' })
+      } catch (error) {
+        console.error('Error in plugin:api:uninstall handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Feature trigger APIs
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:trigger-feature', ({ data, reply }) => {
+      try {
+        const { plugin: pluginName, feature: featureId, query } = data
+        if (!pluginName || !featureId) {
+          return reply(DataCode.ERROR, { error: 'Plugin name and feature ID are required' })
+        }
+
+        const pluginIns = manager.plugins.get(pluginName)
+        if (!pluginIns) {
+          return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+        }
+
+        const feature = pluginIns.getFeature(featureId)
+        if (!feature) {
+          return reply(DataCode.ERROR, { error: `Feature ${featureId} not found in plugin ${pluginName}` })
+        }
+
+        const result = pluginIns.triggerFeature(feature, query)
+        return reply(DataCode.SUCCESS, result)
+      } catch (error) {
+        console.error('Error in plugin:api:trigger-feature handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:feature-input-changed', ({ data, reply }) => {
+      try {
+        const { plugin: pluginName, feature: featureId, query } = data
+        if (!pluginName || !featureId) {
+          return reply(DataCode.ERROR, { error: 'Plugin name and feature ID are required' })
+        }
+
+        const pluginIns = manager.plugins.get(pluginName)
+        if (!pluginIns) {
+          return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+        }
+
+        const feature = pluginIns.getFeature(featureId)
+        if (!feature) {
+          return reply(DataCode.ERROR, { error: `Feature ${featureId} not found in plugin ${pluginName}` })
+        }
+
+        const result = pluginIns.triggerInputChanged(feature, query)
+        return reply(DataCode.SUCCESS, result)
+      } catch (error) {
+        console.error('Error in plugin:api:feature-input-changed handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // System operation APIs
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:open-folder', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.getPluginByName(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        const pluginPath = plugin.pluginPath
+        const err = await shell.openPath(pluginPath)
+        if (err) {
+          console.error('Error opening plugin folder:', err)
+          return reply(DataCode.ERROR, { error: err })
+        }
+
+        return reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('Error in plugin:api:open-folder handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-official-list', async ({ data, reply }) => {
+      try {
+        const result = await getOfficialPlugins({ force: Boolean(data?.force) })
+        return reply(DataCode.SUCCESS, result)
+      } catch (error: any) {
+        console.error('Failed to fetch official plugin list:', error)
+        return reply(DataCode.ERROR, {
+          error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
+        })
       }
     })
   }

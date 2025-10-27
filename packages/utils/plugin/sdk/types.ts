@@ -842,3 +842,78 @@ export interface IPluginInfoManager {
    */
   getPlatforms(): any
 }
+
+/**
+ * Plugin state change event types
+ *
+ * @description
+ * Represents different types of plugin state changes for incremental updates
+ */
+export type PluginStateEvent =
+  | { type: 'added'; plugin: any }
+  | { type: 'removed'; name: string }
+  | { type: 'updated'; name: string; changes: Partial<any> }
+  | { type: 'status-changed'; name: string; status: number }
+  | { type: 'readme-updated'; name: string; readme: string }
+
+/**
+ * Plugin filter options for list queries
+ */
+export interface PluginFilters {
+  /** Filter by plugin status */
+  status?: number
+  /** Filter by enabled state */
+  enabled?: boolean
+  /** Filter by development mode */
+  dev?: boolean
+}
+
+/**
+ * Trigger feature request payload
+ */
+export interface TriggerFeatureRequest {
+  /** Plugin name */
+  plugin: string
+  /** Feature ID */
+  feature: string
+  /** Search query or trigger input */
+  query?: string
+}
+
+/**
+ * Input changed event payload
+ */
+export interface InputChangedRequest {
+  /** Plugin name */
+  plugin: string
+  /** Feature ID */
+  feature: string
+  /** Current input value */
+  query: string
+}
+
+/**
+ * Plugin install request payload
+ */
+export interface InstallRequest {
+  /** Install source (URL, file path, etc) */
+  source: string
+  /** Hint type for installer */
+  hintType?: string
+  /** Additional metadata */
+  metadata?: Record<string, any>
+  /** Client metadata */
+  clientMetadata?: Record<string, any>
+}
+
+/**
+ * Plugin install response
+ */
+export interface InstallResponse {
+  /** Whether installation was successful */
+  success: boolean
+  /** Error message if failed */
+  error?: string
+  /** Installed plugin name */
+  pluginName?: string
+}

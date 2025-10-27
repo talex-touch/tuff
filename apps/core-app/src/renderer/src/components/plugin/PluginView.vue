@@ -16,7 +16,7 @@ export default {
 
 <script setup>
 import { forDialogMention } from '@modules/mention/dialog-mention'
-import { pluginManager } from '@modules/channel/plugin-core/api'
+import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import Loading from '@comp/icon/LoadingIcon.vue'
 
 const props = defineProps({
@@ -60,7 +60,7 @@ function handleListeners(viewData, webview) {
       {
         content: 'Restart plugin',
         type: 'warning',
-        onClick: () => pluginManager.reloadPlugin(props.plugin.name) && true
+        onClick: () => pluginSDK.reload(props.plugin.name) && true
       }
     ])
 

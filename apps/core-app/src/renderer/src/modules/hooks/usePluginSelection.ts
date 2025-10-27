@@ -1,5 +1,5 @@
 import { ref, watch, computed, nextTick } from 'vue'
-import { usePluginStore } from '~/modules/adapter/plugin-adapter/store'
+import { usePluginStore } from '~/stores/plugin'
 import { storeToRefs } from 'pinia'
 import { useDebounceFn } from '@vueuse/core'
 
