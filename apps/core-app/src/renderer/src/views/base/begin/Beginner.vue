@@ -3,32 +3,21 @@ import { sleep } from '@talex-touch/utils/common/utils'
 import Greeting from './internal/Greeting.vue'
 import { appSetting, storageManager } from '~/modules/channel/storage/index'
 import { type Component, type Ref } from 'vue'
-import LaunchMusic from '~/assets/sound/launch.mp3'
 
-// Reactive references
 const main: Ref<HTMLElement | null> = ref(null)
 const content: Ref<HTMLElement | null> = ref(null)
 const component: Ref<Component | null> = ref(null)
 const last_component: Ref<Component | null> = ref(null)
 
-// Audio element for launch sound
-let audio: HTMLAudioElement | null = null
-
-// Initialize appSetting.beginner if it doesn't exist
 if (!appSetting.beginner) {
   appSetting.beginner = {
     init: false
   }
 }
 
-/**
- * Step through the setup wizard
- * @param call - Object containing component and optional rectangle dimensions
- * @param dataAction - Optional function to perform data actions
- */
 async function step(
   call: { comp: Component | null; rect?: { width: number; height: number } },
-  dataAction?: (storageManager: any) => void
+  dataAction?: (storage: unknown) => void
 ): Promise<void> {
   if (!content.value) return
 
@@ -38,7 +27,6 @@ async function step(
   const { comp, rect } = call
   dataAction?.(storageManager)
 
-  // Handle completion case
   if (!comp) {
     if (main.value && main.value.parentElement) {
       main.value.parentElement.style.opacity = '0'
@@ -49,7 +37,6 @@ async function step(
     return
   }
 
-  // Adjust size if rectangle dimensions are provided
   if (rect && main.value) {
     Object.assign(main.value.style, {
       width: `${rect.width}px`,
@@ -58,7 +45,6 @@ async function step(
     await sleep(300)
   }
 
-  // Update component
   last_component.value = component.value
   component.value = comp
   await sleep(100)
@@ -68,17 +54,6 @@ async function step(
   }
 }
 
-// Play launch sound
-function playLaunchSound(): void {
-  if (!audio) {
-    audio = new Audio(LaunchMusic)
-    audio.volume = 0.5
-  }
-
-  audio.play().catch((e) => console.log('Audio play failed:', e))
-}
-
-// Provide step and back functions to child components
 provide('step', step)
 provide('back', () => {
   step({
@@ -86,12 +61,8 @@ provide('back', () => {
   })
 })
 
-// Initialize with Greeting component on mount
 onMounted(async () => {
   await sleep(100)
-
-  // Play launch sound when component mounts
-  playLaunchSound()
 
   step({
     comp: Greeting
@@ -133,8 +104,8 @@ onMounted(async () => {
   &-Main {
     position: absolute;
     padding: 2rem;
-    width: 70%; // Increased width for better layout
-    height: 85%; // Increased height for better layout
+    width: 70%;
+    height: 85%;
     left: 50%;
     top: 50%;
     animation: join 1s;
@@ -142,8 +113,6 @@ onMounted(async () => {
     box-sizing: border-box;
     transform: translate(-50%, -50%);
     backdrop-filter: saturate(180%) brightness(99%) blur(50px);
-
-    // Added max-width and max-height for better responsiveness
     max-width: 900px;
     max-height: 600px;
   }

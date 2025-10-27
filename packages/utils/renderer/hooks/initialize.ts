@@ -196,3 +196,8 @@ export function refreshPerformanceInfo(): IInitializationInfo {
   }
   return window.$initInfo
 }
+
+/**
+ * Development mode flag
+ */
+export const isDev = import.meta.env.MODE === 'development'

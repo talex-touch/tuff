@@ -29,8 +29,6 @@ export class DevProcessManager {
       return // Only enable in development mode
     }
 
-    console.log('[DevProcessManager] Initializing development process manager...')
-
     // Listen for various signals and exceptions
     process.on('SIGTERM', this.handleGracefulShutdown.bind(this))
     process.on('SIGINT', this.handleGracefulShutdown.bind(this))

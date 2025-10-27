@@ -8,7 +8,7 @@ import fse from 'fs-extra'
 import path from 'path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TouchPlugin } from './plugin'
-import { PluginIcon } from './plugin-icon'
+import { TuffIconImpl } from '../../core/tuff-icon'
 import { shell } from 'electron'
 import { createDbUtils } from '../../db/utils'
 import { databaseModule } from '../database'
@@ -17,7 +17,7 @@ import {
   touchEventBus
   // PluginStorageUpdatedEvent
 } from '../../core/eventbus/touch-event'
-import { createPluginLoader } from '../../plugins/loaders'
+import { createPluginLoader } from './plugin-loaders'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
@@ -30,6 +30,7 @@ import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import util from 'util'
 import { createLogger } from '../../utils/logger'
+import { DevServerHealthMonitor } from './dev-server-monitor'
 
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
@@ -336,10 +337,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       logDebug('Ready to load plugin from disk', pluginTag(pluginName), 'path:', currentPluginPath)
 
       if (!fse.existsSync(currentPluginPath) || !fse.existsSync(manifestPath)) {
-        const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'loading', {
-          enable: false,
-          address: ''
-        })
+        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
+        placeholderIcon.status = 'error'
         const touchPlugin = new TouchPlugin(
           pluginName,
           placeholderIcon,
@@ -425,10 +424,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       } catch (error: any) {
         logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
         // Create a dummy plugin to show the error in the UI
-        const placeholderIcon = new PluginIcon(currentPluginPath, 'error', 'fatal', {
-          enable: false,
-          address: ''
-        })
+        const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
+        placeholderIcon.status = 'error'
         const touchPlugin = new TouchPlugin(
           pluginName,
           placeholderIcon,
@@ -566,6 +563,13 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             try {
               logInfo('Auto-enabling plugin', pluginTag(pluginName))
               await plugin.enable()
+
+              if (plugin.dev.enable && plugin.dev.source) {
+                logInfo(
+                  'Plugin will be monitored for Dev Server health after module initialization'
+                )
+              }
+
               logInfo('Auto-enable complete', pluginTag(pluginName))
             } catch (e) {
               logError('Failed to auto-enable plugin', pluginTag(pluginName), e)
@@ -757,6 +761,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 export class PluginModule extends BaseModule {
   pluginManager?: IPluginManager
   installQueue?: PluginInstallQueue
+  healthMonitor?: DevServerHealthMonitor
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -771,9 +776,11 @@ export class PluginModule extends BaseModule {
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     this.pluginManager = createPluginModuleInternal(file.dirPath!)
     this.installQueue = (this.pluginManager as any).__installQueue as PluginInstallQueue
+    this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
   }
   onDestroy(): MaybePromise<void> {
     this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
+    this.healthMonitor?.destroy()
   }
 
   start(): MaybePromise<void> {
@@ -854,12 +861,19 @@ export class PluginModule extends BaseModule {
       if (success) {
         manager.enabledPlugins.add(data!.name)
         await manager.persistEnabledPlugins()
+
+        if (plugin.dev.enable && plugin.dev.source) {
+          this.healthMonitor?.startMonitoring(plugin)
+        }
       }
       return success
     })
     touchChannel.regChannel(ChannelType.MAIN, 'disable-plugin', async ({ data }) => {
       const plugin = manager.plugins.get(data!.name)
       if (!plugin) return false
+
+      this.healthMonitor?.stopMonitoring(data!.name)
+
       const success = await plugin.disable()
       if (success) {
         manager.enabledPlugins.delete(data!.name)
@@ -871,7 +885,21 @@ export class PluginModule extends BaseModule {
       const pluginName = data!.name
       if (!pluginName) return false
       if (!manager.plugins.has(pluginName)) return false
+
+      this.healthMonitor?.stopMonitoring(pluginName)
+
       await manager.reloadPlugin(pluginName)
+
+      const plugin = manager.plugins.get(pluginName)
+      if (
+        plugin &&
+        plugin.status === PluginStatus.ENABLED &&
+        plugin.dev.enable &&
+        plugin.dev.source
+      ) {
+        this.healthMonitor?.startMonitoring(plugin)
+      }
+
       return true
     })
     touchChannel.regChannel(ChannelType.MAIN, 'get-plugin', ({ data }) =>
@@ -1140,6 +1168,55 @@ export class PluginModule extends BaseModule {
         }
       }
     )
+
+    // Dev Server 健康监控相关 IPC 通道
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:reconnect-dev-server',
+      async ({ data, reply }) => {
+        try {
+          const { pluginName } = data
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const success = (await this.healthMonitor?.reconnectDevServer(pluginName)) || false
+          return reply(success ? DataCode.SUCCESS : DataCode.ERROR, { success })
+        } catch (error) {
+          console.error('Error in plugin:reconnect-dev-server handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:dev-server-status', ({ data, reply }) => {
+      try {
+        const { pluginName } = data
+        if (!pluginName) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const status = this.healthMonitor?.getStatus(pluginName) || {
+          monitoring: false,
+          connected: false
+        }
+        return reply(DataCode.SUCCESS, status)
+      } catch (error) {
+        console.error('Error in plugin:dev-server-status handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // 启动已启用插件的 Dev Server 健康监控
+    manager.plugins.forEach((plugin) => {
+      if (plugin.status === PluginStatus.ENABLED && plugin.dev.enable && plugin.dev.source) {
+        this.healthMonitor?.startMonitoring(plugin)
+      }
+    })
   }
 }
 

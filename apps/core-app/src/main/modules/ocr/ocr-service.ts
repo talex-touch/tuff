@@ -552,16 +552,66 @@ class OcrService {
     })
   }
 
+  /**
+   * Resolves the path to the OCR worker script.
+   * Attempts multiple strategies: compiled JS for production, TS for development,
+   * and fallback to current directory search.
+   * @returns URL pointing to the worker script
+   */
   private resolveWorkerUrl(): URL {
-    const jsUrl = new URL('./ocr-worker.js', import.meta.url)
     try {
+      const jsUrl = new URL('./ocr-worker.js', import.meta.url)
       const jsPath = fileURLToPath(jsUrl)
       if (existsSync(jsPath)) {
+        console.log('[OCR] Using compiled worker:', jsPath)
         return jsUrl
       }
-    } catch {}
+      console.warn('[OCR] Worker file not found at:', jsPath)
+    } catch (error) {
+      console.warn('[OCR] Failed to resolve JS worker path:', error)
+    }
 
-    return new URL('./ocr-worker.ts', import.meta.url)
+    try {
+      const tsUrl = new URL('./ocr-worker.ts', import.meta.url)
+      const tsPath = fileURLToPath(tsUrl)
+      if (existsSync(tsPath)) {
+        console.log('[OCR] Using TypeScript worker:', tsPath)
+        return tsUrl
+      }
+      console.warn('[OCR] Worker file not found at:', tsPath)
+    } catch (error) {
+      console.warn('[OCR] Failed to resolve TS worker path:', error)
+    }
+
+    try {
+      const currentDir = fileURLToPath(new URL('.', import.meta.url))
+      const jsPath = path.join(currentDir, 'ocr-worker.js')
+
+      if (existsSync(jsPath)) {
+        console.log('[OCR] Using worker from current directory:', jsPath)
+        return new URL('file://' + jsPath)
+      }
+
+      const tsPath = path.join(currentDir, 'ocr-worker.ts')
+      if (existsSync(tsPath)) {
+        console.log('[OCR] Using TS worker from current directory:', tsPath)
+        return new URL('file://' + tsPath)
+      }
+    } catch (error) {
+      console.error('[OCR] Failed to search in current directory:', error)
+    }
+
+    console.error('[OCR] Worker file not found, using fallback')
+    console.log('[OCR] import.meta.url:', import.meta.url)
+    try {
+      console.log('[OCR] Current directory:', fileURLToPath(new URL('.', import.meta.url)))
+    } catch (e) {
+      console.log('[OCR] Could not resolve current directory')
+    }
+
+    const fallbackUrl = new URL('./ocr-worker.ts', import.meta.url)
+    console.log('[OCR] Fallback to:', fallbackUrl.href)
+    return fallbackUrl
   }
 
   private async handleWorkerSuccess(message: WorkerSuccessMessage): Promise<void> {

@@ -13,7 +13,7 @@ const props = defineProps({
     required: true
   },
   modelValue: {
-    type: Number,
+    type: [String, Number],
     required: true
   },
   disabled: {

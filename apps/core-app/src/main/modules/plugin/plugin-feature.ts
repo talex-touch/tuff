@@ -4,18 +4,17 @@ import {
   IPluginDev,
   IPluginFeature,
   IPlatform,
-  IPluginIcon,
   IFeatureLifeCycle
 } from '@talex-touch/utils/plugin'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { PluginIcon } from './plugin-icon'
+import { TuffIconImpl } from '../../core/tuff-icon'
+import { ITuffIcon } from '@talex-touch/utils'
 import vm from 'vm'
 import { ITouchPlugin } from '@talex-touch/utils/plugin'
 
 export const createBuilderWithPluginContext = (pluginName: string): typeof TuffItemBuilder => {
   return class TuffItemBuilderWithPlugin extends TuffItemBuilder {
     constructor(id: string) {
-      // Call the parent constructor and immediately set the pluginName in meta.
       super(id, 'plugin', 'plugin-features')
       this.setMeta({ pluginName })
     }
@@ -57,7 +56,7 @@ export class PluginFeature implements IPluginFeature {
   id: string
   name: string
   desc: string
-  icon: IPluginIcon
+  icon: ITuffIcon
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]
@@ -69,7 +68,7 @@ export class PluginFeature implements IPluginFeature {
     this.id = options.id
     this.name = options.name
     this.desc = options.desc
-    this.icon = new PluginIcon(pluginPath, options.icon.type, options.icon.value, dev)
+    this.icon = new TuffIconImpl(pluginPath, options.icon.type, options.icon.value)
     this.push = options.push
     this.platform = options.platform
     this.commands = [...options.commands]

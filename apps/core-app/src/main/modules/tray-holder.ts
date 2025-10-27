@@ -14,6 +14,11 @@ interface IconItem {
   apply?: (app: TalexTouch.TouchApp, filePath: string) => void
 }
 
+/**
+ * @deprecated This remote icon download system is deprecated.
+ * Use the new TrayManager with local icon resources instead.
+ * See: apps/core-app/src/main/modules/tray/tray-manager.ts
+ */
 const iconItems: IconItem[] = [
   {
     url: 'https://files.catbox.moe/44pnti.png',
@@ -70,6 +75,10 @@ const iconItems: IconItem[] = [
   }
 ]
 
+/**
+ * @deprecated This module is deprecated. Use TrayManager instead.
+ * See: apps/core-app/src/main/modules/tray/tray-manager.ts
+ */
 export class TrayHolderModule extends BaseModule {
   static key: symbol = Symbol.for('TrayHolder')
   name: ModuleKey = TrayHolderModule.key
@@ -94,6 +103,7 @@ export class TrayHolderModule extends BaseModule {
       fse.ensureDirSync(modulePath)
     })
 
+    // @deprecated Remote download system - use local icons instead
     const downloadManager = new DownloadManager(modulePath)
 
     downloadManager.addDownloads(

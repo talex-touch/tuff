@@ -12,6 +12,7 @@ import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
 
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
+import { showPlatformCompatibilityWarning, shouldShowPlatformWarning } from '~/modules/mention/platform-warning'
 
 import './assets/main.css'
 import '~/styles/element/index.scss'
@@ -29,7 +30,29 @@ preloadLog('Bootstrapping Talex Touch renderer...')
 
 async function bootstrap() {
   preloadDebugStep('Loading localization resources...', 0.05)
-  const i18n = await setupI18n({ locale: 'zh-CN' })
+
+  // 从本地存储获取语言设置，如果没有则使用系统语言或默认中文
+  let initialLanguage = localStorage.getItem('app-language')
+
+  // 如果没有保存的语言设置，检查是否跟随系统语言
+  if (!initialLanguage) {
+    const followSystem = localStorage.getItem('app-follow-system-language') === 'true'
+    if (followSystem) {
+      // 检测系统语言
+      const systemLang = navigator.language || 'en-US'
+      if (systemLang.startsWith('zh')) {
+        initialLanguage = 'zh-CN'
+      } else if (systemLang.startsWith('en')) {
+        initialLanguage = 'en-US'
+      } else {
+        initialLanguage = 'zh-CN' // 默认中文
+      }
+    } else {
+      initialLanguage = 'zh-CN' // 默认中文
+    }
+  }
+
+  const i18n = await setupI18n({ locale: initialLanguage })
   ;(window as any).$i18n = i18n
 
   preloadDebugStep('Creating Vue application instance', 0.05)
@@ -44,7 +67,35 @@ async function bootstrap() {
   preloadDebugStep('Mounting renderer root container', 0.05)
   app.mount('#app')
 
-  preloadDebugStep('Renderer shell mounted', 0.04)
+  preloadDebugStep('Checking platform compatibility', 0.02)
+  // 检查平台兼容性并显示警告
+  checkPlatformCompatibility()
+
+  preloadDebugStep('Renderer shell mounted', 0.02)
+}
+
+/**
+ * 检查平台兼容性并显示警告
+ */
+async function checkPlatformCompatibility() {
+  try {
+    // 等待应用准备就绪
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    // 检查是否应该显示警告
+    if (!shouldShowPlatformWarning()) {
+      return
+    }
+
+    // 获取平台信息
+    const appInfo = await window.$nodeApi.send('app-ready')
+
+    if (appInfo?.platformWarning) {
+      await showPlatformCompatibilityWarning(appInfo.platformWarning)
+    }
+  } catch (error) {
+    console.warn('Failed to check platform compatibility:', error)
+  }
 }
 
 bootstrap().catch((error) => {

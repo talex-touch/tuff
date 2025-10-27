@@ -1,10 +1,10 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "The core app of talex-touch. A strong adaptation more platform all-tool program.",
   "main": "./out/main/index.js",
   "author": "TalexDreamSoul",
-  "homepage": "https://talex-touch.tagzxia.com",
+  "homepage": "https://tuff.tagzxia.com",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -27,6 +27,8 @@
     "build:snapshot:linux": "node scripts/build-target.js --target=linux --type=snapshot"
   },
   "dependencies": {
+    "@clerk/clerk-js": "^5.102.0",
+    "@clerk/types": "^4.95.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.2",
@@ -79,6 +81,7 @@
     "vue-i18n": "^11.1.11",
     "vue-profile-avatar": "^1.2.0",
     "vue-router": "^4.5.1",
+    "vue-sonner": "^2.0.9",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "yauzl": "^3.2.0"

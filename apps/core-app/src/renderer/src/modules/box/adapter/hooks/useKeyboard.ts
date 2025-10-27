@@ -70,14 +70,14 @@ export function useKeyboard(
     const sb = scrollbar.value
 
     if (lastFocus < boxOptions.focus) {
-      if (diff <= 48 * 9) return
+      if (diff <= 48 * 8) return
 
-      sb.scrollTo(0, diff - 48 * 9)
+      sb.scrollTo(0, diff - 48 * 9 + 40)
     } else {
       const mod = boxOptions.focus / 9
       if (!mod) return
 
-      sb.scrollTo(0, diff - 48 * 9)
+      sb.scrollTo(0, diff - 48 * 9 + 40)
     }
   }
 
