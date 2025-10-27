@@ -6,7 +6,7 @@ import router from './base/router'
 import { baseNodeApi } from '~/modules/channel/main/node'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
-import { setupPluginChannel } from '~/modules/adapter/plugin-adapter'
+import { usePluginStore } from '~/stores/plugin'
 import { setupI18n } from '~/modules/lang'
 import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
@@ -61,8 +61,9 @@ async function bootstrap() {
   preloadDebugStep('Registering plugins and global modules', 0.05)
   app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
 
-  preloadDebugStep('Binding plugin communication channel', 0.05)
-  setupPluginChannel()
+  preloadDebugStep('Initializing plugin store', 0.05)
+  const pluginStore = usePluginStore()
+  await pluginStore.initialize()
 
   preloadDebugStep('Mounting renderer root container', 0.05)
   app.mount('#app')

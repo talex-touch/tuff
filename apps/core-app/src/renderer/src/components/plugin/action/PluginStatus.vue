@@ -4,7 +4,7 @@
 
 <script name="PluginStatus" lang="ts" setup>
 import { ITouchPlugin, PluginStatus } from '@talex-touch/utils'
-import { pluginManager } from '~/modules/channel/plugin-core/api'
+import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -52,7 +52,7 @@ function refresh(): void {
     el.innerHTML = t('plugin.status.disabled')
 
     func.value = async () => {
-      await pluginManager.enablePlugin(props.plugin.name)
+      await pluginSDK.enable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.DISABLING) {
     el.innerHTML = ``
@@ -60,13 +60,13 @@ function refresh(): void {
     el.innerHTML = t('plugin.status.crashed')
 
     func.value = async () => {
-      await pluginManager.enablePlugin(props.plugin.name)
+      await pluginSDK.enable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.ENABLED) {
     el.innerHTML = t('plugin.status.enabled')
 
     func.value = async () => {
-      await pluginManager.disablePlugin(props.plugin.name)
+      await pluginSDK.disable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.ACTIVE) {
     el.innerHTML = ``
@@ -76,7 +76,7 @@ function refresh(): void {
     el.innerHTML = t('plugin.status.loaded')
 
     func.value = async () => {
-      await pluginManager.enablePlugin(props.plugin.name)
+      await pluginSDK.enable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.LOAD_FAILED) {
     el.innerHTML = t('plugin.status.loadFailed')
@@ -84,7 +84,7 @@ function refresh(): void {
     func.value = async () => {
       try {
         console.log(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
-        await pluginManager.reloadPlugin(props.plugin.name)
+        await pluginSDK.reload(props.plugin.name)
         console.log(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
       } catch (error) {
         console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)

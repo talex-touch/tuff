@@ -11,7 +11,13 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { ITuffIcon } from '@talex-touch/utils'
 import vm from 'vm'
 import { ITouchPlugin } from '@talex-touch/utils/plugin'
+import fse from 'fs-extra'
 
+/**
+ * Create TuffItemBuilder with plugin context
+ * @param pluginName - Plugin name to inject into meta
+ * @returns TuffItemBuilder subclass with plugin context
+ */
 export const createBuilderWithPluginContext = (pluginName: string): typeof TuffItemBuilder => {
   return class TuffItemBuilderWithPlugin extends TuffItemBuilder {
     constructor(id: string) {
@@ -21,8 +27,13 @@ export const createBuilderWithPluginContext = (pluginName: string): typeof TuffI
   }
 }
 
-import fse from 'fs-extra'
-
+/**
+ * Load plugin feature lifecycle from script content
+ * @param plugin - Plugin instance
+ * @param scriptContent - JavaScript code to execute
+ * @param context - Execution context
+ * @returns Feature lifecycle implementation
+ */
 export function loadPluginFeatureContextFromContent(
   plugin: ITouchPlugin,
   scriptContent: string,
@@ -43,6 +54,13 @@ export function loadPluginFeatureContextFromContent(
   return sandbox.module.exports
 }
 
+/**
+ * Load plugin feature lifecycle from file
+ * @param plugin - Plugin instance
+ * @param featureIndex - Path to feature script
+ * @param context - Execution context
+ * @returns Feature lifecycle implementation
+ */
 export function loadPluginFeatureContext(
   plugin: ITouchPlugin,
   featureIndex: string,
@@ -52,6 +70,9 @@ export function loadPluginFeatureContext(
   return loadPluginFeatureContextFromContent(plugin, scriptContent, context)
 }
 
+/**
+ * Plugin feature implementation
+ */
 export class PluginFeature implements IPluginFeature {
   id: string
   name: string
@@ -77,12 +98,20 @@ export class PluginFeature implements IPluginFeature {
     this.dev = dev
   }
 
+  /**
+   * Serialize feature to JSON object
+   * @returns Plain object representation of the feature
+   */
   toJSONObject(): object {
     return {
       id: this.id,
       name: this.name,
       desc: this.desc,
-      icon: this.icon,
+      icon: {
+        type: this.icon.type,
+        value: this.icon.value,
+        status: this.icon.status
+      },
       push: this.push,
       platform: this.platform,
       commands: this.commands,

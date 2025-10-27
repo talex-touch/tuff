@@ -59,6 +59,9 @@ const disallowedArrays = [
   '排名系统'
 ]
 
+/**
+ * Plugin implementation
+ */
 export class TouchPlugin implements ITouchPlugin {
   dev: IPluginDev
   name: string
@@ -86,18 +89,25 @@ export class TouchPlugin implements ITouchPlugin {
 
   _windows: Map<number, TouchWindow> = new Map()
 
-  // Search Result
   _searchItems: TuffItem[] = []
   _lastSearchQuery: string = ''
   _searchTimestamp: number = 0
 
+  /**
+   * Serialize plugin to JSON object
+   * @returns Plain object representation of the plugin
+   */
   toJSONObject(): object {
     return {
       name: this.name,
       readme: this.readme,
       version: this.version,
       desc: this.desc,
-      icon: this.icon,
+      icon: {
+        type: this.icon.type,
+        value: this.icon.value,
+        status: this.icon.status
+      },
       dev: this.dev,
       status: this.status,
       platforms: this.platforms,
@@ -196,7 +206,6 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     if (feature.interaction?.type === 'widget') {
-      // TODO: Implement widget logic
       this.logger.warn(`Widget interaction type is not implemented yet for feature: ${feature.id}`)
       return
     }
@@ -419,7 +428,6 @@ export class TouchPlugin implements ITouchPlugin {
     this._windows.forEach((win, id) => {
       try {
         if (!win.window.isDestroyed()) {
-          // In development mode, close the window more gently
           if (!app.isPackaged) {
             console.log(`[Plugin] Gracefully closing window ${id} for plugin ${this.name}`)
             win.window.hide()
@@ -757,6 +765,54 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    const pluginsAPI = {
+      /**
+       * Get list of all plugins (read-only access)
+       * @param filters Optional filters for plugin list
+       * @returns Promise resolving to array of plugin objects
+       */
+      list: async (filters?: any) => {
+        try {
+          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:list', { filters })
+          return response || []
+        } catch (error) {
+          console.error(`[Plugin ${pluginName}] Failed to list plugins:`, error)
+          return []
+        }
+      },
+
+      /**
+       * Get specific plugin information (read-only access)
+       * @param name Plugin name
+       * @returns Promise resolving to plugin object or null
+       */
+      get: async (name: string) => {
+        try {
+          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get', { name })
+          return response
+        } catch (error) {
+          console.error(`[Plugin ${pluginName}] Failed to get plugin ${name}:`, error)
+          return null
+        }
+      },
+
+      /**
+       * Get plugin status (read-only access)
+       * @param name Plugin name
+       * @returns Promise resolving to plugin status number
+       */
+      getStatus: async (name: string) => {
+        try {
+          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get-status', { name })
+          return response
+        } catch (error) {
+          console.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}:`, error)
+          throw error
+        }
+      }
+
+    }
+
     return {
       dialog,
       logger: this.logger,
@@ -772,6 +828,7 @@ export class TouchPlugin implements ITouchPlugin {
       search: searchManager,
       features: featuresManager,
       plugin: pluginInfo,
+      plugins: pluginsAPI,
       $box: {
         hide() {
           CoreBoxManager.getInstance().trigger(false)

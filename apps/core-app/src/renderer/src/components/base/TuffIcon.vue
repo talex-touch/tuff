@@ -53,6 +53,8 @@ watch(
     :title="alt"
     role="img"
     class="TuffIcon"
+    :data-icon-type="icon.type"
+    :data-icon-value="icon.value"
     :class="{ 'TuffIcon-Loading': loading }"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
