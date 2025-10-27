@@ -32,12 +32,9 @@ const {
 
 const isSvg = computed(() => url.value?.endsWith('.svg'))
 
-const dataurl = computed(
-  () => {
-    console.log('dataurl', svgContent.value)
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
-  }
-)
+const dataurl = computed(() => {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
+})
 
 watch(
   () => isSvg.value,

@@ -46,7 +46,7 @@ function refresh(): void {
   )
   el.classList.add(mapper[status.value])
 
-  console.log('PluginStatus', props.plugin.name, status.value)
+  console.debug('PluginStatus', props.plugin.name, status.value)
 
   if (status.value === PluginStatus.DISABLED) {
     el.innerHTML = t('plugin.status.disabled')

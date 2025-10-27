@@ -3,12 +3,9 @@
     <div class="FeatureCard-Content">
       <div class="FeatureCard-Header flex items-start justify-between mb-4">
         <div
-          class="FeatureCard-Icon w-12 h-12 bg-gradient-to-br from-[var(--el-color-primary)] to-[var(--el-color-primary-light-3)] rounded-xl flex items-center justify-center"
+          class="FeatureCard-Icon w-12 h-12 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center"
         >
-          <i
-            :class="feature.icon || 'i-ri-function-line'"
-            class="text-[var(--el-color-white)] text-xl"
-          />
+          <TuffIcon :icon="feature.icon" empty="i-carbon-application" :size="32" />
         </div>
         <div
           class="FeatureCard-Badge bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] text-xs px-2 py-1 rounded-lg border border-[var(--el-color-primary-light-8)]"

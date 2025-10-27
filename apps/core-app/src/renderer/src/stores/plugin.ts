@@ -40,6 +40,10 @@ export const usePluginStore = defineStore('plugin', () => {
    * @param pluginList - Complete list of plugins
    */
   function initPlugins(pluginList: ITouchPlugin[]): void {
+    if (!Array.isArray(pluginList)) {
+      console.error('[PluginStore] Invalid plugin list received:', pluginList)
+      return
+    }
     console.log('[PluginStore] Initializing plugins with', pluginList.length, 'plugins')
     plugins.clear()
     pluginList.forEach((plugin) => {
@@ -143,6 +147,10 @@ export const usePluginStore = defineStore('plugin', () => {
 
     try {
       const pluginList = await pluginSDK.list()
+      if (!Array.isArray(pluginList)) {
+        console.error('[PluginStore] Invalid plugin list received:', pluginList)
+        return unsubscribe
+      }
       console.log('[PluginStore] Loaded', pluginList.length, 'plugins')
       initPlugins(pluginList)
     } catch (error) {
@@ -165,4 +173,3 @@ export const usePluginStore = defineStore('plugin', () => {
     initialize
   }
 })
-
