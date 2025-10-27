@@ -42,6 +42,7 @@ protocol.registerSchemesAsPrivileged([
 const modulesToLoad = [
   databaseModule,
   storageModule,
+  fileProtocolModule,
   shortcutModule,
   extensionLoaderModule,
   commonChannelModule,
@@ -54,7 +55,6 @@ const modulesToLoad = [
   clipboardModule,
   tuffDashboardModule,
   FileSystemWatcher,
-  fileProtocolModule,
   terminalModule,
   downloadCenterModule
 ]

@@ -33,7 +33,10 @@ const {
 const isSvg = computed(() => url.value?.endsWith('.svg'))
 
 const dataurl = computed(
-  () => `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
+  () => {
+    console.log('dataurl', svgContent.value)
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
+  }
 )
 
 watch(
