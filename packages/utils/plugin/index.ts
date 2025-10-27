@@ -14,6 +14,9 @@ export enum PluginStatus {
   LOADING,
   LOADED,
   LOAD_FAILED,
+
+  DEV_DISCONNECTED,  // Dev Server 断连
+  DEV_RECONNECTING,  // 正在重连
 }
 
 export interface PluginIssue {
@@ -26,13 +29,15 @@ export interface PluginIssue {
   timestamp?: number
 }
 
-export interface IPluginIcon {
-  type: string | 'remixicon' | 'class'
-  value: any
-  _value?: string
-
-  init(): Promise<void>
+export interface DevServerHealthCheckResult {
+  healthy: boolean
+  version?: string
+  timestamp: number
+  error?: string
 }
+
+import type { ITuffIcon } from '../types/icon'
+
 
 export interface IPlatformInfo {
   enable: boolean
@@ -51,7 +56,7 @@ export interface IPluginBaseInfo {
   readme: string
   version: string
   desc: string
-  icon: IPluginIcon
+  icon: ITuffIcon
   platforms: IPlatform
   _uniqueChannelKey: string
 }
@@ -134,7 +139,7 @@ export interface IPluginFeature {
   id: string
   name: string
   desc: string
-  icon: IPluginIcon
+  icon: ITuffIcon
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]

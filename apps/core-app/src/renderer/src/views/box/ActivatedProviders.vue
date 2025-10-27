@@ -31,7 +31,9 @@ function getUniqueKey(provider: IProviderActivate): string {
           :icon="provider.icon || provider.meta?.pluginIcon"
           :alt="provider.name || provider.meta?.pluginName"
         />
-        <span>{{ provider.name || provider.meta?.pluginName || provider.id }}</span>
+        <span class="Activated-Provider-PillMajor-Label truncate">{{
+          provider.name || provider.meta?.pluginName || provider.id
+        }}</span>
       </div>
       <div class="Activated-Provider-PillVice">
         <span v-if="provider.meta?.feature">{{ provider.meta.feature.render?.basic?.title }}</span>
@@ -50,6 +52,22 @@ function getUniqueKey(provider: IProviderActivate): string {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.Activated-Provider-PillMajor-Label {
+  max-width: 0px;
+  animation: truncateShrink 3s 0.5s linear;
+}
+
+@keyframes truncateShrink {
+  0%,
+  100% {
+    max-width: 0px;
+  }
+
+  50% {
+    max-width: 500px;
+  }
 }
 
 .Activated-Provider-PillMajor {

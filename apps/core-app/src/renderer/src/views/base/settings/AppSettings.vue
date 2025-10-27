@@ -3,11 +3,13 @@
     <div class="AppSettings-Container">
       <SettingHeader />
 
-      <!-- <SettingUser /> -->
+      <SettingUser />
 
       <SettingLanguage />
 
       <SettingTools />
+
+      <SettingDownload />
 
       <!-- <SettingStorage /> -->
 
@@ -19,18 +21,12 @@
 <script lang="ts" name="AppSettings" setup>
 import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
 import SettingHeader from './SettingHeader.vue'
-// import SettingUser from './SettingUser.vue'
+import SettingUser from './SettingUser.vue'
 import SettingLanguage from './SettingLanguage.vue'
 import SettingTools from './SettingTools.vue'
+import SettingDownload from './SettingDownload.vue'
 // import SettingStorage from './SettingStorage.vue'
 import SettingAbout from './SettingAbout.vue'
-
-const dev = ref(false)
-
-// initially
-onMounted(async () => {
-  dev.value = process.env.NODE_ENV === 'development'
-})
 </script>
 
 <style lang="scss" scoped>

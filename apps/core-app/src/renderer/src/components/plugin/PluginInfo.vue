@@ -3,17 +3,12 @@
     class="plugin-info-root h-full flex flex-col bg-gray-50 dark:bg-gray-900 relative"
     :class="{ 'has-error-glow': hasErrors }"
   >
-    <!-- Plugin Header -->
     <div
       class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
     >
       <div class="flex items-center gap-3">
         <div class="relative">
-          <div
-            class="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"
-          >
-            <PluginIcon :alt="plugin.name" :icon="plugin.icon" />
-          </div>
+          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="32" />
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
             :class="statusClass.indicator"
@@ -24,7 +19,9 @@
           <h1 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
             {{ plugin.name }}
           </h1>
-          <p class="text-sm text-gray-600 dark:text-gray-400 truncate">{{ plugin.desc }}</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400 truncate max-w-full">
+            {{ plugin.desc }}
+          </p>
           <div class="flex gap-2 mt-1">
             <span
               v-if="plugin.dev?.enable"
@@ -43,26 +40,46 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <FlatButton class="action-button" :disabled="loadingStates.reload" @click="handleReloadPlugin">
-          <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
-          <i v-else class="i-ri-loader-4-line animate-spin" />
-          <span>{{
-            loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
-          }}</span>
-        </FlatButton>
-        <FlatButton class="action-button" @click="openHistoryDrawer">
-          <i class="i-ri-history-line" />
-          <span>{{ historyActionLabel }}</span>
-        </FlatButton>
-        <FlatButton class="action-button" :disabled="loadingStates.openFolder" @click="handleOpenPluginFolder">
-          <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
-          <i v-else class="i-ri-loader-4-line animate-spin" />
-          <span>{{
-            loadingStates.openFolder ? t('plugin.actions.opening') : t('plugin.actions.openFolder')
-          }}</span>
-        </FlatButton>
-      </div>
+      <el-popover
+        placement="bottom-end"
+        :width="200"
+        trigger="click"
+        popper-class="plugin-actions-popover"
+      >
+        <template #reference>
+          <button
+            class="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+          >
+            <i class="i-ri-more-2-line text-xl text-gray-600 dark:text-gray-400" />
+          </button>
+        </template>
+        <div class="plugin-actions-menu">
+          <div
+            class="action-item"
+            :class="{ disabled: loadingStates.reload }"
+            @click="handleReloadPlugin"
+          >
+            <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
+            <i v-else class="i-ri-loader-4-line animate-spin" />
+            <span>{{
+              loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
+            }}</span>
+          </div>
+          <div
+            class="action-item"
+            :class="{ disabled: loadingStates.openFolder }"
+            @click="handleOpenPluginFolder"
+          >
+            <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
+            <i v-else class="i-ri-loader-4-line animate-spin" />
+            <span>{{
+              loadingStates.openFolder
+                ? t('plugin.actions.opening')
+                : t('plugin.actions.openFolder')
+            }}</span>
+          </div>
+        </div>
+      </el-popover>
     </div>
 
     <!-- Status Section -->
@@ -86,7 +103,11 @@
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="database-2-line" name="Storage(Mock)" :label="t('plugin.tabs.storageMock')">
+        <TvTabItem
+          icon="database-2-line"
+          name="Storage(Mock)"
+          :label="t('plugin.tabs.storageMock')"
+        >
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
@@ -102,8 +123,8 @@
 
 <script lang="ts" name="PluginInfo" setup>
 import { ref, computed, watchEffect, useSlots, VNode } from 'vue'
+import { ElPopover } from 'element-plus'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
-import FlatButton from '../base/button/FlatButton.vue'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import TvTabs from '@comp/tabs/vertical/TvTabs.vue'
 import TvTabItem from '@comp/tabs/vertical/TvTabItem.vue'
@@ -116,6 +137,8 @@ import PluginIssues from './tabs/PluginIssues.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 // Props
 const props = defineProps<{
@@ -138,10 +161,6 @@ const loadingStates = ref({
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
 const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
-const historyActionLabel = computed(() => {
-  const value = t('plugin.actions.history')
-  return value === 'plugin.actions.history' ? '历史日志' : value
-})
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
@@ -176,10 +195,6 @@ const statusClass = computed(() => {
   return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
 })
 
-const openHistoryDrawer = (): void => {
-  pluginLogsRef.value?.openHistoryDrawer()
-}
-
 // Action handlers
 async function handleReloadPlugin(): Promise<void> {
   if (!props.plugin || loadingStates.value.reload) return
@@ -209,16 +224,40 @@ async function handleOpenPluginFolder(): Promise<void> {
 </script>
 
 <style lang="scss" scoped>
-.action-button :deep(.FlatButton-Container) {
-  @apply h-10 px-3 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center gap-2 transition-colors;
+.plugin-actions-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.action-button :deep(.FlatButton-Container i) {
-  @apply text-lg;
-}
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
 
-.action-button :deep(.FlatButton-Container:disabled) {
-  @apply opacity-50 cursor-not-allowed;
+  &:hover:not(.disabled) {
+    background-color: var(--el-fill-color-light);
+  }
+
+  &.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  i {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  span {
+    flex: 1;
+  }
 }
 
 .plugin-info-root.has-error-glow {

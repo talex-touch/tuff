@@ -88,10 +88,12 @@ export default {
               slot.el.addEventListener('click', (e) => {
                 // activeIndex.value = index //slots.indexOf(slot)
 
-                that.$emit('update:modelValue', (that.activeIndex = index))
+                // 传递选项的 value 而不是索引
+                const optionValue = slot.props?.value !== undefined ? slot.props.value : index
+                that.$emit('update:modelValue', optionValue)
                 that.$emit(
                   'change',
-                  slot.props?.hasOwnProperty('name') ? slot.props.name : index,
+                  slot.props?.hasOwnProperty('name') ? slot.props.name : optionValue,
                   e
                 )
 

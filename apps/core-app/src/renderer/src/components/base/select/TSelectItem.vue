@@ -4,9 +4,11 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 /**
  * Props definition
  * @prop modelValue - The currently selected value
+ * @prop value - The value of this option
  */
 defineProps<{
   modelValue: string | number
+  value?: string | number
 }>()
 
 /**

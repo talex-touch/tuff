@@ -13,6 +13,7 @@ import { addonOpenerModule } from './modules/addon-opener'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { trayHolderModule } from './modules/tray-holder'
+// import { trayManagerModule } from './modules/tray/tray-manager'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
@@ -20,6 +21,7 @@ import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventb
 import { fileProtocolModule } from './modules/file-protocol'
 import { terminalModule } from './modules/terminal/terminal.manager'
 import { extensionLoaderModule } from './modules/extension-loader'
+import { downloadCenterModule } from './modules/download/download-center'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
@@ -47,12 +49,14 @@ const modulesToLoad = [
   pluginLogModule,
   coreBoxModule,
   trayHolderModule,
+  // trayManagerModule,
   addonOpenerModule,
   clipboardModule,
   tuffDashboardModule,
   FileSystemWatcher,
   fileProtocolModule,
-  terminalModule
+  terminalModule,
+  downloadCenterModule
 ]
 
 const pollingLog = mainLog.child('PollingService')

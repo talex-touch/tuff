@@ -8,11 +8,16 @@ import {
   preloadRemoveOverlay,
   preloadState
 } from '@talex-touch/utils/preload'
+import { useAppState } from './modules/hooks/useAppStates'
+import { useApplicationUpgrade } from './modules/hooks/useUpdate'
+import { Toaster } from 'vue-sonner'
 
 const init = ref(false)
 const props = defineProps<{
   onReady: () => Promise<void>
 }>()
+const { appStates } = useAppState()
+const { checkApplicationUpgrade } = useApplicationUpgrade()
 
 async function entry(): Promise<void> {
   try {
@@ -31,8 +36,10 @@ async function entry(): Promise<void> {
 
     preloadDebugStep('Renderer warmup completed', 0.06)
     preloadState('finish')
-    preloadLog('Talex Touch is ready.')
+    preloadLog('Tuff is ready.')
     preloadRemoveOverlay()
+
+    isCoreBox() ? executeCoreboxTask() : executeMainTask()
 
     init.value = true
   } catch (error) {
@@ -41,16 +48,27 @@ async function entry(): Promise<void> {
   }
 }
 
+async function executeMainTask(): Promise<void> {
+  await checkApplicationUpgrade()
+}
+
+function executeCoreboxTask(): Promise<void> {
+  console.log('executeCoreboxTask')
+}
+
 setTimeout(() => {
   void entry()
 }, 100)
 </script>
 
 <template>
-  <template v-if="isCoreBox()">
-    <CoreBox />
-  </template>
-  <template v-else-if="init">
-    <slot />
-  </template>
+  <div class="AppEntrance absolute inset-0" :class="{ 'has-update': appStates.hasUpdate }">
+    <Toaster theme="system" rich-colors />
+    <template v-if="isCoreBox()">
+      <CoreBox />
+    </template>
+    <template v-else-if="init">
+      <slot />
+    </template>
+  </div>
 </template>
