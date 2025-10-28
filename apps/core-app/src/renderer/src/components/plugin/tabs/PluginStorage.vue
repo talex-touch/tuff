@@ -25,22 +25,22 @@
       <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           :value="toMB(storageStats.totalSize || 0)"
-          label="Total Storage (MB)"
+          :label="`${t('plugin.storage.stats.totalStorage')} (MB)`"
           icon-class="i-ri-database-line text-6xl text-[var(--el-color-primary)]"
         />
         <StatCard
           :value="String(storageStats.fileCount || 0)"
-          label="Files"
+          :label="t('plugin.storage.stats.files')"
           icon-class="i-ri-file-line text-6xl text-[var(--el-color-success)]"
         />
         <StatCard
           :value="String(storageStats.dirCount || 0)"
-          label="Directories"
+          :label="t('plugin.storage.stats.directories')"
           icon-class="i-ri-folder-line text-6xl text-[var(--el-color-info)]"
         />
         <StatCard
           :value="(storageStats.usagePercent || 0).toFixed(2)"
-          label="Usage (%)"
+          :label="`${t('plugin.storage.stats.usage')} (%)`"
           :icon-class="`i-ri-pie-chart-line text-6xl ${usageColorClass}`"
         />
       </div>
@@ -53,16 +53,34 @@
       <div class="PluginStorage-CardHeader flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
           <i class="i-ri-file-list-line text-xl text-[var(--el-color-primary)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Files</h3>
+          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
+            {{ t('plugin.storage.title') }}
+          </h3>
         </div>
         <div class="flex gap-2">
-          <el-button size="small" @click="handleOpenFolder">
-            <i class="i-ri-folder-open-line" />
-            Open Folder
+          <el-button size="small" type="primary" plain @click="refreshData">
+            <i class="i-ri-refresh-line" />
+            {{ t('plugin.storage.actions.refresh') }}
           </el-button>
           <el-button size="small" @click="handleOpenInEditor">
             <i class="i-ri-edit-line" />
-            Open in Editor
+            {{ t('plugin.storage.actions.openInEditor') }}
+          </el-button>
+          <el-button size="small" @click="handleOpenFolder">
+            <i class="i-ri-folder-open-line" />
+            {{ t('plugin.storage.actions.openFolder') }}
+          </el-button>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            :loading="clearing"
+            @click="handleClearStorage"
+          >
+            <i v-if="!clearing" class="i-ri-delete-bin-line" />
+            {{
+              clearing ? t('plugin.storage.actions.clearing') : t('plugin.storage.actions.clearAll')
+            }}
           </el-button>
         </div>
       </div>
@@ -90,7 +108,7 @@
         v-else-if="!loading && fileList.length === 0"
         class="flex-1 flex items-center justify-center"
       >
-        <el-empty description="No files in storage" />
+        <el-empty :description="t('plugin.storage.empty')" />
       </div>
 
       <div v-else class="flex-1 overflow-auto space-y-2">
@@ -118,39 +136,13 @@
         </div>
       </div>
     </div>
-
-    <!-- Action Buttons -->
-    <div class="PluginStorage-Actions flex flex-wrap gap-3 cursor-pointer">
-      <button
-        class="PluginStorage-ActionButton bg-[var(--el-color-danger-light-9)] text-[var(--el-color-danger)] border border-[var(--el-color-danger-light-8)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        :disabled="clearing"
-        @click="handleClearStorage"
-      >
-        <i v-if="!clearing" class="i-ri-delete-bin-line" />
-        <i v-else class="i-ri-loader-4-line animate-spin" />
-        {{ clearing ? 'Clearing...' : 'Clear All Storage' }}
-      </button>
-      <button
-        class="PluginStorage-ActionButton bg-[var(--el-fill-color-light)] text-[var(--el-text-color-primary)] border border-[var(--el-border-color-lighter)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        @click="handleOpenFolder"
-      >
-        <i class="i-ri-folder-open-line" />
-        Open Storage Folder
-      </button>
-      <button
-        class="PluginStorage-ActionButton bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] border border-[var(--el-color-primary-light-8)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        @click="refreshData"
-      >
-        <i class="i-ri-refresh-line" />
-        Refresh Data
-      </button>
-    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import StatCard from '../../base/card/StatCard.vue'
@@ -159,6 +151,9 @@ import StatCard from '../../base/card/StatCard.vue'
 const props = defineProps<{
   plugin: ITouchPlugin
 }>()
+
+// Composables
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -221,7 +216,7 @@ async function loadStorageData(): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to load storage data:', error)
-    ElMessage.error('Failed to load storage data')
+    ElMessage.error(t('plugin.storage.message.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -300,16 +295,20 @@ async function handleOpenInEditor(): Promise<void> {
     })
   } catch (error) {
     console.error('Failed to open in editor:', error)
-    ElMessage.error('Failed to open storage folder in editor')
+    ElMessage.error(t('plugin.storage.message.openEditorFailed'))
   }
 }
 
 async function handleClearStorage(): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      'Are you sure you want to clear ALL storage for this plugin? This action cannot be undone.',
-      'Clear Storage',
-      { confirmButtonText: 'Clear All', cancelButtonText: 'Cancel', type: 'error' }
+      t('plugin.storage.confirm.clearMessage'),
+      t('plugin.storage.confirm.clearTitle'),
+      {
+        confirmButtonText: t('plugin.storage.confirm.clearConfirm'),
+        cancelButtonText: t('plugin.storage.confirm.cancel'),
+        type: 'error'
+      }
     )
 
     clearing.value = true
@@ -318,14 +317,14 @@ async function handleClearStorage(): Promise<void> {
     })
 
     if (response.success) {
-      ElMessage.success('Storage cleared successfully')
+      ElMessage.success(t('plugin.storage.message.clearSuccess'))
       await refreshData()
     } else {
-      ElMessage.error(response.error || 'Failed to clear storage')
+      ElMessage.error(response.error || t('plugin.storage.message.clearFailed'))
     }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('Failed to clear storage')
+      ElMessage.error(t('plugin.storage.message.clearFailed'))
     }
   } finally {
     clearing.value = false
@@ -338,7 +337,7 @@ async function handleOpenFolder(): Promise<void> {
       pluginName: props.plugin.name
     })
   } catch {
-    ElMessage.error('Failed to open storage folder')
+    ElMessage.error(t('plugin.storage.message.openFolderFailed'))
   }
 }
 
