@@ -7,6 +7,8 @@ const props = defineProps<{
   alt?: string
   size?: number
   empty?: string
+  /** Preserve the original color of the svg icon */
+  colorful?: boolean
 }>()
 
 const loading = computed(() => props.icon.status === 'loading')
@@ -80,7 +82,12 @@ watch(
 
     <template v-else-if="addressable">
       <template v-if="isSvg">
-        <i class="TuffIcon-Svg" :alt="alt" :style="{ '--un-icon': `url(${dataurl})` }" />
+        <i
+          :class="{ colorful }"
+          class="TuffIcon-Svg"
+          :alt="alt"
+          :style="{ '--un-icon': `url(${dataurl})` }"
+        />
       </template>
       <template v-else>
         <img :alt="alt" :src="url" />
@@ -99,6 +106,11 @@ watch(
   color: inherit;
   width: 1em;
   height: 1em;
+}
+
+.TuffIcon-Svg.colorful {
+  color: unset;
+  background-color: unset;
 }
 
 .TuffIcon {
