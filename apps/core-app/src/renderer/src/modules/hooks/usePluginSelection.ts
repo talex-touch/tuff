@@ -11,8 +11,8 @@ interface UsePluginSelectionReturn {
   plugins: ComputedRef<ITouchPlugin[]>
   /** Currently selected plugin name */
   select: Ref<string | undefined>
-  /** Currently selected plugin object */
-  curSelect: Ref<ITouchPlugin | null>
+  /** Currently selected plugin object (computed for reactive updates) */
+  curSelect: ComputedRef<ITouchPlugin | null>
   /** Loading state for async operations */
   loading: Ref<boolean>
   /** Function to select a plugin by name */
@@ -47,36 +47,29 @@ export function usePluginSelection(): UsePluginSelectionReturn {
   const plugins = computed(() => [...pluginMap.value.values()])
 
   const select = ref<string | undefined>()
-  const curSelect = ref<ITouchPlugin | null>(null)
   const loading = ref(false)
   const lastUnloadedPlugin = ref<string | null>(null)
 
   /**
-   * Updates the curSelect ref based on the current select value.
-   * Finds the plugin object from the plugins array by name.
-   */
-  const updateSelectedPlugin = (): void => {
-    curSelect.value = select.value
-      ? (plugins.value.find((item) => item.name === select.value) ?? null)
-      : null
-  }
-
-  /**
-   * Watch for changes to either the selected plugin name or the plugins list.
-   * Updates curSelect accordingly, ensuring it's automatically cleared when:
-   * - User changes selection
+   * Currently selected plugin object.
+   * Directly retrieves from the reactive Map to ensure property updates
+   * (like status changes) are properly tracked and trigger reactive updates.
+   * Automatically returns null when:
+   * - No plugin is selected
    * - Selected plugin is removed from the store
-   * - Plugins list is updated
-   * Runs immediately to initialize curSelect on mount.
+   * - Selected plugin name doesn't exist in the map
    */
-  watch([() => select.value, () => plugins.value], updateSelectedPlugin, { immediate: true })
+  const curSelect = computed<ITouchPlugin | null>(() => {
+    if (!select.value) return null
+    return pluginMap.value.get(select.value) ?? null
+  })
 
   /**
    * Watch for plugin unload events.
    * When the currently selected plugin is removed from the plugin map:
    * 1. Store the plugin name in lastUnloadedPlugin for potential auto-restore
    * 2. Clear the current selection
-   * 3. This triggers curSelect cleanup via the updateSelectedPlugin watcher
+   * 3. curSelect computed property automatically returns null (plugin not found)
    */
   watch(
     () => pluginMap.value,
@@ -84,7 +77,6 @@ export function usePluginSelection(): UsePluginSelectionReturn {
       if (!select.value || !oldMap) return
 
       if (oldMap.has(select.value) && !newMap.has(select.value)) {
-        console.log(`[usePluginSelection] Selected plugin "${select.value}" was unloaded`)
         lastUnloadedPlugin.value = select.value
         select.value = undefined
       }
@@ -104,7 +96,6 @@ export function usePluginSelection(): UsePluginSelectionReturn {
       if (!lastUnloadedPlugin.value) return
 
       if (pluginMap.value.has(lastUnloadedPlugin.value) && !select.value) {
-        console.log(`[usePluginSelection] Auto-restoring selection to: ${lastUnloadedPlugin.value}`)
         select.value = lastUnloadedPlugin.value
         lastUnloadedPlugin.value = null
       }
@@ -120,9 +111,6 @@ export function usePluginSelection(): UsePluginSelectionReturn {
     () => select.value,
     (newSelect) => {
       if (newSelect && newSelect !== lastUnloadedPlugin.value && lastUnloadedPlugin.value) {
-        console.log(
-          `[usePluginSelection] User selected different plugin, clearing restore target: ${lastUnloadedPlugin.value}`
-        )
         lastUnloadedPlugin.value = null
       }
     }
@@ -137,8 +125,6 @@ export function usePluginSelection(): UsePluginSelectionReturn {
    */
   async function selectPlugin(name: string): Promise<void> {
     if (name === select.value || loading.value) return
-
-    console.log(`[usePluginSelection] Selecting plugin: ${name}`)
 
     loading.value = true
     select.value = name
