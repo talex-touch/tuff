@@ -14,7 +14,7 @@ import { createDbUtils } from '../../db/utils'
 import { databaseModule } from '../database'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createPluginLoader } from './plugin-loaders'
-import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { MaybePromise, ModuleInitContext, ModuleKey, sleep } from '@talex-touch/utils'
 import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
 import { BaseModule } from '../abstract-base-module'
@@ -390,6 +390,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       }
 
       await unloadPlugin(pluginName)
+
+      logInfo('Waiting 0.5s before reloading plugin...', pluginTag(pluginName))
+      await sleep(500)
+
       await loadPlugin(pluginName)
 
       const newPlugin = plugins.get(pluginName) as TouchPlugin
@@ -464,9 +468,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
-          plugin: touchPlugin.toJSONObject()
-        })
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -527,9 +528,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           touchPlugin.issues.length
         )
 
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
-          plugin: touchPlugin.toJSONObject()
-        })
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -558,9 +556,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
-          plugin: touchPlugin.toJSONObject()
-        })
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -608,9 +603,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
     logWarn('Plugin unloaded', pluginTag(pluginName))
 
-    genTouchChannel().send(ChannelType.MAIN, 'plugin:del', {
-      plugin: pluginName
-    })
     genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
       type: 'removed',
       name: pluginName
