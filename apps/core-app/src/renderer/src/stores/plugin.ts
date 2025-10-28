@@ -119,22 +119,6 @@ export const usePluginStore = defineStore('plugin', () => {
   }
 
   /**
-   * Reload a plugin (replace or add)
-   * @param plugin - Plugin to reload
-   */
-  function reloadPlugin(plugin: ITouchPlugin): void {
-    const p = getPlugin(plugin.name)
-    if (p) {
-      const updatedPlugin = reactive(plugin)
-      plugins.set(plugin.name, updatedPlugin)
-      console.log(`[PluginStore] Plugin "${plugin.name}" reloaded successfully`)
-    } else {
-      setPlugin(plugin)
-      console.log(`[PluginStore] Plugin "${plugin.name}" added during reload`)
-    }
-  }
-
-  /**
    * Initialize plugin store (subscribe to events and load initial data)
    * @returns Cleanup function
    */
@@ -169,7 +153,6 @@ export const usePluginStore = defineStore('plugin', () => {
     handleStateEvent,
     updatePluginStatus,
     updatePluginReadme,
-    reloadPlugin,
     initialize
   }
 })

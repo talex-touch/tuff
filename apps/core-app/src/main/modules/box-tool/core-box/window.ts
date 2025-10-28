@@ -15,6 +15,8 @@ import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
 import { TouchWindow } from '../../../core/touch-window'
 import { TouchApp } from '../../../core/touch-app'
 import { genTouchApp } from '../../../core'
+import { pluginModule } from '../../plugin/plugin-module'
+import { PluginStatus } from '@talex-touch/utils/plugin'
 
 const windowAnimation = useWindowAnimation()
 
@@ -682,10 +684,13 @@ export class WindowManager {
           this.uiView?.webContents.insertCSS(injections.styles)
         }
 
-        genTouchApp().channel.sendToPlugin(plugin.name, '@lifecycle:' + LifecycleHooks.ACTIVE, {
-          plugin: plugin.name,
-          feature: coreBoxManager.getCurrentFeature()
-        })
+        // Set plugin as active through plugin manager for consistent state management
+        // This will handle both status update and lifecycle event emission
+        if (pluginModule.pluginManager) {
+          pluginModule.pluginManager.setActivePlugin(plugin.name)
+        } else {
+          console.warn('[CoreBox] Plugin manager not available, cannot set plugin active')
+        }
       }
     })
 
@@ -706,6 +711,18 @@ export class WindowManager {
     }
 
     if (this.uiView) {
+      // Handle plugin state transition before detaching
+      if (this.attachedPlugin && pluginModule.pluginManager) {
+        const plugin = this.attachedPlugin
+        // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
+        if (plugin.status === PluginStatus.ACTIVE) {
+          plugin.status = PluginStatus.ENABLED
+          genTouchApp().channel.send(ChannelType.PLUGIN, '@lifecycle:' + LifecycleHooks.INACTIVE, {
+            plugin: plugin.name
+          })
+        }
+      }
+
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         this.uiView.webContents.closeDevTools()

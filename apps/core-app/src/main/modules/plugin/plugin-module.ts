@@ -231,19 +231,52 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   }
 
   const setActivePlugin = (pluginName: string): boolean => {
-    if (active) {
-      const plugin = plugins.get(active)
+    // Handle deactivation of currently active plugin
+    if (active && active !== pluginName) {
+      const previousPlugin = plugins.get(active)
 
-      genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:in', {
-        plugin: active
-      })
+      if (previousPlugin) {
+        logDebug(
+          `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`
+        )
 
-      if (plugin) plugin.status = PluginStatus.ENABLED
+        genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:in', {
+          plugin: active
+        })
+
+        if (previousPlugin.status === PluginStatus.ACTIVE) {
+          previousPlugin.status = PluginStatus.ENABLED
+        }
+      }
     }
 
+    // Handle activation of new plugin
     if (pluginName) {
       const plugin = plugins.get(pluginName)
-      if (!plugin || plugin.status !== PluginStatus.ENABLED) return false
+
+      if (!plugin) {
+        logWarn(`Cannot activate plugin ${pluginTag(pluginName)}: plugin not found`)
+        return false
+      }
+
+      // Allow activation if plugin is ENABLED or already ACTIVE (idempotent)
+      const validStates = [PluginStatus.ENABLED, PluginStatus.ACTIVE]
+      if (!validStates.includes(plugin.status)) {
+        logWarn(
+          `Cannot activate plugin ${pluginTag(pluginName)}: invalid status ${PluginStatus[plugin.status]} (expected ENABLED or ACTIVE)`
+        )
+        return false
+      }
+
+      // Avoid redundant activation
+      if (active === pluginName && plugin.status === PluginStatus.ACTIVE) {
+        logDebug(`Plugin ${pluginTag(pluginName)} is already active, skipping`)
+        return true
+      }
+
+      logDebug(
+        `Activating plugin ${pluginTag(pluginName)}: ${PluginStatus[plugin.status]} → ACTIVE`
+      )
 
       plugin.status = PluginStatus.ACTIVE
       active = pluginName
@@ -251,6 +284,9 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:ac', {
         plugin: pluginName
       })
+    } else {
+      // Clear active plugin if no name provided
+      active = ''
     }
 
     return true
@@ -280,6 +316,53 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     return plugins.has(name) || !!getPluginByName(name)
   }
 
+  const startHealthMonitoringIfNeeded = (plugin: ITouchPlugin): void => {
+    if (plugin.dev.enable && plugin.dev.source && managerInstance.healthMonitor) {
+      managerInstance.healthMonitor.startMonitoring(plugin)
+    }
+  }
+
+  const stopHealthMonitoring = (pluginName: string): void => {
+    if (managerInstance.healthMonitor) {
+      managerInstance.healthMonitor.stopMonitoring(pluginName)
+    }
+  }
+
+  const enablePlugin = async (pluginName: string): Promise<boolean> => {
+    const plugin = plugins.get(pluginName)
+    if (!plugin) return false
+
+    if (plugin.status === PluginStatus.LOAD_FAILED) {
+      pluginLog.info('Attempting to re-enable failed plugin, reloading', {
+        meta: { plugin: pluginName }
+      })
+      await reloadPlugin(pluginName)
+      return enabledPlugins.has(pluginName)
+    }
+
+    const success = await plugin.enable()
+    if (success) {
+      enabledPlugins.add(pluginName)
+      await persistEnabledPlugins()
+      startHealthMonitoringIfNeeded(plugin)
+    }
+    return success
+  }
+
+  const disablePlugin = async (pluginName: string): Promise<boolean> => {
+    const plugin = plugins.get(pluginName)
+    if (!plugin) return false
+
+    stopHealthMonitoring(pluginName)
+
+    const success = await plugin.disable()
+    if (success) {
+      enabledPlugins.delete(pluginName)
+      await persistEnabledPlugins()
+    }
+    return success
+  }
+
   const reloadPlugin = async (pluginName: string): Promise<void> => {
     if (reloadingPlugins.has(pluginName)) {
       logInfo('Skip reload because plugin already reloading:', pluginTag(pluginName))
@@ -297,6 +380,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     try {
       logInfo('Reloading plugin', pluginTag(pluginName))
 
+      stopHealthMonitoring(pluginName)
+
       const _enabled =
         plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
@@ -309,14 +394,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
       const newPlugin = plugins.get(pluginName) as TouchPlugin
       if (newPlugin) {
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
-          source: 'dev',
-          plugin: newPlugin.toJSONObject()
-        })
         if (_enabled) {
           await newPlugin.enable()
           enabledPlugins.add(pluginName)
           await persistEnabledPlugins()
+          startHealthMonitoringIfNeeded(newPlugin)
         }
         logInfo('Plugin reloaded successfully', pluginTag(pluginName))
       } else {
@@ -385,7 +467,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
           plugin: touchPlugin.toJSONObject()
         })
-        // Emit new state change event
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -449,7 +530,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
           plugin: touchPlugin.toJSONObject()
         })
-        // Emit new state change event
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -481,7 +561,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         genTouchChannel().send(ChannelType.MAIN, 'plugin:add', {
           plugin: touchPlugin.toJSONObject()
         })
-        // Emit new state change event
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -501,8 +580,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     const currentPluginPath = path.resolve(pluginPath, pluginName)
     localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
 
-    // Remove from dev watcher
     devWatcherInstance.removePlugin(pluginName)
+    stopHealthMonitoring(pluginName)
 
     if (pluginNameIndex.get(plugin.name) === pluginName) {
       pluginNameIndex.delete(plugin.name)
@@ -532,7 +611,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     genTouchChannel().send(ChannelType.MAIN, 'plugin:del', {
       plugin: pluginName
     })
-    // Emit new state change event
     genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
       type: 'removed',
       name: pluginName
@@ -557,11 +635,14 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     initialLoadPromises,
     pluginPath,
     watcher: null,
-    devWatcher: null!, // Will be set after DevPluginWatcher is created
+    devWatcher: null!,
+    healthMonitor: null,
     getPluginList,
     setActivePlugin,
     hasPlugin,
     getPluginByName,
+    enablePlugin,
+    disablePlugin,
     reloadPlugin,
     persistEnabledPlugins,
     listPlugins,
@@ -573,7 +654,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   ;(managerInstance as any).__installQueue = installQueue
 
   const devWatcherInstance: DevPluginWatcher = new DevPluginWatcher(managerInstance)
-  managerInstance.devWatcher = devWatcherInstance // Set the circular reference
+  managerInstance.devWatcher = devWatcherInstance
 
   const __initDevWatcher = (): void => {
     devWatcherInstance.start()
@@ -606,12 +687,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             try {
               logInfo('Auto-enabling plugin', pluginTag(pluginName))
               await plugin.enable()
-
-              if (plugin.dev.enable && plugin.dev.source) {
-                logInfo(
-                  'Plugin will be monitored for Dev Server health after module initialization'
-                )
-              }
 
               logInfo('Auto-enable complete', pluginTag(pluginName))
             } catch (e) {
@@ -668,6 +743,16 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           if (loadingPlugins.has(pluginName)) {
             logDebug(
               'File change received while plugin is still loading, ignoring.',
+              pluginTag(pluginName),
+              'file:',
+              baseName
+            )
+            return
+          }
+
+          if (reloadingPlugins.has(pluginName)) {
+            logDebug(
+              'File change received while plugin is reloading, ignoring.',
               pluginTag(pluginName),
               'file:',
               baseName
@@ -739,7 +824,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
               plugin: pluginName,
               readme: plugin.readme
             })
-            // Emit new state change event
             genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'readme-updated',
               name: pluginName,
@@ -826,6 +910,7 @@ export class PluginModule extends BaseModule {
     this.pluginManager = createPluginModuleInternal(file.dirPath!)
     this.installQueue = (this.pluginManager as any).__installQueue as PluginInstallQueue
     this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
+    this.pluginManager.healthMonitor = this.healthMonitor
   }
   onDestroy(): MaybePromise<void> {
     this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
@@ -892,63 +977,18 @@ export class PluginModule extends BaseModule {
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
       manager.setActivePlugin(data!.name)
     )
-    touchChannel.regChannel(ChannelType.MAIN, 'enable-plugin', async ({ data }) => {
-      const plugin = manager.plugins.get(data!.name)
-      if (!plugin) return false
-
-      if (plugin.status === PluginStatus.LOAD_FAILED) {
-        pluginLog.info('Attempting to re-enable failed plugin, reloading', {
-          meta: { plugin: data!.name }
-        })
-        await manager.reloadPlugin(data!.name)
-        // After reloading, the plugin might be enabled automatically if it was previously.
-        // We return the current status from the manager.
-        return manager.enabledPlugins.has(data!.name)
-      }
-
-      const success = await plugin.enable()
-      if (success) {
-        manager.enabledPlugins.add(data!.name)
-        await manager.persistEnabledPlugins()
-
-        if (plugin.dev.enable && plugin.dev.source) {
-          this.healthMonitor?.startMonitoring(plugin)
-        }
-      }
-      return success
-    })
-    touchChannel.regChannel(ChannelType.MAIN, 'disable-plugin', async ({ data }) => {
-      const plugin = manager.plugins.get(data!.name)
-      if (!plugin) return false
-
-      this.healthMonitor?.stopMonitoring(data!.name)
-
-      const success = await plugin.disable()
-      if (success) {
-        manager.enabledPlugins.delete(data!.name)
-        await manager.persistEnabledPlugins()
-      }
-      return success
-    })
+    touchChannel.regChannel(ChannelType.MAIN, 'enable-plugin', ({ data }) =>
+      manager.enablePlugin(data!.name)
+    )
+    touchChannel.regChannel(ChannelType.MAIN, 'disable-plugin', ({ data }) =>
+      manager.disablePlugin(data!.name)
+    )
     touchChannel.regChannel(ChannelType.MAIN, 'reload-plugin', async ({ data }) => {
       const pluginName = data!.name
       if (!pluginName) return false
       if (!manager.plugins.has(pluginName)) return false
 
-      this.healthMonitor?.stopMonitoring(pluginName)
-
       await manager.reloadPlugin(pluginName)
-
-      const plugin = manager.plugins.get(pluginName)
-      if (
-        plugin &&
-        plugin.status === PluginStatus.ENABLED &&
-        plugin.dev.enable &&
-        plugin.dev.source
-      ) {
-        this.healthMonitor?.startMonitoring(plugin)
-      }
-
       return true
     })
     touchChannel.regChannel(ChannelType.MAIN, 'get-plugin', ({ data }) =>
@@ -1114,7 +1154,6 @@ export class PluginModule extends BaseModule {
       }
     )
 
-    // 简单的文件级别存储操作
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       'plugin:storage:get-file',
@@ -1218,7 +1257,6 @@ export class PluginModule extends BaseModule {
       }
     )
 
-    // Dev Server 健康监控相关 IPC 通道
     touchChannel.regChannel(
       ChannelType.MAIN,
       'plugin:reconnect-dev-server',
@@ -1260,16 +1298,11 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    // 启动已启用插件的 Dev Server 健康监控
     manager.plugins.forEach((plugin) => {
       if (plugin.status === PluginStatus.ENABLED && plugin.dev.enable && plugin.dev.source) {
         this.healthMonitor?.startMonitoring(plugin)
       }
     })
-
-  /**
-   * RESTful Plugin API handlers (plugin:api:*)
-   */
 
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:list', ({ data, reply }) => {
       try {
@@ -1277,17 +1310,17 @@ export class PluginModule extends BaseModule {
         let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
 
         if (filters.status !== undefined) {
-          plugins = plugins.filter(p => p.status === filters.status)
+          plugins = plugins.filter((p) => p.status === filters.status)
         }
         if (filters.enabled !== undefined) {
           const enabledNames = manager.enabledPlugins
-          plugins = plugins.filter(p => enabledNames.has(p.name) === filters.enabled)
+          plugins = plugins.filter((p) => enabledNames.has(p.name) === filters.enabled)
         }
         if (filters.dev !== undefined) {
-          plugins = plugins.filter(p => p.dev?.enable === filters.dev)
+          plugins = plugins.filter((p) => p.dev?.enable === filters.dev)
         }
 
-        const result = plugins.map(p => p.toJSONObject())
+        const result = plugins.map((p) => p.toJSONObject())
         return reply(DataCode.SUCCESS, result)
       } catch (error) {
         console.error('Error in plugin:api:list handler:', error)
@@ -1339,7 +1372,6 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    // Operation APIs
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:enable', async ({ data, reply }) => {
       try {
         const { name } = data
@@ -1347,35 +1379,17 @@ export class PluginModule extends BaseModule {
           return reply(DataCode.ERROR, { error: 'Plugin name is required' })
         }
 
-        const plugin = manager.plugins.get(name)
-        if (!plugin) {
-          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
-        }
+        const success = await manager.enablePlugin(name)
 
-        if (plugin.status === PluginStatus.LOAD_FAILED) {
-          pluginLog.info('Attempting to re-enable failed plugin, reloading', {
-            meta: { plugin: name }
-          })
-          await manager.reloadPlugin(name)
-          const success = manager.enabledPlugins.has(name)
-          return reply(DataCode.SUCCESS, { success })
-        }
-
-        const success = await plugin.enable()
         if (success) {
-          manager.enabledPlugins.add(name)
-          await manager.persistEnabledPlugins()
-
-          if (plugin.dev.enable && plugin.dev.source) {
-            this.healthMonitor?.startMonitoring(plugin)
+          const plugin = manager.plugins.get(name)
+          if (plugin) {
+            touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+              type: 'status-changed',
+              name,
+              status: plugin.status
+            })
           }
-
-          // Emit state change event
-          touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
-            type: 'status-changed',
-            name,
-            status: plugin.status
-          })
         }
 
         return reply(DataCode.SUCCESS, { success })
@@ -1394,24 +1408,17 @@ export class PluginModule extends BaseModule {
           return reply(DataCode.ERROR, { error: 'Plugin name is required' })
         }
 
-        const plugin = manager.plugins.get(name)
-        if (!plugin) {
-          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
-        }
+        const success = await manager.disablePlugin(name)
 
-        this.healthMonitor?.stopMonitoring(name)
-
-        const success = await plugin.disable()
         if (success) {
-          manager.enabledPlugins.delete(name)
-          await manager.persistEnabledPlugins()
-
-          // Emit state change event
-          touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
-            type: 'status-changed',
-            name,
-            status: plugin.status
-          })
+          const plugin = manager.plugins.get(name)
+          if (plugin) {
+            touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+              type: 'status-changed',
+              name,
+              status: plugin.status
+            })
+          }
         }
 
         return reply(DataCode.SUCCESS, { success })
@@ -1434,23 +1441,7 @@ export class PluginModule extends BaseModule {
           return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
         }
 
-        this.healthMonitor?.stopMonitoring(name)
-
         await manager.reloadPlugin(name)
-
-        const plugin = manager.plugins.get(name) as TouchPlugin | undefined
-        if (plugin && plugin.status === PluginStatus.ENABLED && plugin.dev.enable && plugin.dev.source) {
-          this.healthMonitor?.startMonitoring(plugin)
-        }
-
-        if (plugin) {
-          touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
-            type: 'updated',
-            name,
-            changes: plugin.toJSONObject()
-          })
-        }
-
         return reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
         console.error('Error in plugin:api:reload handler:', error)
@@ -1460,7 +1451,6 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    // Install/Uninstall APIs
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:install', async ({ data, reply }) => {
       if (!this.installQueue) {
         return reply(DataCode.ERROR, { error: 'Install queue is not ready' })
@@ -1497,7 +1487,6 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    // Feature trigger APIs
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:trigger-feature', ({ data, reply }) => {
       try {
         const { plugin: pluginName, feature: featureId, query } = data
@@ -1512,7 +1501,9 @@ export class PluginModule extends BaseModule {
 
         const feature = pluginIns.getFeature(featureId)
         if (!feature) {
-          return reply(DataCode.ERROR, { error: `Feature ${featureId} not found in plugin ${pluginName}` })
+          return reply(DataCode.ERROR, {
+            error: `Feature ${featureId} not found in plugin ${pluginName}`
+          })
         }
 
         const result = pluginIns.triggerFeature(feature, query)
@@ -1525,34 +1516,39 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:feature-input-changed', ({ data, reply }) => {
-      try {
-        const { plugin: pluginName, feature: featureId, query } = data
-        if (!pluginName || !featureId) {
-          return reply(DataCode.ERROR, { error: 'Plugin name and feature ID are required' })
-        }
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:api:feature-input-changed',
+      ({ data, reply }) => {
+        try {
+          const { plugin: pluginName, feature: featureId, query } = data
+          if (!pluginName || !featureId) {
+            return reply(DataCode.ERROR, { error: 'Plugin name and feature ID are required' })
+          }
 
-        const pluginIns = manager.plugins.get(pluginName)
-        if (!pluginIns) {
-          return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
-        }
+          const pluginIns = manager.plugins.get(pluginName)
+          if (!pluginIns) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
 
-        const feature = pluginIns.getFeature(featureId)
-        if (!feature) {
-          return reply(DataCode.ERROR, { error: `Feature ${featureId} not found in plugin ${pluginName}` })
-        }
+          const feature = pluginIns.getFeature(featureId)
+          if (!feature) {
+            return reply(DataCode.ERROR, {
+              error: `Feature ${featureId} not found in plugin ${pluginName}`
+            })
+          }
 
-        const result = pluginIns.triggerInputChanged(feature, query)
-        return reply(DataCode.SUCCESS, result)
-      } catch (error) {
-        console.error('Error in plugin:api:feature-input-changed handler:', error)
-        return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
+          const result = pluginIns.triggerInputChanged(feature, query)
+          return reply(DataCode.SUCCESS, result)
+        } catch (error) {
+          console.error('Error in plugin:api:feature-input-changed handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
       }
-    })
+    )
 
-    // System operation APIs
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:open-folder', async ({ data, reply }) => {
       try {
         const { name } = data
@@ -1581,17 +1577,21 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-official-list', async ({ data, reply }) => {
-      try {
-        const result = await getOfficialPlugins({ force: Boolean(data?.force) })
-        return reply(DataCode.SUCCESS, result)
-      } catch (error: any) {
-        console.error('Failed to fetch official plugin list:', error)
-        return reply(DataCode.ERROR, {
-          error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
-        })
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:api:get-official-list',
+      async ({ data, reply }) => {
+        try {
+          const result = await getOfficialPlugins({ force: Boolean(data?.force) })
+          return reply(DataCode.SUCCESS, result)
+        } catch (error: any) {
+          console.error('Failed to fetch official plugin list:', error)
+          return reply(DataCode.ERROR, {
+            error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
+          })
+        }
       }
-    })
+    )
   }
 }
 

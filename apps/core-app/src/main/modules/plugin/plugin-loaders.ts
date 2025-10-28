@@ -180,8 +180,8 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
       this.touchPlugin.logger.debug(
         `[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`
       )
-      fse.writeJSONSync(path.resolve(this.pluginPath, 'manifest.json'), pluginInfo, { spaces: 2 })
-      this.touchPlugin.logger.debug(`[Dev] Wrote remote manifest to local cache.`)
+      // Note: manifest.json is NOT written here to avoid triggering file watchers
+      // It will be synced by DevServerHealthMonitor when manifest changes are detected via heartbeat
       this.touchPlugin.issues.push({
         type: 'warning',
         message: `Plugin is running in development mode, loading from ${this.devConfig.address}.`,

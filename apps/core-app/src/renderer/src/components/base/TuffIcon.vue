@@ -58,8 +58,10 @@ watch(
     :class="{ 'TuffIcon-Loading': loading }"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
-    <span v-if="!icon?.value && empty" class="TuffIcon-Empty">
-      <img :alt="alt" :src="empty" />
+    <span v-if="!icon?.value" class="TuffIcon-Empty">
+      <slot name="empty">
+        <img v-if="empty" :alt="alt" :src="empty" />
+      </slot>
     </span>
 
     <span v-else-if="error" class="TuffIcon-Error">

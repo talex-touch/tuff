@@ -328,11 +328,14 @@ export interface IPluginManager {
   pluginPath: string
   watcher: FSWatcher | null
   devWatcher: any // Temporarily any, as DevPluginWatcher is internal to core-app
+  healthMonitor: any | null // DevServerHealthMonitor instance, set by PluginModule
 
   getPluginList(): Array<object>
   setActivePlugin(pluginName: string): boolean
   hasPlugin(name: string): boolean
   getPluginByName(name: string): ITouchPlugin | undefined
+  enablePlugin(pluginName: string): Promise<boolean>
+  disablePlugin(pluginName: string): Promise<boolean>
   reloadPlugin(pluginName: string): Promise<void>
   persistEnabledPlugins(): Promise<void>
   listPlugins(): Promise<Array<string>>
