@@ -238,6 +238,36 @@
       "logs": "Logs",
       "details": "Details"
     },
+    "storage": {
+      "title": "Storage Files",
+      "stats": {
+        "totalStorage": "Total Storage",
+        "files": "Files",
+        "directories": "Directories",
+        "usage": "Usage"
+      },
+      "actions": {
+        "openFolder": "Open Folder",
+        "openInEditor": "Open in Editor",
+        "clearAll": "Clear All Storage",
+        "clearing": "Clearing...",
+        "refresh": "Refresh Data"
+      },
+      "empty": "No files in storage",
+      "confirm": {
+        "clearTitle": "Clear Storage",
+        "clearMessage": "Are you sure you want to clear ALL storage for this plugin? This action cannot be undone.",
+        "clearConfirm": "Clear All",
+        "cancel": "Cancel"
+      },
+      "message": {
+        "clearSuccess": "Storage cleared successfully",
+        "clearFailed": "Failed to clear storage",
+        "loadFailed": "Failed to load storage data",
+        "openFolderFailed": "Failed to open storage folder",
+        "openEditorFailed": "Failed to open in editor"
+      }
+    },
     "issues": {
       "title": "Plugin Load Issues",
       "source": "Source"
