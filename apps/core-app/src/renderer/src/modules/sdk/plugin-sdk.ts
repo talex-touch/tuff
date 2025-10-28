@@ -198,6 +198,19 @@ class PluginSDK {
     }
   }
 
+  /**
+   * Reconnect to dev server for a plugin
+   */
+  async reconnectDevServer(name: string): Promise<boolean> {
+    try {
+      const response = await touchChannel.send('plugin:reconnect-dev-server', { pluginName: name })
+      return response?.success || false
+    } catch (error) {
+      console.error('[PluginSDK] Failed to reconnect dev server:', error)
+      return false
+    }
+  }
+
   // ============================================
   // Install/Uninstall APIs
   // ============================================

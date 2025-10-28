@@ -245,7 +245,9 @@
       "crashed": "插件已崩溃，点击重启。",
       "enabled": "插件已启用，点击禁用。",
       "loaded": "插件已加载，点击启用。",
-      "loadFailed": "插件加载失败，点击重新加载。"
+      "loadFailed": "插件加载失败，点击重新加载。",
+      "devDisconnected": "开发服务器已断连，点击重连。",
+      "devReconnecting": "正在重连开发服务器..."
     },
     "tabs": {
       "overview": "概览",

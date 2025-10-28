@@ -22,7 +22,9 @@ const mapper = [
   'ACTIVE',
   'LOADING',
   'LOADED',
-  'LOAD_FAILED'
+  'LOAD_FAILED',
+  'DEV_DISCONNECTED',
+  'DEV_RECONNECTING'
 ]
 
 const func = ref(() => {})
@@ -42,7 +44,10 @@ function refresh(): void {
 
     'LOADING',
     'LOADED',
-    'LOAD_FAILED'
+    'LOAD_FAILED',
+
+    'DEV_DISCONNECTED',
+    'DEV_RECONNECTING'
   )
   el.classList.add(mapper[status.value])
 
@@ -91,6 +96,15 @@ function refresh(): void {
         el.innerHTML = `${t('plugin.status.loadFailed')}`
       }
     }
+  } else if (status.value === PluginStatus.DEV_DISCONNECTED) {
+    el.innerHTML = t('plugin.status.devDisconnected')
+
+    func.value = async () => {
+      await pluginSDK.reconnectDevServer(props.plugin.name)
+    }
+  } else if (status.value === PluginStatus.DEV_RECONNECTING) {
+    el.innerHTML = t('plugin.status.devReconnecting')
+    func.value = () => {}
   }
 }
 
@@ -183,6 +197,24 @@ onMounted(() => {
   pointer-events: none;
   opacity: 0.75;
   background: var(--el-color-info-light-3);
+  animation: loading 0.5s infinite;
+}
+
+.PluginStatus-Container.DEV_DISCONNECTED {
+  height: 30px;
+
+  cursor: pointer;
+  opacity: 0.75;
+  color: var(--el-color-warning-light-7);
+  background: var(--el-color-warning);
+}
+
+.PluginStatus-Container.DEV_RECONNECTING {
+  height: 5px;
+
+  pointer-events: none;
+  opacity: 0.75;
+  background: var(--el-color-warning-light-3);
   animation: loading 0.5s infinite;
 }
 
