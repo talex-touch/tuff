@@ -318,7 +318,7 @@ export class TouchPlugin implements ITouchPlugin {
     return path.join(userDataPath, 'modules', 'plugins', this.name, 'data')
   }
 
-  private getConfigPath(): string {
+  getConfigPath(): string {
     return path.join(this.getDataPath(), 'config')
   }
 
@@ -996,6 +996,262 @@ export class TouchPlugin implements ITouchPlugin {
     if (!fse.existsSync(configPath)) return []
 
     return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
+  }
+
+  /**
+   * 获取存储统计信息
+   * @returns 存储统计数据
+   */
+  getStorageStats(): {
+    totalSize: number
+    fileCount: number
+    dirCount: number
+    maxSize: number
+    usagePercent: number
+  } {
+    const configPath = this.getConfigPath()
+    const maxSize = 10 * 1024 * 1024 // 10MB
+
+    if (!fse.existsSync(configPath)) {
+      return {
+        totalSize: 0,
+        fileCount: 0,
+        dirCount: 0,
+        maxSize,
+        usagePercent: 0
+      }
+    }
+
+    let totalSize = 0
+    let fileCount = 0
+    let dirCount = 0
+
+    const calculateSize = (dirPath: string): void => {
+      const items = fse.readdirSync(dirPath)
+      for (const item of items) {
+        const itemPath = path.join(dirPath, item)
+        const stats = fse.statSync(itemPath)
+
+        if (stats.isDirectory()) {
+          dirCount++
+          calculateSize(itemPath)
+        } else {
+          fileCount++
+          totalSize += stats.size
+        }
+      }
+    }
+
+    calculateSize(configPath)
+
+    return {
+      totalSize,
+      fileCount,
+      dirCount,
+      maxSize,
+      usagePercent: Math.min(100, (totalSize / maxSize) * 100)
+    }
+  }
+
+  /**
+   * 获取存储目录树结构
+   * @returns 树形结构数组
+   */
+  getStorageTree(): Array<{
+    name: string
+    path: string
+    type: 'file' | 'directory'
+    size: number
+    modified: number
+    children?: any[]
+  }> {
+    const configPath = this.getConfigPath()
+
+    if (!fse.existsSync(configPath)) {
+      return []
+    }
+
+    const buildTree = (
+      dirPath: string,
+      relativePath: string = ''
+    ): Array<{
+      name: string
+      path: string
+      type: 'file' | 'directory'
+      size: number
+      modified: number
+      children?: any[]
+    }> => {
+      const items = fse.readdirSync(dirPath)
+      const result: any[] = []
+
+      for (const item of items) {
+        const itemPath = path.join(dirPath, item)
+        const itemRelativePath = relativePath ? path.join(relativePath, item) : item
+        const stats = fse.statSync(itemPath)
+
+        if (stats.isDirectory()) {
+          const children = buildTree(itemPath, itemRelativePath)
+          const dirSize = children.reduce((sum, child) => sum + child.size, 0)
+
+          result.push({
+            name: item,
+            path: itemRelativePath,
+            type: 'directory' as const,
+            size: dirSize,
+            modified: stats.mtimeMs,
+            children
+          })
+        } else {
+          result.push({
+            name: item,
+            path: itemRelativePath,
+            type: 'file' as const,
+            size: stats.size,
+            modified: stats.mtimeMs
+          })
+        }
+      }
+
+      return result
+    }
+
+    return buildTree(configPath)
+  }
+
+  /**
+   * 获取文件详细信息
+   * @param fileName 文件名或相对路径
+   * @returns 文件详情
+   */
+  getFileDetails(fileName: string): {
+    name: string
+    path: string
+    size: number
+    created: number
+    modified: number
+    type: string
+    content?: any
+    truncated?: boolean
+  } | null {
+    const configPath = this.getConfigPath()
+    const filePath = path.join(configPath, fileName)
+
+    if (!fse.existsSync(filePath)) {
+      return null
+    }
+
+    const stats = fse.statSync(filePath)
+
+    if (stats.isDirectory()) {
+      return null
+    }
+
+    const ext = path.extname(fileName).toLowerCase()
+    const fileType = this.getFileType(ext)
+
+    const result: {
+      name: string
+      path: string
+      size: number
+      created: number
+      modified: number
+      type: string
+      content?: any
+      truncated?: boolean
+    } = {
+      name: path.basename(fileName),
+      path: fileName,
+      size: stats.size,
+      created: stats.birthtimeMs,
+      modified: stats.mtimeMs,
+      type: fileType
+    }
+
+    // 读取文件内容（根据类型和大小限制）
+    const maxPreviewSize = this.getMaxPreviewSize(fileType)
+    if (stats.size <= maxPreviewSize) {
+      try {
+        if (fileType === 'json' || fileType === 'text') {
+          result.content = fse.readFileSync(filePath, 'utf-8')
+          if (fileType === 'json') {
+            try {
+              result.content = JSON.parse(result.content)
+            } catch {
+              // 如果解析失败，保持文本格式
+            }
+          }
+        } else if (fileType === 'image') {
+          // 对于图片，返回 base64
+          const buffer = fse.readFileSync(filePath)
+          result.content = `data:image/${ext.slice(1)};base64,${buffer.toString('base64')}`
+        }
+      } catch (error) {
+        console.error(`Failed to read file content: ${fileName}`, error)
+      }
+    } else {
+      result.truncated = true
+    }
+
+    return result
+  }
+
+  /**
+   * 清空存储
+   * @returns 操作结果
+   */
+  clearStorage(): { success: boolean; error?: string } {
+    const configPath = this.getConfigPath()
+
+    if (!fse.existsSync(configPath)) {
+      return { success: true }
+    }
+
+    try {
+      fse.emptyDirSync(configPath)
+      this.broadcastStorageUpdate()
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  }
+
+  /**
+   * 获取文件类型
+   */
+  private getFileType(ext: string): string {
+    const typeMap: Record<string, string> = {
+      '.json': 'json',
+      '.log': 'log',
+      '.txt': 'text',
+      '.md': 'text',
+      '.png': 'image',
+      '.jpg': 'image',
+      '.jpeg': 'image',
+      '.gif': 'image',
+      '.webp': 'image',
+      '.svg': 'image'
+    }
+
+    return typeMap[ext] || 'other'
+  }
+
+  /**
+   * 获取不同文件类型的预览大小限制
+   */
+  private getMaxPreviewSize(fileType: string): number {
+    const sizeMap: Record<string, number> = {
+      json: 100 * 1024, // 100KB
+      text: 50 * 1024, // 50KB
+      log: 50 * 1024, // 50KB
+      image: 5 * 1024 * 1024, // 5MB
+      other: 0 // 不预览
+    }
+
+    return sizeMap[fileType] || 0
   }
 
   /**

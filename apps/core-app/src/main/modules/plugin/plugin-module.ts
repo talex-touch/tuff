@@ -1251,6 +1251,178 @@ export class PluginModule extends BaseModule {
 
     touchChannel.regChannel(
       ChannelType.MAIN,
+      'plugin:storage:get-stats',
+      async ({ data, reply }) => {
+        try {
+          const { pluginName } = data
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const stats = plugin.getStorageStats()
+          return reply(DataCode.SUCCESS, stats)
+        } catch (error) {
+          console.error('Error in plugin:storage:get-stats handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:storage:get-tree',
+      async ({ data, reply }) => {
+        try {
+          const { pluginName } = data
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const tree = plugin.getStorageTree()
+          return reply(DataCode.SUCCESS, tree)
+        } catch (error) {
+          console.error('Error in plugin:storage:get-tree handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:storage:get-file-details',
+      async ({ data, reply }) => {
+        try {
+          const { pluginName, fileName } = data
+          if (!pluginName || !fileName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name and fileName are required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const details = plugin.getFileDetails(fileName)
+          return reply(DataCode.SUCCESS, details)
+        } catch (error) {
+          console.error('Error in plugin:storage:get-file-details handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:storage:clear', async ({ data, reply }) => {
+      try {
+        const { pluginName } = data
+        if (!pluginName) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+        }
+
+        const result = plugin.clearStorage()
+        return reply(DataCode.SUCCESS, result)
+      } catch (error) {
+        console.error('Error in plugin:storage:clear handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:storage:open-folder',
+      async ({ data, reply }) => {
+        try {
+          const { pluginName } = data
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const configPath = plugin.getConfigPath()
+          const { shell } = await import('electron')
+          await shell.openPath(configPath)
+          return reply(DataCode.SUCCESS, { success: true })
+        } catch (error) {
+          console.error('Error in plugin:storage:open-folder handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
+      'plugin:storage:open-in-editor',
+      async ({ data, reply }) => {
+        try {
+          const { pluginName } = data
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const configPath = plugin.getConfigPath()
+          const { shell } = await import('electron')
+
+          // Try to open with default editor (VS Code, Sublime, etc.)
+          // On macOS, use 'open -a "Visual Studio Code"' or just 'open' for default
+          // On Windows, use 'code' or 'start'
+          // On Linux, use 'code' or 'xdg-open'
+          const { exec } = await import('child_process')
+          const { promisify } = await import('util')
+          const execAsync = promisify(exec)
+
+          try {
+            // Try VS Code first (most common)
+            await execAsync(`code "${configPath}"`)
+          } catch {
+            // Fallback to system default
+            await shell.openPath(configPath)
+          }
+
+          return reply(DataCode.SUCCESS, { success: true })
+        } catch (error) {
+          console.error('Error in plugin:storage:open-in-editor handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    touchChannel.regChannel(
+      ChannelType.MAIN,
       'plugin:reconnect-dev-server',
       async ({ data, reply }) => {
         try {
