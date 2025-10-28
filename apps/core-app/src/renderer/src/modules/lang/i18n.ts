@@ -25,17 +25,11 @@ export async function setupI18n(options: { locale: string } = { locale: 'en-US' 
  * @param locale - locale string
  */
 export function setI18nLanguage(i18n: any, locale: string): void {
-  console.log('[setI18nLanguage] Setting locale to:', locale)
-  console.log('[setI18nLanguage] i18n.mode:', i18n.mode)
-  console.log('[setI18nLanguage] Before - i18n.global.locale.value:', i18n.global.locale.value)
-
   if (i18n.mode === 'legacy') {
     i18n.global.locale = locale
   } else {
     i18n.global.locale.value = locale
   }
-
-  console.log('[setI18nLanguage] After - i18n.global.locale.value:', i18n.global.locale.value)
 
   /**
    * NOTE:
@@ -56,15 +50,10 @@ export function setI18nLanguage(i18n: any, locale: string): void {
 export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
   const messages = await import(/* webpackChunkName: "locale-[request]" */ `./${locale}.json`)
 
-  console.log('[loadLocaleMessages] i18n.global:', i18n.global)
-  console.log('[loadLocaleMessages] setLocaleMessage exists:', typeof i18n.global.setLocaleMessage)
-
   if (typeof i18n.global.setLocaleMessage === 'function') {
     i18n.global.setLocaleMessage(locale, messages.default)
-    console.log('[loadLocaleMessages] Set messages for locale using setLocaleMessage:', locale)
   } else if (i18n.global.messages && i18n.global.messages.value) {
     i18n.global.messages.value[locale] = messages.default
-    console.log('[loadLocaleMessages] Set messages for locale using direct assignment:', locale)
   } else {
     console.error('[loadLocaleMessages] i18n.global.messages is not available')
   }
