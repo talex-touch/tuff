@@ -22,7 +22,9 @@ const { checkApplicationUpgrade } = useApplicationUpgrade()
 async function entry(): Promise<void> {
   try {
     preloadDebugStep('Requesting startup handshake...', 0.05)
-    const res: IStartupInfo = touchChannel.sendSync('app-ready')
+    const res: IStartupInfo = touchChannel.sendSync('app-ready', {
+      rendererStartTime: performance.timeOrigin
+    })
     preloadDebugStep('Startup handshake acknowledged', 0.05)
 
     window.$startupInfo = res

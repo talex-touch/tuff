@@ -10,6 +10,7 @@ import { BaseModule } from '../modules/abstract-base-module'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { activeAppService } from '../modules/system/active-app'
+import { getStartupAnalytics } from '../modules/analytics'
 
 function closeApp(app: TalexTouch.TouchApp): void {
   app.window.close()
@@ -119,6 +120,33 @@ export class CommonChannelModule extends BaseModule {
     channel.regChannel(ChannelType.MAIN, 'files:index-progress', async ({ data }) => {
       const paths = Array.isArray(data?.paths) ? data.paths : undefined
       return fileProvider.getIndexingProgress(paths)
+    })
+
+    // Analytics channels
+    channel.regChannel(ChannelType.MAIN, 'analytics:get-current', () => {
+      const analytics = getStartupAnalytics()
+      return analytics.getCurrentMetrics()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'analytics:get-history', () => {
+      const analytics = getStartupAnalytics()
+      return analytics.getHistory()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'analytics:get-summary', () => {
+      const analytics = getStartupAnalytics()
+      return analytics.getPerformanceSummary()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'analytics:export', () => {
+      const analytics = getStartupAnalytics()
+      return analytics.exportMetrics()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'analytics:report', async ({ data }) => {
+      const analytics = getStartupAnalytics()
+      await analytics.reportMetrics(data?.endpoint)
+      return { success: true }
     })
 
     async function onOpenUrl(url: string) {
