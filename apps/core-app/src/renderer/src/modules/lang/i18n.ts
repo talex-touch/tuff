@@ -25,11 +25,18 @@ export async function setupI18n(options: { locale: string } = { locale: 'en-US' 
  * @param locale - locale string
  */
 export function setI18nLanguage(i18n: any, locale: string): void {
+  console.log('[setI18nLanguage] Setting locale to:', locale)
+  console.log('[setI18nLanguage] i18n.mode:', i18n.mode)
+  console.log('[setI18nLanguage] Before - i18n.global.locale.value:', i18n.global.locale.value)
+
   if (i18n.mode === 'legacy') {
     i18n.global.locale = locale
   } else {
     i18n.global.locale.value = locale
   }
+
+  console.log('[setI18nLanguage] After - i18n.global.locale.value:', i18n.global.locale.value)
+
   /**
    * NOTE:
    * If you need to specify the language setting for headers, such as the `fetch` API, set it here.
