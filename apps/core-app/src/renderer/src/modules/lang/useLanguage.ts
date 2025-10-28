@@ -33,14 +33,24 @@ function getSystemLanguage(): SupportedLanguage {
  * 语言管理 composable
  */
 export function useLanguage() {
-  // 使用全局 i18n 实例而不是 composable，因为需要访问 i18n.global
-  const i18n = (window as any).$i18n
+  /**
+   * 获取全局 i18n 实例
+   */
+  function getI18nInstance() {
+    const i18n = (window as any).$i18n
+    if (!i18n) {
+      throw new Error('[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.')
+    }
+    return i18n
+  }
 
   /**
    * 切换语言
    */
   async function switchLanguage(lang: SupportedLanguage) {
     try {
+      const i18n = getI18nInstance()
+
       // 加载语言包
       await loadLocaleMessages(i18n, lang)
 
