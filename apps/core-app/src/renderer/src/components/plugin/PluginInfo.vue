@@ -156,7 +156,6 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 // Loading states
 const loadingStates = ref({
   openFolder: false,
-  reload: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
@@ -195,18 +194,10 @@ const statusClass = computed(() => {
   return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
 })
 
-// Action handlers
 async function handleReloadPlugin(): Promise<void> {
-  if (!props.plugin || loadingStates.value.reload) return
+  if (!props.plugin) return
 
-  loadingStates.value.reload = true
-  try {
-    await touchSdk.reloadPlugin(props.plugin.name)
-  } catch (error) {
-    console.error('Failed to reload plugin:', error)
-  } finally {
-    loadingStates.value.reload = false
-  }
+  await touchSdk.reloadPlugin(props.plugin.name)
 }
 
 async function handleOpenPluginFolder(): Promise<void> {
