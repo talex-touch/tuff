@@ -72,6 +72,43 @@ class PluginSDK {
       }
     })
 
+    touchChannel.regChannel('plugin-status-updated', (payload) => {
+      const { plugin: pluginName, status } = payload.data as { plugin: string; status: number }
+
+      const event: PluginStateEvent = {
+        type: 'status-changed',
+        name: pluginName,
+        status
+      }
+
+      this.subscribers.forEach((callback) => {
+        try {
+          callback(event)
+        } catch (error) {
+          console.error('[PluginSDK] Error in status update subscriber:', error)
+        }
+      })
+
+      const callbacks = this.pluginSubscribers.get(pluginName)
+      if (callbacks && callbacks.size > 0) {
+        this.get(pluginName)
+          .then((plugin) => {
+            if (plugin) {
+              callbacks.forEach((callback) => {
+                try {
+                  callback(plugin)
+                } catch (error) {
+                  console.error('[PluginSDK] Error in plugin-specific status subscriber:', error)
+                }
+              })
+            }
+          })
+          .catch((error) => {
+            console.error('[PluginSDK] Failed to fetch plugin data for status subscribers:', error)
+          })
+      }
+    })
+
     this.initialized = true
   }
 

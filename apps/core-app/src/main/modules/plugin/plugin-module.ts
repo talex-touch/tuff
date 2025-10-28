@@ -391,8 +391,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
       await unloadPlugin(pluginName)
 
-      logInfo('Waiting 0.5s before reloading plugin...', pluginTag(pluginName))
-      await sleep(500)
+      logInfo('Waiting 0.200s before reloading plugin...', pluginTag(pluginName))
+      await sleep(200)
 
       await loadPlugin(pluginName)
 
