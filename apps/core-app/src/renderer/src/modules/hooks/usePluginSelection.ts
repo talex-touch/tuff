@@ -1,71 +1,121 @@
-import { ref, watch, computed, nextTick } from 'vue'
+import { ref, watch, computed, nextTick, type Ref, type ComputedRef } from 'vue'
 import { usePluginStore } from '~/stores/plugin'
 import { storeToRefs } from 'pinia'
-import { useDebounceFn } from '@vueuse/core'
+import type { ITouchPlugin } from '@talex-touch/utils'
 
-export function usePluginSelection() {
+/**
+ * Return type for the usePluginSelection composable.
+ */
+interface UsePluginSelectionReturn {
+  /** Computed array of all available plugins */
+  plugins: ComputedRef<ITouchPlugin[]>
+  /** Currently selected plugin name */
+  select: Ref<string | undefined>
+  /** Currently selected plugin object */
+  curSelect: Ref<ITouchPlugin | null>
+  /** Loading state for async operations */
+  loading: Ref<boolean>
+  /** Function to select a plugin by name */
+  selectPlugin: (name: string) => Promise<void>
+}
+
+/**
+ * Composable for managing plugin selection state and lifecycle.
+ *
+ * Features:
+ * - Plugin selection state management with type-safe plugin objects
+ * - Auto-restore selection when a plugin reloads after being unloaded
+ * - Automatic cleanup when the selected plugin is removed from the store
+ * - Prevents race conditions with loading state management
+ *
+ * @returns Plugin selection state and control methods
+ *
+ * @example
+ * ```ts
+ * const { plugins, select, curSelect, loading, selectPlugin } = usePluginSelection()
+ *
+ * // Select a plugin
+ * await selectPlugin('my-plugin-name')
+ *
+ * // Access current selection
+ * console.log(curSelect.value?.name)
+ * ```
+ */
+export function usePluginSelection(): UsePluginSelectionReturn {
   const pluginStore = usePluginStore()
   const { plugins: pluginMap } = storeToRefs(pluginStore)
   const plugins = computed(() => [...pluginMap.value.values()])
 
-  const select = ref<string>()
-  const curSelect = ref<any>()
+  const select = ref<string | undefined>()
+  const curSelect = ref<ITouchPlugin | null>(null)
   const loading = ref(false)
   const lastUnloadedPlugin = ref<string | null>(null)
 
-  const updateSelectedPlugin = useDebounceFn(() => {
-    if (!plugins.value || !select.value) {
-      curSelect.value = null
-      return
-    }
-    curSelect.value = plugins.value.find((item) => item.name === select.value) || null
-    if (curSelect.value) {
-      console.log(
-        `[usePluginSelection] Plugin "${curSelect.value.name}" selected. Initial status:`,
-        curSelect.value.status
-      )
-    }
-  }, 50)
+  /**
+   * Updates the curSelect ref based on the current select value.
+   * Finds the plugin object from the plugins array by name.
+   */
+  const updateSelectedPlugin = (): void => {
+    curSelect.value = select.value
+      ? (plugins.value.find((item) => item.name === select.value) ?? null)
+      : null
+  }
 
-  watch(() => select.value, updateSelectedPlugin, { immediate: true })
+  /**
+   * Watch for changes to either the selected plugin name or the plugins list.
+   * Updates curSelect accordingly, ensuring it's automatically cleared when:
+   * - User changes selection
+   * - Selected plugin is removed from the store
+   * - Plugins list is updated
+   * Runs immediately to initialize curSelect on mount.
+   */
+  watch([() => select.value, () => plugins.value], updateSelectedPlugin, { immediate: true })
 
-  // Watch for plugin unload (when selected plugin is removed from map)
+  /**
+   * Watch for plugin unload events.
+   * When the currently selected plugin is removed from the plugin map:
+   * 1. Store the plugin name in lastUnloadedPlugin for potential auto-restore
+   * 2. Clear the current selection
+   * 3. This triggers curSelect cleanup via the updateSelectedPlugin watcher
+   */
   watch(
     () => pluginMap.value,
     (newMap, oldMap) => {
       if (!select.value || !oldMap) return
 
-      // Check if the currently selected plugin was removed
       if (oldMap.has(select.value) && !newMap.has(select.value)) {
         console.log(`[usePluginSelection] Selected plugin "${select.value}" was unloaded`)
         lastUnloadedPlugin.value = select.value
-        select.value = ''
-        console.log(
-          `[usePluginSelection] Selection cleared, will auto-restore if plugin reloads and user doesn't select another`
-        )
+        select.value = undefined
       }
     },
     { deep: true }
   )
 
-  // Watch for plugin reload (when size increases and lastUnloaded plugin returns)
+  /**
+   * Watch for plugin reload events.
+   * When the plugin map size increases, check if a previously unloaded plugin
+   * has returned. If so, and the user hasn't selected a different plugin,
+   * automatically restore the previous selection.
+   */
   watch(
     () => pluginMap.value.size,
     () => {
       if (!lastUnloadedPlugin.value) return
 
-      // If the previously unloaded plugin is back and user hasn't selected anything else
       if (pluginMap.value.has(lastUnloadedPlugin.value) && !select.value) {
-        console.log(
-          `[usePluginSelection] Auto-restoring selection to: ${lastUnloadedPlugin.value}`
-        )
+        console.log(`[usePluginSelection] Auto-restoring selection to: ${lastUnloadedPlugin.value}`)
         select.value = lastUnloadedPlugin.value
         lastUnloadedPlugin.value = null
       }
     }
   )
 
-  // Clear lastUnloadedPlugin if user manually selects a different plugin
+  /**
+   * Clear the lastUnloadedPlugin restoration target if the user manually
+   * selects a different plugin. This prevents unwanted auto-restoration
+   * when the user has moved on to a different plugin.
+   */
   watch(
     () => select.value,
     (newSelect) => {
@@ -78,21 +128,24 @@ export function usePluginSelection() {
     }
   )
 
-  async function selectPlugin(index: string): Promise<void> {
-    if (index === select.value || loading.value) return
+  /**
+   * Selects a plugin by name.
+   * Prevents selecting the same plugin twice and blocks selection during loading.
+   *
+   * @param name - The unique name/identifier of the plugin to select
+   * @returns Promise that resolves when selection is complete
+   */
+  async function selectPlugin(name: string): Promise<void> {
+    if (name === select.value || loading.value) return
 
-    console.log('selectPlugin', index, plugins.value[index])
+    console.log(`[usePluginSelection] Selecting plugin: ${name}`)
 
     loading.value = true
+    select.value = name
 
-    select.value = index
-
-    // Simulate async operation if needed, or just set loading false after a tick
     await nextTick()
     loading.value = false
   }
-
-  console.log(plugins)
 
   return {
     plugins,
