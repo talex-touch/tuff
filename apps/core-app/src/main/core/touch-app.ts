@@ -12,6 +12,7 @@ import { TouchWindow } from './touch-window'
 import { TouchConfig } from './touch-config'
 import { ModuleManager } from './module-manager'
 import { mainLog } from '../utils/logger'
+import { getStartupAnalytics } from '../modules/analytics'
 
 export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = innerRootPath
@@ -62,7 +63,6 @@ export class TouchApp implements TalexTouch.TouchApp {
   }
 
   async __init__(): Promise<void> {
-    const startTime = new Date().getTime()
     const renderTimer = mainLog.time('Renderer boot', 'success')
 
     touchEventBus.emit(TalexEvents.APP_START, new AppStartEvent())
@@ -101,13 +101,27 @@ export class TouchApp implements TalexTouch.TouchApp {
       meta: { mode: app.isPackaged ? 'file' : 'dev-server' }
     })
 
-    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header }) => {
+    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, arg }) => {
       const { event } = header
-      // if ()
-      //       genPluginModule().plugins.forEach((plugin) => {
-      //       plugin.webViewInit = false;
-      //     });
-      // }
+      const { rendererStartTime } = arg || {}
+
+      // Use renderer's performance.timeOrigin for accurate timing
+      // This ensures reload doesn't accumulate time incorrectly
+      const rendererStart = rendererStartTime || Date.now()
+      const currentTime = Date.now()
+
+      // Record renderer process metrics for analytics
+      const analytics = getStartupAnalytics()
+      analytics.setRendererProcessMetrics({
+        startTime: rendererStart,
+        readyTime: currentTime,
+        domContentLoaded: undefined, // Will be set by renderer
+        firstInteractive: undefined,  // Will be set by renderer
+        loadEventEnd: undefined        // Will be set by renderer
+      })
+
+      // Save metrics to history (async, don't wait)
+      void analytics.saveToHistory()
 
       return {
         id: (event?.sender as Electron.WebContents).id,
@@ -132,8 +146,8 @@ export class TouchApp implements TalexTouch.TouchApp {
         platformWarning: checkPlatformCompatibility(),
         t: {
           _s: process.getCreationTime(),
-          s: startTime,
-          e: new Date().getTime(),
+          s: rendererStart,
+          e: currentTime,
           p: process.uptime(),
           h: process.hrtime()
         }

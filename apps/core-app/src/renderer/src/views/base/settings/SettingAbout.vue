@@ -8,6 +8,8 @@
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
 import { useEnv } from '~/modules/hooks/env-hooks'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { ElMessage } from 'element-plus'
 
 // Import UI components
 import TBlockLine from '@comp/base/group/TBlockLine.vue'
@@ -21,9 +23,19 @@ const appUpdate = ref(window.$startupInfo.appUpdate)
 const sui = ref(window.$startupInfo)
 
 const dev = ref(false)
+const performanceSummary = ref<any>(null)
+const showPerformanceDetails = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
+
+  // Load performance summary
+  try {
+    const summary = await touchChannel.send('analytics:get-summary')
+    performanceSummary.value = summary
+  } catch (error) {
+    console.warn('Failed to load performance summary', error)
+  }
 })
 
 // Computed property for version string
@@ -33,6 +45,27 @@ const versionStr = computed(
 
 // Computed property for application start time
 const startCosts = computed(() => sui.value && (sui.value.t.e - sui.value.t.s) / 1000)
+
+// Export performance data
+async function exportPerformanceData() {
+  try {
+    const data = await touchChannel.send('analytics:export')
+
+    // Create a download link
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `startup-analytics-${Date.now()}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    ElMessage.success(t('settingAbout.exportSuccess'))
+  } catch (error) {
+    console.error('Failed to export performance data', error)
+    ElMessage.error(t('settingAbout.exportFailed'))
+  }
+}
 
 // Computed property for current quarter based on build time
 const currentQuarter = computed(() => {
@@ -72,7 +105,7 @@ const currentExperiencePack = computed(() => {
     <t-block-line :title="t('settingAbout.specification')" :description="`${currentQuarter}`"></t-block-line>
     <t-block-line :title="t('settingAbout.startCosts')">
       <template #description>
-        {{ startCosts }}s
+        {{ startCosts.toFixed(2) }}s
         <span v-if="startCosts < 1" class="tag" style="color: var(--el-color-success)">
           {{ t('settingAbout.perfect') }}
         </span>
@@ -87,6 +120,60 @@ const currentExperiencePack = computed(() => {
         </span>
       </template>
     </t-block-line>
+    <t-block-line
+      v-if="performanceSummary"
+      :title="t('settingAbout.performanceDetails')"
+      :link="true"
+      @click="showPerformanceDetails = !showPerformanceDetails"
+    >
+      <template #description>
+        <span style="cursor: pointer; color: var(--el-color-primary)">
+          {{ showPerformanceDetails ? t('settingAbout.hideDetails') : t('settingAbout.viewDetails') }}
+        </span>
+      </template>
+    </t-block-line>
+    <template v-if="showPerformanceDetails && performanceSummary">
+      <t-block-line :title="t('settingAbout.mainProcessTime')">
+        <template #description>
+          {{ performanceSummary.mainProcessTime.toFixed(3) }}s
+        </template>
+      </t-block-line>
+      <t-block-line :title="t('settingAbout.rendererTime')">
+        <template #description>
+          {{ performanceSummary.rendererTime.toFixed(3) }}s
+        </template>
+      </t-block-line>
+      <t-block-line :title="t('settingAbout.modulesLoaded')">
+        <template #description>
+          {{ performanceSummary.moduleCount }}
+        </template>
+      </t-block-line>
+      <t-block-line :title="t('settingAbout.performanceRating')">
+        <template #description>
+          <span
+            :style="`color: ${
+              performanceSummary.rating === 'excellent' ? 'var(--el-color-success)' :
+              performanceSummary.rating === 'good' ? 'var(--el-color-warning)' :
+              performanceSummary.rating === 'fair' ? 'var(--el-color-error)' :
+              'var(--el-color-danger)'
+            }`"
+          >
+            {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
+          </span>
+        </template>
+      </t-block-line>
+      <t-block-line
+        :title="t('settingAbout.exportData')"
+        :link="true"
+        @click="exportPerformanceData"
+      >
+        <template #description>
+          <span style="cursor: pointer; color: var(--el-color-primary)">
+            {{ t('settingAbout.exportJson') }}
+          </span>
+        </template>
+      </t-block-line>
+    </template>
     <t-block-line :title="t('settingAbout.electron')" :description="processInfo.versions?.electron"></t-block-line>
     <t-block-line :title="t('settingAbout.v8')" :description="processInfo.versions?.v8"></t-block-line>
     <t-block-line :title="t('settingAbout.os')">

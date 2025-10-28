@@ -33,11 +33,11 @@ declare global {
       userDataPath: string
     }
     t: {
-      _s: number
-      s: number
-      e: number
-      p: number
-      h: number[]
+      _s: number        // Process creation time (from process.getCreationTime())
+      s: number         // Renderer process start time (performance.timeOrigin)
+      e: number         // Time when app-ready received
+      p: number         // Process uptime
+      h: number[]       // Process hrtime
     }
     platform: string
     arch: string
