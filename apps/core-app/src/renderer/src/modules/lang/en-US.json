@@ -245,7 +245,9 @@
       "crashed": "Plugin crashed, click to restart.",
       "enabled": "Plugin enabled, click to disable.",
       "loaded": "Plugin loaded, click to enable.",
-      "loadFailed": "Plugin load failed, click to reload."
+      "loadFailed": "Plugin load failed, click to reload.",
+      "devDisconnected": "Dev server disconnected, click to reconnect.",
+      "devReconnecting": "Reconnecting to dev server..."
     },
     "tabs": {
       "overview": "Overview",

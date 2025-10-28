@@ -184,7 +184,9 @@ const statusMap = {
   [EPluginStatus.DISABLED]: { indicator: 'bg-yellow-500' },
   [EPluginStatus.CRASHED]: { indicator: 'bg-red-500' },
   [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
-  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' }
+  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' },
+  [EPluginStatus.DEV_DISCONNECTED]: { indicator: 'bg-orange-500' },
+  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' }
 }
 
 const statusClass = computed(() => {
