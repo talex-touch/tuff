@@ -5,7 +5,11 @@
         <div
           class="FeatureCard-Icon w-12 h-12 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center"
         >
-          <TuffIcon :icon="feature.icon" empty="i-carbon-application" :size="32" />
+          <TuffIcon :icon="feature.icon" :size="32">
+            <template #empty>
+              <i class="i-carbon-application" />
+            </template>
+          </TuffIcon>
         </div>
         <div
           class="FeatureCard-Badge bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] text-xs px-2 py-1 rounded-lg border border-[var(--el-color-primary-light-8)]"
