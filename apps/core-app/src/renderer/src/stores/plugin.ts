@@ -44,7 +44,6 @@ export const usePluginStore = defineStore('plugin', () => {
       console.error('[PluginStore] Invalid plugin list received:', pluginList)
       return
     }
-    console.log('[PluginStore] Initializing plugins with', pluginList.length, 'plugins')
     plugins.clear()
     pluginList.forEach((plugin) => {
       setPlugin(plugin)
@@ -56,34 +55,28 @@ export const usePluginStore = defineStore('plugin', () => {
    * @param event - Plugin state change event
    */
   function handleStateEvent(event: PluginStateEvent): void {
-    console.log('[PluginStore] Handling state event:', event.type)
 
     switch (event.type) {
       case 'added':
         setPlugin(event.plugin)
-        console.log(`[PluginStore] Plugin "${event.plugin.name}" added`)
         break
 
       case 'removed':
         deletePlugin(event.name)
-        console.log(`[PluginStore] Plugin "${event.name}" removed`)
         break
 
       case 'updated':
         if (event.changes) {
           setPlugin(event.changes as ITouchPlugin)
-          console.log(`[PluginStore] Plugin "${event.name}" updated`)
         }
         break
 
       case 'status-changed':
         updatePluginStatus(event.name, event.status)
-        console.log(`[PluginStore] Plugin "${event.name}" status changed to ${event.status}`)
         break
 
       case 'readme-updated':
         updatePluginReadme(event.name, event.readme)
-        console.log(`[PluginStore] Plugin "${event.name}" readme updated`)
         break
 
       default:
@@ -100,7 +93,6 @@ export const usePluginStore = defineStore('plugin', () => {
     const plugin = getPlugin(name)
     if (plugin) {
       plugin.status = status
-      console.log(`[PluginStore] Status updated for "${name}": ${status}`)
     } else {
       console.warn(`[PluginStore] Plugin "${name}" not found when updating status`)
     }
@@ -123,8 +115,6 @@ export const usePluginStore = defineStore('plugin', () => {
    * @returns Cleanup function
    */
   async function initialize(): Promise<() => void> {
-    console.log('[PluginStore] Initializing...')
-
     const unsubscribe = pluginSDK.subscribe((event) => {
       handleStateEvent(event)
     })
@@ -135,7 +125,6 @@ export const usePluginStore = defineStore('plugin', () => {
         console.error('[PluginStore] Invalid plugin list received:', pluginList)
         return unsubscribe
       }
-      console.log('[PluginStore] Loaded', pluginList.length, 'plugins')
       initPlugins(pluginList)
     } catch (error) {
       console.error('[PluginStore] Failed to load initial plugin list:', error)
