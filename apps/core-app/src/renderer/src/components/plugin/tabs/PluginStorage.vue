@@ -1,120 +1,77 @@
 <template>
-  <div class="PluginStorage w-full space-y-6">
+  <div class="PluginStorage w-full h-full flex flex-col space-y-6">
     <!-- Storage Overview -->
     <div class="PluginStorage-Overview">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Skeleton for stats cards -->
+      <div v-if="loading" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div
+          v-for="i in 4"
+          :key="i"
+          class="bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-6 h-32"
+        >
+          <el-skeleton animated>
+            <template #template>
+              <div class="flex items-center gap-4">
+                <el-skeleton-item variant="circle" style="width: 60px; height: 60px" />
+                <div class="flex-1">
+                  <el-skeleton-item variant="text" style="width: 60%; margin-bottom: 8px" />
+                  <el-skeleton-item variant="text" style="width: 40%" />
+                </div>
+              </div>
+            </template>
+          </el-skeleton>
+        </div>
+      </div>
+
+      <!-- Real stats cards -->
+      <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
-          value="2.4 MB"
+          :value="formatSize(storageStats.totalSize)"
           label="Total Storage"
           icon-class="i-ri-database-line text-6xl text-[var(--el-color-primary)]"
         />
         <StatCard
-          value="156"
+          :value="String(storageStats.fileCount)"
           label="Files"
           icon-class="i-ri-file-line text-6xl text-[var(--el-color-success)]"
         />
         <StatCard
-          value="8"
+          :value="String(storageStats.dirCount)"
           label="Directories"
           icon-class="i-ri-folder-line text-6xl text-[var(--el-color-info)]"
+        />
+        <StatCard
+          :value="`${storageStats.usagePercent.toFixed(1)}%`"
+          :label="`Usage (${formatSize(storageStats.maxSize)} limit)`"
+          :icon-class="`i-ri-pie-chart-line text-6xl ${usageColorClass}`"
         />
       </div>
     </div>
 
-    <!-- Storage Breakdown -->
+    <!-- Storage Info Card -->
     <div
-      class="PluginStorage-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-6"
+      class="flex-1 PluginStorage-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-6"
     >
-      <div class="PluginStorage-CardHeader flex items-center gap-3 mb-6">
-        <i class="i-ri-pie-chart-line text-xl text-[var(--el-color-primary)]" />
-        <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Breakdown</h3>
+      <div class="text-6xl">
+        <i class="i-ri-folder-2-line text-[var(--el-color-primary)]" />
       </div>
-      <div class="PluginStorage-Items space-y-3">
-        <div
-          v-for="item in storageItems"
-          :key="item.name"
-          class="PluginStorage-Item bg-[var(--el-fill-color-darker)] rounded-xl p-4 flex items-center justify-between"
-        >
-          <div class="PluginStorage-ItemInfo flex items-center gap-3">
-            <div
-              class="w-10 h-10 bg-gradient-to-br from-[var(--el-color-primary-light-9)] to-[var(--el-color-info-light-9)] rounded-lg flex items-center justify-center"
-            >
-              <i :class="item.icon" class="text-lg" :style="{ color: item.color }" />
-            </div>
-            <div class="PluginStorage-ItemDetails">
-              <span class="block font-medium text-[var(--el-text-color-primary)]">{{
-                item.name
-              }}</span>
-              <code
-                class="text-xs text-[var(--el-text-color-secondary)] bg-[var(--el-fill-color-darker)] px-2 py-1 rounded mt-1 inline-block"
-                >{{ item.path }}</code
-              >
-            </div>
-          </div>
-          <div class="PluginStorage-ItemSize text-right">
-            <span class="text-sm font-medium text-[var(--el-text-color-primary)]">{{
-              item.size
-            }}</span>
-            <div
-              class="PluginStorage-ProgressBar w-20 h-1 bg-[var(--el-fill-color)] rounded-full mt-1 overflow-hidden"
-            >
-              <div
-                class="h-full bg-gradient-to-r from-[var(--el-color-primary)] to-[var(--el-color-info)] rounded-full"
-                :style="{ width: item.percentage }"
-              />
-            </div>
-          </div>
-        </div>
+      <div class="space-y-2">
+        <h3 class="text-2xl font-semibold text-[var(--el-text-color-primary)]">
+          Plugin Storage Directory
+        </h3>
+        <p class="text-[var(--el-text-color-secondary)] max-w-md">
+          This plugin is using {{ formatSize(storageStats.totalSize) }} of storage space with {{ storageStats.fileCount }} files and {{ storageStats.dirCount }} directories.
+        </p>
       </div>
-    </div>
-
-    <!-- Storage Analysis -->
-    <div
-      class="PluginStorage-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-6"
-    >
-      <div class="PluginStorage-CardHeader flex items-center gap-3 mb-6">
-        <i class="i-ri-bar-chart-line text-xl text-[var(--el-color-success)]" />
-        <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Analysis</h3>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="PluginStorage-AnalysisItem">
-          <h4
-            class="text-sm font-medium text-[var(--el-text-color-regular)] mb-3 flex items-center gap-2"
-          >
-            <i class="i-ri-time-line text-[var(--el-color-warning)]" />
-            Last Modified
-          </h4>
-          <div class="space-y-2">
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              config/settings.json - 2 hours ago
-            </div>
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              cache/images.db - 1 day ago
-            </div>
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              logs/app.log - 3 days ago
-            </div>
-          </div>
-        </div>
-        <div class="PluginStorage-AnalysisItem">
-          <h4
-            class="text-sm font-medium text-[var(--el-text-color-regular)] mb-3 flex items-center gap-2"
-          >
-            <i class="i-ri-error-warning-line text-[var(--el-color-danger)]" />
-            Recommendations
-          </h4>
-          <div class="space-y-2">
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              • Clear cache to free up 856 KB
-            </div>
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              • Archive old logs (30+ days)
-            </div>
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              • Optimize configuration files
-            </div>
-          </div>
-        </div>
+      <div class="flex gap-3">
+        <el-button type="primary" @click="handleOpenFolder">
+          <i class="i-ri-folder-open-line" />
+          Open in File Manager
+        </el-button>
+        <el-button @click="handleOpenInEditor">
+          <i class="i-ri-edit-line" />
+          Open in Editor
+        </el-button>
       </div>
     </div>
 
@@ -122,100 +79,162 @@
     <div class="PluginStorage-Actions flex flex-wrap gap-3">
       <button
         class="PluginStorage-ActionButton bg-[var(--el-color-danger-light-9)] text-[var(--el-color-danger)] border border-[var(--el-color-danger-light-8)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        @click="clearCache"
+        :disabled="clearing"
+        @click="handleClearStorage"
       >
-        <i class="i-ri-delete-bin-line" />
-        Clear Cache
+        <i v-if="!clearing" class="i-ri-delete-bin-line" />
+        <i v-else class="i-ri-loader-4-line animate-spin" />
+        {{ clearing ? 'Clearing...' : 'Clear All Storage' }}
       </button>
       <button
         class="PluginStorage-ActionButton bg-[var(--el-fill-color-light)] text-[var(--el-text-color-primary)] border border-[var(--el-border-color-lighter)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        @click="openDataFolder"
+        @click="handleOpenFolder"
       >
         <i class="i-ri-folder-open-line" />
-        Open Data Folder
-      </button>
-      <button
-        class="PluginStorage-ActionButton bg-[var(--el-fill-color-light)] text-[var(--el-text-color-primary)] border border-[var(--el-border-color-lighter)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        @click="exportData"
-      >
-        <i class="i-ri-download-line" />
-        Export Data
+        Open Storage Folder
       </button>
       <button
         class="PluginStorage-ActionButton bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] border border-[var(--el-color-primary-light-8)] rounded-xl px-4 py-2 text-sm font-medium flex items-center gap-2"
-        @click="optimizeStorage"
+        @click="refreshData"
       >
-        <i class="i-ri-magic-line" />
-        Optimize Storage
+        <i class="i-ri-refresh-line" />
+        Refresh Data
       </button>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { ref, computed, onMounted } from 'vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import type { StorageStats } from '@talex-touch/utils/types/storage'
+import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import StatCard from '../../base/card/StatCard.vue'
 
-// Storage items with enhanced data
-const storageItems = [
-  {
-    name: 'Configuration',
-    path: 'config/',
-    size: '1.2 MB',
-    percentage: '50%',
-    icon: 'i-ri-settings-line',
-    color: 'var(--el-color-primary)'
-  },
-  {
-    name: 'Cache',
-    path: 'cache/',
-    size: '856 KB',
-    percentage: '35%',
-    icon: 'i-ri-image-line',
-    color: 'var(--el-color-success)'
-  },
-  {
-    name: 'Logs',
-    path: 'logs/',
-    size: '384 KB',
-    percentage: '12%',
-    icon: 'i-ri-file-text-line',
-    color: 'var(--el-color-warning)'
-  },
-  {
-    name: 'Data',
-    path: 'data/',
-    size: '128 KB',
-    percentage: '3%',
-    icon: 'i-ri-database-line',
-    color: 'var(--el-color-info)'
+// Props
+const props = defineProps<{
+  plugin: ITouchPlugin
+}>()
+
+// State
+const loading = ref(false)
+const clearing = ref(false)
+const storageStats = ref<StorageStats>({
+  totalSize: 0,
+  fileCount: 0,
+  dirCount: 0,
+  maxSize: 10 * 1024 * 1024,
+  usagePercent: 0
+})
+
+// Computed
+const usageColorClass = computed(() => {
+  const percent = storageStats.value.usagePercent
+  if (percent >= 90) return 'text-[var(--el-color-danger)]'
+  if (percent >= 70) return 'text-[var(--el-color-warning)]'
+  return 'text-[var(--el-color-success)]'
+})
+
+// Methods
+function formatSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
+async function loadStorageData(): Promise<void> {
+  loading.value = true
+  try {
+    // Get stats
+    const statsResponse = await window.$channel.send('plugin:storage:get-stats', {
+      pluginName: props.plugin.name
+    })
+    console.log('Storage stats response:', statsResponse)
+    if (statsResponse && typeof statsResponse === 'object') {
+      storageStats.value = {
+        totalSize: statsResponse.totalSize || 0,
+        fileCount: statsResponse.fileCount || 0,
+        dirCount: statsResponse.dirCount || 0,
+        maxSize: statsResponse.maxSize || (10 * 1024 * 1024),
+        usagePercent: statsResponse.usagePercent || 0
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load storage data:', error)
+    ElMessage.error('Failed to load storage data')
+  } finally {
+    loading.value = false
   }
-]
-
-// Storage management functions
-function clearCache(): void {
-  console.log('Clearing cache...')
-  // TODO: Implement actual cache clearing
 }
 
-function openDataFolder(): void {
-  console.log('Opening data folder...')
-  // TODO: Open data folder in file explorer
+async function handleOpenInEditor(): Promise<void> {
+  try {
+    await window.$channel.send('plugin:storage:open-in-editor', {
+      pluginName: props.plugin.name
+    })
+  } catch (error) {
+    console.error('Failed to open in editor:', error)
+    ElMessage.error('Failed to open storage folder in editor')
+  }
 }
 
-function exportData(): void {
-  console.log('Exporting data...')
-  // TODO: Export plugin data
+async function handleClearStorage(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      'Are you sure you want to clear ALL storage for this plugin? This action cannot be undone and will delete all files and directories.',
+      'Clear Storage',
+      {
+        confirmButtonText: 'Clear All',
+        cancelButtonText: 'Cancel',
+        type: 'error'
+      }
+    )
+
+    clearing.value = true
+    const response = await window.$channel.send('plugin:storage:clear', {
+      pluginName: props.plugin.name
+    })
+
+    if (response.success) {
+      ElMessage.success('Storage cleared successfully')
+      await refreshData()
+    } else {
+      ElMessage.error(response.error || 'Failed to clear storage')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to clear storage:', error)
+      ElMessage.error('Failed to clear storage')
+    }
+  } finally {
+    clearing.value = false
+  }
 }
 
-function optimizeStorage(): void {
-  console.log('Optimizing storage...')
-  // TODO: Run storage optimization
+async function handleOpenFolder(): Promise<void> {
+  try {
+    await window.$channel.send('plugin:storage:open-folder', {
+      pluginName: props.plugin.name
+    })
+  } catch (error) {
+    console.error('Failed to open folder:', error)
+    ElMessage.error('Failed to open storage folder')
+  }
 }
+
+async function refreshData(): Promise<void> {
+  await loadStorageData()
+}
+
+// Lifecycle
+onMounted(() => {
+  loadStorageData()
+})
 </script>
 
 <style lang="scss" scoped>
-/* UnoCSS handles most styling, minimal custom styles needed */
-
 .PluginStorage-ProgressBar {
   transition: width 0.3s ease;
 }
@@ -223,8 +242,26 @@ function optimizeStorage(): void {
 .PluginStorage-ActionButton {
   transition: all 0.2s ease;
 
-  &:active {
+  &:active:not(:disabled) {
     transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

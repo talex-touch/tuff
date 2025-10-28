@@ -234,7 +234,7 @@
       "overview": "Overview",
       "issues": "Issues",
       "features": "Features",
-      "storageMock": "Storage (Mock)",
+      "storage": "Storage",
       "logs": "Logs",
       "details": "Details"
     },

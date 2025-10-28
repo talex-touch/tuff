@@ -103,11 +103,7 @@
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem
-          icon="database-2-line"
-          name="Storage(Mock)"
-          :label="t('plugin.tabs.storageMock')"
-        >
+        <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
@@ -155,7 +151,8 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 
 // Loading states
 const loadingStates = ref({
-  openFolder: false,
+  reload: false,
+  openFolder: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
@@ -165,6 +162,7 @@ const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type
 const slots = useSlots()
 const tabItems = computed(() => {
   const defaultSlots = slots.default?.() || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return defaultSlots.filter((vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem')
 })
 
