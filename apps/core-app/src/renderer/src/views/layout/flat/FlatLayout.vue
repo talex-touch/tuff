@@ -13,27 +13,11 @@
 
         <div class="AppLayout-IconFooter" :class="{ active: isLoggedIn }">
           <slot name="icon" />
-          <div v-if="currentUser?.name" class="AppLayout-Footer">
-            <div class="user-avatar">
-              <img
-                v-if="currentUser.avatar"
-                :src="currentUser.avatar"
-                :alt="currentUser.name"
-                class="avatar-image"
-              />
-              <div v-else class="avatar-placeholder">
-                {{ currentUser.name.charAt(0).toUpperCase() }}
-              </div>
-            </div>
-            <div class="user-info">
-              <p class="user-name">
-                {{ currentUser.name }}
-              </p>
-              <span class="user-email">
-                {{ currentUser.email }}
-              </span>
-            </div>
-          </div>
+          <FlatFooter
+            v-if="currentUser?.name"
+            :current-user="currentUser"
+            @click-download="handleDownloadClick"
+          />
         </div>
       </div>
 
@@ -60,8 +44,14 @@
 import { useAuth } from '~/modules/auth/useAuth'
 import FlatController from './FlatController.vue'
 import FlatNavBar from './FlatNavBar.vue'
+import FlatFooter from './FlatFooter.vue'
 
 const { isLoggedIn, currentUser } = useAuth()
+
+const handleDownloadClick = () => {
+  // TODO: Navigate to download center
+  console.log('Open download center')
+}
 </script>
 
 <style lang="scss" scoped>
@@ -107,107 +97,9 @@ const { isLoggedIn, currentUser } = useAuth()
       transform: translate(0, 0);
     }
 
-    &:before {
-      content: '';
-      position: absolute;
-      padding: 0 5%;
-
-      top: 0;
-      left: 0;
-
-      width: 100%;
-      height: 1px;
-
-      opacity: 0.5;
-      background:
-        linear-gradient(to left, var(--el-border-color) 90%, transparent 50%),
-        linear-gradient(to right, var(--el-border-color) 50%, transparent 90%);
-      background-repeat: no-repeat;
-      background-size: 50% 100%;
-      background-position:
-        left center,
-        right center;
-    }
-
     :deep(.AppLayout-Icon) {
       margin: 0;
       bottom: 0;
-    }
-
-    /**
-     * User information footer
-     * Displays username and email when user is logged in
-     */
-    .AppLayout-Footer {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 0.5rem;
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      box-sizing: border-box;
-
-      .user-avatar {
-        flex-shrink: 0;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        overflow: hidden;
-        background: var(--el-color-primary-light-8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        .avatar-image {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .avatar-placeholder {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--el-color-primary);
-          background: var(--el-color-primary-light-8);
-        }
-      }
-
-      .user-info {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-
-        .user-name {
-          margin: 0;
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--el-text-color-primary);
-          line-height: 1.2;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .user-email {
-          margin: 0;
-          font-size: 11px;
-          font-weight: 400;
-          color: var(--el-text-color-regular);
-          opacity: 0.8;
-          line-height: 1.2;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-      }
     }
 
     position: absolute;
@@ -217,7 +109,7 @@ const { isLoggedIn, currentUser } = useAuth()
     bottom: 0;
 
     width: 100%;
-    height: 50px;
+    height: 110px;
 
     -webkit-app-region: drag;
     transform: translate(0%, 100%);
