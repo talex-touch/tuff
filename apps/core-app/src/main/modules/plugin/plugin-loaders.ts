@@ -76,9 +76,7 @@ abstract class BasePluginLoader {
     this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
-    this.touchPlugin.readme = ((p) => (fse.existsSync(p) ? fse.readFileSync(p).toString() : ''))(
-      path.resolve(this.pluginPath, 'README.md')
-    )
+    // README loading is handled by specific loader implementations (LocalPluginLoader or DevPluginLoader)
 
     const icon = new TuffIconImpl(this.pluginPath, pluginInfo.icon.type, pluginInfo.icon.value)
     await icon.init()
@@ -136,6 +134,12 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
     try {
       const pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
       await this.loadCommon(pluginInfo)
+
+      // Load README from local file system
+      const readmePath = path.resolve(this.pluginPath, 'README.md')
+      this.touchPlugin.readme = fse.existsSync(readmePath)
+        ? fse.readFileSync(readmePath, 'utf-8')
+        : ''
     } catch (error) {
       const err = error as Error
       this.touchPlugin.issues.push({
@@ -206,6 +210,23 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
     }
 
     await this.loadCommon(pluginInfo)
+
+    // Load README from dev server
+    try {
+      const remoteReadmeUrl = new URL('README.md', this.devConfig.address).toString()
+      this.touchPlugin.logger.debug(`[Dev] Fetching remote README from ${remoteReadmeUrl}`)
+      const response = await axios.get(remoteReadmeUrl, {
+        timeout: 2000,
+        proxy: false,
+        responseType: 'text'
+      })
+      this.touchPlugin.readme = response.data || ''
+      this.touchPlugin.logger.debug(`[Dev] Remote README fetched successfully`)
+    } catch {
+      this.touchPlugin.logger.debug(`[Dev] README not found or failed to load from dev server`)
+      this.touchPlugin.readme = ''
+      // README loading failure is not fatal, so we don't add it to issues
+    }
 
     return this.touchPlugin
   }
