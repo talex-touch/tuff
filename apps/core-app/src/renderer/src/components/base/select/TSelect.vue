@@ -14,12 +14,6 @@ export default {
       required: true
     }
   },
-  beforeUnmount() {
-    document.removeEventListener('click', this.clickListener)
-  },
-  mounted() {
-    document.addEventListener('click', this.clickListener)
-  },
   data() {
     const activeIndex = ref(0)
     const click = ref(false)
@@ -34,7 +28,21 @@ export default {
     return {
       activeIndex,
       click,
-      clickListener
+      clickListener,
+      stopClickOutside: null
+    }
+  },
+  mounted() {
+    document.addEventListener('click', this.clickListener)
+
+    this.stopClickOutside = onClickOutside(this.$el, () => {
+      this.click = false
+    })
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.clickListener)
+    if (this.stopClickOutside) {
+      this.stopClickOutside()
     }
   },
   render() {
@@ -141,10 +149,6 @@ export default {
       },
       getContent()
     )
-
-    onClickOutside(v, (event) => {
-      that.click = false
-    })
 
     return v
   }
