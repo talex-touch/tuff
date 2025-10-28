@@ -127,6 +127,14 @@ export class AppUpdate {
    */
   public async check(force = false): Promise<UpdateCheckResult> {
     try {
+      if (!this.touchSDK || !this.touchSDK.rawChannel) {
+        return {
+          hasUpdate: false,
+          error: 'TouchSDK not initialized',
+          source: 'Unknown'
+        }
+      }
+
       const response = await this.touchSDK.rawChannel.send('update:check', force)
 
       if (response.success) {
@@ -228,6 +236,11 @@ export class AppUpdate {
    */
   public async getSettings(): Promise<UpdateSettings> {
     try {
+      if (!this.touchSDK || !this.touchSDK.rawChannel) {
+        console.warn('[AppUpdate] TouchSDK not initialized, returning default settings')
+        return this.settings
+      }
+
       const response = await this.touchSDK.rawChannel.send('update:get-settings')
       if (response.success) {
         this.settings = response.data
@@ -245,6 +258,10 @@ export class AppUpdate {
    */
   public async updateSettings(settings: Partial<UpdateSettings>): Promise<void> {
     try {
+      if (!this.touchSDK || !this.touchSDK.rawChannel) {
+        throw new Error('TouchSDK not initialized')
+      }
+
       const response = await this.touchSDK.rawChannel.send('update:update-settings', settings)
       if (response.success) {
         this.settings = { ...this.settings, ...settings }
@@ -262,6 +279,10 @@ export class AppUpdate {
    */
   public async clearCache(): Promise<void> {
     try {
+      if (!this.touchSDK || !this.touchSDK.rawChannel) {
+        throw new Error('TouchSDK not initialized')
+      }
+
       const response = await this.touchSDK.rawChannel.send('update:clear-cache')
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear cache')
@@ -277,6 +298,10 @@ export class AppUpdate {
    */
   public async getStatus(): Promise<any> {
     try {
+      if (!this.touchSDK || !this.touchSDK.rawChannel) {
+        throw new Error('TouchSDK not initialized')
+      }
+
       const response = await this.touchSDK.rawChannel.send('update:get-status')
       if (response.success) {
         return response.data
