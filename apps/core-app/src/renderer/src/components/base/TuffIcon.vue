@@ -123,8 +123,8 @@ watch(
   min-width: 1em;
   min-height: 1em;
 
-  width: 1.2em;
-  height: 1.2em;
+  width: 1em;
+  height: 1em;
 
   aspect-ratio: 1 / 1;
 

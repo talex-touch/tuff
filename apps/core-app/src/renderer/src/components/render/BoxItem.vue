@@ -113,7 +113,8 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
         :empty="DefaultIcon"
         :icon="displayIcon"
         :alt="render.basic?.title || 'Tuff Item'"
-        :size="25.6"
+        :size="32"
+        colorful
       />
       <span
         v-if="showFrequency"
