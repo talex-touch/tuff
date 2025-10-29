@@ -1,46 +1,33 @@
 <template>
-  <div v-if="currentUser?.name" class="FlatUserInfo">
-    <div class="user-avatar">
-      <img
-        v-if="currentUser.avatar"
-        :src="currentUser.avatar"
-        :alt="currentUser.name"
-        class="avatar-image"
-      />
-      <div v-else class="avatar-placeholder">
-        {{ currentUser.name.charAt(0).toUpperCase() }}
+  <div :class="{ active: isLoggedIn }" class="FlatUserInfo">
+    <template v-if="isLoggedIn && currentUser?.name">
+      <div class="user-avatar">
+        <img
+          v-if="currentUser.avatar"
+          :src="currentUser.avatar"
+          :alt="currentUser.name"
+          class="avatar-image"
+        />
+        <div v-else class="avatar-placeholder">
+          {{ currentUser.name.charAt(0).toUpperCase() }}
+        </div>
       </div>
-    </div>
-    <div class="user-info">
-      <p class="user-name">
-        {{ currentUser.name }}
-      </p>
-      <span class="user-email">
-        {{ currentUser.email }}
-      </span>
-    </div>
+      <div class="user-info">
+        <p class="user-name">
+          {{ currentUser.name }}
+        </p>
+        <span class="user-email">
+          {{ currentUser.email }}
+        </span>
+      </div>
+    </template>
   </div>
 </template>
 
 <script lang="ts" setup>
-/**
- * FlatUserInfo Component
- *
- * Displays user avatar, name, and email information
- *
- * Props:
- * - currentUser: User object containing name, email, and optional avatar
- */
+import { useAuth } from '~/modules/auth/useAuth'
 
-interface User {
-  name: string
-  email: string
-  avatar?: string
-}
-
-defineProps<{
-  currentUser?: User | null
-}>()
+const { currentUser, isLoggedIn } = useAuth()
 </script>
 
 <style lang="scss" scoped>
@@ -49,7 +36,19 @@ defineProps<{
  * Displays user avatar and information in a horizontal layout
  */
 
+@keyframes user-info-enter {
+  from {
+    transform: translate(0, 100%);
+  }
+  to {
+    transform: translate(0, 0);
+  }
+}
+
 .FlatUserInfo {
+  &.active {
+    animation: user-info-enter 0.5s 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86) forwards;
+  }
   position: relative;
   display: flex;
   align-items: center;
@@ -57,6 +56,8 @@ defineProps<{
   padding: 0.5rem;
   width: 100%;
   box-sizing: border-box;
+
+  transform: translate(0, 120px);
 
   &:before {
     content: '';

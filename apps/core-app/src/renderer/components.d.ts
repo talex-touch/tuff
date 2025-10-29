@@ -43,6 +43,7 @@ declare module 'vue' {
     FlatButton: typeof import('./src/components/base/button/FlatButton.vue')['default']
     FlatCodeInput: typeof import('./src/components/base/input/FlatCodeInput.vue')['default']
     FlatCompletion: typeof import('./src/components/base/input/FlatCompletion.vue')['default']
+    FlatDownload: typeof import('./src/components/download/FlatDownload.vue')['default']
     FlatInput: typeof import('./src/components/base/input/FlatInput.vue')['default']
     FlatKeyInput: typeof import('./src/components/base/input/FlatKeyInput.vue')['default']
     FlatMarkdown: typeof import('./src/components/base/input/FlatMarkdown.vue')['default']
