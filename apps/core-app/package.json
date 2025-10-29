@@ -72,6 +72,7 @@
     "pinyin-pro": "^3.19.6",
     "remixicon": "^4.6.0",
     "simple-plist": "1.4.0-0",
+    "tesseract.js": "^5.1.1",
     "v-shared-element": "^3.1.1",
     "v-wave": "^3.0.3",
     "vite-plugin-vue-setup-extend": "^0.4.0",
