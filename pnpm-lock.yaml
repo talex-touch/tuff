@@ -12,9 +12,9 @@ importers:
 
   .:
     dependencies:
-      active-win:
-        specifier: ^9.0.0
-        version: 9.0.0(encoding@0.1.13)
+      get-windows:
+        specifier: ^9.2.3
+        version: 9.2.3(encoding@0.1.13)
       mac-windows:
         specifier: 1.0.0
         version: 1.0.0
@@ -320,8 +320,6 @@ importers:
       vue-tsc:
         specifier: ^3.0.4
         version: 3.0.6(typescript@5.9.2)
-
-  apps/core-app/dist/mac-arm64/Electron.app/Contents/Resources/app: {}
 
   apps/core-app/out: {}
 
@@ -2853,11 +2851,6 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  active-win@9.0.0:
-    resolution: {integrity: sha512-aiDwWcottgi/DO1/XWnXPHpuTh9qtMxzLUzD9nZj66Fub8SPNGvBLnEdaQsx44O9p8TEZG9d5NNAXGxzbes8CA==}
-    engines: {node: '>=18.18'}
-    deprecated: 'Renamed to get-windows: https://www.npmjs.com/package/get-windows'
-
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
     engines: {node: '>= 6.0.0'}
@@ -4329,6 +4322,10 @@ packages:
 
   get-tsconfig@4.10.1:
     resolution: {integrity: sha512-auHyJ4AgMz7vgS8Hp3N6HXSmlMdUyhSUrfBF16w153rxtLIEOE+HGqaBppczZvnHLqQJfiHotCYpNhl0lUROFQ==}
+
+  get-windows@9.2.3:
+    resolution: {integrity: sha512-rTO5ms7Qb5upkNI0UM49W6O1PAcosGlEMitOE2JGeo8yDgBy38xWhxg5GrpV/A+i1p71JogyIM/CZg5RZO0Wjw==}
+    engines: {node: '>=18.18'}
 
   giget@2.0.0:
     resolution: {integrity: sha512-L5bGsVkxJbJgdnwyuheIunkGatUF/zssUoxxjACCseZYAVbaqdh9Tsmmlkl8vYan09H7sbvKt4pS8GqKLBrEzA==}
@@ -9667,15 +9664,6 @@ snapshots:
 
   acorn@8.15.0: {}
 
-  active-win@9.0.0(encoding@0.1.13):
-    optionalDependencies:
-      '@mapbox/node-pre-gyp': 1.0.11(encoding@0.1.13)
-      node-addon-api: 8.5.0
-      node-gyp: 10.3.1
-    transitivePeerDependencies:
-      - encoding
-      - supports-color
-
   agent-base@6.0.2:
     dependencies:
       debug: 4.4.1
@@ -11332,6 +11320,15 @@ snapshots:
   get-tsconfig@4.10.1:
     dependencies:
       resolve-pkg-maps: 1.0.0
+
+  get-windows@9.2.3(encoding@0.1.13):
+    optionalDependencies:
+      '@mapbox/node-pre-gyp': 1.0.11(encoding@0.1.13)
+      node-addon-api: 8.5.0
+      node-gyp: 10.3.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
 
   giget@2.0.0:
     dependencies:
