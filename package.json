@@ -44,7 +44,7 @@
     "vite-plugin-electron": "^0.29.0",
     "mac-windows": "1.0.0",
     "tesseract.js": "^5.0.6",
-    "active-win": "^9.0.0"
+    "get-windows": "^9.2.3"
   },
   "volta": {
     "node": "22.16.0"

@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElButton } from 'element-plus'
 
 // Import UI components
 import TBlockLine from '@comp/base/group/TBlockLine.vue'
@@ -25,6 +25,8 @@ const sui = ref(window.$startupInfo)
 const dev = ref(false)
 const performanceSummary = ref<any>(null)
 const showPerformanceDetails = ref(false)
+const activeApp = ref<any>(null)
+const loadingActiveApp = ref(false)
 
 onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
@@ -37,6 +39,27 @@ onMounted(async () => {
     console.warn('Failed to load performance summary', error)
   }
 })
+
+// Get current active application
+async function getActiveApplication() {
+  loadingActiveApp.value = true
+  try {
+    const result = await touchChannel.send('system:get-active-app', { forceRefresh: true })
+    if (result) {
+      activeApp.value = result
+      ElMessage.success('Successfully retrieved active application info')
+    } else {
+      ElMessage.warning('No active application detected')
+      activeApp.value = null
+    }
+  } catch (error) {
+    console.error('Failed to get active app', error)
+    ElMessage.error('Failed to get active application')
+    activeApp.value = null
+  } finally {
+    loadingActiveApp.value = false
+  }
+}
 
 // Computed property for version string
 const versionStr = computed(
@@ -221,6 +244,90 @@ const currentExperiencePack = computed(() => {
     </t-block-line> -->
     <t-block-line :title="t('settingAbout.terms')" :link="true"></t-block-line>
     <t-block-line :title="t('settingAbout.license')" :link="true"></t-block-line>
+  </t-group-block>
+
+  <!-- System Information Section -->
+  <t-group-block :name="'System Information'" icon="computer-line">
+    <t-block-line :title="'Active Window Detection'" :link="true" @click="getActiveApplication">
+      <template #description>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingActiveApp"
+          @click.stop="getActiveApplication"
+        >
+          {{ loadingActiveApp ? 'Detecting...' : 'Get Active App' }}
+        </el-button>
+      </template>
+    </t-block-line>
+
+    <template v-if="activeApp">
+      <t-block-line :title="'Application Name'">
+        <template #description>
+          <span style="font-weight: 600; color: var(--el-color-primary)">
+            {{ activeApp.displayName || 'N/A' }}
+          </span>
+        </template>
+      </t-block-line>
+
+      <t-block-line :title="'Window Title'">
+        <template #description>
+          {{ activeApp.windowTitle || 'N/A' }}
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.bundleId" :title="'Bundle ID'">
+        <template #description>
+          {{ activeApp.bundleId }}
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.processId" :title="'Process ID'">
+        <template #description>
+          {{ activeApp.processId }}
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.executablePath" :title="'Executable Path'">
+        <template #description>
+          <span style="font-size: 11px; opacity: 0.8">
+            {{ activeApp.executablePath }}
+          </span>
+        </template>
+      </t-block-line>
+
+      <t-block-line :title="'Platform'">
+        <template #description>
+          <span style="text-transform: capitalize">
+            {{ activeApp.platform || 'Unknown' }}
+          </span>
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.icon" :title="'Application Icon'">
+        <template #description>
+          <img
+            :src="activeApp.icon"
+            alt="App Icon"
+            style="width: 24px; height: 24px; vertical-align: middle"
+          />
+        </template>
+      </t-block-line>
+
+      <t-block-line :title="'Last Updated'">
+        <template #description>
+          {{ new Date(activeApp.lastUpdated).toLocaleString() }}
+        </template>
+      </t-block-line>
+    </template>
+
+    <t-block-line v-else-if="!activeApp && !loadingActiveApp" :title="'Status'">
+      <template #description>
+        <span style="color: var(--el-color-info)">
+          Click the button above to detect active application
+        </span>
+      </template>
+    </t-block-line>
   </t-group-block>
 </template>
 
