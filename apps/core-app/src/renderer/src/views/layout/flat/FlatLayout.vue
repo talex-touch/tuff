@@ -11,13 +11,9 @@
       <div class="AppLayout-Aside fake-background">
         <FlatNavBar />
 
-        <div class="AppLayout-IconFooter" :class="{ active: isLoggedIn }">
+        <div class="AppLayout-IconFooter">
           <slot name="icon" />
-          <FlatFooter
-            v-if="currentUser?.name"
-            :current-user="currentUser"
-            @click-download="handleDownloadClick"
-          />
+          <FlatFooter />
         </div>
       </div>
 
@@ -40,18 +36,9 @@
  * - icon: For icons in the footer
  * - view: For the main content area
  */
-
-import { useAuth } from '~/modules/auth/useAuth'
 import FlatController from './FlatController.vue'
 import FlatNavBar from './FlatNavBar.vue'
 import FlatFooter from './FlatFooter.vue'
-
-const { isLoggedIn, currentUser } = useAuth()
-
-const handleDownloadClick = () => {
-  // TODO: Navigate to download center
-  console.log('Open download center')
-}
 </script>
 
 <style lang="scss" scoped>
@@ -93,10 +80,6 @@ const handleDownloadClick = () => {
    * Hidden by default, shown when user is logged in
    */
   .AppLayout-IconFooter {
-    &.active {
-      transform: translate(0, 0);
-    }
-
     :deep(.AppLayout-Icon) {
       margin: 0;
       bottom: 0;
@@ -111,9 +94,7 @@ const handleDownloadClick = () => {
     width: 100%;
     height: 110px;
 
-    -webkit-app-region: drag;
-    transform: translate(0%, 100%);
-    transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
+    -webkit-app-region: no-drag;
   }
 }
 
