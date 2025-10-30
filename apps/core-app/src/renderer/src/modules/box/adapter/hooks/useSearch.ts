@@ -125,6 +125,26 @@ export function useSearch(
     debouncedSearch()
   }
 
+  /**
+   * Force immediate search without debounce
+   * Used when clipboard state changes
+   */
+  async function handleSearchImmediate(): Promise<void> {
+    if (!searchVal.value) {
+      if (!activeActivations.value?.length) {
+        res.value.length = 0
+      }
+      return
+    }
+    // Call the debounced search immediately by flushing
+    debouncedSearch()
+    // @ts-ignore - flush method exists on debounced function
+    if (debouncedSearch.flush) {
+      // @ts-ignore
+      debouncedSearch.flush()
+    }
+  }
+
   async function cancelSearch(): Promise<void> {
     if (!loading.value || !currentSearchId.value) return
 
@@ -427,6 +447,7 @@ export function useSearch(
     activeItem,
     activeActivations,
     handleSearch,
+    handleSearchImmediate,
     handleExecute,
     handleExit,
     deactivateProvider,

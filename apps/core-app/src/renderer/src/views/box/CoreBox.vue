@@ -47,15 +47,20 @@ const {
   activeActivations,
   handleExecute,
   handleExit,
-  handleSearch: triggerSearch,
+  handleSearchImmediate,
   deactivateProvider
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
+const handleClipboardChange = () => {
+  // Force immediate search when clipboard changes (paste or clear)
+  handleSearchImmediate()
+}
+
 const { handlePaste, handleAutoPaste, clearClipboard } = useClipboard(
   boxOptions,
   clipboardOptions,
-  triggerSearch
+  handleClipboardChange
 )
 
 const completionDisplay = computed(() => {
