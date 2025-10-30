@@ -150,6 +150,15 @@ export interface IPluginFeature {
    * Default is 0
    */
   priority?: number
+  /**
+   * Accepted input types for this feature
+   * @description Declares which types of inputs this feature can accept and process.
+   * If not specified, defaults to ['text'] only (backward compatible).
+   * When query contains inputs, only features accepting those input types will be shown.
+   * @example ['text', 'image'] - Feature accepts both text and images
+   * @example ['image', 'files'] - Feature only accepts images and files (no text-only queries)
+   */
+  acceptedInputTypes?: Array<'text' | 'image' | 'files' | 'html'>
 }
 
 export type IFeatureInteraction = {
@@ -187,7 +196,9 @@ export interface IFeatureLifeCycle {
   /**
    * Called when a feature is triggered via a matching command.
    * @param id - Feature ID
-   * @param data - The triggering payload
+   * @param data - The triggering payload. Can be:
+   *   - string: Plain text query (backward compatible)
+   *   - TuffQuery object: Complete query with text and optional inputs array containing clipboard data (images, files, HTML)
    * @param feature - The full feature definition
    * @param signal - An AbortSignal to cancel the operation
    */
@@ -253,7 +264,9 @@ export interface ITargetFeatureLifeCycle {
 
   /**
    * Called when the feature is triggered via a matching command.
-   * @param data - The triggering payload
+   * @param data - The triggering payload. Can be:
+   *   - string: Plain text query (backward compatible)
+   *   - TuffQuery object: Complete query with text and optional inputs array containing clipboard data (images, files, HTML)
    * @param feature - The full feature definition
    */
   onFeatureTriggered(data: any, feature: IPluginFeature): void

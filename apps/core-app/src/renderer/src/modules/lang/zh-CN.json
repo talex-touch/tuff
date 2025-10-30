@@ -162,6 +162,7 @@
   "tagSection": {
     "copiedText": "已复制文本",
     "copiedImage": "已复制图片",
+    "copiedFiles": "已复制文件",
     "copiedHtml": "已复制HTML",
     "command": "命令"
   },

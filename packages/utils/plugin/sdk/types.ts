@@ -518,9 +518,29 @@ export interface IPluginLifecycle {
   /**
    * Called when a plugin feature is triggered
    * @param featureId - The ID of the triggered feature
-   * @param query - The search query or input data
+   * @param query - The search query or input data. Can be:
+   *   - string: Plain text query (backward compatible)
+   *   - TuffQuery object: Complete query with text and optional inputs array
+   *     - query.text: The text query string
+   *     - query.inputs: Array of TuffQueryInput objects (images, files, HTML)
    * @param feature - The feature configuration object
    * @returns Promise or void
+   * @example
+   * ```typescript
+   * onFeatureTriggered(featureId, query, feature) {
+   *   if (typeof query === 'string') {
+   *     // Backward compatible: plain text query
+   *     console.log('Text query:', query)
+   *   } else {
+   *     // New: complete query object
+   *     console.log('Text:', query.text)
+   *     const imageInput = query.inputs?.find(i => i.type === 'image')
+   *     if (imageInput) {
+   *       console.log('Image data:', imageInput.content)
+   *     }
+   *   }
+   * }
+   * ```
    */
   onFeatureTriggered(featureId: string, query: any, feature: any): Promise<void> | void;
 

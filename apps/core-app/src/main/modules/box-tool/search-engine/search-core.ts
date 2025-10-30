@@ -5,7 +5,8 @@ import {
   ISearchProvider,
   TuffItem,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  TuffInputType
 } from '@talex-touch/utils'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
@@ -270,7 +271,37 @@ export class SearchEngineCore
 
     return new Promise((resolve) => {
       let isFirstUpdate = true
-      const providersToSearch = this.getActiveProviders()
+      let providersToSearch = this.getActiveProviders()
+
+      // Smart routing: filter providers based on query.inputs types
+      if (query.inputs && query.inputs.length > 0) {
+        const inputTypes = query.inputs.map(i => i.type)
+        const hasNonTextInput = inputTypes.some(t => t !== TuffInputType.Text)
+
+        if (hasNonTextInput) {
+          console.debug('[SearchEngineCore] Non-text inputs detected, filtering providers:', inputTypes)
+
+          // Keep only providers that support these input types
+          providersToSearch = providersToSearch.filter(provider => {
+            // PluginFeaturesAdapter always kept (it filters features internally)
+            if (provider.id === 'plugin-features') {
+              return true
+            }
+
+            // Other providers must declare supportedInputTypes
+            if (!provider.supportedInputTypes) {
+              // Default to text-only support
+              return false
+            }
+
+            // Check if provider supports at least one of the input types
+            return inputTypes.some(type => provider.supportedInputTypes?.includes(type))
+          })
+
+          console.debug('[SearchEngineCore] Filtered providers:', providersToSearch.map(p => p.id))
+        }
+      }
+
       searchLogger.searchProviders(providersToSearch.map(p => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {

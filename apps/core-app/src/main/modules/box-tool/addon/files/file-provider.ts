@@ -6,6 +6,7 @@ import {
   TuffFactory,
   TuffQuery,
   TuffSearchResult,
+  TuffInputType,
   timingLogger,
   type TimingMeta,
   type TimingOptions,
@@ -262,6 +263,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
   readonly name = 'File Provider'
   readonly type = 'file' as const
+  readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null

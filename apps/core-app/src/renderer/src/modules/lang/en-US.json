@@ -162,6 +162,7 @@
   "tagSection": {
     "copiedText": "Copied Text",
     "copiedImage": "Copied Image",
+    "copiedFiles": "Copied Files",
     "copiedHtml": "Copied Html",
     "command": "COMMAND"
   },

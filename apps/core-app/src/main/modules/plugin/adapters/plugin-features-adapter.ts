@@ -12,7 +12,8 @@ import {
   TuffItem,
   TuffQuery,
   TuffSearchResult,
-  TuffSourceType
+  TuffSourceType,
+  TuffInputType
 } from '@talex-touch/utils'
 import { TuffFactory } from '@talex-touch/utils'
 import searchEngineCore from '../../box-tool/search-engine/search-core'
@@ -91,6 +92,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
   public readonly name = 'Plugin Features'
+  public readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Image, TuffInputType.Files, TuffInputType.Html]
 
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
@@ -219,8 +221,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
-    // Default feature execution
-    plugin.triggerFeature(feature, args.searchResult?.query.text)
+    // Default feature execution - pass full query object
+    const query = args.searchResult?.query || args.searchResult?.query?.text
+    plugin.triggerFeature(feature, query)
 
     if (feature.push) {
       return {
@@ -298,8 +301,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
+          // Pass full query object to plugin
           $app.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-            query: query.text
+            query: query
           })
 
           // If query is empty, return all features of the activated plugin
@@ -318,11 +322,12 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
             `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
           )
 
-          plugin.triggerFeature(feature, query.text)
+          // Pass full query object instead of just text
+          plugin.triggerFeature(feature, query)
 
           // Trigger the input change handler for the specific feature.
           // The feature itself is responsible for pushing results back.
-          plugin.triggerInputChanged(feature, query.text)
+          plugin.triggerInputChanged(feature, query)
 
           // In activated mode, the result is delivered via a side-channel (pushItems),
           // so we return an empty result here.
@@ -341,6 +346,10 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const matchedItems: TuffItem[] = []
     const plugins = pluginModule.pluginManager!.plugins.values()
 
+    // Get input types from query for filtering
+    const queryInputTypes = query.inputs?.map(i => i.type) || []
+    const hasNonTextInput = queryInputTypes.length > 0 && queryInputTypes.some(t => t !== TuffInputType.Text)
+
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {
         return TuffFactory.createSearchResult(query).build()
@@ -352,6 +361,26 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       const features = plugin.getFeatures()
       for (const feature of features as IPluginFeature[]) {
+        // Filter features based on acceptedInputTypes
+        // For backward compatibility: features without acceptedInputTypes default to text-only
+        if (hasNonTextInput) {
+          // When query has non-text inputs (image/files), only show features that explicitly declare support
+          if (!feature.acceptedInputTypes) {
+            // Old feature without declaration: defaults to text-only, skip for non-text inputs
+            continue
+          }
+
+          // Check if feature accepts all the input types in query
+          const acceptsAllInputs = queryInputTypes.every(type =>
+            feature.acceptedInputTypes?.includes(type as any)
+          )
+
+          if (!acceptsAllInputs) {
+            continue
+          }
+        }
+        // else: pure text query - all features are shown (backward compatible)
+
         const isMatch = feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
         if (isMatch) {
           matchedItems.push(this.createTuffItem(plugin, feature))

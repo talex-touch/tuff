@@ -1,9 +1,9 @@
-import { reactive, Ref } from 'vue'
+import { reactive } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode, IBoxOptions } from '..'
 
-export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
+export function useClipboard(boxOptions: IBoxOptions) {
   const clipboardOptions = reactive<any>({
     last: null
   })
@@ -21,6 +21,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     ) {
       const data = clipboardOptions.last
 
+      // Only auto-switch to FILE mode for files, don't auto-fill text/image
       if (data.type === 'files') {
         const pathList = JSON.parse(data.content)
         const [firstFile] = pathList
@@ -37,16 +38,16 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
               boxOptions.mode = BoxMode.FILE
             })
         }
-      } else if (data.type !== 'image') {
-        searchVal.value = data.content
+        // Clear clipboard after auto-switching to FILE mode
+        clipboardOptions.last = null
       }
-
-      clipboardOptions.last = null
+      // For text/image/html: keep in clipboardOptions.last for display in tag
+      // Don't auto-fill searchVal or clear clipboard
     }
   }
 
   function handlePaste(): void {
-   const clipboard = touchChannel.sendSync('clipboard:get-latest')
+    const clipboard = touchChannel.sendSync('clipboard:get-latest')
 
     Object.assign(clipboardOptions, {
       last: clipboard
@@ -71,6 +72,10 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     }
   }
 
+  function clearClipboard(): void {
+    clipboardOptions.last = null
+  }
+
   touchChannel.regChannel('clipboard:new-item', (data: any) => {
     if (!data?.type) return
     Object.assign(clipboardOptions, {
@@ -82,6 +87,7 @@ export function useClipboard(boxOptions: IBoxOptions, searchVal: Ref<string>) {
     clipboardOptions,
     handlePaste,
     handleAutoPaste,
-    applyToActiveApp
+    applyToActiveApp,
+    clearClipboard
   }
 }

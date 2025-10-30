@@ -8,6 +8,8 @@ export function useVisibility(
   searchVal: Ref<string>,
   clipboardOptions: any,
   handleAutoPaste: () => void,
+  handlePaste: () => void,
+  clearClipboard: () => void,
   boxInputRef: Ref<any>
 ) {
   const visibility = useDocumentVisibility()
@@ -17,6 +19,8 @@ export function useVisibility(
     (val) => {
       if (!val) {
         boxOptions.lastHidden = Date.now()
+        // Clear clipboard when window is hidden
+        clearClipboard()
         return
       }
 
@@ -33,6 +37,9 @@ export function useVisibility(
         boxOptions.mode = BoxMode.INPUT
         boxOptions.data = {}
       }
+
+      // Auto-detect clipboard when CoreBox is opened
+      handlePaste()
 
       if (clipboardOptions.last) {
         handleAutoPaste()

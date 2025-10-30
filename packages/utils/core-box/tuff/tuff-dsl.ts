@@ -1042,6 +1042,69 @@ export interface TuffDisplayAction extends Omit<TuffAction, 'payload'> {
 // ==================== 工具类型 ====================
 
 /**
+ * 查询输入类型枚举
+ *
+ * @description
+ * 定义系统支持的所有输入类型。
+ * 用于插件、providers 和 features 声明其支持的输入类型。
+ */
+export enum TuffInputType {
+  /** 纯文本输入 */
+  Text = 'text',
+  /** 图像输入（data URL 格式） */
+  Image = 'image',
+  /** 文件输入（文件路径数组） */
+  Files = 'files',
+  /** 富文本输入（HTML 格式） */
+  Html = 'html'
+}
+
+/**
+ * 查询输入项
+ *
+ * @description
+ * 定义查询中除文本外的多种类型输入（如剪贴板数据）。
+ * 用于支持图像、文件、富文本等多媒体输入。
+ */
+export interface TuffQueryInput {
+  /**
+   * 输入类型
+   * @description 定义输入数据的类型
+   * @required
+   */
+  type: TuffInputType;
+
+  /**
+   * 输入内容
+   * @description 根据类型不同包含不同格式的数据：
+   * - text: 纯文本字符串
+   * - image: data URL 格式的图像数据
+   * - files: JSON 序列化的文件路径数组
+   * - html: HTML 格式的富文本
+   * @required
+   */
+  content: string;
+
+  /**
+   * 原始内容
+   * @description 可选的原始格式内容，如富文本的 HTML 源码
+   */
+  rawContent?: string;
+
+  /**
+   * 缩略图
+   * @description 图像的缩略图 data URL（用于预览）
+   */
+  thumbnail?: string;
+
+  /**
+   * 元数据
+   * @description 附加的元数据信息
+   */
+  metadata?: Record<string, any>;
+}
+
+/**
  * 搜索查询结构
  *
  * @description
@@ -1061,6 +1124,13 @@ export interface TuffQuery {
    * @description 指定查询的输入方式
    */
   type?: 'text' | 'voice' | 'image';
+
+  /**
+   * 多类型输入
+   * @description 除文本外的其他输入数据（如剪贴板中的图像、文件等）
+   * 当用户触发 feature 时，系统会自动检测剪贴板并填充此字段
+   */
+  inputs?: TuffQueryInput[];
 
   /**
    * 过滤条件
@@ -1236,6 +1306,15 @@ export interface ISearchProvider<C> {
    * Icon for the provider.
    */
   readonly icon?: any
+
+  /**
+   * Supported input types
+   * @description Declares which types of inputs this provider can handle.
+   * If not specified, defaults to [TuffInputType.Text] only.
+   * When query contains non-text inputs, only providers supporting those types will be searched.
+   * @example [TuffInputType.Text, TuffInputType.Image, TuffInputType.Files]
+   */
+  readonly supportedInputTypes?: TuffInputType[]
 
   /**
    * Core search method (PULL mode).
