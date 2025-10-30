@@ -234,15 +234,19 @@ export class TouchPlugin implements ITouchPlugin {
       return
     }
 
+    // Pass query (can be string for backward compatibility or TuffQuery object)
     this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
 
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
   }
 
   triggerInputChanged(feature: IPluginFeature, query: any): void {
+    // Pass query (can be string for backward compatibility or TuffQuery object)
     this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
 
-    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query))
+    // For backward compatibility, extract text if query is object
+    const queryText = typeof query === 'string' ? query : query?.text
+    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
   }
 
   public clearCoreBoxItems(): void {

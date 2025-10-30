@@ -41,10 +41,10 @@ const {
   activeActivations,
   handleExecute,
   handleExit,
-  deactivateProvider,
+  deactivateProvider
   // cancelSearch
 } = useSearch(boxOptions)
-const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
+const { clipboardOptions, handlePaste, handleAutoPaste, clearClipboard } = useClipboard(boxOptions)
 
 const completionDisplay = computed(() => {
   if (
@@ -66,7 +66,15 @@ const completionDisplay = computed(() => {
   return completion
 })
 
-useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste, boxInputRef)
+useVisibility(
+  boxOptions,
+  searchVal,
+  clipboardOptions,
+  handleAutoPaste,
+  handlePaste,
+  clearClipboard,
+  boxInputRef
+)
 useKeyboard(
   boxOptions,
   res,
@@ -75,7 +83,10 @@ useKeyboard(
   searchVal,
   handleExecute,
   handleExit,
-  computed(() => boxInputRef.value?.inputEl)
+  computed(() => boxInputRef.value?.inputEl),
+  clipboardOptions,
+  clearClipboard,
+  activeActivations
 )
 useChannel(boxOptions, res)
 
@@ -95,7 +106,7 @@ function handleItemTrigger(index: number, item: TuffItem): void {
 }
 
 const addon = computed(() => {
-  if (!activeItem.value) return
+  if (!activeItem.value) return undefined
 
   const item = activeItem.value
 
@@ -103,7 +114,7 @@ const addon = computed(() => {
     return 'preview'
   }
 
-  return
+  return undefined
 })
 </script>
 

@@ -8,7 +8,7 @@
     >
       <div class="flex items-center gap-3">
         <div class="relative">
-          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="32" />
+          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="48" />
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
             :class="statusClass.indicator"

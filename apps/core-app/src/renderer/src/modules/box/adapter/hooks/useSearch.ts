@@ -2,7 +2,7 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
-import { IProviderActivate, TuffItem, TuffSearchResult } from '@talex-touch/utils'
+import { IProviderActivate, TuffItem, TuffSearchResult, TuffInputType } from '@talex-touch/utils'
 import { IUseSearch } from '../types'
 import { appSetting } from '~/modules/channel/storage'
 
@@ -108,9 +108,51 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     res.value = []
 
     const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
-    const serializedSearchResult = searchResult.value
+    let serializedSearchResult = searchResult.value
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
+
+    // Auto-detect clipboard when triggering plugin feature
+    if (isPluginFeature && serializedSearchResult?.query) {
+      try {
+        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+
+        if (clipboardData && clipboardData.type) {
+          const inputs: any[] = serializedSearchResult.query.inputs || []
+
+          // Convert clipboard data to TuffQueryInput format
+          if (clipboardData.type === 'image') {
+            inputs.push({
+              type: TuffInputType.Image,
+              content: clipboardData.content,
+              thumbnail: clipboardData.thumbnail,
+              metadata: clipboardData.meta
+            })
+          } else if (clipboardData.type === 'files') {
+            inputs.push({
+              type: TuffInputType.Files,
+              content: clipboardData.content, // Already JSON serialized
+              metadata: clipboardData.meta
+            })
+          } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
+            // Has HTML content
+            inputs.push({
+              type: TuffInputType.Html,
+              content: clipboardData.content,
+              rawContent: clipboardData.rawContent,
+              metadata: clipboardData.meta
+            })
+          }
+
+          if (inputs.length > 0) {
+            serializedSearchResult.query.inputs = inputs
+          }
+        }
+      } catch (error) {
+        console.debug('[useSearch] Failed to auto-detect clipboard:', error)
+        // Continue execution even if clipboard detection fails
+      }
+    }
 
     loading.value = true
 

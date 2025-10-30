@@ -1,14 +1,37 @@
 <script setup lang="ts" name="TagSection">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FileTag from './FileTag.vue'
+import ClipboardImageTag from './ClipboardImageTag.vue'
+import ClipboardFileTag from './ClipboardFileTag.vue'
 import { BoxMode, IBoxOptions } from '../../../modules/box/adapter'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   boxOptions: IBoxOptions
   clipboardOptions: any
 }>()
+
+// Truncate clipboard content for display (text only)
+const clipboardPreview = computed(() => {
+  if (!props.clipboardOptions.last) return ''
+
+  const data = props.clipboardOptions.last
+  let preview = ''
+
+  if (data.type === 'text') {
+    preview = data.content || ''
+  } else if (data.type === 'html') {
+    preview = data.content || '' // Plain text version
+  }
+
+  // Truncate to 50 characters
+  if (preview.length > 50) {
+    return preview.substring(0, 50) + '...'
+  }
+  return preview
+})
 </script>
 
 <template>
@@ -16,14 +39,26 @@ defineProps<{
   <div v-if="boxOptions.mode !== BoxMode.FEATURE" class="CoreBox-Tag">
     <!-- Clipboard tag -->
     <template v-if="clipboardOptions.last">
-      <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted">
-        Copied Text
+      <!-- Text clipboard -->
+      <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted" :title="clipboardOptions.last.content">
+        📝 {{ clipboardPreview }}
       </span>
-      <span v-else-if="clipboardOptions.last?.type === 'image'" class="fake-background dotted">
-        Copied Image
-      </span>
-      <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted">
-        Copied Html
+
+      <!-- Image clipboard -->
+      <ClipboardImageTag
+        v-else-if="clipboardOptions.last?.type === 'image'"
+        :data="clipboardOptions.last"
+      />
+
+      <!-- Files clipboard -->
+      <ClipboardFileTag
+        v-else-if="clipboardOptions.last?.type === 'files'"
+        :data="clipboardOptions.last"
+      />
+
+      <!-- HTML clipboard -->
+      <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted" :title="clipboardOptions.last.content">
+        💻 {{ clipboardPreview }}
       </span>
     </template>
 
