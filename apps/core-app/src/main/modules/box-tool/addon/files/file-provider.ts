@@ -425,7 +425,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.backgroundTaskService.registerTask(cleanupTask)
 
     this.backgroundTaskService.on('taskCompleted', (data) => {
-      this.logInfo(`Background task completed: ${data.task.name}`, {
+      this.logDebug(`Background task completed: ${data.task.name}`, {
         duration: formatDuration(data.duration)
       })
     })
