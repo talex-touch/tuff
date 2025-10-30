@@ -1,3 +1,5 @@
+import type { StorageStats, StorageTreeNode, FileDetails } from '../../types/storage'
+
 /**
  * Get the storage for the current plugin.
  * It provides simple file-based storage that is persisted across application launches.
@@ -50,6 +52,47 @@ export function usePluginStorage() {
      */
     listFiles: async (): Promise<string[]> => {
       return channel.send('plugin:storage:list-files', { pluginName })
+    },
+
+    /**
+     * Gets storage statistics for the current plugin.
+     * @returns A promise that resolves with storage statistics.
+     */
+    getStats: async (): Promise<StorageStats> => {
+      return channel.send('plugin:storage:get-stats', { pluginName })
+    },
+
+    /**
+     * Gets the directory tree structure of plugin storage.
+     * @returns A promise that resolves with the tree structure.
+     */
+    getTree: async (): Promise<StorageTreeNode[]> => {
+      return channel.send('plugin:storage:get-tree', { pluginName })
+    },
+
+    /**
+     * Gets detailed information about a specific file.
+     * @param fileName The name of the file to get details for.
+     * @returns A promise that resolves with file details.
+     */
+    getFileDetails: async (fileName: string): Promise<FileDetails | null> => {
+      return channel.send('plugin:storage:get-file-details', { pluginName, fileName })
+    },
+
+    /**
+     * Clears all storage for the current plugin.
+     * @returns A promise that resolves with the operation result.
+     */
+    clearAll: async (): Promise<{ success: boolean, error?: string }> => {
+      return channel.send('plugin:storage:clear', { pluginName })
+    },
+
+    /**
+     * Opens the plugin storage folder in the system file manager.
+     * @returns A promise that resolves when the folder is opened.
+     */
+    openFolder: async (): Promise<void> => {
+      await channel.send('plugin:storage:open-folder', { pluginName })
     },
 
     /**

@@ -17,9 +17,9 @@
     </div>
 
     <!-- Features Grid -->
-    <GridLayout v-if="plugin.features?.length">
+    <GridLayout v-if="plugin?.features?.length && features.length">
       <FeatureCard
-        v-for="feature in plugin.features"
+        v-for="feature in features"
         :key="feature.id"
         :feature="feature"
         @click="showFeatureDetails(feature)"
@@ -55,12 +55,16 @@
       <template #header>
         <div class="flex items-center gap-4 py-2">
           <div
-            class="w-10 h-10 bg-gradient-to-br from-[var(--el-color-primary)] to-[var(--el-color-primary-light-3)] rounded-xl flex items-center justify-center"
+            class="w-10 h-10 bg-gradient-to-br from-[var(--el-color-primary)] to-[var(--el-color-primary-light-3)] rounded-xl flex items-center justify-center overflow-hidden"
           >
-            <i
-              :class="selectedFeature?.icon || 'i-ri-function-line'"
-              class="text-[var(--el-color-white)] text-lg"
+            <TuffIcon
+              v-if="selectedFeature?.icon"
+              :icon="selectedFeature.icon"
+              :alt="selectedFeature.name"
+              :size="24"
+              class="text-[var(--el-color-white)]"
             />
+            <i v-else class="i-ri-function-line text-[var(--el-color-white)] text-lg" />
           </div>
           <div>
             <h2 class="text-xl font-bold text-[var(--el-text-color-primary)]">
@@ -101,6 +105,36 @@
                 class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
                 >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span
               >
+            </div>
+            <div v-if="selectedFeature.acceptedInputTypes" class="flex justify-between items-start">
+              <span class="text-sm text-[var(--el-text-color-regular)]">
+                支持的输入类型
+              </span>
+              <div class="flex flex-wrap gap-1 justify-end max-w-[60%]">
+                <span
+                  v-for="inputType in selectedFeature.acceptedInputTypes"
+                  :key="inputType"
+                  class="text-xs bg-[var(--el-color-success-light-9)] text-[var(--el-color-success)] px-2 py-1 rounded"
+                >
+                  <i :class="getInputTypeIcon(inputType)" class="mr-1" />
+                  {{ inputType }}
+                </span>
+              </div>
+            </div>
+            <div v-else class="flex justify-between items-center">
+              <span class="text-sm text-[var(--el-text-color-regular)]">
+                支持的输入类型
+              </span>
+              <span class="text-xs text-[var(--el-text-color-secondary)]">
+                <i class="i-ri-text mr-1" />
+                text (默认)
+              </span>
+            </div>
+            <div v-if="selectedFeature.priority !== undefined" class="flex justify-between items-center">
+              <span class="text-sm text-[var(--el-text-color-regular)]">
+                优先级
+              </span>
+              <span class="text-sm font-medium">{{ selectedFeature.priority }}</span>
             </div>
           </div>
         </div>
@@ -198,6 +232,7 @@ import type { ITouchPlugin, IFeatureCommand } from '@talex-touch/utils/plugin'
 import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 import { useI18n } from 'vue-i18n'
 
 // Props
@@ -205,9 +240,11 @@ const props = defineProps<{
   plugin: ITouchPlugin
 }>()
 
-// Features state
+// Features state - with defensive checks
+const features = computed(() => props.plugin?.features || [])
+
 const totalCommands = computed(
-  () => props.plugin.features?.reduce((total, feature) => total + feature.commands.length, 0) || 0
+  () => features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0)
 )
 
 const { t } = useI18n()
@@ -215,6 +252,17 @@ const { t } = useI18n()
 // Drawer state
 const showDrawer = ref(false)
 const selectedFeature = ref<any | null>(null)
+
+// Helper function to get icon for input type
+function getInputTypeIcon(type: string): string {
+  const icons: Record<string, string> = {
+    text: 'i-ri-text',
+    image: 'i-ri-image-line',
+    files: 'i-ri-file-copy-line',
+    html: 'i-ri-code-line'
+  }
+  return icons[type] || 'i-ri-question-line'
+}
 
 // Helper functions for drawer content
 function getCommandName(command: IFeatureCommand, feature: any): string {

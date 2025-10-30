@@ -6,11 +6,27 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { IPluginDev } from '@talex-touch/utils/plugin'
 import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { PluginFeature } from './plugin-feature'
+import { TuffIconType } from '@talex-touch/utils/types/icon'
 
 /**
- * The context required for loading plugin features.
+ * Plugin manifest structure from manifest.json
  */
+interface PluginManifest {
+  name: string
+  version: string
+  description: string
+  icon: {
+    type: TuffIconType
+    value: string
+  }
+  dev?: IPluginDev
+  platforms?: Record<string, boolean>
+  features?: IPluginFeature[]
+}
 
+/**
+ * Plugin loader interface
+ */
 export interface IPluginLoader {
   load(): Promise<TouchPlugin>
 }
@@ -37,7 +53,11 @@ abstract class BasePluginLoader {
     )
   }
 
-  protected async loadCommon(pluginInfo: any): Promise<void> {
+  /**
+   * Load common plugin information from manifest
+   * @param pluginInfo - Plugin manifest data
+   */
+  protected async loadCommon(pluginInfo: PluginManifest): Promise<void> {
     if (pluginInfo.name !== this.pluginName) {
       this.touchPlugin.issues.push({
         type: 'error',
@@ -56,15 +76,9 @@ abstract class BasePluginLoader {
     this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
-    this.touchPlugin.readme = ((p) => (fse.existsSync(p) ? fse.readFileSync(p).toString() : ''))(
-      path.resolve(this.pluginPath, 'README.md')
-    )
+    // README loading is handled by specific loader implementations (LocalPluginLoader or DevPluginLoader)
 
-    const icon = new TuffIconImpl(
-      this.pluginPath,
-      pluginInfo.icon.type,
-      pluginInfo.icon.value
-    )
+    const icon = new TuffIconImpl(this.pluginPath, pluginInfo.icon.type, pluginInfo.icon.value)
     await icon.init()
     this.touchPlugin.icon = icon
     if (icon.status === 'error') {
@@ -77,7 +91,7 @@ abstract class BasePluginLoader {
     }
 
     if (pluginInfo.features) {
-      const pendingList: Promise<any>[] = []
+      const iconInitPromises: Promise<void>[] = []
       ;[...pluginInfo.features].forEach((feature: IPluginFeature) => {
         const pluginFeature = new PluginFeature(this.pluginPath, feature, this.touchPlugin.dev)
         if (!this.touchPlugin.addFeature(pluginFeature)) {
@@ -89,7 +103,15 @@ abstract class BasePluginLoader {
             timestamp: Date.now()
           })
         }
-        // Check icon status after creation
+
+        if (pluginFeature.icon instanceof TuffIconImpl) {
+          iconInitPromises.push(pluginFeature.icon.init())
+        }
+      })
+
+      await Promise.allSettled(iconInitPromises)
+
+      this.touchPlugin.features.forEach((pluginFeature) => {
         if (pluginFeature.icon.status === 'error') {
           this.touchPlugin.issues.push({
             type: 'warning',
@@ -99,27 +121,33 @@ abstract class BasePluginLoader {
           })
         }
       })
-      await Promise.allSettled(pendingList)
     }
   }
 }
 
+/**
+ * Loader for local plugins
+ */
 class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
   async load(): Promise<TouchPlugin> {
     const manifestPath = path.resolve(this.pluginPath, 'manifest.json')
     try {
-      const pluginInfo = fse.readJSONSync(manifestPath)
+      const pluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
       await this.loadCommon(pluginInfo)
 
-      // The logic for loading index.js has been moved to the `enable` method of the plugin.
-      // This loader is now only responsible for loading the manifest and basic plugin information.
-    } catch (error: any) {
+      // Load README from local file system
+      const readmePath = path.resolve(this.pluginPath, 'README.md')
+      this.touchPlugin.readme = fse.existsSync(readmePath)
+        ? fse.readFileSync(readmePath, 'utf-8')
+        : ''
+    } catch (error) {
+      const err = error as Error
       this.touchPlugin.issues.push({
         type: 'error',
-        message: `Failed to read or parse local manifest.json: ${error.message}`,
+        message: `Failed to read or parse local manifest.json: ${err.message}`,
         source: 'manifest.json',
         code: 'INVALID_MANIFEST_JSON',
-        meta: { error: error.stack },
+        meta: { error: err.stack },
         timestamp: Date.now()
       })
     }
@@ -127,6 +155,9 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
   }
 }
 
+/**
+ * Loader for plugins in development mode
+ */
 class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
   private readonly devConfig: IPluginDev
 
@@ -136,12 +167,12 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
   }
 
   async load(): Promise<TouchPlugin> {
-    let pluginInfo: any
+    let pluginInfo: PluginManifest
 
     try {
       const remoteManifestUrl = new URL('manifest.json', this.devConfig.address).toString()
       this.touchPlugin.logger.debug(`[Dev] Fetching remote manifest from ${remoteManifestUrl}`)
-      const response = await axios.get(remoteManifestUrl, {
+      const response = await axios.get<PluginManifest>(remoteManifestUrl, {
         timeout: 2000,
         proxy: false,
         headers: {
@@ -153,8 +184,8 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
       this.touchPlugin.logger.debug(
         `[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`
       )
-      fse.writeJSONSync(path.resolve(this.pluginPath, 'manifest.json'), pluginInfo, { spaces: 2 })
-      this.touchPlugin.logger.debug(`[Dev] Wrote remote manifest to local cache.`)
+      // Note: manifest.json is NOT written here to avoid triggering file watchers
+      // It will be synced by DevServerHealthMonitor when manifest changes are detected via heartbeat
       this.touchPlugin.issues.push({
         type: 'warning',
         message: `Plugin is running in development mode, loading from ${this.devConfig.address}.`,
@@ -162,11 +193,12 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         code: 'DEV_MODE_ACTIVE',
         timestamp: Date.now()
       })
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as Error
       const remoteManifestUrl = new URL('manifest.json', this.devConfig.address).toString()
       this.touchPlugin.issues.push({
         type: 'error',
-        message: `Failed to fetch remote manifest from ${remoteManifestUrl}: ${error.message}. In dev-source mode, this is a fatal error.`,
+        message: `Failed to fetch remote manifest from ${remoteManifestUrl}: ${err.message}. In dev-source mode, this is a fatal error.`,
         source: 'dev-mode',
         code: 'REMOTE_MANIFEST_FAILED',
         suggestion:
@@ -179,16 +211,36 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
 
     await this.loadCommon(pluginInfo)
 
-    // The logic for loading the remote index.js has been moved to the `enable` method of the plugin.
-    // This ensures that the script is only fetched and executed when the plugin is explicitly enabled.
+    // Load README from dev server
+    try {
+      const remoteReadmeUrl = new URL('README.md', this.devConfig.address).toString()
+      this.touchPlugin.logger.debug(`[Dev] Fetching remote README from ${remoteReadmeUrl}`)
+      const response = await axios.get(remoteReadmeUrl, {
+        timeout: 2000,
+        proxy: false,
+        responseType: 'text'
+      })
+      this.touchPlugin.readme = response.data || ''
+      this.touchPlugin.logger.debug(`[Dev] Remote README fetched successfully`)
+    } catch {
+      this.touchPlugin.logger.debug(`[Dev] README not found or failed to load from dev server`)
+      this.touchPlugin.readme = ''
+      // README loading failure is not fatal, so we don't add it to issues
+    }
 
     return this.touchPlugin
   }
 }
 
+/**
+ * Create appropriate plugin loader based on manifest configuration
+ * @param pluginName - Plugin directory name
+ * @param pluginPath - Absolute path to plugin directory
+ * @returns Plugin loader instance
+ */
 export function createPluginLoader(pluginName: string, pluginPath: string): IPluginLoader {
   const manifestPath = path.resolve(pluginPath, 'manifest.json')
-  const localPluginInfo = fse.readJSONSync(manifestPath)
+  const localPluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
   const devConfig = localPluginInfo.dev || { enable: false, address: '', source: false }
 
   if (devConfig.enable) {

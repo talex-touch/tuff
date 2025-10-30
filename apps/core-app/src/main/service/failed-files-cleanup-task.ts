@@ -49,7 +49,7 @@ export class FailedFilesCleanupTask implements BackgroundTask {
       throw new Error('Database utils not initialized')
     }
 
-    this.logInfo('Starting failed files cleanup task')
+    this.logDebug('Starting failed files cleanup task')
 
     const startTime = Date.now()
     const cutoffTime = startTime - this.options.maxRetryAge
@@ -72,10 +72,10 @@ export class FailedFilesCleanupTask implements BackgroundTask {
         )
         .limit(this.options.batchSize)
 
-      this.logInfo(`Found ${failedFiles.length} failed files to retry`)
+      this.logDebug(`Found ${failedFiles.length} failed files to retry`)
 
       if (failedFiles.length === 0) {
-        this.logInfo('No failed files to retry')
+        this.logDebug('No failed files to retry')
         return
       }
 
@@ -91,7 +91,7 @@ export class FailedFilesCleanupTask implements BackgroundTask {
       }
 
       const duration = Date.now() - startTime
-      this.logInfo(`Completed failed files cleanup`, {
+      this.logDebug(`Completed failed files cleanup`, {
         processedFiles: failedFiles.length,
         duration: `${duration}ms`
       })
@@ -111,6 +111,10 @@ export class FailedFilesCleanupTask implements BackgroundTask {
     } else {
       fileProviderLog.error(`[FailedFilesCleanupTask] ${message}`)
     }
+  }
+
+  private logDebug(message: string, meta?: Record<string, unknown>): void {
+    fileProviderLog.debug(`[FailedFilesCleanupTask] ${message}`, meta)
   }
 }
 

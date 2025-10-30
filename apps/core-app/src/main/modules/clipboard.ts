@@ -476,7 +476,24 @@ export class ClipboardModule extends BaseModule {
     const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
     let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
 
-    if (includesAny(formats, FILE_URL_FORMATS)) {
+    // Priority: IMAGE -> FILES -> TEXT
+    // Check for standalone image first
+    if (includesAny(formats, IMAGE_FORMATS)) {
+      const image = clipboard.readImage()
+      if (helper.didImageChange(image)) {
+        helper.markText('')
+        const size = image.getSize()
+        metaEntries.push({ key: 'image_size', value: size })
+        item = {
+          type: 'image',
+          content: image.toDataURL(),
+          thumbnail: image.resize({ width: 128 }).toDataURL()
+        }
+      }
+    }
+
+    // Then check for files (only if no image detected)
+    if (!item && includesAny(formats, FILE_URL_FORMATS)) {
       const files = helper.readClipboardFiles()
       if (helper.didFilesChange(files)) {
         const serialized = JSON.stringify(files)
@@ -506,20 +523,6 @@ export class ClipboardModule extends BaseModule {
           type: 'files',
           content: serialized,
           thumbnail
-        }
-      }
-    }
-
-    if (!item && includesAny(formats, IMAGE_FORMATS)) {
-      const image = clipboard.readImage()
-      if (helper.didImageChange(image)) {
-        helper.markText('')
-        const size = image.getSize()
-        metaEntries.push({ key: 'image_size', value: size })
-        item = {
-          type: 'image',
-          content: image.toDataURL(),
-          thumbnail: image.resize({ width: 128 }).toDataURL()
         }
       }
     }

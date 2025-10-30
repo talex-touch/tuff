@@ -8,7 +8,7 @@
     >
       <div class="flex items-center gap-3">
         <div class="relative">
-          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="32" />
+          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="48" />
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
             :class="statusClass.indicator"
@@ -103,11 +103,7 @@
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem
-          icon="database-2-line"
-          name="Storage(Mock)"
-          :label="t('plugin.tabs.storageMock')"
-        >
+        <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
           <PluginStorage :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
@@ -155,8 +151,8 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 
 // Loading states
 const loadingStates = ref({
-  openFolder: false,
-  reload: false
+  reload: false,
+  openFolder: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
@@ -166,6 +162,7 @@ const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type
 const slots = useSlots()
 const tabItems = computed(() => {
   const defaultSlots = slots.default?.() || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return defaultSlots.filter((vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem')
 })
 
@@ -187,7 +184,9 @@ const statusMap = {
   [EPluginStatus.DISABLED]: { indicator: 'bg-yellow-500' },
   [EPluginStatus.CRASHED]: { indicator: 'bg-red-500' },
   [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
-  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' }
+  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' },
+  [EPluginStatus.DEV_DISCONNECTED]: { indicator: 'bg-orange-500' },
+  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' }
 }
 
 const statusClass = computed(() => {
@@ -195,18 +194,10 @@ const statusClass = computed(() => {
   return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
 })
 
-// Action handlers
 async function handleReloadPlugin(): Promise<void> {
-  if (!props.plugin || loadingStates.value.reload) return
+  if (!props.plugin) return
 
-  loadingStates.value.reload = true
-  try {
-    await touchSdk.reloadPlugin(props.plugin.name)
-  } catch (error) {
-    console.error('Failed to reload plugin:', error)
-  } finally {
-    loadingStates.value.reload = false
-  }
+  await touchSdk.reloadPlugin(props.plugin.name)
 }
 
 async function handleOpenPluginFolder(): Promise<void> {

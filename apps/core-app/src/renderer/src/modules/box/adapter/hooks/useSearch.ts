@@ -2,11 +2,14 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
-import { IProviderActivate, TuffItem, TuffSearchResult } from '@talex-touch/utils'
+import { IProviderActivate, TuffItem, TuffSearchResult, TuffInputType, TuffQuery, TuffQueryInput } from '@talex-touch/utils'
 import { IUseSearch } from '../types'
 import { appSetting } from '~/modules/channel/storage'
 
-export function useSearch(boxOptions: IBoxOptions): IUseSearch {
+export function useSearch(
+  boxOptions: IBoxOptions,
+  clipboardOptions?: { last: unknown }
+): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
   const res = ref<Array<TuffItem>>([])
@@ -31,10 +34,66 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     res.value = [] // Clear previous results immediately
 
     try {
-      const query = {
+      const query: TuffQuery = {
         text: searchVal.value,
-        mode: boxOptions.mode
+        inputs: []
       }
+
+      const inputs: TuffQueryInput[] = []
+
+      // Add FILE mode files to inputs (from drag-drop or other sources)
+      if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
+        inputs.push({
+          type: TuffInputType.Files,
+          content: JSON.stringify(boxOptions.file.paths),
+          metadata: undefined
+        })
+      }
+
+      // Only include clipboard data if user hasn't cleared it (ESC key)
+      // This prevents filtering out providers that don't support non-text inputs
+      if (clipboardOptions?.last) {
+        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+        if (clipboardData && clipboardData.type) {
+          if (clipboardData.type === 'image') {
+            inputs.push({
+              type: TuffInputType.Image,
+              content: clipboardData.content,
+              thumbnail: clipboardData.thumbnail,
+              metadata: clipboardData.meta
+            })
+          } else if (clipboardData.type === 'files') {
+            inputs.push({
+              type: TuffInputType.Files,
+              content: clipboardData.content,
+              metadata: clipboardData.meta
+            })
+          } else if (clipboardData.type === 'text') {
+            // 无论是否有 HTML，都添加文本输入
+            if (clipboardData.rawContent) {
+              // 富文本：同时保存纯文本和 HTML
+              inputs.push({
+                type: TuffInputType.Html,
+                content: clipboardData.content,     // 纯文本版本
+                rawContent: clipboardData.rawContent, // HTML 版本
+                metadata: clipboardData.meta
+              })
+            } else {
+              // 纯文本：只有纯文本
+              inputs.push({
+                type: TuffInputType.Text,
+                content: clipboardData.content,
+                metadata: clipboardData.meta
+              })
+            }
+          }
+        }
+      }
+
+      if (inputs.length > 0) {
+        query.inputs = inputs
+      }
+
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
 
@@ -64,6 +123,26 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
   async function handleSearch(): Promise<void> {
     debouncedSearch()
+  }
+
+  /**
+   * Force immediate search without debounce
+   * Used when clipboard state changes
+   */
+  async function handleSearchImmediate(): Promise<void> {
+    if (!searchVal.value) {
+      if (!activeActivations.value?.length) {
+        res.value.length = 0
+      }
+      return
+    }
+    // Call the debounced search immediately by flushing
+    debouncedSearch()
+    // @ts-ignore - flush method exists on debounced function
+    if (debouncedSearch.flush) {
+      // @ts-ignore
+      debouncedSearch.flush()
+    }
   }
 
   async function cancelSearch(): Promise<void> {
@@ -112,6 +191,49 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
 
+    // Auto-detect clipboard when triggering plugin feature
+    // Only if clipboard hasn't been cleared by user (ESC key)
+    if (isPluginFeature && serializedSearchResult?.query && clipboardOptions?.last) {
+      try {
+        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+
+        if (clipboardData && clipboardData.type) {
+          const inputs: unknown[] = serializedSearchResult.query.inputs || []
+
+          // Convert clipboard data to TuffQueryInput format
+          if (clipboardData.type === 'image') {
+            inputs.push({
+              type: TuffInputType.Image,
+              content: clipboardData.content,
+              thumbnail: clipboardData.thumbnail,
+              metadata: clipboardData.meta
+            })
+          } else if (clipboardData.type === 'files') {
+            inputs.push({
+              type: TuffInputType.Files,
+              content: clipboardData.content, // Already JSON serialized
+              metadata: clipboardData.meta
+            })
+          } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
+            // Has HTML content
+            inputs.push({
+              type: TuffInputType.Html,
+              content: clipboardData.content,
+              rawContent: clipboardData.rawContent,
+              metadata: clipboardData.meta
+            })
+          }
+
+          if (inputs.length > 0) {
+            serializedSearchResult.query.inputs = inputs
+          }
+        }
+      } catch (error) {
+        console.debug('[useSearch] Failed to auto-detect clipboard:', error)
+        // Continue execution even if clipboard detection fails
+      }
+    }
+
     loading.value = true
 
     try {
@@ -131,6 +253,16 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
       if (!newActivationState || newActivationState.length === 0) {
         searchVal.value = ''
+      }
+
+      // Clear clipboard after execute if time === 0
+      if (
+        isPluginFeature &&
+        clipboardOptions &&
+        appSetting.tools.autoPaste.time === 0
+      ) {
+        ;(clipboardOptions as any).last = null
+        ;(clipboardOptions as any).detectedAt = null
       }
     } catch (error) {
       console.error('Execute failed:', error)
@@ -315,6 +447,7 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     activeItem,
     activeActivations,
     handleSearch,
+    handleSearchImmediate,
     handleExecute,
     handleExit,
     deactivateProvider,

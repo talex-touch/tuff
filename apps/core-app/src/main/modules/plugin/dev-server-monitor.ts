@@ -1,4 +1,9 @@
-import { IPluginManager, ITouchPlugin, PluginStatus, DevServerHealthCheckResult } from '@talex-touch/utils/plugin'
+import {
+  IPluginManager,
+  ITouchPlugin,
+  PluginStatus,
+  DevServerHealthCheckResult
+} from '@talex-touch/utils/plugin'
 import axios from 'axios'
 import path from 'path'
 import fs from 'fs-extra'
@@ -23,9 +28,9 @@ export class DevServerHealthMonitor {
   private lastFileStatus: Map<string, FileStatusMap> = new Map()
   private failureCount: Map<string, number> = new Map()
 
-  private readonly INTERVAL = 5000      // 探测间隔 5 秒
-  private readonly TIMEOUT = 1500      // 请求超时 1.5 秒
-  private readonly MAX_RETRIES = 1      // 重试次数
+  private readonly INTERVAL = 5000 // 探测间隔 5 秒
+  private readonly TIMEOUT = 1500 // 请求超时 1.5 秒
+  private readonly MAX_RETRIES = 1 // 重试次数
 
   constructor(private manager: IPluginManager) {}
 
@@ -87,7 +92,7 @@ export class DevServerHealthMonitor {
     if (isHealthy) {
       plugin.status = PluginStatus.ENABLED
       // 清除断连警告
-      plugin.issues = plugin.issues.filter(issue => issue.code !== 'DEV_SERVER_DISCONNECTED')
+      plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
       plugin.logger.info('Successfully reconnected to Dev Server')
       return true
     } else {
@@ -116,10 +121,12 @@ export class DevServerHealthMonitor {
    * 检查是否应该监控该插件
    */
   private shouldMonitor(plugin: ITouchPlugin): boolean {
-    return plugin.dev.enable &&
-           plugin.dev.source &&
-           !!plugin.dev.address &&
-           (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE)
+    return (
+      plugin.dev.enable &&
+      plugin.dev.source &&
+      !!plugin.dev.address &&
+      (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE)
+    )
   }
 
   /**
@@ -174,14 +181,17 @@ export class DevServerHealthMonitor {
   /**
    * 处理健康响应
    */
-  private async handleHealthyResponse(plugin: ITouchPlugin, result: DevServerHealthCheckResult): Promise<void> {
+  private async handleHealthyResponse(
+    plugin: ITouchPlugin,
+    result: DevServerHealthCheckResult
+  ): Promise<void> {
     // 重置失败计数
     this.failureCount.delete(plugin.name)
 
     // 如果之前是断连状态，现在恢复了
     if (plugin.status === PluginStatus.DEV_DISCONNECTED) {
       plugin.status = PluginStatus.ENABLED
-      plugin.issues = plugin.issues.filter(issue => issue.code !== 'DEV_SERVER_DISCONNECTED')
+      plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
       plugin.logger.info('Dev Server connection restored')
     }
 
@@ -194,13 +204,18 @@ export class DevServerHealthMonitor {
   /**
    * 处理不健康响应
    */
-  private async handleUnhealthyResponse(plugin: ITouchPlugin, result: DevServerHealthCheckResult): Promise<void> {
+  private async handleUnhealthyResponse(
+    plugin: ITouchPlugin,
+    result: DevServerHealthCheckResult
+  ): Promise<void> {
     const failureCount = (this.failureCount.get(plugin.name) || 0) + 1
     this.failureCount.set(plugin.name, failureCount)
 
     // 重试机制
     if (failureCount <= this.MAX_RETRIES) {
-      monitorLog.debug(`Health check failed for plugin ${plugin.name}, retrying... (${failureCount}/${this.MAX_RETRIES})`)
+      monitorLog.debug(
+        `Health check failed for plugin ${plugin.name}, retrying... (${failureCount}/${this.MAX_RETRIES})`
+      )
       return
     }
 
@@ -236,7 +251,7 @@ export class DevServerHealthMonitor {
       return
     }
 
-    const changedFiles = Object.keys(fileStatus).filter(filename => {
+    const changedFiles = Object.keys(fileStatus).filter((filename) => {
       const current = fileStatus[filename]
       const previous = lastStatus[filename]
       return current.changed && current.exist
@@ -271,7 +286,19 @@ export class DevServerHealthMonitor {
 
     try {
       const response = await axios.get(remoteUrl, { timeout: 3000 })
-      await fs.writeFile(localPath, response.data)
+
+      // Handle JSON files specially to ensure proper formatting
+      if (filename.endsWith('.json')) {
+        const jsonData =
+          typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+        await fs.writeJson(localPath, jsonData, { spaces: 2 })
+      } else {
+        // For non-JSON files, write as-is
+        const content =
+          typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+        await fs.writeFile(localPath, content)
+      }
+
       plugin.logger.info(`Synced ${filename} from Dev Server`)
     } catch (error: any) {
       plugin.logger.error(`Failed to sync ${filename}: ${error.message}`)

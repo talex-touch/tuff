@@ -5,7 +5,8 @@ import {
   ISearchProvider,
   TuffItem,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  TuffInputType
 } from '@talex-touch/utils'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
@@ -150,38 +151,46 @@ export class SearchEngineCore
         }
       }
       this.activatedProviders = uniqueProviders.size > 0 ? uniqueProviders : null
-      console.debug(
-        `[SearchEngineCore] activateProviders SET:`,
-        this.activatedProviders ? Array.from(this.activatedProviders.values()) : null
-      )
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase(
+          'Activate Providers',
+          `SET: ${this.activatedProviders ? JSON.stringify(Array.from(this.activatedProviders.values())) : 'null'}`
+        )
+      }
     } else {
       this.deactivateProviders()
     }
   }
 
   deactivateProvider(uniqueKey: string): void {
-    console.debug(`[SearchEngineCore] deactivateProvider() called for key: ${uniqueKey}.`)
+    if (searchLogger.isEnabled()) {
+      searchLogger.logSearchPhase('Deactivate Provider', `Called for key: ${uniqueKey}`)
+    }
     if (this.activatedProviders && this.activatedProviders.has(uniqueKey)) {
       const deactivatedActivation = this.activatedProviders.get(uniqueKey)
       this.activatedProviders.delete(uniqueKey)
-      console.debug(`[SearchEngineCore] Deactivated provider with key: ${uniqueKey}`)
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase('Deactivate Provider', `Deactivated: ${uniqueKey}`)
+      }
 
       // If the deactivated provider was a plugin feature and we are in UI mode, exit UI mode.
       if (deactivatedActivation?.id === 'plugin-features' && coreBoxManager.isUIMode) {
-        console.debug(
-          `[SearchEngineCore] PluginFeaturesAdapter deactivated, exiting UI mode for key: ${uniqueKey}.`
-        )
+        if (searchLogger.isEnabled()) {
+          searchLogger.logSearchPhase('Exit UI Mode', `PluginFeaturesAdapter deactivated for key: ${uniqueKey}`)
+        }
         coreBoxManager.exitUIMode()
       }
 
       if (this.activatedProviders.size === 0) {
         this.activatedProviders = null
-        console.debug(`[SearchEngineCore] All providers deactivated.`)
+        if (searchLogger.isEnabled()) {
+          searchLogger.logSearchPhase('Deactivate Provider', 'All providers deactivated')
+        }
       }
     } else {
-      console.log(
-        `[SearchEngineCore] Provider with key ${uniqueKey} not found in activated providers.`
-      )
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase('Deactivate Provider', `Provider with key ${uniqueKey} not found`)
+      }
     }
   }
 
@@ -191,7 +200,9 @@ export class SearchEngineCore
     // When all providers are deactivated, ensure any active UI mode is exited.
     // This addresses the issue where UI view might remain attached if not explicitly closed.
     if (coreBoxManager.isUIMode) {
-      console.debug('[SearchEngineCore] Deactivating providers, exiting UI mode.')
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase('Deactivate Providers', 'Exiting UI mode')
+      }
       coreBoxManager.exitUIMode()
     }
   }
@@ -242,7 +253,9 @@ export class SearchEngineCore
 
   public cancelSearch(searchId: string): void {
     if (this.currentGatherController) {
-      console.log(`[SearchEngineCore] Cancelling search with ID: ${searchId}`)
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase('Cancel Search', `Cancelling search with ID: ${searchId}`)
+      }
       this.currentGatherController.abort()
       this.currentGatherController = null
 
@@ -262,7 +275,7 @@ export class SearchEngineCore
   async search(query: TuffQuery): Promise<TuffSearchResult> {
     const sessionId = crypto.randomUUID()
     searchLogger.searchSessionStart(query.text, sessionId)
-    console.debug('[SearchEngineCore] search', query)
+    searchLogger.logSearchPhase('Query Received', `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`)
     this.currentGatherController?.abort()
 
     const startTime = Date.now()
@@ -270,7 +283,37 @@ export class SearchEngineCore
 
     return new Promise((resolve) => {
       let isFirstUpdate = true
-      const providersToSearch = this.getActiveProviders()
+      let providersToSearch = this.getActiveProviders()
+
+      // Smart routing: filter providers based on query.inputs types
+      if (query.inputs && query.inputs.length > 0) {
+        const inputTypes = query.inputs.map(i => i.type)
+        const hasNonTextInput = inputTypes.some(t => t !== TuffInputType.Text)
+
+        if (hasNonTextInput) {
+          searchLogger.logSearchPhase('Provider Filtering', `Non-text inputs detected: ${inputTypes.join(', ')}`)
+
+          // Keep only providers that support these input types
+          providersToSearch = providersToSearch.filter(provider => {
+            // PluginFeaturesAdapter always kept (it filters features internally)
+            if (provider.id === 'plugin-features') {
+              return true
+            }
+
+            // Other providers must declare supportedInputTypes
+            if (!provider.supportedInputTypes) {
+              // Default to text-only support
+              return false
+            }
+
+            // Check if provider supports at least one of the input types
+            return inputTypes.some(type => provider.supportedInputTypes?.includes(type))
+          })
+
+          searchLogger.logSearchPhase('Provider Filtered', `Active providers: ${providersToSearch.map(p => p.id).join(', ')}`)
+        }
+      }
+
       searchLogger.searchProviders(providersToSearch.map(p => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
@@ -302,10 +345,7 @@ export class SearchEngineCore
               sources: update.sourceStats
             })
           }
-          console.debug(
-            `[SearchEngineCore] SEARCH END. Final activation state:`,
-            this.getActivationState()
-          )
+          searchLogger.logSearchPhase('Search End', `Final activation state: ${JSON.stringify(this.getActivationState())}`)
           return
         }
 
@@ -358,7 +398,9 @@ export class SearchEngineCore
         timestamp: new Date(),
         context: JSON.stringify(query.context || {})
       })
-      console.debug(`[SearchEngineCore] Recorded search session ${sessionId}`)
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase('Usage Recording', `Recorded search session ${sessionId}`)
+      }
     } catch (error) {
       console.error('[SearchEngineCore] Failed to record search usage.', error)
     }
@@ -385,9 +427,9 @@ export class SearchEngineCore
       // Atomically increment the click count and update the last used timestamp
       await this.dbUtils.incrementUsageSummary(itemId)
 
-      console.debug(
-        `[SearchEngineCore] Recorded execute for item ${itemId} in session ${sessionId}`
-      )
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase('Usage Recording', `Recorded execute for item ${itemId} in session ${sessionId}`)
+      }
     } catch (error) {
       console.error(`[SearchEngineCore] Failed to record execute usage for item ${itemId}.`, error)
     }
@@ -489,7 +531,9 @@ export class SearchEngineCore
   }
 
   destroy(): void {
-    console.debug('[SearchEngineCore] Destroying SearchEngineCore and aborting any ongoing search.')
+    if (searchLogger.isEnabled()) {
+      searchLogger.logSearchPhase('Destroy', 'Destroying SearchEngineCore and aborting any ongoing search')
+    }
     this.currentGatherController?.abort()
   }
 }

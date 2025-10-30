@@ -3,7 +3,7 @@ import { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ItemSubtitle from './ItemSubtitle.vue'
-import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { useOpenerAutoResolve, getOpenerByExtension } from '~/modules/openers'
 import { resolveSourceMeta } from './sourceMeta'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -23,7 +23,7 @@ const displayIcon = computed(() => {
   const icon = props.render?.basic?.icon
   const defaultIcon = {
     type: 'url',
-    value: DefaultIcon,
+    value: '',
     status: 'normal'
   } as ITuffIcon
 
@@ -109,7 +109,13 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
     :class="{ 'is-active': active, '!bg-[var(--el-bg-color)]': active }"
   >
     <div class="relative w-32px h-32px">
-      <TuffIcon :icon="displayIcon" :alt="render.basic?.title || 'Tuff Item'" :size="25.6" />
+      <TuffIcon
+        :empty="DefaultIcon"
+        :icon="displayIcon"
+        :alt="render.basic?.title || 'Tuff Item'"
+        :size="32"
+        colorful
+      />
       <span
         v-if="showFrequency"
         class="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[10px] leading-none rounded-full bg-[var(--el-color-primary)] text-white shadow-sm"

@@ -6,6 +6,7 @@ import {
   TuffFactory,
   TuffQuery,
   TuffSearchResult,
+  TuffInputType,
   timingLogger,
   type TimingMeta,
   type TimingOptions,
@@ -262,6 +263,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'file-provider'
   readonly name = 'File Provider'
   readonly type = 'file' as const
+  readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
@@ -423,7 +425,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.backgroundTaskService.registerTask(cleanupTask)
 
     this.backgroundTaskService.on('taskCompleted', (data) => {
-      this.logInfo(`Background task completed: ${data.task.name}`, {
+      this.logDebug(`Background task completed: ${data.task.name}`, {
         duration: formatDuration(data.duration)
       })
     })
