@@ -19,8 +19,7 @@ export function useVisibility(
     (val) => {
       if (!val) {
         boxOptions.lastHidden = Date.now()
-        // Clear clipboard when window is hidden
-        clearClipboard()
+        // Don't clear clipboard, preserve state for expiration check on next open
         return
       }
 
@@ -39,6 +38,7 @@ export function useVisibility(
       }
 
       // Auto-detect clipboard when CoreBox is opened
+      // handlePaste will check if clipboard is expired
       handlePaste()
 
       if (clipboardOptions.last) {

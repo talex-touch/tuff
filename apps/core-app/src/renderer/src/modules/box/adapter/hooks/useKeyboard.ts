@@ -12,7 +12,8 @@ export function useKeyboard(
   inputEl: Ref<HTMLInputElement | undefined>,
   clipboardOptions: any,
   clearClipboard: () => void,
-  activeActivations: Ref<any>
+  activeActivations: Ref<any>,
+  handlePaste: () => void
 ) {
   function onKeyDown(event: KeyboardEvent): void {
     if (!document.body.classList.contains('core-box')) {
@@ -20,6 +21,13 @@ export function useKeyboard(
     }
 
     const lastFocus = boxOptions.focus
+
+    // Handle Cmd/Ctrl+V for manual paste
+    if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
+      handlePaste()
+      event.preventDefault()
+      return
+    }
 
     if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       const key = event.key

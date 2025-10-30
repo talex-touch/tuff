@@ -16,7 +16,8 @@ export interface IBoxOptions {
   mode: BoxMode
   focus: number
   file: {
-    buffer: Uint8Array | null
+    buffer?: Uint8Array | null // deprecated, use iconPath
+    iconPath?: string
     paths: string[]
   }
   data: any

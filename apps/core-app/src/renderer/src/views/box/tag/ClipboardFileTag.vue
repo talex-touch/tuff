@@ -1,6 +1,5 @@
 <script name="ClipboardFileTag" setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { computed } from 'vue'
 
 const props = defineProps<{
   data: any // clipboard data with files
@@ -24,41 +23,17 @@ const firstFileName = computed(() => {
   return path.split(/[\\/]/).pop() || path
 })
 
-// Fetch icon for first file
-const fileIcon = computed(() => {
-  // We'll fetch this on mount
-  return null
-})
-
-// Load file icon
-const iconDataUrl = ref<string | null>(null)
-
-onMounted(async () => {
-  if (filePaths.value.length > 0) {
-    try {
-      const buffer = await touchChannel.send('file:extract-icon', {
-        path: filePaths.value[0]
-      })
-
-      if (buffer) {
-        const bytes = new Uint8Array(buffer)
-        let storeData = ''
-        for (let i = 0; i < bytes.length; i++) {
-          storeData += String.fromCharCode(bytes[i])
-        }
-        iconDataUrl.value = 'data:image/png;base64,' + window.btoa(storeData)
-      }
-    } catch (error) {
-      console.debug('Failed to load file icon:', error)
-    }
-  }
+// Use tfile:// protocol for file icon
+const fileIconUrl = computed(() => {
+  if (filePaths.value.length === 0) return null
+  return `tfile://${filePaths.value[0]}`
 })
 </script>
 
 <template>
   <div class="ClipboardFileTag">
     <div class="icon-container">
-      <img v-if="iconDataUrl" :src="iconDataUrl" class="file-icon" alt="file icon" />
+      <img v-if="fileIconUrl" :src="fileIconUrl" class="file-icon" alt="file icon" />
       <i v-else class="ri-file-line file-icon-fallback" />
     </div>
     <span class="name">{{ firstFileName }}</span>

@@ -64,7 +64,7 @@ const clipboardPreview = computed(() => {
 
     <!-- File tag -->
     <template v-if="boxOptions.mode === BoxMode.FILE">
-      <FileTag :buffer="boxOptions.file.buffer!" :paths="boxOptions.file.paths" />
+      <FileTag :icon-path="boxOptions.file.iconPath" :paths="boxOptions.file.paths" />
     </template>
 
     <!-- Image tag -->
