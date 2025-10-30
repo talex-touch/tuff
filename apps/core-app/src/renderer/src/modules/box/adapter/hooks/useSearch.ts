@@ -8,7 +8,7 @@ import { appSetting } from '~/modules/channel/storage'
 
 export function useSearch(
   boxOptions: IBoxOptions,
-  clipboardOptions?: any,
+  clipboardOptions?: { last: unknown },
   clearClipboardFn?: () => void
 ): IUseSearch {
   const searchVal = ref('')
@@ -35,7 +35,11 @@ export function useSearch(
     res.value = [] // Clear previous results immediately
 
     try {
-      const query: any = {
+      const query: {
+        text: string
+        mode?: string
+        inputs?: unknown[]
+      } = {
         text: searchVal.value,
         mode: boxOptions.mode,
         inputs: []
@@ -44,7 +48,7 @@ export function useSearch(
       // Always include clipboard data in search query
       const clipboardData = touchChannel.sendSync('clipboard:get-latest')
       if (clipboardData && clipboardData.type) {
-        const inputs: any[] = []
+        const inputs: unknown[] = []
 
         if (clipboardData.type === 'image') {
           inputs.push({
@@ -146,7 +150,7 @@ export function useSearch(
     res.value = []
 
     const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
-    let serializedSearchResult = searchResult.value
+    const serializedSearchResult = searchResult.value
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
 
@@ -156,7 +160,7 @@ export function useSearch(
         const clipboardData = touchChannel.sendSync('clipboard:get-latest')
 
         if (clipboardData && clipboardData.type) {
-          const inputs: any[] = serializedSearchResult.query.inputs || []
+          const inputs: unknown[] = serializedSearchResult.query.inputs || []
 
           // Convert clipboard data to TuffQueryInput format
           if (clipboardData.type === 'image') {
