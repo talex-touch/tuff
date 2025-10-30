@@ -8,8 +8,7 @@ import { appSetting } from '~/modules/channel/storage'
 
 export function useSearch(
   boxOptions: IBoxOptions,
-  clipboardOptions?: { last: unknown },
-  clearClipboardFn?: () => void
+  clipboardOptions?: { last: unknown }
 ): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
@@ -40,47 +39,59 @@ export function useSearch(
         inputs: []
       }
 
-      // Always include clipboard data in search query
-      const clipboardData = touchChannel.sendSync('clipboard:get-latest')
-      if (clipboardData && clipboardData.type) {
-        const inputs: TuffQueryInput[] = []
+      const inputs: TuffQueryInput[] = []
 
-        if (clipboardData.type === 'image') {
-          inputs.push({
-            type: TuffInputType.Image,
-            content: clipboardData.content,
-            thumbnail: clipboardData.thumbnail,
-            metadata: clipboardData.meta
-          })
-        } else if (clipboardData.type === 'files') {
-          inputs.push({
-            type: TuffInputType.Files,
-            content: clipboardData.content,
-            metadata: clipboardData.meta
-          })
-        } else if (clipboardData.type === 'text') {
-          // 无论是否有 HTML，都添加文本输入
-          if (clipboardData.rawContent) {
-            // 富文本：同时保存纯文本和 HTML
+      // Add FILE mode files to inputs (from drag-drop or other sources)
+      if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
+        inputs.push({
+          type: TuffInputType.Files,
+          content: JSON.stringify(boxOptions.file.paths),
+          metadata: undefined
+        })
+      }
+
+      // Only include clipboard data if user hasn't cleared it (ESC key)
+      // This prevents filtering out providers that don't support non-text inputs
+      if (clipboardOptions?.last) {
+        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+        if (clipboardData && clipboardData.type) {
+          if (clipboardData.type === 'image') {
             inputs.push({
-              type: TuffInputType.Html,
-              content: clipboardData.content,     // 纯文本版本
-              rawContent: clipboardData.rawContent, // HTML 版本
+              type: TuffInputType.Image,
+              content: clipboardData.content,
+              thumbnail: clipboardData.thumbnail,
               metadata: clipboardData.meta
             })
-          } else {
-            // 纯文本：只有纯文本
+          } else if (clipboardData.type === 'files') {
             inputs.push({
-              type: TuffInputType.Text,
+              type: TuffInputType.Files,
               content: clipboardData.content,
               metadata: clipboardData.meta
             })
+          } else if (clipboardData.type === 'text') {
+            // 无论是否有 HTML，都添加文本输入
+            if (clipboardData.rawContent) {
+              // 富文本：同时保存纯文本和 HTML
+              inputs.push({
+                type: TuffInputType.Html,
+                content: clipboardData.content,     // 纯文本版本
+                rawContent: clipboardData.rawContent, // HTML 版本
+                metadata: clipboardData.meta
+              })
+            } else {
+              // 纯文本：只有纯文本
+              inputs.push({
+                type: TuffInputType.Text,
+                content: clipboardData.content,
+                metadata: clipboardData.meta
+              })
+            }
           }
         }
+      }
 
-        if (inputs.length > 0) {
-          query.inputs = inputs
-        }
+      if (inputs.length > 0) {
+        query.inputs = inputs
       }
 
       // The initial call now returns the high-priority results directly.
@@ -161,7 +172,8 @@ export function useSearch(
       : null
 
     // Auto-detect clipboard when triggering plugin feature
-    if (isPluginFeature && serializedSearchResult?.query) {
+    // Only if clipboard hasn't been cleared by user (ESC key)
+    if (isPluginFeature && serializedSearchResult?.query && clipboardOptions?.last) {
       try {
         const clipboardData = touchChannel.sendSync('clipboard:get-latest')
 
@@ -227,10 +239,10 @@ export function useSearch(
       if (
         isPluginFeature &&
         clipboardOptions &&
-        clearClipboardFn &&
         appSetting.tools.autoPaste.time === 0
       ) {
-        clearClipboardFn()
+        ;(clipboardOptions as any).last = null
+        ;(clipboardOptions as any).detectedAt = null
       }
     } catch (error) {
       console.error('Execute failed:', error)

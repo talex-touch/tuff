@@ -1,4 +1,3 @@
-import { reactive } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode, IBoxOptions } from '..'
@@ -14,11 +13,11 @@ import type { IClipboardHook, IClipboardOptions, IClipboardItem } from './types'
  * @param boxOptions - Box options for managing file mode
  * @returns Clipboard hook interface
  */
-export function useClipboard(boxOptions: IBoxOptions): IClipboardHook {
-  const clipboardOptions = reactive<IClipboardOptions>({
-    last: null,
-    detectedAt: null
-  })
+export function useClipboard(
+  boxOptions: IBoxOptions,
+  clipboardOptions: IClipboardOptions,
+  onPasteCallback?: () => void
+): Omit<IClipboardHook, 'clipboardOptions'> {
 
   /**
    * Check if current clipboard content has expired based on settings
@@ -115,6 +114,11 @@ export function useClipboard(boxOptions: IBoxOptions): IClipboardHook {
         type: clipboard.type,
         timestamp: new Date(clipboard.timestamp).toISOString()
       })
+
+      // Trigger search when new clipboard content is pasted
+      if (onPasteCallback) {
+        onPasteCallback()
+      }
     }
 
     handleAutoPaste()
@@ -148,6 +152,11 @@ export function useClipboard(boxOptions: IBoxOptions): IClipboardHook {
   function clearClipboard(): void {
     clipboardOptions.last = null
     clipboardOptions.detectedAt = null
+
+    // Trigger search after clearing to refresh results
+    if (onPasteCallback) {
+      onPasteCallback()
+    }
   }
 
   // Listen for system clipboard changes
@@ -167,7 +176,6 @@ export function useClipboard(boxOptions: IBoxOptions): IClipboardHook {
   })
 
   return {
-    clipboardOptions,
     handlePaste,
     handleAutoPaste,
     applyToActiveApp,

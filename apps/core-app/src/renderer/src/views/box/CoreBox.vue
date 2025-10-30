@@ -32,7 +32,12 @@ const boxOptions = reactive<IBoxOptions>({
   data: {}
 })
 
-const { clipboardOptions, handlePaste, handleAutoPaste, clearClipboard } = useClipboard(boxOptions)
+// Create shared clipboard state
+const clipboardOptions = reactive<any>({
+  last: null,
+  detectedAt: null
+})
+
 const {
   searchVal,
   select,
@@ -42,9 +47,16 @@ const {
   activeActivations,
   handleExecute,
   handleExit,
+  handleSearch: triggerSearch,
   deactivateProvider
   // cancelSearch
-} = useSearch(boxOptions, clipboardOptions, clearClipboard)
+} = useSearch(boxOptions, clipboardOptions)
+
+const { handlePaste, handleAutoPaste, clearClipboard } = useClipboard(
+  boxOptions,
+  clipboardOptions,
+  triggerSearch
+)
 
 const completionDisplay = computed(() => {
   if (
