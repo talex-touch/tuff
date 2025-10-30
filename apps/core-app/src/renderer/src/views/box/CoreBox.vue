@@ -32,6 +32,7 @@ const boxOptions = reactive<IBoxOptions>({
   data: {}
 })
 
+const { clipboardOptions, handlePaste, handleAutoPaste, clearClipboard } = useClipboard(boxOptions)
 const {
   searchVal,
   select,
@@ -43,8 +44,7 @@ const {
   handleExit,
   deactivateProvider
   // cancelSearch
-} = useSearch(boxOptions)
-const { clipboardOptions, handlePaste, handleAutoPaste, clearClipboard } = useClipboard(boxOptions)
+} = useSearch(boxOptions, clipboardOptions, clearClipboard)
 
 const completionDisplay = computed(() => {
   if (
@@ -86,7 +86,8 @@ useKeyboard(
   computed(() => boxInputRef.value?.inputEl),
   clipboardOptions,
   clearClipboard,
-  activeActivations
+  activeActivations,
+  handlePaste
 )
 useChannel(boxOptions, res)
 

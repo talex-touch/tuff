@@ -2,19 +2,34 @@
 import path from 'path-browserify'
 
 const props = defineProps<{
-  buffer: Uint8Array
+  buffer?: Uint8Array // deprecated, use iconPath
+  iconPath?: string
   paths: string[]
 }>()
 
 const image = computed(() => {
-  const bytes: any = props.buffer.buffer
-  let storeData = ''
-  const len = bytes.byteLength
-  for (let i = 0; i < len; i++) {
-    storeData += String.fromCharCode(bytes[i])
+  // Use tfile:// protocol if available
+  if (props.iconPath) {
+    return `tfile://${props.iconPath}`
   }
 
-  return 'data:image/png;base64,' + window.btoa(storeData)
+  // Fallback to first path
+  if (props.paths && props.paths.length > 0) {
+    return `tfile://${props.paths[0]}`
+  }
+
+  // Legacy buffer support (deprecated)
+  if (props.buffer) {
+    const bytes: any = props.buffer.buffer
+    let storeData = ''
+    const len = bytes.byteLength
+    for (let i = 0; i < len; i++) {
+      storeData += String.fromCharCode(bytes[i])
+    }
+    return 'data:image/png;base64,' + window.btoa(storeData)
+  }
+
+  return ''
 })
 
 const firstFileName = computed(() => {

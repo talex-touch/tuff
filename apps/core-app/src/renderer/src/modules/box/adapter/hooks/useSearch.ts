@@ -6,7 +6,11 @@ import { IProviderActivate, TuffItem, TuffSearchResult, TuffInputType } from '@t
 import { IUseSearch } from '../types'
 import { appSetting } from '~/modules/channel/storage'
 
-export function useSearch(boxOptions: IBoxOptions): IUseSearch {
+export function useSearch(
+  boxOptions: IBoxOptions,
+  clipboardOptions?: any,
+  clearClipboardFn?: () => void
+): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
   const res = ref<Array<TuffItem>>([])
@@ -31,10 +35,44 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
     res.value = [] // Clear previous results immediately
 
     try {
-      const query = {
+      const query: any = {
         text: searchVal.value,
-        mode: boxOptions.mode
+        mode: boxOptions.mode,
+        inputs: []
       }
+
+      // Always include clipboard data in search query
+      const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+      if (clipboardData && clipboardData.type) {
+        const inputs: any[] = []
+
+        if (clipboardData.type === 'image') {
+          inputs.push({
+            type: TuffInputType.Image,
+            content: clipboardData.content,
+            thumbnail: clipboardData.thumbnail,
+            metadata: clipboardData.meta
+          })
+        } else if (clipboardData.type === 'files') {
+          inputs.push({
+            type: TuffInputType.Files,
+            content: clipboardData.content,
+            metadata: clipboardData.meta
+          })
+        } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
+          inputs.push({
+            type: TuffInputType.Html,
+            content: clipboardData.content,
+            rawContent: clipboardData.rawContent,
+            metadata: clipboardData.meta
+          })
+        }
+
+        if (inputs.length > 0) {
+          query.inputs = inputs
+        }
+      }
+
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
 
@@ -173,6 +211,16 @@ export function useSearch(boxOptions: IBoxOptions): IUseSearch {
 
       if (!newActivationState || newActivationState.length === 0) {
         searchVal.value = ''
+      }
+
+      // Clear clipboard after execute if time === 0
+      if (
+        isPluginFeature &&
+        clipboardOptions &&
+        clearClipboardFn &&
+        appSetting.tools.autoPaste.time === 0
+      ) {
+        clearClipboardFn()
       }
     } catch (error) {
       console.error('Execute failed:', error)
