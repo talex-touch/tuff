@@ -1110,12 +1110,19 @@ export interface TuffQueryInput {
  * @description
  * 定义搜索请求的参数和过滤条件。
  * 系统根据这些参数执行搜索并返回匹配结果。
+ * 
+ * **重要区分**：
+ * - `text`: 用户在输入框中主动输入的查询文本
+ * - `inputs`: 来自剪贴板或其他来源的附加输入数据（图像、文件、富文本等）
  */
 export interface TuffQuery {
   /**
-   * 查询文本
-   * @description 用户输入的搜索文本
+   * 用户输入的查询文本
+   * @description 这是用户在搜索框中主动输入的文本，不包括剪贴板内容
    * @required
+   * 
+   * @example
+   * 用户输入 "translate" → text = "translate"
    */
   text: string;
 
@@ -1126,9 +1133,27 @@ export interface TuffQuery {
   type?: 'text' | 'voice' | 'image';
 
   /**
-   * 多类型输入
-   * @description 除文本外的其他输入数据（如剪贴板中的图像、文件等）
-   * 当用户触发 feature 时，系统会自动检测剪贴板并填充此字段
+   * 多类型输入（附加数据）
+   * @description 除了用户输入的文本外的其他输入数据（如剪贴板中的图像、文件、富文本等）
+   * 
+   * **与 text 的区别**：
+   * - `text`: 用户主动输入，总是存在
+   * - `inputs`: 系统自动检测的附加数据，可能为空
+   * 
+   * 当用户触发 feature 时，系统会自动检测剪贴板并填充此字段。
+   * 
+   * @example
+   * 场景 1: 用户输入 "translate" + 剪贴板有图片
+   *   text: "translate"
+   *   inputs: [{ type: 'image', content: 'data:image/png;base64,...' }]
+   * 
+   * 场景 2: 用户输入 "compress" + 剪贴板有文件
+   *   text: "compress" 
+   *   inputs: [{ type: 'files', content: '["/path/to/file"]' }]
+   * 
+   * 场景 3: 用户输入 "format" + 剪贴板有富文本
+   *   text: "format"
+   *   inputs: [{ type: 'html', content: 'plain text', rawContent: '<p>html</p>' }]
    */
   inputs?: TuffQueryInput[];
 

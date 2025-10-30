@@ -1,5 +1,5 @@
 import { ISearchProvider, TuffItem, TuffQuery, TuffSearchResult, ProviderContext } from '../types'
-import { TuffRender } from '@talex-touch/utils'
+import { TuffRender, TuffInputType } from '@talex-touch/utils'
 import { clipboardHistory } from '../../../../db/schema'
 import { desc, like, or } from 'drizzle-orm'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
@@ -10,6 +10,7 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
   public readonly type = 'history'
   public readonly name = 'Clipboard History'
   public readonly icon = 'ri:clipboard-line'
+  public readonly supportedInputTypes = [TuffInputType.Text]
 
   private db!: LibSQLDatabase<typeof schema>
 

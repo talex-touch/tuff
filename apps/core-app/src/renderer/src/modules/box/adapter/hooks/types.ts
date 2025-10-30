@@ -1,6 +1,6 @@
 /**
  * Clipboard hook types
- * 
+ *
  * Note: Uses IClipboardItem from main process clipboard module
  * to maintain consistency across renderer and main process.
  */
