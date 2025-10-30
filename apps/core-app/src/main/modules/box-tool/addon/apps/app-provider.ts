@@ -5,7 +5,8 @@ import {
   ISearchProvider,
   TuffFactory,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  TuffInputType
 } from '@talex-touch/utils/core-box'
 import { shell } from 'electron'
 import path from 'path'
@@ -177,6 +178,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
   readonly name = 'App Provider'
   readonly type = 'application' as const
+  readonly supportedInputTypes = [TuffInputType.Text]
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private context: ProviderContext | null = null

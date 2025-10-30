@@ -2,7 +2,7 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
-import { IProviderActivate, TuffItem, TuffSearchResult, TuffInputType } from '@talex-touch/utils'
+import { IProviderActivate, TuffItem, TuffSearchResult, TuffInputType, TuffQuery, TuffQueryInput } from '@talex-touch/utils'
 import { IUseSearch } from '../types'
 import { appSetting } from '~/modules/channel/storage'
 
@@ -35,20 +35,15 @@ export function useSearch(
     res.value = [] // Clear previous results immediately
 
     try {
-      const query: {
-        text: string
-        mode?: string
-        inputs?: unknown[]
-      } = {
+      const query: TuffQuery = {
         text: searchVal.value,
-        mode: boxOptions.mode,
         inputs: []
       }
 
       // Always include clipboard data in search query
       const clipboardData = touchChannel.sendSync('clipboard:get-latest')
       if (clipboardData && clipboardData.type) {
-        const inputs: unknown[] = []
+        const inputs: TuffQueryInput[] = []
 
         if (clipboardData.type === 'image') {
           inputs.push({
@@ -63,13 +58,24 @@ export function useSearch(
             content: clipboardData.content,
             metadata: clipboardData.meta
           })
-        } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
-          inputs.push({
-            type: TuffInputType.Html,
-            content: clipboardData.content,
-            rawContent: clipboardData.rawContent,
-            metadata: clipboardData.meta
-          })
+        } else if (clipboardData.type === 'text') {
+          // 无论是否有 HTML，都添加文本输入
+          if (clipboardData.rawContent) {
+            // 富文本：同时保存纯文本和 HTML
+            inputs.push({
+              type: TuffInputType.Html,
+              content: clipboardData.content,     // 纯文本版本
+              rawContent: clipboardData.rawContent, // HTML 版本
+              metadata: clipboardData.meta
+            })
+          } else {
+            // 纯文本：只有纯文本
+            inputs.push({
+              type: TuffInputType.Text,
+              content: clipboardData.content,
+              metadata: clipboardData.meta
+            })
+          }
         }
 
         if (inputs.length > 0) {
