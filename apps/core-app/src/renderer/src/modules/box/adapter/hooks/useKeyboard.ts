@@ -9,7 +9,11 @@ export function useKeyboard(
   searchVal: Ref<string>,
   handleExecute: (item: any) => void,
   handleExit: () => void,
-  inputEl: Ref<HTMLInputElement | undefined>
+  inputEl: Ref<HTMLInputElement | undefined>,
+  clipboardOptions: any,
+  clearClipboard: () => void,
+  activeActivations: Ref<any>,
+  handlePaste: () => void
 ) {
   function onKeyDown(event: KeyboardEvent): void {
     if (!document.body.classList.contains('core-box')) {
@@ -17,6 +21,13 @@ export function useKeyboard(
     }
 
     const lastFocus = boxOptions.focus
+
+    // Handle Cmd/Ctrl+V for manual paste
+    if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
+      handlePaste()
+      event.preventDefault()
+      return
+    }
 
     if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       const key = event.key
@@ -56,6 +67,21 @@ export function useKeyboard(
       }
       event.preventDefault()
     } else if (event.key === 'Escape') {
+      // Priority: activeProvider → clipboard → mode/search → hide
+      // 1. If there's an active provider, exit it first
+      if (activeActivations.value && activeActivations.value.length > 0) {
+        handleExit() // This will deactivate providers
+        return
+      }
+
+      // 2. If there's clipboard data, clear it
+      if (clipboardOptions.last) {
+        clearClipboard()
+        event.preventDefault()
+        return
+      }
+
+      // 3. Handle other exits (mode, searchVal, hide)
       handleExit()
     }
 

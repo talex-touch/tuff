@@ -219,7 +219,7 @@ export class BackgroundTaskService extends EventEmitter {
     }
 
     this.runningTasks.add(taskId)
-    this.logInfo(`Starting background task: ${task.name}`)
+    this.logDebug(`Starting background task: ${task.name}`)
 
     const startTime = performance.now()
     const timeoutId = setTimeout(() => {
@@ -230,7 +230,7 @@ export class BackgroundTaskService extends EventEmitter {
     try {
       await task.execute()
       const duration = performance.now() - startTime
-      this.logInfo(`Completed background task: ${task.name}`, {
+      this.logDebug(`Completed background task: ${task.name}`, {
         duration: formatDuration(duration)
       })
       this.emit('taskCompleted', { task, duration })
@@ -269,6 +269,10 @@ export class BackgroundTaskService extends EventEmitter {
     } else {
       fileProviderLog.error(`[BackgroundTaskService] ${message}`)
     }
+  }
+
+  private logDebug(message: string, meta?: Record<string, unknown>): void {
+    fileProviderLog.debug(`[BackgroundTaskService] ${message}`, meta)
   }
 }
 

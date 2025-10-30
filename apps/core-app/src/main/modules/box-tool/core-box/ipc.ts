@@ -34,6 +34,21 @@ export class IpcManager {
   }
 
   public register(): void {
+    /**
+     * @deprecated Use tfile:// protocol instead. Will be removed in future version.
+     * @example
+     * // Old way (deprecated):
+     * const buffer = await touchChannel.send('file:extract-icon', { path: '/path/to/file' })
+     *
+     * // New way (recommended):
+     * <img src="tfile:///path/to/file" />
+     *
+     * The tfile:// protocol provides:
+     * - No IPC overhead
+     * - Browser-native image loading
+     * - Automatic caching
+     * - Simpler code
+     */
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
       'file:extract-icon',

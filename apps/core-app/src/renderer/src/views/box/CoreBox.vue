@@ -32,6 +32,12 @@ const boxOptions = reactive<IBoxOptions>({
   data: {}
 })
 
+// Create shared clipboard state
+const clipboardOptions = reactive<any>({
+  last: null,
+  detectedAt: null
+})
+
 const {
   searchVal,
   select,
@@ -41,10 +47,21 @@ const {
   activeActivations,
   handleExecute,
   handleExit,
-  deactivateProvider,
+  handleSearchImmediate,
+  deactivateProvider
   // cancelSearch
-} = useSearch(boxOptions)
-const { clipboardOptions, handlePaste, handleAutoPaste } = useClipboard(boxOptions, searchVal)
+} = useSearch(boxOptions, clipboardOptions)
+
+const handleClipboardChange = () => {
+  // Force immediate search when clipboard changes (paste or clear)
+  handleSearchImmediate()
+}
+
+const { handlePaste, handleAutoPaste, clearClipboard } = useClipboard(
+  boxOptions,
+  clipboardOptions,
+  handleClipboardChange
+)
 
 const completionDisplay = computed(() => {
   if (
@@ -66,7 +83,15 @@ const completionDisplay = computed(() => {
   return completion
 })
 
-useVisibility(boxOptions, searchVal, clipboardOptions, handleAutoPaste, boxInputRef)
+useVisibility(
+  boxOptions,
+  searchVal,
+  clipboardOptions,
+  handleAutoPaste,
+  handlePaste,
+  clearClipboard,
+  boxInputRef
+)
 useKeyboard(
   boxOptions,
   res,
@@ -75,7 +100,11 @@ useKeyboard(
   searchVal,
   handleExecute,
   handleExit,
-  computed(() => boxInputRef.value?.inputEl)
+  computed(() => boxInputRef.value?.inputEl),
+  clipboardOptions,
+  clearClipboard,
+  activeActivations,
+  handlePaste
 )
 useChannel(boxOptions, res)
 
@@ -95,7 +124,7 @@ function handleItemTrigger(index: number, item: TuffItem): void {
 }
 
 const addon = computed(() => {
-  if (!activeItem.value) return
+  if (!activeItem.value) return undefined
 
   const item = activeItem.value
 
@@ -103,7 +132,7 @@ const addon = computed(() => {
     return 'preview'
   }
 
-  return
+  return undefined
 })
 </script>
 

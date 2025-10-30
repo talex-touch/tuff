@@ -26,6 +26,8 @@ import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
 import { mainLog } from './utils/logger'
+import { getStartupAnalytics } from './modules/analytics'
+import type { ModuleLoadMetric } from './modules/analytics'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -42,6 +44,7 @@ protocol.registerSchemesAsPrivileged([
 const modulesToLoad = [
   databaseModule,
   storageModule,
+  fileProtocolModule,
   shortcutModule,
   extensionLoaderModule,
   commonChannelModule,
@@ -54,22 +57,59 @@ const modulesToLoad = [
   clipboardModule,
   tuffDashboardModule,
   FileSystemWatcher,
-  fileProtocolModule,
   terminalModule,
   downloadCenterModule
 ]
 
 const pollingLog = mainLog.child('PollingService')
 
+// Record when Electron becomes ready
+let electronReadyTime: number
+
 app.whenReady().then(async () => {
+  electronReadyTime = Date.now()
   const startupTimer = mainLog.time('All modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
 
-  const app = genTouchApp()
+  const analytics = getStartupAnalytics()
+  const touchApp = genTouchApp()
+  const moduleLoadMetrics: ModuleLoadMetric[] = []
+  const modulesStartTime = Date.now()
 
-  for (const moduleCtor of modulesToLoad) {
-    await app.moduleManager.loadModule(moduleCtor)
+  // Load modules and track individual load times
+  for (let i = 0; i < modulesToLoad.length; i++) {
+    const moduleCtor = modulesToLoad[i]
+    const moduleStartTime = Date.now()
+
+    await touchApp.moduleManager.loadModule(moduleCtor)
+
+    const moduleLoadTime = Date.now() - moduleStartTime
+    // Convert module name to string (handle symbol case)
+    const moduleName = typeof moduleCtor.name === 'string'
+      ? moduleCtor.name
+      : (typeof moduleCtor.name === 'symbol'
+        ? moduleCtor.name.toString()
+        : `Module${i}`)
+
+    moduleLoadMetrics.push({
+      name: moduleName,
+      loadTime: moduleLoadTime,
+      order: i
+    })
+
+    analytics.trackModuleLoad(moduleName, moduleLoadTime, i)
   }
+
+  const totalModulesLoadTime = Date.now() - modulesStartTime
+
+  // Set main process metrics
+  analytics.setMainProcessMetrics({
+    processCreationTime: process.getCreationTime() || Date.now(),
+    electronReadyTime,
+    modulesLoadTime: totalModulesLoadTime,
+    totalModules: modulesToLoad.length,
+    moduleDetails: moduleLoadMetrics
+  })
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
 

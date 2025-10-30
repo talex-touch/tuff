@@ -30,6 +30,7 @@ export function setI18nLanguage(i18n: any, locale: string): void {
   } else {
     i18n.global.locale.value = locale
   }
+
   /**
    * NOTE:
    * If you need to specify the language setting for headers, such as the `fetch` API, set it here.
@@ -49,15 +50,10 @@ export function setI18nLanguage(i18n: any, locale: string): void {
 export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
   const messages = await import(/* webpackChunkName: "locale-[request]" */ `./${locale}.json`)
 
-  console.log('[loadLocaleMessages] i18n.global:', i18n.global)
-  console.log('[loadLocaleMessages] setLocaleMessage exists:', typeof i18n.global.setLocaleMessage)
-
   if (typeof i18n.global.setLocaleMessage === 'function') {
     i18n.global.setLocaleMessage(locale, messages.default)
-    console.log('[loadLocaleMessages] Set messages for locale using setLocaleMessage:', locale)
   } else if (i18n.global.messages && i18n.global.messages.value) {
     i18n.global.messages.value[locale] = messages.default
-    console.log('[loadLocaleMessages] Set messages for locale using direct assignment:', locale)
   } else {
     console.error('[loadLocaleMessages] i18n.global.messages is not available')
   }

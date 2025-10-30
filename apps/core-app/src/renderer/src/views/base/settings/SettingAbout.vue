@@ -8,6 +8,8 @@
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
 import { useEnv } from '~/modules/hooks/env-hooks'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { ElMessage, ElButton } from 'element-plus'
 
 // Import UI components
 import TBlockLine from '@comp/base/group/TBlockLine.vue'
@@ -21,10 +23,43 @@ const appUpdate = ref(window.$startupInfo.appUpdate)
 const sui = ref(window.$startupInfo)
 
 const dev = ref(false)
+const performanceSummary = ref<any>(null)
+const showPerformanceDetails = ref(false)
+const activeApp = ref<any>(null)
+const loadingActiveApp = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
+
+  // Load performance summary
+  try {
+    const summary = await touchChannel.send('analytics:get-summary')
+    performanceSummary.value = summary
+  } catch (error) {
+    console.warn('Failed to load performance summary', error)
+  }
 })
+
+// Get current active application
+async function getActiveApplication() {
+  loadingActiveApp.value = true
+  try {
+    const result = await touchChannel.send('system:get-active-app', { forceRefresh: true })
+    if (result) {
+      activeApp.value = result
+      ElMessage.success('Successfully retrieved active application info')
+    } else {
+      ElMessage.warning('No active application detected')
+      activeApp.value = null
+    }
+  } catch (error) {
+    console.error('Failed to get active app', error)
+    ElMessage.error('Failed to get active application')
+    activeApp.value = null
+  } finally {
+    loadingActiveApp.value = false
+  }
+}
 
 // Computed property for version string
 const versionStr = computed(
@@ -33,6 +68,27 @@ const versionStr = computed(
 
 // Computed property for application start time
 const startCosts = computed(() => sui.value && (sui.value.t.e - sui.value.t.s) / 1000)
+
+// Export performance data
+async function exportPerformanceData() {
+  try {
+    const data = await touchChannel.send('analytics:export')
+
+    // Create a download link
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `startup-analytics-${Date.now()}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    ElMessage.success(t('settingAbout.exportSuccess'))
+  } catch (error) {
+    console.error('Failed to export performance data', error)
+    ElMessage.error(t('settingAbout.exportFailed'))
+  }
+}
 
 // Computed property for current quarter based on build time
 const currentQuarter = computed(() => {
@@ -72,7 +128,7 @@ const currentExperiencePack = computed(() => {
     <t-block-line :title="t('settingAbout.specification')" :description="`${currentQuarter}`"></t-block-line>
     <t-block-line :title="t('settingAbout.startCosts')">
       <template #description>
-        {{ startCosts }}s
+        {{ startCosts.toFixed(2) }}s
         <span v-if="startCosts < 1" class="tag" style="color: var(--el-color-success)">
           {{ t('settingAbout.perfect') }}
         </span>
@@ -87,6 +143,60 @@ const currentExperiencePack = computed(() => {
         </span>
       </template>
     </t-block-line>
+    <t-block-line
+      v-if="performanceSummary"
+      :title="t('settingAbout.performanceDetails')"
+      :link="true"
+      @click="showPerformanceDetails = !showPerformanceDetails"
+    >
+      <template #description>
+        <span style="cursor: pointer; color: var(--el-color-primary)">
+          {{ showPerformanceDetails ? t('settingAbout.hideDetails') : t('settingAbout.viewDetails') }}
+        </span>
+      </template>
+    </t-block-line>
+    <template v-if="showPerformanceDetails && performanceSummary">
+      <t-block-line :title="t('settingAbout.mainProcessTime')">
+        <template #description>
+          {{ performanceSummary.mainProcessTime.toFixed(3) }}s
+        </template>
+      </t-block-line>
+      <t-block-line :title="t('settingAbout.rendererTime')">
+        <template #description>
+          {{ performanceSummary.rendererTime.toFixed(3) }}s
+        </template>
+      </t-block-line>
+      <t-block-line :title="t('settingAbout.modulesLoaded')">
+        <template #description>
+          {{ performanceSummary.moduleCount }}
+        </template>
+      </t-block-line>
+      <t-block-line :title="t('settingAbout.performanceRating')">
+        <template #description>
+          <span
+            :style="`color: ${
+              performanceSummary.rating === 'excellent' ? 'var(--el-color-success)' :
+              performanceSummary.rating === 'good' ? 'var(--el-color-warning)' :
+              performanceSummary.rating === 'fair' ? 'var(--el-color-error)' :
+              'var(--el-color-danger)'
+            }`"
+          >
+            {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
+          </span>
+        </template>
+      </t-block-line>
+      <t-block-line
+        :title="t('settingAbout.exportData')"
+        :link="true"
+        @click="exportPerformanceData"
+      >
+        <template #description>
+          <span style="cursor: pointer; color: var(--el-color-primary)">
+            {{ t('settingAbout.exportJson') }}
+          </span>
+        </template>
+      </t-block-line>
+    </template>
     <t-block-line :title="t('settingAbout.electron')" :description="processInfo.versions?.electron"></t-block-line>
     <t-block-line :title="t('settingAbout.v8')" :description="processInfo.versions?.v8"></t-block-line>
     <t-block-line :title="t('settingAbout.os')">
@@ -134,6 +244,90 @@ const currentExperiencePack = computed(() => {
     </t-block-line> -->
     <t-block-line :title="t('settingAbout.terms')" :link="true"></t-block-line>
     <t-block-line :title="t('settingAbout.license')" :link="true"></t-block-line>
+  </t-group-block>
+
+  <!-- System Information Section -->
+  <t-group-block :name="'System Information'" icon="computer-line">
+    <t-block-line :title="'Active Window Detection'" :link="true" @click="getActiveApplication">
+      <template #description>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingActiveApp"
+          @click.stop="getActiveApplication"
+        >
+          {{ loadingActiveApp ? 'Detecting...' : 'Get Active App' }}
+        </el-button>
+      </template>
+    </t-block-line>
+
+    <template v-if="activeApp">
+      <t-block-line :title="'Application Name'">
+        <template #description>
+          <span style="font-weight: 600; color: var(--el-color-primary)">
+            {{ activeApp.displayName || 'N/A' }}
+          </span>
+        </template>
+      </t-block-line>
+
+      <t-block-line :title="'Window Title'">
+        <template #description>
+          {{ activeApp.windowTitle || 'N/A' }}
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.bundleId" :title="'Bundle ID'">
+        <template #description>
+          {{ activeApp.bundleId }}
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.processId" :title="'Process ID'">
+        <template #description>
+          {{ activeApp.processId }}
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.executablePath" :title="'Executable Path'">
+        <template #description>
+          <span style="font-size: 11px; opacity: 0.8">
+            {{ activeApp.executablePath }}
+          </span>
+        </template>
+      </t-block-line>
+
+      <t-block-line :title="'Platform'">
+        <template #description>
+          <span style="text-transform: capitalize">
+            {{ activeApp.platform || 'Unknown' }}
+          </span>
+        </template>
+      </t-block-line>
+
+      <t-block-line v-if="activeApp.icon" :title="'Application Icon'">
+        <template #description>
+          <img
+            :src="activeApp.icon"
+            alt="App Icon"
+            style="width: 24px; height: 24px; vertical-align: middle"
+          />
+        </template>
+      </t-block-line>
+
+      <t-block-line :title="'Last Updated'">
+        <template #description>
+          {{ new Date(activeApp.lastUpdated).toLocaleString() }}
+        </template>
+      </t-block-line>
+    </template>
+
+    <t-block-line v-else-if="!activeApp && !loadingActiveApp" :title="'Status'">
+      <template #description>
+        <span style="color: var(--el-color-info)">
+          Click the button above to detect active application
+        </span>
+      </template>
+    </t-block-line>
   </t-group-block>
 </template>
 

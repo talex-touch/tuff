@@ -14,12 +14,6 @@ export default {
       required: true
     }
   },
-  beforeUnmount() {
-    document.removeEventListener('click', this.clickListener)
-  },
-  mounted() {
-    document.addEventListener('click', this.clickListener)
-  },
   data() {
     const activeIndex = ref(0)
     const click = ref(false)
@@ -27,14 +21,26 @@ export default {
     function clickListener(e) {
       if (!click.value || !e.path) return
       click.value = e.path.some((node) => node?.className?.indexOf('TSelectItem-Container') > -1)
-      // console.log(e.path, e.path.some(node => node?.className?.indexOf('TSelectItem-Container') > -1))
-      // click.value = false
     }
 
     return {
       activeIndex,
       click,
-      clickListener
+      clickListener,
+      stopClickOutside: null
+    }
+  },
+  mounted() {
+    document.addEventListener('click', this.clickListener)
+
+    this.stopClickOutside = onClickOutside(this.$el, () => {
+      this.click = false
+    })
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.clickListener)
+    if (this.stopClickOutside) {
+      this.stopClickOutside()
     }
   },
   render() {
@@ -45,28 +51,6 @@ export default {
       'default',
       (vnode) => vnode.type?.name === qualifiedName
     )
-
-    // function slotFlat(slot) {
-    //   return slot
-    //     ?.map((item) => {
-    //       console.log("current", item)
-
-    //       if (item.type.name === qualifiedName) {
-    //         return item;
-    //       } else if (item.children?.length) {
-    //         return item.children.map((tempSlot) => {
-    //           if (tempSlot instanceof Array) {
-    //             return slotFlat(tempSlot);
-    //           } else {
-    //             return slotFlat(tempSlot?.default?.());
-    //           }
-    //         });
-    //       }
-    //     })
-    //     .flat();
-    // }
-
-    // const slots = slotFlat(this.$slots.default()); //.filter(slot => slot.type.name === qualifiedName)
 
     function getContent() {
       if (that.click) {
@@ -86,9 +70,6 @@ export default {
               slot.el.style.cursor = 'not-allowed'
             } else {
               slot.el.addEventListener('click', (e) => {
-                // activeIndex.value = index //slots.indexOf(slot)
-
-                // 传递选项的 value 而不是索引
                 const optionValue = slot.props?.value !== undefined ? slot.props.value : index
                 that.$emit('update:modelValue', optionValue)
                 that.$emit(
@@ -105,8 +86,6 @@ export default {
               height += slot.el?.getBoundingClientRect().height + 2
             }
           })
-
-          // const root = that.$el.__vnode
 
           async function adaptPosition() {
             const floating = await computePosition(that.$el, wrapper.el)
@@ -142,10 +121,6 @@ export default {
       getContent()
     )
 
-    onClickOutside(v, (event) => {
-      that.click = false
-    })
-
     return v
   }
 }
@@ -165,10 +140,6 @@ export default {
 }
 
 .TSelect-Wrapper {
-  //&.selection:before {
-  //  opacity: 1;
-  //  transform: scaleY(1);
-  //}
   &:before {
     z-index: 1;
     content: '';
@@ -180,12 +151,10 @@ export default {
     top: var(--height, 8px);
     left: 4px;
 
-    //opacity: 0;
     border-radius: 50px;
     transition: all 0.15s;
     animation: in 0.15s ease-in-out;
     background-color: var(--el-color-primary);
-    //--height: 28px;
   }
 
   z-index: 100;
@@ -204,12 +173,9 @@ export default {
   top: 0;
 
   width: 158px;
-  //width: 100%;
-  //max-height: 500%;
 
   overflow: hidden;
   box-sizing: border-box;
-  //background-color: rgba(0, 0, 0, .5);
   transition: transform 0.25s;
   animation: expand 1.5s cubic-bezier(0.2, 0.5, 0.5, 1);
 }

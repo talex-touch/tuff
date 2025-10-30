@@ -143,6 +143,75 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
 
 **Development Mode:** Set `dev.enable: true` to load plugin from local dev server with hot-reloading.
 
+**Clipboard Support:**
+
+Plugins can receive clipboard data (images, files, rich text) automatically when a feature is triggered. The system detects clipboard content and passes it via the `query` parameter.
+
+**Declaring Input Type Support:**
+
+Features can declare which input types they accept via `acceptedInputTypes`:
+
+```json
+{
+  "id": "image-processor",
+  "name": "Image Processor",
+  "acceptedInputTypes": ["text", "image"],
+  "commands": [{ "type": "over", "value": ["process"] }]
+}
+```
+
+Supported types (TuffInputType enum): `text`, `image`, `files`, `html`
+
+**Handling Clipboard Data in Plugins:**
+
+```typescript
+import { TuffInputType } from '@talex-touch/utils'
+
+onFeatureTriggered(featureId, query, feature) {
+  // Backward compatible: handle string query
+  if (typeof query === 'string') {
+    console.log('Text query:', query)
+    return
+  }
+
+  // New: query is TuffQuery object with inputs
+  const textQuery = query.text
+  const inputs = query.inputs || []
+
+  // Find image input from clipboard
+  const imageInput = inputs.find(i => i.type === TuffInputType.Image)
+  if (imageInput) {
+    // imageInput.content is a data URL
+    console.log('Processing image:', imageInput.content)
+    console.log('Thumbnail:', imageInput.thumbnail)
+  }
+
+  // Find files input
+  const filesInput = inputs.find(i => i.type === TuffInputType.Files)
+  if (filesInput) {
+    // filesInput.content is JSON string of file paths
+    const files = JSON.parse(filesInput.content)
+    console.log('Processing files:', files)
+  }
+
+  // Find HTML input (rich text)
+  const htmlInput = inputs.find(i => i.type === TuffInputType.Html)
+  if (htmlInput) {
+    console.log('Plain text:', htmlInput.content)
+    console.log('HTML:', htmlInput.rawContent)
+  }
+}
+```
+
+**Smart Routing:**
+
+When clipboard contains non-text data (images/files), the search engine automatically:
+- Filters out providers that don't support those input types
+- Only shows features that declare support via `acceptedInputTypes`
+- Passes complete query object with inputs to the plugin
+
+If `acceptedInputTypes` is not declared, the feature only receives text-only queries (default behavior).
+
 ### Channel Communication
 
 The application uses a custom channel system abstracting Electron IPC:

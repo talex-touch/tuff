@@ -28,9 +28,13 @@ declare module 'vue' {
     ElCollapse: typeof import('element-plus/es')['ElCollapse']
     ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElDrawer: typeof import('element-plus/es')['ElDrawer']
+    ElEmpty: typeof import('element-plus/es')['ElEmpty']
+    ElIcon: typeof import('element-plus/es')['ElIcon']
     ElOption: typeof import('element-plus/es')['ElOption']
     ElScrollbar: typeof import('element-plus/es')['ElScrollbar']
     ElSelect: typeof import('element-plus/es')['ElSelect']
+    ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
+    ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
     ElSlider: typeof import('element-plus/es')['ElSlider']
     ElTag: typeof import('element-plus/es')['ElTag']
     EmptyAnimate: typeof import('./src/components/base/EmptyAnimate.vue')['default']
@@ -39,6 +43,7 @@ declare module 'vue' {
     FlatButton: typeof import('./src/components/base/button/FlatButton.vue')['default']
     FlatCodeInput: typeof import('./src/components/base/input/FlatCodeInput.vue')['default']
     FlatCompletion: typeof import('./src/components/base/input/FlatCompletion.vue')['default']
+    FlatDownload: typeof import('./src/components/download/FlatDownload.vue')['default']
     FlatInput: typeof import('./src/components/base/input/FlatInput.vue')['default']
     FlatKeyInput: typeof import('./src/components/base/input/FlatKeyInput.vue')['default']
     FlatMarkdown: typeof import('./src/components/base/input/FlatMarkdown.vue')['default']
@@ -80,6 +85,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     StatCard: typeof import('./src/components/base/card/StatCard.vue')['default']
+    StorageTreeItem: typeof import('./src/components/plugin/tabs/storage/StorageTreeItem.vue')['default']
     TBlockLine: typeof import('./src/components/base/group/TBlockLine.vue')['default']
     TBlockSelect: typeof import('./src/components/base/select/TBlockSelect.vue')['default']
     TBlockSlot: typeof import('./src/components/base/group/TBlockSlot.vue')['default']
@@ -117,5 +123,8 @@ declare module 'vue' {
     Versions: typeof import('./src/components/Versions.vue')['default']
     VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
     ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
+  }
+  export interface GlobalDirectives {
+    vLoading: typeof import('element-plus/es')['ElLoadingDirective']
   }
 }

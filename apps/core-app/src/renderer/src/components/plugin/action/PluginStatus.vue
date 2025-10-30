@@ -4,7 +4,7 @@
 
 <script name="PluginStatus" lang="ts" setup>
 import { ITouchPlugin, PluginStatus } from '@talex-touch/utils'
-import { pluginManager } from '~/modules/channel/plugin-core/api'
+import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -22,7 +22,9 @@ const mapper = [
   'ACTIVE',
   'LOADING',
   'LOADED',
-  'LOAD_FAILED'
+  'LOAD_FAILED',
+  'DEV_DISCONNECTED',
+  'DEV_RECONNECTING'
 ]
 
 const func = ref(() => {})
@@ -42,17 +44,20 @@ function refresh(): void {
 
     'LOADING',
     'LOADED',
-    'LOAD_FAILED'
+    'LOAD_FAILED',
+
+    'DEV_DISCONNECTED',
+    'DEV_RECONNECTING'
   )
   el.classList.add(mapper[status.value])
 
-  console.log('PluginStatus', props.plugin.name, status.value)
+  console.debug('PluginStatus', props.plugin.name, status.value)
 
   if (status.value === PluginStatus.DISABLED) {
     el.innerHTML = t('plugin.status.disabled')
 
     func.value = async () => {
-      await pluginManager.enablePlugin(props.plugin.name)
+      await pluginSDK.enable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.DISABLING) {
     el.innerHTML = ``
@@ -60,13 +65,13 @@ function refresh(): void {
     el.innerHTML = t('plugin.status.crashed')
 
     func.value = async () => {
-      await pluginManager.enablePlugin(props.plugin.name)
+      await pluginSDK.enable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.ENABLED) {
     el.innerHTML = t('plugin.status.enabled')
 
     func.value = async () => {
-      await pluginManager.disablePlugin(props.plugin.name)
+      await pluginSDK.disable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.ACTIVE) {
     el.innerHTML = ``
@@ -76,7 +81,7 @@ function refresh(): void {
     el.innerHTML = t('plugin.status.loaded')
 
     func.value = async () => {
-      await pluginManager.enablePlugin(props.plugin.name)
+      await pluginSDK.enable(props.plugin.name)
     }
   } else if (status.value === PluginStatus.LOAD_FAILED) {
     el.innerHTML = t('plugin.status.loadFailed')
@@ -84,13 +89,22 @@ function refresh(): void {
     func.value = async () => {
       try {
         console.log(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
-        await pluginManager.reloadPlugin(props.plugin.name)
+        await pluginSDK.reload(props.plugin.name)
         console.log(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
       } catch (error) {
         console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
         el.innerHTML = `${t('plugin.status.loadFailed')}`
       }
     }
+  } else if (status.value === PluginStatus.DEV_DISCONNECTED) {
+    el.innerHTML = t('plugin.status.devDisconnected')
+
+    func.value = async () => {
+      await pluginSDK.reconnectDevServer(props.plugin.name)
+    }
+  } else if (status.value === PluginStatus.DEV_RECONNECTING) {
+    el.innerHTML = t('plugin.status.devReconnecting')
+    func.value = () => {}
   }
 }
 
@@ -183,6 +197,24 @@ onMounted(() => {
   pointer-events: none;
   opacity: 0.75;
   background: var(--el-color-info-light-3);
+  animation: loading 0.5s infinite;
+}
+
+.PluginStatus-Container.DEV_DISCONNECTED {
+  height: 30px;
+
+  cursor: pointer;
+  opacity: 0.75;
+  color: var(--el-color-warning-light-7);
+  background: var(--el-color-warning);
+}
+
+.PluginStatus-Container.DEV_RECONNECTING {
+  height: 5px;
+
+  pointer-events: none;
+  opacity: 0.75;
+  background: var(--el-color-warning-light-3);
   animation: loading 0.5s infinite;
 }
 

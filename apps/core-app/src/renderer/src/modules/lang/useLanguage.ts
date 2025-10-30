@@ -1,5 +1,4 @@
 import { ref, watch, readonly } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { setI18nLanguage, loadLocaleMessages } from './i18n'
 
 // 支持的语言列表
@@ -34,18 +33,29 @@ function getSystemLanguage(): SupportedLanguage {
  * 语言管理 composable
  */
 export function useLanguage() {
-  const i18n = useI18n()
+  /**
+   * 获取全局 i18n 实例
+   */
+  function getI18nInstance() {
+    const i18n = (window as any).$i18n
+    if (!i18n) {
+      throw new Error('[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.')
+    }
+    return i18n
+  }
 
   /**
    * 切换语言
    */
   async function switchLanguage(lang: SupportedLanguage) {
     try {
+      const i18n = getI18nInstance()
+
       // 加载语言包
-      await loadLocaleMessages(i18n as any, lang)
+      await loadLocaleMessages(i18n, lang)
 
       // 设置语言
-      setI18nLanguage(i18n as any, lang)
+      setI18nLanguage(i18n, lang)
       currentLanguage.value = lang
 
       // 保存到本地存储

@@ -59,10 +59,11 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     </el-popover>
 
     <TuffIcon
-      class="flex-shrink-0 text-2xl"
+      class="flex-shrink-0"
       :empty="DefaultIcon"
       :icon="plugin.icon"
       :alt="plugin.name"
+      size="32"
     />
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">

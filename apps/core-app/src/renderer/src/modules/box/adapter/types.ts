@@ -16,7 +16,8 @@ export interface IBoxOptions {
   mode: BoxMode
   focus: number
   file: {
-    buffer: Uint8Array | null
+    buffer?: Uint8Array | null // deprecated, use iconPath
+    iconPath?: string
     paths: string[]
   }
   data: any
@@ -31,6 +32,7 @@ export interface IUseSearch {
   activeItem: Ref<TuffItem>
   activeActivations: Ref<IProviderActivate[] | null>
   handleSearch: () => Promise<void>
+  handleSearchImmediate: () => Promise<void>
   handleExecute: (item?: TuffItem) => Promise<void>
   handleExit: () => void
   deactivateProvider: (providerId?: string) => Promise<void>

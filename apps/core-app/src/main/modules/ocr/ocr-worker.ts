@@ -54,7 +54,8 @@ async function run(): Promise<void> {
   const worker = await createWorker(language, undefined, {
     logger: (_message) => undefined,
     cacheMethod: 'read',
-    gzip: true
+    gzip: true,
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0'
   })
 
   try {

@@ -7,6 +7,8 @@ const props = defineProps<{
   alt?: string
   size?: number
   empty?: string
+  /** Preserve the original color of the svg icon */
+  colorful?: boolean
 }>()
 
 const loading = computed(() => props.icon.status === 'loading')
@@ -32,9 +34,9 @@ const {
 
 const isSvg = computed(() => url.value?.endsWith('.svg'))
 
-const dataurl = computed(
-  () => `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
-)
+const dataurl = computed(() => {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
+})
 
 watch(
   () => isSvg.value,
@@ -53,11 +55,15 @@ watch(
     :title="alt"
     role="img"
     class="TuffIcon"
+    :data-icon-type="icon.type"
+    :data-icon-value="icon.value"
     :class="{ 'TuffIcon-Loading': loading }"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
-    <span v-if="!icon?.value && empty" class="TuffIcon-Empty">
-      <img :alt="alt" :src="empty" />
+    <span v-if="!icon?.value" class="TuffIcon-Empty">
+      <slot name="empty">
+        <img v-if="empty" :alt="alt" :src="empty" />
+      </slot>
     </span>
 
     <span v-else-if="error" class="TuffIcon-Error">
@@ -76,7 +82,12 @@ watch(
 
     <template v-else-if="addressable">
       <template v-if="isSvg">
-        <i class="TuffIcon-Svg" :alt="alt" :style="{ '--un-icon': `url(${dataurl})` }" />
+        <i
+          :class="{ colorful }"
+          class="TuffIcon-Svg"
+          :alt="alt"
+          :style="{ '--un-icon': `url(${dataurl})` }"
+        />
       </template>
       <template v-else>
         <img :alt="alt" :src="url" />
@@ -97,6 +108,11 @@ watch(
   height: 1em;
 }
 
+.TuffIcon-Svg.colorful {
+  color: unset;
+  background-color: unset;
+}
+
 .TuffIcon {
   position: relative;
   display: flex;
@@ -107,8 +123,8 @@ watch(
   min-width: 1em;
   min-height: 1em;
 
-  width: 1.2em;
-  height: 1.2em;
+  width: 1em;
+  height: 1em;
 
   aspect-ratio: 1 / 1;
 
