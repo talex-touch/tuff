@@ -23,7 +23,7 @@ export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@talex-touch/utils', 'pinyin-match', 'fs-extra', 'log4js']
+        exclude: ['@talex-touch/utils', 'pinyin-match', 'fs-extra', 'log4js', '@clerk/clerk-js', '@clerk/types', '@vueuse/core', 'vue']
       })
     ],
     build: {
@@ -48,7 +48,7 @@ export default defineConfig({
   preload: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@talex-touch/utils', 'pinyin-match', 'fs-extra', 'log4js']
+        exclude: ['@talex-touch/utils', 'pinyin-match', 'fs-extra', 'log4js', '@clerk/clerk-js', '@clerk/types', '@vueuse/core', 'vue']
       })
     ]
   },
