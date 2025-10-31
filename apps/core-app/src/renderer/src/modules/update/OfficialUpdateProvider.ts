@@ -26,6 +26,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
 
   // 获取下载资源列表
   getDownloadAssets(_release: GitHubRelease): any[] {
+    // Note: _release parameter is unused but required by interface
     throw this.createError(
       UpdateErrorType.API_ERROR,
       'Official update server is not ready yet. Please use GitHub Releases for now.'

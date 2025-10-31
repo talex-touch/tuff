@@ -175,6 +175,7 @@
 
 <script setup lang="ts">
 import { reactive, watch, computed } from 'vue'
+// Note: ref is intentionally not imported as it's not used
 import { ElMessage } from 'element-plus'
 import { DownloadConfig } from '@talex-touch/utils'
 

@@ -139,7 +139,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Emits
+// Emits - defined for type safety, even if not used directly
 defineEmits<{
   pause: [taskId: string]
   resume: [taskId: string]

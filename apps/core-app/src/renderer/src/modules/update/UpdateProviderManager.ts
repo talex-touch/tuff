@@ -9,6 +9,7 @@ import {
   UpdateProviderType,
   CustomUpdateConfig
 } from '@talex-touch/utils'
+// Note: GitHubRelease, UpdateError, UpdateErrorType are imported in other files if needed
 
 export class UpdateProviderManager {
   private providers: UpdateProvider[] = []
@@ -90,7 +91,10 @@ export class UpdateProviderManager {
       let provider: UpdateProvider | null = null
 
       if (config) {
-        provider = this.selectProvider(config)
+        const selectedProvider = this.selectProvider(config)
+        if (selectedProvider) {
+          provider = selectedProvider
+        }
       } else if (this.activeProvider) {
         provider = this.activeProvider
       } else {
