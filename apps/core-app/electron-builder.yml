@@ -1,5 +1,5 @@
-appId: com.tagzxia.app.talex-touch
-productName: talex-touch
+appId: com.tagzxia.app.tuff
+productName: tuff
 asar: false
 compression: normal
 directories:
@@ -17,14 +17,14 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 
 win:
-  executableName: talex-touch
+  executableName: tuff
   target:
     - target: nsis
       arch:
         - x64
   verifyUpdateCodeSignature: false
   requestedExecutionLevel: asInvoker
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: ${productName}-${version}-setup.${ext}
 nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
@@ -52,14 +52,14 @@ mac:
   sign: false
   gatekeeperAssess: false
   target:
-    - target: dmg
-      arch: universal
+    - target: dir
+      arch: arm64
   icon: build/icon.icns
   category: public.app-category.productivity
   forceCodeSigning: false
   identity: null
   hardenedRuntime: false
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
 dmg:
 linux:
   target:
@@ -84,11 +84,11 @@ snap:
   useTemplateApp: false
   desktop:
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
   category: Utility
   synopsis: "A powerful productivity launcher and automation tool"
 deb:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
   category: Utility
   synopsis: "A powerful productivity launcher and automation tool"
 npmRebuild: false
