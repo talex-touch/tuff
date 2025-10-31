@@ -1,7 +1,7 @@
 <template>
   <div class="FlatLayout-Icon">
     <img src="../../../assets/logo.svg" alt="logo" />
-    <span @click="() => void checkApplicationUpgrade()">
+    <span @click="handleUpgradeClick">
       <slot name="title" />
     </span>
   </div>
@@ -25,6 +25,10 @@ import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 const route = useRoute()
 const { t } = useI18n()
 const { checkApplicationUpgrade } = useApplicationUpgrade()
+
+const handleUpgradeClick = () => {
+  void checkApplicationUpgrade()
+}
 </script>
 
 <style lang="scss">

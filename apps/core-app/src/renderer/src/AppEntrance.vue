@@ -54,9 +54,8 @@ async function executeMainTask(): Promise<void> {
   await checkApplicationUpgrade()
 }
 
-function executeCoreboxTask(): Promise<void> {
+async function executeCoreboxTask(): Promise<void> {
   console.log('executeCoreboxTask')
-  return Promise.resolve()
 }
 
 setTimeout(() => {

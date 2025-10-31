@@ -170,6 +170,8 @@ const {
   formatSpeed
 } = useDownloadCenter()
 
+// Remove unused variables from destructuring if needed
+
 const settingsVisible = ref(false)
 
 const openSettings = () => {
@@ -180,7 +182,7 @@ const pauseTask = async (taskId: string) => {
   try {
     await pauseTaskHook(taskId)
     ElMessage.success('任务已暂停')
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     ElMessage.error(`暂停任务失败: ${message}`)
   }
@@ -191,7 +193,7 @@ const cancelTask = async (taskId: string) => {
   try {
     await cancelTaskHook(taskId)
     ElMessage.success('任务已取消')
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     ElMessage.error(`取消任务失败: ${message}`)
   }
@@ -202,14 +204,14 @@ const retryTask = async (taskId: string) => {
   try {
     await resumeTaskHook(taskId)
     ElMessage.success('任务已重试')
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     ElMessage.error(`重试任务失败: ${message}`)
   }
 }
 
 // 移除任务
-const removeTask = () => {
+const removeTask = (_taskId: string) => {
   // 这里可以实现移除任务的逻辑
   ElMessage.success('任务已移除')
 }
@@ -219,7 +221,7 @@ const updateConfig = async (config: any) => {
   try {
     await updateConfigHook(config)
     ElMessage.success('配置已更新')
-  } catch (err) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     ElMessage.error(`更新配置失败: ${message}`)
   }
