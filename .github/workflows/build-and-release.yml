@@ -265,15 +265,36 @@ jobs:
         run: |
           echo "Starting build process for $RUNNER_OS..."
           echo "Current directory: $(pwd)"
-          echo "Available pnpm commands:"
-          pnpm run --help || echo "pnpm run command not available"
-          echo "Checking package.json scripts:"
-          cat package.json | grep -A 20 '"scripts"' || echo "No scripts found"
+          echo "RELEASE_TYPE: $RELEASE_TYPE"
+          echo "RUNNER_OS: $RUNNER_OS"
+          
+          # 检查构建环境
+          echo "Checking build environment..."
+          echo "Node version: $(node --version)"
+          echo "pnpm version: $(pnpm --version)"
+          
+          # 检查 dist 目录
+          echo "Checking dist directory before build:"
+          if [ -d "apps/core-app/dist" ]; then
+            echo "Dist directory exists, contents:"
+            ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
+          else
+            echo "Dist directory does not exist (will be created)"
+          fi
 
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows snapshot..."
-              pnpm core:build:snapshot:win
+              echo "Running: pnpm core:build:snapshot:win"
+              pnpm core:build:snapshot:win || {
+                echo "ERROR: Windows snapshot build failed!"
+                echo "Checking for partial build artifacts..."
+                if [ -d "apps/core-app/dist" ]; then
+                  echo "Dist directory contents after failed build:"
+                  find apps/core-app/dist -type f 2>/dev/null | head -20 || echo "Cannot list files"
+                fi
+                exit 1
+              }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS snapshot..."
               pnpm core:build:snapshot:mac
@@ -283,16 +304,36 @@ jobs:
             fi
           else
             echo "Building release version..."
-            pnpm core:build
+            pnpm core:build || {
+              echo "ERROR: Release build failed!"
+              exit 1
+            }
           fi
 
           # 验证构建输出
+          echo "Verifying build output..."
           if [ -d "apps/core-app/dist" ]; then
-            echo "Build artifacts found:"
-            ls -la apps/core-app/dist/
+            echo "✓ Dist directory exists"
+            echo "Dist directory contents:"
+            ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
+            
+            echo "Searching for build artifacts:"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              find apps/core-app/dist -name "*.exe" -type f 2>/dev/null || echo "No .exe files found"
+            elif [ "$RUNNER_OS" = "macOS" ]; then
+              find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null || echo "No .dmg files found"
+            else
+              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" -o -name "*.snap" \) -type f 2>/dev/null || echo "No Linux artifacts found"
+            fi
+            
+            echo "Total files in dist:"
+            find apps/core-app/dist -type f 2>/dev/null | wc -l || echo "Cannot count files"
+            
             echo "Build completed successfully"
           else
             echo "ERROR: Build artifacts not found!"
+            echo "Checking if build directory exists:"
+            ls -la apps/core-app/ || echo "Cannot list core-app directory"
             exit 1
           fi
         env:
@@ -326,15 +367,51 @@ jobs:
         shell: powershell
         run: |
           $distPath = "apps/core-app/dist"
-          $exists = Get-ChildItem -Path $distPath -Recurse -Include "*.exe" | Where-Object { $_.Name -like "*-setup.exe" }
+          Write-Host "Checking for Windows installer in: $distPath"
+          Write-Host "Directory exists: $(Test-Path $distPath)"
+          
+          if (-not (Test-Path $distPath)) {
+            Write-Error "Dist directory does not exist: $distPath"
+            exit 1
+          }
+          
+          Write-Host "`nListing all .exe files in dist:"
+          $allExeFiles = Get-ChildItem -Path $distPath -Recurse -Include "*.exe" -ErrorAction SilentlyContinue
+          if ($allExeFiles) {
+            $allExeFiles | ForEach-Object {
+              Write-Host "  - $($_.FullName) (Name: $($_.Name))"
+            }
+          } else {
+            Write-Host "  No .exe files found"
+          }
+          
+          Write-Host "`nSearching for installer with pattern: *-setup.exe"
+          $exists = $allExeFiles | Where-Object { $_.Name -like "*-setup.exe" -or $_.Name -match "-setup\.exe$" }
+          
           if (-not $exists) {
+            Write-Host "`nTrying alternative search patterns..."
+            # Try different patterns
+            $alt1 = $allExeFiles | Where-Object { $_.Name -like "*setup*.exe" }
+            $alt2 = $allExeFiles | Where-Object { $_.Name -like "talex-touch*.exe" }
+            
+            if ($alt1) {
+              Write-Host "Found files matching *setup*.exe:"
+              $alt1 | Select-Object FullName, Name
+            }
+            if ($alt2) {
+              Write-Host "Found files matching talex-touch*.exe:"
+              $alt2 | Select-Object FullName, Name
+            }
+            
             Write-Error "NSIS installer not found (*.exe with -setup) in $distPath"
-            Write-Host "Listing .exe files:"
-            Get-ChildItem -Path $distPath -Recurse -Include "*.exe" | Select-Object FullName
+            Write-Host "`nFull directory structure:"
+            Get-ChildItem -Path $distPath -Recurse | Select-Object FullName, PSIsContainer | Format-Table -AutoSize
             exit 1
           } else {
-            Write-Host "Found installer(s):"
-            $exists | Select-Object FullName
+            Write-Host "`n✓ Found installer(s):"
+            $exists | ForEach-Object {
+              Write-Host "  - $($_.FullName) (Size: $([math]::Round($_.Length / 1MB, 2)) MB)"
+            }
           }
 
       - name: Upload Artifacts
