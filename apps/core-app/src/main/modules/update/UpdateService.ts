@@ -2,7 +2,7 @@
  * Update service for checking application updates in main process
  */
 import { BaseModule } from '../abstract-base-module'
-import { ModuleInitContext, ModuleDestroyContext } from '@talex-touch/utils/types/modules'
+import { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import { TalexEvents, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { ChannelType, DataCode } from '@talex-touch/utils'
 import {
@@ -139,7 +139,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   /**
    * Destroy update service
    */
-  async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
+  async onDestroy(): Promise<void> {
     console.log('[UpdateService] Destroying update service')
 
     // Stop polling service

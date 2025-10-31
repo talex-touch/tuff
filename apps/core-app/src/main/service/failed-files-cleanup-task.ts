@@ -104,9 +104,6 @@ export class FailedFilesCleanupTask implements BackgroundTask {
     }
   }
 
-  private logInfo(message: string, meta?: Record<string, unknown>): void {
-    fileProviderLog.info(`[FailedFilesCleanupTask] ${message}`, meta)
-  }
 
   private logError(message: string, error?: unknown): void {
     if (error) {

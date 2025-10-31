@@ -17,7 +17,7 @@
  */
 
 import type { IFeatureCommand } from '../plugin';
-import type { ITuffIcon } from '../types/icon';
+import type { ITuffIcon, TuffIconType } from '../types/icon';
 
 /**
  * Search Result Item Interface
@@ -591,9 +591,8 @@ export function createDataItem(options: {
     name,
     desc,
     icon: {
-      type: iconType,
-      value: iconValue,
-      init: async () => {} // Required by ITuffIcon interface
+      type: (iconType === 'remix' || iconType === 'base64' ? 'url' : (iconType === 'file' || iconType === 'emoji' ? iconType : 'emoji')) as TuffIconType,
+      value: iconValue
     },
     push: false,                    // Data items don't support push mode
     names: [name],                  // Include name in searchable names

@@ -10,6 +10,7 @@ import {
   DownloadTaskChangedEvent,
   UpdateAvailableEvent
 } from '../../core/eventbus/touch-event'
+import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 
 /**
  * TrayManager - Main tray manager
@@ -148,13 +149,15 @@ export class TrayManager extends BaseModule {
     })
 
     // 下载任务变化事件
-    touchEventBus.on(TalexEvents.DOWNLOAD_TASK_CHANGED, (event: DownloadTaskChangedEvent) => {
-      this.updateMenu({ activeDownloads: event.activeCount })
+    touchEventBus.on(TalexEvents.DOWNLOAD_TASK_CHANGED, (event: ITouchEvent<TalexEvents>) => {
+      const downloadEvent = event as DownloadTaskChangedEvent
+      this.updateMenu({ activeDownloads: downloadEvent.activeCount })
     })
 
     // 更新可用事件
-    touchEventBus.on(TalexEvents.UPDATE_AVAILABLE, (event: UpdateAvailableEvent) => {
-      this.updateMenu({ hasUpdate: true, updateVersion: event.version })
+    touchEventBus.on(TalexEvents.UPDATE_AVAILABLE, (event: ITouchEvent<TalexEvents>) => {
+      const updateEvent = event as UpdateAvailableEvent
+      this.updateMenu({ hasUpdate: true, updateVersion: updateEvent.version })
     })
 
     console.log('[TrayManager] Event listeners registered')

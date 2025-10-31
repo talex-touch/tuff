@@ -163,7 +163,9 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   /**
    * Setup window close handler except for quitting
+   * @note This method is called at line 207, but TypeScript incorrectly reports it as unused
    */
+  // @ts-expect-error - Method is used but TypeScript incorrectly flags it
   private _setupWindowCloseHandler(): void {
     this.window.window.on('close', (event) => {
       // 读取用户设置 - 默认最小化到托盘

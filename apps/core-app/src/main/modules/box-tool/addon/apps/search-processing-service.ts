@@ -139,8 +139,8 @@ export async function processSearchResults(
       .setTitle(displayName)
       .setSubtitle(app.path)
       .setIcon({
-        type: 'base64',
-        value: app.extensions.icon || ''
+        type: 'url',
+        value: app.extensions.icon ? `data:image/png;base64,${app.extensions.icon}` : ''
       })
       .setActions([
         {
