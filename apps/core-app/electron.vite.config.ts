@@ -23,7 +23,34 @@ export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@talex-touch/utils', 'pinyin-match', 'fs-extra', 'log4js', '@clerk/clerk-js', '@clerk/types', '@vueuse/core', 'vue']
+        exclude: [
+          '@talex-touch/utils',
+          'pinyin-match',
+          'pinyin-pro',
+          'fs-extra',
+          'log4js',
+          '@clerk/clerk-js',
+          '@clerk/types',
+          '@vueuse/core',
+          'vue',
+          'chokidar',
+          '@electron-toolkit/utils',
+          'drizzle-orm',
+          // @libsql/client should be externalized (uses native modules)
+          'compressing',
+          'crypto-js',
+          'iconv-lite',
+          'js-md5',
+          'simple-plist',
+          'tesseract.js',
+          'xterm',
+          'yauzl',
+          'dayjs',
+          'commander',
+          'extract-file-icon',
+          'electron-log',
+          'electron-updater'
+        ]
       })
     ],
     build: {
@@ -41,14 +68,46 @@ export default defineConfig({
             }
             return '[name]-[hash].js'
           }
-        }
+        },
+        external: [
+          // Externalize @libsql/client and native modules - they need to be in node_modules
+          '@libsql/client',
+          /^@libsql\/(darwin-arm64|darwin-x64|linux-arm64|linux-x64|win32-arm64|win32-x64)$/
+        ]
       }
     }
   },
   preload: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@talex-touch/utils', 'pinyin-match', 'fs-extra', 'log4js', '@clerk/clerk-js', '@clerk/types', '@vueuse/core', 'vue']
+        exclude: [
+          '@talex-touch/utils',
+          'pinyin-match',
+          'pinyin-pro',
+          'fs-extra',
+          'log4js',
+          '@clerk/clerk-js',
+          '@clerk/types',
+          '@vueuse/core',
+          'vue',
+          'chokidar',
+          '@electron-toolkit/utils',
+          'drizzle-orm',
+          // @libsql/client should be externalized (uses native modules)
+          'compressing',
+          'crypto-js',
+          'iconv-lite',
+          'js-md5',
+          'simple-plist',
+          'tesseract.js',
+          'xterm',
+          'yauzl',
+          'dayjs',
+          'commander',
+          'extract-file-icon',
+          'electron-log',
+          'electron-updater'
+        ]
       })
     ]
   },
