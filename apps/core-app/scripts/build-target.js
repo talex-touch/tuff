@@ -109,8 +109,8 @@ function build() {
   process.env.BUILD_TYPE = buildType;
   console.log('Running application build (npm run build)...');
   // Skip typecheck in snapshot/release builds if SKIP_TYPECHECK is set
-  const buildCmd = process.env.SKIP_TYPECHECK === 'true' 
-    ? 'electron-vite build' 
+  const buildCmd = process.env.SKIP_TYPECHECK === 'true'
+    ? 'electron-vite build'
     : 'npm run build';
   execSync(buildCmd, { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
 
@@ -142,7 +142,7 @@ function build() {
 
   const builderCommand = `${resolveBuilderBin()} ${builderArgs.join(' ')}`.trim();
   console.log(`Executing electron-builder: ${builderCommand}`);
-  
+
   // 检查构建前的 dist 目录状态
   console.log('\n=== Pre-build dist directory check ===');
   if (fs.existsSync(distDir)) {
@@ -207,7 +207,7 @@ function build() {
         console.warn(`Warning: Cannot read directory ${basePath || dir}: ${readErr.message}`);
       }
     }
-    
+
     try {
       listFiles(distDir);
       console.log(`Total files found: ${allFiles.length}`);
@@ -221,7 +221,7 @@ function build() {
           console.log(`  ... and ${allFiles.length - 20} more files`);
         }
       }
-      
+
       // Windows 特定检查
       if (normalizedTarget === 'win') {
         const exeFiles = allFiles.filter(f => f.path.endsWith('.exe'));
@@ -230,7 +230,7 @@ function build() {
           const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
           console.log(`  - ${file.path} (${sizeMB} MB)`);
         });
-        
+
         if (exeFiles.length === 0) {
           console.error('\nERROR: No .exe files found in dist directory!');
           console.error('electron-builder may have failed silently.');
