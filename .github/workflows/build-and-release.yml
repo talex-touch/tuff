@@ -286,34 +286,36 @@ jobs:
 
           # 执行构建
           BUILD_FAILED=false
+          set +e  # Temporarily disable exit on error to capture build failure
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows snapshot..."
               echo "Running: pnpm core:build:snapshot:win"
-              if ! pnpm core:build:snapshot:win; then
+              pnpm core:build:snapshot:win || {
                 BUILD_FAILED=true
                 echo "ERROR: Windows snapshot build failed with exit code $?"
-              fi
+              }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS snapshot..."
-              if ! pnpm core:build:snapshot:mac; then
+              pnpm core:build:snapshot:mac || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS snapshot build failed with exit code $?"
-              fi
+              }
             else
               echo "Building Linux snapshot..."
-              if ! pnpm core:build:snapshot:linux; then
+              pnpm core:build:snapshot:linux || {
                 BUILD_FAILED=true
                 echo "ERROR: Linux snapshot build failed with exit code $?"
-              fi
+              }
             fi
           else
             echo "Building release version..."
-            if ! pnpm core:build; then
+            pnpm core:build || {
               BUILD_FAILED=true
               echo "ERROR: Release build failed with exit code $?"
-            fi
+            }
           fi
+          set -e  # Re-enable exit on error
 
           # 验证构建输出
           echo ""
@@ -383,8 +385,14 @@ jobs:
             fi
           fi
 
-          if [ "$ARTIFACTS_FOUND" = "false" ] && [ "$RUNNER_OS" = "Windows" ]; then
-            echo "WARNING: No .exe files found in dist directory!"
+          if [ "$ARTIFACTS_FOUND" = "false" ]; then
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              echo "ERROR: No .exe files found in dist directory!"
+            elif [ "$RUNNER_OS" = "macOS" ]; then
+              echo "ERROR: No .dmg files found in dist directory!"
+            else
+              echo "ERROR: No Linux artifacts (.AppImage, .deb, or .snap) found in dist directory!"
+            fi
             echo "This may indicate the electron-builder step failed silently."
             echo "Check the electron-builder output above for errors."
             exit 1
