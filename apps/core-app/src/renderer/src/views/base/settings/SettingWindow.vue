@@ -12,11 +12,10 @@ import { ref, onMounted } from 'vue'
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
 import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
 
-// Import storage hook
-import { getTouchSDK } from '@talex-touch/utils/renderer'
+// Import storage
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
-const sdk = getTouchSDK()
 
 // Local reactive state for settings
 const windowSettings = ref({
@@ -28,12 +27,15 @@ const windowSettings = ref({
 onMounted(async () => {
   try {
     // Load settings from storage
-    const closeToTray = await sdk.storage.get('app.window.closeToTray', true)
-    const startMinimized = await sdk.storage.get('app.window.startMinimized', false)
+    const closeToTrayResult = touchChannel.sendSync('storage:get', 'app.window.closeToTray')
+    const startMinimizedResult = touchChannel.sendSync('storage:get', 'app.window.startMinimized')
+    
+    const closeToTray = closeToTrayResult !== null && closeToTrayResult !== undefined ? closeToTrayResult : true
+    const startMinimized = startMinimizedResult !== null && startMinimizedResult !== undefined ? startMinimizedResult : false
 
     windowSettings.value = {
-      closeToTray,
-      startMinimized
+      closeToTray: closeToTray as boolean,
+      startMinimized: startMinimized as boolean
     }
 
     console.log('[SettingWindow] Window settings loaded:', windowSettings.value)
@@ -45,7 +47,11 @@ onMounted(async () => {
 // Update close to tray setting
 async function updateCloseToTray(value: boolean) {
   try {
-    await sdk.storage.save('app.window.closeToTray', value)
+    await touchChannel.send('storage:save', {
+      key: 'app.window.closeToTray',
+      content: JSON.stringify(value),
+      clear: false
+    })
     windowSettings.value.closeToTray = value
     console.log('[SettingWindow] Close to tray setting updated:', value)
   } catch (error) {
@@ -56,7 +62,11 @@ async function updateCloseToTray(value: boolean) {
 // Update start minimized setting
 async function updateStartMinimized(value: boolean) {
   try {
-    await sdk.storage.save('app.window.startMinimized', value)
+    await touchChannel.send('storage:save', {
+      key: 'app.window.startMinimized',
+      content: JSON.stringify(value),
+      clear: false
+    })
     windowSettings.value.startMinimized = value
     console.log('[SettingWindow] Start minimized setting updated:', value)
   } catch (error) {

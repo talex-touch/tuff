@@ -1,7 +1,7 @@
 <template>
   <div class="FlatLayout-Icon">
     <img src="../../../assets/logo.svg" alt="logo" />
-    <span @click="checkApplicationUpgrade">
+    <span @click="() => void checkApplicationUpgrade()">
       <slot name="title" />
     </span>
   </div>

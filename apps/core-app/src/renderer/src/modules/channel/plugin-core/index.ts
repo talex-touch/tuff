@@ -1,3 +1,3 @@
-import * as API from './api.js'
-
-export { API }
+// Plugin core API exports
+// TODO: Implement plugin-core API when needed
+export const API = {}

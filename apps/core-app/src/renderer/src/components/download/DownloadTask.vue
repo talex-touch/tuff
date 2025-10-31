@@ -140,7 +140,7 @@ interface Props {
 const props = defineProps<Props>()
 
 // Emits
-const emit = defineEmits<{
+defineEmits<{
   pause: [taskId: string]
   resume: [taskId: string]
   cancel: [taskId: string]

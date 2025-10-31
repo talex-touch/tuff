@@ -56,6 +56,7 @@ async function executeMainTask(): Promise<void> {
 
 function executeCoreboxTask(): Promise<void> {
   console.log('executeCoreboxTask')
+  return Promise.resolve()
 }
 
 setTimeout(() => {
