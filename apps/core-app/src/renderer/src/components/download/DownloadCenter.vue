@@ -154,15 +154,12 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Setting, Loading, Clock, Check, Close } from '@element-plus/icons-vue'
-import { useDownloadCenter } from '@/modules/hooks/useDownloadCenter'
+import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import DownloadTaskItem from './DownloadTask.vue'
 import DownloadSettings from './DownloadSettings.vue'
 
-// 使用下载中心hook
 const {
   downloadTasks,
-  loading,
-  error,
   taskStats,
   tasksByStatus,
   currentDownloadSpeed,
@@ -173,31 +170,19 @@ const {
   formatSpeed
 } = useDownloadCenter()
 
-// 设置对话框可见性
 const settingsVisible = ref(false)
 
-// 打开设置
 const openSettings = () => {
   settingsVisible.value = true
 }
 
-// 暂停任务
 const pauseTask = async (taskId: string) => {
   try {
     await pauseTaskHook(taskId)
     ElMessage.success('任务已暂停')
   } catch (err) {
-    ElMessage.error(`暂停任务失败: ${err.message}`)
-  }
-}
-
-// 恢复任务
-const resumeTask = async (taskId: string) => {
-  try {
-    await resumeTaskHook(taskId)
-    ElMessage.success('任务已恢复')
-  } catch (err) {
-    ElMessage.error(`恢复任务失败: ${err.message}`)
+    const message = err instanceof Error ? err.message : String(err)
+    ElMessage.error(`暂停任务失败: ${message}`)
   }
 }
 
@@ -207,7 +192,8 @@ const cancelTask = async (taskId: string) => {
     await cancelTaskHook(taskId)
     ElMessage.success('任务已取消')
   } catch (err) {
-    ElMessage.error(`取消任务失败: ${err.message}`)
+    const message = err instanceof Error ? err.message : String(err)
+    ElMessage.error(`取消任务失败: ${message}`)
   }
 }
 
@@ -217,12 +203,13 @@ const retryTask = async (taskId: string) => {
     await resumeTaskHook(taskId)
     ElMessage.success('任务已重试')
   } catch (err) {
-    ElMessage.error(`重试任务失败: ${err.message}`)
+    const message = err instanceof Error ? err.message : String(err)
+    ElMessage.error(`重试任务失败: ${message}`)
   }
 }
 
 // 移除任务
-const removeTask = (taskId: string) => {
+const removeTask = () => {
   // 这里可以实现移除任务的逻辑
   ElMessage.success('任务已移除')
 }
@@ -233,7 +220,8 @@ const updateConfig = async (config: any) => {
     await updateConfigHook(config)
     ElMessage.success('配置已更新')
   } catch (err) {
-    ElMessage.error(`更新配置失败: ${err.message}`)
+    const message = err instanceof Error ? err.message : String(err)
+    ElMessage.error(`更新配置失败: ${message}`)
   }
 }
 </script>

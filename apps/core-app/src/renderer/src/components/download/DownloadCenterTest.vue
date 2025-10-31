@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useDownloadCenter } from '@/modules/hooks/useDownloadCenter'
+import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import { DownloadModule, DownloadPriority } from '@talex-touch/utils'
 import DownloadCenter from './DownloadCenter.vue'
 
@@ -62,8 +62,9 @@ const testSmallFile = async () => {
     addTestResult(`样式文件下载任务已创建: ${taskId}`)
     ElMessage.success('小文件下载测试已启动')
   } catch (error) {
-    addTestResult(`小文件下载测试失败: ${error.message}`)
-    ElMessage.error(`小文件下载测试失败: ${error.message}`)
+    const message = error instanceof Error ? error.message : String(error)
+    addTestResult(`小文件下载测试失败: ${message}`)
+    ElMessage.error(`小文件下载测试失败: ${message}`)
   }
 }
 
@@ -87,8 +88,9 @@ const testLargeFile = async () => {
     addTestResult(`大文件下载任务已创建: ${taskId}`)
     ElMessage.success('大文件下载测试已启动')
   } catch (error) {
-    addTestResult(`大文件下载测试失败: ${error.message}`)
-    ElMessage.error(`大文件下载测试失败: ${error.message}`)
+    const message = error instanceof Error ? error.message : String(error)
+    addTestResult(`大文件下载测试失败: ${message}`)
+    ElMessage.error(`大文件下载测试失败: ${message}`)
   }
 }
 
@@ -97,7 +99,7 @@ const testConcurrentDownloads = async () => {
   try {
     addTestResult('开始测试并发下载...')
 
-    const tasks = []
+    const tasks: string[] = []
     for (let i = 0; i < 5; i++) {
       const taskId = await addDownloadTask({
         url: `https://httpbin.org/bytes/1048576?index=${i}`, // 1MB test file
@@ -117,8 +119,9 @@ const testConcurrentDownloads = async () => {
     addTestResult(`并发下载任务已创建: ${tasks.join(', ')}`)
     ElMessage.success('并发下载测试已启动')
   } catch (error) {
-    addTestResult(`并发下载测试失败: ${error.message}`)
-    ElMessage.error(`并发下载测试失败: ${error.message}`)
+    const message = error instanceof Error ? error.message : String(error)
+    addTestResult(`并发下载测试失败: ${message}`)
+    ElMessage.error(`并发下载测试失败: ${message}`)
   }
 }
 
@@ -142,8 +145,9 @@ const testResumeDownload = async () => {
     addTestResult(`断点续传下载任务已创建: ${taskId}`)
     ElMessage.success('断点续传测试已启动')
   } catch (error) {
-    addTestResult(`断点续传测试失败: ${error.message}`)
-    ElMessage.error(`断点续传测试失败: ${error.message}`)
+    const message = error instanceof Error ? error.message : String(error)
+    addTestResult(`断点续传测试失败: ${message}`)
+    ElMessage.error(`断点续传测试失败: ${message}`)
   }
 }
 
@@ -161,8 +165,9 @@ const testGetTasks = async () => {
 
     ElMessage.success(`获取到 ${tasks.length} 个任务`)
   } catch (error) {
-    addTestResult(`获取任务列表失败: ${error.message}`)
-    ElMessage.error(`获取任务列表失败: ${error.message}`)
+    const message = error instanceof Error ? error.message : String(error)
+    addTestResult(`获取任务列表失败: ${message}`)
+    ElMessage.error(`获取任务列表失败: ${message}`)
   }
 }
 </script>

@@ -8,25 +8,31 @@ const props = defineProps<{
   item: TuffItem
 }>()
 
-function transformTuffIcon(icon: TuffIcon | undefined): ITuffIcon | string {
+function transformTuffIcon(icon: TuffIcon | undefined): ITuffIcon | null {
   if (!icon) {
-    return ''
+    return null
   }
   if (typeof icon === 'string') {
-    return icon
+    // Convert string to ITuffIcon format
+    return {
+      type: 'url',
+      value: icon
+    }
   }
   return {
     type: icon.type,
-    value: icon.value,
-    init: async () => {}
+    value: icon.value
   }
 }
 
-const pluginIcon = computed(() => transformTuffIcon(props.item.render?.basic?.icon))
+const pluginIcon = computed(() => {
+  const icon = transformTuffIcon(props.item.render?.basic?.icon)
+  return icon
+})
 </script>
 
 <template>
-  <div v-if="item.render?.basic" class="DefaultPreview">
+  <div v-if="item.render?.basic && pluginIcon" class="DefaultPreview">
     <div class="icon">
       <PluginIcon :icon="pluginIcon" :alt="item.render.basic.title" />
     </div>

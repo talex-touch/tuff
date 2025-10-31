@@ -26,10 +26,10 @@
 </template>
 
 <script setup lang="ts">
-import { useClerkAuth } from '~/modules/auth/useClerkAuth'
+import { useAuth } from '~/modules/auth/useAuth'
 
 const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, getPrimaryEmail } =
-  useClerkAuth()
+  useAuth()
 </script>
 
 <style scoped>

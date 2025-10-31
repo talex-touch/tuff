@@ -63,7 +63,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
       :empty="DefaultIcon"
       :icon="plugin.icon"
       :alt="plugin.name"
-      size="32"
+      :size="32"
     />
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">

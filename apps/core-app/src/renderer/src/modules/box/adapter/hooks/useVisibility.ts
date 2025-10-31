@@ -9,7 +9,7 @@ export function useVisibility(
   clipboardOptions: any,
   handleAutoPaste: () => void,
   handlePaste: () => void,
-  clearClipboard: () => void,
+  _clearClipboard: () => void,
   boxInputRef: Ref<any>
 ) {
   const visibility = useDocumentVisibility()

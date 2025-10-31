@@ -32,7 +32,7 @@ export class CustomUpdateProvider extends UpdateProvider {
   }
 
   // 获取最新版本信息
-  async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
+  async fetchLatestRelease(_channel: AppPreviewChannel): Promise<GitHubRelease> {
     try {
       const config: AxiosRequestConfig = {
         method: 'GET',
@@ -59,17 +59,19 @@ export class CustomUpdateProvider extends UpdateProvider {
 
       if (this.apiFormat === 'github') {
         // 兼容GitHub API格式
-        return this.parseGitHubFormat(data, channel)
+        return this.parseGitHubFormat(data, _channel)
       } else {
         // 自定义格式
-        return this.parseCustomFormat(data, channel)
+        return this.parseCustomFormat(data, _channel)
       }
-    } catch (error) {
-      if (error.type) {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'type' in error) {
         throw error
       }
 
-      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      const axiosError = error as { code?: string; response?: { status?: number }; request?: unknown }
+
+      if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
         throw this.createError(
           UpdateErrorType.TIMEOUT_ERROR,
           'Request to custom API timed out',
@@ -77,10 +79,10 @@ export class CustomUpdateProvider extends UpdateProvider {
         )
       }
 
-      if (error.response) {
-        const statusCode = error.response.status
+      if (axiosError.response) {
+        const statusCode = axiosError.response.status
 
-        if (statusCode >= 500) {
+        if (statusCode && statusCode >= 500) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Custom API server error', error)
         } else if (statusCode === 404) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Custom API endpoint not found', error)
@@ -99,7 +101,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         }
       }
 
-      if (error.request) {
+      if (axiosError.request) {
         throw this.createError(
           UpdateErrorType.NETWORK_ERROR,
           'Unable to connect to custom API',
@@ -179,7 +181,7 @@ export class CustomUpdateProvider extends UpdateProvider {
   }
 
   // 解析自定义格式数据
-  private parseCustomFormat(data: any, channel: AppPreviewChannel): GitHubRelease {
+  private parseCustomFormat(data: any, _channel: AppPreviewChannel): GitHubRelease {
     // 自定义格式解析逻辑
     // 这里需要根据具体的API格式来实现
 
@@ -298,10 +300,11 @@ export class CustomUpdateProvider extends UpdateProvider {
         message: `Connection successful (${response.status})`,
         responseTime
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Connection failed'
       return {
         success: false,
-        message: error.message || 'Connection failed'
+        message
       }
     }
   }

@@ -5,12 +5,9 @@ import { CustomUpdateProvider } from './CustomUpdateProvider'
 import {
   UpdateSourceConfig,
   AppPreviewChannel,
-  GitHubRelease,
   UpdateCheckResult,
   UpdateProviderType,
-  CustomUpdateConfig,
-  UpdateError,
-  UpdateErrorType
+  CustomUpdateConfig
 } from '@talex-touch/utils'
 
 export class UpdateProviderManager {
@@ -98,9 +95,10 @@ export class UpdateProviderManager {
         provider = this.activeProvider
       } else {
         // 使用默认的GitHub Provider
-        provider = this.providers.find((p) => p.type === UpdateProviderType.GITHUB)
-        if (provider) {
-          this.activeProvider = provider
+        const githubProvider = this.providers.find((p) => p.type === UpdateProviderType.GITHUB)
+        if (githubProvider) {
+          provider = githubProvider
+          this.activeProvider = githubProvider
         }
       }
 
