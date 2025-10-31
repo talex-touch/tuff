@@ -201,6 +201,9 @@ export class TouchApp implements TalexTouch.TouchApp {
         }
       })
     }
+
+    // Setup window close handler
+    this._setupWindowCloseHandler()
   }
 
   /**

@@ -3,8 +3,8 @@
  */
 import { BaseModule } from '../abstract-base-module'
 import { ModuleInitContext, ModuleDestroyContext } from '@talex-touch/utils/types/modules'
-import { TouchEventBus, TalexEvents } from '../../core/eventbus/touch-event'
-import { ChannelType } from '@talex-touch/utils'
+import { TalexEvents, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
+import { ChannelType, DataCode } from '@talex-touch/utils'
 import {
   UpdateSourceConfig,
   AppPreviewChannel,
@@ -93,16 +93,17 @@ class PollingService {
 /**
  * Update service module
  */
-export class UpdateServiceModule extends BaseModule {
+export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private pollingService: PollingService
   private settings: UpdateSettings
   private currentVersion: string
   private currentChannel: AppPreviewChannel
   private cache: Map<string, any> = new Map()
   private lastCheckTimes: Map<string, number> = new Map()
+  private initContext?: ModuleInitContext<TalexEvents>
 
   constructor() {
-    super()
+    super(Symbol.for('UpdateService'))
     this.pollingService = new PollingService()
     this.settings = this.getDefaultSettings()
     this.currentVersion = this.getCurrentVersion()
@@ -112,11 +113,15 @@ export class UpdateServiceModule extends BaseModule {
   /**
    * Initialize update service
    */
-  async onInit(ctx: ModuleInitContext): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.initContext = ctx
     console.log('[UpdateService] Initializing update service')
 
     // Register IPC channels
     this.registerIpcChannels()
+
+    // Load settings
+    this.loadSettings()
 
     // Start polling if enabled
     if (this.settings.enabled && this.settings.frequency !== 'never') {
@@ -125,14 +130,16 @@ export class UpdateServiceModule extends BaseModule {
 
     // Check for updates on startup if frequency is 'startup'
     if (this.settings.enabled && this.settings.frequency === 'startup') {
-      setTimeout(() => this.checkForUpdates(), 5000) // Delay 5 seconds after startup
+      setTimeout(() => {
+        void this.checkForUpdates()
+      }, 5000) // Delay 5 seconds after startup
     }
   }
 
   /**
    * Destroy update service
    */
-  async onDestroy(ctx: ModuleDestroyContext): Promise<void> {
+  async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     console.log('[UpdateService] Destroying update service')
 
     // Stop polling service
@@ -148,32 +155,38 @@ export class UpdateServiceModule extends BaseModule {
    * Register IPC channels for communication with renderer process
    */
   private registerIpcChannels(): void {
-    const { regChannel } = this.touchChannel
+    if (!this.initContext) {
+      throw new Error('[UpdateService] Context not initialized')
+    }
+    const touchApp = this.initContext.app as any
+    const { regChannel } = touchApp.channel
 
     // Check for updates
-    regChannel(ChannelType.MAIN, 'update:check', async (force = false) => {
+    regChannel(ChannelType.MAIN, 'update:check', async ({ data, reply }) => {
+      const force = data?.force ?? false
       try {
         const result = await this.checkForUpdates(force)
-        return { success: true, data: result }
+        reply(DataCode.SUCCESS, { success: true, data: result })
       } catch (error) {
         console.error('[UpdateService] Update check failed:', error)
-        return {
+        reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
-        }
+        })
       }
     })
 
     // Get update settings
-    regChannel(ChannelType.MAIN, 'update:get-settings', async () => {
-      return { success: true, data: this.settings }
+    regChannel(ChannelType.MAIN, 'update:get-settings', async ({ reply }) => {
+      reply(DataCode.SUCCESS, { success: true, data: this.settings })
     })
 
     // Update settings
     regChannel(
       ChannelType.MAIN,
       'update:update-settings',
-      async (newSettings: Partial<UpdateSettings>) => {
+      async ({ data, reply }) => {
+        const newSettings = data as Partial<UpdateSettings>
         try {
           this.settings = { ...this.settings, ...newSettings }
           this.saveSettings()
@@ -187,20 +200,20 @@ export class UpdateServiceModule extends BaseModule {
             this.startPolling()
           }
 
-          return { success: true }
+          reply(DataCode.SUCCESS, { success: true })
         } catch (error) {
           console.error('[UpdateService] Failed to update settings:', error)
-          return {
+          reply(DataCode.ERROR, {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
-          }
+          })
         }
       }
     )
 
     // Get update status
-    regChannel(ChannelType.MAIN, 'update:get-status', async () => {
-      return {
+    regChannel(ChannelType.MAIN, 'update:get-status', async ({ reply }) => {
+      reply(DataCode.SUCCESS, {
         success: true,
         data: {
           enabled: this.settings.enabled,
@@ -209,20 +222,20 @@ export class UpdateServiceModule extends BaseModule {
           polling: this.pollingService.isActive(),
           lastCheck: this.lastCheckTimes.get('github-releases') || null
         }
-      }
+      })
     })
 
     // Clear update cache
-    regChannel(ChannelType.MAIN, 'update:clear-cache', async () => {
+    regChannel(ChannelType.MAIN, 'update:clear-cache', async ({ reply }) => {
       try {
         this.cache.clear()
-        return { success: true }
+        reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
         console.error('[UpdateService] Failed to clear cache:', error)
-        return {
+        reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
-        }
+        })
       }
     })
   }
@@ -239,7 +252,9 @@ export class UpdateServiceModule extends BaseModule {
 
     const interval = intervals[this.settings.frequency]
     if (interval) {
-      this.pollingService.start(interval, () => this.checkForUpdates())
+      this.pollingService.start(interval, async () => {
+        await this.checkForUpdates()
+      })
       console.log(`[UpdateService] Started polling with frequency: ${this.settings.frequency}`)
     }
   }
@@ -341,8 +356,13 @@ export class UpdateServiceModule extends BaseModule {
    * @param result - Update check result
    */
   private notifyRendererAboutUpdate(result: UpdateCheckResult): void {
+    if (!this.initContext) {
+      console.warn('[UpdateService] Context not initialized, cannot notify renderer')
+      return
+    }
     // Send update notification to all renderer windows
-    const { sendToAllWindows } = this.touchChannel
+    const touchApp = this.initContext.app as any
+    const { sendToAllWindows } = touchApp.channel
 
     sendToAllWindows('update:available', {
       hasUpdate: true,
@@ -351,7 +371,9 @@ export class UpdateServiceModule extends BaseModule {
     })
 
     // Emit event for other modules
-    TouchEventBus.emit(TalexEvents.APP_UPDATE_AVAILABLE, result)
+    if (this.initContext?.events && result.release) {
+      this.initContext.events.emit(TalexEvents.UPDATE_AVAILABLE, new UpdateAvailableEvent(result.release.tag_name))
+    }
   }
 
   /**
@@ -600,8 +622,12 @@ export class UpdateServiceModule extends BaseModule {
    * Save settings to file
    */
   private saveSettings(): void {
+    if (!this.initContext) {
+      console.warn('[UpdateService] Context not initialized, cannot save settings')
+      return
+    }
     try {
-      const configDir = path.join(this.appDataPath, 'config')
+      const configDir = path.join(this.initContext.app.rootPath, 'config')
       const settingsFile = path.join(configDir, 'update-settings.json')
 
       // Ensure config directory exists
@@ -620,8 +646,12 @@ export class UpdateServiceModule extends BaseModule {
    * Load settings from file
    */
   private loadSettings(): void {
+    if (!this.initContext) {
+      console.warn('[UpdateService] Context not initialized, using default settings')
+      return
+    }
     try {
-      const configDir = path.join(this.appDataPath, 'config')
+      const configDir = path.join(this.initContext.app.rootPath, 'config')
       const settingsFile = path.join(configDir, 'update-settings.json')
 
       if (fs.existsSync(settingsFile)) {
