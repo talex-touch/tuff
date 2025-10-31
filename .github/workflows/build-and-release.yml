@@ -267,12 +267,12 @@ jobs:
           echo "Current directory: $(pwd)"
           echo "RELEASE_TYPE: $RELEASE_TYPE"
           echo "RUNNER_OS: $RUNNER_OS"
-          
+
           # 检查构建环境
           echo "Checking build environment..."
           echo "Node version: $(node --version)"
           echo "pnpm version: $(pnpm --version)"
-          
+
           # 检查 dist 目录
           echo "Checking dist directory before build:"
           if [ -d "apps/core-app/dist" ]; then
@@ -316,7 +316,7 @@ jobs:
             echo "✓ Dist directory exists"
             echo "Dist directory contents:"
             ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
-            
+
             echo "Searching for build artifacts:"
             if [ "$RUNNER_OS" = "Windows" ]; then
               find apps/core-app/dist -name "*.exe" -type f 2>/dev/null || echo "No .exe files found"
@@ -325,10 +325,10 @@ jobs:
             else
               find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" -o -name "*.snap" \) -type f 2>/dev/null || echo "No Linux artifacts found"
             fi
-            
+
             echo "Total files in dist:"
             find apps/core-app/dist -type f 2>/dev/null | wc -l || echo "Cannot count files"
-            
+
             echo "Build completed successfully"
           else
             echo "ERROR: Build artifacts not found!"
@@ -369,12 +369,12 @@ jobs:
           $distPath = "apps/core-app/dist"
           Write-Host "Checking for Windows installer in: $distPath"
           Write-Host "Directory exists: $(Test-Path $distPath)"
-          
+
           if (-not (Test-Path $distPath)) {
             Write-Error "Dist directory does not exist: $distPath"
             exit 1
           }
-          
+
           Write-Host "`nListing all .exe files in dist:"
           $allExeFiles = Get-ChildItem -Path $distPath -Recurse -Include "*.exe" -ErrorAction SilentlyContinue
           if ($allExeFiles) {
@@ -384,16 +384,16 @@ jobs:
           } else {
             Write-Host "  No .exe files found"
           }
-          
+
           Write-Host "`nSearching for installer with pattern: *-setup.exe"
           $exists = $allExeFiles | Where-Object { $_.Name -like "*-setup.exe" -or $_.Name -match "-setup\.exe$" }
-          
+
           if (-not $exists) {
             Write-Host "`nTrying alternative search patterns..."
             # Try different patterns
             $alt1 = $allExeFiles | Where-Object { $_.Name -like "*setup*.exe" }
             $alt2 = $allExeFiles | Where-Object { $_.Name -like "talex-touch*.exe" }
-            
+
             if ($alt1) {
               Write-Host "Found files matching *setup*.exe:"
               $alt1 | Select-Object FullName, Name
@@ -402,7 +402,7 @@ jobs:
               Write-Host "Found files matching talex-touch*.exe:"
               $alt2 | Select-Object FullName, Name
             }
-            
+
             Write-Error "NSIS installer not found (*.exe with -setup) in $distPath"
             Write-Host "`nFull directory structure:"
             Get-ChildItem -Path $distPath -Recurse | Select-Object FullName, PSIsContainer | Format-Table -AutoSize
