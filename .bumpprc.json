@@ -1,0 +1,11 @@
+{
+  "files": [
+    "package.json",
+    "apps/core-app/package.json"
+  ],
+  "commit": true,
+  "tag": true,
+  "push": false,
+  "all": false
+}
+

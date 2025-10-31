@@ -89,13 +89,19 @@ jobs:
         run: |
           VERSION=${{ steps.release-type.outputs.version }}
           if [ -n "$VERSION" ]; then
-            echo "Updating version to $VERSION"
-            # 更新根目录 package.json
-            npm version $VERSION --no-git-tag-version
-            # 更新 apps/core-app/package.json
-            cd apps/core-app
-            npm version $VERSION --no-git-tag-version
-            cd ../..
+            echo "Updating version to $VERSION using bumpp"
+            # 使用 bumpp 更新版本（同步根目录和 apps/core-app/package.json）
+            # --no-commit 和 --no-tag 确保只更新文件，不提交或创建标签
+            # -y 跳过确认提示
+            # 在 CI 环境中，版本应该已经通过工作流输入或标签确定
+            pnpm exec bumpp $VERSION --no-commit --no-tag -y || {
+              # 如果 bumpp 失败（可能因为版本格式），尝试直接使用 npm version 作为后备
+              echo "bumpp failed, falling back to npm version"
+              npm version $VERSION --no-git-tag-version
+              cd apps/core-app
+              npm version $VERSION --no-git-tag-version
+              cd ../..
+            }
             echo "Updated version to $VERSION"
           else
             echo "No version specified, using existing version"

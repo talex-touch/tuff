@@ -12,6 +12,7 @@ import {
   UpdateCheckResult,
   UpdateProviderType
 } from '@talex-touch/utils'
+import { getAppVersionSafe } from '../../utils/version-util'
 import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
@@ -535,16 +536,11 @@ export class UpdateServiceModule extends BaseModule {
   }
 
   /**
-   * Get current version from package.json
+   * Get current version from package.json or environment variable
+   * Uses version-util for consistent version reading across the app
    */
   private getCurrentVersion(): string {
-    try {
-      const pkg = require('../../package.json')
-      return pkg.version
-    } catch (error) {
-      console.error('[UpdateService] Failed to get current version:', error)
-      return '1.0.0'
-    }
+    return getAppVersionSafe()
   }
 
   /**

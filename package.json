@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/tuff",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
   "license": "MPL-2.0 license",
@@ -14,6 +14,7 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@typescript-eslint/parser": "^8.38.0",
+    "bumpp": "^10.3.1",
     "eslint": "^9.32.0",
     "husky": "^9.1.7",
     "typescript": "^5.8.3",
@@ -37,14 +38,18 @@
     "docs:dev": "pnpm -F @talex-touch/docs run dev",
     "docs:build": "pnpm -F @talex-touch/docs run build",
     "utils:test": " pnpm -F test run test",
-    "utils:publish": "pnpm -F @talex-touch/utils run publish"
+    "utils:publish": "pnpm -F @talex-touch/utils run publish",
+    "version": "bumpp",
+    "version:patch": "bumpp --patch",
+    "version:minor": "bumpp --minor",
+    "version:major": "bumpp --major"
   },
   "dependencies": {
-    "pinyin-match": "^1.2.8",
-    "vite-plugin-electron": "^0.29.0",
+    "get-windows": "^9.2.3",
     "mac-windows": "1.0.0",
+    "pinyin-match": "^1.2.8",
     "tesseract.js": "^5.0.6",
-    "get-windows": "^9.2.3"
+    "vite-plugin-electron": "^0.29.0"
   },
   "volta": {
     "node": "22.16.0"
