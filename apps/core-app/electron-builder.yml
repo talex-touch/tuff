@@ -60,6 +60,8 @@ mac:
   identity: null
   hardenedRuntime: false
   artifactName: ${name}-${version}.${ext}
+dmg:
+  filesystem: APFS
 linux:
   target:
     - AppImage
