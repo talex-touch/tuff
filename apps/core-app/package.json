@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "The core app of talex-touch. A strong adaptation more platform all-tool program.",
   "main": "./out/main/index.js",
   "author": "TalexDreamSoul",

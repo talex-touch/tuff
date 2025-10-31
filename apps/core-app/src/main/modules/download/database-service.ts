@@ -215,7 +215,7 @@ export class DatabaseService {
     for (const chunk of chunks) {
       try {
         if (chunk.status === ChunkStatus.FAILED && chunk.filePath) {
-          await fs.unlink(chunk.filePath)
+          await fs.promises.unlink(chunk.filePath)
         }
       } catch (error: unknown) {
         // 忽略文件不存在错误

@@ -1,5 +1,5 @@
 import axios, { AxiosRequestConfig } from 'axios'
-import { promises as fs } from 'fs'
+import { createWriteStream } from 'fs'
 import {
   DownloadTask,
   ChunkInfo,
@@ -77,8 +77,9 @@ export class DownloadWorker {
     onProgress?: (taskId: string, progress: any) => void
   ): Promise<void> {
     try {
-      // 获取文件大小
-      const totalSize = await this.getFileSize(task.url, task.headers)
+      // 获取文件大小 - headers 可能来自 metadata
+      const headers = (task.metadata?.headers as Record<string, string>) || undefined
+      const totalSize = await this.getFileSize(task.url, headers)
 
       if (!totalSize) {
         throw new Error('Unable to determine file size')
@@ -111,13 +112,13 @@ export class DownloadWorker {
           downloadedSize: totalSize
         })
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`Download failed for task ${task.id}:`, error)
 
       if (onProgress) {
         onProgress(task.id, {
           status: DownloadStatus.FAILED,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         })
       }
 
@@ -178,11 +179,12 @@ export class DownloadWorker {
       try {
         chunk.status = ChunkStatus.DOWNLOADING
 
+        const headers = (task.metadata?.headers as Record<string, string>) || {}
         const config: AxiosRequestConfig = {
           method: 'GET',
           url: task.url,
           headers: {
-            ...task.headers,
+            ...headers,
             Range: `bytes=${chunk.start + chunk.downloaded}-${chunk.end}`
           },
           responseType: 'stream',
@@ -191,15 +193,11 @@ export class DownloadWorker {
         }
 
         const response = await axios(config)
-        const writeStream = await fs.open(chunk.filePath, 'w')
+        const writeStream = createWriteStream(chunk.filePath, {
+          flags: chunk.downloaded > 0 ? 'a' : 'w'
+        })
 
         try {
-          // 如果支持断点续传，需要追加写入
-          if (chunk.downloaded > 0) {
-            const appendStream = await fs.open(chunk.filePath, 'a')
-            await appendStream.close()
-          }
-
           // 流式写入
           await new Promise<void>((resolve, reject) => {
             response.data.pipe(writeStream)
@@ -210,14 +208,16 @@ export class DownloadWorker {
 
             response.data.on('end', () => {
               chunk.status = ChunkStatus.COMPLETED
+              writeStream.end()
               resolve()
             })
 
             response.data.on('error', reject)
             writeStream.on('error', reject)
+            writeStream.on('finish', resolve)
           })
         } finally {
-          await writeStream.close()
+          writeStream.destroy()
         }
 
         // 下载成功
@@ -272,10 +272,10 @@ export class DownloadWorker {
     return this.activeTasks.size < this.maxConcurrent
   }
 
-  // 更新最大并发数
-  updateMaxConcurrent(newMax: number): void {
-    this.maxConcurrent = Math.max(1, Math.min(10, newMax))
-  }
+  // 更新最大并发数 - 注意：maxConcurrent 是 readonly，此方法需要重构
+  // updateMaxConcurrent(newMax: number): void {
+  //   this.maxConcurrent = Math.max(1, Math.min(10, newMax))
+  // }
 
   // 获取下载统计
   getDownloadStats(): {
