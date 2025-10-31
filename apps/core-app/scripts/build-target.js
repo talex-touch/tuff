@@ -100,7 +100,7 @@ function build() {
     fs.mkdirSync(path.join(distDir, '__appImage-x64'), { recursive: true });
     fs.mkdirSync(path.join(distDir, '__deb-x64'), { recursive: true });
   } else if (normalizedTarget === 'win') {
-    const winDirs = ['@talex-touch', '@talex-touchcore-app-updater'];
+    const winDirs = ['@talex-touch'];
     winDirs.forEach(dirName => {
       fs.mkdirSync(path.join(distDir, dirName), { recursive: true });
     });
@@ -142,16 +142,109 @@ function build() {
 
   const builderCommand = `${resolveBuilderBin()} ${builderArgs.join(' ')}`.trim();
   console.log(`Executing electron-builder: ${builderCommand}`);
+  
+  // 检查构建前的 dist 目录状态
+  console.log('\n=== Pre-build dist directory check ===');
+  if (fs.existsSync(distDir)) {
+    const filesBefore = fs.readdirSync(distDir, { withFileTypes: true });
+    console.log(`Dist directory exists. Contents: ${filesBefore.length} items`);
+    filesBefore.forEach(item => {
+      console.log(`  - ${item.name} (${item.isDirectory() ? 'dir' : 'file'})`);
+    });
+  } else {
+    console.log('Dist directory does not exist yet');
+  }
 
-  execSync(builderCommand, {
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      BUILD_TYPE: buildType
+  // 检查 out 目录
+  const outDir = path.join(projectRoot, 'out');
+  if (fs.existsSync(outDir)) {
+    const outFiles = fs.readdirSync(outDir, { withFileTypes: true });
+    console.log(`Out directory exists. Contents: ${outFiles.length} items`);
+  } else {
+    console.log('WARNING: Out directory does not exist!');
+  }
+
+  console.log('\n=== Running electron-builder ===');
+  try {
+    execSync(builderCommand, {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        BUILD_TYPE: buildType
+      }
+    });
+  } catch (error) {
+    console.error('\n=== electron-builder failed ===');
+    console.error(`Exit code: ${error.status}`);
+    console.error(`Signal: ${error.signal}`);
+    console.error(`Error message: ${error.message}`);
+    throw error;
+  }
+
+  // 检查构建后的 dist 目录状态
+  console.log('\n=== Post-build dist directory check ===');
+  if (fs.existsSync(distDir)) {
+    // 列出所有文件
+    const allFiles = [];
+    function listFiles(dir, basePath = '') {
+      try {
+        const items = fs.readdirSync(dir, { withFileTypes: true });
+        for (const item of items) {
+          const fullPath = path.join(dir, item.name);
+          const relativePath = basePath ? `${basePath}/${item.name}` : item.name;
+          if (item.isDirectory()) {
+            listFiles(fullPath, relativePath);
+          } else {
+            try {
+              const stat = fs.statSync(fullPath);
+              allFiles.push({ path: relativePath, size: stat.size });
+            } catch (statErr) {
+              console.warn(`Warning: Cannot stat ${relativePath}: ${statErr.message}`);
+            }
+          }
+        }
+      } catch (readErr) {
+        console.warn(`Warning: Cannot read directory ${basePath || dir}: ${readErr.message}`);
+      }
     }
-  });
+    
+    try {
+      listFiles(distDir);
+      console.log(`Total files found: ${allFiles.length}`);
+      if (allFiles.length > 0) {
+        console.log('Files in dist:');
+        allFiles.slice(0, 20).forEach(file => {
+          const sizeKB = (file.size / 1024).toFixed(2);
+          console.log(`  - ${file.path} (${sizeKB} KB)`);
+        });
+        if (allFiles.length > 20) {
+          console.log(`  ... and ${allFiles.length - 20} more files`);
+        }
+      }
+      
+      // Windows 特定检查
+      if (normalizedTarget === 'win') {
+        const exeFiles = allFiles.filter(f => f.path.endsWith('.exe'));
+        console.log(`\nWindows .exe files found: ${exeFiles.length}`);
+        exeFiles.forEach(file => {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          console.log(`  - ${file.path} (${sizeMB} MB)`);
+        });
+        
+        if (exeFiles.length === 0) {
+          console.error('\nERROR: No .exe files found in dist directory!');
+          console.error('electron-builder may have failed silently.');
+        }
+      }
+    } catch (err) {
+      console.error(`Error listing dist files: ${err.message}`);
+    }
+  } else {
+    console.error('ERROR: Dist directory does not exist after build!');
+    throw new Error('Dist directory not created by electron-builder');
+  }
 
-  console.log('Build completed successfully.');
+  console.log('\n✓ Build completed successfully.');
 }
 
 build();
