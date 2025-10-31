@@ -8,7 +8,7 @@ import {
   useCurrentUser,
   LoginResult,
   LoginOptions
-} from '@talex-touch/utils'
+} from '@talex-touch/utils/renderer'
 
 let eventListenerCleanup: (() => void) | null = null
 let isInitialized = false

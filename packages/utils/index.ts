@@ -1,4 +1,4 @@
-export * from './auth'
+// export * from './auth' // Renderer-only, use @talex-touch/utils/renderer instead
 export * from './base'
 export * from './common'
 export * from './plugin'
