@@ -53,13 +53,13 @@ mac:
   gatekeeperAssess: false
   target:
     - target: dmg
-      arch: [x64, arm64]
+      arch: universal
   icon: build/icon.icns
   category: public.app-category.productivity
   forceCodeSigning: false
   identity: null
   hardenedRuntime: false
-  artifactName: ${name}-${version}-universal.${ext}
+  artifactName: ${name}-${version}.${ext}
 linux:
   target:
     - AppImage

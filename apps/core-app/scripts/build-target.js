@@ -400,35 +400,15 @@ function build() {
           throw new Error('Windows build failed: No .exe files generated');
         }
       } else if (normalizedTarget === 'mac') {
-        const dmgFiles = allFiles.filter(f => f.path.endsWith('.dmg') || f.path.includes('.dmg'));
+        const dmgFiles = allFiles.filter(f => f.path.endsWith('.dmg'));
         console.log(`\nmacOS .dmg files found: ${dmgFiles.length}`);
-        dmgFiles.forEach(file => {
-          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-          console.log(`  - ${file.path} (${sizeMB} MB)`);
-        });
-
-        if (dmgFiles.length === 0) {
-          console.error('\nERROR: No .dmg files found in dist directory!');
-          console.error('electron-builder may have failed silently.');
-          console.error('Checking common output locations...');
-
-          // 检查是否输出到了子目录
-          const subDirs = ['@talex-touch'];
-          subDirs.forEach(subDir => {
-            const subPath = path.join(distDir, subDir);
-            if (fs.existsSync(subPath)) {
-              try {
-                const subItems = fs.readdirSync(subPath, { withFileTypes: true });
-                console.log(`  ${subDir}: ${subItems.length} items`);
-                subItems.slice(0, 5).forEach(item => {
-                  console.log(`    - ${item.name} (${item.isDirectory() ? 'dir' : 'file'})`);
-                });
-              } catch (err) {
-                console.log(`  ${subDir}: Cannot read (${err.message})`);
-              }
-            }
+        if (dmgFiles.length > 0) {
+          dmgFiles.forEach(file => {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            console.log(`  - ${file.path} (${sizeMB} MB)`);
           });
-
+        } else {
+          console.error('\nERROR: No .dmg files found in dist directory!');
           throw new Error('macOS build failed: No .dmg files generated');
         }
       } else if (normalizedTarget === 'linux') {
