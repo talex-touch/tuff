@@ -19,11 +19,7 @@
       <div v-else class="w-4" />
 
       <!-- File/Directory Icon -->
-      <i
-        class="text-lg"
-        :class="iconClass"
-        :style="{ color: iconColor }"
-      />
+      <i class="text-lg" :class="iconClass" :style="{ color: iconColor }" />
 
       <!-- Name -->
       <span class="flex-1 text-sm truncate">{{ node.name }}</span>
@@ -149,4 +145,3 @@ function handleClick(): void {
   user-select: none;
 }
 </style>
-

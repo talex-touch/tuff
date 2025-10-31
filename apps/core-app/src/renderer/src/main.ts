@@ -12,7 +12,10 @@ import ElementPlus from 'element-plus'
 import VWave from 'v-wave'
 
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
-import { showPlatformCompatibilityWarning, shouldShowPlatformWarning } from '~/modules/mention/platform-warning'
+import {
+  showPlatformCompatibilityWarning,
+  shouldShowPlatformWarning
+} from '~/modules/mention/platform-warning'
 import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 
 import './assets/main.css'
@@ -85,7 +88,7 @@ async function bootstrap() {
 async function checkPlatformCompatibility() {
   try {
     // 等待应用准备就绪
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
     // 检查是否应该显示警告
     if (!shouldShowPlatformWarning()) {

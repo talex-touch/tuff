@@ -39,7 +39,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         url: this.apiUrl,
         timeout: this.timeout,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/1.0',
           ...this.headers
         }
@@ -81,17 +81,9 @@ export class CustomUpdateProvider extends UpdateProvider {
         const statusCode = error.response.status
 
         if (statusCode >= 500) {
-          throw this.createError(
-            UpdateErrorType.API_ERROR,
-            'Custom API server error',
-            error
-          )
+          throw this.createError(UpdateErrorType.API_ERROR, 'Custom API server error', error)
         } else if (statusCode === 404) {
-          throw this.createError(
-            UpdateErrorType.API_ERROR,
-            'Custom API endpoint not found',
-            error
-          )
+          throw this.createError(UpdateErrorType.API_ERROR, 'Custom API endpoint not found', error)
         } else if (statusCode === 401 || statusCode === 403) {
           throw this.createError(
             UpdateErrorType.API_ERROR,
@@ -129,7 +121,7 @@ export class CustomUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map(asset => ({
+    return release.assets.map((asset) => ({
       name: asset.name,
       url: asset.url,
       size: asset.size || 0,
@@ -147,7 +139,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         url: this.apiUrl,
         timeout: 5000,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/1.0',
           ...this.headers
         }
@@ -226,7 +218,12 @@ export class CustomUpdateProvider extends UpdateProvider {
       return 'win32'
     } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
       return 'darwin'
-    } else if (lower.includes('linux') || lower.includes('.deb') || lower.includes('.rpm') || lower.includes('.AppImage')) {
+    } else if (
+      lower.includes('linux') ||
+      lower.includes('.deb') ||
+      lower.includes('.rpm') ||
+      lower.includes('.AppImage')
+    ) {
       return 'linux'
     }
 

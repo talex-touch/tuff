@@ -3,15 +3,9 @@
     <h2>内存泄漏测试</h2>
 
     <div class="test-controls">
-      <el-button @click="createComponent" type="primary">
-        创建组件
-      </el-button>
-      <el-button @click="destroyComponent" type="danger">
-        销毁组件
-      </el-button>
-      <el-button @click="clearLogs" type="default">
-        清除日志
-      </el-button>
+      <el-button type="primary" @click="createComponent"> 创建组件 </el-button>
+      <el-button type="danger" @click="destroyComponent"> 销毁组件 </el-button>
+      <el-button type="default" @click="clearLogs"> 清除日志 </el-button>
     </div>
 
     <div class="test-info">
@@ -112,7 +106,6 @@ function createComponent() {
     componentStatus.value = '已创建'
     createCount.value++
     addLog('测试组件创建成功')
-
   } catch (error) {
     addLog('创建组件失败: ' + error)
     console.error('Create component error:', error)
@@ -140,7 +133,6 @@ function destroyComponent() {
       setTimeout(() => {
         addLog('内存检查: 组件应该已被完全清理')
       }, 1000)
-
     } else {
       addLog('没有可销毁的组件')
     }

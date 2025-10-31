@@ -40,7 +40,11 @@ const clipboardPreview = computed(() => {
     <!-- Clipboard tag -->
     <template v-if="clipboardOptions.last">
       <!-- Text clipboard -->
-      <span v-if="clipboardOptions.last?.type === 'text'" class="fake-background dotted" :title="clipboardOptions.last.content">
+      <span
+        v-if="clipboardOptions.last?.type === 'text'"
+        class="fake-background dotted"
+        :title="clipboardOptions.last.content"
+      >
         📝 {{ clipboardPreview }}
       </span>
 
@@ -57,7 +61,11 @@ const clipboardPreview = computed(() => {
       />
 
       <!-- HTML clipboard -->
-      <span v-else-if="clipboardOptions.last?.type === 'html'" class="fake-background dotted" :title="clipboardOptions.last.content">
+      <span
+        v-else-if="clipboardOptions.last?.type === 'html'"
+        class="fake-background dotted"
+        :title="clipboardOptions.last.content"
+      >
         💻 {{ clipboardPreview }}
       </span>
     </template>

@@ -1,4 +1,3 @@
-
 <template>
   <div class="TvTabItem-Container" :class="{ active: isActive, disabled }">
     <div class="TvTabs-Tab-Icon">

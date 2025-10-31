@@ -1,8 +1,5 @@
 <template>
   <div
-    @click="handleClick"
-    @mouseenter="handleEnter"
-    @mouseleave="handleLeave"
     relative
     cursor-pointer
     h-full
@@ -11,18 +8,21 @@
     items-center
     justify-center
     :class="{ disabled, active: value === title }"
+    @click="handleClick"
     class="SectionItem-Container transition-cubic"
+    @mouseenter="handleEnter"
+    @mouseleave="handleLeave"
   >
     <div class="SectionItem-Display" :class="title">
       <div v-shared-element:[`theme-preference-${title}-img`] :style="`filter: ${filter}`" />
     </div>
     <div
-      @click="goRouter"
       flex
       items-center
       cursor-pointer
       justify-center
       class="SectionItem-Bar fake-background"
+      @click="goRouter"
     >
       <span v-shared-element:[`theme-preference-${title}`]>
         {{ title }}

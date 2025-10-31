@@ -1,11 +1,11 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs')
+const path = require('path')
 
-const projectRoot = path.join(__dirname, '..');
-const appPackageJson = require('../package.json');
+const projectRoot = path.join(__dirname, '..')
+const appPackageJson = require('../package.json')
 
-const outDir = path.join(projectRoot, 'out');
-const outPackageJsonPath = path.join(outDir, 'package.json');
+const outDir = path.join(projectRoot, 'out')
+const outPackageJsonPath = path.join(outDir, 'package.json')
 
 const minimalPackageJson = {
   name: '@talex-touch/core-app',
@@ -14,9 +14,9 @@ const minimalPackageJson = {
   main: './main/index.js',
   author: 'TalexDreamSoul',
   homepage: 'https://talex-touch.tagzxia.com'
-};
+}
 
-fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2));
+fs.mkdirSync(outDir, { recursive: true })
+fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2))
 
-console.log('Generated out/package.json for electron-builder');
+console.log('Generated out/package.json for electron-builder')

@@ -10,16 +10,26 @@
           <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
           <span>{{ refreshLabel }}</span>
         </button>
-        <button class="toolbar-button" type="button" :disabled="!canOpenLogFile" @click="openSelectedSessionFile">
+        <button
+          class="toolbar-button"
+          type="button"
+          :disabled="!canOpenLogFile"
+          @click="openSelectedSessionFile"
+        >
           <i class="i-ri-file-text-line" />
           <span>{{ openFileLabel }}</span>
         </button>
-        <button class="toolbar-button" type="button" :disabled="!canOpenLogDirectory" @click="openLogDirectory">
+        <button
+          class="toolbar-button"
+          type="button"
+          :disabled="!canOpenLogDirectory"
+          @click="openLogDirectory"
+        >
           <i class="i-ri-folder-open-line" />
           <span>{{ openDirectoryLabel }}</span>
         </button>
       </div>
-      <div class="toolbar-status" v-if="pendingLiveUpdates">
+      <div v-if="pendingLiveUpdates" class="toolbar-status">
         <button class="toolbar-tag" type="button" @click="jumpToLive">
           <i class="i-ri-sparkling-fill" />
           <span>{{ pendingUpdatesLabel }}</span>
@@ -70,16 +80,28 @@
             <span class="history-label">{{ formatSessionLabel(session) }}</span>
             <span v-if="session.version" class="history-version">v{{ session.version }}</span>
           </div>
-          <span v-if="session.id === latestSessionId" class="history-live-badge">{{ liveLabel }}</span>
+          <span v-if="session.id === latestSessionId" class="history-live-badge">{{
+            liveLabel
+          }}</span>
         </button>
       </div>
       <div v-else class="history-empty">{{ historyEmpty }}</div>
       <footer v-if="totalPages > 1" class="history-pagination">
-        <button class="pager" type="button" :disabled="!hasPrevPage" @click="changePage(currentPage - 1)">
+        <button
+          class="pager"
+          type="button"
+          :disabled="!hasPrevPage"
+          @click="changePage(currentPage - 1)"
+        >
           <i class="i-ri-arrow-left-s-line" />
         </button>
         <span class="pager-info">{{ currentPage }} / {{ totalPages }}</span>
-        <button class="pager" type="button" :disabled="!hasNextPage" @click="changePage(currentPage + 1)">
+        <button
+          class="pager"
+          type="button"
+          :disabled="!hasNextPage"
+          @click="changePage(currentPage + 1)"
+        >
           <i class="i-ri-arrow-right-s-line" />
         </button>
       </footer>
@@ -187,8 +209,8 @@ const pendingUpdatesLabel = computed(() => {
   return value === 'plugin.logs.newLogs' ? '有新的实时日志' : value
 })
 
-const isViewingLiveSession = computed(() =>
-  selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value
+const isViewingLiveSession = computed(
+  () => selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value
 )
 
 const selectedSession = computed<LogSessionMeta | null>(() => {
@@ -326,10 +348,13 @@ const readSessionLogs = async (
 
     if (meta?.hasLogFile) {
       try {
-        const sessionLogs: LogItem[] = await touchSdk.rawChannel.send('plugin-log:get-session-log', {
-          pluginName,
-          session: sessionId
-        })
+        const sessionLogs: LogItem[] = await touchSdk.rawChannel.send(
+          'plugin-log:get-session-log',
+          {
+            pluginName,
+            session: sessionId
+          }
+        )
         chunks.push(...sessionLogs)
       } catch (error) {
         console.warn('[PluginLogs] Failed to load session log:', error)
@@ -391,9 +416,11 @@ const fetchSessions = async (
   }
 }
 
-const refreshSessions = async (
-  options?: { gotoLatest?: boolean; reloadLogs?: boolean; preserveSelection?: boolean }
-): Promise<void> => {
+const refreshSessions = async (options?: {
+  gotoLatest?: boolean
+  reloadLogs?: boolean
+  preserveSelection?: boolean
+}): Promise<void> => {
   if (!currentPluginName.value) return
   const gotoLatest = options?.gotoLatest ?? false
   const preserveSelection = options?.preserveSelection ?? !gotoLatest
@@ -450,7 +477,11 @@ const selectSession = async (
     if (session) {
       const sessionPageIndex = sessions.value.findIndex((item) => item.id === sessionId)
       if (sessionPageIndex === -1) {
-        await refreshSessions({ gotoLatest: sessionId === latestSessionId.value, reloadLogs: false, preserveSelection: true })
+        await refreshSessions({
+          gotoLatest: sessionId === latestSessionId.value,
+          reloadLogs: false,
+          preserveSelection: true
+        })
       }
     }
   }

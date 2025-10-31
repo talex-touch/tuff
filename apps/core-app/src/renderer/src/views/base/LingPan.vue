@@ -43,7 +43,9 @@
           </div>
           <div class="info-item">
             <span class="info-key">PLATFORM:</span>
-            <span class="info-value">{{ snapshot.system.platform }} {{ snapshot.system.release }}</span>
+            <span class="info-value"
+              >{{ snapshot.system.platform }} {{ snapshot.system.release }}</span
+            >
           </div>
           <div class="info-item">
             <span class="info-key">ARCHITECTURE:</span>
@@ -73,26 +75,38 @@
           <div class="app-header">
             <div class="app-icon-placeholder">📱</div>
             <div class="app-details">
-              <div class="app-name">{{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}</div>
-              <div class="app-title">{{ snapshot.applications.activeApp.windowTitle ?? 'NO_WINDOW_TITLE' }}</div>
+              <div class="app-name">
+                {{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}
+              </div>
+              <div class="app-title">
+                {{ snapshot.applications.activeApp.windowTitle ?? 'NO_WINDOW_TITLE' }}
+              </div>
             </div>
           </div>
           <div class="app-meta">
             <div class="meta-row">
               <span class="meta-key">BUNDLE_ID:</span>
-              <span class="meta-value">{{ snapshot.applications.activeApp.bundleId ?? 'N/A' }}</span>
+              <span class="meta-value">{{
+                snapshot.applications.activeApp.bundleId ?? 'N/A'
+              }}</span>
             </div>
             <div class="meta-row">
               <span class="meta-key">PROCESS_ID:</span>
-              <span class="meta-value">#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span>
+              <span class="meta-value"
+                >#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span
+              >
             </div>
             <div class="meta-row">
               <span class="meta-key">EXECUTABLE_PATH:</span>
-              <span class="meta-value">{{ snapshot.applications.activeApp.executablePath ?? 'N/A' }}</span>
+              <span class="meta-value">{{
+                snapshot.applications.activeApp.executablePath ?? 'N/A'
+              }}</span>
             </div>
             <div class="meta-row">
               <span class="meta-key">LAST_UPDATED:</span>
-              <span class="meta-value">{{ formatDateTime(snapshot.applications.activeApp.lastUpdated) }}</span>
+              <span class="meta-value">{{
+                formatDateTime(snapshot.applications.activeApp.lastUpdated)
+              }}</span>
             </div>
           </div>
         </div>
@@ -222,7 +236,10 @@
                         {{ truncate(job.result.textSnippet, 50) }}
                       </div>
                       <div class="result-meta">
-                        {{ job.result.language || 'N/A' }} | {{ job.result.confidence !== null ? job.result.confidence.toFixed(1) : 'N/A' }}%
+                        {{ job.result.language || 'N/A' }} |
+                        {{
+                          job.result.confidence !== null ? job.result.confidence.toFixed(1) : 'N/A'
+                        }}%
                       </div>
                     </div>
                     <span v-else class="no-result">NO_RESULT</span>
@@ -485,7 +502,9 @@ function formatEvent(entry: Record<string, unknown> | null): string {
 function sourceLabel(job: OcrJobEntry): string {
   if (!job.source) return 'UNKNOWN'
   if (job.source.type === 'file') {
-    return job.source.filePath ? job.source.filePath.split(/\\|\//).pop() || job.source.filePath : 'FILE_SOURCE'
+    return job.source.filePath
+      ? job.source.filePath.split(/\\|\//).pop() || job.source.filePath
+      : 'FILE_SOURCE'
   }
   if (job.source.type === 'data-url') {
     const length = job.source.dataUrl?.length ?? 0
@@ -636,8 +655,13 @@ onMounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .error-panel {
@@ -927,11 +951,31 @@ onMounted(() => {
   letter-spacing: 0.5px;
 }
 
-.status-completed { background: #000000; color: #00ff00; border: 1px solid #00ff00; }
-.status-failed { background: #000000; color: #ff0000; border: 1px solid #ff0000; }
-.status-skipped { background: #000000; color: #888888; border: 1px solid #888888; }
-.status-processing { background: #000000; color: #0088ff; border: 1px solid #0088ff; }
-.status-unknown { background: #000000; color: #888888; border: 1px solid #888888; }
+.status-completed {
+  background: #000000;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+}
+.status-failed {
+  background: #000000;
+  color: #ff0000;
+  border: 1px solid #ff0000;
+}
+.status-skipped {
+  background: #000000;
+  color: #888888;
+  border: 1px solid #888888;
+}
+.status-processing {
+  background: #000000;
+  color: #0088ff;
+  border: 1px solid #0088ff;
+}
+.status-unknown {
+  background: #000000;
+  color: #888888;
+  border: 1px solid #888888;
+}
 
 .error-text {
   color: #ff6666;

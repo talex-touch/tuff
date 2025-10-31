@@ -54,7 +54,7 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
           if (fileName.endsWith('.lnk')) {
             try {
               appDetail = shell.readShortcutLink(fileDir)
-            } catch (e) {
+            } catch {
               continue // Ignore broken shortcuts
             }
           } else {
@@ -83,7 +83,7 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
         } else if (stats.isDirectory()) {
           results = results.concat(await fileDisplay(fileDir))
         }
-      } catch (e) {
+      } catch {
         // Ignore errors for individual files/directories
       }
     }

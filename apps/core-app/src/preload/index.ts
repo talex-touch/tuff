@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import appLogoAsset from '../../public/logo.png?asset'
-import appIconAsset from '../../public/favicon.ico?asset'
+// import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
@@ -46,7 +46,7 @@ const resolveAssetSource = (asset: string): string => {
 }
 
 const appLogo = resolveAssetSource(appLogoAsset)
-const appIcon = resolveAssetSource(appIconAsset)
+// const appIcon = resolveAssetSource(appIconAsset)
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 

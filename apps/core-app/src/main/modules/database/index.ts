@@ -129,7 +129,6 @@ export class DatabaseModule extends BaseModule {
     }
     return this.db
   }
-
 }
 
 const databaseModule = new DatabaseModule()

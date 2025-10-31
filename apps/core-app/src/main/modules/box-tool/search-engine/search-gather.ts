@@ -239,7 +239,10 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
                   status = 'timeout'
                   searchLogger.providerTimeout(provider.id, taskTimeoutMs)
                 } else {
-                  searchLogger.providerError(provider.id, error instanceof Error ? error.message : 'Unknown error')
+                  searchLogger.providerError(
+                    provider.id,
+                    error instanceof Error ? error.message : 'Unknown error'
+                  )
                 }
                 console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
               } finally {

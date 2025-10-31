@@ -23,7 +23,11 @@ export class FrequencyManager {
    * @param force - Force check regardless of frequency
    * @returns True if check should be performed
    */
-  shouldCheck(key: string, frequency: keyof typeof FrequencyManager.prototype.frequencyTypes, force = false): boolean {
+  shouldCheck(
+    key: string,
+    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes,
+    force = false
+  ): boolean {
     if (force) {
       return true
     }
@@ -59,7 +63,10 @@ export class FrequencyManager {
    * @param frequency - Frequency type
    * @returns Time in milliseconds until next check, or 0 if check is allowed now
    */
-  getTimeUntilNextCheck(key: string, frequency: keyof typeof FrequencyManager.prototype.frequencyTypes): number {
+  getTimeUntilNextCheck(
+    key: string,
+    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes
+  ): number {
     if (frequency === 'never') {
       return Number.MAX_SAFE_INTEGER
     }
@@ -82,7 +89,10 @@ export class FrequencyManager {
    * @param frequency - Frequency type
    * @returns Human-readable time string
    */
-  getTimeUntilNextCheckString(key: string, frequency: keyof typeof FrequencyManager.prototype.frequencyTypes): string {
+  getTimeUntilNextCheckString(
+    key: string,
+    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes
+  ): string {
     const timeUntilNext = this.getTimeUntilNextCheck(key, frequency)
 
     if (timeUntilNext === Number.MAX_SAFE_INTEGER) {

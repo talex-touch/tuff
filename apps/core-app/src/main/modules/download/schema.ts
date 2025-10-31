@@ -21,7 +21,9 @@ export const downloadTasksSchema = sqliteTable('download_tasks', {
 
 export const downloadChunksSchema = sqliteTable('download_chunks', {
   id: text('id').primaryKey(),
-  taskId: text('task_id').notNull().references(() => downloadTasksSchema.id),
+  taskId: text('task_id')
+    .notNull()
+    .references(() => downloadTasksSchema.id),
   index: integer('index').notNull(),
   start: integer('start').notNull(),
   end: integer('end').notNull(),

@@ -4,10 +4,10 @@ import { useVModel } from '@vueuse/core'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 
 const props = defineProps<{
-  modelValue: String
+  modelValue: string
 }>()
 const emits = defineEmits<{
-  (e: 'update:modelValue', val: String): void
+  (e: 'update:modelValue', val: string): void
 }>()
 
 const model = useVModel(props, 'modelValue', emits)
@@ -35,9 +35,9 @@ function startRecord(e: KeyboardEvent) {
 
 <template>
   <FlatInput
+    v-model="model"
     tabindex="0"
     @keydown="startRecord"
-    v-model="model"
     @focus="shortconApi.disableAll"
     @blur="shortconApi.enableAll"
   />

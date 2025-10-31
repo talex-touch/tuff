@@ -1,6 +1,5 @@
 import axios, { AxiosRequestConfig } from 'axios'
 import { promises as fs } from 'fs'
-import path from 'path'
 import {
   DownloadTask,
   ChunkInfo,
@@ -31,7 +30,10 @@ export class DownloadWorker {
   }
 
   // 启动下载任务
-  async startTask(task: DownloadTask, onProgress?: (taskId: string, progress: any) => void): Promise<void> {
+  async startTask(
+    task: DownloadTask,
+    onProgress?: (taskId: string, progress: any) => void
+  ): Promise<void> {
     if (this.activeTasks.has(task.id)) {
       throw new Error(`Task ${task.id} is already active`)
     }
@@ -70,7 +72,10 @@ export class DownloadWorker {
   }
 
   // 下载单个任务
-  private async downloadTask(task: DownloadTask, onProgress?: (taskId: string, progress: any) => void): Promise<void> {
+  private async downloadTask(
+    task: DownloadTask,
+    onProgress?: (taskId: string, progress: any) => void
+  ): Promise<void> {
     try {
       // 获取文件大小
       const totalSize = await this.getFileSize(task.url, task.headers)
@@ -106,7 +111,6 @@ export class DownloadWorker {
           downloadedSize: totalSize
         })
       }
-
     } catch (error) {
       console.error(`Download failed for task ${task.id}:`, error)
 
@@ -142,8 +146,10 @@ export class DownloadWorker {
         // 更新进度
         if (onProgress) {
           const progress = this.chunkManager.getChunkProgress(chunks)
-          const percentage = progress.totalSize > 0 ?
-            Math.round((progress.downloadedSize / progress.totalSize) * 100) : 0
+          const percentage =
+            progress.totalSize > 0
+              ? Math.round((progress.downloadedSize / progress.totalSize) * 100)
+              : 0
 
           onProgress(task.id, {
             status: DownloadStatus.DOWNLOADING,
@@ -177,7 +183,7 @@ export class DownloadWorker {
           url: task.url,
           headers: {
             ...task.headers,
-            'Range': `bytes=${chunk.start + chunk.downloaded}-${chunk.end}`
+            Range: `bytes=${chunk.start + chunk.downloaded}-${chunk.end}`
           },
           responseType: 'stream',
           timeout: this.config.network.timeout,
@@ -210,14 +216,12 @@ export class DownloadWorker {
             response.data.on('error', reject)
             writeStream.on('error', reject)
           })
-
         } finally {
           await writeStream.close()
         }
 
         // 下载成功
         return
-
       } catch (error) {
         retryCount++
         console.warn(`Chunk ${chunk.index} download failed (attempt ${retryCount}):`, error)
@@ -228,7 +232,7 @@ export class DownloadWorker {
         }
 
         // 等待重试
-        await new Promise(resolve => setTimeout(resolve, this.config.network.retryDelay))
+        await new Promise((resolve) => setTimeout(resolve, this.config.network.retryDelay))
       }
     }
   }

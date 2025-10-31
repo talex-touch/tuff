@@ -92,7 +92,12 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
   public readonly name = 'Plugin Features'
-  public readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Image, TuffInputType.Files, TuffInputType.Html]
+  public readonly supportedInputTypes = [
+    TuffInputType.Text,
+    TuffInputType.Image,
+    TuffInputType.Files,
+    TuffInputType.Html
+  ]
 
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
@@ -347,8 +352,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const plugins = pluginModule.pluginManager!.plugins.values()
 
     // Get input types from query for filtering
-    const queryInputTypes = query.inputs?.map(i => i.type) || []
-    const hasNonTextInput = queryInputTypes.length > 0 && queryInputTypes.some(t => t !== TuffInputType.Text)
+    const queryInputTypes = query.inputs?.map((i) => i.type) || []
+    const hasNonTextInput =
+      queryInputTypes.length > 0 && queryInputTypes.some((t) => t !== TuffInputType.Text)
 
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {
@@ -371,7 +377,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           }
 
           // Check if feature accepts all the input types in query
-          const acceptsAllInputs = queryInputTypes.every(type =>
+          const acceptsAllInputs = queryInputTypes.every((type) =>
             feature.acceptedInputTypes?.includes(type as any)
           )
 

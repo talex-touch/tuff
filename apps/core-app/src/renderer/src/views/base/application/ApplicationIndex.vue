@@ -61,11 +61,11 @@ function handleExecute(item: any): void {
 <template>
   <div class="ApplicationIndex">
     <div class="ApplicationList">
-      <AppList :index="index" @select="handleSelect" @search="handleSearch" :list="appList" />
+      <AppList :index="index" :list="appList" @select="handleSelect" @search="handleSearch" />
     </div>
     <div class="ApplicationContent">
       <ApplicationEmpty v-if="!curSelect" />
-      <AppConfigure v-else @execute="handleExecute" :data="curSelect" />
+      <AppConfigure v-else :data="curSelect" @execute="handleExecute" />
     </div>
   </div>
 </template>

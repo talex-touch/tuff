@@ -123,13 +123,9 @@ function handleClick(item: any, ind: number) {
   <el-scrollbar>
     <TransitionGroup name="list" tag="ul" class="AppList">
       <div class="AppList-Toolbox">
-        <FlatInput
-          v-model="search"
-          :placeholder="t('appList.searchPlaceholder')"
-          :fetch="search"
-        />
+        <FlatInput v-model="search" :placeholder="t('appList.searchPlaceholder')" :fetch="search" />
 
-        <span @click="handleOrderChange" class="order-way">
+        <span class="order-way" @click="handleOrderChange">
           <i v-if="orderWay === 0" class="i-ri-sort-desc" />
           <i v-if="orderWay === 1" class="i-ri-sort-alphabet-asc" />
           <i v-if="orderWay === 2" class="i-ri-sort-alphabet-desc" />
@@ -137,11 +133,11 @@ function handleClick(item: any, ind: number) {
         </span>
       </div>
       <li
+        v-for="(item, ind) in _list"
         :index="ind"
         class="fake-background"
         :class="{ active: index === ind }"
         @click="handleClick(item, ind)"
-        v-for="(item, ind) in _list"
       >
         <div class="AppList-IconContainer">
           <PluginIcon v-if="item.icon" :icon="item.icon" :alt="item.name" />

@@ -48,4 +48,3 @@ export interface IClipboardHook {
   /** Check if clipboard content is expired based on settings */
   isClipboardExpired: () => boolean
 }
-

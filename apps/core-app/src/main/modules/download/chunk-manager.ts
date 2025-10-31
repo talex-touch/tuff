@@ -75,7 +75,9 @@ export class ChunkManager {
       try {
         const stats = await fs.stat(chunk.filePath)
         if (stats.size !== chunk.size) {
-          console.warn(`Chunk ${chunk.index} size mismatch: expected ${chunk.size}, got ${stats.size}`)
+          console.warn(
+            `Chunk ${chunk.index} size mismatch: expected ${chunk.size}, got ${stats.size}`
+          )
           return false
         }
       } catch (error) {
@@ -92,9 +94,9 @@ export class ChunkManager {
     for (const chunk of chunks) {
       try {
         await fs.unlink(chunk.filePath)
-      } catch (error) {
+      } catch (error: unknown) {
         // 忽略文件不存在错误
-        if (error.code !== 'ENOENT') {
+        if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
           console.error(`Failed to cleanup chunk file ${chunk.filePath}:`, error)
         }
       }
@@ -131,17 +133,17 @@ export class ChunkManager {
 
   // 检查切片是否可以断点续传
   canResume(chunks: ChunkInfo[]): boolean {
-    return chunks.some(chunk =>
-      chunk.status === ChunkStatus.COMPLETED ||
-      (chunk.status === ChunkStatus.DOWNLOADING && chunk.downloaded > 0)
+    return chunks.some(
+      (chunk) =>
+        chunk.status === ChunkStatus.COMPLETED ||
+        (chunk.status === ChunkStatus.DOWNLOADING && chunk.downloaded > 0)
     )
   }
 
   // 获取需要重新下载的切片
   getChunksToRetry(chunks: ChunkInfo[]): ChunkInfo[] {
-    return chunks.filter(chunk =>
-      chunk.status === ChunkStatus.FAILED ||
-      chunk.status === ChunkStatus.PENDING
+    return chunks.filter(
+      (chunk) => chunk.status === ChunkStatus.FAILED || chunk.status === ChunkStatus.PENDING
     )
   }
 
@@ -159,8 +161,8 @@ export class ChunkManager {
 
   // 计算下载速度
   calculateSpeed(chunks: ChunkInfo[], timeWindowMs: number = 5000): number {
-    const now = Date.now()
-    const recentChunks = chunks.filter(chunk => {
+    // const now = Date.now() // TODO: 需要在实际下载时记录时间戳
+    const recentChunks = chunks.filter((chunk) => {
       // 这里需要在实际下载时记录时间戳
       // 暂时返回所有下载中的切片
       return chunk.status === ChunkStatus.DOWNLOADING

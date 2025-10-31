@@ -1,9 +1,9 @@
 /**
  * Update service for checking application updates in main process
  */
-import { BaseModule } from '../../core/base-module'
-import { ModuleInitContext, ModuleDestroyContext } from '../../core/module-manager'
-import { TouchEventBus, TalexEvents } from '../../core/touch-eventbus'
+import { BaseModule } from '../abstract-base-module'
+import { ModuleInitContext, ModuleDestroyContext } from '@talex-touch/utils/types/modules'
+import { TouchEventBus, TalexEvents } from '../../core/eventbus/touch-event'
 import { ChannelType } from '@talex-touch/utils'
 import {
   UpdateSourceConfig,
@@ -170,29 +170,33 @@ export class UpdateServiceModule extends BaseModule {
     })
 
     // Update settings
-    regChannel(ChannelType.MAIN, 'update:update-settings', async (newSettings: Partial<UpdateSettings>) => {
-      try {
-        this.settings = { ...this.settings, ...newSettings }
-        this.saveSettings()
+    regChannel(
+      ChannelType.MAIN,
+      'update:update-settings',
+      async (newSettings: Partial<UpdateSettings>) => {
+        try {
+          this.settings = { ...this.settings, ...newSettings }
+          this.saveSettings()
 
-        // Restart polling if settings changed
-        if (this.pollingService.isActive()) {
-          this.pollingService.stop()
-        }
+          // Restart polling if settings changed
+          if (this.pollingService.isActive()) {
+            this.pollingService.stop()
+          }
 
-        if (this.settings.enabled && this.settings.frequency !== 'never') {
-          this.startPolling()
-        }
+          if (this.settings.enabled && this.settings.frequency !== 'never') {
+            this.startPolling()
+          }
 
-        return { success: true }
-      } catch (error) {
-        console.error('[UpdateService] Failed to update settings:', error)
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          return { success: true }
+        } catch (error) {
+          console.error('[UpdateService] Failed to update settings:', error)
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
       }
-    })
+    )
 
     // Get update status
     regChannel(ChannelType.MAIN, 'update:get-status', async () => {
@@ -356,7 +360,10 @@ export class UpdateServiceModule extends BaseModule {
    * @param frequency - Frequency type
    * @returns True if check should be performed
    */
-  private shouldCheck(key: string, frequency: keyof typeof UpdateServiceModule.prototype.frequencyTypes): boolean {
+  private shouldCheck(
+    key: string,
+    frequency: keyof typeof UpdateServiceModule.prototype.frequencyTypes
+  ): boolean {
     const lastCheckTime = this.lastCheckTimes.get(key) || 0
     const now = Date.now()
     const interval = this.frequencyTypes[frequency]
@@ -428,7 +435,7 @@ export class UpdateServiceModule extends BaseModule {
       const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
         timeout: 8000,
         headers: {
-          'Accept': 'application/vnd.github.v3+json',
+          Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'TalexTouch-Updater/1.0'
         }
       })
@@ -444,7 +451,7 @@ export class UpdateServiceModule extends BaseModule {
       }
 
       // Filter releases by channel
-      const channelReleases = releases.filter(release => {
+      const channelReleases = releases.filter((release) => {
         const version = this.parseVersion(release.tag_name)
         return version.channel === this.currentChannel
       })
@@ -491,11 +498,17 @@ export class UpdateServiceModule extends BaseModule {
    * @param versionStr - Version string
    * @returns Parsed version object
    */
-  private parseVersion(versionStr: string): { channel: AppPreviewChannel; major: number; minor: number; patch: number } {
+  private parseVersion(versionStr: string): {
+    channel: AppPreviewChannel
+    major: number
+    minor: number
+    patch: number
+  } {
     const version = versionStr.replaceAll('v', '')
     const versionArr = version.split('-')
     const versionNum = versionArr[0]
-    const channel = versionArr.length === 2 ? versionArr[1] || AppPreviewChannel.MASTER : AppPreviewChannel.MASTER
+    const channel =
+      versionArr.length === 2 ? versionArr[1] || AppPreviewChannel.MASTER : AppPreviewChannel.MASTER
 
     const versionNumArr = versionNum.split('.')
 
@@ -512,7 +525,12 @@ export class UpdateServiceModule extends BaseModule {
    * @param newVersion - New version to compare
    * @returns True if update is needed
    */
-  private isUpdateNeeded(newVersion: { channel: AppPreviewChannel; major: number; minor: number; patch: number }): boolean {
+  private isUpdateNeeded(newVersion: {
+    channel: AppPreviewChannel
+    major: number
+    minor: number
+    patch: number
+  }): boolean {
     const currentVersion = this.parseVersion(this.currentVersion)
 
     // Compare versions (prioritize: channel > major > minor > patch)
@@ -549,7 +567,9 @@ export class UpdateServiceModule extends BaseModule {
   private getCurrentChannel(): AppPreviewChannel {
     const version = this.getCurrentVersion()
     const versionArr = version.split('-')
-    return versionArr.length === 2 ? versionArr[1] as AppPreviewChannel || AppPreviewChannel.MASTER : AppPreviewChannel.MASTER
+    return versionArr.length === 2
+      ? (versionArr[1] as AppPreviewChannel) || AppPreviewChannel.MASTER
+      : AppPreviewChannel.MASTER
   }
 
   /**

@@ -102,4 +102,3 @@ export interface AnalyticsConfig {
   /** Optional reporting endpoint */
   reportEndpoint?: string
 }
-

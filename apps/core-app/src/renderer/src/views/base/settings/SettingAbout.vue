@@ -125,7 +125,10 @@ const currentExperiencePack = computed(() => {
         <span v-else class="tag" style="color: #6d8b51"> {{ t('settingAbout.latest') }} </span>
       </template>
     </t-block-line>
-    <t-block-line :title="t('settingAbout.specification')" :description="`${currentQuarter}`"></t-block-line>
+    <t-block-line
+      :title="t('settingAbout.specification')"
+      :description="`${currentQuarter}`"
+    ></t-block-line>
     <t-block-line :title="t('settingAbout.startCosts')">
       <template #description>
         {{ startCosts.toFixed(2) }}s
@@ -151,20 +154,18 @@ const currentExperiencePack = computed(() => {
     >
       <template #description>
         <span style="cursor: pointer; color: var(--el-color-primary)">
-          {{ showPerformanceDetails ? t('settingAbout.hideDetails') : t('settingAbout.viewDetails') }}
+          {{
+            showPerformanceDetails ? t('settingAbout.hideDetails') : t('settingAbout.viewDetails')
+          }}
         </span>
       </template>
     </t-block-line>
     <template v-if="showPerformanceDetails && performanceSummary">
       <t-block-line :title="t('settingAbout.mainProcessTime')">
-        <template #description>
-          {{ performanceSummary.mainProcessTime.toFixed(3) }}s
-        </template>
+        <template #description> {{ performanceSummary.mainProcessTime.toFixed(3) }}s </template>
       </t-block-line>
       <t-block-line :title="t('settingAbout.rendererTime')">
-        <template #description>
-          {{ performanceSummary.rendererTime.toFixed(3) }}s
-        </template>
+        <template #description> {{ performanceSummary.rendererTime.toFixed(3) }}s </template>
       </t-block-line>
       <t-block-line :title="t('settingAbout.modulesLoaded')">
         <template #description>
@@ -175,10 +176,13 @@ const currentExperiencePack = computed(() => {
         <template #description>
           <span
             :style="`color: ${
-              performanceSummary.rating === 'excellent' ? 'var(--el-color-success)' :
-              performanceSummary.rating === 'good' ? 'var(--el-color-warning)' :
-              performanceSummary.rating === 'fair' ? 'var(--el-color-error)' :
-              'var(--el-color-danger)'
+              performanceSummary.rating === 'excellent'
+                ? 'var(--el-color-success)'
+                : performanceSummary.rating === 'good'
+                  ? 'var(--el-color-warning)'
+                  : performanceSummary.rating === 'fair'
+                    ? 'var(--el-color-error)'
+                    : 'var(--el-color-danger)'
             }`"
           >
             {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
@@ -197,8 +201,14 @@ const currentExperiencePack = computed(() => {
         </template>
       </t-block-line>
     </template>
-    <t-block-line :title="t('settingAbout.electron')" :description="processInfo.versions?.electron"></t-block-line>
-    <t-block-line :title="t('settingAbout.v8')" :description="processInfo.versions?.v8"></t-block-line>
+    <t-block-line
+      :title="t('settingAbout.electron')"
+      :description="processInfo.versions?.electron"
+    ></t-block-line>
+    <t-block-line
+      :title="t('settingAbout.v8')"
+      :description="processInfo.versions?.v8"
+    ></t-block-line>
     <t-block-line :title="t('settingAbout.os')">
       <template #description>
         <span flex gap-0 items-center>

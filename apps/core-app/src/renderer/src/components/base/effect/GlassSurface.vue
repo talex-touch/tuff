@@ -29,10 +29,10 @@
           />
 
           <feDisplacementMap
+            id="redchannel"
             ref="redChannelRef"
             in="SourceGraphic"
             in2="map"
-            id="redchannel"
             result="dispRed"
           />
           <feColorMatrix
@@ -46,10 +46,10 @@
           />
 
           <feDisplacementMap
+            id="greenchannel"
             ref="greenChannelRef"
             in="SourceGraphic"
             in2="map"
-            id="greenchannel"
             result="dispGreen"
           />
           <feColorMatrix
@@ -63,10 +63,10 @@
           />
 
           <feDisplacementMap
+            id="bluechannel"
             ref="blueChannelRef"
             in="SourceGraphic"
             in2="map"
-            id="bluechannel"
             result="dispBlue"
           />
           <feColorMatrix

@@ -143,11 +143,7 @@ export class TuffDashboardModule extends BaseModule {
     const [progress, scanRows] = await Promise.all([
       fileProvider.getIndexingProgress(),
       db
-        ? db
-            .select()
-            .from(scanProgress)
-            .orderBy(desc(scanProgress.lastScanned))
-            .limit(limit)
+        ? db.select().from(scanProgress).orderBy(desc(scanProgress.lastScanned)).limit(limit)
         : Promise.resolve([])
     ])
 
@@ -188,7 +184,10 @@ export class TuffDashboardModule extends BaseModule {
 
     const [rows, totalRow] = await Promise.all([
       db.select().from(config).orderBy(config.key).limit(limit),
-      db.select({ total: sql<number>`COUNT(*)` }).from(config).limit(1)
+      db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(config)
+        .limit(1)
     ])
 
     const entries = rows.map((row) => {
@@ -237,7 +236,10 @@ export class TuffDashboardModule extends BaseModule {
         })
       )
       recentFiles = detailed
-        .filter((entry): entry is { name: string; size: number; updatedAt: string | null } => entry !== null)
+        .filter(
+          (entry): entry is { name: string; size: number; updatedAt: string | null } =>
+            entry !== null
+        )
         .sort((a, b) => {
           const left = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
           const right = b.updatedAt ? new Date(b.updatedAt).getTime() : 0

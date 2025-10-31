@@ -121,65 +121,68 @@ export default defineComponent({
               // 如果禁用则不处理点击
               if (vnode.props && Object.hasOwn(vnode.props, 'disabled')) return
 
-            // 获取之前激活的标签索引
-            const previousActiveIndex = Object.keys(activeNodes).find((key) => activeNodes[key])
-            const previousIndex = previousActiveIndex ? parseInt(previousActiveIndex) : 0
+              // 获取之前激活的标签索引
+              const previousActiveIndex = Object.keys(activeNodes).find((key) => activeNodes[key])
+              const previousIndex = previousActiveIndex ? parseInt(previousActiveIndex) : 0
 
-            // 更新指示器位置
-            const targetEl = event.currentTarget as HTMLElement
-            if (targetEl && indicator.value) {
-              // 清除之前的激活状态
-              indicator.value.classList.remove('indicator-active')
-              updateIndicator(targetEl)
-            }
+              // 更新指示器位置
+              const targetEl = event.currentTarget as HTMLElement
+              if (targetEl && indicator.value) {
+                // 清除之前的激活状态
+                indicator.value.classList.remove('indicator-active')
+                updateIndicator(targetEl)
+              }
 
-            // 处理内容切换动画
-            const el = slotWrapper.value
-            if (el) {
-              const classList = el.classList
-              classList.remove('slideInLeft', 'slideInRight', 'slideOutLeft', 'slideOutRight')
+              // 处理内容切换动画
+              const el = slotWrapper.value
+              if (el) {
+                const classList = el.classList
+                classList.remove('slideInLeft', 'slideInRight', 'slideOutLeft', 'slideOutRight')
 
-              // 如果有之前激活的标签，先播放滑出动画
-              if (previousActiveIndex && lastActive.value) {
-                if (tabIndex > previousIndex) {
-                  classList.add('slideOutLeft')
+                // 如果有之前激活的标签，先播放滑出动画
+                if (previousActiveIndex && lastActive.value) {
+                  if (tabIndex > previousIndex) {
+                    classList.add('slideOutLeft')
+                  } else {
+                    classList.add('slideOutRight')
+                  }
+
+                  setTimeout(() => {
+                    classList.remove('slideOutLeft', 'slideOutRight')
+
+                    // 更新激活状态
+                    Object.keys(activeNodes).forEach((key) => delete activeNodes[key])
+                    lastActive.value = vnode
+                    activeNodes[tabIndex] = vnode.props?.name
+                    emit('update:modelValue', { ...activeNodes })
+
+                    nextTick(() => {
+                      if (tabIndex > previousIndex) {
+                        classList.add('slideInRight')
+                      } else {
+                        classList.add('slideInLeft')
+                      }
+                    })
+                  }, 200)
                 } else {
-                  classList.add('slideOutRight')
-                }
-
-                setTimeout(() => {
-                  classList.remove('slideOutLeft', 'slideOutRight')
-
-                  // 更新激活状态
+                  // 没有之前的激活标签，直接更新状态
                   Object.keys(activeNodes).forEach((key) => delete activeNodes[key])
                   lastActive.value = vnode
                   activeNodes[tabIndex] = vnode.props?.name
                   emit('update:modelValue', { ...activeNodes })
 
                   nextTick(() => {
-                    if (tabIndex > previousIndex) {
-                      classList.add('slideInRight')
-                    } else {
-                      classList.add('slideInLeft')
-                    }
+                    classList.add('slideInRight')
                   })
-                }, 200)
-              } else {
-                // 没有之前的激活标签，直接更新状态
-                Object.keys(activeNodes).forEach((key) => delete activeNodes[key])
-                lastActive.value = vnode
-                activeNodes[tabIndex] = vnode.props?.name
-                emit('update:modelValue', { ...activeNodes })
-
-                nextTick(() => {
-                  classList.add('slideInRight')
-                })
                 }
               }
             }
           },
           {
-            icon: typeof vnode.children === 'object' && vnode.children && 'icon' in vnode.children ? vnode.children.icon : null
+            icon:
+              typeof vnode.children === 'object' && vnode.children && 'icon' in vnode.children
+                ? vnode.children.icon
+                : null
           }
         )
       }
@@ -234,7 +237,11 @@ export default defineComponent({
           const activeChild = children[activeIndex]
 
           if (activeChild && activeChild.children) {
-            if (typeof activeChild.children === 'object' && activeChild.children && 'default' in activeChild.children) {
+            if (
+              typeof activeChild.children === 'object' &&
+              activeChild.children &&
+              'default' in activeChild.children
+            ) {
               activeContent = (activeChild.children as { default: () => any }).default?.()
             } else if (typeof activeChild.children === 'object') {
               activeContent = activeChild.children
@@ -245,7 +252,8 @@ export default defineComponent({
         // 如果没有找到激活内容，尝试使用lastActive
         if (!activeContent && lastActive.value && lastActive.value.children) {
           if (
-            typeof lastActive.value.children === 'object' && lastActive.value.children &&
+            typeof lastActive.value.children === 'object' &&
+            lastActive.value.children &&
             'default' in lastActive.value.children
           ) {
             activeContent = (lastActive.value.children as { default: () => any }).default?.()

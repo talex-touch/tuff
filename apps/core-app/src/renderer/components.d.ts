@@ -35,7 +35,6 @@ declare module 'vue' {
     ElSelect: typeof import('element-plus/es')['ElSelect']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
-    ElSlider: typeof import('element-plus/es')['ElSlider']
     ElTag: typeof import('element-plus/es')['ElTag']
     EmptyAnimate: typeof import('./src/components/base/EmptyAnimate.vue')['default']
     FeatureCard: typeof import('./src/components/plugin/FeatureCard.vue')['default']
@@ -123,8 +122,5 @@ declare module 'vue' {
     Versions: typeof import('./src/components/Versions.vue')['default']
     VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
     ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
-  }
-  export interface GlobalDirectives {
-    vLoading: typeof import('element-plus/es')['ElLoadingDirective']
   }
 }

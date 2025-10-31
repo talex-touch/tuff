@@ -107,9 +107,7 @@
               >
             </div>
             <div v-if="selectedFeature.acceptedInputTypes" class="flex justify-between items-start">
-              <span class="text-sm text-[var(--el-text-color-regular)]">
-                支持的输入类型
-              </span>
+              <span class="text-sm text-[var(--el-text-color-regular)]"> 支持的输入类型 </span>
               <div class="flex flex-wrap gap-1 justify-end max-w-[60%]">
                 <span
                   v-for="inputType in selectedFeature.acceptedInputTypes"
@@ -122,18 +120,17 @@
               </div>
             </div>
             <div v-else class="flex justify-between items-center">
-              <span class="text-sm text-[var(--el-text-color-regular)]">
-                支持的输入类型
-              </span>
+              <span class="text-sm text-[var(--el-text-color-regular)]"> 支持的输入类型 </span>
               <span class="text-xs text-[var(--el-text-color-secondary)]">
                 <i class="i-ri-text mr-1" />
                 text (默认)
               </span>
             </div>
-            <div v-if="selectedFeature.priority !== undefined" class="flex justify-between items-center">
-              <span class="text-sm text-[var(--el-text-color-regular)]">
-                优先级
-              </span>
+            <div
+              v-if="selectedFeature.priority !== undefined"
+              class="flex justify-between items-center"
+            >
+              <span class="text-sm text-[var(--el-text-color-regular)]"> 优先级 </span>
               <span class="text-sm font-medium">{{ selectedFeature.priority }}</span>
             </div>
           </div>
@@ -210,10 +207,7 @@
             {{ t('plugin.features.drawer.rawData') }}
           </h3>
           <ElCollapse>
-            <ElCollapseItem
-              :title="t('plugin.features.drawer.viewFullJson')"
-              name="feature-json"
-            >
+            <ElCollapseItem :title="t('plugin.features.drawer.viewFullJson')" name="feature-json">
               <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
                 <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
                   JSON.stringify(selectedFeature, null, 2)
@@ -243,8 +237,8 @@ const props = defineProps<{
 // Features state - with defensive checks
 const features = computed(() => props.plugin?.features || [])
 
-const totalCommands = computed(
-  () => features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0)
+const totalCommands = computed(() =>
+  features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0)
 )
 
 const { t } = useI18n()

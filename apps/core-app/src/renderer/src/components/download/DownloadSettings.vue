@@ -89,11 +89,7 @@
         </template>
 
         <el-form-item :label="$t('settings.download.temp_dir')">
-          <el-input
-            v-model="form.storage.tempDir"
-            readonly
-            style="width: 300px"
-          >
+          <el-input v-model="form.storage.tempDir" readonly style="width: 300px">
             <template #append>
               <el-button @click="selectTempDir">
                 {{ $t('settings.download.browse') }}
@@ -280,12 +276,15 @@ const handleClose = () => {
 }
 
 // 监听对话框显示状态，重置表单
-watch(() => props.visible, (visible) => {
-  if (visible) {
-    // 这里可以从存储中加载当前配置
-    // loadCurrentConfig()
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) {
+      // 这里可以从存储中加载当前配置
+      // loadCurrentConfig()
+    }
   }
-})
+)
 </script>
 
 <style scoped>

@@ -23,7 +23,6 @@ export interface IBoxOptions {
   data: any
 }
 
-
 export interface IUseSearch {
   searchVal: Ref<string>
   select: Ref<number>

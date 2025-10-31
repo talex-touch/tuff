@@ -80,8 +80,8 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
       typeof meta.label === 'string'
         ? meta.label
         : typeof meta.stage === 'string'
-        ? meta.stage
-        : entry.label.split(':').slice(1).join(':') || entry.label
+          ? meta.stage
+          : entry.label.split(':').slice(1).join(':') || entry.label
     const message = typeof meta.message === 'string' ? meta.message : `${stageLabel}`
     const unit = meta.unit ?? (entry.durationMs >= 1000 ? 's' : 'ms')
     const precision = meta.precision ?? (unit === 's' ? 2 : 0)
@@ -996,13 +996,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           return new Set([...accumulator].filter((id) => current.has(id)))
         }, null)
       }
-      logAppDuration('PreciseLookup', preciseStart, {
-        label: 'Precise term lookup',
-        style: 'info',
-        unit: 'ms',
-        precision: 0,
-        suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
-      }, { logger: (message) => console.debug(message) })
+      logAppDuration(
+        'PreciseLookup',
+        preciseStart,
+        {
+          label: 'Precise term lookup',
+          style: 'info',
+          unit: 'ms',
+          precision: 0,
+          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
+        },
+        { logger: (message) => console.debug(message) }
+      )
     }
 
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
@@ -1022,26 +1027,36 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           ? new Set([...preciseMatchedItemIds, ...phraseSet])
           : phraseSet
       }
-      logAppDuration('PhraseLookup', phraseStart, {
-        label: 'Phrase lookup',
-        style: 'info',
-        unit: 'ms',
-        precision: 0,
-        suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} accumulated result(s)`
-      }, { logger: (message) => console.debug(message) })
+      logAppDuration(
+        'PhraseLookup',
+        phraseStart,
+        {
+          label: 'Phrase lookup',
+          style: 'info',
+          unit: 'ms',
+          precision: 0,
+          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} accumulated result(s)`
+        },
+        { logger: (message) => console.debug(message) }
+      )
     }
 
     const ftsQuery = this.buildFtsQuery(terms)
     const ftsStart = startTiming()
     const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
     if (ftsQuery) {
-      logAppDuration('FTSSearch', ftsStart, {
-        label: 'FTS search',
-        style: 'info',
-        unit: 'ms',
-        precision: 0,
-        suffix: `(${chalk.cyan(ftsQuery)}) returned ${chalk.cyan(ftsMatches.length)} matches`
-      }, { logger: (message) => console.debug(message) })
+      logAppDuration(
+        'FTSSearch',
+        ftsStart,
+        {
+          label: 'FTS search',
+          style: 'info',
+          unit: 'ms',
+          precision: 0,
+          suffix: `(${chalk.cyan(ftsQuery)}) returned ${chalk.cyan(ftsMatches.length)} matches`
+        },
+        { logger: (message) => console.debug(message) }
+      )
     }
 
     const preciseCandidates = preciseMatchedItemIds ? Array.from(preciseMatchedItemIds) : []
@@ -1081,12 +1096,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         )
       )
 
-    logAppDuration('LoadCandidates', fetchStart, {
-      label: `Loaded ${chalk.cyan(files.length)} candidate app rows`,
-      style: 'info',
-      unit: 'ms',
-      precision: 0
-    }, { logger: (message) => console.debug(message) })
+    logAppDuration(
+      'LoadCandidates',
+      fetchStart,
+      {
+        label: `Loaded ${chalk.cyan(files.length)} candidate app rows`,
+        style: 'info',
+        unit: 'ms',
+        precision: 0
+      },
+      { logger: (message) => console.debug(message) }
+    )
 
     if (files.length === 0) {
       console.warn(
@@ -1110,7 +1130,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     const sortedItems = processedResults.map((item) => {
-      const { score, ...rest } = item
+      const { score: _score, ...rest } = item
       return rest
     })
 

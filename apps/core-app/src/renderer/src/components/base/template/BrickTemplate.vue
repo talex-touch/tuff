@@ -5,16 +5,38 @@ const disabled = computed(() => _disabled.value)
 </script>
 
 <template>
-  <div :class="{ disabled }" mr-6 border-solid border rounded-lg relative inline-block px-4 w-60 h-32 class="BrickTemplate color-template fake-background">
+  <div
+    :class="{ disabled }"
+    mr-6
+    border-solid
+    border
+    rounded-lg
+    relative
+    inline-block
+    px-4
+    w-60
+    h-32
+    class="BrickTemplate color-template fake-background"
+  >
     <slot>
       <div>
-        <div inline-block mr-2 class="i-simple-icons-remix" />Template
+        <div inline-block mr-2 class="i-simple-icons-remix" />
+        Template
       </div>
-      <span text-sm>
-        This is a template brick template.
-      </span>
-      <button cursor-pointer bg-transparent class="color-template fake-background" border-solid border rounded px-2
-        py-1 my-2>Open in window</button>
+      <span text-sm> This is a template brick template. </span>
+      <button
+        cursor-pointer
+        bg-transparent
+        class="color-template fake-background"
+        border-solid
+        border
+        rounded
+        px-2
+        py-1
+        my-2
+      >
+        Open in window
+      </button>
     </slot>
   </div>
 </template>
@@ -23,7 +45,7 @@ const disabled = computed(() => _disabled.value)
 .BrickTemplate.disabled button {
   &:hover {
     cursor: not-allowed;
-    background-color: var(--el-color-danger)
+    background-color: var(--el-color-danger);
   }
 }
 </style>

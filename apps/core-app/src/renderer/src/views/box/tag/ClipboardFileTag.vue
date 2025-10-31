@@ -97,4 +97,3 @@ const fileIconUrl = computed(() => {
   }
 }
 </style>
-

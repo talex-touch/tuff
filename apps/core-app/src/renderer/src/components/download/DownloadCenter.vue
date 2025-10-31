@@ -11,15 +11,11 @@
           <span class="stat-item">
             {{ $t('download.downloading') }} ({{ taskStats.downloading }})
           </span>
-          <span class="stat-item">
-            {{ $t('download.waiting') }} ({{ taskStats.pending }})
-          </span>
+          <span class="stat-item"> {{ $t('download.waiting') }} ({{ taskStats.pending }}) </span>
           <span class="stat-item">
             {{ $t('download.completed') }} ({{ taskStats.completed }})
           </span>
-          <span class="stat-item">
-            {{ $t('download.failed') }} ({{ taskStats.failed }})
-          </span>
+          <span class="stat-item"> {{ $t('download.failed') }} ({{ taskStats.failed }}) </span>
         </div>
       </div>
       <div class="header-right">
@@ -150,10 +146,7 @@
     </div>
 
     <!-- 设置对话框 -->
-    <DownloadSettings
-      v-model:visible="settingsVisible"
-      @update-config="updateConfig"
-    />
+    <DownloadSettings v-model:visible="settingsVisible" @update-config="updateConfig" />
   </div>
 </template>
 

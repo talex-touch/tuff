@@ -88,7 +88,7 @@ watch(
       </div>
     </div>
     <div v-if="!guidance" class="TBlockSwitch-Switch TBlockSelection-Func">
-      <span display-none ref="mention" style="transition: 0.2s" />
+      <span ref="mention" display-none style="transition: 0.2s" />
       <!--      Style sync opacity no external setting disabled -->
       <TSwitch v-model="value" />
     </div>

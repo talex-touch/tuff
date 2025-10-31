@@ -4,9 +4,4 @@ export { useKeyboard } from './useKeyboard'
 export { useVisibility } from './useVisibility'
 export { useChannel } from './useChannel'
 
-export type {
-  IClipboardItem,
-  IClipboardOptions,
-  IClipboardHook
-} from './types'
-
+export type { IClipboardItem, IClipboardOptions, IClipboardHook } from './types'

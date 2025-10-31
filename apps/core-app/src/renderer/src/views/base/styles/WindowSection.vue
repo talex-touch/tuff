@@ -19,7 +19,7 @@
       <div class="pointer-border left"></div>
       <div class="pointer-border right"></div>
     </div>
-    <p style="transition: 0.1s" ref="tipRef" />
+    <p ref="tipRef" style="transition: 0.1s" />
   </div>
 </template>
 

@@ -55,7 +55,7 @@ function handleChange(val, e) {
       </div>
     </div>
     <div class="TBlockSelect-Select TBlockSelection-Func">
-      <TSelect @change="handleChange" v-model="value">
+      <TSelect v-model="value" @change="handleChange">
         <slot />
       </TSelect>
     </div>

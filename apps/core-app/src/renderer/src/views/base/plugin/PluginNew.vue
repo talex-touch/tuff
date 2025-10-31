@@ -39,7 +39,9 @@ const installState = reactive({
   official: false
 })
 
-const currentInstallTask = computed(() => installManager.getTaskBySource(installState.source.trim()))
+const currentInstallTask = computed(() =>
+  installManager.getTaskBySource(installState.source.trim())
+)
 const currentInstallStage = computed(() => currentInstallTask.value?.stage)
 const currentInstallProgress = computed(() => {
   const progress = currentInstallTask.value?.progress
@@ -366,11 +368,7 @@ async function handleInstallDegit(): Promise<void> {
     <template #header>
       <div class="PluginNew-Header">
         <div class="PluginNew-HeaderRow">
-          <div
-            i-ri-arrow-left-s-line
-            class="PluginNew-Back"
-            @click="emits('close')"
-          />
+          <div i-ri-arrow-left-s-line class="PluginNew-Back" @click="emits('close')" />
           <p class="PluginNew-Title">Plugin Workspace</p>
           <div class="PluginNew-TabGroup">
             <FlatButton :primary="activeTab === 'install'" mini @click="activeTab = 'install'">
@@ -419,9 +417,7 @@ async function handleInstallDegit(): Promise<void> {
             />
           </el-select>
         </div>
-        <p class="InstallHint">
-          支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。
-        </p>
+        <p class="InstallHint">支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。</p>
       </BlockTemplate>
 
       <BlockTemplate title="附加元数据 (可选)">
@@ -453,7 +449,9 @@ async function handleInstallDegit(): Promise<void> {
             <p>{{ installState.message }}</p>
             <p v-if="installState.provider">
               来源类型：
-              {{ providerLabels[installState.provider as PluginProviderType] || installState.provider }}
+              {{
+                providerLabels[installState.provider as PluginProviderType] || installState.provider
+              }}
               <span v-if="installState.official" class="InstallStatus-Official">官方</span>
             </p>
             <ul v-if="installPreview.length" class="InstallManifest">
@@ -469,11 +467,7 @@ async function handleInstallDegit(): Promise<void> {
             @click="installPluginFromSource"
           >
             <div class="InstallButtonContent">
-              <div
-                v-if="manualShowProgress"
-                class="InstallProgress"
-                :style="manualProgressStyle"
-              >
+              <div v-if="manualShowProgress" class="InstallProgress" :style="manualProgressStyle">
                 <span>{{ manualProgressDisplay }}</span>
               </div>
               <i v-else-if="manualShowSpinner" class="i-ri-loader-4-line animate-spin" />
@@ -780,8 +774,10 @@ async function handleInstallDegit(): Promise<void> {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background:
-    conic-gradient(var(--el-color-primary) var(--progress), rgba(var(--el-color-primary-rgb), 0.15) 0);
+  background: conic-gradient(
+    var(--el-color-primary) var(--progress),
+    rgba(var(--el-color-primary-rgb), 0.15) 0
+  );
   display: flex;
   align-items: center;
   justify-content: center;

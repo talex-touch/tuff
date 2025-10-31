@@ -72,9 +72,7 @@
     <!-- 进度条 -->
     <div v-if="showProgress" class="task-progress">
       <div class="progress-info">
-        <span class="progress-text">
-          {{ task.progress?.percentage || 0 }}%
-        </span>
+        <span class="progress-text"> {{ task.progress?.percentage || 0 }}% </span>
         <span v-if="task.progress?.remainingTime" class="remaining-time">
           {{ formatRemainingTime(task.progress.remainingTime) }}
         </span>
@@ -88,12 +86,7 @@
 
     <!-- 错误信息 -->
     <div v-if="task.error" class="task-error">
-      <el-alert
-        :title="task.error"
-        type="error"
-        :closable="false"
-        show-icon
-      />
+      <el-alert :title="task.error" type="error" :closable="false" show-icon />
     </div>
 
     <!-- 任务详情 -->
@@ -167,11 +160,9 @@ const taskStatusClass = computed(() => ({
 
 // 是否显示进度条
 const showProgress = computed(() => {
-  return [
-    DownloadStatus.DOWNLOADING,
-    DownloadStatus.COMPLETED,
-    DownloadStatus.FAILED
-  ].includes(props.task.status as DownloadStatus)
+  return [DownloadStatus.DOWNLOADING, DownloadStatus.COMPLETED, DownloadStatus.FAILED].includes(
+    props.task.status as DownloadStatus
+  )
 })
 
 // 获取模块名称
@@ -315,19 +306,19 @@ const formatRemainingTime = (seconds: number): string => {
 }
 
 .task-downloading {
-  border-left: 4px solid #409EFF;
+  border-left: 4px solid #409eff;
 }
 
 .task-completed {
-  border-left: 4px solid #67C23A;
+  border-left: 4px solid #67c23a;
 }
 
 .task-failed {
-  border-left: 4px solid #F56C6C;
+  border-left: 4px solid #f56c6c;
 }
 
 .task-paused {
-  border-left: 4px solid #E6A23C;
+  border-left: 4px solid #e6a23c;
 }
 
 .task-cancelled {

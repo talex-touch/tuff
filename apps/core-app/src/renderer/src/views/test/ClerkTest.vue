@@ -2,9 +2,7 @@
   <div class="clerk-test">
     <h2>Clerk 认证测试</h2>
 
-    <div v-if="isLoading" class="loading">
-      正在加载 Clerk...
-    </div>
+    <div v-if="isLoading" class="loading">正在加载 Clerk...</div>
 
     <div v-else-if="isAuthenticated" class="authenticated">
       <h3>已登录</h3>
@@ -12,16 +10,12 @@
       <p>邮箱: {{ getPrimaryEmail() }}</p>
       <p>会话ID: {{ authState.sessionId }}</p>
 
-      <el-button @click="signOut" type="danger">
-        登出
-      </el-button>
+      <el-button type="danger" @click="signOut"> 登出 </el-button>
     </div>
 
     <div v-else class="not-authenticated">
       <h3>未登录</h3>
-      <el-button @click="signIn" type="primary">
-        登录
-      </el-button>
+      <el-button type="primary" @click="signIn"> 登录 </el-button>
     </div>
 
     <div class="debug-info">
@@ -34,15 +28,8 @@
 <script setup lang="ts">
 import { useClerkAuth } from '~/modules/auth/useClerkAuth'
 
-const {
-  authState,
-  isLoading,
-  isAuthenticated,
-  signIn,
-  signOut,
-  getDisplayName,
-  getPrimaryEmail
-} = useClerkAuth()
+const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, getPrimaryEmail } =
+  useClerkAuth()
 </script>
 
 <style scoped>

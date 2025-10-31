@@ -20,7 +20,7 @@ export class NetworkMonitor {
   async monitorNetwork(): Promise<NetworkStatus> {
     const now = Date.now()
 
-    if (this.cachedStatus && (now - this.lastCheckTime) < this.cacheTimeout) {
+    if (this.cachedStatus && now - this.lastCheckTime < this.cacheTimeout) {
       return this.cachedStatus
     }
 
@@ -62,12 +62,14 @@ export class NetworkMonitor {
    * @returns Current network status or default values if not available
    */
   getCurrentStatus(): NetworkStatus {
-    return this.cachedStatus || {
-      speed: 1024 * 1024,
-      latency: 100,
-      stability: 0.5,
-      recommendedConcurrency: 2
-    }
+    return (
+      this.cachedStatus || {
+        speed: 1024 * 1024,
+        latency: 100,
+        stability: 0.5,
+        recommendedConcurrency: 2
+      }
+    )
   }
 
   /**
@@ -78,7 +80,10 @@ export class NetworkMonitor {
    * @returns Recommended concurrent download count (1-10)
    */
   getRecommendedConcurrency(speed?: number, latency?: number, stability?: number): number {
-    const status = speed !== undefined ? { speed, latency: latency || 100, stability: stability || 0.5 } : this.getCurrentStatus()
+    const status =
+      speed !== undefined
+        ? { speed, latency: latency || 100, stability: stability || 0.5 }
+        : this.getCurrentStatus()
 
     let concurrency = 1
 
@@ -206,7 +211,9 @@ export class NetworkMonitor {
     this.networkAvailable = false
 
     if (this.latencyHistory.length > 0) {
-      return this.latencyHistory.reduce((sum, latency) => sum + latency, 0) / this.latencyHistory.length
+      return (
+        this.latencyHistory.reduce((sum, latency) => sum + latency, 0) / this.latencyHistory.length
+      )
     }
 
     return 100
@@ -222,11 +229,17 @@ export class NetworkMonitor {
     }
 
     const speedVariance = this.calculateVariance(this.speedHistory)
-    const speedStability = Math.max(0, 1 - (speedVariance / (this.speedHistory.reduce((sum, s) => sum + s, 0) / this.speedHistory.length)))
+    const speedStability = Math.max(
+      0,
+      1 -
+        speedVariance /
+          (this.speedHistory.reduce((sum, s) => sum + s, 0) / this.speedHistory.length)
+    )
 
     const latencyVariance = this.calculateVariance(this.latencyHistory)
-    const avgLatency = this.latencyHistory.reduce((sum, l) => sum + l, 0) / this.latencyHistory.length
-    const latencyStability = Math.max(0, 1 - (latencyVariance / avgLatency))
+    const avgLatency =
+      this.latencyHistory.reduce((sum, l) => sum + l, 0) / this.latencyHistory.length
+    const latencyStability = Math.max(0, 1 - latencyVariance / avgLatency)
 
     return (speedStability + latencyStability) / 2
   }
@@ -238,7 +251,8 @@ export class NetworkMonitor {
    */
   private calculateVariance(values: number[]): number {
     const mean = values.reduce((sum, value) => sum + value, 0) / values.length
-    const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length
+    const variance =
+      values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length
     return Math.sqrt(variance)
   }
 

@@ -49,7 +49,10 @@ export abstract class UpdateProvider {
     }
 
     if (config.type !== this.type) {
-      throw this.createError(UpdateErrorType.API_ERROR, `Invalid provider type: expected ${this.type}, got ${config.type}`)
+      throw this.createError(
+        UpdateErrorType.API_ERROR,
+        `Invalid provider type: expected ${this.type}, got ${config.type}`
+      )
     }
   }
 
@@ -87,14 +90,19 @@ export abstract class UpdateProvider {
   }
 
   // 根据渠道过滤版本
-  protected filterByChannel(releases: GitHubRelease[], channel: AppPreviewChannel): GitHubRelease[] {
-    return releases.filter(release => {
+  protected filterByChannel(
+    releases: GitHubRelease[],
+    channel: AppPreviewChannel
+  ): GitHubRelease[] {
+    return releases.filter((release) => {
       const tagName = release.tag_name.toLowerCase()
 
       if (channel === AppPreviewChannel.SNAPSHOT) {
         return tagName.includes('snapshot') || tagName.includes('beta') || tagName.includes('alpha')
       } else {
-        return !tagName.includes('snapshot') && !tagName.includes('beta') && !tagName.includes('alpha')
+        return (
+          !tagName.includes('snapshot') && !tagName.includes('beta') && !tagName.includes('alpha')
+        )
       }
     })
   }
@@ -114,7 +122,7 @@ export abstract class UpdateProvider {
     const platform = this.getCurrentPlatform()
     const arch = this.getCurrentArch()
 
-    return assets.filter(asset => {
+    return assets.filter((asset) => {
       // 平台匹配
       const platformMatch = asset.platform === platform
 
@@ -172,14 +180,20 @@ export abstract class UpdateProvider {
   // 验证Release数据
   protected validateRelease(release: GitHubRelease): void {
     if (!release.tag_name || !release.name || !release.published_at) {
-      throw this.createError(UpdateErrorType.PARSE_ERROR, 'Invalid release: missing required fields')
+      throw this.createError(
+        UpdateErrorType.PARSE_ERROR,
+        'Invalid release: missing required fields'
+      )
     }
 
     if (!release.assets || !Array.isArray(release.assets)) {
-      throw this.createError(UpdateErrorType.PARSE_ERROR, 'Invalid release: missing or invalid assets')
+      throw this.createError(
+        UpdateErrorType.PARSE_ERROR,
+        'Invalid release: missing or invalid assets'
+      )
     }
 
     // 验证每个资源
-    release.assets.forEach(asset => this.validateAsset(asset))
+    release.assets.forEach((asset) => this.validateAsset(asset))
   }
 }

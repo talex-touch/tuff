@@ -1,16 +1,16 @@
 <template>
-  <div class="FlatInput-Container" ref="completionInput">
-    <FlatInput placeholder="Search..." v-model="value" :icon="icon" />
+  <div ref="completionInput" class="FlatInput-Container">
+    <FlatInput v-model="value" placeholder="Search..." :icon="icon" />
   </div>
   <teleport to="body">
-    <div @click="value = ''" class="FlatInput-Completion" ref="completionWrapper">
+    <div ref="completionWrapper" class="FlatInput-Completion" @click="value = ''">
       <!--      <el-scrollbar>-->
       <div
+        v-for="(item, index) in _res"
+        :key="item"
         v-wave
         class="FlatInput-Completion-Item fake-background"
         :style="`--d: ${index * 0.125}s`"
-        v-for="(item, index) in _res"
-        :key="item"
       >
         <slot :item="item">
           {{ item }}

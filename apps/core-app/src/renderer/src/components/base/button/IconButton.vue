@@ -1,11 +1,11 @@
 <template>
   <div
-    @click="handleClick"
-    @mouseenter="hover = true"
     :class="{ plain, small, select: _select, undot, scaleUpper, middle }"
-    @mouseleave="hover = false"
     role="button"
     class="IconButton-Container fake-background transition"
+    @click="handleClick"
+    @mouseenter="hover = true"
+    @mouseleave="hover = false"
   >
     <div class="IconButton-Icon">
       <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">

@@ -1,19 +1,19 @@
 /**
+ * Cache entry interface
+ */
+interface CacheEntry {
+  data: any
+  timestamp: number
+  ttl: number
+  source: string
+}
+
+/**
  * Update cache manager for reducing GitHub API calls
  */
 export class UpdateCache {
   private cache: Map<string, CacheEntry> = new Map()
   private readonly defaultTTL = 5 * 60 * 1000 // 5 minutes default TTL
-
-  /**
-   * Cache entry interface
-   */
-  interface CacheEntry {
-    data: any
-    timestamp: number
-    ttl: number
-    source: string
-  }
 
   /**
    * Get cached data

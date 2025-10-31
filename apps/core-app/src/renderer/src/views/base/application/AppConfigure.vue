@@ -148,11 +148,7 @@ function handleHelp(): void {
             </t-block-line>
           </t-group-block>
 
-          <t-group-block
-            v-if="info"
-            :name="t('appConfigure.spec')"
-            icon="apps"
-          >
+          <t-group-block v-if="info" :name="t('appConfigure.spec')" icon="apps">
             <t-block-line :title="t('appConfigure.version')">
               <template #description> 1 </template>
             </t-block-line>

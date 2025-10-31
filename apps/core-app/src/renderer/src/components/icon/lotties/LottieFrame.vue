@@ -1,5 +1,5 @@
 <template>
-  <div class="LottieFrame-Container" ref="dom"></div>
+  <div ref="dom" class="LottieFrame-Container"></div>
 </template>
 
 <script name="LottieFrame" setup>

@@ -162,9 +162,15 @@ function formatFileSize(bytes: number): string {
       <t-select-item :model-value="256 * 1024">{{ formatFileSize(256 * 1024) }}</t-select-item>
       <t-select-item :model-value="512 * 1024">{{ formatFileSize(512 * 1024) }}</t-select-item>
       <t-select-item :model-value="1024 * 1024">{{ formatFileSize(1024 * 1024) }}</t-select-item>
-      <t-select-item :model-value="2 * 1024 * 1024">{{ formatFileSize(2 * 1024 * 1024) }}</t-select-item>
-      <t-select-item :model-value="4 * 1024 * 1024">{{ formatFileSize(4 * 1024 * 1024) }}</t-select-item>
-      <t-select-item :model-value="8 * 1024 * 1024">{{ formatFileSize(8 * 1024 * 1024) }}</t-select-item>
+      <t-select-item :model-value="2 * 1024 * 1024">{{
+        formatFileSize(2 * 1024 * 1024)
+      }}</t-select-item>
+      <t-select-item :model-value="4 * 1024 * 1024">{{
+        formatFileSize(4 * 1024 * 1024)
+      }}</t-select-item>
+      <t-select-item :model-value="8 * 1024 * 1024">{{
+        formatFileSize(8 * 1024 * 1024)
+      }}</t-select-item>
     </t-block-select>
 
     <!-- Retry attempts -->

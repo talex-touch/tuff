@@ -45,7 +45,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           url: this.apiUrl,
           timeout: this.timeout,
           headers: {
-            'Accept': 'application/vnd.github.v3+json',
+            Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'TalexTouch-Updater/1.0'
           }
         }
@@ -102,12 +102,19 @@ export class GithubUpdateProvider extends UpdateProvider {
           // Calculate backoff delay
           const baseDelay = 2000 // 2 seconds
           const maxDelay = 60000 // 1 minute
-          const delay = (rateLimitManager as any).calculateBackoffDelay(attempt - 1, baseDelay, maxDelay)
+          const delay = (rateLimitManager as any).calculateBackoffDelay(
+            attempt - 1,
+            baseDelay,
+            maxDelay
+          )
 
-          console.warn(`[GithubUpdateProvider] Attempt ${attempt} failed, retrying in ${delay}ms:`, (error as any).message)
+          console.warn(
+            `[GithubUpdateProvider] Attempt ${attempt} failed, retrying in ${delay}ms:`,
+            (error as any).message
+          )
 
           // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, delay))
+          await new Promise((resolve) => setTimeout(resolve, delay))
           continue
         }
 
@@ -127,17 +134,9 @@ export class GithubUpdateProvider extends UpdateProvider {
           const statusCode = (error as any).response.status
 
           if (statusCode >= 500) {
-            throw this.createError(
-              UpdateErrorType.API_ERROR,
-              'GitHub API server error',
-              error
-            )
+            throw this.createError(UpdateErrorType.API_ERROR, 'GitHub API server error', error)
           } else if (statusCode === 404) {
-            throw this.createError(
-              UpdateErrorType.API_ERROR,
-              'Repository not found',
-              error
-            )
+            throw this.createError(UpdateErrorType.API_ERROR, 'Repository not found', error)
           } else if (statusCode === 403) {
             throw this.createError(
               UpdateErrorType.API_ERROR,
@@ -170,11 +169,9 @@ export class GithubUpdateProvider extends UpdateProvider {
     }
 
     // If we get here, all retries failed
-    throw this.createError(
-      UpdateErrorType.API_ERROR,
-      'All retry attempts failed',
-      { attempts: maxRetries }
-    )
+    throw this.createError(UpdateErrorType.API_ERROR, 'All retry attempts failed', {
+      attempts: maxRetries
+    })
   }
 
   // 获取下载资源列表
@@ -183,7 +180,7 @@ export class GithubUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map(asset => ({
+    return release.assets.map((asset) => ({
       name: asset.name,
       url: (asset as any).browser_download_url || asset.url,
       size: asset.size || 0,
@@ -201,7 +198,7 @@ export class GithubUpdateProvider extends UpdateProvider {
         url: 'https://api.github.com',
         timeout: 5000,
         headers: {
-          'Accept': 'application/vnd.github.v3+json',
+          Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'TalexTouch-Updater/1.0'
         }
       }
@@ -222,7 +219,12 @@ export class GithubUpdateProvider extends UpdateProvider {
       return 'win32'
     } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
       return 'darwin'
-    } else if (lower.includes('linux') || lower.includes('.deb') || lower.includes('.rpm') || lower.includes('.AppImage')) {
+    } else if (
+      lower.includes('linux') ||
+      lower.includes('.deb') ||
+      lower.includes('.rpm') ||
+      lower.includes('.AppImage')
+    ) {
       return 'linux'
     }
 
@@ -263,7 +265,7 @@ export class GithubUpdateProvider extends UpdateProvider {
     }
 
     // 提取前几行作为摘要
-    const lines = release.body.split('\n').filter(line => line.trim())
+    const lines = release.body.split('\n').filter((line) => line.trim())
     const summary = lines.slice(0, 3).join('\n')
 
     return summary.length > 200 ? summary.substring(0, 200) + '...' : summary

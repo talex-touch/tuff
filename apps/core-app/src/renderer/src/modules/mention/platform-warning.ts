@@ -7,9 +7,7 @@ import VWave from 'v-wave'
  * @param warningMessage - 警告消息
  * @returns Promise，当对话框关闭时解析
  */
-export async function showPlatformCompatibilityWarning(
-  warningMessage: string
-): Promise<void> {
+export async function showPlatformCompatibilityWarning(warningMessage: string): Promise<void> {
   return new Promise<void>((resolve) => {
     const root: HTMLDivElement = document.createElement('div')
 

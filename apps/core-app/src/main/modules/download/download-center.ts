@@ -1,6 +1,5 @@
 import { BaseModule } from '../abstract-base-module'
 import { ModuleInitContext, ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
-import { genTouchChannel } from '../../core/channel-core'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { DatabaseService } from './database-service'
 import { TaskQueue } from './task-queue'
