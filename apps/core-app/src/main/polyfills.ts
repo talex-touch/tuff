@@ -8,6 +8,12 @@ import packageJson from '../../../../package.json'
 
 globalThis.$pkg = packageJson
 
+// Set APP_VERSION environment variable from package.json if not already set
+// This allows runtime access to version while keeping package.json as source of truth
+if (!process.env.APP_VERSION) {
+  process.env.APP_VERSION = packageJson.version
+}
+
 globalThis.__filename = fileURLToPath(import.meta.url)
 globalThis.__dirname = path.dirname(__filename)
 
