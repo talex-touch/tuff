@@ -52,7 +52,7 @@ mac:
   sign: false
   gatekeeperAssess: false
   target:
-    - target: zip
+    - target: dmg
       arch: [arm64]
   icon: build/icon.icns
   category: public.app-category.productivity
