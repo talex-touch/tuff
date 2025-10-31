@@ -8,9 +8,7 @@ import { genTouchChannel } from './channel-core'
 import {
   AppStartEvent,
   TalexEvents,
-  touchEventBus,
-  WindowHiddenEvent,
-  WindowShownEvent
+  touchEventBus
 } from './eventbus/touch-event'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { innerRootPath } from './precore'
@@ -35,7 +33,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   channel: ITouchChannel
 
-  private isQuitting = false
+  public isQuitting = false
 
   constructor(app: Electron.App) {
     mainLog.info('Running under application root', {
@@ -159,53 +157,6 @@ export class TouchApp implements TalexTouch.TouchApp {
         }
       }
     })
-  }
-
-  /**
-   * Setup window close handler except for quitting
-   * @note This method is called at line 207, but TypeScript incorrectly reports it as unused
-   */
-  // @ts-expect-error - Method is used but TypeScript incorrectly flags it
-  private _setupWindowCloseHandler(): void {
-    this.window.window.on('close', (event) => {
-      // 读取用户设置 - 默认最小化到托盘
-      const closeToTray = (this.config.data as any)?.window?.closeToTray ?? true
-
-      if (closeToTray && !this.isQuitting) {
-        // 阻止默认关闭行为
-        event.preventDefault()
-
-        // 隐藏窗口
-        this.window.window.hide()
-
-        // 触发窗口隐藏事件
-        touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
-
-        mainLog.debug('Window hidden to tray instead of closing')
-      }
-    })
-
-    // 监听窗口显示/隐藏事件
-    this.window.window.on('show', () => {
-      touchEventBus.emit(TalexEvents.WINDOW_SHOWN, new WindowShownEvent())
-    })
-
-    this.window.window.on('hide', () => {
-      touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
-    })
-
-    // macOS: 处理 Dock 图标点击
-    if (process.platform === 'darwin') {
-      this.app.on('activate', () => {
-        if (!this.window.window.isVisible()) {
-          this.window.window.show()
-          this.window.window.focus()
-        }
-      })
-    }
-
-    // Setup window close handler
-    this._setupWindowCloseHandler()
   }
 
   /**
