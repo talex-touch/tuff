@@ -263,6 +263,8 @@ jobs:
       - name: Build Tuff App
         shell: bash
         run: |
+          set -e  # Exit immediately if a command exits with a non-zero status
+
           echo "Starting build process for $RUNNER_OS..."
           echo "Current directory: $(pwd)"
           echo "RELEASE_TYPE: $RELEASE_TYPE"
@@ -276,66 +278,120 @@ jobs:
           # 检查 dist 目录
           echo "Checking dist directory before build:"
           if [ -d "apps/core-app/dist" ]; then
-            echo "Dist directory exists, contents:"
-            ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
+            echo "Dist directory exists, cleaning..."
+            rm -rf apps/core-app/dist/* || echo "Cannot clean dist (may be empty)"
           else
             echo "Dist directory does not exist (will be created)"
           fi
 
+          # 执行构建
+          BUILD_FAILED=false
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows snapshot..."
               echo "Running: pnpm core:build:snapshot:win"
-              pnpm core:build:snapshot:win || {
-                echo "ERROR: Windows snapshot build failed!"
-                echo "Checking for partial build artifacts..."
-                if [ -d "apps/core-app/dist" ]; then
-                  echo "Dist directory contents after failed build:"
-                  find apps/core-app/dist -type f 2>/dev/null | head -20 || echo "Cannot list files"
-                fi
-                exit 1
-              }
+              if ! pnpm core:build:snapshot:win; then
+                BUILD_FAILED=true
+                echo "ERROR: Windows snapshot build failed with exit code $?"
+              fi
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS snapshot..."
-              pnpm core:build:snapshot:mac
+              if ! pnpm core:build:snapshot:mac; then
+                BUILD_FAILED=true
+                echo "ERROR: macOS snapshot build failed with exit code $?"
+              fi
             else
               echo "Building Linux snapshot..."
-              pnpm core:build:snapshot:linux
+              if ! pnpm core:build:snapshot:linux; then
+                BUILD_FAILED=true
+                echo "ERROR: Linux snapshot build failed with exit code $?"
+              fi
             fi
           else
             echo "Building release version..."
-            pnpm core:build || {
-              echo "ERROR: Release build failed!"
-              exit 1
-            }
+            if ! pnpm core:build; then
+              BUILD_FAILED=true
+              echo "ERROR: Release build failed with exit code $?"
+            fi
           fi
 
           # 验证构建输出
+          echo ""
           echo "Verifying build output..."
-          if [ -d "apps/core-app/dist" ]; then
-            echo "✓ Dist directory exists"
-            echo "Dist directory contents:"
-            ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
 
-            echo "Searching for build artifacts:"
-            if [ "$RUNNER_OS" = "Windows" ]; then
-              find apps/core-app/dist -name "*.exe" -type f 2>/dev/null || echo "No .exe files found"
-            elif [ "$RUNNER_OS" = "macOS" ]; then
-              find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null || echo "No .dmg files found"
-            else
-              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" -o -name "*.snap" \) -type f 2>/dev/null || echo "No Linux artifacts found"
+          if [ "$BUILD_FAILED" = "true" ]; then
+            echo "ERROR: Build step reported failure!"
+            if [ -d "apps/core-app/dist" ]; then
+              echo "Checking for partial build artifacts..."
+              find apps/core-app/dist -type f 2>/dev/null | head -20 || echo "Cannot list files"
             fi
+            exit 1
+          fi
 
-            echo "Total files in dist:"
-            find apps/core-app/dist -type f 2>/dev/null | wc -l || echo "Cannot count files"
-
-            echo "Build completed successfully"
-          else
-            echo "ERROR: Build artifacts not found!"
+          if [ ! -d "apps/core-app/dist" ]; then
+            echo "ERROR: Dist directory was not created!"
             echo "Checking if build directory exists:"
             ls -la apps/core-app/ || echo "Cannot list core-app directory"
             exit 1
           fi
+
+          echo "✓ Dist directory exists"
+
+          # 检查文件数量
+          FILE_COUNT=$(find apps/core-app/dist -type f 2>/dev/null | wc -l || echo "0")
+          echo "Total files in dist: $FILE_COUNT"
+
+          if [ "$FILE_COUNT" = "0" ]; then
+            echo "ERROR: Dist directory exists but is empty!"
+            echo "Build may have failed silently. Checking dist structure:"
+            ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
+            echo ""
+            echo "Checking for any files in subdirectories:"
+            find apps/core-app/dist -type f -o -type d 2>/dev/null | head -20 || echo "No files found"
+            exit 1
+          fi
+
+          echo "Dist directory contents:"
+          ls -la apps/core-app/dist/ || echo "Cannot list dist contents"
+
+          echo ""
+          echo "Searching for build artifacts:"
+          ARTIFACTS_FOUND=false
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            EXE_COUNT=$(find apps/core-app/dist -name "*.exe" -type f 2>/dev/null | wc -l || echo "0")
+            echo "Found $EXE_COUNT .exe file(s)"
+            if [ "$EXE_COUNT" -gt 0 ]; then
+              find apps/core-app/dist -name "*.exe" -type f 2>/dev/null
+              ARTIFACTS_FOUND=true
+            fi
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            DMG_COUNT=$(find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null | wc -l || echo "0")
+            echo "Found $DMG_COUNT .dmg file(s)"
+            if [ "$DMG_COUNT" -gt 0 ]; then
+              find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null
+              ARTIFACTS_FOUND=true
+            fi
+          else
+            APPIMAGE_COUNT=$(find apps/core-app/dist -name "*.AppImage" -type f 2>/dev/null | wc -l || echo "0")
+            DEB_COUNT=$(find apps/core-app/dist -name "*.deb" -type f 2>/dev/null | wc -l || echo "0")
+            SNAP_COUNT=$(find apps/core-app/dist -name "*.snap" -type f 2>/dev/null | wc -l || echo "0")
+            echo "Found $APPIMAGE_COUNT .AppImage, $DEB_COUNT .deb, $SNAP_COUNT .snap file(s)"
+            if [ "$APPIMAGE_COUNT" -gt 0 ] || [ "$DEB_COUNT" -gt 0 ] || [ "$SNAP_COUNT" -gt 0 ]; then
+              find apps/core-app/dist \( -name "*.AppImage" -o -name "*.deb" -o -name "*.snap" \) -type f 2>/dev/null
+              ARTIFACTS_FOUND=true
+            fi
+          fi
+
+          if [ "$ARTIFACTS_FOUND" = "false" ] && [ "$RUNNER_OS" = "Windows" ]; then
+            echo "WARNING: No .exe files found in dist directory!"
+            echo "This may indicate the electron-builder step failed silently."
+            echo "Check the electron-builder output above for errors."
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ Build completed successfully"
         env:
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
           RUNNER_OS: ${{ runner.os }}
@@ -375,42 +431,68 @@ jobs:
             exit 1
           }
 
-          Write-Host "`nListing all .exe files in dist:"
+          Write-Host ""
+          Write-Host "Listing all .exe files in dist:"
           $allExeFiles = Get-ChildItem -Path $distPath -Recurse -Include "*.exe" -ErrorAction SilentlyContinue
-          if ($allExeFiles) {
-            $allExeFiles | ForEach-Object {
-              Write-Host "  - $($_.FullName) (Name: $($_.Name))"
+
+          if ($null -eq $allExeFiles -or $allExeFiles.Count -eq 0) {
+            Write-Host "  No .exe files found"
+            Write-Host ""
+            Write-Host "Checking if dist directory is empty..."
+            $allFiles = Get-ChildItem -Path $distPath -Recurse -ErrorAction SilentlyContinue
+            if ($null -eq $allFiles -or $allFiles.Count -eq 0) {
+              Write-Error "Dist directory exists but is empty. Build may have failed silently."
+              Write-Host "Build artifacts check failed. Please review the build step output above."
+              exit 1
+            } else {
+              Write-Host "Found $($allFiles.Count) files in dist (but no .exe files):"
+              $allFiles | Select-Object -First 10 FullName, PSIsContainer | Format-Table -AutoSize
             }
           } else {
-            Write-Host "  No .exe files found"
+            $allExeFiles | ForEach-Object {
+              $fileSize = [math]::Round($_.Length / 1MB, 2)
+              Write-Host "  - $($_.Name) (Size: $fileSize MB, Path: $($_.FullName))"
+            }
           }
 
-          Write-Host "`nSearching for installer with pattern: *-setup.exe"
-          $exists = $allExeFiles | Where-Object { $_.Name -like "*-setup.exe" -or $_.Name -match "-setup\.exe$" }
+          Write-Host ""
+          Write-Host "Searching for installer with pattern: *-setup.exe"
+          $exists = $null
 
-          if (-not $exists) {
-            Write-Host "`nTrying alternative search patterns..."
-            # Try different patterns
-            $alt1 = $allExeFiles | Where-Object { $_.Name -like "*setup*.exe" }
-            $alt2 = $allExeFiles | Where-Object { $_.Name -like "talex-touch*.exe" }
+          if ($null -ne $allExeFiles -and $allExeFiles.Count -gt 0) {
+            $exists = $allExeFiles | Where-Object { $_.Name -like "*-setup.exe" -or $_.Name -match "-setup\.exe$" }
+          }
 
-            if ($alt1) {
-              Write-Host "Found files matching *setup*.exe:"
-              $alt1 | Select-Object FullName, Name
-            }
-            if ($alt2) {
-              Write-Host "Found files matching talex-touch*.exe:"
-              $alt2 | Select-Object FullName, Name
+          if ($null -eq $exists -or $exists.Count -eq 0) {
+            Write-Host ""
+            Write-Host "Trying alternative search patterns..."
+
+            if ($null -ne $allExeFiles -and $allExeFiles.Count -gt 0) {
+              $alt1 = $allExeFiles | Where-Object { $_.Name -like "*setup*.exe" }
+              $alt2 = $allExeFiles | Where-Object { $_.Name -like "talex-touch*.exe" }
+
+              if ($null -ne $alt1 -and $alt1.Count -gt 0) {
+                Write-Host "Found files matching *setup*.exe:"
+                $alt1 | Select-Object FullName, Name | Format-Table -AutoSize
+              }
+
+              if ($null -ne $alt2 -and $alt2.Count -gt 0) {
+                Write-Host "Found files matching talex-touch*.exe:"
+                $alt2 | Select-Object FullName, Name | Format-Table -AutoSize
+              }
             }
 
             Write-Error "NSIS installer not found (*.exe with -setup) in $distPath"
-            Write-Host "`nFull directory structure:"
+            Write-Host ""
+            Write-Host "Full directory structure:"
             Get-ChildItem -Path $distPath -Recurse | Select-Object FullName, PSIsContainer | Format-Table -AutoSize
             exit 1
           } else {
-            Write-Host "`n✓ Found installer(s):"
+            Write-Host ""
+            Write-Host "Found installer(s):"
             $exists | ForEach-Object {
-              Write-Host "  - $($_.FullName) (Size: $([math]::Round($_.Length / 1MB, 2)) MB)"
+              $fileSize = [math]::Round($_.Length / 1MB, 2)
+              Write-Host "  - $($_.FullName) (Size: $fileSize MB)"
             }
           }
 
