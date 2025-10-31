@@ -113,14 +113,83 @@ function build() {
   const buildCmd = process.env.SKIP_TYPECHECK === 'true'
     ? 'electron-vite build'
     : 'npm run build';
-  execSync(buildCmd, { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
 
-  const outPackageJsonPath = path.join(projectRoot, 'out', 'package.json');
+  try {
+    execSync(buildCmd, { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
+  } catch (error) {
+    console.error('\n❌ Application build failed!');
+    console.error(`Exit code: ${error.status || error.code}`);
+    throw error;
+  }
+
+  // 验证 out 目录是否正确生成
+  const outDir = path.join(projectRoot, 'out');
+  console.log('\n=== Verifying out directory after build ===');
+
+  if (!fs.existsSync(outDir)) {
+    console.error('❌ ERROR: out directory does not exist after build!');
+    throw new Error('out directory was not created by electron-vite build');
+  }
+
+  // 检查 out 目录的内容
+  const outItems = fs.readdirSync(outDir, { withFileTypes: true });
+  console.log(`Out directory exists with ${outItems.length} top-level items`);
+
+  if (outItems.length === 0) {
+    console.error('❌ ERROR: out directory is empty after build!');
+    throw new Error('out directory is empty - electron-vite build may have failed');
+  }
+
+  // 检查关键目录是否存在
+  const requiredDirs = ['main', 'preload', 'renderer'];
+  const missingDirs = [];
+
+  requiredDirs.forEach(dir => {
+    const dirPath = path.join(outDir, dir);
+    if (!fs.existsSync(dirPath)) {
+      missingDirs.push(dir);
+    } else {
+      const dirItems = fs.readdirSync(dirPath, { withFileTypes: true });
+      console.log(`  ✓ ${dir}/: ${dirItems.length} items`);
+    }
+  });
+
+  if (missingDirs.length > 0) {
+    console.error(`❌ ERROR: Missing required directories: ${missingDirs.join(', ')}`);
+    throw new Error(`out directory missing required subdirectories: ${missingDirs.join(', ')}`);
+  }
+
+  // 检查 package.json
+  const outPackageJsonPath = path.join(outDir, 'package.json');
   if (!fs.existsSync(outPackageJsonPath)) {
+    console.log('out/package.json not found, generating...');
     require(path.join(__dirname, 'prepare-out-package-json.js'));
   } else {
-    console.log('out/package.json already present');
+    console.log('✓ out/package.json exists');
   }
+
+  // 验证 package.json 内容
+  try {
+    const outPkg = JSON.parse(fs.readFileSync(outPackageJsonPath, 'utf8'));
+    if (!outPkg.main) {
+      console.error('❌ ERROR: out/package.json missing main field!');
+      throw new Error('out/package.json is invalid');
+    }
+    const mainFile = path.join(outDir, outPkg.main);
+    if (!fs.existsSync(mainFile)) {
+      console.error(`❌ ERROR: Main file ${outPkg.main} not found in out directory!`);
+      throw new Error(`Main entry point ${outPkg.main} missing`);
+    }
+    console.log(`✓ Main entry point exists: ${outPkg.main}`);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      throw err; // 已经处理过的错误
+    }
+    console.error(`❌ ERROR: Cannot read/parse out/package.json: ${err.message}`);
+    throw new Error('out/package.json is invalid or missing');
+  }
+
+  console.log('✓ Out directory verification passed\n');
 
   const builderArgs = [`--${normalizedTarget}`];
 
@@ -156,8 +225,7 @@ function build() {
     console.log('Dist directory does not exist yet');
   }
 
-  // 检查 out 目录
-  const outDir = path.join(projectRoot, 'out');
+  // outDir 已经在前面声明了，这里只需要检查即可
   if (fs.existsSync(outDir)) {
     const outFiles = fs.readdirSync(outDir, { withFileTypes: true });
     console.log(`Out directory exists. Contents: ${outFiles.length} items`);
