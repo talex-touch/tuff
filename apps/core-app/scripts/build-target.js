@@ -308,6 +308,7 @@ function build() {
   if (fs.existsSync(distDir)) {
     // 列出所有文件
     const allFiles = [];
+    const allDirs = [];
     function listFiles(dir, basePath = '') {
       try {
         const items = fs.readdirSync(dir, { withFileTypes: true });
@@ -315,6 +316,15 @@ function build() {
           const fullPath = path.join(dir, item.name);
           const relativePath = basePath ? `${basePath}/${item.name}` : item.name;
           if (item.isDirectory()) {
+            // Check if it's a .app directory (macOS application bundle)
+            if (relativePath.endsWith('.app')) {
+              try {
+                const stat = fs.statSync(fullPath);
+                allDirs.push({ path: relativePath, size: stat.size });
+              } catch (statErr) {
+                console.warn(`Warning: Cannot stat ${relativePath}: ${statErr.message}`);
+              }
+            }
             listFiles(fullPath, relativePath);
           } else {
             try {
@@ -400,16 +410,27 @@ function build() {
           throw new Error('Windows build failed: No .exe files generated');
         }
       } else if (normalizedTarget === 'mac') {
+        // Check for both .dmg files and .app directories (dir mode generates .app only)
         const dmgFiles = allFiles.filter(f => f.path.endsWith('.dmg'));
-        console.log(`\nmacOS .dmg files found: ${dmgFiles.length}`);
+        const appDirs = allDirs.filter(d => d.path.endsWith('.app') && d.path.includes('mac-'));
+        console.log(`\nmacOS build artifacts found:`);
+        console.log(`  - .dmg files: ${dmgFiles.length}`);
+        console.log(`  - .app directories: ${appDirs.length}`);
         if (dmgFiles.length > 0) {
           dmgFiles.forEach(file => {
             const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-            console.log(`  - ${file.path} (${sizeMB} MB)`);
+            console.log(`    - ${file.path} (${sizeMB} MB)`);
           });
-        } else {
-          console.error('\nERROR: No .dmg files found in dist directory!');
-          throw new Error('macOS build failed: No .dmg files generated');
+        }
+        if (appDirs.length > 0) {
+          appDirs.forEach(dir => {
+            const sizeMB = (dir.size / (1024 * 1024)).toFixed(2);
+            console.log(`    - ${dir.path} (${sizeMB} MB)`);
+          });
+        }
+        if (dmgFiles.length === 0 && appDirs.length === 0) {
+          console.error('\nERROR: No .dmg or .app files found in dist directory!');
+          throw new Error('macOS build failed: No build artifacts generated');
         }
       } else if (normalizedTarget === 'linux') {
         const appImageFiles = allFiles.filter(f => f.path.endsWith('.AppImage') || f.path.includes('.AppImage'));
