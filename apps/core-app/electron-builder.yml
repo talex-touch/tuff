@@ -61,7 +61,6 @@ mac:
   hardenedRuntime: false
   artifactName: ${name}-${version}.${ext}
 dmg:
-  filesystem: APFS
 linux:
   target:
     - AppImage
