@@ -8,7 +8,9 @@ import { TrayStateManager, TrayState } from './tray-state-manager'
 import {
   touchEventBus,
   DownloadTaskChangedEvent,
-  UpdateAvailableEvent
+  UpdateAvailableEvent,
+  WindowHiddenEvent,
+  WindowShownEvent
 } from '../../core/eventbus/touch-event'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 
@@ -35,7 +37,7 @@ export class TrayManager extends BaseModule {
 
   async onInit(): Promise<void> {
     this.initializeTray()
-
+    this.registerWindowEvents()
     this.registerEventListeners()
   }
 
@@ -130,7 +132,57 @@ export class TrayManager extends BaseModule {
   }
 
   /**
-   * 注册事件监听器
+   * 注册窗口事件监听器
+   */
+  private registerWindowEvents(): void {
+    const mainWindow = $app.window.window
+
+    // 窗口关闭事件处理 - 根据设置决定是否最小化到托盘
+    mainWindow.on('close', (event) => {
+      // 从存储读取用户设置
+      const closeToTray = ($app.config.data as any)?.window?.closeToTray ?? true
+
+      // 检查是否正在退出应用
+      const isQuitting = $app.isQuitting || false
+
+      if (closeToTray && !isQuitting) {
+        // 阻止默认关闭行为
+        event.preventDefault()
+
+        // 隐藏窗口到托盘
+        mainWindow.hide()
+
+        // 触发窗口隐藏事件
+        touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
+
+        console.log('[TrayManager] Window hidden to tray instead of closing')
+      }
+    })
+
+    // 窗口显示事件
+    mainWindow.on('show', () => {
+      touchEventBus.emit(TalexEvents.WINDOW_SHOWN, new WindowShownEvent())
+    })
+
+    // 窗口隐藏事件
+    mainWindow.on('hide', () => {
+      touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
+    })
+
+    // macOS: 处理 Dock 图标点击
+    if (process.platform === 'darwin') {
+      const { app } = require('electron')
+      app.on('activate', () => {
+        if (!mainWindow.isVisible()) {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      })
+    }
+  }
+
+  /**
+   * 注册应用事件监听器
    */
   private registerEventListeners(): void {
     // 窗口显示/隐藏事件
