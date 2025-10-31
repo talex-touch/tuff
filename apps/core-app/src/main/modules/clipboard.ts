@@ -244,7 +244,9 @@ export class ClipboardModule extends BaseModule {
     try {
       const parsed = JSON.parse(content)
       if (Array.isArray(parsed)) {
-        return parsed.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+        return parsed.filter(
+          (entry): entry is string => typeof entry === 'string' && entry.length > 0
+        )
       }
     } catch (error) {
       console.debug('[Clipboard] Failed to parse file list from clipboard item:', error)
@@ -273,7 +275,7 @@ export class ClipboardModule extends BaseModule {
 
     if (resolvedType === 'text') {
       const content = payload.text ?? base.content ?? ''
-      const rawContent = payload.html ?? (base.rawContent ?? null)
+      const rawContent = payload.html ?? base.rawContent ?? null
       return {
         type: 'text',
         content,
@@ -337,7 +339,9 @@ export class ClipboardModule extends BaseModule {
       }
     })
 
-    const fileUrlContent = resolvedPaths.map((filePath) => pathToFileURL(filePath).toString()).join('\n')
+    const fileUrlContent = resolvedPaths
+      .map((filePath) => pathToFileURL(filePath).toString())
+      .join('\n')
     const buffer = Buffer.from(fileUrlContent, 'utf8')
 
     try {
@@ -370,7 +374,7 @@ export class ClipboardModule extends BaseModule {
 
       if (process.platform === 'win32') {
         const script =
-          '$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys(\'^v\')'
+          "$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys('^v')"
         await execFileAsync('powershell', ['-NoLogo', '-NonInteractive', '-Command', script])
         return
       }
@@ -633,24 +637,22 @@ export class ClipboardModule extends BaseModule {
       touchChannel.regChannel(type, 'clipboard:get-history', async ({ data: payload, reply }) => {
         const { page = 1 } = payload ?? {}
         const offset = (page - 1) * PAGE_SIZE
-        const historyRows = await this.db!
-          .select()
+        const historyRows = await this.db!.select()
           .from(clipboardHistory)
           .orderBy(desc(clipboardHistory.timestamp))
           .limit(PAGE_SIZE)
           .offset(offset)
         const history = await this.hydrateWithMeta(historyRows)
-        const totalResult = await this.db!
-          .select({ count: sql<number>`count(*)` })
-          .from(clipboardHistory)
+        const totalResult = await this.db!.select({ count: sql<number>`count(*)` }).from(
+          clipboardHistory
+        )
         const total = totalResult[0]?.count ?? 0
         reply(DataCode.SUCCESS, { history, total, page, pageSize: PAGE_SIZE })
       })
 
       touchChannel.regChannel(type, 'clipboard:set-favorite', async ({ data, reply }) => {
         const { id, isFavorite } = data ?? {}
-        await this.db!
-          .update(clipboardHistory)
+        await this.db!.update(clipboardHistory)
           .set({ isFavorite })
           .where(eq(clipboardHistory.id, id))
         reply(DataCode.SUCCESS, null)
@@ -670,19 +672,15 @@ export class ClipboardModule extends BaseModule {
         reply(DataCode.SUCCESS, null)
       })
 
-      touchChannel.regChannel(
-        type,
-        'clipboard:apply-to-active-app',
-        async ({ data, reply }) => {
-          try {
-            await this.applyToActiveApp((data ?? {}) as ClipboardApplyPayload)
-            reply(DataCode.SUCCESS, { success: true })
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            reply(DataCode.ERROR, { success: false, message })
-          }
+      touchChannel.regChannel(type, 'clipboard:apply-to-active-app', async ({ data, reply }) => {
+        try {
+          await this.applyToActiveApp((data ?? {}) as ClipboardApplyPayload)
+          reply(DataCode.SUCCESS, { success: true })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          reply(DataCode.ERROR, { success: false, message })
         }
-      )
+      })
     }
 
     registerHandlers(ChannelType.MAIN)

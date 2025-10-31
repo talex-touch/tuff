@@ -55,7 +55,6 @@ export const usePluginStore = defineStore('plugin', () => {
    * @param event - Plugin state change event
    */
   function handleStateEvent(event: PluginStateEvent): void {
-
     switch (event.type) {
       case 'added':
         setPlugin(event.plugin)

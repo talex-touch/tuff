@@ -339,11 +339,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private logWarn(
-    message: string,
-    error?: unknown,
-    meta?: Record<string, Primitive>
-  ): void {
+  private logWarn(message: string, error?: unknown, meta?: Record<string, Primitive>): void {
     if (error || meta) {
       fileProviderLog.warn(message, {
         ...(meta ? { meta } : {}),
@@ -362,11 +358,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private logError(
-    message: string,
-    error?: unknown,
-    meta?: Record<string, Primitive>
-  ): void {
+  private logError(message: string, error?: unknown, meta?: Record<string, Primitive>): void {
     if (error || meta) {
       fileProviderLog.error(message, {
         ...(meta ? { meta } : {}),
@@ -1733,10 +1725,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         totalBytes: size ?? null,
         lastError: error instanceof Error ? error.message : 'parser-error'
       })
-      this.recordContentFailure(
-        file.id,
-        error instanceof Error ? error.message : 'parser-error'
-      )
+      this.recordContentFailure(file.id, error instanceof Error ? error.message : 'parser-error')
       file.content = null
       return
     }
@@ -2087,7 +2076,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const { text: searchText, typeFilters } = this.extractSearchFilters(rawText)
     searchLogger.fileSearchText(searchText, typeFilters.size)
 
-    const logTerms = searchText.toLowerCase().split(/[\s/]+/).filter(Boolean)
+    const logTerms = searchText
+      .toLowerCase()
+      .split(/[\s/]+/)
+      .filter(Boolean)
     searchLogger.logKeywordAnalysis(searchText, logTerms, typeFilters.size)
 
     if (!searchText && typeFilters.size === 0) {

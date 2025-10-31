@@ -36,7 +36,7 @@ export class UpdateProviderManager {
 
   // 注册Provider
   registerProvider(provider: UpdateProvider): void {
-    if (!this.providers.find(p => p.type === provider.type)) {
+    if (!this.providers.find((p) => p.type === provider.type)) {
       this.providers.push(provider)
       console.log(`[UpdateProviderManager] Registered provider: ${provider.name}`)
     }
@@ -55,7 +55,7 @@ export class UpdateProviderManager {
   removeCustomProvider(url: string): boolean {
     const provider = this.customProviders.get(url)
     if (provider) {
-      this.providers = this.providers.filter(p => p !== provider)
+      this.providers = this.providers.filter((p) => p !== provider)
       this.customProviders.delete(url)
       console.log(`[UpdateProviderManager] Removed custom provider: ${url}`)
       return true
@@ -71,7 +71,7 @@ export class UpdateProviderManager {
     }
 
     // 查找匹配的Provider
-    const provider = this.providers.find(p => p.canHandle(config))
+    const provider = this.providers.find((p) => p.canHandle(config))
 
     if (provider) {
       this.activeProvider = provider
@@ -84,7 +84,10 @@ export class UpdateProviderManager {
   }
 
   // 检查更新
-  async checkUpdate(channel: AppPreviewChannel, config?: UpdateSourceConfig): Promise<UpdateCheckResult> {
+  async checkUpdate(
+    channel: AppPreviewChannel,
+    config?: UpdateSourceConfig
+  ): Promise<UpdateCheckResult> {
     try {
       // 使用指定的配置或当前激活的Provider
       let provider: UpdateProvider | null = null
@@ -95,7 +98,7 @@ export class UpdateProviderManager {
         provider = this.activeProvider
       } else {
         // 使用默认的GitHub Provider
-        provider = this.providers.find(p => p.type === UpdateProviderType.GITHUB)
+        provider = this.providers.find((p) => p.type === UpdateProviderType.GITHUB)
         if (provider) {
           this.activeProvider = provider
         }
@@ -179,7 +182,7 @@ export class UpdateProviderManager {
   // 获取推荐的Provider
   getRecommendedProvider(): UpdateProvider | null {
     // 优先级：GitHub > Custom > Official
-    const githubProvider = this.providers.find(p => p.type === UpdateProviderType.GITHUB)
+    const githubProvider = this.providers.find((p) => p.type === UpdateProviderType.GITHUB)
     if (githubProvider) {
       return githubProvider
     }
@@ -189,7 +192,7 @@ export class UpdateProviderManager {
       return customProviders[0]
     }
 
-    const officialProvider = this.providers.find(p => p.type === UpdateProviderType.OFFICIAL)
+    const officialProvider = this.providers.find((p) => p.type === UpdateProviderType.OFFICIAL)
     return officialProvider || null
   }
 
@@ -282,7 +285,7 @@ export class UpdateProviderManager {
       totalProviders: this.providers.length,
       customProviders: this.customProviders.size,
       activeProvider: this.activeProvider?.name || null,
-      availableTypes: this.providers.map(p => p.type)
+      availableTypes: this.providers.map((p) => p.type)
     }
   }
 }

@@ -7,7 +7,7 @@ export const SUPPORTED_LANGUAGES = [
   { key: 'en-US', name: 'English' }
 ] as const
 
-export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number]['key']
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['key']
 
 // 语言设置状态
 const currentLanguage = ref<SupportedLanguage>('zh-CN')
@@ -39,7 +39,9 @@ export function useLanguage() {
   function getI18nInstance() {
     const i18n = (window as any).$i18n
     if (!i18n) {
-      throw new Error('[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.')
+      throw new Error(
+        '[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.'
+      )
     }
     return i18n
   }
@@ -98,7 +100,7 @@ export function useLanguage() {
     if (savedFollowSystem) {
       const systemLang = getSystemLanguage()
       await switchLanguage(systemLang)
-    } else if (savedLanguage && SUPPORTED_LANGUAGES.some(lang => lang.key === savedLanguage)) {
+    } else if (savedLanguage && SUPPORTED_LANGUAGES.some((lang) => lang.key === savedLanguage)) {
       await switchLanguage(savedLanguage)
     } else {
       // 默认使用中文
@@ -107,14 +109,17 @@ export function useLanguage() {
   }
 
   // 监听系统语言变化（如果启用了跟随系统）
-  watch(() => followSystemLanguage.value, async (follow) => {
-    if (follow) {
-      const systemLang = getSystemLanguage()
-      if (systemLang !== currentLanguage.value) {
-        await switchLanguage(systemLang)
+  watch(
+    () => followSystemLanguage.value,
+    async (follow) => {
+      if (follow) {
+        const systemLang = getSystemLanguage()
+        if (systemLang !== currentLanguage.value) {
+          await switchLanguage(systemLang)
+        }
       }
     }
-  })
+  )
 
   return {
     currentLanguage: readonly(currentLanguage),

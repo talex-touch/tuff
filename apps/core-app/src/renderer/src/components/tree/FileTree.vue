@@ -9,20 +9,20 @@
       </span>
 
       <span class="FileTree-Func">
-        <IconButton @click="refresh" small icon="refresh" />
+        <IconButton small icon="refresh" @click="refresh" />
       </span>
     </div>
     <el-scrollbar>
       <!--      <div class="FileTree-Container">-->
 
       <el-tree
-        @currentChange="currentChange"
         ref="treeDom"
-        @check-change="click"
         :props="{ label: 'name', children: 'children', isLeaf: 'leaf' }"
         :load="loadNode"
         lazy
         show-checkbox
+        @current-change="currentChange"
+        @check-change="click"
       >
         <template #default="{ node, data }">
           <span class="FileTree-Item">

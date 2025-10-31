@@ -91,4 +91,3 @@ const stackWidth = computed(() => {
   }
 }
 </style>
-

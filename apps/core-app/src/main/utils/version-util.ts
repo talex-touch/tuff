@@ -33,7 +33,9 @@ export function getAppVersion(): string {
   }
 
   // Last resort fallback
-  console.error('[version-util] Unable to determine version from package.json or APP_VERSION env var')
+  console.error(
+    '[version-util] Unable to determine version from package.json or APP_VERSION env var'
+  )
   return '0.0.0'
 }
 
@@ -46,7 +48,7 @@ export function getAppVersion(): string {
 export function getAppVersionFromGlobal(): string | null {
   // @ts-ignore - globalThis.$pkg is defined in polyfills.ts
   if (typeof globalThis.$pkg !== 'undefined' && globalThis.$pkg?.version) {
-    // @ts-ignore
+    // @ts-ignore - globalThis.$pkg is defined in polyfills.ts
     return globalThis.$pkg.version
   }
   return null
@@ -68,4 +70,3 @@ export function getAppVersionSafe(): string {
   // Fallback to file read or env var
   return getAppVersion()
 }
-

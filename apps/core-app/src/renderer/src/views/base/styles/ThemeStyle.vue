@@ -19,11 +19,7 @@
 
       <!-- Mica window style option -->
       <!-- :disabled="os?.version !== 'Windows 10 Pro'" -->
-      <SectionItem
-        v-model="themeStyle.theme.window"
-        :tip="t('themeStyle.micaTip')"
-        title="Mica"
-      >
+      <SectionItem v-model="themeStyle.theme.window" :tip="t('themeStyle.micaTip')" title="Mica">
       </SectionItem>
 
       <!-- Filter window style option -->

@@ -4,8 +4,7 @@
       <template #view>
         <router-view v-slot="{ Component }">
           <transition>
-            <component :is="Component" v-if="Component">
-            </component>
+            <component :is="Component" v-if="Component"> </component>
           </transition>
         </router-view>
       </template>

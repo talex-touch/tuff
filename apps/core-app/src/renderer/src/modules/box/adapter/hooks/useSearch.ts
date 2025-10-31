@@ -2,7 +2,14 @@ import { ref, watch, computed, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode, IBoxOptions } from '..'
-import { IProviderActivate, TuffItem, TuffSearchResult, TuffInputType, TuffQuery, TuffQueryInput } from '@talex-touch/utils'
+import {
+  IProviderActivate,
+  TuffItem,
+  TuffSearchResult,
+  TuffInputType,
+  TuffQuery,
+  TuffQueryInput
+} from '@talex-touch/utils'
 import { IUseSearch } from '../types'
 import { appSetting } from '~/modules/channel/storage'
 
@@ -74,7 +81,7 @@ export function useSearch(
               // 富文本：同时保存纯文本和 HTML
               inputs.push({
                 type: TuffInputType.Html,
-                content: clipboardData.content,     // 纯文本版本
+                content: clipboardData.content, // 纯文本版本
                 rawContent: clipboardData.rawContent, // HTML 版本
                 metadata: clipboardData.meta
               })
@@ -138,9 +145,9 @@ export function useSearch(
     }
     // Call the debounced search immediately by flushing
     debouncedSearch()
-    // @ts-ignore - flush method exists on debounced function
+    // @ts-ignore - flush method exists on debounced function from lodash-es
     if (debouncedSearch.flush) {
-      // @ts-ignore
+      // @ts-ignore - flush method exists on debounced function from lodash-es
       debouncedSearch.flush()
     }
   }
@@ -256,11 +263,7 @@ export function useSearch(
       }
 
       // Clear clipboard after execute if time === 0
-      if (
-        isPluginFeature &&
-        clipboardOptions &&
-        appSetting.tools.autoPaste.time === 0
-      ) {
+      if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
         ;(clipboardOptions as any).last = null
         ;(clipboardOptions as any).detectedAt = null
       }

@@ -64,14 +64,14 @@ onMounted(() => {
     if (!to.path.startsWith(props.route)) return
 
     if (changePointer && dom.value) {
-      (changePointer as any)(dom.value)
+      ;(changePointer as any)(dom.value)
     }
   })
 
   if (dom.value) {
     dom.value['$fixPointer'] = () => {
       if (changePointer && dom.value) {
-        (changePointer as any)(dom.value)
+        ;(changePointer as any)(dom.value)
       }
     }
   }
@@ -89,7 +89,7 @@ function handleClick($event) {
   if (props.route) router.push(props.route)
 
   if (changePointer && dom.value) {
-    (changePointer as any)(dom.value)
+    ;(changePointer as any)(dom.value)
   }
   emit('active', $event)
 }

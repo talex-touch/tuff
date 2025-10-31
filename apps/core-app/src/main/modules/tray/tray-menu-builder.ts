@@ -2,7 +2,6 @@ import { Menu, MenuItemConstructorOptions } from 'electron'
 import { app, shell } from 'electron'
 import path from 'path'
 import { TrayState } from './tray-state-manager'
-import { TalexTouch } from '../../types'
 
 // TODO: 导入 i18n 函数
 function t(key: string, params?: Record<string, any>): string {
@@ -112,9 +111,10 @@ export class TrayMenuBuilder {
         }
       },
       {
-        label: state.activeDownloads > 0
-          ? t('tray.downloadCenterWithCount', { count: state.activeDownloads })
-          : t('tray.downloadCenter'),
+        label:
+          state.activeDownloads > 0
+            ? t('tray.downloadCenterWithCount', { count: state.activeDownloads })
+            : t('tray.downloadCenter'),
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
@@ -172,9 +172,7 @@ export class TrayMenuBuilder {
         },
         { type: 'separator' },
         {
-          label: state.hasUpdate
-            ? t('tray.checkUpdateAvailable')
-            : t('tray.checkUpdate'),
+          label: state.hasUpdate ? t('tray.checkUpdateAvailable') : t('tray.checkUpdate'),
           click: () => {
             $app.window.window.webContents.send('trigger-update-check')
           }

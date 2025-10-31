@@ -34,6 +34,9 @@
     "core:build:snapshot:win": "pnpm -F @talex-touch/core-app run build:snapshot:win",
     "core:build:snapshot:mac": "pnpm -F @talex-touch/core-app run build:snapshot:mac",
     "core:build:snapshot:linux": "pnpm -F @talex-touch/core-app run build:snapshot:linux",
+    "core:build:release:win": "pnpm -F @talex-touch/core-app run build:release:win",
+    "core:build:release:mac": "pnpm -F @talex-touch/core-app run build:release:mac",
+    "core:build:release:linux": "pnpm -F @talex-touch/core-app run build:release:linux",
     "core:build:docs": "pnpm -F @talex-touch/core-app run build:docs",
     "docs:dev": "pnpm -F @talex-touch/docs run dev",
     "docs:build": "pnpm -F @talex-touch/docs run build",
@@ -56,13 +59,18 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@clerk/shared",
       "@parcel/watcher",
       "@swc/core",
+      "browser-tabs-lock",
+      "core-js",
       "electron",
       "electron-clipboard-ex",
       "esbuild",
       "extract-file-icon",
+      "get-windows",
       "simple-git-hooks",
+      "tesseract.js",
       "typeit",
       "vue-demi"
     ],

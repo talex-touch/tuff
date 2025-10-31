@@ -1,13 +1,13 @@
 <template>
   <div class="FlatCodeInput-Container">
     <span
-      @click="inputCode(i)"
+      v-for="i in 9"
       :class="{
         active: codes.indexOf(i) !== -1,
         disabled: codes.length > 0 && codes[codes.length - 1] !== i
       }"
       class="FlatCodeInput-Item"
-      v-for="i in 9"
+      @click="inputCode(i)"
       v-text="i"
     />
   </div>

@@ -18,7 +18,6 @@ export function useClipboard(
   clipboardOptions: IClipboardOptions,
   onPasteCallback?: () => void
 ): Omit<IClipboardHook, 'clipboardOptions'> {
-
   /**
    * Check if current clipboard content has expired based on settings
    *
@@ -87,8 +86,7 @@ export function useClipboard(
 
     // Check if it's the same clipboard content
     const isSameClipboard =
-      clipboardOptions.last &&
-      clipboardOptions.last.timestamp === clipboard.timestamp
+      clipboardOptions.last && clipboardOptions.last.timestamp === clipboard.timestamp
 
     if (isSameClipboard) {
       // Same clipboard, check if expired

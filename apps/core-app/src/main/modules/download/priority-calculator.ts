@@ -15,7 +15,7 @@ export class PriorityCalculator {
 
   // 计算任务优先级
   calculatePriority(request: DownloadRequest): DownloadPriority {
-    let basePriority = request.priority
+    const basePriority = request.priority
 
     // 根据模块调整
     const moduleMultiplier = this.getModuleMultiplier(request.module)
@@ -26,9 +26,10 @@ export class PriorityCalculator {
     // 根据网络状况调整
     const networkMultiplier = this.getNetworkMultiplier()
 
-    const finalPriority = Math.min(100, Math.max(1,
-      basePriority * moduleMultiplier * sizeMultiplier * networkMultiplier
-    ))
+    const finalPriority = Math.min(
+      100,
+      Math.max(1, basePriority * moduleMultiplier * sizeMultiplier * networkMultiplier)
+    )
 
     return Math.round(finalPriority) as DownloadPriority
   }
@@ -36,9 +37,9 @@ export class PriorityCalculator {
   // 根据模块获取乘数
   private getModuleMultiplier(module: DownloadModule): number {
     const multipliers = {
-      [DownloadModule.USER_MANUAL]: 1.2,      // 用户手动触发优先级最高
-      [DownloadModule.PLUGIN_INSTALL]: 1.1,   // 插件安装优先级较高
-      [DownloadModule.APP_UPDATE]: 1.0,       // 应用更新标准优先级
+      [DownloadModule.USER_MANUAL]: 1.2, // 用户手动触发优先级最高
+      [DownloadModule.PLUGIN_INSTALL]: 1.1, // 插件安装优先级较高
+      [DownloadModule.APP_UPDATE]: 1.0, // 应用更新标准优先级
       [DownloadModule.RESOURCE_DOWNLOAD]: 0.9 // 资源下载优先级较低
     }
     return multipliers[module] || 1.0
@@ -86,10 +87,7 @@ export class PriorityCalculator {
   }
 
   // 根据时间调整优先级
-  adjustPriorityByTime(
-    currentPriority: DownloadPriority,
-    createdAt: Date
-  ): DownloadPriority {
+  adjustPriorityByTime(currentPriority: DownloadPriority, createdAt: Date): DownloadPriority {
     const age = Date.now() - createdAt.getTime()
     const ageHours = age / (1000 * 60 * 60)
 

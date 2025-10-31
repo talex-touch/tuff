@@ -57,7 +57,10 @@ export class BackgroundTaskService extends EventEmitter {
   private checkInterval: NodeJS.Timeout | null = null
   private lastActivityTime = Date.now()
 
-  private constructor(activityTracker: UserActivityTracker, options: Partial<BackgroundTaskServiceOptions> = {}) {
+  private constructor(
+    activityTracker: UserActivityTracker,
+    options: Partial<BackgroundTaskServiceOptions> = {}
+  ) {
     super()
     this.activityTracker = activityTracker
     this.options = {
@@ -72,7 +75,10 @@ export class BackgroundTaskService extends EventEmitter {
   /**
    * Get singleton instance
    */
-  static getInstance(activityTracker?: UserActivityTracker, options?: Partial<BackgroundTaskServiceOptions>): BackgroundTaskService {
+  static getInstance(
+    activityTracker?: UserActivityTracker,
+    options?: Partial<BackgroundTaskServiceOptions>
+  ): BackgroundTaskService {
     if (!BackgroundTaskService.instance) {
       if (!activityTracker) {
         throw new Error('ActivityTracker is required for first initialization')
@@ -198,11 +204,10 @@ export class BackgroundTaskService extends EventEmitter {
   }
 
   private queueAllTasks(): void {
-    const sortedTasks = Array.from(this.tasks.values())
-      .sort((a, b) => {
-        const priorityOrder = { high: 0, normal: 1, low: 2 }
-        return priorityOrder[a.priority] - priorityOrder[b.priority]
-      })
+    const sortedTasks = Array.from(this.tasks.values()).sort((a, b) => {
+      const priorityOrder = { high: 0, normal: 1, low: 2 }
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
+    })
 
     for (const task of sortedTasks) {
       if (!this.runningTasks.has(task.id) && !this.taskQueue.includes(task.id)) {
@@ -298,8 +303,7 @@ export class AppUsageActivityTracker implements UserActivityTracker {
     return AppUsageActivityTracker.instance
   }
 
-  private setupActivityListeners(): void {
-  }
+  private setupActivityListeners(): void {}
 
   isActive(): boolean {
     return this.isCurrentlyActive

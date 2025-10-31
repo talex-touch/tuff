@@ -31,8 +31,8 @@
                     ? 'bg-[var(--el-color-success-light-9)] border-[var(--el-color-success-light-8)] text-[var(--el-color-success)]'
                     : 'text-[var(--el-text-color-secondary)]'
                 "
-                @click="copyToClipboard(plugin.name, 'pluginId')"
                 :title="t('plugin.details.copyPluginId')"
+                @click="copyToClipboard(plugin.name, 'pluginId')"
               >
                 <i
                   :class="copyState.pluginId ? 'i-ri-check-line' : 'i-ri-file-copy-line'"
@@ -111,7 +111,9 @@
             >
             <div class="PluginDetails-Toggle flex items-center gap-2">
               <div class="w-2 h-2 bg-[var(--el-color-success)] rounded-full animate-pulse" />
-              <span class="text-sm text-[var(--el-color-success)]">{{ t('plugin.details.enabled') }}</span>
+              <span class="text-sm text-[var(--el-color-success)]">{{
+                t('plugin.details.enabled')
+              }}</span>
             </div>
           </div>
           <div class="PluginDetails-Row flex justify-between items-center py-3">
@@ -135,7 +137,9 @@
                     ? 'text-[var(--el-color-success)]'
                     : 'text-[var(--el-text-color-placeholder)]'
                 "
-                >{{ plugin.dev?.enable ? t('plugin.details.enabled') : t('plugin.details.disabled') }}</span
+                >{{
+                  plugin.dev?.enable ? t('plugin.details.enabled') : t('plugin.details.disabled')
+                }}</span
               >
             </div>
           </div>
@@ -209,9 +213,9 @@
               >
                 <i class="i-ri-timer-line text-[var(--el-color-primary)] text-sm" />
               </div>
-              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
-                >{{ t('plugin.details.loadTime') }}</span
-              >
+              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]">{{
+                t('plugin.details.loadTime')
+              }}</span>
             </div>
             <span
               class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
@@ -227,9 +231,9 @@
               >
                 <i class="i-ri-ram-line text-[var(--el-color-info)] text-sm" />
               </div>
-              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
-                >{{ t('plugin.details.memoryUsage') }}</span
-              >
+              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]">{{
+                t('plugin.details.memoryUsage')
+              }}</span>
             </div>
             <span
               class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
@@ -245,9 +249,9 @@
               >
                 <i class="i-ri-cpu-line text-[var(--el-color-success)] text-sm" />
               </div>
-              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]"
-                >{{ t('plugin.details.cpuUsage') }}</span
-              >
+              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]">{{
+                t('plugin.details.cpuUsage')
+              }}</span>
             </div>
             <span
               class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"

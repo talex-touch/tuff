@@ -37,7 +37,7 @@ const vueVersion = computed(() => packageJson.value?.dependencies?.vue || '')
         <p>{{ t('settingHeader.subTitle') }}</p>
       </div>
 
-      <ul class="About-Footer" v-if="processInfo">
+      <ul v-if="processInfo" class="About-Footer">
         <li class="fake-background" flex items-center gap-2>
           <div inline-block class="i-ri-chrome-line" />
           <span>Chromium: {{ chromeVersion }}</span>

@@ -19,12 +19,17 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "build:unpack": "npm run build && electron-builder --dir",
+    "build:snapshot": "node scripts/build-target.js --target=${BUILD_TARGET:-mac} --type=snapshot",
+    "build:release": "node scripts/build-target.js --target=${BUILD_TARGET:-mac} --type=release",
     "build:win": "node scripts/build-target.js --target=win --type=release",
     "build:mac": "node scripts/build-target.js --target=mac --type=release",
     "build:linux": "node scripts/build-target.js --target=linux --type=release",
     "build:snapshot:win": "node scripts/build-target.js --target=win --type=snapshot",
     "build:snapshot:mac": "node scripts/build-target.js --target=mac --type=snapshot",
-    "build:snapshot:linux": "node scripts/build-target.js --target=linux --type=snapshot"
+    "build:snapshot:linux": "node scripts/build-target.js --target=linux --type=snapshot",
+    "build:release:win": "node scripts/build-target.js --target=win --type=release",
+    "build:release:mac": "node scripts/build-target.js --target=mac --type=release",
+    "build:release:linux": "node scripts/build-target.js --target=linux --type=release"
   },
   "dependencies": {
     "@clerk/clerk-js": "^5.102.0",

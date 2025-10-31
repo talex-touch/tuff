@@ -2,13 +2,7 @@
 import { TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  ImagePreview,
-  VideoPreview,
-  AudioPreview,
-  TextPreview,
-  DefaultPreview
-} from './preview'
+import { ImagePreview, VideoPreview, AudioPreview, TextPreview, DefaultPreview } from './preview'
 
 const { t } = useI18n()
 

@@ -58,9 +58,7 @@ function formatTimestamp(date = new Date()): string {
 function pickNamespaceColor(namespace: string): typeof chalk.gray {
   const cached = namespaceColorCache.get(namespace)
   if (cached) return cached
-  const seed = namespace
-    .split('')
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const seed = namespace.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
   const color = namespacePalette[seed % namespacePalette.length]
   namespaceColorCache.set(namespace, color)
   return color
@@ -103,7 +101,6 @@ function ensureString(message: unknown): string {
   return String(message)
 }
 
-
 type TimerLevel = Exclude<LogLevel, 'error'>
 
 export interface LoggerTimer {
@@ -136,7 +133,8 @@ function output(level: LogLevel, namespace: string, message: unknown, options?: 
     ? `${timestamp} ${levelLabel} ${namespaceLabel} ${formattedMessage} ${chalk.gray(meta)}`
     : `${timestamp} ${levelLabel} ${namespaceLabel} ${formattedMessage}`
 
-  const consoleMethod = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log
+  const consoleMethod =
+    level === 'error' ? console.error : level === 'warn' ? console.warn : console.log
   consoleMethod(line)
 
   if (level === 'error' && options?.error) {
@@ -192,7 +190,12 @@ export const mainLog = createLogger('TouchApp')
 export const moduleLog = createLogger('ModuleManager')
 export const fileProviderLog = createLogger('FileProvider')
 export const bootstrapTimer = () => performance.now()
-export const logDuration = (namespace: string, message: string, startedAt: number, level: TimerLevel = 'info') => {
+export const logDuration = (
+  namespace: string,
+  message: string,
+  startedAt: number,
+  level: TimerLevel = 'info'
+) => {
   const duration = performance.now() - startedAt
   output(level, namespace, `${message} ${formatDuration(duration)}`)
 }

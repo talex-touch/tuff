@@ -117,7 +117,9 @@ export class TouchPlugin implements ITouchPlugin {
           return feature.toJSONObject()
         }
         // 如果不是 PluginFeature 实例，尝试手动构造对象
-        console.warn(`[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`)
+        console.warn(
+          `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`
+        )
         return {
           id: feature.id,
           name: feature.name,
@@ -831,14 +833,15 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getStatus: async (name: string) => {
         try {
-          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get-status', { name })
+          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get-status', {
+            name
+          })
           return response
         } catch (error) {
           console.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}:`, error)
           throw error
         }
       }
-
     }
 
     return {

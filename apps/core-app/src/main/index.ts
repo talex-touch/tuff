@@ -85,11 +85,12 @@ app.whenReady().then(async () => {
 
     const moduleLoadTime = Date.now() - moduleStartTime
     // Convert module name to string (handle symbol case)
-    const moduleName = typeof moduleCtor.name === 'string'
-      ? moduleCtor.name
-      : (typeof moduleCtor.name === 'symbol'
-        ? moduleCtor.name.toString()
-        : `Module${i}`)
+    const moduleName =
+      typeof moduleCtor.name === 'string'
+        ? moduleCtor.name
+        : typeof moduleCtor.name === 'symbol'
+          ? moduleCtor.name.toString()
+          : `Module${i}`
 
     moduleLoadMetrics.push({
       name: moduleName,

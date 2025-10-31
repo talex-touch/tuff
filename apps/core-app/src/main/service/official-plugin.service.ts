@@ -78,7 +78,9 @@ interface FetchOptions {
   force?: boolean
 }
 
-export async function getOfficialPlugins(options: FetchOptions = {}): Promise<OfficialPluginResponse> {
+export async function getOfficialPlugins(
+  options: FetchOptions = {}
+): Promise<OfficialPluginResponse> {
   const { force = false } = options
   const now = Date.now()
 

@@ -261,4 +261,3 @@ export function getStartupAnalytics(config?: Partial<AnalyticsConfig>): StartupA
 export function resetAnalytics(): void {
   analyticsInstance = null
 }
-

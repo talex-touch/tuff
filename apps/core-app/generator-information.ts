@@ -7,8 +7,8 @@ import type { Plugin } from 'vite'
 console.log('[Talex-Touch] Generate Information ...')
 
 function randomString(len: number) {
-  let chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678'
-  let maxPos = chars.length
+  const chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678'
+  const maxPos = chars.length
   let pwd = ''
   for (let i = 0; i < len; i++) {
     pwd += chars.charAt(Math.floor(Math.random() * maxPos))

@@ -10,13 +10,13 @@ const refresh: (value: string) => void = inject('refresh')!
 
 <template>
   <div
-    @click="refresh(value)"
     data-type="label-select-item"
     :data-value="value"
     class="TLabelSelectItem"
+    @click="refresh(value)"
   >
     <slot>
-      <div :class="icon" v-if="icon" />
+      <div v-if="icon" :class="icon" />
       <span>{{ label }}</span>
     </slot>
   </div>

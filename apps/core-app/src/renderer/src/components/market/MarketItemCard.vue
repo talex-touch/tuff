@@ -53,7 +53,9 @@ const installStage = computed<PluginInstallProgressEvent['stage'] | null>(() => 
   return isInstalling.value ? 'installing' : null
 })
 
-const isActiveStage = computed(() => (installStage.value ? activeStages.has(installStage.value) : false))
+const isActiveStage = computed(() =>
+  installStage.value ? activeStages.has(installStage.value) : false
+)
 
 const progressValue = computed(() => {
   if (typeof props.installTask?.progress === 'number') {
@@ -69,14 +71,16 @@ const showProgressCircle = computed(
 )
 
 const progressCircleStyle = computed(() =>
-  showProgressCircle.value ? ({ '--progress': `${progressValue.value}%` } as Record<string, string>) : {}
+  showProgressCircle.value
+    ? ({ '--progress': `${progressValue.value}%` } as Record<string, string>)
+    : {}
 )
 
-const progressDisplay = computed(() => (progressValue.value !== null ? `${progressValue.value}` : ''))
-
-const showSpinner = computed(
-  () => installStage.value === 'installing' && !showProgressCircle.value
+const progressDisplay = computed(() =>
+  progressValue.value !== null ? `${progressValue.value}` : ''
 )
+
+const showSpinner = computed(() => installStage.value === 'installing' && !showProgressCircle.value)
 
 const buttonIcon = computed(() => {
   switch (installStage.value) {
@@ -199,18 +203,9 @@ function handleOpen(): void {
       </div>
 
       <div class="market-item-actions">
-        <FlatButton
-          :primary="true"
-          mini
-          :disabled="disableInstall"
-          @click="handleInstall"
-        >
+        <FlatButton :primary="true" mini :disabled="disableInstall" @click="handleInstall">
           <div class="install-button-content">
-            <div
-              v-if="showProgressCircle"
-              class="install-progress"
-              :style="progressCircleStyle"
-            >
+            <div v-if="showProgressCircle" class="install-progress" :style="progressCircleStyle">
               <span>{{ progressDisplay }}</span>
             </div>
             <i v-else-if="showSpinner" class="i-ri-loader-4-line animate-spin" />
@@ -220,7 +215,6 @@ function handleOpen(): void {
         </FlatButton>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -233,7 +227,10 @@ function handleOpen(): void {
   border: 1px solid transparent;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    background 0.25s ease;
 
   &:hover {
     border-color: rgba(var(--el-color-primary-rgb), 0.35);
@@ -259,7 +256,11 @@ function handleOpen(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(var(--el-color-primary-rgb), 0.18), rgba(var(--el-color-primary-rgb), 0.05));
+  background: linear-gradient(
+    135deg,
+    rgba(var(--el-color-primary-rgb), 0.18),
+    rgba(var(--el-color-primary-rgb), 0.05)
+  );
   border-radius: 16px;
   border: 1px solid rgba(var(--el-color-primary-rgb), 0.15);
   transition: all 0.25s ease;
@@ -272,7 +273,11 @@ function handleOpen(): void {
 }
 
 .market-item-card:hover .market-item-icon {
-  background: linear-gradient(135deg, rgba(var(--el-color-primary-rgb), 0.24), rgba(var(--el-color-primary-rgb), 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(var(--el-color-primary-rgb), 0.24),
+    rgba(var(--el-color-primary-rgb), 0.08)
+  );
   border-color: rgba(var(--el-color-primary-rgb), 0.3);
 
   i {
@@ -415,8 +420,10 @@ function handleOpen(): void {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background:
-    conic-gradient(var(--el-color-primary) var(--progress), rgba(var(--el-color-primary-rgb), 0.15) 0);
+  background: conic-gradient(
+    var(--el-color-primary) var(--progress),
+    rgba(var(--el-color-primary-rgb), 0.15) 0
+  );
   display: flex;
   align-items: center;
   justify-content: center;

@@ -55,7 +55,8 @@ export class FailedFilesCleanupTask implements BackgroundTask {
     const cutoffTime = startTime - this.options.maxRetryAge
 
     try {
-      const failedFiles = await this.dbUtils.getDb()
+      const failedFiles = await this.dbUtils
+        .getDb()
         .select({
           id: fileIndexProgress.fileId,
           path: filesSchema.path,
@@ -80,12 +81,14 @@ export class FailedFilesCleanupTask implements BackgroundTask {
       }
 
       const fileIds = failedFiles.map((f) => f.id)
-      await this.dbUtils.getDb()
+      await this.dbUtils
+        .getDb()
         .delete(fileIndexProgress)
         .where(eq(fileIndexProgress.fileId, fileIds[0]))
 
       for (let i = 1; i < fileIds.length; i++) {
-        await this.dbUtils.getDb()
+        await this.dbUtils
+          .getDb()
           .delete(fileIndexProgress)
           .where(eq(fileIndexProgress.fileId, fileIds[i]))
       }

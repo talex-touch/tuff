@@ -26,13 +26,17 @@ export class SearchLogger {
     // Watch for app settings changes
     setInterval(async () => {
       try {
-        const appSettingsData = await storageModule.getConfig('app-setting.ini') as unknown as string
+        const appSettingsData = (await storageModule.getConfig(
+          'app-setting.ini'
+        )) as unknown as string
         if (appSettingsData) {
           const parsed = JSON.parse(appSettingsData as unknown as string)
           const newEnabled = parsed.searchEngine?.logsEnabled === true
           if (newEnabled !== this.enabled) {
             this.enabled = newEnabled
-            console.log(`[SearchLogger] Settings changed: logging ${this.enabled ? 'enabled' : 'disabled'}`)
+            console.log(
+              `[SearchLogger] Settings changed: logging ${this.enabled ? 'enabled' : 'disabled'}`
+            )
           }
         }
       } catch (error) {
@@ -115,16 +119,10 @@ export class SearchLogger {
     console.log('\n' + '='.repeat(80))
     console.log(
       chalk.bold.blue('🚀 SEARCH SESSION STARTED') +
-      chalk.gray(` [${new Date().toLocaleTimeString()}]`)
+        chalk.gray(` [${new Date().toLocaleTimeString()}]`)
     )
-    console.log(
-      chalk.cyan('📝 Query: ') +
-      chalk.white.bold(`"${query}"`)
-    )
-    console.log(
-      chalk.cyan('🆔 Session ID: ') +
-      chalk.white(sessionId)
-    )
+    console.log(chalk.cyan('📝 Query: ') + chalk.white.bold(`"${query}"`))
+    console.log(chalk.cyan('🆔 Session ID: ') + chalk.white(sessionId))
     console.log('='.repeat(80) + '\n')
   }
 
@@ -139,31 +137,18 @@ export class SearchLogger {
     console.log('\n' + '='.repeat(80))
     console.log(
       chalk.bold.green('✅ SEARCH SESSION COMPLETED') +
-      chalk.gray(` [${new Date().toLocaleTimeString()}]`)
+        chalk.gray(` [${new Date().toLocaleTimeString()}]`)
     )
-    console.log(
-      chalk.cyan('🆔 Session ID: ') +
-      chalk.white(sessionId)
-    )
-    console.log(
-      chalk.cyan('📊 Total Results: ') +
-      chalk.white.bold(`${totalResults}`)
-    )
-    console.log(
-      chalk.cyan('⏱️ Total Duration: ') +
-      chalk.white.bold(`${totalDuration}ms`)
-    )
+    console.log(chalk.cyan('🆔 Session ID: ') + chalk.white(sessionId))
+    console.log(chalk.cyan('📊 Total Results: ') + chalk.white.bold(`${totalResults}`))
+    console.log(chalk.cyan('⏱️ Total Duration: ') + chalk.white.bold(`${totalDuration}ms`))
 
     // Log search steps summary
     if (this.searchSteps.length > 0) {
       console.log(chalk.cyan('📋 Search Steps:'))
       this.searchSteps.forEach((step, index) => {
         const duration = step.duration ? ` (${step.duration}ms)` : ''
-        console.log(
-          chalk.gray(`  ${index + 1}. `) +
-          chalk.white(step.step) +
-          chalk.gray(duration)
-        )
+        console.log(chalk.gray(`  ${index + 1}. `) + chalk.white(step.step) + chalk.gray(duration))
       })
     }
 
@@ -187,9 +172,9 @@ export class SearchLogger {
     const timeStr = duration ? ` (${duration}ms)` : ''
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.cyan(' 📋 Step: ') +
-      chalk.white(step) +
-      chalk.gray(timeStr)
+        chalk.cyan(' 📋 Step: ') +
+        chalk.white(step) +
+        chalk.gray(timeStr)
     )
   }
 
@@ -200,9 +185,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.cyan(' 🔍 Search started: ') +
-      chalk.white(`"${query}"`) +
-      chalk.gray(` (${sessionId})`)
+        chalk.cyan(' 🔍 Search started: ') +
+        chalk.white(`"${query}"`) +
+        chalk.gray(` (${sessionId})`)
     )
   }
 
@@ -210,9 +195,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.yellow(' 🎯 Active providers: ') +
-      chalk.white(`${providers.length}`) +
-      chalk.gray(` [${providers.join(', ')}]`)
+        chalk.yellow(' 🎯 Active providers: ') +
+        chalk.white(`${providers.length}`) +
+        chalk.gray(` [${providers.join(', ')}]`)
     )
     this.logSearchStep(`Initialized ${providers.length} search providers`)
   }
@@ -222,22 +207,10 @@ export class SearchLogger {
    */
   logKeywordAnalysis(query: string, terms: string[], typeFilters: number): void {
     if (!this.enabled) return
-    console.log(
-      chalk.blue.bold('[SearchEngine]') +
-      chalk.cyan(' 🔤 Keyword Analysis:')
-    )
-    console.log(
-      chalk.gray('  📝 Original Query: ') +
-      chalk.white(`"${query}"`)
-    )
-    console.log(
-      chalk.gray('  🔍 Search Terms: ') +
-      chalk.white(`[${terms.join(', ')}]`)
-    )
-    console.log(
-      chalk.gray('  🏷️ Type Filters: ') +
-      chalk.white(`${typeFilters}`)
-    )
+    console.log(chalk.blue.bold('[SearchEngine]') + chalk.cyan(' 🔤 Keyword Analysis:'))
+    console.log(chalk.gray('  📝 Original Query: ') + chalk.white(`"${query}"`))
+    console.log(chalk.gray('  🔍 Search Terms: ') + chalk.white(`[${terms.join(', ')}]`))
+    console.log(chalk.gray('  🏷️ Type Filters: ') + chalk.white(`${typeFilters}`))
     this.logSearchStep(`Analyzed keywords: ${terms.length} terms, ${typeFilters} filters`)
   }
 
@@ -249,9 +222,9 @@ export class SearchLogger {
     const detailsStr = details ? ` - ${details}` : ''
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.magenta(' 🔄 Phase: ') +
-      chalk.white.bold(phase) +
-      chalk.gray(detailsStr)
+        chalk.magenta(' 🔄 Phase: ') +
+        chalk.white.bold(phase) +
+        chalk.gray(detailsStr)
     )
     this.logSearchStep(`Phase: ${phase}${detailsStr}`)
   }
@@ -263,14 +236,11 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.cyan(' 🔍 Provider Search: ') +
-      chalk.white(providerId) +
-      chalk.gray(` (${searchType})`)
+        chalk.cyan(' 🔍 Provider Search: ') +
+        chalk.white(providerId) +
+        chalk.gray(` (${searchType})`)
     )
-    console.log(
-      chalk.gray('  📝 Query: ') +
-      chalk.white(`"${query}"`)
-    )
+    console.log(chalk.gray('  📝 Query: ') + chalk.white(`"${query}"`))
     this.logSearchStep(`${providerId} ${searchType} search started`)
   }
 
@@ -278,9 +248,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.magenta(' 📊 Search update: ') +
-      chalk.white(`isDone=${isDone}`) +
-      chalk.gray(`, newResults=${newResults}`)
+        chalk.magenta(' 📊 Search update: ') +
+        chalk.white(`isDone=${isDone}`) +
+        chalk.gray(`, newResults=${newResults}`)
     )
   }
 
@@ -288,8 +258,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.blue.bold('[SearchEngine]') +
-      chalk.green(' ✅ Search completed in ') +
-      chalk.white(`${duration}ms`)
+        chalk.green(' ✅ Search completed in ') +
+        chalk.white(`${duration}ms`)
     )
   }
 
@@ -300,9 +270,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.blue(' 🚀 Starting search aggregator: ') +
-      chalk.white(`${providers} providers`) +
-      chalk.gray(` for "${query}"`)
+        chalk.blue(' 🚀 Starting search aggregator: ') +
+        chalk.white(`${providers} providers`) +
+        chalk.gray(` for "${query}"`)
     )
   }
 
@@ -310,9 +280,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.yellow(' 👷 Worker ') +
-      chalk.white(`${workerId}`) +
-      chalk.gray(' started processing tasks')
+        chalk.yellow(' 👷 Worker ') +
+        chalk.white(`${workerId}`) +
+        chalk.gray(' started processing tasks')
     )
   }
 
@@ -320,10 +290,10 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.blue(' 🔄 Worker ') +
-      chalk.white(`${workerId}`) +
-      chalk.gray(' processing provider: ') +
-      chalk.white(providerId)
+        chalk.blue(' 🔄 Worker ') +
+        chalk.white(`${workerId}`) +
+        chalk.gray(' processing provider: ') +
+        chalk.white(providerId)
     )
   }
 
@@ -331,8 +301,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.blue(' ⏱️ Calling provider: ') +
-      chalk.white(providerId)
+        chalk.blue(' ⏱️ Calling provider: ') +
+        chalk.white(providerId)
     )
   }
 
@@ -340,10 +310,10 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.green(' ✅ Provider ') +
-      chalk.white(providerId) +
-      chalk.gray(' returned ') +
-      chalk.white(`${resultCount} results`)
+        chalk.green(' ✅ Provider ') +
+        chalk.white(providerId) +
+        chalk.gray(' returned ') +
+        chalk.white(`${resultCount} results`)
     )
   }
 
@@ -351,10 +321,10 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.red(' ⏰ Provider ') +
-      chalk.white(providerId) +
-      chalk.gray(' timed out after ') +
-      chalk.white(`${timeoutMs}ms`)
+        chalk.red(' ⏰ Provider ') +
+        chalk.white(providerId) +
+        chalk.gray(' timed out after ') +
+        chalk.white(`${timeoutMs}ms`)
     )
   }
 
@@ -362,10 +332,10 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.red(' ❌ Provider ') +
-      chalk.white(providerId) +
-      chalk.gray(' failed: ') +
-      chalk.red(error)
+        chalk.red(' ❌ Provider ') +
+        chalk.white(providerId) +
+        chalk.gray(' failed: ') +
+        chalk.red(error)
     )
   }
 
@@ -373,9 +343,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.green(' 🏁 Worker ') +
-      chalk.white(`${workerId}`) +
-      chalk.gray(' completed all tasks')
+        chalk.green(' 🏁 Worker ') +
+        chalk.white(`${workerId}`) +
+        chalk.gray(' completed all tasks')
     )
   }
 
@@ -383,8 +353,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.magenta(' 📥 Received provider result: ') +
-      chalk.white(`${resultCount} items`)
+        chalk.magenta(' 📥 Received provider result: ') +
+        chalk.white(`${resultCount} items`)
     )
   }
 
@@ -392,8 +362,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.yellow(' 🎯 First batch result, flushing in ') +
-      chalk.white(`${graceMs}ms`)
+        chalk.yellow(' 🎯 First batch result, flushing in ') +
+        chalk.white(`${graceMs}ms`)
     )
   }
 
@@ -401,7 +371,7 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.cyan.bold('[SearchGatherer]') +
-      chalk.green(' ✅ All providers completed, performing final flush')
+        chalk.green(' ✅ All providers completed, performing final flush')
     )
   }
 
@@ -412,8 +382,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.blue(' 🔍 Starting file search: ') +
-      chalk.white(`"${query}"`)
+        chalk.blue(' 🔍 Starting file search: ') +
+        chalk.white(`"${query}"`)
     )
   }
 
@@ -421,7 +391,7 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.red(' ❌ Database utils or search index not initialized')
+        chalk.red(' ❌ Database utils or search index not initialized')
     )
   }
 
@@ -429,9 +399,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.cyan(' 📝 Search text: ') +
-      chalk.white(`"${searchText}"`) +
-      chalk.gray(`, type filters: ${typeFilters}`)
+        chalk.cyan(' 📝 Search text: ') +
+        chalk.white(`"${searchText}"`) +
+        chalk.gray(`, type filters: ${typeFilters}`)
     )
   }
 
@@ -439,8 +409,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.blue(' 🔎 Starting precise keyword search: ') +
-      chalk.white(terms.join(', '))
+        chalk.blue(' 🔎 Starting precise keyword search: ') +
+        chalk.white(terms.join(', '))
     )
   }
 
@@ -448,9 +418,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.cyan(' 📊 Executing ') +
-      chalk.white(`${queryCount}`) +
-      chalk.gray(' precise queries')
+        chalk.cyan(' 📊 Executing ') +
+        chalk.white(`${queryCount}`) +
+        chalk.gray(' precise queries')
     )
   }
 
@@ -458,8 +428,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.green(' 📈 Precise queries completed, matches per term: ') +
-      chalk.white(matches.join(', '))
+        chalk.green(' 📈 Precise queries completed, matches per term: ') +
+        chalk.white(matches.join(', '))
     )
   }
 
@@ -467,8 +437,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.blue(' 🔍 Building FTS query: ') +
-      chalk.white(`"${query}"`)
+        chalk.blue(' 🔍 Building FTS query: ') +
+        chalk.white(`"${query}"`)
     )
   }
 
@@ -476,9 +446,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.green(' 📊 FTS search completed: ') +
-      chalk.white(`${matches} matches`) +
-      chalk.gray(`, ${duration}ms`)
+        chalk.green(' 📊 FTS search completed: ') +
+        chalk.white(`${matches} matches`) +
+        chalk.gray(`, ${duration}ms`)
     )
   }
 
@@ -486,8 +456,8 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.cyan(' 📥 Starting candidate file data fetch: ') +
-      chalk.white(`${candidateCount} paths`)
+        chalk.cyan(' 📥 Starting candidate file data fetch: ') +
+        chalk.white(`${candidateCount} paths`)
     )
   }
 
@@ -495,9 +465,9 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.green.bold('[FileProvider]') +
-      chalk.green(' 📊 Retrieved ') +
-      chalk.white(`${rows} rows`) +
-      chalk.gray(`, ${duration}ms`)
+        chalk.green(' 📊 Retrieved ') +
+        chalk.white(`${rows} rows`) +
+        chalk.gray(`, ${duration}ms`)
     )
   }
 
@@ -508,35 +478,31 @@ export class SearchLogger {
     if (!this.enabled) return
     console.log(
       chalk.magenta.bold('[SearchIndex]') +
-      chalk.blue(' 🔍 Starting FTS search: ') +
-      chalk.white(`provider=${providerId}`) +
-      chalk.gray(`, query="${query}", limit=${limit}`)
+        chalk.blue(' 🔍 Starting FTS search: ') +
+        chalk.white(`provider=${providerId}`) +
+        chalk.gray(`, query="${query}", limit=${limit}`)
     )
   }
 
   indexSearchEmpty(): void {
     if (!this.enabled) return
     console.log(
-      chalk.magenta.bold('[SearchIndex]') +
-      chalk.red(' ❌ Query is empty, returning empty results')
+      chalk.magenta.bold('[SearchIndex]') + chalk.red(' ❌ Query is empty, returning empty results')
     )
   }
 
   indexSearchExecuting(): void {
     if (!this.enabled) return
-    console.log(
-      chalk.magenta.bold('[SearchIndex]') +
-      chalk.cyan(' 📊 Executing SQL query')
-    )
+    console.log(chalk.magenta.bold('[SearchIndex]') + chalk.cyan(' 📊 Executing SQL query'))
   }
 
   indexSearchComplete(matches: number, duration: number): void {
     if (!this.enabled) return
     console.log(
       chalk.magenta.bold('[SearchIndex]') +
-      chalk.green(' ✅ FTS search completed: ') +
-      chalk.white(`${matches} matches`) +
-      chalk.gray(`, ${duration}ms`)
+        chalk.green(' ✅ FTS search completed: ') +
+        chalk.white(`${matches} matches`) +
+        chalk.gray(`, ${duration}ms`)
     )
   }
 }

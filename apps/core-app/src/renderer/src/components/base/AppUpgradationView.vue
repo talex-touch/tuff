@@ -7,7 +7,7 @@
 
     <div class="AppUpgradation-Content">
       <FlatButton @click="close">Not now</FlatButton>
-      <FlatButton @click="upgrade" :primary="true">Update</FlatButton>
+      <FlatButton :primary="true" @click="upgrade">Update</FlatButton>
     </div>
   </div>
 </template>

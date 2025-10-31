@@ -10,14 +10,14 @@
         class="issue-item flex items-start p-3 mb-3 last:mb-0 rounded-lg border"
         :class="{
           'bg-red-500/10 border-red-500/20': issue.type === 'error',
-          'bg-yellow-500/10 border-yellow-500/20': issue.type === 'warning',
+          'bg-yellow-500/10 border-yellow-500/20': issue.type === 'warning'
         }"
       >
         <i
           class="flex-shrink-0 mt-1 text-xl"
           :class="{
             'i-ri-close-circle-fill text-red-500': issue.type === 'error',
-            'i-ri-alert-fill text-yellow-500': issue.type === 'warning',
+            'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
           }"
         />
         <div class="ml-3">

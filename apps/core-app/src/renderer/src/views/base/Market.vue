@@ -33,9 +33,9 @@
           <button
             v-for="(item, index) in tags"
             :key="item.tag || item.label || index"
-            @click="tagInd = index"
             :class="{ active: tagInd === index }"
             class="tag-button"
+            @click="tagInd = index"
           >
             {{ item.label ?? t(item.tag) }}
           </button>
@@ -109,7 +109,7 @@
       <div class="market-detail-backdrop" @click="closePluginDetail" />
 
       <div class="market-detail-shell">
-        <div class="market-detail-panel" :key="activePlugin.id" @click.stop>
+        <div :key="activePlugin.id" class="market-detail-panel" @click.stop>
           <button class="detail-close" type="button" @click="closePluginDetail">
             <i class="i-ri-close-line" />
           </button>
@@ -128,10 +128,7 @@
                   {{ t('market.officialBadge') }}
                 </span>
               </div>
-              <div
-                v-if="activePlugin.version || activePlugin.category"
-                class="detail-subline"
-              >
+              <div v-if="activePlugin.version || activePlugin.category" class="detail-subline">
                 <span v-if="activePlugin.version" class="detail-chip">
                   <i class="i-ri-price-tag-3-line" />
                   v{{ activePlugin.version }}
@@ -158,7 +155,11 @@
                   class="i-ri-loader-4-line animate-spin"
                 />
                 <span>
-                  {{ (this as any).isInstalling(activePlugin.id) ? t('market.installing') : t('market.install') }}
+                  {{
+                    (this as any).isInstalling(activePlugin.id)
+                      ? t('market.installing')
+                      : t('market.install')
+                  }}
                 </span>
               </FlatButton>
             </div>
@@ -426,7 +427,10 @@ function updateCategoryTags(): void {
     new Set(
       officialPlugins.value
         .map((plugin) => plugin.category)
-        .filter((category): category is string => typeof category === 'string' && category.trim().length > 0)
+        .filter(
+          (category): category is string =>
+            typeof category === 'string' && category.trim().length > 0
+        )
     )
   )
 
@@ -485,8 +489,10 @@ function mapManifestEntry(entry: OfficialManifestEntry): OfficialPluginListItem 
   }
 }
 
-async function fetchManifestDirect(): Promise<{ plugins: OfficialPluginListItem[]; fetchedAt: number }>
-{
+async function fetchManifestDirect(): Promise<{
+  plugins: OfficialPluginListItem[]
+  fetchedAt: number
+}> {
   const response = await fetch(MANIFEST_URL, {
     headers: {
       Accept: 'application/json'
@@ -581,7 +587,10 @@ async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
   const channel = await getRendererChannel()
 
   if (!channel) {
-    await forTouchTip(t('market.installation.failureTitle'), t('market.installation.browserNotSupported'))
+    await forTouchTip(
+      t('market.installation.failureTitle'),
+      t('market.installation.browserNotSupported')
+    )
     return
   }
 
@@ -996,7 +1005,11 @@ function onLeave(el, done) {
   width: 88px;
   height: 88px;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(var(--el-color-primary-rgb), 0.2), rgba(var(--el-color-primary-rgb), 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(var(--el-color-primary-rgb), 0.2),
+    rgba(var(--el-color-primary-rgb), 0.08)
+  );
   border: 1px solid rgba(var(--el-color-primary-rgb), 0.18);
   display: flex;
   align-items: center;
@@ -1111,7 +1124,9 @@ function onLeave(el, done) {
   border-radius: 18px;
   background: var(--el-fill-color-light);
   border: 1px solid var(--el-border-color-lighter);
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 
   &:hover {
     border-color: rgba(var(--el-color-primary-rgb), 0.25);

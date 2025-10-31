@@ -5,7 +5,13 @@ import path from 'path'
 import { MainWindowOption } from '../config/default'
 import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-util'
 import { genTouchChannel } from './channel-core'
-import { AppStartEvent, TalexEvents, touchEventBus, WindowHiddenEvent, WindowShownEvent } from './eventbus/touch-event'
+import {
+  AppStartEvent,
+  TalexEvents,
+  touchEventBus,
+  WindowHiddenEvent,
+  WindowShownEvent
+} from './eventbus/touch-event'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { innerRootPath } from './precore'
 import { TouchWindow } from './touch-window'
@@ -101,9 +107,9 @@ export class TouchApp implements TalexTouch.TouchApp {
       meta: { mode: app.isPackaged ? 'file' : 'dev-server' }
     })
 
-    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, arg }) => {
+    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, data }) => {
       const { event } = header
-      const { rendererStartTime } = arg || {}
+      const { rendererStartTime } = data || {}
 
       // Use renderer's performance.timeOrigin for accurate timing
       // This ensures reload doesn't accumulate time incorrectly
@@ -116,8 +122,8 @@ export class TouchApp implements TalexTouch.TouchApp {
         startTime: rendererStart,
         readyTime: currentTime,
         domContentLoaded: undefined, // Will be set by renderer
-        firstInteractive: undefined,  // Will be set by renderer
-        loadEventEnd: undefined        // Will be set by renderer
+        firstInteractive: undefined, // Will be set by renderer
+        loadEventEnd: undefined // Will be set by renderer
       })
 
       // Save metrics to history (async, don't wait)
@@ -158,10 +164,10 @@ export class TouchApp implements TalexTouch.TouchApp {
   /**
    * Setup window close handler except for quitting
    */
-  private setupWindowCloseHandler(): void {
+  private _setupWindowCloseHandler(): void {
     this.window.window.on('close', (event) => {
       // 读取用户设置 - 默认最小化到托盘
-      const closeToTray = this.config.get('app.window.closeToTray', true)
+      const closeToTray = (this.config.data as any)?.window?.closeToTray ?? true
 
       if (closeToTray && !this.isQuitting) {
         // 阻止默认关闭行为

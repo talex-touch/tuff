@@ -18,17 +18,17 @@ const copyWriting = computed(() => {
 
 <template>
   <FormTemplate
-    contentStyle="width: calc(100% - 5rem);height: calc(100% - 10rem)"
+    content-style="width: calc(100% - 5rem);height: calc(100% - 10rem)"
     class="ThemePreference-Container"
   >
     <template #header>
       <div items-center flex>
         <div
           p-2
-          @click="() => $router.back()"
           class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic"
+          @click="() => $router.back()"
         />
-        <p my-4 font-extrabold text-2xl v-shared-element:[`theme-preference-${route.query.theme}`]>
+        <p v-shared-element:[`theme-preference-${route.query.theme}`] my-4 font-extrabold text-2xl>
           {{ route.query.theme }}
         </p>
       </div>
@@ -37,9 +37,9 @@ const copyWriting = computed(() => {
     <div class="ThemePreference-Content">
       <p>{{ copyWriting }}</p>
       <div
+        v-shared-element:[`theme-preference-${route.query.theme}-img`]
         class="ThemePreference-Display"
         :class="route.query.theme"
-        v-shared-element:[`theme-preference-${route.query.theme}-img`]
       ></div>
     </div>
   </FormTemplate>

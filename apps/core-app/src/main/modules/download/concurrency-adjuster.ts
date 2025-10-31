@@ -49,15 +49,20 @@ export class ConcurrencyAdjuster {
     const speed = networkStatus.speed
     let multiplier = 1.0
 
-    if (speed > 10 * 1024 * 1024) { // > 10MB/s
+    if (speed > 10 * 1024 * 1024) {
+      // > 10MB/s
       multiplier = 1.5
-    } else if (speed > 5 * 1024 * 1024) { // > 5MB/s
+    } else if (speed > 5 * 1024 * 1024) {
+      // > 5MB/s
       multiplier = 1.3
-    } else if (speed > 2 * 1024 * 1024) { // > 2MB/s
+    } else if (speed > 2 * 1024 * 1024) {
+      // > 2MB/s
       multiplier = 1.1
-    } else if (speed < 1 * 1024 * 1024) { // < 1MB/s
+    } else if (speed < 1 * 1024 * 1024) {
+      // < 1MB/s
       multiplier = 0.7
-    } else if (speed < 512 * 1024) { // < 512KB/s
+    } else if (speed < 512 * 1024) {
+      // < 512KB/s
       multiplier = 0.5
     }
 

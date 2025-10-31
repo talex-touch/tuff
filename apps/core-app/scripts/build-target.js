@@ -108,7 +108,11 @@ function build() {
 
   process.env.BUILD_TYPE = buildType;
   console.log('Running application build (npm run build)...');
-  execSync('npm run build', { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
+  // Skip typecheck in snapshot/release builds if SKIP_TYPECHECK is set
+  const buildCmd = process.env.SKIP_TYPECHECK === 'true' 
+    ? 'electron-vite build' 
+    : 'npm run build';
+  execSync(buildCmd, { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
 
   const outPackageJsonPath = path.join(projectRoot, 'out', 'package.json');
   if (!fs.existsSync(outPackageJsonPath)) {

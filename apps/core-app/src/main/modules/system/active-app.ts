@@ -120,7 +120,7 @@ class ActiveAppService {
       // Get bundle ID and process ID using lsappinfo
       let bundleId: string | null = null
       let processId: number | null = null
-      let executablePath: string | null = null
+      const executablePath: string | null = null
 
       try {
         const { stdout: processInfo } = await execFileAsync('sh', [
@@ -292,7 +292,10 @@ class ActiveAppService {
     const getWindowsResult = await this.resolveActiveWindowViaGetWindows()
     if (getWindowsResult) {
       return {
-        identifier: getWindowsResult.owner.bundleId || getWindowsResult.owner.path || getWindowsResult.owner.name,
+        identifier:
+          getWindowsResult.owner.bundleId ||
+          getWindowsResult.owner.path ||
+          getWindowsResult.owner.name,
         displayName: getWindowsResult.owner.name,
         bundleId: getWindowsResult.owner.bundleId ?? null,
         processId: getWindowsResult.owner.processId,
@@ -349,7 +352,8 @@ class ActiveAppService {
 
     // Build the complete info object
     const info: ActiveAppInfo = {
-      identifier: activeWindow.identifier || activeWindow.executablePath || activeWindow.displayName || null,
+      identifier:
+        activeWindow.identifier || activeWindow.executablePath || activeWindow.displayName || null,
       displayName: activeWindow.displayName || null,
       bundleId: activeWindow.bundleId || null,
       executablePath: activeWindow.executablePath || null,

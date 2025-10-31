@@ -9,7 +9,7 @@
    *
    * @type {Array}
    */
-  var _recordedSequence: Array<any> = [],
+  let _recordedSequence: Array<any> = [],
     /**
      * a callback to invoke after recording a sequence
      *
@@ -52,8 +52,8 @@
    * @returns void
    */
   function _handleKey(character: string, modifiers: Array<any>, e: Event) {
-    // @ts-ignore
-    var self = this
+    // @ts-ignore - Mousetrap context binding requires 'this'
+    const self = this
 
     if (!self.recording) {
       _origHandleKey.apply(self, arguments)
@@ -85,7 +85,7 @@
    * @returns void
    */
   function _recordKey(key: string) {
-    var i
+    let i
 
     // one-off implementation of Array.indexOf, since IE6-9 don't support it
     for (i = 0; i < _currentRecordedKeys.length; ++i) {
@@ -124,7 +124,7 @@
    * @returns void
    */
   function _normalizeSequence(sequence: Array<any>) {
-    var i
+    let i
 
     for (i = 0; i < sequence.length; ++i) {
       sequence[i].sort(function (x: string, y: string) {
@@ -183,7 +183,7 @@
    * @returns void
    */
   Mousetrap.prototype.record = function (callback: Function) {
-    var self = this
+    const self = this
     self.recording = true
     _recordedSequenceCallback = function () {
       self.recording = false
@@ -192,12 +192,13 @@
   }
 
   Mousetrap.prototype.handleKey = function () {
-    var self = this
-    // @ts-ignore
+    // @ts-ignore - Mousetrap context binding requires 'this'
+    const self = this
+    // @ts-ignore - arguments usage is required for Mousetrap compatibility
     _handleKey.apply(self, arguments)
   }
 
   Mousetrap.init()
 
-  //@ts-ignore
+  // @ts-ignore - Mousetrap record method is added dynamically
 })(Mousetrap)

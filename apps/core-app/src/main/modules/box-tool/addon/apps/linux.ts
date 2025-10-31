@@ -91,7 +91,7 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
       uniqueId: desktopFilePath, // Use .desktop file path as uniqueId
       lastModified: stats.mtime
     }
-  } catch (e) {
+  } catch {
     return null
   }
 }

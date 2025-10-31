@@ -161,17 +161,11 @@ class OcrService {
       }
     }
 
-    const jobs = await this.db
-      .select()
-      .from(ocrJobs)
-      .orderBy(desc(ocrJobs.queuedAt))
-      .limit(limit)
+    const jobs = await this.db.select().from(ocrJobs).orderBy(desc(ocrJobs.queuedAt)).limit(limit)
 
-    const jobIds = jobs
-      .map((job) => job.id)
-      .filter((id): id is number => typeof id === 'number')
+    const jobIds = jobs.map((job) => job.id).filter((id): id is number => typeof id === 'number')
 
-    const resultsMap = new Map<number, (typeof ocrResults.$inferSelect) | null>()
+    const resultsMap = new Map<number, typeof ocrResults.$inferSelect | null>()
 
     if (jobIds.length > 0) {
       const results = await this.db
@@ -201,12 +195,14 @@ class OcrService {
       }
     }
 
-    const configKeys = ['ocr:last-queued', 'ocr:last-dispatch', 'ocr:last-success', 'ocr:last-failure']
+    const configKeys = [
+      'ocr:last-queued',
+      'ocr:last-dispatch',
+      'ocr:last-success',
+      'ocr:last-failure'
+    ]
 
-    const configRows = await this.db
-      .select()
-      .from(config)
-      .where(inArray(config.key, configKeys))
+    const configRows = await this.db.select().from(config).where(inArray(config.key, configKeys))
 
     const configMap: Record<string, unknown> = {}
     for (const row of configRows) {
@@ -260,7 +256,7 @@ class OcrService {
         clipboardIds.add(job.clipboardId)
       }
 
-      const result = job.id ? resultsMap.get(job.id) ?? null : null
+      const result = job.id ? (resultsMap.get(job.id) ?? null) : null
 
       return {
         id: job.id,

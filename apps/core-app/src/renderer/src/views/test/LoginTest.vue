@@ -12,12 +12,10 @@
 
     <div class="actions-section">
       <h3>操作</h3>
-      <button @click="handleLogin" :disabled="isLoading">
+      <button :disabled="isLoading" @click="handleLogin">
         {{ isLoggedIn ? '重新登录' : '登录' }}
       </button>
-      <button @click="handleLogout" :disabled="!isLoggedIn || isLoading">
-        登出
-      </button>
+      <button :disabled="!isLoggedIn || isLoading" @click="handleLogout">登出</button>
     </div>
   </div>
 </template>
@@ -27,14 +25,7 @@ import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuth } from '~/modules/auth/useAuth'
 
-const {
-  isLoggedIn,
-  isLoading,
-  isAuthenticated,
-  currentUser,
-  login,
-  logout
-} = useAuth()
+const { isLoggedIn, isLoading, isAuthenticated, currentUser, login, logout } = useAuth()
 
 const userInfo = ref(currentUser.value)
 
@@ -83,7 +74,8 @@ async function handleLogout() {
   margin: 0 auto;
 }
 
-.status-section, .actions-section {
+.status-section,
+.actions-section {
   margin-bottom: 20px;
   padding: 15px;
   border: 1px solid #ddd;

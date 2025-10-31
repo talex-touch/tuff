@@ -17,10 +17,10 @@ import fs from 'fs'
 
 export class DatabaseService {
   private db: ReturnType<typeof drizzle>
-  private dbPath: string
+  // private dbPath: string - not used but kept for future use
 
   constructor(dbPath: string) {
-    this.dbPath = dbPath
+    // this.dbPath = dbPath - not used but kept for future use
     const client = createClient({
       url: `file:${dbPath}`
     })
@@ -101,12 +101,16 @@ export class DatabaseService {
   }
 
   // 保存切片信息
-  async saveChunks(taskId: string, chunks: NewDownloadChunk[]): Promise<void> {
+  async saveChunks(_taskId: string, chunks: NewDownloadChunk[]): Promise<void> {
     await this.db.insert(downloadChunksSchema).values(chunks)
   }
 
   // 更新切片状态
-  async updateChunkStatus(chunkId: string, status: ChunkStatus, downloaded?: number): Promise<void> {
+  async updateChunkStatus(
+    chunkId: string,
+    status: ChunkStatus,
+    downloaded?: number
+  ): Promise<void> {
     const updateData: any = {
       status,
       updatedAt: Date.now()
@@ -151,10 +155,14 @@ export class DatabaseService {
       status: task.status,
       totalSize: task.totalSize,
       downloadedSize: task.downloadedSize,
-      duration: task.completedAt && task.createdAt ?
-        Math.round((task.completedAt - task.createdAt) / 1000) : undefined,
-      averageSpeed: task.completedAt && task.createdAt && task.downloadedSize ?
-        Math.round(task.downloadedSize / ((task.completedAt - task.createdAt) / 1000)) : undefined,
+      duration:
+        task.completedAt && task.createdAt
+          ? Math.round((task.completedAt - task.createdAt) / 1000)
+          : undefined,
+      averageSpeed:
+        task.completedAt && task.createdAt && task.downloadedSize
+          ? Math.round(task.downloadedSize / ((task.completedAt - task.createdAt) / 1000))
+          : undefined,
       createdAt: task.createdAt,
       completedAt: task.completedAt
     }
@@ -164,7 +172,7 @@ export class DatabaseService {
 
   // 清理过期数据
   async cleanupExpiredData(days: number = 30): Promise<void> {
-    const cutoffDate = Date.now() - (days * 24 * 60 * 60 * 1000)
+    const cutoffDate = Date.now() - days * 24 * 60 * 60 * 1000
 
     // 删除过期的历史记录
     await this.db
@@ -184,43 +192,34 @@ export class DatabaseService {
 
     for (const task of completedTasks) {
       // 删除相关切片
-      await this.db
-        .delete(downloadChunksSchema)
-        .where(eq(downloadChunksSchema.taskId, task.id))
+      await this.db.delete(downloadChunksSchema).where(eq(downloadChunksSchema.taskId, task.id))
 
       // 删除任务
-      await this.db
-        .delete(downloadTasksSchema)
-        .where(eq(downloadTasksSchema.id, task.id))
+      await this.db.delete(downloadTasksSchema).where(eq(downloadTasksSchema.id, task.id))
     }
   }
 
   // 删除任务及其相关数据
   async deleteTask(taskId: string): Promise<void> {
     // 删除切片
-    await this.db
-      .delete(downloadChunksSchema)
-      .where(eq(downloadChunksSchema.taskId, taskId))
+    await this.db.delete(downloadChunksSchema).where(eq(downloadChunksSchema.taskId, taskId))
 
     // 删除任务
-    await this.db
-      .delete(downloadTasksSchema)
-      .where(eq(downloadTasksSchema.id, taskId))
+    await this.db.delete(downloadTasksSchema).where(eq(downloadTasksSchema.id, taskId))
   }
 
   // 清理失败的切片文件
   async cleanupFailedChunks(taskId: string): Promise<void> {
     const chunks = await this.getTaskChunks(taskId)
-    const fsPromises = fs.promises
 
     for (const chunk of chunks) {
       try {
         if (chunk.status === ChunkStatus.FAILED && chunk.filePath) {
           await fs.unlink(chunk.filePath)
         }
-      } catch (error) {
+      } catch (error: unknown) {
         // 忽略文件不存在错误
-        if (error.code !== 'ENOENT') {
+        if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
           console.error(`Failed to cleanup chunk file ${chunk.filePath}:`, error)
         }
       }
@@ -236,20 +235,23 @@ export class DatabaseService {
     averageSpeed: number
   }> {
     const tasks = await this.getAllTasks()
-    const completedTasks = tasks.filter(t => t.status === DownloadStatus.COMPLETED)
-    const failedTasks = tasks.filter(t => t.status === DownloadStatus.FAILED)
+    const completedTasks = tasks.filter((t) => t.status === DownloadStatus.COMPLETED)
+    const failedTasks = tasks.filter((t) => t.status === DownloadStatus.FAILED)
 
-    const totalDownloaded = completedTasks.reduce((sum, task) => sum + (task.downloadedSize || 0), 0)
+    const totalDownloaded = completedTasks.reduce(
+      (sum, task) => sum + (task.downloadedSize || 0),
+      0
+    )
 
     const speeds = completedTasks
-      .filter(task => task.createdAt && task.completedAt && task.downloadedSize)
-      .map(task => {
+      .filter((task) => task.createdAt && task.completedAt && task.downloadedSize)
+      .map((task) => {
         const duration = (task.completedAt! - task.createdAt) / 1000
         return task.downloadedSize! / duration
       })
 
-    const averageSpeed = speeds.length > 0 ?
-      speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0
+    const averageSpeed =
+      speeds.length > 0 ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0
 
     return {
       totalTasks: tasks.length,

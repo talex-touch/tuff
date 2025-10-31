@@ -89,8 +89,8 @@ function onIgnore(): void {
       <h4 class="text-center opacity-75">{{ manifest.description }}</h4>
       <span my-2 class="block text-center text-xs text-gray-500">{{ manifest.version }}</span>
       <div class="flex justify-between mt-16px gap-16px h-2.5rem">
-        <FlatButton flex-1 v-wave @click="onIgnore"> Ignore </FlatButton>
-        <FlatButton flex-1 v-wave :primary="true" @click="install"> Install </FlatButton>
+        <FlatButton v-wave flex-1 @click="onIgnore"> Ignore </FlatButton>
+        <FlatButton v-wave flex-1 :primary="true" @click="install"> Install </FlatButton>
       </div>
     </div>
   </div>

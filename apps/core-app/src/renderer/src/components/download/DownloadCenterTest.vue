@@ -4,21 +4,11 @@
 
     <!-- 测试按钮 -->
     <div class="test-buttons">
-      <el-button type="primary" @click="testSmallFile">
-        测试小文件下载
-      </el-button>
-      <el-button type="primary" @click="testLargeFile">
-        测试大文件下载
-      </el-button>
-      <el-button type="primary" @click="testConcurrentDownloads">
-        测试并发下载
-      </el-button>
-      <el-button type="primary" @click="testResumeDownload">
-        测试断点续传
-      </el-button>
-      <el-button type="success" @click="testGetTasks">
-        获取任务列表
-      </el-button>
+      <el-button type="primary" @click="testSmallFile"> 测试小文件下载 </el-button>
+      <el-button type="primary" @click="testLargeFile"> 测试大文件下载 </el-button>
+      <el-button type="primary" @click="testConcurrentDownloads"> 测试并发下载 </el-button>
+      <el-button type="primary" @click="testResumeDownload"> 测试断点续传 </el-button>
+      <el-button type="success" @click="testGetTasks"> 获取任务列表 </el-button>
     </div>
 
     <!-- 测试结果 -->
@@ -165,7 +155,7 @@ const testGetTasks = async () => {
     const tasks = await getAllTasks()
     addTestResult(`当前任务数量: ${tasks.length}`)
 
-    tasks.forEach(task => {
+    tasks.forEach((task) => {
       addTestResult(`- 任务 ${task.id}: ${task.filename} (${task.status})`)
     })
 
