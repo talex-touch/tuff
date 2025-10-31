@@ -119,7 +119,8 @@ export class StartupAnalytics {
         return history
       }
     } catch (error) {
-      analyticsLog.warn('Failed to load startup history', { meta: { error } })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      analyticsLog.warn('Failed to load startup history', { meta: { error: errorMessage } })
     }
 
     return {
@@ -168,7 +169,8 @@ export class StartupAnalytics {
         }
       })
     } catch (error) {
-      analyticsLog.error('Failed to save metrics to history', { meta: { error } })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      analyticsLog.error('Failed to save metrics to history', { meta: { error: errorMessage } })
     }
   }
 
@@ -205,7 +207,8 @@ export class StartupAnalytics {
       // For now, just log that we would report
       analyticsLog.success('Metrics report prepared (not sent in current implementation)')
     } catch (error) {
-      analyticsLog.error('Failed to report metrics', { meta: { error } })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      analyticsLog.error('Failed to report metrics', { meta: { error: errorMessage } })
     }
   }
 

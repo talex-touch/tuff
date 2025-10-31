@@ -972,7 +972,7 @@ class TuffUtils {
    * @param type - 图标类型
    * @returns {TuffIcon} 创建的图标对象
    */
-  static createIcon(value: string, type: 'emoji' | 'url' | 'base64' | 'component' = 'emoji'): TuffIcon {
+  static createIcon(value: string, type: 'emoji' | 'url' | 'file' = 'emoji'): TuffIcon {
     return {
       type,
       value

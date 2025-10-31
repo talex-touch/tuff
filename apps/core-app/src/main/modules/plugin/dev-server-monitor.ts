@@ -5,8 +5,6 @@ import {
   DevServerHealthCheckResult
 } from '@talex-touch/utils/plugin'
 import axios from 'axios'
-import path from 'path'
-import fs from 'fs-extra'
 import { createLogger } from '../../utils/logger'
 
 const monitorLog = createLogger('DevServerMonitor')
@@ -122,8 +120,8 @@ export class DevServerHealthMonitor {
    */
   private shouldMonitor(plugin: ITouchPlugin): boolean {
     return (
-      plugin.dev.enable &&
-      plugin.dev.source &&
+      plugin.dev.enable === true &&
+      plugin.dev.source === true &&
       !!plugin.dev.address &&
       (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE)
     )
@@ -148,7 +146,11 @@ export class DevServerHealthMonitor {
       }
     } catch (error: any) {
       monitorLog.error(`Health check failed for plugin ${plugin.name}:`, error)
-      await this.handleUnhealthyResponse(plugin, { healthy: false, error: error.message })
+      await this.handleUnhealthyResponse(plugin, {
+        healthy: false,
+        error: error.message,
+        timestamp: Date.now()
+      })
     }
   }
 
@@ -159,15 +161,14 @@ export class DevServerHealthMonitor {
     const healthUrl = new URL('/_tuff_devkit/update', address).toString()
 
     try {
-      const response = await axios.get(healthUrl, {
+      await axios.get(healthUrl, {
         timeout: this.TIMEOUT,
         validateStatus: (status) => status === 200
       })
 
       return {
         healthy: true,
-        timestamp: Date.now(),
-        data: response.data
+        timestamp: Date.now()
       }
     } catch (error: any) {
       return {
@@ -183,7 +184,7 @@ export class DevServerHealthMonitor {
    */
   private async handleHealthyResponse(
     plugin: ITouchPlugin,
-    result: DevServerHealthCheckResult
+    _result: DevServerHealthCheckResult
   ): Promise<void> {
     // 重置失败计数
     this.failureCount.delete(plugin.name)
@@ -194,11 +195,6 @@ export class DevServerHealthMonitor {
       plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
       plugin.logger.info('Dev Server connection restored')
     }
-
-    // 处理文件变化
-    if (result.data) {
-      await this.handleFileChanges(plugin, result.data)
-    }
   }
 
   /**
@@ -206,7 +202,7 @@ export class DevServerHealthMonitor {
    */
   private async handleUnhealthyResponse(
     plugin: ITouchPlugin,
-    result: DevServerHealthCheckResult
+    _result: DevServerHealthCheckResult
   ): Promise<void> {
     const failureCount = (this.failureCount.get(plugin.name) || 0) + 1
     this.failureCount.set(plugin.name, failureCount)
@@ -240,88 +236,28 @@ export class DevServerHealthMonitor {
   }
 
   /**
-   * 处理文件变化
-   */
-  private async handleFileChanges(plugin: ITouchPlugin, fileStatus: FileStatusMap): Promise<void> {
-    const lastStatus = this.lastFileStatus.get(plugin.name)
-    this.lastFileStatus.set(plugin.name, fileStatus)
-
-    if (!lastStatus) {
-      // 首次检查，不处理变化
-      return
-    }
-
-    const changedFiles = Object.keys(fileStatus).filter((filename) => {
-      const current = fileStatus[filename]
-      const previous = lastStatus[filename]
-      return current.changed && current.exist
-    })
-
-    if (changedFiles.length === 0) {
-      return
-    }
-
-    plugin.logger.info(`Dev Server files changed: ${changedFiles.join(', ')}`)
-
-    // 同步变化的文件
-    for (const filename of changedFiles) {
-      await this.syncFileFromDevServer(plugin, filename)
-    }
-
-    // 检查是否需要热重载
-    const needsReload = fileStatus['manifest.json']?.changed || fileStatus['index.js']?.changed
-
-    if (needsReload) {
-      plugin.logger.info('Triggering hot reload due to critical file changes')
-      await this.manager.reloadPlugin(plugin.name)
-    }
-  }
-
-  /**
-   * 从 Dev Server 同步文件
-   */
-  private async syncFileFromDevServer(plugin: ITouchPlugin, filename: string): Promise<void> {
-    const remoteUrl = new URL(filename, plugin.dev.address).toString()
-    const localPath = path.join(plugin.pluginPath, filename)
-
-    try {
-      const response = await axios.get(remoteUrl, { timeout: 3000 })
-
-      // Handle JSON files specially to ensure proper formatting
-      if (filename.endsWith('.json')) {
-        const jsonData =
-          typeof response.data === 'string' ? JSON.parse(response.data) : response.data
-        await fs.writeJson(localPath, jsonData, { spaces: 2 })
-      } else {
-        // For non-JSON files, write as-is
-        const content =
-          typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
-        await fs.writeFile(localPath, content)
-      }
-
-      plugin.logger.info(`Synced ${filename} from Dev Server`)
-    } catch (error: any) {
-      plugin.logger.error(`Failed to sync ${filename}: ${error.message}`)
-    }
-  }
-
-  /**
    * 关闭插件的所有 view 窗口
    */
   private closeAllViewWindows(plugin: ITouchPlugin): void {
-    plugin._windows.forEach((window, id) => {
-      try {
-        if (!window.window.isDestroyed()) {
-          plugin.logger.info(`Closing view window ${id} due to Dev Server disconnection`)
-          window.window.close()
+    // 使用类型断言访问内部实现细节
+    const pluginImpl = plugin as any
+    if (pluginImpl._windows && typeof pluginImpl._windows.forEach === 'function') {
+      pluginImpl._windows.forEach((window: any, id: number) => {
+        try {
+          if (window?.window && !window.window.isDestroyed()) {
+            plugin.logger.info(`Closing view window ${id} due to Dev Server disconnection`)
+            window.window.close()
+          }
+        } catch (error: any) {
+          plugin.logger.warn(`Error closing view window ${id}:`, error)
         }
-      } catch (error: any) {
-        plugin.logger.warn(`Error closing view window ${id}:`, error)
-      }
-    })
+      })
 
-    // 清理窗口引用
-    plugin._windows.clear()
+      // 清理窗口引用
+      if (typeof pluginImpl._windows.clear === 'function') {
+        pluginImpl._windows.clear()
+      }
+    }
   }
 
   /**

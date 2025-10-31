@@ -1,7 +1,7 @@
 import { ClerkConfig } from "./clerk-types"
 
-const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-const clerkDomain = import.meta.env.VITE_CLERK_DOMAIN
+const clerkPublishableKey = (import.meta.env as any).VITE_CLERK_PUBLISHABLE_KEY
+const clerkDomain = (import.meta.env as any).VITE_CLERK_DOMAIN
 
 if (!clerkPublishableKey?.length) {
   throw new Error('VITE_CLERK_PUBLISHABLE_KEY is not set')

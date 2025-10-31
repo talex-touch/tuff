@@ -105,7 +105,10 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
         render.basic.title =
           item.content.length > 100 ? `${item.content.substring(0, 97)}...` : item.content
         render.basic.subtitle = `Text from ${item.sourceApp || 'Unknown'}`
-        render.basic.icon = 'ri:file-text-line'
+        render.basic.icon = {
+          type: 'emoji',
+          value: '📄'
+        }
       }
       render.preview = {
         type: 'panel',
@@ -115,7 +118,13 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
       kind = 'image'
       if (render.basic) {
         render.basic.title = `Image from ${item.sourceApp || 'Unknown'}`
-        render.basic.icon = item.thumbnail || 'ri:image-line'
+        render.basic.icon = item.thumbnail ? {
+          type: 'url',
+          value: item.thumbnail
+        } : {
+          type: 'emoji',
+          value: '🖼️'
+        }
       }
       render.preview = {
         type: 'panel',
@@ -136,7 +145,10 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
         } catch {
           render.basic.title = 'Files from clipboard'
         }
-        render.basic.icon = 'ri:file-copy-2-line'
+        render.basic.icon = {
+          type: 'emoji',
+          value: '📁'
+        }
       }
     }
 

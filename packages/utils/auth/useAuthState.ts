@@ -1,5 +1,5 @@
 import { createGlobalState } from '@vueuse/core'
-import { shallowReactive } from 'vue'
+import { shallowReactive, computed } from 'vue'
 import { ClerkAuthState, CurrentUser } from './clerk-types'
 
 export const useAuthState = createGlobalState(() => {
