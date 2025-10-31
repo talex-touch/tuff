@@ -2,6 +2,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const projectRoot = path.join(__dirname, '..');
 process.chdir(projectRoot);
@@ -165,6 +166,14 @@ function build() {
   }
 
   console.log('\n=== Running electron-builder ===');
+  console.log(`Working directory: ${process.cwd()}`);
+  console.log(`Dist directory: ${distDir}`);
+  console.log(`Out directory: ${outDir}`);
+
+  const builderBin = resolveBuilderBin();
+  console.log(`Using electron-builder: ${builderBin}`);
+
+  let builderExitCode = 0;
   try {
     execSync(builderCommand, {
       stdio: 'inherit',
@@ -173,11 +182,56 @@ function build() {
         BUILD_TYPE: buildType
       }
     });
+    builderExitCode = 0;
+    console.log('\n✓ electron-builder completed with exit code 0');
+
+    // 即使退出码为 0，也要检查是否真的生成了文件（防止静默失败）
+    console.log('\nVerifying electron-builder actually produced files...');
+    if (fs.existsSync(distDir)) {
+      const items = fs.readdirSync(distDir, { withFileTypes: true });
+      // 过滤掉空目录
+      const hasFiles = items.some(item => {
+        if (item.isFile()) return true;
+        if (item.isDirectory()) {
+          try {
+            const subItems = fs.readdirSync(path.join(distDir, item.name), { withFileTypes: true });
+            return subItems.length > 0;
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      if (!hasFiles && items.length > 0) {
+        console.warn('⚠️  WARNING: dist directory only contains empty subdirectories');
+        console.warn('  This may indicate electron-builder failed silently');
+      } else if (items.length === 0) {
+        console.error('❌ ERROR: electron-builder exited with code 0 but produced no files!');
+        console.error('  This is a silent failure - electron-builder may have encountered an error');
+      }
+    }
   } catch (error) {
+    builderExitCode = error.status || error.code || 1;
     console.error('\n=== electron-builder failed ===');
-    console.error(`Exit code: ${error.status}`);
+    console.error(`Exit code: ${builderExitCode}`);
     console.error(`Signal: ${error.signal}`);
     console.error(`Error message: ${error.message}`);
+
+    // 即使失败，也检查是否有部分输出
+    console.log('\nChecking for partial build artifacts despite failure...');
+    if (fs.existsSync(distDir)) {
+      try {
+        const items = fs.readdirSync(distDir, { withFileTypes: true });
+        console.log(`Found ${items.length} items in dist after failure`);
+        items.forEach(item => {
+          console.log(`  - ${item.name} (${item.isDirectory() ? 'dir' : 'file'})`);
+        });
+      } catch (err) {
+        console.error(`Cannot read dist directory: ${err.message}`);
+      }
+    }
+
     throw error;
   }
 
@@ -211,7 +265,48 @@ function build() {
     try {
       listFiles(distDir);
       console.log(`Total files found: ${allFiles.length}`);
-      if (allFiles.length > 0) {
+      if (allFiles.length === 0) {
+        console.error('\n❌ ERROR: Dist directory is empty after electron-builder!');
+        console.error('This indicates electron-builder may have failed silently.');
+        console.error('\nChecking for electron-builder error patterns...');
+
+        // 检查可能的错误位置
+        const possibleErrors = [
+          path.join(projectRoot, 'node_modules', '.cache'),
+          path.join(projectRoot, '.electron-builder-cache'),
+          path.join(os.homedir(), '.cache', 'electron-builder')
+        ];
+        possibleErrors.forEach(errPath => {
+          if (fs.existsSync(errPath)) {
+            console.log(`  Found: ${errPath}`);
+          }
+        });
+
+        // 检查 out 目录是否存在且有内容
+        console.error('\nChecking out directory...');
+        if (fs.existsSync(outDir)) {
+          try {
+            const outFiles = fs.readdirSync(outDir, { withFileTypes: true });
+            console.log(`  Out directory has ${outFiles.length} items`);
+            if (outFiles.length === 0) {
+              console.error('  ❌ Out directory is also empty - application build may have failed!');
+            }
+          } catch (err) {
+            console.error(`  Cannot read out directory: ${err.message}`);
+          }
+        } else {
+          console.error('  ❌ Out directory does not exist - application build failed!');
+        }
+
+        // 根据平台抛出特定错误
+        if (normalizedTarget === 'win') {
+          throw new Error('Windows build failed: electron-builder produced no output files');
+        } else if (normalizedTarget === 'linux') {
+          throw new Error('Linux build failed: electron-builder produced no output files');
+        } else {
+          throw new Error(`${normalizedTarget} build failed: electron-builder produced no output files`);
+        }
+      } else {
         console.log('Files in dist:');
         allFiles.slice(0, 20).forEach(file => {
           const sizeKB = (file.size / 1024).toFixed(2);
@@ -222,7 +317,7 @@ function build() {
         }
       }
 
-      // Windows 特定检查
+      // 平台特定检查
       if (normalizedTarget === 'win') {
         const exeFiles = allFiles.filter(f => f.path.endsWith('.exe'));
         console.log(`\nWindows .exe files found: ${exeFiles.length}`);
@@ -234,6 +329,46 @@ function build() {
         if (exeFiles.length === 0) {
           console.error('\nERROR: No .exe files found in dist directory!');
           console.error('electron-builder may have failed silently.');
+          throw new Error('Windows build failed: No .exe files generated');
+        }
+      } else if (normalizedTarget === 'linux') {
+        const appImageFiles = allFiles.filter(f => f.path.endsWith('.AppImage') || f.path.includes('.AppImage'));
+        const debFiles = allFiles.filter(f => f.path.endsWith('.deb'));
+        console.log(`\nLinux artifacts found:`);
+        console.log(`  - AppImage files: ${appImageFiles.length}`);
+        appImageFiles.forEach(file => {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          console.log(`    - ${file.path} (${sizeMB} MB)`);
+        });
+        console.log(`  - Debian package files: ${debFiles.length}`);
+        debFiles.forEach(file => {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          console.log(`    - ${file.path} (${sizeMB} MB)`);
+        });
+
+        if (appImageFiles.length === 0 && debFiles.length === 0) {
+          console.error('\nERROR: No Linux artifacts (.AppImage or .deb) found in dist directory!');
+          console.error('electron-builder may have failed silently.');
+          console.error('Checking common output locations...');
+
+          // 检查是否输出到了子目录
+          const subDirs = ['__appImage-x64', '__deb-x64', '@talex-touch'];
+          subDirs.forEach(subDir => {
+            const subPath = path.join(distDir, subDir);
+            if (fs.existsSync(subPath)) {
+              try {
+                const subItems = fs.readdirSync(subPath, { withFileTypes: true });
+                console.log(`  ${subDir}: ${subItems.length} items`);
+                subItems.slice(0, 5).forEach(item => {
+                  console.log(`    - ${item.name} (${item.isDirectory() ? 'dir' : 'file'})`);
+                });
+              } catch (err) {
+                console.log(`  ${subDir}: Cannot read (${err.message})`);
+              }
+            }
+          });
+
+          throw new Error('Linux build failed: No .AppImage or .deb files generated');
         }
       }
     } catch (err) {
