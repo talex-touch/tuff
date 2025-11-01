@@ -19,6 +19,7 @@ export class PollingService {
   private tasks = new Map<string, PollingTask>();
   private timerId: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private quitListenerCleanup?: () => void;
 
   private constructor() {
     // Private constructor to enforce singleton pattern
@@ -111,17 +112,53 @@ export class PollingService {
    */
   public start(): void {
     if (this.isRunning) {
+      console.warn('[PollingService] Already running, skipping start.');
       return;
     }
     this.isRunning = true;
-    console.debug('[PollingService] Service started.');
+    console.log('[PollingService] Polling service started');
+    this._setupQuitListener();
     this._reschedule();
   }
 
   /**
-   * Stops the polling service and clears all scheduled tasks.
+   * Sets up Electron app quit listener if running in Electron environment
+   * Uses lazy resolution to avoid hard dependency on Electron
    */
-  public stop(): void {
+  private _setupQuitListener(): void {
+    // Check if we're in Electron environment
+    try {
+      // Use dynamic require to avoid hard dependency on Electron
+      // Similar to the approach used in packages/utils/plugin/channel.ts
+      const electron = (globalThis as any)?.electron ?? 
+                       (typeof require !== 'undefined' ? require('electron') : null);
+      
+      if (electron?.app) {
+        const app = electron.app;
+        
+        // Listen to before-quit event
+        const quitHandler = () => {
+          this.stop('app quit');
+        };
+        
+        app.on('before-quit', quitHandler);
+        
+        // Store cleanup function
+        this.quitListenerCleanup = () => {
+          app.removeListener('before-quit', quitHandler);
+        };
+      }
+    } catch (error) {
+      // Not in Electron environment or Electron not available
+      // This is fine, just skip the quit listener setup
+    }
+  }
+
+  /**
+   * Stops the polling service and clears all scheduled tasks.
+   * @param reason - Optional reason for stopping the service (for logging purposes)
+   */
+  public stop(reason?: string): void {
     if (!this.isRunning) {
       return;
     }
@@ -130,7 +167,18 @@ export class PollingService {
       clearTimeout(this.timerId);
       this.timerId = null;
     }
-    console.log('[PollingService] Service stopped.');
+    
+    // Clean up quit listener
+    if (this.quitListenerCleanup) {
+      this.quitListenerCleanup();
+      this.quitListenerCleanup = undefined;
+    }
+    
+    if (reason) {
+      console.log(`[PollingService] Stopping polling service: ${reason}`);
+    } else {
+      console.log('[PollingService] Polling service stopped');
+    }
   }
 
   private _reschedule(): void {

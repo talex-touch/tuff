@@ -15,6 +15,7 @@ import type {
   ModuleLoadMetric
 } from './types'
 import { createLogger } from '../../utils/logger'
+import { getConfig, saveConfig } from '../storage'
 
 const analyticsLog = createLogger('StartupAnalytics')
 
@@ -112,7 +113,6 @@ export class StartupAnalytics {
   getHistory(): StartupHistory {
     try {
       // Import storage module dynamically to avoid circular dependencies
-      const { getConfig } = require('../storage')
       const history = getConfig('startup-analytics.json') as StartupHistory
 
       if (history && Array.isArray(history.entries)) {
@@ -141,24 +141,16 @@ export class StartupAnalytics {
     }
 
     try {
-      // Import storage module dynamically to avoid circular dependencies
-      const { saveConfig } = require('../storage')
-
-      // Load existing history
       const history = this.getHistory()
 
-      // Add new metrics to the beginning
       history.entries.unshift(metrics)
 
-      // Keep only the most recent entries
       if (history.entries.length > this.config.maxHistory) {
         history.entries = history.entries.slice(0, this.config.maxHistory)
       }
 
-      // Update timestamp
       history.lastUpdated = Date.now()
 
-      // Save to storage
       saveConfig('startup-analytics.json', JSON.stringify(history, null, 2))
 
       analyticsLog.success('Metrics saved to history', {
@@ -245,7 +237,6 @@ export class StartupAnalytics {
   }
 }
 
-// Singleton instance
 let analyticsInstance: StartupAnalytics | null = null
 
 /**
