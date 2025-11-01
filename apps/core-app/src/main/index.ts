@@ -62,8 +62,6 @@ const modulesToLoad = [
   downloadCenterModule
 ]
 
-const pollingLog = mainLog.child('PollingService')
-
 // Record when Electron becomes ready
 let electronReadyTime: number
 
@@ -117,14 +115,8 @@ app.whenReady().then(async () => {
 
   // Start the global polling service after all modules are loaded.
   pollingService.start()
-  pollingLog.success('Polling service started')
 
   startupTimer.end('All modules loaded', {
     meta: { modules: modulesToLoad.length }
   })
-})
-
-touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
-  pollingLog.info('Stopping polling service due to app quit')
-  pollingService.stop()
 })
