@@ -44,6 +44,13 @@ const _appSettingOriginData = {
     startMinimized: false,
     startSilent: false,
   },
+  setup: {
+    accessibility: false,
+    notifications: false,
+    autoStart: false,
+    showTray: true,
+    adminPrivileges: false,
+  },
 };
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)

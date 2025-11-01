@@ -7,6 +7,8 @@
 
       <SettingLanguage />
 
+      <SettingSetup />
+
       <SettingTools />
 
       <SettingDownload />
@@ -23,6 +25,7 @@ import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingUser from './SettingUser.vue'
 import SettingLanguage from './SettingLanguage.vue'
+import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
 import SettingDownload from './SettingDownload.vue'
 // import SettingStorage from './SettingStorage.vue'

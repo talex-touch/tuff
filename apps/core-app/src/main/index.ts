@@ -25,6 +25,7 @@ import { downloadCenterModule } from './modules/download/download-center'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchApp } from './core'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { permissionCheckerModule } from './modules/system/permission-checker'
 import { mainLog } from './utils/logger'
 import { getStartupAnalytics } from './modules/analytics'
 import type { ModuleLoadMetric } from './modules/analytics'
@@ -48,6 +49,7 @@ const modulesToLoad = [
   shortcutModule,
   extensionLoaderModule,
   commonChannelModule,
+  permissionCheckerModule,
   pluginModule,
   pluginLogModule,
   coreBoxModule,
