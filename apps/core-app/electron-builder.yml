@@ -2,6 +2,8 @@ appId: com.tagzxia.app.tuff
 productName: tuff
 asar: false
 compression: normal
+asarUnpack:
+  - '**/node_modules/@libsql/**'
 directories:
   app: out
   buildResources: build
@@ -15,6 +17,7 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+extraFiles: []
 
 win:
   executableName: tuff

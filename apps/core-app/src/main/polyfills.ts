@@ -2,7 +2,7 @@
 import fse from 'fs-extra'
 import path from 'node:path'
 import { app } from 'electron'
-import log4js from 'log4js'
+import * as log4js from 'log4js'
 import { fileURLToPath } from 'url'
 import packageJson from '../../../../package.json'
 
