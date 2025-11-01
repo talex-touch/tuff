@@ -20,7 +20,8 @@ const { t } = useI18n()
 // Local reactive state for settings
 const windowSettings = ref({
   closeToTray: true,
-  startMinimized: false
+  startMinimized: false,
+  startSilent: false
 })
 
 // Load settings on mount
@@ -29,13 +30,16 @@ onMounted(async () => {
     // Load settings from storage
     const closeToTrayResult = touchChannel.sendSync('storage:get', 'app.window.closeToTray')
     const startMinimizedResult = touchChannel.sendSync('storage:get', 'app.window.startMinimized')
+    const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
     
     const closeToTray = closeToTrayResult !== null && closeToTrayResult !== undefined ? closeToTrayResult : true
     const startMinimized = startMinimizedResult !== null && startMinimizedResult !== undefined ? startMinimizedResult : false
+    const startSilent = startSilentResult !== null && startSilentResult !== undefined ? startSilentResult : false
 
     windowSettings.value = {
       closeToTray: closeToTray as boolean,
-      startMinimized: startMinimized as boolean
+      startMinimized: startMinimized as boolean,
+      startSilent: startSilent as boolean
     }
 
     console.log('[SettingWindow] Window settings loaded:', windowSettings.value)
@@ -73,6 +77,21 @@ async function updateStartMinimized(value: boolean) {
     console.error('[SettingWindow] Failed to update start minimized setting:', error)
   }
 }
+
+// Update start silent setting
+async function updateStartSilent(value: boolean) {
+  try {
+    await touchChannel.send('storage:save', {
+      key: 'app.window.startSilent',
+      content: JSON.stringify(value),
+      clear: false
+    })
+    windowSettings.value.startSilent = value
+    console.log('[SettingWindow] Start silent setting updated:', value)
+  } catch (error) {
+    console.error('[SettingWindow] Failed to update start silent setting:', error)
+  }
+}
 </script>
 
 <template>
@@ -97,6 +116,15 @@ async function updateStartMinimized(value: boolean) {
       icon="eye-off"
       :description="t('settings.window.startMinimizedDesc')"
       @update:model-value="updateStartMinimized"
+    />
+
+    <!-- Start silent switch -->
+    <t-block-switch
+      v-model="windowSettings.startSilent"
+      :title="t('settings.window.startSilent')"
+      icon="bell-off"
+      :description="t('settings.window.startSilentDesc')"
+      @update:model-value="updateStartSilent"
     />
   </t-group-block>
 </template>

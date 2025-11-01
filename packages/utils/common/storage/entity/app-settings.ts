@@ -39,6 +39,11 @@ const _appSettingOriginData = {
   searchEngine: {
     logsEnabled: false,
   },
+  window: {
+    closeToTray: true,
+    startMinimized: false,
+    startSilent: false,
+  },
 };
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)
