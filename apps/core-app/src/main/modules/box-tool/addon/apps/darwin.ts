@@ -145,10 +145,6 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   // Use the most definitive name for the icon cache to avoid collisions
   const icon = await getAppIcon({ name: displayName || bundleName || name, path: appPath })
 
-  if (appPath.toLowerCase().includes('wechat')) {
-    console.log(`[Darwin Scan] Path: ${appPath}, Name: ${name}, DisplayName: ${displayName}`)
-  }
-
   return {
     name,
     displayName: displayName || undefined,
