@@ -1,8 +1,8 @@
 <!--
   SettingWindow Component
 
-  Displays window behavior settings in the settings page.
-  Allows users to configure window closing and minimizing behavior.
+  Window behavior settings page
+  Allows users to configure window closing, minimizing, and auto-start behavior
 -->
 <script setup lang="ts" name="SettingWindow">
 import { useI18n } from 'vue-i18n'
@@ -17,29 +17,32 @@ import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
 
-// Local reactive state for settings
 const windowSettings = ref({
   closeToTray: true,
   startMinimized: false,
-  startSilent: false
+  startSilent: false,
+  autoStart: false
 })
 
-// Load settings on mount
 onMounted(async () => {
   try {
-    // Load settings from storage
     const closeToTrayResult = touchChannel.sendSync('storage:get', 'app.window.closeToTray')
     const startMinimizedResult = touchChannel.sendSync('storage:get', 'app.window.startMinimized')
     const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
-    
+    const autoStartResult = touchChannel.sendSync('storage:get', 'app.autoStart')
+
+    const autoStartStatus = touchChannel.sendSync('tray:autostart:get') as boolean | null
+
     const closeToTray = closeToTrayResult !== null && closeToTrayResult !== undefined ? closeToTrayResult : true
     const startMinimized = startMinimizedResult !== null && startMinimizedResult !== undefined ? startMinimizedResult : false
     const startSilent = startSilentResult !== null && startSilentResult !== undefined ? startSilentResult : false
+    const autoStart = autoStartStatus !== null ? autoStartStatus : (autoStartResult !== null && autoStartResult !== undefined ? autoStartResult : false)
 
     windowSettings.value = {
       closeToTray: closeToTray as boolean,
       startMinimized: startMinimized as boolean,
-      startSilent: startSilent as boolean
+      startSilent: startSilent as boolean,
+      autoStart: autoStart as boolean
     }
 
     console.log('[SettingWindow] Window settings loaded:', windowSettings.value)
@@ -48,7 +51,6 @@ onMounted(async () => {
   }
 })
 
-// Update close to tray setting
 async function updateCloseToTray(value: boolean) {
   try {
     await touchChannel.send('storage:save', {
@@ -63,7 +65,6 @@ async function updateCloseToTray(value: boolean) {
   }
 }
 
-// Update start minimized setting
 async function updateStartMinimized(value: boolean) {
   try {
     await touchChannel.send('storage:save', {
@@ -78,7 +79,6 @@ async function updateStartMinimized(value: boolean) {
   }
 }
 
-// Update start silent setting
 async function updateStartSilent(value: boolean) {
   try {
     await touchChannel.send('storage:save', {
@@ -90,6 +90,21 @@ async function updateStartSilent(value: boolean) {
     console.log('[SettingWindow] Start silent setting updated:', value)
   } catch (error) {
     console.error('[SettingWindow] Failed to update start silent setting:', error)
+  }
+}
+
+async function updateAutoStart(value: boolean) {
+  try {
+    await touchChannel.send('storage:save', {
+      key: 'app.autoStart',
+      content: JSON.stringify(value),
+      clear: false
+    })
+    await touchChannel.send('tray:autostart:update', value)
+    windowSettings.value.autoStart = value
+    console.log('[SettingWindow] Auto start setting updated:', value)
+  } catch (error) {
+    console.error('[SettingWindow] Failed to update auto start setting:', error)
   }
 }
 </script>
@@ -125,6 +140,15 @@ async function updateStartSilent(value: boolean) {
       icon="bell-off"
       :description="t('settings.window.startSilentDesc')"
       @update:model-value="updateStartSilent"
+    />
+
+    <!-- Auto start switch -->
+    <t-block-switch
+      v-model="windowSettings.autoStart"
+      :title="t('settings.window.autoStart')"
+      icon="play-circle"
+      :description="t('settings.window.autoStartDesc')"
+      @update:model-value="updateAutoStart"
     />
   </t-group-block>
 </template>

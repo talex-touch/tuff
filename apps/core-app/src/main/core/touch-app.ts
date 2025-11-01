@@ -73,7 +73,6 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     checkDirWithCreate(this.rootPath, true)
 
-    // Check if silent start is enabled
     const startSilent = (this.config.data as any)?.window?.startSilent ?? false
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
@@ -82,7 +81,6 @@ export class TouchApp implements TalexTouch.TouchApp {
       })
       const url = path.join(__dirname, '..', 'renderer', 'index.html')
 
-      // Only show window if silent start is disabled
       if (!startSilent) {
         this.window.window.show()
       } else {
@@ -101,7 +99,6 @@ export class TouchApp implements TalexTouch.TouchApp {
         throw new Error('ELECTRON_RENDERER_URL is not set')
       }
 
-      // Only show window if silent start is disabled
       if (!startSilent) {
         this.window.window.show()
       } else {
