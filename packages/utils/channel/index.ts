@@ -175,3 +175,9 @@ export interface StandardChannelData extends RawStandardChannelData {
 export type IChannelData = any //boolean | number | string | null | undefined | {
   // [prop: string]: any
 // }
+
+// Default export for Vite compatibility (only values, not types)
+export default {
+  ChannelType,
+  DataCode
+}
