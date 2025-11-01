@@ -112,6 +112,27 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
   authState.isSignedIn = isUserValid && isSessionValid
   authState.user = isUserValid ? (candidateUser as ClerkUser) : null
   authState.sessionId = resolvedSessionId
+
+  // Notify Sentry about user context change (async, don't block)
+  void (async () => {
+    try {
+      const { touchChannel } = await import('~/modules/channel/channel-core')
+      // Notify main process Sentry
+      await touchChannel.send('sentry:update-user', {
+        user: authState.user
+      })
+      // Notify renderer process Sentry
+      try {
+        const { updateSentryUserContext } = await import('~/modules/sentry/sentry-renderer')
+        updateSentryUserContext(authState.user)
+      } catch {
+        // Renderer Sentry not initialized yet
+      }
+    } catch (error) {
+      // Silently fail if Sentry is not available
+      console.debug('[useAuth] Failed to update Sentry user context', error)
+    }
+  })()
 }
 
 function getDisplayName(): string {

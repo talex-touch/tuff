@@ -10,7 +10,7 @@ export function useCoreBox(): void {
 
   touchChannel.regChannel('core-box:trigger', ({ data }: any) => {
     const { show, id } = data!
-    if (window.$startupInfo.id !== undefined) {
+    if (window.$startupInfo?.id !== undefined) {
       if (id !== window.$startupInfo.id) return
     }
 
