@@ -394,11 +394,15 @@ async function logout(): Promise<void> {
   }
 }
 
+/**
+ * Authentication hook
+ * 
+ * Note: Skip auth status check on first launch (before onboarding is complete) to avoid login prompts during onboarding
+ */
 export function useAuth() {
   onMounted(() => {
     activeConsumers += 1
 
-    // 如果是首次启动（引导未完成），跳过登录状态检查
     if (!appSetting?.beginner?.init) {
       console.log('[useAuth] Skipping auth status check on first launch')
       return
