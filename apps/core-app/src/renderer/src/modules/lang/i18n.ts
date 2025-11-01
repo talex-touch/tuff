@@ -79,10 +79,25 @@ export async function loadLocaleMessages(i18n: any, locale: string): Promise<voi
 
   if (typeof i18n.global.setLocaleMessage === 'function') {
     i18n.global.setLocaleMessage(locale, messages)
-  } else if (i18n.global.messages && i18n.global.messages.value) {
-    i18n.global.messages.value[locale] = messages
+  } else if (i18n.global.messages) {
+    // Handle both reactive and non-reactive messages
+    if (typeof i18n.global.messages.value === 'object') {
+      i18n.global.messages.value[locale] = messages
+    } else if (typeof i18n.global.messages === 'object') {
+      i18n.global.messages[locale] = messages
+    } else {
+      // Fallback: directly set messages
+      ;(i18n.global as any).messages = { [locale]: messages }
+    }
   } else {
-    console.error('[loadLocaleMessages] i18n.global.messages is not available')
+    // Direct fallback
+    ;(i18n.global as any).messages = { [locale]: messages }
+  }
+
+  // Ensure messages are loaded
+  if (!i18n.global.messages || (!i18n.global.messages.value?.[locale] && !(i18n.global.messages as any)[locale])) {
+    console.warn(`[loadLocaleMessages] Failed to set messages for locale "${locale}", attempting fallback`)
+    ;(i18n.global as any).messages = { [locale]: messages }
   }
 
   return nextTick()

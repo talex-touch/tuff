@@ -4,6 +4,8 @@ import { windowManager } from './window'
 import { IPluginFeature } from '@talex-touch/utils/plugin'
 import { ipcManager } from './ipc'
 import { TouchPlugin } from '../../plugin/plugin'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { getConfig } from '../../storage'
 
 interface ExpandOptions {
   length?: number
@@ -50,6 +52,26 @@ export class CoreBoxManager {
   }
 
   public trigger(show: boolean): void {
+    // If trying to show, check if initialization is complete
+    if (show) {
+      try {
+        const appSetting = getConfig(StorageList.APP_SETTING) as any
+        if (!appSetting?.beginner?.init) {
+          console.warn('[CoreBoxManager] Initialization not complete, cannot open CoreBox')
+          // Show main window to guide user to complete initialization
+          const mainWindow = $app.window.window
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show()
+            mainWindow.focus()
+          }
+          return
+        }
+      } catch (error) {
+        console.error('[CoreBoxManager] Failed to check initialization status:', error)
+        // If we can't check, allow CoreBox to open (fail-open approach)
+      }
+    }
+
     const now = Date.now()
     if (now - this.lastTrigger < 200 && this._show === show) {
       return

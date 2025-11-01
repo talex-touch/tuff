@@ -36,10 +36,17 @@ export class TrayManager extends BaseModule {
   }
 
   async onInit(): Promise<void> {
-    this.initializeTray()
+    // Check if tray should be shown
+    const shouldShowTray = this.shouldShowTray()
+    if (shouldShowTray) {
+      this.initializeTray()
+    } else {
+      console.log('[TrayManager] Tray disabled by configuration')
+    }
     this.registerWindowEvents()
     this.registerEventListeners()
     this.setupAutoStart()
+    this.setupChannels()
 
     if (process.platform === 'darwin') {
       const mainWindow = $app.window.window
@@ -174,6 +181,39 @@ export class TrayManager extends BaseModule {
     } catch (error) {
       console.error('[TrayManager] Failed to initialize tray:', error)
       console.error('[TrayManager] Error details:', error instanceof Error ? error.stack : error)
+    }
+  }
+
+  /**
+   * Destroy tray icon
+   */
+  private destroyTray(): void {
+    if (this.tray) {
+      this.tray.destroy()
+      this.tray = null
+      console.log('[TrayManager] Tray destroyed')
+    }
+  }
+
+  /**
+   * Check if tray should be shown based on configuration
+   */
+  private shouldShowTray(): boolean {
+    try {
+      const config = ($app.config.data as any)
+      const setupConfig = config?.setup
+      
+      // Check app.setup.showTray first
+      if (setupConfig?.showTray !== undefined) {
+        return setupConfig.showTray !== false
+      }
+      
+      // Default to true if not configured
+      return true
+    } catch (error) {
+      console.error('[TrayManager] Failed to check shouldShowTray:', error)
+      // Default to true on error
+      return true
     }
   }
 
@@ -386,6 +426,29 @@ export class TrayManager extends BaseModule {
     })
 
     console.log('[TrayManager] Event listeners registered')
+  }
+
+  private setupChannels(): void {
+    if (!$app.channel) return
+
+    // Get tray show status
+    $app.channel.regChannel(ChannelType.MAIN, 'tray:show:get', () => {
+      return this.tray !== null
+    })
+
+    // Set tray show status
+    $app.channel.regChannel(ChannelType.MAIN, 'tray:show:set', ({ data }) => {
+      const show = data === true
+      if (show && !this.tray) {
+        // Create tray if it doesn't exist
+        this.initializeTray()
+        this.updateMenu()
+      } else if (!show && this.tray) {
+        // Destroy tray if it exists
+        this.destroyTray()
+      }
+      return true
+    })
   }
 
   onDestroy(): MaybePromise<void> {

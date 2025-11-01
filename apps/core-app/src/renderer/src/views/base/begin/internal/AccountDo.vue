@@ -2,6 +2,7 @@
 // import Forbidden from './Forbidden.vue'
 // import OptionMode from './OptionMode.vue'
 import Done from './Done.vue'
+import SetupPermissions from './SetupPermissions.vue'
 import { Ref, ref, inject, watch } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { ElMessage } from 'element-plus'
@@ -18,9 +19,9 @@ const { signIn, isAuthenticated, isLoading } = useAuth()
 watch(isAuthenticated, (authenticated) => {
   if (authenticated) {
     ElMessage.success('登录成功！')
-    // 登录成功后跳转到完成页面
+    // 登录成功后跳转到权限设置页面
     step({
-      comp: Done
+      comp: SetupPermissions
     })
   }
 })
@@ -48,9 +49,9 @@ function handleAgree(): void {
     // 选择登录，使用 Clerk
     handleClerkSignIn()
   } else {
-    // 选择离线模式
+    // 选择离线模式，跳转到权限设置页面
     step({
-      comp: Done
+      comp: SetupPermissions
     })
   }
 }
