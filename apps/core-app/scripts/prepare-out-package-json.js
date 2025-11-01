@@ -29,7 +29,8 @@ const modulesToCopy = [
   'js-base64',
   'promise-limit',
   '@electron-toolkit/preload',
-  '@electron-toolkit/utils'
+  '@electron-toolkit/utils',
+  'path-browserify'
 ]
 
 // Build dependencies object for external modules
