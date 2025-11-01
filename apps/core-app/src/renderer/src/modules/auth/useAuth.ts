@@ -396,7 +396,7 @@ async function logout(): Promise<void> {
 
 /**
  * Authentication hook
- * 
+ *
  * Note: Skip auth status check on first launch (before onboarding is complete) to avoid login prompts during onboarding
  */
 export function useAuth() {

@@ -53,7 +53,7 @@ async function entry(): Promise<void> {
 
 /**
  * Execute main window tasks
- * 
+ *
  * Note: Skip update check on first launch (before onboarding is complete) to avoid update prompts during onboarding
  */
 async function executeMainTask(): Promise<void> {
