@@ -118,7 +118,7 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          mainWindow.webContents.send('navigate-to', '/downloads')
+          mainWindow.webContents.send('open-download-center')
         }
       }
     ]

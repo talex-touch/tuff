@@ -1,18 +1,54 @@
 <script setup lang="ts" name="FlatDownload">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ipcRenderer } = require('electron')
 import FlatButton from '../base/button/FlatButton.vue'
 import { Download } from '@element-plus/icons-vue'
 import { useAuth } from '~/modules/auth/useAuth'
+import DownloadCenter from './DownloadCenter.vue'
 
 const { isLoggedIn } = useAuth()
+const downloadDialogVisible = ref(false)
+
+function handleClick(): void {
+  downloadDialogVisible.value = true
+}
+
+function handleClose(): void {
+  downloadDialogVisible.value = false
+}
+
+function handleOpenDownloadCenter(): void {
+  downloadDialogVisible.value = true
+}
+
+onMounted(() => {
+  ipcRenderer.on('open-download-center', handleOpenDownloadCenter)
+})
+
+onBeforeUnmount(() => {
+  ipcRenderer.removeListener('open-download-center', handleOpenDownloadCenter)
+})
 </script>
 
 <template>
-  <FlatButton :class="{ active: isLoggedIn }" class="download-btn">
+  <FlatButton :class="{ active: isLoggedIn }" class="download-btn" @click="handleClick">
     <el-icon :size="16">
       <Download />
     </el-icon>
     <span class="download-text">下载管理</span>
   </FlatButton>
+
+  <el-dialog
+    v-model="downloadDialogVisible"
+    title="下载管理"
+    width="90%"
+    :before-close="handleClose"
+    top="5vh"
+    class="download-center-dialog"
+  >
+    <DownloadCenter />
+  </el-dialog>
 </template>
 
 <style lang="scss" scoped>
@@ -49,6 +85,16 @@ const { isLoggedIn } = useAuth()
   }
   to {
     transform: translate(0, calc(100% + var(--h)));
+  }
+}
+</style>
+
+<style lang="scss">
+.download-center-dialog {
+  .el-dialog__body {
+    max-height: calc(90vh - 120px);
+    overflow-y: auto;
+    padding: 20px;
   }
 }
 </style>

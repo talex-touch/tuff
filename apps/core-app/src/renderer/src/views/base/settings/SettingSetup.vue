@@ -12,6 +12,7 @@ import { ElMessage } from 'element-plus'
 // Import UI components
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
 import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 // Import storage and channel
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -87,7 +88,10 @@ async function checkAllPermissions(): Promise<void> {
 
     // Check admin privileges (Windows)
     if (isWindows.value) {
-      const adminResult = await touchChannel.send('system:permission:check', 'adminPrivileges' as any)
+      const adminResult = await touchChannel.send(
+        'system:permission:check',
+        'adminPrivileges' as any
+      )
       permissions.value.adminPrivileges = {
         status: adminResult.status,
         checked: true
@@ -196,6 +200,28 @@ function getStatusColor(status: string): string {
       return 'var(--el-color-info)'
   }
 }
+
+function getPermissionIcon(type: string): string {
+  const icons: Record<string, string> = {
+    accessibility: 'keyboard',
+    notifications: 'notification-3',
+    adminPrivileges: 'shield-user'
+  }
+  return icons[type] || 'settings'
+}
+
+function getStatusIcon(status: string): string {
+  switch (status) {
+    case 'granted':
+      return 'checkbox-circle'
+    case 'denied':
+      return 'close-circle'
+    case 'notDetermined':
+      return 'question-line'
+    default:
+      return 'information'
+  }
+}
 </script>
 
 <template>
@@ -205,78 +231,91 @@ function getStatusColor(status: string): string {
     :description="t('settings.setup.groupDesc')"
   >
     <!-- Permissions Section -->
-    <div class="SettingSetup-Permissions">
-      <!-- Accessibility Permission (macOS) -->
-      <div v-if="isMacOS" class="SettingSetup-PermissionItem">
-        <div class="PermissionItem-Info">
-          <span class="PermissionItem-Title">{{ t('settings.setup.accessibility') }}</span>
-          <span class="PermissionItem-Description">{{ t('settings.setup.accessibilityDesc') }}</span>
-        </div>
-        <div class="PermissionItem-Action">
-          <span
-            class="PermissionItem-Status"
-            :style="{ color: getStatusColor(permissions.accessibility.status) }"
-          >
-            {{ getStatusText(permissions.accessibility.status) }}
-          </span>
-          <el-button
-            v-if="permissions.accessibility.status !== 'granted'"
-            size="small"
-            type="primary"
-            @click="requestPermission('accessibility')"
-          >
-            {{ t('setupPermissions.openSettings') }}
-          </el-button>
-          <el-button size="small" :loading="isLoading" @click="checkAllPermissions">
-            {{ t('setupPermissions.recheck') }}
-          </el-button>
+    <!-- Accessibility Permission (macOS) -->
+    <div v-if="isMacOS" class="PermissionItem TBlockSelection fake-background index-fix">
+      <div class="PermissionItem-Content TBlockSelection-Content">
+        <RemixIcon :name="getPermissionIcon('accessibility')" style="line" />
+        <div class="PermissionItem-Label TBlockSelection-Label">
+          <h3>{{ t('settings.setup.accessibility') }}</h3>
+          <p>{{ t('settings.setup.accessibilityDesc') }}</p>
         </div>
       </div>
-
-      <!-- Admin Privileges (Windows) -->
-      <div v-if="isWindows" class="SettingSetup-PermissionItem">
-        <div class="PermissionItem-Info">
-          <span class="PermissionItem-Title">{{ t('settings.setup.adminPrivileges') }}</span>
-          <span class="PermissionItem-Description">{{ t('settings.setup.adminPrivilegesDesc') }}</span>
+      <div class="PermissionItem-Action TBlockSelection-Func">
+        <div
+          class="StatusBadge"
+          :style="{ color: getStatusColor(permissions.accessibility.status) }"
+        >
+          <RemixIcon
+            :name="getStatusIcon(permissions.accessibility.status)"
+            :style="permissions.accessibility.status === 'granted' ? 'fill' : 'line'"
+          />
+          <span>{{ getStatusText(permissions.accessibility.status) }}</span>
         </div>
-        <div class="PermissionItem-Action">
-          <span
-            class="PermissionItem-Status"
-            :style="{ color: getStatusColor(permissions.adminPrivileges.status) }"
-          >
-            {{ getStatusText(permissions.adminPrivileges.status) }}
-          </span>
-          <el-button size="small" :loading="isLoading" @click="checkAllPermissions">
-            {{ t('setupPermissions.recheck') }}
-          </el-button>
+        <el-button
+          v-if="permissions.accessibility.status !== 'granted'"
+          size="small"
+          type="primary"
+          @click="requestPermission('accessibility')"
+        >
+          {{ t('setupPermissions.openSettings') }}
+        </el-button>
+      </div>
+    </div>
+
+    <!-- Admin Privileges (Windows) -->
+    <div v-if="isWindows" class="PermissionItem TBlockSelection fake-background index-fix">
+      <div class="PermissionItem-Content TBlockSelection-Content">
+        <RemixIcon :name="getPermissionIcon('adminPrivileges')" style="line" />
+        <div class="PermissionItem-Label TBlockSelection-Label">
+          <h3>{{ t('settings.setup.adminPrivileges') }}</h3>
+          <p>{{ t('settings.setup.adminPrivilegesDesc') }}</p>
         </div>
       </div>
+      <div class="PermissionItem-Action TBlockSelection-Func">
+        <div
+          class="StatusBadge"
+          :style="{ color: getStatusColor(permissions.adminPrivileges.status) }"
+        >
+          <RemixIcon
+            :name="getStatusIcon(permissions.adminPrivileges.status)"
+            :style="permissions.adminPrivileges.status === 'granted' ? 'fill' : 'line'"
+          />
+          <span>{{ getStatusText(permissions.adminPrivileges.status) }}</span>
+        </div>
+        <el-button size="small" :loading="isLoading" @click="checkAllPermissions">
+          {{ t('setupPermissions.recheck') }}
+        </el-button>
+      </div>
+    </div>
 
-      <!-- Notification Permission -->
-      <div class="SettingSetup-PermissionItem">
-        <div class="PermissionItem-Info">
-          <span class="PermissionItem-Title">{{ t('settings.setup.notifications') }}</span>
-          <span class="PermissionItem-Description">{{ t('settings.setup.notificationsDesc') }}</span>
+    <!-- Notification Permission -->
+    <div class="PermissionItem TBlockSelection fake-background index-fix">
+      <div class="PermissionItem-Content TBlockSelection-Content">
+        <RemixIcon :name="getPermissionIcon('notifications')" style="line" />
+        <div class="PermissionItem-Label TBlockSelection-Label">
+          <h3>{{ t('settings.setup.notifications') }}</h3>
+          <p>{{ t('settings.setup.notificationsDesc') }}</p>
         </div>
-        <div class="PermissionItem-Action">
-          <span
-            class="PermissionItem-Status"
-            :style="{ color: getStatusColor(permissions.notifications.status) }"
-          >
-            {{ getStatusText(permissions.notifications.status) }}
-          </span>
-          <el-button
-            v-if="permissions.notifications.status !== 'granted'"
-            size="small"
-            type="primary"
-            @click="requestPermission('notifications')"
-          >
-            {{ t('setupPermissions.openSettings') }}
-          </el-button>
-          <el-button size="small" :loading="isLoading" @click="checkAllPermissions">
-            {{ t('setupPermissions.recheck') }}
-          </el-button>
+      </div>
+      <div class="PermissionItem-Action TBlockSelection-Func">
+        <div
+          class="StatusBadge"
+          :style="{ color: getStatusColor(permissions.notifications.status) }"
+        >
+          <RemixIcon
+            :name="getStatusIcon(permissions.notifications.status)"
+            :style="permissions.notifications.status === 'granted' ? 'fill' : 'line'"
+          />
+          <span>{{ getStatusText(permissions.notifications.status) }}</span>
         </div>
+        <el-button
+          v-if="permissions.notifications.status !== 'granted'"
+          size="small"
+          type="primary"
+          @click="requestPermission('notifications')"
+        >
+          {{ t('setupPermissions.openSettings') }}
+        </el-button>
       </div>
     </div>
 
@@ -294,7 +333,7 @@ function getStatusColor(status: string): string {
     <t-block-switch
       v-model="settings.showTray"
       :title="t('settings.setup.showTray')"
-      icon="icon"
+      icon="tray"
       :description="t('settings.setup.showTrayDesc')"
       @update:model-value="updateShowTray"
     />
@@ -302,52 +341,86 @@ function getStatusColor(status: string): string {
 </template>
 
 <style lang="scss" scoped>
-.SettingSetup-Permissions {
-  margin-bottom: 1rem;
-}
-
-.SettingSetup-PermissionItem {
-  padding: 1rem;
-  margin-bottom: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color);
-  background-color: var(--el-fill-color-lighter);
+.PermissionItem {
+  position: relative;
+  margin-bottom: 0;
+  padding: 4px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  width: 100%;
+  height: 56px;
+  user-select: none;
+  border-radius: 0;
+  box-sizing: border-box;
+  --fake-color: var(--el-fill-color-dark);
+  --fake-radius: 0;
+  --fake-inner-opacity: 0.5;
 
-  .PermissionItem-Info {
-    flex: 1;
+  &:hover {
+    --fake-color: var(--el-fill-color);
+  }
+
+  .PermissionItem-Content {
     display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    cursor: default;
 
-  .PermissionItem-Title {
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: var(--el-text-color-primary);
-  }
+    > * {
+      margin-right: 16px;
+      font-size: 20px;
+    }
 
-  .PermissionItem-Description {
-    font-size: 0.85rem;
-    color: var(--el-text-color-regular);
-    line-height: 1.5;
+    .PermissionItem-Label {
+      flex: 1;
+
+      h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--el-text-color-primary);
+      }
+
+      p {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 300;
+        opacity: 0.5;
+        color: var(--el-text-color-regular);
+      }
+    }
   }
 
   .PermissionItem-Action {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-  }
+    margin-right: 32px;
 
-  .PermissionItem-Status {
-    font-size: 0.85rem;
-    font-weight: 500;
-    min-width: 80px;
-    text-align: right;
+    .StatusBadge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 12px;
+      font-weight: 500;
+      min-width: 100px;
+      white-space: nowrap;
+
+      .remix {
+        font-size: 16px;
+      }
+    }
+  }
+}
+
+.touch-blur .PermissionItem {
+  --fake-color: var(--el-fill-color);
+
+  &:hover {
+    --fake-color: var(--el-fill-color-light);
   }
 }
 </style>
-
