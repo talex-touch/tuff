@@ -136,12 +136,9 @@ export default defineConfig({
       rollupOptions: {
         external: ['electron', 'fs', 'child_process', 'original-fs'],
         output: {
-          assetFileNames: (assetInfo) => {
-            if (assetInfo.name && assetInfo.name.endsWith('.json')) {
-              return 'assets/[name][extname]'
-            }
-            return 'assets/[name]-[hash][extname]'
-          }
+          assetFileNames: 'assets/[name]-[hash][extname]',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js'
         }
       }
     },
