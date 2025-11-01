@@ -22,7 +22,6 @@ const modulesToCopy = [
   '@libsql/linux-x64-gnu',
   '@libsql/linux-x64-musl',
   '@libsql/win32-x64-msvc',
-  '@libsql/win32-arm64-msvc',
   'libsql',
   '@neon-rs/load',
   'detect-libc',
