@@ -9,6 +9,7 @@ import {
   LoginResult,
   LoginOptions
 } from '@talex-touch/utils/renderer'
+import { appSetting } from '../channel/storage/index'
 
 let eventListenerCleanup: (() => void) | null = null
 let isInitialized = false
@@ -396,6 +397,12 @@ async function logout(): Promise<void> {
 export function useAuth() {
   onMounted(() => {
     activeConsumers += 1
+
+    // 如果是首次启动（引导未完成），跳过登录状态检查
+    if (!appSetting?.beginner?.init) {
+      console.log('[useAuth] Skipping auth status check on first launch')
+      return
+    }
 
     if (!isInitialized) {
       initializeAuth()

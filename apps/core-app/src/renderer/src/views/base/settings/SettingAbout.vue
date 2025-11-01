@@ -256,8 +256,8 @@ const currentExperiencePack = computed(() => {
     <t-block-line :title="t('settingAbout.license')" :link="true"></t-block-line>
   </t-group-block>
 
-  <!-- System Information Section -->
-  <t-group-block :name="'System Information'" icon="computer-line">
+  <!-- System Information Section (Only in development mode) -->
+  <t-group-block v-if="dev" :name="'System Information'" icon="computer-line">
     <t-block-line :title="'Active Window Detection'" :link="true" @click="getActiveApplication">
       <template #description>
         <el-button

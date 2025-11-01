@@ -10,6 +10,7 @@ import {
 } from '@talex-touch/utils/preload'
 import { useAppState } from './modules/hooks/useAppStates'
 import { useApplicationUpgrade } from './modules/hooks/useUpdate'
+import { appSetting } from './modules/channel/storage/index'
 import { Toaster } from 'vue-sonner'
 
 const init = ref(false)
@@ -51,6 +52,11 @@ async function entry(): Promise<void> {
 }
 
 async function executeMainTask(): Promise<void> {
+  // 如果是首次启动（引导未完成），跳过更新检查
+  if (!appSetting?.beginner?.init) {
+    console.log('[AppEntrance] Skipping update check on first launch')
+    return
+  }
   await checkApplicationUpgrade()
 }
 
