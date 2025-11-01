@@ -134,7 +134,15 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['electron', 'fs', 'child_process', 'original-fs']
+        external: ['electron', 'fs', 'child_process', 'original-fs'],
+        output: {
+          assetFileNames: (assetInfo) => {
+            if (assetInfo.name && assetInfo.name.endsWith('.json')) {
+              return 'assets/[name][extname]'
+            }
+            return 'assets/[name]-[hash][extname]'
+          }
+        }
       }
     },
     plugins: [
@@ -151,7 +159,9 @@ export default defineConfig({
         resolvers: [ElementPlusResolver({ importStyle: 'sass' })]
       }),
       VueSetupExtend(),
-      VueI18nPlugin({})
+      VueI18nPlugin({
+        runtimeOnly: false
+      })
     ]
   }
 })

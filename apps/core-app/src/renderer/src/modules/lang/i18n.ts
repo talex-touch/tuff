@@ -1,5 +1,7 @@
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
+import zhCN from './zh-CN.json'
+import enUS from './en-US.json'
 
 /**
  * Setup i18n instance with provided options
@@ -41,6 +43,11 @@ export function setI18nLanguage(i18n: any, locale: string): void {
   document.querySelector('html')!.setAttribute('lang', locale)
 }
 
+const localeMessages: Record<string, any> = {
+  'zh-CN': zhCN,
+  'en-US': enUS
+}
+
 /**
  * Load locale messages dynamically
  * @param i18n - i18n instance
@@ -48,12 +55,32 @@ export function setI18nLanguage(i18n: any, locale: string): void {
  * @returns Promise that resolves when messages are loaded
  */
 export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
-  const messages = await import(/* webpackChunkName: "locale-[request]" */ `./${locale}.json`)
+  let messages: any
+  
+  try {
+    messages = localeMessages[locale]
+    if (!messages) {
+      throw new Error(`Locale "${locale}" not found`)
+    }
+  } catch (error) {
+    console.error(`[loadLocaleMessages] Failed to load locale "${locale}":`, error)
+    try {
+      const fallbackLocale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'
+      messages = localeMessages[fallbackLocale]
+      if (!messages) {
+        throw new Error(`Fallback locale "${fallbackLocale}" not found`)
+      }
+      console.warn(`[loadLocaleMessages] Fallback to "${fallbackLocale}"`)
+    } catch (fallbackError) {
+      console.error(`[loadLocaleMessages] Fallback locale also failed:`, fallbackError)
+      throw error
+    }
+  }
 
   if (typeof i18n.global.setLocaleMessage === 'function') {
-    i18n.global.setLocaleMessage(locale, messages.default)
+    i18n.global.setLocaleMessage(locale, messages)
   } else if (i18n.global.messages && i18n.global.messages.value) {
-    i18n.global.messages.value[locale] = messages.default
+    i18n.global.messages.value[locale] = messages
   } else {
     console.error('[loadLocaleMessages] i18n.global.messages is not available')
   }
