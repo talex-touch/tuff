@@ -73,6 +73,7 @@
     "lottie-web": "^5.13.0",
     "mousetrap": "^1.6.5",
     "original-fs": "^1.2.0",
+    "path-browserify": "^1.0.1",
     "pinia": "^3.0.3",
     "pinyin-pro": "^3.19.6",
     "remixicon": "^4.6.0",
