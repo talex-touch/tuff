@@ -14,6 +14,8 @@ import {
 } from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { BaseModule } from '../abstract-base-module'
+import { app, dialog, BrowserWindow } from 'electron'
+import fse from 'fs-extra'
 
 export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
@@ -29,6 +31,61 @@ export class DatabaseModule extends BaseModule {
     })
   }
 
+  private async showDatabaseErrorDialog(error: Error, details?: string): Promise<void> {
+    const window = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+
+    await dialog.showMessageBox(window || undefined, {
+      type: 'error',
+      title: 'Database Initialization Failed',
+      message: 'Database migration failed, application cannot start',
+      detail: details || error.message || 'Unknown error',
+      buttons: ['OK'],
+      defaultId: 0,
+      noLink: true
+    })
+  }
+
+  private resolveMigrationsFolder(): string {
+    if (app.isPackaged) {
+      const appPath = app.getAppPath()
+      const migrationsPath = path.resolve(appPath, 'resources', 'db', 'migrations')
+
+      // First check the expected path
+      if (fse.existsSync(migrationsPath)) {
+        const metaJournalPath = path.resolve(migrationsPath, 'meta', '_journal.json')
+        if (fse.existsSync(metaJournalPath)) {
+          return migrationsPath
+        }
+      }
+
+      // Try alternative paths
+      const alternativePaths = [
+        // Alternative 1: relative to main directory
+        path.resolve(path.dirname(__dirname || path.join(appPath, 'main')), '..', 'resources', 'db', 'migrations'),
+        // Alternative 2: relative to appPath
+        path.resolve(appPath, '..', 'resources', 'db', 'migrations'),
+        // Alternative 3: process.resourcesPath (Electron specific)
+        ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'app', 'resources', 'db', 'migrations')] : [])
+      ]
+
+      for (const altPath of alternativePaths) {
+        if (fse.existsSync(altPath)) {
+          const metaJournalPath = path.resolve(altPath, 'meta', '_journal.json')
+          if (fse.existsSync(metaJournalPath)) {
+            console.log(chalk.yellow(`[Database] Using alternative migrations path: ${altPath}`))
+            return altPath
+          }
+        }
+      }
+
+      // Return the expected path even if it doesn't exist (will be caught by validation)
+      return migrationsPath
+    } else {
+      const dbFolder = path.dirname(migrationsLocator)
+      return path.resolve(dbFolder, 'migrations')
+    }
+  }
+
   async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const { dirPath } = file
     const dbPath = path.join(dirPath!, 'database.db')
@@ -36,11 +93,44 @@ export class DatabaseModule extends BaseModule {
 
     this.db = drizzle(this.client, { schema })
 
-    const dbFolder = path.dirname(migrationsLocator)
-    const migrationsFolder = path.join(dbFolder, 'migrations')
+    const migrationsFolder = this.resolveMigrationsFolder()
+    const migrationsFolderResolved = path.resolve(migrationsFolder)
+
+    console.log(chalk.cyan(`[Database] Resolved migrations folder: ${migrationsFolderResolved}`))
+
+    if (!fse.existsSync(migrationsFolderResolved)) {
+      const error = new Error(`Migrations folder not found: ${migrationsFolderResolved}`)
+      console.error(chalk.red('[Database] Migration folder not found:'), migrationsFolderResolved)
+      console.error(chalk.red('[Database] App path:'), app.getAppPath())
+      console.error(chalk.red('[Database] __dirname:'), __dirname)
+      console.error(chalk.red('[Database] process.resourcesPath:'), process.resourcesPath)
+
+      await this.showDatabaseErrorDialog(
+        error,
+        `Migrations folder not found:\n${migrationsFolderResolved}\n\nPlease check if the application installation is complete.`
+      )
+      throw error
+    }
+
+    const metaJournalPath = path.resolve(migrationsFolderResolved, 'meta', '_journal.json')
+    if (!fse.existsSync(metaJournalPath)) {
+      const error = new Error(`Migration journal not found: ${metaJournalPath}`)
+      console.error(chalk.red('[Database] Migration journal not found:'), metaJournalPath)
+      console.error(
+        chalk.red('[Database] Migrations folder exists:'),
+        fse.existsSync(migrationsFolderResolved)
+      )
+      console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
+
+      await this.showDatabaseErrorDialog(
+        error,
+        `Migration journal file not found:\n${metaJournalPath}\n\nPlease check if the application installation is complete.`
+      )
+      throw error
+    }
 
     console.log(chalk.cyan(`[Database] Preparing SQLite database at ${chalk.bold(dbPath)}`))
-    console.log(chalk.cyan(`[Database] Applying migrations from ${chalk.bold(migrationsFolder)}`))
+    console.log(chalk.cyan(`[Database] Applying migrations from ${chalk.bold(migrationsFolderResolved)}`))
 
     await this.ensureKeywordMappingsProviderColumn()
 
@@ -69,8 +159,9 @@ export class DatabaseModule extends BaseModule {
     })
 
     try {
-      await timing.cost(async () => migrate(this.db!, { migrationsFolder }), {
-        folder: migrationsFolder
+      // Use resolved path for migration
+      await timing.cost(async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }), {
+        folder: migrationsFolderResolved
       })
 
       await this.ensureKeywordMappingsProviderColumn()
@@ -78,8 +169,8 @@ export class DatabaseModule extends BaseModule {
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
       console.log(chalk.green(`[Database] Migrations completed successfully in ${duration} ms.`))
-    } catch (error: any) {
-      const message = String(error?.message ?? '')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error ?? '')
       const duplicateColumn = message.includes('duplicate column name: provider_id')
 
       if (duplicateColumn) {
@@ -93,6 +184,14 @@ export class DatabaseModule extends BaseModule {
       }
 
       console.error(chalk.red('[Database] Migration failed:'), error)
+
+      const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
+      const errorInstance = error instanceof Error ? error : new Error(errorMessage)
+      await this.showDatabaseErrorDialog(
+        errorInstance,
+        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
+      )
+
       process.exit(1)
     }
   }

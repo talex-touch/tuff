@@ -1,7 +1,6 @@
 import path from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
-// import commonjs from '@rollup/plugin-commonjs'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -36,7 +35,6 @@ export default defineConfig({
           'chokidar',
           '@electron-toolkit/utils',
           'drizzle-orm',
-          // @libsql/client should be externalized (uses native modules)
           'compressing',
           'crypto-js',
           'iconv-lite',
@@ -51,7 +49,7 @@ export default defineConfig({
           'electron-log',
           'electron-updater'
         ]
-      })
+      }),
     ],
     build: {
       rollupOptions: {
@@ -70,8 +68,13 @@ export default defineConfig({
           }
         },
         external: [
-          // Externalize @libsql/client and native modules - they need to be in node_modules
+          // Externalize libsql modules - they need to be in node_modules
           '@libsql/client',
+          '@libsql/core',
+          '@libsql/hrana-client',
+          '@libsql/isomorphic-fetch',
+          '@libsql/isomorphic-ws',
+          'libsql',
           /^@libsql\/(darwin-arm64|darwin-x64|linux-arm64|linux-x64|win32-arm64|win32-x64)$/
         ]
       }
@@ -92,8 +95,8 @@ export default defineConfig({
           'vue',
           'chokidar',
           '@electron-toolkit/utils',
+          '@electron-toolkit/preload',
           'drizzle-orm',
-          // @libsql/client should be externalized (uses native modules)
           'compressing',
           'crypto-js',
           'iconv-lite',
