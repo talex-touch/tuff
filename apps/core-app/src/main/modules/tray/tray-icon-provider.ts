@@ -16,47 +16,63 @@ export class TrayIconProvider {
   static getIcon(): Electron.NativeImage {
     let iconPath: string = ''
 
+    // macOS requires Template.png suffix for template images
+    // Electron automatically handles @2x version if filename matches pattern
+    const preferredNames = process.platform === 'darwin'
+      ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
+      : ['tray_icon.png']
+
     if (app.isPackaged) {
       const appPath = app.getAppPath()
-      const potentialPaths = [
-        path.resolve(appPath, 'resources', 'tray_icon.png'),
-        path.resolve(appPath, '..', 'resources', 'tray_icon.png'),
-        path.resolve(__dirname, '..', '..', '..', 'resources', 'tray_icon.png'),
-        ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', 'tray_icon.png')] : [])
-      ]
 
-      for (const potentialPath of potentialPaths) {
-        if (fse.existsSync(potentialPath)) {
-          iconPath = potentialPath
-          break
+      for (const iconName of preferredNames) {
+        const potentialPaths = [
+          path.resolve(appPath, 'resources', iconName),
+          path.resolve(appPath, '..', 'resources', iconName),
+          path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
+          ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', iconName)] : [])
+        ]
+
+        for (const potentialPath of potentialPaths) {
+          if (fse.existsSync(potentialPath)) {
+            iconPath = potentialPath
+            break
+          }
         }
+
+        if (iconPath) break
       }
 
       if (!iconPath) {
         iconPath = path.resolve(appPath, 'resources', 'tray_icon.png')
       }
     } else {
-      let currentDir = __dirname
       iconPath = ''
 
-      for (let i = 0; i < 10; i++) {
-        const potentialPath = path.resolve(currentDir, 'apps', 'core-app', 'resources', 'tray_icon.png')
-        if (fse.existsSync(potentialPath)) {
-          iconPath = potentialPath
-          break
+      for (const iconName of preferredNames) {
+        let currentDir = __dirname
+
+        for (let i = 0; i < 10; i++) {
+          const potentialPath = path.resolve(currentDir, 'apps', 'core-app', 'resources', iconName)
+          if (fse.existsSync(potentialPath)) {
+            iconPath = potentialPath
+            break
+          }
+
+          const altPath = path.resolve(currentDir, 'resources', iconName)
+          if (fse.existsSync(altPath)) {
+            iconPath = altPath
+            break
+          }
+
+          const parentDir = path.dirname(currentDir)
+          if (parentDir === currentDir) {
+            break
+          }
+          currentDir = parentDir
         }
 
-        const altPath = path.resolve(currentDir, 'resources', 'tray_icon.png')
-        if (fse.existsSync(altPath)) {
-          iconPath = altPath
-          break
-        }
-
-        const parentDir = path.dirname(currentDir)
-        if (parentDir === currentDir) {
-          break
-        }
-        currentDir = parentDir
+        if (iconPath) break
       }
 
       if (!iconPath) {
@@ -86,6 +102,16 @@ export class TrayIconProvider {
       console.log('[TrayIconProvider] Icon size:', size)
 
       if (process.platform === 'darwin') {
+        // Check if using Template.png (required for macOS tray icons)
+        const isTemplateFile = iconPath.endsWith('Template.png')
+        if (isTemplateFile) {
+          console.log('[TrayIconProvider] Using Template.png file (macOS template image)')
+        } else {
+          console.warn('[TrayIconProvider] Icon filename does not end with Template.png')
+          console.warn('[TrayIconProvider] For macOS tray icons, filename MUST end with Template.png')
+          console.warn('[TrayIconProvider] Example: TrayIconTemplate.png (and TrayIconTemplate@2x.png for Retina)')
+        }
+
         if (size.width !== 22 && size.width !== 16 && size.height !== 22 && size.height !== 16) {
           console.warn('[TrayIconProvider] Icon size may not be optimal for macOS:', size)
           console.warn('[TrayIconProvider] Recommended sizes: 22x22 or 16x16 pixels')
@@ -106,47 +132,63 @@ export class TrayIconProvider {
   static getIconPath(): string {
     let iconPath: string = ''
 
+    // macOS requires Template.png suffix for template images
+    // Electron automatically handles @2x version if filename matches pattern
+    const preferredNames = process.platform === 'darwin'
+      ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
+      : ['tray_icon.png']
+
     if (app.isPackaged) {
       const appPath = app.getAppPath()
-      const potentialPaths = [
-        path.resolve(appPath, 'resources', 'tray_icon.png'),
-        path.resolve(appPath, '..', 'resources', 'tray_icon.png'),
-        path.resolve(__dirname, '..', '..', '..', 'resources', 'tray_icon.png'),
-        ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', 'tray_icon.png')] : [])
-      ]
 
-      for (const potentialPath of potentialPaths) {
-        if (fse.existsSync(potentialPath)) {
-          iconPath = potentialPath
-          break
+      for (const iconName of preferredNames) {
+        const potentialPaths = [
+          path.resolve(appPath, 'resources', iconName),
+          path.resolve(appPath, '..', 'resources', iconName),
+          path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
+          ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', iconName)] : [])
+        ]
+
+        for (const potentialPath of potentialPaths) {
+          if (fse.existsSync(potentialPath)) {
+            iconPath = potentialPath
+            break
+          }
         }
+
+        if (iconPath) break
       }
 
       if (!iconPath) {
         iconPath = path.resolve(appPath, 'resources', 'tray_icon.png')
       }
     } else {
-      let currentDir = __dirname
       iconPath = ''
 
-      for (let i = 0; i < 10; i++) {
-        const potentialPath = path.resolve(currentDir, 'apps', 'core-app', 'resources', 'tray_icon.png')
-        if (fse.existsSync(potentialPath)) {
-          iconPath = potentialPath
-          break
+      for (const iconName of preferredNames) {
+        let currentDir = __dirname
+
+        for (let i = 0; i < 10; i++) {
+          const potentialPath = path.resolve(currentDir, 'apps', 'core-app', 'resources', iconName)
+          if (fse.existsSync(potentialPath)) {
+            iconPath = potentialPath
+            break
+          }
+
+          const altPath = path.resolve(currentDir, 'resources', iconName)
+          if (fse.existsSync(altPath)) {
+            iconPath = altPath
+            break
+          }
+
+          const parentDir = path.dirname(currentDir)
+          if (parentDir === currentDir) {
+            break
+          }
+          currentDir = parentDir
         }
 
-        const altPath = path.resolve(currentDir, 'resources', 'tray_icon.png')
-        if (fse.existsSync(altPath)) {
-          iconPath = altPath
-          break
-        }
-
-        const parentDir = path.dirname(currentDir)
-        if (parentDir === currentDir) {
-          break
-        }
-        currentDir = parentDir
+        if (iconPath) break
       }
 
       if (!iconPath) {

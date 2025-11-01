@@ -67,17 +67,48 @@ export class TrayManager extends BaseModule {
       console.log('[TrayManager] Creating tray with icon, size:', size)
       console.log('[TrayManager] Icon path:', iconPath)
 
+      // macOS-specific: Use GUID to maintain position between relaunches
+      // GUID must be a valid UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+      const TRAY_GUID = '550e8400-e29b-41d4-a716-446655440000' // UUID v4 format
+
       if (process.platform === 'darwin') {
         try {
-          console.log('[TrayManager] Attempting to create tray with file path:', iconPath)
-          this.tray = new Tray(iconPath)
-          console.log('[TrayManager] Successfully created tray with file path')
+          // Create NativeImage with template support for macOS
+          const nativeIcon = TrayIconProvider.getIcon()
+          if (!nativeIcon.isEmpty()) {
+            // Set as template image (required for macOS tray icons)
+            nativeIcon.setTemplateImage(true)
+            console.log('[TrayManager] Icon set as template image for macOS')
+
+            // Use NativeImage with GUID (optional, helps maintain position)
+            try {
+              this.tray = new Tray(nativeIcon, TRAY_GUID)
+              console.log('[TrayManager] Successfully created tray with NativeImage and GUID:', TRAY_GUID)
+            } catch (guidError) {
+              // If GUID fails, try without GUID
+              console.warn('[TrayManager] Failed to create tray with GUID, trying without GUID:', guidError)
+              this.tray = new Tray(nativeIcon)
+              console.log('[TrayManager] Successfully created tray with NativeImage (no GUID)')
+            }
+          } else {
+            // Fallback: try file path
+            this.tray = new Tray(iconPath)
+            console.log('[TrayManager] Successfully created tray with file path')
+          }
         } catch (pathError) {
-          console.warn('[TrayManager] Failed to create tray with file path, trying NativeImage:', pathError)
+          console.warn('[TrayManager] Failed to create tray with file path, trying without GUID:', pathError)
 
           try {
-            this.tray = new Tray(icon)
-            console.log('[TrayManager] Successfully created tray with NativeImage')
+            // Last resort: try without GUID
+            const nativeIcon = TrayIconProvider.getIcon()
+            if (!nativeIcon.isEmpty()) {
+              nativeIcon.setTemplateImage(true)
+              this.tray = new Tray(nativeIcon)
+              console.log('[TrayManager] Successfully created tray with NativeImage (no GUID)')
+            } else {
+              this.tray = new Tray(iconPath)
+              console.log('[TrayManager] Successfully created tray with file path (no GUID)')
+            }
           } catch (imageError) {
             console.error('[TrayManager] Failed to create tray with NativeImage:', imageError)
             throw imageError
@@ -92,12 +123,17 @@ export class TrayManager extends BaseModule {
         return
       }
 
+      // Ensure template image is set for macOS (if not already done)
       if (process.platform === 'darwin') {
         const nativeIcon = TrayIconProvider.getIcon()
         if (!nativeIcon.isEmpty()) {
           nativeIcon.setTemplateImage(true)
           this.tray.setImage(nativeIcon)
           console.log('[TrayManager] Set template image for macOS dark mode support')
+
+          // Verify the icon is actually set
+          const bounds = this.tray.getBounds()
+          console.log('[TrayManager] Tray bounds:', bounds)
         }
       }
 
@@ -107,6 +143,7 @@ export class TrayManager extends BaseModule {
       this.updateMenu()
 
       if (process.platform === 'darwin') {
+        // Retry mechanism to ensure icon appears
         const retryDelays = [100, 500, 1000]
         retryDelays.forEach((delay) => {
           setTimeout(() => {
@@ -123,12 +160,15 @@ export class TrayManager extends BaseModule {
         })
 
         console.log('[TrayManager] Tray created on macOS, icon should be visible in menu bar')
-        console.log('[TrayManager] If icon is not visible, check macOS menu bar settings')
-        console.log('[TrayManager] System Preferences > Dock & Menu Bar > Menu Bar')
+        console.log('[TrayManager] If icon is not visible, check:')
+        console.log('[TrayManager] 1. macOS menu bar settings (System Settings > Dock & Menu Bar)')
+        console.log('[TrayManager] 2. Icon file is a valid Template Image (single color, transparent background)')
+        console.log('[TrayManager] 3. Icon size is optimal (16x16 or 22x22 recommended for macOS)')
       }
 
       ;(global as any).__trayInstance = this.tray
       console.log('[TrayManager] Tray instance saved to global scope for debugging')
+      console.log('[TrayManager] Tray GUID:', process.platform === 'darwin' ? this.tray.getGUID() : 'N/A (not macOS)')
 
       console.log('[TrayManager] Tray initialized successfully')
     } catch (error) {
