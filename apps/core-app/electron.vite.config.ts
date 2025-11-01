@@ -122,7 +122,8 @@ export default defineConfig({
         '@comp': path.join(rendererPath, 'components'),
         '@styles': path.join(rendererPath, 'styles'),
         '@assets': path.join(rendererPath, 'assets'),
-        '~': rendererPath
+        '~': rendererPath,
+        'path-browserify': 'path-browserify'
       }
     },
     define: {
