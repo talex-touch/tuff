@@ -140,7 +140,7 @@ export async function processSearchResults(
       .setSubtitle(app.path)
       .setIcon({
         type: 'url',
-        value: app.extensions.icon ? `data:image/png;base64,${app.extensions.icon}` : ''
+        value: app.extensions.icon ?? ''
       })
       .setActions([
         {
