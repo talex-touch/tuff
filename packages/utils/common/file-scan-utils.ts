@@ -7,9 +7,6 @@
  * @version 1.0.0
  */
 
-// Use Node.js path in Node.js environment (main process), path-browserify in browser environment (renderer process)
-// Main process: no window, use Node.js path
-// Renderer process: has window, use path-browserify
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const path = typeof window === 'undefined'
   ? require('path')

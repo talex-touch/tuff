@@ -5,7 +5,6 @@ import vueJsx from '@vitejs/plugin-vue-jsx'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import Unocss from 'unocss/vite'
-// import ElementPlus from "unplugin-element-plus/vite";
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import VueSetupExtend from 'vite-plugin-vue-setup-extend'
@@ -49,7 +48,7 @@ export default defineConfig({
           'electron-log',
           'electron-updater'
         ]
-      }),
+      })
     ],
     build: {
       rollupOptions: {
@@ -68,7 +67,6 @@ export default defineConfig({
           }
         },
         external: [
-          // Externalize libsql modules - they need to be in node_modules
           '@libsql/client',
           '@libsql/core',
           '@libsql/hrana-client',
@@ -123,7 +121,8 @@ export default defineConfig({
         '@styles': path.join(rendererPath, 'styles'),
         '@assets': path.join(rendererPath, 'assets'),
         '~': rendererPath,
-        'path-browserify': 'path-browserify'
+        'path-browserify': 'path-browserify',
+        path: 'path-browserify'
       }
     },
     define: {
@@ -135,67 +134,12 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['electron', 'fs', 'path', 'child_process', 'original-fs']
+        external: ['electron', 'fs', 'child_process', 'original-fs']
       }
     },
     plugins: [
-      // commonjs({
-      //   ignore: ["simple-plist", "element-plus"],
-      //   include: [/dayjs/, /lottie-web/, /node_modules\/dayjs/],
-      //   transformMixedEsModules: true,
-      // }),
       generatorInformation(),
       vue(),
-      // electron([
-      //   {
-      //     // Main-Process entry file of the Electron App.
-      //     entry: "electron/index.ts",
-      //     onstart({ startup }) {
-      //       startup([
-      //         ".",
-      //         "--no-sandbox",
-      //         "--sourcemap",
-      //         "--remote-debugging-port=9222",
-      //         "--disable-gpu-process-crash-limit",
-      //         "--disable-renderer-backgrounding",
-      //         "--disable-backgrounding-occluded-windows",
-      //       ]);
-      //     },
-      //     vite: {
-      //       build: {
-      //         outDir: "dist/electron",
-      //         rollupOptions: {
-      //           external: [
-      //             "fsevents",
-      //             "simple-plist",
-      //             "element-plus",
-      //             "extract-file-icon",
-      //             "electron-clipboard-ex"
-      //           ],
-      //         },
-      //       },
-      //     },
-      //   },
-      //   {
-      //     entry: "electron/preload.ts",
-      //     onstart(options) {
-      //       // Notify the Renderer-Process to reload the page when the Preload-Scripts build is complete,
-      //       // instead of restarting the entire Electron App.
-      //       options.reload();
-      //     },
-      //     vite: {
-      //       build: {
-      //         outDir: "dist/electron",
-      //         rollupOptions: {
-      //           output: {
-      //             // Disable Preload scripts code split
-      //             inlineDynamicImports: true,
-      //           },
-      //         },
-      //       },
-      //     },
-      //   },
-      // ]),
       Unocss(),
       vueJsx(),
       AutoImport({
