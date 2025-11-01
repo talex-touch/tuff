@@ -3,7 +3,7 @@
 </template>
 
 <script name="LottieFrame" setup>
-const lottie = require('lottie-web')
+import lottie from 'lottie-web'
 
 const props = defineProps({
   data: {

@@ -30,7 +30,8 @@ const modulesToCopy = [
   'promise-limit',
   '@electron-toolkit/preload',
   '@electron-toolkit/utils',
-  'path-browserify'
+  'path-browserify',
+  'lottie-web'
 ]
 
 // Build dependencies object for external modules
