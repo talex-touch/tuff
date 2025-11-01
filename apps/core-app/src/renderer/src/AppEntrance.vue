@@ -34,6 +34,17 @@ async function entry(): Promise<void> {
     useTouchSDK({ channel: touchChannel })
     initStorageChannel(touchChannel)
 
+    // Initialize Sentry in renderer process
+    preloadDebugStep('Initializing Sentry...', 0.01)
+    void (async () => {
+      try {
+        const { initSentryRenderer } = await import('./modules/sentry/sentry-renderer')
+        await initSentryRenderer()
+      } catch (error) {
+        console.warn('[AppEntrance] Failed to initialize Sentry', error)
+      }
+    })()
+
     preloadDebugStep('Running renderer warmup tasks', 0.05)
     await props.onReady()
 

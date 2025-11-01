@@ -42,6 +42,8 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+import { sentryModule } from './modules/sentry'
+
 const modulesToLoad = [
   databaseModule,
   storageModule,
@@ -50,6 +52,7 @@ const modulesToLoad = [
   extensionLoaderModule,
   commonChannelModule,
   permissionCheckerModule,
+  sentryModule,
   pluginModule,
   pluginLogModule,
   coreBoxModule,

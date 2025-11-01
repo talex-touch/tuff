@@ -28,6 +28,8 @@ import { ProviderContext } from './types'
 import { gatherAggregator } from './search-gather'
 import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
+import { getSentryService } from '../../sentry'
+import { performance } from 'perf_hooks'
 
 /**
  * Generates a unique key for an activation request.
@@ -288,6 +290,7 @@ export class SearchEngineCore
     this.currentGatherController?.abort()
 
     const startTime = Date.now()
+    const sortingStartTime = { value: 0 }
     this._recordSearchUsage(sessionId, query)
 
     return new Promise((resolve) => {
@@ -370,17 +373,31 @@ export class SearchEngineCore
         if (isFirstUpdate) {
           isFirstUpdate = false
           const initialItems = update.newResults.flatMap((res) => res.items)
+          sortingStartTime.value = performance.now()
           const { sortedItems } = this.sorter.sort(initialItems, query, gatherController.signal)
+          const sortingDuration = performance.now() - sortingStartTime.value
 
           this._updateActivationState(update.newResults)
 
+          const totalDuration = Date.now() - startTime
           const initialResult = TuffFactory.createSearchResult(query)
             .setItems(sortedItems)
-            .setDuration(Date.now() - startTime)
+            .setDuration(totalDuration)
             .setSources(update.sourceStats || [])
             .build()
           initialResult.sessionId = sessionId
           initialResult.activate = this.getActivationState() ?? undefined
+
+          // Record search metrics for Sentry
+          this._recordSearchMetrics({
+            sessionId,
+            query,
+            totalDuration,
+            sortingDuration,
+            sourceStats: update.sourceStats || [],
+            resultCount: sortedItems.length
+          })
+
           resolve(initialResult)
         } else if (update.newResults.length > 0) {
           // This is a subsequent update
@@ -421,6 +438,63 @@ export class SearchEngineCore
       }
     } catch (error) {
       console.error('[SearchEngineCore] Failed to record search usage.', error)
+    }
+  }
+
+  /**
+   * Record search metrics for Sentry analytics
+   */
+  private _recordSearchMetrics({
+    sessionId,
+    query,
+    totalDuration,
+    sortingDuration,
+    sourceStats,
+    resultCount
+  }: {
+    sessionId: string
+    query: TuffQuery
+    totalDuration: number
+    sortingDuration: number
+    sourceStats: Array<{ providerId?: string; provider?: string; resultCount: number; duration?: number }>
+    resultCount: number
+  }): void {
+    try {
+      const sentryService = getSentryService()
+      if (!sentryService.isEnabled()) {
+        return
+      }
+
+      // Extract provider timings and results from sourceStats
+      const providerTimings: Record<string, number> = {}
+      const providerResults: Record<string, number> = {}
+
+      // sourceStats contains provider timing and result information
+      for (const stat of sourceStats) {
+        const providerId = stat.providerId || stat.provider || 'unknown'
+        providerResults[providerId] = stat.resultCount || 0
+        // Duration is in milliseconds, already tracked in gatherAggregator
+        providerTimings[providerId] = stat.duration || 0
+      }
+
+      // Extract input types
+      const inputTypes = query.inputs
+        ? query.inputs.map((input) => input.type).filter(Boolean)
+        : ['text']
+
+      sentryService.recordSearchMetrics({
+        totalDuration,
+        providerTimings,
+        providerResults,
+        sortingDuration,
+        queryText: query.text || '',
+        inputTypes,
+        resultCount,
+        sessionId
+      })
+    } catch (error) {
+      // Silently fail to not disrupt search flow
+      console.debug('[SearchEngineCore] Failed to record search metrics for Sentry', error)
     }
   }
 

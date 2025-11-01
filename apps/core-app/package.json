@@ -49,6 +49,7 @@
     "@milkdown/theme-nord": "^7.17.1",
     "@milkdown/transformer": "^7.17.1",
     "@number-flow/vue": "^0.4.8",
+    "@sentry/electron": "^7.2.0",
     "@talex-touch/utils": "file:../../packages/utils",
     "@types/yauzl": "^2.10.3",
     "@unocss/transformer-attributify-jsx": "^66.5.4",
