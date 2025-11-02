@@ -5,7 +5,7 @@
 -->
 <script setup lang="ts" name="SettingSentry">
 import { useI18n } from 'vue-i18n'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { ElMessage, ElSwitch, ElAlert } from 'element-plus'
 
@@ -98,14 +98,14 @@ onMounted(() => {
       <template #label>
         {{ t('settingSentry.enableDataUpload', '启用数据上传') }}
       </template>
-      <el-switch v-model="enabled" :loading="loading" @change="updateEnabled" />
+      <el-switch v-model="enabled" :loading="loading" @change="(val: string | number | boolean) => updateEnabled(Boolean(val))" />
     </t-block-line>
 
     <t-block-line v-if="enabled">
       <template #label>
         {{ t('settingSentry.anonymousMode', '匿名模式') }}
       </template>
-      <el-switch v-model="anonymous" :loading="loading" @change="updateAnonymous" />
+      <el-switch v-model="anonymous" :loading="loading" @change="(val: string | number | boolean) => updateAnonymous(Boolean(val))" />
     </t-block-line>
 
     <t-block-line v-if="enabled">

@@ -23,7 +23,6 @@ const { t } = useI18n()
 const platform = computed(() => window.$startupInfo?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
-const isLinux = computed(() => platform.value === 'linux')
 
 // Permission states
 const permissions = ref({
@@ -254,7 +253,7 @@ function getStatusIcon(status: string): string {
     <!-- Accessibility Permission (macOS) -->
     <div v-if="isMacOS" class="PermissionItem TBlockSelection fake-background index-fix">
       <div class="PermissionItem-Content TBlockSelection-Content">
-        <RemixIcon :name="getPermissionIcon('accessibility')" style="line" />
+        <RemixIcon :name="getPermissionIcon('accessibility')" :style="'line'" />
         <div class="PermissionItem-Label TBlockSelection-Label">
           <h3>{{ t('settings.setup.accessibility') }}</h3>
           <p>{{ t('settings.setup.accessibilityDesc') }}</p>
@@ -285,7 +284,7 @@ function getStatusIcon(status: string): string {
     <!-- Admin Privileges (Windows) -->
     <div v-if="isWindows" class="PermissionItem TBlockSelection fake-background index-fix">
       <div class="PermissionItem-Content TBlockSelection-Content">
-        <RemixIcon :name="getPermissionIcon('adminPrivileges')" style="line" />
+        <RemixIcon :name="getPermissionIcon('adminPrivileges')" :style="'line'" />
         <div class="PermissionItem-Label TBlockSelection-Label">
           <h3>{{ t('settings.setup.adminPrivileges') }}</h3>
           <p>{{ t('settings.setup.adminPrivilegesDesc') }}</p>
@@ -311,7 +310,7 @@ function getStatusIcon(status: string): string {
     <!-- Notification Permission -->
     <div class="PermissionItem TBlockSelection fake-background index-fix">
       <div class="PermissionItem-Content TBlockSelection-Content">
-        <RemixIcon :name="getPermissionIcon('notifications')" style="line" />
+        <RemixIcon :name="getPermissionIcon('notifications')" :style="'line'" />
         <div class="PermissionItem-Label TBlockSelection-Label">
           <h3>{{ t('settings.setup.notifications') }}</h3>
           <p>{{ t('settings.setup.notificationsDesc') }}</p>
