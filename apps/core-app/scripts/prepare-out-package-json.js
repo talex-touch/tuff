@@ -30,7 +30,10 @@ const modulesToCopy = [
   '@electron-toolkit/preload',
   '@electron-toolkit/utils',
   'path-browserify',
-  'lottie-web'
+  'lottie-web',
+  // Copy node-fetch dependency required by @libsql/hrana-client
+  // to fix electron-builder dependency resolution issue
+  'node-fetch'
 ]
 
 // Build dependencies object for external modules
