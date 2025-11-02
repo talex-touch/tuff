@@ -108,17 +108,78 @@ function resolveModuleRoot(moduleName) {
   }
 }
 
-modulesToCopy.forEach((moduleName) => {
+// Set to track already copied modules (to avoid infinite loops and duplicates)
+const copiedModules = new Set()
+
+// Function to recursively copy a module and its dependencies
+function copyModuleRecursive(moduleName, depth = 0) {
+  // Avoid infinite recursion
+  if (depth > 10) {
+    return
+  }
+
+  // Skip if already copied
+  if (copiedModules.has(moduleName)) {
+    return
+  }
+
   try {
     const sourceDir = resolveModuleRoot(moduleName)
+    const pkgJsonPath = path.join(sourceDir, 'package.json')
+    
+    if (!fs.existsSync(pkgJsonPath)) {
+      return
+    }
+
+    const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+    
+    // Copy the module
     const targetDir = path.join(outNodeModulesPath, moduleName)
     fs.mkdirSync(path.dirname(targetDir), { recursive: true })
-    fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
+    
+    // Only copy if not already copied (to avoid overwriting)
+    if (!copiedModules.has(moduleName)) {
+      fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
+      copiedModules.add(moduleName)
+    }
+
+    // Recursively copy dependencies (including @types packages)
+    const allDeps = {
+      ...(pkgJson.dependencies || {}),
+      ...(pkgJson.peerDependencies || {}),
+      ...(pkgJson.optionalDependencies || {})
+    }
+
+    // For packages that have @types dependencies, also copy @types packages
+    // This is needed for electron-builder 26.0.12 dependency resolution
+    for (const [depName, depVersion] of Object.entries(allDeps)) {
+      // Skip workspace dependencies and internal packages
+      if (depName.startsWith('@talex-touch/')) {
+        continue
+      }
+      
+      try {
+        copyModuleRecursive(depName, depth + 1)
+      } catch (err) {
+        // Silently skip optional dependencies that can't be resolved
+        if (!pkgJson.optionalDependencies?.[depName]) {
+          // Only warn for non-optional dependencies
+          if (depth === 0) {
+            console.warn(`Warning: failed to copy dependency "${depName}" of "${moduleName}": ${err.message}`)
+          }
+        }
+      }
+    }
   } catch (err) {
-    if (err.code !== 'MODULE_NOT_FOUND') {
+    if (err.code !== 'MODULE_NOT_FOUND' && depth === 0) {
       console.warn(`Warning: failed to copy dependency "${moduleName}": ${err.message}`)
     }
   }
+}
+
+// Copy all modules and their dependencies recursively
+modulesToCopy.forEach((moduleName) => {
+  copyModuleRecursive(moduleName)
 })
 
 // Copy resources directory to out directory
