@@ -1,9 +1,11 @@
 import type { ITouchClientChannel } from '../channel'
+import type { ITouchSDK } from './sdk/index'
+// Import SDK for side effects (initializes hooks)
 import './sdk/index'
 
-// window type
+// window type - includes both plugin preload types and SDK types
 declare global {
-  export interface Window {
+  interface Window {
     $plugin: {
       name: string
       path: Object
@@ -13,6 +15,7 @@ declare global {
     $config: {
       themeStyle: any
     }
+    $touchSDK: ITouchSDK
   }
 }
 

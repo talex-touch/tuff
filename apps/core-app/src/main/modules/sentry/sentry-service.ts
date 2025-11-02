@@ -8,8 +8,7 @@ import * as Sentry from '@sentry/electron/main'
 import { app } from 'electron'
 import os from 'node:os'
 import { BaseModule } from '../abstract-base-module'
-import { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import { TalexEvents } from '../../core/eventbus/touch-event'
+import { ModuleKey } from '@talex-touch/utils'
 import { storageModule } from '../storage'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { createLogger } from '../../utils/logger'
@@ -98,7 +97,7 @@ export class SentryServiceModule extends BaseModule {
     super(SentryServiceModule.key)
   }
 
-  async onInit({ file, events }: ModuleInitContext<TalexEvents>): Promise<void> {
+  async onInit(): Promise<void> {
     sentryLog.info('Initializing Sentry service')
 
     // Load configuration
@@ -158,12 +157,12 @@ export class SentryServiceModule extends BaseModule {
    */
   private loadConfig(): void {
     try {
-      const config = storageModule.getConfig('sentry-config.json') as Partial<SentryConfig>
+      const config = storageModule.getConfig('sentry-config.json') as Partial<SentryConfig> | undefined
       this.config = {
         enabled: config?.enabled ?? false,
         anonymous: config?.anonymous ?? true
       }
-      sentryLog.debug('Loaded Sentry config', { meta: this.config })
+      sentryLog.debug('Loaded Sentry config', { meta: { enabled: this.config.enabled, anonymous: this.config.anonymous } })
     } catch (error) {
       sentryLog.warn('Failed to load Sentry config, using defaults', {
         meta: { error: error instanceof Error ? error.message : String(error) }
@@ -221,10 +220,6 @@ export class SentryServiceModule extends BaseModule {
         release: `${getAppVersionSafe()}@${process.env.BUILD_TYPE || 'release'}`,
         // Sample rate for performance monitoring
         tracesSampleRate: 1.0,
-        // Enable native crashes
-        enableNative: true,
-        // Enable IPC transport
-        enableIPC: true,
         // Before send hook to filter sensitive data
         beforeSend(event) {
           // Always include environment context

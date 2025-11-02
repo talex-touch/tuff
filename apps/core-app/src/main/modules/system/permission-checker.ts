@@ -1,10 +1,10 @@
-import { systemPreferences, app, shell } from 'electron'
+import { systemPreferences, shell } from 'electron'
 import { BaseModule } from '../abstract-base-module'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { ModuleKey } from '@talex-touch/utils'
+import { ChannelType } from '@talex-touch/utils/channel'
+import { ModuleKey, ModuleDestroyContext } from '@talex-touch/utils'
+import { TalexEvents } from '../../core/eventbus/touch-event'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as os from 'os'
 
 export enum PermissionType {
   ACCESSIBILITY = 'accessibility',
@@ -319,6 +319,11 @@ export class PermissionCheckerModule extends BaseModule {
     console.log('[PermissionChecker] Permission checker module initialized')
   }
 
+  async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
+    // Cleanup if needed
+    console.log('[PermissionChecker] Permission checker module destroyed')
+  }
+
   private setupChannels(): void {
     if (!$app.channel) {
       console.warn('[PermissionChecker] Channel not available, retrying setupChannels later')
@@ -336,7 +341,7 @@ export class PermissionCheckerModule extends BaseModule {
       const permissionType = data as string
       try {
         let result: PermissionCheckResult
-        
+
         // Handle both enum and string values
         if (permissionType === 'accessibility' || permissionType === PermissionType.ACCESSIBILITY) {
           result = this.checker.checkAccessibility()
@@ -353,7 +358,7 @@ export class PermissionCheckerModule extends BaseModule {
             message: `Unknown permission type: ${permissionType}`
           }
         }
-        
+
         // Return result directly - channel will auto-reply if handler doesn't use reply()
         return result
       } catch (error) {

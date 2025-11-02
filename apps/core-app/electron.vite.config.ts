@@ -52,6 +52,7 @@ export default defineConfig({
       })
     ],
     build: {
+      sourcemap: true,
       rollupOptions: {
         input: {
           index: 'src/main/index.ts',
@@ -161,16 +162,11 @@ export default defineConfig({
       VueSetupExtend(),
       VueI18nPlugin({
         runtimeOnly: false
+      }),
+      sentryVitePlugin({
+        org: "quotawish",
+        project: "tuff"
       })
     ]
-  },
-
-  build: {
-    sourcemap: true
-  },
-
-  plugins: [sentryVitePlugin({
-    org: "quotawish",
-    project: "tuff"
-  })]
+  }
 })

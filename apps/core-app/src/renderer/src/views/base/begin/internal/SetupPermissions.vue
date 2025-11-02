@@ -17,7 +17,6 @@ const step: StepFunction = inject('step')!
 const platform = computed(() => window.$startupInfo?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
-const isLinux = computed(() => platform.value === 'linux')
 
 // Permission states
 const permissions = ref({
@@ -46,7 +45,8 @@ const permissions = ref({
 // Settings
 const settings = ref({
   autoStart: false,
-  showTray: true
+  showTray: true,
+  hideDock: false
 })
 
 const isLoading = ref(false)
@@ -58,7 +58,8 @@ if (!appSetting.setup) {
     notifications: false,
     autoStart: false,
     showTray: true,
-    adminPrivileges: false
+    adminPrivileges: false,
+    hideDock: false
   }
 }
 
@@ -252,7 +253,8 @@ async function handleContinue(): Promise<void> {
         notifications: permissions.value.notifications.status === 'granted',
         autoStart: settings.value.autoStart,
         showTray: settings.value.showTray,
-        adminPrivileges: permissions.value.adminPrivileges.status === 'granted'
+        adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
+        hideDock: settings.value.hideDock ?? false
       }
     }
   )
@@ -328,7 +330,7 @@ function getStatusIcon(status: string): string {
         <!-- File Access Permission (Required) -->
         <div class="PermissionItem TBlockSelection fake-background index-fix" :class="{ required: permissions.fileAccess.required }">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('fileAccess')" style="line" />
+            <RemixIcon :name="getPermissionIcon('fileAccess')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>
                 {{ t('setupPermissions.fileAccess') }}
@@ -351,7 +353,7 @@ function getStatusIcon(status: string): string {
         <!-- Accessibility Permission (macOS, Optional) -->
         <div v-if="isMacOS" class="PermissionItem TBlockSelection fake-background index-fix">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('accessibility')" style="line" />
+            <RemixIcon :name="getPermissionIcon('accessibility')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>{{ t('setupPermissions.accessibility') }}</h3>
               <p>{{ t('setupPermissions.accessibilityDesc') }}</p>
@@ -376,7 +378,7 @@ function getStatusIcon(status: string): string {
         <!-- Admin Privileges (Windows) -->
         <div v-if="isWindows" class="PermissionItem TBlockSelection fake-background index-fix">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('adminPrivileges')" style="line" />
+            <RemixIcon :name="getPermissionIcon('adminPrivileges')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>{{ t('setupPermissions.adminPrivileges') }}</h3>
               <p>{{ t('setupPermissions.adminPrivilegesDesc') }}</p>
@@ -401,7 +403,7 @@ function getStatusIcon(status: string): string {
         <!-- Notification Permission -->
         <div class="PermissionItem TBlockSelection fake-background index-fix">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('notifications')" style="line" />
+            <RemixIcon :name="getPermissionIcon('notifications')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>{{ t('setupPermissions.notifications') }}</h3>
               <p>{{ t('setupPermissions.notificationsDesc') }}</p>

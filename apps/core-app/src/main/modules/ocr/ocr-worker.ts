@@ -85,9 +85,9 @@ async function run(): Promise<void> {
       confidence: data.confidence ?? 0,
       language,
       extra: {
-        symbols: data.symbols?.length ?? 0,
-        words: data.words?.length ?? 0,
-        lines: data.lines?.length ?? 0
+        symbols: (data as any).symbols?.length ?? 0,
+        words: (data as any).words?.length ?? 0,
+        lines: (data as any).lines?.length ?? 0
       }
     })
   } catch (error) {

@@ -5,12 +5,7 @@ export interface ITouchSDK {
   __hooks: {}
 }
 
-// window type
-declare global {
-  export interface Window {
-    $touchSDK: ITouchSDK
-  }
-}
+// Note: Window.$touchSDK is declared in ../preload.ts to avoid duplicate declarations
 
 export * from './types'
 export * from './window/index'
