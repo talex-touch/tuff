@@ -13,6 +13,9 @@ import {
   WindowShownEvent
 } from '../../core/eventbus/touch-event'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
+import { getConfig } from '../storage'
+import { TalexTouch } from '../../types'
+import { StorageList, type AppSetting } from '@talex-touch/utils'
 
 /**
  * Main tray manager
@@ -36,190 +39,73 @@ export class TrayManager extends BaseModule {
   }
 
   async onInit(): Promise<void> {
-    // Check if tray should be shown
     const shouldShowTray = this.shouldShowTray()
-    if (shouldShowTray) {
-      this.initializeTray()
-    } else {
-      console.log('[TrayManager] Tray disabled by configuration')
-    }
     this.registerWindowEvents()
     this.registerEventListeners()
     this.setupAutoStart()
     this.setupChannels()
 
     if (process.platform === 'darwin') {
-      const mainWindow = $app.window.window
-      const startSilent = ($app.config.data as any)?.window?.startSilent ?? false
+      this.setupDockIcon()
+      this.updateDockVisibility()
+    }
 
-      if (startSilent && !mainWindow.isVisible()) {
-        app.dock?.hide()
-        console.log('[TrayManager] Dock icon hidden on init (silent start enabled)')
-      }
+    if (shouldShowTray) {
+      this.initializeTray()
     }
   }
 
   private initializeTray(): void {
     try {
-      const iconPath = TrayIconProvider.getIconPath()
       const icon = TrayIconProvider.getIcon()
 
       if (icon.isEmpty()) {
         console.error('[TrayManager] Icon is empty, cannot create tray')
-        console.error('[TrayManager] Icon path:', iconPath)
         return
       }
 
-      const size = icon.getSize()
-      console.log('[TrayManager] Creating tray with icon, size:', size)
-      console.log('[TrayManager] Icon path:', iconPath)
+      if (process.platform === 'darwin') {
+        icon.setTemplateImage(true)
+      }
 
-      // macOS-specific: Use GUID to maintain position between relaunches
-      // GUID must be a valid UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-      const TRAY_GUID = '550e8400-e29b-41d4-a716-446655440000' // UUID v4 format
+      this.tray = new Tray(icon)
 
       if (process.platform === 'darwin') {
-        try {
-          // Create NativeImage with template support for macOS
-          const nativeIcon = TrayIconProvider.getIcon()
-          if (!nativeIcon.isEmpty()) {
-            // Set as template image (required for macOS tray icons)
-            nativeIcon.setTemplateImage(true)
-            console.log('[TrayManager] Icon set as template image for macOS')
-
-            // Use NativeImage with GUID (optional, helps maintain position)
-            try {
-              this.tray = new Tray(nativeIcon, TRAY_GUID)
-              console.log('[TrayManager] Successfully created tray with NativeImage and GUID:', TRAY_GUID)
-            } catch (guidError) {
-              // If GUID fails, try without GUID
-              console.warn('[TrayManager] Failed to create tray with GUID, trying without GUID:', guidError)
-              this.tray = new Tray(nativeIcon)
-              console.log('[TrayManager] Successfully created tray with NativeImage (no GUID)')
-            }
-          } else {
-            // Fallback: try file path
-            this.tray = new Tray(iconPath)
-            console.log('[TrayManager] Successfully created tray with file path')
-          }
-        } catch (pathError) {
-          console.warn('[TrayManager] Failed to create tray with file path, trying without GUID:', pathError)
-
-          try {
-            // Last resort: try without GUID
-            const nativeIcon = TrayIconProvider.getIcon()
-            if (!nativeIcon.isEmpty()) {
-              nativeIcon.setTemplateImage(true)
-              this.tray = new Tray(nativeIcon)
-              console.log('[TrayManager] Successfully created tray with NativeImage (no GUID)')
-            } else {
-              this.tray = new Tray(iconPath)
-              console.log('[TrayManager] Successfully created tray with file path (no GUID)')
-            }
-          } catch (imageError) {
-            console.error('[TrayManager] Failed to create tray with NativeImage:', imageError)
-            throw imageError
-          }
-        }
-      } else {
-        this.tray = new Tray(icon)
+        icon.setTemplateImage(true)
+        this.tray.setImage(icon)
       }
 
-      if (!this.tray) {
-        console.error('[TrayManager] Failed to create Tray instance')
-        return
-      }
-
-      // Ensure template image is set for macOS (if not already done)
-      if (process.platform === 'darwin') {
-        const nativeIcon = TrayIconProvider.getIcon()
-        if (!nativeIcon.isEmpty()) {
-          nativeIcon.setTemplateImage(true)
-          this.tray.setImage(nativeIcon)
-          console.log('[TrayManager] Set template image for macOS dark mode support')
-
-          // Verify the icon is actually set
-          const bounds = this.tray.getBounds()
-          console.log('[TrayManager] Tray bounds:', bounds)
-        }
-      }
-
-      this.tray.setToolTip('Talex Touch')
-
+      this.tray.setToolTip('tuff')
       this.bindTrayEvents()
       this.updateMenu()
-
-      if (process.platform === 'darwin') {
-        // Retry mechanism to ensure icon appears
-        const retryDelays = [100, 500, 1000]
-        retryDelays.forEach((delay) => {
-          setTimeout(() => {
-            if (this.tray) {
-              const newIcon = TrayIconProvider.getIcon()
-              if (!newIcon.isEmpty()) {
-                newIcon.setTemplateImage(true)
-                this.tray.setImage(newIcon)
-                console.log(`[TrayManager] Re-set tray icon after ${delay}ms`)
-              }
-              this.updateMenu()
-            }
-          }, delay)
-        })
-
-        console.log('[TrayManager] Tray created on macOS, icon should be visible in menu bar')
-        console.log('[TrayManager] If icon is not visible, check:')
-        console.log('[TrayManager] 1. macOS menu bar settings (System Settings > Dock & Menu Bar)')
-        console.log('[TrayManager] 2. Icon file is a valid Template Image (single color, transparent background)')
-        console.log('[TrayManager] 3. Icon size is optimal (16x16 or 22x22 recommended for macOS)')
-      }
-
-      ;(global as any).__trayInstance = this.tray
-      console.log('[TrayManager] Tray instance saved to global scope for debugging')
-      console.log('[TrayManager] Tray GUID:', process.platform === 'darwin' ? this.tray.getGUID() : 'N/A (not macOS)')
-
-      console.log('[TrayManager] Tray initialized successfully')
     } catch (error) {
       console.error('[TrayManager] Failed to initialize tray:', error)
-      console.error('[TrayManager] Error details:', error instanceof Error ? error.stack : error)
     }
   }
 
-  /**
-   * Destroy tray icon
-   */
   private destroyTray(): void {
     if (this.tray) {
       this.tray.destroy()
       this.tray = null
-      console.log('[TrayManager] Tray destroyed')
     }
   }
 
-  /**
-   * Check if tray should be shown based on configuration
-   */
   private shouldShowTray(): boolean {
     try {
       const config = ($app.config.data as any)
       const setupConfig = config?.setup
-      
-      // Check app.setup.showTray first
+
       if (setupConfig?.showTray !== undefined) {
         return setupConfig.showTray !== false
       }
-      
-      // Default to true if not configured
+
       return true
     } catch (error) {
       console.error('[TrayManager] Failed to check shouldShowTray:', error)
-      // Default to true on error
       return true
     }
   }
 
-  /**
-   * Setup auto-start on login
-   */
   private setupAutoStart(): void {
     try {
       const autoStart = ($app.config.data as any)?.autoStart ?? false
@@ -229,26 +115,12 @@ export class TrayManager extends BaseModule {
         openAsHidden: ($app.config.data as any)?.window?.startSilent ?? false
       }
 
-      const wasSet = app.setLoginItemSettings(options)
-
-      console.log('[TrayManager] Auto-start configured:', {
-        enabled: autoStart,
-        wasSet,
-        options
-      })
-
-      if (autoStart && !wasSet) {
-        console.warn('[TrayManager] Failed to set auto-start, may require user permission')
-      }
+      app.setLoginItemSettings(options)
     } catch (error) {
       console.error('[TrayManager] Failed to setup auto-start:', error)
     }
   }
 
-  /**
-   * Update auto-start setting
-   * @param enabled - Whether to enable auto-start
-   */
   public updateAutoStart(enabled: boolean): void {
     try {
       const startSilent = ($app.config.data as any)?.window?.startSilent ?? false
@@ -258,26 +130,12 @@ export class TrayManager extends BaseModule {
         openAsHidden: enabled && startSilent
       }
 
-      const wasSet = app.setLoginItemSettings(options)
-
-      console.log('[TrayManager] Auto-start updated:', {
-        enabled,
-        wasSet,
-        options
-      })
-
-      if (enabled && !wasSet) {
-        console.warn('[TrayManager] Failed to set auto-start, may require user permission')
-      }
+      app.setLoginItemSettings(options)
     } catch (error) {
       console.error('[TrayManager] Failed to update auto-start:', error)
     }
   }
 
-  /**
-   * Get current auto-start status
-   * @returns Current auto-start status
-   */
   public getAutoStartStatus(): boolean {
     try {
       const loginItemSettings = app.getLoginItemSettings()
@@ -293,8 +151,10 @@ export class TrayManager extends BaseModule {
 
     this.tray.on('click', this.handleTrayClick.bind(this))
 
-    if (process.platform === 'darwin') {
-      this.tray.on('double-click', this.handleTrayDoubleClick.bind(this))
+    if (process.platform !== 'darwin') {
+      this.tray.on('right-click', () => {
+        this.tray?.popUpContextMenu()
+      })
     }
   }
 
@@ -313,19 +173,6 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private handleTrayDoubleClick(): void {
-    const mainWindow = $app.window.window
-
-    if (!mainWindow.isVisible()) {
-      mainWindow.show()
-      mainWindow.focus()
-    }
-  }
-
-  /**
-   * Update tray menu
-   * @param state - Optional state update
-   */
   public updateMenu(state?: Partial<TrayState>): void {
     if (!this.tray) return
 
@@ -352,7 +199,10 @@ export class TrayManager extends BaseModule {
         event.preventDefault()
         mainWindow.hide()
         touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
-        console.log('[TrayManager] Window hidden to tray instead of closing')
+
+        if (process.platform === 'darwin') {
+          this.updateDockVisibility()
+        }
       }
     })
 
@@ -360,11 +210,7 @@ export class TrayManager extends BaseModule {
       touchEventBus.emit(TalexEvents.WINDOW_SHOWN, new WindowShownEvent())
 
       if (process.platform === 'darwin') {
-        const startSilent = ($app.config.data as any)?.window?.startSilent ?? false
-        if (startSilent) {
-          app.dock?.show()
-          console.log('[TrayManager] Dock icon shown (window visible)')
-        }
+        this.updateDockVisibility()
       }
     })
 
@@ -372,11 +218,7 @@ export class TrayManager extends BaseModule {
       touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
 
       if (process.platform === 'darwin') {
-        const startSilent = ($app.config.data as any)?.window?.startSilent ?? false
-        if (startSilent) {
-          app.dock?.hide()
-          console.log('[TrayManager] Dock icon hidden (window hidden)')
-        }
+        this.updateDockVisibility()
       }
     })
 
@@ -424,28 +266,71 @@ export class TrayManager extends BaseModule {
     $app.channel?.regChannel(ChannelType.MAIN, 'tray:autostart:get', () => {
       return this.getAutoStartStatus()
     })
+  }
 
-    console.log('[TrayManager] Event listeners registered')
+  private getHideDockConfig(): boolean {
+    try {
+      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      return appConfig?.setup?.hideDock ?? false
+    } catch (error) {
+      console.error('[TrayManager] Failed to read hideDock config:', error)
+      return false
+    }
+  }
+
+  private setupDockIcon(): void {
+    if (process.platform !== 'darwin') return
+
+    try {
+      const appIconPath = TrayIconProvider.getAppIconPath()
+      if (appIconPath && app.dock) {
+        app.dock.setIcon(appIconPath)
+
+        if ($app.version === TalexTouch.AppVersion.DEV) {
+          app.dock.setBadge($app.version)
+        }
+      }
+    } catch (error) {
+      console.error('[TrayManager] Failed to setup Dock icon:', error)
+    }
+  }
+
+  private updateDockVisibility(): void {
+    if (process.platform !== 'darwin') return
+
+    const mainWindow = $app.window.window
+    const hideDock = this.getHideDockConfig()
+
+    if (hideDock) {
+      if (mainWindow.isVisible()) {
+        app.dock?.show()
+      } else {
+        app.dock?.hide()
+      }
+    }
   }
 
   private setupChannels(): void {
     if (!$app.channel) return
 
-    // Get tray show status
     $app.channel.regChannel(ChannelType.MAIN, 'tray:show:get', () => {
       return this.tray !== null
     })
 
-    // Set tray show status
     $app.channel.regChannel(ChannelType.MAIN, 'tray:show:set', ({ data }) => {
       const show = data === true
       if (show && !this.tray) {
-        // Create tray if it doesn't exist
         this.initializeTray()
         this.updateMenu()
       } else if (!show && this.tray) {
-        // Destroy tray if it exists
         this.destroyTray()
+      }
+      return true
+    })
+
+    $app.channel.regChannel(ChannelType.MAIN, 'tray:hidedock:set', () => {
+      if (process.platform === 'darwin') {
+        this.updateDockVisibility()
       }
       return true
     })
@@ -456,7 +341,6 @@ export class TrayManager extends BaseModule {
       this.tray.destroy()
       this.tray = null
     }
-    console.log('[TrayManager] Module destroyed')
   }
 }
 

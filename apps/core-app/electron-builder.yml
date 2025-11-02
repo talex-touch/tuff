@@ -47,10 +47,19 @@ nsis:
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    NSCameraUsageDescription: Application requests access to the device's camera.
+    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    # LSUIElement configuration for macOS tray icon support
+    # Setting LSUIElement: true will:
+    #   - Hide Dock icon (app won't appear in Dock)
+    #   - Make app run as menu bar only (may help with tray icon visibility on macOS Sequoia)
+    #   - Still allow main window to be shown/hidden programmatically
+    #
+    # On macOS Sequoia, setting LSUIElement: true may be required for tray icons to appear
+    # If tray icon is not visible, try uncommenting the line below:
+    # LSUIElement: true
   notarize: false
   sign: false
   gatekeeperAssess: false

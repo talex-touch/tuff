@@ -593,7 +593,7 @@
       "autoStartDesc": "Automatically launch app when system starts"
     },
     "setup": {
-      "groupTitle": "Initialization Settings",
+      "groupTitle": "General Settings",
       "groupDesc": "Configure permissions and basic settings",
       "accessibility": "Accessibility Permission",
       "accessibilityDesc": "Required to scan applications and provide search features",
@@ -604,7 +604,9 @@
       "autoStart": "Auto Start on Boot",
       "autoStartDesc": "Automatically launch app when system starts",
       "showTray": "Show Tray Icon",
-      "showTrayDesc": "Display app icon in system tray"
+      "showTrayDesc": "Display app icon in system tray",
+      "hideDock": "Hide Dock Icon",
+      "hideDockDesc": "Hide Dock icon after closing main window (macOS only)"
     }
   },
   "setupPermissions": {

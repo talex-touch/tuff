@@ -106,15 +106,44 @@ export class TrayIconProvider {
         const isTemplateFile = iconPath.endsWith('Template.png')
         if (isTemplateFile) {
           console.log('[TrayIconProvider] Using Template.png file (macOS template image)')
+
+          // Verify Retina version exists
+          const retinaPath = iconPath.replace('Template.png', 'Template@2x.png')
+          if (!fse.existsSync(retinaPath)) {
+            console.warn('[TrayIconProvider] Retina version not found:', retinaPath)
+            console.warn('[TrayIconProvider] Tray icon may appear blurry on Retina displays')
+            console.warn('[TrayIconProvider] Recommended: Create TrayIconTemplate@2x.png (44x44 pixels)')
+          } else {
+            console.log('[TrayIconProvider] Retina version found:', retinaPath)
+          }
         } else {
           console.warn('[TrayIconProvider] Icon filename does not end with Template.png')
           console.warn('[TrayIconProvider] For macOS tray icons, filename MUST end with Template.png')
           console.warn('[TrayIconProvider] Example: TrayIconTemplate.png (and TrayIconTemplate@2x.png for Retina)')
         }
 
-        if (size.width !== 22 && size.width !== 16 && size.height !== 22 && size.height !== 16) {
-          console.warn('[TrayIconProvider] Icon size may not be optimal for macOS:', size)
-          console.warn('[TrayIconProvider] Recommended sizes: 22x22 or 16x16 pixels')
+        // Auto-resize to 22x22 if size is not optimal for macOS
+        if (size.width !== 22 || size.height !== 22) {
+          if (size.width !== 16 && size.height !== 16) {
+            console.warn('[TrayIconProvider] Icon size not optimal for macOS:', size)
+            console.warn('[TrayIconProvider] Recommended sizes: 22x22 or 16x16 pixels')
+            console.log('[TrayIconProvider] Attempting to resize to 22x22 for optimal display')
+
+            try {
+              const resized = image.resize({ width: 22, height: 22, quality: 'best' })
+              if (!resized.isEmpty()) {
+                console.log('[TrayIconProvider] Successfully resized icon to 22x22')
+                return resized
+              } else {
+                console.warn('[TrayIconProvider] Failed to resize icon, using original')
+              }
+            } catch (resizeError) {
+              console.warn('[TrayIconProvider] Error resizing icon:', resizeError)
+              console.warn('[TrayIconProvider] Using original icon size')
+            }
+          }
+        } else {
+          console.log('[TrayIconProvider] Icon size is optimal (22x22) for macOS')
         }
       }
 
@@ -202,10 +231,62 @@ export class TrayIconProvider {
 
   /**
    * Get application icon path
-   * Reserved for other purposes (Dock icon, window icon, etc.)
-   * @returns Full path to application icon, currently returns empty string
+   * Used for Dock icon on macOS, window icon on other platforms
+   * @returns Full path to application icon file
    */
   static getAppIconPath(): string {
+    if (app.isPackaged) {
+      // In packaged app, look for icon.icns (macOS) or icon.png
+      const appPath = app.getAppPath()
+      const iconNames = process.platform === 'darwin'
+        ? ['icon.icns', 'icon.png']
+        : ['icon.png', 'icon.ico']
+
+      for (const iconName of iconNames) {
+        const potentialPaths = [
+          path.resolve(appPath, 'resources', iconName),
+          path.resolve(appPath, '..', 'resources', iconName),
+          path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
+          ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', iconName)] : [])
+        ]
+
+        for (const potentialPath of potentialPaths) {
+          if (fse.existsSync(potentialPath)) {
+            return potentialPath
+          }
+        }
+      }
+    } else {
+      // In development, look for icon files in build or resources directory
+      const iconNames = process.platform === 'darwin'
+        ? ['icon.icns', 'icon.png']
+        : ['icon.png', 'icon.ico']
+
+      for (const iconName of iconNames) {
+        let currentDir = __dirname
+
+        for (let i = 0; i < 10; i++) {
+          // Check build directory
+          const buildPath = path.resolve(currentDir, 'apps', 'core-app', 'build', iconName)
+          if (fse.existsSync(buildPath)) {
+            return buildPath
+          }
+
+          // Check resources directory
+          const resourcesPath = path.resolve(currentDir, 'apps', 'core-app', 'resources', iconName)
+          if (fse.existsSync(resourcesPath)) {
+            return resourcesPath
+          }
+
+          const parentDir = path.dirname(currentDir)
+          if (parentDir === currentDir) {
+            break
+          }
+          currentDir = parentDir
+        }
+      }
+    }
+
     return ''
   }
 }
