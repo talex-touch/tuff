@@ -1,7 +1,7 @@
 <script setup lang="ts" name="AccountDo">
 // import Forbidden from './Forbidden.vue'
 // import OptionMode from './OptionMode.vue'
-import Done from './Done.vue'
+// import Done from './Done.vue'
 import SetupPermissions from './SetupPermissions.vue'
 import { Ref, ref, inject, watch } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
