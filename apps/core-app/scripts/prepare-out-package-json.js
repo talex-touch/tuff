@@ -126,17 +126,17 @@ function copyModuleRecursive(moduleName, depth = 0) {
   try {
     const sourceDir = resolveModuleRoot(moduleName)
     const pkgJsonPath = path.join(sourceDir, 'package.json')
-    
+
     if (!fs.existsSync(pkgJsonPath)) {
       return
     }
 
     const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
-    
+
     // Copy the module
     const targetDir = path.join(outNodeModulesPath, moduleName)
     fs.mkdirSync(path.dirname(targetDir), { recursive: true })
-    
+
     // Only copy if not already copied (to avoid overwriting)
     if (!copiedModules.has(moduleName)) {
       fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
@@ -157,7 +157,7 @@ function copyModuleRecursive(moduleName, depth = 0) {
       if (depName.startsWith('@talex-touch/')) {
         continue
       }
-      
+
       try {
         copyModuleRecursive(depName, depth + 1)
       } catch (err) {
