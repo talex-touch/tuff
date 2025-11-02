@@ -48,6 +48,7 @@
     "version:major": "bumpp --major"
   },
   "dependencies": {
+    "@sentry/vite-plugin": "^4.6.0",
     "vite-plugin-electron": "^0.29.0"
   },
   "volta": {

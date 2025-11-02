@@ -132,3 +132,6 @@ apps/core-app/src/renderer/src/distinformation.json
 
 # Local README notes
 readme.local.md
+
+# Sentry Config File
+.env.sentry-build-plugin

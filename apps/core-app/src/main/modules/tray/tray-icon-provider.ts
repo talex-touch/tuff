@@ -18,9 +18,10 @@ export class TrayIconProvider {
 
     // macOS requires Template.png suffix for template images
     // Electron automatically handles @2x version if filename matches pattern
-    const preferredNames = process.platform === 'darwin'
-      ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
-      : ['tray_icon.png']
+    const preferredNames =
+      process.platform === 'darwin'
+        ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
+        : ['tray_icon.png']
 
     if (app.isPackaged) {
       const appPath = app.getAppPath()
@@ -30,7 +31,9 @@ export class TrayIconProvider {
           path.resolve(appPath, 'resources', iconName),
           path.resolve(appPath, '..', 'resources', iconName),
           path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
-          ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', iconName)] : [])
+          ...(process.resourcesPath
+            ? [path.resolve(process.resourcesPath, 'resources', iconName)]
+            : [])
         ]
 
         for (const potentialPath of potentialPaths) {
@@ -112,14 +115,20 @@ export class TrayIconProvider {
           if (!fse.existsSync(retinaPath)) {
             console.warn('[TrayIconProvider] Retina version not found:', retinaPath)
             console.warn('[TrayIconProvider] Tray icon may appear blurry on Retina displays')
-            console.warn('[TrayIconProvider] Recommended: Create TrayIconTemplate@2x.png (44x44 pixels)')
+            console.warn(
+              '[TrayIconProvider] Recommended: Create TrayIconTemplate@2x.png (44x44 pixels)'
+            )
           } else {
             console.log('[TrayIconProvider] Retina version found:', retinaPath)
           }
         } else {
           console.warn('[TrayIconProvider] Icon filename does not end with Template.png')
-          console.warn('[TrayIconProvider] For macOS tray icons, filename MUST end with Template.png')
-          console.warn('[TrayIconProvider] Example: TrayIconTemplate.png (and TrayIconTemplate@2x.png for Retina)')
+          console.warn(
+            '[TrayIconProvider] For macOS tray icons, filename MUST end with Template.png'
+          )
+          console.warn(
+            '[TrayIconProvider] Example: TrayIconTemplate.png (and TrayIconTemplate@2x.png for Retina)'
+          )
         }
 
         // Auto-resize to 22x22 if size is not optimal for macOS
@@ -163,9 +172,10 @@ export class TrayIconProvider {
 
     // macOS requires Template.png suffix for template images
     // Electron automatically handles @2x version if filename matches pattern
-    const preferredNames = process.platform === 'darwin'
-      ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
-      : ['tray_icon.png']
+    const preferredNames =
+      process.platform === 'darwin'
+        ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
+        : ['tray_icon.png']
 
     if (app.isPackaged) {
       const appPath = app.getAppPath()
@@ -175,7 +185,9 @@ export class TrayIconProvider {
           path.resolve(appPath, 'resources', iconName),
           path.resolve(appPath, '..', 'resources', iconName),
           path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
-          ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', iconName)] : [])
+          ...(process.resourcesPath
+            ? [path.resolve(process.resourcesPath, 'resources', iconName)]
+            : [])
         ]
 
         for (const potentialPath of potentialPaths) {
@@ -238,16 +250,17 @@ export class TrayIconProvider {
     if (app.isPackaged) {
       // In packaged app, look for icon.icns (macOS) or icon.png
       const appPath = app.getAppPath()
-      const iconNames = process.platform === 'darwin'
-        ? ['icon.icns', 'icon.png']
-        : ['icon.png', 'icon.ico']
+      const iconNames =
+        process.platform === 'darwin' ? ['icon.icns', 'icon.png'] : ['icon.png', 'icon.ico']
 
       for (const iconName of iconNames) {
         const potentialPaths = [
           path.resolve(appPath, 'resources', iconName),
           path.resolve(appPath, '..', 'resources', iconName),
           path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
-          ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'resources', iconName)] : [])
+          ...(process.resourcesPath
+            ? [path.resolve(process.resourcesPath, 'resources', iconName)]
+            : [])
         ]
 
         for (const potentialPath of potentialPaths) {
@@ -258,9 +271,8 @@ export class TrayIconProvider {
       }
     } else {
       // In development, look for icon files in build or resources directory
-      const iconNames = process.platform === 'darwin'
-        ? ['icon.icns', 'icon.png']
-        : ['icon.png', 'icon.ico']
+      const iconNames =
+        process.platform === 'darwin' ? ['icon.icns', 'icon.png'] : ['icon.png', 'icon.ico']
 
       for (const iconName of iconNames) {
         let currentDir = __dirname

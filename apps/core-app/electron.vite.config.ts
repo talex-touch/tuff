@@ -1,3 +1,4 @@
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
@@ -78,6 +79,7 @@ export default defineConfig({
       }
     }
   },
+
   preload: {
     plugins: [
       externalizeDepsPlugin({
@@ -112,6 +114,7 @@ export default defineConfig({
       })
     ]
   },
+
   renderer: {
     resolve: {
       alias: {
@@ -160,5 +163,14 @@ export default defineConfig({
         runtimeOnly: false
       })
     ]
-  }
+  },
+
+  build: {
+    sourcemap: true
+  },
+
+  plugins: [sentryVitePlugin({
+    org: "quotawish",
+    project: "tuff"
+  })]
 })
