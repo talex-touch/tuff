@@ -213,7 +213,7 @@ const getTaskStatusIcon = (status: DownloadStatus) => {
 }
 
 // 获取进度条状态
-const getProgressStatus = (status: DownloadStatus): string => {
+const getProgressStatus = (status: DownloadStatus): '' | 'success' | 'warning' | 'exception' | undefined => {
   switch (status) {
     case DownloadStatus.COMPLETED:
       return 'success'
