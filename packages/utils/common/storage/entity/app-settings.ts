@@ -50,6 +50,7 @@ const _appSettingOriginData = {
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
+    hideDock: false,
   },
 };
 

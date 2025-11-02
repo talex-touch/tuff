@@ -44,7 +44,8 @@ const permissions = ref({
 // Settings
 const settings = ref({
   autoStart: false,
-  showTray: true
+  showTray: true,
+  hideDock: false
 })
 
 const isLoading = ref(false)
@@ -56,7 +57,8 @@ if (!appSetting.setup) {
     notifications: false,
     autoStart: false,
     showTray: true,
-    adminPrivileges: false
+    adminPrivileges: false,
+    hideDock: false
   }
 }
 
@@ -110,6 +112,7 @@ function loadSettings(): void {
   if (appSetting.setup) {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
+    settings.value.hideDock = appSetting.setup.hideDock ?? false
   }
 
   // Load autoStart from existing setting
@@ -169,6 +172,23 @@ function updateShowTray(value: boolean): void {
     ElMessage.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update showTray:', error)
+    ElMessage.error(t('setupPermissions.updateFailed'))
+  }
+}
+
+function updateHideDock(value: boolean): void {
+  settings.value.hideDock = value
+  appSetting.setup.hideDock = value
+  try {
+    touchChannel.send('storage:save', {
+      key: 'app.setup.hideDock',
+      content: JSON.stringify(value),
+      clear: false
+    })
+    touchChannel.send('tray:hidedock:set', value)
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    console.error('[SettingSetup] Failed to update hideDock:', error)
     ElMessage.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -336,6 +356,16 @@ function getStatusIcon(status: string): string {
       icon="tray"
       :description="t('settings.setup.showTrayDesc')"
       @update:model-value="updateShowTray"
+    />
+
+    <!-- Hide Dock (macOS only) -->
+    <t-block-switch
+      v-if="isMacOS"
+      v-model="settings.hideDock"
+      :title="t('settings.setup.hideDock')"
+      icon="macbook"
+      :description="t('settings.setup.hideDockDesc')"
+      @update:model-value="updateHideDock"
     />
   </t-group-block>
 </template>

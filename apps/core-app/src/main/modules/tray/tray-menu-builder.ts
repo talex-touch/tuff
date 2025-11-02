@@ -193,7 +193,7 @@ export class TrayMenuBuilder {
         {
           label: t('tray.visitWebsite'),
           click: () => {
-            shell.openExternal('https://talex-touch.com')
+            shell.openExternal('https://tuff.tagzxia.com')
           }
         }
       ]

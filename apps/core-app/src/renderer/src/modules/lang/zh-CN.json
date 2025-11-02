@@ -593,7 +593,7 @@
       "autoStartDesc": "系统启动时自动运行应用"
     },
     "setup": {
-      "groupTitle": "初始化设置",
+      "groupTitle": "通用配置",
       "groupDesc": "配置权限和基础设置",
       "accessibility": "辅助功能权限",
       "accessibilityDesc": "需要辅助功能权限以扫描应用程序和提供搜索功能",
@@ -604,7 +604,9 @@
       "autoStart": "开机自动启动",
       "autoStartDesc": "系统启动时自动运行应用",
       "showTray": "显示托盘图标",
-      "showTrayDesc": "在系统托盘显示应用图标"
+      "showTrayDesc": "在系统托盘显示应用图标",
+      "hideDock": "不在 Dock 栏显示",
+      "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）"
     }
   },
   "setupPermissions": {
