@@ -347,10 +347,16 @@ jobs:
               ARTIFACTS_FOUND=true
             fi
           elif [ "$RUNNER_OS" = "macOS" ]; then
+            # Check for both .dmg files and .app directories (dir mode generates .app only)
             DMG_COUNT=$(find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null | wc -l || echo "0")
-            echo "Found $DMG_COUNT .dmg file(s)"
+            APP_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
+            echo "Found $DMG_COUNT .dmg file(s) and $APP_COUNT .app directory/directories"
             if [ "$DMG_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null
+              ARTIFACTS_FOUND=true
+            fi
+            if [ "$APP_COUNT" -gt 0 ]; then
+              find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
           else
@@ -368,7 +374,7 @@ jobs:
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "ERROR: No .exe files found in dist directory!"
             elif [ "$RUNNER_OS" = "macOS" ]; then
-              echo "ERROR: No .dmg files found in dist directory!"
+              echo "ERROR: No .dmg files or .app directories found in dist directory!"
             else
               echo "ERROR: No Linux artifacts (.AppImage, .deb, or .snap) found in dist directory!"
             fi
@@ -498,7 +504,10 @@ jobs:
       - name: Cleanup Artifacts for MacOS
         if: matrix.os == 'macos-latest'
         shell: bash
-        run: npx rimraf "apps/core-app/dist/!(*.dmg)"
+        run: |
+          # Keep both .dmg files and .app directories
+          find apps/core-app/dist -type f ! -name "*.dmg" -delete 2>/dev/null || true
+          find apps/core-app/dist -type d -name "mac-*" -prune -o -type d ! -name "*.app" -empty -delete 2>/dev/null || true
 
   create-release:
     name: Create Release
@@ -543,25 +552,31 @@ jobs:
       - name: List Available Artifacts
         run: |
           echo "Available artifacts:"
-          find artifacts -type f -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" | sort
-          echo "Total artifacts:"
+          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" \) | sort
+          find artifacts -type d -name "*.app" -path "*/mac-*/*" | sort
+          echo "Total files:"
           find artifacts -type f | wc -l
+          echo "Total .app directories:"
+          find artifacts -type d -name "*.app" -path "*/mac-*/*" | wc -l
 
       - name: Collect Release Assets
         id: release-files
         run: |
           set -euo pipefail
 
+          # Collect files and .app directories
           mapfile -t FILES < <(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
+          mapfile -t APP_DIRS < <(find artifacts -type d -name "*.app" -path "*/mac-*/*" | sort)
 
-          if [ "${#FILES[@]}" -eq 0 ]; then
-            echo "No release files found in artifacts/"
+          if [ "${#FILES[@]}" -eq 0 ] && [ "${#APP_DIRS[@]}" -eq 0 ]; then
+            echo "No release files or .app directories found in artifacts/"
             exit 1
           fi
 
           mkdir -p release-assets
           declare -a OUTPUT_PATHS=()
 
+          # Process files
           for file in "${FILES[@]}"; do
             relative=${file#artifacts/}
             platform=${relative%%/*}
@@ -578,6 +593,32 @@ jobs:
             done
 
             cp "$file" "$target"
+            OUTPUT_PATHS+=("$target")
+          done
+
+          # Process .app directories (package as zip)
+          for app_dir in "${APP_DIRS[@]}"; do
+            relative=${app_dir#artifacts/}
+            platform=${relative%%/*}
+            if [[ "$platform" == "$relative" ]]; then
+              platform="common"
+            fi
+
+            base=$(basename "$app_dir")
+            zip_name="${base}.zip"
+            target="release-assets/${platform}-${zip_name}"
+            counter=1
+            while [ -e "$target" ]; do
+              counter=$((counter + 1))
+              target="release-assets/${platform}-${counter}-${zip_name}"
+            done
+
+            # Create zip from .app directory
+            app_parent=$(dirname "$app_dir")
+            abs_target=$(realpath "$target" 2>/dev/null || echo "$(pwd)/$target")
+            cd "$app_parent" || exit 1
+            zip -r "$abs_target" "$base" -q
+            cd - > /dev/null || exit 1
             OUTPUT_PATHS+=("$target")
           done
 
