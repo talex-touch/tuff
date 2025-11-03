@@ -3,7 +3,6 @@ import pkg from './package.json'
 import path from 'path'
 import crypto from 'crypto'
 import { execSync } from 'child_process'
-import os from 'os'
 
 import type { Plugin } from 'vite'
 
@@ -24,58 +23,15 @@ function generateBuildIdentifier(timestamp: number): string {
 }
 
 /**
- * 从 SSH RSA 公钥生成密钥指纹
- */
-function getSSHKeyFingerprint(): string | null {
-  try {
-    // 尝试常见的 SSH 公钥路径
-    const possiblePaths = [
-      path.join(os.homedir(), '.ssh', 'id_rsa.pub'),
-      path.join(os.homedir(), '.ssh', 'id_ed25519.pub'),
-      path.join(os.homedir(), '.ssh', 'id_ecdsa.pub'),
-      path.join(os.homedir(), '.ssh', 'id_dsa.pub')
-    ]
-
-    for (const keyPath of possiblePaths) {
-      if (fse.existsSync(keyPath)) {
-        try {
-          // 读取公钥内容
-          const publicKeyContent = fse.readFileSync(keyPath, 'utf8').trim()
-
-          // 解析公钥格式：提取密钥部分（去掉类型和注释）
-          const parts = publicKeyContent.split(/\s+/)
-          if (parts.length >= 2) {
-            // parts[0] 是类型，parts[1] 是密钥数据，parts[2] 是注释
-            const keyData = parts[1]
-
-            // 解码 base64 密钥数据
-            const keyBuffer = Buffer.from(keyData, 'base64')
-
-            // 使用 SHA256 生成指纹（类似 ssh-keygen -lf -E sha256）
-            const hash = crypto.createHash('sha256').update(keyBuffer).digest('base64')
-
-            // 格式化为标准 SSH SHA256 指纹格式：SHA256:xxxxx（标准 base64 格式）
-            const fingerprint = `SHA256:${hash}`
-
-            return fingerprint
-          }
-        } catch (error) {
-          console.warn(`[Talex-Touch] Failed to read SSH key from ${keyPath}:`, error)
-          continue
-        }
-      }
-    }
-  } catch (error) {
-    console.warn('[Talex-Touch] Failed to get SSH key fingerprint:', error)
-  }
-
-  return null
-}
-
-/**
  * 获取 Git commit hash
  */
 function getGitCommitHash(): string | null {
+  // 优先从环境变量获取（GitHub Actions 提供 GITHUB_SHA）
+  if (process.env.GITHUB_SHA) {
+    return process.env.GITHUB_SHA
+  }
+
+  // 本地 dev 环境：使用 git 命令
   try {
     const projectRoot = path.join(__dirname, '..')
     const hash = execSync('git rev-parse HEAD', {
@@ -83,15 +39,15 @@ function getGitCommitHash(): string | null {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore']
     }).trim()
-    return hash
-  } catch (error) {
-    console.warn('[Talex-Touch] Failed to get git commit hash:', error)
+    return hash || null
+  } catch {
+    // 没有就留空
     return null
   }
 }
 
 /**
- * 生成官方构建签名（基于 SSH 密钥指纹）
+ * 生成官方构建签名（基于私钥 TUFF_ENCRYPTION_KEY）
  */
 function generateOfficialSignature(
   version: string,
@@ -99,10 +55,10 @@ function generateOfficialSignature(
   buildType: string,
   gitCommitHash: string | null
 ): { officialSignature: string | null; hasOfficialKey: boolean } {
-  // 从 SSH 密钥获取指纹作为加密密钥
-  const sshFingerprint = getSSHKeyFingerprint()
+  // 直接使用环境变量中的私钥
+  const encryptionKey = process.env.TUFF_ENCRYPTION_KEY
 
-  if (!sshFingerprint) {
+  if (!encryptionKey) {
     return {
       officialSignature: null,
       hasOfficialKey: false
@@ -117,8 +73,8 @@ function generateOfficialSignature(
     gitCommitHash
   })
 
-  // 使用 HMAC-SHA256 生成签名（基于 SSH 密钥指纹）
-  const hmac = crypto.createHmac('sha256', sshFingerprint)
+  // 使用 HMAC-SHA256 生成签名（私钥作为密钥）
+  const hmac = crypto.createHmac('sha256', encryptionKey)
   hmac.update(payload)
   const signature = hmac.digest('hex')
 

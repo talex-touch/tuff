@@ -7,6 +7,7 @@ import Beginner from '~/views/base/begin/Beginner.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import { isCoreBox } from '@talex-touch/utils/renderer'
 import AppEntrance from './AppEntrance.vue'
+import BuildSecurityBanner from '@comp/base/BuildSecurityBanner.vue'
 import { useI18n } from 'vue-i18n'
 import { useLanguage } from '~/modules/lang'
 
@@ -39,6 +40,7 @@ async function init(): Promise<void> {
 
 <template>
   <AppEntrance :on-ready="init">
+    <BuildSecurityBanner />
     <AppLayout>
       <template #title>
         {{ t('app.title') }}
