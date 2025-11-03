@@ -7,12 +7,16 @@ const outDir = path.join(projectRoot, 'out')
 const outPackageJsonPath = path.join(outDir, 'package.json')
 
 const outNodeModulesPath = path.join(outDir, 'node_modules')
+
+// Modules that should be copied to out/node_modules (including nested dependencies via recursion)
 const modulesToCopy = [
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
   '@libsql/isomorphic-fetch',
   '@libsql/isomorphic-ws',
+  // Platform-specific packages are optional dependencies and will be copied recursively
+  // but should NOT be listed in package.json dependencies to avoid electron-builder resolution issues
   '@libsql/darwin-arm64',
   '@libsql/darwin-x64',
   '@libsql/linux-arm-gnueabihf',
@@ -36,9 +40,29 @@ const modulesToCopy = [
   'node-fetch'
 ]
 
-// Build dependencies object for external modules
+// Platform-specific packages that should be copied but NOT listed in package.json
+// These are optional dependencies that electron-builder 26.0.12 has trouble resolving
+const platformSpecificPackages = new Set([
+  '@libsql/darwin-arm64',
+  '@libsql/darwin-x64',
+  '@libsql/linux-arm-gnueabihf',
+  '@libsql/linux-arm-musleabihf',
+  '@libsql/linux-arm64-gnu',
+  '@libsql/linux-arm64-musl',
+  '@libsql/linux-x64-gnu',
+  '@libsql/linux-x64-musl',
+  '@libsql/win32-x64-msvc'
+])
+
+// Build dependencies object for external modules (excluding platform-specific packages)
 const externalDependencies = {}
 modulesToCopy.forEach((moduleName) => {
+  // Skip platform-specific packages - they are optional dependencies
+  // and should not be listed in package.json to avoid electron-builder resolution issues
+  if (platformSpecificPackages.has(moduleName)) {
+    return
+  }
+
   // Try to get version from appPackageJson.dependencies
   // If not found, use '*' as placeholder (actual version will be in copied package.json)
   externalDependencies[moduleName] =
