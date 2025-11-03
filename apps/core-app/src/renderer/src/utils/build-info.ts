@@ -4,11 +4,16 @@ import information from 'talex-touch:information'
 export interface BuildInfo {
   version: string
   buildTime: number
+  buildIdentifier: string
   buildType: 'beta' | 'snapshot' | 'release'
+  channel: 'RELEASE' | 'SNAPSHOT' | 'BETA' | 'UNKNOWN'
   isSnapshot: boolean
   isBeta: boolean
   isRelease: boolean
-  signature?: any
+  gitCommitHash?: string
+  officialSignature?: string
+  hasOfficialKey: boolean
+  refuse?: boolean
 }
 
 /**
@@ -63,4 +68,25 @@ export function isDevelopmentBuild(): boolean {
 export function getBuildTimeString(): string {
   const info = getBuildInfo()
   return new Date(info.buildTime).toLocaleString()
+}
+
+/**
+ * 获取构建标识符
+ */
+export function getBuildIdentifier(): string {
+  const info = getBuildInfo()
+  return info.buildIdentifier || 'unknown'
+}
+
+/**
+ * 检查是否为官方构建
+ */
+export function isOfficialBuild(): boolean {
+  const info = getBuildInfo()
+  // 如果没有密钥，默认为非官方构建
+  if (!info.hasOfficialKey) {
+    return false
+  }
+  // 如果有签名，说明是官方构建
+  return !!info.officialSignature
 }

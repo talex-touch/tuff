@@ -1,7 +1,7 @@
 # Talex Touch PRD 文档
 
 > 本目录包含 Talex Touch 项目的所有产品需求文档 (PRD)  
-> 最后更新: 2025-10-30
+> 最后更新: 2025-11-03
 
 ## 📋 PRD 索引
 
@@ -24,6 +24,8 @@
 
 | 文档 | 状态 | 优先级 | 工期 |
 |-----|------|-------|-----|
+| [构建签名系统](build-signature-system-prd.md) | 已完成 | P2 | - |
+| [构建完整性验证](build-integrity-verification-prd.md) | 未完成 | P2 | 6-10天 |
 | [View Mode 增强](view-mode-prd.md) | 未完成 | P2 | 10-15天 |
 | [Flow Transfer 流转](flow-transfer-prd.md) | 未完成 | P2 | 15-20天 |
 | [多视图并行](multi-attach-view-prd.md) | 未完成 | P2 | 10-15天 |
@@ -47,9 +49,10 @@
 
 ## 📊 统计信息
 
-- **总 PRD 数量**: 15 个
+- **总 PRD 数量**: 16 个
+- **已完成**: 1 个（构建签名系统）
 - **未完成**: 15 个
-- **预计总工期**: 约 150-200 天
+- **预计总工期**: 约 156-210 天
 
 ## 🎯 开发建议
 
@@ -83,7 +86,25 @@
 5. **验收标准** - 可衡量的成功指标
 6. **风险与缓解** - 潜在风险和应对方案
 
+## 📚 其他文档
+
+以下文档已整理到 `plan-prd/` 目录:
+
+- **变更记录**: [CHANGES.md](CHANGES.md) - 项目重大变更日志
+- **设计改进**: [DESIGN_IMPROVEMENTS.md](DESIGN_IMPROVEMENTS.md) - 设计改进建议
+- **项目分析**: [PROJECT_ANALYSIS.md](PROJECT_ANALYSIS.md) - 项目分析文档
+- **文档索引**: [PROJECT_DOCS_INDEX.md](PROJECT_DOCS_INDEX.md) - 项目文档索引
+- **清理报告**: [PRD-CLEANUP-REPORT.md](PRD-CLEANUP-REPORT.md) - PRD 整理报告
+- **调研报告**: [plugin-storage-research.md](plugin-storage-research.md) - 插件存储机制调研
+- **分析报告**: [README_ANALYSIS.md](README_ANALYSIS.md) - README 分析报告
+
 ## 🔄 更新日志
+
+### 2025-11-03
+- 创建[构建完整性验证 PRD](build-integrity-verification-prd.md)
+- 整理根目录 MD 文件到 `plan-prd/` 目录
+- 删除已修复的托盘图标问题总结文档
+- 更新 PRD 索引
 
 ### 2025-10-30
 - 整合所有 PRD 到统一目录
