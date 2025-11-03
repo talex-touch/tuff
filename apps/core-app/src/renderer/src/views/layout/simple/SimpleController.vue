@@ -1,20 +1,22 @@
 <template>
-  <div class="FlatLayout-Icon">
-    <img src="../../../assets/logo.svg" alt="logo" />
-    <span @click="handleUpgradeClick">
-      <slot name="title" />
+  <div class="SimpleController fake-background">
+    <div class="SimpleController-Head">
+      <AppLogo />
+      <span flex items-center gap-2 class="max-w-[80px]" truncate @click="handleUpgradeClick">
+        <slot name="title" />
+      </span>
+    </div>
+
+    <span class="mx-auto">
+      {{ route.name ?? route.path }}
     </span>
+
+    <ul class="SimpleController-Controller">
+      {{
+        t('flatController.useNative')
+      }}
+    </ul>
   </div>
-
-  <span class="mx-auto">
-    {{ route.name ?? route.path }}
-  </span>
-
-  <ul class="FlatLayout-Controller">
-    {{
-      t('flatController.useNative')
-    }}
-  </ul>
 </template>
 
 <script lang="ts" name="FlatController" setup>
@@ -32,8 +34,45 @@ const handleUpgradeClick = () => {
 </script>
 
 <style lang="scss">
-.FlatLayout-Controller {
-  opacity: 0;
+.SimpleController {
+  position: relative;
+  // padding: 0.1rem 0.5rem;
+  display: flex;
+
+  width: 100%;
+  height: var(--ctr-height);
+
+  align-items: center;
+  // justify-content: space-around;
+
+  --fake-inner-opacity: 0.5;
+
+  img {
+    width: 24px;
+  }
+}
+
+.SimpleController-Controller {
+  .darwin & {
+    display: none;
+  }
+}
+
+.SimpleController-Head {
+  .darwin & {
+    padding-right: 0.5rem;
+    justify-content: flex-end;
+  }
+  position: relative;
+  display: flex;
+
+  height: var(--ctr-height);
+  width: var(--nav-width);
+
+  gap: 0.5rem;
+  align-items: center;
+
+  border-right: 1px solid var(--el-border-color);
 }
 
 .FlatLayout-Icon {
@@ -78,23 +117,5 @@ const handleUpgradeClick = () => {
     -webkit-app-region: no-drag;
   }
 
-  body.darwin & {
-    padding-right: 4px;
-    flex-direction: row-reverse;
-  }
-
-  display: flex;
-  padding: 0 0 0 0.5%;
-
-  height: var(--ctr-height);
-  width: var(--nav-width);
-
-  align-items: center;
-  text-indent: 5px;
-  box-sizing: border-box;
-
-  img {
-    width: 24px;
-  }
 }
 </style>

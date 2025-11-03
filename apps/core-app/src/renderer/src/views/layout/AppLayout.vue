@@ -1,6 +1,6 @@
 <template>
   <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
-    <FlatLayout>
+    <SimpleLayout>
       <template #view>
         <router-view v-slot="{ Component }">
           <transition>
@@ -11,12 +11,13 @@
       <template #title>
         <slot name="title" />
       </template>
-    </FlatLayout>
+    </SimpleLayout>
   </div>
 </template>
 
 <script lang="ts" name="AppLayout" setup>
-import FlatLayout from './flat/FlatLayout.vue'
+// import FlatLayout from './flat/FlatLayout.vue'
+import SimpleLayout from './simple/SimpleLayout.vue'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
 
 const mica = computed(() => themeStyle.value.theme.window === 'Mica')

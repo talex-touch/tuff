@@ -81,7 +81,7 @@ body.core-box #app {
 
   position: relative; // make sure background adapt to parent
 
-  border-radius: 12px;
+  border-radius: var(--fake-radius, 12px);
 }
 
 .color-template {

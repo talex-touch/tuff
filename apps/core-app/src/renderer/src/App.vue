@@ -43,8 +43,12 @@ async function init(): Promise<void> {
     <BuildSecurityBanner />
     <AppLayout>
       <template #title>
-        {{ t('app.title') }}
-        <span class="tag version fake-background">{{ packageJson.version }}</span>
+        <span text-sm>{{ t('app.title') }}</span>
+        <span
+          style="--fake-radius: 4px"
+          class="px-[3px] py-[1px] rounded-md text-xs version fake-background"
+          >{{ packageJson.version }}</span
+        >
       </template>
     </AppLayout>
 
