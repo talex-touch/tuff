@@ -1,11 +1,11 @@
 <script lang="ts" name="CoreBoxFooter" setup>
 import { computed } from 'vue'
-import { TuffItem } from '@talex-touch/utils'
-import PluginIcon from '@renderer/components/plugin/PluginIcon.vue'
+import { TuffItem, ITuffIcon } from '@talex-touch/utils'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { useDebounce } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { resolveSourceMeta } from './sourceMeta'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 const props = defineProps<{
   display: boolean
@@ -18,13 +18,24 @@ const debouncedDisplay = useDebounce(displayValue, 100)
 const { t } = useI18n()
 
 const displayIcon = computed(() => {
-  const icon = props.item?.render?.basic?.icon || props.item?.icon
-  if (!icon) return DefaultIcon
-  if (typeof icon === 'string') return icon
-  if (icon && typeof icon === 'object' && 'value' in icon && icon.value?.length) {
-    return icon
+  const icon = props.item?.render?.basic?.icon
+  const defaultIcon = {
+    type: 'url',
+    value: '',
+    status: 'normal'
+  } as ITuffIcon
+
+  if (typeof icon === 'string') {
+    defaultIcon.value = icon
   }
-  return DefaultIcon
+
+  if (icon && typeof icon === 'object' && 'value' in icon) {
+    if (icon.value?.length) {
+      defaultIcon.value = icon.value
+    }
+  }
+
+  return defaultIcon
 })
 
 const title = computed(() => props.item?.render?.basic?.title || 'CoreBox')
@@ -67,7 +78,13 @@ const keyHints = computed(() => {
     class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--el-border-color-lighter)] bg-transparent text-12px text-[color:var(--el-text-color-secondary)]"
   >
     <div class="FooterInfo">
-      <PluginIcon :icon="displayIcon as any" :alt="title" class="FooterIcon" />
+      <TuffIcon
+        :icon="displayIcon"
+        :alt="title"
+        :empty="DefaultIcon"
+        :size="20"
+        class="FooterIcon"
+      />
       <div class="FooterText">
         <span class="FooterTitle" :title="title">{{ title }}</span>
         <span v-if="subtitleMeta" class="FooterSubtitle" :title="subtitleMeta.label">
