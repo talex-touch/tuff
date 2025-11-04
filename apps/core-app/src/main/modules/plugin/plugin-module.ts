@@ -1252,7 +1252,7 @@ export class PluginModule extends BaseModule {
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       'plugin:storage:get-stats',
-      async ({ data, reply, plugin: pluginName }) => {
+      async ({ reply, plugin: pluginName }) => {
         try {
           if (!pluginName) {
             return reply(DataCode.ERROR, { error: 'Plugin name is required' })
@@ -1304,7 +1304,7 @@ export class PluginModule extends BaseModule {
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       'plugin:storage:get-tree',
-      async ({ data, reply, plugin: pluginName }) => {
+      async ({ reply, plugin: pluginName }) => {
         try {
           if (!pluginName) {
             return reply(DataCode.ERROR, { error: 'Plugin name is required' })
@@ -1402,7 +1402,7 @@ export class PluginModule extends BaseModule {
       }
     })
 
-    touchChannel.regChannel(ChannelType.PLUGIN, 'plugin:storage:clear', async ({ data, reply, plugin: pluginName }) => {
+    touchChannel.regChannel(ChannelType.PLUGIN, 'plugin:storage:clear', async ({ reply, plugin: pluginName }) => {
       try {
         if (!pluginName) {
           return reply(DataCode.ERROR, { error: 'Plugin name is required' })
@@ -1455,7 +1455,7 @@ export class PluginModule extends BaseModule {
     touchChannel.regChannel(
       ChannelType.PLUGIN,
       'plugin:storage:open-folder',
-      async ({ data, reply, plugin: pluginName }) => {
+      async ({ reply, plugin: pluginName }) => {
         try {
           if (!pluginName) {
             return reply(DataCode.ERROR, { error: 'Plugin name is required' })
