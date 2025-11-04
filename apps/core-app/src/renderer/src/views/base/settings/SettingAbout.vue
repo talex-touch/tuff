@@ -10,6 +10,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { ElMessage, ElButton } from 'element-plus'
+import { getBuildInfo } from '~/utils/build-info'
 
 // Import UI components
 import TBlockLine from '@comp/base/group/TBlockLine.vue'
@@ -108,6 +109,9 @@ const currentExperiencePack = computed(() => {
 
   return `${now.getFullYear()}.${month}.${day}`
 })
+
+// Get build info from signature
+const buildInfo = computed(() => getBuildInfo())
 </script>
 
 <template>
@@ -128,6 +132,36 @@ const currentExperiencePack = computed(() => {
     <t-block-line
       :title="t('settingAbout.specification')"
       :description="`${currentQuarter}`"
+    ></t-block-line>
+    <t-block-line
+      v-if="buildInfo.version"
+      title="Version"
+      :description="buildInfo.version"
+    ></t-block-line>
+    <t-block-line
+      v-if="buildInfo.buildIdentifier"
+      title="Build ID"
+      :description="buildInfo.buildIdentifier"
+    ></t-block-line>
+    <t-block-line
+      v-if="buildInfo.gitCommitHash"
+      title="Git Hash"
+      :description="buildInfo.gitCommitHash.substring(0, 7)"
+    ></t-block-line>
+    <t-block-line
+      v-if="buildInfo.channel"
+      title="Channel"
+      :description="buildInfo.channel"
+    ></t-block-line>
+    <t-block-line
+      v-if="buildInfo.buildType"
+      title="Build Type"
+      :description="buildInfo.buildType"
+    ></t-block-line>
+    <t-block-line
+      v-if="buildInfo.buildTime"
+      title="Build Time"
+      :description="new Date(buildInfo.buildTime).toLocaleString()"
     ></t-block-line>
     <t-block-line :title="t('settingAbout.startCosts')">
       <template #description>

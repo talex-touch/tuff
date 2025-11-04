@@ -40,7 +40,7 @@ async function init(): Promise<void> {
 
 <template>
   <AppEntrance :on-ready="init">
-    <BuildSecurityBanner />
+    <!-- <BuildSecurityBanner /> -->
     <AppLayout>
       <template #title>
         <span text-sm>{{ t('app.title') }}</span>
