@@ -15,8 +15,6 @@ import { useApplicationUpgrade } from './useUpdate'
  * Handles complete application initialization and post-initialization tasks
  */
 export function useAppLifecycle() {
-  const { checkApplicationUpgrade } = useApplicationUpgrade()
-
   /**
    * Execute main window tasks
    *
@@ -24,6 +22,12 @@ export function useAppLifecycle() {
    * to avoid update prompts during onboarding
    */
   async function executeMainTask(): Promise<void> {
+    // Call useApplicationUpgrade only when needed, after TouchSDK is initialized
+    const { checkApplicationUpgrade, setupUpdateListener } = useApplicationUpgrade()
+
+    // Setup update listener after TouchSDK is initialized
+    setupUpdateListener()
+
     if (!appSetting?.beginner?.init) {
       console.log('[useAppLifecycle] Skipping update check on first launch')
       return
