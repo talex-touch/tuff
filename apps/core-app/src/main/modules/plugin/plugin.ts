@@ -201,8 +201,7 @@ export class TouchPlugin implements ITouchPlugin {
     return this.features
   }
 
-  async triggerFeature(feature: IPluginFeature, query: any): Promise<void> {
-    // Mark as async
+  async triggerFeature(feature: IPluginFeature, query: any): Promise<boolean | void> {
     if (this.featureControllers.has(feature.id)) {
       this.featureControllers.get(feature.id)?.abort()
     }
@@ -221,14 +220,13 @@ export class TouchPlugin implements ITouchPlugin {
 
       this.logger.info(`Trigger feature with WebContent interaction: ${feature.id}`)
 
-      // Delegate view loading to the unified PluginViewLoader
       if (!this.pluginLifecycle) {
         this.logger.warn(
           `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
         )
       }
       await PluginViewLoader.loadPluginView(this, feature)
-      return
+      return true
     }
 
     if (feature.interaction?.type === 'widget') {
@@ -236,10 +234,9 @@ export class TouchPlugin implements ITouchPlugin {
       return
     }
 
-    // Pass query (can be string for backward compatibility or TuffQuery object)
-    this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
-
+    const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
+    return result
   }
 
   triggerInputChanged(feature: IPluginFeature, query: any): void {

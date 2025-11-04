@@ -201,8 +201,9 @@ export interface IFeatureLifeCycle {
    *   - TuffQuery object: Complete query with text and optional inputs array containing clipboard data (images, files, HTML)
    * @param feature - The full feature definition
    * @param signal - An AbortSignal to cancel the operation
+   * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered(id: string, data: any, feature: IPluginFeature, signal?: AbortSignal): void
+  onFeatureTriggered(id: string, data: any, feature: IPluginFeature, signal?: AbortSignal): boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
@@ -268,8 +269,9 @@ export interface ITargetFeatureLifeCycle {
    *   - string: Plain text query (backward compatible)
    *   - TuffQuery object: Complete query with text and optional inputs array containing clipboard data (images, files, HTML)
    * @param feature - The full feature definition
+   * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered(data: any, feature: IPluginFeature): void
+  onFeatureTriggered(data: any, feature: IPluginFeature): boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
