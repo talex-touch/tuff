@@ -2,10 +2,11 @@
   <Transition name="banner-slide">
     <div
       v-if="showBanner"
-      class="build-security-banner"
+      class="BuildSecurityBanner"
       :class="{ 'verification-failed': verificationFailed }"
     >
-      <div class="banner-content">
+      <div class="BuildSecurityBanner-Bar"></div>
+      <div class="BuildSecurityBanner-Content">
         <div class="banner-icon">
           <i v-if="verificationFailed" class="i-ri-error-warning-line" />
           <i v-else class="i-ri-information-line" />
@@ -51,7 +52,6 @@ interface VerificationStatus {
 }
 
 function handleVerificationStatus(status: VerificationStatus) {
-  // 如果不是官方构建或验证失败，显示横幅
   if (!status.isOfficialBuild || status.verificationFailed) {
     if (!dismissed.value) {
       showBanner.value = true
@@ -61,13 +61,11 @@ function handleVerificationStatus(status: VerificationStatus) {
 }
 
 onMounted(async () => {
-  // 监听构建验证状态（后端推送）
   touchChannel.regChannel('build:verification-status', ({ data }) => {
     const status = data as VerificationStatus
     handleVerificationStatus(status)
   })
 
-  // 主动请求验证状态（避免时序问题）
   try {
     const status = await touchChannel.send('build:get-verification-status')
     if (status) {
@@ -85,7 +83,22 @@ function dismissBanner() {
 </script>
 
 <style lang="scss" scoped>
-.build-security-banner {
+.BuildSecurityBanner-Bar {
+  z-index: 1;
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 10%;
+
+  filter: blur(2px) brightness(1.1);
+  box-shadow: 0 4px 12px 2px var(--el-color-warning);
+  background: var(--el-color-warning);
+}
+
+.BuildSecurityBanner {
   position: fixed;
   top: 0;
   left: 0;
@@ -102,7 +115,7 @@ function dismissBanner() {
     border-bottom-color: var(--el-color-danger);
   }
 
-  .banner-content {
+  &-Content {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -111,8 +124,8 @@ function dismissBanner() {
 
     .banner-icon {
       flex-shrink: 0;
-      width: 24px;
-      height: 24px;
+      width: 48px;
+      height: 48px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -144,8 +157,8 @@ function dismissBanner() {
 
     .banner-close {
       flex-shrink: 0;
-      width: 24px;
-      height: 24px;
+      width: 36px;
+      height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -162,7 +175,7 @@ function dismissBanner() {
       }
 
       i {
-        font-size: 18px;
+        font-size: 24px;
       }
     }
   }

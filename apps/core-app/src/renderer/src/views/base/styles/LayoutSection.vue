@@ -1,11 +1,7 @@
 <template>
   <div ref="wrapperRef" class="LayoutSection-Wrapper fake-background">
     <p font-600 text-lg>{{ t('layoutSection.title', 'Layout Selection') }}</p>
-    <div
-      ref="scrollContainer"
-      class="LayoutSection-Container"
-      @scroll="handleScroll"
-    >
+    <div ref="scrollContainer" class="LayoutSection-Container" @scroll="handleScroll">
       <div
         v-for="(layout, key) in availableLayouts"
         :key="key"
@@ -65,16 +61,14 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     console.log('[LayoutSection] Calling switchLayout:', layoutName)
     await switchLayout(layoutName)
     const layoutConfig = availableLayouts.value[layoutName]
-    
+
     console.log('[LayoutSection] Layout switch completed:', {
       layoutName,
       layoutConfig,
       currentLayoutName: currentLayoutName.value
     })
-    
-    updateTip(
-      t('layoutSection.selected', `Selected: ${layoutConfig?.displayName || layoutName}`)
-    )
+
+    updateTip(t('layoutSection.selected', `Selected: ${layoutConfig?.displayName || layoutName}`))
   } catch (error) {
     console.error('[LayoutSection] Failed to switch layout:', error)
     updateTip(t('layoutSection.error', 'Failed to switch layout'))
@@ -183,7 +177,8 @@ onMounted(() => {
 
   &.active {
     border-color: var(--el-color-primary);
-    box-shadow: 0 0 0 2px var(--el-color-primary-light-5),
+    box-shadow:
+      0 0 0 2px var(--el-color-primary-light-5),
       0 4px 12px rgba(0, 0, 0, 0.15);
 
     .LayoutSection-Item-Bar {
@@ -282,4 +277,3 @@ onMounted(() => {
   transition: opacity 0.3s ease;
 }
 </style>
-
