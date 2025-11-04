@@ -315,10 +315,25 @@ jobs:
             fi
           else
             echo "Building release version..."
-            pnpm core:build || {
-              BUILD_FAILED=true
-              echo "ERROR: Release build failed with exit code $?"
-            }
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              echo "Building Windows release..."
+              pnpm core:build:release:win || {
+                BUILD_FAILED=true
+                echo "ERROR: Windows release build failed with exit code $?"
+              }
+            elif [ "$RUNNER_OS" = "macOS" ]; then
+              echo "Building macOS release..."
+              pnpm core:build:release:mac || {
+                BUILD_FAILED=true
+                echo "ERROR: macOS release build failed with exit code $?"
+              }
+            else
+              echo "Building Linux release..."
+              pnpm core:build:release:linux || {
+                BUILD_FAILED=true
+                echo "ERROR: Linux release build failed with exit code $?"
+              }
+            fi
           fi
           set -e  # Re-enable exit on error
 
