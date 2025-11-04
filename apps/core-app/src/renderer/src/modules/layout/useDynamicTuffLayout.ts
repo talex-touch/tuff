@@ -1,66 +1,41 @@
-import { computed, ref, watch, nextTick, type Component } from 'vue'
+import { computed, ref, watch, nextTick, type Component, type Ref, type ComputedRef } from 'vue'
 import layoutsDefinition, { LayoutConfig } from './layouts-definition'
 import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 
-/**
- * Layout component cache
- */
-const componentCache: Map<string, Component> = new Map()
+const componentCache = new Map<string, Component>()
 
-/**
- * Get the current layout name from settings
- */
 function getCurrentLayoutName(): string {
-  try {
-    if (appSettings?.data?.layout && layoutsDefinition[appSettings.data.layout]) {
-      return appSettings.data.layout
-    }
-  } catch {
-    // appSettings not initialized yet
+  const layout = appSettings?.data?.layout
+  if (layout && layoutsDefinition[layout]) {
+    return layout
   }
-  return 'simple'
+
+  return layoutsDefinition[0].name
 }
 
-/**
- * Set the current layout in settings
- */
 function setCurrentLayoutName(layoutName: string): void {
-  if (!layoutsDefinition[layoutName]) {
-    return
-  }
+  if (!layoutsDefinition[layoutName]) return
   try {
-    if (appSettings?.data) {
-      appSettings.data.layout = layoutName
-    }
+    appSettings?.data && (appSettings.data.layout = layoutName)
   } catch {
-    // appSettings not initialized yet
+    // appSettings not initialized
   }
 }
 
-/**
- * Load layout component dynamically from layouts-definition
- */
 async function loadLayoutComponent(
   layoutName: string,
   forceReload = false
 ): Promise<Component | null> {
-  // Check cache first (unless force reload)
   if (!forceReload && componentCache.has(layoutName)) {
     return componentCache.get(layoutName)!
   }
 
-  // Get layout config
   const config = layoutsDefinition[layoutName]
-  if (!config) {
-    return null
-  }
+  if (!config) return null
 
   try {
-    // Load component from layouts-definition (already a Promise)
     const module = await config.component
     const component = module.default
-
-    // Cache the component
     componentCache.set(layoutName, component)
     return component
   } catch (error) {
@@ -71,47 +46,35 @@ async function loadLayoutComponent(
 
 /**
  * Composable for managing dynamic layout state and operations
- *
- * Provides reactive access to current layout, available layouts,
- * and methods to switch between layouts with dynamic loading.
- *
- * @example
- * ```ts
- * const { currentLayout, availableLayouts, switchLayout, layoutComponent } = useDynamicTuffLayout()
- * ```
  */
-export function useDynamicTuffLayout() {
+export function useDynamicTuffLayout(): {
+  currentLayoutName: Ref<string>
+  currentLayout: ComputedRef<LayoutConfig | undefined>
+  currentLayoutDisplayName: ComputedRef<string>
+  layoutComponent: Ref<Component | null>
+  isLoading: Ref<boolean>
+  availableLayouts: ComputedRef<Record<string, LayoutConfig>>
+  loadLayout: (layoutName?: string) => Promise<void>
+  switchLayout: (layoutName: string) => Promise<void>
+} {
   const currentLayoutName = ref<string>(getCurrentLayoutName())
   const layoutComponent = ref<Component | null>(null)
   const isLoading = ref(false)
 
-  /**
-   * Get available layouts from the registry
-   */
-  const availableLayouts = computed<Record<string, LayoutConfig>>(() => {
-    return { ...layoutsDefinition }
-  })
+  const availableLayouts = computed<Record<string, LayoutConfig>>(() => ({
+    ...layoutsDefinition
+  }))
 
-  /**
-   * Get current layout configuration
-   */
-  const currentLayout = computed<LayoutConfig | undefined>(() => {
-    return layoutsDefinition[currentLayoutName.value]
-  })
+  const currentLayout = computed<LayoutConfig | undefined>(
+    () => layoutsDefinition[currentLayoutName.value]
+  )
 
-  /**
-   * Get current layout display name
-   */
-  const currentLayoutDisplayName = computed(() => {
-    return currentLayout.value?.displayName || currentLayoutName.value
-  })
+  const currentLayoutDisplayName = computed(
+    () => currentLayout.value?.displayName || currentLayoutName.value
+  )
 
-  /**
-   * Load the layout component for the current layout name
-   */
   async function loadLayout(layoutName?: string): Promise<void> {
     const layoutToLoad = layoutName || currentLayoutName.value
-
     if (!layoutsDefinition[layoutToLoad]) {
       layoutComponent.value = null
       return
@@ -132,78 +95,42 @@ export function useDynamicTuffLayout() {
     }
   }
 
-  /**
-   * Switch to a different layout
-   */
   async function switchLayout(layoutName: string): Promise<void> {
-    if (layoutName === currentLayoutName.value) {
-      return
-    }
+    if (layoutName === currentLayoutName.value) return
 
-    try {
-      // Clear current component first to force re-render
-      layoutComponent.value = null
-
-      // Update settings and state
-      setCurrentLayoutName(layoutName)
-      currentLayoutName.value = layoutName
-
-      // Wait a tick to ensure reactive updates propagate
-      await nextTick()
-
-      // Load the new layout
-      await loadLayout(layoutName)
-    } catch (error) {
-      console.error('Failed to switch layout:', error)
-      throw error
-    }
+    layoutComponent.value = null
+    setCurrentLayoutName(layoutName)
+    currentLayoutName.value = layoutName
+    await nextTick()
+    await loadLayout(layoutName)
   }
 
-  // Watch for when appSettings becomes available and load saved layout
   watch(
-    () => {
-      try {
-        return appSettings?.data?.layout
-      } catch {
-        return null
-      }
-    },
+    () => appSettings?.data?.layout,
     (newLayout) => {
       if (newLayout && newLayout !== currentLayoutName.value && layoutsDefinition[newLayout]) {
         currentLayoutName.value = newLayout
         loadLayout(newLayout)
       } else if (!layoutComponent.value) {
-        // Load default layout if we haven't loaded any yet
-        const savedLayout = getCurrentLayoutName()
-        if (savedLayout && savedLayout !== currentLayoutName.value) {
-          currentLayoutName.value = savedLayout
-          loadLayout(savedLayout)
-        } else if (layoutsDefinition[0]) {
-          loadLayout('simple')
-        }
+        currentLayoutName.value = newLayout
+        loadLayout(newLayout)
       }
     },
     { immediate: true }
   )
 
   return {
-    // State
     currentLayoutName,
     currentLayout,
     currentLayoutDisplayName,
     layoutComponent,
     isLoading,
     availableLayouts,
-
-    // Methods
     loadLayout,
     switchLayout
   }
 }
 
-/**
- * Clear component cache (useful for hot reloading)
- */
 export function clearLayoutCache(): void {
   componentCache.clear()
 }

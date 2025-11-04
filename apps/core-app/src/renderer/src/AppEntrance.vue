@@ -12,8 +12,9 @@ const props = defineProps<{
 const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
 
-setTimeout(() => {
-  void entry(props.onReady, init)
+setTimeout(async () => {
+  await entry(props.onReady)
+  init.value = true
 }, 100)
 </script>
 
