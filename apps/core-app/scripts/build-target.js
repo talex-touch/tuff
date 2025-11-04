@@ -480,6 +480,64 @@ function build() {
     throw new Error('Dist directory not created by electron-builder');
   }
 
+  // Fix executable permissions for macOS .app bundles
+  if (normalizedTarget === 'mac') {
+    console.log('\n=== Fixing macOS executable permissions ===');
+    try {
+      function fixAppPermissions(appPath) {
+        const executablePath = path.join(appPath, 'Contents', 'MacOS', 'tuff');
+        if (fs.existsSync(executablePath)) {
+          try {
+            const stats = fs.statSync(executablePath);
+            const mode = stats.mode;
+            // Check if executable bit is not set for owner (S_IXUSR = 0o100 = 64)
+            const ownerExecutable = (mode & parseInt('100', 8)) !== 0;
+            if (!ownerExecutable) {
+              console.log(`  Fixing permissions for: ${executablePath}`);
+              fs.chmodSync(executablePath, 0o755);
+              console.log(`  ✓ Fixed permissions`);
+            } else {
+              console.log(`  ✓ Permissions already correct: ${executablePath}`);
+            }
+          } catch (err) {
+            console.warn(`  Warning: Cannot fix permissions for ${executablePath}: ${err.message}`);
+          }
+        }
+      }
+
+      // Find all .app directories in dist
+      function findAppDirs(dir) {
+        const items = fs.readdirSync(dir, { withFileTypes: true });
+        const appDirs = [];
+        for (const item of items) {
+          const fullPath = path.join(dir, item.name);
+          if (item.isDirectory()) {
+            if (item.name.endsWith('.app')) {
+              appDirs.push(fullPath);
+            } else {
+              // Recursively search subdirectories
+              appDirs.push(...findAppDirs(fullPath));
+            }
+          }
+        }
+        return appDirs;
+      }
+
+      const appDirs = findAppDirs(distDir);
+      if (appDirs.length > 0) {
+        appDirs.forEach(appPath => {
+          fixAppPermissions(appPath);
+        });
+        console.log(`✓ Fixed permissions for ${appDirs.length} .app bundle(s)`);
+      } else {
+        console.log('  No .app bundles found to fix');
+      }
+    } catch (err) {
+      console.warn(`  Warning: Failed to fix executable permissions: ${err.message}`);
+      // Don't fail the build if permission fix fails
+    }
+  }
+
   console.log('\n✓ Build completed successfully.');
 }
 
