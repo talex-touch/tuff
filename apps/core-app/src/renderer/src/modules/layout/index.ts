@@ -7,10 +7,8 @@
  * - Layout switching utilities
  */
 
-export { LayoutManager, type LayoutConfig } from './layout-manager'
-export { useDynamicTuffLayout } from './useDynamicTuffLayout'
-export { getAppSettings, getAppSettingsSync, initializeAppSettings } from './app-settings-loader'
-export type { default as layoutsConfig } from './layouts.json'
+export { useDynamicTuffLayout, clearLayoutCache, type LayoutConfig } from './useDynamicTuffLayout'
+export type { default as layoutsConfig } from './layouts-definition'
 
 // Legacy export for backward compatibility
 export { useDynamicTuffLayout as useLayout } from './useDynamicTuffLayout'
