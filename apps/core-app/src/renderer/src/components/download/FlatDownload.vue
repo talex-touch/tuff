@@ -65,6 +65,7 @@ onBeforeUnmount(() => {
   border-radius: 12px;
 
   --h: 30px;
+  overflow: hidden;
   border-radius: 12px;
   transform: translate(0, 20vh);
   animation: download-btn-enter 0.5s 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86) forwards;

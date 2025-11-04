@@ -22,7 +22,12 @@ export function useSvgContent(
   }
 
   async function doFetch(): Promise<string> {
-    const response = await fetch(url.value)
+    let targetUrl = url.value
+    if (!targetUrl.startsWith('tfile://')) {
+      targetUrl = `tfile://${targetUrl}`
+    }
+
+    const response = await fetch(targetUrl)
     return await response.text()
   }
 

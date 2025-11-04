@@ -905,7 +905,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const buffer = extractFileIcon(appPath)
       if (buffer && buffer.length > 0) {
-        return `data:image/png;base64,${buffer.toString('base64')}`
+        return buffer.toString('base64')
       }
     } catch (error) {
       this.logWarn('Failed to extract icon', error, {
@@ -1563,7 +1563,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             extensionsToAdd.push({
               fileId: file.id,
               key: 'icon',
-              value: `data:image/png;base64,${icon.toString('base64')}`
+              value: icon.toString('base64')
             })
           } catch {
             /* ignore */

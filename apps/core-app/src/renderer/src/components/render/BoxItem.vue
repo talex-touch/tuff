@@ -115,6 +115,7 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
         :alt="render.basic?.title || 'Tuff Item'"
         :size="32"
         colorful
+        style="--icon-color: var(--el-text-color-primary)"
       />
       <span
         v-if="showFrequency"

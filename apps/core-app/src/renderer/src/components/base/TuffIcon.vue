@@ -109,8 +109,8 @@ watch(
 }
 
 .TuffIcon-Svg.colorful {
-  color: unset;
-  background-color: unset;
+  color: var(--icon-color, unset);
+  background-color: var(--icon-color, unset);
 }
 
 .TuffIcon {
