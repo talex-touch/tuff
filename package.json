@@ -42,10 +42,10 @@
     "docs:build": "pnpm -F @talex-touch/docs run build",
     "utils:test": " pnpm -F test run test",
     "utils:publish": "pnpm -F @talex-touch/utils run publish",
-    "version": "bumpp",
-    "version:patch": "bumpp --patch",
-    "version:minor": "bumpp --minor",
-    "version:major": "bumpp --major"
+    "version": "node scripts/version-sync.mjs",
+    "version:patch": "node scripts/version-sync.mjs --patch",
+    "version:minor": "node scripts/version-sync.mjs --minor",
+    "version:major": "node scripts/version-sync.mjs --major"
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.6.0",
