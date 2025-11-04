@@ -1,24 +1,6 @@
-import fse from 'fs-extra'
-import path from 'path'
 import { BaseModule } from '../abstract-base-module'
-import { ModuleInitContext, MaybePromise, ChannelType } from '@talex-touch/utils'
-import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { BrowserWindow, app } from 'electron'
-import { mainLog } from '../../utils/logger'
-
-interface BuildInfo {
-  version: string
-  buildTime: number
-  buildIdentifier: string
-  buildType: string
-  channel: string
-  isSnapshot: boolean
-  isBeta: boolean
-  isRelease: boolean
-  gitCommitHash?: string
-  officialSignature?: string
-  hasOfficialKey: boolean
-}
+import { ModuleInitContext, MaybePromise } from '@talex-touch/utils'
+import { TalexEvents } from '../../core/eventbus/touch-event'
 
 /**
  * 构建完整性验证模块
