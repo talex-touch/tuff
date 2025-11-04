@@ -24,17 +24,7 @@ import { ProviderContext } from '../../box-tool/search-engine/types'
 
 import type { TuffIconType } from '@talex-touch/utils'
 
-/**
- * Checks if a feature's command matches the given query text.
- * @param command - The feature command to check.
- * @param queryText - The user's input query.
- * @returns True if the command matches, false otherwise.
- */
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
-  console.debug(
-    `[PluginFeaturesAdapter] isCommandMatch: query="${queryText}", command=`,
-    JSON.stringify(command)
-  )
   if (!command.type) {
     return true
   }
@@ -58,36 +48,21 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
     case 'regex':
       return (command.value as RegExp).test(queryText)
     default:
-      console.debug(
-        `[PluginFeaturesAdapter] isCommandMatch: Unknown type "${command.type}", returning false.`
-      )
       return false
   }
 }
 
-/**
- * Maps the legacy plugin icon type to the new TuffIconType.
- * @param type - The icon type from ITuffIcon.
- * @returns The corresponding TuffIconType.
- */
 function mapIconType(type: string): TuffIconType {
   switch (type) {
     case 'file':
       return 'file'
     case 'remixicon':
-      return 'emoji' // Map remixicon to emoji as fallback
     case 'class':
-      return 'emoji' // Map class-based icons to emoji as fallback
+      return 'emoji'
     default:
-      // Fallback for any other type to emoji
       return 'emoji'
   }
 }
-
-/**
- * An adapter that exposes features from the legacy plugin system
- * as a modern ISearchProvider.
- */
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
@@ -102,16 +77,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
 
-    // If `defaultAction` exists, it's an "Action Item" for a plugin to handle.
     if (item.meta?.defaultAction) {
       const pluginName = item.meta?.pluginName
       if (!pluginName) {
         console.error(
-          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.',
-          {
-            meta: item.meta,
-            availablePlugins: Array.from(pluginModule.pluginManager!.plugins.keys())
-          }
+          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
         )
         return null
       }
@@ -119,30 +89,17 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       const plugin = pluginModule.pluginManager!.plugins.get(pluginName) as TouchPlugin | undefined
 
       if (plugin?.pluginLifecycle?.onItemAction) {
-        console.debug(
-          `[PluginFeaturesAdapter] Routing to ${pluginName}.onItemAction for default action.`
-        )
-
-        // Track action execution to prevent race conditions
         const actionStartTime = Date.now()
 
         try {
           const result = await plugin.pluginLifecycle.onItemAction(item)
-
-          // Check if action was executed (e.g., opened external resource)
-          // If action took significant time or returned a specific indicator,
-          // it likely executed an external action and shouldn't activate
           const executionTime = Date.now() - actionStartTime
           const isExternalAction = executionTime > 100 || result?.externalAction === true
 
           if (isExternalAction) {
-            console.debug(
-              `[PluginFeaturesAdapter] Action executed externally (${executionTime}ms), not activating feature.`
-            )
             return null
           }
 
-          // If action returns activation data, use it
           if (result?.shouldActivate) {
             return result.activation || null
           }
@@ -150,7 +107,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           console.error(`[PluginFeaturesAdapter] Error in onItemAction for ${pluginName}:`, error)
         }
 
-        // Simple actions should not activate a provider by default
         return null
       } else {
         console.warn(
@@ -160,20 +116,14 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
-    // Otherwise, it's a "Feature Item" intended to activate a feature.
-    console.debug(`[PluginFeaturesAdapter] Executing as a Feature Item.`)
     const meta = item.meta || {}
     const extension = meta.extension || {}
-    // For feature items, the plugin name is in the payload of the 'trigger-feature' action.
     const pluginName =
       meta.pluginName || extension.pluginName || item.actions?.[0]?.payload?.pluginName
     const featureId = meta.featureId || extension.featureId || item.actions?.[0]?.payload?.featureId
 
     if (!pluginName || !featureId) {
-      console.error(
-        '[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.',
-        item
-      )
+      console.error('[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.')
       return null
     }
 
@@ -193,14 +143,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return null
     }
 
-    // Handle webcontent interaction
     if (feature.interaction && feature.interaction.type === 'webcontent') {
-      // Delegate view loading to the unified PluginViewLoader.
-      // The loader will add issues to plugin.issues if an error occurs.
       await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature)
 
-      // Check if the loader added an INVALID_VIEW_PATH issue to the plugin.
-      // If so, it means the view could not be loaded due to a security concern.
       if (
         plugin.issues.some(
           (issue) => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`
@@ -209,7 +154,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         return null
       }
 
-      // Return an activation object to keep the plugin active
       return {
         id: this.id,
         name: plugin.name,
@@ -226,11 +170,14 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
-    // Default feature execution - pass full query object
     const query = args.searchResult?.query || args.searchResult?.query?.text
-    plugin.triggerFeature(feature, query)
+    const shouldActivate = await plugin.triggerFeature(feature, query)
 
-    if (feature.push) {
+    if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
+      return null
+    }
+
+    if (feature.push || (typeof shouldActivate === 'boolean' && shouldActivate === true)) {
       return {
         id: this.id,
         meta: {
@@ -296,8 +243,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const activationState = searchEngineCore.getActivationState()
 
-    // --- Activated Mode ---
-    // If there is an active feature, route the input directly to it.
     if (activationState) {
       const activeFeatureActivation = activationState.find((a) => a.id === this.id)
       if (activeFeatureActivation?.meta?.pluginName) {
@@ -306,12 +251,10 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
-          // Pass full query object to plugin
           $app.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
             query: query
           })
 
-          // If query is empty, return all features of the activated plugin
           if (!query.text) {
             const allFeatures = plugin.getFeatures()
             const items = allFeatures
@@ -323,35 +266,18 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
               .build()
           }
 
-          console.debug(
-            `[PluginFeaturesAdapter] Activated search: Routing query "${query.text}" to feature "${feature.id}" of plugin "${plugin.name}"`
-          )
-
-          // Pass full query object instead of just text
           plugin.triggerFeature(feature, query)
-
-          // Trigger the input change handler for the specific feature.
-          // The feature itself is responsible for pushing results back.
           plugin.triggerInputChanged(feature, query)
 
-          // In activated mode, the result is delivered via a side-channel (pushItems),
-          // so we return an empty result here.
-          return TuffFactory.createSearchResult(query)
-            .setActivate(activationState) // Preserve activation state
-            .build()
+          return TuffFactory.createSearchResult(query).setActivate(activationState).build()
         }
       }
     }
-
-    // --- Global Search Mode ---
-    // If no feature is active, perform a global search across all plugin features.
-    console.debug(`[PluginFeaturesAdapter] Global search with query: "${query.text}"`)
 
     const queryText = query.text.trim()
     const matchedItems: TuffItem[] = []
     const plugins = pluginModule.pluginManager!.plugins.values()
 
-    // Get input types from query for filtering
     const queryInputTypes = query.inputs?.map((i) => i.type) || []
     const hasNonTextInput =
       queryInputTypes.length > 0 && queryInputTypes.some((t) => t !== TuffInputType.Text)
@@ -367,25 +293,19 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       const features = plugin.getFeatures()
       for (const feature of features as IPluginFeature[]) {
-        // Filter features based on acceptedInputTypes
-        // For backward compatibility: features without acceptedInputTypes default to text-only
         if (hasNonTextInput) {
-          // When query has non-text inputs (image/files), only show features that explicitly declare support
           if (!feature.acceptedInputTypes) {
-            // Old feature without declaration: defaults to text-only, skip for non-text inputs
             continue
           }
 
-          // Check if feature accepts all the input types in query
           const acceptsAllInputs = queryInputTypes.every((type) =>
-            feature.acceptedInputTypes?.includes(type as any)
+            feature.acceptedInputTypes?.includes(type as TuffInputType)
           )
 
           if (!acceptsAllInputs) {
             continue
           }
         }
-        // else: pure text query - all features are shown (backward compatible)
 
         const isMatch = feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
         if (isMatch) {
@@ -394,7 +314,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
-    // Sort matched items by priority (highest first)
     const sortedItems = matchedItems.sort(
       (a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0)
     )
