@@ -96,7 +96,7 @@ jobs:
           # 设置正确的权限
           chmod -R 755 apps/core-app/dist
           echo "Build directories prepared"
-      
+
       - name: Set Build Environment Variables
         shell: bash
         run: |
@@ -256,6 +256,16 @@ jobs:
         env:
           GITHUB_SHA: ${{ github.sha }}
           TUFF_ENCRYPTION_KEY: ${{ secrets.TUFF_ENCRYPTION_KEY }}
+          RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
+          RUNNER_OS: ${{ runner.os }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 完全禁用签名相关功能
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_LINK: ''
+          CSC_KEY_PASSWORD: ''
+          APPLE_ID: ''
+          APPLE_ID_PASSWORD: ''
+          APPLE_TEAM_ID: ''
         run: |
           set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -401,17 +411,6 @@ jobs:
 
           echo ""
           echo "✓ Build completed successfully"
-        env:
-          RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
-          RUNNER_OS: ${{ runner.os }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 完全禁用签名相关功能
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          CSC_LINK: ''
-          CSC_KEY_PASSWORD: ''
-          APPLE_ID: ''
-          APPLE_ID_PASSWORD: ''
-          APPLE_TEAM_ID: ''
 
       - name: Verify Build Artifacts
         shell: bash

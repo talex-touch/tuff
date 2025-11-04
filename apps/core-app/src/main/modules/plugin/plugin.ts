@@ -521,21 +521,22 @@ export class TouchPlugin implements ITouchPlugin {
         return this.listPluginFiles()
       },
       onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
-        const unsubscribe = touchEventBus.on(
-          TalexEvents.PLUGIN_STORAGE_UPDATED,
-          (event: ITouchEvent<TalexEvents>) => {
-            const storageEvent = event as PluginStorageUpdatedEvent
-            if (
-              storageEvent.pluginName === pluginName &&
-              (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
-            ) {
-              const config = this.getPluginFile(fileName)
-              callback(config)
-            }
+        const handler = (event: ITouchEvent<TalexEvents>) => {
+          const storageEvent = event as PluginStorageUpdatedEvent
+          if (
+            storageEvent.pluginName === pluginName &&
+            (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
+          ) {
+            const config = this.getPluginFile(fileName)
+            callback(config)
           }
-        )
+        }
 
-        return unsubscribe
+        touchEventBus.on(TalexEvents.PLUGIN_STORAGE_UPDATED, handler)
+
+        return () => {
+          touchEventBus.off(TalexEvents.PLUGIN_STORAGE_UPDATED, handler)
+        }
       }
     }
     const clipboardUtil = createClipboardManager(clipboard)
