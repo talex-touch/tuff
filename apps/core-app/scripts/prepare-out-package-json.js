@@ -37,7 +37,9 @@ const modulesToCopy = [
   'lottie-web',
   // Copy node-fetch dependency required by @libsql/hrana-client
   // to fix electron-builder dependency resolution issue
-  'node-fetch'
+  'node-fetch',
+  // Copy @sentry/electron for error tracking
+  '@sentry/electron'
 ]
 
 // Platform-specific packages that should be copied but NOT listed in package.json
