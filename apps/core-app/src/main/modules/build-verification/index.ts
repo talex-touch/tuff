@@ -37,25 +37,26 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   onInit(_ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
-      setTimeout(() => {
-        this.verifyBuildIntegrity().catch((error) => {
-          mainLog.error('[BuildVerification] Verification failed:', {
-            meta: { error: error instanceof Error ? error.message : String(error) }
-          })
-        })
-      }, 2000)
-    })
+    // 暂时注释掉官方构建验证逻辑
+    // touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
+    //   setTimeout(() => {
+    //     this.verifyBuildIntegrity().catch((error) => {
+    //       mainLog.error('[BuildVerification] Verification failed:', {
+    //         meta: { error: error instanceof Error ? error.message : String(error) }
+    //       })
+    //     })
+    //   }, 2000)
+    // })
 
-    app.on('browser-window-created', (_, window) => {
-      window.webContents.once('did-finish-load', () => {
-        setTimeout(() => {
-          if (this.isVerified) {
-            this.pushVerificationStatus(window)
-          }
-        }, 500)
-      })
-    })
+    // app.on('browser-window-created', (_, window) => {
+    //   window.webContents.once('did-finish-load', () => {
+    //     setTimeout(() => {
+    //       if (this.isVerified) {
+    //         this.pushVerificationStatus(window)
+    //       }
+    //     }, 500)
+    //   })
+    // })
   }
 
   onDestroy(): MaybePromise<void> {
@@ -64,76 +65,79 @@ export class BuildVerificationModule extends BaseModule {
 
   /**
    * Verify build integrity
+   * 暂时注释掉验证逻辑
    */
-  private async verifyBuildIntegrity(): Promise<void> {
-    try {
-      const signaturePath = path.join(__dirname, '../../../signature.json')
+  // private async verifyBuildIntegrity(): Promise<void> {
+  //   try {
+  //     const signaturePath = path.join(__dirname, '../../../signature.json')
 
-      if (!fse.existsSync(signaturePath)) {
-        mainLog.warn('[BuildVerification] signature.json not found')
-        this.setVerificationStatus(false, false)
-        return
-      }
+  //     if (!fse.existsSync(signaturePath)) {
+  //       mainLog.warn('[BuildVerification] signature.json not found')
+  //       this.setVerificationStatus(false, false)
+  //       return
+  //     }
 
-      const buildInfo: BuildInfo = fse.readJsonSync(signaturePath, { encoding: 'utf8' })
+  //     const buildInfo: BuildInfo = fse.readJsonSync(signaturePath, { encoding: 'utf8' })
 
-      // 如果没有官方密钥或签名，标记为非官方构建
-      if (!buildInfo.hasOfficialKey || !buildInfo.officialSignature) {
-        mainLog.warn('[BuildVerification] Non-official build detected (no encryption key)')
-        this.setVerificationStatus(false, false)
-        return
-      }
+  //     // 如果没有官方密钥或签名，标记为非官方构建
+  //     if (!buildInfo.hasOfficialKey || !buildInfo.officialSignature) {
+  //       mainLog.warn('[BuildVerification] Non-official build detected (no encryption key)')
+  //       this.setVerificationStatus(false, false)
+  //       return
+  //     }
 
-      // 注意：运行时无法验证签名，因为没有构建时的 TUFF_ENCRYPTION_KEY
-      // 我们只检查是否有签名存在，如果有签名就认为是官方构建
-      // 完整的签名验证需要服务器端验证或应用启动时提供密钥
+  //     // 注意：运行时无法验证签名，因为没有构建时的 TUFF_ENCRYPTION_KEY
+  //     // 我们只检查是否有签名存在，如果有签名就认为是官方构建
+  //     // 完整的签名验证需要服务器端验证或应用启动时提供密钥
 
-      // 有签名且 hasOfficialKey 为 true，认为是官方构建
-      mainLog.info('[BuildVerification] Official build detected (has signature)')
-      this.setVerificationStatus(true, false)
-    } catch (error) {
-      mainLog.error('[BuildVerification] Verification error:', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
-      })
-      this.setVerificationStatus(false, false)
-    }
-  }
+  //     // 有签名且 hasOfficialKey 为 true，认为是官方构建
+  //     mainLog.info('[BuildVerification] Official build detected (has signature)')
+  //     this.setVerificationStatus(true, false)
+  //   } catch (error) {
+  //     mainLog.error('[BuildVerification] Verification error:', {
+  //       meta: { error: error instanceof Error ? error.message : String(error) }
+  //     })
+  //     this.setVerificationStatus(false, false)
+  //   }
+  // }
 
   // 注意：运行时验证签名需要在服务器端或提供密钥
   // 这里仅检测是否有签名存在
 
   /**
    * 推送验证状态到指定窗口
+   * 暂时注释掉
    */
-  private pushVerificationStatus(window: BrowserWindow): void {
-    $app.channel?.sendTo(window, ChannelType.MAIN, 'build:verification-status', {
-      isOfficialBuild: this.isOfficialBuild,
-      verificationFailed: this.verificationFailed,
-      hasOfficialKey: this.isVerified
-    })
-  }
+  // private pushVerificationStatus(window: BrowserWindow): void {
+  //   $app.channel?.sendTo(window, ChannelType.MAIN, 'build:verification-status', {
+  //     isOfficialBuild: this.isOfficialBuild,
+  //     verificationFailed: this.verificationFailed,
+  //     hasOfficialKey: this.isVerified
+  //   })
+  // }
 
   /**
    * 设置验证状态并通知前端
+   * 暂时注释掉
    */
-  private setVerificationStatus(isOfficial: boolean, verificationFailed: boolean): void {
-    this.isVerified = true
-    this.isOfficialBuild = isOfficial
-    this.verificationFailed = verificationFailed
+  // private setVerificationStatus(isOfficial: boolean, verificationFailed: boolean): void {
+  //   this.isVerified = true
+  //   this.isOfficialBuild = isOfficial
+  //   this.verificationFailed = verificationFailed
 
-    // 通过 channel 通知所有窗口
-    const windows = BrowserWindow.getAllWindows()
-    for (const win of windows) {
-      this.pushVerificationStatus(win)
-    }
+  //   // 通过 channel 通知所有窗口
+  //   const windows = BrowserWindow.getAllWindows()
+  //   for (const win of windows) {
+  //     this.pushVerificationStatus(win)
+  //   }
 
-    mainLog.info('[BuildVerification] Status updated', {
-      meta: {
-        isOfficialBuild: isOfficial,
-        verificationFailed
-      }
-    })
-  }
+  //   mainLog.info('[BuildVerification] Status updated', {
+  //     meta: {
+  //       isOfficialBuild: isOfficial,
+  //       verificationFailed
+  //     }
+  //   })
+  // }
 
   /**
    * 获取验证状态（供其他模块调用）
