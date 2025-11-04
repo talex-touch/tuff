@@ -481,9 +481,6 @@ export function useApplicationUpgrade() {
     }
   }
 
-  // Setup listener when hook is called (after SDK is initialized)
-  setupUpdateListener()
-
   return {
     checkApplicationUpgrade,
     handleDownloadUpdate,
@@ -492,6 +489,7 @@ export function useApplicationUpgrade() {
     updateSettings,
     clearUpdateCache,
     getUpdateStatus,
+    setupUpdateListener,
     loading,
     error
   }
