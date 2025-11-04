@@ -1,4 +1,3 @@
-import { type Ref } from 'vue'
 import { initStorageChannel, isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
 import { touchChannel } from '~/modules/channel/channel-core'
 import {
