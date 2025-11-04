@@ -68,7 +68,7 @@ export function mapFileToTuffItem(
         subtitle: file.path,
         icon: {
           type: 'url',
-          value: extensions.icon ? `data:image/png;base64,${extensions.icon}` : ''
+          value: extensions.icon ?? ''
         }
       }
     },
