@@ -1,4 +1,4 @@
-import { ref, h, onMounted } from 'vue'
+import { ref, h } from 'vue'
 import { ElMessage } from 'element-plus'
 import { popperMention } from '../mention/dialog-mention'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
@@ -456,12 +456,12 @@ export function useApplicationUpgrade() {
 
   /**
    * Listen for update notifications from main process
+   * This should be called after TouchSDK is initialized
    */
-  onMounted(() => {
+  function setupUpdateListener(): void {
     try {
       const touchSDK = getTouchSDK()
 
-      // Listen for update notifications from main process
       touchSDK.onChannelEvent('update:available', (data: unknown) => {
         console.log('[useApplicationUpgrade] Received update notification:', data)
 
@@ -477,9 +477,12 @@ export function useApplicationUpgrade() {
         }
       })
     } catch (error) {
-      console.warn('Failed to initialize TouchSDK in useApplicationUpgrade:', error)
+      console.warn('Failed to setup update listener:', error)
     }
-  })
+  }
+
+  // Setup listener when hook is called (after SDK is initialized)
+  setupUpdateListener()
 
   return {
     checkApplicationUpgrade,

@@ -37,22 +37,18 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   onInit(_ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    // 监听所有模块加载完成事件，在启动完成后执行验证
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
-      // 延迟执行验证，确保不影响启动
       setTimeout(() => {
         this.verifyBuildIntegrity().catch((error) => {
           mainLog.error('[BuildVerification] Verification failed:', {
             meta: { error: error instanceof Error ? error.message : String(error) }
           })
         })
-      }, 2000) // 启动完成 2 秒后执行
+      }, 2000)
     })
 
-    // 监听窗口就绪事件，推送验证状态（避免时序问题）
     app.on('browser-window-created', (_, window) => {
       window.webContents.once('did-finish-load', () => {
-        // 窗口加载完成后，延迟推送验证状态（如果已验证）
         setTimeout(() => {
           if (this.isVerified) {
             this.pushVerificationStatus(window)
@@ -63,16 +59,16 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
-    // 清理工作
+    console.debug('[BuildVerification] onDestroy')
   }
 
   /**
-   * 验证构建完整性
+   * Verify build integrity
    */
   private async verifyBuildIntegrity(): Promise<void> {
     try {
       const signaturePath = path.join(__dirname, '../../../signature.json')
-      
+
       if (!fse.existsSync(signaturePath)) {
         mainLog.warn('[BuildVerification] signature.json not found')
         this.setVerificationStatus(false, false)
