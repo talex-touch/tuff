@@ -80,6 +80,10 @@ watch(
       {{ icon.value || '⚠️' }}
     </span>
 
+    <span v-else-if="icon.type === 'class'" class="class">
+      <i :class="icon.value" />
+    </span>
+
     <template v-else-if="addressable">
       <template v-if="isSvg">
         <i

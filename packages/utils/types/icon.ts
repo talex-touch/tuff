@@ -11,8 +11,9 @@
  * - emoji: Emoji characters (e.g., "🚀")
  * - url: Remote URL (http/https) or Data URL (data:image/...)
  * - file: Local file path (relative to plugin root directory)
+ * - class: Class name (e.g., "i-ri-rocket-line")
  */
-export type TuffIconType = 'emoji' | 'url' | 'file'
+export type TuffIconType = 'emoji' | 'url' | 'file' | 'class'
 
 /**
  * Icon status enumeration
