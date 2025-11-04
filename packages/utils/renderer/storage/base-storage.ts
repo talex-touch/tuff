@@ -30,7 +30,13 @@ export interface IStorageChannel extends ITouchClientChannel {
 let channel: IStorageChannel | null = null;
 
 /**
+ * Queue of initialization callbacks waiting for channel initialization
+ */
+const pendingInitializations: Array<() => void> = [];
+
+/**
  * Initializes the global channel for communication.
+ * Processes all pending storage initializations after initialization.
  *
  * @example
  * ```ts
@@ -45,6 +51,14 @@ let channel: IStorageChannel | null = null;
  */
 export function initStorageChannel(c: IStorageChannel): void {
   channel = c;
+
+  // Process all pending storage initializations
+  for (const initFn of pendingInitializations) {
+    initFn();
+  }
+
+  // Clear the queue
+  pendingInitializations.length = 0;
 }
 
 /**
@@ -64,6 +78,7 @@ export class TouchStorage<T extends object> {
   #assigning = false;
   readonly originalData: T;
   private readonly _onUpdate: Array<() => void> = [];
+  #channelInitialized = false;
 
   /**
    * The reactive data exposed to users.
@@ -72,6 +87,7 @@ export class TouchStorage<T extends object> {
 
   /**
    * Creates a new reactive storage instance.
+   * If channel is not initialized, the instance will be queued for initialization.
    *
    * @param qName Globally unique name for the instance
    * @param initData Initial data to populate the storage
@@ -86,30 +102,52 @@ export class TouchStorage<T extends object> {
     if (storages.has(qName)) {
       throw new Error(`Storage "${qName}" already exists`);
     }
+
+    this.#qualifiedName = qName;
+    this.originalData = initData;
+    this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>;
+
+    if (onUpdate) this._onUpdate.push(onUpdate);
+
+    // Register to storages map immediately
+    storages.set(qName, this);
+
+    // Initialize channel-dependent operations
+    if (channel) {
+      this.#initializeChannel();
+    } else {
+      // Queue initialization callback for later
+      pendingInitializations.push(() => this.#initializeChannel());
+    }
+  }
+
+  /**
+   * Initialize channel-dependent operations
+   */
+  #initializeChannel(): void {
+    if (this.#channelInitialized) {
+      return;
+    }
+
     if (!channel) {
       throw new Error(
         'TouchStorage: channel is not initialized. Please call initStorageChannel(...) before using.'
       );
     }
 
-    this.#qualifiedName = qName;
-    this.originalData = initData;
+    this.#channelInitialized = true;
 
-    // const stored = (channel.sendSync('storage:get', qName) as Partial<T>) || {};
-    this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>;
-    this.loadFromRemote()
+    // Load data from remote
+    this.loadFromRemote();
 
-    if (onUpdate) this._onUpdate.push(onUpdate);
-
+    // Register update listener
     channel.regChannel('storage:update', ({ data }) => {
       const { name } = data!
 
-      if (name === qName) {
+      if (name === this.#qualifiedName) {
         this.loadFromRemote()
       }
-    })
-
-    storages.set(qName, this);
+    });
   }
 
   /**
@@ -313,6 +351,7 @@ export class TouchStorage<T extends object> {
   }
   /**
    * Loads data from remote storage and applies it.
+   * If channel is not initialized yet, this method will do nothing.
    *
    * @returns The current instance
    *
@@ -323,7 +362,8 @@ export class TouchStorage<T extends object> {
    */
   loadFromRemote(): this {
     if (!channel) {
-      throw new Error("TouchStorage: channel not initialized");
+      // Channel not initialized yet, data will be loaded when channel is ready
+      return this;
     }
 
     const result = channel.sendSync('storage:get', this.#qualifiedName)

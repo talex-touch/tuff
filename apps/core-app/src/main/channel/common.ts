@@ -11,6 +11,7 @@ import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { activeAppService } from '../modules/system/active-app'
 import { getStartupAnalytics } from '../modules/analytics'
+import { buildVerificationModule } from '../modules/build-verification'
 
 function closeApp(app: TalexTouch.TouchApp): void {
   app.window.close()
@@ -172,11 +173,8 @@ export class CommonChannelModule extends BaseModule {
 
     touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => onOpenUrl(event.data))
 
-    // 构建验证状态查询
     channel.regChannel(ChannelType.MAIN, 'build:get-verification-status', () => {
-      // 从构建验证模块获取状态
       try {
-        const { buildVerificationModule } = require('../modules/build-verification')
         if (buildVerificationModule?.getVerificationStatus) {
           const status = buildVerificationModule.getVerificationStatus()
           return {
