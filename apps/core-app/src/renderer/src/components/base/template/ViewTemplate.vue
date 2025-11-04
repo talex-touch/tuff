@@ -2,10 +2,10 @@
   <div :class="{ router: subRouterMode }" class="ViewTemplate">
     <div
       :class="{ blur: subRouterMode }"
-      class="ViewTemplate-Wrapper transition-cubic p-2 absolute w-full h-full"
+      class="ViewTemplate-Wrapper transition-cubic absolute w-full h-full"
     >
       <el-scrollbar>
-        <div class="View-Container">
+        <div class="View-Container pl-2 pr-3">
           <slot />
         </div>
       </el-scrollbar>
@@ -31,10 +31,11 @@
 
 <script lang="ts" name="View" setup>
 import { useRoute, useRouter } from 'vue-router'
+// import TouchScroll from '../TouchScroll.vue'
 
 const props = withDefaults(
   defineProps<{
-    title: string
+    title?: string
     len?: number
   }>(),
   {
@@ -90,7 +91,6 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
 
 .View-Container {
   position: relative;
-  padding: 0.5rem;
 
   height: 100%;
   width: 100%;

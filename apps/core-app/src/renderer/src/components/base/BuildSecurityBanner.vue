@@ -7,18 +7,22 @@
     >
       <div class="banner-content">
         <div class="banner-icon">
-          <i class="i-ri-error-warning-line" v-if="verificationFailed" />
-          <i class="i-ri-information-line" v-else />
+          <i v-if="verificationFailed" class="i-ri-error-warning-line" />
+          <i v-else class="i-ri-information-line" />
         </div>
         <div class="banner-text">
           <div class="banner-title">
-            {{ verificationFailed ? '构建验证失败' : '非官方构建' }}
+            {{
+              verificationFailed
+                ? t('buildSecurity.title.verificationFailed')
+                : t('buildSecurity.title.unofficial')
+            }}
           </div>
           <div class="banner-description">
             {{
               verificationFailed
-                ? '应用签名验证失败，可能已被修改，请谨慎使用'
-                : '当前版本未通过官方构建验证，可能不安全'
+                ? t('buildSecurity.description.verificationFailed')
+                : t('buildSecurity.description.unofficial')
             }}
           </div>
         </div>
@@ -32,8 +36,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { touchChannel } from '@modules/channel/channel-core'
+import { useI18n } from 'vue-i18n'
+import { touchChannel } from '~/modules/channel/channel-core'
 
+const { t } = useI18n()
 const showBanner = ref(false)
 const verificationFailed = ref(false)
 const dismissed = ref(false)
@@ -44,19 +50,32 @@ interface VerificationStatus {
   hasOfficialKey: boolean
 }
 
-onMounted(() => {
-  // 监听构建验证状态
+function handleVerificationStatus(status: VerificationStatus) {
+  // 如果不是官方构建或验证失败，显示横幅
+  if (!status.isOfficialBuild || status.verificationFailed) {
+    if (!dismissed.value) {
+      showBanner.value = true
+      verificationFailed.value = status.verificationFailed || false
+    }
+  }
+}
+
+onMounted(async () => {
+  // 监听构建验证状态（后端推送）
   touchChannel.regChannel('build:verification-status', ({ data }) => {
     const status = data as VerificationStatus
-
-    // 如果不是官方构建或验证失败，显示横幅
-    if (!status.isOfficialBuild || status.verificationFailed) {
-      if (!dismissed.value) {
-        showBanner.value = true
-        verificationFailed.value = status.verificationFailed || false
-      }
-    }
+    handleVerificationStatus(status)
   })
+
+  // 主动请求验证状态（避免时序问题）
+  try {
+    const status = await touchChannel.send('build:get-verification-status')
+    if (status) {
+      handleVerificationStatus(status as VerificationStatus)
+    }
+  } catch (error) {
+    console.warn('[BuildSecurityBanner] Failed to get verification status:', error)
+  }
 })
 
 function dismissBanner() {
@@ -74,7 +93,7 @@ function dismissBanner() {
   z-index: 10000;
   background: var(--el-color-warning-light-9);
   border-bottom: 1px solid var(--el-color-warning);
-  padding: 12px 16px;
+  padding: 1rem 8rem;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 
@@ -164,4 +183,3 @@ function dismissBanner() {
   opacity: 0;
 }
 </style>
-

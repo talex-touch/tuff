@@ -171,6 +171,29 @@ export class CommonChannelModule extends BaseModule {
     })
 
     touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => onOpenUrl(event.data))
+
+    // 构建验证状态查询
+    channel.regChannel(ChannelType.MAIN, 'build:get-verification-status', () => {
+      // 从构建验证模块获取状态
+      try {
+        const { buildVerificationModule } = require('../modules/build-verification')
+        if (buildVerificationModule?.getVerificationStatus) {
+          const status = buildVerificationModule.getVerificationStatus()
+          return {
+            isOfficialBuild: status.isOfficialBuild,
+            verificationFailed: status.verificationFailed,
+            hasOfficialKey: status.isOfficialBuild || status.verificationFailed
+          }
+        }
+      } catch (error) {
+        console.warn('[CommonChannel] Failed to get build verification status:', error)
+      }
+      return {
+        isOfficialBuild: false,
+        verificationFailed: false,
+        hasOfficialKey: false
+      }
+    })
   }
 
   onDestroy(): MaybePromise<void> {

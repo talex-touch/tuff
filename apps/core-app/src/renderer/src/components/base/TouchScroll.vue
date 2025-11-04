@@ -133,7 +133,7 @@ defineExpose({
 .native-scroll-wrapper {
   width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow: scroll;
 }
 
 .el-scroll-wrapper {
