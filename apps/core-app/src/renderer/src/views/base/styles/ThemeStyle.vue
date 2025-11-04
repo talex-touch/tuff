@@ -32,6 +32,9 @@
       </SectionItem>
     </WindowSectionVue>
 
+    <!-- Layout selection section -->
+    <LayoutSection />
+
     <!-- Personalized settings group -->
     <t-group-block
       :name="t('themeStyle.personalized')"
@@ -117,6 +120,7 @@ import TGroupSwitch from '@comp/base/group/TGroupBlock.vue'
 import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
 import WindowSectionVue from './WindowSection.vue'
 import SectionItem from './SectionItem.vue'
+import LayoutSection from './LayoutSection.vue'
 
 // Import utility functions
 import { useEnv } from '~/modules/hooks/env-hooks'

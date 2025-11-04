@@ -641,6 +641,16 @@
     "requiredFileAccess": "必须授予文件访问权限才能继续",
     "required": "必需"
   },
+  "buildSecurity": {
+    "title": {
+      "verificationFailed": "构建验证失败",
+      "unofficial": "非官方构建"
+    },
+    "description": {
+      "verificationFailed": "应用签名验证失败，可能已被修改，请谨慎使用",
+      "unofficial": "当前版本未通过官方构建验证，可能不安全"
+    }
+  },
   "common": {
     "cancel": "取消",
     "save": "保存",

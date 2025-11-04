@@ -641,6 +641,16 @@
       "requiredFileAccess": "File access permission is required to continue",
       "required": "Required"
   },
+  "buildSecurity": {
+    "title": {
+      "verificationFailed": "Build Verification Failed",
+      "unofficial": "Unofficial Build"
+    },
+    "description": {
+      "verificationFailed": "Application signature verification failed, may have been tampered with, use with caution",
+      "unofficial": "Current version has not passed official build verification, may be unsafe"
+    }
+  },
   "common": {
     "cancel": "Cancel",
     "save": "Save",

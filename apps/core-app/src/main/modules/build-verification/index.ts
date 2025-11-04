@@ -3,7 +3,7 @@ import path from 'path'
 import { BaseModule } from '../abstract-base-module'
 import { ModuleInitContext, MaybePromise, ChannelType } from '@talex-touch/utils'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import { mainLog } from '../../utils/logger'
 
 interface BuildInfo {
@@ -47,6 +47,18 @@ export class BuildVerificationModule extends BaseModule {
           })
         })
       }, 2000) // 启动完成 2 秒后执行
+    })
+
+    // 监听窗口就绪事件，推送验证状态（避免时序问题）
+    app.on('browser-window-created', (_, window) => {
+      window.webContents.once('did-finish-load', () => {
+        // 窗口加载完成后，延迟推送验证状态（如果已验证）
+        setTimeout(() => {
+          if (this.isVerified) {
+            this.pushVerificationStatus(window)
+          }
+        }, 500)
+      })
     })
   }
 
@@ -95,6 +107,17 @@ export class BuildVerificationModule extends BaseModule {
   // 这里仅检测是否有签名存在
 
   /**
+   * 推送验证状态到指定窗口
+   */
+  private pushVerificationStatus(window: BrowserWindow): void {
+    $app.channel?.sendTo(window, ChannelType.MAIN, 'build:verification-status', {
+      isOfficialBuild: this.isOfficialBuild,
+      verificationFailed: this.verificationFailed,
+      hasOfficialKey: this.isVerified
+    })
+  }
+
+  /**
    * 设置验证状态并通知前端
    */
   private setVerificationStatus(isOfficial: boolean, verificationFailed: boolean): void {
@@ -105,11 +128,7 @@ export class BuildVerificationModule extends BaseModule {
     // 通过 channel 通知所有窗口
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
-      $app.channel?.sendTo(win, ChannelType.MAIN, 'build:verification-status', {
-        isOfficialBuild: isOfficial,
-        verificationFailed,
-        hasOfficialKey: true
-      })
+      this.pushVerificationStatus(win)
     }
 
     mainLog.info('[BuildVerification] Status updated', {

@@ -52,6 +52,7 @@ const _appSettingOriginData = {
     adminPrivileges: false,
     hideDock: false,
   },
+  layout: 'simple',
 };
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)

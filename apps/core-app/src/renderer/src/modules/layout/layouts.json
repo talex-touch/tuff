@@ -1,0 +1,13 @@
+{
+  "simple": {
+    "name": "simple",
+    "displayName": "Simple Layout",
+    "component": "~/views/layout/simple/SimpleLayout.vue"
+  },
+  "flat": {
+    "name": "flat",
+    "displayName": "Flat Layout",
+    "component": "~/views/layout/flat/FlatLayout.vue"
+  }
+}
+
