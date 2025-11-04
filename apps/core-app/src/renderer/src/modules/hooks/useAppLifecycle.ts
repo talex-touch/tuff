@@ -32,7 +32,7 @@ export function useAppLifecycle() {
       console.log('[useAppLifecycle] Skipping update check on first launch')
       return
     }
-    await checkApplicationUpgrade()
+    checkApplicationUpgrade()
   }
 
   /**
@@ -58,7 +58,7 @@ export function useAppLifecycle() {
    * Main application entry point
    * Handles complete initialization sequence
    */
-  async function entry(onReady: () => Promise<void>, initRef: Ref<boolean>): Promise<void> {
+  async function entry(onReady: () => Promise<void>): Promise<void> {
     try {
       preloadDebugStep('Requesting startup handshake...', 0.05)
       const res: IStartupInfo = touchChannel.sendSync('app-ready', {
@@ -95,7 +95,7 @@ export function useAppLifecycle() {
       // All tasks that require TouchSDK will be executed here
       await start()
 
-      initRef.value = true
+      console.log('[useAppLifecycle] Initialization completed')
     } catch (error) {
       console.error('[useAppLifecycle] Initialization failed', error)
       preloadLog('Renderer initialization failed. Check console output.')
