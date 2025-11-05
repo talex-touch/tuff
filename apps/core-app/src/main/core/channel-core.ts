@@ -333,7 +333,7 @@ class TouchChannel implements ITouchChannel {
         } else {
           console.error(`[Channel] Error sending "${eventName}":`, error)
         }
-        
+
         // Clean up pending map
         this.pendingMap.delete(uniqueId)
         resolve({ code: DataCode.ERROR, data: errorMessage })
