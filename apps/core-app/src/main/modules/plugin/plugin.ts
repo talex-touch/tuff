@@ -33,6 +33,7 @@ import { ITouchEvent } from '@talex-touch/utils/eventbus'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { getJs, getStyles } from '../../utils/plugin-injection'
+import { TuffIconImpl } from '../../core/tuff-icon'
 
 const disallowedArrays = [
   '官方',
@@ -561,14 +562,58 @@ export class TouchPlugin implements ITouchPlugin {
        * Pushes search items directly to the CoreBox window
        * @param items - Array of search items to display
        */
-      pushItems: (items: TuffItem[]) => {
+      pushItems: async (items: TuffItem[]) => {
         console.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`)
         console.debug(
           `[Plugin ${this.name}] Items to push:`,
           items.map((item) => item.id)
         )
 
-        this._searchItems = [...items]
+        // 使用 TuffIconImpl 解析 items 中的 icon 相对路径为绝对路径
+        const processedItems = await Promise.all(
+          items.map(async (item) => {
+            const processedItem = { ...item }
+
+            // 处理 item.icon
+            if (processedItem.icon && processedItem.icon.type === 'file') {
+              const icon = new TuffIconImpl(
+                this.pluginPath,
+                processedItem.icon.type,
+                processedItem.icon.value
+              )
+              await icon.init()
+              processedItem.icon = {
+                type: icon.type,
+                value: icon.value,
+                status: icon.status
+              }
+            }
+
+            // 处理 render.basic.icon
+            if (
+              processedItem.render?.basic?.icon &&
+              typeof processedItem.render.basic.icon === 'object' &&
+              processedItem.render.basic.icon.type === 'file'
+            ) {
+              const basicIcon = processedItem.render.basic.icon
+              const icon = new TuffIconImpl(
+                this.pluginPath,
+                basicIcon.type,
+                basicIcon.value
+              )
+              await icon.init()
+              processedItem.render.basic.icon = {
+                type: icon.type,
+                value: icon.value,
+                status: icon.status
+              }
+            }
+
+            return processedItem
+          })
+        )
+
+        this._searchItems = [...processedItems]
         this._searchTimestamp = Date.now()
 
         const coreBoxWindow = getCoreBoxWindow()
@@ -582,7 +627,7 @@ export class TouchPlugin implements ITouchPlugin {
             items: this._searchItems,
             timestamp: this._searchTimestamp,
             query: this._lastSearchQuery,
-            total: items.length
+            total: processedItems.length
           }
 
           console.debug(`[Plugin ${this.name}] Sending core-box:push-items with payload:`, payload)
@@ -597,7 +642,7 @@ export class TouchPlugin implements ITouchPlugin {
             })
 
           console.debug(
-            `[Plugin ${this.name}] Successfully sent ${items.length} search results to CoreBox`
+            `[Plugin ${this.name}] Successfully sent ${processedItems.length} search results to CoreBox`
           )
         } else {
           console.warn(
