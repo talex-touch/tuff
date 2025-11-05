@@ -388,16 +388,21 @@ jobs:
               ARTIFACTS_FOUND=true
             fi
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            # Check for both .dmg files and .app directories (dir mode generates .app only)
+            # Check for .dmg files, .app directories, and .zip files (zip contains .app + start.sh)
             DMG_COUNT=$(find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null | wc -l || echo "0")
             APP_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
-            echo "Found $DMG_COUNT .dmg file(s) and $APP_COUNT .app directory/directories"
+            ZIP_COUNT=$(find apps/core-app/dist -name "*.zip" -type f 2>/dev/null | wc -l || echo "0")
+            echo "Found $DMG_COUNT .dmg file(s), $APP_COUNT .app directory/directories, and $ZIP_COUNT .zip file(s)"
             if [ "$DMG_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
             if [ "$APP_COUNT" -gt 0 ]; then
               find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null
+              ARTIFACTS_FOUND=true
+            fi
+            if [ "$ZIP_COUNT" -gt 0 ]; then
+              find apps/core-app/dist -name "*.zip" -type f 2>/dev/null
               ARTIFACTS_FOUND=true
             fi
           else
@@ -415,7 +420,7 @@ jobs:
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "ERROR: No .exe files found in dist directory!"
             elif [ "$RUNNER_OS" = "macOS" ]; then
-              echo "ERROR: No .dmg files or .app directories found in dist directory!"
+              echo "ERROR: No .dmg files, .app directories, or .zip files found in dist directory!"
             else
               echo "ERROR: No Linux artifacts (.AppImage, .deb, or .snap) found in dist directory!"
             fi
@@ -535,8 +540,8 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Keep both .dmg files and .app directories
-          find apps/core-app/dist -type f ! -name "*.dmg" -delete 2>/dev/null || true
+          # Keep .dmg files, .zip files (contain .app + start.sh), and .app directories
+          find apps/core-app/dist -type f ! -name "*.dmg" ! -name "*.zip" -delete 2>/dev/null || true
           find apps/core-app/dist -type d -name "mac-*" -prune -o -type d ! -name "*.app" -empty -delete 2>/dev/null || true
 
   create-release:
@@ -627,12 +632,14 @@ jobs:
       - name: List Available Artifacts
         run: |
           echo "Available artifacts:"
-          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" \) | sort
+          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "*.zip" \) | sort
           find artifacts -type d -name "*.app" -path "*/mac-*/*" | sort
           echo "Total files:"
           find artifacts -type f | wc -l
           echo "Total .app directories:"
           find artifacts -type d -name "*.app" -path "*/mac-*/*" | wc -l
+          echo "Total .zip files:"
+          find artifacts -type f -name "*.zip" | wc -l
 
       - name: Collect Release Assets
         id: release-files
