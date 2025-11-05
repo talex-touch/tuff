@@ -730,21 +730,64 @@ function build() {
         });
 
         // Add ad-hoc code signing to bypass Gatekeeper "damaged" error
+        // IMPORTANT: Sign in correct order: Helpers -> Frameworks -> Main app
+        // Also need to sign all .framework bundles
         console.log('\n=== Adding ad-hoc code signature ===');
         appDirs.forEach(appPath => {
           try {
-            // Sign the main app bundle with ad-hoc signature
-            // This tells macOS the app is "signed" (even though it's ad-hoc, not from a trusted developer)
-            // This bypasses the "damaged" error for unsigned apps
-            execSync(`codesign --force --deep --sign - "${appPath}"`, { stdio: 'inherit' });
-            console.log(`  ✓ Added ad-hoc signature to: ${appPath}`);
+            const frameworksPath = path.join(appPath, 'Contents', 'Frameworks');
 
-            // Verify the signature
+            // Step 1: Sign all Helper.app bundles first
+            if (fs.existsSync(frameworksPath)) {
+              try {
+                const frameworks = fs.readdirSync(frameworksPath, { withFileTypes: true });
+                frameworks.forEach(framework => {
+                  if (framework.isDirectory() && framework.name.endsWith('.app')) {
+                    const helperAppPath = path.join(frameworksPath, framework.name);
+                    try {
+                      execSync(`codesign --force --sign - "${helperAppPath}"`, { stdio: 'pipe' });
+                      console.log(`  ✓ Signed Helper: ${framework.name}`);
+                    } catch (err) {
+                      console.warn(`  ⚠️  Failed to sign Helper ${framework.name}: ${err.message}`);
+                    }
+                  }
+                });
+              } catch (err) {
+                console.warn(`  Warning: Cannot read Frameworks directory: ${err.message}`);
+              }
+
+              // Step 2: Sign all .framework bundles (including Electron Framework)
+              try {
+                const frameworks = fs.readdirSync(frameworksPath, { withFileTypes: true });
+                frameworks.forEach(framework => {
+                  if (framework.isDirectory() && framework.name.endsWith('.framework')) {
+                    const frameworkPath = path.join(frameworksPath, framework.name);
+                    try {
+                      execSync(`codesign --force --sign - "${frameworkPath}"`, { stdio: 'pipe' });
+                      console.log(`  ✓ Signed Framework: ${framework.name}`);
+                    } catch (err) {
+                      console.warn(`  ⚠️  Failed to sign Framework ${framework.name}: ${err.message}`);
+                    }
+                  }
+                });
+              } catch (err) {
+                console.warn(`  Warning: Cannot read Frameworks for framework signing: ${err.message}`);
+              }
+            }
+
+            // Step 3: Sign the main app bundle (this will sign all nested components with --deep)
+            execSync(`codesign --force --deep --sign - "${appPath}"`, { stdio: 'inherit' });
+            console.log(`  ✓ Added ad-hoc signature to main app: ${appPath}`);
+
+            // Verify the signature (without --deep to avoid false positives)
             try {
-              execSync(`codesign --verify --verbose "${appPath}"`, { stdio: 'pipe' });
+              execSync(`codesign --verify --strict --verbose "${appPath}"`, { stdio: 'pipe' });
               console.log(`  ✓ Verified signature for: ${appPath}`);
             } catch (verifyErr) {
-              console.warn(`  ⚠️  Signature verification warning (this is normal for ad-hoc signatures): ${verifyErr.message}`);
+              console.warn(`  ⚠️  Signature verification warning: ${verifyErr.message}`);
+              console.warn(`  → This is often normal for ad-hoc signatures. The app should still work.`);
+              console.warn(`  → Note: Ad-hoc signatures are not trusted by Gatekeeper, but bypass 'damaged' error.`);
+              console.warn(`  → Users may need to right-click and select 'Open' the first time.`);
             }
           } catch (err) {
             console.warn(`  Warning: Failed to add ad-hoc signature to ${appPath}: ${err.message}`);
@@ -752,42 +795,13 @@ function build() {
           }
         });
 
-        // Create zip file with start.sh script for easy permission fixing
-        console.log('\n=== Creating zip file with start.sh script ===');
+        // Create zip file with just the .app bundle
+        console.log('\n=== Creating zip file ===');
         appDirs.forEach(appPath => {
           const appName = path.basename(appPath);
           const appParent = path.dirname(appPath);
           // Create zip in dist root directory for easy discovery
           const zipPath = path.join(distDir, `${appName}.zip`);
-
-          // Copy start.sh script to the same directory as .app
-          const startScriptSource = path.join(projectRoot, 'resources', 'start.sh');
-          const startScriptTarget = path.join(appParent, 'start.sh');
-
-          if (fs.existsSync(startScriptSource)) {
-            try {
-              fs.copyFileSync(startScriptSource, startScriptTarget);
-              // Make start.sh executable
-              fs.chmodSync(startScriptTarget, 0o755);
-              console.log(`  ✓ Copied start.sh to ${appParent}`);
-            } catch (err) {
-              console.warn(`  Warning: Failed to copy start.sh: ${err.message}`);
-            }
-          } else {
-            // Fallback: try to find start.sh in project root resources
-            const altStartScript = path.join(projectRoot, '..', '..', 'apps', 'core-app', 'resources', 'start.sh');
-            if (fs.existsSync(altStartScript)) {
-              try {
-                fs.copyFileSync(altStartScript, startScriptTarget);
-                fs.chmodSync(startScriptTarget, 0o755);
-                console.log(`  ✓ Copied start.sh from alternative location`);
-              } catch (err) {
-                console.warn(`  Warning: Failed to copy start.sh from alternative location: ${err.message}`);
-              }
-            } else {
-              console.warn(`  Warning: start.sh not found at ${startScriptSource} or ${altStartScript}`);
-            }
-          }
 
           // Create zip file in dist root directory
           // This ensures GitHub Actions can easily find it
@@ -797,10 +811,10 @@ function build() {
               fs.unlinkSync(zipPath);
             }
 
-            // Create zip with preserved permissions
+            // Create zip with just the .app bundle (preserving permissions and signatures)
             // Use absolute path for zipPath to ensure it's created in dist root
             const absZipPath = path.resolve(zipPath);
-            execSync(`cd "${appParent}" && zip -r "${absZipPath}" "${appName}" start.sh`, { stdio: 'inherit' });
+            execSync(`cd "${appParent}" && zip -r "${absZipPath}" "${appName}"`, { stdio: 'inherit' });
             console.log(`  ✓ Created zip: ${absZipPath}`);
 
             // Verify zip was created

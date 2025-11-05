@@ -43,16 +43,28 @@ else
     echo "   ⚠️  Frameworks directory not found"
 fi
 
-# Step 4: Add ad-hoc code signature (if not already signed)
+# Step 4: Add ad-hoc code signature (extracting from zip resets signatures)
 echo "4. Adding ad-hoc code signature..."
-if ! codesign --verify --verbose "$APP_BUNDLE" > /dev/null 2>&1; then
-    if codesign --force --deep --sign - "$APP_BUNDLE" > /dev/null 2>&1; then
-        echo "   ✓ Added ad-hoc signature"
-    else
-        echo "   ⚠️  Could not add signature (may need to run manually)"
-    fi
+# Sign all Helper.app bundles first
+FRAMEWORKS_PATH="$APP_BUNDLE/Contents/Frameworks"
+if [ -d "$FRAMEWORKS_PATH" ]; then
+    # Sign Helper.app bundles
+    find "$FRAMEWORKS_PATH" -name "*.app" -type d | while read helperApp; do
+        codesign --force --sign - "$helperApp" > /dev/null 2>&1 && echo "   ✓ Signed: $(basename "$helperApp")" || true
+    done
+    
+    # Sign .framework bundles
+    find "$FRAMEWORKS_PATH" -name "*.framework" -type d | while read framework; do
+        codesign --force --sign - "$framework" > /dev/null 2>&1 && echo "   ✓ Signed: $(basename "$framework")" || true
+    done
+fi
+
+# Sign main app bundle (with --deep to sign nested components)
+if codesign --force --deep --sign - "$APP_BUNDLE" > /dev/null 2>&1; then
+    echo "   ✓ Added ad-hoc signature to main app"
 else
-    echo "   ✓ App already has signature"
+    echo "   ⚠️  Could not add signature (may need to run manually)"
+    echo "   → Try: codesign --force --deep --sign - \"$APP_BUNDLE\""
 fi
 
 # Step 5: Clear Gatekeeper cache
