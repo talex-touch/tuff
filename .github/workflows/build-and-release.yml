@@ -596,7 +596,12 @@ jobs:
 
           # Collect files and .app directories
           mapfile -t FILES < <(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
-          mapfile -t APP_DIRS < <(find artifacts -type d -name "*.app" -path "*/mac-*/*" | sort)
+          # Find .app directories - match both "mac-*" and "macos-*" patterns, and also check subdirectories
+          mapfile -t APP_DIRS < <(find artifacts -type d -name "*.app" \( -path "*/mac-*/*" -o -path "*/macos-*/*" -o -path "*/mac-*/dist/*" -o -path "*/macos-*/dist/*" \) | sort)
+          # Also check for .app directories directly in artifacts (in case path structure is different)
+          if [ "${#APP_DIRS[@]}" -eq 0 ]; then
+            mapfile -t APP_DIRS < <(find artifacts -type d -name "*.app" | sort)
+          fi
 
           if [ "${#FILES[@]}" -eq 0 ] && [ "${#APP_DIRS[@]}" -eq 0 ]; then
             echo "No release files or .app directories found in artifacts/"
@@ -629,9 +634,14 @@ jobs:
           # Process .app directories (copy directly without compression to preserve permissions)
           for app_dir in "${APP_DIRS[@]}"; do
             relative=${app_dir#artifacts/}
-            platform=${relative%%/*}
-            if [[ "$platform" == "$relative" ]]; then
-              platform="common"
+            # Extract platform from path (e.g., "mac-latest-release" from "artifacts/mac-latest-release/tuff.app")
+            platform=$(echo "$relative" | cut -d'/' -f1)
+            if [[ -z "$platform" ]] || [[ "$platform" == "$relative" ]]; then
+              # Fallback: try to extract from parent directory name
+              platform=$(basename "$(dirname "$app_dir")")
+              if [[ "$platform" == "artifacts" ]] || [[ -z "$platform" ]]; then
+                platform="macos"
+              fi
             fi
 
             base=$(basename "$app_dir")
@@ -646,6 +656,7 @@ jobs:
 
             # Copy .app directory directly (no compression)
             # This preserves executable permissions and avoids macOS quarantine issues
+            echo "Copying .app directory: $app_dir -> $target"
             cp -R "$app_dir" "$target"
             OUTPUT_PATHS+=("$target")
           done
