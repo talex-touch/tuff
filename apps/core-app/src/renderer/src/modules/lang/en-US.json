@@ -72,6 +72,11 @@
     "platform": "Platform",
     "experience": "Experience",
     "experiencePack": "Touch Feature Experience Pack",
+    "openAppFolder": "Application Folder",
+    "openFolder": "Open Folder",
+    "folderOpened": "Application folder opened",
+    "folderOpenFailed": "Failed to open application folder",
+    "folderPathNotFound": "Application folder path not found",
     "terms": "TalexTouch Terms of Service",
     "license": "TalexTouch Software License"
   },

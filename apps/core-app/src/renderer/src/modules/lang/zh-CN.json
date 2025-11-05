@@ -72,6 +72,11 @@
     "platform": "平台",
     "experience": "体验",
     "experiencePack": "Touch 功能体验包",
+    "openAppFolder": "应用文件夹",
+    "openFolder": "打开文件夹",
+    "folderOpened": "应用文件夹已打开",
+    "folderOpenFailed": "打开应用文件夹失败",
+    "folderPathNotFound": "未找到应用文件夹路径",
     "terms": "TalexTouch 服务条款",
     "license": "TalexTouch 软件许可证"
   },

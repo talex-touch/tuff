@@ -165,7 +165,11 @@ function copyModuleRecursive(moduleName, depth = 0) {
 
     // Only copy if not already copied (to avoid overwriting)
     if (!copiedModules.has(moduleName)) {
-      fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
+      // Remove target directory if it exists to ensure clean copy
+      if (fs.existsSync(targetDir)) {
+        fs.rmSync(targetDir, { recursive: true, force: true })
+      }
+      fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true, force: true })
       copiedModules.add(moduleName)
     }
 

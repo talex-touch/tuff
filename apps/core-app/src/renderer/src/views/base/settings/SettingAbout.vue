@@ -112,6 +112,26 @@ const currentExperiencePack = computed(() => {
 
 // Get build info from signature
 const buildInfo = computed(() => getBuildInfo())
+
+// Open application folder
+async function openAppFolder() {
+  try {
+    const rootPath = window.$startupInfo?.path?.rootPath
+    if (!rootPath) {
+      ElMessage.error(t('settingAbout.folderPathNotFound'))
+      return
+    }
+    const result = await touchChannel.send('execute:cmd', { command: rootPath })
+    if (result?.success) {
+      ElMessage.success(t('settingAbout.folderOpened'))
+    } else {
+      ElMessage.error(t('settingAbout.folderOpenFailed'))
+    }
+  } catch (error) {
+    console.error('Failed to open app folder', error)
+    ElMessage.error(t('settingAbout.folderOpenFailed'))
+  }
+}
 </script>
 
 <template>
@@ -286,6 +306,13 @@ const buildInfo = computed(() => getBuildInfo())
         </span>
       </template>
     </t-block-line> -->
+    <t-block-line :title="t('settingAbout.openAppFolder')" :link="true" @click="openAppFolder">
+      <template #description>
+        <span style="cursor: pointer; color: var(--el-color-primary)">
+          {{ t('settingAbout.openFolder') }}
+        </span>
+      </template>
+    </t-block-line>
     <t-block-line :title="t('settingAbout.terms')" :link="true"></t-block-line>
     <t-block-line :title="t('settingAbout.license')" :link="true"></t-block-line>
   </t-group-block>
