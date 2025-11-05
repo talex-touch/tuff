@@ -388,7 +388,7 @@ jobs:
               ARTIFACTS_FOUND=true
             fi
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            # Check for .dmg files, .app directories, and .zip files (zip contains .app + start.sh)
+            # Check for .dmg files, .app directories, and .zip files (zip contains .app)
             DMG_COUNT=$(find apps/core-app/dist -name "*.dmg" -type f 2>/dev/null | wc -l || echo "0")
             APP_COUNT=$(find apps/core-app/dist -name "*.app" -type d -path "*/mac-*/*" 2>/dev/null | wc -l || echo "0")
             ZIP_COUNT=$(find apps/core-app/dist -name "*.zip" -type f 2>/dev/null | wc -l || echo "0")
@@ -540,7 +540,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         run: |
-          # Keep .dmg files, .zip files (contain .app + start.sh), and .app directories
+          # Keep .dmg files, .zip files (contain .app), and .app directories
           find apps/core-app/dist -type f ! -name "*.dmg" ! -name "*.zip" -delete 2>/dev/null || true
           find apps/core-app/dist -type d -name "mac-*" -prune -o -type d ! -name "*.app" -empty -delete 2>/dev/null || true
 
@@ -699,7 +699,7 @@ jobs:
 
             ### Downloads
             - **Windows**: Installer (.exe)
-            - **macOS**: ZIP Package (contains `tuff.app` + `start.sh`) or Disk Image (.dmg)
+            - **macOS**: ZIP Package (contains `tuff.app`) or Disk Image (.dmg)
             - **Linux**: AppImage and Debian packages
 
             ### Installation
@@ -708,8 +708,7 @@ jobs:
               - **DMG**: Mount the DMG and drag to Applications
               - **ZIP Package**:
                 1. Download and extract the zip file
-                2. **Double-click `start.sh`** to automatically fix permissions and launch the app
-                3. Or run manually: `./start.sh` in Terminal
+                2. **Double-click `tuff.app`** to launch (or right-click and select "Open" if you see a security warning)
             - **Linux**:
               - AppImage: Make executable and run
               - Debian: `sudo dpkg -i *.deb`
@@ -720,16 +719,12 @@ jobs:
 
             1. **Download** `tuff.app.zip` from the assets above
             2. **Extract** the zip file (double-click or use `unzip`)
-            3. **Double-click `start.sh`** - it will automatically:
-               - Remove quarantine attributes
-               - Fix executable permissions
-               - Launch the app
+            3. **Double-click `tuff.app`** to launch
 
-            Or run from Terminal:
-            ```bash
-            cd /path/to/extracted/folder
-            ./start.sh
-            ```
+            **Note**: If you see "damaged and cannot be opened" error:
+            - Right-click on `tuff.app` and select "Open"
+            - Click "Open" in the security dialog
+            - This bypasses Gatekeeper for unsigned apps
 
             ### Troubleshooting (macOS)
 
