@@ -18,10 +18,11 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   # Exclude unnecessary node_modules to reduce package size
+  # But include node_modules from out directory (which contains required dependencies)
   - '!**/node_modules/**'
   - '!**/node_modules'
-  # Only include required node_modules from out directory
-  - 'out/node_modules/**'
+  # Include required node_modules from out directory (paths are relative to app directory which is 'out')
+  - 'node_modules/**'
   # Exclude sourcemap files to reduce package size (not needed in production)
   - '!**/*.map'
 extraFiles: []
