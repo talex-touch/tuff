@@ -12,11 +12,14 @@ const showSettings = ref(false)
 
 onMounted(() => {
   onCoreBoxInputChange(({ query: newQuery }) => {
-    query.value = newQuery
+    // 兼容新版本：query 可能是字符串或 TuffQuery 对象
+    const queryText = typeof newQuery === 'string'
+      ? newQuery
+      : (newQuery as any)?.text || ''
+    query.value = queryText
   })
 })
 
-// 使用新的 hooks
 const {
   translate: performTranslation,
   currentResponse,
@@ -34,11 +37,9 @@ const {
   updateProviderConfig,
 } = useTranslationProvider()
 
-// 配置模态框状态
 const showConfigModal = ref(false)
 const currentConfigProvider = ref<TranslationProvider | null>(null)
 
-// 计算属性
 const translationResults = computed(() => {
   const results = new Map()
   const errors = new Map()

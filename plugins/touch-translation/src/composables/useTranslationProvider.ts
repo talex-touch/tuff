@@ -45,7 +45,7 @@ export function useTranslationProvider() {
   }
 
   // 保存提供者配置到 localStorage
-  const saveProvidersConfig = () => {
+  const saveProvidersConfig = async () => {
     const config: Record<string, any> = {}
     providers.forEach((provider, id) => {
       config[id] = {
@@ -53,14 +53,16 @@ export function useTranslationProvider() {
         config: provider.config || {}
       }
     })
-    storage.setItem('providers_config', config)
+    // 兼容新版本：使用 setFile 代替 setItem
+    await storage.setFile('providers_config', config)
   }
 
   // 从 localStorage 加载提供者配置
   const loadProvidersConfig = async () => {
     try {
-      const saved = await storage.getItem('providers_config')
-      if (saved) {
+      // 兼容新版本：使用 getFile 代替 getItem
+      const saved = await storage.getFile('providers_config')
+      if (saved && typeof saved === 'object' && saved !== null) {
         const config = saved
         providers.forEach((provider, id) => {
           if (config[id]) {
@@ -96,7 +98,8 @@ export function useTranslationProvider() {
     const provider = providers.get(id)
     if (provider) {
       provider.enabled = enabled ?? !provider.enabled
-      saveProvidersConfig()
+      // 异步保存，不阻塞 UI
+      saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
     }
   }
 
@@ -105,20 +108,23 @@ export function useTranslationProvider() {
     const provider = providers.get(id)
     if (provider && provider.config) {
       provider.config = { ...provider.config, ...config }
-      saveProvidersConfig()
+      // 异步保存，不阻塞 UI
+      saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
     }
   }
 
   // 注册新的提供者
   const registerProvider = (provider: TranslationProvider) => {
     providers.set(provider.id, provider)
-    saveProvidersConfig()
+    // 异步保存，不阻塞 UI
+    saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
   }
 
   // 注销提供者
   const unregisterProvider = (id: string) => {
     providers.delete(id)
-    saveProvidersConfig()
+    // 异步保存，不阻塞 UI
+    saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
   }
 
   // 重置所有提供者配置
@@ -166,7 +172,8 @@ export function useTranslationProvider() {
         }
       }
     })
-    saveProvidersConfig()
+    // 异步保存，不阻塞 UI
+    saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
   }
 
   // 自动初始化

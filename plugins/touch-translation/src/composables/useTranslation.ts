@@ -23,8 +23,9 @@ export function useTranslation() {
   // 初始化历史记录
   const initHistory = async () => {
     try {
-      const saved = await storage.getItem('history')
-      if (saved) {
+      // 兼容新版本：使用 getFile 代替 getItem
+      const saved = await storage.getFile('history')
+      if (saved && Array.isArray(saved)) {
         history.value = saved
       }
     }
@@ -35,9 +36,10 @@ export function useTranslation() {
   }
 
   // 保存历史记录
-  const saveHistory = () => {
+  const saveHistory = async () => {
     try {
-      storage.setItem('history', history.value)
+      // 兼容新版本：使用 setFile 代替 setItem
+      await storage.setFile('history', history.value)
     }
     catch (error) {
       console.error('Failed to save translation history:', error)
@@ -68,7 +70,8 @@ export function useTranslation() {
     if (history.value.length > MAX_HISTORY_ITEMS) {
       history.value = history.value.slice(0, MAX_HISTORY_ITEMS)
     }
-    saveHistory()
+    // 异步保存，不阻塞 UI
+    saveHistory().catch(err => console.error('Failed to save history:', err))
   }
 
   // 从历史记录中删除项目
@@ -76,14 +79,16 @@ export function useTranslation() {
     const index = history.value.findIndex(item => item.id === id)
     if (index > -1) {
       history.value.splice(index, 1)
-      saveHistory()
+      // 异步保存，不阻塞 UI
+      saveHistory().catch(err => console.error('Failed to save history:', err))
     }
   }
 
   // 清空历史记录
   const clearHistory = () => {
     history.value = []
-    saveHistory()
+    // 异步保存，不阻塞 UI
+    saveHistory().catch(err => console.error('Failed to save history:', err))
   }
 
   // 翻译文本
