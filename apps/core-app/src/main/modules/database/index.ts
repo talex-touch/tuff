@@ -105,10 +105,23 @@ export class DatabaseModule extends BaseModule {
       console.error(chalk.red('[Database] __dirname:'), __dirname)
       console.error(chalk.red('[Database] process.resourcesPath:'), process.resourcesPath)
 
-      await this.showDatabaseErrorDialog(
-        error,
-        `Migrations folder not found:\n${migrationsFolderResolved}\n\nPlease check if the application installation is complete.`
-      )
+      // Collect all tried paths for error message
+      const allTriedPaths = [
+        migrationsFolderResolved,
+        ...(app.isPackaged ? [
+          path.resolve(app.getAppPath(), 'resources', 'db', 'migrations'),
+          path.resolve(app.getAppPath(), '..', 'resources', 'db', 'migrations'),
+          ...(process.resourcesPath ? [
+            path.resolve(process.resourcesPath, 'app', 'resources', 'db', 'migrations'),
+            ...(process.platform === 'darwin' ? [path.resolve(process.resourcesPath, 'resources', 'db', 'migrations')] : [])
+          ] : []),
+          path.resolve(__dirname, '..', '..', '..', 'resources', 'db', 'migrations')
+        ] : [])
+      ]
+
+      const detail = `Migrations folder not found:\n${migrationsFolderResolved}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${allTriedPaths.join('\n')}`
+
+      await this.showDatabaseErrorDialog(error, detail)
       throw error
     }
 
@@ -122,10 +135,13 @@ export class DatabaseModule extends BaseModule {
       )
       console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
 
-      await this.showDatabaseErrorDialog(
-        error,
-        `Migration journal file not found:\n${metaJournalPath}\n\nPlease check if the application installation is complete.`
-      )
+      const folderContents = fse.existsSync(migrationsFolderResolved) 
+        ? fse.readdirSync(migrationsFolderResolved).join(', ')
+        : 'N/A'
+
+      const detail = `Migration journal file not found:\n${metaJournalPath}\n\nMigrations folder exists: ${fse.existsSync(migrationsFolderResolved)}\nFolder contents: ${folderContents}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Migrations folder: ${migrationsFolderResolved}`
+
+      await this.showDatabaseErrorDialog(error, detail)
       throw error
     }
 
