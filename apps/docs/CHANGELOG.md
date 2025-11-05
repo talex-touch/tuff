@@ -4,6 +4,22 @@
 
 > The new refactoring version `2.0.0` is under development. Soon will meet with you!
 
+### Installation Notes
+
+**macOS Users**: If you encounter "Permission denied" or "App is damaged" errors when launching the app, please run the following command in Terminal to remove the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine /path/to/tuff.app
+```
+
+Or if the app is in your Downloads folder:
+
+```bash
+xattr -dr com.apple.quarantine ~/Downloads/tuff.app
+```
+
+This is required because the app is currently unsigned. We will add code signing in future releases.
+
 ### Features
 - Plugin Store functionality including Plugin installation and upgrading modules
 - App upgrade information reminder module
