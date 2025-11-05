@@ -600,6 +600,29 @@ function build() {
             console.warn(`  Warning: Failed to remove quarantine from ${appPath}: ${err.message}`);
           }
         });
+
+        // Recreate zip files if they exist (to ensure permissions are preserved)
+        console.log('\n=== Recreating zip files with fixed permissions ===');
+        appDirs.forEach(appPath => {
+          const appName = path.basename(appPath);
+          const zipPath = path.join(distDir, `${appName}.zip`);
+          const parentZipPath = path.join(path.dirname(distDir), `${appName}.zip`);
+          
+          // Check if zip exists in dist or parent directory
+          if (fs.existsSync(zipPath) || fs.existsSync(parentZipPath)) {
+            const targetZip = fs.existsSync(zipPath) ? zipPath : parentZipPath;
+            console.log(`  Recreating zip: ${targetZip}`);
+            try {
+              // Remove old zip
+              fs.unlinkSync(targetZip);
+              // Create new zip with preserved permissions
+              execSync(`cd "${path.dirname(appPath)}" && zip -r "${targetZip}" "${appName}"`, { stdio: 'inherit' });
+              console.log(`  ✓ Recreated zip with fixed permissions`);
+            } catch (err) {
+              console.warn(`  Warning: Failed to recreate zip ${targetZip}: ${err.message}`);
+            }
+          }
+        });
       } else {
         console.log('  No .app bundles found to fix');
       }

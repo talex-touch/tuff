@@ -122,11 +122,38 @@ class TouchChannel implements ITouchChannel {
           console.debug('Reply data: ', finalData)
 
           if (rawData.sync) {
-            e.sender.send(
-              `@${rawData.header.type === ChannelType.MAIN ? 'main' : 'plugin'}-process-message`,
-              finalData
-            )
-          } else e.returnValue = finalData
+            try {
+              // Check if sender is still valid before sending
+              if (e.sender.isDestroyed()) {
+                console.warn(
+                  `[Channel] Cannot send reply for ${rawData.name} to destroyed webContents.`
+                )
+                return
+              }
+              e.sender.send(
+                `@${rawData.header.type === ChannelType.MAIN ? 'main' : 'plugin'}-process-message`,
+                finalData
+              )
+            } catch (error) {
+              // Handle EPIPE and other write errors
+              const errorMessage = error instanceof Error ? error.message : String(error)
+              if (errorMessage.includes('EPIPE') || errorMessage.includes('write')) {
+                console.warn(
+                  `[Channel] EPIPE error when sending reply for ${rawData.name}: ${errorMessage}. WebContents may have crashed.`
+                )
+              } else {
+                console.error(`[Channel] Error sending reply for ${rawData.name}:`, error)
+              }
+            }
+          } else {
+            try {
+              e.returnValue = finalData
+            } catch (error) {
+              // Handle sync IPC errors
+              const errorMessage = error instanceof Error ? error.message : String(error)
+              console.warn(`[Channel] Error setting returnValue for ${rawData.name}: ${errorMessage}`)
+            }
+          }
           _replied = true
         },
         ...rawData
@@ -279,13 +306,38 @@ class TouchChannel implements ITouchChannel {
     }
 
     return new Promise((resolve) => {
-      webContents.send(_channelCategory, finalData)
+      try {
+        // Check if webContents is still valid before sending
+        if (webContents.isDestroyed()) {
+          console.warn(
+            `[Channel] Cannot send "${eventName}" to destroyed webContents.`
+          )
+          resolve({ code: DataCode.ERROR, data: 'WebContents destroyed' })
+          return
+        }
 
-      this.pendingMap.set(uniqueId, (res) => {
+        webContents.send(_channelCategory, finalData)
+
+        this.pendingMap.set(uniqueId, (res) => {
+          this.pendingMap.delete(uniqueId)
+
+          resolve(res)
+        })
+      } catch (error) {
+        // Handle EPIPE and other write errors
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        if (errorMessage.includes('EPIPE') || errorMessage.includes('write')) {
+          console.warn(
+            `[Channel] EPIPE error when sending "${eventName}": ${errorMessage}. WebContents may have crashed.`
+          )
+        } else {
+          console.error(`[Channel] Error sending "${eventName}":`, error)
+        }
+        
+        // Clean up pending map
         this.pendingMap.delete(uniqueId)
-
-        resolve(res)
-      })
+        resolve({ code: DataCode.ERROR, data: errorMessage })
+      }
     })
   }
 
