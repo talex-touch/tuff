@@ -511,6 +511,7 @@ function build() {
       function fixAppPermissions(appPath) {
         // Fix main executable
         const executablePath = path.join(appPath, 'Contents', 'MacOS', 'tuff');
+        console.log(`  Fixing main executable: ${executablePath}`);
         fixExecutablePermissions(executablePath);
 
         // Fix all Helper executables in Frameworks
@@ -598,6 +599,21 @@ function build() {
             console.log(`  ✓ Removed quarantine from: ${appPath}`);
           } catch (err) {
             console.warn(`  Warning: Failed to remove quarantine from ${appPath}: ${err.message}`);
+          }
+        });
+
+        // Fix all executable permissions in Frameworks (including Electron Framework Helpers)
+        console.log('\n=== Fixing all Framework executable permissions ===');
+        appDirs.forEach(appPath => {
+          const frameworksPath = path.join(appPath, 'Contents', 'Frameworks');
+          if (fs.existsSync(frameworksPath)) {
+            try {
+              // Fix all non-library files in Frameworks (they should be executables)
+              execSync(`find "${frameworksPath}" -type f ! -name "*.dylib" ! -name "*.plist" -exec chmod +x {} \\;`, { stdio: 'inherit' });
+              console.log(`  ✓ Fixed all Framework executable permissions in: ${appPath}`);
+            } catch (err) {
+              console.warn(`  Warning: Failed to fix Framework permissions in ${appPath}: ${err.message}`);
+            }
           }
         });
 
