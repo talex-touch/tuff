@@ -619,11 +619,56 @@ function build() {
           }
         });
 
-        // Skip zip creation to avoid permission issues when extracting
-        // The .app bundle can be used directly without compression
-        console.log('\n=== Skipping zip creation (using .app bundle directly) ===');
-        console.log('  Note: The .app bundle is ready to use without compression.');
-        console.log('  This avoids permission issues that occur when extracting zip files.');
+        // Create zip file with start.sh script for easy permission fixing
+        console.log('\n=== Creating zip file with start.sh script ===');
+        appDirs.forEach(appPath => {
+          const appName = path.basename(appPath);
+          const appParent = path.dirname(appPath);
+          const zipPath = path.join(distDir, `${appName}.zip`);
+
+          // Copy start.sh script to the same directory as .app
+          const startScriptSource = path.join(projectRoot, 'resources', 'start.sh');
+          const startScriptTarget = path.join(appParent, 'start.sh');
+
+          if (fs.existsSync(startScriptSource)) {
+            try {
+              fs.copyFileSync(startScriptSource, startScriptTarget);
+              // Make start.sh executable
+              fs.chmodSync(startScriptTarget, 0o755);
+              console.log(`  ✓ Copied start.sh to ${appParent}`);
+            } catch (err) {
+              console.warn(`  Warning: Failed to copy start.sh: ${err.message}`);
+            }
+          } else {
+            // Fallback: try to find start.sh in project root resources
+            const altStartScript = path.join(projectRoot, '..', '..', 'apps', 'core-app', 'resources', 'start.sh');
+            if (fs.existsSync(altStartScript)) {
+              try {
+                fs.copyFileSync(altStartScript, startScriptTarget);
+                fs.chmodSync(startScriptTarget, 0o755);
+                console.log(`  ✓ Copied start.sh from alternative location`);
+              } catch (err) {
+                console.warn(`  Warning: Failed to copy start.sh from alternative location: ${err.message}`);
+              }
+            } else {
+              console.warn(`  Warning: start.sh not found at ${startScriptSource} or ${altStartScript}`);
+            }
+          }
+
+          // Create zip file (GitHub Actions will compress anyway, so we create it with correct permissions)
+          try {
+            // Remove old zip if exists
+            if (fs.existsSync(zipPath)) {
+              fs.unlinkSync(zipPath);
+            }
+
+            // Create zip with preserved permissions
+            execSync(`cd "${appParent}" && zip -r "${zipPath}" "${appName}" start.sh`, { stdio: 'inherit' });
+            console.log(`  ✓ Created zip: ${zipPath}`);
+          } catch (err) {
+            console.warn(`  Warning: Failed to create zip ${zipPath}: ${err.message}`);
+          }
+        });
       } else {
         console.log('  No .app bundles found to fix');
       }

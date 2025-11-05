@@ -639,24 +639,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Collect files and .app directories
-          mapfile -t FILES < <(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
-          # Find .app directories - match both "mac-*" and "macos-*" patterns, and also check subdirectories
-          mapfile -t APP_DIRS < <(find artifacts -type d -name "*.app" \( -path "*/mac-*/*" -o -path "*/macos-*/*" -o -path "*/mac-*/dist/*" -o -path "*/macos-*/dist/*" \) | sort)
-          # Also check for .app directories directly in artifacts (in case path structure is different)
-          if [ "${#APP_DIRS[@]}" -eq 0 ]; then
-            mapfile -t APP_DIRS < <(find artifacts -type d -name "*.app" | sort)
-          fi
+          # Collect files (including zip files with .app)
+          mapfile -t FILES < <(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "*.zip" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
 
-          if [ "${#FILES[@]}" -eq 0 ] && [ "${#APP_DIRS[@]}" -eq 0 ]; then
-            echo "No release files or .app directories found in artifacts/"
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "No release files found in artifacts/"
             exit 1
           fi
 
           mkdir -p release-assets
           declare -a OUTPUT_PATHS=()
 
-          # Process files
+          # Process files (including zip files)
           for file in "${FILES[@]}"; do
             relative=${file#artifacts/}
             platform=${relative%%/*}
@@ -673,36 +667,6 @@ jobs:
             done
 
             cp "$file" "$target"
-            OUTPUT_PATHS+=("$target")
-          done
-
-          # Process .app directories (copy directly without compression to preserve permissions)
-          for app_dir in "${APP_DIRS[@]}"; do
-            relative=${app_dir#artifacts/}
-            # Extract platform from path (e.g., "mac-latest-release" from "artifacts/mac-latest-release/tuff.app")
-            platform=$(echo "$relative" | cut -d'/' -f1)
-            if [[ -z "$platform" ]] || [[ "$platform" == "$relative" ]]; then
-              # Fallback: try to extract from parent directory name
-              platform=$(basename "$(dirname "$app_dir")")
-              if [[ "$platform" == "artifacts" ]] || [[ -z "$platform" ]]; then
-                platform="macos"
-              fi
-            fi
-
-            base=$(basename "$app_dir")
-            # Use .app directory directly instead of creating zip
-            # This preserves file permissions and avoids quarantine issues
-            target="release-assets/${platform}-${base}"
-            counter=1
-            while [ -e "$target" ]; do
-              counter=$((counter + 1))
-              target="release-assets/${platform}-${counter}-${base}"
-            done
-
-            # Copy .app directory directly (no compression)
-            # This preserves executable permissions and avoids macOS quarantine issues
-            echo "Copying .app directory: $app_dir -> $target"
-            cp -R "$app_dir" "$target"
             OUTPUT_PATHS+=("$target")
           done
 
@@ -728,17 +692,37 @@ jobs:
 
             ### Downloads
             - **Windows**: Installer (.exe)
-            - **macOS**: Disk Image (.dmg) or App Bundle (.app)
+            - **macOS**: ZIP Package (contains `tuff.app` + `start.sh`) or Disk Image (.dmg)
             - **Linux**: AppImage and Debian packages
 
             ### Installation
             - **Windows**: Run the installer executable
             - **macOS**:
               - **DMG**: Mount the DMG and drag to Applications
-              - **App Bundle**: Extract and run directly (no installation needed)
+              - **ZIP Package**:
+                1. Download and extract the zip file
+                2. **Double-click `start.sh`** to automatically fix permissions and launch the app
+                3. Or run manually: `./start.sh` in Terminal
             - **Linux**:
               - AppImage: Make executable and run
               - Debian: `sudo dpkg -i *.deb`
+
+            ### Quick Start (macOS ZIP Package)
+
+            The easiest way to run the app:
+
+            1. **Download** `tuff.app.zip` from the assets above
+            2. **Extract** the zip file (double-click or use `unzip`)
+            3. **Double-click `start.sh`** - it will automatically:
+               - Remove quarantine attributes
+               - Fix executable permissions
+               - Launch the app
+
+            Or run from Terminal:
+            ```bash
+            cd /path/to/extracted/folder
+            ./start.sh
+            ```
 
             ### Troubleshooting (macOS)
 
