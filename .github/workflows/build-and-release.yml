@@ -674,14 +674,67 @@ jobs:
 
             ### Downloads
             - **Windows**: Installer (.exe)
-            - **macOS**: Disk Image (.dmg)
+            - **macOS**: Disk Image (.dmg) or App Bundle (.app)
             - **Linux**: AppImage and Debian packages
 
             ### Installation
             - **Windows**: Run the installer executable
-            - **macOS**: Mount the DMG and drag to Applications
+            - **macOS**:
+              - **DMG**: Mount the DMG and drag to Applications
+              - **App Bundle**: Extract and run directly (no installation needed)
             - **Linux**:
               - AppImage: Make executable and run
               - Debian: `sudo dpkg -i *.deb`
+
+            ### Troubleshooting (macOS)
+
+            If you encounter "Application cannot be opened" or "App is damaged" errors on macOS, follow these steps:
+
+            #### Quick Fix Script
+            We provide a fix script in the repository. Run it from the project root:
+            ```bash
+            ./scripts/fix-app-permissions.sh /path/to/tuff.app
+            ```
+
+            #### Manual Fix
+
+            **1. Remove Quarantine Attribute**
+            macOS Gatekeeper adds a quarantine attribute to downloaded files. Remove it:
+            ```bash
+            xattr -dr com.apple.quarantine /path/to/tuff.app
+            ```
+
+            **2. Fix Executable Permissions**
+            Ensure the main executable has proper permissions:
+            ```bash
+            chmod +x /path/to/tuff.app/Contents/MacOS/tuff
+            ```
+
+            **3. Fix Helper Process Permissions**
+            Fix permissions for all Helper processes (required for GPU and renderer processes):
+            ```bash
+            find /path/to/tuff.app/Contents/Frameworks -type f ! -name "*.dylib" ! -name "*.plist" -exec chmod +x {} \;
+            ```
+
+            #### Complete Fix Command
+            Run all fixes at once:
+            ```bash
+            APP_PATH="/path/to/tuff.app"
+            xattr -dr com.apple.quarantine "$APP_PATH"
+            chmod +x "$APP_PATH/Contents/MacOS/tuff"
+            find "$APP_PATH/Contents/Frameworks" -type f ! -name "*.dylib" ! -name "*.plist" -exec chmod +x {} \;
+            ```
+
+            #### Why This Happens
+            - The app is currently unsigned (we will add code signing in future releases)
+            - macOS Gatekeeper blocks unsigned apps from unknown developers
+            - Extracting from ZIP files may reset file permissions
+
+            #### Alternative: Right-Click to Open
+            If the above doesn't work, try:
+            1. Right-click on `tuff.app`
+            2. Select "Open" from the context menu
+            3. Click "Open" in the security dialog
+            This bypasses Gatekeeper for that specific app instance.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
