@@ -591,18 +591,8 @@ function build() {
         });
         console.log(`✓ Fixed permissions for ${appDirs.length} .app bundle(s)`);
 
-        // Also remove quarantine attribute to allow running unsigned apps
-        console.log('\n=== Removing quarantine attribute ===');
-        appDirs.forEach(appPath => {
-          try {
-            execSync(`xattr -dr com.apple.quarantine "${appPath}"`, { stdio: 'inherit' });
-            console.log(`  ✓ Removed quarantine from: ${appPath}`);
-          } catch (err) {
-            console.warn(`  Warning: Failed to remove quarantine from ${appPath}: ${err.message}`);
-          }
-        });
-
-        // Fix all executable permissions in Frameworks (including Electron Framework Helpers)
+        // Fix all executable permissions in Frameworks FIRST (including Electron Framework Helpers)
+        // This must be done before removing quarantine to avoid permission issues
         console.log('\n=== Fixing all Framework executable permissions ===');
         appDirs.forEach(appPath => {
           const frameworksPath = path.join(appPath, 'Contents', 'Frameworks');
@@ -617,28 +607,23 @@ function build() {
           }
         });
 
-        // Recreate zip files if they exist (to ensure permissions are preserved)
-        console.log('\n=== Recreating zip files with fixed permissions ===');
+        // Remove quarantine attribute AFTER fixing permissions
+        // This prevents macOS from adding quarantine back when permissions are changed
+        console.log('\n=== Removing quarantine attribute ===');
         appDirs.forEach(appPath => {
-          const appName = path.basename(appPath);
-          const zipPath = path.join(distDir, `${appName}.zip`);
-          const parentZipPath = path.join(path.dirname(distDir), `${appName}.zip`);
-
-          // Check if zip exists in dist or parent directory
-          if (fs.existsSync(zipPath) || fs.existsSync(parentZipPath)) {
-            const targetZip = fs.existsSync(zipPath) ? zipPath : parentZipPath;
-            console.log(`  Recreating zip: ${targetZip}`);
-            try {
-              // Remove old zip
-              fs.unlinkSync(targetZip);
-              // Create new zip with preserved permissions
-              execSync(`cd "${path.dirname(appPath)}" && zip -r "${targetZip}" "${appName}"`, { stdio: 'inherit' });
-              console.log(`  ✓ Recreated zip with fixed permissions`);
-            } catch (err) {
-              console.warn(`  Warning: Failed to recreate zip ${targetZip}: ${err.message}`);
-            }
+          try {
+            execSync(`xattr -dr com.apple.quarantine "${appPath}"`, { stdio: 'inherit' });
+            console.log(`  ✓ Removed quarantine from: ${appPath}`);
+          } catch (err) {
+            console.warn(`  Warning: Failed to remove quarantine from ${appPath}: ${err.message}`);
           }
         });
+
+        // Skip zip creation to avoid permission issues when extracting
+        // The .app bundle can be used directly without compression
+        console.log('\n=== Skipping zip creation (using .app bundle directly) ===');
+        console.log('  Note: The .app bundle is ready to use without compression.');
+        console.log('  This avoids permission issues that occur when extracting zip files.');
       } else {
         console.log('  No .app bundles found to fix');
       }
