@@ -607,7 +607,7 @@ function build() {
           const appName = path.basename(appPath);
           const zipPath = path.join(distDir, `${appName}.zip`);
           const parentZipPath = path.join(path.dirname(distDir), `${appName}.zip`);
-          
+
           // Check if zip exists in dist or parent directory
           if (fs.existsSync(zipPath) || fs.existsSync(parentZipPath)) {
             const targetZip = fs.existsSync(zipPath) ? zipPath : parentZipPath;
