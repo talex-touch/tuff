@@ -558,6 +558,51 @@ jobs:
         with:
           path: artifacts
 
+      - name: Fix macOS App Permissions After Download
+        shell: bash
+        run: |
+          # GitHub Actions upload-artifact automatically compresses to zip
+          # We need to extract and fix permissions after download
+          echo "Fixing macOS app permissions after artifact extraction..."
+          echo "Searching for .app directories in artifacts..."
+
+          # Find all .app directories (they may be in subdirectories after extraction)
+          # Try multiple path patterns
+          APP_FOUND=false
+          while IFS= read -r app_dir; do
+            if [ -d "$app_dir" ]; then
+              APP_FOUND=true
+              echo "Found .app directory: $app_dir"
+              echo "Fixing permissions for: $app_dir"
+
+              # Fix main executable
+              if [ -f "$app_dir/Contents/MacOS/tuff" ]; then
+                chmod +x "$app_dir/Contents/MacOS/tuff"
+                echo "  ✓ Fixed main executable permissions"
+              fi
+
+              # Fix all Framework executables
+              if [ -d "$app_dir/Contents/Frameworks" ]; then
+                find "$app_dir/Contents/Frameworks" -type f ! -name "*.dylib" ! -name "*.plist" -exec chmod +x {} \;
+                echo "  ✓ Fixed Framework executable permissions"
+              fi
+
+              # Remove quarantine attribute (if on macOS)
+              if [ "$(uname)" = "Darwin" ]; then
+                xattr -dr com.apple.quarantine "$app_dir" 2>/dev/null || true
+                echo "  ✓ Removed quarantine attribute"
+              fi
+            fi
+          done < <(find artifacts -type d -name "*.app" 2>/dev/null | sort)
+
+          if [ "$APP_FOUND" = "false" ]; then
+            echo "⚠️  No .app directories found in artifacts/"
+            echo "Listing artifacts directory structure:"
+            find artifacts -type d -maxdepth 3 | head -20
+          else
+            echo "✓ macOS app permissions fixed"
+          fi
+
       - name: Determine Release Type and Tag
         id: release-info
         run: |
