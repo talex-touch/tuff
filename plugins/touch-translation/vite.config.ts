@@ -10,6 +10,7 @@ import VueMacros from 'unplugin-vue-macros/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+  base: './',
   resolve: {
     alias: {
       '~/': `${fileURLToPath(new URL('./src', import.meta.url))}/`,
