@@ -4,7 +4,7 @@ import appLogoAsset from '../../public/logo.png?asset'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
+import { isCoreBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
 import {
   PRELOAD_LOADING_CHANNEL,
   type LoadingEvent,
@@ -611,6 +611,8 @@ domReady().then(() => {
   const info = useInitialize()
   if (isMainWindow()) {
     appendLoading()
+  } else if (isCoreBox()) {
+    document.body.classList.add('core-box')
   }
 
   document.body.classList.add(info.platform)

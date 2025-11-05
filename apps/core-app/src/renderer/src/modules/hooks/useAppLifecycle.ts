@@ -8,6 +8,7 @@ import {
 } from '@talex-touch/utils/preload'
 import { appSetting } from '~/modules/channel/storage/index'
 import { useApplicationUpgrade } from './useUpdate'
+import { useCoreBox } from './core-box'
 
 /**
  * Application lifecycle management hook
@@ -40,6 +41,7 @@ export function useAppLifecycle() {
   async function executeCoreboxTask(): Promise<void> {
     console.log('[useAppLifecycle] executeCoreboxTask')
     // Add CoreBox-specific tasks here
+    useCoreBox()
   }
 
   /**

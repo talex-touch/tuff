@@ -626,7 +626,7 @@ jobs:
             OUTPUT_PATHS+=("$target")
           done
 
-          # Process .app directories (package as zip)
+          # Process .app directories (copy directly without compression to preserve permissions)
           for app_dir in "${APP_DIRS[@]}"; do
             relative=${app_dir#artifacts/}
             platform=${relative%%/*}
@@ -635,20 +635,18 @@ jobs:
             fi
 
             base=$(basename "$app_dir")
-            zip_name="${base}.zip"
-            target="release-assets/${platform}-${zip_name}"
+            # Use .app directory directly instead of creating zip
+            # This preserves file permissions and avoids quarantine issues
+            target="release-assets/${platform}-${base}"
             counter=1
             while [ -e "$target" ]; do
               counter=$((counter + 1))
-              target="release-assets/${platform}-${counter}-${zip_name}"
+              target="release-assets/${platform}-${counter}-${base}"
             done
 
-            # Create zip from .app directory
-            app_parent=$(dirname "$app_dir")
-            abs_target=$(realpath "$target" 2>/dev/null || echo "$(pwd)/$target")
-            cd "$app_parent" || exit 1
-            zip -r "$abs_target" "$base" -q
-            cd - > /dev/null || exit 1
+            # Copy .app directory directly (no compression)
+            # This preserves executable permissions and avoids macOS quarantine issues
+            cp -R "$app_dir" "$target"
             OUTPUT_PATHS+=("$target")
           done
 
