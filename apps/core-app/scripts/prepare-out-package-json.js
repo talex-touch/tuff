@@ -212,7 +212,7 @@ modulesToCopy.forEach((moduleName) => {
   copyModuleRecursive(moduleName)
 })
 
-// Copy resources directory to out directory
+// Copy resources directory to out directory (excluding start.sh to avoid duplication)
 const resourcesSourceDir = path.join(projectRoot, 'resources')
 const resourcesTargetDir = path.join(outDir, 'resources')
 if (fs.existsSync(resourcesSourceDir)) {
@@ -220,8 +220,28 @@ if (fs.existsSync(resourcesSourceDir)) {
     if (fs.existsSync(resourcesTargetDir)) {
       fs.rmSync(resourcesTargetDir, { recursive: true, force: true })
     }
-    fs.cpSync(resourcesSourceDir, resourcesTargetDir, { recursive: true, dereference: true })
-    console.log('Copied resources directory to out/resources')
+    fs.mkdirSync(resourcesTargetDir, { recursive: true })
+    
+    // Copy resources directory but exclude start.sh (it will be added separately in zip)
+    const items = fs.readdirSync(resourcesSourceDir, { withFileTypes: true })
+    items.forEach(item => {
+      const sourcePath = path.join(resourcesSourceDir, item.name)
+      const targetPath = path.join(resourcesTargetDir, item.name)
+      
+      // Skip start.sh - it will be added separately in the zip file
+      if (item.name === 'start.sh') {
+        console.log('Skipping start.sh (will be added separately in zip)')
+        return
+      }
+      
+      if (item.isDirectory()) {
+        fs.cpSync(sourcePath, targetPath, { recursive: true, dereference: true })
+      } else {
+        fs.copyFileSync(sourcePath, targetPath)
+      }
+    })
+    
+    console.log('Copied resources directory to out/resources (excluding start.sh)')
   } catch (err) {
     console.warn(`Warning: failed to copy resources directory: ${err.message}`)
   }

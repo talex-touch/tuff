@@ -624,6 +624,7 @@ function build() {
         appDirs.forEach(appPath => {
           const appName = path.basename(appPath);
           const appParent = path.dirname(appPath);
+          // Create zip in dist root directory for easy discovery
           const zipPath = path.join(distDir, `${appName}.zip`);
 
           // Copy start.sh script to the same directory as .app
@@ -655,7 +656,8 @@ function build() {
             }
           }
 
-          // Create zip file (GitHub Actions will compress anyway, so we create it with correct permissions)
+          // Create zip file in dist root directory
+          // This ensures GitHub Actions can easily find it
           try {
             // Remove old zip if exists
             if (fs.existsSync(zipPath)) {
@@ -663,8 +665,19 @@ function build() {
             }
 
             // Create zip with preserved permissions
-            execSync(`cd "${appParent}" && zip -r "${zipPath}" "${appName}" start.sh`, { stdio: 'inherit' });
-            console.log(`  ✓ Created zip: ${zipPath}`);
+            // Use absolute path for zipPath to ensure it's created in dist root
+            const absZipPath = path.resolve(zipPath);
+            execSync(`cd "${appParent}" && zip -r "${absZipPath}" "${appName}" start.sh`, { stdio: 'inherit' });
+            console.log(`  ✓ Created zip: ${absZipPath}`);
+
+            // Verify zip was created
+            if (fs.existsSync(zipPath)) {
+              const stats = fs.statSync(zipPath);
+              const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+              console.log(`  ✓ Zip file verified: ${sizeMB} MB`);
+            } else {
+              console.warn(`  ⚠️  Warning: Zip file created but not found at expected path: ${zipPath}`);
+            }
           } catch (err) {
             console.warn(`  Warning: Failed to create zip ${zipPath}: ${err.message}`);
           }

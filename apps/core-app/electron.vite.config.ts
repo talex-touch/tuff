@@ -18,6 +18,10 @@ const __dirname = path.dirname(__filename)
 const basePath = path.join(__dirname, 'src')
 const rendererPath = path.join(basePath, 'renderer', 'src')
 
+// Disable sourcemap in production/release builds to reduce package size
+const isProduction = process.env.BUILD_TYPE === 'release' || process.env.NODE_ENV === 'production'
+const enableSourcemap = !isProduction
+
 export default defineConfig({
   main: {
     plugins: [
@@ -52,7 +56,7 @@ export default defineConfig({
       })
     ],
     build: {
-      sourcemap: true,
+      sourcemap: enableSourcemap,
       rollupOptions: {
         input: {
           index: 'src/main/index.ts',
@@ -113,7 +117,10 @@ export default defineConfig({
           'electron-updater'
         ]
       })
-    ]
+    ],
+    build: {
+      sourcemap: enableSourcemap
+    }
   },
 
   renderer: {
@@ -137,6 +144,7 @@ export default defineConfig({
       exclude: ['electron', 'fs', 'path', 'child_process', 'original-fs']
     },
     build: {
+      sourcemap: enableSourcemap,
       rollupOptions: {
         external: ['electron', 'fs', 'child_process', 'original-fs'],
         output: {

@@ -17,6 +17,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # Exclude unnecessary node_modules to reduce package size
+  - '!**/node_modules/**'
+  - '!**/node_modules'
+  # Only include required node_modules from out directory
+  - 'out/node_modules/**'
+  # Exclude sourcemap files to reduce package size (not needed in production)
+  - '!**/*.map'
 extraFiles: []
 
 win:
