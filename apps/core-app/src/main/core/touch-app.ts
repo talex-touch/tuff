@@ -104,7 +104,17 @@ export class TouchApp implements TalexTouch.TouchApp {
         path.join(__dirname, '..', 'renderer', 'index.html'),
         path.join(appPath, 'renderer', 'index.html'),
         ...(process.resourcesPath
-          ? [path.join(process.resourcesPath, 'app', 'renderer', 'index.html')]
+          ? [
+              path.join(process.resourcesPath, 'app', 'renderer', 'index.html'),
+              path.join(process.resourcesPath, 'renderer', 'index.html')
+            ]
+          : []),
+        // Additional macOS-specific paths
+        ...(process.platform === 'darwin'
+          ? [
+              path.resolve(appPath, '..', '..', '..', 'Resources', 'app', 'renderer', 'index.html'),
+              path.resolve(__dirname, '..', '..', 'renderer', 'index.html')
+            ]
           : [])
       ]
 
@@ -135,6 +145,16 @@ export class TouchApp implements TalexTouch.TouchApp {
       }
 
       if (!found) {
+        // Log all debug information before showing dialog
+        console.error('[TouchApp] index.html not found!')
+        console.error('[TouchApp] __dirname:', __dirname)
+        console.error('[TouchApp] app.getAppPath():', appPath)
+        console.error('[TouchApp] process.resourcesPath:', process.resourcesPath || 'N/A')
+        console.error('[TouchApp] Tried paths:')
+        possiblePaths.forEach((p, i) => {
+          console.error(`[TouchApp]   ${i + 1}. ${p} (exists: ${fse.existsSync(p)})`)
+        })
+
         const errorMsg = `index.html not found. Tried paths:\n${possiblePaths.join('\n')}`
         mainLog.error('Renderer file not found', {
           meta: {
