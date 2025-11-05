@@ -1,7 +1,8 @@
 import { TalexTouch } from '../types'
 import { ChannelType, ITouchChannel } from '@talex-touch/utils/channel'
-import { app } from 'electron'
+import { app, dialog, BrowserWindow } from 'electron'
 import path from 'path'
+import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
 import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-util'
 import { genTouchChannel } from './channel-core'
@@ -34,6 +35,23 @@ export class TouchApp implements TalexTouch.TouchApp {
   channel: ITouchChannel
 
   public isQuitting = false
+
+  private async showFileNotFoundDialog(filePath: string, triedPaths: string[]): Promise<void> {
+    const window = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+
+    const triedPathsText = triedPaths.join('\n')
+    const detail = `Cannot find renderer entry file:\n${filePath}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${triedPathsText}`
+
+    await dialog.showMessageBox(window || undefined, {
+      type: 'error',
+      title: 'File Not Found',
+      message: 'Cannot find this file.',
+      detail,
+      buttons: ['OK'],
+      defaultId: 0,
+      noLink: true
+    })
+  }
 
   constructor(app: Electron.App) {
     mainLog.info('Running under application root', {
@@ -79,7 +97,42 @@ export class TouchApp implements TalexTouch.TouchApp {
       mainLog.info('Booting packaged build', {
         meta: { appPath: app.getAppPath() }
       })
-      const url = path.join(__dirname, '..', 'renderer', 'index.html')
+
+      // Try multiple paths for index.html
+      const possiblePaths = [
+        path.join(__dirname, '..', 'renderer', 'index.html'),
+        path.join(app.getAppPath(), 'renderer', 'index.html'),
+        ...(process.resourcesPath
+          ? [path.join(process.resourcesPath, 'app', 'renderer', 'index.html')]
+          : [])
+      ]
+
+      let url = possiblePaths[0]
+      let found = false
+
+      for (const testPath of possiblePaths) {
+        if (fse.existsSync(testPath)) {
+          url = testPath
+          found = true
+          mainLog.info(`Found index.html at: ${testPath}`)
+          break
+        }
+      }
+
+      if (!found) {
+        const errorMsg = `index.html not found. Tried paths:\n${possiblePaths.join('\n')}`
+        mainLog.error('Renderer file not found', {
+          meta: {
+            triedPaths: possiblePaths.join(', '),
+            appPath: app.getAppPath(),
+            __dirname: String(__dirname),
+            resourcesPath: process.resourcesPath || 'N/A'
+          }
+        })
+
+        await this.showFileNotFoundDialog(url, possiblePaths)
+        throw new Error(errorMsg)
+      }
 
       if (!startSilent) {
         this.window.window.show()
@@ -90,9 +143,19 @@ export class TouchApp implements TalexTouch.TouchApp {
         meta: { url }
       })
 
-      await this.window.loadFile(url, {
-        devtools: this.version === TalexTouch.AppVersion.DEV
-      })
+      try {
+        await this.window.loadFile(url, {
+          devtools: this.version === TalexTouch.AppVersion.DEV
+        })
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        mainLog.error('Failed to load renderer file', {
+          meta: { url, error: errorMsg }
+        })
+
+        await this.showFileNotFoundDialog(url, possiblePaths)
+        throw error
+      }
     } else {
       const url = process.env['ELECTRON_RENDERER_URL'] as string
       if (!url) {
