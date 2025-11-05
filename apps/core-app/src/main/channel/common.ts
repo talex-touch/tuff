@@ -104,10 +104,21 @@ export class CommonChannelModule extends BaseModule {
       }
     })
 
-    channel.regChannel(ChannelType.MAIN, 'execute:cmd', ({ data }) => {
+    channel.regChannel(ChannelType.MAIN, 'execute:cmd', async ({ data }) => {
       if (data?.command) {
-        shell.openPath(data.command)
+        try {
+          const error = await shell.openPath(data.command)
+          if (error) {
+            console.error(`[CommonChannel] Failed to open path: ${data.command}, error: ${error}`)
+            return { success: false, error }
+          }
+          return { success: true }
+        } catch (error) {
+          console.error(`[CommonChannel] Error opening path: ${data.command}`, error)
+          return { success: false, error: error instanceof Error ? error.message : String(error) }
+        }
       }
+      return { success: false, error: 'No command provided' }
     })
 
     channel.regChannel(ChannelType.MAIN, 'app:open', ({ data }) => {

@@ -1102,7 +1102,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (filesToInsert.length > 0) {
-      const inserted = await db.insert(filesSchema).values(filesToInsert).returning()
+      const inserted = await db
+        .insert(filesSchema)
+        .values(filesToInsert)
+        .onConflictDoUpdate({
+          target: filesSchema.path,
+          set: {
+            name: sql`excluded.name`,
+            extension: sql`excluded.extension`,
+            size: sql`excluded.size`,
+            mtime: sql`excluded.mtime`,
+            ctime: sql`excluded.ctime`,
+            lastIndexedAt: sql`excluded.last_indexed_at`
+          }
+        })
+        .returning()
       await this.processFileExtensions(inserted)
       await this.extractContentForFiles(inserted)
       await this.indexFilesForSearch(inserted)
@@ -1254,7 +1268,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             chunks,
             async (chunk, chunkIndex) => {
               const chunkStart = performance.now()
-              const inserted = await db.insert(filesSchema).values(chunk).returning()
+              const inserted = await db
+                .insert(filesSchema)
+                .values(chunk)
+                .onConflictDoUpdate({
+                  target: filesSchema.path,
+                  set: {
+                    name: sql`excluded.name`,
+                    extension: sql`excluded.extension`,
+                    size: sql`excluded.size`,
+                    mtime: sql`excluded.mtime`,
+                    ctime: sql`excluded.ctime`,
+                    lastIndexedAt: sql`excluded.last_indexed_at`
+                  }
+                })
+                .returning()
               this.logDebug('Full scan chunk inserted', {
                 path: newPath,
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
@@ -1382,7 +1410,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           chunks,
           async (chunk, chunkIndex) => {
             const chunkStart = performance.now()
-            const inserted = await db.insert(filesSchema).values(chunk).returning()
+            const inserted = await db
+              .insert(filesSchema)
+              .values(chunk)
+              .onConflictDoUpdate({
+                target: filesSchema.path,
+                set: {
+                  name: sql`excluded.name`,
+                  extension: sql`excluded.extension`,
+                  size: sql`excluded.size`,
+                  mtime: sql`excluded.mtime`,
+                  ctime: sql`excluded.ctime`,
+                  lastIndexedAt: sql`excluded.last_indexed_at`
+                }
+              })
+              .returning()
             this.logDebug('Reconciliation chunk inserted', {
               chunk: `${chunkIndex + 1}/${chunks.length}`,
               size: chunk.length,
