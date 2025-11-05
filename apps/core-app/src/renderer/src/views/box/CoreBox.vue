@@ -7,7 +7,6 @@ import { appSetting } from '~/modules/channel/storage'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import PrefixPart from './PrefixPart.vue'
-import { useCoreBox } from '@renderer/modules/hooks/core-box'
 
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
@@ -19,8 +18,6 @@ import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { TuffItem } from '@talex-touch/utils'
-
-useCoreBox()
 
 const scrollbar = ref()
 const boxInputRef = ref()

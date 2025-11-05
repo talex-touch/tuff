@@ -6,8 +6,6 @@ export function useCoreBox(): void {
     'background: #42b983; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;'
   )
 
-  document.body.classList.add('core-box')
-
   touchChannel.regChannel('core-box:trigger', ({ data }: any) => {
     const { show, id } = data!
     if (window.$startupInfo?.id !== undefined) {
