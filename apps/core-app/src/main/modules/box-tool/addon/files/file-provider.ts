@@ -2370,10 +2370,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     try {
+      // Check if file exists before opening to avoid macOS system dialog
+      await fs.access(filePath)
       await shell.openPath(filePath)
       return null
-    } catch (err) {
-      this.logError('Failed to open file', err, { path: filePath })
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        this.logError('File not found', new Error(`File does not exist: ${filePath}`), { path: filePath })
+      } else {
+        this.logError('Failed to open file', err, { path: filePath })
+      }
       return null
     }
   }
