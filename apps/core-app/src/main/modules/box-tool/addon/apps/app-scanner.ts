@@ -3,6 +3,7 @@ import os from 'os'
 import { formatLog, LogStyle } from './app-utils'
 import chalk from 'chalk'
 import { exec } from 'child_process'
+import { existsSync } from 'fs'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 
@@ -145,19 +146,23 @@ export class AppScanner {
   /**
    * Runs an `mdls` update scan on macOS to refresh application metadata.
    * @param {any[]} apps - The list of applications to scan.
-   * @returns {Promise<{updatedApps: any[], updatedCount: number}>} A promise that resolves to the updated apps and count.
+   * @returns {Promise<{updatedApps: any[], updatedCount: number, deletedApps: any[]}>} A promise that resolves to the updated apps, count, and deleted apps.
    */
-  async runMdlsUpdateScan(apps: any[]): Promise<{ updatedApps: any[]; updatedCount: number }> {
+  async runMdlsUpdateScan(apps: any[]): Promise<{
+    updatedApps: any[]
+    updatedCount: number
+    deletedApps: any[]
+  }> {
     if (process.platform !== 'darwin') {
       console.log(formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info))
-      return { updatedApps: [], updatedCount: 0 }
+      return { updatedApps: [], updatedCount: 0, deletedApps: [] }
     }
 
     console.log(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
 
     if (apps.length === 0) {
       console.log(formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info))
-      return { updatedApps: [], updatedCount: 0 }
+      return { updatedApps: [], updatedCount: 0, deletedApps: [] }
     }
 
     console.log(
@@ -171,12 +176,26 @@ export class AppScanner {
     let updatedCount = 0
     let processedCount = 0
     const updatedApps: any[] = []
+    const deletedApps: any[] = []
     const startTime = Date.now()
 
     await runAdaptiveTaskQueue(
       apps,
       async (app) => {
         try {
+          // 先检查文件是否存在
+          if (!existsSync(app.path)) {
+            console.warn(
+              formatLog(
+                'AppScanner',
+                `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
+                LogStyle.warning
+              )
+            )
+            deletedApps.push(app)
+            return
+          }
+
           const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
           const { stdout, stderr } = await this._execCommand(command)
 
@@ -215,12 +234,16 @@ export class AppScanner {
             })
           }
         } catch (error) {
+          // 记录更详细的错误信息
+          const errorDetails =
+            error instanceof Error
+              ? `${error.message}${error.code ? ` (code: ${error.code})` : ''}`
+              : String(error)
+
           console.error(
             formatLog(
               'AppScanner',
-              `Error processing app ${chalk.red(app.path)}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
+              `Error processing app ${chalk.red(app.path)}: ${errorDetails}`,
               LogStyle.error
             )
           )
@@ -259,12 +282,14 @@ export class AppScanner {
         'AppScanner',
         `mdls update scan finished. Updated ${chalk.green(
           updatedCount
-        )} app display names in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
+        )} app display names, found ${chalk.yellow(
+          deletedApps.length
+        )} missing apps in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
         LogStyle.success
       )
     )
 
-    return { updatedApps, updatedCount }
+    return { updatedApps, updatedCount, deletedApps }
   }
 
   /**

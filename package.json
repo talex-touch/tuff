@@ -58,6 +58,7 @@
     "onlyBuiltDependencies": [
       "@clerk/shared",
       "@parcel/watcher",
+      "@sentry/cli",
       "@swc/core",
       "browser-tabs-lock",
       "core-js",

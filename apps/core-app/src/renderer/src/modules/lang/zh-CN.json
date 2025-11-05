@@ -611,7 +611,9 @@
       "showTray": "显示托盘图标",
       "showTrayDesc": "在系统托盘显示应用图标",
       "hideDock": "不在 Dock 栏显示",
-      "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）"
+      "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）",
+      "startSilent": "静默启动",
+      "startSilentDesc": "应用启动时不显示窗口，仅在后台运行"
     }
   },
   "setupPermissions": {
