@@ -729,6 +729,29 @@ function build() {
           }
         });
 
+        // Add ad-hoc code signing to bypass Gatekeeper "damaged" error
+        console.log('\n=== Adding ad-hoc code signature ===');
+        appDirs.forEach(appPath => {
+          try {
+            // Sign the main app bundle with ad-hoc signature
+            // This tells macOS the app is "signed" (even though it's ad-hoc, not from a trusted developer)
+            // This bypasses the "damaged" error for unsigned apps
+            execSync(`codesign --force --deep --sign - "${appPath}"`, { stdio: 'inherit' });
+            console.log(`  ✓ Added ad-hoc signature to: ${appPath}`);
+
+            // Verify the signature
+            try {
+              execSync(`codesign --verify --verbose "${appPath}"`, { stdio: 'pipe' });
+              console.log(`  ✓ Verified signature for: ${appPath}`);
+            } catch (verifyErr) {
+              console.warn(`  ⚠️  Signature verification warning (this is normal for ad-hoc signatures): ${verifyErr.message}`);
+            }
+          } catch (err) {
+            console.warn(`  Warning: Failed to add ad-hoc signature to ${appPath}: ${err.message}`);
+            console.warn(`  → The app may still show 'damaged' error. Users can right-click and select 'Open' to bypass.`);
+          }
+        });
+
         // Create zip file with start.sh script for easy permission fixing
         console.log('\n=== Creating zip file with start.sh script ===');
         appDirs.forEach(appPath => {
