@@ -611,7 +611,9 @@
       "showTray": "Show Tray Icon",
       "showTrayDesc": "Display app icon in system tray",
       "hideDock": "Hide Dock Icon",
-      "hideDockDesc": "Hide Dock icon after closing main window (macOS only)"
+      "hideDockDesc": "Hide Dock icon after closing main window (macOS only)",
+      "startSilent": "Silent Start",
+      "startSilentDesc": "Launch application without showing window, run in background only"
     }
   },
   "setupPermissions": {

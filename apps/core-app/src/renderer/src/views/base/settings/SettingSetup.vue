@@ -44,7 +44,8 @@ const permissions = ref({
 const settings = ref({
   autoStart: false,
   showTray: true,
-  hideDock: false
+  hideDock: false,
+  startSilent: false
 })
 
 const isLoading = ref(false)
@@ -123,6 +124,18 @@ function loadSettings(): void {
   } catch (error) {
     console.error('[SettingSetup] Failed to load autoStart:', error)
   }
+
+  // Load startSilent from existing setting
+  try {
+    const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
+    if (startSilentResult !== null && startSilentResult !== undefined) {
+      settings.value.startSilent = startSilentResult as boolean
+    } else if (appSetting.window?.startSilent !== undefined) {
+      settings.value.startSilent = appSetting.window.startSilent
+    }
+  } catch (error) {
+    console.error('[SettingSetup] Failed to load startSilent:', error)
+  }
 }
 
 async function requestPermission(type: string): Promise<void> {
@@ -188,6 +201,27 @@ function updateHideDock(value: boolean): void {
     ElMessage.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update hideDock:', error)
+    ElMessage.error(t('setupPermissions.updateFailed'))
+  }
+}
+
+function updateStartSilent(value: boolean): void {
+  settings.value.startSilent = value
+  if (!appSetting.window) {
+    appSetting.window = {}
+  }
+  appSetting.window.startSilent = value
+  try {
+    touchChannel.send('storage:save', {
+      key: 'app.window.startSilent',
+      content: JSON.stringify(value),
+      clear: false
+    })
+    // Update auto-start setting to apply the change
+    touchChannel.send('tray:autostart:update', settings.value.autoStart)
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    console.error('[SettingSetup] Failed to update startSilent:', error)
     ElMessage.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -365,6 +399,15 @@ function getStatusIcon(status: string): string {
       icon="macbook"
       :description="t('settings.setup.hideDockDesc')"
       @update:model-value="updateHideDock"
+    />
+
+    <!-- Start Silent -->
+    <t-block-switch
+      v-model="settings.startSilent"
+      :title="t('settings.setup.startSilent')"
+      icon="bell-off"
+      :description="t('settings.setup.startSilentDesc')"
+      @update:model-value="updateStartSilent"
     />
   </t-group-block>
 </template>

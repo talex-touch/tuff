@@ -1509,8 +1509,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    const { updatedApps, updatedCount } = await appScanner.runMdlsUpdateScan(allDbApps)
+    const { updatedApps, updatedCount, deletedApps } =
+      await appScanner.runMdlsUpdateScan(allDbApps)
 
+    // 处理更新的 app
     if (updatedCount > 0 && updatedApps.length > 0) {
       const db = this.dbUtils.getDb()
 
@@ -1532,6 +1534,50 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           const itemId = appInfo.uniqueId
           await this.searchIndex?.removeItems([itemId])
           await this._syncKeywordsForApp(appInfo)
+        }
+      }
+    }
+
+    // 处理删除的 app（文件不存在，从数据库中删除）
+    if (deletedApps.length > 0) {
+      const db = this.dbUtils.getDb()
+      console.log(
+        formatLog(
+          'AppProvider',
+          `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
+          LogStyle.process
+        )
+      )
+
+      for (const app of deletedApps) {
+        try {
+          const extensions = await this.dbUtils.getFileExtensions(app.id)
+          const itemId = extensions.find((e) => e.key === 'bundleId')?.value || app.path
+
+          await db.transaction(async (tx) => {
+            await tx.delete(filesSchema).where(eq(filesSchema.id, app.id))
+            await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, app.id))
+          })
+
+          await this.searchIndex?.removeItems([itemId])
+
+          console.log(
+            formatLog(
+              'AppProvider',
+              `App deleted from database: ${chalk.cyan(app.path)}`,
+              LogStyle.success
+            )
+          )
+        } catch (error) {
+          console.error(
+            formatLog(
+              'AppProvider',
+              `Error deleting app ${chalk.red(app.path)}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              LogStyle.error
+            )
+          )
         }
       }
     }
