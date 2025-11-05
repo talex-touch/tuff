@@ -484,8 +484,7 @@ function build() {
   if (normalizedTarget === 'mac') {
     console.log('\n=== Fixing macOS executable permissions ===');
     try {
-      function fixAppPermissions(appPath) {
-        const executablePath = path.join(appPath, 'Contents', 'MacOS', 'tuff');
+      function fixExecutablePermissions(executablePath) {
         if (fs.existsSync(executablePath)) {
           try {
             const stats = fs.statSync(executablePath);
@@ -496,11 +495,72 @@ function build() {
               console.log(`  Fixing permissions for: ${executablePath}`);
               fs.chmodSync(executablePath, 0o755);
               console.log(`  ✓ Fixed permissions`);
+              return true;
             } else {
               console.log(`  ✓ Permissions already correct: ${executablePath}`);
+              return false;
             }
           } catch (err) {
             console.warn(`  Warning: Cannot fix permissions for ${executablePath}: ${err.message}`);
+            return false;
+          }
+        }
+        return false;
+      }
+
+      function fixAppPermissions(appPath) {
+        // Fix main executable
+        const executablePath = path.join(appPath, 'Contents', 'MacOS', 'tuff');
+        fixExecutablePermissions(executablePath);
+
+        // Fix all Helper executables in Frameworks
+        const frameworksPath = path.join(appPath, 'Contents', 'Frameworks');
+        if (fs.existsSync(frameworksPath)) {
+          // Find all Helper.app bundles
+          try {
+            const frameworks = fs.readdirSync(frameworksPath, { withFileTypes: true });
+            frameworks.forEach(framework => {
+              if (framework.isDirectory() && framework.name.includes('Helper')) {
+                const helperAppPath = path.join(frameworksPath, framework.name);
+                const helperMacOSPath = path.join(helperAppPath, 'Contents', 'MacOS');
+
+                if (fs.existsSync(helperMacOSPath)) {
+                  try {
+                    const helperFiles = fs.readdirSync(helperMacOSPath, { withFileTypes: true });
+                    helperFiles.forEach(helperFile => {
+                      if (helperFile.isFile()) {
+                        const helperPath = path.join(helperMacOSPath, helperFile.name);
+                        // Fix permissions for all files in MacOS directory (they should be executables)
+                        fixExecutablePermissions(helperPath);
+                      }
+                    });
+                  } catch (err) {
+                    console.warn(`  Warning: Cannot read Helper MacOS directory ${helperMacOSPath}: ${err.message}`);
+                  }
+                }
+              }
+            });
+          } catch (err) {
+            console.warn(`  Warning: Cannot read Frameworks directory: ${err.message}`);
+          }
+
+          // Fix Electron Framework Helpers (crashpad_handler, etc.)
+          const electronFrameworkPath = path.join(frameworksPath, 'Electron Framework.framework');
+          if (fs.existsSync(electronFrameworkPath)) {
+            const helpersPath = path.join(electronFrameworkPath, 'Helpers');
+            if (fs.existsSync(helpersPath)) {
+              try {
+                const helpers = fs.readdirSync(helpersPath);
+                helpers.forEach(helper => {
+                  const helperPath = path.join(helpersPath, helper);
+                  if (fs.statSync(helperPath).isFile() && !helper.endsWith('.dylib')) {
+                    fixExecutablePermissions(helperPath);
+                  }
+                });
+              } catch (err) {
+                console.warn(`  Warning: Cannot read Helpers directory: ${err.message}`);
+              }
+            }
           }
         }
       }
@@ -529,6 +589,17 @@ function build() {
           fixAppPermissions(appPath);
         });
         console.log(`✓ Fixed permissions for ${appDirs.length} .app bundle(s)`);
+
+        // Also remove quarantine attribute to allow running unsigned apps
+        console.log('\n=== Removing quarantine attribute ===');
+        appDirs.forEach(appPath => {
+          try {
+            execSync(`xattr -dr com.apple.quarantine "${appPath}"`, { stdio: 'inherit' });
+            console.log(`  ✓ Removed quarantine from: ${appPath}`);
+          } catch (err) {
+            console.warn(`  Warning: Failed to remove quarantine from ${appPath}: ${err.message}`);
+          }
+        });
       } else {
         console.log('  No .app bundles found to fix');
       }

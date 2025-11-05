@@ -259,7 +259,18 @@ export class TrayIconProvider {
           path.resolve(appPath, '..', 'resources', iconName),
           path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
           ...(process.resourcesPath
-            ? [path.resolve(process.resourcesPath, 'resources', iconName)]
+            ? [
+                path.resolve(process.resourcesPath, 'resources', iconName),
+                path.resolve(process.resourcesPath, 'app', 'resources', iconName)
+              ]
+            : []),
+          // macOS-specific paths (Contents/Resources)
+          ...(process.platform === 'darwin'
+            ? [
+                path.resolve(appPath, '..', '..', '..', 'Resources', iconName),
+                path.resolve(appPath, '..', '..', '..', 'Resources', 'app', 'resources', iconName),
+                path.resolve(__dirname, '..', '..', '..', '..', '..', 'build', iconName)
+              ]
             : [])
         ]
 
