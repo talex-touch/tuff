@@ -7,6 +7,48 @@ const os = require('os');
 const projectRoot = path.join(__dirname, '..');
 process.chdir(projectRoot);
 
+/**
+ * Detect if version contains beta
+ * @param {string} version - Version string (e.g., "2.4.3-beta.9" or "v2.4.3-beta.9")
+ * @returns {boolean} True if version contains beta
+ */
+function isBetaVersion(version) {
+  if (!version) return false
+  // Remove 'v' prefix if present
+  const normalizedVersion = version.replace(/^v/i, '')
+  return normalizedVersion.includes('-beta.') || normalizedVersion.includes('-beta')
+}
+
+/**
+ * Convert beta version to snapshot version format
+ * @param {string} version - Beta version string (e.g., "2.4.3-beta.9" or "v2.4.3-beta.9")
+ * @returns {string} Snapshot version (e.g., "SNAPSHOT-2.4.3-9")
+ */
+function convertBetaToSnapshotVersion(version) {
+  if (!version) return version
+  // Remove 'v' prefix if present
+  let normalizedVersion = version.replace(/^v/i, '')
+
+  // Match pattern: X.Y.Z-beta.N
+  const betaMatch = normalizedVersion.match(/^(\d+\.\d+\.\d+)-beta\.(\d+)$/i)
+  if (betaMatch) {
+    const [, baseVersion, betaNumber] = betaMatch
+    return `SNAPSHOT-${baseVersion}-${betaNumber}`
+  }
+
+  // Fallback: try to extract base version and beta number
+  const parts = normalizedVersion.split('-beta.')
+  if (parts.length === 2) {
+    const baseVersion = parts[0]
+    const betaNumber = parts[1]
+    return `SNAPSHOT-${baseVersion}-${betaNumber}`
+  }
+
+  // If pattern doesn't match, return original
+  console.warn(`Warning: Could not parse beta version "${version}", using original`)
+  return version
+}
+
 function parseArgs(argv) {
   const result = {
     target: process.env.BUILD_TARGET,
@@ -77,7 +119,38 @@ function build() {
     process.exit(1);
   }
 
-  const buildType = (type || 'release').toLowerCase();
+  // Read version from package.json
+  const packageJsonPath = path.join(projectRoot, 'package.json');
+  let packageVersion = '0.0.0';
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    packageVersion = packageJson.version || '0.0.0';
+    console.log(`Detected version from package.json: ${packageVersion}`);
+  } catch (err) {
+    console.warn(`Warning: Could not read package.json: ${err.message}`);
+  }
+
+  // Auto-detect build type from version if beta
+  // Beta versions always use snapshot build, regardless of explicit type
+  let finalBuildType = (type || 'release').toLowerCase();
+  let finalVersion = packageVersion;
+
+  if (isBetaVersion(packageVersion)) {
+    console.log(`\n✓ Beta version detected: ${packageVersion}`);
+    // Force snapshot build for beta versions
+    finalBuildType = 'snapshot';
+    finalVersion = convertBetaToSnapshotVersion(packageVersion);
+    console.log(`  → Auto-switching to snapshot build (beta versions always use snapshot)`);
+    console.log(`  → Converting version: ${packageVersion} → ${finalVersion}`);
+    if (type && type.toLowerCase() !== 'snapshot') {
+      console.log(`  → Note: Explicit --type=${type} was overridden for beta version`);
+    }
+  } else {
+    // For non-beta versions, use provided type or default to release
+    finalBuildType = (type || 'release').toLowerCase();
+  }
+
+  const buildType = finalBuildType;
   const normalizedTarget = target.toLowerCase();
 
   const supportedTargets = ['win', 'mac', 'linux'];
@@ -108,6 +181,12 @@ function build() {
   }
 
   process.env.BUILD_TYPE = buildType;
+  // Set APP_VERSION environment variable for prepare-out-package-json.js
+  if (finalVersion !== packageVersion) {
+    process.env.APP_VERSION = finalVersion;
+    console.log(`Setting APP_VERSION environment variable: ${finalVersion}`);
+  }
+
   console.log('Running application build (npm run build)...');
   // Skip typecheck in snapshot/release builds if SKIP_TYPECHECK is set
   const buildCmd = process.env.SKIP_TYPECHECK === 'true'
@@ -115,7 +194,18 @@ function build() {
     : 'npm run build';
 
   try {
-    execSync(buildCmd, { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: buildType } });
+    const buildEnv = {
+      ...process.env,
+      BUILD_TYPE: buildType
+    };
+    // Only set APP_VERSION if version was converted
+    if (finalVersion !== packageVersion) {
+      buildEnv.APP_VERSION = finalVersion;
+    }
+    execSync(buildCmd, {
+      stdio: 'inherit',
+      env: buildEnv
+    });
   } catch (error) {
     console.error('\n❌ Application build failed!');
     console.error(`Exit code: ${error.status || error.code}`);
@@ -190,6 +280,26 @@ function build() {
   }
 
   console.log('✓ Out directory verification passed\n');
+
+  // Verify that out/package.json has the correct version (if conversion was applied)
+  if (finalVersion !== packageVersion) {
+    try {
+      const outPackageJsonPath = path.join(outDir, 'package.json');
+      if (fs.existsSync(outPackageJsonPath)) {
+        const outPkg = JSON.parse(fs.readFileSync(outPackageJsonPath, 'utf8'));
+        if (outPkg.version !== finalVersion) {
+          console.log(`\n=== Updating out/package.json version to: ${finalVersion} ===`);
+          outPkg.version = finalVersion;
+          fs.writeFileSync(outPackageJsonPath, JSON.stringify(outPkg, null, 2));
+          console.log(`✓ Updated out/package.json version to ${finalVersion}`);
+        } else {
+          console.log(`✓ Verified out/package.json version: ${finalVersion}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`Warning: Failed to verify/update out/package.json version: ${err.message}`);
+    }
+  }
 
   const builderArgs = [`--${normalizedTarget}`];
 

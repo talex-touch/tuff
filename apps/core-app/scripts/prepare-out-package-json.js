@@ -73,9 +73,13 @@ modulesToCopy.forEach((moduleName) => {
     '*'
 })
 
+// Use converted version from environment variable if available (for beta -> snapshot conversion)
+// Otherwise use version from package.json
+const finalVersion = process.env.APP_VERSION || appPackageJson.version || '0.0.0'
+
 const minimalPackageJson = {
   name: '@talex-touch/core-app',
-  version: appPackageJson.version || '0.0.0',
+  version: finalVersion,
   description: 'A powerful productivity launcher and automation tool',
   main: './main/index.js',
   author: 'TalexDreamSoul',
