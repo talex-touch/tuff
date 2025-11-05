@@ -99,19 +99,34 @@ export class TouchApp implements TalexTouch.TouchApp {
       })
 
       // Try multiple paths for index.html
+      const appPath = app.getAppPath()
       const possiblePaths = [
         path.join(__dirname, '..', 'renderer', 'index.html'),
-        path.join(app.getAppPath(), 'renderer', 'index.html'),
+        path.join(appPath, 'renderer', 'index.html'),
         ...(process.resourcesPath
           ? [path.join(process.resourcesPath, 'app', 'renderer', 'index.html')]
           : [])
       ]
 
+      mainLog.info('Checking for index.html', {
+        meta: {
+          __dirname: String(__dirname),
+          appPath,
+          resourcesPath: process.resourcesPath || 'N/A',
+          possiblePaths: possiblePaths.join(', ')
+        }
+      })
+
       let url = possiblePaths[0]
       let found = false
 
       for (const testPath of possiblePaths) {
-        if (fse.existsSync(testPath)) {
+        const exists = fse.existsSync(testPath)
+        mainLog.debug(`Checking path: ${testPath}`, {
+          meta: { exists }
+        })
+
+        if (exists) {
           url = testPath
           found = true
           mainLog.info(`Found index.html at: ${testPath}`)

@@ -50,10 +50,21 @@ export class DatabaseModule extends BaseModule {
       const appPath = app.getAppPath()
       const migrationsPath = path.resolve(appPath, 'resources', 'db', 'migrations')
 
+      console.log(chalk.cyan(`[Database] Resolving migrations folder...`))
+      console.log(chalk.cyan(`[Database] app.getAppPath(): ${appPath}`))
+      console.log(chalk.cyan(`[Database] __dirname: ${__dirname}`))
+      console.log(chalk.cyan(`[Database] process.resourcesPath: ${process.resourcesPath || 'N/A'}`))
+      console.log(chalk.cyan(`[Database] Primary path: ${migrationsPath}`))
+      console.log(chalk.cyan(`[Database] Primary path exists: ${fse.existsSync(migrationsPath)}`))
+
       // First check the expected path
       if (fse.existsSync(migrationsPath)) {
         const metaJournalPath = path.resolve(migrationsPath, 'meta', '_journal.json')
+        console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
+        console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
+        
         if (fse.existsSync(metaJournalPath)) {
+          console.log(chalk.green(`[Database] Using primary migrations path: ${migrationsPath}`))
           return migrationsPath
         }
       }
@@ -68,9 +79,17 @@ export class DatabaseModule extends BaseModule {
         ...(process.resourcesPath ? [path.resolve(process.resourcesPath, 'app', 'resources', 'db', 'migrations')] : [])
       ]
 
-      for (const altPath of alternativePaths) {
+      console.log(chalk.cyan(`[Database] Trying ${alternativePaths.length} alternative paths...`))
+      for (let i = 0; i < alternativePaths.length; i++) {
+        const altPath = alternativePaths[i]
+        console.log(chalk.cyan(`[Database] Alternative ${i + 1}: ${altPath}`))
+        console.log(chalk.cyan(`[Database] Alternative ${i + 1} exists: ${fse.existsSync(altPath)}`))
+        
         if (fse.existsSync(altPath)) {
           const metaJournalPath = path.resolve(altPath, 'meta', '_journal.json')
+          console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
+          console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
+          
           if (fse.existsSync(metaJournalPath)) {
             console.log(chalk.yellow(`[Database] Using alternative migrations path: ${altPath}`))
             return altPath
@@ -79,6 +98,7 @@ export class DatabaseModule extends BaseModule {
       }
 
       // Return the expected path even if it doesn't exist (will be caught by validation)
+      console.log(chalk.red(`[Database] No valid migrations path found, returning primary path: ${migrationsPath}`))
       return migrationsPath
     } else {
       const dbFolder = path.dirname(migrationsLocator)
