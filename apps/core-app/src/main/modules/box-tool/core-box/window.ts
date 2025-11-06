@@ -483,32 +483,23 @@ export class WindowManager {
       return
     }
 
-    // 输出 URL 信息，特别是本地文件
-    const isLocalFile = url.startsWith('file://')
-    if (isLocalFile) {
-      console.log(`[CoreBox] AttachUIView - Loading local file: ${url}`)
-    } else {
-      console.log(`[CoreBox] AttachUIView - Loading URL: ${url}`)
-    }
+    console.log(`[CoreBox] AttachUIView - Loading: ${url}`)
 
     if (this.uiView) {
-      // this.detachUIView()
       console.warn('[CoreBox] UI view already attached, skipping re-attachment.')
       return
     }
 
     const injections = plugin?.__getInjections__()
 
-    // 创建动态 preload 脚本，确保 window.$plugin 在页面脚本执行前被设置
+    // Create dynamic preload script to inject window.$plugin and window.$channel before page scripts execute
     let preloadPath = injections?._.preload
     if (plugin && injections?.js) {
-      // 创建临时 preload 文件（使用绝对路径）
       const tempPreloadPath = path.resolve(
         os.tmpdir(),
         `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
       )
 
-      // 读取原始 preload（如果存在）
       let originalPreloadContent = ''
       if (injections._.preload && fse.existsSync(injections._.preload)) {
         try {
@@ -518,7 +509,6 @@ export class WindowManager {
         }
       }
 
-      // 创建 channel 脚本（提前注入）
       const channelScript = `
 (function() {
   const uniqueKey = "${plugin._uniqueChannelKey}";
@@ -671,34 +661,24 @@ export class WindowManager {
 })();
 `
 
-      // 创建合并的 preload 脚本：先注入 window.$plugin 和 window.$channel，再执行原始 preload
       const hasOriginalPreload = originalPreloadContent && originalPreloadContent.trim().length > 0
-
-      // 清理 injections.js，确保作为语句执行
       const pluginInjectionCode = injections.js.trim()
 
       const combinedPreload = `
 // Auto-generated preload script for plugin initialization
 (function() {
-  // 1. 立即注入 window.$plugin 等变量（在页面脚本执行前）
   try {
     ${pluginInjectionCode};
-    console.log('[CoreBox] window.$plugin injected successfully');
   } catch (error) {
     console.error('[CoreBox] Failed to inject window.$plugin:', error);
-    console.error('[CoreBox] Error details:', error.message, error.stack);
   }
 
-  // 2. 立即注入 window.$channel（在页面脚本执行前）
   try {
     ${channelScript}
-    console.log('[CoreBox] window.$channel injected successfully');
   } catch (error) {
     console.error('[CoreBox] Failed to inject window.$channel:', error);
-    console.error('[CoreBox] Error details:', error.message, error.stack);
   }
 
-  // 3. 执行原始 preload（如果存在）
   ${
     hasOriginalPreload
       ? `try {
@@ -712,16 +692,10 @@ export class WindowManager {
 `
       try {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
-        // 确保使用绝对路径
         preloadPath = path.resolve(tempPreloadPath)
-        console.log(`[CoreBox] Created dynamic preload script with channel: ${preloadPath}`)
-        // 调试：输出 preload 脚本的前 500 个字符
-        console.log(
-          `[CoreBox] Preload script preview (first 500 chars): ${combinedPreload.substring(0, 500)}`
-        )
+        console.log(`[CoreBox] Created dynamic preload script: ${preloadPath}`)
       } catch (error) {
         console.error(`[CoreBox] Failed to create preload script: ${tempPreloadPath}`, error)
-        // 如果创建失败，回退到原始 preload
         preloadPath = injections._.preload
       }
     }
@@ -751,8 +725,8 @@ export class WindowManager {
       this.uiViewFocused = true
     })
 
-    // 注意：window.$plugin 和 window.$channel 现在通过 preload 脚本注入（在页面脚本执行前）
-    // 样式将在 dom-ready 时注入
+    // window.$plugin and window.$channel are injected via preload script before page scripts execute
+    // Styles will be injected on dom-ready
 
     this.uiView.webContents.addListener('dom-ready', () => {
       this.applyThemeToUIView(view)
@@ -764,16 +738,9 @@ export class WindowManager {
           this.uiViewFocused = true
         }
 
-        // 注意：window.$channel 现在通过 preload 脚本注入（在页面脚本执行前）
-        // 这里不再需要注入 channel 脚本
-
-        // 注入样式
         if (injections?.styles) {
           this.uiView?.webContents.insertCSS(injections.styles)
         }
-
-        // Set plugin as active through plugin manager for consistent state management
-        // This will handle both status update and lifecycle event emission
         if (pluginModule.pluginManager) {
           pluginModule.pluginManager.setActivePlugin(plugin.name)
         } else {
@@ -790,12 +757,6 @@ export class WindowManager {
       height: bounds.height - 60
     })
 
-    // 在加载 URL 前再次输出，特别是本地文件
-    if (url.startsWith('file://')) {
-      console.log(`[CoreBox] Loading local file via loadURL: ${url}`)
-    } else {
-      console.log(`[CoreBox] Loading URL via loadURL: ${url}`)
-    }
     this.uiView.webContents.loadURL(url)
   }
 
