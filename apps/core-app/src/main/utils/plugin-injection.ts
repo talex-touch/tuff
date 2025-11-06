@@ -23,11 +23,52 @@ export function getJs(options) {
                 themeStyle: ${JSON.stringify(themeConfig)}
             }
 
-            window.clsL = document.body.parentNode['classList']
+            // 延迟 DOM 操作到 DOM ready 时执行
+            function applyThemeStyles() {
+                if (document.body && document.body.parentNode) {
+                    const clsL = document.body.parentNode['classList']
+                    window.clsL = clsL
+                    
+                    if (window.$config.themeStyle['dark']) {
+                        clsL.add('dark')
+                    } else {
+                        clsL.remove('dark')
+                    }
+                    
+                    if (window.$config.themeStyle['blur']) {
+                        clsL.add('touch-blur')
+                    } else {
+                        clsL.remove('touch-blur')
+                    }
+                    
+                    if (window.$config.themeStyle['coloring']) {
+                        clsL.add('coloring')
+                    } else {
+                        clsL.remove('coloring')
+                    }
+                } else {
+                    // DOM 还没准备好，等待
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyThemeStyles)
+                    } else {
+                        // 如果已经加载完成但 body 还不存在，延迟重试
+                        setTimeout(applyThemeStyles, 0)
+                    }
+                }
+            }
 
-            window.$config.themeStyle['dark'] ? clsL.add('dark') : clsL.remove('dark')
-            window.$config.themeStyle['blur'] ? clsL.add('touch-blur') : clsL.remove('touch-blur')
-            window.$config.themeStyle['coloring'] ? clsL.add('coloring') : clsL.remove('coloring')
+            // 如果 DOM 已经准备好，立即执行
+            if (document.readyState !== 'loading' && document.body) {
+                applyThemeStyles()
+            } else {
+                // 等待 DOM ready
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', applyThemeStyles)
+                } else {
+                    // 使用 setTimeout 确保在下一个事件循环中执行
+                    setTimeout(applyThemeStyles, 0)
+                }
+            }
 
         })()
     `

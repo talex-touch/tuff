@@ -2,6 +2,8 @@ import { BoxWindowOption } from '../../../config/default'
 import { app, screen, WebContentsView, nativeTheme } from 'electron'
 import path from 'path'
 import * as fs from 'fs'
+import fse from 'fs-extra'
+import os from 'os'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 import chalk from 'chalk'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
@@ -481,6 +483,14 @@ export class WindowManager {
       return
     }
 
+    // 输出 URL 信息，特别是本地文件
+    const isLocalFile = url.startsWith('file://')
+    if (isLocalFile) {
+      console.log(`[CoreBox] AttachUIView - Loading local file: ${url}`)
+    } else {
+      console.log(`[CoreBox] AttachUIView - Loading URL: ${url}`)
+    }
+
     if (this.uiView) {
       // this.detachUIView()
       console.warn('[CoreBox] UI view already attached, skipping re-attachment.')
@@ -488,8 +498,236 @@ export class WindowManager {
     }
 
     const injections = plugin?.__getInjections__()
+
+    // 创建动态 preload 脚本，确保 window.$plugin 在页面脚本执行前被设置
+    let preloadPath = injections?._.preload
+    if (plugin && injections?.js) {
+      // 创建临时 preload 文件（使用绝对路径）
+      const tempPreloadPath = path.resolve(
+        os.tmpdir(),
+        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
+      )
+
+      // 读取原始 preload（如果存在）
+      let originalPreloadContent = ''
+      if (injections._.preload && fse.existsSync(injections._.preload)) {
+        try {
+          originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
+        } catch (error) {
+          console.warn(`[CoreBox] Failed to read original preload: ${injections._.preload}`, error)
+        }
+      }
+
+      // 创建 channel 脚本（提前注入）
+      const channelScript = `
+(function() {
+  const uniqueKey = "${plugin._uniqueChannelKey}";
+  const electron = require('electron')
+  const ChannelType = ${JSON.stringify(ChannelType)};
+  const DataCode = ${JSON.stringify(DataCode)};
+
+  class TouchChannel {
+    channelMap = new Map();
+    pendingMap = new Map();
+
+    constructor() {
+      electron.ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
+    }
+
+    __parse_raw_data(e, arg) {
+      if (arg) {
+        const { name, header, code, plugin, data, sync } = arg;
+        if (header) {
+          const { uniqueKey: thisUniqueKey } = header
+          if (!thisUniqueKey) {
+            console.warn('[CoreBox] Plugin uniqueKey not found in header:', arg)
+          } else if (thisUniqueKey !== uniqueKey) {
+            console.error("[FatalError] Plugin uniqueKey not match!", e, arg, thisUniqueKey, uniqueKey)
+            return null;
+          }
+
+          return {
+            header: {
+              status: header.status || 'request',
+              type: ChannelType.MAIN,
+              _originData: arg,
+              event: e || undefined
+            },
+            sync,
+            code,
+            data,
+            plugin,
+            name: name
+          };
+        }
+      }
+      console.error(e, arg);
+      return null;
+    }
+
+    __handle_main(e, arg) {
+      console.debug(e, arg)
+      const rawData = this.__parse_raw_data(e, arg);
+      if (!rawData?.header) {
+        console.error('Invalid message: ', arg);
+        return;
+      }
+      if (rawData.header.status === 'reply' && rawData.sync) {
+        const { id } = rawData.sync;
+        return this.pendingMap.get(id)?.(rawData);
+      }
+      this.channelMap.get(rawData.name)?.forEach((func) => {
+        const handInData = {
+          reply: (code, data) => {
+            e.sender.send(
+              '@plugin-process-message',
+              this.__parse_sender(code, rawData, data, rawData.sync)
+            );
+          },
+          ...rawData
+        };
+        func(handInData);
+        handInData.reply(DataCode.SUCCESS, undefined);
+      });
+    }
+
+    __parse_sender(code, rawData, data, sync) {
+      return {
+        code,
+        data,
+        sync: !sync ? undefined : {
+          timeStamp: new Date().getTime(),
+          timeout: sync.timeout,
+          id: sync.id
+        },
+        name: rawData.name,
+        header: {
+          status: 'reply',
+          type: rawData.header.type,
+          _originData: rawData.header._originData
+        }
+      };
+    }
+
+    regChannel(eventName, callback) {
+      const listeners = this.channelMap.get(eventName) || [];
+      if (!listeners.includes(callback)) {
+        listeners.push(callback);
+      } else {
+        return () => {};
+      }
+      this.channelMap.set(eventName, listeners);
+      return () => {
+        const index = listeners.indexOf(callback);
+        if (index !== -1) {
+          listeners.splice(index, 1);
+        }
+      };
+    }
+
+    send(eventName, arg) {
+      const uniqueId = \`\${new Date().getTime()}#\${eventName}@\${Math.random().toString(12)}\`;
+      const data = {
+        code: DataCode.SUCCESS,
+        data: arg,
+        sync: {
+          timeStamp: new Date().getTime(),
+          timeout: 10000,
+          id: uniqueId
+        },
+        name: eventName,
+        header: {
+          uniqueKey,
+          status: 'request',
+          type: ChannelType.PLUGIN
+        }
+      };
+      return new Promise((resolve) => {
+        electron.ipcRenderer.send('@plugin-process-message', data);
+        this.pendingMap.set(uniqueId, (res) => {
+          this.pendingMap.delete(uniqueId);
+          resolve(res.data);
+        });
+      });
+    }
+
+    sendSync(eventName, arg) {
+      const data = {
+        code: DataCode.SUCCESS,
+        data: arg,
+        name: eventName,
+        header: {
+          uniqueKey,
+          status: 'request',
+          type: ChannelType.PLUGIN
+        }
+      };
+      const res = this.__parse_raw_data(null, electron.ipcRenderer.sendSync('@plugin-process-message', data));
+      if (res?.header?.status === 'reply') return res.data;
+      return res;
+    }
+  }
+  window['$channel'] = new TouchChannel();
+})();
+`
+
+      // 创建合并的 preload 脚本：先注入 window.$plugin 和 window.$channel，再执行原始 preload
+      const hasOriginalPreload = originalPreloadContent && originalPreloadContent.trim().length > 0
+
+      // 清理 injections.js，确保作为语句执行
+      const pluginInjectionCode = injections.js.trim()
+
+      const combinedPreload = `
+// Auto-generated preload script for plugin initialization
+(function() {
+  // 1. 立即注入 window.$plugin 等变量（在页面脚本执行前）
+  try {
+    ${pluginInjectionCode};
+    console.log('[CoreBox] window.$plugin injected successfully');
+  } catch (error) {
+    console.error('[CoreBox] Failed to inject window.$plugin:', error);
+    console.error('[CoreBox] Error details:', error.message, error.stack);
+  }
+
+  // 2. 立即注入 window.$channel（在页面脚本执行前）
+  try {
+    ${channelScript}
+    console.log('[CoreBox] window.$channel injected successfully');
+  } catch (error) {
+    console.error('[CoreBox] Failed to inject window.$channel:', error);
+    console.error('[CoreBox] Error details:', error.message, error.stack);
+  }
+
+  // 3. 执行原始 preload（如果存在）
+  ${
+    hasOriginalPreload
+      ? `try {
+    ${originalPreloadContent};
+  } catch (error) {
+    console.error('[CoreBox] Failed to execute original preload:', error);
+  }`
+      : '// No original preload script'
+  }
+})();
+`
+      try {
+        fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
+        // 确保使用绝对路径
+        preloadPath = path.resolve(tempPreloadPath)
+        console.log(`[CoreBox] Created dynamic preload script with channel: ${preloadPath}`)
+        // 调试：输出 preload 脚本的前 500 个字符
+        console.log(
+          `[CoreBox] Preload script preview (first 500 chars): ${combinedPreload.substring(0, 500)}`
+        )
+      } catch (error) {
+        console.error(`[CoreBox] Failed to create preload script: ${tempPreloadPath}`, error)
+        // 如果创建失败，回退到原始 preload
+        preloadPath = injections._.preload
+      }
+    }
+
     const webPreferences: Electron.WebPreferences = {
-      preload: injections?._.preload || undefined,
+      preload: preloadPath || undefined,
       webSecurity: false,
       nodeIntegration: true,
       nodeIntegrationInSubFrames: true,
@@ -513,6 +751,9 @@ export class WindowManager {
       this.uiViewFocused = true
     })
 
+    // 注意：window.$plugin 和 window.$channel 现在通过 preload 脚本注入（在页面脚本执行前）
+    // 样式将在 dom-ready 时注入
+
     this.uiView.webContents.addListener('dom-ready', () => {
       this.applyThemeToUIView(view)
       this.runUIViewDarkThemeSync()
@@ -523,164 +764,11 @@ export class WindowManager {
           this.uiViewFocused = true
         }
 
-        const channelScript = `
-        (() => {
-            const uniqueKey = "${plugin._uniqueChannelKey}";
-            const electron = require('electron')
-            const ChannelType = ${JSON.stringify(ChannelType)};
-            const DataCode = ${JSON.stringify(DataCode)};
+        // 注意：window.$channel 现在通过 preload 脚本注入（在页面脚本执行前）
+        // 这里不再需要注入 channel 脚本
 
-            class TouchChannel {
-              channelMap = new Map();
-              pendingMap = new Map();
-
-              constructor() {
-                electron.ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
-              }
-
-              __parse_raw_data(e, arg) {
-                if (arg) {
-                  const { name, header, code, plugin, data, sync } = arg;
-                  if (header) {
-
-                    const { uniqueKey: thisUniqueKey } = header
-                    if (!thisUniqueKey) {
-                      console.warn('[CoreBox] Plugin uniqueKey not found in header:', arg)
-                    } else if (thisUniqueKey !== uniqueKey) {
-                      console.error("[FatalError] Plugin uniqueKey not match!", e, arg, thisUniqueKey, uniqueKey)
-                      return null;
-                    }
-
-                    return {
-                      header: {
-                        status: header.status || 'request',
-                        type: ChannelType.MAIN,
-                        _originData: arg,
-                        event: e || undefined
-                      },
-                      sync,
-                      code,
-                      data,
-                      plugin,
-                      name: name
-                    };
-                  }
-                }
-                console.error(e, arg);
-                return null;
-              }
-
-              __handle_main(e, arg) {
-                console.debug(e, arg)
-                const rawData = this.__parse_raw_data(e, arg);
-                if (!rawData?.header) {
-                  console.error('Invalid message: ', arg);
-                  return;
-                }
-                if (rawData.header.status === 'reply' && rawData.sync) {
-                  const { id } = rawData.sync;
-                  return this.pendingMap.get(id)?.(rawData);
-                }
-                this.channelMap.get(rawData.name)?.forEach((func) => {
-                  const handInData = {
-                    reply: (code, data) => {
-                      e.sender.send(
-                        '@plugin-process-message',
-                        this.__parse_sender(code, rawData, data, rawData.sync)
-                      );
-                    },
-                    ...rawData
-                  };
-                  func(handInData);
-                  handInData.reply(DataCode.SUCCESS, undefined);
-                });
-              }
-
-              __parse_sender(code, rawData, data, sync) {
-                return {
-                  code,
-                  data,
-                  sync: !sync ? undefined : {
-                    timeStamp: new Date().getTime(),
-                    timeout: sync.timeout,
-                    id: sync.id
-                  },
-                  name: rawData.name,
-                  header: {
-                    status: 'reply',
-                    type: rawData.header.type,
-                    _originData: rawData.header._originData
-                  }
-                };
-              }
-
-              regChannel(eventName, callback) {
-                const listeners = this.channelMap.get(eventName) || [];
-                if (!listeners.includes(callback)) {
-                  listeners.push(callback);
-                } else {
-                  return () => {};
-                }
-                this.channelMap.set(eventName, listeners);
-                return () => {
-                  const index = listeners.indexOf(callback);
-                  if (index !== -1) {
-                    listeners.splice(index, 1);
-                  }
-                };
-              }
-
-              send(eventName, arg) {
-                const uniqueId = \`\${new Date().getTime()}#\${eventName}@\${Math.random().toString(12)}\`;
-                const data = {
-                  code: DataCode.SUCCESS,
-                  data: arg,
-                  sync: {
-                    timeStamp: new Date().getTime(),
-                    timeout: 10000,
-                    id: uniqueId
-                  },
-                  name: eventName,
-                  header: {
-                    uniqueKey,
-                    status: 'request',
-                    type: ChannelType.PLUGIN
-                  }
-                };
-                return new Promise((resolve) => {
-                  electron.ipcRenderer.send('@plugin-process-message', data);
-                  this.pendingMap.set(uniqueId, (res) => {
-                    this.pendingMap.delete(uniqueId);
-                    resolve(res.data);
-                  });
-                });
-              }
-
-              sendSync(eventName, arg) {
-                const data = {
-                  code: DataCode.SUCCESS,
-                  data: arg,
-                  name: eventName,
-                  header: {
-                    uniqueKey,
-                    status: 'request',
-                    type: ChannelType.PLUGIN
-                  }
-                };
-                const res = this.__parse_raw_data(null, electron.ipcRenderer.sendSync('@plugin-process-message', data));
-                if (res?.header?.status === 'reply') return res.data;
-                return res;
-              }
-            }
-            window['$channel'] = new TouchChannel();
-        })();
-        `
-        this.uiView?.webContents.executeJavaScript(channelScript)
-
-        if (injections.js) {
-          this.uiView?.webContents.executeJavaScript(injections.js)
-        }
-        if (injections.styles) {
+        // 注入样式
+        if (injections?.styles) {
           this.uiView?.webContents.insertCSS(injections.styles)
         }
 
@@ -701,6 +789,13 @@ export class WindowManager {
       width: bounds.width,
       height: bounds.height - 60
     })
+
+    // 在加载 URL 前再次输出，特别是本地文件
+    if (url.startsWith('file://')) {
+      console.log(`[CoreBox] Loading local file via loadURL: ${url}`)
+    } else {
+      console.log(`[CoreBox] Loading URL via loadURL: ${url}`)
+    }
     this.uiView.webContents.loadURL(url)
   }
 
