@@ -36,6 +36,27 @@
       "when": 1759457085635,
       "tag": "0004_outstanding_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1762394229048,
+      "tag": "0005_orange_wiccan",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1762394850342,
+      "tag": "0006_wide_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1762395751836,
+      "tag": "0007_remarkable_silver_sable",
+      "breakpoints": true
     }
   ]
 }

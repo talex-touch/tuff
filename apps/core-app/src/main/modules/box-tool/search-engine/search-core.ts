@@ -30,6 +30,8 @@ import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
 import { getSentryService } from '../../sentry'
 import { performance } from 'perf_hooks'
+import { UsageSummaryService } from './usage-summary-service'
+import { QueryCompletionService } from './query-completion-service'
 
 /**
  * Generates a unique key for an activation request.
@@ -59,8 +61,11 @@ export class SearchEngineCore
   private currentGatherController: IGatherController | null = null
   private dbUtils: DbUtils | null = null
   private searchIndexService: SearchIndexService | null = null
+  private usageSummaryService: UsageSummaryService | null = null
+  private queryCompletionService: QueryCompletionService | null = null
 
   private touchApp: TouchApp | null = null
+  private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
 
   constructor() {
     if (SearchEngineCore._instance) {
@@ -289,6 +294,9 @@ export class SearchEngineCore
     )
     this.currentGatherController?.abort()
 
+    // 保存当前查询用于完成跟踪
+    this.lastSearchQuery = query.text || ''
+
     const startTime = Date.now()
     const sortingStartTime = { value: 0 }
     this._recordSearchUsage(sessionId, query)
@@ -346,7 +354,7 @@ export class SearchEngineCore
 
       searchLogger.logSearchPhase('Initialization', 'Setting up search aggregator')
 
-      const gatherController = gatherAggregator(providersToSearch, query, (update) => {
+      const gatherController = gatherAggregator(providersToSearch, query, async (update) => {
         searchLogger.searchUpdate(update.isDone, update.newResults.length)
         if (update.isDone) {
           // Handle final state and notify frontend
@@ -373,6 +381,13 @@ export class SearchEngineCore
         if (isFirstUpdate) {
           isFirstUpdate = false
           const initialItems = update.newResults.flatMap((res) => res.items)
+
+          // 批量获取使用统计并注入到 items 中
+          await this._injectUsageStats(initialItems)
+
+          // 注入查询完成权重
+          await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
+
           sortingStartTime.value = performance.now()
           const { sortedItems } = this.sorter.sort(initialItems, query, gatherController.signal)
           const sortingDuration = performance.now() - sortingStartTime.value
@@ -398,10 +413,19 @@ export class SearchEngineCore
             resultCount: sortedItems.length
           })
 
+          // 异步记录搜索结果统计（不阻塞返回）
+          this._recordSearchResults(sessionId, sortedItems).catch((error) => {
+            console.error('[SearchEngineCore] Failed to record search results:', error)
+          })
+
           resolve(initialResult)
         } else if (update.newResults.length > 0) {
           // This is a subsequent update
           const subsequentItems = update.newResults.flatMap((res) => res.items)
+
+          // 批量获取使用统计并注入到 items 中
+          await this._injectUsageStats(subsequentItems)
+
           const { sortedItems } = this.sorter.sort(subsequentItems, query, gatherController.signal)
           this._updateActivationState(update.newResults)
           sendUpdateToFrontend(sortedItems)
@@ -438,6 +462,91 @@ export class SearchEngineCore
       }
     } catch (error) {
       console.error('[SearchEngineCore] Failed to record search usage.', error)
+    }
+  }
+
+  /** Batch fetch usage stats and inject into items metadata before sorting */
+  private async _injectUsageStats(items: TuffItem[]): Promise<void> {
+    if (!this.dbUtils || items.length === 0) return
+
+    const start = performance.now()
+
+    try {
+      const keys = items.map((item) => ({
+        sourceId: item.source.id,
+        itemId: item.id
+      }))
+
+      const stats = await this.dbUtils.getUsageStatsBatch(keys)
+
+      const statsMap = new Map(stats.map((s) => [`${s.sourceId}:${s.itemId}`, s]))
+
+      let injectedCount = 0
+      for (const item of items) {
+        const key = `${item.source.id}:${item.id}`
+        const stat = statsMap.get(key)
+
+        if (stat) {
+          if (!item.meta) item.meta = {}
+          item.meta.usageStats = {
+            executeCount: stat.executeCount,
+            searchCount: stat.searchCount,
+            cancelCount: stat.cancelCount,
+            lastExecuted: stat.lastExecuted ? stat.lastExecuted.toISOString() : null,
+            lastSearched: stat.lastSearched ? stat.lastSearched.toISOString() : null,
+            lastCancelled: stat.lastCancelled ? stat.lastCancelled.toISOString() : null
+          }
+          injectedCount++
+        }
+      }
+
+      if (searchLogger.isEnabled()) {
+        const duration = performance.now() - start
+        searchLogger.logSearchPhase(
+          'Usage Stats Injection',
+          `Injected ${injectedCount}/${items.length} stats in ${duration.toFixed(2)}ms`
+        )
+      }
+    } catch (error) {
+      console.error('[SearchEngineCore] Failed to inject usage stats:', error)
+    }
+  }
+
+  /** Record search result display stats for top 10 items */
+  private async _recordSearchResults(sessionId: string, items: TuffItem[]): Promise<void> {
+    if (!this.dbUtils || items.length === 0) return
+
+    const start = performance.now()
+
+    try {
+      const topItems = items.slice(0, 10)
+
+      const updatePromises = topItems.map((item) =>
+        this.dbUtils!.incrementUsageStats(
+          item.source.id,
+          item.id,
+          item.source.type,
+          'search'
+        ).catch((error) => {
+          console.error(
+            `[SearchEngineCore] Failed to update search stats for item ${item.id}:`,
+            error
+          )
+          return null
+        })
+      )
+
+      await Promise.allSettled(updatePromises)
+
+      if (searchLogger.isEnabled()) {
+        const duration = performance.now() - start
+        searchLogger.logSearchPhase(
+          'Usage Recording',
+          `Recorded ${topItems.length} items in ${duration.toFixed(2)}ms (session: ${sessionId})`
+        )
+      }
+    } catch (error) {
+      console.error('[SearchEngineCore] Failed to record search results.', error)
     }
   }
 
@@ -516,13 +625,26 @@ export class SearchEngineCore
         })
       })
 
-      // Atomically increment the click count and update the last used timestamp
+      // 保持原有的 usageSummary 更新（向后兼容）
       await this.dbUtils.incrementUsageSummary(itemId)
+
+      // 新增：更新基于 source + id 的组合键统计
+      await this.dbUtils.incrementUsageStats(
+        item.source.id,
+        itemId,
+        item.source.type,
+        'execute'
+      )
+
+      // 记录查询完成（如果有最后的搜索查询）
+      if (this.lastSearchQuery && this.queryCompletionService) {
+        await this.queryCompletionService.recordCompletion(this.lastSearchQuery, item)
+      }
 
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Usage Recording',
-          `Recorded execute for item ${itemId} in session ${sessionId}`
+          `Recorded execute for item ${itemId} (source: ${item.source.id}) in session ${sessionId}`
         )
       }
     } catch (error) {
@@ -547,11 +669,22 @@ export class SearchEngineCore
     const db = databaseModule.getDb()
     instance.dbUtils = createDbUtils(db)
     instance.searchIndexService = new SearchIndexService(db)
+    instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
+
+    // 初始化并启动使用统计汇总服务
+    instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
+      retentionDays: 30,
+      autoCleanup: true,
+      summaryInterval: 24 * 60 * 60 * 1000 // 24 小时
+    })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
       console.log('[SearchEngineCore] All modules loaded, starting provider initialization...')
       instance.providersToLoad.forEach((provider) => instance.loadProvider(provider))
       instance.providersToLoad = []
+
+      // 启动汇总服务
+      instance.usageSummaryService?.start()
     })
 
     // Register IPC handlers
@@ -633,6 +766,9 @@ export class SearchEngineCore
       )
     }
     this.currentGatherController?.abort()
+
+    // 停止汇总服务
+    this.usageSummaryService?.stop()
   }
 }
 

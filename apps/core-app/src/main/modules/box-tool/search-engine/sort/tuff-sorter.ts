@@ -1,5 +1,6 @@
 import { TuffQuery } from '@talex-touch/utils/core-box'
 import { ISortMiddleware, TuffItem } from '../types'
+import { calculateFrequencyScore } from '../usage-utils'
 
 const DEFAULT_WEIGHTS: Record<string, number> = {
   app: 100,
@@ -64,7 +65,28 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   const matchScore = calculateMatchScore(item, searchKey)
   const weight = getWeight(item)
   const recency = item.scoring?.recency || 0
-  const frequency = item.scoring?.frequency || 0
+
+  // 使用增强的频率计算（从 meta.usageStats 读取）
+  let frequency = item.scoring?.frequency || 0
+
+  // 如果存在使用统计元数据，使用带时间衰减的计算（含 cancel 惩罚）
+  if (item.meta?.usageStats) {
+    const stats = item.meta.usageStats
+
+    const lastExecuted = stats.lastExecuted ? new Date(stats.lastExecuted) : null
+    const lastSearched = stats.lastSearched ? new Date(stats.lastSearched) : null
+    const lastCancelled = stats.lastCancelled ? new Date(stats.lastCancelled) : null
+
+    frequency = calculateFrequencyScore(
+      stats.executeCount,
+      stats.searchCount,
+      stats.cancelCount || 0,
+      lastExecuted,
+      lastSearched,
+      lastCancelled,
+      0.1 // lambda 参数，PRD 要求
+    )
+  }
 
   const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 10
 

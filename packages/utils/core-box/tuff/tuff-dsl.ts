@@ -921,6 +921,38 @@ export interface TuffMeta {
   };
 
   /**
+   * 组合键使用统计信息（基于 source + id）
+   * @description 用于智能排序的详细统计数据，包含搜索/执行/取消等多维度统计
+   */
+  usageStats?: {
+    /** 执行次数 */
+    executeCount: number;
+    /** 搜索次数 */
+    searchCount: number;
+    /** 取消/失败次数 */
+    cancelCount?: number;
+    /** 最后执行时间（ISO 字符串） */
+    lastExecuted: string | null;
+    /** 最后搜索时间（ISO 字符串） */
+    lastSearched: string | null;
+    /** 最后取消时间（ISO 字符串） */
+    lastCancelled?: string | null;
+  };
+
+  /**
+   * 查询完成统计信息
+   * @description 基于查询前缀的自动完成统计
+   */
+  completion?: {
+    /** 完成次数 */
+    count: number;
+    /** 最后完成时间（ISO 字符串） */
+    lastCompleted: string;
+    /** 完成得分 */
+    score: number;
+  };
+
+  /**
    * 插件扩展字段
    * @description 供插件存储自定义数据的字段
    */
@@ -1110,7 +1142,7 @@ export interface TuffQueryInput {
  * @description
  * 定义搜索请求的参数和过滤条件。
  * 系统根据这些参数执行搜索并返回匹配结果。
- * 
+ *
  * **重要区分**：
  * - `text`: 用户在输入框中主动输入的查询文本
  * - `inputs`: 来自剪贴板或其他来源的附加输入数据（图像、文件、富文本等）
@@ -1120,7 +1152,7 @@ export interface TuffQuery {
    * 用户输入的查询文本
    * @description 这是用户在搜索框中主动输入的文本，不包括剪贴板内容
    * @required
-   * 
+   *
    * @example
    * 用户输入 "translate" → text = "translate"
    */
@@ -1135,22 +1167,22 @@ export interface TuffQuery {
   /**
    * 多类型输入（附加数据）
    * @description 除了用户输入的文本外的其他输入数据（如剪贴板中的图像、文件、富文本等）
-   * 
+   *
    * **与 text 的区别**：
    * - `text`: 用户主动输入，总是存在
    * - `inputs`: 系统自动检测的附加数据，可能为空
-   * 
+   *
    * 当用户触发 feature 时，系统会自动检测剪贴板并填充此字段。
-   * 
+   *
    * @example
    * 场景 1: 用户输入 "translate" + 剪贴板有图片
    *   text: "translate"
    *   inputs: [{ type: 'image', content: 'data:image/png;base64,...' }]
-   * 
+   *
    * 场景 2: 用户输入 "compress" + 剪贴板有文件
-   *   text: "compress" 
+   *   text: "compress"
    *   inputs: [{ type: 'files', content: '["/path/to/file"]' }]
-   * 
+   *
    * 场景 3: 用户输入 "format" + 剪贴板有富文本
    *   text: "format"
    *   inputs: [{ type: 'html', content: 'plain text', rawContent: '<p>html</p>' }]
