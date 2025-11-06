@@ -200,6 +200,15 @@ jobs:
 
           Write-Host "Windows build environment prepared"
 
+      - name: Rebuild Electron Native Modules (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        working-directory: apps/core-app
+        run: |
+          Write-Host "Rebuilding Electron native modules for Windows (x64)..."
+          pnpm exec electron-builder install-app-deps --platform=win32 --arch=x64
+          Write-Host "Electron native modules rebuilt for Windows"
+
       - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
         shell: bash
@@ -243,6 +252,15 @@ jobs:
 
           echo "Linux build environment prepared successfully (AppImage + Debian only)"
 
+      - name: Rebuild Electron Native Modules (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        working-directory: apps/core-app
+        run: |
+          echo "Rebuilding Electron native modules for Linux..."
+          pnpm exec electron-builder install-app-deps --platform=linux --arch=x64
+          echo "Electron native modules rebuilt for Linux"
+
       - name: Install macOS Dependencies
         if: matrix.os == 'macos-latest'
         shell: bash
@@ -250,6 +268,15 @@ jobs:
           # macOS 通常不需要额外依赖，但可以检查 Xcode Command Line Tools
           xcode-select --install || echo "Xcode Command Line Tools already installed"
           echo "macOS build environment ready"
+
+      - name: Rebuild Electron Native Modules (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        working-directory: apps/core-app
+        run: |
+          echo "Rebuilding Electron native modules for macOS (arm64)..."
+          pnpm exec electron-builder install-app-deps --platform=darwin --arch=arm64
+          echo "Electron native modules rebuilt for macOS"
 
       - name: Build Tuff App
         shell: bash
