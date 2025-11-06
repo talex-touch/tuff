@@ -9,11 +9,8 @@ import 'uno.css'
 
 const app = createApp(App)
 
-// 在本地文件协议（file://）下使用 Hash 模式，否则使用 History 模式
+// Use hash mode for file:// protocol, history mode for http/https
 const isFileProtocol = window.location.protocol === 'file:'
-const historyMode = isFileProtocol ? 'hash' : 'history'
-console.log(`[Plugin Router] Using ${historyMode} mode (protocol: ${window.location.protocol}, url: ${window.location.href})`)
-
 const router = createRouter({
   history: isFileProtocol
     ? createWebHashHistory(import.meta.env.BASE_URL)
