@@ -235,9 +235,13 @@ export class AppScanner {
           }
         } catch (error) {
           // 记录更详细的错误信息
+          const hasCode =
+            typeof error === 'object' && error !== null && 'code' in error
+              ? (error as { code?: unknown }).code
+              : undefined
           const errorDetails =
             error instanceof Error
-              ? `${error.message}${error.code ? ` (code: ${error.code})` : ''}`
+              ? `${error.message}${hasCode ? ` (code: ${String(hasCode)})` : ''}`
               : String(error)
 
           console.error(
