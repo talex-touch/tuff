@@ -183,6 +183,53 @@ export const usageSummary = sqliteTable('usage_summary', {
 })
 
 /**
+ * 基于 source + item 组合键的使用统计表。
+ * 用于更精确地统计不同来源下相同项目的使用频率，支持搜索和执行的独立统计。
+ * 这是智能排序和推荐的核心数据基础。
+ */
+export const itemUsageStats = sqliteTable(
+  'item_usage_stats',
+  {
+    sourceId: text('source_id').notNull(), // 来源标识符 (source.id)
+    itemId: text('item_id').notNull(), // 项目标识符 (item.id)
+    sourceType: text('source_type').notNull(), // 来源类型 (source.type)
+    searchCount: integer('search_count').notNull().default(0), // 搜索次数
+    executeCount: integer('execute_count').notNull().default(0), // 执行次数
+    cancelCount: integer('cancel_count').notNull().default(0), // 取消/失败次数
+    lastSearched: integer('last_searched', { mode: 'timestamp' }), // 最后搜索时间
+    lastExecuted: integer('last_executed', { mode: 'timestamp' }), // 最后执行时间
+    lastCancelled: integer('last_cancelled', { mode: 'timestamp' }), // 最后取消时间
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sourceId, table.itemId] })
+  })
+)
+
+/**
+ * 查询前缀完成表
+ * 存储用户的查询前缀与实际执行的项目的映射关系
+ * 用于自动完成优化和动态匹配权重调整
+ */
+export const queryCompletions = sqliteTable('query_completions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  prefix: text('prefix').notNull(), // 查询前缀（规范化后）
+  sourceId: text('source_id').notNull(), // 执行项的来源ID
+  itemId: text('item_id').notNull(), // 执行项的ID
+  completionCount: integer('completion_count').notNull().default(1), // 完成次数
+  lastCompleted: integer('last_completed', { mode: 'timestamp' }).notNull(), // 最后完成时间
+  avgQueryLength: real('avg_query_length').notNull().default(0), // 平均查询长度
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(strftime('%s', 'now'))`)
+})
+
+/**
  * 为插件提供统一的、隔离的持久化键值对存储能力。
  */
 export const pluginData = sqliteTable(

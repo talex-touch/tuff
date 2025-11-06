@@ -146,6 +146,89 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
         .where(inArray(schema.usageSummary.itemId, itemIds))
     },
 
+    // Item Usage Stats (source + item 组合键统计)
+    async incrementUsageStats(
+      sourceId: string,
+      itemId: string,
+      sourceType: string,
+      type: 'search' | 'execute' | 'cancel'
+    ) {
+      const now = new Date()
+      const updateFields: any = {
+        updatedAt: now
+      }
+
+      if (type === 'search') {
+        updateFields.searchCount = sql`${schema.itemUsageStats.searchCount} + 1`
+        updateFields.lastSearched = now
+      } else if (type === 'execute') {
+        updateFields.executeCount = sql`${schema.itemUsageStats.executeCount} + 1`
+        updateFields.lastExecuted = now
+      } else if (type === 'cancel') {
+        updateFields.cancelCount = sql`${schema.itemUsageStats.cancelCount} + 1`
+        updateFields.lastCancelled = now
+      }
+
+      return db
+        .insert(schema.itemUsageStats)
+        .values({
+          sourceId,
+          itemId,
+          sourceType,
+          searchCount: type === 'search' ? 1 : 0,
+          executeCount: type === 'execute' ? 1 : 0,
+          cancelCount: type === 'cancel' ? 1 : 0,
+          lastSearched: type === 'search' ? now : null,
+          lastExecuted: type === 'execute' ? now : null,
+          lastCancelled: type === 'cancel' ? now : null,
+          createdAt: now,
+          updatedAt: now
+        })
+        .onConflictDoUpdate({
+          target: [schema.itemUsageStats.sourceId, schema.itemUsageStats.itemId],
+          set: updateFields
+        })
+    },
+
+    async getUsageStatsBatch(keys: Array<{ sourceId: string; itemId: string }>) {
+      if (keys.length === 0) return []
+
+      // 构建 OR 条件查询
+      const conditions = keys.map((key) =>
+        and(
+          eq(schema.itemUsageStats.sourceId, key.sourceId),
+          eq(schema.itemUsageStats.itemId, key.itemId)
+        )
+      )
+
+      // SQLite 的 IN 查询对复合键支持不好，使用 OR 条件
+      if (conditions.length === 1) {
+        return db.select().from(schema.itemUsageStats).where(conditions[0])
+      }
+
+      // 对于多个条件，使用 sql 模板构建查询
+      const sourceIds = keys.map((k) => k.sourceId)
+      const itemIds = keys.map((k) => k.itemId)
+
+      // 使用 IN 查询优化（预过滤）
+      return db
+        .select()
+        .from(schema.itemUsageStats)
+        .where(
+          and(
+            inArray(schema.itemUsageStats.sourceId, sourceIds),
+            inArray(schema.itemUsageStats.itemId, itemIds)
+          )
+        )
+    },
+
+    async getUsageStatsBySource(sourceId: string) {
+      return db
+        .select()
+        .from(schema.itemUsageStats)
+        .where(eq(schema.itemUsageStats.sourceId, sourceId))
+    },
+
     // Plugin Data
     async getPluginData(pluginId: string, key: string) {
       return db
@@ -209,6 +292,18 @@ export type DbUtils = {
   getUsageSummaryByItemIds: (
     itemIds: string[]
   ) => Promise<(typeof schema.usageSummary.$inferSelect)[]>
+  incrementUsageStats: (
+    sourceId: string,
+    itemId: string,
+    sourceType: string,
+    type: 'search' | 'execute' | 'cancel'
+  ) => Promise<any>
+  getUsageStatsBatch: (
+    keys: Array<{ sourceId: string; itemId: string }>
+  ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
+  getUsageStatsBySource: (
+    sourceId: string
+  ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>
 }
