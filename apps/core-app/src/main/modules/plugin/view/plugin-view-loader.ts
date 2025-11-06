@@ -36,8 +36,23 @@ export class PluginViewLoader {
         })
         return null
       }
-      const viewPath = path.join(plugin.pluginPath, interactionPath)
-      viewUrl = 'file://' + viewPath
+
+      // 检查 interactionPath 是否已经是文件路径（包含文件扩展名）
+      const hasFileExtension = /\.(html|htm|php|asp|aspx)$/i.test(interactionPath)
+
+      if (hasFileExtension) {
+        // 如果已经是文件路径，直接使用
+        const viewPath = path.join(plugin.pluginPath, interactionPath)
+        viewUrl = 'file://' + viewPath
+        console.log(`[PluginViewLoader] Loading file path: ${viewUrl}`)
+      } else {
+        // 如果是路由路径，拼接 index.html#<path>
+        const indexPath = path.join(plugin.pluginPath, 'index.html')
+        // 确保 interactionPath 以 / 开头作为 hash 路由
+        const hashPath = interactionPath.startsWith('/') ? interactionPath : '/' + interactionPath
+        viewUrl = 'file://' + indexPath + '#' + hashPath
+        console.log(`[PluginViewLoader] Loading route path: ${viewUrl} (hash: ${hashPath})`)
+      }
     }
 
     coreBoxManager.enterUIMode(viewUrl, plugin, feature)

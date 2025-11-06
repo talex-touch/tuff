@@ -11,6 +11,10 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   base: './',
+  server: {
+    // Vite 默认支持 History 模式，所有路由都会回退到 index.html
+    // 这样可以支持 Vue Router 的 History 模式
+  },
   resolve: {
     alias: {
       '~/': `${fileURLToPath(new URL('./src', import.meta.url))}/`,
@@ -59,6 +63,7 @@ export default defineConfig({
   ],
 
   // https://github.com/vitest-dev/vitest
+  // @ts-expect-error - test is for vitest config
   test: {
     environment: 'jsdom',
   },
