@@ -51,6 +51,7 @@ export default defineConfig({
           'commander',
           'extract-file-icon',
           'electron-log',
+          '@sentry/electron',
           'electron-updater'
         ]
       })
@@ -114,6 +115,7 @@ export default defineConfig({
           'commander',
           'extract-file-icon',
           'electron-log',
+          '@sentry/electron',
           'electron-updater'
         ]
       })

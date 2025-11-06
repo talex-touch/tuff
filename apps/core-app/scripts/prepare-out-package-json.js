@@ -8,90 +8,112 @@ const outPackageJsonPath = path.join(outDir, 'package.json')
 
 const outNodeModulesPath = path.join(outDir, 'node_modules')
 
-// Modules that should be copied to out/node_modules (including nested dependencies via recursion)
-const modulesToCopy = [
+// Core modules that must remain external and be copied into out/node_modules
+const baseModulesToCopy = [
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
   '@libsql/isomorphic-fetch',
   '@libsql/isomorphic-ws',
-  // Platform-specific packages are optional dependencies and will be copied recursively
-  // but should NOT be listed in package.json dependencies to avoid electron-builder resolution issues
-  '@libsql/darwin-arm64',
-  '@libsql/darwin-x64',
-  '@libsql/linux-arm-gnueabihf',
-  '@libsql/linux-arm-musleabihf',
-  '@libsql/linux-arm64-gnu',
-  '@libsql/linux-arm64-musl',
-  '@libsql/linux-x64-gnu',
-  '@libsql/linux-x64-musl',
-  '@libsql/win32-x64-msvc',
   'libsql',
   '@neon-rs/load',
   'detect-libc',
   'js-base64',
   'promise-limit',
-  '@electron-toolkit/preload',
-  '@electron-toolkit/utils',
-  'path-browserify',
-  'lottie-web',
   // Copy node-fetch dependency required by @libsql/hrana-client
-  // to fix electron-builder dependency resolution issue
-  'node-fetch',
-  // Copy @sentry/electron for error tracking
-  '@sentry/electron'
+  'node-fetch'
 ]
 
-// Platform-specific packages that should be copied but NOT listed in package.json
-// These are optional dependencies that electron-builder 26.0.12 has trouble resolving
-const platformSpecificPackages = new Set([
-  '@libsql/darwin-arm64',
-  '@libsql/darwin-x64',
-  '@libsql/linux-arm-gnueabihf',
-  '@libsql/linux-arm-musleabihf',
-  '@libsql/linux-arm64-gnu',
-  '@libsql/linux-arm64-musl',
-  '@libsql/linux-x64-gnu',
-  '@libsql/linux-x64-musl',
-  '@libsql/win32-x64-msvc'
-])
-
-// Build dependencies object for external modules (excluding platform-specific packages)
-const externalDependencies = {}
-modulesToCopy.forEach((moduleName) => {
-  // Skip platform-specific packages - they are optional dependencies
-  // and should not be listed in package.json to avoid electron-builder resolution issues
-  if (platformSpecificPackages.has(moduleName)) {
-    return
+// Map build targets to platform-specific libsql binaries
+const platformModuleMap = {
+  darwin: {
+    arm64: ['@libsql/darwin-arm64'],
+    x64: ['@libsql/darwin-x64']
+  },
+  linux: {
+    arm64: ['@libsql/linux-arm64-gnu', '@libsql/linux-arm64-musl'],
+    arm: ['@libsql/linux-arm-gnueabihf', '@libsql/linux-arm-musleabihf'],
+    x64: ['@libsql/linux-x64-gnu', '@libsql/linux-x64-musl']
+  },
+  win32: {
+    x64: ['@libsql/win32-x64-msvc']
   }
-
-  // Try to get version from appPackageJson.dependencies
-  // If not found, use '*' as placeholder (actual version will be in copied package.json)
-  externalDependencies[moduleName] =
-    appPackageJson.dependencies?.[moduleName] ||
-    appPackageJson.devDependencies?.[moduleName] ||
-    '*'
-})
-
-// Use converted version from environment variable if available (for beta -> snapshot conversion)
-// Otherwise use version from package.json
-const finalVersion = process.env.APP_VERSION || appPackageJson.version || '0.0.0'
-
-const minimalPackageJson = {
-  name: '@talex-touch/core-app',
-  version: finalVersion,
-  description: 'A powerful productivity launcher and automation tool',
-  main: './main/index.js',
-  author: 'TalexDreamSoul',
-  homepage: 'https://talex-touch.tagzxia.com',
-  dependencies: externalDependencies
 }
 
-fs.mkdirSync(outDir, { recursive: true })
-fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2))
+// Flatten platform-specific packages to ensure they are not declared as dependencies
+const platformSpecificPackages = new Set(
+  Object.values(platformModuleMap)
+    .flatMap(archMap => Object.values(archMap))
+    .flat()
+)
 
-fs.rmSync(outNodeModulesPath, { recursive: true, force: true })
-fs.mkdirSync(outNodeModulesPath, { recursive: true })
+const skipRecursiveModules = new Set(['electron', '@sentry/node-native'])
+
+function normalizeTargetPlatform(rawTarget) {
+  if (!rawTarget) {
+    return null
+  }
+  const lowered = rawTarget.toLowerCase()
+  if (lowered === 'mac' || lowered === 'darwin' || lowered === 'osx') {
+    return 'darwin'
+  }
+  if (lowered === 'win' || lowered === 'windows' || lowered === 'win32') {
+    return 'win32'
+  }
+  if (lowered === 'linux') {
+    return 'linux'
+  }
+  return null
+}
+
+function detectTargetPlatform() {
+  return (
+    normalizeTargetPlatform(process.env.BUILD_TARGET) ||
+    normalizeTargetPlatform(process.env.ELECTRON_PLATFORM) ||
+    process.platform
+  )
+}
+
+function detectTargetArch(targetPlatform) {
+  const archFromEnv = process.env.BUILD_ARCH || process.env.ELECTRON_ARCH
+  if (archFromEnv) {
+    return archFromEnv.toLowerCase()
+  }
+  if (targetPlatform === 'darwin') {
+    return 'arm64'
+  }
+  if (targetPlatform === 'win32' || targetPlatform === 'linux') {
+    return 'x64'
+  }
+  return process.arch.toLowerCase()
+}
+
+const targetPlatform = detectTargetPlatform()
+const targetArch = detectTargetArch(targetPlatform)
+
+const modulesToCopy = new Set(baseModulesToCopy)
+const platformModules = platformModuleMap[targetPlatform]
+
+if (platformModules) {
+  if (platformModules[targetArch]) {
+    platformModules[targetArch].forEach(moduleName => modulesToCopy.add(moduleName))
+  } else {
+    console.warn(
+      `Warning: No exact libsql binary mapping for ${targetPlatform}/${targetArch}, including all variants for this platform`
+    )
+    Object.values(platformModules).forEach(moduleList => {
+      moduleList.forEach(moduleName => modulesToCopy.add(moduleName))
+    })
+  }
+} else {
+  console.warn(
+    `Warning: Unsupported platform ${targetPlatform}, falling back to copying all libsql binaries`
+  )
+  platformSpecificPackages.forEach(moduleName => modulesToCopy.add(moduleName))
+}
+console.log(
+  `prepare-out-package-json: target=${targetPlatform}/${targetArch}, copying ${modulesToCopy.size} modules`
+)
 
 function findPackageRoot(resolvedPath, moduleName) {
   let dir = path.dirname(resolvedPath)
@@ -138,6 +160,55 @@ function resolveModuleRoot(moduleName) {
   }
 }
 
+// Build dependencies object for external modules (excluding platform-specific packages)
+const externalDependencies = {}
+modulesToCopy.forEach((moduleName) => {
+  if (platformSpecificPackages.has(moduleName)) {
+    return
+  }
+  externalDependencies[moduleName] = getModuleVersion(moduleName)
+})
+
+function getModuleVersion(moduleName) {
+  try {
+    const moduleRoot = resolveModuleRoot(moduleName)
+    const pkgJsonPath = path.join(moduleRoot, 'package.json')
+    if (fs.existsSync(pkgJsonPath)) {
+      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+      if (pkgJson.version) {
+        return pkgJson.version
+      }
+    }
+  } catch (err) {
+    // Ignore and fallback below
+  }
+  return (
+    appPackageJson.dependencies?.[moduleName] ||
+    appPackageJson.devDependencies?.[moduleName] ||
+    '*'
+  )
+}
+
+// Use converted version from environment variable if available (for beta -> snapshot conversion)
+// Otherwise use version from package.json
+const finalVersion = process.env.APP_VERSION || appPackageJson.version || '0.0.0'
+
+const minimalPackageJson = {
+  name: '@talex-touch/core-app',
+  version: finalVersion,
+  description: 'A powerful productivity launcher and automation tool',
+  main: './main/index.js',
+  author: 'TalexDreamSoul',
+  homepage: 'https://talex-touch.tagzxia.com',
+  dependencies: externalDependencies
+}
+
+fs.mkdirSync(outDir, { recursive: true })
+fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2))
+
+fs.rmSync(outNodeModulesPath, { recursive: true, force: true })
+fs.mkdirSync(outNodeModulesPath, { recursive: true })
+
 // Set to track already copied modules (to avoid infinite loops and duplicates)
 const copiedModules = new Set()
 
@@ -150,6 +221,11 @@ function copyModuleRecursive(moduleName, depth = 0) {
 
   // Skip if already copied
   if (copiedModules.has(moduleName)) {
+    return
+  }
+
+  if (skipRecursiveModules.has(moduleName)) {
+    console.log(`Skipping optional/peer dependency "${moduleName}"`)
     return
   }
 
@@ -178,10 +254,11 @@ function copyModuleRecursive(moduleName, depth = 0) {
     }
 
     // Recursively copy dependencies (including @types packages)
+    const optionalDeps = pkgJson.optionalDependencies || {}
     const allDeps = {
       ...(pkgJson.dependencies || {}),
       ...(pkgJson.peerDependencies || {}),
-      ...(pkgJson.optionalDependencies || {})
+      ...optionalDeps
     }
 
     // For packages that have @types dependencies, also copy @types packages
@@ -189,6 +266,14 @@ function copyModuleRecursive(moduleName, depth = 0) {
     for (const [depName, depVersion] of Object.entries(allDeps)) {
       // Skip workspace dependencies and internal packages
       if (depName.startsWith('@talex-touch/')) {
+        continue
+      }
+      if (skipRecursiveModules.has(depName)) {
+        console.log(`Skipping optional dependency "${depName}" of "${moduleName}"`)
+        continue
+      }
+      if (optionalDeps[depName] && !modulesToCopy.has(depName)) {
+        // Skip irrelevant optional deps (e.g. libsql binaries for other platforms)
         continue
       }
 
