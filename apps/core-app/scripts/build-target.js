@@ -1,5 +1,5 @@
 /* eslint-disable */
-const { execSync, execFileSync } = require('child_process');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -319,8 +319,11 @@ function build() {
   if (effectiveArch) {
     installAppDepsArgs.push(`--arch=${effectiveArch}`);
   }
+  const builderBinForShell = process.platform === 'win32' ? `"${builderBin}"` : builderBin;
+  const installCommand = `${builderBinForShell} ${installAppDepsArgs.join(' ')}`.trim();
+
   try {
-    execFileSync(builderBin, installAppDepsArgs, {
+    execSync(installCommand, {
       stdio: 'inherit',
       env: {
         ...process.env,
