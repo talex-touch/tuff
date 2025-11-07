@@ -307,6 +307,69 @@ function build() {
   if (skipInstallAppDeps) {
     console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n');
   } else {
+    // Sync lockfile with out/package.json before install-app-deps
+    // This ensures the lockfile matches the generated package.json
+    const outDir = path.join(projectRoot, 'out');
+    const outPackageJsonPath = path.join(outDir, 'package.json');
+    
+    if (fs.existsSync(outPackageJsonPath)) {
+      console.log('=== Syncing lockfile with out/package.json ===');
+      const workspaceRoot = path.join(projectRoot, '../..');
+      const originalCwd = process.cwd();
+      
+      try {
+        // First, try to update lockfile from workspace root
+        // This ensures pnpm recognizes the out/package.json as part of the workspace
+        process.chdir(workspaceRoot);
+        
+        // Run pnpm install with --lockfile-only and --no-frozen-lockfile
+        // This updates the lockfile to match all package.json files including out/package.json
+        // --no-frozen-lockfile is necessary in CI to allow lockfile updates
+        execSync('pnpm install --lockfile-only --no-frozen-lockfile', {
+          stdio: 'pipe', // Use pipe to suppress output unless there's an error
+          cwd: workspaceRoot,
+          env: {
+            ...process.env,
+            PWD: workspaceRoot
+          }
+        });
+        
+        process.chdir(originalCwd);
+        console.log('✓ Lockfile synced with out/package.json\n');
+      } catch (error) {
+        // If lockfile-only fails, try a different approach: run full pnpm install
+        // This will update the lockfile entry for apps/core-app/out
+        console.log('Lockfile-only sync failed, trying alternative method...');
+        try {
+          // Ensure we're in workspace root (might have failed before chdir)
+          if (process.cwd() !== workspaceRoot) {
+            process.chdir(workspaceRoot);
+          }
+          
+          // Run pnpm install with --no-frozen-lockfile to update lockfile
+          // This will update the apps/core-app/out entry in the lockfile
+          execSync('pnpm install --no-frozen-lockfile', {
+            stdio: 'pipe',
+            cwd: workspaceRoot,
+            env: {
+              ...process.env,
+              PWD: workspaceRoot
+            }
+          });
+          
+          process.chdir(originalCwd);
+          console.log('✓ Lockfile synced with out/package.json (alternative method)\n');
+        } catch (fallbackError) {
+          // Ensure we restore cwd even on error
+          if (process.cwd() !== originalCwd) {
+            process.chdir(originalCwd);
+          }
+          console.warn('Warning: Failed to sync lockfile, continuing anyway:', fallbackError.message);
+          // Don't throw - allow build to continue as lockfile sync is best-effort
+        }
+      }
+    }
+    
     console.log('=== Rebuilding Electron native modules for packaged app ===');
     const installPlatformMap = {
       win: 'win32',
