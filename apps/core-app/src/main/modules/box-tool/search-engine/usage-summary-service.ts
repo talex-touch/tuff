@@ -1,7 +1,7 @@
 import { DbUtils } from '../../../db/utils'
 import * as schema from '../../../db/schema'
 import { lt, sql } from 'drizzle-orm'
-import { createLogger } from '../../../utils/logger'
+import { Primitive, createLogger } from '../../../utils/logger'
 
 const log = createLogger('UsageSummaryService')
 
@@ -214,7 +214,12 @@ export class UsageSummaryService {
 
   updateConfig(config: Partial<SummaryConfig>): void {
     this.config = { ...this.config, ...config }
-    log.info('Configuration updated', { meta: this.config })
+    const metaConfig: Record<string, Primitive> = {
+      retentionDays: this.config.retentionDays,
+      autoCleanup: this.config.autoCleanup,
+      summaryInterval: this.config.summaryInterval
+    }
+    log.info('Configuration updated', { meta: metaConfig })
 
     if (this.isRunning) {
       this.stop()
@@ -230,4 +235,3 @@ export class UsageSummaryService {
     return { ...this.stats }
   }
 }
-

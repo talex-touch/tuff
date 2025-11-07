@@ -50,6 +50,27 @@ const settings = ref({
 
 const isLoading = ref(false)
 
+function ensureWindowSettings(): void {
+  if (!appSetting.window) {
+    appSetting.window = {
+      closeToTray: true,
+      startMinimized: false,
+      startSilent: false
+    }
+    return
+  }
+
+  if (appSetting.window.closeToTray === undefined) {
+    appSetting.window.closeToTray = true
+  }
+  if (appSetting.window.startMinimized === undefined) {
+    appSetting.window.startMinimized = false
+  }
+  if (appSetting.window.startSilent === undefined) {
+    appSetting.window.startSilent = false
+  }
+}
+
 // Initialize appSetting.setup if not exists
 if (!appSetting.setup) {
   appSetting.setup = {
@@ -114,6 +135,8 @@ function loadSettings(): void {
     settings.value.showTray = appSetting.setup.showTray ?? true
     settings.value.hideDock = appSetting.setup.hideDock ?? false
   }
+
+  ensureWindowSettings()
 
   // Load autoStart from existing setting
   try {
@@ -207,9 +230,7 @@ function updateHideDock(value: boolean): void {
 
 function updateStartSilent(value: boolean): void {
   settings.value.startSilent = value
-  if (!appSetting.window) {
-    appSetting.window = {}
-  }
+  ensureWindowSettings()
   appSetting.window.startSilent = value
   try {
     touchChannel.send('storage:save', {

@@ -113,6 +113,7 @@ function resolveBuilderBin() {
 
 function build() {
   const { target, type, publish, dir, arch } = parseArgs(process.argv.slice(2));
+  const skipInstallAppDeps = process.env.SKIP_INSTALL_APP_DEPS === 'true';
 
   if (!target) {
     console.error('Missing build target. Usage: node build-target.js --target=win|mac|linux [--type=snapshot|release]');
@@ -301,6 +302,45 @@ function build() {
     }
   }
 
+  const builderBin = resolveBuilderBin();
+
+  if (skipInstallAppDeps) {
+    console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n');
+  } else {
+    console.log('=== Rebuilding Electron native modules for packaged app ===');
+    const installPlatformMap = {
+      win: 'win32',
+      mac: 'darwin',
+      linux: 'linux'
+    };
+    const installPlatform = installPlatformMap[normalizedTarget] || normalizedTarget;
+    const effectiveArch =
+      arch ||
+      (normalizedTarget === 'mac'
+        ? 'arm64'
+        : 'x64');
+    const installAppDepsArgs = ['install-app-deps', `--platform=${installPlatform}`];
+    if (effectiveArch) {
+      installAppDepsArgs.push(`--arch=${effectiveArch}`);
+    }
+    const builderBinForShell = process.platform === 'win32' ? `"${builderBin}"` : builderBin;
+    const installCommand = `${builderBinForShell} ${installAppDepsArgs.join(' ')}`.trim();
+
+    try {
+      execSync(installCommand, {
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          BUILD_TYPE: buildType
+        }
+      });
+      console.log('✓ electron-builder install-app-deps completed\n');
+    } catch (error) {
+      console.error('\n❌ electron-builder install-app-deps failed!');
+      throw error;
+    }
+  }
+
   const builderArgs = [`--${normalizedTarget}`];
 
   if (normalizedTarget === 'linux' && !arch) {
@@ -320,7 +360,7 @@ function build() {
     builderArgs.push(`--publish=${publishPolicy}`);
   }
 
-  const builderCommand = `${resolveBuilderBin()} ${builderArgs.join(' ')}`.trim();
+  const builderCommand = `${builderBin} ${builderArgs.join(' ')}`.trim();
   console.log(`Executing electron-builder: ${builderCommand}`);
 
   // 检查构建前的 dist 目录状态
@@ -348,7 +388,6 @@ function build() {
   console.log(`Dist directory: ${distDir}`);
   console.log(`Out directory: ${outDir}`);
 
-  const builderBin = resolveBuilderBin();
   console.log(`Using electron-builder: ${builderBin}`);
 
   let builderExitCode = 0;
