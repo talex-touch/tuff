@@ -160,6 +160,51 @@ function resolveModuleRoot(moduleName) {
   }
 }
 
+// Parse lockfile to get specifiers
+function parseLockfileSpecifiers() {
+  const lockfilePath = path.join(__dirname, '../../pnpm-lock.yaml')
+  const specifiers = {}
+  
+  if (!fs.existsSync(lockfilePath)) {
+    return specifiers
+  }
+  
+  try {
+    const lockfileContent = fs.readFileSync(lockfilePath, 'utf8')
+    // Try to find apps/core-app/out first (what electron-builder compares against)
+    // Otherwise fall back to apps/core-app
+    let sectionMatch = lockfileContent.match(/^  apps\/core-app\/out:[\s\S]*?(?=\n  [a-z]|\n$)/m)
+    if (!sectionMatch) {
+      sectionMatch = lockfileContent.match(/^  apps\/core-app:[\s\S]*?(?=\n  [a-z]|\n$)/m)
+    }
+    
+    if (sectionMatch) {
+      const section = sectionMatch[0]
+      // Extract specifiers: match "package-name:" followed by "specifier: value"
+      // Pattern: package name with colon, then specifier on next line
+      // Use a regex that matches the entire pattern: package name, then specifier
+      // Package name can be scoped (@scope/name) or non-scoped (name), with optional quotes
+      const specifierPattern = /^\s+([^:\n]+?):\s*\n\s+specifier:\s+(.+)$/gm
+      let match
+      while ((match = specifierPattern.exec(section)) !== null) {
+        let pkgName = match[1].trim()
+        // Remove quotes if present
+        pkgName = pkgName.replace(/^['"]|['"]$/g, '')
+        let specifier = match[2].trim()
+        // Remove quotes from specifier value if present
+        specifier = specifier.replace(/^['"]|['"]$/g, '')
+        specifiers[pkgName] = specifier
+      }
+    }
+  } catch (err) {
+    console.warn(`Warning: Failed to parse lockfile: ${err.message}`)
+  }
+  
+  return specifiers
+}
+
+const lockfileSpecifiers = parseLockfileSpecifiers()
+
 // Build dependencies object for external modules (excluding platform-specific packages)
 const externalDependencies = {}
 modulesToCopy.forEach((moduleName) => {
@@ -170,23 +215,22 @@ modulesToCopy.forEach((moduleName) => {
 })
 
 function getModuleVersion(moduleName) {
-  try {
-    const moduleRoot = resolveModuleRoot(moduleName)
-    const pkgJsonPath = path.join(moduleRoot, 'package.json')
-    if (fs.existsSync(pkgJsonPath)) {
-      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
-      if (pkgJson.version) {
-        return pkgJson.version
-      }
-    }
-  } catch (err) {
-    // Ignore and fallback below
+  // First, check if we have a specifier from the lockfile
+  if (lockfileSpecifiers[moduleName]) {
+    return lockfileSpecifiers[moduleName]
   }
-  return (
-    appPackageJson.dependencies?.[moduleName] ||
-    appPackageJson.devDependencies?.[moduleName] ||
-    '*'
-  )
+  
+  // Then check original package.json dependencies
+  if (appPackageJson.dependencies?.[moduleName]) {
+    return appPackageJson.dependencies[moduleName]
+  }
+  
+  if (appPackageJson.devDependencies?.[moduleName]) {
+    return appPackageJson.devDependencies[moduleName]
+  }
+  
+  // Fallback to * for transitive dependencies
+  return '*'
 }
 
 // Use converted version from environment variable if available (for beta -> snapshot conversion)
