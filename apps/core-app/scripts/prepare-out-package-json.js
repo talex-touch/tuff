@@ -345,6 +345,26 @@ modulesToCopy.forEach((moduleName) => {
   copyModuleRecursive(moduleName)
 })
 
+// Verify that platform-specific modules were copied
+const platformModulesToVerify = platformModuleMap[targetPlatform]?.[targetArch] || []
+if (platformModulesToVerify.length > 0) {
+  console.log(`\n=== Verifying platform-specific modules (${targetPlatform}/${targetArch}) ===`)
+  platformModulesToVerify.forEach((moduleName) => {
+    const modulePath = path.join(outNodeModulesPath, moduleName)
+    if (fs.existsSync(modulePath)) {
+      const pkgJsonPath = path.join(modulePath, 'package.json')
+      if (fs.existsSync(pkgJsonPath)) {
+        console.log(`  ✓ ${moduleName} copied successfully`)
+      } else {
+        console.warn(`  ⚠ ${moduleName} directory exists but package.json is missing`)
+      }
+    } else {
+      console.error(`  ✗ ${moduleName} was NOT copied! This will cause runtime errors.`)
+      process.exit(1)
+    }
+  })
+}
+
 // Copy resources directory to out directory (excluding start.sh to avoid duplication)
 const resourcesSourceDir = path.join(projectRoot, 'resources')
 const resourcesTargetDir = path.join(outDir, 'resources')
