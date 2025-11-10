@@ -182,11 +182,32 @@ function build() {
   }
 
   process.env.BUILD_TYPE = buildType;
+  
+  // Map target to platform name for prepare-out-package-json.js
+  const platformMap = {
+    win: 'win32',
+    mac: 'darwin',
+    linux: 'linux'
+  };
+  const electronPlatform = platformMap[normalizedTarget] || normalizedTarget;
+  
+  // Determine architecture (default based on target)
+  const defaultArch = normalizedTarget === 'mac' ? 'arm64' : 'x64';
+  const effectiveArch = arch || defaultArch;
+  
+  // Set environment variables for prepare-out-package-json.js
+  process.env.BUILD_TARGET = normalizedTarget;
+  process.env.BUILD_ARCH = effectiveArch;
+  process.env.ELECTRON_PLATFORM = electronPlatform;
+  process.env.ELECTRON_ARCH = effectiveArch;
+  
   // Set APP_VERSION environment variable for prepare-out-package-json.js
   if (finalVersion !== packageVersion) {
     process.env.APP_VERSION = finalVersion;
     console.log(`Setting APP_VERSION environment variable: ${finalVersion}`);
   }
+  
+  console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`);
 
   console.log('Running application build (npm run build)...');
   // Skip typecheck in snapshot/release builds if SKIP_TYPECHECK is set
@@ -197,7 +218,11 @@ function build() {
   try {
     const buildEnv = {
       ...process.env,
-      BUILD_TYPE: buildType
+      BUILD_TYPE: buildType,
+      BUILD_TARGET: normalizedTarget,
+      BUILD_ARCH: effectiveArch,
+      ELECTRON_PLATFORM: electronPlatform,
+      ELECTRON_ARCH: effectiveArch
     };
     // Only set APP_VERSION if version was converted
     if (finalVersion !== packageVersion) {
