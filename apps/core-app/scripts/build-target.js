@@ -182,7 +182,7 @@ function build() {
   }
 
   process.env.BUILD_TYPE = buildType;
-  
+
   // Map target to platform name for prepare-out-package-json.js
   const platformMap = {
     win: 'win32',
@@ -190,23 +190,23 @@ function build() {
     linux: 'linux'
   };
   const electronPlatform = platformMap[normalizedTarget] || normalizedTarget;
-  
+
   // Determine architecture (default based on target)
   const defaultArch = normalizedTarget === 'mac' ? 'arm64' : 'x64';
   const effectiveArch = arch || defaultArch;
-  
+
   // Set environment variables for prepare-out-package-json.js
   process.env.BUILD_TARGET = normalizedTarget;
   process.env.BUILD_ARCH = effectiveArch;
   process.env.ELECTRON_PLATFORM = electronPlatform;
   process.env.ELECTRON_ARCH = effectiveArch;
-  
+
   // Set APP_VERSION environment variable for prepare-out-package-json.js
   if (finalVersion !== packageVersion) {
     process.env.APP_VERSION = finalVersion;
     console.log(`Setting APP_VERSION environment variable: ${finalVersion}`);
   }
-  
+
   console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`);
 
   console.log('Running application build (npm run build)...');
@@ -336,17 +336,17 @@ function build() {
     // This ensures the lockfile matches the generated package.json
     const outDir = path.join(projectRoot, 'out');
     const outPackageJsonPath = path.join(outDir, 'package.json');
-    
+
     if (fs.existsSync(outPackageJsonPath)) {
       console.log('=== Syncing lockfile with out/package.json ===');
       const workspaceRoot = path.join(projectRoot, '../..');
       const originalCwd = process.cwd();
-      
+
       try {
         // First, try to update lockfile from workspace root
         // This ensures pnpm recognizes the out/package.json as part of the workspace
         process.chdir(workspaceRoot);
-        
+
         // Run pnpm install with --lockfile-only and --no-frozen-lockfile
         // This updates the lockfile to match all package.json files including out/package.json
         // --no-frozen-lockfile is necessary in CI to allow lockfile updates
@@ -358,7 +358,7 @@ function build() {
             PWD: workspaceRoot
           }
         });
-        
+
         process.chdir(originalCwd);
         console.log('✓ Lockfile synced with out/package.json\n');
       } catch (error) {
@@ -370,7 +370,7 @@ function build() {
           if (process.cwd() !== workspaceRoot) {
             process.chdir(workspaceRoot);
           }
-          
+
           // Run pnpm install with --no-frozen-lockfile to update lockfile
           // This will update the apps/core-app/out entry in the lockfile
           execSync('pnpm install --no-frozen-lockfile', {
@@ -381,7 +381,7 @@ function build() {
               PWD: workspaceRoot
             }
           });
-          
+
           process.chdir(originalCwd);
           console.log('✓ Lockfile synced with out/package.json (alternative method)\n');
         } catch (fallbackError) {
@@ -394,7 +394,7 @@ function build() {
         }
       }
     }
-    
+
     console.log('=== Rebuilding Electron native modules for packaged app ===');
     const installPlatformMap = {
       win: 'win32',
