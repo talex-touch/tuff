@@ -1,7 +1,11 @@
 <template>
-  <div class="AppLayout-Container Simple">
+  <div class="AppLayout-Container Simple" :class="{ 'is-display': isDisplayMode }">
     <div class="AppLayout-Header fake-background">
-      <SimpleController>
+      <template v-if="isDisplayMode">
+        <div class="LayoutDisplay-Line short" />
+        <div class="LayoutDisplay-Line long" />
+      </template>
+      <SimpleController v-else>
         <template #title>
           <slot name="title" />
         </template>
@@ -9,16 +13,23 @@
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <SimpleNavBar />
+        <template v-if="isDisplayMode">
+          <div class="LayoutDisplay-Block nav" />
+          <div class="LayoutDisplay-Block footer" />
+        </template>
+        <template v-else>
+          <SimpleNavBar />
 
-        <div class="AppLayout-IconFooter">
-          <slot name="icon" />
-          <SimpleFooter />
-        </div>
+          <div class="AppLayout-IconFooter">
+            <slot name="icon" />
+            <SimpleFooter />
+          </div>
+        </template>
       </div>
 
       <div class="AppLayout-View fake-background">
-        <slot name="view" />
+        <div v-if="isDisplayMode" class="LayoutDisplay-View" />
+        <slot v-else name="view" />
       </div>
     </div>
   </div>
@@ -39,6 +50,17 @@
 import SimpleController from './SimpleController.vue'
 import SimpleNavBar from './SimpleNavBar.vue'
 import SimpleFooter from './SimpleFooter.vue'
+
+const props = withDefaults(
+  defineProps<{
+    display?: boolean
+  }>(),
+  {
+    display: false
+  }
+)
+
+const isDisplayMode = computed(() => props.display)
 </script>
 
 <style lang="scss" scoped>
@@ -121,6 +143,84 @@ import SimpleFooter from './SimpleFooter.vue'
       flex-direction: row-reverse;
       justify-content: center;
     }
+  }
+}
+
+.AppLayout-Container.Simple.is-display {
+  --ctr-height: 28px;
+  --nav-width: 60px;
+  --fake-inner-opacity: 0;
+
+  min-height: 140px;
+  padding: 6px;
+
+  .AppLayout-Header {
+    padding: 6px 8px;
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .AppLayout-Main {
+    gap: 6px;
+    padding: 4px 0 0;
+    height: calc(100% - var(--ctr-height));
+  }
+
+  .AppLayout-Aside {
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: var(--nav-width);
+    border-right: none;
+  }
+
+  .AppLayout-View {
+    width: calc(100% - var(--nav-width));
+    border-radius: 6px;
+  }
+
+  .LayoutDisplay-Line,
+  .LayoutDisplay-Block,
+  .LayoutDisplay-View {
+    background: var(--el-fill-color-darker);
+    border-radius: 6px;
+    opacity: 0.8;
+  }
+
+  .LayoutDisplay-Line {
+    height: 10px;
+    margin: 6px 0;
+
+    &.short {
+      width: 60px;
+      align-self: flex-start;
+    }
+
+    &.long {
+      width: 120px;
+      align-self: flex-end;
+    }
+  }
+
+  .LayoutDisplay-Block {
+    width: 100%;
+    margin: 0;
+
+    &.nav {
+      flex: 1;
+    }
+
+    &.footer {
+      height: 20%;
+      opacity: 0.5;
+    }
+  }
+
+  .LayoutDisplay-View {
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
   }
 }
 </style>

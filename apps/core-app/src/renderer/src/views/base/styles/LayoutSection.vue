@@ -11,12 +11,23 @@
       >
         <div class="LayoutSection-Item-Preview">
           <div class="LayoutSection-Item-Preview-Content">
-            <!-- Layout preview placeholder -->
             <div class="LayoutSection-Item-Preview-Window">
-              <div class="LayoutSection-Item-Preview-Header" />
-              <div class="LayoutSection-Item-Preview-Body">
-                <div class="LayoutSection-Item-Preview-Sidebar" />
-                <div class="LayoutSection-Item-Preview-Main" />
+              <div
+                v-if="layoutPreviewStates[key]?.component"
+                class="LayoutSection-PreviewLayout"
+              >
+                <component
+                  :is="layoutPreviewStates[key].component"
+                  class="LayoutSection-PreviewLayout-Inner"
+                  display
+                />
+              </div>
+              <div v-else class="LayoutSection-PreviewSkeleton">
+                <div class="LayoutSection-Item-Preview-Header" />
+                <div class="LayoutSection-Item-Preview-Body">
+                  <div class="LayoutSection-Item-Preview-Sidebar" />
+                  <div class="LayoutSection-Item-Preview-Main" />
+                </div>
               </div>
             </div>
           </div>
@@ -31,6 +42,8 @@
 </template>
 
 <script lang="ts" name="LayoutSection" setup>
+import { markRaw, reactive } from 'vue'
+import type { Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useDynamicTuffLayout } from '~/modules/layout'
 
@@ -41,6 +54,39 @@ const { currentLayoutName, availableLayouts, switchLayout } = useDynamicTuffLayo
 const wrapperRef = ref<HTMLElement | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
 const tipRef = ref<HTMLElement | null>(null)
+
+interface LayoutPreviewState {
+  component: Component | null
+  loading: boolean
+}
+
+const layoutPreviewStates = reactive<Record<string, LayoutPreviewState>>({})
+
+watch(
+  availableLayouts,
+  (layouts) => {
+    Object.entries(layouts).forEach(([key, layout]) => {
+      if (layoutPreviewStates[key]) return
+
+      layoutPreviewStates[key] = reactive<LayoutPreviewState>({
+        component: null,
+        loading: true
+      })
+
+      layout.component
+        .then((module) => {
+          layoutPreviewStates[key].component = markRaw(module.default)
+        })
+        .catch((error) => {
+          console.error(`[LayoutSection] Failed to load preview for layout "${key}":`, error)
+        })
+        .finally(() => {
+          layoutPreviewStates[key].loading = false
+        })
+    })
+  },
+  { immediate: true }
+)
 
 /**
  * Handle layout selection
@@ -208,42 +254,66 @@ onMounted(() => {
 
 .LayoutSection-Item-Preview-Window {
   position: relative;
-
   width: 100%;
   height: 100%;
-
   display: flex;
   flex-direction: column;
-
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  background: var(--el-bg-color);
+}
+
+.LayoutSection-PreviewLayout,
+.LayoutSection-PreviewSkeleton {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.LayoutSection-PreviewLayout {
+  position: relative;
+  background: var(--el-bg-color);
+}
+
+.LayoutSection-PreviewLayout-Inner {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+
+  :deep(.AppLayout-Container) {
+    width: 100%;
+    height: 100%;
+    -webkit-app-region: none;
+    pointer-events: none;
+  }
+}
+
+.LayoutSection-PreviewSkeleton {
+  display: flex;
+  flex-direction: column;
 }
 
 .LayoutSection-Item-Preview-Header {
   height: 32px;
-
   background: var(--el-bg-color);
   border-bottom: 1px solid var(--el-border-color);
 }
 
 .LayoutSection-Item-Preview-Body {
   flex: 1;
-
   display: flex;
-
   background: var(--el-bg-color-page);
 }
 
 .LayoutSection-Item-Preview-Sidebar {
   width: 40px;
-
   background: var(--el-bg-color);
   border-right: 1px solid var(--el-border-color);
 }
 
 .LayoutSection-Item-Preview-Main {
   flex: 1;
-
   background: var(--el-bg-color-page);
 }
 

@@ -1,7 +1,11 @@
 <template>
-  <div class="AppLayout-Container Flat">
+  <div class="AppLayout-Container Flat" :class="{ 'is-display': isDisplayMode }">
     <div class="AppLayout-Header fake-background">
-      <FlatController>
+      <template v-if="isDisplayMode">
+        <div class="LayoutDisplay-Line short" />
+        <div class="LayoutDisplay-Line long" />
+      </template>
+      <FlatController v-else>
         <template #title>
           <slot name="title" />
         </template>
@@ -9,16 +13,23 @@
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <FlatNavBar />
+        <template v-if="isDisplayMode">
+          <div class="LayoutDisplay-Block nav" />
+          <div class="LayoutDisplay-Block footer" />
+        </template>
+        <template v-else>
+          <FlatNavBar />
 
-        <div class="AppLayout-IconFooter">
-          <slot name="icon" />
-          <FlatFooter />
-        </div>
+          <div class="AppLayout-IconFooter">
+            <slot name="icon" />
+            <FlatFooter />
+          </div>
+        </template>
       </div>
 
       <div class="AppLayout-View fake-background">
-        <slot name="view" />
+        <div v-if="isDisplayMode" class="LayoutDisplay-View" />
+        <slot v-else name="view" />
       </div>
     </div>
   </div>
@@ -39,6 +50,17 @@
 import FlatController from './FlatController.vue'
 import FlatNavBar from './FlatNavBar.vue'
 import FlatFooter from './FlatFooter.vue'
+
+const props = withDefaults(
+  defineProps<{
+    display?: boolean
+  }>(),
+  {
+    display: false
+  }
+)
+
+const isDisplayMode = computed(() => props.display)
 </script>
 
 <style lang="scss" scoped>
@@ -113,6 +135,81 @@ import FlatFooter from './FlatFooter.vue'
       flex-direction: row-reverse;
       justify-content: center;
     }
+  }
+}
+
+.AppLayout-Container.Flat.is-display {
+  --ctr-height: 28px;
+  --nav-width: 56px;
+
+  min-height: 140px;
+  padding: 8px;
+
+  .AppLayout-Header {
+    padding: 6px 8px;
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .AppLayout-Main {
+    gap: 8px;
+    padding-top: 4px;
+    height: calc(100% - var(--ctr-height));
+  }
+
+  .AppLayout-Aside {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: var(--nav-width);
+  }
+
+  .AppLayout-View {
+    width: calc(100% - var(--nav-width));
+    border-radius: 8px 0 0 8px;
+  }
+
+  .LayoutDisplay-Line,
+  .LayoutDisplay-Block,
+  .LayoutDisplay-View {
+    background: var(--el-fill-color-darker);
+    border-radius: 6px;
+    opacity: 0.85;
+  }
+
+  .LayoutDisplay-Line {
+    height: 10px;
+    margin: 6px 0;
+
+    &.short {
+      width: 50px;
+      align-self: flex-start;
+    }
+
+    &.long {
+      width: 110px;
+      align-self: flex-end;
+    }
+  }
+
+  .LayoutDisplay-Block {
+    width: 100%;
+    margin: 0;
+
+    &.nav {
+      flex: 1;
+    }
+
+    &.footer {
+      height: 22%;
+      opacity: 0.5;
+    }
+  }
+
+  .LayoutDisplay-View {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px 0 0 8px;
   }
 }
 </style>
