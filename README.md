@@ -1,13 +1,11 @@
 <div align="center">
 
 ![LogoBanner](./shots/LogoBanner.png)
-
 ---
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-2.1.0-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
-  [![GitHub release](https://img.shields.io/badge/dev-2.1.0-64391A?style=flat-square)](https://github.com/talex-touch/tuff/discussions/35)
+  [![GitHub release](https://img.shields.io/badge/release-2.4.5-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
   <br>
   English | [简体中文](./README.zh-CN.md)
 </div>
@@ -18,21 +16,31 @@
 
 ## 🔷 Introduction
 
-Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with Electron, TypeScript, and Vue.js. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
+Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with ai-native. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
 
-![CoreBoxMain](./shots/CoreBox%20AppRoundMainSo.png)
+### Search all apps on device.
+
+![SearchApplication](./shots/SearchApp.gif)
+
+### Search files immediately.
+
+![SearchFilesImmediately](./shots/SearchFileImmediately.gif)
+
+### Plugin translate.
+
+![TranslatePlugin](./shots/PluginTranslate.gif)
+
+### Manage plugins on your own.
+
+![ManagePlugins](./shots/ManagePlugin.gif)
+
+### Settings page
 
 ![Settings](./shots/SettingsSo.png)
 
 ## 🚀 Background
 
 **We believe your most powerful tool should be as adaptable as you are. Tuff is a new kind of command center—a foundational, open-source layer for your OS, crafted to anticipate your intent and seamlessly integrate with your unique workflow. Hackable to its core and open by design, it’s ready to be shaped by you.**
-
-## �️ Cross-Platform Support
-
-Tuff is currently available for macOS.
-
-> Support for Windows and Linux is coming soon.
 
 ## 🦋 Beautiful UI Design
 
@@ -97,29 +105,7 @@ Please keep in mind that developers are under no obligation to solve your Issue 
 
 ## ❤️ Contribution
 
-### What we use
-
-#### 🌀 Front-end
-
-- Electron ^37.2.4
-- Vue.js: ^3.5.18
-- Vue Router: ^4.5.1
-- Element Plus: ^2.10.4
-- Milkdown: ^7.15.2
-- Lottie-web: ^5.13.0
-
-#### 💠 Back-end
-
-- Node.js: >=22.0.0
-- Koa: ^2.7.0
-
-#### 🔧 Build Tools
-
-- Vite: ^7.0.6
-- Electron Builder: ^25.1.8
-- Sass: ^1.89.2
-
-#### [Here](./.github/docs/contribution/CONTRIBUTING.md)
+#### [Click here to learn more](./.github/docs/contribution/CONTRIBUTING.md)
 
 ### Who works with us
 
