@@ -74,7 +74,7 @@ function handleClick(event: MouseEvent) {
         </template>
         <template v-else>
           <div class="TBlockSlot-TitleRow">
-            <h3>{{ title }}</h3>
+            <h5 class="text-sm">{{ title }}</h5>
             <div v-if="$slots.tags" class="TBlockSlot-Tags">
               <slot name="tags" />
             </div>

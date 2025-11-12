@@ -215,11 +215,6 @@ onMounted(() => {
 <style lang="scss" scoped>
 .TGroupBlock-Header {
   .TGroupBlock-Content {
-    :deep(.TuffIcon) {
-      position: relative;
-      bottom: -0.125em;
-      font-size: inherit;
-    }
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -235,7 +230,7 @@ onMounted(() => {
 
       > h3 {
         margin: 0;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 500;
       }
 
@@ -249,11 +244,9 @@ onMounted(() => {
   }
   .TGroupBlock-Mode {
     position: relative;
-    margin-right: 10px;
-    bottom: -0.125em;
     font-size: 20px;
   }
-  padding: 4px 12px;
+  padding: 4px 22px 4px 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -316,6 +309,7 @@ onMounted(() => {
   border-radius: 12px;
   overflow: hidden;
   --fake-radius: 0 !important;
-}
 
+  border: 1px solid var(--el-border-color-lighter);
+}
 </style>

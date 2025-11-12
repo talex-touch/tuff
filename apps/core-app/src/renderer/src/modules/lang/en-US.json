@@ -544,7 +544,8 @@
     "platformTags": {
       "macOnly": "macOS only",
       "windowsOnly": "Windows only",
-      "linuxOnly": "Linux only"
+      "linuxOnly": "Linux only",
+      "beta": "Beta"
     },
     "settingDownload": {
       "groupTitle": "Download Settings",
@@ -627,6 +628,10 @@
       "hideDockDesc": "Hide Dock icon after closing main window (macOS only)",
       "startSilent": "Silent Start",
       "startSilentDesc": "Launch application without showing window, run in background only",
+      "runAsAdmin": "Run with administrator privileges",
+      "runAsAdminDesc": "Run elevated on Windows to unlock system-level tasks.",
+      "customDesktop": "Use custom desktop shell",
+      "customDesktopDesc": "Enable the experimental Linux desktop integration (Beta).",
       "fileIndexing": "File Indexing",
       "tabs": {
         "permissions": "Permissions",

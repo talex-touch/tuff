@@ -56,22 +56,23 @@ const styleVars = computed(() => ({
   border: 1px solid
     var(--tuff-tag-border, color-mix(in srgb, currentColor 32%, transparent));
   font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.1px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  line-height: 1;
   white-space: nowrap;
 
   i {
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1;
   }
 
   &.size-sm {
-    padding: 2px 8px;
+    padding: 1px 6px;
   }
 
   &.size-md {
-    padding: 4px 10px;
-    font-size: 13px;
+    padding: 3px 9px;
+    font-size: 12px;
   }
 }
 </style>

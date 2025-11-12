@@ -47,8 +47,8 @@ function handleClick(event: MouseEvent) {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 6px 18px 6px 50px;
-  min-height: 36px;
+  padding: 2px 18px 2px 50px;
+  min-height: 24px;
   border-radius: 12px;
 
   --fake-color: var(--el-fill-color);
@@ -58,7 +58,7 @@ function handleClick(event: MouseEvent) {
     width: 120px;
     font-size: 13px;
     font-weight: 600;
-    color: var(--el-text-color);
+    color: var(--el-text-color-secondary);
   }
 
   .TBlockLine-Description {
@@ -70,7 +70,6 @@ function handleClick(event: MouseEvent) {
   }
 
   .TBlockLine-LinkSlot {
-    margin-left: auto;
     font-size: 13px;
     font-weight: 600;
     color: var(--el-color-primary);
@@ -88,15 +87,21 @@ function handleClick(event: MouseEvent) {
 
     .TBlockLine-Title {
       width: auto;
-      color: var(--el-color-primary);
+      opacity: 0.7;
+      min-width: 120px;
+      color: var(--el-text-color);
+      text-decoration-color: var(--el-text-color);
     }
 
     .TBlockLine-LinkSlot {
       color: var(--el-color-primary);
+      text-decoration-color: var(--el-color-primary);
     }
 
     &:hover {
       text-decoration: underline;
+
+      --fake-inner-opacity: 0.75;
     }
   }
 }

@@ -544,7 +544,8 @@
     "platformTags": {
       "macOnly": "仅限 macOS",
       "windowsOnly": "仅限 Windows",
-      "linuxOnly": "仅限 Linux"
+      "linuxOnly": "仅限 Linux",
+      "beta": "Beta"
     },
     "settingDownload": {
       "groupTitle": "下载设置",
@@ -627,6 +628,10 @@
       "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）",
       "startSilent": "静默启动",
       "startSilentDesc": "应用启动时不显示窗口，仅在后台运行",
+      "runAsAdmin": "使用管理员权限运行",
+      "runAsAdminDesc": "以管理员权限启动应用，启用系统级功能。",
+      "customDesktop": "使用自定义桌面",
+      "customDesktopDesc": "启用 Linux 平台实验性桌面适配（Beta）。",
       "fileIndexing": "文件索引",
       "tabs": {
         "permissions": "权限",

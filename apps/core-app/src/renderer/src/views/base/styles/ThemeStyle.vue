@@ -5,100 +5,87 @@
   Allows users to customize window styles, color themes, and other visual preferences.
 -->
 <template>
-  <!-- Main view template for styles -->
   <ViewTemplate :name="t('themeStyle.styles')">
-    <!-- Window style section -->
     <WindowSectionVue tip="">
-      <!-- Default window style option -->
       <SectionItem
         v-model="themeStyle.theme.window"
         :tip="t('themeStyle.defaultTip')"
         title="Default"
-      >
-      </SectionItem>
-
-      <!-- Mica window style option -->
-      <!-- :disabled="os?.version !== 'Windows 10 Pro'" -->
-      <SectionItem v-model="themeStyle.theme.window" :tip="t('themeStyle.micaTip')" title="Mica">
-      </SectionItem>
-
-      <!-- Filter window style option -->
+      />
+      <SectionItem v-model="themeStyle.theme.window" :tip="t('themeStyle.micaTip')" title="Mica" />
       <SectionItem
         v-model="themeStyle.theme.window"
         :tip="t('themeStyle.filterTip')"
         title="Filter"
         :disabled="true"
-      >
-      </SectionItem>
+      />
     </WindowSectionVue>
 
-    <!-- Layout selection section -->
     <LayoutSection />
 
-    <!-- Personalized settings group -->
-    <t-group-block
+    <tuff-group-block
       :name="t('themeStyle.personalized')"
-      icon="earth"
       :description="t('themeStyle.personalizedDesc')"
+      default-icon="i-carbon-globe"
+      active-icon="i-carbon-globe"
+      memory-name="theme-style-personalized"
     >
-      <!-- Color style selection -->
-      <t-block-select
+      <tuff-block-select
         v-model="styleValue"
         :title="t('themeStyle.colorStyle')"
-        :icon="themeStyle.theme.style.dark ? 'moon' : 'lightbulb'"
-        icon-change="line"
         :description="t('themeStyle.colorStyleDesc')"
+        :default-icon="colorStyleIcon"
+        :active-icon="colorStyleIcon"
         @change="handleThemeChange"
       >
-        <t-select-item name="light">{{ t('themeStyle.lightStyle') }}</t-select-item>
-        <t-select-item name="dark">{{ t('themeStyle.darkStyle') }}</t-select-item>
-        <t-select-item name="auto">{{ t('themeStyle.followSystem') }}</t-select-item>
-      </t-block-select>
+        <t-select-item :model-value="0" name="light">{{ t('themeStyle.lightStyle') }}</t-select-item>
+        <t-select-item :model-value="1" name="dark">{{ t('themeStyle.darkStyle') }}</t-select-item>
+        <t-select-item :model-value="2" name="auto">{{ t('themeStyle.followSystem') }}</t-select-item>
+      </tuff-block-select>
 
-      <!-- Homepage wallpaper source selection -->
-      <t-block-select
+      <tuff-block-select
         v-model="homeBgSource"
         :title="t('themeStyle.homepageWallpaper')"
-        icon="image-add"
-        icon-change="line"
         :description="t('themeStyle.homepageWallpaperDesc')"
+        default-icon="i-carbon-image"
+        active-icon="i-carbon-image"
       >
-        <t-select-item name="bing">{{ t('themeStyle.bing') }}</t-select-item>
-        <t-select-item name="folder">{{ t('themeStyle.folder') }}</t-select-item>
-      </t-block-select>
-    </t-group-block>
+        <t-select-item :model-value="0" name="bing">{{ t('themeStyle.bing') }}</t-select-item>
+        <t-select-item :model-value="1" name="folder">{{ t('themeStyle.folder') }}</t-select-item>
+      </tuff-block-select>
+    </tuff-group-block>
 
-    <!-- Emphasis settings group -->
-    <t-group-switch
-      :expand-fill="true"
+    <tuff-group-block
       :name="t('themeStyle.emphasis')"
-      icon="record-circle"
       :description="t('themeStyle.emphasisDesc')"
+      default-icon="i-carbon-drop"
+      active-icon="i-carbon-drop"
+      memory-name="theme-style-emphasis"
     >
-      <!-- Coloring switch -->
-      <t-block-switch
+      <tuff-block-switch
         v-model="themeStyle.theme.addon.coloring"
         :title="t('themeStyle.coloring')"
         :description="t('themeStyle.coloringDesc')"
-        icon="contrast-drop-2"
+        default-icon="i-carbon-contrast"
+        active-icon="i-carbon-contrast"
       />
 
-      <!-- High contrast switch -->
-      <t-block-switch
+      <tuff-block-switch
         v-model="themeStyle.theme.addon.contrast"
-        disabled
         :title="t('themeStyle.highContrast')"
         :description="t('themeStyle.highContrastDesc')"
-        icon="contrast"
+        default-icon="i-carbon-text-contrast"
+        active-icon="i-carbon-text-contrast"
+        disabled
       />
-    </t-group-switch>
+    </tuff-group-block>
 
-    <!-- Theme help switch -->
-    <t-block-switch
+    <tuff-block-switch
       guidance
       :title="t('themeStyle.themeHelp')"
       :description="t('themeStyle.themeHelpDesc')"
-      icon="search-2"
+      default-icon="i-carbon-help"
+      active-icon="i-carbon-help"
     />
   </ViewTemplate>
 </template>
@@ -109,15 +96,15 @@
   Handles theme and style settings logic including theme changes and environment detection.
 -->
 <script name="ThemeStyle" lang="ts" setup>
+import { computed, onMounted, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Import UI components
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
-import TBlockSelect from '@comp/base/select/TBlockSelect.vue'
-import TSelectItem from '@comp/base/select/TSelectItem.vue'
 import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
-import TGroupSwitch from '@comp/base/group/TGroupBlock.vue'
-import TBlockSwitch from '@comp/base/switch/TBlockSwitch.vue'
+import TSelectItem from '@comp/base/select/TSelectItem.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import WindowSectionVue from './WindowSection.vue'
 import SectionItem from './SectionItem.vue'
 import LayoutSection from './LayoutSection.vue'
@@ -132,6 +119,9 @@ const { t } = useI18n()
 const os = ref()
 const styleValue = ref(0)
 const homeBgSource = ref(0)
+const colorStyleIcon = computed(() =>
+  themeStyle.value.theme.style.dark ? 'i-carbon-moon' : 'i-carbon-lightbulb'
+)
 
 // Watch for theme style changes and update the style value accordingly
 watchEffect(() => {
