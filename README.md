@@ -14,18 +14,12 @@
   English | [简体中文](./README.zh-CN.md)
 </div>
 
-## 📌 Announcement
+## 📌 What is tuff?
 
-> 2.0.0 version is now under development and beta testing.
-
-We are proud that our re-designed 2.0.0 version is actively developing and under beta test.
-Download from the `releases` with pre-release and fork this project with making contributions, any `Pull Request` and `Issues` are welcomed!
-
-Download it and feedback!
-
-## 🔷 Introduction
 
 ![MainBanner](./shots/MainBanner.png)
+
+## 🔷 Introduction
 
 Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with Electron, TypeScript, and Vue.js. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
 
