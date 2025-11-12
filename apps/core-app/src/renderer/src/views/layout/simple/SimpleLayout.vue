@@ -1,35 +1,26 @@
 <template>
   <div class="AppLayout-Container Simple" :class="{ 'is-display': isDisplayMode }">
     <div class="AppLayout-Header fake-background">
-      <template v-if="isDisplayMode">
-        <div class="LayoutDisplay-Line short" />
-        <div class="LayoutDisplay-Line long" />
-      </template>
-      <SimpleController v-else>
-        <template #title>
+      <SimpleController>
+        <template v-if="!isDisplayMode" #title>
           <slot name="title" />
         </template>
       </SimpleController>
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <template v-if="isDisplayMode">
-          <div class="LayoutDisplay-Block nav" />
-          <div class="LayoutDisplay-Block footer" />
-        </template>
-        <template v-else>
-          <SimpleNavBar />
+        <SimpleNavBar />
 
-          <div class="AppLayout-IconFooter">
-            <slot name="icon" />
-            <SimpleFooter />
-          </div>
-        </template>
+        <div class="AppLayout-IconFooter">
+          <slot v-if="!isDisplayMode" name="icon" />
+          <SimpleFooter v-if="!isDisplayMode" />
+          <div v-else class="LayoutDisplay-Footer" />
+        </div>
       </div>
 
       <div class="AppLayout-View fake-background">
-        <div v-if="isDisplayMode" class="LayoutDisplay-View" />
-        <slot v-else name="view" />
+        <slot v-if="!isDisplayMode" name="view" />
+        <div v-else class="LayoutDisplay-View" />
       </div>
     </div>
   </div>
@@ -147,80 +138,60 @@ const isDisplayMode = computed(() => props.display)
 }
 
 .AppLayout-Container.Simple.is-display {
-  --ctr-height: 28px;
-  --nav-width: 60px;
-  --fake-inner-opacity: 0;
+  --ctr-height: 26px;
+  --nav-width: 68px;
 
-  min-height: 140px;
+  min-height: 150px;
   padding: 6px;
+  gap: 4px;
+
+  border-radius: 12px;
+  pointer-events: none;
 
   .AppLayout-Header {
-    padding: 6px 8px;
-    gap: 6px;
-    align-items: flex-start;
+    padding: 4px 6px;
+    border-bottom: none;
+    gap: 8px;
   }
 
   .AppLayout-Main {
     gap: 6px;
-    padding: 4px 0 0;
-    height: calc(100% - var(--ctr-height));
   }
 
   .AppLayout-Aside {
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    width: var(--nav-width);
+    padding: 2px 4px;
     border-right: none;
   }
 
-  .AppLayout-View {
-    width: calc(100% - var(--nav-width));
-    border-radius: 6px;
+  .AppLayout-IconFooter {
+    position: relative;
+    height: auto;
+    min-height: 32px;
   }
 
-  .LayoutDisplay-Line,
-  .LayoutDisplay-Block,
-  .LayoutDisplay-View {
+  :deep(.TouchMenuItem-Container) {
+    padding: 0.25rem;
+    margin: 0.2rem 0;
+    min-height: 20px;
+
+    --fake-inner-opacity: 0.4;
+  }
+
+  .LayoutDisplay-View,
+  .LayoutDisplay-Footer {
+    width: 100%;
     background: var(--el-fill-color-darker);
-    border-radius: 6px;
-    opacity: 0.8;
-  }
-
-  .LayoutDisplay-Line {
-    height: 10px;
-    margin: 6px 0;
-
-    &.short {
-      width: 60px;
-      align-self: flex-start;
-    }
-
-    &.long {
-      width: 120px;
-      align-self: flex-end;
-    }
-  }
-
-  .LayoutDisplay-Block {
-    width: 100%;
-    margin: 0;
-
-    &.nav {
-      flex: 1;
-    }
-
-    &.footer {
-      height: 20%;
-      opacity: 0.5;
-    }
+    border-radius: 8px;
+    opacity: 0.6;
   }
 
   .LayoutDisplay-View {
-    width: 100%;
     height: 100%;
-    border-radius: 6px;
+  }
+
+  .LayoutDisplay-Footer {
+    height: 32px;
+    margin-top: 6px;
   }
 }
 </style>

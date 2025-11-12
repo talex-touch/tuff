@@ -1,10 +1,8 @@
 <div align="center">
 
-  <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="logo">
+![LogoBanner](./shots/LogoBanner.png)
 
-  <h1>Tuff</h1>
-
-  > The command bar, reimagined for those who build.
+---
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
@@ -15,7 +13,6 @@
 </div>
 
 ## 📌 What is tuff?
-
 
 ![MainBanner](./shots/MainBanner.png)
 
