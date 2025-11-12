@@ -16,6 +16,8 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'
 import TuffWindowsTag from '~/components/tuff/tags/TuffWindowsTag.vue'
+import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
+import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 
 // Import storage and channel
@@ -27,6 +29,7 @@ const { t } = useI18n()
 const platform = computed(() => window.$startupInfo?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
+const isLinux = computed(() => platform.value === 'linux')
 
 // Permission states
 const permissions = ref({
@@ -49,7 +52,9 @@ const settings = ref({
   autoStart: false,
   showTray: true,
   hideDock: false,
-  startSilent: false
+  startSilent: false,
+  runAsAdmin: false,
+  customDesktop: false
 })
 
 const isLoading = ref(false)
@@ -93,8 +98,18 @@ if (!appSetting.setup) {
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
-    hideDock: false
+    hideDock: false,
+    runAsAdmin: false,
+    customDesktop: false
   }
+}
+
+if (appSetting.setup.runAsAdmin === undefined) {
+  appSetting.setup.runAsAdmin = false
+}
+
+if (appSetting.setup.customDesktop === undefined) {
+  appSetting.setup.customDesktop = false
 }
 
 onMounted(async () => {
@@ -198,6 +213,8 @@ function loadSettings(): void {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
     settings.value.hideDock = appSetting.setup.hideDock ?? false
+    settings.value.runAsAdmin = appSetting.setup.runAsAdmin ?? false
+    settings.value.customDesktop = appSetting.setup.customDesktop ?? false
   }
 
   ensureWindowSettings()
@@ -307,6 +324,38 @@ function updateStartSilent(value: boolean): void {
     ElMessage.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
+    ElMessage.error(t('setupPermissions.updateFailed'))
+  }
+}
+
+async function updateRunAsAdmin(value: boolean): Promise<void> {
+  settings.value.runAsAdmin = value
+  appSetting.setup.runAsAdmin = value
+  try {
+    await touchChannel.send('storage:save', {
+      key: 'app.setup.runAsAdmin',
+      content: JSON.stringify(value),
+      clear: false
+    })
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    console.error('[SettingSetup] Failed to update runAsAdmin:', error)
+    ElMessage.error(t('setupPermissions.updateFailed'))
+  }
+}
+
+async function updateCustomDesktop(value: boolean): Promise<void> {
+  settings.value.customDesktop = value
+  appSetting.setup.customDesktop = value
+  try {
+    await touchChannel.send('storage:save', {
+      key: 'app.setup.customDesktop',
+      content: JSON.stringify(value),
+      clear: false
+    })
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    console.error('[SettingSetup] Failed to update customDesktop:', error)
     ElMessage.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -476,6 +525,35 @@ function getStatusIconClass(status: string): string {
       active-icon="i-carbon-notification-off"
       @update:model-value="updateStartSilent"
     />
+
+    <tuff-block-switch
+      v-if="isWindows"
+      v-model="settings.runAsAdmin"
+      :title="t('settings.setup.runAsAdmin')"
+      :description="t('settings.setup.runAsAdminDesc')"
+      default-icon="i-carbon-user-avatar"
+      active-icon="i-carbon-user-avatar-filled"
+      @update:model-value="updateRunAsAdmin"
+    >
+      <template #tags>
+        <TuffWindowsTag />
+      </template>
+    </tuff-block-switch>
+
+    <tuff-block-switch
+      v-if="isLinux"
+      v-model="settings.customDesktop"
+      :title="t('settings.setup.customDesktop')"
+      :description="t('settings.setup.customDesktopDesc')"
+      default-icon="i-carbon-screen"
+      active-icon="i-carbon-screen"
+      @update:model-value="updateCustomDesktop"
+    >
+      <template #tags>
+        <TuffLinuxTag />
+        <TuffBetaTag />
+      </template>
+    </tuff-block-switch>
 
     <!-- File Indexing Progress -->
     <div v-if="indexingProgress && indexingProgress.stage !== 'idle'" class="IndexingProgress">
