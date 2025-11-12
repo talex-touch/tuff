@@ -122,7 +122,7 @@ export class UsageStatsQueue {
         lastCancelled: Date | null
       }> = []
 
-      for (const [groupKey, ops] of grouped.entries()) {
+      for (const ops of grouped.values()) {
         const firstOp = ops[0]
         let searchCount = 0
         let executeCount = 0
@@ -272,4 +272,3 @@ export class UsageStatsQueue {
     this.queue.clear()
   }
 }
-

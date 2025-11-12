@@ -11,6 +11,7 @@ const { t } = useI18n()
   <tuff-block-switch
     v-wave
     guidance
+    :model-value="false"
     :title="t('settingStorage.title')"
     :description="t('settingStorage.description')"
     default-icon="i-carbon-folder"

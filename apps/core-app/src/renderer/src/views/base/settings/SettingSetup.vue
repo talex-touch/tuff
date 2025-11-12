@@ -60,12 +60,16 @@ const settings = ref({
 const isLoading = ref(false)
 
 // File indexing progress
-const indexingProgress = ref<{
-  stage: 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+type IndexingStage = 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+
+interface IndexingProgress {
+  stage: IndexingStage
   current: number
   total: number
   progress: number
-} | null>(null)
+}
+
+const indexingProgress = ref<IndexingProgress | null>(null)
 
 let progressUnsubscribe: (() => void) | null = null
 
@@ -127,12 +131,7 @@ onUnmounted(() => {
 
 function setupIndexingProgressListener(): void {
   progressUnsubscribe = touchChannel.regChannel('file-index:progress', (data) => {
-    const progressData = data.data as {
-      stage: typeof indexingProgress.value.stage
-      current: number
-      total: number
-      progress: number
-    }
+    const progressData = data.data as IndexingProgress | null
     if (progressData) {
       indexingProgress.value = {
         stage: progressData.stage,
@@ -234,8 +233,11 @@ function loadSettings(): void {
     const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
     if (startSilentResult !== null && startSilentResult !== undefined) {
       settings.value.startSilent = startSilentResult as boolean
-    } else if (appSetting.window?.startSilent !== undefined) {
-      settings.value.startSilent = appSetting.window.startSilent
+    } else {
+      const windowSettings = appSetting.window
+      if (windowSettings && windowSettings.startSilent !== undefined) {
+        settings.value.startSilent = windowSettings.startSilent
+      }
     }
   } catch (error) {
     console.error('[SettingSetup] Failed to load startSilent:', error)
