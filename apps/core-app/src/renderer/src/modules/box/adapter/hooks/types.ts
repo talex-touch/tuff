@@ -29,6 +29,10 @@ export interface IClipboardOptions {
   last: IClipboardItem | null
   /** Timestamp when current clipboard was first detected (for expiration check) */
   detectedAt: number | null
+  /** Whether the current clipboard content has been auto-pasted (to avoid re-pasting after ESC) */
+  autoPasted: boolean
+  /** Timestamp of the last clipboard item that was cleared (to prevent re-paste of same content) */
+  lastClearedTimestamp: string | Date | null
 }
 
 /**

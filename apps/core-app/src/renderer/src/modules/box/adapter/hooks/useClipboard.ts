@@ -10,6 +10,8 @@ import type { IClipboardHook, IClipboardOptions, IClipboardItem } from './types'
  * Clipboard state is preserved when CoreBox is hidden, allowing expiration
  * check on next open.
  *
+ * Note: Auto-paste does NOT paste text to search bar, only displays in tag.
+ *
  * @param boxOptions - Box options for managing file mode
  * @returns Clipboard hook interface
  */
@@ -43,14 +45,21 @@ export function useClipboard(
 
   /**
    * Auto-paste logic: switch to FILE mode for file clipboard
+   * Note: Text content is NOT pasted to search bar, only displayed in tag
    */
   function handleAutoPaste(): void {
-    if (!clipboardOptions.last) return
+    if (!clipboardOptions.last || !appSetting.tools.autoPaste.enable) return
+
+    // If already auto-pasted and user cleared it (ESC), don't re-paste
+    if (clipboardOptions.autoPasted) {
+      console.debug('[Clipboard] Already auto-pasted, skipping to avoid re-paste after ESC')
+      return
+    }
 
     const data = clipboardOptions.last
 
-    // Only auto-switch to FILE mode for files
-    if (data.type === 'files' && appSetting.tools.autoPaste.enable) {
+    // Auto-switch to FILE mode for files
+    if (data.type === 'files') {
       try {
         const pathList = JSON.parse(data.content)
         const firstFile = pathList[0]
@@ -62,14 +71,32 @@ export function useClipboard(
           }
           boxOptions.mode = BoxMode.FILE
 
+          // Mark as auto-pasted
+          clipboardOptions.autoPasted = true
+
           // Clear clipboard after switching to FILE mode
           clearClipboard()
         }
       } catch (error) {
         console.error('[Clipboard] Failed to parse file paths:', error)
       }
+      return
     }
-    // For text/image/html: keep in clipboardOptions.last for display in tag
+
+    // For text/image/html: mark as auto-pasted and keep in clipboardOptions.last for display in tag
+    // Text is NOT pasted to search bar, only shown in the suffix tag
+    if (data.type === 'text' || data.type === 'image' || data.type === 'html') {
+      clipboardOptions.autoPasted = true
+      console.debug('[Clipboard] Auto-paste detected, content will be shown in tag', {
+        type: data.type,
+        length: data.type === 'text' ? data.content.length : undefined
+      })
+
+      // Trigger search callback to refresh results
+      if (onPasteCallback) {
+        onPasteCallback()
+      }
+    }
   }
 
   /**
@@ -84,9 +111,14 @@ export function useClipboard(
       return
     }
 
-    // Check if it's the same clipboard content
+    // Check if it's the same clipboard content (by timestamp)
     const isSameClipboard =
       clipboardOptions.last && clipboardOptions.last.timestamp === clipboard.timestamp
+
+    // Check if this is the same content that was previously cleared (user pressed ESC)
+    const isClearedContent =
+      clipboardOptions.lastClearedTimestamp &&
+      clipboardOptions.lastClearedTimestamp === clipboard.timestamp
 
     if (isSameClipboard) {
       // Same clipboard, check if expired
@@ -103,10 +135,19 @@ export function useClipboard(
         return
       }
       // Not expired, keep displaying
+    } else if (isClearedContent) {
+      // This is the same content that was cleared by user (ESC), restore it but mark as auto-pasted
+      clipboardOptions.last = clipboard
+      clipboardOptions.autoPasted = true
+      console.debug('[Clipboard] Restored previously cleared content, marking as auto-pasted to prevent re-paste')
     } else {
       // New clipboard content, record first detection time
       clipboardOptions.last = clipboard
       clipboardOptions.detectedAt = Date.now()
+      // Reset auto-pasted flag for new content
+      clipboardOptions.autoPasted = false
+      // Clear the lastClearedTimestamp since this is new content
+      clipboardOptions.lastClearedTimestamp = null
 
       console.debug('[Clipboard] New content detected', {
         type: clipboard.type,
@@ -148,8 +189,18 @@ export function useClipboard(
    * Clear clipboard state completely
    */
   function clearClipboard(): void {
+    // If clearing after auto-paste, save the timestamp to prevent re-paste of same content
+    if (clipboardOptions.last && clipboardOptions.autoPasted) {
+      clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+      console.debug('[Clipboard] Clearing clipboard after auto-paste, saving timestamp to prevent re-paste', {
+        timestamp: clipboardOptions.lastClearedTimestamp
+      })
+    }
+
     clipboardOptions.last = null
     clipboardOptions.detectedAt = null
+    // Keep autoPasted flag when clearing to prevent re-paste after ESC
+    // It will be reset when new clipboard content is detected
 
     // Trigger search after clearing to refresh results
     if (onPasteCallback) {
@@ -163,9 +214,11 @@ export function useClipboard(
 
     const clipboardData = data as IClipboardItem
 
-    // New clipboard content, reset detection time
+    // New clipboard content, reset detection time, auto-pasted flag, and cleared timestamp
     clipboardOptions.last = clipboardData
     clipboardOptions.detectedAt = Date.now()
+    clipboardOptions.autoPasted = false
+    clipboardOptions.lastClearedTimestamp = null
 
     console.debug('[Clipboard] System clipboard changed', {
       type: clipboardData.type,

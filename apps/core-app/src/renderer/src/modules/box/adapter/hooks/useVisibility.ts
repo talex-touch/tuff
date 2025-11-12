@@ -19,6 +19,7 @@ export function useVisibility(
     (val) => {
       if (!val) {
         boxOptions.lastHidden = Date.now()
+        console.debug('[Visibility] CoreBox hidden, timestamp saved:', boxOptions.lastHidden)
         // Don't clear clipboard, preserve state for expiration check on next open
         return
       }
@@ -28,13 +29,27 @@ export function useVisibility(
         boxInputRef.value?.focus()
       })
 
-      if (
-        appSetting.tools.autoClear !== -1 &&
-        Date.now() - boxOptions.lastHidden > appSetting.tools.autoClear * 1000
-      ) {
+      // Check if autoClear should be triggered
+      if (appSetting.tools.autoClear !== -1 && boxOptions.lastHidden > 0) {
+        const timeSinceHidden = Date.now() - boxOptions.lastHidden
+        const autoClearMs = appSetting.tools.autoClear * 1000
+
+        console.debug('[Visibility] CoreBox shown, checking autoClear', {
+          timeSinceHidden: Math.round(timeSinceHidden / 1000) + 's',
+          autoClearThreshold: appSetting.tools.autoClear + 's',
+          shouldClear: timeSinceHidden > autoClearMs
+        })
+
+        if (timeSinceHidden > autoClearMs) {
+          console.debug('[Visibility] AutoClear triggered, clearing search bar')
         searchVal.value = ''
         boxOptions.mode = BoxMode.INPUT
         boxOptions.data = {}
+        }
+      } else if (appSetting.tools.autoClear === -1) {
+        console.debug('[Visibility] AutoClear disabled (set to -1)')
+      } else if (boxOptions.lastHidden <= 0) {
+        console.debug('[Visibility] No lastHidden timestamp, skipping autoClear')
       }
 
       // Auto-detect clipboard when CoreBox is opened
