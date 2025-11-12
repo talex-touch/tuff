@@ -80,7 +80,7 @@ watch(
       {{ icon.value || '⚠️' }}
     </span>
 
-    <span v-else-if="icon.type === 'class'" class="class">
+    <span v-else-if="icon.type === 'class'" class="class flex">
       <i :class="icon.value" />
     </span>
 

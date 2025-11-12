@@ -38,6 +38,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.4",
     "@floating-ui/vue": "^1.1.9",
+    "@iconify-json/carbon": "^1.2.4",
     "@iconify-json/ri": "^1.2.6",
     "@iconify-json/simple-icons": "^1.2.56",
     "@intlify/unplugin-vue-i18n": "^11.0.1",

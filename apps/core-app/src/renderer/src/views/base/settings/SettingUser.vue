@@ -1,14 +1,13 @@
 <script setup lang="ts" name="SettingUser">
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '~/modules/auth/useAuth'
-import TBlockSlot from '@comp/base/group/TBlockSlot.vue'
 import FlatButton from '@comp/base/button/FlatButton.vue'
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 // import { appSetting } from '~/modules/channel/storage'
 import { ElMessage } from 'element-plus'
 
 const { t } = useI18n()
-
 const { isLoggedIn, currentUser, login, logout } = useAuth()
 
 async function handleLogin() {
@@ -36,33 +35,37 @@ async function handleLogout() {
 </script>
 
 <template>
-  <t-group-block
+  <tuff-group-block
     :name="t('settingUser.groupTitle')"
-    icon="account-box"
     :description="t('settingUser.groupDesc')"
+    default-icon="i-carbon-user"
+    active-icon="i-carbon-user-avatar"
+    memory-name="setting-user"
   >
-    <t-block-slot
+    <tuff-block-slot
       v-if="isLoggedIn"
       :title="currentUser?.name || '用户'"
-      icon="account-circle"
       disabled
       :description="currentUser?.email || '已登录'"
+      default-icon="i-carbon-face-satisfied"
+      active-icon="i-carbon-face-satisfied"
     >
       <FlatButton type="danger" @click="handleLogout">
         {{ t('settingUser.logout') }}
       </FlatButton>
-    </t-block-slot>
+    </tuff-block-slot>
 
-    <t-block-slot
+    <tuff-block-slot
       v-else
       :title="t('settingUser.noAccount')"
-      icon="account-circle"
       disabled
       :description="t('settingUser.noAccountDesc')"
+      default-icon="i-carbon-face-satisfied"
+      active-icon="i-carbon-face-satisfied"
     >
       <FlatButton type="primary" @click="handleLogin">
         {{ t('settingUser.login') }}
       </FlatButton>
-    </t-block-slot>
-  </t-group-block>
+    </tuff-block-slot>
+  </tuff-group-block>
 </template>
