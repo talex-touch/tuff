@@ -26,18 +26,20 @@
     <tuff-group-block
       :name="t('themeStyle.personalized')"
       :description="t('themeStyle.personalizedDesc')"
-      default-icon="i-carbon-globe"
-      active-icon="i-carbon-globe"
       memory-name="theme-style-personalized"
     >
+      <template #icon="{ active }">
+        <ThemePreviewIcon variant="personalized" :active="active" />
+      </template>
       <tuff-block-select
         v-model="styleValue"
         :title="t('themeStyle.colorStyle')"
         :description="t('themeStyle.colorStyleDesc')"
-        :default-icon="colorStyleIcon"
-        :active-icon="colorStyleIcon"
         @change="handleThemeChange"
       >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="palette" :active="active" />
+        </template>
         <t-select-item :model-value="0" name="light">{{ t('themeStyle.lightStyle') }}</t-select-item>
         <t-select-item :model-value="1" name="dark">{{ t('themeStyle.darkStyle') }}</t-select-item>
         <t-select-item :model-value="2" name="auto">{{ t('themeStyle.followSystem') }}</t-select-item>
@@ -47,9 +49,10 @@
         v-model="homeBgSource"
         :title="t('themeStyle.homepageWallpaper')"
         :description="t('themeStyle.homepageWallpaperDesc')"
-        default-icon="i-carbon-image"
-        active-icon="i-carbon-image"
       >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="wallpaper" :active="active" />
+        </template>
         <t-select-item :model-value="0" name="bing">{{ t('themeStyle.bing') }}</t-select-item>
         <t-select-item :model-value="1" name="folder">{{ t('themeStyle.folder') }}</t-select-item>
       </tuff-block-select>
@@ -58,35 +61,42 @@
     <tuff-group-block
       :name="t('themeStyle.emphasis')"
       :description="t('themeStyle.emphasisDesc')"
-      default-icon="i-carbon-drop"
-      active-icon="i-carbon-drop"
       memory-name="theme-style-emphasis"
     >
+      <template #icon="{ active }">
+        <ThemePreviewIcon variant="emphasis" :active="active" />
+      </template>
       <tuff-block-switch
         v-model="themeStyle.theme.addon.coloring"
         :title="t('themeStyle.coloring')"
         :description="t('themeStyle.coloringDesc')"
-        default-icon="i-carbon-contrast"
-        active-icon="i-carbon-contrast"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="coloring" :active="active" />
+        </template>
       />
 
       <tuff-block-switch
         v-model="themeStyle.theme.addon.contrast"
         :title="t('themeStyle.highContrast')"
         :description="t('themeStyle.highContrastDesc')"
-        default-icon="i-carbon-text-contrast"
-        active-icon="i-carbon-text-contrast"
         disabled
-      />
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="contrast" :active="active" />
+        </template>
+      </tuff-block-switch>
     </tuff-group-block>
 
     <tuff-block-switch
       guidance
       :title="t('themeStyle.themeHelp')"
       :description="t('themeStyle.themeHelpDesc')"
-      default-icon="i-carbon-help"
-      active-icon="i-carbon-help"
-    />
+    >
+      <template #icon="{ active }">
+        <ThemePreviewIcon variant="guide" :active="active" />
+      </template>
+    </tuff-block-switch>
   </ViewTemplate>
 </template>
 
@@ -96,7 +106,7 @@
   Handles theme and style settings logic including theme changes and environment detection.
 -->
 <script name="ThemeStyle" lang="ts" setup>
-import { computed, onMounted, ref, watchEffect } from 'vue'
+import { onMounted, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Import UI components
@@ -108,6 +118,7 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import WindowSectionVue from './WindowSection.vue'
 import SectionItem from './SectionItem.vue'
 import LayoutSection from './LayoutSection.vue'
+import ThemePreviewIcon from './sub/ThemePreviewIcon.vue'
 
 // Import utility functions
 import { useEnv } from '~/modules/hooks/env-hooks'
@@ -119,10 +130,6 @@ const { t } = useI18n()
 const os = ref()
 const styleValue = ref(0)
 const homeBgSource = ref(0)
-const colorStyleIcon = computed(() =>
-  themeStyle.value.theme.style.dark ? 'i-carbon-moon' : 'i-carbon-lightbulb'
-)
-
 // Watch for theme style changes and update the style value accordingly
 watchEffect(() => {
   if (themeStyle.value.theme.style.auto) styleValue.value = 2
