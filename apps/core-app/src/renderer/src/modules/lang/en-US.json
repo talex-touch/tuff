@@ -103,6 +103,9 @@
     "usage": "Usage",
     "usageDesc": "Guide you to use app when enter.",
     "shortcutDesc": "Define shortcut for {shortcut}",
+    "shortcutLabels": {
+      "core_box_toggle": "Open command palette"
+    },
     "autoPaste": "Auto paste",
     "autoPasteDesc": "Paste what you copied in searchbar.",
     "disabled": "Disabled",
@@ -538,6 +541,11 @@
     }
   },
   "settings": {
+    "platformTags": {
+      "macOnly": "macOS only",
+      "windowsOnly": "Windows only",
+      "linuxOnly": "Linux only"
+    },
     "settingDownload": {
       "groupTitle": "Download Settings",
       "groupDesc": "Configure download behavior and storage options",

@@ -35,6 +35,7 @@ function startRecord(e: KeyboardEvent) {
 
 <template>
   <FlatInput
+    class="FlatKeyInput-Control"
     v-model="model"
     tabindex="0"
     @keydown="startRecord"
@@ -42,3 +43,19 @@ function startRecord(e: KeyboardEvent) {
     @blur="shortconApi.enableAll"
   />
 </template>
+
+<style scoped>
+:deep(.FlatKeyInput-Control) {
+  min-width: 220px;
+  max-width: 300px;
+  height: 36px;
+}
+
+:deep(.FlatKeyInput-Control input) {
+  text-align: center;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+</style>

@@ -65,6 +65,9 @@ function updateValue(val: string | number) {
     :active="isActive"
     :disabled="disabled"
   >
+    <template #tags>
+      <slot name="tags" />
+    </template>
     <template #default>
       <slot
         name="control"

@@ -66,10 +66,21 @@ function handleClick(event: MouseEvent) {
         <TuffIcon v-if="currentIcon" :icon="currentIcon" :size="iconSize" />
       </slot>
       <div class="TBlockSlot-Label TBlockSelection-Label">
-        <slot name="label">
-          <h3>{{ title }}</h3>
+        <template v-if="$slots.label">
+          <slot name="label" />
+          <div v-if="$slots.tags" class="TBlockSlot-Tags TBlockSlot-Tags--after">
+            <slot name="tags" />
+          </div>
+        </template>
+        <template v-else>
+          <div class="TBlockSlot-TitleRow">
+            <h3>{{ title }}</h3>
+            <div v-if="$slots.tags" class="TBlockSlot-Tags">
+              <slot name="tags" />
+            </div>
+          </div>
           <p>{{ description }}</p>
-        </slot>
+        </template>
       </div>
     </div>
     <div class="TBlockSlot-Slot TBlockSelection-Func">
@@ -88,6 +99,10 @@ function handleClick(event: MouseEvent) {
   .TBlockSlot-Slot {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    margin-left: auto;
+    flex-shrink: 0;
+    gap: 8px;
   }
 
   .TBlockSlot-Content {
@@ -118,13 +133,31 @@ function handleClick(event: MouseEvent) {
       }
 
       > p {
-        margin: 0;
+        margin: 2px 0 0;
 
         font-size: 12px;
         font-weight: 400;
 
         opacity: 0.5;
       }
+    }
+
+    .TBlockSlot-TitleRow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .TBlockSlot-Tags {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .TBlockSlot-Tags--after {
+      margin-top: 4px;
     }
   }
 
