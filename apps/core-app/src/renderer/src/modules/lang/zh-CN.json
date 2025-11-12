@@ -78,7 +78,12 @@
     "folderOpenFailed": "打开应用文件夹失败",
     "folderPathNotFound": "未找到应用文件夹路径",
     "terms": "TalexTouch 服务条款",
-    "license": "TalexTouch 软件许可证"
+    "license": "TalexTouch 软件许可证",
+    "tabs": {
+      "app": "应用信息",
+      "system": "系统信息"
+    },
+    "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
   },
   "settingLanguage": {
     "groupTitle": "语言设置",
@@ -613,7 +618,19 @@
       "hideDock": "不在 Dock 栏显示",
       "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）",
       "startSilent": "静默启动",
-      "startSilentDesc": "应用启动时不显示窗口，仅在后台运行"
+      "startSilentDesc": "应用启动时不显示窗口，仅在后台运行",
+      "fileIndexing": "文件索引",
+      "tabs": {
+        "permissions": "权限",
+        "settings": "设置"
+      },
+      "indexingStage": {
+        "cleanup": "清理中",
+        "scanning": "扫描中",
+        "indexing": "索引中",
+        "reconciliation": "同步中",
+        "completed": "已完成"
+      }
     }
   },
   "setupPermissions": {
