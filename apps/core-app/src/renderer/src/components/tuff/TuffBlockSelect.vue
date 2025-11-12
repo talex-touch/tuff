@@ -41,6 +41,9 @@ function handleChange(val: string | number, evt?: Event) {
     :active="isActive"
     :disabled="disabled"
   >
+    <template #tags>
+      <slot name="tags" />
+    </template>
     <template #default>
       <div class="flex items-center justify-end w-full">
         <TSelect v-model="value" :class="disabled ? 'pointer-events-none opacity-70' : ''" @change="handleChange">

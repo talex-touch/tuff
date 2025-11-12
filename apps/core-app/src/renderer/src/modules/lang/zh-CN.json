@@ -103,6 +103,9 @@
     "usage": "使用",
     "usageDesc": "进入时引导您使用应用程序。",
     "shortcutDesc": "为 {shortcut} 定义快捷键",
+    "shortcutLabels": {
+      "core_box_toggle": "唤起命令面板"
+    },
     "autoPaste": "自动粘贴",
     "autoPasteDesc": "在搜索栏中粘贴您复制的内容。",
     "disabled": "禁用",
@@ -538,6 +541,11 @@
     }
   },
   "settings": {
+    "platformTags": {
+      "macOnly": "仅限 macOS",
+      "windowsOnly": "仅限 Windows",
+      "linuxOnly": "仅限 Linux"
+    },
     "settingDownload": {
       "groupTitle": "下载设置",
       "groupDesc": "配置下载行为和存储选项",

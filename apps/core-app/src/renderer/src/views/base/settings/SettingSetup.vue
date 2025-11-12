@@ -13,6 +13,9 @@ import { ElMessage } from 'element-plus'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
+import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'
+import TuffWindowsTag from '~/components/tuff/tags/TuffWindowsTag.vue'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 
 // Import storage and channel
@@ -323,19 +326,6 @@ function getStatusText(status: string): string {
   }
 }
 
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'granted':
-      return 'var(--el-color-success)'
-    case 'denied':
-      return 'var(--el-color-danger)'
-    case 'notDetermined':
-      return 'var(--el-color-warning)'
-    default:
-      return 'var(--el-color-info)'
-  }
-}
-
 function getStatusIconClass(status: string): string {
   switch (status) {
     case 'granted':
@@ -368,14 +358,16 @@ function getStatusIconClass(status: string): string {
       default-icon="i-carbon-screen"
       active-icon="i-carbon-screen"
     >
+      <template #tags>
+        <TuffMacOSTag />
+      </template>
       <div class="PermissionActions">
-        <span
-          class="StatusBadge"
-          :style="{ '--status-color': getStatusColor(permissions.accessibility.status) }"
-        >
-          <i :class="getStatusIconClass(permissions.accessibility.status)" />
-          <span>{{ getStatusText(permissions.accessibility.status) }}</span>
-        </span>
+        <TuffStatusBadge
+          size="md"
+          :status-key="permissions.accessibility.status"
+          :icon="getStatusIconClass(permissions.accessibility.status)"
+          :text="getStatusText(permissions.accessibility.status)"
+        />
         <FlatButton
           v-if="permissions.accessibility.status !== 'granted'"
           primary
@@ -395,14 +387,16 @@ function getStatusIconClass(status: string): string {
       default-icon="i-carbon-security"
       active-icon="i-carbon-security"
     >
+      <template #tags>
+        <TuffWindowsTag />
+      </template>
       <div class="PermissionActions">
-        <span
-          class="StatusBadge"
-          :style="{ '--status-color': getStatusColor(permissions.adminPrivileges.status) }"
-        >
-          <i :class="getStatusIconClass(permissions.adminPrivileges.status)" />
-          <span>{{ getStatusText(permissions.adminPrivileges.status) }}</span>
-        </span>
+        <TuffStatusBadge
+          size="md"
+          :status-key="permissions.adminPrivileges.status"
+          :icon="getStatusIconClass(permissions.adminPrivileges.status)"
+          :text="getStatusText(permissions.adminPrivileges.status)"
+        />
         <FlatButton
           primary
           mini
@@ -424,13 +418,12 @@ function getStatusIconClass(status: string): string {
       active-icon="i-carbon-notification"
     >
       <div class="PermissionActions">
-        <span
-          class="StatusBadge"
-          :style="{ '--status-color': getStatusColor(permissions.notifications.status) }"
-        >
-          <i :class="getStatusIconClass(permissions.notifications.status)" />
-          <span>{{ getStatusText(permissions.notifications.status) }}</span>
-        </span>
+        <TuffStatusBadge
+          size="md"
+          :status-key="permissions.notifications.status"
+          :icon="getStatusIconClass(permissions.notifications.status)"
+          :text="getStatusText(permissions.notifications.status)"
+        />
         <FlatButton
           v-if="permissions.notifications.status !== 'granted'"
           primary
@@ -469,7 +462,11 @@ function getStatusIconClass(status: string): string {
       default-icon="i-carbon-screen"
       active-icon="i-carbon-screen"
       @update:model-value="updateHideDock"
-    />
+    >
+      <template #tags>
+        <TuffMacOSTag />
+      </template>
+    </tuff-block-switch>
 
     <tuff-block-switch
       v-model="settings.startSilent"
@@ -506,37 +503,18 @@ function getStatusIconClass(status: string): string {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
   width: 100%;
 }
 
 .PermissionActions .FlatButton-Container {
-  min-width: 140px;
+  min-width: 120px;
 }
 
 .PermissionActions .FlatButton-Container.is-loading {
   opacity: 0.6;
   pointer-events: none;
-}
-
-.StatusBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--status-color, var(--el-text-color-primary));
-  background: color-mix(in srgb, var(--status-color, var(--el-color-primary)) 12%, transparent);
-  border: 1px solid
-    color-mix(in srgb, var(--status-color, var(--el-color-primary)) 35%, transparent);
-  min-width: 140px;
-  justify-content: center;
-
-  i {
-    font-size: 15px;
-  }
 }
 
 .IndexingProgress {

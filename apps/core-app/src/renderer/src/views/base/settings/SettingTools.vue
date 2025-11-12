@@ -36,6 +36,13 @@ function updateShortcut(id: string, newAccelerator: string): void {
   if (!id || !newAccelerator) return
   shortconApi.update(id, newAccelerator)
 }
+
+function getShortcutLabel(id: string): string {
+  const normalized = id.replace(/[\.\-]/g, '_')
+  const key = `settingTools.shortcutLabels.${normalized}`
+  const translated = t(key)
+  return translated === key ? id : translated
+}
 </script>
 
 <!--
@@ -66,8 +73,8 @@ function updateShortcut(id: string, newAccelerator: string): void {
       <tuff-block-slot
         v-for="shortcut in shortcuts"
         :key="shortcut.id"
-        :title="shortcut.id"
-        :description="t('settingTools.shortcutDesc', { shortcut: shortcut.id })"
+        :title="getShortcutLabel(shortcut.id)"
+        :description="t('settingTools.shortcutDesc', { shortcut: getShortcutLabel(shortcut.id) })"
         default-icon="i-carbon-keyboard"
         active-icon="i-carbon-keyboard"
       >

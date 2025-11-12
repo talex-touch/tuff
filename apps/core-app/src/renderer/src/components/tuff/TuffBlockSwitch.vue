@@ -53,6 +53,9 @@ function handleClick(event: MouseEvent) {
     :disabled="disabled || loading"
     @click="handleClick"
   >
+    <template #tags>
+      <slot name="tags" />
+    </template>
     <template v-if="!guidance">
       <div class="flex items-center gap-3">
         <span

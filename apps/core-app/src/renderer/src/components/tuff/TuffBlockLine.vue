@@ -81,8 +81,8 @@ function handleClick(event: MouseEvent) {
 
   &.link {
     cursor: pointer;
-    padding-top: 4px;
-    padding-bottom: 4px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     --fake-color: var(--el-fill-color);
     --fake-opacity: 0.4;
 
