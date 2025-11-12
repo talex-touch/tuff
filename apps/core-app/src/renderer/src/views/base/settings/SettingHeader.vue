@@ -39,15 +39,15 @@ const vueVersion = computed(() => packageJson.value?.dependencies?.vue || '')
 
       <ul v-if="processInfo" class="About-Footer">
         <li class="fake-background" flex items-center gap-2>
-          <div inline-block class="i-ri-chrome-line" />
+          <div inline-block class="i-carbon-chip" />
           <span>Chromium: {{ chromeVersion }}</span>
         </li>
         <li class="fake-background" flex items-center gap-2>
-          <div inline-block class="i-ri-node-tree" />
+          <div inline-block class="i-carbon-code" />
           <span>Node.js: {{ nodeVersion }}</span>
         </li>
         <li class="fake-background" flex items-center gap-2>
-          <div inline-block class="i-ri-vuejs-line" />
+          <div inline-block class="i-carbon-logo-vue" />
           <span>Vue: {{ vueVersion }}</span>
         </li>
       </ul>

@@ -7,6 +7,7 @@ import presetIcons from '@unocss/preset-icons'
 import transformerAttributifyJsx from '@unocss/transformer-attributify-jsx'
 import ri from '@iconify-json/ri/icons.json'
 import simpleIcons from '@iconify-json/simple-icons/icons.json'
+import carbonIcons from '@iconify-json/carbon/icons.json'
 
 export default defineConfig({
   theme: {
@@ -26,7 +27,8 @@ export default defineConfig({
     presetIcons({
       collections: {
         ri: ri as any,
-        'simple-icons': simpleIcons as any
+        'simple-icons': simpleIcons as any,
+        carbon: carbonIcons as any
       }
     })
     // presetTheme<Theme>({

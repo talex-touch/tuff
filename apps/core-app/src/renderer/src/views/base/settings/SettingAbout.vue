@@ -4,17 +4,17 @@
   Displays application information and specifications in the settings page.
   Shows version, build information, system specs, and resource usage.
 -->
-<script setup lang="ts" name="SettingUser">
+<script setup lang="ts" name="SettingAbout">
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ElMessage, ElButton } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getBuildInfo } from '~/utils/build-info'
 
 // Import UI components
-import TBlockLine from '@comp/base/group/TBlockLine.vue'
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
+import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import OSIcon from '~/components/icon/OSIcon.vue'
 
 const { t } = useI18n()
@@ -26,8 +26,6 @@ const sui = ref(window.$startupInfo)
 const dev = ref(false)
 const performanceSummary = ref<any>(null)
 const showPerformanceDetails = ref(false)
-const activeApp = ref<any>(null)
-const loadingActiveApp = ref(false)
 
 onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
@@ -40,27 +38,6 @@ onMounted(async () => {
     console.warn('Failed to load performance summary', error)
   }
 })
-
-// Get current active application
-async function getActiveApplication() {
-  loadingActiveApp.value = true
-  try {
-    const result = await touchChannel.send('system:get-active-app', { forceRefresh: true })
-    if (result) {
-      activeApp.value = result
-      ElMessage.success('Successfully retrieved active application info')
-    } else {
-      ElMessage.warning('No active application detected')
-      activeApp.value = null
-    }
-  } catch (error) {
-    console.error('Failed to get active app', error)
-    ElMessage.error('Failed to get active application')
-    activeApp.value = null
-  } finally {
-    loadingActiveApp.value = false
-  }
-}
 
 // Computed property for version string
 const versionStr = computed(
@@ -135,8 +112,14 @@ async function openAppFolder() {
 </script>
 
 <template>
-  <t-group-block v-if="processInfo" :name="t('settingAbout.groupTitle')" icon="apps">
-    <t-block-line :title="t('settingAbout.version')">
+  <tuff-group-block
+    v-if="processInfo"
+    :name="t('settingAbout.groupTitle')"
+    default-icon="i-carbon-apps"
+    active-icon="i-carbon-app-switcher"
+    memory-name="setting-about"
+  >
+    <tuff-block-line :title="t('settingAbout.version')">
       <template #description>
         {{ versionStr }}
         <span
@@ -148,42 +131,42 @@ async function openAppFolder() {
         </span>
         <span v-else class="tag" style="color: #6d8b51"> {{ t('settingAbout.latest') }} </span>
       </template>
-    </t-block-line>
-    <t-block-line
+    </tuff-block-line>
+    <tuff-block-line
       :title="t('settingAbout.specification')"
       :description="`${currentQuarter}`"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       v-if="buildInfo.version"
       title="Version"
       :description="buildInfo.version"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       v-if="buildInfo.buildIdentifier"
       title="Build ID"
       :description="buildInfo.buildIdentifier"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       v-if="buildInfo.gitCommitHash"
       title="Git Hash"
       :description="buildInfo.gitCommitHash.substring(0, 7)"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       v-if="buildInfo.channel"
       title="Channel"
       :description="buildInfo.channel"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       v-if="buildInfo.buildType"
       title="Build Type"
       :description="buildInfo.buildType"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       v-if="buildInfo.buildTime"
       title="Build Time"
       :description="new Date(buildInfo.buildTime).toLocaleString()"
-    ></t-block-line>
-    <t-block-line :title="t('settingAbout.startCosts')">
+    ></tuff-block-line>
+    <tuff-block-line :title="t('settingAbout.startCosts')">
       <template #description>
         {{ startCosts.toFixed(2) }}s
         <span v-if="startCosts < 1" class="tag" style="color: var(--el-color-success)">
@@ -199,11 +182,11 @@ async function openAppFolder() {
           {{ t('settingAbout.slowly') }}
         </span>
       </template>
-    </t-block-line>
-    <t-block-line
+    </tuff-block-line>
+    <tuff-block-line
       v-if="performanceSummary"
       :title="t('settingAbout.performanceDetails')"
-      :link="true"
+      link
       @click="showPerformanceDetails = !showPerformanceDetails"
     >
       <template #description>
@@ -213,20 +196,20 @@ async function openAppFolder() {
           }}
         </span>
       </template>
-    </t-block-line>
+    </tuff-block-line>
     <template v-if="showPerformanceDetails && performanceSummary">
-      <t-block-line :title="t('settingAbout.mainProcessTime')">
+      <tuff-block-line :title="t('settingAbout.mainProcessTime')">
         <template #description> {{ performanceSummary.mainProcessTime.toFixed(3) }}s </template>
-      </t-block-line>
-      <t-block-line :title="t('settingAbout.rendererTime')">
+      </tuff-block-line>
+      <tuff-block-line :title="t('settingAbout.rendererTime')">
         <template #description> {{ performanceSummary.rendererTime.toFixed(3) }}s </template>
-      </t-block-line>
-      <t-block-line :title="t('settingAbout.modulesLoaded')">
+      </tuff-block-line>
+      <tuff-block-line :title="t('settingAbout.modulesLoaded')">
         <template #description>
           {{ performanceSummary.moduleCount }}
         </template>
-      </t-block-line>
-      <t-block-line :title="t('settingAbout.performanceRating')">
+      </tuff-block-line>
+      <tuff-block-line :title="t('settingAbout.performanceRating')">
         <template #description>
           <span
             :style="`color: ${
@@ -242,10 +225,10 @@ async function openAppFolder() {
             {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
           </span>
         </template>
-      </t-block-line>
-      <t-block-line
+      </tuff-block-line>
+      <tuff-block-line
         :title="t('settingAbout.exportData')"
-        :link="true"
+        link
         @click="exportPerformanceData"
       >
         <template #description>
@@ -253,33 +236,33 @@ async function openAppFolder() {
             {{ t('settingAbout.exportJson') }}
           </span>
         </template>
-      </t-block-line>
+      </tuff-block-line>
     </template>
-    <t-block-line
+    <tuff-block-line
       :title="t('settingAbout.electron')"
       :description="processInfo.versions?.electron"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       :title="t('settingAbout.v8')"
       :description="processInfo.versions?.v8"
-    ></t-block-line>
-    <t-block-line :title="t('settingAbout.os')">
+    ></tuff-block-line>
+    <tuff-block-line :title="t('settingAbout.os')">
       <template #description>
         <span flex gap-0 items-center>
           <OSIcon ml-8 :os="os?.version" />
           <span>{{ os?.version }}</span>
         </span>
       </template>
-    </t-block-line>
-    <t-block-line
+    </tuff-block-line>
+    <tuff-block-line
       :title="t('settingAbout.platform')"
       :description="`${processInfo.platform} (${os.value?.arch})`"
-    ></t-block-line>
-    <t-block-line
+    ></tuff-block-line>
+    <tuff-block-line
       :title="t('settingAbout.experience')"
       :description="`${t('settingAbout.experiencePack')} ${currentExperiencePack}`"
-    ></t-block-line>
-    <!-- <t-block-line title="CPU Usage">
+    ></tuff-block-line>
+    <!-- <tuff-block-line title="CPU Usage">
       <template #description>
         <span
           :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`"
@@ -290,8 +273,8 @@ async function openAppFolder() {
         >
         </span>
       </template>
-    </t-block-line>
-    <t-block-line title="Mem Usage">
+    </tuff-block-line>
+    <tuff-block-line title="Mem Usage">
       <template #description>
         <span
           :data-text="`${
@@ -305,101 +288,17 @@ async function openAppFolder() {
         >
         </span>
       </template>
-    </t-block-line> -->
-    <t-block-line :title="t('settingAbout.openAppFolder')" :link="true" @click="openAppFolder">
+    </tuff-block-line> -->
+    <tuff-block-line :title="t('settingAbout.openAppFolder')" link @click="openAppFolder">
       <template #description>
         <span style="cursor: pointer; color: var(--el-color-primary)">
           {{ t('settingAbout.openFolder') }}
         </span>
       </template>
-    </t-block-line>
-    <t-block-line :title="t('settingAbout.terms')" :link="true"></t-block-line>
-    <t-block-line :title="t('settingAbout.license')" :link="true"></t-block-line>
-  </t-group-block>
-
-  <!-- System Information Section (Only in development mode) -->
-  <t-group-block v-if="dev" :name="'System Information'" icon="computer-line">
-    <t-block-line :title="'Active Window Detection'" :link="true" @click="getActiveApplication">
-      <template #description>
-        <el-button
-          type="primary"
-          size="small"
-          :loading="loadingActiveApp"
-          @click.stop="getActiveApplication"
-        >
-          {{ loadingActiveApp ? 'Detecting...' : 'Get Active App' }}
-        </el-button>
-      </template>
-    </t-block-line>
-
-    <template v-if="activeApp">
-      <t-block-line :title="'Application Name'">
-        <template #description>
-          <span style="font-weight: 600; color: var(--el-color-primary)">
-            {{ activeApp.displayName || 'N/A' }}
-          </span>
-        </template>
-      </t-block-line>
-
-      <t-block-line :title="'Window Title'">
-        <template #description>
-          {{ activeApp.windowTitle || 'N/A' }}
-        </template>
-      </t-block-line>
-
-      <t-block-line v-if="activeApp.bundleId" :title="'Bundle ID'">
-        <template #description>
-          {{ activeApp.bundleId }}
-        </template>
-      </t-block-line>
-
-      <t-block-line v-if="activeApp.processId" :title="'Process ID'">
-        <template #description>
-          {{ activeApp.processId }}
-        </template>
-      </t-block-line>
-
-      <t-block-line v-if="activeApp.executablePath" :title="'Executable Path'">
-        <template #description>
-          <span style="font-size: 11px; opacity: 0.8">
-            {{ activeApp.executablePath }}
-          </span>
-        </template>
-      </t-block-line>
-
-      <t-block-line :title="'Platform'">
-        <template #description>
-          <span style="text-transform: capitalize">
-            {{ activeApp.platform || 'Unknown' }}
-          </span>
-        </template>
-      </t-block-line>
-
-      <t-block-line v-if="activeApp.icon" :title="'Application Icon'">
-        <template #description>
-          <img
-            :src="activeApp.icon"
-            alt="App Icon"
-            style="width: 24px; height: 24px; vertical-align: middle"
-          />
-        </template>
-      </t-block-line>
-
-      <t-block-line :title="'Last Updated'">
-        <template #description>
-          {{ new Date(activeApp.lastUpdated).toLocaleString() }}
-        </template>
-      </t-block-line>
-    </template>
-
-    <t-block-line v-else-if="!activeApp && !loadingActiveApp" :title="'Status'">
-      <template #description>
-        <span style="color: var(--el-color-info)">
-          Click the button above to detect active application
-        </span>
-      </template>
-    </t-block-line>
-  </t-group-block>
+    </tuff-block-line>
+    <tuff-block-line :title="t('settingAbout.terms')" link></tuff-block-line>
+    <tuff-block-line :title="t('settingAbout.license')" link></tuff-block-line>
+  </tuff-group-block>
 </template>
 
 <style lang="scss">

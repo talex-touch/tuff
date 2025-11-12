@@ -9,8 +9,8 @@ import { useI18n } from 'vue-i18n'
 import { ref, onMounted } from 'vue'
 
 // Import UI components
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
-import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 
 // Import storage
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -110,47 +110,53 @@ async function updateAutoStart(value: boolean) {
 </script>
 
 <template>
-  <t-group-block
+  <tuff-group-block
     :name="t('settings.window.groupTitle')"
-    icon="window"
     :description="t('settings.window.groupDesc')"
+    default-icon="i-carbon-laptop"
+    active-icon="i-carbon-laptop"
+    memory-name="setting-window"
   >
     <!-- Close window to tray switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="windowSettings.closeToTray"
       :title="t('settings.window.closeToTray')"
-      icon="minimize"
       :description="t('settings.window.closeToTrayDesc')"
+      default-icon="i-carbon-minimize"
+      active-icon="i-carbon-minimize"
       @update:model-value="updateCloseToTray"
     />
 
     <!-- Start minimized switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="windowSettings.startMinimized"
       :title="t('settings.window.startMinimized')"
-      icon="eye-off"
       :description="t('settings.window.startMinimizedDesc')"
+      default-icon="i-carbon-view-off"
+      active-icon="i-carbon-view-off"
       @update:model-value="updateStartMinimized"
     />
 
     <!-- Start silent switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="windowSettings.startSilent"
       :title="t('settings.window.startSilent')"
-      icon="bell-off"
       :description="t('settings.window.startSilentDesc')"
+      default-icon="i-carbon-notification-off"
+      active-icon="i-carbon-notification-off"
       @update:model-value="updateStartSilent"
     />
 
     <!-- Auto start switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="windowSettings.autoStart"
       :title="t('settings.window.autoStart')"
-      icon="play-circle"
       :description="t('settings.window.autoStartDesc')"
+      default-icon="i-carbon-play"
+      active-icon="i-carbon-play-filled"
       @update:model-value="updateAutoStart"
     />
-  </t-group-block>
+  </tuff-group-block>
 </template>
 
 <style scoped>

@@ -9,11 +9,11 @@ import { useI18n } from 'vue-i18n'
 import { ref, onMounted } from 'vue'
 
 // Import UI components
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
-import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
-import TBlockSelect from '~/components/base/select/TBlockSelect.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
-import TBlockSlot from '@comp/base/group/TBlockSlot.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 // Import download center hook
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
@@ -36,6 +36,7 @@ const downloadConfig = ref({
   storagePath: '',
   enableNotifications: true
 })
+
 
 // Load settings on mount
 onMounted(() => {
@@ -84,62 +85,70 @@ function formatFileSize(bytes: number): string {
 -->
 <template>
   <!-- Download settings group block -->
-  <t-group-block
+  <tuff-group-block
     :name="t('settings.settingDownload.groupTitle')"
-    icon="download"
     :description="t('settings.settingDownload.groupDesc')"
+    default-icon="i-carbon-cloud-download"
+    active-icon="i-carbon-cloud"
+    memory-name="setting-download"
   >
     <!-- Auto start downloads switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="downloadConfig.autoStart"
       :title="t('settings.settingDownload.autoStart')"
-      icon="play"
       :description="t('settings.settingDownload.autoStartDesc')"
+      default-icon="i-carbon-play"
+      active-icon="i-carbon-play-filled"
       @update:model-value="onConfigChange"
     />
 
     <!-- Auto resume downloads switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="downloadConfig.autoResume"
       :title="t('settings.settingDownload.autoResume')"
-      icon="refresh"
       :description="t('settings.settingDownload.autoResumeDesc')"
+      default-icon="i-carbon-time"
+      active-icon="i-carbon-timer"
       @update:model-value="onConfigChange"
     />
 
     <!-- Enable checksum verification switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="downloadConfig.enableChecksum"
       :title="t('settings.settingDownload.enableChecksum')"
-      icon="shield-check"
       :description="t('settings.settingDownload.enableChecksumDesc')"
+      default-icon="i-carbon-security"
+      active-icon="i-carbon-security"
       @update:model-value="onConfigChange"
     />
 
     <!-- Enable progress tracking switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="downloadConfig.enableProgress"
       :title="t('settings.settingDownload.enableProgress')"
-      icon="progress"
       :description="t('settings.settingDownload.enableProgressDesc')"
+      default-icon="i-carbon-meter"
+      active-icon="i-carbon-meter-alt"
       @update:model-value="onConfigChange"
     />
 
     <!-- Enable notifications switch -->
-    <t-block-switch
+    <tuff-block-switch
       v-model="downloadConfig.enableNotifications"
       :title="t('settings.settingDownload.enableNotifications')"
-      icon="bell"
       :description="t('settings.settingDownload.enableNotificationsDesc')"
+      default-icon="i-carbon-notification"
+      active-icon="i-carbon-notification-filled"
       @update:model-value="onConfigChange"
     />
 
     <!-- Maximum concurrent downloads -->
-    <t-block-select
+    <tuff-block-select
       v-model="downloadConfig.maxConcurrent"
       :title="t('settings.settingDownload.maxConcurrent')"
-      icon="layers"
       :description="t('settings.settingDownload.maxConcurrentDesc')"
+      default-icon="i-carbon-flow"
+      active-icon="i-carbon-flow-stream"
       @update:model-value="onConfigChange"
     >
       <t-select-item :model-value="1">1</t-select-item>
@@ -149,14 +158,15 @@ function formatFileSize(bytes: number): string {
       <t-select-item :model-value="5">5</t-select-item>
       <t-select-item :model-value="8">8</t-select-item>
       <t-select-item :model-value="10">10</t-select-item>
-    </t-block-select>
+    </tuff-block-select>
 
     <!-- Chunk size selection -->
-    <t-block-select
+    <tuff-block-select
       v-model="downloadConfig.chunkSize"
       :title="t('settings.settingDownload.chunkSize')"
-      icon="layers-2"
       :description="t('settings.settingDownload.chunkSizeDesc')"
+      default-icon="i-carbon-data-volume"
+      active-icon="i-carbon-data-volume"
       @update:model-value="onConfigChange"
     >
       <t-select-item :model-value="256 * 1024">{{ formatFileSize(256 * 1024) }}</t-select-item>
@@ -171,14 +181,15 @@ function formatFileSize(bytes: number): string {
       <t-select-item :model-value="8 * 1024 * 1024">{{
         formatFileSize(8 * 1024 * 1024)
       }}</t-select-item>
-    </t-block-select>
+    </tuff-block-select>
 
     <!-- Retry attempts -->
-    <t-block-select
+    <tuff-block-select
       v-model="downloadConfig.retryAttempts"
       :title="t('settings.settingDownload.retryAttempts')"
-      icon="refresh-2"
       :description="t('settings.settingDownload.retryAttemptsDesc')"
+      default-icon="i-carbon-renew"
+      active-icon="i-carbon-renew"
       @update:model-value="onConfigChange"
     >
       <t-select-item :model-value="1">1</t-select-item>
@@ -187,14 +198,15 @@ function formatFileSize(bytes: number): string {
       <t-select-item :model-value="5">5</t-select-item>
       <t-select-item :model-value="10">10</t-select-item>
       <t-select-item :model-value="0">{{ t('settings.settingDownload.noRetry') }}</t-select-item>
-    </t-block-select>
+    </tuff-block-select>
 
     <!-- Retry delay -->
-    <t-block-select
+    <tuff-block-select
       v-model="downloadConfig.retryDelay"
       :title="t('settings.settingDownload.retryDelay')"
-      icon="clock"
       :description="t('settings.settingDownload.retryDelayDesc')"
+      default-icon="i-carbon-timer"
+      active-icon="i-carbon-timer"
       @update:model-value="onConfigChange"
     >
       <t-select-item :model-value="500">500ms</t-select-item>
@@ -203,19 +215,21 @@ function formatFileSize(bytes: number): string {
       <t-select-item :model-value="3000">3s</t-select-item>
       <t-select-item :model-value="5000">5s</t-select-item>
       <t-select-item :model-value="10000">10s</t-select-item>
-    </t-block-select>
+    </tuff-block-select>
 
     <!-- Storage path slot -->
-    <t-block-slot
+    <tuff-block-slot
       :title="t('settings.settingDownload.storagePath')"
-      icon="folder"
       :description="t('settings.settingDownload.storagePathDesc')"
+      default-icon="i-carbon-folder"
+      active-icon="i-carbon-folder-open"
+      :active="Boolean(downloadConfig.storagePath)"
     >
       <div class="storage-path-display">
         {{ downloadConfig.storagePath || t('settings.settingDownload.defaultPath') }}
       </div>
-    </t-block-slot>
-  </t-group-block>
+    </tuff-block-slot>
+  </tuff-group-block>
 </template>
 
 <style lang="scss" scoped>

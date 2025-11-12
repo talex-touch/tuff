@@ -7,11 +7,10 @@
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ElMessage, ElSwitch, ElAlert } from 'element-plus'
-
-// Import UI components
-import TBlockLine from '@comp/base/group/TBlockLine.vue'
-import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
+import { ElMessage } from 'element-plus'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 
 const { t } = useI18n()
 
@@ -20,7 +19,6 @@ const anonymous = ref(true)
 const loading = ref(false)
 const searchCount = ref(0)
 
-// Load Sentry configuration
 async function loadConfig() {
   try {
     const config = (await touchChannel.send('storage:get', 'sentry-config.json')) as {
@@ -30,19 +28,17 @@ async function loadConfig() {
     enabled.value = config?.enabled ?? false
     anonymous.value = config?.anonymous ?? true
 
-    // Get search count
     try {
       const count = await touchChannel.send('sentry:get-search-count')
       searchCount.value = count || 0
     } catch {
-      // Silently fail if not available
+      // Ignore if unavailable
     }
   } catch (error) {
     console.error('Failed to load Sentry config', error)
   }
 }
 
-// Save Sentry configuration
 async function saveConfig() {
   loading.value = true
   try {
@@ -62,13 +58,11 @@ async function saveConfig() {
   }
 }
 
-// Update enabled state
 async function updateEnabled(value: boolean) {
   enabled.value = value
   await saveConfig()
 }
 
-// Update anonymous state
 async function updateAnonymous(value: boolean) {
   anonymous.value = value
   await saveConfig()
@@ -80,53 +74,81 @@ onMounted(() => {
 </script>
 
 <template>
-  <t-group-block :name="t('settingSentry.title', 'Sentry 数据分析')" icon="data-analysis">
-    <el-alert
-      :title="t('settingSentry.description', '帮助改进应用体验')"
-      type="info"
-      :closable="false"
-      style="margin-bottom: 16px"
-    >
-      <template #default>
-        <p style="margin: 0">
-          {{ t('settingSentry.descriptionText', '启用数据分析可以帮助我们改进应用性能和用户体验。所有数据都经过匿名化处理，不会包含敏感信息。') }}
-        </p>
-      </template>
-    </el-alert>
+  <tuff-group-block
+    :name="t('settingSentry.title', 'Sentry 数据分析')"
+    :description="t('settingSentry.groupDesc', '帮助改进应用体验')"
+    default-icon="i-carbon-chart-bar"
+    active-icon="i-carbon-chart-column"
+    memory-name="setting-sentry"
+  >
+    <section class="SentryBanner">
+      <p>
+        {{
+          t(
+            'settingSentry.descriptionText',
+            '启用数据分析可以帮助我们改进应用性能和用户体验。所有数据都经过匿名化处理，不会包含敏感信息。'
+          )
+        }}
+      </p>
+    </section>
 
-    <t-block-line>
-      <template #label>
-        {{ t('settingSentry.enableDataUpload', '启用数据上传') }}
-      </template>
-      <el-switch v-model="enabled" :loading="loading" @change="(val: string | number | boolean) => updateEnabled(Boolean(val))" />
-    </t-block-line>
+    <tuff-block-switch
+      v-model="enabled"
+      :title="t('settingSentry.enableDataUpload', '启用数据上传')"
+      :description="t('settingSentry.enableDesc', '上传匿名性能指标，帮助快速定位问题。')"
+      default-icon="i-carbon-cloud"
+      active-icon="i-carbon-cloud"
+      :loading="loading"
+      @update:model-value="updateEnabled"
+    />
 
-    <t-block-line v-if="enabled">
-      <template #label>
-        {{ t('settingSentry.anonymousMode', '匿名模式') }}
-      </template>
-      <el-switch v-model="anonymous" :loading="loading" @change="(val: string | number | boolean) => updateAnonymous(Boolean(val))" />
-    </t-block-line>
+    <tuff-block-switch
+      v-if="enabled"
+      v-model="anonymous"
+      :title="t('settingSentry.anonymousMode', '匿名模式')"
+      :description="t('settingSentry.anonymousDesc', '仅记录必要字段，不包含个人身份信息。')"
+      default-icon="i-carbon-user-avatar"
+      active-icon="i-carbon-user-avatar-filled"
+      :loading="loading"
+      @update:model-value="updateAnonymous"
+    />
 
-    <t-block-line v-if="enabled">
-      <template #label>
-        {{ t('settingSentry.searchCount', '已记录搜索次数') }}
+    <tuff-block-line v-if="enabled" :title="t('settingSentry.searchCount', '已记录搜索次数')">
+      <template #description>
+        <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+          {{ searchCount }}
+        </span>
       </template>
-      <span>{{ searchCount }}</span>
-    </t-block-line>
+    </tuff-block-line>
 
-    <el-alert
-      v-if="enabled && !anonymous"
-      type="warning"
-      :closable="false"
-      style="margin-top: 16px"
-    >
-      <template #default>
-        <p style="margin: 0">
-          {{ t('settingSentry.warning', '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。') }}
-        </p>
-      </template>
-    </el-alert>
-  </t-group-block>
+    <section v-if="enabled && !anonymous" class="SentryBanner warning">
+      <p>
+        {{
+          t(
+            'settingSentry.warning',
+            '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。'
+          )
+        }}
+      </p>
+    </section>
+  </tuff-group-block>
 </template>
 
+<style scoped>
+.SentryBanner {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color);
+  background: color-mix(in srgb, var(--el-color-primary) 6%, transparent);
+  margin-bottom: 16px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.SentryBanner.warning {
+  background: color-mix(in srgb, var(--el-color-warning) 10%, transparent);
+  border-color: color-mix(in srgb, var(--el-color-warning) 45%, var(--el-border-color));
+  color: var(--el-color-warning-dark-2, #b15c00);
+}
+</style>
