@@ -78,7 +78,12 @@
     "folderOpenFailed": "Failed to open application folder",
     "folderPathNotFound": "Application folder path not found",
     "terms": "TalexTouch Terms of Service",
-    "license": "TalexTouch Software License"
+    "license": "TalexTouch Software License",
+    "tabs": {
+      "app": "Application",
+      "system": "System"
+    },
+    "systemInfoPlaceholder": "System information is only available in development mode"
   },
   "settingLanguage": {
     "groupTitle": "Language Settings",
@@ -613,7 +618,19 @@
       "hideDock": "Hide Dock Icon",
       "hideDockDesc": "Hide Dock icon after closing main window (macOS only)",
       "startSilent": "Silent Start",
-      "startSilentDesc": "Launch application without showing window, run in background only"
+      "startSilentDesc": "Launch application without showing window, run in background only",
+      "fileIndexing": "File Indexing",
+      "tabs": {
+        "permissions": "Permissions",
+        "settings": "Settings"
+      },
+      "indexingStage": {
+        "cleanup": "Cleaning up",
+        "scanning": "Scanning",
+        "indexing": "Indexing",
+        "reconciliation": "Reconciling",
+        "completed": "Completed"
+      }
     }
   },
   "setupPermissions": {

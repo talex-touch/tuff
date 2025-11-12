@@ -30,270 +30,332 @@
     </div>
 
     <div v-if="snapshot" class="debug-content">
-      <!-- System Overview -->
-      <section class="debug-section">
-        <div class="section-header">
-          <h2 class="section-title">[SYSTEM_OVERVIEW]</h2>
-          <div class="timestamp">{{ formatDateTime(snapshot.generatedAt) }}</div>
-        </div>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-key">VERSION:</span>
-            <span class="info-value">{{ snapshot.system.version }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-key">PLATFORM:</span>
-            <span class="info-value"
-              >{{ snapshot.system.platform }} {{ snapshot.system.release }}</span
-            >
-          </div>
-          <div class="info-item">
-            <span class="info-key">ARCHITECTURE:</span>
-            <span class="info-value">{{ snapshot.system.architecture }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-key">UPTIME:</span>
-            <span class="info-value">{{ formatDuration(snapshot.system.uptime) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-key">MEMORY_FREE:</span>
-            <span class="info-value">{{ formatBytes(snapshot.system.memory.free) }}</span>
-          </div>
-          <div class="info-item">
-            <span class="info-key">MEMORY_TOTAL:</span>
-            <span class="info-value">{{ formatBytes(snapshot.system.memory.total) }}</span>
+      <!-- Overall Indexing Progress Bar -->
+      <div
+        v-if="indexingProgress && indexingProgress.stage !== 'idle'"
+        class="overall-indexing-progress"
+      >
+        <div class="progress-header">
+          <span class="progress-icon">📁</span>
+          <div class="progress-info">
+            <h3 class="progress-title">文件索引</h3>
+            <p class="progress-subtitle">
+              {{ getStageText(indexingProgress.stage) }}
+              <span v-if="indexingProgress.total > 0">
+                ({{ indexingProgress.current }} / {{ indexingProgress.total }})
+              </span>
+            </p>
           </div>
         </div>
-      </section>
+        <el-progress
+          :percentage="overallProgress"
+          :status="indexingProgress.stage === 'completed' ? 'success' : undefined"
+          :stroke-width="8"
+          class="progress-bar"
+        />
+      </div>
 
-      <!-- Active Application -->
-      <section class="debug-section">
-        <div class="section-header">
-          <h2 class="section-title">[ACTIVE_APPLICATION]</h2>
-        </div>
-        <div v-if="snapshot.applications.activeApp" class="app-info">
-          <div class="app-header">
-            <div class="app-icon-placeholder">📱</div>
-            <div class="app-details">
-              <div class="app-name">
-                {{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}
+      <!-- Tabs for different sections -->
+      <el-tabs v-model="activeTab" class="debug-tabs">
+        <!-- System Tab -->
+        <el-tab-pane label="系统" name="system">
+          <div class="tab-content">
+            <!-- System Overview -->
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">[SYSTEM_OVERVIEW]</h2>
+                <div class="timestamp">{{ formatDateTime(snapshot.generatedAt) }}</div>
               </div>
-              <div class="app-title">
-                {{ snapshot.applications.activeApp.windowTitle ?? 'NO_WINDOW_TITLE' }}
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-key">VERSION:</span>
+                  <span class="info-value">{{ snapshot.system.version }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-key">PLATFORM:</span>
+                  <span class="info-value"
+                    >{{ snapshot.system.platform }} {{ snapshot.system.release }}</span
+                  >
+                </div>
+                <div class="info-item">
+                  <span class="info-key">ARCHITECTURE:</span>
+                  <span class="info-value">{{ snapshot.system.architecture }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-key">UPTIME:</span>
+                  <span class="info-value">{{ formatDuration(snapshot.system.uptime) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-key">MEMORY_FREE:</span>
+                  <span class="info-value">{{ formatBytes(snapshot.system.memory.free) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-key">MEMORY_TOTAL:</span>
+                  <span class="info-value">{{ formatBytes(snapshot.system.memory.total) }}</span>
+                </div>
               </div>
-            </div>
-          </div>
-          <div class="app-meta">
-            <div class="meta-row">
-              <span class="meta-key">BUNDLE_ID:</span>
-              <span class="meta-value">{{
-                snapshot.applications.activeApp.bundleId ?? 'N/A'
-              }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="meta-key">PROCESS_ID:</span>
-              <span class="meta-value"
-                >#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span
-              >
-            </div>
-            <div class="meta-row">
-              <span class="meta-key">EXECUTABLE_PATH:</span>
-              <span class="meta-value">{{
-                snapshot.applications.activeApp.executablePath ?? 'N/A'
-              }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="meta-key">LAST_UPDATED:</span>
-              <span class="meta-value">{{
-                formatDateTime(snapshot.applications.activeApp.lastUpdated)
-              }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-else class="no-data">
-          <span class="no-data-text">NO_ACTIVE_APPLICATION_DETECTED</span>
-        </div>
-      </section>
+            </section>
 
-      <!-- Indexing Progress -->
-      <section class="debug-section">
-        <div class="section-header">
-          <h2 class="section-title">[INDEXING_PROGRESS]</h2>
-          <div class="watched-paths">
-            <span v-for="path in snapshot.indexing.watchedPaths" :key="path" class="path-tag">
-              {{ path }}
-            </span>
-          </div>
-        </div>
-
-        <div class="stats-grid">
-          <div v-for="(value, key) in snapshot.indexing.summary" :key="key" class="stat-item">
-            <span class="stat-key">{{ key.toUpperCase() }}:</span>
-            <span class="stat-value">{{ value }}</span>
-          </div>
-        </div>
-
-        <div class="table-section">
-          <div class="table-header">INDEXING_ENTRIES</div>
-          <div class="table-container">
-            <table class="debug-table">
-              <thead>
-                <tr>
-                  <th>PATH</th>
-                  <th>STATUS</th>
-                  <th>PROGRESS</th>
-                  <th>PROCESSED</th>
-                  <th>TOTAL</th>
-                  <th>UPDATED</th>
-                  <th>ERROR</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="entry in snapshot.indexing.entries" :key="entry.path">
-                  <td class="path-cell">{{ entry.path }}</td>
-                  <td>
-                    <span class="status-tag" :class="`status-${entry.status}`">
-                      {{ entry.status ?? 'UNKNOWN' }}
-                    </span>
-                  </td>
-                  <td>{{ formatProgress(entry.progress) }}</td>
-                  <td>{{ formatBytes(entry.processedBytes) }}</td>
-                  <td>{{ formatBytes(entry.totalBytes) }}</td>
-                  <td>{{ formatDateTime(entry.updatedAt) }}</td>
-                  <td>
-                    <span v-if="entry.lastError" class="error-text" :title="entry.lastError">
-                      {{ truncate(entry.lastError, 40) }}
-                    </span>
-                    <span v-else class="no-error">NONE</span>
-                  </td>
-                </tr>
-                <tr v-if="!snapshot.indexing.entries.length">
-                  <td colspan="7" class="empty-row">NO_INDEXING_RECORDS</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- OCR Status -->
-      <section class="debug-section">
-        <div class="section-header">
-          <h2 class="section-title">[OCR_STATUS]</h2>
-        </div>
-
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-key">TOTAL_TASKS:</span>
-            <span class="stat-value">{{ snapshot.ocr.stats.total }}</span>
-          </div>
-          <div v-for="(value, key) in snapshot.ocr.stats.byStatus" :key="key" class="stat-item">
-            <span class="stat-key">{{ key.toUpperCase() }}:</span>
-            <span class="stat-value">{{ value }}</span>
-          </div>
-        </div>
-
-        <div class="timeline-section">
-          <div class="timeline-header">RECENT_ACTIVITY</div>
-          <div class="timeline-grid">
-            <div v-for="(value, label) in ocrTimeline" :key="label" class="timeline-item">
-              <span class="timeline-key">{{ label.toUpperCase() }}:</span>
-              <span class="timeline-value">{{ formatEvent(value) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="table-section">
-          <div class="table-header">OCR_JOBS</div>
-          <div class="table-container">
-            <table class="debug-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>STATUS</th>
-                  <th>SOURCE</th>
-                  <th>QUEUED</th>
-                  <th>FINISHED</th>
-                  <th>ATTEMPTS</th>
-                  <th>RESULT</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="job in ocrJobs" :key="(job.id ?? job.payloadHash) || Math.random()">
-                  <td>{{ job.id ?? 'N/A' }}</td>
-                  <td>
-                    <span class="status-tag" :class="`status-${job.status}`">
-                      {{ formatStatus(job.status) }}
-                    </span>
-                  </td>
-                  <td>{{ sourceLabel(job) }}</td>
-                  <td>{{ formatDateTime(job.queuedAt) }}</td>
-                  <td>{{ formatDateTime(job.finishedAt) }}</td>
-                  <td>{{ job.attempts ?? 0 }}</td>
-                  <td>
-                    <div v-if="job.result" class="result-content">
-                      <div class="result-text" :title="job.result.textSnippet">
-                        {{ truncate(job.result.textSnippet, 50) }}
-                      </div>
-                      <div class="result-meta">
-                        {{ job.result.language || 'N/A' }} |
-                        {{
-                          job.result.confidence !== null ? job.result.confidence.toFixed(1) : 'N/A'
-                        }}%
-                      </div>
+            <!-- Active Application -->
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">[ACTIVE_APPLICATION]</h2>
+              </div>
+              <div v-if="snapshot.applications.activeApp" class="app-info">
+                <div class="app-header">
+                  <div class="app-icon-placeholder">📱</div>
+                  <div class="app-details">
+                    <div class="app-name">
+                      {{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}
                     </div>
-                    <span v-else class="no-result">NO_RESULT</span>
-                  </td>
-                </tr>
-                <tr v-if="!ocrJobs.length">
-                  <td colspan="7" class="empty-row">NO_OCR_TASKS</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- Logs Information -->
-      <section class="debug-section">
-        <div class="section-header">
-          <h2 class="section-title">[LOGS_INFORMATION]</h2>
-        </div>
-        <div class="logs-content">
-          <div class="log-paths">
-            <div class="path-row">
-              <span class="path-key">USER_DATA_DIR:</span>
-              <span class="path-value">{{ snapshot.logs.userDataDir }}</span>
-            </div>
-            <div class="path-row">
-              <span class="path-key">LOGS_DIR:</span>
-              <span class="path-value">{{ snapshot.logs.directory }}</span>
-            </div>
-            <div class="path-row">
-              <span class="path-key">LOG_FILES_COUNT:</span>
-              <span class="path-value">{{ snapshot.logs.recentFiles.length }}</span>
-            </div>
-          </div>
-          <div v-if="snapshot.logs.recentFiles.length" class="recent-files">
-            <div class="files-header">RECENT_FILES</div>
-            <div class="files-list">
-              <div v-for="file in snapshot.logs.recentFiles" :key="file.name" class="file-item">
-                <span class="file-name">{{ file.name }}</span>
-                <span class="file-meta">
-                  {{ formatBytes(file.size) }} | {{ formatDateTime(file.updatedAt) }}
-                </span>
+                    <div class="app-title">
+                      {{ snapshot.applications.activeApp.windowTitle ?? 'NO_WINDOW_TITLE' }}
+                    </div>
+                  </div>
+                </div>
+                <div class="app-meta">
+                  <div class="meta-row">
+                    <span class="meta-key">BUNDLE_ID:</span>
+                    <span class="meta-value">{{
+                      snapshot.applications.activeApp.bundleId ?? 'N/A'
+                    }}</span>
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-key">PROCESS_ID:</span>
+                    <span class="meta-value"
+                      >#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span
+                    >
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-key">EXECUTABLE_PATH:</span>
+                    <span class="meta-value">{{
+                      snapshot.applications.activeApp.executablePath ?? 'N/A'
+                    }}</span>
+                  </div>
+                  <div class="meta-row">
+                    <span class="meta-key">LAST_UPDATED:</span>
+                    <span class="meta-value">{{
+                      formatDateTime(snapshot.applications.activeApp.lastUpdated)
+                    }}</span>
+                  </div>
+                </div>
               </div>
-            </div>
+              <div v-else class="no-data">
+                <span class="no-data-text">NO_ACTIVE_APPLICATION_DETECTED</span>
+              </div>
+            </section>
           </div>
-        </div>
-      </section>
+        </el-tab-pane>
+
+        <!-- Indexing Tab -->
+        <el-tab-pane label="索引" name="indexing">
+          <div class="tab-content">
+            <!-- Indexing Progress -->
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">[INDEXING_PROGRESS]</h2>
+                <div class="watched-paths">
+                  <span v-for="path in snapshot.indexing.watchedPaths" :key="path" class="path-tag">
+                    {{ path }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="stats-grid">
+                <div v-for="(value, key) in snapshot.indexing.summary" :key="key" class="stat-item">
+                  <span class="stat-key">{{ key.toUpperCase() }}:</span>
+                  <span class="stat-value">{{ value }}</span>
+                </div>
+              </div>
+
+              <div class="table-section">
+                <div class="table-header">INDEXING_ENTRIES</div>
+                <div class="table-container">
+                  <table class="debug-table">
+                    <thead>
+                      <tr>
+                        <th>PATH</th>
+                        <th>STATUS</th>
+                        <th>PROGRESS</th>
+                        <th>PROCESSED</th>
+                        <th>TOTAL</th>
+                        <th>UPDATED</th>
+                        <th>ERROR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="entry in snapshot.indexing.entries" :key="entry.path">
+                        <td class="path-cell">{{ entry.path }}</td>
+                        <td>
+                          <span class="status-tag" :class="`status-${entry.status}`">
+                            {{ entry.status ?? 'UNKNOWN' }}
+                          </span>
+                        </td>
+                        <td>{{ formatProgress(entry.progress) }}</td>
+                        <td>{{ formatBytes(entry.processedBytes) }}</td>
+                        <td>{{ formatBytes(entry.totalBytes) }}</td>
+                        <td>{{ formatDateTime(entry.updatedAt) }}</td>
+                        <td>
+                          <span v-if="entry.lastError" class="error-text" :title="entry.lastError">
+                            {{ truncate(entry.lastError, 40) }}
+                          </span>
+                          <span v-else class="no-error">NONE</span>
+                        </td>
+                      </tr>
+                      <tr v-if="!snapshot.indexing.entries.length">
+                        <td colspan="7" class="empty-row">NO_INDEXING_RECORDS</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </el-tab-pane>
+
+        <!-- OCR Tab -->
+        <el-tab-pane label="OCR" name="ocr">
+          <div class="tab-content">
+            <!-- OCR Status -->
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">[OCR_STATUS]</h2>
+              </div>
+
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-key">TOTAL_TASKS:</span>
+                  <span class="stat-value">{{ snapshot.ocr.stats.total }}</span>
+                </div>
+                <div
+                  v-for="(value, key) in snapshot.ocr.stats.byStatus"
+                  :key="key"
+                  class="stat-item"
+                >
+                  <span class="stat-key">{{ key.toUpperCase() }}:</span>
+                  <span class="stat-value">{{ value }}</span>
+                </div>
+              </div>
+
+              <div class="timeline-section">
+                <div class="timeline-header">RECENT_ACTIVITY</div>
+                <div class="timeline-grid">
+                  <div v-for="(value, label) in ocrTimeline" :key="label" class="timeline-item">
+                    <span class="timeline-key">{{ label.toUpperCase() }}:</span>
+                    <span class="timeline-value">{{ formatEvent(value) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="table-section">
+                <div class="table-header">OCR_JOBS</div>
+                <div class="table-container">
+                  <table class="debug-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>STATUS</th>
+                        <th>SOURCE</th>
+                        <th>QUEUED</th>
+                        <th>FINISHED</th>
+                        <th>ATTEMPTS</th>
+                        <th>RESULT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="job in ocrJobs"
+                        :key="(job.id ?? job.payloadHash) || Math.random()"
+                      >
+                        <td>{{ job.id ?? 'N/A' }}</td>
+                        <td>
+                          <span class="status-tag" :class="`status-${job.status}`">
+                            {{ formatStatus(job.status) }}
+                          </span>
+                        </td>
+                        <td>{{ sourceLabel(job) }}</td>
+                        <td>{{ formatDateTime(job.queuedAt) }}</td>
+                        <td>{{ formatDateTime(job.finishedAt) }}</td>
+                        <td>{{ job.attempts ?? 0 }}</td>
+                        <td>
+                          <div v-if="job.result" class="result-content">
+                            <div class="result-text" :title="job.result.textSnippet">
+                              {{ truncate(job.result.textSnippet, 50) }}
+                            </div>
+                            <div class="result-meta">
+                              {{ job.result.language || 'N/A' }} |
+                              {{
+                                job.result.confidence !== null
+                                  ? job.result.confidence.toFixed(1)
+                                  : 'N/A'
+                              }}%
+                            </div>
+                          </div>
+                          <span v-else class="no-result">NO_RESULT</span>
+                        </td>
+                      </tr>
+                      <tr v-if="!ocrJobs.length">
+                        <td colspan="7" class="empty-row">NO_OCR_TASKS</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </el-tab-pane>
+
+        <!-- Logs Tab -->
+        <el-tab-pane label="日志" name="logs">
+          <div class="tab-content">
+            <!-- Logs Information -->
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">[LOGS_INFORMATION]</h2>
+              </div>
+              <div class="logs-content">
+                <div class="log-paths">
+                  <div class="path-row">
+                    <span class="path-key">USER_DATA_DIR:</span>
+                    <span class="path-value">{{ snapshot.logs.userDataDir }}</span>
+                  </div>
+                  <div class="path-row">
+                    <span class="path-key">LOGS_DIR:</span>
+                    <span class="path-value">{{ snapshot.logs.directory }}</span>
+                  </div>
+                  <div class="path-row">
+                    <span class="path-key">LOG_FILES_COUNT:</span>
+                    <span class="path-value">{{ snapshot.logs.recentFiles.length }}</span>
+                  </div>
+                </div>
+                <div v-if="snapshot.logs.recentFiles.length" class="recent-files">
+                  <div class="files-header">RECENT_FILES</div>
+                  <div class="files-list">
+                    <div
+                      v-for="file in snapshot.logs.recentFiles"
+                      :key="file.name"
+                      class="file-item"
+                    >
+                      <span class="file-name">{{ file.name }}</span>
+                      <span class="file-meta">
+                        {{ formatBytes(file.size) }} | {{ formatDateTime(file.updatedAt) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
+import { ElTabs, ElTabPane, ElProgress } from 'element-plus'
 
 interface ActiveAppInfo {
   identifier: string | null
@@ -410,6 +472,87 @@ const limit = ref<number>(50)
 const loading = ref<boolean>(false)
 const error = ref<string | null>(null)
 const snapshot = ref<TuffDashboardSnapshot | null>(null)
+const activeTab = ref('system')
+
+// File indexing progress
+const indexingProgress = ref<{
+  stage: 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+  current: number
+  total: number
+  progress: number
+} | null>(null)
+
+let progressUnsubscribe: (() => void) | null = null
+
+// Calculate overall indexing progress
+const overallProgress = computed(() => {
+  if (!indexingProgress.value || indexingProgress.value.stage === 'idle') {
+    return 0
+  }
+
+  const { stage, progress } = indexingProgress.value
+
+  // Stage weights: cleanup 5%, scanning 20%, indexing 60%, reconciliation 15%
+  const stageWeights: Record<string, { start: number; weight: number }> = {
+    cleanup: { start: 0, weight: 5 },
+    scanning: { start: 5, weight: 20 },
+    indexing: { start: 25, weight: 60 },
+    reconciliation: { start: 85, weight: 15 },
+    completed: { start: 100, weight: 0 }
+  }
+
+  const stageInfo = stageWeights[stage] || { start: 0, weight: 0 }
+
+  if (stage === 'completed') {
+    return 100
+  }
+
+  // Calculate progress within current stage
+  const stageProgress = (progress / 100) * stageInfo.weight
+  return Math.min(100, stageInfo.start + stageProgress)
+})
+
+function getStageText(stage: string): string {
+  switch (stage) {
+    case 'cleanup':
+      return '清理中'
+    case 'scanning':
+      return '扫描中'
+    case 'indexing':
+      return '索引中'
+    case 'reconciliation':
+      return '同步中'
+    case 'completed':
+      return '已完成'
+    default:
+      return ''
+  }
+}
+
+function setupIndexingProgressListener(): void {
+  progressUnsubscribe = touchChannel.regChannel('file-index:progress', (data) => {
+    const progressData = data.data as {
+      stage: 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+      current: number
+      total: number
+      progress: number
+    }
+    if (progressData) {
+      indexingProgress.value = {
+        stage: progressData.stage,
+        current: progressData.current,
+        total: progressData.total,
+        progress: progressData.progress
+      }
+      // Reset to null when completed
+      if (progressData.stage === 'completed') {
+        setTimeout(() => {
+          indexingProgress.value = null
+        }, 2000)
+      }
+    }
+  })
+}
 
 const ocrJobs = computed(() => snapshot.value?.ocr.jobs.slice(0, limit.value) ?? [])
 const ocrTimeline = computed(() => ({
@@ -534,8 +677,104 @@ watch(limit, () => {
 
 onMounted(() => {
   load().catch(() => void 0)
+  setupIndexingProgressListener()
+})
+
+onUnmounted(() => {
+  if (progressUnsubscribe) {
+    progressUnsubscribe()
+    progressUnsubscribe = null
+  }
 })
 </script>
+
+<style scoped>
+.overall-indexing-progress {
+  background: #111111;
+  border: 1px solid #333333;
+  border-radius: 2px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.progress-icon {
+  font-size: 1.5rem;
+}
+
+.progress-info {
+  flex: 1;
+}
+
+.progress-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.progress-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #888888;
+}
+
+.progress-bar {
+  width: 100%;
+}
+
+.debug-tabs {
+  margin-top: 1rem;
+}
+
+.debug-tabs :deep(.el-tabs__header) {
+  background: #111111;
+  border: 1px solid #333333;
+  border-radius: 2px 2px 0 0;
+  margin: 0 0 0 0;
+  padding: 0 1rem;
+}
+
+.debug-tabs :deep(.el-tabs__nav-wrap) {
+  background: transparent;
+}
+
+.debug-tabs :deep(.el-tabs__item) {
+  color: #888888;
+  border-bottom: 2px solid transparent;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 0.75rem 1rem;
+}
+
+.debug-tabs :deep(.el-tabs__item:hover) {
+  color: #ffffff;
+}
+
+.debug-tabs :deep(.el-tabs__item.is-active) {
+  color: #ffffff;
+  border-bottom-color: #ffffff;
+}
+
+.debug-tabs :deep(.el-tabs__content) {
+  padding: 0;
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+</style>
 
 <style scoped>
 .debug-page {
