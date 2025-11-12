@@ -13,6 +13,7 @@ import { tuffSorter } from './sort/tuff-sorter'
 import { appProvider } from '../addon/apps/app-provider'
 import { windowManager } from '../core-box/window'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
+import { systemProvider } from '../addon/system/system-provider'
 import { TalexTouch, TuffFactory } from '@talex-touch/utils'
 import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
 import { createDbUtils, DbUtils } from '../../../db/utils'
@@ -32,6 +33,8 @@ import { getSentryService } from '../../sentry'
 import { performance } from 'perf_hooks'
 import { UsageSummaryService } from './usage-summary-service'
 import { QueryCompletionService } from './query-completion-service'
+import { UsageStatsCache, getUsageStatsBatchCached } from './usage-stats-cache'
+import { UsageStatsQueue } from './usage-stats-queue'
 
 /**
  * Generates a unique key for an activation request.
@@ -63,6 +66,8 @@ export class SearchEngineCore
   private searchIndexService: SearchIndexService | null = null
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
+  private usageStatsCache: UsageStatsCache | null = null
+  private usageStatsQueue: UsageStatsQueue | null = null
 
   private touchApp: TouchApp | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
@@ -84,6 +89,7 @@ export class SearchEngineCore
     // TODO refractory - this provider costs a lot of time
     this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)
+    this.registerProvider(systemProvider)
   }
 
   static getInstance(): SearchEngineCore {
@@ -477,7 +483,10 @@ export class SearchEngineCore
         itemId: item.id
       }))
 
-      const stats = await this.dbUtils.getUsageStatsBatch(keys)
+      // Use cached batch query
+      const stats = this.usageStatsCache
+        ? await getUsageStatsBatchCached(this.dbUtils, this.usageStatsCache, keys)
+        : await this.dbUtils.getUsageStatsBatch(keys)
 
       const statsMap = new Map(stats.map((s) => [`${s.sourceId}:${s.itemId}`, s]))
 
@@ -521,22 +530,30 @@ export class SearchEngineCore
     try {
       const topItems = items.slice(0, 10)
 
-      const updatePromises = topItems.map((item) =>
-        this.dbUtils!.incrementUsageStats(
-          item.source.id,
-          item.id,
-          item.source.type,
-          'search'
-        ).catch((error) => {
-          console.error(
-            `[SearchEngineCore] Failed to update search stats for item ${item.id}:`,
-            error
-          )
-          return null
-        })
-      )
+      // Use queue for batch writes instead of direct database calls
+      if (this.usageStatsQueue) {
+        for (const item of topItems) {
+          this.usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'search')
+        }
+      } else {
+        // Fallback to direct database calls if queue is not available
+        const updatePromises = topItems.map((item) =>
+          this.dbUtils!.incrementUsageStats(
+            item.source.id,
+            item.id,
+            item.source.type,
+            'search'
+          ).catch((error) => {
+            console.error(
+              `[SearchEngineCore] Failed to update search stats for item ${item.id}:`,
+              error
+            )
+            return null
+          })
+        )
 
-      await Promise.allSettled(updatePromises)
+        await Promise.allSettled(updatePromises)
+      }
 
       if (searchLogger.isEnabled()) {
         const duration = performance.now() - start
@@ -628,13 +645,21 @@ export class SearchEngineCore
       // 保持原有的 usageSummary 更新（向后兼容）
       await this.dbUtils.incrementUsageSummary(itemId)
 
-      // 新增：更新基于 source + id 的组合键统计
-      await this.dbUtils.incrementUsageStats(
-        item.source.id,
-        itemId,
-        item.source.type,
-        'execute'
-      )
+      // 新增：更新基于 source + id 的组合键统计（使用队列批量写入）
+      if (this.usageStatsQueue) {
+        this.usageStatsQueue.enqueue(item.source.id, itemId, item.source.type, 'execute')
+      } else {
+        // Fallback to direct database call
+        await this.dbUtils.incrementUsageStats(
+          item.source.id,
+          itemId,
+          item.source.type,
+          'execute'
+        )
+      }
+
+      // Invalidate cache for this item
+      this.usageStatsCache?.invalidate(item.source.id, itemId)
 
       // 记录查询完成（如果有最后的搜索查询）
       if (this.lastSearchQuery && this.queryCompletionService) {
@@ -670,6 +695,8 @@ export class SearchEngineCore
     instance.dbUtils = createDbUtils(db)
     instance.searchIndexService = new SearchIndexService(db)
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
+    instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
+    instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval
 
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
@@ -769,6 +796,11 @@ export class SearchEngineCore
 
     // 停止汇总服务
     this.usageSummaryService?.stop()
+
+    // 强制刷新队列
+    this.usageStatsQueue?.forceFlush().catch((error) => {
+      console.error('[SearchEngineCore] Failed to flush usage stats queue on destroy:', error)
+    })
   }
 }
 

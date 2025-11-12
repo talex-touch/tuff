@@ -304,6 +304,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   >()
   private backgroundTaskService: BackgroundTaskService | null = null
   private activityTracker: AppUsageActivityTracker | null = null
+  private touchApp: TalexTouch.TouchApp | null = null
+  private indexingProgress = {
+    current: 0,
+    total: 0,
+    stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+  }
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -572,21 +578,28 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const loadStart = performance.now()
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
+    this.touchApp = context.touchApp
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
 
     this.initializeBackgroundTaskService()
 
+    // 启动异步后台索引任务，不阻塞onLoad
     if (!this.isInitializing) {
-      this.logInfo('onLoad: initializing provider state...')
-      this.isInitializing = this._initialize()
+      this.logInfo('onLoad: starting background index task...')
+      // 不等待初始化完成，让它在后台运行
+      this.isInitializing = this._initialize(context).catch((error) => {
+        this.logError('Background index task failed', error)
+        this.emitIndexingProgress('idle', 0, 0)
+      })
     }
-    await this.isInitializing
+
+    // 只等待文件系统监听器设置完成，不等待索引完成
     await this.ensureFileSystemWatchers()
     this.registerOpenersChannel(context)
     const loadDuration = performance.now() - loadStart
-    this.logInfo('Provider onLoad completed', {
+    this.logInfo('Provider onLoad completed (indexing continues in background)', {
       duration: formatDuration(loadDuration)
     })
   }
@@ -1171,7 +1184,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async _initialize(): Promise<void> {
+  private emitIndexingProgress(
+    stage: typeof this.indexingProgress.stage,
+    current: number,
+    total: number
+  ): void {
+    this.indexingProgress = { stage, current, total }
+    if (this.touchApp) {
+      this.touchApp.channel.send(ChannelType.MAIN, 'file-index:progress', {
+        stage,
+        current,
+        total,
+        progress: total > 0 ? Math.round((current / total) * 100) : 0
+      }).catch((error) => {
+        console.warn('[FileProvider] Failed to emit indexing progress:', error)
+      })
+    }
+  }
+
+  private async _initialize(context: ProviderContext): Promise<void> {
     const initStart = performance.now()
     this.logInfo('Starting index process')
     if (!this.dbUtils) return
@@ -1188,6 +1219,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // --- 1. Index Cleanup (FR-IX-4) ---
     const cleanupStart = performance.now()
     this.logInfo('Cleaning stale index entries from removed watch paths')
+    this.emitIndexingProgress('cleanup', 0, 1)
     const allDbFilePaths = await db
       .select({ path: filesSchema.path, id: filesSchema.id })
       .from(filesSchema)
@@ -1206,6 +1238,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
       await this.searchIndex?.removeItems(pathsToDelete)
     }
+    this.emitIndexingProgress('cleanup', 1, 1)
     this.logInfo('Cleanup stage finished', {
       duration: formatDuration(performance.now() - cleanupStart),
       removed: filesToDelete.length
@@ -1231,6 +1264,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         count: newPathsToScan.length,
         sample: newPathsToScan.slice(0, 3).join(', ')
       })
+      this.emitIndexingProgress('scanning', 0, newPathsToScan.length)
+      let scannedPaths = 0
       for (const newPath of newPathsToScan) {
         const pathScanStart = performance.now()
         this.logDebug('Scanning new path', { path: newPath })
@@ -1240,6 +1275,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           files: diskFiles.length,
           duration: formatDuration(performance.now() - pathScanStart)
         })
+
+        scannedPaths++
+        this.emitIndexingProgress('scanning', scannedPaths, newPathsToScan.length)
 
         const newFileRecords = diskFiles.map((file) => ({
           path: file.path,
@@ -1264,6 +1302,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             chunks.push(newFileRecords.slice(i, i + chunkSize))
           }
 
+          let indexedFiles = 0
+          this.emitIndexingProgress('indexing', 0, newFileRecords.length)
           await runAdaptiveTaskQueue(
             chunks,
             async (chunk, chunkIndex) => {
@@ -1292,6 +1332,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               await this.processFileExtensions(inserted)
               await this.extractContentForFiles(inserted)
               await this.indexFilesForSearch(inserted)
+              indexedFiles += chunk.length
+              this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
             },
             {
               estimatedTaskTimeMs: 8,
@@ -1320,6 +1362,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         count: reconciliationPaths.length,
         sample: reconciliationPaths.slice(0, 3).join(', ')
       })
+      this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
       const dbReadStart = performance.now()
       const dbFiles = await db.select().from(filesSchema).where(eq(filesSchema.type, 'file'))
       this.logDebug('Loaded DB file records for reconciliation', {
@@ -1330,8 +1373,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       const diskScanStart = performance.now()
       const diskFiles: ScannedFileInfo[] = []
+      let reconciledPaths = 0
       for (const dir of reconciliationPaths) {
         diskFiles.push(...(await scanDirectory(dir, excludePathsSet)))
+        reconciledPaths++
+        this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
       }
       this.logDebug('Disk reconciliation scan finished', {
         files: diskFiles.length,
@@ -1406,6 +1452,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           chunks.push(newFileRecords.slice(i, i + chunkSize))
         }
 
+        let reconciledFiles = 0
+        this.emitIndexingProgress('indexing', 0, filesToAdd.length)
         await runAdaptiveTaskQueue(
           chunks,
           async (chunk, chunkIndex) => {
@@ -1433,6 +1481,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             await this.processFileExtensions(inserted)
             await this.extractContentForFiles(inserted)
             await this.indexFilesForSearch(inserted)
+            reconciledFiles += chunk.length
+            this.emitIndexingProgress('indexing', reconciledFiles, filesToAdd.length)
           },
           {
             estimatedTaskTimeMs: 6,
@@ -1449,6 +1499,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
+    this.emitIndexingProgress('completed', 1, 1)
     this.logInfo('Index process complete', {
       duration: formatDuration(performance.now() - initStart)
     })
