@@ -48,55 +48,65 @@ export function useSearch(
 
       const inputs: TuffQueryInput[] = []
 
-      // Add FILE mode files to inputs (from drag-drop or other sources)
-      if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
+      // Priority-based input selection (matches TagSection display logic):
+      // Priority 1: Image (clipboard image)
+      // Priority 2: File (FILE mode or clipboard files)
+      // Priority 3: Text (clipboard text/html)
+      // Only one input should be added to match what's displayed in the tag
+
+      // Priority 1: Image (clipboard image)
+      if (clipboardOptions?.last?.type === 'image') {
+        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+        if (clipboardData && clipboardData.type === 'image') {
+          inputs.push({
+            type: TuffInputType.Image,
+            content: clipboardData.content,
+            thumbnail: clipboardData.thumbnail,
+            metadata: clipboardData.meta
+          })
+        }
+      }
+      // Priority 2: File (FILE mode or clipboard files)
+      else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
         inputs.push({
           type: TuffInputType.Files,
           content: JSON.stringify(boxOptions.file.paths),
           metadata: undefined
         })
-      }
-
-      // Only include clipboard data if user hasn't cleared it (ESC key)
-      // This prevents filtering out providers that don't support non-text inputs
-      if (clipboardOptions?.last) {
+      } else if (clipboardOptions?.last?.type === 'files') {
         const clipboardData = touchChannel.sendSync('clipboard:get-latest')
-        if (clipboardData && clipboardData.type) {
-          if (clipboardData.type === 'image') {
+        if (clipboardData && clipboardData.type === 'files') {
+          inputs.push({
+            type: TuffInputType.Files,
+            content: clipboardData.content,
+            metadata: clipboardData.meta
+          })
+        }
+      }
+      // Priority 3: Text (clipboard text/html)
+      else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
+        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
+        if (clipboardData && (clipboardData.type === 'text' || clipboardData.type === 'html')) {
+          if (clipboardData.rawContent) {
+            // 富文本：同时保存纯文本和 HTML
             inputs.push({
-              type: TuffInputType.Image,
-              content: clipboardData.content,
-              thumbnail: clipboardData.thumbnail,
+              type: TuffInputType.Html,
+              content: clipboardData.content, // 纯文本版本
+              rawContent: clipboardData.rawContent, // HTML 版本
               metadata: clipboardData.meta
             })
-          } else if (clipboardData.type === 'files') {
+          } else {
+            // 纯文本：只有纯文本
             inputs.push({
-              type: TuffInputType.Files,
+              type: TuffInputType.Text,
               content: clipboardData.content,
               metadata: clipboardData.meta
             })
-          } else if (clipboardData.type === 'text') {
-            // 无论是否有 HTML，都添加文本输入
-            if (clipboardData.rawContent) {
-              // 富文本：同时保存纯文本和 HTML
-              inputs.push({
-                type: TuffInputType.Html,
-                content: clipboardData.content, // 纯文本版本
-                rawContent: clipboardData.rawContent, // HTML 版本
-                metadata: clipboardData.meta
-              })
-            } else {
-              // 纯文本：只有纯文本
-              inputs.push({
-                type: TuffInputType.Text,
-                content: clipboardData.content,
-                metadata: clipboardData.meta
-              })
-            }
           }
         }
       }
 
+      // Only add inputs if we have one (matches what's displayed in tag)
       if (inputs.length > 0) {
         query.inputs = inputs
       }

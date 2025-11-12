@@ -32,7 +32,9 @@ const boxOptions = reactive<IBoxOptions>({
 // Create shared clipboard state
 const clipboardOptions = reactive<any>({
   last: null,
-  detectedAt: null
+  detectedAt: null,
+  autoPasted: false,
+  lastClearedTimestamp: null
 })
 
 const {

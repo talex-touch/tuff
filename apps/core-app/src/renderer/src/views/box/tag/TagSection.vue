@@ -19,69 +19,100 @@ const clipboardPreview = computed(() => {
 
   const data = props.clipboardOptions.last
   let preview = ''
+  let totalLength = 0
 
   if (data.type === 'text') {
     preview = data.content || ''
+    totalLength = preview.length
   } else if (data.type === 'html') {
     preview = data.content || '' // Plain text version
+    totalLength = preview.length
   }
 
-  // Truncate to 50 characters
-  if (preview.length > 50) {
-    return preview.substring(0, 50) + '...'
+  if (!preview) return ''
+
+  // If text is too long, truncate and show character count
+  const maxLength = 30
+  if (totalLength > maxLength) {
+    return preview.substring(0, maxLength) + `... 共${totalLength}字`
   }
   return preview
+})
+
+// Determine which tag to show based on priority: image > file > text
+// This matches the logic in useSearch.ts for building TuffQuery
+const activeTag = computed(() => {
+  // Priority 1: Image (clipboard image)
+  if (props.clipboardOptions.last?.type === 'image') {
+    return { type: 'clipboard-image', data: props.clipboardOptions.last }
+  }
+
+  // Priority 2: File (FILE mode or clipboard files)
+  if (props.boxOptions.mode === BoxMode.FILE && props.boxOptions.file?.paths?.length > 0) {
+    return {
+      type: 'file',
+      iconPath: props.boxOptions.file.iconPath,
+      paths: props.boxOptions.file.paths
+    }
+  }
+  if (props.clipboardOptions.last?.type === 'files') {
+    return { type: 'clipboard-files', data: props.clipboardOptions.last }
+  }
+
+  // Priority 3: Text (clipboard text/html)
+  if (
+    props.clipboardOptions.last?.type === 'text' ||
+    props.clipboardOptions.last?.type === 'html'
+  ) {
+    return { type: 'clipboard-text', data: props.clipboardOptions.last }
+  }
+
+  // Other modes
+  if (props.boxOptions.mode === BoxMode.COMMAND) {
+    return { type: 'command' }
+  }
+
+  return null
 })
 </script>
 
 <template>
   <!-- Tag section (shown when not in FEATURE mode) -->
-  <div v-if="boxOptions.mode !== BoxMode.FEATURE" class="CoreBox-Tag">
-    <!-- Clipboard tag -->
-    <template v-if="clipboardOptions.last">
-      <!-- Text clipboard -->
-      <span
-        v-if="clipboardOptions.last?.type === 'text'"
-        class="fake-background dotted"
-        :title="clipboardOptions.last.content"
-      >
-        📝 {{ clipboardPreview }}
-      </span>
+  <div v-if="boxOptions.mode !== BoxMode.FEATURE && activeTag" class="CoreBox-Tag">
+    <!-- Image clipboard (highest priority) -->
+    <ClipboardImageTag
+      v-if="activeTag && activeTag.type === 'clipboard-image'"
+      :data="activeTag.data"
+    />
 
-      <!-- Image clipboard -->
-      <ClipboardImageTag
-        v-else-if="clipboardOptions.last?.type === 'image'"
-        :data="clipboardOptions.last"
-      />
+    <!-- File tag (FILE mode) -->
+    <FileTag
+      v-else-if="activeTag && activeTag.type === 'file'"
+      :icon-path="activeTag.iconPath"
+      :paths="activeTag.paths || []"
+    />
 
-      <!-- Files clipboard -->
-      <ClipboardFileTag
-        v-else-if="clipboardOptions.last?.type === 'files'"
-        :data="clipboardOptions.last"
-      />
+    <!-- Files clipboard -->
+    <ClipboardFileTag
+      v-else-if="activeTag && activeTag.type === 'clipboard-files'"
+      :data="activeTag.data"
+    />
 
-      <!-- HTML clipboard -->
-      <span
-        v-else-if="clipboardOptions.last?.type === 'html'"
-        class="fake-background dotted"
-        :title="clipboardOptions.last.content"
-      >
-        💻 {{ clipboardPreview }}
-      </span>
-    </template>
-
-    <!-- File tag -->
-    <template v-if="boxOptions.mode === BoxMode.FILE">
-      <FileTag :icon-path="boxOptions.file.iconPath" :paths="boxOptions.file.paths" />
-    </template>
-
-    <!-- Image tag -->
-    <template v-else-if="boxOptions.mode === BoxMode.IMAGE"> </template>
+    <!-- Text/HTML clipboard -->
+    <span
+      v-else-if="activeTag && activeTag.type === 'clipboard-text'"
+      class="fake-background dotted"
+      :title="activeTag.data?.content"
+    >
+      <template v-if="activeTag.data?.type === 'text'">📝</template>
+      <template v-else>💻</template>
+      {{ clipboardPreview }}
+    </span>
 
     <!-- Command tag -->
-    <template v-else-if="boxOptions.mode === BoxMode.COMMAND">
-      <span class="fake-background">{{ t('tagSection.command') }}</span>
-    </template>
+    <span v-else-if="activeTag && activeTag.type === 'command'" class="fake-background">
+      {{ t('tagSection.command') }}
+    </span>
   </div>
 </template>
 
