@@ -1,4 +1,3 @@
-import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../db/schema'
 import { performance } from 'perf_hooks'
 
@@ -235,4 +234,3 @@ export async function getUsageStatsBatchCached(
 
   return result
 }
-

@@ -74,7 +74,7 @@
         <template #icon="{ active }">
           <ThemePreviewIcon variant="coloring" :active="active" />
         </template>
-      />
+      </tuff-block-switch>
 
       <tuff-block-switch
         v-model="themeStyle.theme.addon.contrast"
@@ -90,6 +90,7 @@
 
     <tuff-block-switch
       guidance
+      :model-value="false"
       :title="t('themeStyle.themeHelp')"
       :description="t('themeStyle.themeHelpDesc')"
     >
@@ -144,8 +145,12 @@ watchEffect(() => {
  * @param e - The mouse event triggering the change
  * @returns void
  */
-function handleThemeChange(v: string, e: MouseEvent): void {
-  triggerThemeTransition([e.x, e.y], v as any)
+function handleThemeChange(value: string | number, event?: Event): void {
+  if (event instanceof MouseEvent) {
+    triggerThemeTransition([event.x, event.y], value as any)
+  } else {
+    triggerThemeTransition([0, 0], value as any)
+  }
 }
 
 // Lifecycle hook to initialize component

@@ -813,6 +813,11 @@ export interface TuffContext {
  */
 export interface TuffMeta {
   /**
+   * Legacy icon identifier used by renderer fallbacks.
+   * @description Allows providers to pass through icon class names without building a full TuffIcon.
+   */
+  icon?: string;
+  /**
    * For plugin items, this holds the name of the plugin that generated the item.
    * @description The name of the plugin.
    */

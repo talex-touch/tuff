@@ -59,7 +59,9 @@ if (!appSetting.setup) {
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
-    hideDock: false
+    hideDock: false,
+    runAsAdmin: false,
+    customDesktop: false
   }
 }
 
@@ -254,7 +256,9 @@ async function handleContinue(): Promise<void> {
         autoStart: settings.value.autoStart,
         showTray: settings.value.showTray,
         adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
-        hideDock: settings.value.hideDock ?? false
+        hideDock: settings.value.hideDock ?? false,
+        runAsAdmin: appSetting.setup.runAsAdmin ?? false,
+        customDesktop: appSetting.setup.customDesktop ?? false
       }
     }
   )
@@ -612,4 +616,3 @@ function getStatusIcon(status: string): string {
   }
 }
 </style>
-

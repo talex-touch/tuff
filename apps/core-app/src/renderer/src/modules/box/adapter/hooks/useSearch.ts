@@ -12,10 +12,11 @@ import {
 } from '@talex-touch/utils'
 import { IUseSearch } from '../types'
 import { appSetting } from '~/modules/channel/storage'
+import type { IClipboardOptions } from './types'
 
 export function useSearch(
   boxOptions: IBoxOptions,
-  clipboardOptions?: { last: unknown }
+  clipboardOptions?: IClipboardOptions
 ): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
@@ -274,8 +275,8 @@ export function useSearch(
 
       // Clear clipboard after execute if time === 0
       if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
-        ;(clipboardOptions as any).last = null
-        ;(clipboardOptions as any).detectedAt = null
+        clipboardOptions.last = null
+        clipboardOptions.detectedAt = null
       }
     } catch (error) {
       console.error('Execute failed:', error)

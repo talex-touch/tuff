@@ -51,6 +51,8 @@ const _appSettingOriginData = {
     showTray: true,
     adminPrivileges: false,
     hideDock: false,
+    runAsAdmin: false,
+    customDesktop: false,
   },
   layout: 'simple',
 };

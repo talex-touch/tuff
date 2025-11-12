@@ -1,6 +1,7 @@
 import { ProviderContext } from '../../search-engine/types'
 import {
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
   TuffFactory,
   TuffQuery,
@@ -8,10 +9,11 @@ import {
   TuffInputType,
   TuffItem
 } from '@talex-touch/utils'
+import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { app, dialog, shell } from 'electron'
-import { PermissionChecker, PermissionType, PermissionStatus } from '../../../system/permission-checker'
+import { dialog, shell } from 'electron'
+import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
 
 const execAsync = promisify(exec)
 
@@ -240,7 +242,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  async onLoad(context: ProviderContext): Promise<void> {
+  async onLoad(_context: ProviderContext): Promise<void> {
     this.permissionChecker = PermissionChecker.getInstance()
     console.log('[SystemProvider] System provider loaded')
   }
@@ -260,16 +262,11 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     })
 
     const items: TuffItem[] = matchedActions.map((action) => {
-      return TuffFactory.createItem()
-        .setId(action.id)
+      return new TuffItemBuilder(action.id, this.type, this.id)
         .setTitle(action.name)
         .setDescription(action.description)
         .setKind('command')
-        .setSource({
-          id: this.id,
-          type: this.type,
-          name: this.name
-        })
+        .setSource(this.type, this.id, this.name)
         .setScoring({
           final: 100,
           match: 100,
@@ -278,7 +275,9 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
           base: 0
         })
         .setMeta({
-          action: action,
+          raw: {
+            systemActionId: action.id
+          },
           icon: action.icon
         })
         .build()
@@ -287,11 +286,14 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     return TuffFactory.createSearchResult(query).setItems(items).build()
   }
 
-  async onExecute({ item }: IExecuteArgs): Promise<void> {
-    const action = item.meta?.action as SystemAction | undefined
+  async onExecute({ item }: IExecuteArgs): Promise<IProviderActivate | null> {
+    const actionMeta = item.meta?.raw as { systemActionId?: string } | undefined
+    const action = actionMeta
+      ? this.actions.find((candidate) => candidate.id === actionMeta.systemActionId)
+      : undefined
     if (!action) {
       console.error('[SystemProvider] Action not found in item meta')
-      return
+      return null
     }
 
     // Check permissions if required
@@ -299,7 +301,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       const adminCheck = this.permissionChecker.checkAdminPrivileges()
       if (adminCheck.status !== PermissionStatus.GRANTED) {
         await this.showPermissionError(action.name)
-        return
+        return null
       }
     }
 
@@ -315,8 +317,9 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         detail: error instanceof Error ? error.message : String(error)
       })
     }
+
+    return null
   }
 }
 
 export const systemProvider = new SystemProvider()
-

@@ -1,4 +1,5 @@
 import { ProviderContext } from '../../search-engine/types'
+import type { TouchApp } from '../../../../core/touch-app'
 import {
   IExecuteArgs,
   IProviderActivate,
@@ -304,7 +305,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   >()
   private backgroundTaskService: BackgroundTaskService | null = null
   private activityTracker: AppUsageActivityTracker | null = null
-  private touchApp: TalexTouch.TouchApp | null = null
+  private touchApp: TouchApp | null = null
   private indexingProgress = {
     current: 0,
     total: 0,
@@ -589,7 +590,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.isInitializing) {
       this.logInfo('onLoad: starting background index task...')
       // 不等待初始化完成，让它在后台运行
-      this.isInitializing = this._initialize(context).catch((error) => {
+      this.isInitializing = this._initialize().catch((error) => {
         this.logError('Background index task failed', error)
         this.emitIndexingProgress('idle', 0, 0)
       })
@@ -1202,7 +1203,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async _initialize(context: ProviderContext): Promise<void> {
+  private async _initialize(): Promise<void> {
     const initStart = performance.now()
     this.logInfo('Starting index process')
     if (!this.dbUtils) return
