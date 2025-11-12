@@ -236,10 +236,24 @@ export class SearchIndexService {
       this.appendKeyword(keywordMap, acronym, 1.35)
     }
 
+    // 为所有文件名生成拼音索引（不仅限于中文）
     if (CHINESE_CHAR_REGEX.test(titleSource)) {
+      // 中文：生成完整拼音和首字母
       const { full, first } = await this.generatePinyin(titleSource)
       if (full) this.appendKeyword(keywordMap, full, 1.15)
       if (first) this.appendKeyword(keywordMap, first, 1.2)
+    } else {
+      // 英文：生成首字母缩写作为拼音（如果还没有生成过）
+      // 这样可以支持通过拼音首字母搜索英文文件名
+      // 例如 "My Document" 可以通过 "md" 搜索到
+      if (!acronym || acronym.length > 1) {
+        // 如果acronym已经存在且长度>1，说明是多词缩写，已经添加过了
+        // 否则，为单词文件名生成首字母
+        const firstLetter = normalizedTitle.charAt(0)
+        if (firstLetter && /[a-z0-9]/.test(firstLetter)) {
+          this.appendKeyword(keywordMap, firstLetter, 1.1)
+        }
+      }
     }
 
     const secondaryName = item.name.toLowerCase().trim()

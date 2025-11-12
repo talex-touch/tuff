@@ -6,8 +6,9 @@
 -->
 <script setup lang="ts" name="SettingSetup">
 import { useI18n } from 'vue-i18n'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ElProgress } from 'element-plus'
 
 // Import UI components
 import TGroupBlock from '@comp/base/group/TGroupBlock.vue'
@@ -50,6 +51,16 @@ const settings = ref({
 
 const isLoading = ref(false)
 
+// File indexing progress
+const indexingProgress = ref<{
+  stage: 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+  current: number
+  total: number
+  progress: number
+} | null>(null)
+
+let progressUnsubscribe: (() => void) | null = null
+
 function ensureWindowSettings(): void {
   if (!appSetting.window) {
     appSetting.window = {
@@ -86,7 +97,57 @@ if (!appSetting.setup) {
 onMounted(async () => {
   await checkAllPermissions()
   loadSettings()
+  setupIndexingProgressListener()
 })
+
+onUnmounted(() => {
+  if (progressUnsubscribe) {
+    progressUnsubscribe()
+    progressUnsubscribe = null
+  }
+})
+
+function setupIndexingProgressListener(): void {
+  progressUnsubscribe = touchChannel.regChannel('file-index:progress', (data) => {
+    const progressData = data.data as {
+      stage: typeof indexingProgress.value.stage
+      current: number
+      total: number
+      progress: number
+    }
+    if (progressData) {
+      indexingProgress.value = {
+        stage: progressData.stage,
+        current: progressData.current,
+        total: progressData.total,
+        progress: progressData.progress
+      }
+      // Reset to null when completed
+      if (progressData.stage === 'completed') {
+        setTimeout(() => {
+          indexingProgress.value = null
+        }, 2000)
+      }
+    }
+  })
+}
+
+function getStageText(stage: string): string {
+  switch (stage) {
+    case 'cleanup':
+      return t('settings.setup.indexingStage.cleanup')
+    case 'scanning':
+      return t('settings.setup.indexingStage.scanning')
+    case 'indexing':
+      return t('settings.setup.indexingStage.indexing')
+    case 'reconciliation':
+      return t('settings.setup.indexingStage.reconciliation')
+    case 'completed':
+      return t('settings.setup.indexingStage.completed')
+    default:
+      return ''
+  }
+}
 
 async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
@@ -430,6 +491,28 @@ function getStatusIcon(status: string): string {
       :description="t('settings.setup.startSilentDesc')"
       @update:model-value="updateStartSilent"
     />
+
+    <!-- File Indexing Progress -->
+    <div v-if="indexingProgress && indexingProgress.stage !== 'idle'" class="IndexingProgress">
+      <div class="IndexingProgress-Header">
+        <RemixIcon name="file-search" :style="'line'" />
+        <div class="IndexingProgress-Info">
+          <h3>{{ t('settings.setup.fileIndexing') }}</h3>
+          <p>
+            {{ getStageText(indexingProgress.stage) }}
+            <span v-if="indexingProgress.total > 0">
+              ({{ indexingProgress.current }} / {{ indexingProgress.total }})
+            </span>
+          </p>
+        </div>
+      </div>
+      <el-progress
+        :percentage="indexingProgress.progress"
+        :status="indexingProgress.stage === 'completed' ? 'success' : undefined"
+        :stroke-width="6"
+        class="IndexingProgress-Bar"
+      />
+    </div>
   </t-group-block>
 </template>
 
@@ -514,6 +597,49 @@ function getStatusIcon(status: string): string {
 
   &:hover {
     --fake-color: var(--el-fill-color-light);
+  }
+}
+
+.IndexingProgress {
+  position: relative;
+  margin: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color);
+
+  .IndexingProgress-Header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+
+    .remix {
+      font-size: 20px;
+      color: var(--el-color-primary);
+    }
+
+    .IndexingProgress-Info {
+      flex: 1;
+
+      h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text-color-primary);
+      }
+
+      p {
+        margin: 4px 0 0 0;
+        font-size: 12px;
+        color: var(--el-text-color-regular);
+        opacity: 0.8;
+      }
+    }
+  }
+
+  .IndexingProgress-Bar {
+    width: 100%;
   }
 }
 </style>
