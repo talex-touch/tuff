@@ -1,7 +1,14 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const path = typeof window === 'undefined'
-  ? require('path')
-  : require('path-browserify')
+const path = (() => {
+  if (typeof window === 'undefined') {
+    return require('path')
+  }
+  try {
+    return require('path-browserify')
+  } catch {
+    return require('path')
+  }
+})()
 
 /**
  * Enum for various file types.
