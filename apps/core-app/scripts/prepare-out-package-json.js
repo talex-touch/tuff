@@ -216,11 +216,11 @@ function resolveModuleRoot(moduleName) {
 function parseLockfileSpecifiers() {
   const lockfilePath = path.join(__dirname, '../../pnpm-lock.yaml')
   const specifiers = {}
-  
+
   if (!fs.existsSync(lockfilePath)) {
     return specifiers
   }
-  
+
   try {
     const lockfileContent = fs.readFileSync(lockfilePath, 'utf8')
     // Try to find apps/core-app/out first (what electron-builder compares against)
@@ -229,7 +229,7 @@ function parseLockfileSpecifiers() {
     if (!sectionMatch) {
       sectionMatch = lockfileContent.match(/^  apps\/core-app:[\s\S]*?(?=\n  [a-z]|\n$)/m)
     }
-    
+
     if (sectionMatch) {
       const section = sectionMatch[0]
       // Extract specifiers: match "package-name:" followed by "specifier: value"
@@ -251,7 +251,7 @@ function parseLockfileSpecifiers() {
   } catch (err) {
     console.warn(`Warning: Failed to parse lockfile: ${err.message}`)
   }
-  
+
   return specifiers
 }
 
@@ -260,7 +260,24 @@ const lockfileSpecifiers = parseLockfileSpecifiers()
 // Build dependencies object for external modules (excluding platform-specific packages)
 const externalDependencies = {}
 modulesToCopy.forEach((moduleName) => {
-  externalDependencies[moduleName] = getModuleVersion(moduleName)
+  const versionSpecifier = getModuleVersion(moduleName)
+  externalDependencies[moduleName] = versionSpecifier
+
+  if (moduleName === 'detect-libc') {
+    try {
+      const moduleRoot = resolveModuleRoot(moduleName)
+      const detectedVersion = getPackageVersion(moduleRoot)
+      const major = parseInt(String(detectedVersion).split('.')[0], 10)
+      if (!Number.isFinite(major) || Number.isNaN(major) || major < 2) {
+        throw new Error(
+          `Detected detect-libc@${detectedVersion} (from ${moduleRoot}). Expected >=2. Install detect-libc@^2.0.4 before building.`
+        )
+      }
+    } catch (err) {
+      console.error(`prepare-out-package-json: detect-libc validation failed: ${err.message}`)
+      throw err
+    }
+  }
 })
 
 console.log('prepare-out-package-json: external module versions:')
@@ -279,16 +296,16 @@ function getModuleVersion(moduleName) {
   if (lockfileSpecifiers[moduleName]) {
     return lockfileSpecifiers[moduleName]
   }
-  
+
   // Then check original package.json dependencies
   if (appPackageJson.dependencies?.[moduleName]) {
     return appPackageJson.dependencies[moduleName]
   }
-  
+
   if (appPackageJson.devDependencies?.[moduleName]) {
     return appPackageJson.devDependencies[moduleName]
   }
-  
+
   // Try to read the installed package version directly
   const installedVersion = getInstalledModuleVersion(moduleName)
   if (installedVersion) {
@@ -318,6 +335,18 @@ function getInstalledModuleVersion(moduleName) {
     // Ignore resolution errors and fall back to default handling
   }
   return null
+}
+
+function getPackageVersion(moduleRoot) {
+  const pkgJsonPath = path.join(moduleRoot, 'package.json')
+  if (!fs.existsSync(pkgJsonPath)) {
+    throw new Error(`package.json not found for module root: ${moduleRoot}`)
+  }
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+  if (!pkgJson.version) {
+    throw new Error(`module at ${moduleRoot} does not specify a version`)
+  }
+  return pkgJson.version
 }
 
 // Use converted version from environment variable if available (for beta -> snapshot conversion)
@@ -472,7 +501,7 @@ if (fs.existsSync(resourcesSourceDir)) {
       fs.rmSync(resourcesTargetDir, { recursive: true, force: true })
     }
     fs.mkdirSync(resourcesTargetDir, { recursive: true })
-    
+
     // Copy resources directory
     fs.cpSync(resourcesSourceDir, resourcesTargetDir, { recursive: true, dereference: true })
     console.log('Copied resources directory to out/resources')

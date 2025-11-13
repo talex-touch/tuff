@@ -85,6 +85,9 @@ importers:
       dayjs:
         specifier: ^1.11.19
         version: 1.11.19
+      detect-libc:
+        specifier: ^2.0.4
+        version: 2.0.4
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@libsql/client@0.15.15)(@opentelemetry/api@1.9.0)(@types/pg@8.15.5)
@@ -336,28 +339,28 @@ importers:
         specifier: ^0.15.15
         version: 0.15.15
       '@libsql/core':
-        specifier: '*'
+        specifier: ^0.15.14
         version: 0.15.14
       '@libsql/darwin-arm64':
-        specifier: '*'
+        specifier: ^0.5.22
         version: 0.5.22
       '@libsql/hrana-client':
-        specifier: '*'
+        specifier: ^0.7.0
         version: 0.7.0
       '@libsql/isomorphic-fetch':
-        specifier: '*'
+        specifier: ^0.3.1
         version: 0.3.1
       '@libsql/isomorphic-ws':
-        specifier: '*'
+        specifier: ^0.1.5
         version: 0.1.5
       '@neon-rs/load':
-        specifier: '*'
+        specifier: ^0.0.4
         version: 0.0.4
       detect-libc:
-        specifier: '*'
+        specifier: ^2.0.4
         version: 2.0.4
       libsql:
-        specifier: '*'
+        specifier: ^0.5.22
         version: 0.5.22
 
   apps/docs:
