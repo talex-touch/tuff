@@ -42,6 +42,7 @@
     "commander": "^14.0.2",
     "compressing": "^2.0.0",
     "crypto-js": "^4.2.0",
+    "detect-libc": "^2.0.4",
     "dayjs": "^1.11.19",
     "drizzle-orm": "^0.44.7",
     "electron-log": "5.0.0-beta.28",
