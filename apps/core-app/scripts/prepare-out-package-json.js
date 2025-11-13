@@ -22,7 +22,8 @@ const baseModulesToCopy = [
   'detect-libc',
 
   // 其他原生模块和特殊依赖
-  'extract-file-icon',      // 原生模块
+  // 注意: extract-file-icon 因为 node-abi 不支持 Electron 38 而被移除
+  // 'extract-file-icon',   // 暂时注释，等待 node-abi 更新
   'electron-log',           // Electron 特定
   'electron-updater',       // Electron 特定
   '@sentry/electron',       // Electron 特定，包含原生模块
