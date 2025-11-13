@@ -302,7 +302,7 @@ jobs:
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS snapshot..."
-              pnpm core:build:snapshot:mac || {
+              SKIP_INSTALL_APP_DEPS=true pnpm core:build:snapshot:mac || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS snapshot build failed with exit code $?"
               }
@@ -323,7 +323,7 @@ jobs:
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS release..."
-              pnpm core:build:release:mac || {
+              SKIP_INSTALL_APP_DEPS=true pnpm core:build:release:mac || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS release build failed with exit code $?"
               }

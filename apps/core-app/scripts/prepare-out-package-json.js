@@ -208,9 +208,6 @@ const lockfileSpecifiers = parseLockfileSpecifiers()
 // Build dependencies object for external modules (excluding platform-specific packages)
 const externalDependencies = {}
 modulesToCopy.forEach((moduleName) => {
-  if (platformSpecificPackages.has(moduleName)) {
-    return
-  }
   externalDependencies[moduleName] = getModuleVersion(moduleName)
 })
 
@@ -250,7 +247,18 @@ const minimalPackageJson = {
 fs.mkdirSync(outDir, { recursive: true })
 fs.writeFileSync(outPackageJsonPath, JSON.stringify(minimalPackageJson, null, 2))
 
-fs.rmSync(outNodeModulesPath, { recursive: true, force: true })
+try {
+  fs.rmSync(outNodeModulesPath, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50
+  })
+} catch (err) {
+  if (err.code !== 'ENOENT') {
+    console.warn(`[prepare-out] Failed to clean node_modules (${err.code}). Continuing...`)
+  }
+}
 fs.mkdirSync(outNodeModulesPath, { recursive: true })
 
 // Set to track already copied modules (to avoid infinite loops and duplicates)
