@@ -1,4 +1,4 @@
-import { sentryVitePlugin } from "@sentry/vite-plugin";
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import path from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
@@ -27,32 +27,9 @@ export default defineConfig({
     plugins: [
       externalizeDepsPlugin({
         exclude: [
-          '@talex-touch/utils',
-          'pinyin-match',
-          'pinyin-pro',
-          'fs-extra',
-          'log4js',
-          '@clerk/clerk-js',
-          '@clerk/types',
-          '@vueuse/core',
-          'vue',
-          'chokidar',
-          '@electron-toolkit/utils',
-          'drizzle-orm',
-          'compressing',
-          'crypto-js',
-          'iconv-lite',
-          'js-md5',
-          'simple-plist',
-          'tesseract.js',
-          'xterm',
-          'yauzl',
-          'dayjs',
-          'commander',
-          'extract-file-icon',
-          'electron-log',
-          '@sentry/electron',
-          'electron-updater'
+          '@talex-touch/utils', // workspace 包需要打包
+          'pinyin-match',       // ESM only 模块
+          'pinyin-pro'          // ESM only 模块
         ]
       })
     ],
@@ -95,33 +72,8 @@ export default defineConfig({
     plugins: [
       externalizeDepsPlugin({
         exclude: [
-          '@talex-touch/utils',
-          'pinyin-match',
-          'pinyin-pro',
-          'fs-extra',
-          'log4js',
-          '@clerk/clerk-js',
-          '@clerk/types',
-          '@vueuse/core',
-          'vue',
-          'chokidar',
-          '@electron-toolkit/utils',
-          '@electron-toolkit/preload',
-          'drizzle-orm',
-          'compressing',
-          'crypto-js',
-          'iconv-lite',
-          'js-md5',
-          'simple-plist',
-          'tesseract.js',
-          'xterm',
-          'yauzl',
-          'dayjs',
-          'commander',
-          'extract-file-icon',
-          'electron-log',
-          '@sentry/electron',
-          'electron-updater'
+          '@talex-touch/utils', // workspace 包需要打包
+          '@electron-toolkit/preload'
         ]
       })
     ],
@@ -179,8 +131,8 @@ export default defineConfig({
         runtimeOnly: false
       }),
       sentryVitePlugin({
-        org: "quotawish",
-        project: "tuff"
+        org: 'quotawish',
+        project: 'tuff'
       })
     ]
   }

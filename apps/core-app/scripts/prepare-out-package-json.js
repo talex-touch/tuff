@@ -9,6 +9,7 @@ const outPackageJsonPath = path.join(outDir, 'package.json')
 const outNodeModulesPath = path.join(outDir, 'node_modules')
 
 // Core modules that must remain external and be copied into out/node_modules
+// Now that dependencies are properly classified, we only need minimal modules
 const baseModulesToCopy = [
   '@libsql/client',
   '@libsql/core',
@@ -17,11 +18,7 @@ const baseModulesToCopy = [
   '@libsql/isomorphic-ws',
   'libsql',
   '@neon-rs/load',
-  'detect-libc',
-  'js-base64',
-  'promise-limit',
-  // Copy node-fetch dependency required by @libsql/hrana-client
-  'node-fetch'
+  'detect-libc'
 ]
 
 // Map build targets to platform-specific libsql binaries
