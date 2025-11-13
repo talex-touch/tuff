@@ -29,7 +29,8 @@ export default defineConfig({
         exclude: [
           '@talex-touch/utils', // workspace 包需要打包
           'pinyin-match',       // ESM only 模块
-          'pinyin-pro'          // ESM only 模块
+          'pinyin-pro',         // ESM only 模块
+          'fs-extra'            // 需要打包到 asar 中
         ]
       })
     ],
