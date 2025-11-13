@@ -1,12 +1,23 @@
 <script lang="ts">
-import { h, nextTick, ref, Teleport } from 'vue'
+import { defineComponent, h, nextTick, Teleport, type VNode } from 'vue'
 import { computePosition } from '@floating-ui/vue'
 import { extractFromSlots } from '@talex-touch/utils/renderer/slots'
 import { onClickOutside } from '@vueuse/core'
 
 const qualifiedName = 'TSelectItem'
 
-export default {
+const isQualifiedVNode = (vnode: VNode): boolean => {
+  const type = vnode.type as { name?: string } | string | undefined
+  if (typeof type === 'object' && type !== null && 'name' in type) {
+    return type.name === qualifiedName
+  }
+  if (typeof type === 'string') {
+    return type === qualifiedName
+  }
+  return false
+}
+
+export default defineComponent({
   name: 'TSelect',
   props: {
     modelValue: {
@@ -15,30 +26,34 @@ export default {
     }
   },
   data() {
-    const activeIndex = ref(0)
-    const click = ref(false)
-
-    const clickListener = (event) => {
-      if (!click.value) return
-      const path = typeof event.composedPath === 'function' ? event.composedPath() : event.path
+    return {
+      activeIndex: 0,
+      click: false,
+      stopClickOutside: null as null | (() => void)
+    }
+  },
+  methods: {
+    clickListener(event: MouseEvent) {
+      if (!this.click) return
+      const path =
+        typeof event.composedPath === 'function'
+          ? event.composedPath()
+          : (event as unknown as { path?: EventTarget[] }).path
       if (!Array.isArray(path)) {
-        click.value = false
+        this.click = false
         return
       }
-      click.value = path.some((node) => node?.className?.indexOf?.('TSelectItem-Container') > -1)
-    }
-
-    return {
-      activeIndex,
-      click,
-      clickListener,
-      stopClickOutside: null
+      this.click = path.some((node) => {
+        const element = node as HTMLElement | undefined
+        const className = element?.className
+        return typeof className === 'string' && className.includes('TSelectItem-Container')
+      })
     }
   },
   mounted() {
     document.addEventListener('click', this.clickListener)
 
-    this.stopClickOutside = onClickOutside(this.$el, () => {
+    this.stopClickOutside = onClickOutside(this.$el as HTMLElement, () => {
       this.click = false
     })
   },
@@ -49,11 +64,10 @@ export default {
     }
   },
   render() {
-
     const rawSlots = extractFromSlots(
       this.$slots,
       'default',
-      (vnode) => vnode.type?.name === qualifiedName
+      (vnode) => isQualifiedVNode(vnode as VNode)
     )
 
     const slots = rawSlots.map((vnode, index) => ({
@@ -66,15 +80,11 @@ export default {
     const matchedIndex = slots.findIndex((slot) => slot.value === this.modelValue)
     this.activeIndex = matchedIndex > -1 ? matchedIndex : 0
 
+    const that = this
+
     function getContent() {
       if (that.click) {
-        const wrapper = h(
-          'div',
-          {
-            class: 'TSelect-Wrapper'
-          },
-          slots.map((slot) => slot.vnode)
-        )
+        const wrapper = h('div', { class: 'TSelect-Wrapper' }, slots.map((slot) => slot.vnode)) as VNode
 
         nextTick(() => {
           let height = 0
@@ -99,11 +109,14 @@ export default {
           })
 
           async function adaptPosition() {
-            const floating = await computePosition(that.$el, wrapper.el)
+            const referenceEl = that.$el as HTMLElement | null
+            const floatingEl = wrapper.el as HTMLElement | null
+            if (!referenceEl || !floatingEl) return
+            const floating = await computePosition(referenceEl, floatingEl)
 
-            if (wrapper.el) {
-              wrapper.el.style.setProperty('--height', `${36 * that.activeIndex + 8}px`)
-              Object.assign(wrapper.el.style, {
+            if (floatingEl) {
+              floatingEl.style.setProperty('--height', `${36 * that.activeIndex + 8}px`)
+              Object.assign(floatingEl.style, {
                 top: `${floating.y}px`,
                 left: `${floating.x}px`,
                 transform: `translate(0, ${-height}px)`
@@ -120,8 +133,6 @@ export default {
       return slots[that.activeIndex]?.vnode || slots[0]?.vnode
     }
 
-    const that = this
-
     const v = h(
       'div',
       {
@@ -135,7 +146,7 @@ export default {
 
     return v
   }
-}
+})
 </script>
 
 <style lang="scss" scoped>

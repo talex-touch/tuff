@@ -148,6 +148,7 @@ import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
 // Props
 const props = defineProps<{
@@ -246,7 +247,7 @@ async function handleUninstallPlugin(): Promise<void> {
 
   loadingStates.value.uninstall = true
   try {
-    const success = await touchSdk.uninstall(props.plugin.name)
+    const success = await pluginSDK.uninstall(props.plugin.name)
     if (success) {
       ElMessage.success(t('plugin.uninstall.success', { name: props.plugin.name }))
     } else {
