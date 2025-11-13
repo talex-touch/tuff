@@ -60,7 +60,8 @@ export default defineConfig({
           'node-fetch',
 
           // 其他包含原生模块的依赖
-          'extract-file-icon', // 原生模块
+          // 注意: extract-file-icon 暂时注释，因为 node-abi 不支持 Electron 38
+          // 'extract-file-icon',   // 原生模块
           'electron-log', // Electron 特定
           'electron-updater', // Electron 特定
           '@sentry/electron', // Electron 特定
