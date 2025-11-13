@@ -136,3 +136,5 @@ readme.local.md
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+*.local.json

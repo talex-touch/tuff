@@ -92,9 +92,7 @@ export default defineConfig({
         '@comp': path.join(rendererPath, 'components'),
         '@styles': path.join(rendererPath, 'styles'),
         '@assets': path.join(rendererPath, 'assets'),
-        '~': rendererPath,
-        'path-browserify': 'path-browserify',
-        path: 'path-browserify'
+        '~': rendererPath
       }
     },
     define: {
@@ -102,7 +100,7 @@ export default defineConfig({
       __VUE_PROD_DEVTOOLS__: false
     },
     optimizeDeps: {
-      exclude: ['electron', 'fs', 'path', 'child_process', 'original-fs']
+      exclude: ['electron', 'fs', 'child_process', 'original-fs']
     },
     build: {
       sourcemap: enableSourcemap,
