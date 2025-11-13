@@ -24,7 +24,10 @@ const enableSourcemap = !isProduction
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      // 不使用 externalizeDepsPlugin，改为通过 rollupOptions.external 精确控制
+      // externalizeDepsPlugin() 会外部化所有依赖，但我们只想外部化特定的原生模块
+    ],
     build: {
       sourcemap: enableSourcemap,
       rollupOptions: {
@@ -43,6 +46,12 @@ export default defineConfig({
           }
         },
         external: [
+          // Electron 内置模块
+          'electron',
+          'electron/main',
+          'electron/common',
+          'electron/renderer',
+
           // libsql 相关（原生模块）
           '@libsql/client',
           '@libsql/core',
