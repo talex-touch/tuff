@@ -1,9 +1,15 @@
 appId: com.tagzxia.app.tuff
 productName: tuff
-asar: false
-compression: normal
+asar: true
+compression: maximum
 asarUnpack:
   - '**/node_modules/@libsql/**'
+  - '**/node_modules/@neon-rs/**'
+  - '**/node_modules/detect-libc/**'
+  - '**/*.node'
+  - '**/*.dylib'
+  - '**/*.dll'
+  - '**/*.so'
 directories:
   app: out
   buildResources: build
@@ -12,19 +18,17 @@ files:
   - '**/*'
   - '!**/.DS_Store'
   - '!**/.vscode/**'
-  - '!src/**'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  # Exclude unnecessary node_modules to reduce package size
-  # But include node_modules from out directory (which contains required dependencies)
+  - '!**/src/**'
+  - '!**/electron.vite.config.{js,ts,mjs,cjs}'
+  - '!**/{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!**/{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!**/{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!**/node_modules/**'
-  - '!**/node_modules'
-  # Include required node_modules from out directory (paths are relative to app directory which is 'out')
   - 'node_modules/**'
-  # Exclude sourcemap files to reduce package size (not needed in production)
   - '!**/*.map'
+  - '!**/patches/**'
+  - '!**/scripts/**'
+  - '!**/build/**'
 extraFiles: []
 
 win:

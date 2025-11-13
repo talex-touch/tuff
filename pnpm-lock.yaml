@@ -52,60 +52,15 @@ importers:
 
   apps/core-app:
     dependencies:
-      '@clerk/clerk-js':
-        specifier: ^5.103.1
-        version: 5.103.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.0))
-      '@clerk/types':
-        specifier: ^4.96.0
-        version: 4.96.0
       '@electron-toolkit/preload':
         specifier: ^3.0.2
         version: 3.0.2(electron@38.5.0)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@38.5.0)
-      '@floating-ui/dom':
-        specifier: ^1.7.4
-        version: 1.7.4
-      '@floating-ui/vue':
-        specifier: ^1.1.9
-        version: 1.1.9(vue@3.5.22(typescript@5.9.3))
-      '@iconify-json/carbon':
-        specifier: ^1.2.4
-        version: 1.2.13
-      '@iconify-json/ri':
-        specifier: ^1.2.6
-        version: 1.2.6
-      '@iconify-json/simple-icons':
-        specifier: ^1.2.56
-        version: 1.2.56
-      '@intlify/unplugin-vue-i18n':
-        specifier: ^11.0.1
-        version: 11.0.1(@vue/compiler-dom@3.5.22)(eslint@9.39.0(jiti@2.6.1))(rollup@4.50.0)(typescript@5.9.3)(vue-i18n@11.1.12(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
       '@libsql/client':
         specifier: ^0.15.15
         version: 0.15.15
-      '@milkdown/core':
-        specifier: ^7.17.1
-        version: 7.17.1
-      '@milkdown/ctx':
-        specifier: ^7.17.1
-        version: 7.17.1
-      '@milkdown/preset-commonmark':
-        specifier: ^7.17.1
-        version: 7.17.1
-      '@milkdown/prose':
-        specifier: ^7.17.1
-        version: 7.17.1
-      '@milkdown/theme-nord':
-        specifier: ^7.17.1
-        version: 7.17.1
-      '@milkdown/transformer':
-        specifier: ^7.17.1
-        version: 7.17.1
-      '@number-flow/vue':
-        specifier: ^0.4.8
-        version: 0.4.8(vue@3.5.22(typescript@5.9.3))
       '@sentry/electron':
         specifier: ^7.2.0
         version: 7.2.0
@@ -115,15 +70,6 @@ importers:
       '@types/yauzl':
         specifier: ^2.10.3
         version: 2.10.3
-      '@unocss/transformer-attributify-jsx':
-        specifier: ^66.5.4
-        version: 66.5.4
-      '@vueuse/core':
-        specifier: ^14.0.0
-        version: 14.0.0(vue@3.5.22(typescript@5.9.3))
-      child_process:
-        specifier: ^1.0.2
-        version: 1.0.2
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
@@ -148,18 +94,12 @@ importers:
       electron-updater:
         specifier: ^6.6.2
         version: 6.6.2
-      element-plus:
-        specifier: ^2.11.7
-        version: 2.11.7(vue@3.5.22(typescript@5.9.3))
       extract-file-icon:
         specifier: ^0.3.2
         version: 0.3.2
       fs-extra:
         specifier: ^11.3.2
         version: 11.3.2
-      gsap:
-        specifier: ^3.13.0
-        version: 3.13.0
       hotkeys-js:
         specifier: ^3.13.15
         version: 3.13.15
@@ -172,9 +112,6 @@ importers:
       log4js:
         specifier: ^6.9.1
         version: 6.9.1
-      lottie-web:
-        specifier: ^5.13.0
-        version: 5.13.0
       mac-windows:
         specifier: 1.0.0
         version: 1.0.0
@@ -184,57 +121,18 @@ importers:
       original-fs:
         specifier: ^1.2.0
         version: 1.2.0
-      path-browserify:
-        specifier: ^1.0.1
-        version: 1.0.1
-      pinia:
-        specifier: ^3.0.3
-        version: 3.0.3(typescript@5.9.3)(vue@3.5.22(typescript@5.9.3))
       pinyin-match:
         specifier: ^1.2.8
         version: 1.2.8
       pinyin-pro:
         specifier: ^3.27.0
         version: 3.27.0
-      remixicon:
-        specifier: ^4.7.0
-        version: 4.7.0
       simple-plist:
         specifier: 1.4.0-0
         version: 1.4.0-0
       tesseract.js:
         specifier: ^6.0.1
         version: 6.0.1(encoding@0.1.13)
-      v-shared-element:
-        specifier: ^3.1.1
-        version: 3.1.1(vue-router@4.6.3(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
-      v-wave:
-        specifier: ^3.0.4
-        version: 3.0.4(vue@3.5.22(typescript@5.9.3))
-      vite-plugin-vue-setup-extend:
-        specifier: ^0.4.0
-        version: 0.4.0(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.93.3)(yaml@2.8.1))
-      vue:
-        specifier: ^3.5.22
-        version: 3.5.22(typescript@5.9.3)
-      vue-demi:
-        specifier: ^0.14.10
-        version: 0.14.10(vue@3.5.22(typescript@5.9.3))
-      vue-draggable-plus:
-        specifier: ^0.6.0
-        version: 0.6.0(@types/sortablejs@1.15.8)
-      vue-i18n:
-        specifier: ^11.1.12
-        version: 11.1.12(vue@3.5.22(typescript@5.9.3))
-      vue-profile-avatar:
-        specifier: ^1.2.0
-        version: 1.2.0(vue@3.5.22(typescript@5.9.3))
-      vue-router:
-        specifier: ^4.6.3
-        version: 4.6.3(vue@3.5.22(typescript@5.9.3))
-      vue-sonner:
-        specifier: ^2.0.9
-        version: 2.0.9(@nuxt/kit@4.2.0)
       xterm:
         specifier: ^5.3.0
         version: 5.3.0
@@ -245,6 +143,12 @@ importers:
         specifier: ^3.2.0
         version: 3.2.0
     devDependencies:
+      '@clerk/clerk-js':
+        specifier: ^5.103.1
+        version: 5.103.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.0))
+      '@clerk/types':
+        specifier: ^4.96.0
+        version: 4.96.0
       '@electron-toolkit/eslint-config-prettier':
         specifier: 3.0.0
         version: 3.0.0(eslint@9.39.0(jiti@2.6.1))(prettier@3.6.2)
@@ -254,6 +158,45 @@ importers:
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.1.0)
+      '@floating-ui/dom':
+        specifier: ^1.7.4
+        version: 1.7.4
+      '@floating-ui/vue':
+        specifier: ^1.1.9
+        version: 1.1.9(vue@3.5.22(typescript@5.9.3))
+      '@iconify-json/carbon':
+        specifier: ^1.2.4
+        version: 1.2.13
+      '@iconify-json/ri':
+        specifier: ^1.2.6
+        version: 1.2.6
+      '@iconify-json/simple-icons':
+        specifier: ^1.2.56
+        version: 1.2.56
+      '@intlify/unplugin-vue-i18n':
+        specifier: ^11.0.1
+        version: 11.0.1(@vue/compiler-dom@3.5.22)(eslint@9.39.0(jiti@2.6.1))(rollup@4.50.0)(typescript@5.9.3)(vue-i18n@11.1.12(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
+      '@milkdown/core':
+        specifier: ^7.17.1
+        version: 7.17.1
+      '@milkdown/ctx':
+        specifier: ^7.17.1
+        version: 7.17.1
+      '@milkdown/preset-commonmark':
+        specifier: ^7.17.1
+        version: 7.17.1
+      '@milkdown/prose':
+        specifier: ^7.17.1
+        version: 7.17.1
+      '@milkdown/theme-nord':
+        specifier: ^7.17.1
+        version: 7.17.1
+      '@milkdown/transformer':
+        specifier: ^7.17.1
+        version: 7.17.1
+      '@number-flow/vue':
+        specifier: ^0.4.8
+        version: 0.4.8(vue@3.5.22(typescript@5.9.3))
       '@rollup/plugin-commonjs':
         specifier: ^29.0.0
         version: 29.0.0(rollup@4.50.0)
@@ -269,6 +212,9 @@ importers:
       '@unocss/preset-uno':
         specifier: ^66.5.4
         version: 66.5.4
+      '@unocss/transformer-attributify-jsx':
+        specifier: ^66.5.4
+        version: 66.5.4
       '@unocss/transformer-variant-group':
         specifier: ^66.5.4
         version: 66.5.4
@@ -278,6 +224,12 @@ importers:
       '@vitejs/plugin-vue-jsx':
         specifier: ^5.1.1
         version: 5.1.1(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.93.3)(yaml@2.8.1))(vue@3.5.22(typescript@5.9.3))
+      '@vueuse/core':
+        specifier: ^14.0.0
+        version: 14.0.0(vue@3.5.22(typescript@5.9.3))
+      child_process:
+        specifier: ^1.0.2
+        version: 1.0.2
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -293,15 +245,33 @@ importers:
       electron-vite:
         specifier: ^4.0.1
         version: 4.0.1(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.93.3)(yaml@2.8.1))
+      element-plus:
+        specifier: ^2.11.7
+        version: 2.11.7(vue@3.5.22(typescript@5.9.3))
       eslint:
         specifier: ^9.39.0
         version: 9.39.0(jiti@2.6.1)
       eslint-plugin-vue:
         specifier: ^10.5.1
         version: 10.5.1(@stylistic/eslint-plugin@5.5.0(eslint@9.39.0(jiti@2.6.1)))(@typescript-eslint/parser@8.41.0(eslint@9.39.0(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.0(jiti@2.6.1))(vue-eslint-parser@10.2.0(eslint@9.39.0(jiti@2.6.1)))
+      gsap:
+        specifier: ^3.13.0
+        version: 3.13.0
+      lottie-web:
+        specifier: ^5.13.0
+        version: 5.13.0
+      path-browserify:
+        specifier: ^1.0.1
+        version: 1.0.1
+      pinia:
+        specifier: ^3.0.3
+        version: 3.0.3(typescript@5.9.3)(vue@3.5.22(typescript@5.9.3))
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
+      remixicon:
+        specifier: ^4.7.0
+        version: 4.7.0
       sass:
         specifier: ^1.93.3
         version: 1.93.3
@@ -320,15 +290,84 @@ importers:
       unplugin-vue-components:
         specifier: ^30.0.0
         version: 30.0.0(@babel/parser@7.28.5)(@nuxt/kit@4.2.0)(vue@3.5.22(typescript@5.9.3))
+      v-shared-element:
+        specifier: ^3.1.1
+        version: 3.1.1(vue-router@4.6.3(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
+      v-wave:
+        specifier: ^3.0.4
+        version: 3.0.4(vue@3.5.22(typescript@5.9.3))
       vite:
         specifier: 7.0.6
         version: 7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.93.3)(yaml@2.8.1)
+      vite-plugin-vue-setup-extend:
+        specifier: ^0.4.0
+        version: 0.4.0(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.93.3)(yaml@2.8.1))
+      vue:
+        specifier: ^3.5.22
+        version: 3.5.22(typescript@5.9.3)
+      vue-demi:
+        specifier: ^0.14.10
+        version: 0.14.10(vue@3.5.22(typescript@5.9.3))
+      vue-draggable-plus:
+        specifier: ^0.6.0
+        version: 0.6.0(@types/sortablejs@1.15.8)
       vue-eslint-parser:
         specifier: ^10.2.0
         version: 10.2.0(eslint@9.39.0(jiti@2.6.1))
+      vue-i18n:
+        specifier: ^11.1.12
+        version: 11.1.12(vue@3.5.22(typescript@5.9.3))
+      vue-profile-avatar:
+        specifier: ^1.2.0
+        version: 1.2.0(vue@3.5.22(typescript@5.9.3))
+      vue-router:
+        specifier: ^4.6.3
+        version: 4.6.3(vue@3.5.22(typescript@5.9.3))
+      vue-sonner:
+        specifier: ^2.0.9
+        version: 2.0.9(@nuxt/kit@4.2.0)
       vue-tsc:
         specifier: ^3.1.2
         version: 3.1.2(typescript@5.9.3)
+
+  apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app:
+    dependencies:
+      '@libsql/client':
+        specifier: ^0.15.15
+        version: 0.15.15
+      '@libsql/core':
+        specifier: '*'
+        version: 0.15.14
+      '@libsql/darwin-arm64':
+        specifier: '*'
+        version: 0.5.22
+      '@libsql/hrana-client':
+        specifier: '*'
+        version: 0.7.0
+      '@libsql/isomorphic-fetch':
+        specifier: '*'
+        version: 0.3.1
+      '@libsql/isomorphic-ws':
+        specifier: '*'
+        version: 0.1.5
+      '@neon-rs/load':
+        specifier: '*'
+        version: 0.0.4
+      detect-libc:
+        specifier: '*'
+        version: 2.0.4
+      js-base64:
+        specifier: '*'
+        version: 3.7.8
+      libsql:
+        specifier: '*'
+        version: 0.5.22
+      node-fetch:
+        specifier: '*'
+        version: 3.3.2
+      promise-limit:
+        specifier: '*'
+        version: 2.7.0
 
   apps/core-app/out:
     dependencies:
@@ -338,6 +377,9 @@ importers:
       '@libsql/core':
         specifier: '*'
         version: 0.15.14
+      '@libsql/darwin-arm64':
+        specifier: '*'
+        version: 0.5.22
       '@libsql/hrana-client':
         specifier: '*'
         version: 0.7.0
@@ -9309,8 +9351,7 @@ snapshots:
     dependencies:
       js-base64: 3.7.8
 
-  '@libsql/darwin-arm64@0.5.22':
-    optional: true
+  '@libsql/darwin-arm64@0.5.22': {}
 
   '@libsql/darwin-x64@0.5.22':
     optional: true
