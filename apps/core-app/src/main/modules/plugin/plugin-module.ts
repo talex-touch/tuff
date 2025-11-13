@@ -1,4 +1,4 @@
-import { IPluginManager, ITouchPlugin, PluginStatus } from '@talex-touch/utils/plugin'
+import { IManifest, IPluginManager, ITouchPlugin, PluginStatus } from '@talex-touch/utils/plugin'
 import type {
   PluginInstallRequest,
   PluginInstallSummary
@@ -200,7 +200,39 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const pluginTag = (name: string): string => `[${name}]`
 
   const installer = new PluginInstaller()
-  const installQueue = new PluginInstallQueue(installer)
+
+  const persistInstallSourceMetadata = async ({
+    request,
+    manifest,
+    providerResult
+  }: {
+    request: PluginInstallRequest
+    manifest?: IManifest
+    providerResult: PluginInstallSummary['providerResult']
+  }): Promise<void> => {
+    const pluginName = manifest?.name
+    if (!pluginName) {
+      logWarn('Failed to persist install metadata: missing plugin name')
+      return
+    }
+    try {
+      await dbUtils.setPluginData(pluginName, 'install_source', {
+        source: request.source,
+        hintType: request.hintType ?? null,
+        official: Boolean(providerResult.official),
+        provider: providerResult.provider,
+        installedAt: Date.now(),
+        metadata: request.metadata ?? null,
+        clientMetadata: request.clientMetadata ?? null
+      })
+    } catch (error) {
+      logWarn('Failed to save plugin source metadata', pluginTag(pluginName), error as Error)
+    }
+  }
+
+  const installQueue = new PluginInstallQueue(installer, {
+    onInstallCompleted: persistInstallSourceMetadata
+  })
   const localProvider = new LocalPluginProvider(pluginPath)
 
   const getPluginList = (): Array<object> => {
@@ -455,7 +487,9 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           'Loading...',
           '',
           { enable: false, address: '' },
-          currentPluginPath
+          currentPluginPath,
+          undefined,
+          { skipDataInit: true }
         )
 
         touchPlugin.issues.push({
@@ -544,7 +578,9 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           'Fatal Error',
           '',
           { enable: false, address: '' },
-          currentPluginPath
+          currentPluginPath,
+          undefined,
+          { skipDataInit: true }
         )
         touchPlugin.issues.push({
           type: 'error',
@@ -618,6 +654,49 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     return summary
   }
 
+  const resolvePluginFolderName = (identifier: string): string | undefined => {
+    if (plugins.has(identifier)) return identifier
+    return pluginNameIndex.get(identifier)
+  }
+
+  const uninstallPlugin = async (identifier: string): Promise<boolean> => {
+    const folderName = resolvePluginFolderName(identifier)
+
+    if (!folderName) {
+      logWarn('Cannot uninstall plugin, not found:', pluginTag(identifier))
+      return false
+    }
+
+    const pluginInstance = plugins.get(folderName) as TouchPlugin | undefined
+    const dataDir =
+      pluginInstance instanceof TouchPlugin ? path.dirname(pluginInstance.getConfigPath()) : null
+    const manifestName = pluginInstance?.name ?? identifier
+    const pluginDir = path.resolve(pluginPath, folderName)
+
+    await unloadPlugin(folderName)
+
+    if (await fse.pathExists(pluginDir)) {
+      await fse.remove(pluginDir).catch((error) => {
+        logWarn('Failed to remove plugin directory', pluginTag(folderName), error)
+      })
+    }
+
+    if (dataDir && (await fse.pathExists(dataDir))) {
+      await fse.remove(dataDir).catch((error) => {
+        logWarn('Failed to remove plugin data directory', pluginTag(folderName), error)
+      })
+    }
+
+    await dbUtils.deletePluginData(manifestName).catch((error) => {
+      logWarn('Failed to delete plugin data records', pluginTag(folderName), error)
+    })
+
+    await persistEnabledPlugins()
+
+    logInfo('Plugin uninstalled successfully', pluginTag(folderName))
+    return true
+  }
+
   const managerInstance: IPluginManager = {
     plugins,
     active,
@@ -640,7 +719,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     listPlugins,
     loadPlugin,
     unloadPlugin,
-    installFromSource
+    installFromSource,
+    uninstallPlugin
   }
 
   ;(managerInstance as any).__installQueue = installQueue
@@ -1743,8 +1823,12 @@ export class PluginModule extends BaseModule {
           return reply(DataCode.ERROR, { error: 'Plugin name is required' })
         }
 
-        // TODO: Implement uninstall logic
-        return reply(DataCode.ERROR, { error: 'Uninstall not yet implemented' })
+        const success = await manager.uninstallPlugin(name)
+        if (!success) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        return reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
         console.error('Error in plugin:api:uninstall handler:', error)
         return reply(DataCode.ERROR, {

@@ -246,6 +246,14 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           target: [schema.pluginData.pluginId, schema.pluginData.key],
           set: { value: stringValue }
         })
+    },
+    async deletePluginData(pluginId: string, key?: string) {
+      if (key) {
+        return db
+          .delete(schema.pluginData)
+          .where(and(eq(schema.pluginData.pluginId, pluginId), eq(schema.pluginData.key, key)))
+      }
+      return db.delete(schema.pluginData).where(eq(schema.pluginData.pluginId, pluginId))
     }
   }
 }
@@ -306,6 +314,7 @@ export type DbUtils = {
   ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>
+  deletePluginData: (pluginId: string, key?: string) => Promise<any>
 }
 
 export function createDbUtils(db: LibSQLDatabase<typeof schema>): DbUtils {

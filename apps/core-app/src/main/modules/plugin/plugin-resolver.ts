@@ -13,6 +13,14 @@ export enum ResolverStatus {
   SUCCESS
 }
 
+export interface ResolverInstallOptions {
+  enforceProdMode?: boolean
+}
+
+export interface ResolverOptions {
+  installOptions?: ResolverInstallOptions
+}
+
 export class PluginResolver {
   filePath: string
 
@@ -46,7 +54,11 @@ export class PluginResolver {
     await compressing.tar.uncompress(source, target)
   }
 
-  async install(manifest: IManifest, cb: (msg: string, type?: string) => void): Promise<void> {
+  async install(
+    manifest: IManifest,
+    cb: (msg: string, type?: string) => void,
+    options?: ResolverInstallOptions
+  ): Promise<void> {
     console.log('[PluginResolver] Installing plugin: ' + manifest.name)
     const _target = path.join(pluginModule.filePath!, manifest.name)
 
@@ -57,6 +69,7 @@ export class PluginResolver {
 
     try {
       await this.uncompress(this.filePath, _target)
+      await this.applyInstallOptions(manifest, _target, options)
 
       // const manifestPath = path.join(_target, 'key.talex')
       // if (fse.existsSync(manifestPath)) {
@@ -74,7 +87,8 @@ export class PluginResolver {
 
   async resolve(
     callback: (result: { event: any; type: string }) => void,
-    whole = false
+    whole = false,
+    options?: ResolverOptions
   ): Promise<void> {
     console.debug('[PluginResolver] Resolving plugin: ' + this.filePath)
     const event = { msg: '' } as any
@@ -109,7 +123,7 @@ export class PluginResolver {
         await this.install(manifest, (msg, type = 'error') => {
           event.msg = msg
           callback({ event, type })
-        })
+        }, options?.installOptions)
       } else {
         event.msg = manifest
         callback({ event, type: 'success' })
@@ -121,6 +135,43 @@ export class PluginResolver {
     } finally {
       await fse.remove(tempDir)
       console.log('[PluginResolver] Resolved plugin: ' + this.filePath + ' | Temp dir released!')
+    }
+  }
+
+  private async applyInstallOptions(
+    manifest: IManifest,
+    targetDir: string,
+    options?: ResolverInstallOptions
+  ): Promise<void> {
+    if (!options?.enforceProdMode) return
+    await this.disableDevMode(manifest, targetDir)
+  }
+
+  private async disableDevMode(manifest: IManifest, targetDir: string): Promise<void> {
+    const updateDevConfig = (container?: IManifest['dev']): IManifest['dev'] => {
+      const updated = container ?? { enable: false, address: '' }
+      updated.enable = false
+      updated.address = ''
+      ;(updated as any).source = false
+      return updated
+    }
+
+    manifest.dev = updateDevConfig(manifest.dev)
+    if (manifest.plugin?.dev) {
+      manifest.plugin.dev = updateDevConfig(manifest.plugin.dev)
+    }
+
+    const manifestPath = path.join(targetDir, 'manifest.json')
+    try {
+      if (!(await fse.pathExists(manifestPath))) return
+      const fileManifest = await fse.readJSON(manifestPath)
+      fileManifest.dev = updateDevConfig(fileManifest.dev)
+      if (fileManifest.plugin?.dev) {
+        fileManifest.plugin.dev = updateDevConfig(fileManifest.plugin.dev)
+      }
+      await fse.writeFile(manifestPath, JSON.stringify(fileManifest, null, 2))
+    } catch (error) {
+      console.warn('[PluginResolver] Failed to enforce prod mode manifest:', error)
     }
   }
 }

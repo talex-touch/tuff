@@ -258,7 +258,9 @@
       "openFolder": "Open Folder",
       "opening": "Opening...",
       "reload": "Reload",
-      "reloading": "Reloading..."
+      "reloading": "Reloading...",
+      "uninstall": "Uninstall Plugin",
+      "uninstalling": "Uninstalling..."
     },
     "badges": {
       "dev": "Dev",
@@ -344,6 +346,14 @@
     "logs": {
       "historyTitle": "History",
       "historyEmpty": "No historical logs yet"
+    },
+    "uninstall": {
+      "confirmTitle": "Uninstall Plugin",
+      "confirmMessage": "Are you sure you want to uninstall {name}? This removes all plugin files and cached data.",
+      "confirmButton": "Uninstall",
+      "cancelButton": "Cancel",
+      "success": "{name} has been uninstalled.",
+      "failed": "Failed to uninstall {name}. Please try again."
     },
     "details": {
       "basicInfo": "Basic Information",

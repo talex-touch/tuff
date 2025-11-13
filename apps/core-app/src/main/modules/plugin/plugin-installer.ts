@@ -10,6 +10,7 @@ import {
 } from '@talex-touch/utils/plugin/providers'
 import { type RiskPromptHandler, type RiskPromptInput } from '@talex-touch/utils/plugin/risk'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
+import type { ResolverOptions } from './plugin-resolver'
 
 function createDialogRiskPrompt(): RiskPromptHandler {
   return async (input: RiskPromptInput) => {
@@ -40,7 +41,8 @@ function isRemoteSource(source: string): boolean {
 
 async function runResolver(
   filePath: string,
-  whole: boolean
+  whole: boolean,
+  options?: ResolverOptions
 ): Promise<{ manifest?: IManifest } & { code: string }> {
   const { PluginResolver } = await import('./plugin-resolver')
   return new Promise((resolve, reject) => {
@@ -52,7 +54,7 @@ async function runResolver(
           return
         }
         resolve({ code: 'success', manifest: event.msg })
-      }, whole)
+      }, whole, options)
       .catch(reject)
   })
 }
@@ -66,6 +68,7 @@ export interface PreparedPluginInstall {
 export interface PluginInstallOptions {
   onDownloadProgress?: (progress: number) => void
   autoResolve?: boolean
+  installOptions?: ResolverOptions['installOptions']
 }
 
 export class PluginInstaller {
@@ -86,7 +89,9 @@ export class PluginInstaller {
       return { manifest: prepared.manifest, providerResult: prepared.providerResult }
     }
 
-    return this.finalizeInstall(prepared)
+    return this.finalizeInstall(prepared, {
+      installOptions: options?.installOptions
+    })
   }
 
   async prepareInstall(
@@ -131,8 +136,13 @@ export class PluginInstaller {
     }
   }
 
-  async finalizeInstall(prepared: PreparedPluginInstall): Promise<PluginInstallSummary> {
-    await runResolver(prepared.providerResult.filePath!, true)
+  async finalizeInstall(
+    prepared: PreparedPluginInstall,
+    options?: { installOptions?: ResolverOptions['installOptions'] }
+  ): Promise<PluginInstallSummary> {
+    await runResolver(prepared.providerResult.filePath!, true, {
+      installOptions: options?.installOptions
+    })
 
     await this.cleanupIfNeeded(prepared.request.source, prepared.providerResult.filePath)
 
