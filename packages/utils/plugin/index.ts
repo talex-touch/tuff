@@ -357,6 +357,7 @@ export interface IPluginManager {
   loadPlugin(pluginName: string): Promise<boolean>
   unloadPlugin(pluginName: string): Promise<boolean>
   installFromSource(request: PluginInstallRequest): Promise<PluginInstallSummary>
+  uninstallPlugin(pluginName: string): Promise<boolean>
 }
 
 /**

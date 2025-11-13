@@ -292,7 +292,8 @@ export class TouchPlugin implements ITouchPlugin {
     readme: string,
     dev: IPluginDev,
     pluginPath: string,
-    platforms: IPlatform = {}
+    platforms: IPlatform = {},
+    options?: { skipDataInit?: boolean }
   ) {
     this.name = name
     this.icon = icon
@@ -314,7 +315,9 @@ export class TouchPlugin implements ITouchPlugin {
       })
     )
 
-    this.ensureDataDirectories()
+    if (!options?.skipDataInit) {
+      this.ensureDataDirectories()
+    }
   }
 
   private getDataPath(): string {

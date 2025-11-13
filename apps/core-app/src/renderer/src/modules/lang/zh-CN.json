@@ -258,7 +258,9 @@
       "openFolder": "打开文件夹",
       "opening": "打开中...",
       "reload": "重新加载",
-      "reloading": "重新加载中..."
+      "reloading": "重新加载中...",
+      "uninstall": "卸载插件",
+      "uninstalling": "正在卸载..."
     },
     "badges": {
       "dev": "开发模式",
@@ -344,6 +346,14 @@
     "logs": {
       "historyTitle": "历史记录",
       "historyEmpty": "暂无历史日志"
+    },
+    "uninstall": {
+      "confirmTitle": "卸载插件",
+      "confirmMessage": "确定要卸载 {name} 吗？这会删除插件文件及其缓存数据。",
+      "confirmButton": "卸载",
+      "cancelButton": "取消",
+      "success": "{name} 已卸载。",
+      "failed": "卸载 {name} 失败，请重试。"
     },
     "details": {
       "basicInfo": "基础信息",

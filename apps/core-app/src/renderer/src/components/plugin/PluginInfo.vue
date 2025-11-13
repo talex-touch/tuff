@@ -78,6 +78,19 @@
                 : t('plugin.actions.openFolder')
             }}</span>
           </div>
+          <div
+            class="action-item danger"
+            :class="{ disabled: loadingStates.uninstall }"
+            @click="handleUninstallPlugin"
+          >
+            <i v-if="!loadingStates.uninstall" class="i-ri-delete-bin-6-line" />
+            <i v-else class="i-ri-loader-4-line animate-spin" />
+            <span>{{
+              loadingStates.uninstall
+                ? t('plugin.actions.uninstalling')
+                : t('plugin.actions.uninstall')
+            }}</span>
+          </div>
         </div>
       </el-popover>
     </div>
@@ -119,7 +132,7 @@
 
 <script lang="ts" name="PluginInfo" setup>
 import { ref, computed, watchEffect, useSlots, VNode } from 'vue'
-import { ElPopover } from 'element-plus'
+import { ElPopover, ElMessageBox, ElMessage } from 'element-plus'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
 import TvTabs from '@comp/tabs/vertical/TvTabs.vue'
@@ -152,7 +165,8 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 // Loading states
 const loadingStates = ref({
   reload: false,
-  openFolder: false
+  openFolder: false,
+  uninstall: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
@@ -212,6 +226,39 @@ async function handleOpenPluginFolder(): Promise<void> {
     loadingStates.value.openFolder = false
   }
 }
+
+async function handleUninstallPlugin(): Promise<void> {
+  if (!props.plugin || loadingStates.value.uninstall) return
+
+  try {
+    await ElMessageBox.confirm(
+      t('plugin.uninstall.confirmMessage', { name: props.plugin.name }),
+      t('plugin.uninstall.confirmTitle'),
+      {
+        type: 'warning',
+        confirmButtonText: t('plugin.uninstall.confirmButton'),
+        cancelButtonText: t('plugin.uninstall.cancelButton')
+      }
+    )
+  } catch {
+    return
+  }
+
+  loadingStates.value.uninstall = true
+  try {
+    const success = await touchSdk.uninstall(props.plugin.name)
+    if (success) {
+      ElMessage.success(t('plugin.uninstall.success', { name: props.plugin.name }))
+    } else {
+      ElMessage.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
+    }
+  } catch (error) {
+    console.error('Failed to uninstall plugin:', error)
+    ElMessage.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
+  } finally {
+    loadingStates.value.uninstall = false
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -239,6 +286,14 @@ async function handleOpenPluginFolder(): Promise<void> {
   &.disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  &.danger {
+    color: #dc2626;
+  }
+
+  &.danger:not(.disabled):hover {
+    background-color: rgba(220, 38, 38, 0.08);
   }
 
   i {

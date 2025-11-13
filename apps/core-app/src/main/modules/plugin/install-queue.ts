@@ -23,6 +23,14 @@ interface InstallTask {
 const PROGRESS_EVENT = 'plugin:install-progress'
 const CONFIRM_EVENT = 'plugin:install-confirm'
 
+interface PluginInstallQueueOptions {
+  onInstallCompleted?: (payload: {
+    request: PluginInstallRequest
+    manifest?: PreparedPluginInstall['manifest']
+    providerResult: PreparedPluginInstall['providerResult']
+  }) => Promise<void> | void
+}
+
 function extractClientString(
   meta: Record<string, unknown> | undefined,
   key: string
@@ -39,9 +47,11 @@ export class PluginInstallQueue {
     string,
     { resolve: (decision: 'accept' | 'reject') => void; reject: (reason: Error) => void }
   >()
+  private readonly options?: PluginInstallQueueOptions
 
-  constructor(installer: PluginInstaller) {
+  constructor(installer: PluginInstaller, options?: PluginInstallQueueOptions) {
     this.installer = installer
+    this.options = options
   }
 
   enqueue(request: PluginInstallRequest, reply: StandardChannelData['reply']): InstallTask {
@@ -112,7 +122,9 @@ export class PluginInstallQueue {
 
       this.emitProgress(task, 'installing', { progress: 100 })
 
-      const summary = await this.installer.finalizeInstall(prepared)
+      const summary = await this.installer.finalizeInstall(prepared, {
+        installOptions: this.buildInstallOptions(task)
+      })
       task.prepared = undefined
 
       this.emitProgress(task, 'completed', { progress: 100 })
@@ -123,6 +135,18 @@ export class PluginInstallQueue {
         provider: summary.providerResult.provider,
         official: summary.providerResult.official ?? false
       })
+
+      if (this.options?.onInstallCompleted) {
+        await this.options
+          .onInstallCompleted({
+            request: task.request,
+            manifest: summary.manifest,
+            providerResult: summary.providerResult
+          })
+          .catch((error) => {
+            console.warn('[PluginInstallQueue] Failed to persist install metadata:', error)
+          })
+      }
     } catch (error: any) {
       const message = typeof error?.message === 'string' ? error.message : 'INSTALL_FAILED'
       this.emitProgress(task, 'failed', { progress: 100, error: message })
@@ -141,6 +165,19 @@ export class PluginInstallQueue {
       this.activeTask = null
       this.process()
     }
+  }
+
+  private buildInstallOptions(
+    task: InstallTask
+  ): { enforceProdMode: boolean } | undefined {
+    if (this.shouldEnforceProdMode(task)) {
+      return { enforceProdMode: true }
+    }
+    return undefined
+  }
+
+  private shouldEnforceProdMode(task: InstallTask): boolean {
+    return Boolean(task.officialActual ?? task.officialHint)
   }
 
   private async requestConfirmation(task: InstallTask): Promise<void> {
