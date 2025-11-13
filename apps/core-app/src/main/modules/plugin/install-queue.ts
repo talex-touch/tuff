@@ -136,16 +136,17 @@ export class PluginInstallQueue {
         official: summary.providerResult.official ?? false
       })
 
-      if (this.options?.onInstallCompleted) {
-        await this.options
-          .onInstallCompleted({
+      const completionHandler = this.options?.onInstallCompleted
+      if (completionHandler) {
+        try {
+          await completionHandler({
             request: task.request,
             manifest: summary.manifest,
             providerResult: summary.providerResult
           })
-          .catch((error) => {
-            console.warn('[PluginInstallQueue] Failed to persist install metadata:', error)
-          })
+        } catch (error) {
+          console.warn('[PluginInstallQueue] Failed to persist install metadata:', error)
+        }
       }
     } catch (error: any) {
       const message = typeof error?.message === 'string' ? error.message : 'INSTALL_FAILED'

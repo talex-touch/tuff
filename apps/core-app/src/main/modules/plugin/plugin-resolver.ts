@@ -148,30 +148,32 @@ export class PluginResolver {
   }
 
   private async disableDevMode(manifest: IManifest, targetDir: string): Promise<void> {
-    const updateDevConfig = (container?: IManifest['dev']): IManifest['dev'] => {
-      const updated = container ?? { enable: false, address: '' }
-      updated.enable = false
-      updated.address = ''
-      ;(updated as any).source = false
-      return updated
-    }
-
-    manifest.dev = updateDevConfig(manifest.dev)
+    manifest.dev = this.createProdDevConfig(manifest.dev)
     if (manifest.plugin?.dev) {
-      manifest.plugin.dev = updateDevConfig(manifest.plugin.dev)
+      manifest.plugin.dev.enable = false
+      manifest.plugin.dev.address = ''
     }
 
     const manifestPath = path.join(targetDir, 'manifest.json')
     try {
       if (!(await fse.pathExists(manifestPath))) return
-      const fileManifest = await fse.readJSON(manifestPath)
-      fileManifest.dev = updateDevConfig(fileManifest.dev)
+      const fileManifest = (await fse.readJSON(manifestPath)) as IManifest
+      fileManifest.dev = this.createProdDevConfig(fileManifest.dev)
       if (fileManifest.plugin?.dev) {
-        fileManifest.plugin.dev = updateDevConfig(fileManifest.plugin.dev)
+        fileManifest.plugin.dev.enable = false
+        fileManifest.plugin.dev.address = ''
       }
       await fse.writeFile(manifestPath, JSON.stringify(fileManifest, null, 2))
     } catch (error) {
       console.warn('[PluginResolver] Failed to enforce prod mode manifest:', error)
     }
+  }
+
+  private createProdDevConfig(dev?: IManifest['dev']): IManifest['dev'] {
+    const result: IManifest['dev'] = dev ?? { enable: false, address: '' }
+    result.enable = false
+    result.address = ''
+    result.source = false
+    return result
   }
 }

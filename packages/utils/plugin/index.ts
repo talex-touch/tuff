@@ -404,6 +404,14 @@ export interface IManifest {
    */
   activationKeywords?: string[];
   /**
+   * Optional runtime development configuration, typically used when running plugins from a dev server.
+   */
+  dev?: {
+    enable?: boolean;
+    address?: string;
+    source?: boolean;
+  };
+  /**
    * Optional digital signature of the plugin package, used for verification.
    */
   _signature?: string;
