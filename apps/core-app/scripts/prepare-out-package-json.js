@@ -9,9 +9,9 @@ const outPackageJsonPath = path.join(outDir, 'package.json')
 const outNodeModulesPath = path.join(outDir, 'node_modules')
 
 // Core modules that must remain external and be copied into out/node_modules
-// These are modules with native code or special requirements that cannot be bundled
+// ONLY include modules with native binaries (.node files) that cannot be bundled into asar
 const baseModulesToCopy = [
-  // libsql 相关（原生模块）
+  // libsql 相关（包含 .node 原生模块，必须外部化）
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
@@ -19,17 +19,15 @@ const baseModulesToCopy = [
   '@libsql/isomorphic-ws',
   'libsql',
   '@neon-rs/load',
-  'detect-libc',
+  'detect-libc'
 
-  // 其他原生模块和特殊依赖
-  // 注意: extract-file-icon 因为 node-abi 不支持 Electron 38 而被移除
-  // 'extract-file-icon',   // 暂时注释，等待 node-abi 更新
-  'electron-log',           // Electron 特定
-  'electron-updater',       // Electron 特定
-  '@sentry/electron',       // Electron 特定，包含原生模块
-  'original-fs',            // 文件系统
-  'tesseract.js',           // WASM/Worker
-  'compressing'             // 可能包含原生模块
+  // 其他包已移除，改为打包进 asar 以减小体积：
+  // - electron-log: 纯 JS，可以打包
+  // - electron-updater: 纯 JS，可以打包
+  // - @sentry/electron: 虽然大，但可以打包
+  // - tesseract.js: WASM 可以打包
+  // - compressing: 纯 JS，可以打包
+  // - original-fs: 纯 JS，可以打包
 ]
 
 // Map build targets to platform-specific libsql binaries
