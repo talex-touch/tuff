@@ -330,45 +330,6 @@ importers:
         specifier: ^3.1.2
         version: 3.1.2(typescript@5.9.3)
 
-  apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app:
-    dependencies:
-      '@libsql/client':
-        specifier: ^0.15.15
-        version: 0.15.15
-      '@libsql/core':
-        specifier: '*'
-        version: 0.15.14
-      '@libsql/darwin-arm64':
-        specifier: '*'
-        version: 0.5.22
-      '@libsql/hrana-client':
-        specifier: '*'
-        version: 0.7.0
-      '@libsql/isomorphic-fetch':
-        specifier: '*'
-        version: 0.3.1
-      '@libsql/isomorphic-ws':
-        specifier: '*'
-        version: 0.1.5
-      '@neon-rs/load':
-        specifier: '*'
-        version: 0.0.4
-      detect-libc:
-        specifier: '*'
-        version: 2.0.4
-      js-base64:
-        specifier: '*'
-        version: 3.7.8
-      libsql:
-        specifier: '*'
-        version: 0.5.22
-      node-fetch:
-        specifier: '*'
-        version: 3.3.2
-      promise-limit:
-        specifier: '*'
-        version: 2.7.0
-
   apps/core-app/out:
     dependencies:
       '@libsql/client':
@@ -395,18 +356,9 @@ importers:
       detect-libc:
         specifier: '*'
         version: 2.0.4
-      js-base64:
-        specifier: '*'
-        version: 3.7.8
       libsql:
         specifier: '*'
         version: 0.5.22
-      node-fetch:
-        specifier: '*'
-        version: 3.3.2
-      promise-limit:
-        specifier: '*'
-        version: 2.7.0
 
   apps/docs:
     dependencies:
