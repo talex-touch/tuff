@@ -1,5 +1,6 @@
 import { ref, watch, readonly } from 'vue'
 import { setI18nLanguage, loadLocaleMessages } from './i18n'
+import { appSetting } from '~/modules/channel/storage'
 
 // 支持的语言列表
 export const SUPPORTED_LANGUAGES = [
@@ -9,24 +10,76 @@ export const SUPPORTED_LANGUAGES = [
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['key']
 
+/**
+ * 根据传入 locale 匹配项目支持的语言
+ */
+function resolveSupportedLocale(locale?: string | null): SupportedLanguage | null {
+  if (!locale) return null
+  const normalized = locale.replace('_', '-').toLowerCase()
+  const matched = SUPPORTED_LANGUAGES.find((lang) => {
+    const langKey = lang.key.toLowerCase()
+    return normalized === langKey || normalized.startsWith(langKey.split('-')[0])
+  })
+  return matched?.key ?? null
+}
+
+const initialLanguage = (() => {
+  if (typeof window === 'undefined') {
+    return resolveSupportedLocale(appSetting?.lang?.locale) ?? 'zh-CN'
+  }
+
+  const stored = resolveSupportedLocale(localStorage.getItem('app-language'))
+  if (stored) {
+    return stored
+  }
+
+  const fromSetting = resolveSupportedLocale(appSetting?.lang?.locale)
+  return fromSetting ?? 'zh-CN'
+})()
+
+const initialFollowSystem = (() => {
+  if (typeof window === 'undefined') {
+    return Boolean(appSetting?.lang?.followSystem)
+  }
+
+  const stored = localStorage.getItem('app-follow-system-language')
+  if (stored === 'true' || stored === 'false') {
+    return stored === 'true'
+  }
+
+  if (appSetting?.lang?.followSystem !== undefined) {
+    return Boolean(appSetting.lang.followSystem)
+  }
+
+  return false
+})()
+
 // 语言设置状态
-const currentLanguage = ref<SupportedLanguage>('zh-CN')
-const followSystemLanguage = ref(false)
+const currentLanguage = ref<SupportedLanguage>(initialLanguage)
+const followSystemLanguage = ref(initialFollowSystem)
 
 /**
- * 获取系统语言
+ * 获取系统语言（使用浏览器可见的 locale 以及本地设置作为回退）
  */
 function getSystemLanguage(): SupportedLanguage {
-  const systemLang = navigator.language || 'en-US'
+  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : undefined
+  const intlLocale =
+    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined
 
-  // 检查是否为支持的语言
-  for (const lang of SUPPORTED_LANGUAGES) {
-    if (systemLang.startsWith(lang.key.split('-')[0])) {
-      return lang.key
+  const candidates: Array<string | null | undefined> = [
+    browserLanguage,
+    intlLocale,
+    appSetting?.lang?.locale
+  ]
+
+  for (const candidate of candidates) {
+    const resolved = resolveSupportedLocale(candidate)
+    if (resolved) {
+      return resolved
     }
   }
 
-  return 'en-US' // 默认返回英语
+  return 'en-US'
 }
 
 /**
@@ -62,6 +115,9 @@ export function useLanguage() {
 
       // 保存到本地存储
       localStorage.setItem('app-language', lang)
+      if (appSetting?.lang) {
+        appSetting.lang.locale = lang
+      }
 
       // 只有在手动切换语言时才关闭跟随系统
       if (!followSystemLanguage.value) {
@@ -80,6 +136,9 @@ export function useLanguage() {
   async function setFollowSystemLanguage(follow: boolean) {
     followSystemLanguage.value = follow
     localStorage.setItem('app-follow-system-language', follow.toString())
+    if (appSetting?.lang) {
+      appSetting.lang.followSystem = follow
+    }
 
     if (follow) {
       const systemLang = getSystemLanguage()

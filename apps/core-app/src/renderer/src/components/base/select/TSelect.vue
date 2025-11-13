@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 import { h, nextTick, ref, Teleport } from 'vue'
 import { computePosition } from '@floating-ui/vue'
 import { extractFromSlots } from '@talex-touch/utils/renderer/slots'
@@ -18,9 +18,14 @@ export default {
     const activeIndex = ref(0)
     const click = ref(false)
 
-    function clickListener(e) {
-      if (!click.value || !e.path) return
-      click.value = e.path.some((node) => node?.className?.indexOf('TSelectItem-Container') > -1)
+    const clickListener = (event) => {
+      if (!click.value) return
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : event.path
+      if (!Array.isArray(path)) {
+        click.value = false
+        return
+      }
+      click.value = path.some((node) => node?.className?.indexOf?.('TSelectItem-Container') > -1)
     }
 
     return {
@@ -44,13 +49,22 @@ export default {
     }
   },
   render() {
-    this.activeIndex = this.modelValue || 0
 
-    const slots = extractFromSlots(
+    const rawSlots = extractFromSlots(
       this.$slots,
       'default',
       (vnode) => vnode.type?.name === qualifiedName
     )
+
+    const slots = rawSlots.map((vnode, index) => ({
+      vnode,
+      index,
+      value: vnode.props?.value !== undefined ? vnode.props.value : index,
+      disabled: Object.prototype.hasOwnProperty.call(vnode.props ?? {}, 'disabled')
+    }))
+
+    const matchedIndex = slots.findIndex((slot) => slot.value === this.modelValue)
+    this.activeIndex = matchedIndex > -1 ? matchedIndex : 0
 
     function getContent() {
       if (that.click) {
@@ -59,44 +73,42 @@ export default {
           {
             class: 'TSelect-Wrapper'
           },
-          slots
+          slots.map((slot) => slot.vnode)
         )
 
         nextTick(() => {
           let height = 0
 
-          slots.forEach((slot, index) => {
-            if (slot.props?.hasOwnProperty('disabled')) {
-              slot.el.style.cursor = 'not-allowed'
-            } else {
-              slot.el.addEventListener('click', (e) => {
-                const optionValue = slot.props?.value !== undefined ? slot.props.value : index
-                that.$emit('update:modelValue', optionValue)
-                that.$emit(
-                  'change',
-                  slot.props?.hasOwnProperty('name') ? slot.props.name : optionValue,
-                  e
-                )
+          slots.forEach((slot) => {
+            const el = slot.vnode.el as HTMLElement | null
+            if (!el) return
 
+            if (slot.disabled) {
+              el.style.cursor = 'not-allowed'
+            } else {
+              el.onclick = (e) => {
+                that.$emit('update:modelValue', slot.value)
+                that.$emit('change', slot.vnode.props?.name ?? slot.value, e)
                 that.click = false
-              })
+              }
             }
 
-            if (index <= that.activeIndex) {
-              height += slot.el?.getBoundingClientRect().height + 2
+            if (slot.index <= that.activeIndex) {
+              height += el.getBoundingClientRect().height + 2
             }
           })
 
           async function adaptPosition() {
             const floating = await computePosition(that.$el, wrapper.el)
 
-            wrapper.el.style.setProperty('--height', `${36 * that.activeIndex + 8}px`)
-
-            Object.assign(wrapper.el.style, {
-              top: `${floating.y}px`,
-              left: `${floating.x}px`,
-              transform: `translate(0, ${-height}px)`
-            })
+            if (wrapper.el) {
+              wrapper.el.style.setProperty('--height', `${36 * that.activeIndex + 8}px`)
+              Object.assign(wrapper.el.style, {
+                top: `${floating.y}px`,
+                left: `${floating.x}px`,
+                transform: `translate(0, ${-height}px)`
+              })
+            }
           }
 
           adaptPosition()
@@ -105,7 +117,7 @@ export default {
         return h(Teleport, { to: 'body' }, wrapper)
       }
 
-      return slots[that.activeIndex] || slots[0]
+      return slots[that.activeIndex]?.vnode || slots[0]?.vnode
     }
 
     const that = this

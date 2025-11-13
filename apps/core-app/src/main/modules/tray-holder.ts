@@ -1,32 +1,51 @@
 import { TalexTouch } from '../types'
-import { Menu, Tray } from 'electron'
+import { Menu, Tray, nativeImage } from 'electron'
 import fse from 'fs-extra'
 import { APP_SCHEMA } from '../config/default'
-import { DownloadManager } from '@talex-touch/utils/electron'
 import { BaseModule } from './abstract-base-module'
 import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { TalexEvents } from '../core/eventbus/touch-event'
 import path from 'path'
+import { TrayIconProvider } from './tray/tray-icon-provider'
+
+const legacyTrayRef: { value: Tray | null } = {
+  value: null
+}
 
 interface IconItem {
-  url: string
-  filename: string
+  name: string
+  targetFilename: string
+  resolveSourcePath: () => string
   apply?: (app: TalexTouch.TouchApp, filePath: string) => void
+  copyRetinaVariant?: boolean
 }
 
 /**
- * @deprecated This remote icon download system is deprecated.
- * Use the new TrayManager with local icon resources instead.
+ * @deprecated Legacy tray holder.
+ * Migrated to load icons from bundled resources instead of remote downloads.
  * See: apps/core-app/src/main/modules/tray/tray-manager.ts
  */
 const iconItems: IconItem[] = [
   {
-    url: 'https://files.catbox.moe/44pnti.png',
-    filename: 'app-tray-icon.png',
+    name: 'tray-icon',
+    targetFilename:
+      process.platform === 'darwin' ? 'TrayIconTemplate.png' : 'tray_icon.png',
+    resolveSourcePath: () => TrayIconProvider.getIconPath(),
+    copyRetinaVariant: process.platform === 'darwin',
     apply: (app: TalexTouch.TouchApp, filePath: string) => {
-      console.log('[TrayHolder] TrayIcon path from ' + filePath)
+      console.log('[TrayHolder] Legacy tray icon path:', filePath)
 
-      const tray = new Tray(filePath)
+      const icon = nativeImage.createFromPath(filePath)
+      if (icon.isEmpty()) {
+        console.warn('[TrayHolder] Legacy tray icon is empty, skipping legacy tray setup.')
+        return
+      }
+
+      if (process.platform === 'darwin') {
+        icon.setTemplateImage(true)
+      }
+
+      const tray = new Tray(icon)
 
       const contextMenu = Menu.buildFromTemplate([
         {
@@ -56,11 +75,19 @@ const iconItems: IconItem[] = [
         window.show()
         window.focus()
       })
+
+      legacyTrayRef.value = tray
     }
   },
   {
-    url: 'https://files.catbox.moe/ssn1rx.png',
-    filename: 'app-default-icon.png',
+    name: 'app-icon',
+    targetFilename:
+      process.platform === 'darwin'
+        ? 'app-default-icon.icns'
+        : process.platform === 'win32'
+          ? 'app-default-icon.ico'
+          : 'app-default-icon.png',
+    resolveSourcePath: () => TrayIconProvider.getAppIconPath(),
     apply: (app: TalexTouch.TouchApp, filePath: string) => {
       if (process.platform === 'darwin') {
         app.app.dock?.setIcon(filePath)
@@ -88,43 +115,62 @@ export class TrayHolderModule extends BaseModule {
       create: true,
       dirName: 'tray'
     })
+
   }
 
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const modulePath = file.dirPath!
-    const markerFile = path.join(modulePath, 'tray-downloaded')
+    fse.ensureDirSync(modulePath)
 
-    if (fse.existsSync(markerFile)) {
-      iconItems.map((item) => item.apply && item.apply($app, path.join(modulePath, item.filename)))
-      return
-    }
-
-    fse.remove(modulePath, () => {
-      fse.ensureDirSync(modulePath)
-    })
-
-    // @deprecated Remote download system - use local icons instead
-    const downloadManager = new DownloadManager(modulePath)
-
-    downloadManager.addDownloads(
-      iconItems.map((item) => ({
-        ...item,
-        apply: (filePath: string) => {
-          item.apply!($app, filePath)
-        }
-      }))
-    )
-
-    const checkDownload = setInterval(() => {
-      if (downloadManager.getQueueLength() === 0) {
-        clearInterval(checkDownload)
-
-        fse.writeFileSync(markerFile, '1')
+    iconItems.forEach((item) => {
+      const sourcePath = item.resolveSourcePath()
+      if (!sourcePath) {
+        console.warn(`[TrayHolder] No source path resolved for ${item.name}`)
+        return
       }
-    }, 100)
+
+      if (!fse.existsSync(sourcePath)) {
+        console.warn(`[TrayHolder] Source icon does not exist for ${item.name}: ${sourcePath}`)
+        return
+      }
+
+      const targetPath = path.join(modulePath, item.targetFilename)
+
+      try {
+        fse.copyFileSync(sourcePath, targetPath)
+        if (item.copyRetinaVariant && sourcePath.endsWith('Template.png')) {
+          const retinaSource = sourcePath.replace('Template.png', 'Template@2x.png')
+          const retinaTarget = targetPath.replace('Template.png', 'Template@2x.png')
+          if (fse.existsSync(retinaSource)) {
+            fse.copyFileSync(retinaSource, retinaTarget)
+          }
+        }
+      } catch (error) {
+        console.error(`[TrayHolder] Failed to copy icon for ${item.name}:`, error)
+        return
+      }
+
+      if (item.apply) {
+        try {
+          item.apply($app, targetPath)
+        } catch (error) {
+          console.error(`[TrayHolder] Failed to apply icon for ${item.name}:`, error)
+        }
+      }
+    })
   }
 
   onDestroy(): MaybePromise<void> {
+    if (legacyTrayRef.value) {
+      try {
+        legacyTrayRef.value.destroy()
+      } catch (error) {
+        console.warn('[TrayHolder] Failed to destroy legacy tray:', error)
+      } finally {
+        legacyTrayRef.value = null
+      }
+    }
+
     console.log('[TrayHolder] Module destroyed.')
   }
 }

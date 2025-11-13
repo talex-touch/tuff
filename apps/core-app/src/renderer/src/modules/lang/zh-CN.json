@@ -93,6 +93,16 @@
     "chooseLanguage": "选择语言",
     "chooseLanguageDesc": "手动选择您喜欢的显示语言。"
   },
+  "beginner": {
+    "language": {
+      "title": "选择你的语言",
+      "desc": "先选好界面语言，接下来的引导才能看得顺眼。",
+      "followSystem": "跟随系统语言",
+      "systemDetected": "检测到的系统语言：{lang}",
+      "systemTag": "系统语言",
+      "next": "继续"
+    }
+  },
   "settingStorage": {
     "title": "存储",
     "description": "查看应用存储详情"

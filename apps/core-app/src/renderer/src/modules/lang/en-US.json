@@ -93,6 +93,16 @@
     "chooseLanguage": "Choose Language",
     "chooseLanguageDesc": "Manually select your preferred display language."
   },
+  "beginner": {
+    "language": {
+      "title": "Choose your language",
+      "desc": "Pick a language before continuing the guided setup.",
+      "followSystem": "Follow system language",
+      "systemDetected": "Detected system language: {lang}",
+      "systemTag": "System default",
+      "next": "Continue"
+    }
+  },
   "settingStorage": {
     "title": "Storage",
     "description": "View app storage details"
