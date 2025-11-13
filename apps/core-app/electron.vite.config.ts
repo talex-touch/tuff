@@ -46,31 +46,25 @@ export default defineConfig({
           }
         },
         external: [
-          // Electron 内置模块
+          // Electron 内置模块（必须外部化）
           'electron',
           'electron/main',
           'electron/common',
           'electron/renderer',
 
-          // libsql 相关（原生模块） - 使用正则匹配所有相关包
+          // libsql 相关（包含原生模块，必须外部化）
           /^@libsql\/.*/,
           'libsql',
-
-          // libsql 的依赖
           'detect-libc',
           '@neon-rs/load',
           'js-base64',
           'promise-limit',
-          'node-fetch',
+          'node-fetch'
 
-          // 其他包含原生模块的依赖
-          'electron-log',
-          'electron-updater',
-          '@sentry/electron',
-          /^@sentry\/.*/, // @sentry 的所有子包
-          'original-fs',
-          'tesseract.js',
-          'compressing'
+          // 其他包改为打包进 asar（减小 node_modules 体积）：
+          // - electron-log, electron-updater, @sentry/electron
+          // - tesseract.js, compressing, original-fs
+          // 这些都是纯 JS 或 WASM，可以打包
         ]
       }
     }

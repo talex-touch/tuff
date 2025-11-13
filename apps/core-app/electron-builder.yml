@@ -4,6 +4,7 @@ asar: true
 compression: maximum
 asarUnpack:
   - '**/node_modules/@libsql/**'
+  - '**/node_modules/libsql/**'
   - '**/node_modules/@neon-rs/**'
   - '**/node_modules/detect-libc/**'
   - '**/*.node'
