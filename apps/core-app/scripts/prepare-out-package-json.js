@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const projectRoot = path.join(__dirname, '..')
+const workspaceRoot = path.join(projectRoot, '..', '..')
 const appPackageJson = require('../package.json')
 
 const outDir = path.join(projectRoot, 'out')
@@ -121,6 +122,10 @@ console.log(
   `prepare-out-package-json: target=${targetPlatform}/${targetArch}, copying ${modulesToCopy.size} modules`
 )
 
+const moduleRootOverrides = {
+  'detect-libc': path.join(workspaceRoot, 'node_modules', 'detect-libc')
+}
+
 function findPackageRoot(resolvedPath, moduleName) {
   let dir = path.dirname(resolvedPath)
   while (dir && dir !== path.dirname(dir)) {
@@ -143,6 +148,13 @@ function findPackageRoot(resolvedPath, moduleName) {
 }
 
 function resolveModuleRoot(moduleName) {
+  const overrideRoot = moduleRootOverrides[moduleName]
+  if (overrideRoot) {
+    const pkgJsonPath = path.join(overrideRoot, 'package.json')
+    if (fs.existsSync(pkgJsonPath)) {
+      return overrideRoot
+    }
+  }
   try {
     const entryPath = require.resolve(moduleName)
     return findPackageRoot(entryPath, moduleName)
@@ -215,6 +227,17 @@ const lockfileSpecifiers = parseLockfileSpecifiers()
 const externalDependencies = {}
 modulesToCopy.forEach((moduleName) => {
   externalDependencies[moduleName] = getModuleVersion(moduleName)
+})
+
+console.log('prepare-out-package-json: external module versions:')
+modulesToCopy.forEach((moduleName) => {
+  let moduleSource = 'unknown'
+  try {
+    moduleSource = resolveModuleRoot(moduleName)
+  } catch (err) {
+    moduleSource = `not found (${err.message})`
+  }
+  console.log(`  - ${moduleName}@${externalDependencies[moduleName]} (source: ${moduleSource})`)
 })
 
 function getModuleVersion(moduleName) {
