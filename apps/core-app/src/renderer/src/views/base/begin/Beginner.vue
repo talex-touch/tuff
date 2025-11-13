@@ -1,6 +1,7 @@
 <script setup lang="ts" name="Beginner">
 import { sleep } from '@talex-touch/utils/common/utils'
 import Greeting from './internal/Greeting.vue'
+import LanguageSetup from './internal/LanguageSetup.vue'
 import { appSetting, storageManager } from '~/modules/channel/storage/index'
 import { type Component, type Ref } from 'vue'
 
@@ -65,7 +66,7 @@ onMounted(async () => {
   await sleep(100)
 
   step({
-    comp: Greeting
+    comp: LanguageSetup
   })
 })
 </script>

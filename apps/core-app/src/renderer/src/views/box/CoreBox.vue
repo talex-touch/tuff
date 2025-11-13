@@ -4,7 +4,6 @@ import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
 import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
 import { appSetting } from '~/modules/channel/storage'
-import RemixIcon from '~/components/icon/RemixIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import PrefixPart from './PrefixPart.vue'
 
@@ -17,7 +16,8 @@ import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
-import type { TuffItem } from '@talex-touch/utils'
+import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 const scrollbar = ref()
 const boxInputRef = ref()
@@ -133,6 +133,12 @@ const addon = computed(() => {
 
   return undefined
 })
+
+const pinIcon = computed<ITuffIcon>(() => ({
+  type: 'class',
+  value: appSetting.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
+  status: 'normal'
+}))
 </script>
 
 <template>
@@ -164,11 +170,7 @@ const addon = computed(() => {
         @click="cancelSearch"
         title="取消搜索"
       /> -->
-      <RemixIcon
-        :style="appSetting.tools.autoHide ? 'line' : 'fill'"
-        name="pushpin-2"
-        @click="handleTogglePin"
-      />
+      <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
     </div>
   </div>
 
