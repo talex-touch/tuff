@@ -80,6 +80,11 @@ export default defineConfig({
           '@libsql/isomorphic-fetch',
           '@libsql/isomorphic-ws',
           'libsql',
+          'detect-libc',
+          '@neon-rs/load',
+          'js-base64',
+          'promise-limit',
+          'node-fetch',
           /^@libsql\/(darwin-arm64|darwin-x64|linux-arm64|linux-x64|win32-x64)$/
         ]
       }
