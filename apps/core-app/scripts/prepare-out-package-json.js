@@ -232,8 +232,35 @@ function getModuleVersion(moduleName) {
     return appPackageJson.devDependencies[moduleName]
   }
   
+  // Try to read the installed package version directly
+  const installedVersion = getInstalledModuleVersion(moduleName)
+  if (installedVersion) {
+    return installedVersion
+  }
+
   // Fallback to * for transitive dependencies
   return '*'
+}
+
+function getInstalledModuleVersion(moduleName) {
+  try {
+    const moduleRoot = resolveModuleRoot(moduleName)
+    if (!moduleRoot) {
+      return null
+    }
+    const pkgJsonPath = path.join(moduleRoot, 'package.json')
+    if (!fs.existsSync(pkgJsonPath)) {
+      return null
+    }
+    const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+    if (pkgJson.version) {
+      // Use caret to allow compatible patch/minor updates when reinstalling
+      return `^${pkgJson.version}`
+    }
+  } catch (err) {
+    // Ignore resolution errors and fall back to default handling
+  }
+  return null
 }
 
 // Use converted version from environment variable if available (for beta -> snapshot conversion)
