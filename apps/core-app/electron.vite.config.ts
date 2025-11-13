@@ -25,14 +25,8 @@ const enableSourcemap = !isProduction
 export default defineConfig({
   main: {
     plugins: [
-      externalizeDepsPlugin({
-        exclude: [
-          '@talex-touch/utils', // workspace 包需要打包
-          'pinyin-match',       // ESM only 模块
-          'pinyin-pro',         // ESM only 模块
-          'fs-extra'            // 需要打包到 asar 中
-        ]
-      })
+      // 不使用 externalizeDepsPlugin 的默认行为
+      // 所有依赖默认打包，只通过 rollupOptions.external 指定需要外部化的包
     ],
     build: {
       sourcemap: enableSourcemap,
