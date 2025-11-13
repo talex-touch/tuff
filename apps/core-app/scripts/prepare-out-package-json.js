@@ -123,7 +123,41 @@ console.log(
 )
 
 const moduleRootOverrides = {
-  'detect-libc': path.join(workspaceRoot, 'node_modules', 'detect-libc')
+  'detect-libc': resolveDetectLibcRoot()
+}
+
+function resolveDetectLibcRoot() {
+  const candidates = []
+  try {
+    const libsqlDetectLibc = path.join(
+      path.dirname(require.resolve('libsql/package.json')),
+      'node_modules',
+      'detect-libc'
+    )
+    candidates.push(libsqlDetectLibc)
+  } catch (err) {
+    // ignore; fallback to other candidates
+  }
+
+  candidates.push(path.join(workspaceRoot, 'node_modules', 'detect-libc'))
+  candidates.push(path.join(projectRoot, 'node_modules', 'detect-libc'))
+
+  for (const candidate of candidates) {
+    const pkgJsonPath = path.join(candidate, 'package.json')
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+        if (pkg.version && pkg.version.startsWith('1.')) {
+          continue
+        }
+        return candidate
+      } catch {
+        return candidate
+      }
+    }
+  }
+
+  return path.join(workspaceRoot, 'node_modules', 'detect-libc')
 }
 
 function findPackageRoot(resolvedPath, moduleName) {
