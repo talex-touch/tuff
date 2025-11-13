@@ -52,16 +52,11 @@ export default defineConfig({
           'electron/common',
           'electron/renderer',
 
-          // libsql 相关（原生模块）
-          '@libsql/client',
-          '@libsql/core',
-          '@libsql/hrana-client',
-          '@libsql/isomorphic-fetch',
-          '@libsql/isomorphic-ws',
+          // libsql 相关（原生模块） - 使用正则匹配所有相关包
+          /^@libsql\/.*/,
           'libsql',
-          /^@libsql\/(darwin-arm64|darwin-x64|linux-arm64|linux-x64|win32-x64)$/,
 
-          // libsql 依赖的包
+          // libsql 的依赖
           'detect-libc',
           '@neon-rs/load',
           'js-base64',
@@ -69,14 +64,13 @@ export default defineConfig({
           'node-fetch',
 
           // 其他包含原生模块的依赖
-          // 注意: extract-file-icon 暂时注释，因为 node-abi 不支持 Electron 38
-          // 'extract-file-icon',   // 原生模块
-          'electron-log', // Electron 特定
-          'electron-updater', // Electron 特定
-          '@sentry/electron', // Electron 特定
-          'original-fs', // 文件系统相关
-          'tesseract.js', // 包含 WASM/Worker
-          'compressing' // 可能包含原生模块
+          'electron-log',
+          'electron-updater',
+          '@sentry/electron',
+          /^@sentry\/.*/, // @sentry 的所有子包
+          'original-fs',
+          'tesseract.js',
+          'compressing'
         ]
       }
     }
