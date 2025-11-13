@@ -24,10 +24,7 @@ const enableSourcemap = !isProduction
 
 export default defineConfig({
   main: {
-    plugins: [
-      // 不使用 externalizeDepsPlugin 的默认行为
-      // 所有依赖默认打包，只通过 rollupOptions.external 指定需要外部化的包
-    ],
+    plugins: [externalizeDepsPlugin()],
     build: {
       sourcemap: enableSourcemap,
       rollupOptions: {

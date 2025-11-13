@@ -9,8 +9,9 @@ const outPackageJsonPath = path.join(outDir, 'package.json')
 const outNodeModulesPath = path.join(outDir, 'node_modules')
 
 // Core modules that must remain external and be copied into out/node_modules
-// Now that dependencies are properly classified, we only need minimal modules
+// These are modules with native code or special requirements that cannot be bundled
 const baseModulesToCopy = [
+  // libsql 相关（原生模块）
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
@@ -18,7 +19,16 @@ const baseModulesToCopy = [
   '@libsql/isomorphic-ws',
   'libsql',
   '@neon-rs/load',
-  'detect-libc'
+  'detect-libc',
+
+  // 其他原生模块和特殊依赖
+  'extract-file-icon',      // 原生模块
+  'electron-log',           // Electron 特定
+  'electron-updater',       // Electron 特定
+  '@sentry/electron',       // Electron 特定，包含原生模块
+  'original-fs',            // 文件系统
+  'tesseract.js',           // WASM/Worker
+  'compressing'             // 可能包含原生模块
 ]
 
 // Map build targets to platform-specific libsql binaries
