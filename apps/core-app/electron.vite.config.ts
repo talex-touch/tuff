@@ -45,27 +45,24 @@ export default defineConfig({
             return '[name]-[hash].js'
           }
         },
-        external: [
-          // Electron 内置模块（必须外部化）
-          'electron',
-          'electron/main',
-          'electron/common',
-          'electron/renderer',
-
-          // libsql 相关（包含原生模块，必须外部化）
-          /^@libsql\/.*/,
-          'libsql',
-          'detect-libc',
-          '@neon-rs/load',
-          'js-base64',
-          'promise-limit',
-          'node-fetch'
-
-          // 其他包改为打包进 asar（减小 node_modules 体积）：
-          // - electron-log, electron-updater, @sentry/electron
-          // - tesseract.js, compressing, original-fs
-          // 这些都是纯 JS 或 WASM，可以打包
-        ]
+        external: (id, parentId) => {
+          if (parentId?.includes('ocr-worker')) {
+            return ['electron', 'node:worker_threads', 'node:fs/promises', 'node:fs', 'node:path'].includes(id) || id.startsWith('node:')
+          }
+          return [
+            'electron',
+            'electron/main',
+            'electron/common',
+            'electron/renderer',
+            /^@libsql\/.*/,
+            'libsql',
+            'detect-libc',
+            '@neon-rs/load',
+            'js-base64',
+            'promise-limit',
+            'node-fetch'
+          ].some(ext => typeof ext === 'string' ? ext === id : ext.test(id))
+        }
       }
     }
   },
