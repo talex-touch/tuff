@@ -642,6 +642,12 @@
         "cacheClearFailed": "Failed to clear cache"
       }
     },
+    "updateModal": {
+      "title": "New Version Available",
+      "publishedAt": "Published at: {time}",
+      "notNow": "Not now",
+      "update": "Update"
+    },
     "download": {
       "title": "Download Settings",
       "concurrency_settings": "Concurrency Settings",
