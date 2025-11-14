@@ -74,6 +74,7 @@ import {
 import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 
 const MAX_CONTENT_LENGTH = 200_000
+const ICON_META_EXTENSION_KEY = 'iconMeta'
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 
@@ -199,6 +200,16 @@ const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
   设计: 'design'
 }
 
+type IconCacheMeta = {
+  mtime: number | null
+  size: number | null
+}
+
+type IconCacheEntry = {
+  icon?: string | null
+  meta?: IconCacheMeta
+}
+
 const execFileAsync = promisify(execFile)
 
 const LAUNCH_SERVICES_PLIST_PATH = path.join(
@@ -311,6 +322,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     total: 0,
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
   }
+  private readonly enableFileIconExtraction =
+    (process.env.TALEX_FILE_PROVIDER_EXTRACT_ICONS ?? 'true').toLowerCase() !== 'false'
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -1520,6 +1533,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     let processedCount = 0
     const logInterval = 200
+    const processStart = performance.now()
 
     await runAdaptiveTaskQueue(
       chunks,
@@ -1551,11 +1565,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         processedCount += chunk.length
         if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {
+          const chunkDuration = performance.now() - chunkStart
+          const totalDuration = performance.now() - processStart
+          const averagePerFile = processedCount > 0 ? totalDuration / processedCount : totalDuration
           this.logDebug('File update chunk processed', {
             processed: processedCount,
             total: filesToUpdate.length,
-            duration: formatDuration(performance.now() - chunkStart),
-            averageDuration: formatDuration(performance.now() - chunkStart / processedCount)
+            duration: formatDuration(chunkDuration),
+            averageDuration: formatDuration(averagePerFile)
           })
         }
       },
@@ -1633,6 +1650,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils) return
     if (files.length === 0) return
 
+    const iconCache = this.enableFileIconExtraction
+      ? await this.buildIconCache(files)
+      : new Map<number, IconCacheEntry>()
+
     const timingToken = timingLogger.start(
       'FileProvider:ProcessExtensions',
       {
@@ -1650,25 +1671,45 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         files,
         async (file) => {
-          try {
-            const icon = extractFileIcon(file.path)
-            extensionsToAdd.push({
-              fileId: file.id,
-              key: 'icon',
-              value: icon.toString('base64')
-            })
-          } catch {
-            /* ignore */
+          const fileId = typeof file.id === 'number' ? file.id : null
+
+          if (fileId && this.enableFileIconExtraction) {
+            const cached = iconCache.get(fileId)
+            if (this.needsIconExtraction(file, cached)) {
+              try {
+                const icon = extractFileIcon(file.path)
+                const meta: IconCacheMeta = {
+                  mtime: this.toTimestamp(file.mtime),
+                  size: typeof file.size === 'number' ? file.size : null
+                }
+                const iconValue = icon.toString('base64')
+                extensionsToAdd.push({
+                  fileId,
+                  key: 'icon',
+                  value: iconValue
+                })
+                extensionsToAdd.push({
+                  fileId,
+                  key: ICON_META_EXTENSION_KEY,
+                  value: JSON.stringify(meta)
+                })
+                iconCache.set(fileId, { icon: iconValue, meta })
+              } catch {
+                /* ignore icon failures */
+              }
+            }
           }
 
           const fileExtension = file.extension || path.extname(file.name).toLowerCase()
           const keywords = KEYWORD_MAP[fileExtension]
           if (keywords) {
-            extensionsToAdd.push({
-              fileId: file.id,
-              key: 'keywords',
-              value: JSON.stringify(keywords)
-            })
+            if (fileId) {
+              extensionsToAdd.push({
+                fileId,
+                key: 'keywords',
+                value: JSON.stringify(keywords)
+              })
+            }
           }
         },
         {
@@ -1699,6 +1740,71 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         FILE_TIMING_BASE_OPTIONS
       )
     }
+  }
+
+  private async buildIconCache(
+    files: (typeof filesSchema.$inferSelect)[]
+  ): Promise<Map<number, IconCacheEntry>> {
+    const cache = new Map<number, IconCacheEntry>()
+    if (!this.dbUtils) {
+      return cache
+    }
+
+    const fileIds = files
+      .map((file) => file.id)
+      .filter((id): id is number => typeof id === 'number')
+
+    if (fileIds.length === 0) {
+      return cache
+    }
+
+    const rows = await this.dbUtils.getFileExtensionsByFileIds(fileIds, [
+      'icon',
+      ICON_META_EXTENSION_KEY
+    ])
+
+    for (const row of rows) {
+      const entry = cache.get(row.fileId) ?? {}
+      if (row.key === 'icon') {
+        entry.icon = row.value
+      } else if (row.key === ICON_META_EXTENSION_KEY && row.value) {
+        try {
+          const parsed = JSON.parse(row.value) as IconCacheMeta
+          entry.meta = {
+            mtime: typeof parsed?.mtime === 'number' ? parsed.mtime : null,
+            size: typeof parsed?.size === 'number' ? parsed.size : null
+          }
+        } catch {
+          entry.meta = undefined
+        }
+      }
+      cache.set(row.fileId, entry)
+    }
+
+    return cache
+  }
+
+  private needsIconExtraction(
+    file: typeof filesSchema.$inferSelect,
+    cached?: IconCacheEntry
+  ): boolean {
+    if (!this.enableFileIconExtraction) {
+      return false
+    }
+    if (!cached || !cached.icon) {
+      return true
+    }
+    if (!cached.meta) {
+      return true
+    }
+    const fileMtime = this.toTimestamp(file.mtime)
+    const cachedMtime = typeof cached.meta.mtime === 'number' ? cached.meta.mtime : null
+    if (cachedMtime !== fileMtime) {
+      return true
+    }
+    const fileSize = typeof file.size === 'number' ? file.size : null
+    const cachedSize = typeof cached.meta.size === 'number' ? cached.meta.size : null
+    return cachedSize !== fileSize
   }
 
   private async extractContentForFiles(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
