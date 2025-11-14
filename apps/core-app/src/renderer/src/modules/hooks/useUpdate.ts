@@ -519,8 +519,7 @@ export function useApplicationUpgrade() {
         if ((data as any).hasUpdate && (data as any).release) {
           appStates.hasUpdate = true
 
-          // Show update dialog
-          popperMention('New Version Available', () => {
+          blowMention('New Version Available', () => {
             return h(AppUpdateView, {
               release: (data as any).release as unknown as Record<string, unknown>
             })

@@ -98,7 +98,7 @@ async function loadSettings(): Promise<void> {
 async function refreshStatus(): Promise<void> {
   try {
     const status = await getUpdateStatus()
-    lastCheck.value = status.lastCheck ?? null
+    lastCheck.value = (status as any).lastCheck ?? null
   } catch (error) {
     console.warn('[SettingUpdate] Failed to refresh status:', error)
   }

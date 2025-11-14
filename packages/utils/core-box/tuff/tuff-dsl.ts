@@ -959,6 +959,21 @@ export interface TuffMeta {
   };
 
   /**
+   * 预览相关元数据
+   * @description 用于预览类型项目的额外信息
+   */
+  preview?: {
+    /** 能力ID */
+    abilityId?: string;
+    /** 置信度 */
+    confidence?: number;
+    /** 表达式 */
+    expression?: string;
+    /** 预览负载数据 */
+    payload?: any;
+  };
+
+  /**
    * 插件扩展字段
    * @description 供插件存储自定义数据的字段
    */
