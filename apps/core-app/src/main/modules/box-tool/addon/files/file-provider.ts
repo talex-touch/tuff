@@ -1513,7 +1513,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
 
-    // 重新使用chunk方式，但优化日志输出
     const chunks: (typeof filesSchema.$inferSelect)[][] = []
     for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
       chunks.push(filesToUpdate.slice(i, i + chunkSize))
@@ -1527,7 +1526,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       async (chunk) => {
         const chunkStart = performance.now()
 
-        // 批量更新文件信息
         const updatePromises = chunk.map((file) =>
           db
             .update(filesSchema)
