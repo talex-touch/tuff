@@ -66,6 +66,22 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           set: { value: sql`excluded.value` }
         })
     },
+    async getFileExtensionsByFileIds(fileIds: number[], keys?: string[]) {
+      if (fileIds.length === 0) return []
+      const filters = [inArray(schema.fileExtensions.fileId, fileIds)]
+      if (keys && keys.length > 0) {
+        filters.push(inArray(schema.fileExtensions.key, keys))
+      }
+      const condition = filters.length === 1 ? filters[0] : and(...filters)
+      return db
+        .select({
+          fileId: schema.fileExtensions.fileId,
+          key: schema.fileExtensions.key,
+          value: schema.fileExtensions.value
+        })
+        .from(schema.fileExtensions)
+        .where(condition)
+    },
     async getFileExtensions(fileId: number) {
       return db.select().from(schema.fileExtensions).where(eq(schema.fileExtensions.fileId, fileId))
     },
@@ -277,6 +293,16 @@ export type DbUtils = {
   clearFilesByType: (type: string) => Promise<any>
   addFileExtension: (fileId: number, key: string, value: string) => Promise<any>
   addFileExtensions: (extensions: { fileId: number; key: string; value: string }[]) => Promise<any>
+  getFileExtensionsByFileIds: (
+    fileIds: number[],
+    keys?: string[]
+  ) => Promise<
+    Array<{
+      fileId: number
+      key: string
+      value: string | null
+    }>
+  >
   getFileExtensions: (fileId: number) => Promise<any[]>
   setFileIndexProgress: (
     fileId: number,
