@@ -51,6 +51,19 @@ export function useKeyboard(
     } else if (event.key === 'ArrowUp') {
       boxOptions.focus -= 1
       event.preventDefault()
+    } else if (
+      event.key === 'ArrowRight' &&
+      event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      const current = res.value[boxOptions.focus]
+      if (current?.source?.id === 'preview-provider') {
+        window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
+        event.preventDefault()
+        return
+      }
     } else if (event.key === 'Tab') {
       if (res.value[boxOptions.focus]) {
         const completion =

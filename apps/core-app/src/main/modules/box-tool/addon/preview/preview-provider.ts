@@ -1,10 +1,17 @@
 import { TuffFactory, TuffItemBuilder, TuffInputType } from '@talex-touch/utils'
-import type { PreviewAbilityResult } from '@talex-touch/utils'
+import type {
+  IExecuteArgs,
+  PreviewAbilityResult,
+  PreviewCardPayload,
+  TuffItem
+} from '@talex-touch/utils'
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
 import type { ISearchProvider } from '@talex-touch/utils'
 import crypto from 'node:crypto'
 import { PreviewAbilityRegistry } from './preview-registry'
 import { performance } from 'perf_hooks'
+import { clipboard } from 'electron'
+import { clipboardModule } from '../../../clipboard'
 
 const PREVIEW_COMPONENT_NAME = 'core-preview-card'
 const SOURCE_ID = 'preview-provider'
@@ -30,6 +37,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     }
 
     const item = this.buildPreviewItem(query, result)
+    void this.recordHistory(result.payload, query)
     const duration = performance.now() - startedAt
 
     return TuffFactory.createSearchResult(query)
@@ -53,6 +61,14 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
 
   onDeactivate(): void {
     // no-op
+  }
+
+  async onExecute({ item }: IExecuteArgs): Promise<null> {
+    const payload = this.extractPayload(item)
+    if (payload?.primaryValue) {
+      clipboard.writeText(payload.primaryValue)
+    }
+    return null
   }
 
   private createEmptyResult(query: TuffQuery, startedAt: number): TuffSearchResult {
@@ -97,5 +113,26 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     }
 
     return builder.build()
+  }
+
+  private extractPayload(item: TuffItem): PreviewCardPayload | undefined {
+    if (item.render?.mode !== 'custom') return undefined
+    const custom = item.render.custom
+    if (custom?.type !== 'vue') return undefined
+    return custom.data as PreviewCardPayload | undefined
+  }
+
+  private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
+    if (!payload?.primaryValue) return
+    await clipboardModule.saveVirtualEntry({
+      content: payload.primaryValue,
+      rawContent: query.text ?? '',
+      source: 'calculation',
+      meta: {
+        expression: query.text ?? '',
+        abilityId: payload.abilityId,
+        payload
+      }
+    })
   }
 }

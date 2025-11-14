@@ -1,0 +1,235 @@
+import type { PreviewAbilityResult, PreviewCardPayload } from '@talex-touch/utils'
+import type { PreviewAbilityContext } from '../preview-ability'
+import { BasePreviewAbility } from '../preview-ability'
+import dayjs from 'dayjs'
+import duration from 'dayjs/plugin/duration'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import { performance } from 'perf_hooks'
+
+dayjs.extend(duration)
+dayjs.extend(relativeTime)
+
+const RELATIVE_PATTERN = /^now\s*([+-])\s*([\d\w\s.]+)$/i
+const RANGE_PATTERN =
+  /^(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)\s*-\s*(now|\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)$/i
+
+const UNIT_MAP: Record<string, number> = {
+  s: 1000,
+  sec: 1000,
+  secs: 1000,
+  second: 1000,
+  seconds: 1000,
+  m: 60 * 1000,
+  min: 60 * 1000,
+  mins: 60 * 1000,
+  minute: 60 * 1000,
+  minutes: 60 * 1000,
+  h: 60 * 60 * 1000,
+  hr: 60 * 60 * 1000,
+  hrs: 60 * 60 * 1000,
+  hour: 60 * 60 * 1000,
+  hours: 60 * 60 * 1000,
+  d: 24 * 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  days: 24 * 60 * 60 * 1000,
+  w: 7 * 24 * 60 * 60 * 1000
+  ,
+  week: 7 * 24 * 60 * 60 * 1000,
+  weeks: 7 * 24 * 60 * 60 * 1000
+}
+
+function parseRelative(value: string): number {
+  let total = 0
+  const regex = /([-+]?\d*\.?\d+)\s*([a-z]+)/gi
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(value)) !== null) {
+    const amount = Number(match[1])
+    const unit = match[2].toLowerCase()
+    const factor = UNIT_MAP[unit]
+    if (!factor || Number.isNaN(amount)) continue
+    total += amount * factor
+  }
+  return total
+}
+
+const CN_UNIT_MAP: Record<string, number> = {
+  秒: UNIT_MAP.second,
+  分钟: UNIT_MAP.minute,
+  分: UNIT_MAP.minute,
+  小时: UNIT_MAP.hour,
+  时: UNIT_MAP.hour,
+  天: UNIT_MAP.day,
+  日: UNIT_MAP.day,
+  周: UNIT_MAP.week
+}
+
+function parseChineseRelative(text: string): number | null {
+  const match = text.match(/^([-+]?\d*\.?\d+)\s*(秒|分钟|分|小时|时|天|日|周)(后|前)?$/)
+  if (!match) return null
+  const [, amountRaw, unitRaw, direction] = match
+  const factor = CN_UNIT_MAP[unitRaw]
+  if (!factor) return null
+  const amount = Number(amountRaw)
+  if (Number.isNaN(amount)) return null
+  const sign = direction === '前' ? -1 : 1
+  return amount * factor * sign
+}
+
+function parseNaturalRelative(text: string): number | null {
+  const lower = text.trim().toLowerCase()
+  if (!lower) return null
+
+  if (lower === 'tomorrow' || lower === '明天') return UNIT_MAP.day
+  if (lower === 'yesterday' || lower === '昨天') return -UNIT_MAP.day
+  if (lower === 'today' || lower === 'now' || lower === '今天') return 0
+
+  const inMatch = lower.match(/^in\s+([\d\w\s.]+)$/)
+  if (inMatch) {
+    const offset = parseRelative(inMatch[1])
+    return offset || null
+  }
+
+  const agoMatch = lower.match(/^([\d\w\s.]+)\s+(ago|before)$/)
+  if (agoMatch) {
+    const offset = parseRelative(agoMatch[1])
+    return offset ? -offset : null
+  }
+
+  const laterMatch = lower.match(/^([\d\w\s.]+)\s+(later|after|from now)$/)
+  if (laterMatch) {
+    const offset = parseRelative(laterMatch[1])
+    return offset || null
+  }
+
+  const simpleMatch = lower.match(/^([-+]?\d*\.?\d+)\s*[a-z]+$/)
+  if (simpleMatch) {
+    const offset = parseRelative(lower)
+    return offset || null
+  }
+
+  const cn = parseChineseRelative(text)
+  if (cn !== null) return cn
+
+  return null
+}
+
+function formatDuration(ms: number): string {
+  const d = dayjs.duration(ms)
+  const segments: string[] = []
+  if (d.days()) segments.push(`${d.days()}天`)
+  if (d.hours()) segments.push(`${d.hours()}小时`)
+  if (d.minutes()) segments.push(`${d.minutes()}分钟`)
+  if (segments.length === 0) segments.push(`${d.seconds()}秒`)
+  return segments.join('')
+}
+
+export class TimeDeltaAbility extends BasePreviewAbility {
+  readonly id = 'preview.time'
+  readonly priority = 30
+
+  override canHandle(query: { text?: string }): boolean {
+    if (!query.text) return false
+    return (
+      RELATIVE_PATTERN.test(query.text) ||
+      RANGE_PATTERN.test(query.text) ||
+      parseNaturalRelative(query.text) !== null
+    )
+  }
+
+  async execute(context: PreviewAbilityContext): Promise<PreviewAbilityResult | null> {
+    const startedAt = performance.now()
+    const text = this.getNormalizedQuery(context.query)
+
+    const relativeMatch = text.match(RELATIVE_PATTERN)
+    if (relativeMatch) {
+      const [, operator, expression] = relativeMatch
+      const offset = parseRelative(expression)
+      const sign = operator === '-' ? -1 : 1
+      const target = dayjs().add(sign * offset, 'millisecond')
+      const payload: PreviewCardPayload = {
+        abilityId: this.id,
+        title: text,
+        subtitle: '时间偏移',
+        primaryLabel: '目标时间',
+        primaryValue: target.format('YYYY-MM-DD HH:mm:ss'),
+        secondaryLabel: '相对现在',
+        secondaryValue: target.fromNow(),
+        sections: [
+          {
+            rows: [
+              { label: '偏移量', value: formatDuration(offset) },
+              { label: 'ISO', value: target.toISOString() }
+            ]
+          }
+        ]
+      }
+      return {
+        abilityId: this.id,
+        confidence: 0.8,
+        payload,
+        durationMs: performance.now() - startedAt
+      }
+    }
+
+    const naturalOffset = parseNaturalRelative(text)
+    if (naturalOffset !== null) {
+      const target = dayjs().add(naturalOffset, 'millisecond')
+      const payload: PreviewCardPayload = {
+        abilityId: this.id,
+        title: text,
+        subtitle: '时间偏移',
+        primaryLabel: '目标时间',
+        primaryValue: target.format('YYYY-MM-DD HH:mm:ss'),
+        secondaryLabel: '相对现在',
+        secondaryValue: target.fromNow(),
+        sections: [
+          {
+            rows: [
+              { label: '偏移量', value: formatDuration(Math.abs(naturalOffset)) },
+              { label: 'ISO', value: target.toISOString() }
+            ]
+          }
+        ]
+      }
+      return {
+        abilityId: this.id,
+        confidence: 0.7,
+        payload,
+        durationMs: performance.now() - startedAt
+      }
+    }
+
+    const rangeMatch = text.match(RANGE_PATTERN)
+    if (!rangeMatch) return null
+    const [, startRaw, endRaw] = rangeMatch
+    const start = startRaw.toLowerCase() === 'now' ? dayjs() : dayjs(startRaw)
+    const end = endRaw.toLowerCase() === 'now' ? dayjs() : dayjs(endRaw)
+    if (!start.isValid() || !end.isValid()) return null
+    const diff = Math.abs(end.diff(start))
+
+    const payload: PreviewCardPayload = {
+      abilityId: this.id,
+      title: text,
+      subtitle: '时间差',
+      primaryLabel: '间隔',
+      primaryValue: formatDuration(diff),
+      secondaryLabel: '毫秒',
+      secondaryValue: diff.toString(),
+      sections: [
+        {
+          rows: [
+            { label: '起点', value: start.format('YYYY-MM-DD HH:mm:ss') },
+            { label: '终点', value: end.format('YYYY-MM-DD HH:mm:ss') }
+          ]
+        }
+      ]
+    }
+
+    return {
+      abilityId: this.id,
+      confidence: 0.75,
+      payload,
+      durationMs: performance.now() - startedAt
+    }
+  }
+}

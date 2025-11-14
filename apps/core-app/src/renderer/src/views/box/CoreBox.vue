@@ -1,5 +1,5 @@
 <script setup lang="ts" name="CoreBox">
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
 import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
@@ -15,9 +15,14 @@ import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
+import PreviewHistoryPanel, {
+  type CalculationHistoryEntry
+} from '~/components/render/custom/PreviewHistoryPanel.vue'
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { ElMessage } from 'element-plus'
 
 const scrollbar = ref()
 const boxInputRef = ref()
@@ -106,6 +111,76 @@ useKeyboard(
   handlePaste
 )
 useChannel(boxOptions, res)
+
+const previewHistory = reactive<{
+  visible: boolean
+  loading: boolean
+  items: CalculationHistoryEntry[]
+}>({
+  visible: false,
+  loading: false,
+  items: []
+})
+
+async function loadPreviewHistory(): Promise<void> {
+  previewHistory.loading = true
+  try {
+    const response = await touchChannel.send('preview-history:get', { limit: 20 })
+    previewHistory.items = response?.items ?? []
+  } catch (error) {
+    console.error('[CoreBox] Failed to load calculation history:', error)
+    ElMessage.error('加载最近计算失败')
+  } finally {
+    previewHistory.loading = false
+  }
+}
+
+function openPreviewHistory(): void {
+  previewHistory.visible = true
+  void loadPreviewHistory()
+}
+
+function closePreviewHistory(): void {
+  previewHistory.visible = false
+}
+
+function applyPreviewHistory(entry: CalculationHistoryEntry): void {
+  const expression =
+    entry.meta?.expression ?? entry.meta?.payload?.title ?? entry.content ?? ''
+  if (!expression) return
+  searchVal.value = expression
+  previewHistory.visible = false
+  boxInputRef.value?.focus?.()
+}
+
+function handleHistoryEvent(): void {
+  openPreviewHistory()
+}
+
+function handleCopyPreviewEvent(event: Event): void {
+  const detail = (event as CustomEvent<{ value: string }>).detail
+  const value = detail?.value
+  if (!value) return
+  touchChannel
+    .send('clipboard:write-text', { text: value })
+    .then(() => {
+      ElMessage.success('结果已复制')
+    })
+    .catch((error) => {
+      console.error('[CoreBox] Failed to copy preview result:', error)
+      ElMessage.error('复制失败')
+    })
+}
+
+onMounted(() => {
+  window.addEventListener('corebox:show-calculation-history', handleHistoryEvent)
+  window.addEventListener('corebox:copy-preview', handleCopyPreviewEvent)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
+  window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)
+})
 
 function handleTogglePin(): void {
   appSetting.tools.autoHide = !appSetting.tools.autoHide
@@ -197,6 +272,13 @@ const pinIcon = computed<ITuffIcon>(() => ({
       <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
     </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
+    <PreviewHistoryPanel
+      :visible="previewHistory.visible"
+      :loading="previewHistory.loading"
+      :items="previewHistory.items"
+      @close="closePreviewHistory"
+      @apply="applyPreviewHistory"
+    />
   </div>
 </template>
 
