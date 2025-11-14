@@ -9,7 +9,8 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
   plugin: 3,
   file: 2,
   url: 1,
-  text: 1
+  text: 1,
+  preview: 10000
 }
 
 function getWeight(item: TuffItem): number {

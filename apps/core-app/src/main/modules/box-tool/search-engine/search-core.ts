@@ -35,6 +35,7 @@ import { UsageSummaryService } from './usage-summary-service'
 import { QueryCompletionService } from './query-completion-service'
 import { UsageStatsCache, getUsageStatsBatchCached } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
+import { previewProvider } from '../addon/preview'
 
 /**
  * Generates a unique key for an activation request.
@@ -90,6 +91,7 @@ export class SearchEngineCore
     this.registerProvider(fileProvider)
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(systemProvider)
+    this.registerProvider(previewProvider)
   }
 
   static getInstance(): SearchEngineCore {
