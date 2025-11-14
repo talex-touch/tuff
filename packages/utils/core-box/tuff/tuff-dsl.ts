@@ -189,6 +189,7 @@ export type TuffItemKind =
   | 'command'          // 系统命令，终端或系统级指令
   | 'script'           // 脚本文件，可执行的代码文件
   | 'workflow'         // 工作流，一系列自动化步骤
+  | 'preview'          // 直接预览卡片
 
   // 文件与资源
   | 'file'             // 普通文件，未指定具体类型的文件

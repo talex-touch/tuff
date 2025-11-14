@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.1.5",
+  "version": "2.4.6",
   "description": "A strong adaptation more platform all-tool program.",
   "main": "./out/main/index.js",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -36,7 +36,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.2.0",
-    "@talex-touch/utils": "file:../../packages/utils",
+    "@talex-touch/utils": "workspace:^",
     "@types/yauzl": "^2.10.3",
     "chokidar": "^4.0.3",
     "commander": "^14.0.2",

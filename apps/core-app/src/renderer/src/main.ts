@@ -24,10 +24,13 @@ import '~/styles/index.scss'
 
 import 'uno.css'
 import 'virtual:unocss-devtools'
+import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 
 window.$nodeApi = baseNodeApi
 window.$shortconApi = shortconApi
 window.$storage = storageManager
+
+registerDefaultCustomRenderers()
 
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')
