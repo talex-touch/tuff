@@ -1,6 +1,7 @@
 <script name="App" lang="ts" setup>
 import AppLayout from '~/views/layout/AppLayout.vue'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
+import { captureAppContext } from '~/modules/mention/dialog-mention'
 // urlHooker,
 // clipBoardResolver,
 import Beginner from '~/views/base/begin/Beginner.vue'
@@ -16,6 +17,10 @@ const { initializeLanguage } = useLanguage()
 const packageJson = window.$nodeApi.getPackageJSON()
 
 const beginner = ref(false)
+
+// 在 setup 的同步代码中立即捕获应用上下文
+// 这样对话框函数就可以在任何地方（包括事件监听器）使用
+captureAppContext()
 
 async function init(): Promise<void> {
   if (isCoreBox()) {
