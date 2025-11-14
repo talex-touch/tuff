@@ -1,6 +1,6 @@
 <script setup lang="ts" name="PreviewHistoryPanel">
 import dayjs from 'dayjs'
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 export type CalculationHistoryEntry = {
   id?: number
@@ -14,18 +14,21 @@ const props = withDefaults(
     visible: boolean
     loading: boolean
     items: CalculationHistoryEntry[]
+    activeIndex?: number
   }>(),
   {
     visible: false,
     loading: false,
-    items: () => []
+    items: () => [],
+    activeIndex: -1
   }
 )
 
 const emit = defineEmits<{
-  (e: 'close'): void
   (e: 'apply', entry: CalculationHistoryEntry): void
 }>()
+
+const listRef = ref<HTMLUListElement>()
 
 const formattedItems = computed(() =>
   props.items.map((item) => ({
@@ -36,24 +39,44 @@ const formattedItems = computed(() =>
     time: item.timestamp ? dayjs(item.timestamp).format('HH:mm:ss') : ''
   }))
 )
+
+watch(
+  () => props.activeIndex,
+  (index) => {
+    if (typeof index !== 'number' || index < 0) return
+    nextTick(() => {
+      const list = listRef.value
+      const el = list?.children[index] as HTMLElement | undefined
+      el?.scrollIntoView({ block: 'nearest' })
+    })
+  }
+)
 </script>
 
 <template>
-  <transition name="fade">
-    <div v-if="visible" class="PreviewHistoryPanel">
-      <div class="panel">
-        <header>
-          <div>
-            <span class="title">最近计算</span>
-            <span class="count">共 {{ items.length }} 条</span>
-          </div>
-          <button class="close" type="button" @click="emit('close')">×</button>
-        </header>
+  <div
+    class="PreviewHistoryPanel"
+    :class="{ 'is-visible': visible }"
+    :aria-hidden="(!visible).toString()"
+  >
+    <div class="panel">
+      <header>
+        <div class="title-row">
+          <span class="title">最近处理</span>
+          <span class="count">共 {{ items.length }} 条</span>
+        </div>
+      </header>
+      <div class="panel-body">
         <div v-if="loading" class="state">加载中...</div>
         <div v-else-if="!items.length" class="state">暂无记录</div>
-        <ul v-else class="history-list">
-          <li v-for="item in formattedItems" :key="item.id" @click="emit('apply', item)">
-            <div class="expression">{{ item.expression }}</div>
+        <ul v-else ref="listRef" class="history-list">
+          <li
+            v-for="(item, index) in formattedItems"
+            :key="item.id ?? `${item.content}-${index}`"
+            :class="{ 'is-active': index === props.activeIndex }"
+            @click="emit('apply', item)"
+          >
+            <div class="expression" :title="item.expression">{{ item.expression }}</div>
             <div class="meta-row">
               <span class="result">{{ item.result }}</span>
               <span class="ability">{{ item.abilityId }}</span>
@@ -63,99 +86,129 @@ const formattedItems = computed(() =>
         </ul>
       </div>
     </div>
-  </transition>
+  </div>
 </template>
 
 <style scoped lang="scss">
 .PreviewHistoryPanel {
-  position: absolute;
-  top: 72px;
-  right: 20px;
-  width: 320px;
-  max-height: calc(100% - 120px);
-  z-index: 20;
+  position: relative;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  transition: width 0.25s ease;
+  pointer-events: none;
+  border-left: 1px solid transparent;
+
+  &.is-visible {
+    width: 320px;
+    pointer-events: auto;
+    border-color: var(--el-border-color);
+    padding-left: 12px;
+  }
 }
 
 .panel {
-  background: var(--el-bg-color);
-  border-radius: 16px;
+  height: 100%;
+  border-radius: 18px;
   border: 1px solid var(--el-border-color);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
-  padding: 12px;
+  background: var(--el-bg-color);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  height: 100%;
+  padding: 16px 14px 12px;
+  opacity: 0;
+  transform: translateX(12px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+
+  .PreviewHistoryPanel.is-visible & {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 12px;
+
+  .title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
 
   .title {
+    font-size: 14px;
     font-weight: 600;
+    color: var(--el-text-color-primary);
   }
 
   .count {
-    margin-left: 6px;
     font-size: 12px;
     color: var(--el-text-color-secondary);
   }
+}
 
-  .close {
-    border: none;
-    background: var(--el-fill-color-light);
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-  }
+.panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .state {
-  text-align: center;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--el-text-color-secondary);
-  padding: 20px 0;
+  font-size: 13px;
 }
 
 .history-list {
   list-style: none;
-  margin: 0;
   padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   overflow-y: auto;
 }
 
 .history-list li {
-  padding: 10px;
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
   border: 1px solid transparent;
   cursor: pointer;
   background: var(--el-fill-color-light);
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.15s ease;
 
   &:hover {
     border-color: var(--el-color-primary);
     background: var(--el-color-primary-light-9);
+    transform: translateY(-1px);
   }
 
   .expression {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--el-text-color-primary);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    font-weight: 500;
   }
 
   .meta-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--el-text-color-secondary);
+    gap: 6px;
 
     .result {
       font-weight: 600;
@@ -163,18 +216,14 @@ header {
     }
 
     .ability {
-      opacity: 0.5;
+      opacity: 0.6;
     }
   }
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.history-list li.is-active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-8);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 </style>

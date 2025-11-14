@@ -1,5 +1,5 @@
 <script setup lang="ts" name="CoreBox">
-import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
 import BoxInput from './BoxInput.vue'
 import TagSection from './tag/TagSection.vue'
@@ -23,6 +23,12 @@ import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { ElMessage } from 'element-plus'
+
+declare global {
+  interface Window {
+    __coreboxHistoryVisible?: boolean
+  }
+}
 
 const scrollbar = ref()
 const boxInputRef = ref()
@@ -112,6 +118,9 @@ useKeyboard(
 )
 useChannel(boxOptions, res)
 
+const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
+const historyActiveIndex = ref(-1)
+
 const previewHistory = reactive<{
   visible: boolean
   loading: boolean
@@ -122,26 +131,83 @@ const previewHistory = reactive<{
   items: []
 })
 
+function broadcastHistoryVisibility(visible: boolean): void {
+  window.__coreboxHistoryVisible = visible
+  window.dispatchEvent(
+    new CustomEvent('corebox:history-visibility-change', {
+      detail: { visible }
+    })
+  )
+}
+
+function ensureHistorySelection(preferStart = false): void {
+  if (!previewHistory.visible || !previewHistory.items.length) {
+    historyActiveIndex.value = -1
+    return
+  }
+
+  if (preferStart || historyActiveIndex.value < 0) {
+    historyActiveIndex.value = 0
+    return
+  }
+
+  if (historyActiveIndex.value > previewHistory.items.length - 1) {
+    historyActiveIndex.value = previewHistory.items.length - 1
+  }
+}
+
+watch(
+  () => previewHistory.visible,
+  (visible) => {
+    broadcastHistoryVisibility(visible)
+    if (!visible) {
+      historyActiveIndex.value = -1
+    } else {
+      ensureHistorySelection(true)
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => previewHistory.items.length,
+  () => {
+    ensureHistorySelection()
+  }
+)
+
+function focusMainInput(): void {
+  boxInputRef.value?.focus?.()
+}
+
 async function loadPreviewHistory(): Promise<void> {
   previewHistory.loading = true
   try {
     const response = await touchChannel.send('preview-history:get', { limit: 20 })
     previewHistory.items = response?.items ?? []
+    ensureHistorySelection()
   } catch (error) {
     console.error('[CoreBox] Failed to load calculation history:', error)
-    ElMessage.error('加载最近计算失败')
+    ElMessage.error('加载最近处理失败')
   } finally {
     previewHistory.loading = false
   }
 }
 
 function openPreviewHistory(): void {
-  previewHistory.visible = true
+  if (!previewHistory.visible) {
+    previewHistory.visible = true
+  }
   void loadPreviewHistory()
 }
 
-function closePreviewHistory(): void {
+function shrinkPreviewHistory(options?: { focusInput?: boolean }): void {
+  if (!previewHistory.visible) return
   previewHistory.visible = false
+  historyActiveIndex.value = -1
+  if (options?.focusInput ?? true) {
+    focusMainInput()
+  }
 }
 
 function applyPreviewHistory(entry: CalculationHistoryEntry): void {
@@ -149,12 +215,24 @@ function applyPreviewHistory(entry: CalculationHistoryEntry): void {
     entry.meta?.expression ?? entry.meta?.payload?.title ?? entry.content ?? ''
   if (!expression) return
   searchVal.value = expression
-  previewHistory.visible = false
-  boxInputRef.value?.focus?.()
+  shrinkPreviewHistory({ focusInput: false })
+  focusMainInput()
+}
+
+function applyHistorySelection(): void {
+  if (historyActiveIndex.value < 0) return
+  const entry = previewHistory.items[historyActiveIndex.value]
+  if (entry) {
+    applyPreviewHistory(entry)
+  }
 }
 
 function handleHistoryEvent(): void {
   openPreviewHistory()
+}
+
+function handleHistoryHideEvent(): void {
+  shrinkPreviewHistory()
 }
 
 function handleCopyPreviewEvent(event: Event): void {
@@ -172,14 +250,86 @@ function handleCopyPreviewEvent(event: Event): void {
     })
 }
 
+function isClickInsideHistory(target: EventTarget | null): boolean {
+  const el = historyPanelRef.value?.$el as HTMLElement | undefined
+  return !!(el && target instanceof Node && el.contains(target))
+}
+
+function handleGlobalMouseDown(event: MouseEvent): void {
+  if (event.button !== 0 || !previewHistory.visible) return
+  if (!document.body.classList.contains('core-box')) return
+  if (isClickInsideHistory(event.target)) return
+  shrinkPreviewHistory()
+}
+
+function handleHistoryKeydown(event: KeyboardEvent): void {
+  if (!previewHistory.visible) return
+  if (!document.body.classList.contains('core-box')) return
+
+  const key = event.key
+  if (key === 'Escape') {
+    shrinkPreviewHistory()
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+
+  if (key === 'ArrowDown') {
+    if (previewHistory.items.length) {
+      if (historyActiveIndex.value < 0) {
+        historyActiveIndex.value = 0
+      } else if (historyActiveIndex.value < previewHistory.items.length - 1) {
+        historyActiveIndex.value += 1
+      }
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+
+  if (key === 'ArrowUp') {
+    if (previewHistory.items.length) {
+      if (historyActiveIndex.value === -1) {
+        historyActiveIndex.value = previewHistory.items.length - 1
+      } else if (historyActiveIndex.value > 0) {
+        historyActiveIndex.value -= 1
+      }
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+
+  if (key === 'Enter') {
+    if (historyActiveIndex.value >= 0) {
+      applyHistorySelection()
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }
+}
+
+function handleHistoryContextMenu(event: MouseEvent): void {
+  if (!document.body.classList.contains('core-box')) return
+  if (previewHistory.visible) return
+  event.preventDefault()
+  openPreviewHistory()
+}
+
 onMounted(() => {
   window.addEventListener('corebox:show-calculation-history', handleHistoryEvent)
+  window.addEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.addEventListener('corebox:copy-preview', handleCopyPreviewEvent)
+  window.addEventListener('mousedown', handleGlobalMouseDown)
+  window.addEventListener('keydown', handleHistoryKeydown, true)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
+  window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)
+  window.removeEventListener('mousedown', handleGlobalMouseDown)
+  window.removeEventListener('keydown', handleHistoryKeydown, true)
 })
 
 function handleTogglePin(): void {
@@ -249,7 +399,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
     </div>
   </div>
 
-  <div class="CoreBoxRes flex">
+  <div class="CoreBoxRes flex" @contextmenu="handleHistoryContextMenu">
     <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
       <TouchScroll ref="scrollbar" class="scroll-area">
         <CoreBoxRender
@@ -273,10 +423,11 @@ const pinIcon = computed<ITuffIcon>(() => ({
     </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
     <PreviewHistoryPanel
+      ref="historyPanelRef"
       :visible="previewHistory.visible"
       :loading="previewHistory.loading"
       :items="previewHistory.items"
-      @close="closePreviewHistory"
+      :active-index="historyActiveIndex"
       @apply="applyPreviewHistory"
     />
   </div>

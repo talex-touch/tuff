@@ -1,6 +1,12 @@
 import { onBeforeUnmount, Ref } from 'vue'
 import { IBoxOptions } from '..'
 
+declare global {
+  interface Window {
+    __coreboxHistoryVisible?: boolean
+  }
+}
+
 export function useKeyboard(
   boxOptions: IBoxOptions,
   res: Ref<any[]>,
@@ -52,7 +58,7 @@ export function useKeyboard(
       boxOptions.focus -= 1
       event.preventDefault()
     } else if (
-      event.key === 'ArrowRight' &&
+      event.key === 'ArrowLeft' &&
       event.metaKey &&
       !event.ctrlKey &&
       !event.altKey &&
@@ -61,6 +67,18 @@ export function useKeyboard(
       const current = res.value[boxOptions.focus]
       if (current?.source?.id === 'preview-provider') {
         window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
+        event.preventDefault()
+        return
+      }
+    } else if (
+      event.key === 'ArrowRight' &&
+      event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      if (window.__coreboxHistoryVisible) {
+        window.dispatchEvent(new CustomEvent('corebox:hide-calculation-history'))
         event.preventDefault()
         return
       }

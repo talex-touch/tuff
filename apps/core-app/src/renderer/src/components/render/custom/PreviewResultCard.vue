@@ -1,5 +1,5 @@
 <script setup lang="ts" name="PreviewResultCard">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
 
@@ -12,6 +12,22 @@ const emit = defineEmits<{
   (e: 'show-history'): void
   (e: 'copy-primary'): void
 }>()
+
+const historyVisible = ref(typeof window !== 'undefined' ? !!window.__coreboxHistoryVisible : false)
+const HISTORY_VISIBILITY_EVENT = 'corebox:history-visibility-change'
+
+function handleHistoryVisibility(event: Event): void {
+  const detail = (event as CustomEvent<{ visible: boolean }>).detail
+  historyVisible.value = !!detail?.visible
+}
+
+onMounted(() => {
+  window.addEventListener(HISTORY_VISIBILITY_EVENT, handleHistoryVisibility)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(HISTORY_VISIBILITY_EVENT, handleHistoryVisibility)
+})
 
 const resolvedPayload = computed<PreviewCardPayload | undefined>(() => {
   if (props.payload) return props.payload
@@ -49,8 +65,8 @@ const accentStyle = computed(() => {
           复制结果
         </button>
         <button class="hint" type="button" @click="emit('show-history')">
-          <span class="hint-key">⌘→</span>
-          最近计算
+          <span class="hint-key">{{ historyVisible ? '⌘→' : '⌘←' }}</span>
+          最近处理
         </button>
       </div>
     </div>
