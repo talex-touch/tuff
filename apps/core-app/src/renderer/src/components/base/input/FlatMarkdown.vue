@@ -1,50 +1,103 @@
-<script name="FlatMarkdown" setup>
+<script lang="ts" name="FlatMarkdown" setup>
+import { shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
+import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { nord } from '@milkdown/theme-nord'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { replaceAll } from '@milkdown/utils'
-import { onMounted, ref } from 'vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import '@milkdown/theme-nord/style.css'
 
-const props = defineProps(['modelValue', 'readonly'])
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string
+    readonly?: boolean
+  }>(),
+  {
+    modelValue: '',
+    readonly: false
+  }
+)
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: string): void
+}>()
 
 const value = useModelWrapper(props, emit)
+const editor = shallowRef<Editor | null>(null)
+const editorDom = ref<HTMLElement>()
+const editorReady = ref(false)
+let internalUpdate = false
 
-const editor = ref()
-const editorDom = ref()
-
-watch(value, () => {
-  console.log('text updated', value, editor.value, replaceAll)
-
-  handleInit()
-  // editor.value?.action(replaceAll(value.value, true));
-})
-
-async function handleInit() {
+const initEditor = async (): Promise<void> => {
+  if (!editorDom.value) return
   if (editor.value) {
-    editor.value.destroy()
+    await editor.value.destroy()
+    editor.value = null
   }
 
-  editor.value = await Editor.make()
+  const instance = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, editorDom.value)
-      ctx.set(defaultValueCtx, value.value)
-
+      ctx.set(defaultValueCtx, value.value ?? '')
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
         editable: () => !props.readonly
       }))
+      ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
+        if (markdown === value.value) return
+        internalUpdate = true
+        value.value = markdown
+      })
     })
     .use(nord)
     .use(commonmark)
+    .use(listener)
     .create()
+
+  editor.value = instance
+  editorReady.value = true
 }
 
-onMounted(async () => {
-  handleInit()
+const applyMarkdown = (markdown: string): void => {
+  if (!editorReady.value || !editor.value) return
+  editor.value.action(replaceAll(markdown, true))
+}
+
+watch(
+  () => value.value,
+  (next, prev) => {
+    if (!editorReady.value || internalUpdate) {
+      internalUpdate = false
+      return
+    }
+    if (next === prev) return
+    applyMarkdown(next ?? '')
+  }
+)
+
+watch(
+  () => props.readonly,
+  (readonly) => {
+    if (!editorReady.value || !editor.value) return
+    editor.value.action((ctx) => {
+      ctx.update(editorViewOptionsCtx, (prev) => ({
+        ...prev,
+        editable: () => !readonly
+      }))
+    })
+  }
+)
+
+onMounted(() => {
+  void initEditor()
+})
+
+onBeforeUnmount(async () => {
+  if (editor.value) {
+    await editor.value.destroy()
+    editor.value = null
+  }
 })
 </script>
 
@@ -65,6 +118,7 @@ onMounted(async () => {
       outline: none;
     }
 
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
 
@@ -155,9 +209,8 @@ onMounted(async () => {
 
   :deep(.el-scrollbar) {
     .el-scrollbar__view {
-      height: 100%;
+      min-height: 100%;
     }
-
     height: 100%;
   }
 
