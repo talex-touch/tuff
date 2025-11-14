@@ -593,6 +593,52 @@
       "defaultPath": "Default Path",
       "noRetry": "No Retry"
     },
+    "settingUpdate": {
+      "groupTitle": "Application Updates",
+      "groupDesc": "Choose your update channel and how often to check for new builds.",
+      "channelTitle": "Update Channel",
+      "channelDesc": "Preview channels receive builds earlier but may be less stable.",
+      "channelSnapshotLocked": "Snapshot builds always stay on the snapshot channel.",
+      "channels": {
+        "release": "Stable (Release)",
+        "beta": "Beta (preview)",
+        "snapshot": "Snapshot (nightly)"
+      },
+      "frequencyTitle": "Check Frequency",
+      "frequencyDesc": "Automatic polling interval after the app starts.",
+      "frequency": {
+        "everyday": "Every 12 hours",
+        "daily": "Every day",
+        "every3days": "Every 3 days",
+        "weekly": "Every week",
+        "monthly": "Every month",
+        "never": "Never"
+      },
+      "statusTitle": "Status",
+      "status": {
+        "loading": "Loading update status…",
+        "never": "Never checked for updates",
+        "lastChecked": "Last check: {time}",
+        "updateAvailable": "A new version is available. See the popup dialog.",
+        "upToDate": "You are already on the latest version."
+      },
+      "actionsTitle": "Actions",
+      "actionsDesc": "Trigger update checks or maintenance tasks.",
+      "actions": {
+        "manualCheck": "Check Now",
+        "clearCache": "Clear Cache"
+      },
+      "messages": {
+        "loadFailed": "Failed to load update settings",
+        "channelSaved": "Update channel saved",
+        "frequencySaved": "Frequency saved",
+        "saveFailed": "Failed to save settings",
+        "manualCheckStarted": "Update check started",
+        "manualCheckFailed": "Failed to start update check",
+        "cacheCleared": "Update cache cleared",
+        "cacheClearFailed": "Failed to clear cache"
+      }
+    },
     "download": {
       "title": "Download Settings",
       "concurrency_settings": "Concurrency Settings",

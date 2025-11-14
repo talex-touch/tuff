@@ -44,6 +44,7 @@ protocol.registerSchemesAsPrivileged([
 
 import { sentryModule } from './modules/sentry'
 import { buildVerificationModule } from './modules/build-verification'
+import { updateServiceModule } from './modules/update/UpdateService'
 
 const modulesToLoad = [
   databaseModule,
@@ -55,6 +56,7 @@ const modulesToLoad = [
   permissionCheckerModule,
   sentryModule,
   buildVerificationModule,
+  updateServiceModule,
   pluginModule,
   pluginLogModule,
   coreBoxModule,

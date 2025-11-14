@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/tuff",
-  "version": "2.4.5",
+  "version": "2.1.5",
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
   "license": "MPL-2.0 license",
@@ -26,6 +26,8 @@
     "lint:fix": "eslint --fix .",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
+    "postinstall": "node scripts/sync-core-package.mjs",
+    "sync:core-pkg": "node scripts/sync-core-package.mjs",
     "core:dev": "pnpm -F @talex-touch/core-app run dev",
     "core:build": "pnpm -F @talex-touch/core-app run build",
     "core:build:beta": "pnpm -F @talex-touch/core-app run build:beta",

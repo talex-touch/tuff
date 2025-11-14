@@ -53,6 +53,7 @@ export enum TalexEvents {
 }
 
 import { LogItem } from '@talex-touch/utils/plugin/log/types'
+import { AppPreviewChannel } from '@talex-touch/utils'
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
   handler: EventHandler
@@ -380,9 +381,11 @@ export class DownloadTaskChangedEvent implements ITouchEvent<TalexEvents> {
 export class UpdateAvailableEvent implements ITouchEvent<TalexEvents> {
   name: TalexEvents = TalexEvents.UPDATE_AVAILABLE
   version: string
+  channel: AppPreviewChannel
 
-  constructor(version: string) {
+  constructor(version: string, channel: AppPreviewChannel) {
     this.version = version
+    this.channel = channel
   }
 }
 

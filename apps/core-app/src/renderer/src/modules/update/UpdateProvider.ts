@@ -98,12 +98,20 @@ export abstract class UpdateProvider {
       const tagName = release.tag_name.toLowerCase()
 
       if (channel === AppPreviewChannel.SNAPSHOT) {
-        return tagName.includes('snapshot') || tagName.includes('beta') || tagName.includes('alpha')
-      } else {
         return (
-          !tagName.includes('snapshot') && !tagName.includes('beta') && !tagName.includes('alpha')
+          tagName.includes('snapshot') || tagName.includes('beta') || tagName.includes('alpha')
         )
       }
+
+      if (channel === AppPreviewChannel.BETA) {
+        return tagName.includes('beta') && !tagName.includes('snapshot')
+      }
+
+      return (
+        !tagName.includes('snapshot') &&
+        !tagName.includes('beta') &&
+        !tagName.includes('alpha')
+      )
     })
   }
 
@@ -149,16 +157,22 @@ export abstract class UpdateProvider {
   protected parseVersionTag(tagName: string): { version: string; channel: AppPreviewChannel } {
     const tag = tagName.toLowerCase()
 
-    if (tag.includes('snapshot') || tag.includes('beta') || tag.includes('alpha')) {
+    if (tag.includes('snapshot') || tag.includes('alpha')) {
       return {
         version: tagName,
         channel: AppPreviewChannel.SNAPSHOT
       }
     }
+    if (tag.includes('beta')) {
+      return {
+        version: tagName,
+        channel: AppPreviewChannel.BETA
+      }
+    }
 
     return {
       version: tagName,
-      channel: AppPreviewChannel.MASTER
+      channel: AppPreviewChannel.RELEASE
     }
   }
 
