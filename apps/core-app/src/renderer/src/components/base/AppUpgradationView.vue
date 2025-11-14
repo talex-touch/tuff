@@ -1,9 +1,11 @@
 <template>
-  <div class="AppUpgradation-Container">
+  <div class="AppUpgradation-Container flex flex-col items-center justify-center">
     <p>New Version Available</p>
     <span>{{ release.published_at }}</span>
-    <br />
-    <FlatMarkdown :model-value="release.body" :readonly="true" />
+
+    <div class="AppUpgradation-Content-Markdown h-full overflow-hidden">
+      <FlatMarkdown :model-value="release.body" :readonly="true" />
+    </div>
 
     <div class="AppUpgradation-Content">
       <FlatButton @click="close">Not now</FlatButton>
@@ -42,7 +44,11 @@ function upgrade() {
 .AppUpgradation-Container {
   position: relative;
 
-  height: 100vh;
+  min-width: 480px;
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
 }
 
 .AppUpgradation-Content {
