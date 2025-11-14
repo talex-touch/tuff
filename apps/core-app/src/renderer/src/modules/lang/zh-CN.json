@@ -593,6 +593,52 @@
       "defaultPath": "默认路径",
       "noRetry": "不重试"
     },
+    "settingUpdate": {
+      "groupTitle": "应用更新",
+      "groupDesc": "选择更新渠道并设置自动检查频率。",
+      "channelTitle": "更新渠道",
+      "channelDesc": "预览渠道能更早体验新版本，但可能不够稳定。",
+      "channelSnapshotLocked": "Snapshot 构建会强制锁定在 Snapshot 渠道。",
+      "channels": {
+        "release": "稳定版（Release）",
+        "beta": "公测版（Beta）",
+        "snapshot": "每日构建（Snapshot）"
+      },
+      "frequencyTitle": "检查频率",
+      "frequencyDesc": "应用启动后按照该频率自动轮询更新。",
+      "frequency": {
+        "everyday": "每 12 小时",
+        "daily": "每天一次",
+        "every3days": "每 3 天一次",
+        "weekly": "每周一次",
+        "monthly": "每月一次",
+        "never": "不自动检查"
+      },
+      "statusTitle": "状态",
+      "status": {
+        "loading": "正在加载更新状态…",
+        "never": "尚未检查过更新",
+        "lastChecked": "上次检查：{time}",
+        "updateAvailable": "发现新版本，请关注弹出的更新提示。",
+        "upToDate": "当前已是最新版本。"
+      },
+      "actionsTitle": "操作",
+      "actionsDesc": "手动触发更新检查或维护任务。",
+      "actions": {
+        "manualCheck": "立即检查",
+        "clearCache": "清空缓存"
+      },
+      "messages": {
+        "loadFailed": "加载更新设置失败",
+        "channelSaved": "更新渠道已保存",
+        "frequencySaved": "检查频率已保存",
+        "saveFailed": "保存更新设置失败",
+        "manualCheckStarted": "已开始手动检测更新",
+        "manualCheckFailed": "手动检测更新失败",
+        "cacheCleared": "更新缓存已清空",
+        "cacheClearFailed": "清空更新缓存失败"
+      }
+    },
     "download": {
       "title": "下载设置",
       "concurrency_settings": "并发设置",

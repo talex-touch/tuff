@@ -10,27 +10,28 @@ import {
   AppPreviewChannel,
   GitHubRelease,
   UpdateCheckResult,
-  UpdateProviderType
+  UpdateProviderType,
+  UpdateFrequency,
+  type UpdateSettings as SharedUpdateSettings
 } from '@talex-touch/utils'
 import { getAppVersionSafe } from '../../utils/version-util'
 import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
 
+const HALF_DAY_IN_MS = 12 * 60 * 60 * 1000
+const DAY_IN_MS = 24 * 60 * 60 * 1000
+
 /**
  * Update settings interface
  */
-interface UpdateSettings {
-  enabled: boolean
-  frequency: 'startup' | 'daily' | 'weekly' | 'monthly' | 'never'
-  source: UpdateSourceConfig
-  crossChannel: boolean
-  ignoredVersions: string[]
+type UpdateSettings = SharedUpdateSettings & {
   cacheEnabled: boolean
   cacheTTL: number // Cache TTL in minutes
   rateLimitEnabled: boolean
   maxRetries: number
   retryDelay: number // Base retry delay in milliseconds
+  lastCheckedAt: number | null
 }
 
 /**
@@ -99,15 +100,19 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private currentVersion: string
   private currentChannel: AppPreviewChannel
   private cache: Map<string, any> = new Map()
-  private lastCheckTimes: Map<string, number> = new Map()
   private initContext?: ModuleInitContext<TalexEvents>
+  private readonly channelPriority: Record<AppPreviewChannel, number> = {
+    [AppPreviewChannel.RELEASE]: 0,
+    [AppPreviewChannel.BETA]: 1,
+    [AppPreviewChannel.SNAPSHOT]: 2
+  }
 
   constructor() {
     super(Symbol.for('UpdateService'))
     this.pollingService = new PollingService()
-    this.settings = this.getDefaultSettings()
     this.currentVersion = this.getCurrentVersion()
     this.currentChannel = this.getCurrentChannel()
+    this.settings = this.getDefaultSettings()
   }
 
   /**
@@ -123,16 +128,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     // Load settings
     this.loadSettings()
 
-    // Start polling if enabled
-    if (this.settings.enabled && this.settings.frequency !== 'never') {
+    // Start polling as soon as the app boots
+    if (this.settings.enabled) {
       this.startPolling()
-    }
 
-    // Check for updates on startup if frequency is 'startup'
-    if (this.settings.enabled && this.settings.frequency === 'startup') {
-      setTimeout(() => {
-        void this.checkForUpdates()
-      }, 5000) // Delay 5 seconds after startup
+      if (this.settings.frequency !== 'never') {
+        setTimeout(() => {
+          void this.checkForUpdates(true)
+        }, 5000) // Delay 5 seconds after startup
+      }
     }
   }
 
@@ -188,7 +192,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       async ({ data, reply }) => {
         const newSettings = data as Partial<UpdateSettings>
         try {
-          this.settings = { ...this.settings, ...newSettings }
+          const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
+
+          if ('updateChannel' in sanitizedSettings) {
+            sanitizedSettings.updateChannel = this.enforceChannelPreference(
+              sanitizedSettings.updateChannel
+            )
+          }
+
+          if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
+            sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
+          }
+
+          if ('lastCheckedAt' in sanitizedSettings) {
+            delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
+          }
+
+          this.settings = { ...this.settings, ...sanitizedSettings }
           this.saveSettings()
 
           // Restart polling if settings changed
@@ -196,7 +216,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             this.pollingService.stop()
           }
 
-          if (this.settings.enabled && this.settings.frequency !== 'never') {
+          if (this.settings.enabled) {
             this.startPolling()
           }
 
@@ -219,8 +239,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           enabled: this.settings.enabled,
           frequency: this.settings.frequency,
           source: this.settings.source,
+          channel: this.getEffectiveChannel(),
           polling: this.pollingService.isActive(),
-          lastCheck: this.lastCheckTimes.get('github-releases') || null
+          lastCheck: this.settings.lastCheckedAt ?? null
         }
       })
     })
@@ -244,19 +265,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Start polling service based on frequency settings
    */
   private startPolling(): void {
-    const intervals = {
-      daily: 24 * 60 * 60 * 1000, // 24 hours
-      weekly: 7 * 24 * 60 * 60 * 1000, // 7 days
-      monthly: 30 * 24 * 60 * 60 * 1000 // 30 days
+    const interval = this.getFrequencyIntervalMs(this.settings.frequency)
+
+    if (!interval) {
+      console.log(
+        `[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`
+      )
+      return
     }
 
-    const interval = intervals[this.settings.frequency]
-    if (interval) {
-      this.pollingService.start(interval, async () => {
-        await this.checkForUpdates()
-      })
-      console.log(`[UpdateService] Started polling with frequency: ${this.settings.frequency}`)
-    }
+    this.pollingService.start(interval, async () => {
+      await this.checkForUpdates()
+    })
+    console.log(
+      `[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`
+    )
   }
 
   /**
@@ -265,34 +288,35 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * @returns Update check result
    */
   private async checkForUpdates(force = false): Promise<UpdateCheckResult> {
+    const targetChannel = this.getEffectiveChannel()
+    const allowedBySchedule = this.shouldPerformCheck(force)
+
+    if (!allowedBySchedule) {
+      const cachedResult = this.getCachedResult(targetChannel)
+      if (cachedResult) {
+        console.log('[UpdateService] Using cached result due to frequency settings')
+        return cachedResult
+      }
+
+      if (this.settings.frequency === 'never' && !force) {
+        return {
+          hasUpdate: false,
+          source: 'scheduler'
+        }
+      }
+    }
+
+    let performedNetworkCheck = false
+
     try {
-      // Check frequency settings
-      if (!force && !this.shouldCheck('github-releases', this.settings.frequency)) {
-        const cachedResult = this.getCachedResult()
-        if (cachedResult) {
-          console.log('[UpdateService] Using cached result due to frequency settings')
-          return cachedResult
-        }
-      }
-
-      // Check cache first
-      if (this.settings.cacheEnabled && !force) {
-        const cachedResult = this.getCachedResult()
-        if (cachedResult) {
-          console.log('[UpdateService] Using cached result')
-          return cachedResult
-        }
-      }
-
-      // Perform actual update check
-      const result = await this.fetchLatestRelease()
+      performedNetworkCheck = true
+      const result = await this.fetchLatestRelease(targetChannel)
+      this.recordCheckTimestamp()
 
       if (result.hasUpdate && result.release) {
         const newVersion = this.parseVersion(result.release.tag_name)
 
-        // Check if update is needed
         if (this.isUpdateNeeded(newVersion)) {
-          // Check if version is ignored
           if (this.settings.ignoredVersions.includes(result.release.tag_name)) {
             const ignoredResult = {
               hasUpdate: false,
@@ -300,45 +324,38 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               source: result.source
             }
 
-            // Cache the result
             if (this.settings.cacheEnabled) {
-              this.setCachedResult(ignoredResult)
+              this.setCachedResult(targetChannel, ignoredResult)
             }
 
             return ignoredResult
           }
 
-          // Cache the result
           if (this.settings.cacheEnabled) {
-            this.setCachedResult(result)
+            this.setCachedResult(targetChannel, result)
           }
 
-          // Record the check
-          this.recordCheck('github-releases')
-
-          // Notify renderer process about available update
-          this.notifyRendererAboutUpdate(result)
+          this.notifyRendererAboutUpdate(result, targetChannel)
 
           return result
         }
       }
 
-      const noUpdateResult = {
+      const noUpdateResult: UpdateCheckResult = {
         hasUpdate: false,
         error: 'No update available',
         source: result.source
       }
 
-      // Cache the result
       if (this.settings.cacheEnabled) {
-        this.setCachedResult(noUpdateResult)
+        this.setCachedResult(targetChannel, noUpdateResult)
       }
-
-      // Record the check
-      this.recordCheck('github-releases')
 
       return noUpdateResult
     } catch (error) {
+      if (performedNetworkCheck) {
+        this.recordCheckTimestamp()
+      }
       console.error('[UpdateService] Update check failed:', error)
 
       const errorResult = {
@@ -355,7 +372,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Notify renderer process about available update
    * @param result - Update check result
    */
-  private notifyRendererAboutUpdate(result: UpdateCheckResult): void {
+  private notifyRendererAboutUpdate(
+    result: UpdateCheckResult,
+    channel: AppPreviewChannel
+  ): void {
     if (!this.initContext) {
       console.warn('[UpdateService] Context not initialized, cannot notify renderer')
       return
@@ -367,50 +387,51 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     sendToAllWindows('update:available', {
       hasUpdate: true,
       release: result.release,
-      source: result.source
+      source: result.source,
+      channel
     })
 
     // Emit event for other modules
     if (this.initContext?.events && result.release) {
-      this.initContext.events.emit(TalexEvents.UPDATE_AVAILABLE, new UpdateAvailableEvent(result.release.tag_name))
+      this.initContext.events.emit(
+        TalexEvents.UPDATE_AVAILABLE,
+        new UpdateAvailableEvent(result.release.tag_name, channel)
+      )
     }
   }
 
   /**
-   * Check if update check should be performed based on frequency settings
-   * @param key - Unique key for the check
-   * @param frequency - Frequency type
-   * @returns True if check should be performed
+   * Determine whether a scheduled check is allowed to hit the network.
    */
-  private shouldCheck(
-    key: string,
-    frequency: keyof typeof UpdateServiceModule.prototype.frequencyTypes
-  ): boolean {
-    const lastCheckTime = this.lastCheckTimes.get(key) || 0
-    const now = Date.now()
-    const interval = this.frequencyTypes[frequency]
+  private shouldPerformCheck(force: boolean): boolean {
+    if (force) return true
+    if (!this.settings.enabled) return false
 
-    // For startup frequency, only check if never checked before
-    if (frequency === 'startup') {
-      return lastCheckTime === 0
+    const interval = this.getFrequencyIntervalMs(this.settings.frequency)
+    if (interval === null) {
+      return false
     }
 
-    return now - lastCheckTime >= interval
+    if (!this.settings.lastCheckedAt) {
+      return true
+    }
+
+    return Date.now() - this.settings.lastCheckedAt >= interval
   }
 
   /**
-   * Record that a check was performed
-   * @param key - Unique key for the check
+   * Persist the timestamp of the last attempt.
    */
-  private recordCheck(key: string): void {
-    this.lastCheckTimes.set(key, Date.now())
+  private recordCheckTimestamp(): void {
+    this.settings.lastCheckedAt = Date.now()
+    this.saveSettings()
   }
 
   /**
    * Get cached result
    */
-  private getCachedResult(): UpdateCheckResult | null {
-    const cacheKey = this.getCacheKey()
+  private getCachedResult(channel: AppPreviewChannel): UpdateCheckResult | null {
+    const cacheKey = this.getCacheKey(channel)
     const entry = this.cache.get(cacheKey)
 
     if (!entry) {
@@ -430,8 +451,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Set cached result
    * @param data - Data to cache
    */
-  private setCachedResult(data: UpdateCheckResult): void {
-    const cacheKey = this.getCacheKey()
+  private setCachedResult(channel: AppPreviewChannel, data: UpdateCheckResult): void {
+    const cacheKey = this.getCacheKey(channel)
     const now = Date.now()
     const ttl = this.settings.cacheTTL * 60 * 1000 // Convert minutes to milliseconds
 
@@ -445,14 +466,16 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   /**
    * Get cache key for current configuration
    */
-  private getCacheKey(): string {
-    return `releases:talex-touch/tuff:${this.currentChannel}`
+  private getCacheKey(channel: AppPreviewChannel): string {
+    return `releases:talex-touch/tuff:${channel}`
   }
 
   /**
    * Fetch latest release from GitHub API
    */
-  private async fetchLatestRelease(): Promise<UpdateCheckResult> {
+  private async fetchLatestRelease(
+    channel: AppPreviewChannel
+  ): Promise<UpdateCheckResult> {
     try {
       const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
         timeout: 8000,
@@ -475,13 +498,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       // Filter releases by channel
       const channelReleases = releases.filter((release) => {
         const version = this.parseVersion(release.tag_name)
-        return version.channel === this.currentChannel
+        return version.channel === channel
       })
 
       if (channelReleases.length === 0) {
         return {
           hasUpdate: false,
-          error: `No releases found for channel: ${this.currentChannel}`,
+          error: `No releases found for channel: ${channel}`,
           source: 'GitHub'
         }
       }
@@ -505,15 +528,26 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   /**
-   * Frequency types and their intervals in milliseconds
+   * Resolve the interval for a given frequency preset.
    */
-  private readonly frequencyTypes = {
-    startup: 0, // Only on startup
-    daily: 24 * 60 * 60 * 1000, // 24 hours
-    weekly: 7 * 24 * 60 * 60 * 1000, // 7 days
-    monthly: 30 * 24 * 60 * 60 * 1000, // 30 days
-    never: Number.MAX_SAFE_INTEGER // Never
-  } as const
+  private getFrequencyIntervalMs(frequency: UpdateFrequency): number | null {
+    switch (frequency) {
+      case 'everyday':
+        return HALF_DAY_IN_MS
+      case '1day':
+        return DAY_IN_MS
+      case '3day':
+        return 3 * DAY_IN_MS
+      case '7day':
+        return 7 * DAY_IN_MS
+      case '1month':
+        return 30 * DAY_IN_MS
+      case 'never':
+        return null
+      default:
+        return HALF_DAY_IN_MS
+    }
+  }
 
   /**
    * Parse version string to version object
@@ -529,17 +563,39 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const version = versionStr.replaceAll('v', '')
     const versionArr = version.split('-')
     const versionNum = versionArr[0]
-    const channel =
-      versionArr.length === 2 ? versionArr[1] || AppPreviewChannel.MASTER : AppPreviewChannel.MASTER
+    const channelLabel = versionArr.length >= 2 ? versionArr[1] : undefined
 
     const versionNumArr = versionNum.split('.')
 
     return {
-      channel: channel as AppPreviewChannel,
+      channel: this.parseChannelLabel(channelLabel),
       major: +versionNumArr[0],
       minor: parseInt(versionNumArr[1]),
       patch: parseInt(versionNumArr[2])
     }
+  }
+
+  /**
+   * Normalize channel text to the enum.
+   */
+  private parseChannelLabel(label?: string): AppPreviewChannel {
+    const normalized = (label || '').toUpperCase()
+
+    if (normalized === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.SNAPSHOT
+    }
+    if (normalized === AppPreviewChannel.BETA) {
+      return AppPreviewChannel.BETA
+    }
+    if (normalized === 'MASTER') {
+      return AppPreviewChannel.RELEASE
+    }
+
+    return AppPreviewChannel.RELEASE
+  }
+
+  private getChannelPriority(channel: AppPreviewChannel): number {
+    return this.channelPriority[channel] ?? 0
   }
 
   /**
@@ -557,7 +613,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     // Compare versions (prioritize: channel > major > minor > patch)
     if (currentVersion.channel !== newVersion.channel) {
-      return newVersion.channel > currentVersion.channel
+      return (
+        this.getChannelPriority(newVersion.channel) >
+        this.getChannelPriority(currentVersion.channel)
+      )
     }
 
     if (currentVersion.major === newVersion.major) {
@@ -589,9 +648,44 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private getCurrentChannel(): AppPreviewChannel {
     const version = this.getCurrentVersion()
     const versionArr = version.split('-')
-    return versionArr.length === 2
-      ? (versionArr[1] as AppPreviewChannel) || AppPreviewChannel.MASTER
-      : AppPreviewChannel.MASTER
+    const channelLabel = versionArr.length >= 2 ? versionArr[1] : undefined
+    return this.parseChannelLabel(channelLabel)
+  }
+
+  private enforceChannelPreference(preferred?: AppPreviewChannel): AppPreviewChannel {
+    if (this.currentChannel === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.SNAPSHOT
+    }
+    if (!preferred) {
+      return AppPreviewChannel.RELEASE
+    }
+    return preferred
+  }
+
+  private getEffectiveChannel(): AppPreviewChannel {
+    return this.enforceChannelPreference(this.settings.updateChannel)
+  }
+
+  private normalizeFrequency(value?: string): UpdateFrequency {
+    switch (value) {
+      case 'everyday':
+      case '1day':
+      case '3day':
+      case '7day':
+      case '1month':
+      case 'never':
+        return value
+      case 'daily':
+        return '1day'
+      case 'weekly':
+        return '7day'
+      case 'monthly':
+        return '1month'
+      case 'startup':
+        return 'everyday'
+      default:
+        return 'everyday'
+    }
   }
 
   /**
@@ -600,7 +694,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private getDefaultSettings(): UpdateSettings {
     return {
       enabled: true,
-      frequency: 'weekly', // Changed from 'startup' to 'weekly' to reduce API calls
+      frequency: 'everyday',
       source: {
         type: UpdateProviderType.GITHUB,
         name: 'GitHub Releases',
@@ -608,13 +702,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         enabled: true,
         priority: 1
       },
-      crossChannel: false,
+      updateChannel: this.enforceChannelPreference(this.currentChannel),
       ignoredVersions: [],
+      customSources: [],
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
       rateLimitEnabled: true,
       maxRetries: 3,
-      retryDelay: 2000 // 2 seconds base retry delay
+      retryDelay: 2000, // 2 seconds base retry delay
+      lastCheckedAt: null
     }
   }
 
@@ -653,11 +749,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     try {
       const configDir = path.join(this.initContext.app.rootPath, 'config')
       const settingsFile = path.join(configDir, 'update-settings.json')
+      const defaults = this.getDefaultSettings()
 
       if (fs.existsSync(settingsFile)) {
         const settingsData = fs.readFileSync(settingsFile, 'utf8')
-        this.settings = { ...this.getDefaultSettings(), ...JSON.parse(settingsData) }
+        const persisted = JSON.parse(settingsData)
+        this.settings = {
+          ...defaults,
+          ...persisted,
+          updateChannel: this.enforceChannelPreference(persisted.updateChannel)
+        }
+        this.settings.frequency = this.normalizeFrequency(this.settings.frequency)
+        if (typeof this.settings.lastCheckedAt !== 'number') {
+          this.settings.lastCheckedAt = defaults.lastCheckedAt
+        }
         console.log('[UpdateService] Settings loaded from:', settingsFile)
+      } else {
+        this.settings = defaults
       }
     } catch (error) {
       console.error('[UpdateService] Failed to load settings:', error)

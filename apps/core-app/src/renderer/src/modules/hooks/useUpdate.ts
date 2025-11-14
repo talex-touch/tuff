@@ -9,27 +9,11 @@ import {
   AppPreviewChannel,
   GitHubRelease,
   UpdateCheckResult,
-  UpdateSourceConfig,
   UpdateProviderType,
   DownloadModule,
-  DownloadPriority
+  DownloadPriority,
+  type UpdateSettings
 } from '@talex-touch/utils'
-
-/**
- * Update settings configuration
- */
-interface UpdateSettings {
-  enabled: boolean
-  frequency: 'startup' | 'daily' | 'weekly' | 'monthly' | 'never'
-  source: UpdateSourceConfig
-  crossChannel: boolean
-  ignoredVersions: string[]
-  cacheEnabled: boolean
-  cacheTTL: number // Cache TTL in minutes
-  rateLimitEnabled: boolean
-  maxRetries: number
-  retryDelay: number // Base retry delay in milliseconds
-}
 
 export interface GithubAuthor {
   login: string
@@ -95,16 +79,55 @@ export class AppUpdate {
     // 1.0.0-SNAPSHOT
     const versionArr = versionStr.split('-')
     const version = versionArr[0]
-    const channel =
-      versionArr.length === 2 ? versionArr[1] || AppPreviewChannel.MASTER : AppPreviewChannel.MASTER
+    const channel = this.normalizeChannelLabel(versionArr.length === 2 ? versionArr[1] : undefined)
 
     const versionNumArr = version.split('.')
 
     return {
-      channel: channel as AppPreviewChannel,
+      channel,
       major: +versionNumArr[0],
       minor: parseInt(versionNumArr[1]),
       patch: parseInt(versionNumArr[2])
+    }
+  }
+
+  private normalizeChannelLabel(label?: string): AppPreviewChannel {
+    const normalized = (label || '').toUpperCase()
+
+    if (normalized === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.SNAPSHOT
+    }
+    if (normalized === AppPreviewChannel.BETA) {
+      return AppPreviewChannel.BETA
+    }
+    if (normalized === 'MASTER') {
+      return AppPreviewChannel.RELEASE
+    }
+
+    return AppPreviewChannel.RELEASE
+  }
+
+  private normalizeFrequencyLabel(
+    value?: string
+  ): UpdateSettings['frequency'] {
+    switch (value) {
+      case 'everyday':
+      case '1day':
+      case '3day':
+      case '7day':
+      case '1month':
+      case 'never':
+        return value
+      case 'daily':
+        return '1day'
+      case 'weekly':
+        return '7day'
+      case 'monthly':
+        return '1month'
+      case 'startup':
+        return 'everyday'
+      default:
+        return 'everyday'
     }
   }
 
@@ -135,7 +158,7 @@ export class AppUpdate {
         }
       }
 
-      const response = await this.touchSDK.rawChannel.send('update:check', force)
+      const response = await this.touchSDK.rawChannel.send('update:check', { force })
 
       if (response.success) {
         return response.data
@@ -210,9 +233,14 @@ export class AppUpdate {
    * @returns Default update settings
    */
   private getDefaultSettings(): UpdateSettings {
+    const defaultChannel =
+      this.version.channel === AppPreviewChannel.SNAPSHOT
+        ? AppPreviewChannel.SNAPSHOT
+        : AppPreviewChannel.RELEASE
+
     return {
       enabled: true,
-      frequency: 'weekly', // Changed from 'startup' to 'weekly' to reduce API calls
+      frequency: 'everyday',
       source: {
         type: UpdateProviderType.GITHUB,
         name: 'GitHub Releases',
@@ -220,13 +248,15 @@ export class AppUpdate {
         enabled: true,
         priority: 1
       },
-      crossChannel: false,
+      updateChannel: defaultChannel,
       ignoredVersions: [],
+      customSources: [],
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
       rateLimitEnabled: true,
       maxRetries: 3,
-      retryDelay: 2000 // 2 seconds base retry delay
+      retryDelay: 2000, // 2 seconds base retry delay
+      lastCheckedAt: null
     }
   }
 
@@ -243,7 +273,9 @@ export class AppUpdate {
 
       const response = await this.touchSDK.rawChannel.send('update:get-settings')
       if (response.success) {
-        this.settings = response.data
+        const serverSettings = response.data as UpdateSettings
+        serverSettings.frequency = this.normalizeFrequencyLabel(serverSettings.frequency)
+        this.settings = serverSettings
       }
       return this.settings
     } catch (error) {
@@ -262,9 +294,23 @@ export class AppUpdate {
         throw new Error('TouchSDK not initialized')
       }
 
-      const response = await this.touchSDK.rawChannel.send('update:update-settings', settings)
+      const payload: Partial<UpdateSettings> = { ...settings }
+
+      if (this.version.channel === AppPreviewChannel.SNAPSHOT) {
+        payload.updateChannel = AppPreviewChannel.SNAPSHOT
+      }
+
+      if ('lastCheckedAt' in payload) {
+        delete (payload as Record<string, unknown>).lastCheckedAt
+      }
+
+      if ('frequency' in payload && payload.frequency) {
+        payload.frequency = this.normalizeFrequencyLabel(payload.frequency)
+      }
+
+      const response = await this.touchSDK.rawChannel.send('update:update-settings', payload)
       if (response.success) {
-        this.settings = { ...this.settings, ...settings }
+        this.settings = { ...this.settings, ...payload }
       } else {
         throw new Error(response.error || 'Failed to update settings')
       }
@@ -342,6 +388,7 @@ export function useApplicationUpgrade() {
 
       if (result.hasUpdate && result.release) {
         appStates.hasUpdate = true
+        appStates.noUpdateAvailable = false
 
         if (result.release) {
           await popperMention('New Version Available', () => {
@@ -351,12 +398,17 @@ export function useApplicationUpgrade() {
           })
         }
       } else if (result.error) {
+        appStates.noUpdateAvailable = false
         handleUpdateError(result.error, result.source)
+      } else {
+        appStates.hasUpdate = false
+        appStates.noUpdateAvailable = true
       }
     } catch (err) {
       console.error('[useApplicationUpgrade] Update check failed:', err)
       error.value = err instanceof Error ? err.message : 'Unknown error'
       handleUpdateError(error.value, 'Unknown')
+      appStates.noUpdateAvailable = false
     } finally {
       loading.value = false
     }

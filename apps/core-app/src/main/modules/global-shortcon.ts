@@ -9,6 +9,40 @@ import { storageModule } from './storage'
 // A runtime map to hold callbacks for 'main' type shortcuts
 const mainCallbackRegistry = new Map<string, () => void>()
 
+const isMacPlatform = process.platform === 'darwin'
+const acceleratorTokenAlias = new Map<string, string>([
+  ['META', isMacPlatform ? 'Command' : 'Super'],
+  ['COMMAND', 'Command'],
+  ['CMD', 'Command'],
+  ['COMMANDORCONTROL', 'CommandOrControl'],
+  ['CMDORCTRL', 'CommandOrControl'],
+  ['COMMANDORCTRL', 'CommandOrControl'],
+  ['CTRL', 'Control'],
+  ['CONTROL', 'Control'],
+  ['ALT', 'Alt'],
+  ['OPTION', isMacPlatform ? 'Option' : 'Alt'],
+  ['OPT', isMacPlatform ? 'Option' : 'Alt'],
+  ['SHIFT', 'Shift'],
+  ['SUPER', 'Super'],
+  ['WIN', 'Super'],
+  ['WINDOWS', 'Super'],
+  ['SPACE', 'Space'],
+  ['SPACEBAR', 'Space'],
+  ['ENTER', 'Enter'],
+  ['RETURN', 'Enter'],
+  ['BACKSPACE', 'Backspace'],
+  ['DELETE', 'Delete'],
+  ['DEL', 'Delete'],
+  ['ESC', 'Esc'],
+  ['ESCAPE', 'Esc'],
+  ['TAB', 'Tab'],
+  ['HOME', 'Home'],
+  ['END', 'End'],
+  ['PAGEUP', 'PageUp'],
+  ['PAGEDOWN', 'PageDown']
+])
+const F_KEY_REGEX = /^F\d{1,2}$/i
+
 export class ShortcutModule extends BaseModule {
   static key: symbol = Symbol.for('Shortcut')
   name: ModuleKey = ShortcutModule.key
@@ -137,21 +171,36 @@ export class ShortcutModule extends BaseModule {
     }
 
     const allShortcuts = this.storage!.getAllShortcuts()
+    let successCount = 0
     for (const shortcut of allShortcuts) {
+      const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
+      if (!normalizedAccelerator) {
+        console.error(
+          `[GlobalShortcon] Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`
+        )
+        continue
+      }
+
+      if (normalizedAccelerator !== shortcut.accelerator) {
+        this.storage!.updateShortcutAccelerator(shortcut.id, normalizedAccelerator)
+        shortcut.accelerator = normalizedAccelerator
+      }
+
       try {
-        globalShortcut.register(shortcut.accelerator, () => {
+        globalShortcut.register(normalizedAccelerator, () => {
           console.debug(`[GlobalShortcon] Shortcut triggered: ${shortcut.id}`)
           this.handleTrigger(shortcut)
         })
+        successCount++
       } catch (error) {
         console.error(
-          `[GlobalShortcon] Failed to register shortcut: ${shortcut.id} (${shortcut.accelerator})`,
+          `[GlobalShortcon] Failed to register shortcut: ${shortcut.id} (${normalizedAccelerator})`,
           error
         )
       }
     }
 
-    console.log(`[GlobalShortcon] Successfully registered ${allShortcuts.length} shortcuts.`)
+    console.log(`[GlobalShortcon] Successfully registered ${successCount} shortcuts.`)
   }
 
   /**
@@ -181,6 +230,57 @@ export class ShortcutModule extends BaseModule {
         break
       }
     }
+  }
+
+  private normalizeAccelerator(raw: string): string | null {
+    if (!raw || typeof raw !== 'string') {
+      return null
+    }
+
+    const tokens = raw
+      .split('+')
+      .map(token => token.trim())
+      .filter(Boolean)
+
+    if (!tokens.length) {
+      return null
+    }
+
+    const normalizedTokens = tokens
+      .map(token => this.normalizeAcceleratorToken(token))
+      .filter((token): token is string => Boolean(token))
+
+    if (!normalizedTokens.length) {
+      return null
+    }
+
+    return normalizedTokens.join('+')
+  }
+
+  private normalizeAcceleratorToken(token: string): string {
+    const upper = token.toUpperCase()
+    const alias = acceleratorTokenAlias.get(upper)
+    if (alias) {
+      return alias
+    }
+
+    if (F_KEY_REGEX.test(token)) {
+      return upper
+    }
+
+    if (token.length === 1) {
+      return upper
+    }
+
+    if (token.toLowerCase().startsWith('numpad')) {
+      const suffix = token.slice(6)
+      if (!suffix) {
+        return 'Numpad'
+      }
+      return `Numpad${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}`
+    }
+
+    return token.charAt(0).toUpperCase() + token.slice(1)
   }
 }
 

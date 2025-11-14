@@ -32,9 +32,20 @@ onMounted(async () => {
   shortcuts.value = await shortconApi.getAll()
 })
 
-function updateShortcut(id: string, newAccelerator: string): void {
+async function updateShortcut(id: string, newAccelerator: string): Promise<void> {
   if (!id || !newAccelerator) return
-  shortconApi.update(id, newAccelerator)
+  const shortcutList = shortcuts.value
+  const target = shortcutList?.find(item => item.id === id)
+  const previousValue = target?.accelerator
+
+  if (target) {
+    target.accelerator = newAccelerator
+  }
+
+  const success = await shortconApi.update(id, newAccelerator)
+  if (!success && target && previousValue) {
+    target.accelerator = previousValue
+  }
 }
 
 function getShortcutLabel(id: string): string {

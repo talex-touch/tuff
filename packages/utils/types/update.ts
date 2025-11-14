@@ -1,11 +1,15 @@
-// 更新源类型枚举
+/**
+ * Known update provider types.
+ */
 export enum UpdateProviderType {
   GITHUB = 'github',
   OFFICIAL = 'official',
   CUSTOM = 'custom'
 }
 
-// 更新源配置接口
+/**
+ * Describes the remote endpoint that serves release metadata.
+ */
 export interface UpdateSourceConfig {
   type: UpdateProviderType
   name: string
@@ -14,7 +18,9 @@ export interface UpdateSourceConfig {
   priority: number
 }
 
-// 下载资源接口
+/**
+ * Represents a downloadable build artifact.
+ */
 export interface DownloadAsset {
   name: string
   url: string
@@ -24,7 +30,9 @@ export interface DownloadAsset {
   checksum?: string
 }
 
-// GitHub Release接口（兼容GitHub API格式）
+/**
+ * Minimal subset of the GitHub release payload that the updater consumes.
+ */
 export interface GitHubRelease {
   tag_name: string
   name: string
@@ -33,7 +41,9 @@ export interface GitHubRelease {
   assets: DownloadAsset[]
 }
 
-// 更新检查结果接口
+/**
+ * Standardized shape of an update check response.
+ */
 export interface UpdateCheckResult {
   hasUpdate: boolean
   release?: GitHubRelease
@@ -41,7 +51,9 @@ export interface UpdateCheckResult {
   source: string
 }
 
-// 自定义更新源配置
+/**
+ * Custom provider definition used to extend the updater beyond the built-ins.
+ */
 export interface CustomUpdateConfig {
   name: string
   url: string
@@ -49,26 +61,62 @@ export interface CustomUpdateConfig {
   headers?: Record<string, string>
 }
 
-// 应用预览渠道枚举
+/**
+ * Build channels supported by the desktop client.
+ */
 export enum AppPreviewChannel {
-  MASTER = 'master',
-  SNAPSHOT = 'snapshot'
+  RELEASE = 'RELEASE',
+  BETA = 'BETA',
+  SNAPSHOT = 'SNAPSHOT'
 }
 
-// 更新设置配置
+/**
+ * Scheduler presets used by the polling worker.
+ */
+export type UpdateFrequency = 'everyday' | '1day' | '3day' | '7day' | '1month' | 'never'
+
+/**
+ * User and system configurable update preferences.
+ */
 export interface UpdateSettings {
   enabled: boolean
-  frequency: 'startup' | 'daily' | 'weekly' | 'manual'
+  frequency: UpdateFrequency
   source: UpdateSourceConfig
-  crossChannel: boolean
+  updateChannel: AppPreviewChannel
   ignoredVersions: string[]
   customSources: CustomUpdateConfig[]
+  /**
+   * Timestamp (ms) of the last successful update check.
+   */
+  lastCheckedAt?: number | null
+  /**
+   * Enable/disable local caching of remote responses.
+   */
+  cacheEnabled?: boolean
+  /**
+   * Cache TTL in minutes.
+   */
+  cacheTTL?: number
+  /**
+   * Enable retry logic for transient failures.
+   */
+  rateLimitEnabled?: boolean
+  /**
+   * Maximum retry attempts when the provider throttles requests.
+   */
+  maxRetries?: number
+  /**
+   * Base retry delay in milliseconds.
+   */
+  retryDelay?: number
 }
 
-// 默认更新设置
+/**
+ * Safe defaults used when no user configuration exists yet.
+ */
 export const defaultUpdateSettings: UpdateSettings = {
   enabled: true,
-  frequency: 'startup',
+  frequency: 'everyday',
   source: {
     type: UpdateProviderType.GITHUB,
     name: 'GitHub Releases',
@@ -76,12 +124,20 @@ export const defaultUpdateSettings: UpdateSettings = {
     enabled: true,
     priority: 1
   },
-  crossChannel: false,
+  updateChannel: AppPreviewChannel.RELEASE,
   ignoredVersions: [],
-  customSources: []
+  customSources: [],
+  lastCheckedAt: null,
+  cacheEnabled: true,
+  cacheTTL: 30,
+  rateLimitEnabled: true,
+  maxRetries: 3,
+  retryDelay: 2000
 }
 
-// 更新错误类型
+/**
+ * Categorized error types emitted by the updater pipeline.
+ */
 export enum UpdateErrorType {
   NETWORK_ERROR = 'network_error',
   TIMEOUT_ERROR = 'timeout_error',
@@ -91,7 +147,9 @@ export enum UpdateErrorType {
   UNKNOWN_ERROR = 'unknown_error'
 }
 
-// 更新错误接口
+/**
+ * Error type used across providers.
+ */
 export interface UpdateError extends Error {
   type: UpdateErrorType
   code?: string

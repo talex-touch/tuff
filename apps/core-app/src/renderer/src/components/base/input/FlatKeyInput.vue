@@ -12,24 +12,109 @@ const emits = defineEmits<{
 
 const model = useVModel(props, 'modelValue', emits)
 
+const platform =
+  typeof process !== 'undefined' && process?.platform
+    ? process.platform
+    : typeof navigator !== 'undefined'
+      ? navigator.platform.toLowerCase()
+      : ''
+const isMac = platform === 'darwin' || platform.includes('mac')
+const metaModifier = isMac ? 'Command' : 'Super'
+const altModifier = isMac ? 'Option' : 'Alt'
+
+const MODIFIER_ONLY_KEYS = new Set(['Meta', 'Alt', 'Control', 'Shift'])
+
+const SPECIAL_KEYS: Record<string, string> = {
+  ' ': 'Space',
+  Spacebar: 'Space',
+  Space: 'Space',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Escape: 'Esc',
+  Esc: 'Esc',
+  Enter: 'Enter',
+  Return: 'Enter',
+  Tab: 'Tab',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  Home: 'Home',
+  End: 'End'
+}
+
+const KEY_REPLACEMENTS: Record<string, string> = {
+  '`': 'Backquote',
+  '\\': 'Backslash',
+  '=': 'Equal',
+  '-': 'Minus',
+  '[': 'BracketLeft',
+  ']': 'BracketRight',
+  ';': 'Semicolon',
+  "'": 'Quote',
+  ',': 'Comma',
+  '.': 'Period',
+  '/': 'Slash'
+}
+
+function normalizePrimaryKey(event: KeyboardEvent): string | null {
+  if (MODIFIER_ONLY_KEYS.has(event.key)) {
+    return null
+  }
+
+  if (event.code?.startsWith('Numpad')) {
+    if (event.code === 'NumpadEnter') {
+      return 'Enter'
+    }
+    return event.code
+  }
+
+  if (SPECIAL_KEYS[event.key]) {
+    return SPECIAL_KEYS[event.key]
+  }
+
+  if (KEY_REPLACEMENTS[event.key]) {
+    return KEY_REPLACEMENTS[event.key]
+  }
+
+  if (event.key.length === 1) {
+    return event.key === ' ' ? 'Space' : event.key.toUpperCase()
+  }
+
+  if (/^F\d{1,2}$/i.test(event.key)) {
+    return event.key.toUpperCase()
+  }
+
+  return event.key.charAt(0).toUpperCase() + event.key.slice(1)
+}
+
+function formatAccelerator(event: KeyboardEvent): string | null {
+  const key = normalizePrimaryKey(event)
+  if (!key) {
+    return null
+  }
+
+  const modifiers: string[] = []
+
+  if (event.metaKey) modifiers.push(metaModifier)
+  if (event.ctrlKey) modifiers.push('Control')
+  if (event.altKey) modifiers.push(altModifier)
+  if (event.shiftKey) modifiers.push('Shift')
+
+  return [...modifiers, key].join('+')
+}
+
 function startRecord(e: KeyboardEvent) {
   e.preventDefault()
 
-  let extraKey = e.key
+  const accelerator = formatAccelerator(e)
+  if (!accelerator) {
+    return
+  }
 
-  if (extraKey === ' ') extraKey = 'space'
-  else if (extraKey === '`') extraKey = 'Backquote'
-  else if (extraKey === '.') extraKey = 'NumpadDecimal'
-  else if (extraKey === '\\') extraKey = 'Backslash'
-  else if (extraKey === '=') extraKey = 'Equal'
-  else if (extraKey === '-') extraKey = 'Minus'
-
-  if (e.altKey && extraKey !== 'altKey') extraKey = 'alt + ' + extraKey
-  else if (e.ctrlKey && extraKey !== 'ctrlKey') extraKey = 'ctrl + ' + extraKey
-  else if (e.metaKey && extraKey !== 'Meta') extraKey = 'meta + ' + extraKey
-  else if (e.shiftKey && extraKey !== 'Shift') extraKey = 'shift + ' + extraKey
-
-  setTimeout(() => (model.value = extraKey.toLocaleUpperCase()), 10)
+  model.value = accelerator
 }
 </script>
 
