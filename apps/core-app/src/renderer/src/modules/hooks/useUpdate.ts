@@ -1,6 +1,6 @@
 import { ref, h } from 'vue'
 import { ElMessage } from 'element-plus'
-import { popperMention } from '../mention/dialog-mention'
+import { blowMention } from '../mention/dialog-mention'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useAppState } from './useAppStates'
 import { useDownloadCenter } from './useDownloadCenter'
@@ -14,6 +14,7 @@ import {
   DownloadPriority,
   type UpdateSettings
 } from '@talex-touch/utils'
+import { withTimeout, TimeoutError } from '@talex-touch/utils/common/utils/time'
 
 export interface GithubAuthor {
   login: string
@@ -53,6 +54,7 @@ export class AppUpdate {
   private static instance: AppUpdate
   private settings: UpdateSettings
   private touchSDK: ReturnType<typeof getTouchSDK>
+  private static readonly CHANNEL_TIMEOUT = 4000
 
   version: AppVersion
 
@@ -150,15 +152,7 @@ export class AppUpdate {
    */
   public async check(force = false): Promise<UpdateCheckResult> {
     try {
-      if (!this.touchSDK || !this.touchSDK.rawChannel) {
-        return {
-          hasUpdate: false,
-          error: 'TouchSDK not initialized',
-          source: 'Unknown'
-        }
-      }
-
-      const response = await this.touchSDK.rawChannel.send('update:check', { force })
+      const response = await this.sendRequest('update:check', { force })
 
       if (response.success) {
         return response.data
@@ -266,12 +260,7 @@ export class AppUpdate {
    */
   public async getSettings(): Promise<UpdateSettings> {
     try {
-      if (!this.touchSDK || !this.touchSDK.rawChannel) {
-        console.warn('[AppUpdate] TouchSDK not initialized, returning default settings')
-        return this.settings
-      }
-
-      const response = await this.touchSDK.rawChannel.send('update:get-settings')
+      const response = await this.sendRequest('update:get-settings')
       if (response.success) {
         const serverSettings = response.data as UpdateSettings
         serverSettings.frequency = this.normalizeFrequencyLabel(serverSettings.frequency)
@@ -290,10 +279,6 @@ export class AppUpdate {
    */
   public async updateSettings(settings: Partial<UpdateSettings>): Promise<void> {
     try {
-      if (!this.touchSDK || !this.touchSDK.rawChannel) {
-        throw new Error('TouchSDK not initialized')
-      }
-
       const payload: Partial<UpdateSettings> = { ...settings }
 
       if (this.version.channel === AppPreviewChannel.SNAPSHOT) {
@@ -308,7 +293,7 @@ export class AppUpdate {
         payload.frequency = this.normalizeFrequencyLabel(payload.frequency)
       }
 
-      const response = await this.touchSDK.rawChannel.send('update:update-settings', payload)
+      const response = await this.sendRequest('update:update-settings', payload)
       if (response.success) {
         this.settings = { ...this.settings, ...payload }
       } else {
@@ -325,11 +310,7 @@ export class AppUpdate {
    */
   public async clearCache(): Promise<void> {
     try {
-      if (!this.touchSDK || !this.touchSDK.rawChannel) {
-        throw new Error('TouchSDK not initialized')
-      }
-
-      const response = await this.touchSDK.rawChannel.send('update:clear-cache')
+      const response = await this.sendRequest('update:clear-cache')
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear cache')
       }
@@ -344,11 +325,7 @@ export class AppUpdate {
    */
   public async getStatus(): Promise<any> {
     try {
-      if (!this.touchSDK || !this.touchSDK.rawChannel) {
-        throw new Error('TouchSDK not initialized')
-      }
-
-      const response = await this.touchSDK.rawChannel.send('update:get-status')
+      const response = await this.sendRequest('update:get-status')
       if (response.success) {
         return response.data
       } else {
@@ -356,6 +333,26 @@ export class AppUpdate {
       }
     } catch (error) {
       console.error('[AppUpdate] Failed to get status:', error)
+      throw error
+    }
+  }
+
+  private async sendRequest(channel: string, payload?: unknown): Promise<any> {
+    if (!this.touchSDK || !this.touchSDK.rawChannel) {
+      throw new Error('TouchSDK not initialized')
+    }
+
+    try {
+      return await withTimeout(
+        this.touchSDK.rawChannel.send(channel, payload),
+        AppUpdate.CHANNEL_TIMEOUT
+      )
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        console.warn(
+          `[AppUpdate] ${channel} timed out after ${AppUpdate.CHANNEL_TIMEOUT}ms`
+        )
+      }
       throw error
     }
   }
@@ -376,7 +373,7 @@ export function useApplicationUpgrade() {
    * @param force - Force check regardless of frequency settings
    * @returns Promise<void>
    */
-  async function checkApplicationUpgrade(force = false): Promise<void> {
+  async function checkApplicationUpgrade(force = false): Promise<UpdateCheckResult | undefined> {
     try {
       loading.value = true
       error.value = null
@@ -391,7 +388,7 @@ export function useApplicationUpgrade() {
         appStates.noUpdateAvailable = false
 
         if (result.release) {
-          await popperMention('New Version Available', () => {
+          await blowMention('New Version Available', () => {
             return h(AppUpdateView, {
               release: result.release as unknown as Record<string, unknown>
             })
@@ -404,11 +401,13 @@ export function useApplicationUpgrade() {
         appStates.hasUpdate = false
         appStates.noUpdateAvailable = true
       }
+      return result
     } catch (err) {
       console.error('[useApplicationUpgrade] Update check failed:', err)
       error.value = err instanceof Error ? err.message : 'Unknown error'
       handleUpdateError(error.value, 'Unknown')
       appStates.noUpdateAvailable = false
+      return undefined
     } finally {
       loading.value = false
     }

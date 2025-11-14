@@ -634,6 +634,9 @@
         "frequencySaved": "检查频率已保存",
         "saveFailed": "保存更新设置失败",
         "manualCheckStarted": "已开始手动检测更新",
+        "manualCheckFound": "发现新版本 {version}",
+        "manualCheckNoUpdate": "最新版本：{version}",
+        "manualCheckFailedWithReason": "检测失败：{reason}",
         "manualCheckFailed": "手动检测更新失败",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败"

@@ -163,10 +163,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       throw new Error('[UpdateService] Context not initialized')
     }
     const touchApp = this.initContext.app as any
-    const { regChannel } = touchApp.channel
+    const appChannel = touchApp.channel
 
     // Check for updates
-    regChannel(ChannelType.MAIN, 'update:check', async ({ data, reply }) => {
+    appChannel.regChannel(ChannelType.MAIN, 'update:check', async ({ data, reply }) => {
       const force = data?.force ?? false
       try {
         const result = await this.checkForUpdates(force)
@@ -181,12 +181,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     })
 
     // Get update settings
-    regChannel(ChannelType.MAIN, 'update:get-settings', async ({ reply }) => {
+    appChannel.regChannel(ChannelType.MAIN, 'update:get-settings', async ({ reply }) => {
       reply(DataCode.SUCCESS, { success: true, data: this.settings })
     })
 
     // Update settings
-    regChannel(
+    appChannel.regChannel(
       ChannelType.MAIN,
       'update:update-settings',
       async ({ data, reply }) => {
@@ -232,7 +232,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     )
 
     // Get update status
-    regChannel(ChannelType.MAIN, 'update:get-status', async ({ reply }) => {
+    appChannel.regChannel(ChannelType.MAIN, 'update:get-status', async ({ reply }) => {
       reply(DataCode.SUCCESS, {
         success: true,
         data: {
@@ -247,7 +247,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     })
 
     // Clear update cache
-    regChannel(ChannelType.MAIN, 'update:clear-cache', async ({ reply }) => {
+    appChannel.regChannel(ChannelType.MAIN, 'update:clear-cache', async ({ reply }) => {
       try {
         this.cache.clear()
         reply(DataCode.SUCCESS, { success: true })
@@ -382,9 +382,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
     // Send update notification to all renderer windows
     const touchApp = this.initContext.app as any
-    const { sendToAllWindows } = touchApp.channel
 
-    sendToAllWindows('update:available', {
+    touchApp.channel.sendMain('update:available', {
       hasUpdate: true,
       release: result.release,
       source: result.source,

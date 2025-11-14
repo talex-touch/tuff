@@ -634,6 +634,9 @@
         "frequencySaved": "Frequency saved",
         "saveFailed": "Failed to save settings",
         "manualCheckStarted": "Update check started",
+        "manualCheckFound": "Found release {version}",
+        "manualCheckNoUpdate": "Latest release: {version}",
+        "manualCheckFailedWithReason": "Update check failed: {reason}",
         "manualCheckFailed": "Failed to start update check",
         "cacheCleared": "Update cache cleared",
         "cacheClearFailed": "Failed to clear cache"

@@ -36,6 +36,7 @@ const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const manualChecking = ref(false)
 const clearingCache = ref(false)
+const lastResultMessage = ref<string>('')
 
 const channelOptions = computed(() => {
   const base = [
@@ -144,9 +145,30 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
 async function handleManualCheck(): Promise<void> {
   manualChecking.value = true
   try {
-    await checkApplicationUpgrade(true)
+    const result = await checkApplicationUpgrade(true)
     await refreshStatus()
-    ElMessage.success(t('settings.settingUpdate.messages.manualCheckStarted'))
+    updateLastResultMessage(result)
+    if (result?.hasUpdate && result.release) {
+      ElMessage.success(
+        t('settings.settingUpdate.messages.manualCheckFound', {
+          version: result.release.tag_name
+        })
+      )
+    } else if (result?.error) {
+      ElMessage.warning(
+        t('settings.settingUpdate.messages.manualCheckFailedWithReason', {
+          reason: result.error
+        })
+      )
+    } else if (result?.release) {
+      ElMessage.success(
+        t('settings.settingUpdate.messages.manualCheckNoUpdate', {
+          version: result.release.tag_name
+        })
+      )
+    } else {
+      ElMessage.success(t('settings.settingUpdate.messages.manualCheckStarted'))
+    }
   } catch (error) {
     console.error('[SettingUpdate] Manual update check failed:', error)
     ElMessage.error(t('settings.settingUpdate.messages.manualCheckFailed'))
@@ -177,6 +199,32 @@ function normalizeBuildChannel(channel?: string): AppPreviewChannel {
 
 function formatTimestamp(value: number): string {
   return new Date(value).toLocaleString()
+}
+
+function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplicationUpgrade>>): void {
+  if (!result) {
+    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFailed')
+    return
+  }
+  if (result.hasUpdate && result.release) {
+    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFound', {
+      version: result.release.tag_name
+    })
+    return
+  }
+  if (result.error) {
+    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFailedWithReason', {
+      reason: result.error
+    })
+    return
+  }
+  if (result.release) {
+    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckNoUpdate', {
+      version: result.release.tag_name
+    })
+    return
+  }
+  lastResultMessage.value = ''
 }
 </script>
 
@@ -231,19 +279,20 @@ function formatTimestamp(value: number): string {
     <tuff-block-slot
       :title="t('settings.settingUpdate.statusTitle')"
       :description="statusDescription"
-      disabled
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
       <div class="status-message" v-if="updateStateMessage">
         {{ updateStateMessage }}
       </div>
+      <div class="status-message" v-if="lastResultMessage">
+        {{ lastResultMessage }}
+      </div>
     </tuff-block-slot>
 
     <tuff-block-slot
       :title="t('settings.settingUpdate.actionsTitle')"
       :description="t('settings.settingUpdate.actionsDesc')"
-      disabled
       default-icon="i-carbon-settings-adjust"
       active-icon="i-carbon-settings-adjust"
     >
