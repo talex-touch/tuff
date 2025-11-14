@@ -1,6 +1,7 @@
 <script lang="ts" name="CoreBoxRender" setup>
 import { computed } from 'vue'
 import { TuffItem } from '@talex-touch/utils'
+import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
 import BoxItem from './BoxItem.vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 
@@ -29,7 +30,23 @@ const customRenderer = computed(() => {
   return getCustomRenderer(custom.content) ?? null
 })
 
-const customPayload = computed(() => render.value?.custom?.data)
+const customPayload = computed<PreviewCardPayload | undefined>(() => {
+  return render.value?.custom?.data as PreviewCardPayload | undefined
+})
+
+function handleShowHistory(): void {
+  window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: props.item }))
+}
+
+function handleCopyPrimary(): void {
+  const value = customPayload.value?.primaryValue
+  if (!value) return
+  window.dispatchEvent(
+    new CustomEvent('corebox:copy-preview', {
+      detail: { value, item: props.item }
+    })
+  )
+}
 </script>
 
 <template>
@@ -39,7 +56,13 @@ const customPayload = computed(() => render.value?.custom?.data)
     </template>
     <template v-else-if="render.mode === 'custom' && customRenderer">
       <div class="CoreBoxRender-Custom" :class="{ active }">
-        <component :is="customRenderer" :item="item" :payload="customPayload" />
+        <component
+          :is="customRenderer"
+          :item="item"
+          :payload="customPayload"
+          @show-history="handleShowHistory"
+          @copy-primary="handleCopyPrimary"
+        />
       </div>
     </template>
     <template v-else>
@@ -55,8 +78,7 @@ const customPayload = computed(() => render.value?.custom?.data)
 
 .CoreBoxRender-Custom {
   margin: 8px 16px;
-  padding: 4px;
-  border-radius: 12px;
+  border-radius: 18px;
   border: 1px solid transparent;
   transition: border-color 0.2s ease;
 

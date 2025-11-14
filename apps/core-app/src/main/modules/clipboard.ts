@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import path from 'node:path'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
-import { desc, gt, sql, eq, inArray } from 'drizzle-orm'
+import { desc, gt, sql, eq, inArray, and } from 'drizzle-orm'
 import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from '../db/schema'
 import { DataCode, MaybePromise, ModuleKey } from '@talex-touch/utils'
@@ -458,6 +458,67 @@ export class ClipboardModule extends BaseModule {
     await this.db.insert(clipboardHistoryMeta).values(values)
   }
 
+  public async saveVirtualEntry({
+    content,
+    rawContent,
+    source = 'virtual',
+    meta
+  }: {
+    content: string
+    rawContent?: string | null
+    source?: string
+    meta?: Record<string, unknown>
+  }): Promise<IClipboardItem | null> {
+    if (!this.db) return null
+
+    const metaEntries: ClipboardMetaEntry[] = [{ key: 'source', value: source }]
+    if (meta) {
+      for (const [key, value] of Object.entries(meta)) {
+        metaEntries.push({ key, value })
+      }
+    }
+
+    const mergedMeta: Record<string, unknown> = {}
+    for (const entry of metaEntries) {
+      mergedMeta[entry.key] = entry.value
+    }
+
+    const metadata = this.mergeMetadataString(null, mergedMeta)
+    const record = {
+      type: 'text' as const,
+      content,
+      rawContent: rawContent ?? null,
+      thumbnail: null,
+      timestamp: new Date(),
+      sourceApp: 'Talex Touch',
+      isFavorite: false,
+      metadata
+    }
+
+    const inserted = await this.db.insert(clipboardHistory).values(record).returning()
+    if (inserted.length === 0) {
+      return null
+    }
+
+    const persisted = inserted[0] as IClipboardItem
+    persisted.meta = mergedMeta
+
+    if (persisted.id) {
+      await this.persistMetaEntries(persisted.id, mergedMeta)
+    }
+
+    this.updateMemoryCache(persisted)
+
+    const touchChannel = genTouchChannel()
+    for (const win of windowManager.windows) {
+      if (!win.window.isDestroyed()) {
+        touchChannel.sendToMain(win.window, 'clipboard:new-item', persisted)
+      }
+    }
+
+    return persisted
+  }
+
   private startClipboardMonitoring(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId)
@@ -680,6 +741,46 @@ export class ClipboardModule extends BaseModule {
           const message = error instanceof Error ? error.message : String(error)
           reply(DataCode.ERROR, { success: false, message })
         }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:write-text', async ({ data, reply }) => {
+        try {
+          clipboard.writeText((data?.text ?? '') as string)
+          reply(DataCode.SUCCESS, null)
+        } catch (error) {
+          reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'preview-history:get', async ({ data, reply }) => {
+        if (!this.db) {
+          reply(DataCode.ERROR, null)
+          return
+        }
+        const limit = Math.min(Math.max(data?.limit ?? 15, 1), 50)
+        const idRows = await this.db
+          .select({ clipboardId: clipboardHistoryMeta.clipboardId })
+          .from(clipboardHistoryMeta)
+          .where(
+            and(
+              eq(clipboardHistoryMeta.key, 'source'),
+              eq(clipboardHistoryMeta.value, JSON.stringify('calculation'))
+            )
+          )
+          .orderBy(desc(clipboardHistoryMeta.createdAt))
+          .limit(limit)
+        const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
+        if (ids.length === 0) {
+          reply(DataCode.SUCCESS, { items: [] })
+          return
+        }
+        const rows = await this.db
+          .select()
+          .from(clipboardHistory)
+          .where(inArray(clipboardHistory.id, ids))
+          .orderBy(desc(clipboardHistory.timestamp))
+        const history = await this.hydrateWithMeta(rows)
+        reply(DataCode.SUCCESS, { items: history })
       })
     }
 
