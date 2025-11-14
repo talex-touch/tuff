@@ -6,7 +6,6 @@ import { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import { TalexEvents, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { ChannelType, DataCode } from '@talex-touch/utils'
 import {
-  UpdateSourceConfig,
   AppPreviewChannel,
   GitHubRelease,
   UpdateCheckResult,

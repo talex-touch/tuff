@@ -36,7 +36,9 @@ const initEditor = async (): Promise<void> => {
     editor.value = null
   }
 
+  // @ts-ignore: Milkdown plugin type compatibility issue
   const instance = await Editor.make()
+    // @ts-ignore
     .config((ctx) => {
       ctx.set(rootCtx, editorDom.value)
       ctx.set(defaultValueCtx, value.value ?? '')
@@ -50,8 +52,10 @@ const initEditor = async (): Promise<void> => {
         value.value = markdown
       })
     })
+    // @ts-ignore
     .use(nord)
     .use(commonmark)
+    // @ts-ignore
     .use(listener)
     .create()
 

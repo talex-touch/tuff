@@ -57,7 +57,7 @@ watch(
   <div
     class="PreviewHistoryPanel"
     :class="{ 'is-visible': visible }"
-    :aria-hidden="(!visible).toString()"
+    :aria-hidden="!visible"
   >
     <div class="panel">
       <header>
