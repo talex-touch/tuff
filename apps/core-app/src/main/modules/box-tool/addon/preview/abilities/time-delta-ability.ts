@@ -101,14 +101,69 @@ function parseNaturalRelative(text: string): number | null {
     return offset || null
   }
 
-  const simpleMatch = lower.match(/^([-+]?\d*\.?\d+)\s*[a-z]+$/)
-  if (simpleMatch) {
+  const cn = parseChineseRelative(text)
+  if (cn !== null) return cn
+
+  return null
+}
+
+function parseDurationValue(text: string): number | null {
+  const lower = text.trim().toLowerCase()
+  const regex = /^([-+]?\d*\.?\d+)\s*([a-z]+)$/i
+  const match = lower.match(regex)
+  if (match) {
     const offset = parseRelative(lower)
-    return offset || null
+    if (offset) return Math.abs(offset)
   }
 
   const cn = parseChineseRelative(text)
-  if (cn !== null) return cn
+  if (cn !== null) {
+    return Math.abs(cn)
+  }
+
+  const multiMatch = /(\d+)\s+[a-z]+/i.test(lower)
+  if (multiMatch) {
+    const offset = parseRelative(lower)
+    if (offset) return Math.abs(offset)
+  }
+
+  return null
+}
+
+function parseAbsoluteDate(text: string): dayjs.Dayjs | null {
+  const normalized = text.trim()
+  if (!normalized) return null
+
+  const formats = [
+    'YYYY-MM-DD',
+    'YYYY/MM/DD',
+    'YYYY.MM.DD',
+    'YYYY-MM-DD HH:mm',
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY/MM/DD HH:mm',
+    'YYYY/MM/DD HH:mm:ss',
+    'YYYY.MM.DD HH:mm',
+    'YYYY.MM.DD HH:mm:ss'
+  ]
+
+  for (const format of formats) {
+    const parsed = dayjs(normalized, format, true)
+    if (parsed.isValid()) return parsed
+  }
+
+  const naturalMap: Record<string, number> = {
+    tomorrow: 1,
+    'day after tomorrow': 2,
+    yesterday: -1,
+    今天: 0,
+    明天: 1,
+    后天: 2,
+    昨天: -1
+  }
+  const lower = normalized.toLowerCase()
+  if (lower in naturalMap) {
+    return dayjs().add(naturalMap[lower], 'day')
+  }
 
   return null
 }
@@ -132,7 +187,9 @@ export class TimeDeltaAbility extends BasePreviewAbility {
     return (
       RELATIVE_PATTERN.test(query.text) ||
       RANGE_PATTERN.test(query.text) ||
-      parseNaturalRelative(query.text) !== null
+      parseNaturalRelative(query.text) !== null ||
+      parseDurationValue(query.text) !== null ||
+      parseAbsoluteDate(query.text) !== null
     )
   }
 
@@ -191,6 +248,66 @@ export class TimeDeltaAbility extends BasePreviewAbility {
           }
         ]
       }
+      return {
+        abilityId: this.id,
+        confidence: 0.7,
+        payload,
+        durationMs: performance.now() - startedAt
+      }
+    }
+
+    const durationValue = parseDurationValue(text)
+    if (durationValue) {
+      const hours = durationValue / (60 * 60 * 1000)
+      const minutes = durationValue / (60 * 1000)
+      const seconds = durationValue / 1000
+
+      const payload: PreviewCardPayload = {
+        abilityId: this.id,
+        title: text,
+        subtitle: '时长换算',
+        primaryLabel: '总时长',
+        primaryValue: formatDuration(durationValue),
+        sections: [
+          {
+            rows: [
+              { label: '小时', value: hours.toFixed(2) },
+              { label: '分钟', value: minutes.toFixed(2) },
+              { label: '秒', value: seconds.toFixed(2) }
+            ]
+          }
+        ]
+      }
+
+      return {
+        abilityId: this.id,
+        confidence: 0.6,
+        payload,
+        durationMs: performance.now() - startedAt
+      }
+    }
+
+    const absoluteDate = parseAbsoluteDate(text)
+    if (absoluteDate) {
+      const diff = Math.abs(absoluteDate.diff(dayjs()))
+      const payload: PreviewCardPayload = {
+        abilityId: this.id,
+        title: text,
+        subtitle: '日期差',
+        primaryLabel: '距离现在',
+        primaryValue: absoluteDate.fromNow(),
+        secondaryLabel: '间隔',
+        secondaryValue: formatDuration(diff),
+        sections: [
+          {
+            rows: [
+              { label: '目标日期', value: absoluteDate.format('YYYY-MM-DD HH:mm:ss') },
+              { label: '毫秒', value: diff.toString() }
+            ]
+          }
+        ]
+      }
+
       return {
         abilityId: this.id,
         confidence: 0.7,
