@@ -101,16 +101,11 @@ export class TrayIconProvider {
       }
 
       const size = image.getSize()
-      console.log('[TrayIconProvider] Successfully loaded icon from:', iconPath)
-      console.log('[TrayIconProvider] Icon size:', size)
 
       if (process.platform === 'darwin') {
         // Check if using Template.png (required for macOS tray icons)
         const isTemplateFile = iconPath.endsWith('Template.png')
         if (isTemplateFile) {
-          console.log('[TrayIconProvider] Using Template.png file (macOS template image)')
-
-          // Verify Retina version exists
           const retinaPath = iconPath.replace('Template.png', 'Template@2x.png')
           if (!fse.existsSync(retinaPath)) {
             console.warn('[TrayIconProvider] Retina version not found:', retinaPath)
@@ -118,8 +113,6 @@ export class TrayIconProvider {
             console.warn(
               '[TrayIconProvider] Recommended: Create TrayIconTemplate@2x.png (44x44 pixels)'
             )
-          } else {
-            console.log('[TrayIconProvider] Retina version found:', retinaPath)
           }
         } else {
           console.warn('[TrayIconProvider] Icon filename does not end with Template.png')

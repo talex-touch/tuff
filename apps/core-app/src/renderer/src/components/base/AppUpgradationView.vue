@@ -26,17 +26,31 @@ const props = defineProps({
     required: true
   }
 })
+
 const close = inject('destroy')
 const { t } = useI18n()
 
-function upgrade() {
+/**
+ * 打开更新页面的外部链接
+ *
+ * 使用系统默认浏览器打开 GitHub Release 页面
+ */
+function upgrade(): void {
   window.$nodeApi.openExternal(props.release.html_url)
 }
 
-const publishedAt = computed(() => {
+/**
+ * 格式化发布时间
+ *
+ * 将 ISO 8601 格式的时间字符串转换为本地化的日期时间格式
+ */
+const publishedAt = computed<string>(() => {
   if (!props.release?.published_at) return ''
+
   const date = new Date(props.release.published_at)
-  return Number.isNaN(date.getTime()) ? props.release.published_at : date.toLocaleString()
+  return Number.isNaN(date.getTime())
+    ? props.release.published_at
+    : date.toLocaleString()
 })
 </script>
 
