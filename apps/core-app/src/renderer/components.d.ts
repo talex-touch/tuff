@@ -14,6 +14,9 @@ declare module 'vue' {
   export interface GlobalComponents {
     ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
     AgreementTemplate: typeof import('./src/components/addon/AgreementTemplate.vue')['default']
+    AISDKItem: typeof import('./src/components/aisdk/layout/AISDKItem.vue')['default']
+    AISDKList: typeof import('./src/components/aisdk/layout/AISDKList.vue')['default']
+    AISDKListModule: typeof import('./src/components/aisdk/layout/AISDKListModule.vue')['default']
     AppLogo: typeof import('./src/components/icon/AppLogo.vue')['default']
     AppUpgradationView: typeof import('./src/components/base/AppUpgradationView.vue')['default']
     AudioPreview: typeof import('./src/components/render/addon/preview/AudioPreview.vue')['default']
@@ -179,6 +182,9 @@ declare module 'vue' {
 declare global {
   const ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
   const AgreementTemplate: typeof import('./src/components/addon/AgreementTemplate.vue')['default']
+  const AISDKItem: typeof import('./src/components/aisdk/layout/AISDKItem.vue')['default']
+  const AISDKList: typeof import('./src/components/aisdk/layout/AISDKList.vue')['default']
+  const AISDKListModule: typeof import('./src/components/aisdk/layout/AISDKListModule.vue')['default']
   const AppLogo: typeof import('./src/components/icon/AppLogo.vue')['default']
   const AppUpgradationView: typeof import('./src/components/base/AppUpgradationView.vue')['default']
   const AudioPreview: typeof import('./src/components/render/addon/preview/AudioPreview.vue')['default']

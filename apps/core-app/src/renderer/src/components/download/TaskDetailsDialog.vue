@@ -80,10 +80,6 @@
           <span class="detail-label">{{ $t('download.updated_at') }}:</span>
           <span class="detail-value">{{ formatDate(task.updatedAt) }}</span>
         </div>
-        <div v-if="task.completedAt" class="detail-item">
-          <span class="detail-label">{{ $t('download.completed_at') }}:</span>
-          <span class="detail-value">{{ formatDate(task.completedAt) }}</span>
-        </div>
       </div>
 
       <!-- 错误信息 -->
@@ -167,7 +163,7 @@ const handleShowInFolder = () => {
   }
 }
 
-const getStatusType = (status: DownloadStatus): string => {
+const getStatusType = (status: DownloadStatus): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   switch (status) {
     case DownloadStatus.DOWNLOADING:
       return 'primary'
@@ -204,7 +200,7 @@ const getModuleName = (module: DownloadModule): string => {
   return moduleMap[module] || module
 }
 
-const getPriorityType = (priority: number): string => {
+const getPriorityType = (priority: number): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   if (priority >= DownloadPriority.CRITICAL) return 'danger'
   if (priority >= DownloadPriority.HIGH) return 'warning'
   if (priority >= DownloadPriority.NORMAL) return 'primary'

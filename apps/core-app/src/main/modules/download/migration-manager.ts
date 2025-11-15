@@ -50,13 +50,13 @@ export interface MigrationResult {
 
 export class MigrationManager extends EventEmitter {
   private dbPath: string
-  private oldDataPath: string
+  // private oldDataPath: string
   private migrationInProgress = false
 
   constructor(dbPath: string) {
     super()
     this.dbPath = dbPath
-    this.oldDataPath = path.join(app.getPath('userData'), 'old_downloads')
+    // this.oldDataPath = path.join(app.getPath('userData'), 'old_downloads')
   }
 
   /**
@@ -67,7 +67,7 @@ export class MigrationManager extends EventEmitter {
       // Check if old data exists
       const oldDbPath = path.join(app.getPath('userData'), 'downloads.db')
       const oldConfigPath = path.join(app.getPath('userData'), 'download-config.json')
-      
+
       const [oldDbExists, oldConfigExists] = await Promise.all([
         this.fileExists(oldDbPath),
         this.fileExists(oldConfigPath)
@@ -114,7 +114,7 @@ export class MigrationManager extends EventEmitter {
       // Step 1: Migrate old download tasks
       const tasks = await this.migrateDownloadTasks()
       result.migratedTasks = tasks.length
-      
+
       this.emitProgress({
         phase: 'migrating',
         current: 33,
@@ -190,7 +190,7 @@ export class MigrationManager extends EventEmitter {
    */
   private async migrateDownloadTasks(): Promise<DownloadTask[]> {
     const oldDbPath = path.join(app.getPath('userData'), 'downloads.db')
-    
+
     if (!(await this.fileExists(oldDbPath))) {
       console.log('[MigrationManager] No old download database found')
       return []
@@ -203,10 +203,10 @@ export class MigrationManager extends EventEmitter {
     try {
       // Read old tasks
       const result = await oldClient.execute('SELECT * FROM downloads')
-      
+
       for (const row of result.rows) {
         const oldRecord = row as unknown as OldDownloadRecord
-        
+
         // Convert old format to new format
         const newTask: DownloadTask = {
           id: oldRecord.id || this.generateId(),
@@ -272,7 +272,7 @@ export class MigrationManager extends EventEmitter {
    */
   private async migrateDownloadHistory(): Promise<DownloadHistory[]> {
     const oldDbPath = path.join(app.getPath('userData'), 'downloads.db')
-    
+
     if (!(await this.fileExists(oldDbPath))) {
       return []
     }
@@ -293,10 +293,10 @@ export class MigrationManager extends EventEmitter {
       }
 
       const result = await oldClient.execute('SELECT * FROM download_history')
-      
+
       for (const row of result.rows) {
         const oldRecord = row as unknown as OldDownloadRecord
-        
+
         const newHistory: DownloadHistory = {
           id: `${oldRecord.id || this.generateId()}_history`,
           taskId: oldRecord.id || this.generateId(),
@@ -306,7 +306,7 @@ export class MigrationManager extends EventEmitter {
           status: this.mapOldStatus(oldRecord.status),
           totalSize: oldRecord.size || null,
           downloadedSize: oldRecord.downloaded || null,
-          duration: oldRecord.completedAt && oldRecord.createdAt 
+          duration: oldRecord.completedAt && oldRecord.createdAt
             ? Math.round((oldRecord.completedAt - oldRecord.createdAt) / 1000)
             : null,
           averageSpeed: null,

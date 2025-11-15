@@ -1135,5 +1135,64 @@
     "minutesAgo": "{count} minutes ago",
     "hoursAgo": "{count} hours ago",
     "daysAgo": "{count} days ago"
+  },
+  "aisdk": {
+    "providers": "AI Providers",
+    "addProvider": "Add Provider",
+    "builtinProviders": "Built-in Providers",
+    "customProviders": "Custom Providers",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "selectProviderHint": "Select a provider to configure",
+    "testing": "Testing...",
+    "test": "Test Connection",
+    "testSuccess": "Connection Successful",
+    "testFailed": "Connection Failed",
+    "testSuccessMessage": "Provider connection is working correctly",
+    "testErrorMessage": "Failed to connect to provider",
+    "latency": "Latency",
+    "apiConfig": "API Configuration",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Enter your API key",
+    "baseUrl": "Base URL",
+    "baseUrlPlaceholder": "Enter base URL (optional)",
+    "modelConfig": "Model Configuration",
+    "models": "Available Models",
+    "addModelPlaceholder": "Press Enter to add a model",
+    "defaultModel": "Default Model",
+    "selectModel": "Select default model",
+    "instructions": "System Instructions",
+    "instructionsPlaceholder": "Enter system instructions for this provider",
+    "advancedConfig": "Advanced Configuration",
+    "priority": "Priority",
+    "priorityHigh": "High",
+    "priorityMedium": "Medium",
+    "priorityLow": "Low",
+    "timeout": "Timeout",
+    "rateLimit": "Rate Limits",
+    "requestsPerMinute": "Requests per Minute",
+    "tokensPerMinute": "Tokens per Minute",
+    "unlimited": "Unlimited",
+    "addCustomProvider": "Add Custom Provider",
+    "providerType": "Provider Type",
+    "providerName": "Provider Name",
+    "providerNamePlaceholder": "Enter provider name",
+    "customCompatible": "Custom (OpenAI Compatible)",
+    "compatible": "Compatible",
+    "search": {
+      "placeholder": "Search providers..."
+    },
+    "list": {
+      "enabled": "Enabled Providers",
+      "disabled": "Disabled Providers",
+      "empty": "No providers in this category"
+    },
+    "item": {
+      "configError": "Configuration incomplete or invalid"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    }
   }
 }

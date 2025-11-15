@@ -43,7 +43,7 @@ interface Props {
   draggable?: boolean
 }
 
-const { t } = useI18n()
+useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
   draggable: false

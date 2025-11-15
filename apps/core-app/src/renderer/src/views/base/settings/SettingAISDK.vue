@@ -206,6 +206,7 @@
           >
             <div class="input-wrapper">
               <input
+                v-if="provider.rateLimit"
                 v-model.number="provider.rateLimit.requestsPerMinute"
                 type="number"
                 min="0"
@@ -225,6 +226,7 @@
           >
             <div class="input-wrapper">
               <input
+                v-if="provider.rateLimit"
                 v-model.number="provider.rateLimit.tokensPerMinute"
                 type="number"
                 min="0"
@@ -331,7 +333,7 @@ interface AiProviderConfig {
   instructions?: string
   timeout?: number
   rateLimit?: AiProviderRateLimit
-  priority?: number
+  priority: number  // Changed from optional to required
 }
 
 interface AiSDKConfig {
@@ -339,7 +341,7 @@ interface AiSDKConfig {
   defaultStrategy: string
   enableAudit: boolean
   enableCache: boolean
-  cacheExpiration?: number
+  cacheExpiration: number  // Changed from optional to required
 }
 
 const { t } = useI18n()
@@ -479,8 +481,6 @@ async function testProvider(provider: AiProviderConfig) {
   const startTime = Date.now()
 
   try {
-    const testMessage = 'Hello, this is a test message. Please respond with "OK".'
-    
     console.log(`Testing ${provider.name}...`, {
       baseUrl: provider.baseUrl,
       model: provider.defaultModel,

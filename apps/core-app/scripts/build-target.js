@@ -183,7 +183,7 @@ function build() {
 
   process.env.BUILD_TYPE = buildType;
 
-  // Map target to platform name for prepare-out-package-json.js
+  // Map target to platform name for downstream tooling
   const platformMap = {
     win: 'win32',
     mac: 'darwin',
@@ -195,13 +195,13 @@ function build() {
   const defaultArch = normalizedTarget === 'mac' ? 'arm64' : 'x64';
   const effectiveArch = arch || defaultArch;
 
-  // Set environment variables for prepare-out-package-json.js
+  // Set environment variables for downstream tooling
   process.env.BUILD_TARGET = normalizedTarget;
   process.env.BUILD_ARCH = effectiveArch;
   process.env.ELECTRON_PLATFORM = electronPlatform;
   process.env.ELECTRON_ARCH = effectiveArch;
 
-  // Set APP_VERSION environment variable for prepare-out-package-json.js
+  // Set APP_VERSION environment variable for downstream tooling
   if (finalVersion !== packageVersion) {
     process.env.APP_VERSION = finalVersion;
     console.log(`Setting APP_VERSION environment variable: ${finalVersion}`);
@@ -275,126 +275,13 @@ function build() {
     throw new Error(`out directory missing required subdirectories: ${missingDirs.join(', ')}`);
   }
 
-  // 检查 package.json
-  const outPackageJsonPath = path.join(outDir, 'package.json');
-  if (!fs.existsSync(outPackageJsonPath)) {
-    console.log('out/package.json not found, generating...');
-    require(path.join(__dirname, 'prepare-out-package-json.js'));
-  } else {
-    console.log('✓ out/package.json exists');
-  }
-
-  // 验证 package.json 内容
-  try {
-    const outPkg = JSON.parse(fs.readFileSync(outPackageJsonPath, 'utf8'));
-    if (!outPkg.main) {
-      console.error('❌ ERROR: out/package.json missing main field!');
-      throw new Error('out/package.json is invalid');
-    }
-    const mainFile = path.join(outDir, outPkg.main);
-    if (!fs.existsSync(mainFile)) {
-      console.error(`❌ ERROR: Main file ${outPkg.main} not found in out directory!`);
-      throw new Error(`Main entry point ${outPkg.main} missing`);
-    }
-    console.log(`✓ Main entry point exists: ${outPkg.main}`);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      throw err; // 已经处理过的错误
-    }
-    console.error(`❌ ERROR: Cannot read/parse out/package.json: ${err.message}`);
-    throw new Error('out/package.json is invalid or missing');
-  }
-
   console.log('✓ Out directory verification passed\n');
-
-  // Verify that out/package.json has the correct version (if conversion was applied)
-  if (finalVersion !== packageVersion) {
-    try {
-      const outPackageJsonPath = path.join(outDir, 'package.json');
-      if (fs.existsSync(outPackageJsonPath)) {
-        const outPkg = JSON.parse(fs.readFileSync(outPackageJsonPath, 'utf8'));
-        if (outPkg.version !== finalVersion) {
-          console.log(`\n=== Updating out/package.json version to: ${finalVersion} ===`);
-          outPkg.version = finalVersion;
-          fs.writeFileSync(outPackageJsonPath, JSON.stringify(outPkg, null, 2));
-          console.log(`✓ Updated out/package.json version to ${finalVersion}`);
-        } else {
-          console.log(`✓ Verified out/package.json version: ${finalVersion}`);
-        }
-      }
-    } catch (err) {
-      console.warn(`Warning: Failed to verify/update out/package.json version: ${err.message}`);
-    }
-  }
 
   const builderBin = resolveBuilderBin();
 
   if (skipInstallAppDeps) {
     console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n');
   } else {
-    // Sync lockfile with out/package.json before install-app-deps
-    // This ensures the lockfile matches the generated package.json
-    const outDir = path.join(projectRoot, 'out');
-    const outPackageJsonPath = path.join(outDir, 'package.json');
-
-    if (fs.existsSync(outPackageJsonPath)) {
-      console.log('=== Syncing lockfile with out/package.json ===');
-      const workspaceRoot = path.join(projectRoot, '../..');
-      const originalCwd = process.cwd();
-
-      try {
-        // First, try to update lockfile from workspace root
-        // This ensures pnpm recognizes the out/package.json as part of the workspace
-        process.chdir(workspaceRoot);
-
-        // Run pnpm install with --lockfile-only and --no-frozen-lockfile
-        // This updates the lockfile to match all package.json files including out/package.json
-        // --no-frozen-lockfile is necessary in CI to allow lockfile updates
-        execSync('pnpm install --lockfile-only --no-frozen-lockfile', {
-          stdio: 'pipe', // Use pipe to suppress output unless there's an error
-          cwd: workspaceRoot,
-          env: {
-            ...process.env,
-            PWD: workspaceRoot
-          }
-        });
-
-        process.chdir(originalCwd);
-        console.log('✓ Lockfile synced with out/package.json\n');
-      } catch (error) {
-        // If lockfile-only fails, try a different approach: run full pnpm install
-        // This will update the lockfile entry for apps/core-app/out
-        console.log('Lockfile-only sync failed, trying alternative method...');
-        try {
-          // Ensure we're in workspace root (might have failed before chdir)
-          if (process.cwd() !== workspaceRoot) {
-            process.chdir(workspaceRoot);
-          }
-
-          // Run pnpm install with --no-frozen-lockfile to update lockfile
-          // This will update the apps/core-app/out entry in the lockfile
-          execSync('pnpm install --no-frozen-lockfile', {
-            stdio: 'pipe',
-            cwd: workspaceRoot,
-            env: {
-              ...process.env,
-              PWD: workspaceRoot
-            }
-          });
-
-          process.chdir(originalCwd);
-          console.log('✓ Lockfile synced with out/package.json (alternative method)\n');
-        } catch (fallbackError) {
-          // Ensure we restore cwd even on error
-          if (process.cwd() !== originalCwd) {
-            process.chdir(originalCwd);
-          }
-          console.warn('Warning: Failed to sync lockfile, continuing anyway:', fallbackError.message);
-          // Don't throw - allow build to continue as lockfile sync is best-effort
-        }
-      }
-    }
-
     console.log('=== Rebuilding Electron native modules for packaged app ===');
     const installPlatformMap = {
       win: 'win32',
@@ -441,6 +328,11 @@ function build() {
 
   if (dir) {
     builderArgs.push('--dir');
+  }
+
+  if (finalVersion !== packageVersion) {
+    builderArgs.push(`--config.extraMetadata.version=${finalVersion}`);
+    console.log(`Overriding package version for builder: ${finalVersion}`);
   }
 
   const publishPolicy = publish || (buildType === 'snapshot' ? 'never' : undefined);

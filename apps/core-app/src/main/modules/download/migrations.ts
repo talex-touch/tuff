@@ -55,7 +55,7 @@ export class MigrationRunner extends EventEmitter {
       const result = await client.execute(
         'SELECT version, name, applied_at FROM migrations ORDER BY version'
       )
-      
+
       return result.rows.map(row => ({
         version: row.version as number,
         name: row.name as string,
@@ -102,7 +102,7 @@ export class MigrationRunner extends EventEmitter {
       // Apply pending migrations
       for (let i = 0; i < pendingMigrations.length; i++) {
         const migration = pendingMigrations[i]
-        
+
         this.emit('progress', {
           current: i + 1,
           total: pendingMigrations.length,
@@ -111,9 +111,9 @@ export class MigrationRunner extends EventEmitter {
         })
 
         console.log(`[MigrationRunner] Applying migration ${migration.version}: ${migration.name}`)
-        
+
         await migration.up(client)
-        
+
         await client.execute({
           sql: 'INSERT INTO migrations (version, name, applied_at) VALUES (?, ?, ?)',
           args: [migration.version, migration.name, Date.now()]
@@ -149,7 +149,7 @@ export class MigrationRunner extends EventEmitter {
 
       for (const version of versionsToRollback) {
         const migration = migrations.find(m => m.version === version)
-        
+
         if (!migration) {
           throw new Error(`Migration ${version} not found`)
         }
@@ -159,9 +159,9 @@ export class MigrationRunner extends EventEmitter {
         }
 
         console.log(`[MigrationRunner] Rolling back migration ${version}: ${migration.name}`)
-        
+
         await migration.down(client)
-        
+
         await client.execute({
           sql: 'DELETE FROM migrations WHERE version = ?',
           args: [version]
@@ -187,44 +187,44 @@ export const addPerformanceIndexes: Migration = {
   up: async (db: any) => {
     // Add indexes for download_tasks table
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_status 
+      CREATE INDEX IF NOT EXISTS idx_tasks_status
       ON download_tasks(status)
     `)
 
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_created 
+      CREATE INDEX IF NOT EXISTS idx_tasks_created
       ON download_tasks(created_at)
     `)
 
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_priority 
+      CREATE INDEX IF NOT EXISTS idx_tasks_priority
       ON download_tasks(priority)
     `)
 
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_status_priority 
+      CREATE INDEX IF NOT EXISTS idx_tasks_status_priority
       ON download_tasks(status, priority)
     `)
 
     // Add indexes for download_chunks table
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_chunks_task 
+      CREATE INDEX IF NOT EXISTS idx_chunks_task
       ON download_chunks(task_id)
     `)
 
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_chunks_task_index 
+      CREATE INDEX IF NOT EXISTS idx_chunks_task_index
       ON download_chunks(task_id, index)
     `)
 
     // Add indexes for download_history table
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_history_created 
+      CREATE INDEX IF NOT EXISTS idx_history_created
       ON download_history(created_at)
     `)
 
     await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_history_completed 
+      CREATE INDEX IF NOT EXISTS idx_history_completed
       ON download_history(completed_at)
     `)
 
@@ -271,9 +271,9 @@ export async function runMigrations(dbPath: string, migrations: Migration[]): Pr
     for (const migration of migrations.sort((a, b) => a.version - b.version)) {
       if (!appliedVersions.has(migration.version)) {
         console.log(`[Migration] Applying migration ${migration.version}: ${migration.name}`)
-        
+
         await migration.up(client)
-        
+
         await client.execute({
           sql: 'INSERT INTO migrations (version, name, applied_at) VALUES (?, ?, ?)',
           args: [migration.version, migration.name, Date.now()]
@@ -309,7 +309,8 @@ export const addChecksumField: Migration = {
       console.log('[Migration] Added checksum field to download_tasks')
     }
   },
-  down: async (db: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  down: async (_db: any) => {
     // SQLite doesn't support DROP COLUMN easily, so we'd need to recreate the table
     console.log('[Migration] Checksum field removal not implemented (SQLite limitation)')
   }
@@ -378,9 +379,9 @@ export async function rollbackMigration(
 
   try {
     console.log(`[Migration] Rolling back migration ${migration.version}: ${migration.name}`)
-    
+
     await migration.down(client)
-    
+
     await client.execute({
       sql: 'DELETE FROM migrations WHERE version = ?',
       args: [migration.version]

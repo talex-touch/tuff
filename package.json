@@ -63,15 +63,18 @@
       "@sentry/cli",
       "@swc/core",
       "browser-tabs-lock",
+      "bufferutil",
       "core-js",
       "electron",
       "electron-clipboard-ex",
+      "electron-winstaller",
       "esbuild",
       "extract-file-icon",
       "get-windows",
       "simple-git-hooks",
       "tesseract.js",
       "typeit",
+      "utf-8-validate",
       "vue-demi"
     ],
     "overrides": {
