@@ -81,6 +81,7 @@ import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Delete, Download } from '@element-plus/icons-vue'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
 
@@ -119,7 +120,7 @@ watch(visible, (val) => {
 const refreshLogs = async () => {
   loading.value = true
   try {
-    const result = await $app.channel.call('download:get-logs', logLimit.value)
+    const result = await touchChannel.send('download:get-logs', logLimit.value)
     if (result.success) {
       logs.value = result.logs || t('download.no_logs')
     } else {
@@ -135,7 +136,7 @@ const refreshLogs = async () => {
 
 const loadErrorStats = async () => {
   try {
-    const result = await $app.channel.call('download:get-error-stats')
+    const result = await touchChannel.send('download:get-error-stats')
     if (result.success) {
       errorStats.value = result.stats
     }
@@ -156,7 +157,7 @@ const clearLogs = async () => {
       }
     )
 
-    const result = await $app.channel.call('download:clear-logs')
+    const result = await touchChannel.send('download:clear-logs')
     if (result.success) {
       logs.value = ''
       errorStats.value = null

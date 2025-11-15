@@ -1,5 +1,5 @@
 <script lang="ts" name="TTag" setup>
-const props = withDefaults(
+const { type, size, pill } = withDefaults(
   defineProps<{
     type?: 'default' | 'success' | 'danger' | 'warning' | 'info'
     size?: 'sm' | 'md'

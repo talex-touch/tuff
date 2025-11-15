@@ -198,7 +198,6 @@ const {
   downloadTasks,
   tasksByStatus,
   pauseTask: pauseTaskHook,
-  resumeTask: resumeTaskHook,
   cancelTask: cancelTaskHook,
   retryTask: retryTaskHook,
   pauseAllTasks: pauseAllTasksHook,
@@ -294,17 +293,7 @@ const pauseTask = async (taskId: string) => {
   }
 }
 
-const resumeTask = async (taskId: string) => {
-  try {
-    await resumeTaskHook(taskId)
-    ElMessage.success(t('download.task_resumed'))
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.resume_failed')}: ${message}`)
-  }
-}
-
-// Note: resumeTask is used in template via TaskList component events
+// Note: resumeTask is now inlined in the event handlers of TaskList component
 
 const cancelTask = async (taskId: string) => {
   try {

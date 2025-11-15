@@ -82,6 +82,7 @@ Tuff integrates a variety of practical functions to make your desktop smarter an
 - **AI-Powered Search:** Understands natural language to find files, apps, and actions.
 - **Contextual Intelligence:** Proactively suggests commands based on your current context.
 - **Extensible:** Supports custom plugins ("Capabilities") to extend its functionality.
+- **Direct preview calculation:** Inline arithmetic/unit/currency/time queries now render instant cards, including scientific constants, so results are copy-ready.
 - **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
 - **Unified Download Center:** Centralized download management with progress tracking, resume support, and automatic updates.
 

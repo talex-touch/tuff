@@ -107,7 +107,7 @@ export function useKeyboard(
 
       // 2. If there's clipboard data, clear it
       if (clipboardOptions.last) {
-        clearClipboard({ remember: true })
+        clearClipboard()
         event.preventDefault()
         return
       }

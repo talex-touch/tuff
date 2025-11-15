@@ -1135,5 +1135,64 @@
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
     "daysAgo": "{count} 天前"
+  },
+  "aisdk": {
+    "providers": "AI 提供商",
+    "addProvider": "添加提供商",
+    "builtinProviders": "内置提供商",
+    "customProviders": "自定义提供商",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "selectProviderHint": "选择一个提供商进行配置",
+    "testing": "测试中...",
+    "test": "测试连接",
+    "testSuccess": "连接成功",
+    "testFailed": "连接失败",
+    "testSuccessMessage": "提供商连接正常",
+    "testErrorMessage": "无法连接到提供商",
+    "latency": "延迟",
+    "apiConfig": "API 配置",
+    "apiKey": "API 密钥",
+    "apiKeyPlaceholder": "输入您的 API 密钥",
+    "baseUrl": "基础 URL",
+    "baseUrlPlaceholder": "输入基础 URL（可选）",
+    "modelConfig": "模型配置",
+    "models": "可用模型",
+    "addModelPlaceholder": "按 Enter 添加模型",
+    "defaultModel": "默认模型",
+    "selectModel": "选择默认模型",
+    "instructions": "系统指令",
+    "instructionsPlaceholder": "输入此提供商的系统指令",
+    "advancedConfig": "高级配置",
+    "priority": "优先级",
+    "priorityHigh": "高",
+    "priorityMedium": "中",
+    "priorityLow": "低",
+    "timeout": "超时时间",
+    "rateLimit": "速率限制",
+    "requestsPerMinute": "每分钟请求数",
+    "tokensPerMinute": "每分钟令牌数",
+    "unlimited": "无限制",
+    "addCustomProvider": "添加自定义提供商",
+    "providerType": "提供商类型",
+    "providerName": "提供商名称",
+    "providerNamePlaceholder": "输入提供商名称",
+    "customCompatible": "自定义（OpenAI 兼容）",
+    "compatible": "兼容",
+    "search": {
+      "placeholder": "搜索提供商..."
+    },
+    "list": {
+      "enabled": "已启用的提供商",
+      "disabled": "已禁用的提供商",
+      "empty": "此类别中没有提供商"
+    },
+    "item": {
+      "configError": "配置不完整或无效"
+    },
+    "status": {
+      "enabled": "已启用",
+      "disabled": "已禁用"
+    }
   }
 }

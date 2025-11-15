@@ -146,7 +146,7 @@ interface Props {
   viewMode: 'detailed' | 'compact'
 }
 
-const { t } = useI18n()
+useI18n()
 
 const props = defineProps<Props>()
 

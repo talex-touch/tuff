@@ -192,11 +192,11 @@ function handleRetry() {
   window.electron?.ipcRenderer.send('download:retry-migration')
 }
 
-function handleProgress(data: MigrationProgress) {
+function handleProgress(_event: any, data: MigrationProgress) {
   progress.value = data
 }
 
-function handleResult(data: MigrationResult) {
+function handleResult(_event: any, data: MigrationResult) {
   result.value = data
 }
 
@@ -221,8 +221,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.electron?.ipcRenderer.off('download:migration-progress', handleProgress)
-  window.electron?.ipcRenderer.off('download:migration-result', handleResult)
+  window.electron?.ipcRenderer.removeListener('download:migration-progress', handleProgress)
+  window.electron?.ipcRenderer.removeListener('download:migration-result', handleResult)
 })
 </script>
 
