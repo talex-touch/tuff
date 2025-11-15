@@ -53,6 +53,7 @@ pnpm -F @talex-touch/core-app run build:release:linux
    - 检测 beta 版本，自动转成 `SNAPSHOT-x.y.z-n` 并通过 `--config.extraMetadata.version` 注入 electron-builder，无需修改任何 package。
    - 清空 `dist/`，设置 `BUILD_*` 环境变量，执行 `npm run build`（或 `electron-vite build`）。
    - 校验 `out/` 是否存在 `main/preload/renderer`。
+   - 调用 `scripts/ensure-platform-modules.js` 把 libsql 平台二进制同步到 `apps/core-app/node_modules`。
    - 运行 `electron-builder install-app-deps`（可通过 `SKIP_INSTALL_APP_DEPS` 跳过）。
    - 调用 `electron-builder --{target}`，构建完成后检查产物是否齐全，并在 mac 上执行 `chmod -> xattr -> codesign - -> zip`。
 

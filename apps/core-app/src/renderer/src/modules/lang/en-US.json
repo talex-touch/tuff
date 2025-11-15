@@ -198,7 +198,7 @@
     "market": "Market",
     "plugin": "Plugin",
     "details": "Details",
-    "aisdk": "AI SDK",
+    "aisdk": "TaTa AI",
     "style": "Style",
     "setting": "Setting"
   },
@@ -1145,7 +1145,19 @@
     "disabled": "Disabled",
     "selectProviderHint": "Select a provider to configure",
     "testing": "Testing...",
-    "test": "Test Connection",
+    "test": {
+      "button": "Test Connection",
+      "testing": "Testing...",
+      "latency": "Latency",
+      "success": {
+        "title": "Connection Successful",
+        "message": "Provider connection is working correctly"
+      },
+      "error": {
+        "title": "Connection Failed",
+        "message": "Failed to connect to provider"
+      }
+    },
     "testSuccess": "Connection Successful",
     "testFailed": "Connection Failed",
     "testSuccessMessage": "Provider connection is working correctly",
@@ -1164,10 +1176,12 @@
     "instructions": "System Instructions",
     "instructionsPlaceholder": "Enter system instructions for this provider",
     "advancedConfig": "Advanced Configuration",
-    "priority": "Priority",
-    "priorityHigh": "High",
-    "priorityMedium": "Medium",
-    "priorityLow": "Low",
+    "priority": {
+      "label": "Priority",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
     "timeout": "Timeout",
     "rateLimit": "Rate Limits",
     "requestsPerMinute": "Requests per Minute",
@@ -1193,6 +1207,87 @@
     "status": {
       "enabled": "Enabled",
       "disabled": "Disabled"
+    },
+    "disabled": {
+      "message": "This provider is disabled. Enable it to configure its settings."
+    },
+    "empty": {
+      "title": "No Provider Selected",
+      "description": "Select a provider from the list to view and configure its settings"
+    },
+    "config": {
+      "api": {
+        "title": "API Configuration",
+        "description": "Configure API key and endpoint",
+        "apiKey": "API Key",
+        "apiKeyPlaceholder": "Enter your API key",
+        "apiKeyRequired": "API key is required for enabled providers",
+        "baseUrl": "Base URL",
+        "baseUrlPlaceholder": "https://api.example.com/v1",
+        "baseUrlHint": "Leave empty to use the default endpoint",
+        "baseUrlInvalid": "Please enter a valid URL"
+      },
+      "model": {
+        "title": "Model Configuration",
+        "description": "Manage available models and default model",
+        "models": "Available Models",
+        "noModels": "No models",
+        "modelsCount": "models",
+        "manageModels": "Manage Models",
+        "addModel": "Add Model",
+        "modelsRequired": "At least one model is required for enabled providers",
+        "modelsHint": "Add models that this provider supports",
+        "modelExists": "This model already exists",
+        "addModelPlaceholder": "Type model name and press Enter",
+        "defaultModel": "Default Model",
+        "defaultModelPlaceholder": "Select a default model",
+        "defaultModelRequired": "Default model is required for enabled providers",
+        "defaultModelInvalid": "Default model must be from the available models list",
+        "instructions": "System Instructions",
+        "instructionsPlaceholder": "Enter system instructions for this provider...",
+        "instructionsHint": "Optional system prompt that will be used with this provider"
+      },
+      "advanced": {
+        "title": "Advanced Configuration",
+        "description": "Configure priority and timeout settings",
+        "priority": "Priority",
+        "priorityPlaceholder": "Select priority level",
+        "priorityHint": "Lower priority number means higher preference",
+        "timeout": "Timeout",
+        "timeoutPlaceholder": "30000",
+        "timeoutUnit": "ms",
+        "timeoutHint": "Maximum time to wait for API response (1000-300000ms)",
+        "timeoutInvalid": "Timeout must be between 1000 and 300000 milliseconds"
+      },
+      "rateLimit": {
+        "title": "Rate Limits",
+        "description": "Set request and token limits",
+        "requestsPerMinute": "Requests per Minute",
+        "tokensPerMinute": "Tokens per Minute",
+        "unlimitedPlaceholder": "Leave empty for unlimited",
+        "requestsUnit": "req/min",
+        "tokensUnit": "tokens/min",
+        "requestsPerMinuteHint": "Maximum number of requests per minute",
+        "tokensPerMinuteHint": "Maximum number of tokens per minute",
+        "invalidValue": "Value must be a positive number",
+        "infoMessage": "Leave fields empty for unlimited rate limits"
+      }
+    },
+    "global": {
+      "title": "Global Settings",
+      "description": "Configure audit logging and caching options",
+      "auditLogging": "Enable Audit Logging",
+      "auditLoggingHint": "Record all AI requests for security and compliance purposes",
+      "caching": "Enable Response Caching",
+      "cachingHint": "Cache AI responses to reduce costs and improve response times",
+      "cacheExpiration": "Cache Expiration",
+      "cacheExpirationPlaceholder": "Select cache expiration time",
+      "cacheExpirationHint": "How long to keep cached responses before they expire",
+      "cacheExpiration5min": "5 minutes",
+      "cacheExpiration15min": "15 minutes",
+      "cacheExpiration1hour": "1 hour",
+      "cacheExpiration6hours": "6 hours",
+      "cacheExpiration24hours": "24 hours"
     }
   }
 }

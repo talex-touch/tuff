@@ -84,7 +84,7 @@ export class ScientificConstantsAbility extends BasePreviewAbility {
     }
   }
 
-  override async preload(): Promise<void> {
+  async preload(): Promise<void> {
     void SCIENTIFIC_CONSTANTS
   }
 }

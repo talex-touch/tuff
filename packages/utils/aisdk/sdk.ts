@@ -276,6 +276,104 @@ export class AiSDK {
     generate: (payload: AiEmbeddingPayload, options?: AiInvokeOptions) => 
       this.invoke<number[]>('embedding.generate', payload, options)
   }
+
+  /**
+   * Test a provider connection
+   * @param providerConfig - Provider configuration to test
+   * @returns Test result with success status, message, and latency
+   */
+  async testProvider(providerConfig: AiProviderConfig): Promise<{
+    success: boolean
+    message: string
+    latency?: number
+    timestamp: number
+  }> {
+    const startTime = Date.now()
+    const timestamp = Date.now()
+
+    try {
+      // Validate provider configuration
+      if (!providerConfig.enabled) {
+        return {
+          success: false,
+          message: 'Provider is disabled',
+          timestamp
+        }
+      }
+
+      if (!providerConfig.apiKey && providerConfig.type !== 'local') {
+        return {
+          success: false,
+          message: 'API key is required',
+          timestamp
+        }
+      }
+
+      // Create a temporary provider instance for testing
+      const provider = providerManager.createProviderInstance(providerConfig)
+      
+      // Use a simple test payload
+      const testPayload: AiChatPayload = {
+        messages: [
+          {
+            role: 'user',
+            content: 'Hello'
+          }
+        ],
+        maxTokens: 10
+      }
+
+      const timeout = providerConfig.timeout || 30000
+
+      // Test the provider with timeout
+      const result = await Promise.race([
+        provider.chat(testPayload, { timeout }),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), timeout)
+        )
+      ])
+
+      const latency = Date.now() - startTime
+
+      return {
+        success: true,
+        message: `Connection successful. Model: ${result.model}`,
+        latency,
+        timestamp
+      }
+    } catch (error) {
+      const latency = Date.now() - startTime
+      let message = 'Connection failed'
+
+      if (error instanceof Error) {
+        // Parse common error messages
+        if (error.message.includes('timeout')) {
+          message = 'Request timeout - check your network connection'
+        } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          message = 'Invalid API key'
+        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+          message = 'Access forbidden - check your API key permissions'
+        } else if (error.message.includes('404')) {
+          message = 'API endpoint not found - check your base URL'
+        } else if (error.message.includes('429')) {
+          message = 'Rate limit exceeded'
+        } else if (error.message.includes('500') || error.message.includes('502') || error.message.includes('503')) {
+          message = 'Provider service error - try again later'
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          message = 'Network error - check your internet connection'
+        } else {
+          message = error.message
+        }
+      }
+
+      return {
+        success: false,
+        message,
+        latency,
+        timestamp
+      }
+    }
+  }
 }
 
 export const ai = new AiSDK()
