@@ -37,7 +37,7 @@ const styleVars = computed(() => ({
 </script>
 
 <template>
-  <span class="TuffBlockTag" :class="[`size-${size}`]" :style="styleVars">
+  <span class="TuffBlockTag" :class="[`tuff-block-tag-size-${size}`]" :style="styleVars">
     <i v-if="icon" :class="icon" aria-hidden="true" />
     <span class="TuffBlockTag-Text">
       <slot>{{ label }}</slot>
@@ -53,8 +53,7 @@ const styleVars = computed(() => ({
   border-radius: 999px;
   color: var(--tuff-tag-color, var(--el-color-primary));
   background: var(--tuff-tag-bg, color-mix(in srgb, currentColor 12%, transparent));
-  border: 1px solid
-    var(--tuff-tag-border, color-mix(in srgb, currentColor 32%, transparent));
+  border: 1px solid var(--tuff-tag-border, color-mix(in srgb, currentColor 32%, transparent));
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.05em;
@@ -66,11 +65,11 @@ const styleVars = computed(() => ({
     line-height: 1;
   }
 
-  &.size-sm {
+  &.tuff-block-tag-size-sm {
     padding: 1px 6px;
   }
 
-  &.size-md {
+  &.tuff-block-tag-size-md {
     padding: 3px 9px;
     font-size: 12px;
   }

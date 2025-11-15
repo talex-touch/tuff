@@ -13,18 +13,48 @@ import {
   type NewDownloadHistory
 } from './schema'
 import { DownloadStatus, ChunkStatus } from '@talex-touch/utils'
+import { runMigrations, addPerformanceIndexes } from './migrations'
+import { PerformanceMonitor } from './performance-monitor'
 import fs from 'fs'
 
 export class DatabaseService {
   private db: ReturnType<typeof drizzle>
-  // private dbPath: string - not used but kept for future use
+  private dbPath: string
+  private initialized = false
+  private performanceMonitor = new PerformanceMonitor()
 
   constructor(dbPath: string) {
-    // this.dbPath = dbPath - not used but kept for future use
+    this.dbPath = dbPath
     const client = createClient({
       url: `file:${dbPath}`
     })
     this.db = drizzle(client)
+  }
+
+  /**
+   * Get performance monitor instance
+   */
+  getPerformanceMonitor(): PerformanceMonitor {
+    return this.performanceMonitor
+  }
+
+  /**
+   * Initialize database and run migrations
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) {
+      return
+    }
+
+    try {
+      // Run migrations to add performance indexes
+      await runMigrations(this.dbPath, [addPerformanceIndexes])
+      this.initialized = true
+      console.log('[DatabaseService] Initialized successfully')
+    } catch (error) {
+      console.error('[DatabaseService] Initialization failed:', error)
+      // Don't throw - allow the app to continue even if migrations fail
+    }
   }
 
   // 保存下载任务
@@ -80,10 +110,15 @@ export class DatabaseService {
 
   // 获取所有任务
   async getAllTasks(): Promise<DownloadTask[]> {
-    return await this.db
-      .select()
-      .from(downloadTasksSchema)
-      .orderBy(desc(downloadTasksSchema.createdAt))
+    return await this.performanceMonitor.measure(
+      'db_get_all_tasks',
+      async () => {
+        return await this.db
+          .select()
+          .from(downloadTasksSchema)
+          .orderBy(desc(downloadTasksSchema.createdAt))
+      }
+    )
   }
 
   // 获取进行中的任务
@@ -137,11 +172,17 @@ export class DatabaseService {
 
   // 获取任务历史
   async getTaskHistory(limit: number = 50): Promise<DownloadHistory[]> {
-    return await this.db
-      .select()
-      .from(downloadHistorySchema)
-      .orderBy(desc(downloadHistorySchema.createdAt))
-      .limit(limit)
+    return await this.performanceMonitor.measure(
+      'db_get_task_history',
+      async () => {
+        return await this.db
+          .select()
+          .from(downloadHistorySchema)
+          .orderBy(desc(downloadHistorySchema.createdAt))
+          .limit(limit)
+      },
+      { limit }
+    )
   }
 
   // 保存到历史记录
@@ -206,6 +247,11 @@ export class DatabaseService {
 
     // 删除任务
     await this.db.delete(downloadTasksSchema).where(eq(downloadTasksSchema.id, taskId))
+  }
+
+  // 删除单个历史记录
+  async deleteHistoryItem(historyId: string): Promise<void> {
+    await this.db.delete(downloadHistorySchema).where(eq(downloadHistorySchema.id, historyId))
   }
 
   // 清理失败的切片文件

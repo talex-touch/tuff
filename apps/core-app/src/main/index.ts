@@ -1,4 +1,9 @@
 import './polyfills'
+
+// 设置环境变量禁用 ws 模块的可选依赖
+process.env.WS_NO_UTF_8_VALIDATE = 'true'
+process.env.WS_NO_BUFFER_UTIL = 'true'
+
 import './core/precore'
 import { app, protocol } from 'electron'
 import { storageModule } from './modules/storage'

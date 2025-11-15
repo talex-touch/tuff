@@ -10,64 +10,63 @@ This directory contains composable hooks for CoreBox functionality, including cl
 
 ### 🎯 useClipboard
 
-Manages clipboard content detection, expiration, and auto-paste behavior.
+Manages clipboard content detection and auto-paste behavior.
 
 #### Design Principles
 
-1. **Timestamp-based expiration** - Uses time comparison instead of `setTimeout` for better reliability
-2. **Persistent state** - Clipboard state is preserved when CoreBox is hidden, expiration is checked on next open
-3. **Smart detection** - Distinguishes between same and new clipboard content
+1. **Timestamp-gated auto paste** - No timers, only compare `detectedAt` when CoreBox re-opens
+2. **Dismissal aware** - Once the user clears a clipboard item it stays hidden until the system clipboard changes
+3. **Image-first** - Renderer and main process both prioritize image payloads over files
 4. **Type-safe** - Full TypeScript support with proper interfaces
 
 #### Configuration
 
 Controlled by `appSetting.tools.autoPaste`:
 
-- `time: -1` - Never expire (clipboard always visible)
-- `time: 0` - Clear immediately after Execute
-- `time: N` (seconds) - Expire N seconds after first detection
+- `time: -1` - Disable auto paste entirely (manual paste still works)
+- `time: 0` - No limit; always eligible for auto paste
+- `time: N` (seconds) - Only auto paste within N seconds after detection
 
 #### Usage
 
 ```typescript
 const {
   clipboardOptions,    // Reactive state
-  handlePaste,         // Manual refresh
+  handlePaste,         // Manual refresh (pass { overrideDismissed: true } for user-initiated paste)
   handleAutoPaste,     // Auto-switch to FILE mode
-  clearClipboard,      // Clear state
-  isClipboardExpired   // Check expiration
+  clearClipboard       // Clear state
 } = useClipboard(boxOptions)
+
+// Keep CoreBox from re-surfacing the current clipboard item
+clearClipboard({ remember: true })
 ```
 
 #### State Flow
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ User copies image (T0 = 10:00:00)                       │
+│ User copies screenshot (T0 = 10:00:00)                  │
 └─────────────────┬───────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│ Open CoreBox (10:00:01)                                 │
-│ - handlePaste() called                                  │
-│ - New content detected                                  │
-│ - detectedAt = Date.now()                               │
-│ - Display clipboard preview                             │
+│ CoreBox opens                                           │
+│ - handlePaste() saves clipboard + detectedAt            │
+│ - handleAutoPaste() runs because elapsed < autoPaste    │
 └─────────────────┬───────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│ Close CoreBox (10:00:05)                                │
-│ - State preserved (not cleared)                         │
+│ User presses ESC                                        │
+│ - clearClipboard({ remember: true }) stores timestamp   │
+│ - Clipboard tag disappears                              │
 └─────────────────┬───────────────────────────────────────┘
                   │
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│ Open CoreBox again (10:10:00)                           │
-│ - handlePaste() called                                  │
-│ - Same clipboard detected                               │
-│ - Check: elapsed = 600s > 5s                            │
-│ - Expired! Clear and don't display                      │
+│ CoreBox opens again (clipboard unchanged)               │
+│ - handlePaste() sees timestamp == lastClearedTimestamp  │
+│ - Item stays hidden, box state unchanged                │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -92,15 +91,15 @@ interface IClipboardOptions {
   last: IClipboardItem | null
   /** Timestamp when current clipboard was first detected */
   detectedAt: number | null
+  lastClearedTimestamp: string | Date | null
 }
 
 interface IClipboardHook {
   clipboardOptions: IClipboardOptions
-  handlePaste: () => void
+  handlePaste: (options?: { overrideDismissed?: boolean }) => void
   handleAutoPaste: () => void
   applyToActiveApp: (item?: IClipboardItem) => Promise<boolean>
-  clearClipboard: () => void
-  isClipboardExpired: () => boolean
+  clearClipboard: (options?: { remember?: boolean }) => void
 }
 ```
 
@@ -198,18 +197,17 @@ CoreBox Opened
     │
     └─► handlePaste()
             │
-            ├─► Check if same clipboard
-            │   └─► Yes: Check expiration
-            │       └─► Expired? Clear : Keep
+            ├─► Timestamp matches dismissed entry?
+            │   └─► Keep hidden
             │
-            └─► New clipboard
-                └─► Set detectedAt = now
-                    Display preview
+            └─► Accept clipboard
+                └─► handleAutoPaste() checks autoPaste window
+                    └─► Eligible? auto paste feature/file
 ```
 
 ## Best Practices
 
-1. **Always check expiration** - Use `isClipboardExpired()` before displaying clipboard content
+1. **Respect dismissals** - Call `clearClipboard({ remember: true })` when ESC clears clipboard content
 2. **Preserve state on hide** - Don't clear clipboard when CoreBox is hidden
 3. **Type safety** - Import types from `./types` for better IDE support
 4. **Error handling** - Always wrap clipboard operations in try-catch
@@ -236,20 +234,24 @@ watch(visibility, (val) => {
 })
 ```
 
-### After (Timestamp-based)
+### After (Timestamp-gated auto paste)
 
 ```typescript
-// ✅ New: Uses timestamp comparison
+// ✅ New: timestamps only gate auto paste
 clipboardOptions.detectedAt = Date.now()
 
-function isClipboardExpired(): boolean {
-  const elapsed = Date.now() - clipboardOptions.detectedAt
-  return elapsed >= time * 1000
+function canAutoPaste(limit: number): boolean {
+  if (limit === -1) return false
+  if (limit === 0) return true
+  return Date.now() - (clipboardOptions.detectedAt ?? Date.now()) <= limit * 1000
 }
 
-// Preserved on hide, checked on show
 watch(visibility, (val) => {
-  if (val) handlePaste() // Checks expiration
+  if (!val) return
+  handlePaste()
+  if (canAutoPaste(appSetting.tools.autoPaste.time)) {
+    handleAutoPaste()
+  }
 })
 ```
 
@@ -257,11 +259,11 @@ watch(visibility, (val) => {
 
 | Metric | Old (Timer) | New (Timestamp) |
 |--------|-------------|-----------------|
-| Memory | Higher (timers) | Lower (just numbers) |
-| Reliability | Timer may drift | Precise time check |
+| Auto paste gating | Separate timers per clipboard | Single timestamp comparison |
+| Reliability | Timer may drift | Deterministic comparisons |
 | Code complexity | ~30 lines | ~15 lines |
 | Maintainability | Hard to debug timers | Easy to reason about |
-| State management | Must track timers | Simple timestamp comparison |
+| State management | Needed timer bookkeeping | Persisted timestamps + dismissals |
 
 ## Debugging
 
@@ -270,7 +272,7 @@ Enable debug logs:
 ```typescript
 // Look for these console.debug messages:
 "[Clipboard] New content detected"
-"[Clipboard] Content expired, clearing"
+"[Clipboard] Skipping dismissed clipboard item"
 "[Clipboard] System clipboard changed"
 ```
 
@@ -318,4 +320,3 @@ When modifying these hooks:
 3. Add JSDoc comments for all public functions
 4. Test clipboard expiration edge cases
 5. Ensure backward compatibility
-

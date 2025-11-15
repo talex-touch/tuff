@@ -150,6 +150,209 @@ export function useDownloadCenter() {
   }
 
   /**
+   * Retry a failed download task
+   * @param taskId - The task ID to retry
+   * @returns Promise that resolves when task is retried
+   */
+  const retryTask = async (taskId: string): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:retry-task', taskId)
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to retry task')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Pause all active download tasks
+   * @returns Promise that resolves when all tasks are paused
+   */
+  const pauseAllTasks = async (): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:pause-all-tasks')
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to pause all tasks')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Resume all paused download tasks
+   * @returns Promise that resolves when all tasks are resumed
+   */
+  const resumeAllTasks = async (): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:resume-all-tasks')
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to resume all tasks')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Cancel all active download tasks
+   * @returns Promise that resolves when all tasks are cancelled
+   */
+  const cancelAllTasks = async (): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:cancel-all-tasks')
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to cancel all tasks')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Open a downloaded file
+   * @param taskId - The task ID of the file to open
+   * @returns Promise that resolves when file is opened
+   */
+  const openFile = async (taskId: string): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:open-file', taskId)
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to open file')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Show a downloaded file in folder
+   * @param taskId - The task ID of the file to show
+   * @returns Promise that resolves when folder is shown
+   */
+  const showInFolder = async (taskId: string): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:show-in-folder', taskId)
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to show in folder')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Delete a downloaded file
+   * @param taskId - The task ID of the file to delete
+   * @returns Promise that resolves when file is deleted
+   */
+  const deleteFile = async (taskId: string): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:delete-file', taskId)
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete file')
+      }
+
+      // Remove from local tasks list
+      const index = downloadTasks.value.findIndex((t) => t.id === taskId)
+      if (index !== -1) {
+        downloadTasks.value.splice(index, 1)
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Remove a task from the list (without deleting the file)
+   * @param taskId - The task ID to remove
+   * @returns Promise that resolves when task is removed
+   */
+  const removeTask = async (taskId: string): Promise<void> => {
+    try {
+      // For now, just remove from local list
+      // TODO: Add backend API to remove task from database
+      const index = downloadTasks.value.findIndex((t) => t.id === taskId)
+      if (index !== -1) {
+        downloadTasks.value.splice(index, 1)
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Get download history
+   * @param limit - Maximum number of history items to retrieve
+   * @returns Promise that resolves to array of history items
+   */
+  const getHistory = async (limit?: number): Promise<any[]> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:get-history', limit)
+
+      if (response.success) {
+        return response.history
+      } else {
+        throw new Error(response.error || 'Failed to get history')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Clear all download history
+   * @returns Promise that resolves when history is cleared
+   */
+  const clearHistory = async (): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:clear-history')
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to clear history')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Clear a single history item
+   * @param historyId - The history item ID to clear
+   * @returns Promise that resolves when history item is cleared
+   */
+  const clearHistoryItem = async (historyId: string): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:clear-history-item', historyId)
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to clear history item')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
    * Update a task in the tasks list
    * @param task - The task to update
    */
@@ -361,9 +564,20 @@ export function useDownloadCenter() {
     pauseTask,
     resumeTask,
     cancelTask,
+    retryTask,
+    pauseAllTasks,
+    resumeAllTasks,
+    cancelAllTasks,
     getAllTasks,
     getTaskStatus,
     updateConfig,
+    openFile,
+    showInFolder,
+    deleteFile,
+    removeTask,
+    getHistory,
+    clearHistory,
+    clearHistoryItem,
 
     // Utility methods
     formatSpeed,

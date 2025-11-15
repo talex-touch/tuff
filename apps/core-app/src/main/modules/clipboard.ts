@@ -546,6 +546,10 @@ export class ClipboardModule extends BaseModule {
     if (includesAny(formats, IMAGE_FORMATS)) {
       const image = clipboard.readImage()
       if (helper.didImageChange(image)) {
+        if (includesAny(formats, FILE_URL_FORMATS)) {
+          const files = helper.readClipboardFiles()
+          helper.primeFiles(files)
+        }
         helper.markText('')
         const size = image.getSize()
         metaEntries.push({ key: 'image_size', value: size })

@@ -59,7 +59,7 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
 </script>
 
 <template>
-  <div class="TuffStatusBadge" :class="[`size-${size}`]" :style="styleVars">
+  <div class="TuffStatusBadge" :class="[`tuff-status-size-${size}`]" :style="styleVars">
     <i v-if="iconClass" :class="iconClass" />
     <span>{{ text }}</span>
   </div>
@@ -84,11 +84,11 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
     font-size: 14px;
   }
 
-  &.size-sm {
+  &.tuff-status-size-sm {
     padding: 2px 8px;
   }
 
-  &.size-md {
+  &.tuff-status-size-md {
     padding: 4px 12px;
   }
 }

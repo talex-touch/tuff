@@ -147,6 +147,7 @@ function handleClick(event: MouseEvent) {
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+      width: 100%;
     }
 
     .TBlockSlot-Tags {
@@ -154,6 +155,10 @@ function handleClick(event: MouseEvent) {
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
+      flex: 0 0 auto;
+      max-width: 100%;
+      align-self: flex-start;
+      height: auto;
     }
 
     .TBlockSlot-Tags--after {

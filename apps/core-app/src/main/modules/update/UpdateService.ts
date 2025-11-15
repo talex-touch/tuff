@@ -17,6 +17,7 @@ import { getAppVersionSafe } from '../../utils/version-util'
 import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
+import { UpdateSystem } from './update-system'
 
 const HALF_DAY_IN_MS = 12 * 60 * 60 * 1000
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -100,6 +101,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private currentChannel: AppPreviewChannel
   private cache: Map<string, any> = new Map()
   private initContext?: ModuleInitContext<TalexEvents>
+  private updateSystem?: UpdateSystem
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
@@ -120,6 +122,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.initContext = ctx
     console.log('[UpdateService] Initializing update service')
+
+    // Initialize UpdateSystem with DownloadCenter integration
+    const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
+    if (downloadCenterModule) {
+      this.updateSystem = new UpdateSystem(downloadCenterModule, {
+        autoDownload: false,
+        autoCheck: this.settings.enabled,
+        checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
+        ignoredVersions: this.settings.ignoredVersions,
+        updateChannel: this.settings.updateChannel
+      })
+      console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
+    } else {
+      console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
+    }
 
     // Register IPC channels
     this.registerIpcChannels()
@@ -252,6 +269,113 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
         console.error('[UpdateService] Failed to clear cache:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Download update
+    appChannel.regChannel(ChannelType.MAIN, 'update:download', async ({ data, reply }) => {
+      try {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
+        }
+        const release = data as GitHubRelease
+        const taskId = await this.updateSystem.downloadUpdate(release)
+        reply(DataCode.SUCCESS, { success: true, taskId })
+      } catch (error) {
+        console.error('[UpdateService] Failed to download update:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Install update
+    appChannel.regChannel(ChannelType.MAIN, 'update:install', async ({ data, reply }) => {
+      try {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
+        }
+        const taskId = data as string
+        await this.updateSystem.installUpdate(taskId)
+        reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('[UpdateService] Failed to install update:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Ignore version
+    appChannel.regChannel(ChannelType.MAIN, 'update:ignore-version', async ({ data, reply }) => {
+      try {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
+        }
+        const version = data as string
+        this.updateSystem.ignoreVersion(version)
+        this.settings.ignoredVersions.push(version)
+        this.saveSettings()
+        reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('[UpdateService] Failed to ignore version:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    // Set auto download
+    appChannel.regChannel(
+      ChannelType.MAIN,
+      'update:set-auto-download',
+      async ({ data, reply }) => {
+        try {
+          if (!this.updateSystem) {
+            throw new Error('UpdateSystem not initialized')
+          }
+          const enabled = data as boolean
+          this.updateSystem.setAutoDownload(enabled)
+          reply(DataCode.SUCCESS, { success: true })
+        } catch (error) {
+          console.error('[UpdateService] Failed to set auto download:', error)
+          reply(DataCode.ERROR, {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
+    )
+
+    // Set auto check
+    appChannel.regChannel(ChannelType.MAIN, 'update:set-auto-check', async ({ data, reply }) => {
+      try {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
+        }
+        const enabled = data as boolean
+        this.updateSystem.setAutoCheck(enabled)
+        this.settings.enabled = enabled
+        this.saveSettings()
+
+        // Restart or stop polling based on setting
+        if (this.pollingService.isActive()) {
+          this.pollingService.stop()
+        }
+        if (enabled) {
+          this.startPolling()
+        }
+
+        reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('[UpdateService] Failed to set auto check:', error)
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -733,6 +857,25 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       console.log('[UpdateService] Settings saved to:', settingsFile)
     } catch (error) {
       console.error('[UpdateService] Failed to save settings:', error)
+    }
+  }
+
+  /**
+   * Map UpdateFrequency to check frequency
+   */
+  private mapFrequencyToCheckFrequency(
+    frequency: UpdateFrequency
+  ): 'startup' | 'daily' | 'weekly' | 'never' {
+    switch (frequency) {
+      case 'everyday':
+      case '1day':
+        return 'daily'
+      case '7day':
+        return 'weekly'
+      case 'never':
+        return 'never'
+      default:
+        return 'startup'
     }
   }
 

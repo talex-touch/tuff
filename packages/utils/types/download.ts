@@ -7,6 +7,27 @@ export enum DownloadPriority {
   BACKGROUND = 10    // 后台预加载
 }
 
+// 错误类型枚举
+export enum DownloadErrorType {
+  NETWORK_ERROR = 'network_error',
+  TIMEOUT_ERROR = 'timeout_error',
+  DISK_SPACE_ERROR = 'disk_space_error',
+  PERMISSION_ERROR = 'permission_error',
+  CHECKSUM_ERROR = 'checksum_error',
+  FILE_NOT_FOUND = 'file_not_found',
+  INVALID_URL = 'invalid_url',
+  CANCELLED = 'cancelled',
+  UNKNOWN_ERROR = 'unknown_error'
+}
+
+// 错误严重程度
+export enum ErrorSeverity {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  CRITICAL = 'critical'
+}
+
 // 下载模块枚举
 export enum DownloadModule {
   APP_UPDATE = 'app_update',
@@ -133,6 +154,23 @@ export interface DownloadStats {
   failedTasks: number
   totalDownloaded: number
   averageSpeed: number
+}
+
+// 下载历史记录接口
+export interface DownloadHistory {
+  id: string
+  taskId: string
+  url: string
+  filename: string
+  module: DownloadModule
+  status: DownloadStatus
+  totalSize?: number
+  downloadedSize: number
+  duration?: number // seconds
+  averageSpeed?: number // bytes/s
+  destination: string
+  createdAt: Date
+  completedAt?: Date
 }
 
 // 默认下载配置

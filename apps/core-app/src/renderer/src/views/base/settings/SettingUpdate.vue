@@ -29,11 +29,13 @@ const {
 const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
+const autoDownloadEnabled = ref<boolean>(false)
 const lastCheck = ref<number | null>(null)
 
 const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
+const autoDownloadSaving = ref(false)
 const manualChecking = ref(false)
 const clearingCache = ref(false)
 const lastResultMessage = ref<string>('')
@@ -86,6 +88,7 @@ async function loadSettings(): Promise<void> {
     settings.value = fetched
     selectedChannel.value = fetched.updateChannel
     selectedFrequency.value = fetched.frequency
+    autoDownloadEnabled.value = (fetched as any).autoDownload ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
   } catch (error) {
     console.error('[SettingUpdate] Failed to load settings:', error)
@@ -139,6 +142,25 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
     ElMessage.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     frequencySaving.value = false
+  }
+}
+
+async function handleAutoDownloadChange(value: boolean): Promise<void> {
+  if (!settings.value || autoDownloadSaving.value) return
+
+  const previous = autoDownloadEnabled.value
+  autoDownloadEnabled.value = value
+  autoDownloadSaving.value = true
+  try {
+    await updateSettings({ autoDownload: value } as any)
+    ;(settings.value as any).autoDownload = value
+    ElMessage.success(t('settings.settingUpdate.messages.autoDownloadSaved'))
+  } catch (error) {
+    console.error('[SettingUpdate] Failed to update auto download:', error)
+    autoDownloadEnabled.value = previous
+    ElMessage.error(t('settings.settingUpdate.messages.saveFailed'))
+  } finally {
+    autoDownloadSaving.value = false
   }
 }
 
@@ -275,6 +297,16 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
         {{ freq.label }}
       </t-select-item>
     </tuff-block-select>
+
+    <tuff-block-switch
+      v-model="autoDownloadEnabled"
+      :title="t('settings.settingUpdate.autoDownloadTitle')"
+      :description="t('settings.settingUpdate.autoDownloadDesc')"
+      default-icon="i-carbon-download"
+      active-icon="i-carbon-download"
+      :disabled="fetching || autoDownloadSaving"
+      @update:model-value="handleAutoDownloadChange"
+    />
 
     <tuff-block-slot
       :title="t('settings.settingUpdate.statusTitle')"

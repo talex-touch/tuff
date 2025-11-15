@@ -44,7 +44,6 @@ const boxOptions = reactive<IBoxOptions>({
 const clipboardOptions = reactive<any>({
   last: null,
   detectedAt: null,
-  autoPasted: false,
   lastClearedTimestamp: null
 })
 
@@ -371,7 +370,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
     <div class="CoreBox-Mask" />
   </teleport>
 
-  <div class="CoreBox" @paste="handlePaste">
+  <div class="CoreBox" @paste="() => handlePaste({ overrideDismissed: true })">
     <PrefixPart
       :providers="activeActivations"
       @close="handleExit"
