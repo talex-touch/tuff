@@ -32,9 +32,17 @@ export default defineConfig({
         ]
       })
     ],
+    resolve: {
+      alias: {
+        // 强制 @libsql/isomorphic-ws 使用 web 版本而不是 node 版本
+        // 这样就不会引入 ws 模块，避免原生依赖问题
+        '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs'
+      }
+    },
     define: {
-      'process.env.WS_NO_BUFFER_UTIL': 'true',
-      'process.env.WS_NO_UTF_8_VALIDATE': 'true'
+      // 这些环境变量现在不再需要，因为我们完全避免了 ws
+      // 'process.env.WS_NO_BUFFER_UTIL': 'true',
+      // 'process.env.WS_NO_UTF_8_VALIDATE': 'true'
     },
     build: {
       sourcemap: enableSourcemap,

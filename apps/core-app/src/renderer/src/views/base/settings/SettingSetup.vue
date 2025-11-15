@@ -7,7 +7,7 @@
 <script setup lang="ts" name="SettingSetup">
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 
 // Import UI components
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -201,7 +201,7 @@ async function checkAllPermissions(): Promise<void> {
     }
   } catch (error) {
     console.error('[SettingSetup] Failed to check permissions:', error)
-    ElMessage.error(t('setupPermissions.checkFailed'))
+    toast.error(t('setupPermissions.checkFailed'))
   } finally {
     isLoading.value = false
   }
@@ -248,7 +248,7 @@ async function requestPermission(type: string): Promise<void> {
   try {
     const opened = await touchChannel.send('system:permission:request', type as any)
     if (opened) {
-      ElMessage.info(t('setupPermissions.openSettings'))
+      toast.info(t('setupPermissions.openSettings'))
     }
     // Recheck after a delay to allow user to grant permission
     setTimeout(async () => {
@@ -256,7 +256,7 @@ async function requestPermission(type: string): Promise<void> {
     }, 2000)
   } catch (error) {
     console.error(`[SettingSetup] Failed to request permission ${type}:`, error)
-    ElMessage.error(t('setupPermissions.requestFailed'))
+    toast.error(t('setupPermissions.requestFailed'))
   }
 }
 
@@ -270,10 +270,10 @@ async function updateAutoStart(value: boolean): Promise<void> {
       clear: false
     })
     await touchChannel.send('tray:autostart:update', value)
-    ElMessage.success(t('common.success'))
+    toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update autoStart:', error)
-    ElMessage.error(t('setupPermissions.updateFailed'))
+    toast.error(t('setupPermissions.updateFailed'))
   }
 }
 
@@ -287,10 +287,10 @@ function updateShowTray(value: boolean): void {
       clear: false
     })
     touchChannel.send('tray:show:set', value)
-    ElMessage.success(t('common.success'))
+    toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update showTray:', error)
-    ElMessage.error(t('setupPermissions.updateFailed'))
+    toast.error(t('setupPermissions.updateFailed'))
   }
 }
 
@@ -304,10 +304,10 @@ function updateHideDock(value: boolean): void {
       clear: false
     })
     touchChannel.send('tray:hidedock:set', value)
-    ElMessage.success(t('common.success'))
+    toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update hideDock:', error)
-    ElMessage.error(t('setupPermissions.updateFailed'))
+    toast.error(t('setupPermissions.updateFailed'))
   }
 }
 
@@ -323,10 +323,10 @@ function updateStartSilent(value: boolean): void {
     })
     // Update auto-start setting to apply the change
     touchChannel.send('tray:autostart:update', settings.value.autoStart)
-    ElMessage.success(t('common.success'))
+    toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
-    ElMessage.error(t('setupPermissions.updateFailed'))
+    toast.error(t('setupPermissions.updateFailed'))
   }
 }
 
@@ -339,10 +339,10 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
       content: JSON.stringify(value),
       clear: false
     })
-    ElMessage.success(t('common.success'))
+    toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update runAsAdmin:', error)
-    ElMessage.error(t('setupPermissions.updateFailed'))
+    toast.error(t('setupPermissions.updateFailed'))
   }
 }
 
@@ -355,10 +355,10 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
       content: JSON.stringify(value),
       clear: false
     })
-    ElMessage.success(t('common.success'))
+    toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update customDesktop:', error)
-    ElMessage.error(t('setupPermissions.updateFailed'))
+    toast.error(t('setupPermissions.updateFailed'))
   }
 }
 

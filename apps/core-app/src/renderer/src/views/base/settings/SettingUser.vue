@@ -5,7 +5,7 @@ import FlatButton from '@comp/base/button/FlatButton.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 // import { appSetting } from '~/modules/channel/storage'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 
 const { t } = useI18n()
 const { isLoggedIn, currentUser, login, logout } = useAuth()
@@ -19,17 +19,17 @@ async function handleLogin() {
     }
   } catch (error) {
     console.error('登录过程出错:', error)
-    ElMessage.error('登录过程中发生错误')
+    toast.error('登录过程中发生错误')
   }
 }
 
 async function handleLogout() {
   try {
     await logout()
-    ElMessage.success('已登出')
+    toast.success('已登出')
   } catch (error) {
     console.error('登出失败:', error)
-    ElMessage.error('登出失败')
+    toast.error('登出失败')
   }
 }
 </script>

@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SettingUpdate">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { AppPreviewChannel, type UpdateSettings } from '@talex-touch/utils'
 import FlatButton from '@comp/base/button/FlatButton.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -92,7 +92,7 @@ async function loadSettings(): Promise<void> {
     lastCheck.value = fetched.lastCheckedAt ?? null
   } catch (error) {
     console.error('[SettingUpdate] Failed to load settings:', error)
-    ElMessage.error(t('settings.settingUpdate.messages.loadFailed'))
+    toast.error(t('settings.settingUpdate.messages.loadFailed'))
   } finally {
     fetching.value = false
   }
@@ -116,11 +116,11 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
   try {
     await updateSettings({ updateChannel: value })
     settings.value.updateChannel = value
-    ElMessage.success(t('settings.settingUpdate.messages.channelSaved'))
+    toast.success(t('settings.settingUpdate.messages.channelSaved'))
   } catch (error) {
     console.error('[SettingUpdate] Failed to update channel:', error)
     selectedChannel.value = previous
-    ElMessage.error(t('settings.settingUpdate.messages.saveFailed'))
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     channelSaving.value = false
   }
@@ -135,11 +135,11 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
   try {
     await updateSettings({ frequency: value })
     settings.value.frequency = value
-    ElMessage.success(t('settings.settingUpdate.messages.frequencySaved'))
+    toast.success(t('settings.settingUpdate.messages.frequencySaved'))
   } catch (error) {
     console.error('[SettingUpdate] Failed to update frequency:', error)
     selectedFrequency.value = previous
-    ElMessage.error(t('settings.settingUpdate.messages.saveFailed'))
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     frequencySaving.value = false
   }
@@ -154,11 +154,11 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
   try {
     await updateSettings({ autoDownload: value } as any)
     ;(settings.value as any).autoDownload = value
-    ElMessage.success(t('settings.settingUpdate.messages.autoDownloadSaved'))
+    toast.success(t('settings.settingUpdate.messages.autoDownloadSaved'))
   } catch (error) {
     console.error('[SettingUpdate] Failed to update auto download:', error)
     autoDownloadEnabled.value = previous
-    ElMessage.error(t('settings.settingUpdate.messages.saveFailed'))
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     autoDownloadSaving.value = false
   }
@@ -171,29 +171,29 @@ async function handleManualCheck(): Promise<void> {
     await refreshStatus()
     updateLastResultMessage(result)
     if (result?.hasUpdate && result.release) {
-      ElMessage.success(
+      toast.success(
         t('settings.settingUpdate.messages.manualCheckFound', {
           version: result.release.tag_name
         })
       )
     } else if (result?.error) {
-      ElMessage.warning(
+      toast.warning(
         t('settings.settingUpdate.messages.manualCheckFailedWithReason', {
           reason: result.error
         })
       )
     } else if (result?.release) {
-      ElMessage.success(
+      toast.success(
         t('settings.settingUpdate.messages.manualCheckNoUpdate', {
           version: result.release.tag_name
         })
       )
     } else {
-      ElMessage.success(t('settings.settingUpdate.messages.manualCheckStarted'))
+      toast.success(t('settings.settingUpdate.messages.manualCheckStarted'))
     }
   } catch (error) {
     console.error('[SettingUpdate] Manual update check failed:', error)
-    ElMessage.error(t('settings.settingUpdate.messages.manualCheckFailed'))
+    toast.error(t('settings.settingUpdate.messages.manualCheckFailed'))
   } finally {
     manualChecking.value = false
   }
@@ -203,10 +203,10 @@ async function handleClearCache(): Promise<void> {
   clearingCache.value = true
   try {
     await clearUpdateCache()
-    ElMessage.success(t('settings.settingUpdate.messages.cacheCleared'))
+    toast.success(t('settings.settingUpdate.messages.cacheCleared'))
   } catch (error) {
     console.error('[SettingUpdate] Failed to clear cache:', error)
-    ElMessage.error(t('settings.settingUpdate.messages.cacheClearFailed'))
+    toast.error(t('settings.settingUpdate.messages.cacheClearFailed'))
   } finally {
     clearingCache.value = false
   }

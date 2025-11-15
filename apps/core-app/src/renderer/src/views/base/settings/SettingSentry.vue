@@ -7,7 +7,7 @@
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
@@ -49,10 +49,10 @@ async function saveConfig() {
         anonymous: anonymous.value
       })
     })
-    ElMessage.success(t('settingSentry.saveSuccess', '设置已保存'))
+    toast.success(t('settingSentry.saveSuccess', '设置已保存'))
   } catch (error) {
     console.error('Failed to save Sentry config', error)
-    ElMessage.error(t('settingSentry.saveError', '保存设置失败'))
+    toast.error(t('settingSentry.saveError', '保存设置失败'))
   } finally {
     loading.value = false
   }

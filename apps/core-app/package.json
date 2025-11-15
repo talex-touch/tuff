@@ -12,7 +12,7 @@
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev",
+    "dev": "pnpm exec electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postbuild": "node scripts/prepare-out-package-json.js",
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
