@@ -198,7 +198,7 @@
     "market": "市场",
     "plugin": "插件",
     "details": "详细信息",
-    "aisdk": "AI SDK",
+    "aisdk": "塔塔智能",
     "style": "样式",
     "setting": "设置"
   },
@@ -1145,7 +1145,19 @@
     "disabled": "已禁用",
     "selectProviderHint": "选择一个提供商进行配置",
     "testing": "测试中...",
-    "test": "测试连接",
+    "test": {
+      "button": "测试连接",
+      "testing": "测试中...",
+      "latency": "延迟",
+      "success": {
+        "title": "连接成功",
+        "message": "提供商连接正常"
+      },
+      "error": {
+        "title": "连接失败",
+        "message": "无法连接到提供商"
+      }
+    },
     "testSuccess": "连接成功",
     "testFailed": "连接失败",
     "testSuccessMessage": "提供商连接正常",
@@ -1164,10 +1176,12 @@
     "instructions": "系统指令",
     "instructionsPlaceholder": "输入此提供商的系统指令",
     "advancedConfig": "高级配置",
-    "priority": "优先级",
-    "priorityHigh": "高",
-    "priorityMedium": "中",
-    "priorityLow": "低",
+    "priority": {
+      "label": "优先级",
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
     "timeout": "超时时间",
     "rateLimit": "速率限制",
     "requestsPerMinute": "每分钟请求数",
@@ -1193,6 +1207,87 @@
     "status": {
       "enabled": "已启用",
       "disabled": "已禁用"
+    },
+    "disabled": {
+      "message": "此提供商已禁用。启用后可配置其设置。"
+    },
+    "empty": {
+      "title": "未选择提供商",
+      "description": "从列表中选择一个提供商以查看和配置其设置"
+    },
+    "config": {
+      "api": {
+        "title": "API 配置",
+        "description": "配置 API 密钥和端点",
+        "apiKey": "API 密钥",
+        "apiKeyPlaceholder": "输入您的 API 密钥",
+        "apiKeyRequired": "已启用的提供商需要 API 密钥",
+        "baseUrl": "基础 URL",
+        "baseUrlPlaceholder": "https://api.example.com/v1",
+        "baseUrlHint": "留空以使用默认端点",
+        "baseUrlInvalid": "请输入有效的 URL"
+      },
+      "model": {
+        "title": "模型配置",
+        "description": "管理可用模型和默认模型",
+        "models": "可用模型",
+        "noModels": "暂无模型",
+        "modelsCount": "个模型",
+        "manageModels": "管理模型",
+        "addModel": "添加模型",
+        "modelsRequired": "已启用的提供商至少需要一个模型",
+        "modelsHint": "添加此提供商支持的模型",
+        "modelExists": "此模型已存在",
+        "addModelPlaceholder": "输入模型名称并按 Enter",
+        "defaultModel": "默认模型",
+        "defaultModelPlaceholder": "选择默认模型",
+        "defaultModelRequired": "已启用的提供商需要默认模型",
+        "defaultModelInvalid": "默认模型必须来自可用模型列表",
+        "instructions": "系统指令",
+        "instructionsPlaceholder": "输入此提供商的系统指令...",
+        "instructionsHint": "可选的系统提示词，将与此提供商一起使用"
+      },
+      "advanced": {
+        "title": "高级配置",
+        "description": "配置优先级和超时设置",
+        "priority": "优先级",
+        "priorityPlaceholder": "选择优先级",
+        "priorityHint": "优先级数字越小表示优先级越高",
+        "timeout": "超时时间",
+        "timeoutPlaceholder": "30000",
+        "timeoutUnit": "毫秒",
+        "timeoutHint": "等待 API 响应的最长时间（1000-300000毫秒）",
+        "timeoutInvalid": "超时时间必须在 1000 到 300000 毫秒之间"
+      },
+      "rateLimit": {
+        "title": "速率限制",
+        "description": "设置请求和令牌限制",
+        "requestsPerMinute": "每分钟请求数",
+        "tokensPerMinute": "每分钟令牌数",
+        "unlimitedPlaceholder": "留空表示无限制",
+        "requestsUnit": "请求/分钟",
+        "tokensUnit": "令牌/分钟",
+        "requestsPerMinuteHint": "每分钟最大请求数",
+        "tokensPerMinuteHint": "每分钟最大令牌数",
+        "invalidValue": "值必须是正数",
+        "infoMessage": "留空字段表示无速率限制"
+      }
+    },
+    "global": {
+      "title": "全局设置",
+      "description": "配置审计日志和缓存选项",
+      "auditLogging": "启用审计日志",
+      "auditLoggingHint": "记录所有 AI 请求以用于安全和合规目的",
+      "caching": "启用响应缓存",
+      "cachingHint": "缓存 AI 响应以降低成本并提高响应速度",
+      "cacheExpiration": "缓存过期时间",
+      "cacheExpirationPlaceholder": "选择缓存过期时间",
+      "cacheExpirationHint": "缓存响应在过期前保留的时间",
+      "cacheExpiration5min": "5 分钟",
+      "cacheExpiration15min": "15 分钟",
+      "cacheExpiration1hour": "1 小时",
+      "cacheExpiration6hours": "6 小时",
+      "cacheExpiration24hours": "24 小时"
     }
   }
 }

@@ -279,6 +279,15 @@ function build() {
 
   const builderBin = resolveBuilderBin();
 
+  // 确保关键平台依赖存在于应用 node_modules 中
+  try {
+    const ensureModules = require(path.join(__dirname, 'ensure-platform-modules.js'));
+    ensureModules(normalizedTarget, effectiveArch);
+    console.log('✓ Platform-specific modules synced to app node_modules\n');
+  } catch (err) {
+    console.warn(`Warning: Failed to ensure platform modules: ${err.message}`);
+  }
+
   if (skipInstallAppDeps) {
     console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n');
   } else {

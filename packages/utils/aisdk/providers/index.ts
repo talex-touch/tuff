@@ -2,6 +2,9 @@ import type { AiProvider } from './base'
 import type { AiProviderConfig } from '../../types/aisdk'
 import { AiProviderType } from '../../types/aisdk'
 import { OpenAIProvider } from './openai'
+import { AnthropicProvider } from './anthropic'
+import { DeepSeekProvider } from './deepseek'
+import { LocalProvider } from './local'
 
 export class ProviderManager {
   private providers = new Map<string, AiProvider>()
@@ -13,6 +16,9 @@ export class ProviderManager {
 
   private registerDefaultFactories(): void {
     this.registerFactory(AiProviderType.OPENAI, (config) => new OpenAIProvider(config))
+    this.registerFactory(AiProviderType.ANTHROPIC, (config) => new AnthropicProvider(config))
+    this.registerFactory(AiProviderType.DEEPSEEK, (config) => new DeepSeekProvider(config))
+    this.registerFactory(AiProviderType.LOCAL, (config) => new LocalProvider(config))
   }
 
   registerFactory(type: AiProviderType, factory: (config: AiProviderConfig) => AiProvider): void {
@@ -84,6 +90,18 @@ export class ProviderManager {
     }
     provider.updateConfig(config)
     console.log(`[ProviderManager] Updated configuration for provider: ${providerId}`)
+  }
+
+  /**
+   * Create a temporary provider instance without registering it
+   * Useful for testing provider configurations
+   */
+  createProviderInstance(config: AiProviderConfig): AiProvider {
+    const factory = this.providerFactories.get(config.type)
+    if (!factory) {
+      throw new Error(`[ProviderManager] No factory registered for provider type: ${config.type}`)
+    }
+    return factory(config)
   }
 }
 

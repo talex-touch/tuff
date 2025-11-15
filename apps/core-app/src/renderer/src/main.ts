@@ -21,6 +21,8 @@ import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import './assets/main.css'
 import '~/styles/element/index.scss'
 import '~/styles/index.scss'
+import '~/styles/accessibility.scss'
+import '~/components/aisdk/styles/aisdk-theme.scss'
 
 import 'uno.css'
 import 'virtual:unocss-devtools'

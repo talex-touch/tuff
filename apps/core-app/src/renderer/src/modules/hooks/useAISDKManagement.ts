@@ -1,10 +1,10 @@
-import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, onMounted, type Ref, type ComputedRef } from 'vue'
 import type {
   AiProviderConfig,
   AISDKGlobalConfig,
   TestResult
 } from '~/types/aisdk'
-import { DEFAULT_PROVIDERS, DEFAULT_GLOBAL_CONFIG } from '~/types/aisdk'
+import { aisdkStorage, migrateAISDKSettings } from '~/modules/storage/aisdk-storage'
 
 /**
  * Return type for the useAISDKManagement composable
@@ -77,12 +77,34 @@ interface UseAISDKManagementReturn {
  * ```
  */
 export function useAISDKManagement(): UseAISDKManagementReturn {
-  // Core state
-  const providers = ref<AiProviderConfig[]>([...DEFAULT_PROVIDERS])
+  // Core state - now backed by persistent storage
+  const providers = computed<AiProviderConfig[]>({
+    get: () => aisdkStorage.data.providers,
+    set: (value) => {
+      aisdkStorage.data.providers = value
+    }
+  })
+  
   const selectedProviderId = ref<string | null>(null)
-  const globalConfig = ref<AISDKGlobalConfig>({ ...DEFAULT_GLOBAL_CONFIG })
+  
+  const globalConfig = computed<AISDKGlobalConfig>({
+    get: () => aisdkStorage.data.globalConfig,
+    set: (value) => {
+      aisdkStorage.data.globalConfig = value
+    }
+  })
+  
   const testResults = ref<Map<string, TestResult>>(new Map())
   const loading = ref(false)
+
+  // Initialize storage and run migrations on mount
+  onMounted(async () => {
+    try {
+      await migrateAISDKSettings()
+    } catch (error) {
+      console.error('[AISDK Management] Failed to migrate settings:', error)
+    }
+  })
 
   /**
    * Currently selected provider object.
@@ -143,16 +165,18 @@ export function useAISDKManagement(): UseAISDKManagementReturn {
   /**
    * Updates a provider's configuration.
    * Merges the updates with the existing configuration.
+   * Changes are automatically persisted via TouchStorage auto-save.
    *
    * @param id - The unique identifier of the provider to update
    * @param updates - Partial provider configuration to merge
    */
   function updateProvider(id: string, updates: Partial<AiProviderConfig>): void {
-    const index = providers.value.findIndex((p) => p.id === id)
+    const index = aisdkStorage.data.providers.findIndex((p) => p.id === id)
     if (index === -1) return
 
-    providers.value[index] = {
-      ...providers.value[index],
+    // Update the provider in storage (auto-save will handle persistence)
+    aisdkStorage.data.providers[index] = {
+      ...aisdkStorage.data.providers[index],
       ...updates
     }
   }
@@ -160,11 +184,12 @@ export function useAISDKManagement(): UseAISDKManagementReturn {
   /**
    * Toggles a provider's enabled state.
    * If the provider is currently selected and being disabled, clears the selection.
+   * Changes are automatically persisted via TouchStorage auto-save.
    *
    * @param id - The unique identifier of the provider to toggle
    */
   function toggleProvider(id: string): void {
-    const provider = providers.value.find((p) => p.id === id)
+    const provider = aisdkStorage.data.providers.find((p) => p.id === id)
     if (!provider) return
 
     const newEnabledState = !provider.enabled
@@ -179,14 +204,13 @@ export function useAISDKManagement(): UseAISDKManagementReturn {
   /**
    * Updates the global AISDK configuration.
    * Merges the updates with the existing configuration.
+   * Changes are automatically persisted via TouchStorage auto-save.
    *
    * @param updates - Partial global configuration to merge
    */
   function updateGlobalConfig(updates: Partial<AISDKGlobalConfig>): void {
-    globalConfig.value = {
-      ...globalConfig.value,
-      ...updates
-    }
+    // Update global config in storage (auto-save will handle persistence)
+    Object.assign(aisdkStorage.data.globalConfig, updates)
   }
 
   /**
@@ -215,7 +239,7 @@ export function useAISDKManagement(): UseAISDKManagementReturn {
    * @returns The provider configuration or undefined if not found
    */
   function getProvider(id: string): AiProviderConfig | undefined {
-    return providers.value.find((p) => p.id === id)
+    return aisdkStorage.data.providers.find((p) => p.id === id)
   }
 
   return {

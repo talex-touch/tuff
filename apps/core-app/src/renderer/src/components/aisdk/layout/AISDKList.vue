@@ -1,15 +1,40 @@
 <template>
   <TouchScroll class="AISDKList-Container cubic-transition">
-    <div class="AISDKList-Toolbox w-full">
+    <div class="AISDKList-Toolbox w-full" role="search">
       <div class="search-wrapper">
-        <i class="i-ri-search-line search-icon" />
+        <label for="provider-search" class="sr-only">{{ t('aisdk.search.label') }}</label>
+        <i class="i-ri-search-line search-icon" aria-hidden="true" />
         <input
+          id="provider-search"
           v-model="searchQuery"
-          type="text"
+          type="search"
           :placeholder="t('aisdk.search.placeholder')"
+          :aria-label="t('aisdk.search.label')"
+          :aria-describedby="searchQuery ? 'search-results-count' : undefined"
           class="search-input"
+          autocomplete="off"
         />
-        <i v-if="searchQuery" class="i-ri-close-line clear-icon" @click="searchQuery = ''" />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="clear-icon"
+          :aria-label="t('aisdk.search.clear')"
+          @click="clearSearch"
+          @keydown.enter="clearSearch"
+        >
+          <i class="i-ri-close-line" aria-hidden="true" />
+        </button>
+      </div>
+      <div 
+        v-if="searchQuery" 
+        id="search-results-count" 
+        class="sr-only" 
+        role="status" 
+        aria-live="polite"
+      >
+        {{ t('aisdk.search.results', { 
+          count: filteredEnabledProviders.length + filteredDisabledProviders.length 
+        }) }}
       </div>
     </div>
 
@@ -18,6 +43,7 @@
       :providers="filteredEnabledProviders"
       :title="t('aisdk.list.enabled')"
       icon="i-ri-check-line"
+      section-id="enabled-providers"
       @toggle="handleToggle"
     />
 
@@ -26,6 +52,7 @@
       :providers="filteredDisabledProviders"
       :title="t('aisdk.list.disabled')"
       icon="i-ri-close-line"
+      section-id="disabled-providers"
       @toggle="handleToggle"
     />
   </TouchScroll>
@@ -126,6 +153,10 @@ watch(
 function handleToggle(provider: AiProviderConfig) {
   emits('toggle', provider)
 }
+
+function clearSearch() {
+  searchQuery.value = ''
+}
 </script>
 
 <style lang="scss" scoped>
@@ -150,16 +181,18 @@ function handleToggle(provider: AiProviderConfig) {
   height: 32px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 
   &:hover {
     background: var(--el-fill-color-light);
     border-color: var(--el-border-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
   }
 
   &:focus-within {
     background: var(--el-fill-color);
     border-color: var(--el-color-primary-light-5);
-    box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
+    box-shadow: 0 0 0 3px var(--el-color-primary-light-9), 0 2px 4px rgba(0, 0, 0, 0.06);
   }
 }
 
@@ -168,6 +201,10 @@ function handleToggle(provider: AiProviderConfig) {
   font-size: 14px;
   margin-right: 8px;
   transition: color 0.3s ease;
+  
+  .search-wrapper:focus-within & {
+    color: var(--el-color-primary);
+  }
 }
 
 .search-input {
@@ -181,6 +218,11 @@ function handleToggle(provider: AiProviderConfig) {
 
   &::placeholder {
     color: var(--el-text-color-placeholder);
+    transition: color 0.3s ease;
+  }
+  
+  &:focus::placeholder {
+    color: var(--el-text-color-disabled);
   }
 }
 
@@ -189,18 +231,43 @@ function handleToggle(provider: AiProviderConfig) {
   font-size: 14px;
   margin-left: 8px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50%;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0;
 
   &:hover {
     color: var(--el-text-color-regular);
     background: var(--el-fill-color);
+    transform: scale(1.1);
   }
+  
+  &:active {
+    transform: scale(0.95);
+  }
+  
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 .AISDKList-Container {
