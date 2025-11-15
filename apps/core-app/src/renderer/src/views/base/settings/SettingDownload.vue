@@ -7,7 +7,7 @@
 <script setup lang="ts" name="SettingDownload">
 import { useI18n } from 'vue-i18n'
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { getTouchSDK } from '@talex-touch/utils/renderer'
 import type { DownloadConfig } from '@talex-touch/utils'
 
@@ -72,7 +72,7 @@ async function loadConfig() {
     }
   } catch (error) {
     console.error('[SettingDownload] Failed to load config:', error)
-    ElMessage.warning(t('settings.settingDownload.messages.loadFailed'))
+    toast.warning(t('settings.settingDownload.messages.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -82,10 +82,10 @@ async function loadConfig() {
 async function updateDownloadConfig() {
   try {
     await updateConfig(downloadConfig.value)
-    ElMessage.success(t('settings.settingDownload.messages.saved'))
+    toast.success(t('settings.settingDownload.messages.saved'))
   } catch (error) {
     console.error('[SettingDownload] Failed to update config:', error)
-    ElMessage.error(t('settings.settingDownload.messages.saveFailed'))
+    toast.error(t('settings.settingDownload.messages.saveFailed'))
   }
 }
 
@@ -121,7 +121,7 @@ async function restoreDefaults() {
     }
   }
   await updateDownloadConfig()
-  ElMessage.success(t('settings.settingDownload.messages.defaultsRestored'))
+  toast.success(t('settings.settingDownload.messages.defaultsRestored'))
 }
 
 // Clean up temporary files
@@ -130,13 +130,13 @@ async function cleanupTempFiles() {
   try {
     const response = await touchSDK.rawChannel.send('download:cleanup-temp')
     if (response.success) {
-      ElMessage.success(t('settings.settingDownload.messages.tempCleaned'))
+      toast.success(t('settings.settingDownload.messages.tempCleaned'))
     } else {
       throw new Error(response.error || 'Failed to cleanup temp files')
     }
   } catch (error) {
     console.error('[SettingDownload] Failed to cleanup temp files:', error)
-    ElMessage.error(t('settings.settingDownload.messages.tempCleanFailed'))
+    toast.error(t('settings.settingDownload.messages.tempCleanFailed'))
   } finally {
     cleaningTemp.value = false
   }

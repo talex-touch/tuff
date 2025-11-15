@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { getBuildInfo } from '~/utils/build-info'
 
 // Import UI components
@@ -61,10 +61,10 @@ async function exportPerformanceData() {
     link.click()
     URL.revokeObjectURL(url)
 
-    ElMessage.success(t('settingAbout.exportSuccess'))
+    toast.success(t('settingAbout.exportSuccess'))
   } catch (error) {
     console.error('Failed to export performance data', error)
-    ElMessage.error(t('settingAbout.exportFailed'))
+    toast.error(t('settingAbout.exportFailed'))
   }
 }
 
@@ -95,18 +95,18 @@ async function openAppFolder() {
   try {
     const rootPath = window.$startupInfo?.path?.rootPath
     if (!rootPath) {
-      ElMessage.error(t('settingAbout.folderPathNotFound'))
+      toast.error(t('settingAbout.folderPathNotFound'))
       return
     }
     const result = await touchChannel.send('execute:cmd', { command: rootPath })
     if (result?.success) {
-      ElMessage.success(t('settingAbout.folderOpened'))
+      toast.success(t('settingAbout.folderOpened'))
     } else {
-      ElMessage.error(t('settingAbout.folderOpenFailed'))
+      toast.error(t('settingAbout.folderOpenFailed'))
     }
   } catch (error) {
     console.error('Failed to open app folder', error)
-    ElMessage.error(t('settingAbout.folderOpenFailed'))
+    toast.error(t('settingAbout.folderOpenFailed'))
   }
 }
 </script>

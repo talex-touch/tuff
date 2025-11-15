@@ -20,7 +20,7 @@ setTimeout(async () => {
 
 <template>
   <div class="AppEntrance absolute inset-0" :class="{ 'has-update': appStates.hasUpdate }">
-    <Toaster theme="system" rich-colors />
+    <Toaster position="bottom-left" theme="system" rich-colors />
     <template v-if="isCoreBox()">
       <CoreBox />
     </template>

@@ -139,3 +139,4 @@ readme.local.md
 
 *.local.json
 .kiro/
+.serena/

@@ -10,17 +10,21 @@ const outPackageJsonPath = path.join(outDir, 'package.json')
 const outNodeModulesPath = path.join(outDir, 'node_modules')
 
 // Core modules that must remain external and be copied into out/node_modules
-// ONLY include modules with native binaries (.node files) that cannot be bundled into asar
+// Include modules with native binaries AND modules heavily used in main process
 const baseModulesToCopy = [
   // libsql 相关（包含 .node 原生模块，必须外部化）
   '@libsql/client',
   '@libsql/core',
   '@libsql/hrana-client',
   '@libsql/isomorphic-fetch',
-  '@libsql/isomorphic-ws',
+  // @libsql/isomorphic-ws 已被别名到 web 版本并打包进 bundle，无需外部化
+  // '@libsql/isomorphic-ws',
   'libsql',
   '@neon-rs/load',
-  'detect-libc'
+  'detect-libc',
+
+  // 主进程重要依赖（虽然是纯 JS，但使用频繁，需要外部化）
+  'fs-extra'
 
   // 其他包已移除，改为打包进 asar 以减小体积：
   // - electron-log: 纯 JS，可以打包
@@ -57,14 +61,13 @@ const platformSpecificPackages = new Set(
 const skipRecursiveModules = new Set([
   'electron',
   '@sentry/node-native',
-  // 跳过这些问题模块，它们会导致运行时错误
+  // 跳过所有 jsdom 相关依赖（只在开发时需要）
+  'jsdom',
+  // 跳过 ws 相关模块，因为我们用的是 web 版本的 WebSocket
   'ws',
   'utf-8-validate',
   'bufferutil',
-  // 跳过所有 jsdom 相关依赖（只在开发时需要）
-  'jsdom',
-  // 跳过 fs-extra，它在主进程中不应该被外部化
-  'fs-extra'
+  '@libsql/isomorphic-ws' // 我们使用的是别名到 web 版本
 ])
 
 function normalizeTargetPlatform(rawTarget) {
@@ -525,42 +528,30 @@ if (fs.existsSync(resourcesSourceDir)) {
 
 console.log('Generated out/package.json for electron-builder')
 
-// 修补已复制包的 package.json，移除跳过的依赖声明
-// 这防止 electron-builder 因为缺少依赖而失败
-console.log('\n=== Patching copied modules to remove skipped dependencies ===')
-const modulesToPatch = [
-  {
-    module: '@libsql/isomorphic-ws',
-    removeDependencies: ['ws', 'utf-8-validate', 'bufferutil']
-  }
-]
+// 清理已复制模块中对 @libsql/isomorphic-ws 的依赖引用
+// 因为我们已经把它打包进主进程了
+console.log('\n=== Cleaning up isomorphic-ws dependencies ===')
+const modulesToCleanup = ['@libsql/hrana-client']
 
-modulesToPatch.forEach(({ module, removeDependencies }) => {
-  const modulePackageJsonPath = path.join(outNodeModulesPath, module, 'package.json')
+modulesToCleanup.forEach((moduleName) => {
+  const modulePackageJsonPath = path.join(outNodeModulesPath, moduleName, 'package.json')
   if (fs.existsSync(modulePackageJsonPath)) {
     try {
       const modulePackageJson = JSON.parse(fs.readFileSync(modulePackageJsonPath, 'utf8'))
       let modified = false
 
-      removeDependencies.forEach(depName => {
-        if (modulePackageJson.dependencies?.[depName]) {
-          delete modulePackageJson.dependencies[depName]
-          console.log(`  Removed ${depName} dependency from ${module}`)
-          modified = true
-        }
-        if (modulePackageJson.optionalDependencies?.[depName]) {
-          delete modulePackageJson.optionalDependencies[depName]
-          console.log(`  Removed ${depName} optionalDependency from ${module}`)
-          modified = true
-        }
-      })
+      if (modulePackageJson.dependencies?.['@libsql/isomorphic-ws']) {
+        delete modulePackageJson.dependencies['@libsql/isomorphic-ws']
+        console.log(`  Removed @libsql/isomorphic-ws dependency from ${moduleName}`)
+        modified = true
+      }
 
       if (modified) {
         fs.writeFileSync(modulePackageJsonPath, JSON.stringify(modulePackageJson, null, 2))
-        console.log(`  ✓ Patched ${module}/package.json`)
+        console.log(`  ✓ Cleaned up ${moduleName}/package.json`)
       }
     } catch (err) {
-      console.warn(`  ⚠ Failed to patch ${module}: ${err.message}`)
+      console.warn(`  ⚠ Failed to cleanup ${moduleName}: ${err.message}`)
     }
   }
 })
