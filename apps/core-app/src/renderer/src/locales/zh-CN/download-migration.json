@@ -1,0 +1,26 @@
+{
+  "download": {
+    "migration": {
+      "title": "数据迁移",
+      "subtitle": "正在将下载数据迁移到新系统",
+      "pleaseWait": "请稍候，正在迁移您的数据...",
+      "tasks": "已迁移任务",
+      "history": "已迁移历史",
+      "config": "配置已迁移",
+      "duration": "耗时",
+      "errors": "错误",
+      "phase": {
+        "scanning": "扫描中",
+        "migrating": "迁移中",
+        "validating": "验证中",
+        "complete": "完成"
+      }
+    }
+  },
+  "common": {
+    "yes": "是",
+    "no": "否",
+    "close": "关闭",
+    "retry": "重试"
+  }
+}

@@ -9,6 +9,8 @@ import {
 } from '@talex-touch/utils'
 import { ChunkManager } from './chunk-manager'
 import { NetworkMonitor } from './network-monitor'
+import { ProgressTracker } from './progress-tracker'
+import { DownloadErrorClass } from './error-types'
 
 export class DownloadWorker {
   private readonly maxConcurrent: number
@@ -16,6 +18,7 @@ export class DownloadWorker {
   private networkMonitor: NetworkMonitor
   private chunkManager: ChunkManager
   private config: DownloadConfig
+  private progressTrackers: Map<string, ProgressTracker> = new Map()
 
   constructor(
     maxConcurrent: number,
@@ -44,10 +47,27 @@ export class DownloadWorker {
 
     this.activeTasks.add(task.id)
 
+    // 创建进度跟踪器
+    const progressTracker = new ProgressTracker(task.id, {
+      windowSize: 10,
+      updateInterval: 1000, // 每秒更新一次
+      minSpeedSamples: 2
+    })
+
+    // 设置节流回调
+    if (onProgress) {
+      progressTracker.setThrottledCallback((progress) => {
+        onProgress(task.id, progress)
+      })
+    }
+
+    this.progressTrackers.set(task.id, progressTracker)
+
     try {
-      await this.downloadTask(task, onProgress)
+      await this.downloadTask(task, progressTracker, onProgress)
     } finally {
       this.activeTasks.delete(task.id)
+      this.progressTrackers.delete(task.id)
     }
   }
 
@@ -74,34 +94,56 @@ export class DownloadWorker {
   // 下载单个任务
   private async downloadTask(
     task: DownloadTask,
+    progressTracker: ProgressTracker,
     onProgress?: (taskId: string, progress: any) => void
   ): Promise<void> {
+    const errorContext = {
+      taskId: task.id,
+      url: task.url,
+      filename: task.filename,
+      module: task.module,
+      timestamp: Date.now()
+    }
+
     try {
       // 获取文件大小 - headers 可能来自 metadata
       const headers = (task.metadata?.headers as Record<string, string>) || undefined
       const totalSize = await this.getFileSize(task.url, headers)
 
       if (!totalSize) {
-        throw new Error('Unable to determine file size')
+        throw DownloadErrorClass.networkError(
+          'Unable to determine file size',
+          errorContext
+        )
       }
+
+      // 初始化进度跟踪器
+      progressTracker.updateProgress(0, totalSize)
 
       // 创建切片
       const chunks = this.chunkManager.createChunks(task, totalSize)
 
-      // 确保临时目录存在
-      await this.chunkManager.ensureTempDir(task)
+      // 确保临时目录存在（使用配置的临时目录）
+      await this.chunkManager.ensureTempDir(task, this.config.storage.tempDir)
 
       // 并发下载切片
-      await this.downloadChunksConcurrently(task, chunks, onProgress)
+      await this.downloadChunksConcurrently(task, chunks, progressTracker, onProgress)
 
       // 验证切片完整性
       const isValid = await this.chunkManager.validateChunks(chunks)
       if (!isValid) {
-        throw new Error('File validation failed')
+        throw DownloadErrorClass.checksumError(
+          'File validation failed',
+          errorContext
+        )
       }
 
       // 合并切片
       await this.chunkManager.mergeChunks(task, chunks)
+
+      // 更新进度为100%
+      progressTracker.updateProgress(totalSize, totalSize)
+      progressTracker.forceUpdate()
 
       // 通知完成
       if (onProgress) {
@@ -109,20 +151,28 @@ export class DownloadWorker {
           status: DownloadStatus.COMPLETED,
           percentage: 100,
           totalSize,
-          downloadedSize: totalSize
+          downloadedSize: totalSize,
+          speed: 0,
+          remainingTime: 0
         })
       }
     } catch (error: unknown) {
-      console.error(`Download failed for task ${task.id}:`, error)
+      // 转换为 DownloadErrorClass
+      const downloadError =
+        error instanceof DownloadErrorClass
+          ? error
+          : DownloadErrorClass.fromError(error as Error, errorContext)
+
+      console.error(`Download failed for task ${task.id}:`, downloadError.userMessage)
 
       if (onProgress) {
         onProgress(task.id, {
           status: DownloadStatus.FAILED,
-          error: error instanceof Error ? error.message : String(error)
+          error: downloadError.userMessage
         })
       }
 
-      throw error
+      throw downloadError
     }
   }
 
@@ -130,7 +180,8 @@ export class DownloadWorker {
   private async downloadChunksConcurrently(
     task: DownloadTask,
     chunks: ChunkInfo[],
-    onProgress?: (taskId: string, progress: any) => void
+    progressTracker: ProgressTracker,
+    _onProgress?: (taskId: string, progress: any) => void
   ): Promise<void> {
     const concurrentLimit = Math.min(this.maxConcurrent, chunks.length)
     const semaphore = new Array(concurrentLimit).fill(null)
@@ -138,28 +189,19 @@ export class DownloadWorker {
 
     const downloadPromises = chunks.map(async (chunk, index) => {
       await semaphore[index % concurrentLimit]
-      semaphore[index % concurrentLimit] = this.downloadChunk(chunk, task)
+      semaphore[index % concurrentLimit] = this.downloadChunk(chunk, task, progressTracker)
 
       try {
         await semaphore[index % concurrentLimit]
         completedChunks++
 
-        // 更新进度
-        if (onProgress) {
-          const progress = this.chunkManager.getChunkProgress(chunks)
-          const percentage =
-            progress.totalSize > 0
-              ? Math.round((progress.downloadedSize / progress.totalSize) * 100)
-              : 0
+        // 更新进度（通过 ProgressTracker）
+        const progress = this.chunkManager.getChunkProgress(chunks)
+        progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
 
-          onProgress(task.id, {
-            status: DownloadStatus.DOWNLOADING,
-            percentage,
-            totalSize: progress.totalSize,
-            downloadedSize: progress.downloadedSize,
-            completedChunks: progress.completedChunks,
-            totalChunks: progress.totalChunks
-          })
+        // 如果需要立即更新（例如切片完成时），可以强制更新
+        if (completedChunks % Math.max(1, Math.floor(chunks.length / 10)) === 0) {
+          progressTracker.forceUpdate()
         }
       } catch (error) {
         console.error(`Chunk ${chunk.index} download failed:`, error)
@@ -171,9 +213,26 @@ export class DownloadWorker {
   }
 
   // 下载单个切片
-  private async downloadChunk(chunk: ChunkInfo, task: DownloadTask): Promise<void> {
+  private async downloadChunk(
+    chunk: ChunkInfo,
+    task: DownloadTask,
+    _progressTracker: ProgressTracker
+  ): Promise<void> {
     const maxRetries = this.config.chunk.maxRetries
     let retryCount = 0
+
+    const errorContext = {
+      taskId: task.id,
+      url: task.url,
+      filename: task.filename,
+      module: task.module,
+      timestamp: Date.now(),
+      additionalInfo: {
+        chunkIndex: chunk.index,
+        chunkStart: chunk.start,
+        chunkEnd: chunk.end
+      }
+    }
 
     while (retryCount <= maxRetries) {
       try {
@@ -204,6 +263,10 @@ export class DownloadWorker {
 
             response.data.on('data', (data: Buffer) => {
               chunk.downloaded += data.length
+              
+              // 实时更新进度跟踪器（会自动节流）
+              // 注意：这里我们需要计算所有切片的总下载量
+              // 这个会在 downloadChunksConcurrently 中统一处理
             })
 
             response.data.on('end', () => {
@@ -224,11 +287,21 @@ export class DownloadWorker {
         return
       } catch (error) {
         retryCount++
-        console.warn(`Chunk ${chunk.index} download failed (attempt ${retryCount}):`, error)
+        
+        // 转换为 DownloadErrorClass
+        const downloadError =
+          error instanceof DownloadErrorClass
+            ? error
+            : DownloadErrorClass.fromError(error as Error, errorContext)
+
+        console.warn(
+          `Chunk ${chunk.index} download failed (attempt ${retryCount}):`,
+          downloadError.userMessage
+        )
 
         if (retryCount > maxRetries) {
           chunk.status = ChunkStatus.FAILED
-          throw error
+          throw downloadError
         }
 
         // 等待重试
@@ -252,7 +325,12 @@ export class DownloadWorker {
 
       return contentLength ? parseInt(contentLength, 10) : null
     } catch (error) {
-      console.warn('Failed to get file size:', error)
+      const downloadError =
+        error instanceof DownloadErrorClass
+          ? error
+          : DownloadErrorClass.fromError(error as Error)
+      
+      console.warn('Failed to get file size:', downloadError.userMessage)
       return null
     }
   }
@@ -292,5 +370,16 @@ export class DownloadWorker {
       networkQuality: this.networkMonitor.getNetworkQuality(),
       recommendedConcurrency: networkStatus.recommendedConcurrency
     }
+  }
+
+  // 获取任务的进度跟踪器
+  getProgressTracker(taskId: string): ProgressTracker | undefined {
+    return this.progressTrackers.get(taskId)
+  }
+
+  // 获取任务的格式化进度
+  getFormattedProgress(taskId: string) {
+    const tracker = this.progressTrackers.get(taskId)
+    return tracker ? tracker.getFormattedProgress() : null
   }
 }

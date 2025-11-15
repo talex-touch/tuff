@@ -1,0 +1,26 @@
+{
+  "download": {
+    "migration": {
+      "title": "Data Migration",
+      "subtitle": "Migrating download data to the new system",
+      "pleaseWait": "Please wait while we migrate your data...",
+      "tasks": "Migrated Tasks",
+      "history": "Migrated History",
+      "config": "Configuration Migrated",
+      "duration": "Duration",
+      "errors": "Errors",
+      "phase": {
+        "scanning": "Scanning",
+        "migrating": "Migrating",
+        "validating": "Validating",
+        "complete": "Complete"
+      }
+    }
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "close": "Close",
+    "retry": "Retry"
+  }
+}

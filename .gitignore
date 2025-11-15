@@ -138,3 +138,4 @@ readme.local.md
 .env.sentry-build-plugin
 
 *.local.json
+.kiro/

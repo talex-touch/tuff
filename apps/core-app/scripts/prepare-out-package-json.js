@@ -54,7 +54,18 @@ const platformSpecificPackages = new Set(
     .flat()
 )
 
-const skipRecursiveModules = new Set(['electron', '@sentry/node-native'])
+const skipRecursiveModules = new Set([
+  'electron',
+  '@sentry/node-native',
+  // 跳过这些问题模块，它们会导致运行时错误
+  'ws',
+  'utf-8-validate',
+  'bufferutil',
+  // 跳过所有 jsdom 相关依赖（只在开发时需要）
+  'jsdom',
+  // 跳过 fs-extra，它在主进程中不应该被外部化
+  'fs-extra'
+])
 
 function normalizeTargetPlatform(rawTarget) {
   if (!rawTarget) {
@@ -513,3 +524,43 @@ if (fs.existsSync(resourcesSourceDir)) {
 }
 
 console.log('Generated out/package.json for electron-builder')
+
+// 修补已复制包的 package.json，移除跳过的依赖声明
+// 这防止 electron-builder 因为缺少依赖而失败
+console.log('\n=== Patching copied modules to remove skipped dependencies ===')
+const modulesToPatch = [
+  {
+    module: '@libsql/isomorphic-ws',
+    removeDependencies: ['ws', 'utf-8-validate', 'bufferutil']
+  }
+]
+
+modulesToPatch.forEach(({ module, removeDependencies }) => {
+  const modulePackageJsonPath = path.join(outNodeModulesPath, module, 'package.json')
+  if (fs.existsSync(modulePackageJsonPath)) {
+    try {
+      const modulePackageJson = JSON.parse(fs.readFileSync(modulePackageJsonPath, 'utf8'))
+      let modified = false
+
+      removeDependencies.forEach(depName => {
+        if (modulePackageJson.dependencies?.[depName]) {
+          delete modulePackageJson.dependencies[depName]
+          console.log(`  Removed ${depName} dependency from ${module}`)
+          modified = true
+        }
+        if (modulePackageJson.optionalDependencies?.[depName]) {
+          delete modulePackageJson.optionalDependencies[depName]
+          console.log(`  Removed ${depName} optionalDependency from ${module}`)
+          modified = true
+        }
+      })
+
+      if (modified) {
+        fs.writeFileSync(modulePackageJsonPath, JSON.stringify(modulePackageJson, null, 2))
+        console.log(`  ✓ Patched ${module}/package.json`)
+      }
+    } catch (err) {
+      console.warn(`  ⚠ Failed to patch ${module}: ${err.message}`)
+    }
+  }
+})

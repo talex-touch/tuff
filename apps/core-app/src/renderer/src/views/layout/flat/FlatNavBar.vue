@@ -12,6 +12,7 @@
         icon="i-ri-dashboard-line"
       />
       <!-- <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" /> -->
+      <TouchMenuItem route="/aisdk" :name="t('flatNavBar.aisdk')" icon="i-carbon-watson-machine-learning" />
       <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
       <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />
     </TouchMenu>

@@ -8,7 +8,7 @@ export function useVisibility(
   searchVal: Ref<string>,
   clipboardOptions: any,
   handleAutoPaste: () => void,
-  handlePaste: () => void,
+  handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   _clearClipboard: () => void,
   boxInputRef: Ref<any>
 ) {

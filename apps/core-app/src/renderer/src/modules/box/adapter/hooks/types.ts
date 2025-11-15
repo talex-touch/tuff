@@ -27,10 +27,8 @@ export interface IClipboardItem {
 export interface IClipboardOptions {
   /** Current clipboard content */
   last: IClipboardItem | null
-  /** Timestamp when current clipboard was first detected (for expiration check) */
+  /** Timestamp when current clipboard was first detected */
   detectedAt: number | null
-  /** Whether the current clipboard content has been auto-pasted (to avoid re-pasting after ESC) */
-  autoPasted: boolean
   /** Timestamp of the last clipboard item that was cleared (to prevent re-paste of same content) */
   lastClearedTimestamp: string | Date | null
 }
@@ -42,13 +40,11 @@ export interface IClipboardHook {
   /** Reactive clipboard state */
   clipboardOptions: IClipboardOptions
   /** Manually refresh clipboard from system */
-  handlePaste: () => void
+  handlePaste: (options?: { overrideDismissed?: boolean }) => void
   /** Auto-paste logic (switch to FILE mode for files) */
   handleAutoPaste: () => void
   /** Apply clipboard item to active application */
   applyToActiveApp: (item?: IClipboardItem) => Promise<boolean>
   /** Clear clipboard state */
-  clearClipboard: () => void
-  /** Check if clipboard content is expired based on settings */
-  isClipboardExpired: () => boolean
+  clearClipboard: (options?: { remember?: boolean }) => void
 }

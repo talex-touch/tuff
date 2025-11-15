@@ -83,6 +83,7 @@ Tuff integrates a variety of practical functions to make your desktop smarter an
 - **Contextual Intelligence:** Proactively suggests commands based on your current context.
 - **Extensible:** Supports custom plugins ("Capabilities") to extend its functionality.
 - **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
+- **Unified Download Center:** Centralized download management with progress tracking, resume support, and automatic updates.
 
 ## 🍀 Simple and Easy-to-Use Operations
 

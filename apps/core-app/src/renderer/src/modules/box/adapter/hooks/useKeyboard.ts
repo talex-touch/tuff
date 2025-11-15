@@ -19,7 +19,7 @@ export function useKeyboard(
   clipboardOptions: any,
   clearClipboard: () => void,
   activeActivations: Ref<any>,
-  handlePaste: () => void
+  handlePaste: (options?: { overrideDismissed?: boolean }) => void
 ) {
   function onKeyDown(event: KeyboardEvent): void {
     if (!document.body.classList.contains('core-box')) {
@@ -30,7 +30,7 @@ export function useKeyboard(
 
     // Handle Cmd/Ctrl+V for manual paste
     if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
-      handlePaste()
+      handlePaste({ overrideDismissed: true })
       event.preventDefault()
       return
     }
@@ -107,7 +107,7 @@ export function useKeyboard(
 
       // 2. If there's clipboard data, clear it
       if (clipboardOptions.last) {
-        clearClipboard()
+        clearClipboard({ remember: true })
         event.preventDefault()
         return
       }

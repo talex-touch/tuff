@@ -4,11 +4,18 @@ import { ChunkInfo, ChunkStatus, DownloadTask } from '@talex-touch/utils'
 
 export class ChunkManager {
   private readonly chunkSize: number = 1024 * 1024 // 1MB per chunk
+  private baseTempDir?: string
 
-  constructor(chunkSize?: number) {
+  constructor(chunkSize?: number, baseTempDir?: string) {
     if (chunkSize) {
       this.chunkSize = chunkSize
     }
+    this.baseTempDir = baseTempDir
+  }
+
+  // 设置基础临时目录
+  setBaseTempDir(baseTempDir: string): void {
+    this.baseTempDir = baseTempDir
   }
 
   // 创建下载切片
@@ -22,7 +29,7 @@ export class ChunkManager {
       const size = end - start + 1
 
       const chunkId = `${task.id}_chunk_${i}`
-      const chunkPath = path.join(this.getTempDir(task), `${chunkId}.tmp`)
+      const chunkPath = path.join(this.getTempDir(task, this.baseTempDir), `${chunkId}.tmp`)
 
       chunks.push({
         index: i,
@@ -61,8 +68,9 @@ export class ChunkManager {
       await writeStream.close()
     }
 
-    // 清理临时切片文件
+    // 清理临时切片文件和任务临时目录
     await this.cleanupChunks(chunks)
+    await this.cleanupTaskTempDir(task, this.baseTempDir)
   }
 
   // 验证切片完整性
@@ -147,24 +155,46 @@ export class ChunkManager {
     )
   }
 
-  // 获取临时目录
-  private getTempDir(task: DownloadTask): string {
+  // 获取临时目录 - 使用配置的临时目录而不是目标目录
+  getTempDir(task: DownloadTask, baseTempDir?: string): string {
+    // 如果提供了基础临时目录，使用它；否则使用任务目标目录下的 .tmp
+    if (baseTempDir) {
+      return path.join(baseTempDir, task.id)
+    }
     return path.join(task.destination, '.tmp', task.id)
   }
 
   // 确保临时目录存在
-  async ensureTempDir(task: DownloadTask): Promise<string> {
-    const tempDir = this.getTempDir(task)
+  async ensureTempDir(task: DownloadTask, baseTempDir?: string): Promise<string> {
+    const tempDir = this.getTempDir(task, baseTempDir)
     await fs.mkdir(tempDir, { recursive: true })
     return tempDir
   }
 
-  // 计算下载速度
+  // 清理任务的临时目录（包括所有切片文件）
+  async cleanupTaskTempDir(task: DownloadTask, baseTempDir?: string): Promise<void> {
+    const tempDir = this.getTempDir(task, baseTempDir)
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true })
+      console.log(`Cleaned up temp directory for task ${task.id}: ${tempDir}`)
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        console.error(`Failed to cleanup temp directory ${tempDir}:`, error)
+      }
+    }
+  }
+
+  /**
+   * Calculate download speed based on active chunks
+   * Note: This is a simplified calculation. For accurate speed tracking,
+   * use ProgressTracker which maintains time-series data with timestamps.
+   * @param chunks - Array of chunk information
+   * @param timeWindowMs - Time window for speed calculation (unused in current implementation)
+   * @returns Estimated speed in bytes per second
+   */
   calculateSpeed(chunks: ChunkInfo[], timeWindowMs: number = 5000): number {
-    // const now = Date.now() // TODO: 需要在实际下载时记录时间戳
+    // Filter for currently downloading chunks
     const recentChunks = chunks.filter((chunk) => {
-      // 这里需要在实际下载时记录时间戳
-      // 暂时返回所有下载中的切片
       return chunk.status === ChunkStatus.DOWNLOADING
     })
 

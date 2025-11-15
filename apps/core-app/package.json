@@ -129,5 +129,9 @@
     "vue-sonner": "^2.0.9",
     "vue-tsc": "^3.1.2"
   },
+  "optionalDependencies": {
+    "utf-8-validate": "^6.0.5",
+    "bufferutil": "^4.0.9"
+  },
   "license": "MPL-2.0 license"
 }

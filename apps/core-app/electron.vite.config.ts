@@ -25,11 +25,23 @@ const enableSourcemap = !isProduction
 export default defineConfig({
   main: {
     plugins: [
-      // 不使用 externalizeDepsPlugin，改为通过 rollupOptions.external 精确控制
-      // externalizeDepsPlugin() 会外部化所有依赖，但我们只想外部化特定的原生模块
+      // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体
+      externalizeDepsPlugin({
+        exclude: [
+          '@talex-touch/utils' // workspace 包必须打包
+        ]
+      })
     ],
+    define: {
+      'process.env.WS_NO_BUFFER_UTIL': 'true',
+      'process.env.WS_NO_UTF_8_VALIDATE': 'true'
+    },
     build: {
       sourcemap: enableSourcemap,
+      commonjsOptions: {
+        // libsql chooses native binding at runtime via dynamic require
+        ignoreDynamicRequires: true
+      },
       rollupOptions: {
         input: {
           index: 'src/main/index.ts',
@@ -44,24 +56,6 @@ export default defineConfig({
             }
             return '[name]-[hash].js'
           }
-        },
-        external: (id, parentId) => {
-          if (parentId?.includes('ocr-worker')) {
-            return ['electron', 'node:worker_threads', 'node:fs/promises', 'node:fs', 'node:path'].includes(id) || id.startsWith('node:')
-          }
-          return [
-            'electron',
-            'electron/main',
-            'electron/common',
-            'electron/renderer',
-            /^@libsql\/.*/,
-            'libsql',
-            'detect-libc',
-            '@neon-rs/load',
-            'js-base64',
-            'promise-limit',
-            'node-fetch'
-          ].some(ext => typeof ext === 'string' ? ext === id : ext.test(id))
         }
       }
     }
@@ -70,10 +64,7 @@ export default defineConfig({
   preload: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: [
-          '@talex-touch/utils', // workspace 包需要打包
-          '@electron-toolkit/preload'
-        ]
+        exclude: ['@talex-touch/utils'] // workspace 包必须打包
       })
     ],
     build: {

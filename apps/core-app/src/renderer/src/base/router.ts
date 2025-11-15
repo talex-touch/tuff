@@ -97,6 +97,14 @@ const routes: any = [
     meta: {
       index: 7
     }
+  },
+  {
+    path: '/aisdk',
+    name: 'AI SDK',
+    component: () => import('../views/base/AISDKPage.vue'),
+    meta: {
+      index: 8
+    }
   }
 ]
 
