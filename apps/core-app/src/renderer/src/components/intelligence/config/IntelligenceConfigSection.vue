@@ -3,8 +3,7 @@
     class="aisdk-config-section mb-6"
     :aria-labelledby="`${sectionId}-heading`"
   >
-    <button
-      type="button"
+    <FlatButton
       class="section-header flex items-center gap-2 mb-3 cursor-pointer select-none w-full text-left"
       :aria-expanded="!isCollapsed"
       :aria-controls="`${sectionId}-content`"
@@ -27,7 +26,7 @@
       <span class="sr-only">
         {{ isCollapsed ? 'Expand section' : 'Collapse section' }}
       </span>
-    </button>
+    </FlatButton>
     
     <Transition name="collapse">
       <div 
@@ -47,6 +46,7 @@
 
 <script lang="ts" name="IntelligenceConfigSection" setup>
 import { ref } from 'vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 defineProps<{
   title: string
@@ -68,10 +68,11 @@ function toggleCollapse() {
 
 .section-header {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 8px 4px;
+  padding: 0;
   border-radius: 8px;
   border: none;
   background: transparent;
+  box-shadow: none;
 
   &:hover {
     background-color: var(--el-fill-color-light);
@@ -91,7 +92,12 @@ function toggleCollapse() {
     outline-offset: 2px;
     background-color: var(--el-fill-color-light);
   }
-  
+
+  :deep(> div) {
+    justify-content: flex-start;
+    padding: 8px 4px;
+  }
+
   i {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }

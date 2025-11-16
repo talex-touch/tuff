@@ -6,7 +6,7 @@
     <div class="flex items-center gap-3">
       <!-- Provider Icon -->
       <div class="provider-icon-large" aria-hidden="true">
-        {{ getProviderIcon(provider.type) }}
+        <i :class="getProviderIconClass(provider.type)" />
       </div>
 
       <!-- Provider Info -->
@@ -20,15 +20,15 @@
         <div class="flex gap-2 mt-1" role="group" aria-label="Provider status">
           <span
             class="badge"
-            :class="provider.enabled ? 'badge-success' : 'badge-gray'"
+            :class="localEnabled ? 'badge-success' : 'badge-gray'"
             role="status"
-            :aria-label="`Status: ${provider.enabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')}`"
+            :aria-label="`Status: ${localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')}`"
           >
             <i
-              :class="provider.enabled ? 'i-carbon-checkmark' : 'i-carbon-close'"
+              :class="localEnabled ? 'i-carbon-checkmark' : 'i-carbon-close'"
               aria-hidden="true"
             />
-            {{ provider.enabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled') }}
+            {{ localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled') }}
           </span>
           <span
             v-if="provider.priority"
@@ -44,9 +44,8 @@
 
     <!-- Actions -->
     <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
-      <button
+      <FlatButton
         v-if="provider.enabled && provider.apiKey"
-        type="button"
         class="test-button"
         :class="{ testing: isTesting }"
         :disabled="isTesting"
@@ -57,7 +56,29 @@
         <i v-if="isTesting" class="i-carbon-renew animate-spin" aria-hidden="true" />
         <i v-else class="i-carbon-play-filled" aria-hidden="true" />
         <span>{{ isTesting ? t('aisdk.test.testing') : t('aisdk.test.button') }}</span>
-      </button>
+      </FlatButton>
+
+      <el-dropdown
+        v-if="provider.type === 'custom'"
+        trigger="click"
+        placement="bottom-end"
+      >
+        <FlatButton
+          text
+          mini
+          :aria-label="t('settings.aisdk.moreActions')"
+        >
+          <i class="i-carbon-overflow-menu-horizontal" aria-hidden="true" />
+        </FlatButton>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item @click="handleDelete">
+              <i class="i-carbon-trash-can text-red-500" aria-hidden="true" />
+              <span class="ml-2">{{ t('settings.aisdk.deleteProvider', { name: provider.name }) }}</span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
 
       <TSwitch
         v-model="localEnabled"
@@ -71,7 +92,9 @@
 <script lang="ts" name="IntelligenceHeader" setup>
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessageBox } from 'element-plus'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 enum AiProviderType {
   OPENAI = 'openai',
@@ -108,6 +131,7 @@ const props = defineProps<{
 const emits = defineEmits<{
   toggle: []
   test: []
+  delete: []
 }>()
 
 const { t } = useI18n()
@@ -121,16 +145,16 @@ watch(
   }
 )
 
-function getProviderIcon(type: string): string {
-  const icons: Record<string, string> = {
-    [AiProviderType.OPENAI]: '🤖',
-    [AiProviderType.ANTHROPIC]: '🧠',
-    [AiProviderType.DEEPSEEK]: '🔍',
-    [AiProviderType.SILICONFLOW]: '⚡️',
-    [AiProviderType.LOCAL]: '💻',
-    [AiProviderType.CUSTOM]: '⚙️'
+function getProviderIconClass(type: string): string {
+  const iconClasses: Record<string, string> = {
+    [AiProviderType.OPENAI]: 'i-simple-icons-openai text-green-600',
+    [AiProviderType.ANTHROPIC]: 'i-simple-icons-anthropic text-orange-500',
+    [AiProviderType.DEEPSEEK]: 'i-carbon-search-advanced text-blue-600',
+    [AiProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning text-purple-600',
+    [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server text-gray-600',
+    [AiProviderType.CUSTOM]: 'i-carbon-settings text-gray-500'
   }
-  return icons[type] || '🤖'
+  return iconClasses[type] || 'i-carbon-ibm-watson-machine-learning text-gray-400'
 }
 
 function getPriorityLabel(priority: number): string {
@@ -147,7 +171,25 @@ function handleToggle() {
 }
 
 function handleTest() {
+  if (props.isTesting) return
   emits('test')
+}
+
+function handleDelete() {
+  ElMessageBox.confirm(
+    t('settings.aisdk.deleteConfirmMessage', { name: props.provider.name }),
+    t('settings.aisdk.deleteConfirmTitle'),
+    {
+      confirmButtonText: t('settings.aisdk.deleteConfirmButton'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    }
+  ).then(() => {
+    emits('delete')
+  }).catch(() => {
+    // User cancelled, do nothing
+  })
 }
 </script>
 
@@ -277,7 +319,7 @@ function handleTest() {
       height 0.6s;
   }
 
-  &:hover:not(:disabled) {
+  &:hover:not(.is-disabled) {
     background-color: var(--el-color-primary-light-3);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transform: translateY(-2px);
@@ -292,7 +334,7 @@ function handleTest() {
     }
   }
 
-  &:active:not(:disabled) {
+  &:active:not(.is-disabled) {
     transform: translateY(0);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
@@ -302,7 +344,7 @@ function handleTest() {
     outline-offset: 2px;
   }
 
-  &:disabled {
+  &.is-disabled {
     opacity: 0.7;
     cursor: not-allowed;
     background-color: var(--el-color-primary-light-5);

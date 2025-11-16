@@ -77,6 +77,8 @@ const updateStateMessage = computed(() => {
   return ''
 })
 
+const updateErrorMessage = computed(() => appStates.updateErrorMessage)
+
 onMounted(async () => {
   await loadSettings()
 })
@@ -174,12 +176,6 @@ async function handleManualCheck(): Promise<void> {
       toast.success(
         t('settings.settingUpdate.messages.manualCheckFound', {
           version: result.release.tag_name
-        })
-      )
-    } else if (result?.error) {
-      toast.warning(
-        t('settings.settingUpdate.messages.manualCheckFailedWithReason', {
-          reason: result.error
         })
       )
     } else if (result?.release) {
@@ -317,6 +313,9 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
       <div class="status-message" v-if="updateStateMessage">
         {{ updateStateMessage }}
       </div>
+      <div class="status-message warning" v-if="updateErrorMessage">
+        {{ updateErrorMessage }}
+      </div>
       <div class="status-message" v-if="lastResultMessage">
         {{ lastResultMessage }}
       </div>
@@ -342,5 +341,9 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
 .status-message {
   font-size: 13px;
   color: var(--el-color-info);
+}
+
+.status-message.warning {
+  color: var(--el-color-warning);
 }
 </style>

@@ -5,8 +5,12 @@
     flex
     relative
     role="button"
-    :class="{ primary, 'fake-background': !primary, mini }"
+    :tabindex="disabled ? -1 : 0"
+    :aria-disabled="disabled || undefined"
+    :class="{ primary, 'fake-background': !primary, mini, 'is-disabled': disabled }"
     class="FlatButton-Container"
+    @keydown.enter.prevent="handleKeyActivate"
+    @keydown.space.prevent="handleKeyActivate"
   >
     <div flex items-center px-4 gap-2 w-full justify-center>
       <slot />
@@ -15,10 +19,16 @@
 </template>
 
 <script name="FlatButton" lang="ts" setup>
-defineProps<{
+const props = defineProps<{
   primary?: boolean
   mini?: boolean
+  disabled?: boolean
 }>()
+
+function handleKeyActivate(event: KeyboardEvent): void {
+  if (props.disabled) return
+  ;(event.currentTarget as HTMLElement | null)?.click()
+}
 </script>
 
 <style lang="scss" scoped>
@@ -58,5 +68,11 @@ defineProps<{
   border-radius: 6px;
   border: 1px solid var(--el-border-color);
   transition: 0.25s;
+
+  &.is-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
 }
 </style>

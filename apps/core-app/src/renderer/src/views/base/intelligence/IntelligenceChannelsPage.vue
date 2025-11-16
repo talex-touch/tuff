@@ -1,75 +1,41 @@
 <template>
-  <div class="aisdk-page h-full flex flex-col" role="main" aria-label="AI Intelligence Channels">
-    <header class="aisdk-hero">
-      <div>
-        <p class="aisdk-hero__eyebrow">{{ t('flatNavBar.aisdk') }}</p>
-        <h1>{{ t('settings.aisdk.channelPageTitle') }}</h1>
-        <p class="aisdk-hero__desc">
-          {{ t('settings.aisdk.channelPageDesc') }}
-        </p>
-      </div>
-      <div class="aisdk-hero__actions">
-        <FlatButton primary @click="handleAddProvider">
-          <i class="i-carbon-add" aria-hidden="true" />
-          <span>{{ t('settings.aisdk.addChannel') }}</span>
-        </FlatButton>
-        <FlatButton
-          v-if="selectedProvider"
-          @click="handleTestProvider"
-        >
-          <i :class="isTesting ? 'i-carbon-renew animate-spin' : 'i-carbon-connection-signal'" aria-hidden="true" />
-          <span>
-            {{ isTesting ? t('settings.aisdk.testing') : t('settings.aisdk.test') }}
-          </span>
-        </FlatButton>
-      </div>
-    </header>
-
-    <div class="aisdk-body flex-1 flex flex-col gap-4 overflow-hidden">
-      <section class="aisdk-section flex flex-col gap-3">
-        <div class="aisdk-section__header">
-          <div>
-            <h2>{{ t('settings.aisdk.channelsSection') }}</h2>
-            <p>{{ t('settings.aisdk.selectProviderHint') }}</p>
-          </div>
-        </div>
-        <div class="aisdk-section__content flex flex-1 overflow-hidden rounded-2xl border border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]">
-          <aside
-            class="aisdk-sidebar w-76 border-r border-[var(--el-border-color-lighter)]"
-            aria-label="AI Provider List"
-          >
-            <IntelligenceList
-              :providers="providers"
-              :selected-id="selectedProviderId"
-              @select="handleSelectProvider"
-              @toggle="handleToggleProvider"
-            />
-          </aside>
-          <section
-            class="aisdk-detail flex-1 h-full overflow-hidden"
-            :aria-live="selectedProvider ? 'polite' : 'off'"
-          >
-            <Transition name="fade-slide" mode="out-in">
-              <IntelligenceInfo
-                v-if="selectedProvider"
-                :key="selectedProvider.id"
-                :provider="selectedProvider"
-                :global-config="globalConfig"
-                :test-result="testResult"
-                :is-testing="isTesting"
-                @update="handleUpdateProvider"
-                @test="handleTestProvider"
-                @update-global="handleUpdateGlobal"
-              />
-              <IntelligenceEmptyState v-else />
-            </Transition>
-          </section>
-        </div>
-        <p v-if="providers.length === 0" class="aisdk-empty-hint">
-          {{ t('settings.aisdk.emptyProviders') }}
-        </p>
+  <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
+    <div
+      class="flex flex-1 overflow-hidden border border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]"
+    >
+      <IntelligenceList
+        class="h-full w-76 flex-shrink-0 overflow-hidden border-r border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color)]"
+        aria-label="AI Provider List"
+        :providers="providers"
+        :selected-id="selectedProviderId"
+        @select="handleSelectProvider"
+        @toggle="handleToggleProvider"
+        @add-provider="handleAddProvider"
+      />
+      <section
+        class="h-full flex-1 overflow-hidden"
+        :aria-live="selectedProvider ? 'polite' : 'off'"
+      >
+        <Transition name="fade-slide" mode="out-in">
+          <IntelligenceInfo
+            v-if="selectedProvider"
+            :key="selectedProvider.id"
+            :provider="selectedProvider"
+            :global-config="globalConfig"
+            :test-result="testResult"
+            :is-testing="isTesting"
+            @update="handleUpdateProvider"
+            @test="handleTestProvider"
+            @update-global="handleUpdateGlobal"
+            @delete="handleDeleteProvider"
+          />
+          <IntelligenceEmptyState v-else />
+        </Transition>
       </section>
     </div>
+    <p v-if="providers.length === 0" class="text-sm text-[var(--el-text-color-secondary)]">
+      {{ t('settings.aisdk.emptyProviders') }}
+    </p>
   </div>
 </template>
 
@@ -79,7 +45,6 @@ import { useI18n } from 'vue-i18n'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 import type { AiProviderConfig, AISDKGlobalConfig, TestResult } from '~/types/aisdk'
 import { AiProviderType } from '~/types/aisdk'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
@@ -97,6 +62,7 @@ const {
   globalConfig,
   addProvider,
   updateProvider,
+  removeProvider,
   toggleProvider: toggleProviderState,
   updateGlobalConfig
 } = useIntelligenceManager()
@@ -155,6 +121,11 @@ function handleUpdateGlobal(updatedConfig: AISDKGlobalConfig): void {
   updateGlobalConfig(updatedConfig)
 }
 
+function handleDeleteProvider(): void {
+  if (!selectedProvider.value) return
+  removeProvider(selectedProvider.value.id)
+}
+
 function navigateToNextProvider(): void {
   const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
   if (currentIndex < providers.value.length - 1) {
@@ -182,7 +153,3 @@ onMounted(() => {
   console.log('[IntelligenceChannels] Providers count:', providers.value.length)
 })
 </script>
-
-<style lang="scss" scoped>
-@import './intelligence-shared.scss';
-</style>

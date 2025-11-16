@@ -44,11 +44,11 @@
 
     <!-- Status Indicator & Toggle -->
     <div class="ml-auto flex items-center gap-2">
-      <div 
+      <div
         class="status-dot w-2 h-2 rounded-full"
-        :class="provider.enabled ? 'bg-green-500' : 'bg-gray-400'"
+        :class="localEnabled ? 'bg-green-500' : 'bg-gray-400'"
         role="status"
-        :aria-label="provider.enabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')"
+        :aria-label="localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')"
       />
       <TSwitch
         v-model="localEnabled"

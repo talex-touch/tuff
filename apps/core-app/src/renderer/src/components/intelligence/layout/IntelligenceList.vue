@@ -1,6 +1,7 @@
 <template>
-  <TouchScroll class="AISDKList-Container cubic-transition">
-    <div class="AISDKList-Toolbox w-full" role="search">
+  <aside class="AISDKList-Container h-full flex flex-col">
+    <!-- Search Section -->
+    <div class="AISDKList-Search-Section flex-shrink-0 p-3 border-b border-[var(--el-border-color-lighter)]">
       <div class="search-wrapper">
         <label for="provider-search" class="sr-only">{{ t('aisdk.search.label') }}</label>
         <i class="i-ri-search-line search-icon" aria-hidden="true" />
@@ -14,48 +15,69 @@
           class="search-input"
           autocomplete="off"
         />
-        <button
+        <FlatButton
           v-if="searchQuery"
-          type="button"
           class="clear-icon"
+          mini
           :aria-label="t('aisdk.search.clear')"
           @click="clearSearch"
           @keydown.enter="clearSearch"
+          @keydown.space.prevent="clearSearch"
         >
           <i class="i-ri-close-line" aria-hidden="true" />
-        </button>
+        </FlatButton>
       </div>
-      <div 
-        v-if="searchQuery" 
-        id="search-results-count" 
-        class="sr-only" 
-        role="status" 
+
+      <div
+        v-if="searchQuery"
+        id="search-results-count"
+        class="sr-only"
+        role="status"
         aria-live="polite"
       >
-        {{ t('aisdk.search.results', { 
-          count: filteredEnabledProviders.length + filteredDisabledProviders.length 
+        {{ t('aisdk.search.results', {
+          count: filteredEnabledProviders.length + filteredDisabledProviders.length
         }) }}
       </div>
     </div>
 
-    <IntelligenceListModule
-      v-model="selectedId"
-      :providers="filteredEnabledProviders"
-      :title="t('aisdk.list.enabled')"
-      icon="i-ri-check-line"
-      section-id="enabled-providers"
-      @toggle="handleToggle"
-    />
+    <!-- Providers List Section -->
+    <div class="AISDKList-Content flex-1 overflow-hidden">
+      <TouchScroll>
+        <div class="p-3 pb-20">
+          <IntelligenceListModule
+            v-model="selectedId"
+            :providers="filteredEnabledProviders"
+            :title="t('aisdk.list.enabled')"
+            icon="i-ri-check-line"
+            section-id="enabled-providers"
+            @toggle="handleToggle"
+          />
 
-    <IntelligenceListModule
-      v-model="selectedId"
-      :providers="filteredDisabledProviders"
-      :title="t('aisdk.list.disabled')"
-      icon="i-ri-close-line"
-      section-id="disabled-providers"
-      @toggle="handleToggle"
-    />
-  </TouchScroll>
+          <IntelligenceListModule
+            v-model="selectedId"
+            :providers="filteredDisabledProviders"
+            :title="t('aisdk.list.disabled')"
+            icon="i-ri-close-line"
+            section-id="disabled-providers"
+            @toggle="handleToggle"
+          />
+        </div>
+      </TouchScroll>
+    </div>
+
+    <!-- Add Provider Button -->
+    <div class="AISDKList-AddButton-Section flex-shrink-0 p-3 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]">
+      <FlatButton
+        class="add-provider-btn w-full"
+        :aria-label="t('settings.aisdk.addChannel')"
+        @click="handleAddProvider"
+      >
+        <i class="i-carbon-add" aria-hidden="true" />
+        <span>{{ t('settings.aisdk.addChannel') }}</span>
+      </FlatButton>
+    </div>
+  </aside>
 </template>
 
 <script lang="ts" name="IntelligenceList" setup>
@@ -63,6 +85,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import IntelligenceListModule from './IntelligenceListModule.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 interface AiProviderConfig {
   id: string
@@ -90,6 +113,7 @@ const props = defineProps<{
 const emits = defineEmits<{
   select: [id: string]
   toggle: [provider: AiProviderConfig]
+  addProvider: []
 }>()
 
 const { t } = useI18n()
@@ -154,21 +178,23 @@ function handleToggle(provider: AiProviderConfig) {
   emits('toggle', provider)
 }
 
+function handleAddProvider() {
+  emits('addProvider')
+}
+
 function clearSearch() {
   searchQuery.value = ''
 }
 </script>
 
 <style lang="scss" scoped>
-.AISDKList-Toolbox {
-  z-index: 1;
-  position: sticky;
-  padding: 2px 2%;
-  top: 1%;
-  width: 100%;
-  height: 36px;
-  border-radius: 8px;
-  box-sizing: border-box;
+.AISDKList-Container {
+  background: var(--el-bg-color);
+  position: relative;
+}
+
+.AISDKList-Search-Section {
+  background: var(--el-bg-color);
 }
 
 .search-wrapper {
@@ -178,7 +204,7 @@ function clearSearch() {
   background: var(--el-fill-color-lighter);
   border-radius: 12px;
   padding: 0 12px;
-  height: 32px;
+  height: 36px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid var(--el-border-color-lighter);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -201,7 +227,7 @@ function clearSearch() {
   font-size: 14px;
   margin-right: 8px;
   transition: color 0.3s ease;
-  
+
   .search-wrapper:focus-within & {
     color: var(--el-color-primary);
   }
@@ -220,7 +246,7 @@ function clearSearch() {
     color: var(--el-text-color-placeholder);
     transition: color 0.3s ease;
   }
-  
+
   &:focus::placeholder {
     color: var(--el-text-color-disabled);
   }
@@ -235,10 +261,13 @@ function clearSearch() {
   border-radius: 50%;
   width: 20px;
   height: 20px;
+  min-width: 20px;
+  min-height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
+  box-shadow: none;
   background: transparent;
   padding: 0;
 
@@ -247,14 +276,61 @@ function clearSearch() {
     background: var(--el-fill-color);
     transform: scale(1.1);
   }
-  
+
   &:active {
     transform: scale(0.95);
   }
-  
+
   &:focus-visible {
     outline: 2px solid var(--el-color-primary);
     outline-offset: 2px;
+  }
+
+  :deep(> div) {
+    padding: 0;
+  }
+}
+
+.AISDKList-AddButton-Section {
+  background: var(--el-bg-color);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.add-provider-btn {
+  height: 40px;
+  border-radius: 12px;
+  border: none;
+  background: var(--el-color-primary);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-size: 14px;
+  font-weight: 500;
+
+  &:hover {
+    background: var(--el-color-primary-light-3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(var(--el-color-primary-rgb), 0.3);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
+
+  i {
+    font-size: 16px;
   }
 }
 
@@ -268,12 +344,5 @@ function clearSearch() {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
-}
-
-.AISDKList-Container {
-  position: relative;
-  padding: 0 0.5rem;
-  width: 100%;
-  box-sizing: border-box;
 }
 </style>
