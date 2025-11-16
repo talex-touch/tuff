@@ -32,12 +32,14 @@
         </div>
 
         <!-- Close Button -->
-        <button
-          class="flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+        <FlatButton
+          class="test-results-dismiss flex-shrink-0"
+          mini
+          :aria-label="t('common.close')"
           @click="handleDismiss"
         >
           <i class="i-carbon-close text-lg opacity-60 hover:opacity-100" />
-        </button>
+        </FlatButton>
       </div>
     </div>
   </transition>
@@ -68,6 +70,7 @@
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import type { TestResult } from '~/types/aisdk'
 
 const props = withDefaults(
@@ -200,5 +203,32 @@ onMounted(() => {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+.test-results-dismiss {
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 4px;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
+
+  :deep(> div) {
+    padding: 0;
+  }
 }
 </style>

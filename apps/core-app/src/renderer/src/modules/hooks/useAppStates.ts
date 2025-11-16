@@ -7,7 +7,8 @@ import { createGlobalState } from '@vueuse/core'
 export const useAppState = createGlobalState(() => {
   const states = shallowReactive({
     hasUpdate: false,
-    noUpdateAvailable: false
+    noUpdateAvailable: false,
+    updateErrorMessage: ''
   })
 
   return { appStates: states }

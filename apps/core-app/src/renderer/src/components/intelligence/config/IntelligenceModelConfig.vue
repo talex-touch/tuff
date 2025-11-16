@@ -108,14 +108,14 @@
             class="add-model-input"
             @keyup.enter="handleAddModel"
           />
-          <button
+          <FlatButton
             class="add-model-button"
             :disabled="!newModelInput.trim()"
             @click="handleAddModel"
           >
             <i class="i-carbon-add" />
             {{ t('aisdk.config.model.addModel') }}
-          </button>
+          </FlatButton>
         </div>
 
         <p v-if="modelsError" class="error-message">
@@ -134,6 +134,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 interface AiProviderConfig {
   id: string
@@ -397,11 +398,11 @@ function emitUpdate() {
     cursor: pointer;
     transition: all 0.2s;
 
-    &:hover:not(:disabled) {
+    &:hover:not(.is-disabled) {
       background: var(--el-color-primary-light-3);
     }
 
-    &:disabled {
+    &.is-disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }

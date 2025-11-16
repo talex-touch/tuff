@@ -386,6 +386,7 @@ export function useApplicationUpgrade() {
       if (result.hasUpdate && result.release) {
         appStates.hasUpdate = true
         appStates.noUpdateAvailable = false
+        clearUpdateErrorMessage()
 
         if (result.release) {
           await blowMention('New Version Available', () => {
@@ -400,6 +401,7 @@ export function useApplicationUpgrade() {
       } else {
         appStates.hasUpdate = false
         appStates.noUpdateAvailable = true
+        clearUpdateErrorMessage()
       }
       return result
     } catch (err) {
@@ -456,17 +458,27 @@ export function useApplicationUpgrade() {
   function handleUpdateError(errorMessage: string, source: string): void {
     console.warn(`[useApplicationUpgrade] Update error from ${source}:`, errorMessage)
 
-    // 根据错误类型显示不同的提示
-    if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
-      toast.warning('网络连接失败，请检查网络设置')
-    } else if (errorMessage.includes('rate limit')) {
-      toast.warning('API请求频率过高，请稍后重试')
-    } else if (errorMessage.includes('ignored')) {
-      // 忽略版本不需要提示
-      return
-    } else {
-      toast.warning(`更新检查失败: ${errorMessage}`)
+    const normalizedMessage = resolveUpdateErrorMessage(errorMessage)
+    appStates.updateErrorMessage = normalizedMessage
+  }
+
+  function clearUpdateErrorMessage(): void {
+    appStates.updateErrorMessage = ''
+  }
+
+  function resolveUpdateErrorMessage(errorMessage: string): string {
+    const lowerCaseMessage = errorMessage.toLowerCase()
+
+    if (lowerCaseMessage.includes('ignored')) {
+      return ''
     }
+    if (lowerCaseMessage.includes('network') || lowerCaseMessage.includes('timeout')) {
+      return '网络连接失败，请检查网络设置'
+    }
+    if (lowerCaseMessage.includes('rate limit')) {
+      return 'API请求频率过高，请稍后重试'
+    }
+    return `更新检查失败: ${errorMessage}`
   }
 
   /**

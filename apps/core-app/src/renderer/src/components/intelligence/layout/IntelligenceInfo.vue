@@ -1,11 +1,12 @@
 <template>
   <div class="aisdk-info-root h-full flex flex-col">
     <!-- Header -->
-    <IntelligenceHeader 
+    <IntelligenceHeader
       :provider="localProvider"
       :is-testing="isTesting"
       @toggle="handleToggle"
       @test="handleTest"
+      @delete="handleDelete"
     />
 
     <!-- Scrollable Content -->
@@ -30,10 +31,9 @@
         active-icon="i-carbon-key"
         memory-name="aisdk-api-config"
       >
-        <IntelligenceApiConfig 
-          v-model="localProvider" 
-          :disabled="!localProvider.enabled"
-          @change="handleChange" 
+        <IntelligenceApiConfig
+          v-model="localProvider"
+          @change="handleChange"
         />
       </TuffGroupBlock>
 
@@ -44,10 +44,9 @@
         active-icon="i-carbon-model"
         memory-name="aisdk-model-config"
       >
-        <IntelligenceModelConfig 
-          v-model="localProvider" 
-          :disabled="!localProvider.enabled"
-          @change="handleChange" 
+        <IntelligenceModelConfig
+          v-model="localProvider"
+          @change="handleChange"
         />
       </TuffGroupBlock>
 
@@ -58,10 +57,9 @@
         active-icon="i-carbon-settings"
         memory-name="aisdk-advanced-config"
       >
-        <IntelligenceAdvancedConfig 
-          v-model="localProvider" 
-          :disabled="!localProvider.enabled"
-          @change="handleChange" 
+        <IntelligenceAdvancedConfig
+          v-model="localProvider"
+          @change="handleChange"
         />
       </TuffGroupBlock>
 
@@ -72,10 +70,9 @@
         active-icon="i-carbon-time"
         memory-name="aisdk-ratelimit-config"
       >
-        <IntelligenceRateLimitConfig 
-          v-model="localProvider" 
-          :disabled="!localProvider.enabled"
-          @change="handleChange" 
+        <IntelligenceRateLimitConfig
+          v-model="localProvider"
+          @change="handleChange"
         />
       </TuffGroupBlock>
 
@@ -143,6 +140,7 @@ const emits = defineEmits<{
   update: [provider: AiProviderConfig]
   test: []
   updateGlobal: [config: AISDKGlobalConfig]
+  delete: []
 }>()
 
 const { t } = useI18n()
@@ -203,6 +201,13 @@ function handleToggle() {
  */
 function handleTest() {
   emits('test')
+}
+
+/**
+ * Handle delete button click
+ */
+function handleDelete() {
+  emits('delete')
 }
 
 /**

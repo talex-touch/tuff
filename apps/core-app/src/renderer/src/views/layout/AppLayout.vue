@@ -2,9 +2,9 @@
   <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
     <DynamicLayout>
       <template #view>
-        <router-view v-slot="{ Component }">
-          <transition>
-            <component :is="Component" v-if="Component"> </component>
+        <router-view v-slot="{ Component, route }">
+          <transition name="route-slide" appear>
+            <component v-if="Component" :is="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </template>
@@ -90,6 +90,32 @@ onMounted(() => {
     opacity: 1;
     transform: translateX(0) scale(1);
   }
+}
+
+.route-slide-enter-active,
+.route-slide-leave-active {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition:
+    opacity 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
+    transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
+    filter 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.route-slide-enter-from {
+  opacity: 0;
+  transform: translate3d(80px, 0, 0) scale(0.96);
+  filter: brightness(1.05);
+}
+
+.route-slide-leave-to {
+  opacity: 0;
+  transform: translate3d(-40px, 0, 0) scale(0.92);
+  filter: brightness(0.85);
 }
 
 .AppLayout-Main {

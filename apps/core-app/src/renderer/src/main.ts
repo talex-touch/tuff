@@ -38,51 +38,29 @@ preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')
 
 async function bootstrap() {
-  preloadDebugStep('Loading localization resources...', 0.05)
-
-  // 从本地存储获取语言设置，如果没有则使用系统语言或默认中文
-  let initialLanguage = localStorage.getItem('app-language')
-
-  // 如果没有保存的语言设置，检查是否跟随系统语言
-  if (!initialLanguage) {
-    const followSystem = localStorage.getItem('app-follow-system-language') === 'true'
-    if (followSystem) {
-      // 检测系统语言
-      const systemLang = navigator.language || 'en-US'
-      if (systemLang.startsWith('zh')) {
-        initialLanguage = 'zh-CN'
-      } else if (systemLang.startsWith('en')) {
-        initialLanguage = 'en-US'
-      } else {
-        initialLanguage = 'zh-CN' // 默认中文
-      }
-    } else {
-      initialLanguage = 'zh-CN' // 默认中文
-    }
-  }
-
-  const i18n = await setupI18n({ locale: initialLanguage })
+  const initialLanguage = resolveInitialLanguage()
+  const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
+    setupI18n({ locale: initialLanguage })
+  )
   ;(window as any).$i18n = i18n
 
-  preloadDebugStep('Creating Vue application instance', 0.05)
-  const app = createApp(App)
+  const app = await runBootStep('Creating Vue application instance', 0.05, () =>
+    createApp(App)
+  )
 
-  preloadDebugStep('Registering plugins and global modules', 0.05)
-  app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
+  await runBootStep('Registering plugins and global modules', 0.05, () =>
+    registerCorePlugins(app, i18n)
+  )
 
-  // CoreBox 窗口不需要初始化插件列表
-  if (!isCoreBox()) {
-    preloadDebugStep('Initializing plugin store', 0.05)
-    const pluginStore = usePluginStore()
-    await pluginStore.initialize()
-  }
+  await runBootStep('Initializing plugin store', 0.05, () => maybeInitializePluginStore())
 
-  preloadDebugStep('Mounting renderer root container', 0.05)
-  app.mount('#app')
+  await runBootStep('Mounting renderer root container', 0.05, () => {
+    app.mount('#app')
+  })
 
-  preloadDebugStep('Checking platform compatibility', 0.02)
-  // 检查平台兼容性并显示警告
-  checkPlatformCompatibility()
+  await runBootStep('Checking platform compatibility', 0.02, () =>
+    checkPlatformCompatibility()
+  )
 
   preloadDebugStep('Renderer shell mounted', 0.02)
 }
@@ -109,6 +87,46 @@ async function checkPlatformCompatibility() {
   } catch (error) {
     console.warn('Failed to check platform compatibility:', error)
   }
+}
+
+const DEFAULT_LOCALE = 'zh-CN'
+
+function resolveInitialLanguage() {
+  const storedLanguage = localStorage.getItem('app-language')
+  if (storedLanguage) {
+    return storedLanguage
+  }
+
+  const followSystem = localStorage.getItem('app-follow-system-language') === 'true'
+  if (!followSystem) {
+    return DEFAULT_LOCALE
+  }
+
+  const systemLang = navigator.language || 'en-US'
+  if (systemLang.startsWith('zh')) {
+    return 'zh-CN'
+  }
+  if (systemLang.startsWith('en')) {
+    return 'en-US'
+  }
+  return DEFAULT_LOCALE
+}
+
+function registerCorePlugins(app: ReturnType<typeof createApp>, i18n: any) {
+  app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
+}
+
+async function maybeInitializePluginStore() {
+  if (isCoreBox()) {
+    return
+  }
+  const pluginStore = usePluginStore()
+  await pluginStore.initialize()
+}
+
+async function runBootStep<T>(message: string, progress: number, task: () => T | Promise<T>) {
+  preloadDebugStep(message, progress)
+  return await task()
 }
 
 bootstrap().catch((error) => {
