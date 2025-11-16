@@ -100,8 +100,32 @@ const routes: any = [
   },
   {
     path: '/aisdk',
-    name: 'AI SDK',
-    component: () => import('../views/base/AISDKPage.vue'),
+    name: 'Intelligence',
+    component: () => import('../views/base/intelligence/IntelligencePage.vue'),
+    meta: {
+      index: 8
+    }
+  },
+  {
+    path: '/aisdk/channels',
+    name: 'IntelligenceChannels',
+    component: () => import('../views/base/intelligence/IntelligenceChannelsPage.vue'),
+    meta: {
+      index: 8
+    }
+  },
+  {
+    path: '/aisdk/capabilities',
+    name: 'IntelligenceCapabilities',
+    component: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue'),
+    meta: {
+      index: 8
+    }
+  },
+  {
+    path: '/aisdk/prompts',
+    name: 'IntelligencePrompts',
+    component: () => import('../views/base/intelligence/IntelligencePromptsPage.vue'),
     meta: {
       index: 8
     }

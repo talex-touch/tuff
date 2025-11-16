@@ -2,6 +2,9 @@
   <div class="AppLayout-Container Flat" :class="{ 'is-display': isDisplayMode }">
     <div class="AppLayout-Header fake-background">
       <FlatController>
+        <template #nav>
+          <slot name="nav" />
+        </template>
         <template v-if="!isDisplayMode" #title>
           <slot name="title" />
         </template>

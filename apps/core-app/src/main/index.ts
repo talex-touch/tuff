@@ -34,6 +34,7 @@ import { permissionCheckerModule } from './modules/system/permission-checker'
 import { mainLog } from './utils/logger'
 import { getStartupAnalytics } from './modules/analytics'
 import type { ModuleLoadMetric } from './modules/analytics'
+import { intelligenceModule } from './modules/ai/intelligence-module'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -62,6 +63,7 @@ const modulesToLoad = [
   sentryModule,
   buildVerificationModule,
   updateServiceModule,
+  intelligenceModule,
   pluginModule,
   pluginLogModule,
   coreBoxModule,

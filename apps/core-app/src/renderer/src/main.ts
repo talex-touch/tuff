@@ -22,7 +22,7 @@ import './assets/main.css'
 import '~/styles/element/index.scss'
 import '~/styles/index.scss'
 import '~/styles/accessibility.scss'
-import '~/components/aisdk/styles/aisdk-theme.scss'
+// Intelligence 样式已移至页面级按需加载
 
 import 'uno.css'
 import 'virtual:unocss-devtools'

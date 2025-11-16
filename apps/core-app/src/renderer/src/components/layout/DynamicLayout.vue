@@ -11,6 +11,9 @@
         <template #view>
           <slot name="view" />
         </template>
+        <template #nav>
+          <slot name="nav" />
+        </template>
         <template #title>
           <slot name="title" />
         </template>

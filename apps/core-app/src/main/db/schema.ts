@@ -1,7 +1,7 @@
 // src/db/schema.ts
 
 import { sql } from 'drizzle-orm'
-import { integer, sqliteTable, text, primaryKey, real, customType } from 'drizzle-orm/sqlite-core'
+import { integer, sqliteTable, text, primaryKey, real, customType, index } from 'drizzle-orm/sqlite-core'
 
 // --- 自定义类型 (Custom Types) ---
 
@@ -314,6 +314,7 @@ export const ocrJobs = sqliteTable('ocr_jobs', {
   priority: integer('priority').notNull().default(0),
   attempts: integer('attempts').notNull().default(0),
   lastError: text('last_error'),
+  nextRetryAt: integer('next_retry_at', { mode: 'timestamp' }), // 下次重试时间
   payloadHash: text('payload_hash'),
   meta: text('meta'),
   queuedAt: integer('queued_at', { mode: 'timestamp' })
@@ -340,3 +341,76 @@ export const ocrResults = sqliteTable('ocr_results', {
     .notNull()
     .default(sql`(strftime('%s', 'now'))`)
 })
+
+// =============================================================================
+// 7. 下载管理 (Download Management) - 文件下载任务和历史记录
+// =============================================================================
+
+/**
+ * 下载任务表，用于管理文件下载队列。
+ */
+export const downloadTasks = sqliteTable('download_tasks', {
+  id: text('id').primaryKey(),
+  url: text('url').notNull(),
+  destination: text('destination').notNull(),
+  filename: text('filename').notNull(),
+  priority: integer('priority').notNull(),
+  module: text('module').notNull(),
+  status: text('status').notNull(),
+  totalSize: integer('total_size'),
+  downloadedSize: integer('downloaded_size').default(0),
+  checksum: text('checksum'),
+  metadata: text('metadata'), // JSON string
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  completedAt: integer('completed_at'),
+  error: text('error')
+}, (table) => ({
+  statusIdx: index('idx_tasks_status').on(table.status),
+  createdAtIdx: index('idx_tasks_created').on(table.createdAt),
+  priorityIdx: index('idx_tasks_priority').on(table.priority),
+  statusPriorityIdx: index('idx_tasks_status_priority').on(table.status, table.priority)
+}))
+
+/**
+ * 下载分块表，用于支持分块下载和断点续传。
+ */
+export const downloadChunks = sqliteTable('download_chunks', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id')
+    .notNull()
+    .references(() => downloadTasks.id),
+  index: integer('index').notNull(),
+  start: integer('start').notNull(),
+  end: integer('end').notNull(),
+  size: integer('size').notNull(),
+  downloaded: integer('downloaded').default(0),
+  status: text('status').notNull(),
+  filePath: text('file_path').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+}, (table) => ({
+  taskIdIdx: index('idx_chunks_task').on(table.taskId),
+  taskIdIndexIdx: index('idx_chunks_task_index').on(table.taskId, table.index)
+}))
+
+/**
+ * 下载历史记录表，用于保存已完成下载的统计信息。
+ */
+export const downloadHistory = sqliteTable('download_history', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull(),
+  url: text('url').notNull(),
+  filename: text('filename').notNull(),
+  module: text('module').notNull(),
+  status: text('status').notNull(),
+  totalSize: integer('total_size'),
+  downloadedSize: integer('downloaded_size'),
+  duration: integer('duration'), // seconds
+  averageSpeed: integer('average_speed'), // bytes/s
+  createdAt: integer('created_at').notNull(),
+  completedAt: integer('completed_at')
+}, (table) => ({
+  createdAtIdx: index('idx_history_created').on(table.createdAt),
+  completedAtIdx: index('idx_history_completed').on(table.completedAt)
+}))

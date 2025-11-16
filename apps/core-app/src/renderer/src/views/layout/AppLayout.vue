@@ -8,6 +8,9 @@
           </transition>
         </router-view>
       </template>
+      <template #nav>
+        <LayoutBackButton :visible="canNavigateBack" @click="navigateBack" />
+      </template>
       <template #title>
         <slot name="title" />
       </template>
@@ -22,10 +25,15 @@
 import { computed } from 'vue'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
 import DynamicLayout from '~/components/layout/DynamicLayout.vue'
+import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
+import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
 
 const mica = computed(() => themeStyle.value.theme.window === 'Mica')
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
 const contrast = computed(() => themeStyle.value.theme.addon.contrast)
+const { canNavigateBack, navigateBack } = useSecondaryNavigation({
+  debugLabel: 'AppLayout'
+})
 
 onMounted(() => {
   triggerThemeTransition(

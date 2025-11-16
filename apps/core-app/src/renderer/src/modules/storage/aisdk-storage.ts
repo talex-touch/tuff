@@ -1,18 +1,6 @@
 import { TouchStorage } from '@talex-touch/utils/renderer'
-import type { AiProviderConfig, AISDKGlobalConfig } from '~/types/aisdk'
-import { DEFAULT_PROVIDERS, DEFAULT_GLOBAL_CONFIG } from '~/types/aisdk'
-
-/**
- * Interface for AISDK storage data structure
- */
-export interface AISDKStorageData {
-  /** Array of AI provider configurations */
-  providers: AiProviderConfig[]
-  /** Global AISDK configuration settings */
-  globalConfig: AISDKGlobalConfig
-  /** Version number for migration purposes */
-  version: number
-}
+import type { AISDKStorageData, AISDKGlobalConfig } from '~/types/aisdk'
+import { DEFAULT_PROVIDERS, DEFAULT_GLOBAL_CONFIG, DEFAULT_CAPABILITIES } from '~/types/aisdk'
 
 /**
  * Default AISDK storage data
@@ -20,6 +8,7 @@ export interface AISDKStorageData {
 const defaultAISDKData: AISDKStorageData = {
   providers: [...DEFAULT_PROVIDERS],
   globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
+  capabilities: { ...DEFAULT_CAPABILITIES },
   version: 1
 }
 
@@ -64,26 +53,33 @@ export async function migrateAISDKSettings(): Promise<void> {
     // Ensure all providers have required fields
     const migratedProviders = currentData.providers.map((provider) => ({
       ...provider,
-      // Add any missing fields with defaults
       enabled: provider.enabled ?? false,
       priority: provider.priority ?? 2,
       timeout: provider.timeout ?? 30000,
       rateLimit: provider.rateLimit ?? {},
-      models: provider.models ?? []
+      models: provider.models ?? [],
+      capabilities: provider.capabilities ?? []
     }))
 
     // Ensure global config has all required fields
+    const storedStrategy = currentData.globalConfig?.defaultStrategy
+    const normalizedStrategy =
+      storedStrategy === 'priority' ? 'rule-based-default' : storedStrategy ?? 'adaptive-default'
+
     const migratedGlobalConfig: AISDKGlobalConfig = {
-      defaultStrategy: currentData.globalConfig?.defaultStrategy ?? 'priority',
+      defaultStrategy: normalizedStrategy,
       enableAudit: currentData.globalConfig?.enableAudit ?? false,
       enableCache: currentData.globalConfig?.enableCache ?? true,
       cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600
     }
 
+    const migratedCapabilities = currentData.capabilities ?? { ...DEFAULT_CAPABILITIES }
+
     // Apply migrated data
     aisdkStorage.applyData({
       providers: migratedProviders,
       globalConfig: migratedGlobalConfig,
+      capabilities: migratedCapabilities,
       version: 1
     })
 
@@ -106,6 +102,7 @@ export async function resetAISDKConfig(): Promise<void> {
   aisdkStorage.applyData({
     providers: [...DEFAULT_PROVIDERS],
     globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
+    capabilities: { ...DEFAULT_CAPABILITIES },
     version: 1
   })
 

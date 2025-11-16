@@ -2,6 +2,7 @@ export enum AiProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   DEEPSEEK = 'deepseek',
+  SILICONFLOW = 'siliconflow',
   LOCAL = 'local',
   CUSTOM = 'custom'
 }
@@ -24,6 +25,43 @@ export interface AiProviderRateLimit {
   tokensPerDay?: number
 }
 
+export interface AiVisionImageSource {
+  type: 'data-url' | 'file' | 'base64'
+  dataUrl?: string
+  filePath?: string
+  base64?: string
+}
+
+export interface AiVisionOcrBlock {
+  id?: string
+  text: string
+  language?: string
+  confidence?: number
+  boundingBox?: [number, number, number, number]
+  polygon?: Array<[number, number]>
+  type?: 'word' | 'line' | 'paragraph' | 'region'
+  children?: AiVisionOcrBlock[]
+}
+
+export interface AiVisionOcrResult {
+  text: string
+  confidence?: number
+  language?: string
+  keywords?: string[]
+  suggestions?: string[]
+  blocks?: AiVisionOcrBlock[]
+  raw?: any
+}
+
+export interface AiVisionOcrPayload {
+  source: AiVisionImageSource
+  language?: string
+  prompt?: string
+  metadata?: Record<string, any>
+  includeLayout?: boolean
+  includeKeywords?: boolean
+}
+
 export interface AiProviderConfig {
   id: string
   type: AiProviderType
@@ -33,7 +71,12 @@ export interface AiProviderConfig {
   baseUrl?: string
   rateLimit?: AiProviderRateLimit
   models?: string[]
+  defaultModel?: string
+  instructions?: string
+  timeout?: number
   priority?: number
+  capabilities?: AiCapabilityType[]
+  metadata?: Record<string, any>
 }
 
 export interface AiMessage {
@@ -49,6 +92,10 @@ export interface AiInvokeOptions {
   latencyTarget?: number
   timeout?: number
   stream?: boolean
+  preferredProviderId?: string
+  allowedProviderIds?: string[]
+  metadata?: Record<string, any>
+  testRun?: boolean
 }
 
 export interface AiInvokeContext {
@@ -89,6 +136,7 @@ export interface AiCapabilityDescriptor {
   outputSchema?: any
   defaultStrategy?: string
   supportedProviders: AiProviderType[]
+  metadata?: Record<string, any>
 }
 
 export interface AiChatPayload {
@@ -125,6 +173,7 @@ export interface AiSDKConfig {
   enableAudit: boolean
   enableCache: boolean
   cacheExpiration?: number
+  capabilities?: Record<string, AiCapabilityRoutingConfig>
 }
 
 export interface AiStrategyConfig {
@@ -147,4 +196,59 @@ export interface AiAuditLog {
   latency: number
   success: boolean
   error?: string
+}
+
+export interface AiCapabilityProviderBinding {
+  providerId: string
+  models?: string[]
+  priority?: number
+  enabled?: boolean
+  metadata?: Record<string, any>
+}
+
+export interface AiCapabilityRoutingConfig {
+  label?: string
+  description?: string
+  providers: AiCapabilityProviderBinding[]
+  promptTemplate?: string
+  testResourceDir?: string
+  metadata?: Record<string, any>
+}
+
+export interface AiSDKPersistedConfig {
+  providers: AiProviderConfig[]
+  globalConfig: {
+    defaultStrategy: string
+    enableAudit: boolean
+    enableCache: boolean
+    cacheExpiration?: number
+  }
+  capabilities?: Record<string, AiCapabilityRoutingConfig>
+  version: number
+}
+
+export interface AiProviderAdapter {
+  readonly type: AiProviderType
+  getConfig(): AiProviderConfig
+  updateConfig(config: Partial<AiProviderConfig>): void
+  isEnabled(): boolean
+  chat(payload: AiChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>>
+  chatStream(
+    payload: AiChatPayload,
+    options: AiInvokeOptions
+  ): AsyncGenerator<AiStreamChunk>
+  embedding(payload: AiEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>>
+  translate(payload: AiTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>>
+  visionOcr(
+    payload: AiVisionOcrPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<AiVisionOcrResult>>
+}
+
+export interface ProviderManagerAdapter {
+  clear(): void
+  registerFromConfig(config: AiProviderConfig): AiProviderAdapter
+  getEnabled(): AiProviderAdapter[]
+  get(providerId: string): AiProviderAdapter | undefined
+  createProviderInstance(config: AiProviderConfig): AiProviderAdapter
 }

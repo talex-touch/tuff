@@ -5,7 +5,7 @@
       class="ViewTemplate-Wrapper transition-cubic absolute w-full h-full"
     >
       <el-scrollbar>
-        <div class="View-Container pl-2 pr-3">
+        <div class="View-Container py-2 pl-2 pr-3">
           <slot />
         </div>
       </el-scrollbar>

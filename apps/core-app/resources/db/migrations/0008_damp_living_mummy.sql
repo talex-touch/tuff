@@ -1,0 +1,1 @@
+ALTER TABLE `ocr_jobs` ADD `next_retry_at` integer;
