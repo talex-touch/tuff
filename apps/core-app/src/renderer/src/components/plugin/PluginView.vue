@@ -15,9 +15,9 @@ export default {
 </script>
 
 <script setup>
-import { forDialogMention } from '@modules/mention/dialog-mention'
+import { forDialogMention } from '~/modules/mention/dialog-mention'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
-import Loading from '@comp/icon/LoadingIcon.vue'
+import Loading from '~/components/icon/LoadingIcon.vue'
 
 const props = defineProps({
   plugin: {

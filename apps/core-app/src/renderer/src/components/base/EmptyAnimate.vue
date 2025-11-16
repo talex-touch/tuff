@@ -7,7 +7,7 @@
 </template>
 
 <script name="EmptyAnimate" lang="ts" setup>
-import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
+import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 // import { $t } from '~/modules/lang'
 import empty from '~/assets/lotties/empty.json'
 </script>

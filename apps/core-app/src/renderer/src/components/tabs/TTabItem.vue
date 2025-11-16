@@ -15,7 +15,7 @@ export default {
 </script>
 
 <script setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { inject, ref, watchEffect } from 'vue'
 
 const props = defineProps({

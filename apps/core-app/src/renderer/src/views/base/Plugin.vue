@@ -44,11 +44,11 @@
 <script lang="ts" name="Plugin" setup>
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import PluginInfo from '@comp/plugin/PluginInfo.vue'
-import PluginList from '@comp/plugin/layout/PluginList.vue'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import PluginInfo from '~/components/plugin/PluginInfo.vue'
+import PluginList from '~/components/plugin/layout/PluginList.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import PluginNew from './plugin/PluginNew.vue'
-import PluginEmptyState from '@comp/plugin/layout/PluginEmptyState.vue'
+import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 

@@ -22,7 +22,7 @@
 </template>
 
 <script setup name="FlatCompletion">
-import FlatInput from '@comp/base/input/FlatInput.vue'
+import FlatInput from '~/components/base/input/FlatInput.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { computePosition } from '@floating-ui/vue'
 

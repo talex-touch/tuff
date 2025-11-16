@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import RemixIcon from '~/components/icon/RemixIcon.vue'
-import { IUseSearch } from '@renderer/modules/box/adapter/types'
+import { IUseSearch } from '~/modules/box/adapter/types'
 import { IProviderActivate } from '@talex-touch/utils'
 
 defineProps<{

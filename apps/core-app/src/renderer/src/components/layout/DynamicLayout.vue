@@ -27,7 +27,7 @@
 
 <script lang="ts" setup>
 import { useDynamicTuffLayout } from '~/modules/layout'
-import LayoutSkeleton from '@comp/layout/LayoutSkeleton.vue'
+import LayoutSkeleton from '~/components/layout/LayoutSkeleton.vue'
 
 const { layoutComponent, isLoading, currentLayoutName } = useDynamicTuffLayout()
 </script>

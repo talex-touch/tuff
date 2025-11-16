@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import Loading from '@comp/icon/LoadingIcon.vue'
+import Loading from '~/components/icon/LoadingIcon.vue'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import PluginIcon from '@comp/plugin/PluginIcon.vue'
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import PluginIcon from '~/components/plugin/PluginIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 /**
  * Button interface for defining button properties

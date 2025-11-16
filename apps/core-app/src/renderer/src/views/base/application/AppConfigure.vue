@@ -1,7 +1,7 @@
 <script name="AppConfigure" setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { touchChannel } from '~/modules/channel/channel-core'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 // import cprocess from "child_process";
 // import fs from 'fs'
 // import path from 'path'

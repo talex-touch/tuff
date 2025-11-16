@@ -1,6 +1,6 @@
 <script>
 import { defineComponent, h, nextTick, ref } from 'vue'
-import TMenuItem from '@comp/tabs/TMenuItem.vue'
+import TMenuItem from '~/components/tabs/TMenuItem.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 import router from '~/base/router'
 

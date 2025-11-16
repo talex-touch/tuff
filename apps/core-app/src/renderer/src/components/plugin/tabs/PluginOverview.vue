@@ -40,7 +40,7 @@
 </template>
 
 <script lang="ts" setup>
-import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import OSIcon from '~/components/icon/OSIcon.vue'
 import type { ITouchPlugin, IPlatform } from '@talex-touch/utils/plugin'
 import { useI18n } from 'vue-i18n'

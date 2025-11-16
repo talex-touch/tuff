@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import FlatInput from '@comp/base/input/FlatInput.vue'
+import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(

@@ -1,8 +1,8 @@
 <script lang="ts">
 import { h, nextTick, ref, defineComponent } from 'vue'
-import TTabItem from '@comp/tabs/TTabItem.vue'
+import TTabItem from '~/components/tabs/TTabItem.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import TTabHeader from '@comp/tabs/TTabHeader.vue'
+import TTabHeader from '~/components/tabs/TTabHeader.vue'
 import { ElScrollbar } from 'element-plus'
 
 const qualifiedName = ['TTabItem', 'TTabItemGroup', 'TTabHeader']

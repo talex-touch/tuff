@@ -17,7 +17,7 @@ export default {
 </script>
 
 <script setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({

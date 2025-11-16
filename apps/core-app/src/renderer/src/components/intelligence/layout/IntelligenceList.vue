@@ -61,7 +61,7 @@
 <script lang="ts" name="IntelligenceList" setup>
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TouchScroll from '@comp/base/TouchScroll.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import IntelligenceListModule from './IntelligenceListModule.vue'
 
 interface AiProviderConfig {

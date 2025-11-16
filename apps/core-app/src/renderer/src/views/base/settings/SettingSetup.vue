@@ -18,7 +18,7 @@ import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'
 import TuffWindowsTag from '~/components/tuff/tags/TuffWindowsTag.vue'
 import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
 import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 // Import storage and channel
 import { touchChannel } from '~/modules/channel/channel-core'

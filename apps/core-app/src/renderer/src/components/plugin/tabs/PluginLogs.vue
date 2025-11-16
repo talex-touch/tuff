@@ -112,9 +112,9 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
-import { formatLogForTerminal } from '@renderer/utils/log-formatter'
-import LogTerminal from '@comp/terminal/LogTerminal.vue'
-import TDrawer from '@comp/base/dialog/TDrawer.vue'
+import { formatLogForTerminal } from '~/utils/log-formatter'
+import LogTerminal from '~/components/terminal/LogTerminal.vue'
+import TDrawer from '~/components/base/dialog/TDrawer.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import { useI18n } from 'vue-i18n'

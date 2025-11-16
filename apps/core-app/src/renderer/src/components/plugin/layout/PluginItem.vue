@@ -1,7 +1,7 @@
 <script lang="ts" name="PluginItem" setup>
 import { computed } from 'vue'
 import { ElPopover } from 'element-plus'
-import PluginStatus from '@comp/plugin/action/PluginStatus.vue'
+import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 import { ITouchPlugin } from '@talex-touch/utils'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TuffIcon from '~/components/base/TuffIcon.vue'

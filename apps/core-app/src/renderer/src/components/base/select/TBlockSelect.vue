@@ -1,6 +1,6 @@
 <script name="TBlockSelect" setup>
-import TSelect from '@comp/base/select/TSelect.vue'
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import TSelect from '~/components/base/select/TSelect.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 
 const props = defineProps({

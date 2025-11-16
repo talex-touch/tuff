@@ -1,14 +1,14 @@
 <script setup lang="ts" name="PluginNew">
-import FormTemplate from '@comp/base/template/FormTemplate.vue'
-import BlockTemplate from '@comp/base/template/BlockTemplate.vue'
-import BrickTemplate from '@comp/base/template/BrickTemplate.vue'
-import LineTemplate from '@comp/base/template/LineTemplate.vue'
-import ActionTemplate from '@comp/base/template/ActionTemplate.vue'
+import FormTemplate from '~/components/base/template/FormTemplate.vue'
+import BlockTemplate from '~/components/base/template/BlockTemplate.vue'
+import BrickTemplate from '~/components/base/template/BrickTemplate.vue'
+import LineTemplate from '~/components/base/template/LineTemplate.vue'
+import ActionTemplate from '~/components/base/template/ActionTemplate.vue'
 
-import FlatButton from '@comp/base/button/FlatButton.vue'
-import FlatInput from '@comp/base/input/FlatInput.vue'
-import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue'
-import TCheckBox from '@comp/base/checkbox/TCheckBox.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import FlatInput from '~/components/base/input/FlatInput.vue'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import TCheckBox from '~/components/base/checkbox/TCheckBox.vue'
 
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { touchChannel } from '~/modules/channel/channel-core'

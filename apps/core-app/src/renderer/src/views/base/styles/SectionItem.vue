@@ -109,7 +109,7 @@ function handleLeave() {
     height: 100%;
 
     background-size: cover;
-    background-image: url('@assets/bg/apparent.jpg');
+    background-image: url('~/assets/bg/apparent.jpg');
   }
 }
 
