@@ -1,7 +1,7 @@
 <script setup name="IntelligencePrompts" lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -23,16 +23,16 @@ function handlePromptsClick() {
 async function handleOpenFolder() {
   try {
     await touchChannel.send('app:open-prompts-folder')
-    ElMessage.success('已打开提示词文件夹')
+    toast.success('已打开提示词文件夹')
   } catch (error) {
     console.error('Failed to open prompts folder:', error)
-    ElMessage.error('打开文件夹失败')
+    toast.error('打开文件夹失败')
   }
 }
 
 function handleCreatePrompt() {
   console.log('Create new prompt file')
-  ElMessage.info('创建提示词功能开发中')
+  toast.info('创建提示词功能开发中')
 }
 </script>
 

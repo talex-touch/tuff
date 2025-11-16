@@ -44,6 +44,7 @@ aisdkStorage.setAutoSave(true)
  * @returns Promise that resolves when migration is complete
  */
 export async function migrateAISDKSettings(): Promise<void> {
+  console.log('[AISDK Storage] Starting migration check...')
   const currentData = aisdkStorage.data
 
   // Check if migration is needed (version 0 or missing version)
@@ -87,7 +88,11 @@ export async function migrateAISDKSettings(): Promise<void> {
     await aisdkStorage.saveToRemote({ force: true })
 
     console.log('[AISDK Storage] Migration complete')
+  } else {
+    console.log('[AISDK Storage] No migration needed, current version:', currentData.version)
   }
+
+  console.log('[AISDK Storage] Final providers count:', aisdkStorage.data.providers.length)
 }
 
 /**

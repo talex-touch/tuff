@@ -22,7 +22,7 @@ import PreviewHistoryPanel, {
 import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 
 declare global {
   interface Window {
@@ -187,7 +187,7 @@ async function loadPreviewHistory(): Promise<void> {
     ensureHistorySelection()
   } catch (error) {
     console.error('[CoreBox] Failed to load calculation history:', error)
-    ElMessage.error('加载最近处理失败')
+    toast.error('加载最近处理失败')
   } finally {
     previewHistory.loading = false
   }
@@ -241,11 +241,11 @@ function handleCopyPreviewEvent(event: Event): void {
   touchChannel
     .send('clipboard:write-text', { text: value })
     .then(() => {
-      ElMessage.success('结果已复制')
+      toast.success('结果已复制')
     })
     .catch((error) => {
       console.error('[CoreBox] Failed to copy preview result:', error)
-      ElMessage.error('复制失败')
+      toast.error('复制失败')
     })
 }
 

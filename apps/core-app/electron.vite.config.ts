@@ -82,9 +82,16 @@ export default defineConfig({
 
   renderer: {
     resolve: {
-      alias: {
-        '~': rendererPath
-      }
+      alias: [
+        {
+          find: /^~\//,
+          replacement: `${rendererPath}/`
+        },
+        {
+          find: /^assets\//,
+          replacement: `${path.join(rendererPath, 'assets')}/`
+        }
+      ]
     },
     define: {
       __VUE_OPTIONS_API__: true,

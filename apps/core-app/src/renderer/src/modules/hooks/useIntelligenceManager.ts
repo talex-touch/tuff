@@ -119,7 +119,10 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   // Initialize storage and run migrations on mount
   onMounted(async () => {
     try {
+      console.log('[IntelligenceManager] Initializing...')
       await migrateAISDKSettings()
+      console.log('[IntelligenceManager] Current providers:', aisdkStorage.data.providers)
+      console.log('[IntelligenceManager] Providers count:', aisdkStorage.data.providers.length)
     } catch (error) {
       console.error('[AISDK Management] Failed to migrate settings:', error)
     }

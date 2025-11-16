@@ -141,7 +141,8 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
@@ -216,7 +217,7 @@ async function loadStorageData(): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to load storage data:', error)
-    ElMessage.error(t('plugin.storage.message.loadFailed'))
+    toast.error(t('plugin.storage.message.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -295,7 +296,7 @@ async function handleOpenInEditor(): Promise<void> {
     })
   } catch (error) {
     console.error('Failed to open in editor:', error)
-    ElMessage.error(t('plugin.storage.message.openEditorFailed'))
+    toast.error(t('plugin.storage.message.openEditorFailed'))
   }
 }
 
@@ -317,14 +318,14 @@ async function handleClearStorage(): Promise<void> {
     })
 
     if (response.success) {
-      ElMessage.success(t('plugin.storage.message.clearSuccess'))
+      toast.success(t('plugin.storage.message.clearSuccess'))
       await refreshData()
     } else {
-      ElMessage.error(response.error || t('plugin.storage.message.clearFailed'))
+      toast.error(response.error || t('plugin.storage.message.clearFailed'))
     }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error(t('plugin.storage.message.clearFailed'))
+      toast.error(t('plugin.storage.message.clearFailed'))
     }
   } finally {
     clearing.value = false
@@ -337,7 +338,7 @@ async function handleOpenFolder(): Promise<void> {
       pluginName: props.plugin.name
     })
   } catch {
-    ElMessage.error(t('plugin.storage.message.openFolderFailed'))
+    toast.error(t('plugin.storage.message.openFolderFailed'))
   }
 }
 

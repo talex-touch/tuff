@@ -11,7 +11,7 @@
         <i :class="icon" class="text-base text-[var(--el-color-primary)]" aria-hidden="true" />
         {{ title }}
       </span>
-      <span 
+      <span
         class="text-[var(--el-text-color-secondary)]"
         :aria-label="`${providers.length} ${t('aisdk.list.providersCount')}`"
       >
@@ -19,8 +19,8 @@
       </span>
     </h2>
 
-    <p 
-      v-if="providers.length === 0" 
+    <p
+      v-if="providers.length === 0"
       class="text-center opacity-75 text-sm"
       role="status"
     >

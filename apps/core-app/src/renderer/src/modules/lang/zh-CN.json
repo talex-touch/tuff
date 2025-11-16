@@ -853,7 +853,7 @@
     },
   "aisdk": {
     "pageTitle": "塔塔智能",
-    "pageDesc": "请选择需要配置的智能模块，进入专属控制面板。",
+    "pageDesc": "通过塔塔智能，你可以优雅调度每条渠道，编排专属能力，并在一块打磨精致的控制面板中掌控全程。",
     "channelsSection": "渠道",
     "capabilitiesSection": "能力编排",
     "logsSection": "调用日志",
@@ -1255,7 +1255,8 @@
     "list": {
       "enabled": "已启用的提供商",
       "disabled": "已禁用的提供商",
-      "empty": "此类别中没有提供商"
+      "empty": "此类别中没有提供商",
+      "providersCount": "个提供商"
     },
     "item": {
       "configError": "配置不完整或无效"

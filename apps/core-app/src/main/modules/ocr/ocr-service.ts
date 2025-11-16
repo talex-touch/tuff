@@ -8,7 +8,7 @@ import { databaseModule } from '../database'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchChannel } from '../../core/channel-core'
 import { windowManager } from '../box-tool/core-box/window'
-import { ai } from '@talex-touch/utils/aisdk'
+import { ai } from '../ai/ai-sdk'
 import type {
   AiVisionOcrPayload,
   AiVisionOcrResult,

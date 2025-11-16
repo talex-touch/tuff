@@ -1,5 +1,5 @@
 import { computed, watch, onMounted, onUnmounted, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import {
   ClerkUser,
   ClerkResourceSnapshot,
@@ -186,7 +186,7 @@ async function initializeAuth() {
 
     // 显示用户友好的错误消息
     const errorMessage = getErrorMessage(error, 'INITIALIZATION_FAILED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
   }
 }
 
@@ -196,7 +196,7 @@ async function signIn() {
   if (!clerk) {
     const error = new Error('Clerk not initialized')
     const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
     throw error
   }
 
@@ -206,7 +206,7 @@ async function signIn() {
   } catch (error) {
     console.error('Sign in failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_IN_FAILED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
     throw error
   } finally {
     authLoadingState.isSigningIn = false
@@ -219,7 +219,7 @@ async function signUp() {
   if (!clerk) {
     const error = new Error('Clerk not initialized')
     const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
     throw error
   }
 
@@ -229,7 +229,7 @@ async function signUp() {
   } catch (error) {
     console.error('Sign up failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_UP_FAILED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
     throw error
   } finally {
     authLoadingState.isSigningUp = false
@@ -242,7 +242,7 @@ async function signOut() {
   if (!clerk) {
     const error = new Error('Clerk not initialized')
     const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
     throw error
   }
 
@@ -257,7 +257,7 @@ async function signOut() {
   } catch (error) {
     console.error('Sign out failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
     throw error
   } finally {
     authLoadingState.isSigningOut = false
@@ -356,7 +356,7 @@ async function loginWithClerk(): Promise<LoginResult> {
           }
           const error = new Error('Login timeout')
           const errorMessage = getErrorMessage(error, 'LOGIN_TIMEOUT')
-          ElMessage.error(errorMessage)
+          toast.error(errorMessage)
           authLoadingState.loginProgress = 0
           authLoadingState.loginTimeRemaining = 0
           resolve({
@@ -407,11 +407,11 @@ async function logout(): Promise<void> {
       await signOut()
     }
 
-    ElMessage.success('已登出')
+    toast.success('已登出')
   } catch (error) {
     console.error('Logout failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
-    ElMessage.error(errorMessage)
+    toast.error(errorMessage)
   }
 }
 

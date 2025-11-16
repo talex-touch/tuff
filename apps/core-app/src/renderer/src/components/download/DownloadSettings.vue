@@ -176,7 +176,7 @@
 <script setup lang="ts">
 import { reactive, watch, computed } from 'vue'
 // Note: ref is intentionally not imported as it's not used
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { DownloadConfig } from '@talex-touch/utils'
 
 // Props
@@ -259,9 +259,9 @@ const selectTempDir = async () => {
     // if (!result.canceled && result.filePaths.length > 0) {
     //   form.storage.tempDir = result.filePaths[0]
     // }
-    ElMessage.info('选择目录功能待实现')
+    toast.info('选择目录功能待实现')
   } catch (error) {
-    ElMessage.error('选择目录失败')
+    toast.error('选择目录失败')
   }
 }
 
