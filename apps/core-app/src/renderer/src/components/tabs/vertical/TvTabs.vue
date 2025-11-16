@@ -10,7 +10,7 @@ import {
   nextTick,
   onMounted
 } from 'vue'
-import TvTabItem from '@comp/tabs/vertical/TvTabItem.vue'
+import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 import { ElScrollbar } from 'element-plus'
 
 export default defineComponent({

@@ -14,8 +14,8 @@
 </template>
 
 <script name="ViewPlugin" setup>
-import PluginView from '@comp/plugin/PluginView.vue'
-import { touchChannel } from '@modules/channel/channel-core'
+import PluginView from '~/components/plugin/PluginView.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const options = window.$storage.themeStyle
 const activePlugin = inject('activePlugin')

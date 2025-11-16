@@ -10,7 +10,7 @@
 </template>
 
 <script name="TvTabItem" setup lang="ts">
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { computed } from 'vue'
 
 const props = defineProps({

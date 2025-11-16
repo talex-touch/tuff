@@ -1,5 +1,5 @@
 <script lang="ts" name="TouchTip" setup>
-import Loading from '@comp/icon/LoadingIcon.vue'
+import Loading from '~/components/icon/LoadingIcon.vue'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
 

@@ -16,7 +16,7 @@
 </template>
 
 <script name="IconButton" lang="ts" setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

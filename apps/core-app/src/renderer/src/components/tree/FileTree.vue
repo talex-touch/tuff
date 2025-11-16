@@ -43,8 +43,8 @@
 
 <script name="FileTree" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import RemixIcon from '@comp/icon/RemixIcon.vue'
-import IconButton from '@comp/base/button/IconButton.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
+import IconButton from '~/components/base/button/IconButton.vue'
 
 const props = defineProps(['fileAdpoter', 'modelValue'])
 const emit = defineEmits(['update:modelValue'])

@@ -17,7 +17,7 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 // Import download center hook
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'

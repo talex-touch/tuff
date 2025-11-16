@@ -1,7 +1,9 @@
 import { BaseModule } from '../abstract-base-module'
 import { ModuleInitContext, ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { DatabaseService } from './database-service'
+import { databaseModule } from '../database'
+import { downloadTasks, downloadChunks, downloadHistory } from '../../db/schema'
+import { eq, desc, and, lt } from 'drizzle-orm'
 import { TaskQueue } from './task-queue'
 import { DownloadWorker } from './download-worker'
 import { ChunkManager } from './chunk-manager'
@@ -12,8 +14,6 @@ import { NotificationService, NotificationConfig } from './notification-service'
 import { ErrorLogger } from './error-logger'
 import { RetryStrategy } from './retry-strategy'
 import { DownloadErrorClass } from './error-types'
-import { MigrationManager, MigrationProgress, MigrationResult } from './migration-manager'
-import { MigrationRunner, allMigrations } from './migrations'
 import {
   DownloadRequest,
   DownloadTask,
@@ -59,15 +59,12 @@ export class DownloadCenterModule extends BaseModule {
   private taskQueue!: TaskQueue                      // Priority-based task queue
   private downloadWorkers!: DownloadWorker[]         // Worker pool for concurrent downloads
   private chunkManager!: ChunkManager                // Manages file chunking and merging
-  private databaseService!: DatabaseService          // SQLite database for persistence
   private networkMonitor!: NetworkMonitor            // Monitors network status
   private priorityCalculator!: PriorityCalculator    // Calculates task priorities
   private concurrencyAdjuster!: ConcurrencyAdjuster  // Adjusts concurrency based on network
   private notificationService!: NotificationService  // System notifications
   private errorLogger!: ErrorLogger                  // Error logging and tracking
   private retryStrategy!: RetryStrategy              // Retry logic with backoff
-  private migrationManager!: MigrationManager        // Data migration from old systems
-  private migrationRunner!: MigrationRunner          // Database schema migrations
   
   // Configuration and state
   private config!: DownloadConfig                    // Download configuration
@@ -95,8 +92,6 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     // 初始化组件
-    const dbPath = path.join(moduleDir, 'download.db')
-    this.databaseService = new DatabaseService(dbPath)
     this.taskQueue = new TaskQueue()
     this.networkMonitor = new NetworkMonitor()
     this.chunkManager = new ChunkManager(this.config.chunk.size, this.config.storage.tempDir)
@@ -111,33 +106,6 @@ export class DownloadCenterModule extends BaseModule {
       },
       this.errorLogger
     )
-
-    // 初始化迁移管理器
-    this.migrationManager = new MigrationManager(dbPath)
-    this.migrationRunner = new MigrationRunner(dbPath)
-
-    // 设置迁移进度监听
-    this.migrationManager.on('progress', (progress: MigrationProgress) => {
-      this.broadcastMigrationProgress(progress)
-    })
-
-    // 检查并运行数据迁移
-    const needsMigration = await this.migrationManager.needsMigration()
-    if (needsMigration) {
-      console.log('[DownloadCenter] Migration needed, starting migration...')
-      const result = await this.migrationManager.migrate()
-      this.broadcastMigrationResult(result)
-      
-      if (!result.success) {
-        console.error('[DownloadCenter] Migration failed:', result.errors)
-      }
-    }
-
-    // 运行数据库schema迁移
-    await this.migrationRunner.runMigrations(allMigrations)
-
-    // 初始化数据库（包括运行迁移）
-    await this.databaseService.initialize()
 
     // 初始化错误日志记录器
     await this.errorLogger.initialize()
@@ -187,6 +155,11 @@ export class DownloadCenterModule extends BaseModule {
     console.log('DownloadCenterModule destroyed')
   }
 
+  // 获取主数据库连接
+  private getDb() {
+    return databaseModule.getDb()
+  }
+
   // 添加下载任务
   async addTask(request: DownloadRequest): Promise<string> {
     const taskId = request.id || randomUUID()
@@ -217,7 +190,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     // 保存到数据库
-    await this.databaseService.saveTask({
+    await this.getDb().insert(downloadTasks).values({
       id: taskId,
       url: request.url,
       destination: request.destination,
@@ -250,7 +223,13 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.PAUSED
-    await this.databaseService.updateTaskStatus(taskId, DownloadStatus.PAUSED)
+    await this.getDb()
+      .update(downloadTasks)
+      .set({
+        status: DownloadStatus.PAUSED,
+        updatedAt: Date.now()
+      })
+      .where(eq(downloadTasks.id, taskId))
 
     this.broadcastTaskUpdated(task)
   }
@@ -263,7 +242,13 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.PENDING
-    await this.databaseService.updateTaskStatus(taskId, DownloadStatus.PENDING)
+    await this.getDb()
+      .update(downloadTasks)
+      .set({
+        status: DownloadStatus.PENDING,
+        updatedAt: Date.now()
+      })
+      .where(eq(downloadTasks.id, taskId))
 
     this.broadcastTaskUpdated(task)
   }

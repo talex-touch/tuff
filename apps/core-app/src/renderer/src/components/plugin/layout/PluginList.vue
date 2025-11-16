@@ -27,7 +27,7 @@
 </template>
 
 <script lang="ts" name="PluginList" setup>
-import PluginListModule from '@comp/plugin/layout/PluginListModule.vue'
+import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import { ITouchPlugin } from '@talex-touch/utils'
 
 const props = defineProps<{

@@ -20,7 +20,7 @@
 </template>
 
 <script lang="ts" name="PluginEmptyState" setup>
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 </script>
 
 <style lang="scss" scoped>

@@ -1,9 +1,9 @@
 import { Component, createVNode, render, getCurrentInstance, type AppContext } from 'vue'
-import TDialogMention from '@comp/base/dialog/TDialogMention.vue'
-import TBottomDialog from '@comp/base/dialog/TBottomDialog.vue'
-import TBlowDialog from '@comp/base/dialog/TBlowDialog.vue'
-import TPopperDialog from '@comp/base/dialog/TPopperDialog.vue'
-import TouchTip from '@comp/base/dialog/TouchTip.vue'
+import TDialogMention from '~/components/base/dialog/TDialogMention.vue'
+import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
+import TBlowDialog from '~/components/base/dialog/TBlowDialog.vue'
+import TPopperDialog from '~/components/base/dialog/TPopperDialog.vue'
+import TouchTip from '~/components/base/dialog/TouchTip.vue'
 
 /**
  * Type definition for dialog button click handler

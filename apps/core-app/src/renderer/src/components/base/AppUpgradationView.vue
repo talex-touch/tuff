@@ -17,8 +17,8 @@
 <script lang="ts" name="AppUpgradationView" setup>
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatMarkdown from '@comp/base/input/FlatMarkdown.vue'
-import FlatButton from '@comp/base/button//FlatButton.vue'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import FlatButton from '~/components/base/button//FlatButton.vue'
 
 const props = defineProps({
   release: {

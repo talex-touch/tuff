@@ -1,9 +1,9 @@
 <script name="PluginApplyInstall" lang="ts" setup>
 import { blowMention } from '~/modules/mention/dialog-mention'
 import Loading from '~/assets/lotties/compress-loading.json'
-import LottieFrame from '@comp/icon/lotties/LottieFrame.vue'
+import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { sleep } from '@talex-touch/utils'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { getBufferedFile, clearBufferedFile } from '~/modules/hooks/dropper-resolver'
 

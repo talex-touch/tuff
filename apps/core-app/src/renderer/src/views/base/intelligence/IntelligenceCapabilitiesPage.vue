@@ -114,7 +114,7 @@
 <script lang="ts" name="IntelligenceCapabilitiesPage" setup>
 import { computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import type {
   AISDKCapabilityConfig,
   AiCapabilityProviderBinding,

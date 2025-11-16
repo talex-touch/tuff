@@ -22,7 +22,7 @@ export default {
 </script>
 
 <script setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps({
   title: {

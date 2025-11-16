@@ -1,5 +1,5 @@
 <script setup lang="ts" name="ThemePreference">
-import FormTemplate from '@comp/base/template/FormTemplate.vue'
+import FormTemplate from '~/components/base/template/FormTemplate.vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -91,7 +91,7 @@ const copyWriting = computed(() => {
     background-position: 0% 0%;
     background-size: 120% 120%;
     background-repeat: no-repeat;
-    background-image: url('@assets/bg/apparent.jpg');
+    background-image: url('~/assets/bg/apparent.jpg');
   }
 }
 

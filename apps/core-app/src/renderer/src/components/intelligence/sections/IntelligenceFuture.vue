@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TButton from '@comp/base/tuff/TButton.vue'
+import TButton from '~/components/base/tuff/TButton.vue'
 
 const { t } = useI18n()
 

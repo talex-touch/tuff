@@ -111,8 +111,8 @@ import { onMounted, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Import UI components
-import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
-import TSelectItem from '@comp/base/select/TSelectItem.vue'
+import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
+import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'

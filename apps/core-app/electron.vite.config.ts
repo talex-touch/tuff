@@ -83,11 +83,6 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@renderer': rendererPath,
-        '@modules': path.join(rendererPath, 'modules'),
-        '@comp': path.join(rendererPath, 'components'),
-        '@styles': path.join(rendererPath, 'styles'),
-        '@assets': path.join(rendererPath, 'assets'),
         '~': rendererPath
       }
     },

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import TSelect from '@comp/base/select/TSelect.vue'
+import TSelect from '~/components/base/select/TSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(

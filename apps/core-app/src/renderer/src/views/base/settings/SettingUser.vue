@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SettingUser">
 import { useI18n } from 'vue-i18n'
 import { useAuth } from '~/modules/auth/useAuth'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 // import { appSetting } from '~/modules/channel/storage'

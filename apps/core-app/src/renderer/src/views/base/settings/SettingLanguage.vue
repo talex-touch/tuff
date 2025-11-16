@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
-import TSelectItem from '@comp/base/select/TSelectItem.vue'
+import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import { useLanguageSettings } from '~/modules/hooks/useLanguageSettings'
 
 const { t } = useI18n()

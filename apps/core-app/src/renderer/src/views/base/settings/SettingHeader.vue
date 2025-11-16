@@ -25,7 +25,7 @@ const vueVersion = computed(() => packageJson.value?.dependencies?.vue || '')
     <div class="About-Image">
       <div class="Home-Logo-Bg"></div>
 
-      <img src="@assets/logo.svg" alt="logo" />
+      <img src="~/assets/logo.svg" alt="logo" />
     </div>
 
     <div class="About-Content">

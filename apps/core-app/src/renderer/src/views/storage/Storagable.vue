@@ -5,7 +5,7 @@
 </template>
 
 <script name="AppSettings" setup>
-import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
+import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 </script>
 
 <style lang="scss" scoped>

@@ -1,5 +1,5 @@
 <script name="FlatInput" setup>
-import RemixIcon from '@comp/icon/RemixIcon.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { ref } from 'vue'
 

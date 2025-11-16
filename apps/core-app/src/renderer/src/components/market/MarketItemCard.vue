@@ -7,7 +7,7 @@
 <script setup lang="ts" name="MarketItemCard">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 
 interface MarketItem {

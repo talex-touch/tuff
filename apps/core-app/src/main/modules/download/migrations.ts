@@ -179,6 +179,79 @@ export class MigrationRunner extends EventEmitter {
 }
 
 /**
+ * Migration to create base database tables
+ */
+export const createBaseTables: Migration = {
+  version: 0,
+  name: 'create_base_tables',
+  description: 'Create download_tasks, download_chunks, and download_history tables',
+  up: async (db: any) => {
+    // Create download_tasks table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS download_tasks (
+        id TEXT PRIMARY KEY NOT NULL,
+        url TEXT NOT NULL,
+        destination TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        priority INTEGER NOT NULL,
+        module TEXT NOT NULL,
+        status TEXT NOT NULL,
+        total_size INTEGER,
+        downloaded_size INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        completed_at INTEGER
+      )
+    `)
+
+    // Create download_chunks table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS download_chunks (
+        id TEXT PRIMARY KEY NOT NULL,
+        task_id TEXT NOT NULL,
+        "index" INTEGER NOT NULL,
+        start INTEGER NOT NULL,
+        "end" INTEGER NOT NULL,
+        size INTEGER NOT NULL,
+        downloaded INTEGER DEFAULT 0,
+        status TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES download_tasks(id)
+      )
+    `)
+
+    // Create download_history table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS download_history (
+        id TEXT PRIMARY KEY NOT NULL,
+        task_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        module TEXT NOT NULL,
+        status TEXT NOT NULL,
+        total_size INTEGER,
+        downloaded_size INTEGER,
+        duration INTEGER,
+        average_speed INTEGER,
+        created_at INTEGER NOT NULL,
+        completed_at INTEGER
+      )
+    `)
+
+    console.log('[Migration] Created base tables: download_tasks, download_chunks, download_history')
+  },
+  down: async (db: any) => {
+    // Drop tables in reverse order due to foreign key constraints
+    await db.execute('DROP TABLE IF EXISTS download_history')
+    await db.execute('DROP TABLE IF EXISTS download_chunks')
+    await db.execute('DROP TABLE IF EXISTS download_tasks')
+    console.log('[Migration] Dropped base tables')
+  }
+}
+
+/**
  * Migration to add performance indexes
  */
 export const addPerformanceIndexes: Migration = {

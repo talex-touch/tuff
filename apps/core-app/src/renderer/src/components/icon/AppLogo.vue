@@ -3,5 +3,5 @@
 </template>
 
 <script name="AppLogo" setup>
-import Logo from '@assets/logo.svg'
+import Logo from '~/assets/logo.svg'
 </script>

@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import FlatButton from '@comp/base/button/FlatButton.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { computed, ref } from 'vue'
 

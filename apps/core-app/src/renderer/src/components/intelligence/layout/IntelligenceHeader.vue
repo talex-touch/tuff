@@ -71,7 +71,7 @@
 <script lang="ts" name="IntelligenceHeader" setup>
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TSwitch from '@comp/base/switch/TSwitch.vue'
+import TSwitch from '~/components/base/switch/TSwitch.vue'
 
 enum AiProviderType {
   OPENAI = 'openai',

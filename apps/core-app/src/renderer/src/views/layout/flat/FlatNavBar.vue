@@ -32,8 +32,8 @@
 import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/channel/storage'
 
-import TouchMenu from '@comp/menu/TouchMenu.vue'
-import TouchMenuItem from '@comp/menu/TouchMenuItem.vue'
+import TouchMenu from '~/components/menu/TouchMenu.vue'
+import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
 
 const { t } = useI18n()
 </script>

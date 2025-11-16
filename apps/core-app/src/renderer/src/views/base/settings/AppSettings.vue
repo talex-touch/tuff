@@ -23,7 +23,7 @@
 </template>
 
 <script lang="ts" name="AppSettings" setup>
-import ViewTemplate from '@comp/base/template/ViewTemplate.vue'
+import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingUser from './SettingUser.vue'
 import SettingLanguage from './SettingLanguage.vue'

@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import { BaseNodeApi } from '@modules/channel/main/node'
+import { BaseNodeApi } from '~/modules/channel/main/node'
 import { StorageManager } from './modules/channel/storage'
 import { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { I18n } from 'vue-i18n'
