@@ -1,3 +1,4 @@
+import chalk from 'chalk'
 import type {
   AiInvokeOptions,
   AiInvokeResult,
@@ -6,19 +7,42 @@ import type {
   AiEmbeddingPayload,
   AiTranslatePayload,
   AiSummarizePayload,
+  AiVisionOcrPayload,
   AiSDKConfig,
-  AiAuditLog
+  AiAuditLog,
+  ProviderManagerAdapter,
+  AiProviderConfig
 } from '../types/aisdk'
 import { aiCapabilityRegistry } from './registry'
 import { strategyManager } from './strategy'
-import { providerManager } from './providers'
+import './capabilities'
+
+const INTELLIGENCE_TAG = chalk.hex('#8e24aa').bold('[Intelligence]')
+const logInfo = (...args: any[]) => console.log(INTELLIGENCE_TAG, ...args)
+const logWarn = (...args: any[]) => console.warn(INTELLIGENCE_TAG, ...args)
+const logError = (...args: any[]) => console.error(INTELLIGENCE_TAG, ...args)
+
+let providerManager: ProviderManagerAdapter | null = null
+
+export function setIntelligenceProviderManager(manager: ProviderManagerAdapter): void {
+  providerManager = manager
+  logInfo('Provider manager injected')
+}
+
+function ensureProviderManager(): ProviderManagerAdapter {
+  if (!providerManager) {
+    throw new Error('[Intelligence] Provider manager not initialized')
+  }
+  return providerManager
+}
 
 export class AiSDK {
   private config: AiSDKConfig = {
     providers: [],
     defaultStrategy: 'adaptive-default',
     enableAudit: true,
-    enableCache: false
+    enableCache: false,
+    capabilities: {}
   }
 
   private auditLogs: AiAuditLog[] = []
@@ -31,24 +55,41 @@ export class AiSDK {
   }
 
   updateConfig(config: Partial<AiSDKConfig>): void {
-    this.config = { ...this.config, ...config }
+    const nextConfig: AiSDKConfig = { ...this.config, ...config }
+
+    if (config.capabilities) {
+      nextConfig.capabilities = {
+        ...this.config.capabilities,
+        ...config.capabilities
+      }
+    }
+
+    if (config.defaultStrategy) {
+      nextConfig.defaultStrategy = normalizeStrategyId(config.defaultStrategy) || this.config.defaultStrategy
+    }
+
+    this.config = {
+      ...nextConfig,
+      defaultStrategy: normalizeStrategyId(nextConfig.defaultStrategy) || 'adaptive-default'
+    }
 
     if (config.providers) {
-      providerManager.clear()
+      const manager = ensureProviderManager()
+      manager.clear()
       config.providers.forEach(providerConfig => {
         try {
-          providerManager.registerFromConfig(providerConfig)
+          manager.registerFromConfig(providerConfig)
         } catch (error) {
-          console.error(`[AiSDK] Failed to register provider ${providerConfig.id}:`, error)
+          logError(`Failed to register provider ${providerConfig.id}:`, error)
         }
       })
     }
 
-    if (config.defaultStrategy) {
-      strategyManager.setDefaultStrategy(config.defaultStrategy)
+    if (this.config.defaultStrategy) {
+      strategyManager.setDefaultStrategy(this.config.defaultStrategy)
     }
 
-    console.log('[AiSDK] Configuration updated:', this.config)
+    logInfo('Configuration updated')
   }
 
   async invoke<T = any>(
@@ -58,37 +99,69 @@ export class AiSDK {
   ): Promise<AiInvokeResult<T>> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
-      throw new Error(`[AiSDK] Capability ${capabilityId} not found`)
+      throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
+    }
+    logInfo(`invoke -> ${capabilityId}`)
+
+    const runtimeOptions: AiInvokeOptions = { ...options }
+    const capabilityRouting = this.config.capabilities?.[capabilityId]
+    const configuredProviders =
+      capabilityRouting?.providers
+        ?.filter(binding => binding.enabled !== false)
+        .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+        .map(binding => binding.providerId) ?? []
+
+    if ((!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) && configuredProviders.length > 0) {
+      runtimeOptions.allowedProviderIds = configuredProviders
     }
 
-    const cacheKey = this.getCacheKey(capabilityId, payload, options)
-    if (this.config.enableCache && !options.stream) {
+    if ((!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) && capabilityRouting?.providers) {
+      const preferredModels = capabilityRouting.providers
+        .filter(binding => !runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.includes(binding.providerId))
+        .flatMap(binding => binding.models ?? [])
+        .filter((model): model is string => Boolean(model))
+      if (preferredModels.length > 0) {
+        runtimeOptions.modelPreference = preferredModels
+      }
+    }
+
+    const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
+    if (this.config.enableCache && !runtimeOptions.stream) {
       const cached = this.getFromCache(cacheKey)
       if (cached) {
-        console.log(`[AiSDK] Returning cached result for ${capabilityId}`)
+        logInfo(`Returning cached result for ${capabilityId}`)
         return cached
       }
     }
 
-    const availableProviders = providerManager
+    const manager = ensureProviderManager()
+
+    const availableProviders = manager
       .getEnabled()
       .map(p => p.getConfig())
       .filter(config => capability.supportedProviders.includes(config.type))
+      .filter(config => {
+        if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
+          return true
+        }
+        return runtimeOptions.allowedProviderIds.includes(config.id)
+      })
 
     if (availableProviders.length === 0) {
-      throw new Error(`[AiSDK] No enabled providers available for capability ${capabilityId}`)
+      throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
     const strategyResult = await strategyManager.select({
       capabilityId,
-      options,
+      options: runtimeOptions,
       availableProviders
     })
 
-    const provider = providerManager.get(strategyResult.selectedProvider.id)
+    const provider = manager.get(strategyResult.selectedProvider.id)
     if (!provider) {
-      throw new Error(`[AiSDK] Provider ${strategyResult.selectedProvider.id} not found`)
+      throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
     }
+    logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
 
     let result: AiInvokeResult<T>
     const startTime = Date.now()
@@ -96,16 +169,19 @@ export class AiSDK {
     try {
       switch (capability.type) {
         case 'chat':
-          result = await provider.chat(payload as AiChatPayload, options) as AiInvokeResult<T>
+          result = await provider.chat(payload as AiChatPayload, runtimeOptions) as AiInvokeResult<T>
           break
         case 'embedding':
-          result = await provider.embedding(payload as AiEmbeddingPayload, options) as AiInvokeResult<T>
+          result = await provider.embedding(payload as AiEmbeddingPayload, runtimeOptions) as AiInvokeResult<T>
           break
         case 'translate':
-          result = await provider.translate(payload as AiTranslatePayload, options) as AiInvokeResult<T>
+          result = await provider.translate(payload as AiTranslatePayload, runtimeOptions) as AiInvokeResult<T>
+          break
+        case 'vision':
+          result = await provider.visionOcr(payload as AiVisionOcrPayload, runtimeOptions) as AiInvokeResult<T>
           break
         default:
-          throw new Error(`[AiSDK] Capability type ${capability.type} not implemented`)
+          throw new Error(`[Intelligence] Capability type ${capability.type} not implemented`)
       }
 
       if (this.config.enableCache) {
@@ -125,16 +201,17 @@ export class AiSDK {
         })
       }
 
+      logInfo(`${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`)
       return result
     } catch (error) {
-      console.error(`[AiSDK] Invoke error for ${capabilityId}:`, error)
+      logError(`Invoke error for ${capabilityId}`, error)
 
       if (this.config.enableAudit) {
         this.addAuditLog({
           traceId: `error-${Date.now()}`,
           timestamp: startTime,
           capabilityId,
-          provider: strategyResult.selectedProvider.type,
+          provider: strategyResult.selectedProvider.id,
           model: 'unknown',
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
           latency: Date.now() - startTime,
@@ -144,30 +221,33 @@ export class AiSDK {
       }
 
       if (strategyResult.fallbackProviders.length > 0) {
-        console.log(`[AiSDK] Attempting fallback providers for ${capabilityId}`)
+        logWarn(`Attempting fallback providers for ${capabilityId}`)
         for (const fallbackConfig of strategyResult.fallbackProviders) {
-          const fallbackProvider = providerManager.get(fallbackConfig.id)
+          const fallbackProvider = manager.get(fallbackConfig.id)
           if (!fallbackProvider) continue
 
           try {
             switch (capability.type) {
               case 'chat':
-                result = await fallbackProvider.chat(payload as AiChatPayload, options) as AiInvokeResult<T>
+                result = await fallbackProvider.chat(payload as AiChatPayload, runtimeOptions) as AiInvokeResult<T>
                 break
               case 'embedding':
-                result = await fallbackProvider.embedding(payload as AiEmbeddingPayload, options) as AiInvokeResult<T>
+                result = await fallbackProvider.embedding(payload as AiEmbeddingPayload, runtimeOptions) as AiInvokeResult<T>
                 break
               case 'translate':
-                result = await fallbackProvider.translate(payload as AiTranslatePayload, options) as AiInvokeResult<T>
+                result = await fallbackProvider.translate(payload as AiTranslatePayload, runtimeOptions) as AiInvokeResult<T>
+                break
+              case 'vision':
+                result = await fallbackProvider.visionOcr(payload as AiVisionOcrPayload, runtimeOptions) as AiInvokeResult<T>
                 break
               default:
                 continue
             }
 
-            console.log(`[AiSDK] Fallback successful with provider ${fallbackConfig.id}`)
+            logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
             return result
           } catch (fallbackError) {
-            console.error(`[AiSDK] Fallback provider ${fallbackConfig.id} also failed:`, fallbackError)
+            logError(`Fallback provider ${fallbackConfig.id} failed`, fallbackError)
           }
         }
       }
@@ -183,34 +263,64 @@ export class AiSDK {
   ): AsyncGenerator<AiStreamChunk> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
-      throw new Error(`[AiSDK] Capability ${capabilityId} not found`)
+      throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
     }
 
-    const availableProviders = providerManager
+    const runtimeOptions: AiInvokeOptions = { ...options, stream: true }
+    const capabilityRouting = this.config.capabilities?.[capabilityId]
+    const configuredProviders =
+      capabilityRouting?.providers
+        ?.filter(binding => binding.enabled !== false)
+        .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+        .map(binding => binding.providerId) ?? []
+
+    if ((!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) && configuredProviders.length > 0) {
+      runtimeOptions.allowedProviderIds = configuredProviders
+    }
+
+    if ((!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) && capabilityRouting?.providers) {
+      const preferredModels = capabilityRouting.providers
+        .filter(binding => !runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.includes(binding.providerId))
+        .flatMap(binding => binding.models ?? [])
+        .filter((model): model is string => Boolean(model))
+      if (preferredModels.length > 0) {
+        runtimeOptions.modelPreference = preferredModels
+      }
+    }
+
+    const manager = ensureProviderManager()
+
+    const availableProviders = manager
       .getEnabled()
       .map(p => p.getConfig())
       .filter(config => capability.supportedProviders.includes(config.type))
+      .filter(config => {
+        if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
+          return true
+        }
+        return runtimeOptions.allowedProviderIds.includes(config.id)
+      })
 
     if (availableProviders.length === 0) {
-      throw new Error(`[AiSDK] No enabled providers available for capability ${capabilityId}`)
+      throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
     const strategyResult = await strategyManager.select({
       capabilityId,
-      options: { ...options, stream: true },
+      options: runtimeOptions,
       availableProviders
     })
 
-    const provider = providerManager.get(strategyResult.selectedProvider.id)
+    const provider = manager.get(strategyResult.selectedProvider.id)
     if (!provider) {
-      throw new Error(`[AiSDK] Provider ${strategyResult.selectedProvider.id} not found`)
+      throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
     }
 
     if (capability.type !== 'chat') {
-      throw new Error(`[AiSDK] Stream is only supported for chat capability`)
+      throw new Error('[Intelligence] Stream is only supported for chat capability')
     }
 
-    yield* provider.chatStream(payload as AiChatPayload, options)
+    yield* provider.chatStream(payload as AiChatPayload, runtimeOptions)
   }
 
   private getCacheKey(capabilityId: string, payload: any, options: AiInvokeOptions): string {
@@ -250,12 +360,12 @@ export class AiSDK {
 
   clearCache(): void {
     this.cache.clear()
-    console.log('[AiSDK] Cache cleared')
+    logInfo('Cache cleared')
   }
 
   clearAuditLogs(): void {
     this.auditLogs = []
-    console.log('[AiSDK] Audit logs cleared')
+    logInfo('Audit logs cleared')
   }
 
   text = {
@@ -310,7 +420,8 @@ export class AiSDK {
       }
 
       // Create a temporary provider instance for testing
-      const provider = providerManager.createProviderInstance(providerConfig)
+      const manager = ensureProviderManager()
+      const provider = manager.createProviderInstance(providerConfig)
       
       // Use a simple test payload
       const testPayload: AiChatPayload = {
@@ -377,3 +488,9 @@ export class AiSDK {
 }
 
 export const ai = new AiSDK()
+function normalizeStrategyId(id?: string): string | undefined {
+  if (!id) return id
+  if (id === 'priority') return 'rule-based-default'
+  if (id === 'adaptive') return 'adaptive-default'
+  return id
+}

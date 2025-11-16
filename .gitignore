@@ -140,3 +140,5 @@ readme.local.md
 *.local.json
 .kiro/
 .serena/
+.spec-workflow/
+apps/core-app/.spec-workflow/

@@ -33,15 +33,6 @@ a:focus-visible,
   box-shadow: 0 0 0 4px var(--el-color-primary-light-9);
 }
 
-/* Focus for form inputs */
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 1px;
-  border-color: var(--el-color-primary);
-}
-
 /* Skip to main content link (for screen readers) */
 .skip-to-main {
   position: absolute;
@@ -155,7 +146,7 @@ select:focus-visible {
 /* Loading state accessibility */
 [aria-busy="true"] {
   position: relative;
-  
+
   &::after {
     content: '';
     position: absolute;
@@ -192,17 +183,6 @@ a {
     text-decoration-thickness: 2px;
     text-underline-offset: 2px;
   }
-}
-
-/* Ensure interactive elements have sufficient size */
-button,
-a,
-[role="button"],
-[role="link"],
-input[type="checkbox"],
-input[type="radio"] {
-  min-height: 32px;
-  min-width: 32px;
 }
 
 /* Focus within for containers */

@@ -1,15 +1,18 @@
 <template>
   <div class="SimpleController fake-background">
-    <div class="SimpleController-Head">
+    <div class="SimpleController-Head flex-shrink-0">
       <AppLogo />
       <span flex items-center gap-2 class="max-w-[80px]" truncate @click="handleUpgradeClick">
         <slot name="title" />
       </span>
     </div>
 
-    <span class="mx-auto">
-      {{ route.name ?? route.path }}
-    </span>
+    <div class="mx-auto relative w-full flex items-center justify-center">
+      <div class="SimpleController-Nav absolute left-2">
+        <slot name="nav" />
+      </div>
+      <span> {{ route.name ?? route.path }}</span>
+    </div>
 
     <ul class="SimpleController-Controller">
       {{
@@ -56,6 +59,15 @@ const handleUpgradeClick = () => {
   .darwin & {
     display: none;
   }
+}
+
+.SimpleController-Nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 28px;
+  -webkit-app-region: no-drag;
 }
 
 .SimpleController-Head {
@@ -116,6 +128,5 @@ const handleUpgradeClick = () => {
     pointer-events: none;
     -webkit-app-region: no-drag;
   }
-
 }
 </style>

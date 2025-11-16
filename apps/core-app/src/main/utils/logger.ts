@@ -39,6 +39,11 @@ const namespacePalette = [
   chalk.yellowBright
 ]
 
+// 特殊命名空间的固定颜色
+const namespaceColorOverrides = new Map<string, typeof chalk.gray>([
+  ['Intelligence', chalk.hex('#b388ff').bold]
+])
+
 const namespaceColorCache = new Map<string, typeof chalk.gray>()
 
 const debugEnabled =
@@ -56,8 +61,15 @@ function formatTimestamp(date = new Date()): string {
 }
 
 function pickNamespaceColor(namespace: string): typeof chalk.gray {
+  // 检查是否有固定颜色覆盖
+  const override = namespaceColorOverrides.get(namespace)
+  if (override) return override
+
+  // 检查缓存
   const cached = namespaceColorCache.get(namespace)
   if (cached) return cached
+
+  // 自动选择颜色
   const seed = namespace.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
   const color = namespacePalette[seed % namespacePalette.length]
   namespaceColorCache.set(namespace, color)

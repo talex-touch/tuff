@@ -1,14 +1,19 @@
-import { Worker } from 'node:worker_threads'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { readFile } from 'node:fs/promises'
 
 import type { IClipboardItem } from '../clipboard'
 import { databaseModule } from '../database'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchChannel } from '../../core/channel-core'
 import { windowManager } from '../box-tool/core-box/window'
+import { ai } from '@talex-touch/utils/aisdk'
+import type {
+  AiVisionOcrPayload,
+  AiVisionOcrResult,
+  AiInvokeResult
+} from '@talex-touch/utils/types/aisdk'
 import {
   ocrJobs,
   ocrResults,
@@ -21,6 +26,7 @@ import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import chalk from 'chalk'
+import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from '../ai/ai-config'
 
 export interface ClipboardOcrPayload {
   clipboardId: number
@@ -28,7 +34,7 @@ export interface ClipboardOcrPayload {
   formats: string[]
 }
 
-interface WorkerRequestPayload {
+interface AgentJobPayload {
   jobId: number
   clipboardId: number | null
   payloadHash: string | null
@@ -44,27 +50,16 @@ interface WorkerRequestPayload {
   }
 }
 
-interface WorkerSuccessMessage {
-  status: 'success'
-  jobId: number
-  text: string
-  confidence: number
-  language: string
-  extra?: Record<string, unknown>
-}
-
-interface WorkerErrorMessage {
-  status: 'error'
-  jobId: number
-  error: string
-  details?: unknown
-}
-
-type WorkerResponseMessage = WorkerSuccessMessage | WorkerErrorMessage
-
 const PROCESS_INTERVAL_SECONDS = 5
 const MAX_ATTEMPTS = 3
 const WORKER_CONCURRENCY = 1
+
+// 重试延迟配置(秒)
+const RETRY_DELAYS = {
+  'No enabled providers available': 3600, // 1小时
+  'Provider factory missing': 300, // 5分钟
+  default: 60 // 默认1分钟
+}
 
 function dataUrlToHash(dataUrl: string): string {
   return createHash('sha256').update(dataUrl).digest('hex')
@@ -79,7 +74,8 @@ class OcrService {
   private db: LibSQLDatabase<typeof schema> | null = null
   private pollTaskId = 'ocr-service:dispatcher'
   private processing = false
-  private activeWorkers = new Map<number, Worker>()
+  private activeJobs = new Map<number, Promise<void>>()
+  private lastAttemptMap = new Map<number, number>() // jobId -> timestamp
   private clipboardMetaListener:
     | ((clipboardId: number, patch: Record<string, unknown>) => void)
     | null = null
@@ -91,6 +87,7 @@ class OcrService {
     this.db = databaseModule.getDb()
 
     this.registerChannels()
+    ensureAiConfigLoaded(true)
 
     pollingService.register(
       this.pollTaskId,
@@ -375,8 +372,8 @@ class OcrService {
 
   private async buildJobPayload(payload: ClipboardOcrPayload): Promise<{
     clipboardId: number
-    source: WorkerRequestPayload['source']
-    options: WorkerRequestPayload['options']
+    source: AgentJobPayload['source']
+    options: AgentJobPayload['options']
     payloadHash: string | null
   } | null> {
     const { clipboardId, item } = payload
@@ -441,25 +438,115 @@ class OcrService {
     return ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp', '.heic'].includes(ext)
   }
 
+  private detectMimeType(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase()
+    switch (ext) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg'
+      case '.webp':
+        return 'image/webp'
+      case '.gif':
+        return 'image/gif'
+      case '.bmp':
+        return 'image/bmp'
+      case '.tiff':
+        return 'image/tiff'
+      case '.heic':
+        return 'image/heic'
+      default:
+        return 'image/png'
+    }
+  }
+
+  private async normalizeSourceForAgent(
+    source: AgentJobPayload['source']
+  ): Promise<AiVisionOcrPayload['source']> {
+    if (source.type === 'data-url' && source.dataUrl) {
+      return { type: 'data-url', dataUrl: source.dataUrl }
+    }
+
+    if (source.type === 'file' && source.filePath) {
+      const buffer = await readFile(source.filePath)
+      const mime = this.detectMimeType(source.filePath)
+      return {
+        type: 'data-url',
+        dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
+      }
+    }
+
+    throw new Error('[OCR] Unsupported source payload for agent invocation')
+  }
+
   private async processQueue(): Promise<void> {
     if (this.processing) return
     if (!this.db) return
 
     this.processing = true
     try {
-      while (this.activeWorkers.size < WORKER_CONCURRENCY) {
-        const pending = await this.db
+      while (this.activeJobs.size < WORKER_CONCURRENCY) {
+        const now = Date.now()
+
+        // 查询所有 pending 任务
+        const allPending = await this.db
           .select()
           .from(ocrJobs)
           .where(eq(ocrJobs.status, 'pending'))
           .orderBy(desc(ocrJobs.priority), ocrJobs.queuedAt)
-          .limit(1)
 
-        if (pending.length === 0) {
+        // 在应用层过滤:只处理未尝试或已超过重试延迟的任务
+        const readyJobs = allPending.filter((job) => {
+          if (!job.id) return false
+
+          // 首先检查是否已达到最大重试次数
+          const currentAttempts = job.attempts ?? 0
+          if (currentAttempts >= MAX_ATTEMPTS) {
+            // 这种情况不应该发生,说明数据库状态不一致,直接标记为失败
+            console.warn(
+              chalk.yellow(
+                `[OCR] Found pending job ${job.id} with attempts=${currentAttempts} >= MAX_ATTEMPTS, marking as failed`
+              )
+            )
+            this.failJob(job.id, 'Max attempts exceeded').catch(console.error)
+            return false
+          }
+
+          // 如果没有错误记录,说明是首次尝试
+          if (!job.lastError) return true
+
+          // 检查内存中的最后尝试时间
+          const lastAttempt = this.lastAttemptMap.get(job.id)
+          if (!lastAttempt) {
+            // 内存中没有记录(可能是应用重启),检查数据库中的 startedAt
+            if (job.startedAt) {
+              const startedAtMs =
+                typeof job.startedAt === 'number'
+                  ? job.startedAt * 1000
+                  : new Date(job.startedAt).getTime()
+
+              const delaySeconds = (RETRY_DELAYS as any)[job.lastError] || RETRY_DELAYS.default
+              const delayMs = delaySeconds * 1000
+              const timeSinceStart = now - startedAtMs
+
+              return timeSinceStart >= delayMs
+            }
+            // 没有 startedAt,说明从未执行过,允许执行
+            return true
+          }
+
+          // 根据错误类型确定延迟时间
+          const delaySeconds = (RETRY_DELAYS as any)[job.lastError] || RETRY_DELAYS.default
+          const delayMs = delaySeconds * 1000
+          const timeSinceLastAttempt = now - lastAttempt
+
+          return timeSinceLastAttempt >= delayMs
+        })
+
+        if (readyJobs.length === 0) {
           break
         }
 
-        const job = pending[0]
+        const job = readyJobs[0]
 
         const attemptCount = (job.attempts ?? 0) + 1
 
@@ -481,20 +568,27 @@ class OcrService {
           at: new Date().toISOString()
         })
 
-        await this.startWorker(job.id!, job)
+        const task = this.runAgentJob(job.id!, job).finally(() => {
+          this.activeJobs.delete(job.id!)
+          setImmediate(() => {
+            this.processQueue().catch((error) => console.error('[OCR] Queue resume error:', error))
+          })
+        })
+
+        this.activeJobs.set(job.id!, task)
       }
     } finally {
       this.processing = false
     }
   }
 
-  private async startWorker(jobId: number, job: typeof ocrJobs.$inferSelect): Promise<void> {
+  private async runAgentJob(jobId: number, job: typeof ocrJobs.$inferSelect): Promise<void> {
     if (!job.meta) {
       await this.failJob(jobId, 'Missing job metadata')
       return
     }
 
-    let parsed: { source: WorkerRequestPayload['source']; options: WorkerRequestPayload['options'] }
+    let parsed: { source: AgentJobPayload['source']; options: AgentJobPayload['options'] }
     try {
       parsed = JSON.parse(job.meta)
     } catch (error) {
@@ -508,126 +602,160 @@ class OcrService {
       })
     }
 
-    const workerUrl = this.resolveWorkerUrl()
-    const worker = new Worker(workerUrl, {
-      workerData: {
+    ensureAiConfigLoaded()
+
+    const capabilityOptions = getCapabilityOptions('vision.ocr')
+    const normalizedSource = await this.normalizeSourceForAgent(parsed.source)
+    const payload: AiVisionOcrPayload = {
+      source: normalizedSource,
+      language: parsed.options?.language,
+      prompt: this.buildAgentPrompt(parsed),
+      includeLayout: true,
+      includeKeywords: true,
+      metadata: {
         jobId,
-        clipboardId: job.clipboardId ?? null,
-        payloadHash: job.payloadHash ?? null,
-        source: parsed.source,
-        options: parsed.options
+        clipboardId: job.clipboardId,
+        payloadHash: job.payloadHash
       }
-    })
+    }
 
-    this.activeWorkers.set(jobId, worker)
-
-    worker.on('message', (message: WorkerResponseMessage) => {
-      if (message.status === 'success') {
-        this.handleWorkerSuccess(message).catch((error) => {
-          console.error('[OCR] Failed to handle success message:', error)
-        })
-      } else {
-        this.handleWorkerErrorResponse(message).catch((error) => {
-          console.error('[OCR] Failed to handle error message:', error)
-        })
+    try {
+      const invocation = await ai.invoke<AiVisionOcrResult>('vision.ocr', payload, {
+        modelPreference: capabilityOptions.modelPreference,
+        allowedProviderIds: capabilityOptions.allowedProviderIds
+      })
+      await this.persistAgentSuccess(job, invocation)
+    } catch (error) {
+      const retryReason = this.classifyRetryableAgentError(error)
+      if (retryReason) {
+        await this.deferJob(job, retryReason)
+        return
       }
-    })
-
-    worker.on('error', (error) => {
-      console.error('[OCR] Worker crashed:', error)
-      this.failJob(jobId, 'Worker crashed', error).catch((err) => {
-        console.error('[OCR] Failed to mark job failed after worker crash:', err)
-      })
-    })
-
-    worker.on('exit', () => {
-      this.activeWorkers.delete(jobId)
-      setImmediate(() => {
-        this.processQueue().catch((error) => console.error('[OCR] Queue resume error:', error))
-      })
-    })
+      console.error('[OCR] Agent invocation failed:', error)
+      await this.failJob(jobId, error instanceof Error ? error.message : String(error), error)
+    }
   }
 
-  /**
-   * Resolves the path to the OCR worker script.
-   * Attempts multiple strategies: compiled JS for production, TS for development,
-   * and fallback to current directory search.
-   * @returns URL pointing to the worker script
-   */
-  private resolveWorkerUrl(): URL {
-    try {
-      const jsUrl = new URL('./ocr-worker.js', import.meta.url)
-      const jsPath = fileURLToPath(jsUrl)
-      if (existsSync(jsPath)) {
-        console.log('[OCR] Using compiled worker:', jsPath)
-        return jsUrl
-      }
-      console.warn('[OCR] Worker file not found at:', jsPath)
-    } catch (error) {
-      console.warn('[OCR] Failed to resolve JS worker path:', error)
+  private classifyRetryableAgentError(error: unknown): string | null {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('No enabled providers')) {
+      return 'No enabled providers available'
     }
-
-    try {
-      const tsUrl = new URL('./ocr-worker.ts', import.meta.url)
-      const tsPath = fileURLToPath(tsUrl)
-      if (existsSync(tsPath)) {
-        console.log('[OCR] Using TypeScript worker:', tsPath)
-        return tsUrl
-      }
-      console.warn('[OCR] Worker file not found at:', tsPath)
-    } catch (error) {
-      console.warn('[OCR] Failed to resolve TS worker path:', error)
+    if (message.includes('No provider factory')) {
+      return 'Provider factory missing'
     }
-
-    try {
-      const currentDir = fileURLToPath(new URL('.', import.meta.url))
-      const jsPath = path.join(currentDir, 'ocr-worker.js')
-
-      if (existsSync(jsPath)) {
-        console.log('[OCR] Using worker from current directory:', jsPath)
-        return new URL('file://' + jsPath)
-      }
-
-      const tsPath = path.join(currentDir, 'ocr-worker.ts')
-      if (existsSync(tsPath)) {
-        console.log('[OCR] Using TS worker from current directory:', tsPath)
-        return new URL('file://' + tsPath)
-      }
-    } catch (error) {
-      console.error('[OCR] Failed to search in current directory:', error)
-    }
-
-    console.error('[OCR] Worker file not found, using fallback')
-    console.log('[OCR] import.meta.url:', import.meta.url)
-    try {
-      console.log('[OCR] Current directory:', fileURLToPath(new URL('.', import.meta.url)))
-    } catch (e) {
-      console.log('[OCR] Could not resolve current directory')
-    }
-
-    const fallbackUrl = new URL('./ocr-worker.ts', import.meta.url)
-    console.log('[OCR] Fallback to:', fallbackUrl.href)
-    return fallbackUrl
+    return null
   }
 
-  private async handleWorkerSuccess(message: WorkerSuccessMessage): Promise<void> {
+  private async deferJob(job: typeof ocrJobs.$inferSelect, reason: string): Promise<void> {
+    if (!this.db || !job.id) return
+
+    const currentAttempts = job.attempts ?? 0
+
+    // 检查是否已达到最大重试次数
+    if (currentAttempts >= MAX_ATTEMPTS) {
+      console.warn(
+        chalk.yellow(
+          `[OCR] Job ${job.id} reached max attempts (${MAX_ATTEMPTS}), marking as failed: ${reason}`
+        )
+      )
+      await this.failJob(job.id, `Max attempts reached: ${reason}`)
+      return
+    }
+
+    // 记录最后尝试时间到内存 Map
+    this.lastAttemptMap.set(job.id, Date.now())
+
+    await this.db
+      .update(ocrJobs)
+      .set({
+        status: 'pending',
+        lastError: reason,
+        startedAt: null
+      })
+      .where(eq(ocrJobs.id, job.id))
+
+    if (job.clipboardId) {
+      await this.updateClipboardMeta(job.clipboardId, {
+        ocr_status: 'pending',
+        ocr_last_error: reason,
+        ocr_retry_count: currentAttempts
+      })
+    }
+
+    // 根据错误原因确定延迟时间(用于日志显示)
+    const delaySeconds = (RETRY_DELAYS as any)[reason] || RETRY_DELAYS.default
+    const delayMinutes = Math.floor(delaySeconds / 60)
+    const delayHours = Math.floor(delayMinutes / 60)
+    const delayDisplay =
+      delayHours > 0
+        ? `${delayHours}小时${delayMinutes % 60}分钟`
+        : delayMinutes > 0
+          ? `${delayMinutes}分钟`
+          : `${delaySeconds}秒`
+
+    console.debug(
+      chalk.gray(
+        `[OCR] Job ${job.id} deferred (attempt ${currentAttempts}/${MAX_ATTEMPTS}): ${reason} (下次重试: ${delayDisplay}后)`
+      )
+    )
+  }
+
+  private buildAgentPrompt(payload: { options?: AgentJobPayload['options'] }): string {
+    const capabilityPrompt = getCapabilityPrompt('vision.ocr')
+    if (payload.options?.config && typeof payload.options.config.prompt === 'string') {
+      return payload.options.config.prompt
+    }
+    if (
+      payload.options &&
+      'prompt' in payload.options &&
+      typeof (payload.options as any).prompt === 'string'
+    ) {
+      return String((payload.options as any).prompt)
+    }
+    if (capabilityPrompt) {
+      return capabilityPrompt
+    }
+    return [
+      '你是一名多语言 OCR 专家：',
+      '1. 识别图片中全部文字，保持原有换行。',
+      '2. 输出 JSON，对象包含 text、language、confidence、keywords(数组)、blocks(可选)。',
+      '3. keywords 限制 5 个以内，倾向于可搜索的词或短语。',
+      '4. 如果检测到多种语言，需要在 text 中附上主要内容的中文翻译。'
+    ].join('\n')
+  }
+
+  private async persistAgentSuccess(
+    job: typeof ocrJobs.$inferSelect,
+    invocation: AiInvokeResult<AiVisionOcrResult>
+  ): Promise<void> {
     if (!this.db) return
 
-    const { jobId, text, confidence, language, extra } = message
+    const { result } = invocation
+    const jobId = job.id!
+    const keywords = this.normalizeKeywords(result.keywords, result.text)
+    const summary = this.buildSummary(result.text)
+    const embedding = await this.generateEmbedding(result.text)
 
-    const jobs = await this.db.select().from(ocrJobs).where(eq(ocrJobs.id, jobId)).limit(1)
-
-    if (jobs.length === 0) return
-
-    const job = jobs[0]
+    const extra = {
+      keywords,
+      blocks: result.blocks,
+      summary,
+      suggestions: result.suggestions,
+      raw: result.raw,
+      embedding,
+      provider: invocation.provider,
+      model: invocation.model,
+      usage: invocation.usage
+    }
 
     await this.db.insert(ocrResults).values({
       jobId,
-      text,
-      confidence,
-      language,
+      text: result.text,
+      confidence: result.confidence ?? null,
+      language: result.language ?? null,
       checksum: job.payloadHash ?? null,
-      extra: extra ? JSON.stringify(extra) : null
+      extra: JSON.stringify(extra)
     })
 
     await this.db
@@ -638,27 +766,77 @@ class OcrService {
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
         ocr_status: 'done',
-        ocr_text: text,
-        ocr_confidence: confidence,
-        ocr_language: language,
+        ocr_text: result.text,
+        ocr_confidence: result.confidence ?? null,
+        ocr_language: result.language ?? null,
         ocr_checksum: job.payloadHash,
         ocr_job_id: jobId,
-        ocr_excerpt: text.length > 280 ? `${text.slice(0, 277)}...` : text,
+        ocr_excerpt: summary,
+        ocr_keywords: keywords,
+        ocr_provider: invocation.provider,
+        ocr_model: invocation.model,
+        ocr_usage_prompt: invocation.usage.promptTokens,
+        ocr_usage_completion: invocation.usage.completionTokens,
         ocr_last_error: null,
-        ocr_retry_count: job.attempts ?? 0
+        ocr_retry_count: job.attempts ?? 0,
+        ocr_embedding_status: embedding ? 'generated' : 'skipped'
       })
+
       await this.upsertConfig('ocr:last-success', {
         jobId,
         clipboardId: job.clipboardId,
-        confidence,
-        language,
+        confidence: result.confidence,
+        language: result.language,
+        provider: invocation.provider,
+        model: invocation.model,
         at: new Date().toISOString()
       })
     }
   }
 
-  private async handleWorkerErrorResponse(message: WorkerErrorMessage): Promise<void> {
-    await this.failJob(message.jobId, message.error, message.details)
+  private buildSummary(text: string): string {
+    if (!text) return ''
+    const normalized = text.replace(/\s+/g, ' ').trim()
+    return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized
+  }
+
+  private normalizeKeywords(keywords?: string[], fallback?: string): string[] {
+    if (keywords && keywords.length > 0) {
+      return Array.from(new Set(keywords.map((kw) => kw.trim()).filter(Boolean))).slice(0, 5)
+    }
+
+    if (!fallback) {
+      return []
+    }
+
+    return Array.from(
+      new Set(
+        fallback
+          .split(/[\s,.;，。；、]+/)
+          .map((token) => token.trim())
+          .filter((token) => token.length > 1)
+      )
+    ).slice(0, 5)
+  }
+
+  private async generateEmbedding(text: string): Promise<number[] | null> {
+    if (!text || text.length < 8) {
+      return null
+    }
+    const capabilityOptions = getCapabilityOptions('embedding.generate')
+    try {
+      const response = await ai.embedding.generate(
+        { text },
+        {
+          modelPreference: capabilityOptions.modelPreference,
+          allowedProviderIds: capabilityOptions.allowedProviderIds
+        }
+      )
+      return response.result
+    } catch (error) {
+      console.warn('[OCR] Embedding generation failed:', error)
+      return null
+    }
   }
 
   private async failJob(jobId: number, reason: string, details?: unknown): Promise<void> {

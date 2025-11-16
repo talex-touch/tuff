@@ -1,6 +1,9 @@
 <template>
   <div class="FlatLayout-Icon">
     <img src="../../../assets/logo.svg" alt="logo" />
+    <div class="FlatLayout-Nav">
+      <slot name="nav" />
+    </div>
     <span @click="handleUpgradeClick">
       <slot name="title" />
     </span>
@@ -34,6 +37,16 @@ const handleUpgradeClick = () => {
 <style lang="scss">
 .FlatLayout-Controller {
   opacity: 0;
+}
+
+.FlatLayout-Nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-right: 4px;
+  min-width: 28px;
+  -webkit-app-region: no-drag;
 }
 
 .FlatLayout-Icon {

@@ -148,6 +148,10 @@ export class TouchStorage<T extends object> {
         this.loadFromRemote()
       }
     });
+
+    if (this.#autoSave && !this.#autoSaveStopHandle) {
+      this.#startAutoSaveWatcher();
+    }
   }
 
   /**
@@ -219,31 +223,43 @@ export class TouchStorage<T extends object> {
     this.#autoSave = autoSave;
 
     this.#autoSaveStopHandle?.();
+    this.#autoSaveStopHandle = undefined;
 
     if (autoSave) {
-      this.#autoSaveStopHandle = watch(
-        this.data,
-        () => {
-          if (this.#assigning) {
-            console.debug("[Storage] Skip auto-save watch handle for", this.getQualifiedName());
-            return;
-          }
-
-          this._onUpdate.forEach((fn) => {
-            try {
-              fn();
-            } catch (e) {
-              console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
-            }
-          });
-
-          this.saveToRemote();
-        },
-        { deep: true, immediate: true },
-      );
+      if (this.#channelInitialized) {
+        this.#startAutoSaveWatcher();
+      } else {
+        console.debug(
+          "[Storage] Auto-save requested before channel initialization for",
+          this.getQualifiedName(),
+        );
+      }
     }
 
     return this;
+  }
+
+  #startAutoSaveWatcher(): void {
+    this.#autoSaveStopHandle = watch(
+      this.data,
+      () => {
+        if (this.#assigning) {
+          console.debug("[Storage] Skip auto-save watch handle for", this.getQualifiedName());
+          return;
+        }
+
+        this._onUpdate.forEach((fn) => {
+          try {
+            fn();
+          } catch (e) {
+            console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
+          }
+        });
+
+        this.saveToRemote();
+      },
+      { deep: true, immediate: true },
+    );
   }
 
   /**

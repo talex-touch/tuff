@@ -139,6 +139,9 @@
     "noAccountDesc": "Account access is currently unavailable.",
     "login": "Login"
   },
+  "layout": {
+    "back": "Back"
+  },
   "themeStyle": {
     "styles": "Styles",
     "defaultTip": "Click to select.",
@@ -198,7 +201,7 @@
     "market": "Market",
     "plugin": "Plugin",
     "details": "Details",
-    "aisdk": "TaTa AI",
+    "aisdk": "Intelligence",
     "style": "Style",
     "setting": "Setting"
   },
@@ -849,6 +852,17 @@
       "cacheExpirationDesc": "How long to keep cached responses"
     },
     "aisdk": {
+      "pageTitle": "TaTa Intelligence",
+      "pageDesc": "Choose the module you want to configure and jump into its control surface.",
+      "channelsSection": "Channels",
+      "capabilitiesSection": "Capabilities",
+      "logsSection": "Audit Logs",
+      "addChannel": "Add Channel",
+      "capabilityProviderLabel": "Bound Channels",
+      "capabilityPromptLabel": "Default Prompt",
+      "capabilityTest": "Run Capability Test",
+      "capabilityTestHint": "Use a built-in sample image to run a quick test.",
+      "emptyProviders": "No available channels yet. Please add or enable one first.",
       "providers": "Providers",
       "addProvider": "Add Provider",
       "builtinProviders": "Built-in Providers",
@@ -890,7 +904,49 @@
       "customCompatible": "Custom Compatible",
       "compatible": "Compatible",
       "providerName": "Provider Name",
-      "providerNamePlaceholder": "e.g. My Custom AI"
+      "providerNamePlaceholder": "e.g. My Custom AI",
+      "channelPageTitle": "Channel Manager",
+      "channelPageDesc": "Onboard OpenAI, DeepSeek, Siliconflow and more, manage keys and prioritisation.",
+      "capabilityPageTitle": "Capability Manager",
+      "capabilityPageDesc": "Bind OCR, embedding and other skills to providers, test them instantly.",
+      "promptPageTitle": "Prompt Manager",
+      "promptPageDesc": "Maintain consistent instructions and tone across all intelligent features.",
+      "promptEditorLabel": "Custom Prompt",
+      "promptEditorPlaceholder": "e.g. You are an OCR assistant, respond with JSON containing text/keywords/blocks...",
+      "docsButton": "View GitHub Docs",
+      "futureCenterTitle": "Cloud Center (coming soon)",
+      "futureCenterDesc": "Cloud download, target sharing and policy sync are on the way.",
+      "futureCloudSync": "Cloud sync for prompts and policies",
+      "futureTargetShare": "Cross-device target sharing",
+      "futureDownload": "Cloud model/template downloads",
+      "providerStat": "{count} channels",
+      "capabilityStat": "{count} capabilities",
+      "landing": {
+        "channels": {
+          "title": "Channel Manager",
+          "desc": "Configure channel credentials, priorities and rate limits.",
+          "cta": "Open channels"
+        },
+        "capabilities": {
+          "title": "Capability Manager",
+          "desc": "Bind OCR / embedding capabilities to providers and run tests.",
+          "cta": "Open capabilities"
+        },
+        "prompts": {
+          "title": "Prompt Manager",
+          "desc": "Centralise system prompts so every task shares the same tone.",
+          "cta": "Edit prompts"
+        },
+        "future": {
+          "title": "Cloud & Sharing",
+          "desc": "Cloud download, target sharing and more are on the roadmap.",
+          "cta": "Coming soon"
+        },
+        "docs": {
+          "title": "GitHub Documentation",
+          "desc": "Browse official guides and examples."
+        }
+      }
     },
     "settingUpdate": {
       "groupTitle": "Application Updates",

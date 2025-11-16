@@ -10,6 +10,7 @@ export enum AiProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   DEEPSEEK = 'deepseek',
+  SILICONFLOW = 'siliconflow',
   LOCAL = 'local',
   CUSTOM = 'custom'
 }
@@ -56,6 +57,47 @@ export interface AiProviderConfig {
   rateLimit?: AiProviderRateLimit
   /** Priority level (1 = highest, 3 = lowest) */
   priority?: number
+  /** Declared capabilities for quick filtering */
+  capabilities?: string[]
+  /** Extra metadata for provider-specific options */
+  metadata?: Record<string, any>
+}
+
+export interface AiVisionImageSource {
+  type: 'data-url' | 'file' | 'base64'
+  dataUrl?: string
+  filePath?: string
+  base64?: string
+}
+
+export interface AiVisionOcrBlock {
+  id?: string
+  text: string
+  language?: string
+  confidence?: number
+  boundingBox?: [number, number, number, number]
+  polygon?: Array<[number, number]>
+  type?: 'word' | 'line' | 'paragraph' | 'region'
+  children?: AiVisionOcrBlock[]
+}
+
+export interface AiVisionOcrResult {
+  text: string
+  confidence?: number
+  language?: string
+  keywords?: string[]
+  suggestions?: string[]
+  blocks?: AiVisionOcrBlock[]
+  raw?: any
+}
+
+export interface AiVisionOcrPayload {
+  source: AiVisionImageSource
+  language?: string
+  prompt?: string
+  metadata?: Record<string, any>
+  includeLayout?: boolean
+  includeKeywords?: boolean
 }
 
 /**
@@ -84,6 +126,44 @@ export interface TestResult {
   latency?: number
   /** Timestamp when the test was performed */
   timestamp: number
+}
+
+/**
+ * Capability-to-provider binding configuration
+ */
+export interface AiCapabilityProviderBinding {
+  providerId: string
+  /** Preferred models when invoking this capability */
+  models?: string[]
+  /** Smaller number means higher priority */
+  priority?: number
+  /** Whether this binding is active */
+  enabled?: boolean
+  /** Additional metadata (prompt overrides, etc.) */
+  metadata?: Record<string, any>
+}
+
+/**
+ * Capability configuration stored in TouchStorage
+ */
+export interface AISDKCapabilityConfig {
+  id: string
+  label: string
+  description?: string
+  providers: AiCapabilityProviderBinding[]
+  promptTemplate?: string
+  testResourceDir?: string
+  metadata?: Record<string, any>
+}
+
+/**
+ * Persisted storage payload
+ */
+export interface AISDKStorageData {
+  providers: AiProviderConfig[]
+  globalConfig: AISDKGlobalConfig
+  capabilities: Record<string, AISDKCapabilityConfig>
+  version: number
 }
 
 /**
@@ -124,6 +204,28 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
     rateLimit: {}
   },
   {
+    id: 'siliconflow-default',
+    type: AiProviderType.SILICONFLOW,
+    name: 'SiliconFlow',
+    enabled: false,
+    priority: 2,
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    models: [
+      'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+      'tencent/Hunyuan-MT-7B',
+      'TeleAI/TeleSpeechASR',
+      'THUDM/GLM-4.1V-9B-Thinking',
+      'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
+      'BAAI/bge-reranker-v2-m3',
+      'netease-youdao/bce-embedding-base_v1',
+      'Kwai-Kolors/Kolors',
+      'BAAI/bge-m3'
+    ],
+    defaultModel: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+    timeout: 30000,
+    rateLimit: {}
+  },
+  {
     id: 'local-default',
     type: AiProviderType.LOCAL,
     name: 'Local Model',
@@ -140,8 +242,55 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
  * Default global configuration
  */
 export const DEFAULT_GLOBAL_CONFIG: AISDKGlobalConfig = {
-  defaultStrategy: 'priority',
+  defaultStrategy: 'adaptive-default',
   enableAudit: false,
   enableCache: true,
   cacheExpiration: 3600
+}
+
+/**
+ * Default capability routing (channels -> abilities)
+ */
+export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
+  'text.chat': {
+    id: 'text.chat',
+    label: '对话 / Chat',
+    description: '默认用于系统对话、翻译、总结等文本任务的模型集合',
+    providers: [
+      { providerId: 'openai-default', priority: 1, enabled: true },
+      { providerId: 'anthropic-default', priority: 2, enabled: true },
+      { providerId: 'deepseek-default', priority: 3, enabled: true },
+      { providerId: 'siliconflow-default', priority: 4, enabled: true }
+    ]
+  },
+  'embedding.generate': {
+    id: 'embedding.generate',
+    label: 'Embedding',
+    description: '为向量检索/摘要生成 embedding',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        models: ['netease-youdao/bce-embedding-base_v1', 'BAAI/bge-m3'],
+        priority: 1,
+        enabled: true
+      }
+    ]
+  },
+  'vision.ocr': {
+    id: 'vision.ocr',
+    label: '图像 OCR',
+    description: '识别截图、图片中的文字并生成关键词',
+    promptTemplate:
+      '你是 OCR 助手，识别图片所有文本，生成 keywords 数组（5 个以内）辅助搜索。',
+    testResourceDir: 'intelligence/test-capability/ocr',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        models: ['deepseek-ai/DeepSeek-OCR', 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'],
+        priority: 1,
+        enabled: true,
+        metadata: { defaultVisionModel: 'deepseek-ai/DeepSeek-OCR' }
+      }
+    ]
+  }
 }

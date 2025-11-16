@@ -185,61 +185,82 @@ export const addPerformanceIndexes: Migration = {
   version: 1,
   name: 'add_performance_indexes',
   up: async (db: any) => {
-    // Add indexes for download_tasks table
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_status
-      ON download_tasks(status)
-    `)
+    // Check if download_tasks table exists before creating indexes
+    const tablesResult = await db.execute(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('download_tasks', 'download_chunks', 'download_history')"
+    )
+    const existingTables = new Set(tablesResult.rows.map((row: any) => row.name))
 
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_created
-      ON download_tasks(created_at)
-    `)
+    // Add indexes for download_tasks table (if exists)
+    if (existingTables.has('download_tasks')) {
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_status
+        ON download_tasks(status)
+      `)
 
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_priority
-      ON download_tasks(priority)
-    `)
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_created
+        ON download_tasks(created_at)
+      `)
 
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_tasks_status_priority
-      ON download_tasks(status, priority)
-    `)
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_priority
+        ON download_tasks(priority)
+      `)
 
-    // Add indexes for download_chunks table
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_chunks_task
-      ON download_chunks(task_id)
-    `)
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_status_priority
+        ON download_tasks(status, priority)
+      `)
+      console.log('[Migration] Added indexes for download_tasks')
+    } else {
+      console.log('[Migration] Skipping download_tasks indexes - table does not exist')
+    }
 
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_chunks_task_index
-      ON download_chunks(task_id, index)
-    `)
+    // Add indexes for download_chunks table (if exists)
+    if (existingTables.has('download_chunks')) {
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_chunks_task
+        ON download_chunks(task_id)
+      `)
 
-    // Add indexes for download_history table
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_history_created
-      ON download_history(created_at)
-    `)
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_chunks_task_index
+        ON download_chunks(task_id, index)
+      `)
+      console.log('[Migration] Added indexes for download_chunks')
+    } else {
+      console.log('[Migration] Skipping download_chunks indexes - table does not exist')
+    }
 
-    await db.run(`
-      CREATE INDEX IF NOT EXISTS idx_history_completed
-      ON download_history(completed_at)
-    `)
+    // Add indexes for download_history table (if exists)
+    if (existingTables.has('download_history')) {
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_history_created
+        ON download_history(created_at)
+      `)
 
-    console.log('[Migration] Performance indexes added successfully')
+      await db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_history_completed
+        ON download_history(completed_at)
+      `)
+      console.log('[Migration] Added indexes for download_history')
+    } else {
+      console.log('[Migration] Skipping download_history indexes - table does not exist')
+    }
+
+    console.log('[Migration] Performance indexes migration completed')
   },
   down: async (db: any) => {
     // Drop indexes if needed
-    await db.run('DROP INDEX IF EXISTS idx_tasks_status')
-    await db.run('DROP INDEX IF EXISTS idx_tasks_created')
-    await db.run('DROP INDEX IF EXISTS idx_tasks_priority')
-    await db.run('DROP INDEX IF EXISTS idx_tasks_status_priority')
-    await db.run('DROP INDEX IF EXISTS idx_chunks_task')
-    await db.run('DROP INDEX IF EXISTS idx_chunks_task_index')
-    await db.run('DROP INDEX IF EXISTS idx_history_created')
-    await db.run('DROP INDEX IF EXISTS idx_history_completed')
+    await db.execute('DROP INDEX IF EXISTS idx_tasks_status')
+    await db.execute('DROP INDEX IF EXISTS idx_tasks_created')
+    await db.execute('DROP INDEX IF EXISTS idx_tasks_priority')
+    await db.execute('DROP INDEX IF EXISTS idx_tasks_status_priority')
+    await db.execute('DROP INDEX IF EXISTS idx_chunks_task')
+    await db.execute('DROP INDEX IF EXISTS idx_chunks_task_index')
+    await db.execute('DROP INDEX IF EXISTS idx_history_created')
+    await db.execute('DROP INDEX IF EXISTS idx_history_completed')
 
     console.log('[Migration] Performance indexes removed')
   }
