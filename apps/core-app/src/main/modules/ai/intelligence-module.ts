@@ -9,8 +9,10 @@ import type {
   AiVisionOcrPayload,
   AiVisionOcrResult
 } from '@talex-touch/utils/types/aisdk'
-import { aiCapabilityRegistry, ai, setIntelligenceProviderManager } from '@talex-touch/utils/aisdk'
+import { aiCapabilityRegistry } from './ai-capability-registry'
+import { ai, setIntelligenceProviderManager } from './ai-sdk'
 import { genTouchChannel } from '../../core/channel-core'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
 import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from './ai-config'
 import { OpenAIProvider } from './providers/openai-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
@@ -37,13 +39,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   name: ModuleKey = IntelligenceModule.key
 
   private manager: IntelligenceProviderManager | null = null
-  private channel = genTouchChannel()
+  private channel: ITouchChannel | null = null
 
   constructor() {
     super(IntelligenceModule.key)
   }
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    // 在 onInit 阶段获取已初始化的 TouchChannel
+    this.channel = genTouchChannel()
+
     if (!this.channel) {
       throw new Error('[Intelligence] Touch channel not ready')
     }

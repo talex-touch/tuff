@@ -853,7 +853,7 @@
     },
     "aisdk": {
       "pageTitle": "TaTa Intelligence",
-      "pageDesc": "Choose the module you want to configure and jump into its control surface.",
+      "pageDesc": "With TaTa Intelligence, orchestrate every channel, choreograph bespoke capabilities, and stay effortlessly in command from one polished surface.",
       "channelsSection": "Channels",
       "capabilitiesSection": "Capabilities",
       "logsSection": "Audit Logs",
@@ -1255,7 +1255,8 @@
     "list": {
       "enabled": "Enabled Providers",
       "disabled": "Disabled Providers",
-      "empty": "No providers in this category"
+      "empty": "No providers in this category",
+      "providersCount": "providers"
     },
     "item": {
       "configError": "Configuration incomplete or invalid"

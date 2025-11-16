@@ -78,7 +78,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Delete, Download } from '@element-plus/icons-vue'
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -124,11 +125,11 @@ const refreshLogs = async () => {
     if (result.success) {
       logs.value = result.logs || t('download.no_logs')
     } else {
-      ElMessage.error(t('download.load_logs_failed'))
+      toast.error(t('download.load_logs_failed'))
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    ElMessage.error(`${t('download.load_logs_failed')}: ${message}`)
+    toast.error(`${t('download.load_logs_failed')}: ${message}`)
   } finally {
     loading.value = false
   }
@@ -161,20 +162,20 @@ const clearLogs = async () => {
     if (result.success) {
       logs.value = ''
       errorStats.value = null
-      ElMessage.success(t('download.logs_cleared'))
+      toast.success(t('download.logs_cleared'))
     } else {
-      ElMessage.error(t('download.clear_logs_failed'))
+      toast.error(t('download.clear_logs_failed'))
     }
   } catch (error: unknown) {
     if (error === 'cancel') return
     const message = error instanceof Error ? error.message : String(error)
-    ElMessage.error(`${t('download.clear_logs_failed')}: ${message}`)
+    toast.error(`${t('download.clear_logs_failed')}: ${message}`)
   }
 }
 
 const downloadLogs = () => {
   if (!logs.value) {
-    ElMessage.warning(t('download.no_logs_to_download'))
+    toast.warning(t('download.no_logs_to_download'))
     return
   }
 
@@ -188,7 +189,7 @@ const downloadLogs = () => {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
   
-  ElMessage.success(t('download.logs_downloaded'))
+  toast.success(t('download.logs_downloaded'))
 }
 </script>
 

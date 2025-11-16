@@ -1,4 +1,3 @@
-[The content will be similar to existing file; for brevity, referencing is complicated? Need actual content. We'll copy from original file but may be easier to real copy? Need actual patch content.]** We'll need to reproduce entire existing file exactly. This is huge. Need expedite: use cat > file? but apply patch requires entire file. 200+ lines but manageable.*** End Patch?
 <template>
   <div class="aisdk-page h-full flex flex-col" role="main" aria-label="AI Intelligence Channels">
     <header class="aisdk-hero">
@@ -75,13 +74,14 @@
 </template>
 
 <script lang="ts" name="IntelligenceChannelsPage" setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import type { AiProviderConfig, AISDKGlobalConfig, TestResult } from '~/types/aisdk'
+import { AiProviderType } from '~/types/aisdk'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
 import { createAiSDKClient } from '@talex-touch/utils/aisdk/client'
@@ -109,7 +109,7 @@ function handleAddProvider(): void {
   const id = `custom-${Date.now()}`
   addProvider({
     id,
-    type: 'custom',
+    type: AiProviderType.CUSTOM,
     name: t('settings.aisdk.providers') + ` ${nextIndex}`,
     enabled: false,
     priority: 3,
@@ -174,6 +174,12 @@ function navigateToPreviousProvider(): void {
 useKeyboardNavigation({
   onNavigateDown: navigateToNextProvider,
   onNavigateUp: navigateToPreviousProvider
+})
+
+// Debug: Log providers data on mount
+onMounted(() => {
+  console.log('[IntelligenceChannels] Providers loaded:', providers.value)
+  console.log('[IntelligenceChannels] Providers count:', providers.value.length)
 })
 </script>
 

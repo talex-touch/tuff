@@ -169,7 +169,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import {
   Download,
@@ -286,10 +287,10 @@ const handleSearch = (value: string) => {
 const pauseTask = async (taskId: string) => {
   try {
     await pauseTaskHook(taskId)
-    ElMessage.success(t('download.task_paused'))
+    toast.success(t('download.task_paused'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.pause_failed')}: ${message}`)
+    toast.error(`${t('download.pause_failed')}: ${message}`)
   }
 }
 
@@ -307,21 +308,21 @@ const cancelTask = async (taskId: string) => {
       }
     )
     await cancelTaskHook(taskId)
-    ElMessage.success(t('download.task_cancelled'))
+    toast.success(t('download.task_cancelled'))
   } catch (err: unknown) {
     if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.cancel_failed')}: ${message}`)
+    toast.error(`${t('download.cancel_failed')}: ${message}`)
   }
 }
 
 const retryTask = async (taskId: string) => {
   try {
     await retryTaskHook(taskId)
-    ElMessage.success(t('download.task_retrying'))
+    toast.success(t('download.task_retrying'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.retry_failed')}: ${message}`)
+    toast.error(`${t('download.retry_failed')}: ${message}`)
   }
 }
 
@@ -337,21 +338,21 @@ const removeTask = async (taskId: string) => {
       }
     )
     await removeTaskHook(taskId)
-    ElMessage.success(t('download.task_removed'))
+    toast.success(t('download.task_removed'))
   } catch (err: unknown) {
     if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.remove_failed')}: ${message}`)
+    toast.error(`${t('download.remove_failed')}: ${message}`)
   }
 }
 
 const openFile = async (taskId: string) => {
   try {
     await openFileHook(taskId)
-    ElMessage.success(t('download.file_opened'))
+    toast.success(t('download.file_opened'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.open_file_failed')}: ${message}`)
+    toast.error(`${t('download.open_file_failed')}: ${message}`)
   }
 }
 
@@ -360,7 +361,7 @@ const showInFolder = async (taskId: string) => {
     await showInFolderHook(taskId)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.show_folder_failed')}: ${message}`)
+    toast.error(`${t('download.show_folder_failed')}: ${message}`)
   }
 }
 
@@ -377,11 +378,11 @@ const deleteTask = async (taskId: string) => {
       }
     )
     await deleteFileHook(taskId)
-    ElMessage.success(t('download.file_deleted'))
+    toast.success(t('download.file_deleted'))
   } catch (err: unknown) {
     if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.delete_failed')}: ${message}`)
+    toast.error(`${t('download.delete_failed')}: ${message}`)
   }
 }
 
@@ -396,20 +397,20 @@ const showTaskDetails = (taskId: string) => {
 const pauseAllTasks = async () => {
   try {
     await pauseAllTasksHook()
-    ElMessage.success(t('download.all_tasks_paused'))
+    toast.success(t('download.all_tasks_paused'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.pause_all_failed')}: ${message}`)
+    toast.error(`${t('download.pause_all_failed')}: ${message}`)
   }
 }
 
 const resumeAllTasks = async () => {
   try {
     await resumeAllTasksHook()
-    ElMessage.success(t('download.all_tasks_resumed'))
+    toast.success(t('download.all_tasks_resumed'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.resume_all_failed')}: ${message}`)
+    toast.error(`${t('download.resume_all_failed')}: ${message}`)
   }
 }
 
@@ -425,31 +426,31 @@ const clearHistory = async () => {
       }
     )
     await clearHistoryHook()
-    ElMessage.success(t('download.history_cleared'))
+    toast.success(t('download.history_cleared'))
   } catch (err: unknown) {
     if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.clear_history_failed')}: ${message}`)
+    toast.error(`${t('download.clear_history_failed')}: ${message}`)
   }
 }
 
 const handlePriorityChange = async (_taskId: string, _newPriority: number) => {
   try {
     // TODO: Implement priority change API
-    ElMessage.success(t('download.priority_updated'))
+    toast.success(t('download.priority_updated'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.priority_update_failed')}: ${message}`)
+    toast.error(`${t('download.priority_update_failed')}: ${message}`)
   }
 }
 
 const updateConfig = async (config: any) => {
   try {
     await updateConfigHook(config)
-    ElMessage.success(t('download.config_updated'))
+    toast.success(t('download.config_updated'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.config_update_failed')}: ${message}`)
+    toast.error(`${t('download.config_update_failed')}: ${message}`)
   }
 }
 </script>

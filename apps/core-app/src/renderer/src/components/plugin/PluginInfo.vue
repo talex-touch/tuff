@@ -132,7 +132,8 @@
 
 <script lang="ts" name="PluginInfo" setup>
 import { ref, computed, watchEffect, useSlots, VNode } from 'vue'
-import { ElPopover, ElMessageBox, ElMessage } from 'element-plus'
+import { ElPopover, ElMessageBox } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
@@ -249,13 +250,13 @@ async function handleUninstallPlugin(): Promise<void> {
   try {
     const success = await pluginSDK.uninstall(props.plugin.name)
     if (success) {
-      ElMessage.success(t('plugin.uninstall.success', { name: props.plugin.name }))
+      toast.success(t('plugin.uninstall.success', { name: props.plugin.name }))
     } else {
-      ElMessage.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
+      toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
     }
   } catch (error) {
     console.error('Failed to uninstall plugin:', error)
-    ElMessage.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
+    toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
   } finally {
     loadingStates.value.uninstall = false
   }

@@ -22,7 +22,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
 
 const { isLoggedIn, isLoading, isAuthenticated, currentUser, login, logout } = useAuth()
@@ -38,11 +38,11 @@ async function handleLogin() {
   try {
     const result = await login({
       onSuccess: (user) => {
-        ElMessage.success('登录成功！')
+        toast.success('登录成功！')
         console.log('用户登录成功:', user)
       },
       onError: (error) => {
-        ElMessage.error('登录失败: ' + (error.message || error))
+        toast.error('登录失败: ' + (error.message || error))
         console.error('登录失败:', error)
       }
     })
@@ -52,7 +52,7 @@ async function handleLogin() {
     }
   } catch (error) {
     console.error('登录过程出错:', error)
-    ElMessage.error('登录过程中发生错误')
+    toast.error('登录过程中发生错误')
   }
 }
 
@@ -62,7 +62,7 @@ async function handleLogout() {
     userInfo.value = null
   } catch (error) {
     console.error('登出失败:', error)
-    ElMessage.error('登出失败')
+    toast.error('登出失败')
   }
 }
 </script>

@@ -12,10 +12,9 @@ import type {
   AiAuditLog,
   ProviderManagerAdapter,
   AiProviderConfig
-} from '../types/aisdk'
-import { aiCapabilityRegistry } from './registry'
-import { strategyManager } from './strategy'
-import './capabilities'
+} from '@talex-touch/utils/types/aisdk'
+import { aiCapabilityRegistry } from './ai-capability-registry'
+import { strategyManager } from './ai-strategy-manager'
 
 const INTELLIGENCE_TAG = chalk.hex('#8e24aa').bold('[Intelligence]')
 const logInfo = (...args: any[]) => console.log(INTELLIGENCE_TAG, ...args)
@@ -369,21 +368,21 @@ export class AiSDK {
   }
 
   text = {
-    chat: (payload: AiChatPayload, options?: AiInvokeOptions) => 
+    chat: (payload: AiChatPayload, options?: AiInvokeOptions) =>
       this.invoke<string>('text.chat', payload, options),
-    
-    chatStream: (payload: AiChatPayload, options?: AiInvokeOptions) => 
+
+    chatStream: (payload: AiChatPayload, options?: AiInvokeOptions) =>
       this.invokeStream('text.chat', payload, options),
-    
-    translate: (payload: AiTranslatePayload, options?: AiInvokeOptions) => 
+
+    translate: (payload: AiTranslatePayload, options?: AiInvokeOptions) =>
       this.invoke<string>('text.translate', payload, options),
-    
-    summarize: (payload: AiSummarizePayload, options?: AiInvokeOptions) => 
+
+    summarize: (payload: AiSummarizePayload, options?: AiInvokeOptions) =>
       this.invoke<string>('text.summarize', payload, options)
   }
 
   embedding = {
-    generate: (payload: AiEmbeddingPayload, options?: AiInvokeOptions) => 
+    generate: (payload: AiEmbeddingPayload, options?: AiInvokeOptions) =>
       this.invoke<number[]>('embedding.generate', payload, options)
   }
 
@@ -422,7 +421,7 @@ export class AiSDK {
       // Create a temporary provider instance for testing
       const manager = ensureProviderManager()
       const provider = manager.createProviderInstance(providerConfig)
-      
+
       // Use a simple test payload
       const testPayload: AiChatPayload = {
         messages: [
@@ -439,7 +438,7 @@ export class AiSDK {
       // Test the provider with timeout
       const result = await Promise.race([
         provider.chat(testPayload, { timeout }),
-        new Promise<never>((_, reject) => 
+        new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), timeout)
         )
       ])
@@ -488,6 +487,7 @@ export class AiSDK {
 }
 
 export const ai = new AiSDK()
+
 function normalizeStrategyId(id?: string): string | undefined {
   if (!id) return id
   if (id === 'priority') return 'rule-based-default'

@@ -1,5 +1,5 @@
 import { ref, h } from 'vue'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { blowMention } from '../mention/dialog-mention'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useAppState } from './useAppStates'
@@ -420,13 +420,13 @@ export function useApplicationUpgrade() {
   async function handleDownloadUpdate(release: GitHubRelease): Promise<void> {
     try {
       await appUpdate.downloadUpdate(release)
-      ElMessage.success('更新包下载已开始，请查看下载中心')
+      toast.success('更新包下载已开始，请查看下载中心')
 
       // 可以在这里打开下载中心
       // openDownloadCenter()
     } catch (err) {
       console.error('[useApplicationUpgrade] Download failed:', err)
-      ElMessage.error(`下载失败: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast.error(`下载失败: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
@@ -440,11 +440,11 @@ export function useApplicationUpgrade() {
       if (!settings.ignoredVersions.includes(release.tag_name)) {
         settings.ignoredVersions.push(release.tag_name)
         await appUpdate.updateSettings({ ignoredVersions: settings.ignoredVersions })
-        ElMessage.success('已忽略此版本')
+        toast.success('已忽略此版本')
       }
     } catch (err) {
       console.error('[useApplicationUpgrade] Failed to ignore version:', err)
-      ElMessage.error('忽略版本失败')
+      toast.error('忽略版本失败')
     }
   }
 
@@ -458,14 +458,14 @@ export function useApplicationUpgrade() {
 
     // 根据错误类型显示不同的提示
     if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
-      ElMessage.warning('网络连接失败，请检查网络设置')
+      toast.warning('网络连接失败，请检查网络设置')
     } else if (errorMessage.includes('rate limit')) {
-      ElMessage.warning('API请求频率过高，请稍后重试')
+      toast.warning('API请求频率过高，请稍后重试')
     } else if (errorMessage.includes('ignored')) {
       // 忽略版本不需要提示
       return
     } else {
-      ElMessage.warning(`更新检查失败: ${errorMessage}`)
+      toast.warning(`更新检查失败: ${errorMessage}`)
     }
   }
 
@@ -491,10 +491,10 @@ export function useApplicationUpgrade() {
   async function clearUpdateCache(): Promise<void> {
     try {
       await appUpdate.clearCache()
-      ElMessage.success('更新缓存已清空')
+      toast.success('更新缓存已清空')
     } catch (err) {
       console.error('[useApplicationUpgrade] Failed to clear cache:', err)
-      ElMessage.error('清空缓存失败')
+      toast.error('清空缓存失败')
     }
   }
 

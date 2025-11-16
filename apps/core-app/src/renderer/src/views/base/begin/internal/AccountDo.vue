@@ -5,7 +5,7 @@
 import SetupPermissions from './SetupPermissions.vue'
 import { Ref, ref, inject, watch } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 
 type StepFunction = (call: { comp: unknown; rect?: { width: number; height: number } }) => void
 
@@ -18,7 +18,7 @@ const { signIn, isAuthenticated, isLoading } = useAuth()
 // 监听认证状态变化
 watch(isAuthenticated, (authenticated) => {
   if (authenticated) {
-    ElMessage.success('登录成功！')
+    toast.success('登录成功！')
     // 登录成功后跳转到权限设置页面
     step({
       comp: SetupPermissions
@@ -31,7 +31,7 @@ async function handleClerkSignIn(): Promise<void> {
     await signIn()
   } catch (error) {
     console.error('Clerk sign in failed:', error)
-    ElMessage.error('登录失败，请重试')
+    toast.error('登录失败，请重试')
   }
 }
 
@@ -40,7 +40,7 @@ async function handleClerkSignIn(): Promise<void> {
 //     await signUp()
 //   } catch (error) {
 //     console.error('Clerk sign up failed:', error)
-//     ElMessage.error('注册失败，请重试')
+//     toast.error('注册失败，请重试')
 //   }
 // }
 

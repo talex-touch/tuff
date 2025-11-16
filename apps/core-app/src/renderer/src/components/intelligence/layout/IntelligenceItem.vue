@@ -31,7 +31,7 @@
 
     <!-- Provider Icon -->
     <div class="provider-icon flex-shrink-0" aria-hidden="true">
-      {{ getProviderIcon(provider.type) }}
+      <i :class="getProviderIconClass(provider.type)" />
     </div>
 
     <!-- Provider Info -->
@@ -134,16 +134,16 @@ const hasConfigError = computed(() => {
   return false
 })
 
-function getProviderIcon(type: string): string {
-  const icons: Record<string, string> = {
-    [AiProviderType.OPENAI]: '🤖',
-    [AiProviderType.ANTHROPIC]: '🧠',
-    [AiProviderType.DEEPSEEK]: '🔍',
-    [AiProviderType.SILICONFLOW]: '⚡️',
-    [AiProviderType.LOCAL]: '💻',
-    [AiProviderType.CUSTOM]: '⚙️'
+function getProviderIconClass(type: string): string {
+  const iconClasses: Record<string, string> = {
+    [AiProviderType.OPENAI]: 'i-simple-icons-openai text-green-600',
+    [AiProviderType.ANTHROPIC]: 'i-simple-icons-anthropic text-orange-500',
+    [AiProviderType.DEEPSEEK]: 'i-carbon-search-advanced text-blue-600',
+    [AiProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning text-purple-600',
+    [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server text-gray-600',
+    [AiProviderType.CUSTOM]: 'i-carbon-settings text-gray-500'
   }
-  return icons[type] || '🤖'
+  return iconClasses[type] || 'i-carbon-ibm-watson-machine-learning text-gray-400'
 }
 
 function handleClick() {
@@ -225,19 +225,27 @@ function handleToggle() {
   align-items: center;
   width: 48px;
   height: 48px;
-  font-size: 32px;
   border-radius: 12px;
   background-color: var(--el-fill-color);
   box-sizing: border-box;
   z-index: 1;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  
+
+  i {
+    font-size: 24px;
+    transition: transform 0.3s ease;
+  }
+
   .aisdk-item:hover & {
     background-color: var(--el-fill-color-light);
     transform: scale(1.05);
+
+    i {
+      transform: scale(1.1);
+    }
   }
-  
+
   .aisdk-item.selected & {
     background: linear-gradient(135deg, var(--el-fill-color-light) 0%, var(--el-fill-color) 100%);
   }

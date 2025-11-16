@@ -13,18 +13,16 @@ const totalChannels = computed(() => providerCount.value)
 
 <template>
   <div class="intelligence-header activate">
-    <div class="header-image">
-      <div class="header-logo-bg"></div>
-      <div class="ai-icon">
-        <i class="i-carbon-watson-knowledge-catalog" />
-      </div>
-    </div>
+    <div class="header-image"></div>
 
     <div class="header-content">
       <div class="header-text">
-        <svg>
-          <text x="0" y="20%">Intelligence</text>
-        </svg>
+        <div>
+          <svg>
+
+            <text x="0" y="20%">Intelligence<tuff-beta-tag /></text>
+          </svg>
+        </div>
         <p>{{ t('settings.aisdk.pageDesc') }}</p>
       </div>
 
@@ -130,68 +128,41 @@ const totalChannels = computed(() => providerCount.value)
     display: flex;
     align-items: center;
     justify-content: center;
-    top: 20%;
-    right: 5%;
-    height: 60%;
-    aspect-ratio: 1 / 1;
 
-    &:before,
+    inset: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    backdrop-filter: blur(18px) saturate(180%);
+
     &:after {
       content: '';
       position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      border: 1px solid var(--el-fill-color-light);
-      animation: header-breathing 1s linear infinite;
-    }
+      inset: 0;
 
-    &:after {
-      width: 125%;
-      height: 125%;
-      animation-delay: 0.5s;
-    }
+      filter: blur(50px);
+      transform: scale(1.05);
 
-    .ai-icon {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 48px;
-      color: var(--el-color-primary);
-      opacity: 0.9;
+      // opacity: 0.75;
+      background-image: linear-gradient(
+        to right,
+        #1c15d0,
+        hsl(27deg 93% 60%),
+        #6500ff,
+        #ff0056,
+        #1c15d0
+      );
+      background-size: 200% 100%;
+      animation: waving 5s infinite linear;
     }
-  }
-
-  &.activate {
-    opacity: 0.75;
-    background-image: linear-gradient(
-      to right,
-      var(--el-color-primary-light-3) 0%,
-      var(--el-color-success-dark-2) 50%,
-      var(--el-color-primary-light-3) 100%
-    );
   }
 
   position: relative;
-  margin-bottom: 15px;
+  margin: 0.5rem 0;
   width: 100%;
-  min-height: 180px;
-  height: 30%;
+  height: 180px;
   clear: both;
   border-radius: 12px;
-  background-color: var(--el-fill-color-light);
-  background-image: linear-gradient(
-    to right,
-    #5324AB 0%,
-    var(--el-color-success-dark-2) 50%,
-    var(--el-color-primary-light-3) 100%
-  );
-  background-size: 200% 100%;
-  animation: waving 10s infinite linear;
+  border: 1px solid var(--el-border-color);
 }
 
 @keyframes header-breathing {

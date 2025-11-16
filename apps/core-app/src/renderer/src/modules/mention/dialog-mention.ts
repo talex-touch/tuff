@@ -63,13 +63,6 @@ export function captureAppContext(): void {
 
   globalAppContext = instance.appContext
 
-  // 调试：检查 i18n 是否在 appContext 中
-  const i18n = instance.appContext.config.globalProperties.$i18n as unknown
-  console.log('[DialogMention] App context captured successfully')
-  console.log('[DialogMention] i18n available:', !!i18n)
-  if (i18n && typeof i18n === 'object' && 'global' in i18n) {
-    console.log('[DialogMention] i18n.global:', (i18n as { global: unknown }).global)
-  }
 }
 
 /**

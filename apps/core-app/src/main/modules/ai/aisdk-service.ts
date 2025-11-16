@@ -9,7 +9,8 @@ import type {
   AiVisionOcrPayload,
   AiVisionOcrResult
 } from '@talex-touch/utils/types/aisdk'
-import { aiCapabilityRegistry, ai, setIntelligenceProviderManager } from '@talex-touch/utils/aisdk'
+import { aiCapabilityRegistry } from './ai-capability-registry'
+import { ai, setIntelligenceProviderManager } from './ai-sdk'
 import { genTouchChannel } from '../../core/channel-core'
 import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from './ai-config'
 import { OpenAIProvider } from './providers/openai-provider'

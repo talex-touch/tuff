@@ -94,8 +94,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import {
   Clock,
   Search,
@@ -131,7 +132,7 @@ const loadHistory = async () => {
     historyList.value = history
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.load_history_failed')}: ${message}`)
+    toast.error(`${t('download.load_history_failed')}: ${message}`)
   } finally {
     loading.value = false
   }
@@ -209,10 +210,10 @@ const handleOpenFile = async (historyId: string) => {
     if (!item) return
 
     await openFile(item.taskId)
-    ElMessage.success(t('download.file_opened'))
+    toast.success(t('download.file_opened'))
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.open_file_failed')}: ${message}`)
+    toast.error(`${t('download.open_file_failed')}: ${message}`)
   }
 }
 
@@ -224,7 +225,7 @@ const handleShowInFolder = async (historyId: string) => {
     await showInFolder(item.taskId)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.show_folder_failed')}: ${message}`)
+    toast.error(`${t('download.show_folder_failed')}: ${message}`)
   }
 }
 
@@ -248,11 +249,11 @@ const handleClearHistoryItem = async (historyId: string) => {
       historyList.value.splice(index, 1)
     }
 
-    ElMessage.success(t('download.history_item_cleared'))
+    toast.success(t('download.history_item_cleared'))
   } catch (err: unknown) {
     if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.clear_history_item_failed')}: ${message}`)
+    toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
   }
 }
 
@@ -271,11 +272,11 @@ const handleClearAllHistory = async () => {
 
     await clearHistory()
     historyList.value = []
-    ElMessage.success(t('download.all_history_cleared'))
+    toast.success(t('download.all_history_cleared'))
   } catch (err: unknown) {
     if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(`${t('download.clear_all_history_failed')}: ${message}`)
+    toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
   }
 }
 

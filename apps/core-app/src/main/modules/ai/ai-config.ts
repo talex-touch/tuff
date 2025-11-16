@@ -1,4 +1,4 @@
-import { ai } from '@talex-touch/utils/aisdk'
+import { ai } from './ai-sdk'
 import type {
   AiCapabilityRoutingConfig,
   AiSDKPersistedConfig
