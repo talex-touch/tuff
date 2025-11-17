@@ -4,7 +4,7 @@
       <div ref="nativeScrollRef" class="native-scroll-wrapper" @scroll="handleScroll">
         <slot name="header" />
 
-        <div class="py-2 pl-2 pr-3">
+        <div class="py-2 pl-2 pr-3" :style="noPadding ? 'padding: 0 !important' : ''">
           <slot></slot>
         </div>
       </div>
@@ -29,12 +29,16 @@ defineOptions({
   name: 'TouchScroll'
 })
 
-const props = defineProps({
-  native: {
-    type: Boolean,
-    default: false
+const props = withDefaults(
+  defineProps<{
+    noPadding?: boolean
+    native?: boolean
+  }>(),
+  {
+    noPadding: false,
+    native: false
   }
-})
+)
 
 const emit = defineEmits<{
   scroll: [scrollInfo: { scrollTop: number; scrollLeft: number }]

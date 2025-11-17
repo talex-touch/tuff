@@ -29,28 +29,26 @@
     </template>
 
     <template #main>
-      <Transition name="fade-slide" mode="out-in">
-        <AISDKCapabilityDetails
-          v-if="selectedCapability"
-          :key="selectedCapability.id"
-          :capability="selectedCapability"
-          :providers="providers"
-          :bindings="activeBindings(selectedCapability.id)"
-          :is-testing="!!capabilityTesting[selectedCapability.id]"
-          :test-result="capabilityTests[selectedCapability.id]"
-          @toggle-provider="onToggleProvider"
-          @update-models="onUpdateModels"
-          @update-prompt="onUpdatePrompt"
-          @reorder-providers="onReorderProviders"
-          @test="handleCapabilityTest(selectedCapability.id)"
-        />
-        <div v-else class="capability-empty-state" role="status">
-          <i class="i-carbon-cube text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
-          <p class="capability-empty-state__title">
-            {{ t('settings.intelligence.capabilityListEmpty') }}
-          </p>
-        </div>
-      </Transition>
+      <IntelligenceCapabilityInfo
+        v-if="selectedCapability"
+        :key="selectedCapability.id"
+        :capability="selectedCapability"
+        :providers="providers"
+        :bindings="activeBindings(selectedCapability.id)"
+        :is-testing="!!capabilityTesting[selectedCapability.id]"
+        :test-result="capabilityTests[selectedCapability.id]"
+        @toggle-provider="onToggleProvider"
+        @update-models="onUpdateModels"
+        @update-prompt="onUpdatePrompt"
+        @reorder-providers="onReorderProviders"
+        @test="handleCapabilityTest(selectedCapability.id)"
+      />
+      <div v-else class="capability-empty-state" role="status">
+        <i class="i-carbon-cube text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
+        <p class="capability-empty-state__title">
+          {{ t('settings.intelligence.capabilityListEmpty') }}
+        </p>
+      </div>
     </template>
   </tuff-aside-template>
 </template>
@@ -69,7 +67,7 @@ import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client
 import { touchChannel } from '~/modules/channel/channel-core'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
-import AISDKCapabilityDetails from '~/components/intelligence/capabilities/AISDKCapabilityDetails.vue'
+import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
 import type {
   CapabilityBinding,
   CapabilityTestResult
@@ -100,31 +98,40 @@ const filteredCapabilities = computed(() => {
   )
 })
 
-const selectedCapabilityId = ref<string | null>(capabilityList.value[0]?.id ?? null)
+const selectedCapabilityId = ref<string | null>(null)
 const selectedCapability = computed<AISDKCapabilityConfig | null>(() => {
   if (!selectedCapabilityId.value) return null
-  return capabilityList.value.find((entry) => entry.id === selectedCapabilityId.value) ?? null
+  const values = Object.values(capabilityList.value)
+  return values.find((entry) => entry.id === selectedCapabilityId.value) ?? null
 })
 
 watch(
-  filteredCapabilities,
+  capabilityList,
   (list) => {
-    if (list.length === 0) {
-      selectedCapabilityId.value = null
-      return
-    }
-    if (
-      !selectedCapabilityId.value ||
-      !list.some((item) => item.id === selectedCapabilityId.value)
-    ) {
+    if (list.length > 0 && !selectedCapabilityId.value) {
       selectedCapabilityId.value = list[0].id
     }
   },
   { immediate: true }
 )
 
+watch(filteredCapabilities, (list) => {
+  if (list.length === 0) {
+    selectedCapabilityId.value = null
+    return
+  }
+  if (!selectedCapabilityId.value || !list.some((item) => item.id === selectedCapabilityId.value)) {
+    selectedCapabilityId.value = list[0].id
+  }
+})
+
 function handleSelectCapability(id: string): void {
+  console.log('[IntelligenceCapabilitiesPage] Selecting capability:', id)
   selectedCapabilityId.value = id
+  console.log('[IntelligenceCapabilitiesPage] selectedCapabilityId:', selectedCapabilityId.value)
+  console.log('[IntelligenceCapabilitiesPage] capabilityList:', capabilityList.value)
+  console.log('[IntelligenceCapabilitiesPage] Selected capability:', selectedCapability.value)
+  console.log('[IntelligenceCapabilitiesPage] providers:', providers.value)
 }
 
 function getCapabilityIcon(capability: AISDKCapabilityConfig): ITuffIcon {
@@ -133,7 +140,10 @@ function getCapabilityIcon(capability: AISDKCapabilityConfig): ITuffIcon {
     'embedding.generate': 'i-carbon-data-base',
     'vision.ocr': 'i-carbon-image-search'
   }
-  return iconMap[capability.id] || 'i-carbon-cube'
+  return {
+    type: 'class',
+    value: iconMap[capability.id] || 'i-carbon-cube'
+  }
 }
 
 const capabilityTests = reactive<Record<string, CapabilityTestResult | null>>({})

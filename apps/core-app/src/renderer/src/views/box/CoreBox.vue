@@ -210,8 +210,7 @@ function shrinkPreviewHistory(options?: { focusInput?: boolean }): void {
 }
 
 function applyPreviewHistory(entry: CalculationHistoryEntry): void {
-  const expression =
-    entry.meta?.expression ?? entry.meta?.payload?.title ?? entry.content ?? ''
+  const expression = entry.meta?.expression ?? entry.meta?.payload?.title ?? entry.content ?? ''
   if (!expression) return
   searchVal.value = expression
   shrinkPreviewHistory({ focusInput: false })
@@ -400,7 +399,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
 
   <div class="CoreBoxRes flex" @contextmenu="handleHistoryContextMenu">
     <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
-      <TouchScroll ref="scrollbar" class="scroll-area">
+      <TouchScroll ref="scrollbar" no-padding class="scroll-area">
         <CoreBoxRender
           v-for="(item, index) in res"
           :key="index"
