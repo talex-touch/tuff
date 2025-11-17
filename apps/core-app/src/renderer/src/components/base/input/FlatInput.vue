@@ -93,7 +93,6 @@ function onKeyDown(e) {
 
     font-size: 16px;
 
-    border-radius: 0 6px 6px 0;
     background-color: transparent;
   }
 
@@ -124,11 +123,11 @@ function onKeyDown(e) {
   height: 32px;
   line-height: 32px;
 
-  border-radius: 6px;
+  border-radius: 8px;
   box-sizing: border-box;
   border: 1px solid var(--el-border-color);
 
-  --fake-radius: 6px;
+  --fake-radius: 8px;
   transition:
     border-color 0.25s,
     box-shadow 0.25s;
@@ -164,8 +163,8 @@ div.FlatInput-Container.win {
     box-shadow: none;
   }
 
-  border-radius: 4px;
-  --fake-radius: 4px !important;
+  border-radius: 8px;
+  --fake-radius: 8px !important;
   border-bottom: 1px solid var(--el-border-color);
 }
 </style>
