@@ -1,5 +1,5 @@
 <script setup lang="ts" name="TuffAsideTemplate">
-import { computed } from 'vue'
+import TuffAsideSearchBar from './TuffAsideSearchBar.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -26,18 +26,6 @@ const emit = defineEmits<{
   (event: 'clear'): void
 }>()
 
-const searchValue = computed({
-  get: () => props.modelValue,
-  set: (value: string) => {
-    emit('update:modelValue', value)
-    emit('search', value)
-  }
-})
-
-function handleClear(): void {
-  searchValue.value = ''
-  emit('clear')
-}
 </script>
 
 <template>
@@ -50,33 +38,16 @@ function handleClear(): void {
           </div>
 
           <div v-if="props.searchable" class="tuff-aside-template__search">
-            <label
-              v-if="props.searchLabel"
-              class="tuff-aside-template__search-label"
-              :for="props.searchId"
-            >
-              {{ props.searchLabel }}
-            </label>
-            <div class="tuff-aside-template__search-field">
-              <i class="i-carbon-search" aria-hidden="true" />
-              <input
-                :id="props.searchId"
-                v-model="searchValue"
-                class="tuff-aside-template__search-input"
-                type="search"
-                :placeholder="props.searchPlaceholder"
-                autocomplete="off"
-              />
-              <button
-                v-if="searchValue"
-                class="tuff-aside-template__search-clear"
-                type="button"
-                :aria-label="props.clearLabel"
-                @click="handleClear"
-              >
-                <i class="i-carbon-close" aria-hidden="true" />
-              </button>
-            </div>
+            <TuffAsideSearchBar
+              :modelValue="props.modelValue"
+              :searchLabel="props.searchLabel"
+              :searchPlaceholder="props.searchPlaceholder"
+              :searchId="props.searchId"
+              :clearLabel="props.clearLabel"
+              @update:modelValue="emit('update:modelValue', $event)"
+              @search="emit('search', $event)"
+              @clear="emit('clear')"
+            />
           </div>
 
           <div v-if="$slots.filter" class="tuff-aside-template__filters">
@@ -120,67 +91,6 @@ function handleClear(): void {
   flex-direction: column;
   gap: 1rem;
   height: 100%;
-}
-
-.tuff-aside-template__search {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.tuff-aside-template__search-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--el-text-color-secondary);
-}
-
-.tuff-aside-template__search-field {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.4rem 0.65rem;
-  border: 1px solid var(--el-border-color);
-  border-radius: 0.75rem;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
-
-  i {
-    font-size: 1rem;
-    color: var(--el-text-color-placeholder);
-  }
-}
-
-.tuff-aside-template__search-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  font: inherit;
-  color: inherit;
-
-  &::placeholder {
-    color: var(--el-text-color-placeholder);
-  }
-}
-
-.tuff-aside-template__search-clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--el-text-color-placeholder);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--el-fill-color);
-    color: var(--el-text-color-primary);
-  }
 }
 
 .tuff-aside-template__filters {

@@ -23,6 +23,7 @@
             @toggle-provider="onToggleProvider"
             @update-models="onUpdateModels"
             @update-prompt="onUpdatePrompt"
+            @reorder-providers="onReorderProviders"
             @test="handleCapabilityTest(selectedCapability.id)"
           />
           <div
@@ -173,6 +174,11 @@ function onUpdateModels(providerId: string, models: string[]): void {
 function onUpdatePrompt(prompt: string): void {
   if (!selectedCapability.value) return
   handleCapabilityPrompt(selectedCapability.value.id, prompt)
+}
+
+function onReorderProviders(bindings: AiCapabilityProviderBinding[]): void {
+  if (!selectedCapability.value) return
+  setCapabilityProviders(selectedCapability.value.id, bindings)
 }
 
 async function handleCapabilityTest(capabilityId: string): Promise<void> {
