@@ -18,6 +18,9 @@
         <span v-else class="text-[var(--el-text-color-primary)]">
           {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
         </span>
+        <FlatButton>
+          edit
+        </FlatButton>
       </div>
     </TuffBlockSlot>
 
@@ -63,22 +66,18 @@
           {{ t('intelligence.config.model.modelsHint') }}
         </p>
 
-        <!-- Model Tags -->
-        <div class="model-tags-list">
-          <div v-for="model in localModels" :key="model" class="model-tag-item">
-            <span>{{ model }}</span>
-            <i
-              class="i-carbon-close cursor-pointer text-[var(--el-text-color-secondary)] hover:text-[var(--el-color-error)]"
-              @click="handleRemoveModel(model)"
-            />
-          </div>
-
-          <div v-if="localModels.length === 0" class="empty-state">
-            <i class="i-carbon-model text-4xl text-[var(--el-text-color-placeholder)]" />
-            <p class="text-[var(--el-text-color-secondary)]">
-              {{ t('intelligence.config.model.noModels') }}
-            </p>
-          </div>
+        <div class="model-transfer-section">
+          <el-transfer
+            v-model="transferSelectedModels"
+            :data="transferData"
+            filterable
+            :filter-placeholder="t('intelligence.config.model.transferFilterPlaceholder')"
+            :titles="[
+              t('intelligence.config.model.transferAll'),
+              t('intelligence.config.model.transferEnabled')
+            ]"
+            :target-order="'original'"
+          />
         </div>
 
         <!-- Fetch Models Button -->
@@ -157,8 +156,9 @@
 </template>
 
 <script lang="ts" name="IntelligenceModelConfig" setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElTransfer } from 'element-plus'
 import { toast } from 'vue-sonner'
 import TDrawer from '~/components/base/dialog/TDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -209,6 +209,90 @@ const localInstructions = computed({
       instructions: value || undefined
     })
     emits('change')
+  }
+})
+
+const allModels = ref<string[]>([])
+
+function normalizeModel(value?: string): string {
+  return (value ?? '').trim()
+}
+
+function normalizeModelList(list: string[] = []): string[] {
+  const seen = new Set<string>()
+  return list
+    .map(normalizeModel)
+    .filter(Boolean)
+    .filter((model) => {
+      if (seen.has(model)) return false
+      seen.add(model)
+      return true
+    })
+}
+
+function addToAllModels(values: string | string[]): void {
+  const items = Array.isArray(values) ? values : [values]
+  const normalized = normalizeModelList(items)
+
+  if (!normalized.length) return
+
+  const merged = new Set(allModels.value)
+  normalized.forEach((model) => {
+    merged.add(model)
+  })
+  allModels.value = Array.from(merged)
+}
+
+function ensureDefaultModelWithin(models: string[]): void {
+  if (!models.length) {
+    if (localDefaultModel.value) {
+      localDefaultModel.value = ''
+    }
+    return
+  }
+
+  if (!localDefaultModel.value) {
+    localDefaultModel.value = models[0]
+    return
+  }
+
+  if (!models.includes(localDefaultModel.value)) {
+    localDefaultModel.value = models[0]
+  }
+}
+
+function applyModelUpdates(nextModels: string[]): void {
+  const normalized = normalizeModelList(nextModels)
+  addToAllModels(normalized)
+  localModels.value = normalized
+  ensureDefaultModelWithin(normalized)
+  validateModels()
+  validateDefaultModel()
+}
+
+const transferData = computed(() => {
+  const pool = new Set<string>()
+  allModels.value.forEach((model) => {
+    const normalized = normalizeModel(model)
+    if (normalized) pool.add(normalized)
+  })
+  localModels.value.forEach((model) => {
+    const normalized = normalizeModel(model)
+    if (normalized) pool.add(normalized)
+  })
+
+  return Array.from(pool)
+    .sort((a, b) => a.localeCompare(b))
+    .map((model) => ({
+      key: model,
+      label: model
+    }))
+})
+
+const transferSelectedModels = computed<string[]>({
+  get: () => localModels.value,
+  set: (value) => {
+    applyModelUpdates(value ?? [])
   }
 })
 
@@ -284,7 +368,7 @@ function validateDefaultModel(): boolean {
 }
 
 function handleAddModel() {
-  const modelName = newModelInput.value.trim()
+  const modelName = normalizeModel(newModelInput.value)
 
   if (!modelName) return
 
@@ -293,27 +377,8 @@ function handleAddModel() {
     return
   }
 
-  const newModels = [...localModels.value, modelName]
-  localModels.value = newModels
+  applyModelUpdates([...localModels.value, modelName])
   newModelInput.value = ''
-  modelsError.value = ''
-
-  // If this is the first model, set it as default
-  if (newModels.length === 1) {
-    localDefaultModel.value = modelName
-  }
-}
-
-function handleRemoveModel(model: string) {
-  const newModels = localModels.value.filter((m) => m !== model)
-  localModels.value = newModels
-
-  // If removed model was the default, clear default or set to first available
-  if (localDefaultModel.value === model) {
-    localDefaultModel.value = newModels.length > 0 ? newModels[0] : ''
-  }
-
-  validateModels()
 }
 
 function handleDefaultModelChange() {
@@ -348,14 +413,8 @@ async function handleFetchModels() {
     const result = await aiClient.fetchModels(fetchConfig)
 
     if (result.success && result.models) {
-      // 合并现有模型和新获取的模型，去重
-      const allModels = [...new Set([...localModels.value, ...result.models])]
-      localModels.value = allModels
-
-      // 如果没有默认模型且有可用模型，设置第一个为默认
-      if (!localDefaultModel.value && allModels.length > 0) {
-        localDefaultModel.value = allModels[0]
-      }
+      // 合并现有模型和新获取的模型并应用
+      applyModelUpdates([...localModels.value, ...result.models])
 
       toast.success(`已获取 ${result.models.length} 个模型`)
     } else {
@@ -371,6 +430,22 @@ async function handleFetchModels() {
     isFetching.value = false
   }
 }
+
+watch(
+  () => props.modelValue.id,
+  () => {
+    allModels.value = []
+    addToAllModels(localModels.value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => localModels.value,
+  (models) => {
+    addToAllModels(models)
+  }
+)
 </script>
 
 <style lang="scss" scoped>
@@ -391,44 +466,24 @@ async function handleFetchModels() {
 .models-drawer-content {
   padding: 0 4px;
 
-  .model-tags-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .model-transfer-section {
     margin-bottom: 16px;
-    min-height: 200px;
-    max-height: 400px;
-    overflow-y: auto;
-    padding: 12px;
-    border: 1px solid var(--el-border-color-lighter);
-    border-radius: 8px;
-    background: var(--el-fill-color-blank);
-  }
 
-  .model-tag-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    background: var(--el-color-info-light-9);
-    border: 1px solid var(--el-color-info-light-7);
-    border-radius: 6px;
-    font-size: 14px;
-    color: var(--el-text-color-primary);
-
-    i {
-      font-size: 16px;
-      transition: all 0.2s;
+    :deep(.el-transfer) {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--el-border-color-lighter);
+      background: var(--el-fill-color-blank);
+      min-height: 260px;
     }
-  }
 
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    text-align: center;
+    :deep(.el-transfer__buttons) {
+      margin: 0 8px;
+    }
+
+    :deep(.el-transfer__panel) {
+      min-height: 220px;
+    }
   }
 
   .fetch-models-section {

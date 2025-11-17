@@ -1,59 +1,70 @@
 <template>
   <teleport to="body">
-    <transition
-      enter-active-class="transition-opacity duration-300 ease-in-out"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition-opacity duration-300 ease-in-out"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
+    <div class="TuffDrawer z-1998 absolute inset-0 transition-cubic" :class="{ display }">
       <div
-        v-if="visible"
-        class="fake-background fixed inset-0 z-[998] backdrop-blur-sm bg-black/20"
+        class="TuffDrawer-Mask fake-background absolute inset-0 transition-cubic"
         @click="handleClose"
       ></div>
-    </transition>
-    <transition
-      enter-active-class="transition-transform duration-300 ease-in-out"
-      enter-from-class="translate-x-full"
-      enter-to-class="translate-x-0"
-      leave-active-class="transition-transform duration-300 ease-in-out"
-      leave-from-class="translate-x-0"
-      leave-to-class="translate-x-full"
-    >
+
       <div
-        v-if="visible"
-        class="fixed top-0 right-0 bottom-0 z-[999] w-96 bg-base-100/80 backdrop-blur-lg shadow-2xl flex flex-col"
+        class="TuffDrawer-Main overflow-hidden absolute top-0 right-0 bottom-0 z-[999] w-[60%] transition-cubic fake-background shadow-2xl flex flex-col"
       >
-        <header class="p-4 border-b border-base-300/50">
-          <h2 class="text-xl font-bold">{{ title }}</h2>
-        </header>
-        <main class="flex-1 p-4 overflow-y-auto">
+        <TouchScroll class="absolute inset-0">
+          <template #header>
+            <header class="p-4 border-b border-[--el-border-color]">
+              <h2 class="text-xl font-bold">{{ title }}</h2>
+            </header>
+          </template>
           <slot></slot>
-        </main>
+        </TouchScroll>
       </div>
-    </transition>
+    </div>
   </teleport>
 </template>
 
 <script lang="ts" setup>
-defineProps({
-  visible: {
-    type: Boolean,
-    required: true
-  },
-  title: {
-    type: String,
-    default: 'Drawer'
-  }
-})
+import { useModelWrapper } from '@talex-touch/utils/renderer'
+import TouchScroll from '../TouchScroll.vue'
 
-const emit = defineEmits(['update:visible', 'close'])
+const props = withDefaults(
+  defineProps<{
+    title?: string
+    visible: boolean
+  }>(),
+  {
+    title: 'Drawer'
+  }
+)
+
+const emits = defineEmits(['update:visible', 'close'])
+
+const display = useModelWrapper(props, emits, 'visible')
 
 const handleClose = (): void => {
-  emit('update:visible', false)
-  emit('close')
+  display.value = false
+  emits('close')
 }
 </script>
-]]>
+
+<style lang="scss" scoped>
+.TuffDrawer {
+  &.display {
+    --tuff-drawer-xoffset: 0;
+    --tuff-drawer-opacity: 1;
+    pointer-events: auto;
+  }
+
+  &-Mask {
+    --fake-inner-opacity: 0.75;
+    opacity: var(--tuff-drawer-opacity);
+  }
+
+  &-Main {
+    transform: translateX(var(--tuff-drawer-xoffset));
+  }
+
+  --tuff-drawer-xoffset: 120%;
+  --tuff-drawer-opacity: 0;
+  pointer-events: none;
+}
+</style>

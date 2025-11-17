@@ -1,11 +1,7 @@
 <template>
   <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
     <template v-if="useNative">
-      <div
-        ref="nativeScrollRef"
-        class="native-scroll-wrapper"
-        @scroll="handleScroll"
-      >
+      <div ref="nativeScrollRef" class="native-scroll-wrapper" @scroll="handleScroll">
         <slot name="header" />
 
         <div class="py-2 pl-2 pr-3">
@@ -131,7 +127,7 @@ defineExpose({
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .touch-scroll {
   width: 100%;
   height: 100%;
@@ -139,6 +135,14 @@ defineExpose({
 }
 
 .native-scroll-wrapper {
+  :deep(header, .header) {
+    z-index: var(--touch-scroll-z-index, 100);
+    position: sticky;
+
+    top: 0;
+
+    backdrop-filter: blur(18px) saturate(180%);
+  }
   width: 100%;
   height: 100%;
   overflow: scroll;
