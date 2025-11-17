@@ -162,6 +162,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   display: flex;
   align-items: center;
   gap: 1rem;
+  max-width: 100%;
   border-radius: 18px;
   border: 2px solid transparent;
   overflow: hidden;
@@ -173,11 +174,9 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     &:hover:not(.is-disabled) {
       border-color: var(--el-border-color);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-      transform: translateY(-1px);
     }
 
     &:active:not(.is-disabled) {
-      transform: translateY(0);
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     }
   }
@@ -192,10 +191,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     border-color: var(--el-color-primary-light-3);
     background-color: color-mix(in srgb, var(--el-color-primary) 5%, var(--el-fill-color-blank));
     box-shadow: 0 2px 12px rgba(var(--el-color-primary-rgb), 0.15);
-
-    &:hover:not(.is-disabled) {
-      box-shadow: 0 4px 16px rgba(var(--el-color-primary-rgb), 0.2);
-    }
   }
 
   &.is-disabled {
@@ -216,7 +211,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     }
   }
 
-  // Size variants
   &.size-sm {
     height: 3.5rem;
     padding: 0.375rem;
@@ -243,7 +237,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   }
 }
 
-// Icon
 .TuffItemTemplate-Icon {
   position: relative;
   flex-shrink: 0;
@@ -282,24 +275,10 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     }
   }
 
-  :deep(.TuffIcon) {
-    transition: transform 0.3s ease;
-  }
-
-  .TuffItemTemplate:hover & {
-    background-color: var(--el-fill-color-light);
-    transform: scale(1.05);
-
-    :deep(.TuffIcon) {
-      transform: scale(1.1);
-    }
-  }
-
   .TuffItemTemplate.is-selected & {
     background: linear-gradient(135deg, var(--el-fill-color-light) 0%, var(--el-fill-color) 100%);
   }
 
-  // Status Dot on Icon
   .TuffItemTemplate-StatusDot {
     position: absolute;
     right: -2px;
@@ -330,7 +309,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   }
 }
 
-// Content
 .TuffItemTemplate-Content {
   flex: 1;
   min-width: 0;
@@ -390,7 +368,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   }
 }
 
-// Trailing (right side)
 .TuffItemTemplate-Trailing {
   flex-shrink: 0;
   display: flex;
