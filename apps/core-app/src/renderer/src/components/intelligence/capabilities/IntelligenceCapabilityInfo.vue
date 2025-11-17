@@ -37,13 +37,16 @@
         :memory-name="`capability-models-${capability.id}`"
       >
         <template #default>
-          <div class="config-param__row">
-            <p class="config-param__summary">{{ modelSummary }}</p>
-            <FlatButton primary :disabled="!canEditModels" @click="openModelDrawer">
+          <TuffBlockSlot
+            :title="modelSummary"
+            default-icon="i-carbon-model"
+            @click="openModelDrawer"
+          >
+            <FlatButton primary :disabled="!canEditModels">
               <i class="i-carbon-settings" aria-hidden="true" />
               <span>{{ t('settings.intelligence.manageModels') }}</span>
             </FlatButton>
-          </div>
+          </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
 
@@ -55,13 +58,16 @@
         :memory-name="`capability-prompt-${capability.id}`"
       >
         <template #default>
-          <div class="config-param__row">
-            <p class="config-param__summary">{{ promptSummary }}</p>
-            <FlatButton text @click="openPromptDrawer">
+          <TuffBlockSlot
+            :title="promptSummary"
+            default-icon="i-carbon-notebook"
+            @click="openPromptDrawer"
+          >
+            <FlatButton text>
               <i class="i-carbon-edit" aria-hidden="true" />
               <span>{{ t('settings.intelligence.editPrompt') }}</span>
             </FlatButton>
-          </div>
+          </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
 
@@ -121,6 +127,7 @@
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
@@ -421,23 +428,7 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
-.config-param__row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
 
-.config-param__summary {
-  flex: 1;
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--el-text-color-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .capability-info__drawer {
   display: flex;
