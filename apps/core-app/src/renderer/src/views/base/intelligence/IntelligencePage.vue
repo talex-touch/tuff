@@ -1,16 +1,14 @@
 <template>
   <ViewTemplate title="Intelligence">
-    <div class="intelligence-container">
-      <IntelligenceHeader />
+    <IntelligenceHeader />
 
-      <IntelligenceChannels />
+    <IntelligenceChannels />
 
-      <IntelligenceCapabilities />
+    <IntelligenceCapabilities />
 
-      <IntelligencePrompts />
+    <IntelligencePrompts />
 
-      <IntelligenceFuture />
-    </div>
+    <IntelligenceFuture />
   </ViewTemplate>
 </template>
 
@@ -22,11 +20,3 @@ import IntelligenceCapabilities from '~/components/intelligence/IntelligenceCapa
 import IntelligencePrompts from '~/components/intelligence/IntelligencePrompts.vue'
 import IntelligenceFuture from '~/components/intelligence/IntelligenceFuture.vue'
 </script>
-
-<style lang="scss" scoped>
-.intelligence-container {
-  position: relative;
-  height: 100%;
-  width: 100%;
-}
-</style>

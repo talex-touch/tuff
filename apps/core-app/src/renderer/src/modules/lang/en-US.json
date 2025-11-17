@@ -1403,9 +1403,12 @@
         "defaultModelPlaceholder": "Select a default model",
         "defaultModelRequired": "Default model is required for enabled providers",
         "defaultModelInvalid": "Default model must be from the available models list",
+        "fetchModels": "Fetch Models",
+        "fetchModelsHint": "Automatically fetch available models from the provider",
         "instructions": "System Instructions",
         "instructionsPlaceholder": "Enter system instructions for this provider...",
-        "instructionsHint": "Optional system prompt that will be used with this provider"
+        "instructionsHint": "Optional system prompt that will be used with this provider",
+        "instructionsEmpty": "Add system prompt"
       },
       "advanced": {
         "title": "Advanced Configuration",
@@ -1448,6 +1451,13 @@
       "cacheExpiration1hour": "1 hour",
       "cacheExpiration6hours": "6 hours",
       "cacheExpiration24hours": "24 hours"
+    }
+  },
+  "Intelligence": {
+    "config": {
+      "advanced": {
+        "description": "Configure priority and timeout settings"
+      }
     }
   }
 }

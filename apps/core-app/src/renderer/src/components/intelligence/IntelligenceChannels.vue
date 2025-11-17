@@ -42,7 +42,6 @@ function handleViewStats() {
       :description="t('settings.aisdk.landing.channels.manageDesc')"
       default-icon="i-carbon-settings"
       active-icon="i-carbon-settings"
-      @click="handleChannelsClick"
     >
       <FlatButton primary @click="handleChannelsClick">
         <i class="i-carbon-launch" />

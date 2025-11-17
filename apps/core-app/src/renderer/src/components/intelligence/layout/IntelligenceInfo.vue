@@ -1,28 +1,13 @@
 <template>
-  <div class="aisdk-info-root h-full flex flex-col">
-    <!-- Header -->
-    <IntelligenceHeader
-      :provider="localProvider"
-      :is-testing="isTesting"
-      @test="handleTest"
-      @delete="handleDelete"
-    />
+  <div class="IntelligenceInfo-root h-full flex flex-col">
+    <IntelligenceHeader :provider="localProvider" @delete="handleDelete" />
 
-    <!-- Scrollable Content -->
-    <div 
-      class="flex-1 overflow-auto p-6"
+    <TouchScroll
+      class="flex-1 overflow-auto"
       role="region"
       :aria-label="t('aisdk.info.configurationPanel')"
       tabindex="0"
     >
-      <!-- Test Results -->
-      <IntelligenceTestResults 
-        v-if="testResult"
-        :result="testResult"
-        @dismiss="handleDismissTestResult"
-      />
-
-      <!-- Configuration Sections (always visible, disabled when provider is disabled) -->
       <TuffGroupBlock
         :name="t('aisdk.config.api.title')"
         :description="t('aisdk.config.api.description')"
@@ -30,10 +15,7 @@
         active-icon="i-carbon-key"
         memory-name="aisdk-api-config"
       >
-        <IntelligenceApiConfig
-          v-model="localProvider"
-          @change="handleChange"
-        />
+        <IntelligenceApiConfig v-model="localProvider" @change="handleChange" />
       </TuffGroupBlock>
 
       <TuffGroupBlock
@@ -52,15 +34,12 @@
 
       <TuffGroupBlock
         :name="t('aisdk.config.advanced.title')"
-        :description="t('aisdk.config.advanced.description')"
+        :description="t('Intelligence.config.advanced.description')"
         default-icon="i-carbon-settings"
         active-icon="i-carbon-settings"
         memory-name="aisdk-advanced-config"
       >
-        <IntelligenceAdvancedConfig
-          v-model="localProvider"
-          @change="handleChange"
-        />
+        <IntelligenceAdvancedConfig v-model="localProvider" @change="handleChange" />
       </TuffGroupBlock>
 
       <TuffGroupBlock
@@ -70,31 +49,28 @@
         active-icon="i-carbon-time"
         memory-name="aisdk-ratelimit-config"
       >
-        <IntelligenceRateLimitConfig
-          v-model="localProvider"
-          @change="handleChange"
-        />
+        <IntelligenceRateLimitConfig v-model="localProvider" @change="handleChange" />
       </TuffGroupBlock>
-    </div>
+    </TouchScroll>
   </div>
 </template>
 
 <script lang="ts" name="IntelligenceInfo" setup>
 /**
- * AISDKInfo Component
- * 
+ * IntelligenceInfo Component
+ *
  * Provider detail panel that displays comprehensive configuration options for a selected AI provider.
  * Features:
  * - Provider header with status and test button
  * - Collapsible configuration sections (API, Model, Advanced, Rate Limits)
  * - Test results display
- * - Global AISDK settings
+ * - Global Intelligence settings
  * - Conditional rendering based on provider enabled state
  * - Auto-save on configuration changes
- * 
+ *
  * @example
  * ```vue
- * <AISDKInfo
+ * <IntelligenceInfo
  *   :provider="selectedProvider"
  *   :global-config="globalConfig"
  *   @update="handleUpdateProvider"
@@ -111,8 +87,9 @@ import IntelligenceApiConfig from '../config/IntelligenceApiConfig.vue'
 import IntelligenceModelConfig from '../config/IntelligenceModelConfig.vue'
 import IntelligenceAdvancedConfig from '../config/IntelligenceAdvancedConfig.vue'
 import IntelligenceRateLimitConfig from '../config/IntelligenceRateLimitConfig.vue'
-import IntelligenceTestResults from './IntelligenceTestResults.vue'
-import type { AiProviderConfig, TestResult } from '~/types/aisdk'
+import TouchScroll from '~/components/base/TouchScroll.vue'
+// import IntelligenceTestResults from './IntelligenceTestResults.vue'
+import type { AiProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
 
 const props = defineProps<{
   provider: AiProviderConfig
@@ -128,22 +105,17 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-// Local state for provider
 const localProvider = ref<AiProviderConfig>({ ...props.provider })
 const testResult = ref<TestResult | null>(props.testResult || null)
 const isTesting = ref(props.isTesting || false)
 
-// Check if API key is configured (model config should be disabled when no key)
 const isModelConfigDisabled = computed(() => {
-  // Local providers don't need API keys
   if (localProvider.value.type === 'local') {
     return false
   }
-  // For remote providers, require API key
   return !localProvider.value.apiKey || localProvider.value.apiKey.trim().length === 0
 })
 
-// Watch for external provider changes
 watch(
   () => props.provider,
   (newProvider) => {
@@ -152,7 +124,6 @@ watch(
   { deep: true }
 )
 
-// Watch for test result changes
 watch(
   () => props.testResult,
   (newResult) => {
@@ -160,20 +131,12 @@ watch(
   }
 )
 
-// Watch for testing state changes
 watch(
   () => props.isTesting,
   (newState) => {
     isTesting.value = newState || false
   }
 )
-
-/**
- * Handle test button click
- */
-function handleTest() {
-  emits('test')
-}
 
 /**
  * Handle delete button click
@@ -189,36 +152,4 @@ function handleDelete() {
 function handleChange() {
   emits('update', localProvider.value)
 }
-
-/**
- * Handle test result dismissal
- */
-function handleDismissTestResult() {
-  testResult.value = null
-}
 </script>
-
-<style lang="scss" scoped>
-.aisdk-info-root {
-  background: var(--el-bg-color-page);
-}
-
-// Custom scrollbar styling
-.aisdk-info-root > div:nth-child(2) {
-  scroll-behavior: smooth;
-  
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-    margin: 4px 0;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--el-border-color);
-    border-radius: 4px;
-  }
-}
-</style>

@@ -3,8 +3,13 @@ import type {
   AISDKCapabilityConfig,
   AiCapabilityProviderBinding,
   TestResult
-} from '~/types/aisdk'
-import { intelligenceSettings, type AiProviderConfig, type AISDKGlobalConfig } from '@talex-touch/utils/renderer/storage'
+} from '@talex-touch/utils/types/intelligence'
+import {
+  aisdkStorage,
+  intelligenceSettings,
+  type AiProviderConfig,
+  type AISDKGlobalConfig
+} from '@talex-touch/utils/renderer/storage'
 
 /**
  * Return type for the useIntelligenceManager composable
@@ -112,8 +117,12 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
     }
   })
 
-  // TODO: 能力配置将来可以从存储中获取
-  const capabilities = ref<Record<string, AISDKCapabilityConfig>>({})
+  const capabilities = computed<Record<string, AISDKCapabilityConfig>>({
+    get: () => aisdkStorage.data.capabilities,
+    set: (value) => {
+      aisdkStorage.data.capabilities = value
+    }
+  })
 
   const testResults = ref<Map<string, TestResult>>(new Map())
   const loading = ref(false)

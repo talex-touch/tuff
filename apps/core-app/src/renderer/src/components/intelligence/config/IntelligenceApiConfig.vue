@@ -1,6 +1,5 @@
 <template>
   <div class="aisdk-api-config">
-    <!-- API Key Input -->
     <TuffBlockInput
       v-model="localApiKey"
       :title="t('aisdk.config.api.apiKey')"
@@ -8,23 +7,20 @@
       :placeholder="t('aisdk.config.api.apiKeyPlaceholder')"
       default-icon="i-carbon-password"
       active-icon="i-carbon-password"
-      :disabled="disabled"
       @blur="handleApiKeyBlur"
     >
-      <template #control="{ modelValue, update, focus, blur }">
+      <template #control="{ modelValue, update, focus }">
         <FlatInput
           :model-value="modelValue"
           :placeholder="t('aisdk.config.api.apiKeyPlaceholder')"
-          :disabled="disabled"
           password
           @update:model-value="update"
           @focus="focus"
-          @blur="blur(); handleApiKeyBlur()"
+          @blur="handleApiKeyBlur"
         />
       </template>
     </TuffBlockInput>
 
-    <!-- Base URL Input -->
     <TuffBlockInput
       v-model="localBaseUrl"
       :title="t('aisdk.config.api.baseUrl')"
@@ -32,7 +28,6 @@
       :placeholder="t('aisdk.config.api.baseUrlPlaceholder')"
       default-icon="i-carbon-link"
       active-icon="i-carbon-link"
-      :disabled="disabled"
       clearable
       @blur="handleBaseUrlBlur"
     >
@@ -40,61 +35,55 @@
         <FlatInput
           :model-value="modelValue"
           :placeholder="t('aisdk.config.api.baseUrlPlaceholder')"
-          :disabled="disabled"
           @update:model-value="update"
           @focus="focus"
-          @blur="blur(); handleBaseUrlBlur()"
+          @blur="handleBaseUrlBlur"
         />
       </template>
     </TuffBlockInput>
 
-    <!-- 连接状态显示 -->
-    <TuffBlockInput
-      :model-value="''"
+    <TuffBlockSlot
       :title="t('aisdk.config.api.testConnection')"
-      :description="testError || testResult || t('aisdk.config.api.testConnectionHint')"
-      default-icon="i-carbon-network"
-      active-icon="i-carbon-network"
-      :disabled="true"
-      readonly
+      :description="t('aisdk.config.api.testConnectionHint')"
+      default-icon="i-carbon-content-delivery-network"
+      active-icon="i-carbon-content-delivery-network"
+      :active="!!testResult"
+      guidance
     >
-      <template #control>
-        <div class="test-status-display">
-          <div v-if="isTesting" class="status-item testing">
-            <i class="i-carbon-renew animate-spin" />
-            <span>{{ t('aisdk.config.api.testButton') }}...</span>
-          </div>
-          <div v-else-if="testResult" class="status-item success">
-            <i class="i-carbon-checkmark" />
+      <div class="flex items-center gap-2">
+        <div class="flex">
+          <div v-if="testResult" class="flex items-center gap-2 text-green-600 text-sm">
+            <i class="i-carbon-checkmark-filled-warning" />
             <span>{{ testResult }}</span>
           </div>
-          <div v-else-if="testError" class="status-item error">
-            <i class="i-carbon-warning" />
+          <div v-else-if="testError" class="flex items-center gap-2 text-red-600 text-sm">
+            <i class="i-carbon-warning-filled" />
             <span>{{ testError }}</span>
           </div>
-          <div v-else class="status-item idle">
-            <i class="i-carbon-play" />
-            <span>{{ t('aisdk.config.api.testConnectionHint') }}</span>
-          </div>
         </div>
-      </template>
-    </TuffBlockInput>
+        <FlatButton v-if="canTest" :disabled="isTesting" :loading="isTesting" @click="handleTest">
+          <i v-if="isTesting" class="i-carbon-renew animate-spin" />
+          <i v-else class="i-carbon-play-filled" />
+          <span>{{ t('aisdk.config.api.testButton') }}</span>
+        </FlatButton>
+      </div>
+    </TuffBlockSlot>
   </div>
 </template>
 
 <script lang="ts" name="IntelligenceApiConfig" setup>
 import { ref, computed, getCurrentInstance } from 'vue'
-import { toast } from 'vue-sonner'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { intelligenceSettings, type AiProviderConfig } from '@talex-touch/utils/renderer/storage'
+import { forDialogMention } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
   modelValue: AiProviderConfig
-  disabled?: boolean
 }>()
 
 const emits = defineEmits<{
@@ -108,7 +97,6 @@ const t = (key: string) => instance?.proxy?.$t(key) || key
 
 const aiClient = createIntelligenceClient(touchChannel as any)
 
-// 直接使用 reactive 对象的计算属性
 const localApiKey = computed({
   get: () => props.modelValue.apiKey || '',
   set: (value: string) => {
@@ -129,14 +117,12 @@ const localBaseUrl = computed({
   }
 })
 
-const testModelName = ref('')
 const apiKeyError = ref('')
 const baseUrlError = ref('')
 const testError = ref('')
 const testResult = ref('')
 const isTesting = ref(false)
 
-// 是否可以进行测试（只需要有 API Key，不需要启用）
 const canTest = computed(() => {
   const hasApiKey = localApiKey.value.trim().length > 0
   const isNotLocal = props.modelValue.type !== 'local'
@@ -177,7 +163,7 @@ function handleBaseUrlBlur() {
   validateBaseUrl(localBaseUrl.value)
 }
 
-async function handleTestConnection() {
+async function handleTest() {
   if (!canTest.value || isTesting.value) return
 
   isTesting.value = true
@@ -197,10 +183,12 @@ async function handleTestConnection() {
       defaultModel: props.modelValue.defaultModel || undefined,
       instructions: props.modelValue.instructions || undefined,
       timeout: Number(props.modelValue.timeout) || 30000,
-      rateLimit: props.modelValue.rateLimit ? {
-        requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
-        tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
-      } : undefined,
+      rateLimit: props.modelValue.rateLimit
+        ? {
+            requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
+            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
+          }
+        : undefined,
       priority: Number(props.modelValue.priority) || 1
     }
 
@@ -214,45 +202,73 @@ async function handleTestConnection() {
       baseUrl: testProvider.baseUrl
     })
 
-    const result = await aiClient.testProvider(testProvider)
+    const result = (await aiClient.testProvider(testProvider)) as any
 
-    if (result.success) {
+    if (result?.success) {
       testResult.value = t('aisdk.config.api.testSuccess')
-      toast.success(t('aisdk.config.api.testSuccess'))
+
+      // 使用 MentionDialog 显示成功消息
+      await forDialogMention(
+        '连接测试成功',
+        `已成功连接到 ${props.modelValue.name}`,
+        { type: 'remix', value: 'ri-checkbox-circle-line' },
+        [{ content: '确定', type: 'success', onClick: () => true }]
+      )
 
       // 尝试获取可用模型列表
       await fetchAvailableModels(testProvider)
     } else {
-      testError.value = result.message || '连接失败'
-      toast.error(`连接测试失败: ${result.message}`)
+      testError.value = result?.message || '连接失败'
+
+      // 使用 MentionDialog 显示失败消息
+      await forDialogMention(
+        '连接测试失败',
+        result?.message || '无法连接到提供商，请检查您的配置',
+        { type: 'remix', value: 'ri-error-warning-line' },
+        [{ content: '确定', type: 'danger', onClick: () => true }]
+      )
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : '连接失败'
     testError.value = message
-    toast.error(`连接测试失败: ${message}`)
+
+    // 使用 MentionDialog 显示错误消息
+    await forDialogMention(
+      '连接测试失败',
+      `连接过程中发生错误: ${message}`,
+      { type: 'remix', value: 'ri-error-warning-line' },
+      [{ content: '确定', type: 'danger', onClick: () => true }]
+    )
+
     console.error('[API Config] Test connection failed:', error)
   } finally {
     isTesting.value = false
   }
 }
 
-async function fetchAvailableModels(provider: AiProviderConfig) {
+async function fetchAvailableModels(provider: any) {
   try {
     console.log('[API Config] Fetching available models...')
 
     // 使用 intelligence client 获取模型列表
-    const result = await aiClient.fetchModels(provider)
+    const result = (await aiClient.fetchModels(provider)) as any
 
-    if (result.success && result.models) {
+    if (result?.success && result?.models) {
       // 直接更新 provider 的模型列表
       intelligenceSettings.updateProvider(provider.id, {
         models: result.models
       })
       emits('testSuccess', result.models)
 
-      toast.success(`已获取 ${result.models.length} 个可用模型`)
+      // 使用 MentionDialog 显示获取模型成功消息
+      await forDialogMention(
+        '模型获取成功',
+        `已获取 ${result.models.length} 个可用模型`,
+        { type: 'remix', value: 'ri-checkbox-circle-line' },
+        [{ content: '确定', type: 'success', onClick: () => true }]
+      )
     } else {
-      console.log('[API Config] Failed to fetch models:', result.message)
+      console.log('[API Config] Failed to fetch models:', result?.message)
       // 即使获取模型失败，连接测试也算成功
       // 发送空数组，表示测试成功但没有获取到模型
       emits('testSuccess', [])
@@ -266,75 +282,16 @@ async function fetchAvailableModels(provider: AiProviderConfig) {
 </script>
 
 <style lang="scss" scoped>
-.aisdk-api-config {
-  .tuff-input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--el-border-color);
-    border-radius: 6px;
-    background: var(--el-fill-color-blank);
-    color: var(--el-text-color-primary);
-    font-size: 14px;
-    outline: none;
-    transition: all 0.2s;
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
 
-    &:focus {
-      border-color: var(--el-color-primary);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    &::placeholder {
-      color: var(--el-text-color-placeholder);
-    }
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
   }
-
-  .test-status-display {
-    width: 100%;
-    padding: 8px 12px;
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-
-      &.testing {
-        color: var(--el-color-primary);
-      }
-
-      &.success {
-        color: var(--el-color-success);
-      }
-
-      &.error {
-        color: var(--el-color-error);
-      }
-
-      &.idle {
-        color: var(--el-text-color-secondary);
-      }
-
-      i {
-        font-size: 16px;
-      }
-    }
-  }
-
-  .animate-spin {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

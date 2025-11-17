@@ -20,6 +20,7 @@ import { LocalProvider } from './providers/local-provider'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import chalk from 'chalk'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
+import { fetchProviderModels } from './provider-models'
 
 const LOG = chalk.hex('#b388ff').bold('[Intelligence]')
 const logInfo = (...args: any[]) => console.log(LOG, ...args)
@@ -46,7 +47,7 @@ export function initAiSdkService(): void {
   setIntelligenceProviderManager(manager)
   logInfo('Provider factories registered')
 
-  channel.regChannel(ChannelType.MAIN, 'aisdk:invoke', async ({ data, reply }) => {
+  channel.regChannel(ChannelType.MAIN, 'intelligence:invoke', async ({ data, reply }) => {
   try {
     if (!data || typeof data !== 'object' || typeof (data as any).capabilityId !== 'string') {
       throw new Error('Invalid invoke payload')
@@ -72,7 +73,7 @@ export function initAiSdkService(): void {
   }
   })
 
-  channel.regChannel(ChannelType.MAIN, 'aisdk:test-provider', async ({ data, reply }) => {
+  channel.regChannel(ChannelType.MAIN, 'intelligence:test-provider', async ({ data, reply }) => {
   try {
     if (!data || typeof data !== 'object' || !(data as any).provider) {
       throw new Error('Missing provider payload')
@@ -97,7 +98,7 @@ export function initAiSdkService(): void {
   }
   })
 
-  channel.regChannel(ChannelType.MAIN, 'aisdk:test-capability', async ({ data, reply }) => {
+  channel.regChannel(ChannelType.MAIN, 'intelligence:test-capability', async ({ data, reply }) => {
   try {
     if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
       throw new Error('Invalid capability test payload')
@@ -149,6 +150,32 @@ export function initAiSdkService(): void {
     }
   } catch (error) {
     logError('Capability test failed:', error)
+    reply(DataCode.ERROR, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+  })
+
+  channel.regChannel(ChannelType.MAIN, 'intelligence:fetch-models', async ({ data, reply }) => {
+  try {
+    if (!data || typeof data !== 'object' || !(data as any).provider) {
+      throw new Error('Missing provider payload')
+    }
+
+    const { provider } = data as { provider: AiProviderConfig }
+    ensureAiConfigLoaded()
+    logInfo(`Fetching models for provider ${provider.id}`)
+    const models = await fetchProviderModels(provider)
+    reply(DataCode.SUCCESS, {
+      ok: true,
+      result: {
+        success: true,
+        models
+      }
+    })
+  } catch (error) {
+    logError('Fetch models failed:', error)
     reply(DataCode.ERROR, {
       ok: false,
       error: error instanceof Error ? error.message : String(error)

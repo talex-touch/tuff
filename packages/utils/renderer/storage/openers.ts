@@ -1,4 +1,4 @@
-import { TouchStorage } from '.'
+import { TouchStorage, getOrCreateStorageSingleton } from '.'
 import { openersOriginData, StorageList, type OpenersMap } from '../..'
 
 class OpenersStorage extends TouchStorage<OpenersMap> {
@@ -8,4 +8,9 @@ class OpenersStorage extends TouchStorage<OpenersMap> {
   }
 }
 
-export const openersStorage = new OpenersStorage()
+const OPENERS_STORAGE_KEY = `storage:${StorageList.OPENERS}`
+
+export const openersStorage = getOrCreateStorageSingleton<OpenersStorage>(
+  OPENERS_STORAGE_KEY,
+  () => new OpenersStorage()
+)

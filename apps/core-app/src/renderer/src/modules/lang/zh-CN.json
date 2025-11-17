@@ -1407,7 +1407,8 @@
         "fetchModelsHint": "从提供商自动获取可用模型列表",
         "instructions": "系统指令",
         "instructionsPlaceholder": "输入此提供商的系统指令...",
-        "instructionsHint": "可选的系统提示词，将与此提供商一起使用"
+        "instructionsHint": "可选的系统提示词，将与此提供商一起使用",
+        "instructionsEmpty": "设置系统指令"
       },
       "advanced": {
         "title": "高级配置",
@@ -1450,6 +1451,13 @@
       "cacheExpiration1hour": "1 小时",
       "cacheExpiration6hours": "6 小时",
       "cacheExpiration24hours": "24 小时"
+    }
+  },
+  "Intelligence": {
+    "config": {
+      "advanced": {
+        "description": "配置优先级和超时设置"
+      }
     }
   }
 }

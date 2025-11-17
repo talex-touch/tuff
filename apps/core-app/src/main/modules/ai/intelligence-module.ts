@@ -24,6 +24,7 @@ import { BaseModule } from '../abstract-base-module'
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import { createLogger } from '../../utils/logger'
 import { TalexEvents } from '../../core/eventbus/touch-event'
+import { fetchProviderModels } from './provider-models'
 
 const intelligenceLog = createLogger('Intelligence')
 
@@ -183,7 +184,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceLog.info('Registering IPC channels')
 
     // 调用 AI 能力
-    this.channel.regChannel(ChannelType.MAIN, 'aisdk:invoke', async ({ data, reply }) => {
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:invoke', async ({ data, reply }) => {
       try {
         if (!data || typeof data !== 'object' || typeof (data as any).capabilityId !== 'string') {
           throw new Error('Invalid invoke payload')
@@ -212,7 +213,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     })
 
     // 测试 Provider
-    this.channel.regChannel(ChannelType.MAIN, 'aisdk:test-provider', async ({ data, reply }) => {
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:test-provider', async ({ data, reply }) => {
       try {
         if (!data || typeof data !== 'object' || !(data as any).provider) {
           throw new Error('Missing provider payload')
@@ -240,7 +241,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // 测试能力
     this.channel.regChannel(
       ChannelType.MAIN,
-      'aisdk:test-capability',
+      'intelligence:test-capability',
       async ({ data, reply }) => {
         try {
           if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
@@ -302,6 +303,37 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
       }
     )
+
+    // 获取可用模型
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:fetch-models', async ({ data, reply }) => {
+      try {
+        if (!data || typeof data !== 'object' || !(data as any).provider) {
+          throw new Error('Missing provider payload')
+        }
+
+        const { provider } = data as { provider: AiProviderConfig }
+        ensureAiConfigLoaded()
+        intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
+
+        const models = await fetchProviderModels(provider)
+        intelligenceLog.success(`Loaded ${models.length} models for provider ${provider.id}`)
+
+        reply(DataCode.SUCCESS, {
+          ok: true,
+          result: {
+            success: true,
+            models
+          }
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        intelligenceLog.error('Fetch models failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: message
+        })
+      }
+    })
 
     intelligenceLog.success('IPC channels registered')
   }

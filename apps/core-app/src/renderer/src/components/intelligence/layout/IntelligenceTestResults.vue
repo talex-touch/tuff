@@ -71,7 +71,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import type { TestResult } from '~/types/aisdk'
+import type { TestResult } from '@talex-touch/utils/types/intelligence'
 
 const props = withDefaults(
   defineProps<{

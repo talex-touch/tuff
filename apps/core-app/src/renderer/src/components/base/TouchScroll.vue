@@ -1,7 +1,7 @@
 <template>
   <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
     <template v-if="useNative">
-      <div ref="nativeScrollRef" class="native-scroll-wrapper" @scroll="handleScroll">
+      <div ref="nativeScrollRef" class="native-scroll-wrapper pl-2 pr-3" @scroll="handleScroll">
         <slot></slot>
       </div>
     </template>
@@ -139,11 +139,5 @@ defineExpose({
 .el-scroll-wrapper {
   width: 100%;
   height: 100%;
-}
-
-.native-scroll-wrapper::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
 }
 </style>

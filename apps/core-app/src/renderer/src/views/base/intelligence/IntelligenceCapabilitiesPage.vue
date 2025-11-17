@@ -46,7 +46,7 @@ import type {
   AISDKCapabilityConfig,
   AiCapabilityProviderBinding,
   AiVisionOcrResult
-} from '~/types/aisdk'
+} from '@talex-touch/utils/types/intelligence'
 import type { AiInvokeResult } from '@talex-touch/utils'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
@@ -139,13 +139,10 @@ function handleCapabilityProviderToggle(
 function handleCapabilityModels(
   capabilityId: string,
   providerId: string,
-  value: string
+  models: string[]
 ): void {
-  const models = value
-    .split(',')
-    .map((token) => token.trim())
-    .filter(Boolean)
-  updateCapabilityBinding(capabilityId, providerId, { models })
+  const normalized = models.map((token) => token.trim()).filter(Boolean)
+  updateCapabilityBinding(capabilityId, providerId, { models: normalized })
 }
 
 function handleCapabilityPrompt(capabilityId: string, prompt: string): void {
@@ -168,9 +165,9 @@ function onToggleProvider(providerId: string, enabled: boolean): void {
   handleCapabilityProviderToggle(selectedCapability.value.id, providerId, enabled)
 }
 
-function onUpdateModels(providerId: string, value: string): void {
+function onUpdateModels(providerId: string, models: string[]): void {
   if (!selectedCapability.value) return
-  handleCapabilityModels(selectedCapability.value.id, providerId, value)
+  handleCapabilityModels(selectedCapability.value.id, providerId, models)
 }
 
 function onUpdatePrompt(prompt: string): void {
