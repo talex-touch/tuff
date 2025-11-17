@@ -62,7 +62,7 @@
     </section>
   </div>
 
-  <TDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
+  <TuffDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
     <section class="history-panel">
       <div v-if="historySessions.length" class="history-list">
         <button
@@ -106,7 +106,7 @@
         </button>
       </footer>
     </section>
-  </TDrawer>
+  </TuffDrawer>
 </template>
 
 <script lang="ts" setup>
@@ -114,7 +114,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { formatLogForTerminal } from '~/utils/log-formatter'
 import LogTerminal from '~/components/terminal/LogTerminal.vue'
-import TDrawer from '~/components/base/dialog/TDrawer.vue'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import { useI18n } from 'vue-i18n'

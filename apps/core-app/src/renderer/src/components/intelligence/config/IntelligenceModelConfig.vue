@@ -59,7 +59,7 @@
     </TuffBlockSlot>
 
     <!-- Models Drawer -->
-    <TDrawer
+    <TuffDrawer
       v-model:visible="showModelsDrawer"
       :title="t('intelligence.config.model.manageModels')"
     >
@@ -122,10 +122,10 @@
           {{ modelsError }}
         </p>
       </div>
-    </TDrawer>
+    </TuffDrawer>
 
     <!-- Default Model Drawer -->
-    <TDrawer
+    <TuffDrawer
       v-model:visible="showDefaultModelDrawer"
       :title="t('intelligence.config.model.defaultModel')"
     >
@@ -166,10 +166,10 @@
           {{ defaultModelError }}
         </p>
       </div>
-    </TDrawer>
+    </TuffDrawer>
 
     <!-- Instructions Drawer -->
-    <TDrawer
+    <TuffDrawer
       v-model:visible="showInstructionsDrawer"
       :title="t('intelligence.config.model.instructions')"
     >
@@ -180,7 +180,7 @@
         v-model="localInstructions"
         @update:model-value="handleInstructionsChange"
       />
-    </TDrawer>
+    </TuffDrawer>
   </div>
 </template>
 
@@ -189,7 +189,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElTransfer, ElSelect, ElOption, ElOptionGroup } from 'element-plus'
 import { toast } from 'vue-sonner'
-import TDrawer from '~/components/base/dialog/TDrawer.vue'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'

@@ -59,6 +59,7 @@ const { t } = useI18n()
   height: 180px;
   clear: both;
   overflow: hidden;
+  user-select: none;
   border-radius: 12px;
   border: 1px solid var(--el-border-color);
 

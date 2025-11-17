@@ -9,6 +9,7 @@ const props = withDefaults(
     searchId?: string
     searchable?: boolean
     clearLabel?: string
+    mainAriaLive?: string
   }>(),
   {
     modelValue: '',
@@ -16,7 +17,8 @@ const props = withDefaults(
     searchPlaceholder: '',
     searchId: 'tuff-aside-template-search',
     searchable: true,
-    clearLabel: 'Clear search'
+    clearLabel: 'Clear search',
+    mainAriaLive: 'polite'
   }
 )
 
@@ -25,12 +27,11 @@ const emit = defineEmits<{
   (event: 'search', value: string): void
   (event: 'clear'): void
 }>()
-
 </script>
 
 <template>
-  <div class="tuff-aside-template">
-    <aside class="tuff-aside-template__aside" aria-label="Tuff aside layout">
+  <div class="TuffAsideTemplate">
+    <aside class="TuffAsideTemplate-Aside w-76" aria-label="Tuff aside layout">
       <slot name="aside">
         <div class="tuff-aside-template__aside-default">
           <div v-if="$slots['aside-header']" class="tuff-aside-template__aside-header">
@@ -39,12 +40,12 @@ const emit = defineEmits<{
 
           <div v-if="props.searchable" class="tuff-aside-template__search">
             <TuffAsideSearchBar
-              :modelValue="props.modelValue"
-              :searchLabel="props.searchLabel"
-              :searchPlaceholder="props.searchPlaceholder"
-              :searchId="props.searchId"
-              :clearLabel="props.clearLabel"
-              @update:modelValue="emit('update:modelValue', $event)"
+              :model-value="props.modelValue"
+              :search-label="props.searchLabel"
+              :search-placeholder="props.searchPlaceholder"
+              :search-id="props.searchId"
+              :clear-label="props.clearLabel"
+              @update:model-value="emit('update:modelValue', $event)"
               @search="emit('search', $event)"
               @clear="emit('clear')"
             />
@@ -61,28 +62,25 @@ const emit = defineEmits<{
       </slot>
     </aside>
 
-    <section class="tuff-aside-template__main">
-      <slot name="main" />
+    <section class="TuffAsideTemplate-Main" :aria-live="props.mainAriaLive">
+      <Transition name="fade-slide" mode="out-in">
+        <slot name="main" />
+      </Transition>
     </section>
   </div>
 </template>
 
 <style scoped lang="scss">
-.tuff-aside-template {
+.TuffAsideTemplate {
   display: flex;
   height: 100%;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 1.25rem;
   overflow: hidden;
   background: var(--el-bg-color-page);
 }
 
-.tuff-aside-template__aside {
-  width: 22rem;
-  min-width: 20rem;
+.TuffAsideTemplate-Aside {
   border-right: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color);
-  padding: 1.25rem;
   overflow-y: auto;
 }
 
@@ -107,12 +105,29 @@ const emit = defineEmits<{
   gap: 0.75rem;
 }
 
-.tuff-aside-template__main {
+.TuffAsideTemplate-Main {
   flex: 1;
   background: var(--el-bg-color);
   padding: 1.5rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
 }
 </style>
