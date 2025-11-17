@@ -86,7 +86,9 @@
 </template>
 
 <script lang="ts" name="TuffItemTemplate" setup>
+import type { ITuffIcon } from '@talex-touch/utils'
 import TuffStatusBadge from '../TuffStatusBadge.vue'
+import TuffIcon from '../../base/TuffIcon.vue'
 
 export type TuffItemBadge = {
   text: string
@@ -105,7 +107,7 @@ export type TuffItemTemplateProps = {
   // Main content
   title?: string
   subtitle?: string
-  icon?: string
+  icon?: ITuffIcon
   iconClass?: string
 
   // Badges
@@ -131,7 +133,7 @@ export type TuffItemTemplateProps = {
 const props = withDefaults(defineProps<TuffItemTemplateProps>(), {
   title: '',
   subtitle: '',
-  icon: '',
+  icon: undefined,
   iconClass: '',
   topBadge: undefined,
   bottomBadge: undefined,
@@ -243,6 +245,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 
 // Icon
 .TuffItemTemplate-Icon {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   justify-content: center;
@@ -256,7 +259,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     width: 2.5rem;
     height: 2.5rem;
 
-    i {
+    :deep(.TuffIcon) {
       font-size: 1.25rem;
     }
   }
@@ -265,7 +268,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     width: 3rem;
     height: 3rem;
 
-    i {
+    :deep(.TuffIcon) {
       font-size: 1.5rem;
     }
   }
@@ -274,12 +277,12 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     width: 3.5rem;
     height: 3.5rem;
 
-    i {
+    :deep(.TuffIcon) {
       font-size: 1.75rem;
     }
   }
 
-  i {
+  :deep(.TuffIcon) {
     transition: transform 0.3s ease;
   }
 
@@ -287,13 +290,43 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     background-color: var(--el-fill-color-light);
     transform: scale(1.05);
 
-    i {
+    :deep(.TuffIcon) {
       transform: scale(1.1);
     }
   }
 
   .TuffItemTemplate.is-selected & {
     background: linear-gradient(135deg, var(--el-fill-color-light) 0%, var(--el-fill-color) 100%);
+  }
+
+  // Status Dot on Icon
+  .TuffItemTemplate-StatusDot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 0 2px var(--el-fill-color-blank);
+    z-index: 1;
+
+    &.is-active {
+      background-color: var(--el-color-success);
+      animation: pulse-success 2s ease-in-out infinite;
+    }
+
+    &.is-inactive {
+      background-color: var(--el-text-color-disabled);
+    }
+
+    &.is-error {
+      background-color: var(--el-color-error);
+    }
+
+    &.is-warning {
+      background-color: var(--el-color-warning);
+    }
   }
 }
 
@@ -364,31 +397,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   align-items: center;
   gap: 0.5rem;
   margin-left: auto;
-}
-
-.TuffItemTemplate-StatusDot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 0 2px var(--el-fill-color-blank);
-
-  &.is-active {
-    background-color: var(--el-color-success);
-    animation: pulse-success 2s ease-in-out infinite;
-  }
-
-  &.is-inactive {
-    background-color: var(--el-text-color-disabled);
-  }
-
-  &.is-error {
-    background-color: var(--el-color-error);
-  }
-
-  &.is-warning {
-    background-color: var(--el-color-warning);
-  }
 }
 
 @keyframes pulse-success {

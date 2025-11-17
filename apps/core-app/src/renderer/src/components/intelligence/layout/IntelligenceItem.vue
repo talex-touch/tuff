@@ -2,7 +2,7 @@
   <TuffItemTemplate
     :title="provider.name"
     :subtitle="provider.type"
-    :icon="getProviderIconClass(provider.type)"
+    :icon="getProviderIcon(provider.type)"
     :selected="isSelected"
     :top-badge="hasConfigError ? errorBadge : undefined"
     :status-dot="statusDot"
@@ -14,6 +14,7 @@
 <script lang="ts" name="IntelligenceItemRefactored" setup>
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { ITuffIcon } from '@talex-touch/utils'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 import type { TuffItemBadge, TuffItemStatusDot } from '~/components/tuff/template/TuffItemTemplate.vue'
 
@@ -95,16 +96,23 @@ const statusDot = computed<TuffItemStatusDot>(() => ({
   label: localEnabled.value ? t('intelligence.status.enabled') : t('intelligence.status.disabled')
 }))
 
-function getProviderIconClass(type: string): string {
-  const iconClasses: Record<string, string> = {
-    [AiProviderType.OPENAI]: 'i-simple-icons-openai text-green-600',
-    [AiProviderType.ANTHROPIC]: 'i-simple-icons-anthropic text-orange-500',
-    [AiProviderType.DEEPSEEK]: 'i-carbon-search-advanced text-blue-600',
-    [AiProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning text-purple-600',
-    [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server text-gray-600',
-    [AiProviderType.CUSTOM]: 'i-carbon-settings text-gray-500'
+function getProviderIcon(type: string): ITuffIcon {
+  const iconMap: Record<string, string> = {
+    [AiProviderType.OPENAI]: 'i-simple-icons-openai',
+    [AiProviderType.ANTHROPIC]: 'i-simple-icons-anthropic',
+    [AiProviderType.DEEPSEEK]: 'i-carbon-search-advanced',
+    [AiProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning',
+    [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server',
+    [AiProviderType.CUSTOM]: 'i-carbon-settings'
   }
-  return iconClasses[type] || 'i-carbon-ibm-watson-machine-learning text-gray-400'
+  
+  const iconClass = iconMap[type] || 'i-carbon-ibm-watson-machine-learning'
+  
+  return {
+    type: 'class',
+    value: iconClass,
+    status: 'success'
+  }
 }
 
 function handleClick() {
