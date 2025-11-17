@@ -34,10 +34,19 @@ interface IntelligenceComposable {
   testCapability: (params: {
     capabilityId: string
     providerId?: string
+    userInput?: string
     source?: any
   }) => Promise<{
     ok: boolean
     result: any
+  }>
+
+  // Get capability test metadata
+  getCapabilityTestMeta: (params: {
+    capabilityId: string
+  }) => Promise<{
+    requiresUserInput: boolean
+    inputHint: string
   }>
 
   // Convenient text methods
@@ -148,13 +157,20 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
       ),
 
     // Capability testing
-    testCapability: (params: { capabilityId: string; providerId?: string; source?: any }) =>
+    testCapability: (params: { capabilityId: string; providerId?: string; userInput?: string; source?: any }) =>
       withLoadingState(() =>
         sendChannelRequest<{
           ok: boolean
           result: any
         }>('intelligence:test-capability', params)
       ),
+
+    // Get capability test metadata
+    getCapabilityTestMeta: (params: { capabilityId: string }) =>
+      sendChannelRequest<{
+        requiresUserInput: boolean
+        inputHint: string
+      }>('intelligence:get-capability-test-meta', params),
 
     // Convenient text methods
     text: {

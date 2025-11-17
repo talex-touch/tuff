@@ -41,7 +41,7 @@
           @update-models="onUpdateModels"
           @update-prompt="onUpdatePrompt"
           @reorder-providers="onReorderProviders"
-          @test="handleCapabilityTest(selectedCapability.id)"
+          @test="(params) => handleCapabilityTest(selectedCapability.id, params)"
         />
       </div>
     </template>
@@ -215,23 +215,24 @@ function onReorderProviders(bindings: AiCapabilityProviderBinding[]): void {
   setCapabilityProviders(selectedCapability.value.id, bindings)
 }
 
-async function handleCapabilityTest(capabilityId: string): Promise<void> {
+async function handleCapabilityTest(
+  capabilityId: string,
+  params?: { providerId?: string; userInput?: string }
+): Promise<void> {
   if (capabilityTesting[capabilityId]) return
   capabilityTesting[capabilityId] = true
   capabilityTests[capabilityId] = null
 
   try {
-    const invocation = (await aiClient.testCapability({
-      capabilityId
-    })) as AiInvokeResult<AiVisionOcrResult>
+    const response = await aiClient.testCapability({
+      capabilityId,
+      providerId: params?.providerId,
+      userInput: params?.userInput
+    })
 
+    // 使用格式化后的结果
     capabilityTests[capabilityId] = {
-      success: true,
-      message: t('settings.intelligence.capabilityTestHint'),
-      latency: invocation.latency,
-      provider: invocation.provider,
-      model: invocation.model,
-      textPreview: invocation.result.text?.slice(0, 120),
+      ...response.result,
       timestamp: Date.now()
     }
   } catch (error) {
