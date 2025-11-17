@@ -23,16 +23,16 @@ function handlePromptsClick() {
 async function handleOpenFolder() {
   try {
     await touchChannel.send('app:open-prompts-folder')
-    toast.success('已打开提示词文件夹')
+    toast.success(t('settings.aisdk.landing.prompts.folderOpenSuccess'))
   } catch (error) {
     console.error('Failed to open prompts folder:', error)
-    toast.error('打开文件夹失败')
+    toast.error(t('settings.aisdk.landing.prompts.folderOpenFailed'))
   }
 }
 
 function handleCreatePrompt() {
   console.log('Create new prompt file')
-  toast.info('创建提示词功能开发中')
+  toast.info(t('settings.aisdk.landing.prompts.createPromptHint'))
 }
 </script>
 
@@ -46,43 +46,43 @@ function handleCreatePrompt() {
   >
     <!-- 编辑提示词 -->
     <tuff-block-slot
-      title="编辑提示词"
-      description="集中管理系统提示词模板"
+      :title="t('settings.aisdk.landing.prompts.editTitle')"
+      :description="t('settings.aisdk.landing.prompts.editDesc')"
       default-icon="i-carbon-edit"
       active-icon="i-carbon-edit"
       @click="handlePromptsClick"
     >
       <FlatButton primary @click="handlePromptsClick">
         <i class="i-carbon-launch" />
-        <span>进入编辑</span>
+        <span>{{ t('settings.aisdk.landing.prompts.editButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 打开文件夹 -->
     <tuff-block-slot
-      title="打开文件夹"
-      description="查看提示词存储位置"
+      :title="t('settings.aisdk.landing.prompts.folderTitle')"
+      :description="t('settings.aisdk.landing.prompts.folderDesc')"
       default-icon="i-carbon-folder"
       active-icon="i-carbon-folder"
       @click="handleOpenFolder"
     >
       <FlatButton @click="handleOpenFolder">
         <i class="i-carbon-folder-open" />
-        <span>打开文件夹</span>
+        <span>{{ t('settings.aisdk.landing.prompts.folderButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 提示词统计 -->
     <tuff-block-slot
-      :title="`提示词统计: ${promptCount} 个`"
-      :description="`总字数: ${totalWords}`"
+      :title="t('settings.aisdk.landing.prompts.statsTitle', { count: promptCount })"
+      :description="t('settings.aisdk.landing.prompts.statsDesc', { words: totalWords })"
       default-icon="i-carbon-chart-bar"
       active-icon="i-carbon-chart-bar"
       @click="handleCreatePrompt"
     >
       <FlatButton @click="handleCreatePrompt">
         <i class="i-carbon-add" />
-        <span>新建提示词</span>
+        <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
   </tuff-group-block>

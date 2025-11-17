@@ -853,7 +853,7 @@
     },
     "aisdk": {
       "pageTitle": "TaTa Intelligence",
-      "pageDesc": "With TaTa Intelligence, orchestrate every channel, choreograph bespoke capabilities, and stay effortlessly in command from one polished surface.",
+      "pageDesc": "With TaTa Intelligence, command every channel and tailor capabilities—all from one refined interface.",
       "channelsSection": "Channels",
       "capabilitiesSection": "Capabilities",
       "logsSection": "Audit Logs",
@@ -950,21 +950,51 @@
       "providerStat": "{count} channels",
       "capabilityStat": "{count} capabilities",
       "landing": {
-        "channels": {
-          "title": "Channel Manager",
-          "desc": "Configure channel credentials, priorities and rate limits.",
-          "cta": "Open channels"
-        },
-        "capabilities": {
-          "title": "Capability Manager",
-          "desc": "Bind OCR / embedding capabilities to providers and run tests.",
-          "cta": "Open capabilities"
-        },
-        "prompts": {
-          "title": "Prompt Manager",
-          "desc": "Centralise system prompts so every task shares the same tone.",
-          "cta": "Edit prompts"
-        },
+      "channels": {
+        "title": "Channel Manager",
+        "desc": "Configure channel credentials, priorities and rate limits.",
+        "cta": "Open channels",
+        "manageTitle": "Configure Channels",
+        "manageDesc": "Connect OpenAI, DeepSeek, Siliconflow and more.",
+        "manageButton": "Open configuration",
+        "auditTitle": "Channel Audit",
+        "auditDesc": "Review invocation history and logs across channels.",
+        "auditButton": "View audit",
+        "statsTitle": "Total spend: ${amount}",
+        "statsDesc": "Channels: {total} | Enabled: {enabled}",
+        "statsButton": "View stats"
+      },
+      "capabilities": {
+        "title": "Capability Manager",
+        "desc": "Bind OCR / embedding capabilities to providers and run tests.",
+        "cta": "Open capabilities",
+        "manageTitle": "Configure Capabilities",
+        "manageDesc": "Bind OCR / embedding skills to providers and models.",
+        "manageButton": "Open configuration",
+        "auditTitle": "Capability Audit",
+        "auditDesc": "Track execution logs and performance metrics.",
+        "auditButton": "View audit",
+        "statsTitle": "Total calls: {count} times",
+        "statsDesc": "Capabilities: {total} | Bound: {bound} | Frequency: {freq}/h",
+        "statsButton": "View metrics"
+      },
+      "prompts": {
+        "title": "Prompt Manager",
+        "desc": "Centralise system prompts so every task shares the same tone.",
+        "cta": "Edit prompts",
+        "editTitle": "Edit Prompts",
+        "editDesc": "Centralise system prompt templates for every feature.",
+        "editButton": "Open editor",
+        "folderTitle": "Open Folder",
+        "folderDesc": "Jump to the prompt storage directory.",
+        "folderButton": "Open folder",
+        "statsTitle": "Prompt stats: {count} templates",
+        "statsDesc": "Total words: {words}",
+        "newPromptButton": "New prompt",
+        "folderOpenSuccess": "Prompt folder opened",
+        "folderOpenFailed": "Failed to open prompt folder",
+        "createPromptHint": "Prompt creation is under development"
+      },
         "future": {
           "title": "Cloud & Sharing",
           "desc": "Cloud download, target sharing and more are on the roadmap.",
