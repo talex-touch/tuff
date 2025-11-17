@@ -1,4 +1,4 @@
-import { TouchStorage, getOrCreateStorageSingleton } from '.';
+import { TouchStorage, createStorageProxy } from '.';
 import { appSettingOriginData, StorageList, type AppSetting } from '../..';
 
 /**
@@ -37,12 +37,7 @@ const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`;
  * Lazy-initialized application settings.
  * The actual instance is created only when first accessed AND after initStorageChannel() is called.
  */
-export const appSettings = new Proxy({} as AppSettingsStorage, {
-  get(_target, prop) {
-    const instance = getOrCreateStorageSingleton<AppSettingsStorage>(
-      APP_SETTINGS_SINGLETON_KEY,
-      () => new AppSettingsStorage()
-    );
-    return instance[prop as keyof AppSettingsStorage];
-  }
-});
+export const appSettings = createStorageProxy<AppSettingsStorage>(
+  APP_SETTINGS_SINGLETON_KEY,
+  () => new AppSettingsStorage()
+);

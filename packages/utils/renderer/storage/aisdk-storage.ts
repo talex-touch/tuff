@@ -1,4 +1,4 @@
-import { TouchStorage, getOrCreateStorageSingleton } from './base-storage'
+import { TouchStorage, createStorageProxy } from './base-storage'
 import {
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
@@ -27,15 +27,10 @@ class AISDKStorage extends TouchStorage<AISDKStorageData> {
  * Lazy-initialized AISDK storage.
  * The actual instance is created only when first accessed AND after initStorageChannel() is called.
  */
-export const aisdkStorage = new Proxy({} as TouchStorage<AISDKStorageData>, {
-  get(_target, prop) {
-    const instance = getOrCreateStorageSingleton<AISDKStorage>(
-      AISDK_STORAGE_KEY,
-      () => new AISDKStorage()
-    );
-    return instance[prop as keyof TouchStorage<AISDKStorageData>];
-  }
-});
+export const aisdkStorage = createStorageProxy<TouchStorage<AISDKStorageData>>(
+  AISDK_STORAGE_KEY,
+  () => new AISDKStorage()
+);
 
 export async function migrateAISDKSettings(): Promise<void> {
   console.log('[AISDK Storage] Starting migration check...')

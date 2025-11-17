@@ -11,7 +11,7 @@ function goon(): void {
       comp: null
     },
     () => {
-      appSetting.data.beginner.init = true
+      appSetting.beginner.init = true
     }
   )
 }

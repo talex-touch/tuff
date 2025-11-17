@@ -96,6 +96,23 @@ export function getOrCreateStorageSingleton<T>(key: string, factory: () => T): T
 }
 
 /**
+ * Creates a proxy that lazily initializes a singleton storage instance and
+ * ensures all method calls are bound to the real instance so private fields
+ * stay accessible (Proxy `this` would otherwise break private member access).
+ */
+export function createStorageProxy<T extends object>(key: string, factory: () => T): T {
+  return new Proxy({} as T, {
+    get(_target, prop) {
+      const instance = getOrCreateStorageSingleton(key, factory);
+      const property = (instance as Record<PropertyKey, unknown>)[prop as PropertyKey];
+      return typeof property === 'function'
+        ? property.bind(instance)
+        : property;
+    }
+  });
+}
+
+/**
  * A reactive storage utility with optional auto-save and update subscriptions.
  *
  * @template T Shape of the stored data.
@@ -169,21 +186,10 @@ export class TouchStorage<T extends object> {
 
     this.#channelInitialized = true;
 
-    // Load data from remote immediately (synchronously)
-    console.log(`[TouchStorage] ${this.#qualifiedName} - Loading data from remote...`);
     const result = channel!.sendSync('storage:get', this.#qualifiedName);
-    console.log(`[TouchStorage] ${this.#qualifiedName} - Raw result:`, result);
     const parsed = result ? (result as Partial<T>) : {};
-    console.log(`[TouchStorage] ${this.#qualifiedName} - Parsed result:`, parsed);
-    console.log(`[TouchStorage] ${this.#qualifiedName} - Current data before assign:`, JSON.parse(JSON.stringify(this.data)));
 
-    if (Object.keys(parsed).length > 0) {
-      // Directly assign without stopWatch to avoid setTimeout delay
-      Object.assign(this.data, parsed);
-      console.log(`[TouchStorage] ${this.#qualifiedName} - Data after assign:`, JSON.parse(JSON.stringify(this.data)));
-    } else {
-      console.log(`[TouchStorage] ${this.#qualifiedName} - No data from remote, using defaults`);
-    }
+    this.assignData(parsed)
 
     // Register update listener
     channel!.regChannel('storage:update', ({ data }) => {

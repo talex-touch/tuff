@@ -1,8 +1,16 @@
 <template>
   <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
     <template v-if="useNative">
-      <div ref="nativeScrollRef" class="native-scroll-wrapper pl-2 pr-3" @scroll="handleScroll">
-        <slot></slot>
+      <div
+        ref="nativeScrollRef"
+        class="native-scroll-wrapper"
+        @scroll="handleScroll"
+      >
+        <slot name="header" />
+
+        <div class="py-2 pl-2 pr-3">
+          <slot></slot>
+        </div>
       </div>
     </template>
     <template v-else>

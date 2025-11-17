@@ -30,13 +30,13 @@ export function useVisibility(
       })
 
       // Check if autoClear should be triggered
-      if (appSetting.data.tools.autoClear !== -1 && boxOptions.lastHidden > 0) {
+      if (appSetting.tools.autoClear !== -1 && boxOptions.lastHidden > 0) {
         const timeSinceHidden = Date.now() - boxOptions.lastHidden
-        const autoClearMs = appSetting.data.tools.autoClear * 1000
+        const autoClearMs = appSetting.tools.autoClear * 1000
 
         console.debug('[Visibility] CoreBox shown, checking autoClear', {
           timeSinceHidden: Math.round(timeSinceHidden / 1000) + 's',
-          autoClearThreshold: appSetting.data.tools.autoClear + 's',
+          autoClearThreshold: appSetting.tools.autoClear + 's',
           shouldClear: timeSinceHidden > autoClearMs
         })
 
@@ -46,7 +46,7 @@ export function useVisibility(
         boxOptions.mode = BoxMode.INPUT
         boxOptions.data = {}
         }
-      } else if (appSetting.data.tools.autoClear === -1) {
+      } else if (appSetting.tools.autoClear === -1) {
         console.debug('[Visibility] AutoClear disabled (set to -1)')
       } else if (boxOptions.lastHidden <= 0) {
         console.debug('[Visibility] No lastHidden timestamp, skipping autoClear')

@@ -51,7 +51,7 @@
       guidance
     >
       <div class="flex items-center gap-2">
-        <div class="flex">
+        <div class="flex max-w-[200px] truncate">
           <div v-if="testResult" class="flex items-center gap-2 text-green-600 text-sm">
             <i class="i-carbon-checkmark-filled-warning" />
             <span>{{ testResult }}</span>

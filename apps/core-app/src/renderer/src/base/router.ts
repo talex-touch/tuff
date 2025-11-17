@@ -146,7 +146,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  if (to.meta?.requiresDashboard && !appSetting.data.dashboard.enable) {
+  if (to.meta?.requiresDashboard && !appSetting.dashboard.enable) {
     next('/home')
   } else {
     next()
