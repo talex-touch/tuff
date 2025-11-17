@@ -18,7 +18,7 @@ const { t } = useI18n()
       <h1>Tuff Intelligence&nbsp;<tuff-beta-tag /></h1>
 
       <div class="header-text">
-        <p>{{ t('settings.aisdk.pageDesc') }}</p>
+        <p>{{ t('settings.intelligence.pageDesc') }}</p>
       </div>
     </div>
   </div>

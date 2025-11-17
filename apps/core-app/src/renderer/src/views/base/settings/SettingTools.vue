@@ -72,7 +72,7 @@ function getShortcutLabel(id: string): string {
   >
     <!-- Beginner usage guide switch -->
     <tuff-block-switch
-      v-model="appSetting.beginner.init"
+      v-model="appSetting.data.beginner.init"
       :title="t('settingTools.usage')"
       :description="t('settingTools.usageDesc')"
       default-icon="i-carbon-book"
@@ -98,7 +98,7 @@ function getShortcutLabel(id: string): string {
 
     <!-- Auto paste time selection -->
     <tuff-block-select
-      v-model="appSetting.tools.autoPaste.time"
+      v-model="appSetting.data.tools.autoPaste.time"
       :title="t('settingTools.autoPaste')"
       :description="t('settingTools.autoPasteDesc')"
       default-icon="i-carbon-copy"
@@ -117,7 +117,7 @@ function getShortcutLabel(id: string): string {
 
     <!-- Auto clear time selection -->
     <tuff-block-select
-      v-model="appSetting.tools.autoClear"
+      v-model="appSetting.data.tools.autoClear"
       :title="t('settingTools.autoClear')"
       :description="t('settingTools.autoClearDesc')"
       default-icon="i-carbon-erase"
@@ -136,7 +136,7 @@ function getShortcutLabel(id: string): string {
 
     <!-- Auto hide switch -->
     <tuff-block-switch
-      v-model="appSetting.tools.autoHide"
+      v-model="appSetting.data.tools.autoHide"
       :title="t('settingTools.autoHide')"
       :description="t('settingTools.autoHideDesc')"
       default-icon="i-carbon-view-off"
@@ -145,7 +145,7 @@ function getShortcutLabel(id: string): string {
 
     <!-- Dashboard switch -->
     <tuff-block-switch
-      v-model="appSetting.dashboard.enable"
+      v-model="appSetting.data.dashboard.enable"
       :title="t('settingTools.dashboard')"
       :description="t('settingTools.dashboardDesc')"
       default-icon="i-carbon-dashboard"
@@ -154,7 +154,7 @@ function getShortcutLabel(id: string): string {
 
     <!-- Search Engine Logs switch -->
     <tuff-block-switch
-      v-model="appSetting.searchEngine.logsEnabled"
+      v-model="appSetting.data.searchEngine.logsEnabled"
       :title="t('settingTools.searchEngineLogs')"
       :description="t('settingTools.searchEngineLogsDesc')"
       default-icon="i-carbon-warning-alt"

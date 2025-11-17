@@ -17,7 +17,7 @@
         <!-- Content -->
         <div class="flex-1 min-w-0">
           <h4 class="font-semibold text-base mb-1" :class="titleClass">
-            {{ result.success ? t('aisdk.test.success.title') : t('aisdk.test.error.title') }}
+            {{ result.success ? t('intelligence.test.success.title') : t('intelligence.test.error.title') }}
           </h4>
           
           <p class="text-sm opacity-90 mb-2" :class="messageClass">
@@ -27,7 +27,7 @@
           <!-- Latency Display -->
           <div v-if="result.success && result.latency !== undefined" class="flex items-center gap-2 text-xs opacity-75">
             <i class="i-carbon-time text-base" />
-            <span>{{ t('aisdk.test.latency') }}: {{ result.latency }}ms</span>
+            <span>{{ t('intelligence.test.latency') }}: {{ result.latency }}ms</span>
           </div>
         </div>
 
@@ -114,8 +114,8 @@ const messageClass = computed(() => {
 
 const defaultMessage = computed(() => {
   return props.result.success
-    ? t('aisdk.test.success.message')
-    : t('aisdk.test.error.message')
+    ? t('intelligence.test.success.message')
+    : t('intelligence.test.error.message')
 })
 
 // Show the component with animation

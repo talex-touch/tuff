@@ -5,12 +5,12 @@
     <TouchScroll
       class="flex-1 overflow-auto"
       role="region"
-      :aria-label="t('aisdk.info.configurationPanel')"
+      :aria-label="t('intelligence.info.configurationPanel')"
       tabindex="0"
     >
       <TuffGroupBlock
-        :name="t('aisdk.config.api.title')"
-        :description="t('aisdk.config.api.description')"
+        :name="t('intelligence.config.api.title')"
+        :description="t('intelligence.config.api.description')"
         default-icon="i-carbon-key"
         active-icon="i-carbon-key"
         memory-name="aisdk-api-config"
@@ -19,8 +19,8 @@
       </TuffGroupBlock>
 
       <TuffGroupBlock
-        :name="t('aisdk.config.model.title')"
-        :description="t('aisdk.config.model.description')"
+        :name="t('intelligence.config.model.title')"
+        :description="t('intelligence.config.model.description')"
         default-icon="i-carbon-model"
         active-icon="i-carbon-model"
         memory-name="aisdk-model-config"
@@ -33,7 +33,7 @@
       </TuffGroupBlock>
 
       <TuffGroupBlock
-        :name="t('aisdk.config.advanced.title')"
+        :name="t('intelligence.config.advanced.title')"
         :description="t('Intelligence.config.advanced.description')"
         default-icon="i-carbon-settings"
         active-icon="i-carbon-settings"
@@ -43,8 +43,8 @@
       </TuffGroupBlock>
 
       <TuffGroupBlock
-        :name="t('aisdk.config.rateLimit.title')"
-        :description="t('aisdk.config.rateLimit.description')"
+        :name="t('intelligence.config.rateLimit.title')"
+        :description="t('intelligence.config.rateLimit.description')"
         default-icon="i-carbon-time"
         active-icon="i-carbon-time"
         memory-name="aisdk-ratelimit-config"

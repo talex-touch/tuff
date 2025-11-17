@@ -10,11 +10,11 @@
         <div class="capability-details__badges">
           <span class="capability-details__badge">
             <i class="i-carbon-flow-logs" aria-hidden="true" />
-            {{ t('settings.aisdk.capabilityProvidersStat', { count: activeBindingCount }) }}
+            {{ t('settings.intelligence.capabilityProvidersStat', { count: activeBindingCount }) }}
           </span>
           <span class="capability-details__badge capability-details__badge--muted">
             <i class="i-carbon-catalog" aria-hidden="true" />
-            {{ t('settings.aisdk.capabilityBindingsStat', { count: capability.providers?.length || 0 }) }}
+            {{ t('settings.intelligence.capabilityBindingsStat', { count: capability.providers?.length || 0 }) }}
           </span>
         </div>
       </div>
@@ -26,14 +26,14 @@
         @click="handleTest"
       >
         <i :class="isTesting ? 'i-carbon-renew animate-spin' : 'i-carbon-flash'" aria-hidden="true" />
-        <span>{{ isTesting ? t('settings.aisdk.testing') : t('settings.aisdk.capabilityTest') }}</span>
+        <span>{{ isTesting ? t('settings.intelligence.testing') : t('settings.intelligence.capabilityTest') }}</span>
       </FlatButton>
     </header>
 
     <div class="capability-details__grid">
       <div class="capability-details__providers">
-        <h2>{{ t('settings.aisdk.capabilityProviderSectionTitle') }}</h2>
-        <p>{{ t('settings.aisdk.capabilityProviderSectionDesc') }}</p>
+        <h2>{{ t('settings.intelligence.capabilityProviderSectionTitle') }}</h2>
+        <p>{{ t('settings.intelligence.capabilityProviderSectionDesc') }}</p>
         <div class="capability-details__provider-list">
           <TuffBlockSlot
             v-for="provider in providers"
@@ -65,7 +65,7 @@
 
       <div class="capability-details__models">
         <TuffBlockSlot
-          :title="focusedProvider?.name || t('settings.aisdk.capabilityBindingModelsTitle')"
+          :title="focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')"
           :description="modelTransferDescription"
           default-icon="i-carbon-model"
           active-icon="i-carbon-model"
@@ -84,8 +84,8 @@
 
     <TuffBlockSlot
       class="capability-details__prompt"
-      :title="t('settings.aisdk.capabilityPromptSectionTitle')"
-      :description="t('settings.aisdk.capabilityPromptSectionDesc')"
+      :title="t('settings.intelligence.capabilityPromptSectionTitle')"
+      :description="t('settings.intelligence.capabilityPromptSectionDesc')"
       default-icon="i-carbon-notebook"
       active-icon="i-carbon-notebook"
       guidance
@@ -100,7 +100,7 @@
 
     <TuffBlockSlot
       v-if="testResult"
-      :title="t('settings.aisdk.latestTestResult')"
+      :title="t('settings.intelligence.latestTestResult')"
       :description="testSummary"
       default-icon="i-carbon-result"
       active-icon="i-carbon-result"
@@ -112,7 +112,7 @@
         role="status"
       >
         <p class="font-semibold">
-          {{ testResult.success ? t('settings.aisdk.testSuccess') : t('settings.aisdk.testFailed') }}
+          {{ testResult.success ? t('settings.intelligence.testSuccess') : t('settings.intelligence.testFailed') }}
         </p>
         <p class="mt-2 text-sm">
           {{ testResult.message }}
@@ -192,13 +192,13 @@ const focusedBinding = computed(() => {
 
 const modelTransferDescription = computed(() => {
   if (!focusedProvider.value) {
-    return t('settings.aisdk.capabilityBindingModelsDesc')
+    return t('settings.intelligence.capabilityBindingModelsDesc')
   }
   if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.aisdk.capabilityBindingModelsEnableHint')
-    return hint === 'settings.aisdk.capabilityBindingModelsEnableHint' ? '开启渠道后再配置模型' : hint
+    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
+    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint' ? '开启渠道后再配置模型' : hint
   }
-  return t('settings.aisdk.capabilityBindingModelsDesc')
+  return t('settings.intelligence.capabilityBindingModelsDesc')
 })
 
 const testSummary = computed(() => {

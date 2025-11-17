@@ -18,13 +18,13 @@
       <span
         class="badge"
         role="status"
-        :aria-label="t('settings.aisdk.capabilityProvidersStat', { count: activeProviderCount })"
+        :aria-label="t('settings.intelligence.capabilityProvidersStat', { count: activeProviderCount })"
       >
         <i class="i-carbon-flow-logs" aria-hidden="true" />
-        {{ t('settings.aisdk.capabilityProvidersStat', { count: activeProviderCount }) }}
+        {{ t('settings.intelligence.capabilityProvidersStat', { count: activeProviderCount }) }}
       </span>
       <span v-if="providerCount > activeProviderCount" class="badge badge-gray text-xs">
-        {{ t('settings.aisdk.capabilityProvidersTotal', { count: providerCount }) }}
+        {{ t('settings.intelligence.capabilityProvidersTotal', { count: providerCount }) }}
       </span>
     </template>
   </TuffBlockSlot>

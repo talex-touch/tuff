@@ -2,17 +2,17 @@
   <div class="prompt-selector">
     <div class="flex items-center justify-between mb-3">
       <label class="block text-sm font-medium text-[var(--el-text-color-primary)]">
-        {{ t('aisdk.instructions') }}
+        {{ t('intelligence.instructions') }}
       </label>
       <FlatButton
         mini
         text
         class="manage-prompts-btn"
-        :aria-label="t('aisdk.managePrompts')"
+        :aria-label="t('intelligence.managePrompts')"
         @click="handleManagePrompts"
       >
         <i class="i-carbon-settings" aria-hidden="true" />
-        <span>{{ t('aisdk.managePrompts') }}</span>
+        <span>{{ t('intelligence.managePrompts') }}</span>
       </FlatButton>
     </div>
 
@@ -20,7 +20,7 @@
     <div class="prompt-quick-select mb-3">
       <el-select
         :model-value="selectedPromptId"
-        :placeholder="t('aisdk.selectPrompt')"
+        :placeholder="t('intelligence.selectPrompt')"
         clearable
         filterable
         class="w-full"
@@ -30,7 +30,7 @@
         <!-- Built-in Prompts Group -->
         <el-option-group
           v-if="builtinPrompts.length > 0"
-          :label="t('aisdk.builtinPrompts')"
+          :label="t('intelligence.builtinPrompts')"
         >
           <el-option
             v-for="prompt in builtinPrompts"
@@ -40,7 +40,7 @@
           >
             <div class="flex items-center justify-between w-full">
               <span>{{ prompt.name }}</span>
-              <el-tag size="small" type="info">{{ t('aisdk.builtin') }}</el-tag>
+              <el-tag size="small" type="info">{{ t('intelligence.builtin') }}</el-tag>
             </div>
           </el-option>
         </el-option-group>
@@ -48,7 +48,7 @@
         <!-- Custom Prompts Group -->
         <el-option-group
           v-if="customPrompts.length > 0"
-          :label="t('aisdk.customPrompts')"
+          :label="t('intelligence.customPrompts')"
         >
           <el-option
             v-for="prompt in customPrompts"
@@ -58,7 +58,7 @@
           >
             <div class="flex items-center justify-between w-full">
               <span>{{ prompt.name }}</span>
-              <el-tag size="small" type="success">{{ t('aisdk.custom') }}</el-tag>
+              <el-tag size="small" type="success">{{ t('intelligence.custom') }}</el-tag>
             </div>
           </el-option>
         </el-option-group>
@@ -66,11 +66,11 @@
         <!-- Add New Prompt Option -->
         <el-option
           value="__create_new__"
-          :label="t('aisdk.createNewPrompt')"
+          :label="t('intelligence.createNewPrompt')"
         >
           <div class="flex items-center gap-2 text-[var(--el-color-primary)]">
             <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('aisdk.createNewPrompt') }}</span>
+            <span>{{ t('intelligence.createNewPrompt') }}</span>
           </div>
         </el-option>
       </el-select>
@@ -81,7 +81,7 @@
       <el-input
         :model-value="customInstructions"
         type="textarea"
-        :placeholder="t('aisdk.instructionsPlaceholder')"
+        :placeholder="t('intelligence.instructionsPlaceholder')"
         :rows="4"
         :disabled="!!selectedPromptId && selectedPromptId !== '__create_new__'"
         resize="vertical"
@@ -91,7 +91,7 @@
         v-if="selectedPromptId && selectedPromptId !== '__create_new__'"
         class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
       >
-        {{ t('aisdk.promptSelectedHint') }}
+        {{ t('intelligence.promptSelectedHint') }}
       </div>
     </div>
 
@@ -109,7 +109,7 @@
           size="small"
           :type="selectedPrompt.builtin ? 'info' : 'success'"
         >
-          {{ selectedPrompt.builtin ? t('aisdk.builtin') : t('aisdk.custom') }}
+          {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
         </el-tag>
       </div>
       <div class="text-sm text-[var(--el-text-color-regular)] whitespace-pre-wrap">

@@ -4,18 +4,18 @@
       v-model="searchQuery"
       class="prompt-shell flex-1"
       :search-id="'prompt-search'"
-      :search-label="t('settings.aisdk.promptSearchLabel')"
-      :search-placeholder="t('settings.aisdk.promptSearchPlaceholder')"
+      :search-label="t('settings.intelligence.promptSearchLabel')"
+      :search-placeholder="t('settings.intelligence.promptSearchPlaceholder')"
       :clear-label="t('common.close')"
     >
       <template #aside-header>
         <div class="prompt-sidebar__summary">
           <p class="prompt-sidebar__eyebrow">
-            {{ t('settings.aisdk.promptStatsLabel', promptStats) }}
+            {{ t('settings.intelligence.promptStatsLabel', promptStats) }}
           </p>
           <button class="aisdk-btn primary mt-3 w-full" type="button" @click="handleCreatePrompt">
             <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
+            <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
           </button>
         </div>
       </template>
@@ -35,7 +35,7 @@
           </button>
         </div>
         <p class="prompt-list__hint text-xs text-[var(--el-text-color-secondary)]">
-          {{ t('settings.aisdk.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
+          {{ t('settings.intelligence.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
         </p>
       </template>
 
@@ -43,7 +43,7 @@
         <tuff-aside-list
           v-model:selected-id="selectedPromptId"
           :items="promptListItems"
-          :empty-text="t('settings.aisdk.promptListEmpty')"
+          :empty-text="t('settings.intelligence.promptListEmpty')"
           @select="handleSelectPrompt"
         />
       </template>
@@ -52,26 +52,26 @@
         <div class="prompt-main-panel flex-1 overflow-hidden">
           <header class="prompt-main-header">
             <div>
-              <p class="prompt-main-eyebrow">{{ t('flatNavBar.aisdk') }}</p>
-              <h1>{{ t('settings.aisdk.promptPageTitle') }}</h1>
-              <p class="prompt-main-desc">{{ t('settings.aisdk.promptPageDesc') }}</p>
+              <p class="prompt-main-eyebrow">{{ t('flatNavBar.intelligence') }}</p>
+              <h1>{{ t('settings.intelligence.promptPageTitle') }}</h1>
+              <p class="prompt-main-desc">{{ t('settings.intelligence.promptPageDesc') }}</p>
             </div>
             <div class="prompt-main-actions">
               <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
                 <i class="i-carbon-link" aria-hidden="true" />
-                <span>{{ t('settings.aisdk.docsButton') }}</span>
+                <span>{{ t('settings.intelligence.docsButton') }}</span>
               </button>
               <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
                 <i class="i-carbon-folder-open" aria-hidden="true" />
-                <span>{{ t('settings.aisdk.landing.prompts.folderButton') }}</span>
+                <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
               </button>
               <button class="aisdk-btn ghost" type="button" @click="triggerImport">
                 <i class="i-carbon-download" aria-hidden="true" />
-                <span>{{ t('settings.aisdk.promptImportButton') }}</span>
+                <span>{{ t('settings.intelligence.promptImportButton') }}</span>
               </button>
               <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
                 <i class="i-carbon-upload" aria-hidden="true" />
-                <span>{{ t('settings.aisdk.promptExportButton') }}</span>
+                <span>{{ t('settings.intelligence.promptExportButton') }}</span>
               </button>
             </div>
           </header>
@@ -87,20 +87,20 @@
                 <header class="prompt-detail__header">
                   <div>
                     <p class="text-xs uppercase tracking-wide text-[var(--el-text-color-secondary)]">
-                      {{ selectedPrompt.builtin ? t('settings.aisdk.builtin') : t('settings.aisdk.custom') }}
+                      {{ selectedPrompt.builtin ? t('settings.intelligence.builtin') : t('settings.intelligence.custom') }}
                     </p>
                     <h2 class="prompt-detail__title">{{ promptDraft.name }}</h2>
                     <p class="prompt-detail__desc">
-                      {{ promptDraft.description || t('settings.aisdk.promptMetaDescription') }}
+                      {{ promptDraft.description || t('settings.intelligence.promptMetaDescription') }}
                     </p>
                   </div>
                   <div class="prompt-detail__meta text-sm text-[var(--el-text-color-secondary)]">
                     <p>
-                      {{ t('settings.aisdk.promptMetaUpdated') }}:
+                      {{ t('settings.intelligence.promptMetaUpdated') }}:
                       {{ formatTimestamp(selectedPrompt.updatedAt) }}
                     </p>
                     <p>
-                      {{ t('settings.aisdk.promptMetaCreated') }}:
+                      {{ t('settings.intelligence.promptMetaCreated') }}:
                       {{ formatTimestamp(selectedPrompt.createdAt) }}
                     </p>
                   </div>
@@ -112,48 +112,48 @@
                   role="status"
                 >
                   <i class="i-carbon-information" aria-hidden="true" />
-                  <span>{{ t('settings.aisdk.promptReadonlyHint') }}</span>
+                  <span>{{ t('settings.intelligence.promptReadonlyHint') }}</span>
                 </div>
 
                 <div class="prompt-form">
                   <label class="prompt-label" for="prompt-name">
-                    {{ t('settings.aisdk.promptNameLabel') }}
+                    {{ t('settings.intelligence.promptNameLabel') }}
                   </label>
                   <input
                     id="prompt-name"
                     v-model="promptDraft.name"
                     class="prompt-input"
                     type="text"
-                    :placeholder="t('settings.aisdk.promptNamePlaceholder')"
+                    :placeholder="t('settings.intelligence.promptNamePlaceholder')"
                     :disabled="isBuiltinSelected"
                   />
 
                   <label class="prompt-label" for="prompt-category">
-                    {{ t('settings.aisdk.promptMetaCategory') }}
+                    {{ t('settings.intelligence.promptMetaCategory') }}
                   </label>
                   <input
                     id="prompt-category"
                     v-model="promptDraft.category"
                     class="prompt-input"
                     type="text"
-                    :placeholder="t('settings.aisdk.promptCategoryPlaceholder')"
+                    :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
                     :disabled="isBuiltinSelected"
                   />
 
                   <label class="prompt-label" for="prompt-description">
-                    {{ t('settings.aisdk.promptDescriptionLabel') }}
+                    {{ t('settings.intelligence.promptDescriptionLabel') }}
                   </label>
                   <textarea
                     id="prompt-description"
                     v-model="promptDraft.description"
                     class="prompt-textarea"
                     rows="2"
-                    :placeholder="t('settings.aisdk.promptDescriptionPlaceholder')"
+                    :placeholder="t('settings.intelligence.promptDescriptionPlaceholder')"
                     :disabled="isBuiltinSelected"
                   />
 
               <label class="prompt-label" for="prompt-content">
-                {{ t('settings.aisdk.promptContentLabel') }}
+                {{ t('settings.intelligence.promptContentLabel') }}
               </label>
               <div class="prompt-markdown">
                 <FlatMarkdown
@@ -167,11 +167,11 @@
               <div class="prompt-actions__primary">
                 <button class="aisdk-btn ghost" type="button" @click="handleDuplicatePrompt">
                   <i class="i-carbon-copy" aria-hidden="true" />
-                  <span>{{ t('settings.aisdk.promptDuplicateButton') }}</span>
+                  <span>{{ t('settings.intelligence.promptDuplicateButton') }}</span>
                     </button>
                     <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
                       <i class="i-carbon-document" aria-hidden="true" />
-                      <span>{{ t('settings.aisdk.promptCopyButton') }}</span>
+                      <span>{{ t('settings.intelligence.promptCopyButton') }}</span>
                     </button>
                   </div>
                   <div class="prompt-actions__secondary">
@@ -182,7 +182,7 @@
                       @click="handleDeletePrompt"
                     >
                       <i class="i-carbon-trash-can" aria-hidden="true" />
-                      <span>{{ t('settings.aisdk.promptDeleteButton') }}</span>
+                      <span>{{ t('settings.intelligence.promptDeleteButton') }}</span>
                     </button>
                     <button
                       class="aisdk-btn primary"
@@ -191,7 +191,7 @@
                       @click="handleSavePrompt"
                     >
                       <i class="i-carbon-checkmark" aria-hidden="true" />
-                  <span>{{ t('settings.aisdk.promptSaveButton') }}</span>
+                  <span>{{ t('settings.intelligence.promptSaveButton') }}</span>
                 </button>
               </div>
               <div v-if="isCustomEditable" class="prompt-actions__status" :data-status="autoSaveStatus">
@@ -210,14 +210,14 @@
               <div v-else class="prompt-empty-state" role="status">
                 <i class="i-carbon-idea text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
                 <p class="prompt-empty-state__title">
-                  {{ t('settings.aisdk.promptEmptyStateTitle') }}
+                  {{ t('settings.intelligence.promptEmptyStateTitle') }}
                 </p>
                 <p class="prompt-empty-state__desc">
-                  {{ t('settings.aisdk.promptEmptyStateDesc') }}
+                  {{ t('settings.intelligence.promptEmptyStateDesc') }}
                 </p>
                 <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
                   <i class="i-carbon-add" aria-hidden="true" />
-                  <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
+                  <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
                 </button>
               </div>
             </Transition>
@@ -266,9 +266,9 @@ let isApplyingDraft = false
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 const filterOptions = computed(() => [
-  { value: 'all', label: t('settings.aisdk.promptFilterAll') },
-  { value: 'builtin', label: t('settings.aisdk.builtin') },
-  { value: 'custom', label: t('settings.aisdk.custom') }
+  { value: 'all', label: t('settings.intelligence.promptFilterAll') },
+  { value: 'builtin', label: t('settings.intelligence.builtin') },
+  { value: 'custom', label: t('settings.intelligence.custom') }
 ])
 
 const orderedPrompts = computed<PromptTemplate[]>(() => {
@@ -301,8 +301,8 @@ const promptListItems = computed(() =>
   visiblePrompts.value.map((prompt) => ({
     id: prompt.id,
     title: prompt.name,
-    description: prompt.description || t('settings.aisdk.promptMetaDescription'),
-    badgeLabel: prompt.builtin ? t('settings.aisdk.builtin') : t('settings.aisdk.custom'),
+    description: prompt.description || t('settings.intelligence.promptMetaDescription'),
+    badgeLabel: prompt.builtin ? t('settings.intelligence.builtin') : t('settings.intelligence.custom'),
     badgeVariant: prompt.builtin ? 'info' : 'success'
   }))
 )
@@ -434,32 +434,32 @@ function handleOpenDocs(): void {
 async function handleOpenFolder(): Promise<void> {
   try {
     await touchChannel.send('app:open-prompts-folder')
-    toast.success(t('settings.aisdk.landing.prompts.folderOpenSuccess'))
+    toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
   } catch (error) {
     console.error('[PromptManager] Failed to open folder', error)
-    toast.error(t('settings.aisdk.landing.prompts.folderOpenFailed'))
+    toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
 }
 
 function handleCreatePrompt(): void {
   flushPendingPromptChanges()
-  const name = t('settings.aisdk.promptNewDefaultName', { index: promptStats.value.custom + 1 })
+  const name = t('settings.intelligence.promptNewDefaultName', { index: promptStats.value.custom + 1 })
   const newId = promptManager.addCustomPrompt({
     name,
     category: 'custom',
-    description: t('settings.aisdk.promptDescriptionPlaceholder'),
+    description: t('settings.intelligence.promptDescriptionPlaceholder'),
     content: ''
   })
   filterMode.value = 'custom'
   searchQuery.value = ''
   selectedPromptId.value = newId
-  toast.success(t('settings.aisdk.promptCreateSuccess'))
+  toast.success(t('settings.intelligence.promptCreateSuccess'))
 }
 
 function handleDuplicatePrompt(): void {
   if (!selectedPrompt.value) return
   flushPendingPromptChanges()
-  const suffix = t('settings.aisdk.promptDuplicateSuffix')
+  const suffix = t('settings.intelligence.promptDuplicateSuffix')
   const name = `${selectedPrompt.value.name} ${suffix}`.trim()
   const newId = promptManager.addCustomPrompt({
     name,
@@ -469,7 +469,7 @@ function handleDuplicatePrompt(): void {
   })
   filterMode.value = 'custom'
   selectedPromptId.value = newId
-  toast.success(t('settings.aisdk.promptDuplicateSuccess'))
+  toast.success(t('settings.intelligence.promptDuplicateSuccess'))
 }
 
 function persistPrompt(showSuccessToast: boolean, showErrorToast: boolean = true): boolean {
@@ -481,9 +481,9 @@ function persistPrompt(showSuccessToast: boolean, showErrorToast: boolean = true
     content: promptDraft.content
   })
   if (ok) {
-    if (showSuccessToast) toast.success(t('settings.aisdk.promptSaveSuccess'))
+    if (showSuccessToast) toast.success(t('settings.intelligence.promptSaveSuccess'))
   } else if (showErrorToast) {
-    toast.error(t('settings.aisdk.promptSaveFailed'))
+    toast.error(t('settings.intelligence.promptSaveFailed'))
   }
   return ok
 }
@@ -537,14 +537,14 @@ watch(
 function handleDeletePrompt(): void {
   if (!selectedPrompt.value || !isCustomEditable.value) return
   flushPendingPromptChanges()
-  if (!window.confirm(t('settings.aisdk.promptDeleteConfirm'))) return
+  if (!window.confirm(t('settings.intelligence.promptDeleteConfirm'))) return
   const deletedId = selectedPrompt.value.id
   const deleted = promptManager.deleteCustomPrompt(deletedId)
   if (!deleted) {
-    toast.error(t('settings.aisdk.promptDeleteFailed'))
+    toast.error(t('settings.intelligence.promptDeleteFailed'))
     return
   }
-  toast.success(t('settings.aisdk.promptDeleteSuccess'))
+  toast.success(t('settings.intelligence.promptDeleteSuccess'))
   const next = visiblePrompts.value.find((prompt) => prompt.id !== deletedId)
   selectedPromptId.value = next?.id ?? orderedPrompts.value[0]?.id ?? null
 }
@@ -553,7 +553,7 @@ async function handleCopyContent(): Promise<void> {
   if (!selectedPrompt.value) return
   try {
     await navigator.clipboard.writeText(selectedPrompt.value.content)
-    toast.success(t('settings.aisdk.promptCopySuccess'))
+    toast.success(t('settings.intelligence.promptCopySuccess'))
   } catch (error) {
     console.error('[PromptManager] Failed to copy prompt', error)
   }
@@ -571,10 +571,10 @@ async function handleImport(event: Event): Promise<void> {
     const text = await file.text()
     const payload = JSON.parse(text)
     const imported = promptManager.importPrompts(payload)
-    toast.success(t('settings.aisdk.promptImportSuccess', { count: imported }))
+    toast.success(t('settings.intelligence.promptImportSuccess', { count: imported }))
   } catch (error) {
     console.error('[PromptManager] Failed to import prompts', error)
-    toast.error(t('settings.aisdk.promptImportFailed'))
+    toast.error(t('settings.intelligence.promptImportFailed'))
   } finally {
     input.value = ''
   }
@@ -583,7 +583,7 @@ async function handleImport(event: Event): Promise<void> {
 function handleExportPrompts(): void {
   const data = promptManager.exportCustomPrompts()
   if (data.length === 0) {
-    toast.error(t('settings.aisdk.promptExportEmpty'))
+    toast.error(t('settings.intelligence.promptExportEmpty'))
     return
   }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -593,11 +593,11 @@ function handleExportPrompts(): void {
   link.download = 'tuff-prompts.json'
   link.click()
   URL.revokeObjectURL(url)
-  toast.success(t('settings.aisdk.promptExportSuccess', { count: data.length }))
+  toast.success(t('settings.intelligence.promptExportSuccess', { count: data.length }))
 }
 
 function formatTimestamp(value?: number): string {
-  if (!value) return t('settings.aisdk.promptTimestampUnknown')
+  if (!value) return t('settings.intelligence.promptTimestampUnknown')
   return new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
     month: '2-digit',

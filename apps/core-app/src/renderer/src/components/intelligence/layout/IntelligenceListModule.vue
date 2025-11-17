@@ -13,7 +13,7 @@
       </span>
       <span
         class="text-[var(--el-text-color-secondary)]"
-        :aria-label="`${providers.length} ${t('aisdk.list.providersCount')}`"
+        :aria-label="`${providers.length} ${t('intelligence.list.providersCount')}`"
       >
         {{ providers.length }}
       </span>
@@ -24,7 +24,7 @@
       class="text-center opacity-75 text-sm"
       role="status"
     >
-      {{ t('aisdk.list.empty') }}
+      {{ t('intelligence.list.empty') }}
     </p>
 
     <transition-group 

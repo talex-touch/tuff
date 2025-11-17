@@ -11,7 +11,7 @@ import { appSettingOriginData, StorageList, type AppSetting } from '../..';
  * ```ts
  * import { appSettings } from './app-settings-storage';
  *
- * // Read a setting
+ * // Access after initStorageChannel()
  * const isAutoStart = appSettings.data.autoStart;
  *
  * // Modify a setting (auto-saved)
@@ -33,7 +33,16 @@ class AppSettingsStorage extends TouchStorage<AppSetting> {
  */
 const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`;
 
-export const appSettings = getOrCreateStorageSingleton<AppSettingsStorage>(
-  APP_SETTINGS_SINGLETON_KEY,
-  () => new AppSettingsStorage()
-);
+/**
+ * Lazy-initialized application settings.
+ * The actual instance is created only when first accessed AND after initStorageChannel() is called.
+ */
+export const appSettings = new Proxy({} as AppSettingsStorage, {
+  get(_target, prop) {
+    const instance = getOrCreateStorageSingleton<AppSettingsStorage>(
+      APP_SETTINGS_SINGLETON_KEY,
+      () => new AppSettingsStorage()
+    );
+    return instance[prop as keyof AppSettingsStorage];
+  }
+});

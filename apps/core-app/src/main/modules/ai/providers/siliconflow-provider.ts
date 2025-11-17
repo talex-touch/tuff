@@ -266,7 +266,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
       throw new Error(`SiliconFlow API error: ${response.status} ${errorText}`)
     }
 
-    return response.json() as Promise<T>
+    return this.parseJsonResponse<T>(response, { endpoint })
   }
 
   private async getImageData(source: AiVisionOcrPayload['source']): Promise<string> {

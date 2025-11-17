@@ -191,7 +191,7 @@ export function useSearch(
 
     const isPluginFeature =
       itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
-    const shouldRestoreAfterExecute = isPluginFeature || !appSetting.tools.autoHide
+    const shouldRestoreAfterExecute = isPluginFeature || !appSetting.data.tools.autoHide
 
     if (!isPluginFeature) {
       touchChannel.sendSync('core-box:hide')
@@ -274,7 +274,7 @@ export function useSearch(
       }
 
       // Clear clipboard after execute if time === 0
-      if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
+      if (isPluginFeature && clipboardOptions && appSetting.data.tools.autoPaste.time === 0) {
         clipboardOptions.last = null
         clipboardOptions.detectedAt = null
       }

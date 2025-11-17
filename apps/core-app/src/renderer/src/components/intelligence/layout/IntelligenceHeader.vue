@@ -13,15 +13,15 @@
     </div>
     <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
       <el-dropdown v-if="provider.type === 'custom'" trigger="click" placement="bottom-end">
-        <FlatButton text mini :aria-label="t('settings.aisdk.moreActions')">
-          <TuffIcon :icon="overflowIcon" :alt="t('settings.aisdk.moreActions')" :size="20" />
+        <FlatButton text mini :aria-label="t('settings.intelligence.moreActions')">
+          <TuffIcon :icon="overflowIcon" :alt="t('settings.intelligence.moreActions')" :size="20" />
         </FlatButton>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item @click="handleDelete">
-              <TuffIcon :icon="trashIcon" :alt="t('settings.aisdk.deleteProvider', { name: provider.name })" :size="18" />
+              <TuffIcon :icon="trashIcon" :alt="t('settings.intelligence.deleteProvider', { name: provider.name })" :size="18" />
               <span class="ml-2">
-                {{ t('settings.aisdk.deleteProvider', { name: provider.name }) }}
+                {{ t('settings.intelligence.deleteProvider', { name: provider.name }) }}
               </span>
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -104,10 +104,10 @@ const providerIcon = computed<ITuffIcon>(() => {
 
 function handleDelete() {
   ElMessageBox.confirm(
-    t('settings.aisdk.deleteConfirmMessage', { name: props.provider.name }),
-    t('settings.aisdk.deleteConfirmTitle'),
+    t('settings.intelligence.deleteConfirmMessage', { name: props.provider.name }),
+    t('settings.intelligence.deleteConfirmTitle'),
     {
-      confirmButtonText: t('settings.aisdk.deleteConfirmButton'),
+      confirmButtonText: t('settings.intelligence.deleteConfirmButton'),
       cancelButtonText: t('common.cancel'),
       type: 'warning',
       confirmButtonClass: 'el-button--danger'

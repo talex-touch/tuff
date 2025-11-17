@@ -78,22 +78,24 @@ window.onbeforeunload = () => {
 export const storageManager = new StorageManager()
 
 /**
- * Convenient access to application settings, powered by TouchStorage
+ * Application settings storage instance.
+ * Access reactive data via `appSetting.data`.
  *
  * @example
  * ```ts
  * import { appSetting } from './storage';
  *
  * // Read a setting
- * console.log(appSetting.autoStart);
+ * console.log(appSetting.data.autoStart);
  *
  * // Modify a setting (automatically persisted)
- * appSetting.autoStart = true;
+ * appSetting.data.autoStart = true;
  * ```
  */
-export const appSetting = appSettings.data
+export const appSetting = appSettings
 
 /**
- * Cached mapping of file extensions to their preferred openers.
+ * Openers storage instance.
+ * Access reactive data via `openers.data`.
  */
-export const openers = openersStorage.data
+export const openers = openersStorage

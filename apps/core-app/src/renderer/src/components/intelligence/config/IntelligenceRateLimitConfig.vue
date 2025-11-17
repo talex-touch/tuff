@@ -3,9 +3,9 @@
     <!-- Requests Per Minute -->
     <TuffBlockInput
       v-model="localRequestsPerMinute"
-      :title="t('aisdk.config.rateLimit.requestsPerMinute')"
-      :description="requestsPerMinuteError || t('aisdk.config.rateLimit.requestsPerMinuteHint')"
-      :placeholder="t('aisdk.config.rateLimit.unlimitedPlaceholder')"
+      :title="t('intelligence.config.rateLimit.requestsPerMinute')"
+      :description="requestsPerMinuteError || t('intelligence.config.rateLimit.requestsPerMinuteHint')"
+      :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
       default-icon="i-carbon-request-quote"
       active-icon="i-carbon-request-quote"
       :disabled="disabled"
@@ -18,7 +18,7 @@
             :value="modelValue || ''"
             type="number"
             min="0"
-            :placeholder="t('aisdk.config.rateLimit.unlimitedPlaceholder')"
+            :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
             @input="update(($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : undefined)"
@@ -26,7 +26,7 @@
             @blur="blur(); handleRequestsPerMinuteBlur()"
           />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
-            {{ t('aisdk.config.rateLimit.requestsUnit') }}
+            {{ t('intelligence.config.rateLimit.requestsUnit') }}
           </span>
         </div>
       </template>
@@ -35,9 +35,9 @@
     <!-- Tokens Per Minute -->
     <TuffBlockInput
       v-model="localTokensPerMinute"
-      :title="t('aisdk.config.rateLimit.tokensPerMinute')"
-      :description="tokensPerMinuteError || t('aisdk.config.rateLimit.tokensPerMinuteHint')"
-      :placeholder="t('aisdk.config.rateLimit.unlimitedPlaceholder')"
+      :title="t('intelligence.config.rateLimit.tokensPerMinute')"
+      :description="tokensPerMinuteError || t('intelligence.config.rateLimit.tokensPerMinuteHint')"
+      :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
       default-icon="i-carbon-data-1"
       active-icon="i-carbon-data-1"
       :disabled="disabled"
@@ -50,7 +50,7 @@
             :value="modelValue || ''"
             type="number"
             min="0"
-            :placeholder="t('aisdk.config.rateLimit.unlimitedPlaceholder')"
+            :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
             @input="update(($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : undefined)"
@@ -58,7 +58,7 @@
             @blur="blur(); handleTokensPerMinuteBlur()"
           />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
-            {{ t('aisdk.config.rateLimit.tokensUnit') }}
+            {{ t('intelligence.config.rateLimit.tokensUnit') }}
           </span>
         </div>
       </template>
@@ -66,7 +66,7 @@
 
     <!-- Info Message -->
     <TuffBlockSlot
-      :title="t('aisdk.config.rateLimit.infoMessage')"
+      :title="t('intelligence.config.rateLimit.infoMessage')"
       description=""
       default-icon="i-carbon-information"
       active-icon="i-carbon-information"
@@ -139,7 +139,7 @@ function validateRequestsPerMinute(value: number | undefined): boolean {
   requestsPerMinuteError.value = ''
   
   if (value !== undefined && (isNaN(value) || value < 0)) {
-    requestsPerMinuteError.value = t('aisdk.config.rateLimit.invalidValue')
+    requestsPerMinuteError.value = t('intelligence.config.rateLimit.invalidValue')
     return false
   }
   
@@ -150,7 +150,7 @@ function validateTokensPerMinute(value: number | undefined): boolean {
   tokensPerMinuteError.value = ''
   
   if (value !== undefined && (isNaN(value) || value < 0)) {
-    tokensPerMinuteError.value = t('aisdk.config.rateLimit.invalidValue')
+    tokensPerMinuteError.value = t('intelligence.config.rateLimit.invalidValue')
     return false
   }
   

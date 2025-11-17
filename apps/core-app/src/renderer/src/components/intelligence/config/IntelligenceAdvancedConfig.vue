@@ -3,8 +3,8 @@
     <!-- Priority Selector -->
     <TuffBlockSelect
       v-model="localPriority"
-      :title="t('aisdk.config.advanced.priority')"
-      :description="t('aisdk.config.advanced.priorityHint')"
+      :title="t('intelligence.config.advanced.priority')"
+      :description="t('intelligence.config.advanced.priorityHint')"
       default-icon="i-carbon-task-star"
       active-icon="i-carbon-task-star"
       :disabled="disabled"
@@ -13,19 +13,19 @@
       <TSelectItem :model-value="1">
         <div class="flex items-center gap-2">
           <i class="i-carbon-arrow-up text-red-500" />
-          <span>{{ t('aisdk.priority.high') }}</span>
+          <span>{{ t('intelligence.priority.high') }}</span>
         </div>
       </TSelectItem>
       <TSelectItem :model-value="2">
         <div class="flex items-center gap-2">
           <i class="i-carbon-subtract text-yellow-500" />
-          <span>{{ t('aisdk.priority.medium') }}</span>
+          <span>{{ t('intelligence.priority.medium') }}</span>
         </div>
       </TSelectItem>
       <TSelectItem :model-value="3">
         <div class="flex items-center gap-2">
           <i class="i-carbon-arrow-down text-green-500" />
-          <span>{{ t('aisdk.priority.low') }}</span>
+          <span>{{ t('intelligence.priority.low') }}</span>
         </div>
       </TSelectItem>
     </TuffBlockSelect>
@@ -33,9 +33,9 @@
     <!-- Timeout Input -->
     <TuffBlockInput
       v-model="localTimeout"
-      :title="t('aisdk.config.advanced.timeout')"
-      :description="timeoutError || t('aisdk.config.advanced.timeoutHint')"
-      :placeholder="t('aisdk.config.advanced.timeoutPlaceholder')"
+      :title="t('intelligence.config.advanced.timeout')"
+      :description="timeoutError || t('intelligence.config.advanced.timeoutHint')"
+      :placeholder="t('intelligence.config.advanced.timeoutPlaceholder')"
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
       :disabled="disabled"
@@ -48,7 +48,7 @@
             type="number"
             min="1000"
             max="300000"
-            :placeholder="t('aisdk.config.advanced.timeoutPlaceholder')"
+            :placeholder="t('intelligence.config.advanced.timeoutPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
             @input="update(Number(($event.target as HTMLInputElement).value))"
@@ -56,7 +56,7 @@
             @blur="blur(); handleTimeoutBlur()"
           />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
-            {{ t('aisdk.config.advanced.timeoutUnit') }}
+            {{ t('intelligence.config.advanced.timeoutUnit') }}
           </span>
         </div>
       </template>
@@ -124,7 +124,7 @@ function validateTimeout(value: number): boolean {
   timeoutError.value = ''
   
   if (isNaN(value) || value < 1000 || value > 300000) {
-    timeoutError.value = t('aisdk.config.advanced.timeoutInvalid')
+    timeoutError.value = t('intelligence.config.advanced.timeoutInvalid')
     return false
   }
   
