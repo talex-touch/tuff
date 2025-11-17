@@ -1,27 +1,27 @@
 <template>
-  <aside class="IntelligenceList h-full flex flex-col">
-    <IntelligenceListModule
-      v-model="selectedId"
-      :providers="filteredEnabledProviders"
-      :title="t('intelligence.list.enabled')"
-      icon="i-ri-check-line"
-      section-id="enabled-providers"
-    />
-
-    <IntelligenceListModule
-      v-model="selectedId"
-      :providers="filteredDisabledProviders"
-      :title="t('intelligence.list.disabled')"
-      icon="i-ri-close-line"
-      section-id="disabled-providers"
-    />
+  <aside class="IntelligenceList h-full">
+    <TuffListTemplate
+      :groups="listGroups"
+      :empty-text="t('intelligence.list.empty')"
+      class="h-full"
+    >
+      <template #item="{ item }">
+        <IntelligenceItem
+          :provider="item"
+          :is-selected="item.id === selectedId"
+          role="listitem"
+          @click="handleItemClick(item.id)"
+        />
+      </template>
+    </TuffListTemplate>
   </aside>
 </template>
 
 <script lang="ts" name="IntelligenceList" setup>
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import IntelligenceListModule from './IntelligenceListModule.vue'
+import IntelligenceItem from './IntelligenceItem.vue'
+import TuffListTemplate from '~/components/tuff/template/TuffListTemplate.vue'
 
 interface AiProviderConfig {
   id: string
@@ -102,4 +102,31 @@ watch(
     selectedId.value = newId || null
   }
 )
+
+const listGroups = computed(() => [
+  {
+    id: 'enabled',
+    title: t('intelligence.list.enabled'),
+    icon: 'i-ri-check-line',
+    badgeText: String(filteredEnabledProviders.value.length),
+    items: filteredEnabledProviders.value,
+    collapsible: false,
+    itemKey: (provider: AiProviderConfig) => provider.id
+  },
+  {
+    id: 'disabled',
+    title: t('intelligence.list.disabled'),
+    icon: 'i-ri-close-line',
+    badgeText: String(filteredDisabledProviders.value.length),
+    items: filteredDisabledProviders.value,
+    collapsible: true,
+    collapsed: false,
+    itemKey: (provider: AiProviderConfig) => provider.id
+  }
+])
+
+function handleItemClick(id: string): void {
+  selectedId.value = id
+}
+
 </script>
