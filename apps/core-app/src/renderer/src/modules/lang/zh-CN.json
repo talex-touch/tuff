@@ -1396,6 +1396,7 @@
         "noModels": "暂无模型",
         "modelsCount": "个模型",
         "manageModels": "管理模型",
+        "editModels": "编辑",
         "addModel": "添加模型",
         "modelsRequired": "已启用的提供商至少需要一个模型",
         "modelsHint": "添加此提供商支持的模型",
@@ -1408,6 +1409,9 @@
         "defaultModelPlaceholder": "选择默认模型",
         "defaultModelRequired": "已启用的提供商需要默认模型",
         "defaultModelInvalid": "默认模型必须来自可用模型列表",
+        "group": {
+          "other": "其他"
+        },
         "fetchModels": "获取模型",
         "fetchModelsHint": "从提供商自动获取可用模型列表",
         "instructions": "系统指令",

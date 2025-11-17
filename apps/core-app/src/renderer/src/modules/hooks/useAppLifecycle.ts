@@ -21,9 +21,6 @@ export function useAppLifecycle() {
    * Skips update check on first launch before onboarding is complete.
    */
   async function executeMainTask(): Promise<void> {
-    console.log('[useAppLifecycle] executeMainTask - appSetting:', JSON.parse(JSON.stringify(appSetting)))
-    console.log('[useAppLifecycle] executeMainTask - beginner.init:', appSetting?.beginner?.init)
-
     const { checkApplicationUpgrade, setupUpdateListener } = useApplicationUpgrade()
 
     setupUpdateListener()
@@ -33,7 +30,6 @@ export function useAppLifecycle() {
       return
     }
 
-    console.log('[useAppLifecycle] Checking for application upgrade')
     checkApplicationUpgrade()
   }
 
@@ -71,13 +67,7 @@ export function useAppLifecycle() {
 
       preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
       useTouchSDK({ channel: touchChannel })
-      console.log('[useAppLifecycle] Before initStorageChannel')
       initStorageChannel(touchChannel)
-      console.log('[useAppLifecycle] After initStorageChannel')
-
-      // Wait for Vue's reactivity system to process storage updates
-      await nextTick()
-      console.log('[useAppLifecycle] After nextTick - appSetting:', JSON.parse(JSON.stringify(appSetting)))
 
       preloadDebugStep('Initializing Sentry...', 0.01)
       void (async () => {

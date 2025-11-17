@@ -12,15 +12,14 @@
       @click="showModelsDrawer = true"
     >
       <div class="models-summary">
+        <span class="text-sm op-70">
         <span v-if="localModels.length === 0" class="text-[var(--el-text-color-placeholder)]">
           {{ t('intelligence.config.model.noModels') }}
         </span>
         <span v-else class="text-[var(--el-text-color-primary)]">
           {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
-        </span>
-        <FlatButton>
-          edit
-        </FlatButton>
+        </span></span>
+        <FlatButton>{{ t('intelligence.config.model.editModels') }}</FlatButton>
       </div>
     </TuffBlockSlot>
 
@@ -60,7 +59,10 @@
     </TuffBlockSlot>
 
     <!-- Models Drawer -->
-    <TDrawer v-model:visible="showModelsDrawer" :title="t('intelligence.config.model.manageModels')">
+    <TDrawer
+      v-model:visible="showModelsDrawer"
+      :title="t('intelligence.config.model.manageModels')"
+    >
       <div class="models-drawer-content">
         <p class="text-sm text-[var(--el-text-color-secondary)] mb-4">
           {{ t('intelligence.config.model.modelsHint') }}
@@ -123,27 +125,54 @@
     </TDrawer>
 
     <!-- Default Model Drawer -->
-    <TDrawer v-model:visible="showDefaultModelDrawer" :title="t('intelligence.config.model.defaultModel')">
+    <TDrawer
+      v-model:visible="showDefaultModelDrawer"
+      :title="t('intelligence.config.model.defaultModel')"
+    >
       <p class="drawer-description">
         {{ t('intelligence.config.model.defaultModelPlaceholder') }}
       </p>
-      <TuffBlockSelect
-        v-model="localDefaultModel"
-        :title="t('intelligence.config.model.defaultModel')"
-        :description="defaultModelError || t('intelligence.config.model.defaultModelPlaceholder')"
-        default-icon="i-carbon-checkmark"
-        active-icon="i-carbon-checkmark"
-        :disabled="disabled || localModels.length === 0"
-        @update:model-value="handleDefaultModelChange"
-      >
-        <TSelectItem v-for="model in localModels" :key="model" :model-value="model">
-          {{ model }}
-        </TSelectItem>
-      </TuffBlockSelect>
+      <div class="default-model-select">
+        <el-select
+          v-model="localDefaultModel"
+          filterable
+          allow-create
+          :placeholder="t('intelligence.config.model.defaultModelPlaceholder')"
+          class="default-model-dropdown"
+          :disabled="disabled || localModels.length === 0"
+          @change="handleDefaultModelChange"
+          @created="handleDefaultModelCreate"
+        >
+          <el-option-group
+            v-for="group in defaultModelGroups"
+            :key="group.key"
+            :label="group.label"
+          >
+            <el-option
+              v-for="model in group.models"
+              :key="model"
+              :label="model"
+              :value="model"
+            />
+          </el-option-group>
+          <el-option
+            v-if="!defaultModelGroups.length"
+            :label="t('intelligence.config.model.noModels')"
+            value=""
+            disabled
+          />
+        </el-select>
+        <p v-if="defaultModelError" class="drawer-error">
+          {{ defaultModelError }}
+        </p>
+      </div>
     </TDrawer>
 
     <!-- Instructions Drawer -->
-    <TDrawer v-model:visible="showInstructionsDrawer" :title="t('intelligence.config.model.instructions')">
+    <TDrawer
+      v-model:visible="showInstructionsDrawer"
+      :title="t('intelligence.config.model.instructions')"
+    >
       <p class="drawer-description">
         {{ t('intelligence.config.model.instructionsHint') }}
       </p>
@@ -158,12 +187,10 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElTransfer } from 'element-plus'
+import { ElTransfer, ElSelect, ElOption, ElOptionGroup } from 'element-plus'
 import { toast } from 'vue-sonner'
 import TDrawer from '~/components/base/dialog/TDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
@@ -213,6 +240,26 @@ const localInstructions = computed({
 })
 
 const allModels = ref<string[]>([])
+const DEFAULT_MODEL_GROUP_FALLBACK = '__default_model_group__'
+const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  deepseek: 'DeepSeek',
+  siliconflow: 'SiliconFlow',
+  'ascend-tribe': 'Ascend Tribe',
+  local: 'Local Model',
+  custom: 'Custom Provider'
+}
+
+function formatGroupLabel(value: string): string {
+  const cleaned = (value || '').trim()
+  if (!cleaned) return cleaned
+  return cleaned
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+    .join(' ')
+}
 
 function normalizeModel(value?: string): string {
   return (value ?? '').trim()
@@ -323,6 +370,51 @@ const instructionsSummary = computed(() => {
   return singleLine.length > 60 ? `${singleLine.slice(0, 57)}...` : singleLine
 })
 
+const defaultModelGroups = computed(() => {
+  const fallbackName = (props.modelValue.name || '').trim()
+  const fallbackKey = fallbackName ? fallbackName.toLowerCase() : DEFAULT_MODEL_GROUP_FALLBACK
+  const fallbackLabel = fallbackName || t('intelligence.config.model.group.other')
+
+  const grouped = new Map<string, { label: string; models: Set<string> }>()
+
+  function ensureGroup(key: string, label: string) {
+    if (!grouped.has(key)) {
+      grouped.set(key, { label, models: new Set() })
+    }
+    return grouped.get(key)!
+  }
+
+  localModels.value.forEach((model) => {
+    const normalized = normalizeModel(model)
+    if (!normalized) return
+
+    const slashIndex = normalized.indexOf('/')
+    const hasProviderPrefix = slashIndex > 0
+    const groupKey = hasProviderPrefix
+      ? normalized.slice(0, slashIndex).toLowerCase()
+      : fallbackKey
+    const rawLabel = hasProviderPrefix ? normalized.slice(0, slashIndex) : fallbackLabel
+    const label = hasProviderPrefix
+      ? PROVIDER_NAME_OVERRIDES[groupKey] ?? formatGroupLabel(rawLabel)
+      : fallbackLabel
+
+    const group = ensureGroup(groupKey, label)
+    group.models.add(normalized)
+  })
+
+  const sortedGroups = Array.from(grouped.entries()).sort(([keyA], [keyB]) => {
+    if (keyA === fallbackKey) return 1
+    if (keyB === fallbackKey) return -1
+    return keyA.localeCompare(keyB)
+  })
+
+  return sortedGroups.map(([key, { label, models }]) => ({
+    key,
+    label,
+    models: Array.from(models).sort((a, b) => a.localeCompare(b))
+  }))
+})
+
 function openDefaultModelDrawer() {
   if (props.disabled || localModels.value.length === 0) return
   showDefaultModelDrawer.value = true
@@ -382,6 +474,19 @@ function handleAddModel() {
 }
 
 function handleDefaultModelChange() {
+  validateDefaultModel()
+}
+
+function handleDefaultModelCreate(value: string) {
+  const modelName = normalizeModel(value)
+
+  if (!modelName) return
+
+  if (!localModels.value.includes(modelName)) {
+    applyModelUpdates([...localModels.value, modelName])
+  }
+
+  localDefaultModel.value = modelName
   validateDefaultModel()
 }
 
@@ -460,6 +565,20 @@ watch(
     margin-bottom: 12px;
     color: var(--el-text-color-secondary);
     font-size: 13px;
+  }
+
+  .default-model-select {
+    margin-top: 12px;
+
+    .default-model-dropdown {
+      width: 100%;
+    }
+
+    .drawer-error {
+      margin-top: 8px;
+      color: var(--el-color-error);
+      font-size: 12px;
+    }
   }
 }
 
