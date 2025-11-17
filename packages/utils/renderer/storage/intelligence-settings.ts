@@ -2,7 +2,7 @@
  * Intelligence Storage for AI Provider Configuration
  * 管理 AI 智能模块的数据存储，包括提供商配置、全局设置等
  */
-import { TouchStorage, getOrCreateStorageSingleton } from './base-storage'
+import { TouchStorage, createStorageProxy } from './base-storage'
 import { StorageList } from '../../common/storage/constants'
 import { AiProviderType, type AiProviderConfig, type AISDKGlobalConfig } from '../../types/intelligence'
 
@@ -59,7 +59,6 @@ const DEFAULT_PROVIDERS: AiProviderConfig[] = [
   }
 ]
 
-// 默认全局配置
 const DEFAULT_GLOBAL_CONFIG: AISDKGlobalConfig = {
   maxRetries: 3,
   defaultTimeout: 30000,
@@ -75,7 +74,6 @@ const DEFAULT_GLOBAL_CONFIG: AISDKGlobalConfig = {
   cacheExpiration: 3600
 }
 
-// 默认 Intelligence 配置
 export const intelligenceSettingOriginData: IntelligenceSetting = {
   providers: DEFAULT_PROVIDERS,
   globalConfig: DEFAULT_GLOBAL_CONFIG,
@@ -190,12 +188,7 @@ const INTELLIGENCE_SETTINGS_KEY = `storage:${StorageList.INTELLIGENCE_SETTING}`
  * Lazy-initialized intelligence settings storage.
  * The actual instance is created only when first accessed AND after initStorageChannel() is called.
  */
-export const intelligenceSettings = new Proxy({} as IntelligenceSettingsStorage, {
-  get(_target, prop) {
-    const instance = getOrCreateStorageSingleton<IntelligenceSettingsStorage>(
-      INTELLIGENCE_SETTINGS_KEY,
-      () => new IntelligenceSettingsStorage()
-    );
-    return instance[prop as keyof IntelligenceSettingsStorage];
-  }
-});
+export const intelligenceSettings = createStorageProxy<IntelligenceSettingsStorage>(
+  INTELLIGENCE_SETTINGS_KEY,
+  () => new IntelligenceSettingsStorage()
+);

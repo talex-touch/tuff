@@ -21,14 +21,14 @@ export function useAppLifecycle() {
    * Skips update check on first launch before onboarding is complete.
    */
   async function executeMainTask(): Promise<void> {
-    console.log('[useAppLifecycle] executeMainTask - appSetting.data:', JSON.parse(JSON.stringify(appSetting.data)))
-    console.log('[useAppLifecycle] executeMainTask - beginner.init:', appSetting.data?.beginner?.init)
+    console.log('[useAppLifecycle] executeMainTask - appSetting:', JSON.parse(JSON.stringify(appSetting)))
+    console.log('[useAppLifecycle] executeMainTask - beginner.init:', appSetting?.beginner?.init)
 
     const { checkApplicationUpgrade, setupUpdateListener } = useApplicationUpgrade()
 
     setupUpdateListener()
 
-    if (!appSetting.data?.beginner?.init) {
+    if (!appSetting?.beginner?.init) {
       console.log('[useAppLifecycle] Skipping update check - beginner.init is false')
       return
     }
@@ -77,7 +77,7 @@ export function useAppLifecycle() {
 
       // Wait for Vue's reactivity system to process storage updates
       await nextTick()
-      console.log('[useAppLifecycle] After nextTick - appSetting.data:', JSON.parse(JSON.stringify(appSetting.data)))
+      console.log('[useAppLifecycle] After nextTick - appSetting:', JSON.parse(JSON.stringify(appSetting)))
 
       preloadDebugStep('Initializing Sentry...', 0.01)
       void (async () => {

@@ -1,4 +1,4 @@
-import { TouchStorage, getOrCreateStorageSingleton } from '.'
+import { TouchStorage, createStorageProxy } from '.'
 import { openersOriginData, StorageList, type OpenersMap } from '../..'
 
 class OpenersStorage extends TouchStorage<OpenersMap> {
@@ -14,12 +14,7 @@ const OPENERS_STORAGE_KEY = `storage:${StorageList.OPENERS}`
  * Lazy-initialized openers storage.
  * The actual instance is created only when first accessed AND after initStorageChannel() is called.
  */
-export const openersStorage = new Proxy({} as OpenersStorage, {
-  get(_target, prop) {
-    const instance = getOrCreateStorageSingleton<OpenersStorage>(
-      OPENERS_STORAGE_KEY,
-      () => new OpenersStorage()
-    );
-    return instance[prop as keyof OpenersStorage];
-  }
-});
+export const openersStorage = createStorageProxy<OpenersStorage>(
+  OPENERS_STORAGE_KEY,
+  () => new OpenersStorage()
+);

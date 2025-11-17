@@ -25,9 +25,9 @@ export function useClipboard(
 ): Omit<IClipboardHook, 'clipboardOptions'> {
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last || !clipboardOptions.detectedAt) return false
-    if (!appSetting.data.tools.autoPaste.enable) return false
+    if (!appSetting.tools.autoPaste.enable) return false
 
-    const limit = appSetting.data.tools.autoPaste.time
+    const limit = appSetting.tools.autoPaste.time
     if (limit === -1) return false
     if (limit === 0) return true
 

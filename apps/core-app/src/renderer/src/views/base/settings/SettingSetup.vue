@@ -74,8 +74,8 @@ const indexingProgress = ref<IndexingProgress | null>(null)
 let progressUnsubscribe: (() => void) | null = null
 
 function ensureWindowSettings(): void {
-  if (!appSetting.data.window) {
-    appSetting.data.window = {
+  if (!appSetting.window) {
+    appSetting.window = {
       closeToTray: true,
       startMinimized: false,
       startSilent: false
@@ -83,20 +83,20 @@ function ensureWindowSettings(): void {
     return
   }
 
-  if (appSetting.data.window.closeToTray === undefined) {
-    appSetting.data.window.closeToTray = true
+  if (appSetting.window.closeToTray === undefined) {
+    appSetting.window.closeToTray = true
   }
-  if (appSetting.data.window.startMinimized === undefined) {
-    appSetting.data.window.startMinimized = false
+  if (appSetting.window.startMinimized === undefined) {
+    appSetting.window.startMinimized = false
   }
-  if (appSetting.data.window.startSilent === undefined) {
-    appSetting.data.window.startSilent = false
+  if (appSetting.window.startSilent === undefined) {
+    appSetting.window.startSilent = false
   }
 }
 
-// Initialize appSetting.data.setup if not exists
-if (!appSetting.data.setup) {
-  appSetting.data.setup = {
+// Initialize appSetting.setup if not exists
+if (!appSetting.setup) {
+  appSetting.setup = {
     accessibility: false,
     notifications: false,
     autoStart: false,
@@ -108,12 +108,12 @@ if (!appSetting.data.setup) {
   }
 }
 
-if (appSetting.data.setup.runAsAdmin === undefined) {
-  appSetting.data.setup.runAsAdmin = false
+if (appSetting.setup.runAsAdmin === undefined) {
+  appSetting.setup.runAsAdmin = false
 }
 
-if (appSetting.data.setup.customDesktop === undefined) {
-  appSetting.data.setup.customDesktop = false
+if (appSetting.setup.customDesktop === undefined) {
+  appSetting.setup.customDesktop = false
 }
 
 onMounted(async () => {
@@ -176,7 +176,7 @@ async function checkAllPermissions(): Promise<void> {
         status: accResult.status,
         checked: true
       }
-      appSetting.data.setup.accessibility = accResult.status === 'granted'
+      appSetting.setup.accessibility = accResult.status === 'granted'
     }
 
     // Check notification permission
@@ -185,7 +185,7 @@ async function checkAllPermissions(): Promise<void> {
       status: notifResult.status,
       checked: true
     }
-    appSetting.data.setup.notifications = notifResult.status === 'granted'
+    appSetting.setup.notifications = notifResult.status === 'granted'
 
     // Check admin privileges (Windows)
     if (isWindows.value) {
@@ -197,7 +197,7 @@ async function checkAllPermissions(): Promise<void> {
         status: adminResult.status,
         checked: true
       }
-      appSetting.data.setup.adminPrivileges = adminResult.status === 'granted'
+      appSetting.setup.adminPrivileges = adminResult.status === 'granted'
     }
   } catch (error) {
     console.error('[SettingSetup] Failed to check permissions:', error)
@@ -208,12 +208,12 @@ async function checkAllPermissions(): Promise<void> {
 }
 
 function loadSettings(): void {
-  if (appSetting.data.setup) {
-    settings.value.autoStart = appSetting.data.setup.autoStart ?? false
-    settings.value.showTray = appSetting.data.setup.showTray ?? true
-    settings.value.hideDock = appSetting.data.setup.hideDock ?? false
-    settings.value.runAsAdmin = appSetting.data.setup.runAsAdmin ?? false
-    settings.value.customDesktop = appSetting.data.setup.customDesktop ?? false
+  if (appSetting.setup) {
+    settings.value.autoStart = appSetting.setup.autoStart ?? false
+    settings.value.showTray = appSetting.setup.showTray ?? true
+    settings.value.hideDock = appSetting.setup.hideDock ?? false
+    settings.value.runAsAdmin = appSetting.setup.runAsAdmin ?? false
+    settings.value.customDesktop = appSetting.setup.customDesktop ?? false
   }
 
   ensureWindowSettings()
@@ -234,7 +234,7 @@ function loadSettings(): void {
     if (startSilentResult !== null && startSilentResult !== undefined) {
       settings.value.startSilent = startSilentResult as boolean
     } else {
-      const windowSettings = appSetting.data.window
+      const windowSettings = appSetting.window
       if (windowSettings && windowSettings.startSilent !== undefined) {
         settings.value.startSilent = windowSettings.startSilent
       }
@@ -262,7 +262,7 @@ async function requestPermission(type: string): Promise<void> {
 
 async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
-  appSetting.data.setup.autoStart = value
+  appSetting.setup.autoStart = value
   try {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
@@ -279,7 +279,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
 
 function updateShowTray(value: boolean): void {
   settings.value.showTray = value
-  appSetting.data.setup.showTray = value
+  appSetting.setup.showTray = value
   try {
     touchChannel.send('storage:save', {
       key: 'app.setup.showTray',
@@ -296,7 +296,7 @@ function updateShowTray(value: boolean): void {
 
 function updateHideDock(value: boolean): void {
   settings.value.hideDock = value
-  appSetting.data.setup.hideDock = value
+  appSetting.setup.hideDock = value
   try {
     touchChannel.send('storage:save', {
       key: 'app.setup.hideDock',
@@ -314,7 +314,7 @@ function updateHideDock(value: boolean): void {
 function updateStartSilent(value: boolean): void {
   settings.value.startSilent = value
   ensureWindowSettings()
-  appSetting.data.window.startSilent = value
+  appSetting.window.startSilent = value
   try {
     touchChannel.send('storage:save', {
       key: 'app.window.startSilent',
@@ -332,7 +332,7 @@ function updateStartSilent(value: boolean): void {
 
 async function updateRunAsAdmin(value: boolean): Promise<void> {
   settings.value.runAsAdmin = value
-  appSetting.data.setup.runAsAdmin = value
+  appSetting.setup.runAsAdmin = value
   try {
     await touchChannel.send('storage:save', {
       key: 'app.setup.runAsAdmin',
@@ -348,7 +348,7 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
 
 async function updateCustomDesktop(value: boolean): Promise<void> {
   settings.value.customDesktop = value
-  appSetting.data.setup.customDesktop = value
+  appSetting.setup.customDesktop = value
   try {
     await touchChannel.send('storage:save', {
       key: 'app.setup.customDesktop',

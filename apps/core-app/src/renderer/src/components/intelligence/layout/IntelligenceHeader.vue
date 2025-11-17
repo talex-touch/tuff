@@ -1,5 +1,8 @@
 <template>
-  <header class="IntelligenceHeader flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800" role="banner">
+  <header
+    class="IntelligenceHeader z-1 sticky w-full top-0 flex items-center justify-between p-4 fake-background"
+    role="banner"
+  >
     <div class="flex items-center gap-3">
       <TuffIcon :icon="providerIcon" :alt="provider.name" :size="40" />
       <div class="min-w-0 flex-1">
@@ -19,7 +22,11 @@
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item @click="handleDelete">
-              <TuffIcon :icon="trashIcon" :alt="t('settings.intelligence.deleteProvider', { name: provider.name })" :size="18" />
+              <TuffIcon
+                :icon="trashIcon"
+                :alt="t('settings.intelligence.deleteProvider', { name: provider.name })"
+                :size="18"
+              />
               <span class="ml-2">
                 {{ t('settings.intelligence.deleteProvider', { name: provider.name }) }}
               </span>
@@ -119,3 +126,10 @@ function handleDelete() {
     .catch(() => {})
 }
 </script>
+
+<style lang="scss" scoped>
+.IntelligenceHeader {
+  backdrop-filter: blur(18px) saturate(180%);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+</style>

@@ -1,13 +1,10 @@
 <template>
-  <div class="IntelligenceInfo-root h-full flex flex-col">
-    <IntelligenceHeader :provider="localProvider" @delete="handleDelete" />
+  <TouchScroll class="IntelligenceInfo-root h-full flex flex-col">
+    <template #header>
+      <IntelligenceHeader :provider="localProvider" @delete="handleDelete" />
+    </template>
 
-    <TouchScroll
-      class="flex-1 overflow-auto"
-      role="region"
-      :aria-label="t('intelligence.info.configurationPanel')"
-      tabindex="0"
-    >
+    <div role="region" :aria-label="t('intelligence.info.configurationPanel')" tabindex="0">
       <TuffGroupBlock
         :name="t('intelligence.config.api.title')"
         :description="t('intelligence.config.api.description')"
@@ -51,8 +48,8 @@
       >
         <IntelligenceRateLimitConfig v-model="localProvider" @change="handleChange" />
       </TuffGroupBlock>
-    </TouchScroll>
-  </div>
+    </div>
+  </TouchScroll>
 </template>
 
 <script lang="ts" name="IntelligenceInfo" setup>
@@ -90,6 +87,7 @@ import IntelligenceRateLimitConfig from '../config/IntelligenceRateLimitConfig.v
 import TouchScroll from '~/components/base/TouchScroll.vue'
 // import IntelligenceTestResults from './IntelligenceTestResults.vue'
 import type { AiProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
+import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 
 const props = defineProps<{
   provider: AiProviderConfig
@@ -150,6 +148,10 @@ function handleDelete() {
  * Emits update event with the modified provider
  */
 function handleChange() {
-  emits('update', localProvider.value)
+  const liveProvider = intelligenceSettings
+    .get()
+    .providers.find((p) => p.id === localProvider.value.id)
+
+  emits('update', liveProvider ?? localProvider.value)
 }
 </script>

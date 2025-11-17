@@ -79,23 +79,23 @@ export const storageManager = new StorageManager()
 
 /**
  * Application settings storage instance.
- * Access reactive data via `appSetting.data`.
+ * Access reactive data via `appSetting`.
  *
  * @example
  * ```ts
  * import { appSetting } from './storage';
  *
  * // Read a setting
- * console.log(appSetting.data.autoStart);
+ * console.log(appSetting.autoStart);
  *
  * // Modify a setting (automatically persisted)
- * appSetting.data.autoStart = true;
+ * appSetting.autoStart = true;
  * ```
  */
-export const appSetting = appSettings
+export const appSetting = appSettings.data
 
 /**
  * Openers storage instance.
  * Access reactive data via `openers.data`.
  */
-export const openers = openersStorage
+export const openers = openersStorage.data

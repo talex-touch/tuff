@@ -51,9 +51,9 @@ const settings = ref({
 
 const isLoading = ref(false)
 
-// Initialize appSetting.data.setup if not exists
-if (!appSetting.data.setup) {
-  appSetting.data.setup = {
+// Initialize appSettingtata.setup if not exists
+if (!appSetting.setup) {
+  appSetting.setup = {
     accessibility: false,
     notifications: false,
     autoStart: false,
@@ -76,7 +76,7 @@ async function checkAllPermissions(): Promise<void> {
     // Already checking, avoid duplicate requests
     return
   }
-  
+
   isLoading.value = true
   try {
     // Check file access permission (required)
@@ -84,7 +84,7 @@ async function checkAllPermissions(): Promise<void> {
       touchChannel.send('system:permission:check', 'fileAccess' as any),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
     ]) as any
-    
+
     if (fileAccessResult && fileAccessResult.status) {
       permissions.value.fileAccess = {
         status: fileAccessResult.status,
@@ -100,14 +100,14 @@ async function checkAllPermissions(): Promise<void> {
           touchChannel.send('system:permission:check', 'accessibility' as any),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]) as any
-        
+
         if (accResult && accResult.status) {
           permissions.value.accessibility = {
             status: accResult.status,
             checked: true,
             required: false
           }
-          appSetting.data.setup.accessibility = accResult.status === 'granted'
+          appSetting.setup.accessibility = accResult.status === 'granted'
         }
       } catch (error) {
         console.warn('[SetupPermissions] Failed to check accessibility permission:', error)
@@ -120,14 +120,14 @@ async function checkAllPermissions(): Promise<void> {
         touchChannel.send('system:permission:check', 'notifications' as any),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
       ]) as any
-      
+
       if (notifResult && notifResult.status) {
         permissions.value.notifications = {
           status: notifResult.status,
           checked: true,
           required: false
         }
-        appSetting.data.setup.notifications = notifResult.status === 'granted'
+        appSetting.setup.notifications = notifResult.status === 'granted'
       }
     } catch (error) {
       console.warn('[SetupPermissions] Failed to check notification permission:', error)
@@ -140,14 +140,14 @@ async function checkAllPermissions(): Promise<void> {
           touchChannel.send('system:permission:check', 'adminPrivileges' as any),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]) as any
-        
+
         if (adminResult && adminResult.status) {
           permissions.value.adminPrivileges = {
             status: adminResult.status,
             checked: true,
             required: false
           }
-          appSetting.data.setup.adminPrivileges = adminResult.status === 'granted'
+          appSetting.setup.adminPrivileges = adminResult.status === 'granted'
         }
       } catch (error) {
         console.warn('[SetupPermissions] Failed to check admin privileges:', error)
@@ -162,9 +162,9 @@ async function checkAllPermissions(): Promise<void> {
 }
 
 function loadSettings(): void {
-  if (appSetting.data.setup) {
-    settings.value.autoStart = appSetting.data.setup.autoStart ?? false
-    settings.value.showTray = appSetting.data.setup.showTray ?? true
+  if (appSetting.setup) {
+    settings.value.autoStart = appSetting.setup.autoStart ?? false
+    settings.value.showTray = appSetting.setup.showTray ?? true
   }
 
   // Load autoStart from existing setting
@@ -192,7 +192,7 @@ async function requestPermission(type: string): Promise<void> {
 
 async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
-  appSetting.data.setup.autoStart = value
+  appSetting.setup.autoStart = value
   try {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
@@ -208,7 +208,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
 
 function updateShowTray(value: boolean): void {
   settings.value.showTray = value
-  appSetting.data.setup.showTray = value
+  appSetting.setup.showTray = value
   try {
     touchChannel.send('storage:save', {
       key: 'app.setup.showTray',
@@ -250,15 +250,15 @@ async function handleContinue(): Promise<void> {
     },
     () => {
       // Save all settings before proceeding
-      appSetting.data.setup = {
+      appSetting.setup = {
         accessibility: permissions.value.accessibility.status === 'granted',
         notifications: permissions.value.notifications.status === 'granted',
         autoStart: settings.value.autoStart,
         showTray: settings.value.showTray,
         adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
         hideDock: settings.value.hideDock ?? false,
-        runAsAdmin: appSetting.data.setup.runAsAdmin ?? false,
-        customDesktop: appSetting.data.setup.customDesktop ?? false
+        runAsAdmin: appSetting.setup.runAsAdmin ?? false,
+        customDesktop: appSetting.setup.customDesktop ?? false
       }
     }
   )

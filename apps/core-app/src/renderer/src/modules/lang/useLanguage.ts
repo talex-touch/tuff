@@ -2,7 +2,6 @@ import { ref, watch, readonly } from 'vue'
 import { setI18nLanguage, loadLocaleMessages } from './i18n'
 import { appSetting } from '~/modules/channel/storage'
 
-// 支持的语言列表
 export const SUPPORTED_LANGUAGES = [
   { key: 'zh-CN', name: '简体中文' },
   { key: 'en-US', name: 'English' }
@@ -48,7 +47,7 @@ const initialFollowSystem = (() => {
   }
 
   if (appSetting?.lang?.followSystem !== undefined) {
-    return Boolean(appSetting.data.lang.followSystem)
+    return Boolean(appSetting.lang.followSystem)
   }
 
   return false
@@ -113,7 +112,7 @@ export function useLanguage() {
 
       localStorage.setItem('app-language', lang)
       if (appSetting?.lang) {
-        appSetting.data.lang.locale = lang
+        appSetting.lang.locale = lang
       }
 
       if (!followSystemLanguage.value) {
@@ -133,7 +132,7 @@ export function useLanguage() {
     followSystemLanguage.value = follow
     localStorage.setItem('app-follow-system-language', follow.toString())
     if (appSetting?.lang) {
-      appSetting.data.lang.followSystem = follow
+      appSetting.lang.followSystem = follow
     }
 
     if (follow) {
