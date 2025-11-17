@@ -1,42 +1,64 @@
 <template>
-  <div class="flex h-full flex-col" role="main" aria-label="Intelligence Capability Binding">
-    <div class="flex flex-1 overflow-hidden border border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]">
-      <AISDKCapabilityList
-        class="h-full w-80 flex-shrink-0 border-r border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color)]"
-        :capabilities="capabilityList"
-        :selected-id="selectedCapabilityId"
-        @select="handleSelectCapability"
-      />
-      <section
-        class="h-full flex-1 overflow-hidden"
-        :aria-live="selectedCapability ? 'polite' : 'off'"
-      >
-        <Transition name="fade-slide" mode="out-in">
-          <AISDKCapabilityDetails
-            v-if="selectedCapability"
-            :key="selectedCapability.id"
-            :capability="selectedCapability"
-            :providers="providers"
-            :bindings="activeBindings(selectedCapability.id)"
-            :is-testing="!!capabilityTesting[selectedCapability.id]"
-            :test-result="capabilityTests[selectedCapability.id]"
-            @toggle-provider="onToggleProvider"
-            @update-models="onUpdateModels"
-            @update-prompt="onUpdatePrompt"
-            @reorder-providers="onReorderProviders"
-            @test="handleCapabilityTest(selectedCapability.id)"
-          />
-          <div
-            v-else
-            class="flex h-full flex-col items-center justify-center gap-2 text-[var(--el-text-color-secondary)]"
-            role="status"
-          >
-            <i class="i-carbon-cube text-3xl" aria-hidden="true" />
-            <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
-          </div>
-        </Transition>
-      </section>
-    </div>
+  <div class="capability-page h-full flex flex-col" role="main" aria-label="Intelligence Capability Binding">
+    <tuff-aside-template
+      v-model="searchQuery"
+      class="capability-shell flex-1"
+      :search-id="'capability-search'"
+      :search-label="t('settings.intelligence.capabilitySearchLabel')"
+      :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
+      :clear-label="t('common.close')"
+    >
+      <template #aside-header>
+        <div class="capability-sidebar__summary">
+          <p class="capability-sidebar__eyebrow">
+            {{ t('settings.intelligence.capabilitySummary', { count: capabilityList.length }) }}
+          </p>
+        </div>
+      </template>
+
+      <template #default>
+        <tuff-aside-list
+          v-model:selected-id="selectedCapabilityId"
+          :items="filteredCapabilities"
+          :get-id="(item) => item.id"
+          :get-title="(item) => item.label || item.id"
+          :get-description="(item) => item.description"
+          :empty-text="t('settings.intelligence.capabilityListEmpty')"
+          @select="handleSelectCapability"
+        />
+      </template>
+
+      <template #main>
+        <div class="capability-main-panel flex-1 overflow-hidden">
+          <Transition name="fade-slide" mode="out-in">
+            <AISDKCapabilityDetails
+              v-if="selectedCapability"
+              :key="selectedCapability.id"
+              :capability="selectedCapability"
+              :providers="providers"
+              :bindings="activeBindings(selectedCapability.id)"
+              :is-testing="!!capabilityTesting[selectedCapability.id]"
+              :test-result="capabilityTests[selectedCapability.id]"
+              @toggle-provider="onToggleProvider"
+              @update-models="onUpdateModels"
+              @update-prompt="onUpdatePrompt"
+              @reorder-providers="onReorderProviders"
+              @test="handleCapabilityTest(selectedCapability.id)"
+            />
+            <div
+              v-else
+              class="capability-empty-state"
+              role="status"
+            >
+              <i class="i-carbon-cube text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
+              <p class="capability-empty-state__title">
+                {{ t('settings.intelligence.capabilityListEmpty') }}
+              </p>
+            </div>
+          </Transition>
+        </div>
+      </template>
+    </tuff-aside-template>
   </div>
 </template>
 
@@ -52,7 +74,8 @@ import type { AiInvokeResult } from '@talex-touch/utils'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { touchChannel } from '~/modules/channel/channel-core'
-import AISDKCapabilityList from '~/components/intelligence/capabilities/AISDKCapabilityList.vue'
+import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import AISDKCapabilityDetails from '~/components/intelligence/capabilities/AISDKCapabilityDetails.vue'
 import type {
   CapabilityBinding,
@@ -69,10 +92,22 @@ const {
   setCapabilityProviders
 } = useIntelligenceManager()
 
+const searchQuery = ref('')
 const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
   Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
 )
 const providerMap = computed(() => new Map(providers.value.map((provider) => [provider.id, provider])))
+
+const filteredCapabilities = computed(() => {
+  if (!searchQuery.value.trim()) return capabilityList.value
+  const query = searchQuery.value.toLowerCase()
+  return capabilityList.value.filter(
+    (capability) =>
+      capability.id.toLowerCase().includes(query) ||
+      (capability.label?.toLowerCase().includes(query) ?? false) ||
+      (capability.description?.toLowerCase().includes(query) ?? false)
+  )
+})
 
 const selectedCapabilityId = ref<string | null>(capabilityList.value[0]?.id ?? null)
 const selectedCapability = computed<AISDKCapabilityConfig | null>(() => {
@@ -81,7 +116,7 @@ const selectedCapability = computed<AISDKCapabilityConfig | null>(() => {
 })
 
 watch(
-  capabilityList,
+  filteredCapabilities,
   (list) => {
     if (list.length === 0) {
       selectedCapabilityId.value = null
@@ -214,4 +249,67 @@ async function handleCapabilityTest(capabilityId: string): Promise<void> {
 
 <style lang="scss" scoped>
 @import './intelligence-shared.scss';
+
+.capability-page {
+  min-height: 0;
+}
+
+.capability-shell {
+  min-height: 0;
+}
+
+.capability-sidebar__summary {
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--el-fill-color);
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.capability-sidebar__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--el-text-color-secondary);
+}
+
+.capability-main-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.capability-empty-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+}
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
 </style>

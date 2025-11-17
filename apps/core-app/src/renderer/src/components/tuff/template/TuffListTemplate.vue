@@ -1,4 +1,5 @@
 <script setup lang="ts" name="TuffListTemplate">
+import { reactive } from 'vue'
 export type TuffListGroup<TItem> = {
   id: string
   title?: string
@@ -50,12 +51,30 @@ function setGroupCollapsed(groupId: string, collapsed: boolean): void {
   collapsedState[group.id] = collapsed
 }
 
+const variantTitleColorMap: Record<TuffListGroup<any>['badgeVariant'], string> = {
+  info: 'var(--el-color-info)',
+  success: 'var(--el-color-success)',
+  warning: 'var(--el-color-warning)',
+  danger: 'var(--el-color-danger)'
+}
+
+function resolveTitleColor(group: TuffListGroup<any>): string {
+  if (group.titleColor) {
+    return group.titleColor
+  }
+  if (group.badgeVariant) {
+    return variantTitleColorMap[group.badgeVariant] ?? 'inherit'
+  }
+  return 'inherit'
+}
+
 function getGroupItems(groupId: string) {
   return props.groups.find((group) => group.id === groupId)?.items ?? []
 }
 
 defineExpose({
   toggleGroup,
+  setGroupCollapsed,
   isGroupCollapsed,
   getGroupItems
 })
@@ -81,16 +100,16 @@ function getItemKey(group: TuffListGroup<any>, item: any, index: number): string
         @click="group.collapsible ? toggleGroup(group) : undefined"
       >
         <slot v-if="$slots['group-header']" name="group-header" :group="group" />
-          <template v-else>
-            <div class="TuffListTemplate-GroupTitle">
-              <i v-if="group.icon" :class="group.icon" aria-hidden="true" />
-              <div>
-                <p
-                  class="TuffListTemplate-GroupTitleText"
-                  :style="{ color: group.titleColor ?? 'inherit' }"
-                >
-                  {{ group.title }}
-                </p>
+        <template v-else>
+          <div class="TuffListTemplate-GroupTitle">
+            <i v-if="group.icon" :class="group.icon" aria-hidden="true" />
+            <div>
+              <p
+                class="TuffListTemplate-GroupTitleText"
+                :style="{ color: resolveTitleColor(group) }"
+              >
+                {{ group.title }}
+              </p>
               <p v-if="group.subtitle" class="TuffListTemplate-GroupSubtitle">
                 {{ group.subtitle }}
               </p>
@@ -221,7 +240,7 @@ function getItemKey(group: TuffListGroup<any>, item: any, index: number): string
   margin-top: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.25rem;
 }
 
 .TuffListTemplate-EmptyGroup {

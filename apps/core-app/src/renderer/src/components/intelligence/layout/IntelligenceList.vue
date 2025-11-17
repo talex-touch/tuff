@@ -111,6 +111,7 @@ const listGroups = computed(() => [
     badgeText: String(filteredEnabledProviders.value.length),
     items: filteredEnabledProviders.value,
     collapsible: false,
+    badgeVariant: 'success',
     itemKey: (provider: AiProviderConfig) => provider.id
   },
   {
@@ -121,6 +122,7 @@ const listGroups = computed(() => [
     items: filteredDisabledProviders.value,
     collapsible: true,
     collapsed: false,
+    badgeVariant: 'info',
     itemKey: (provider: AiProviderConfig) => provider.id
   }
 ])
@@ -128,5 +130,4 @@ const listGroups = computed(() => [
 function handleItemClick(id: string): void {
   selectedId.value = id
 }
-
 </script>
