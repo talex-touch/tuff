@@ -41,19 +41,15 @@ function handleClear(): void {
 </script>
 
 <template>
-  <div class="tuff-aside-search">
-    <label
-      v-if="props.searchLabel"
-      class="tuff-aside-search__label"
-      :for="props.searchId"
-    >
+  <div class="TuffAsideSearch">
+    <label v-if="props.searchLabel" class="TuffAsideSearch-Label" :for="props.searchId">
       {{ props.searchLabel }}
     </label>
-    <div class="tuff-aside-search__field">
+    <div class="TuffAsideSearch-Field">
       <FlatInput
-        class="tuff-aside-search__input"
         :id="props.searchId"
         v-model="searchValue"
+        class="TuffAsideSearch-Input"
         :placeholder="props.searchPlaceholder"
         autocomplete="off"
       >
@@ -63,7 +59,7 @@ function handleClear(): void {
       </FlatInput>
       <FlatButton
         v-if="searchValue"
-        class="tuff-aside-search__clear"
+        class="TuffAsideSearch-Clear"
         mini
         :aria-label="props.clearLabel"
         @click="handleClear"
@@ -75,13 +71,13 @@ function handleClear(): void {
 </template>
 
 <style scoped lang="scss">
-.tuff-aside-search {
+.TuffAsideSearch {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.tuff-aside-search__label {
+.TuffAsideSearch-Label {
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -89,30 +85,19 @@ function handleClear(): void {
   color: var(--el-text-color-secondary);
 }
 
-.tuff-aside-search__field {
+.TuffAsideSearch-Field {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.65rem;
-  border: 1px solid var(--el-border-color);
-  border-radius: 0.75rem;
-  background: var(--el-fill-color-light);
   color: var(--el-text-color-regular);
 }
 
-.tuff-aside-search__field :deep(.FlatInput-Container) {
-  width: 100%;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
-}
-
-.tuff-aside-search__input {
+.TuffAsideSearch-Input {
   flex: 1;
 }
 
-.tuff-aside-search__clear {
+.TuffAsideSearch-Clear {
   min-width: 32px;
   min-height: 32px;
   border-radius: 999px;
@@ -121,13 +106,13 @@ function handleClear(): void {
   color: var(--el-text-color-placeholder);
 }
 
-.tuff-aside-search__clear > div {
+.TuffAsideSearch-Clear > div {
   gap: 0;
   padding: 0;
   justify-content: center;
 }
 
-.tuff-aside-search__clear:hover {
+.TuffAsideSearch-Clear:hover {
   background: transparent;
   color: var(--el-text-color-primary);
 }
