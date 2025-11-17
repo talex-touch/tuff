@@ -1,12 +1,10 @@
 import { ref, computed, watch, onMounted, type Ref, type ComputedRef } from 'vue'
 import type {
-  AiProviderConfig,
-  AISDKGlobalConfig,
   AISDKCapabilityConfig,
   AiCapabilityProviderBinding,
   TestResult
 } from '~/types/aisdk'
-import { aisdkStorage, migrateAISDKSettings } from '~/modules/storage/aisdk-storage'
+import { intelligenceSettings, type AiProviderConfig, type AISDKGlobalConfig } from '@talex-touch/utils/renderer/storage'
 
 /**
  * Return type for the useIntelligenceManager composable
@@ -89,42 +87,45 @@ interface UseIntelligenceManagerReturn {
  * ```
  */
 export function useIntelligenceManager(): UseIntelligenceManagerReturn {
-  // Core state - now backed by persistent storage
+  // Core state - now backed by persistent storage from utils package
   const providers = computed<AiProviderConfig[]>({
-    get: () => aisdkStorage.data.providers,
+    get: () => intelligenceSettings.get().providers,
     set: (value) => {
-      aisdkStorage.data.providers = value
-    }
-  })
-  
-  const selectedProviderId = ref<string | null>(null)
-  
-  const globalConfig = computed<AISDKGlobalConfig>({
-    get: () => aisdkStorage.data.globalConfig,
-    set: (value) => {
-      aisdkStorage.data.globalConfig = value
+      const currentData = intelligenceSettings.get()
+      intelligenceSettings.set({
+        ...currentData,
+        providers: value
+      })
     }
   })
 
-  const capabilities = computed<Record<string, AISDKCapabilityConfig>>({
-    get: () => aisdkStorage.data.capabilities,
+  const selectedProviderId = ref<string | null>(null)
+
+  const globalConfig = computed<AISDKGlobalConfig>({
+    get: () => intelligenceSettings.get().globalConfig,
     set: (value) => {
-      aisdkStorage.data.capabilities = value
+      const currentData = intelligenceSettings.get()
+      intelligenceSettings.set({
+        ...currentData,
+        globalConfig: value
+      })
     }
   })
-  
+
+  // TODO: 能力配置将来可以从存储中获取
+  const capabilities = ref<Record<string, AISDKCapabilityConfig>>({})
+
   const testResults = ref<Map<string, TestResult>>(new Map())
   const loading = ref(false)
 
-  // Initialize storage and run migrations on mount
+  // Initialize storage on mount
   onMounted(async () => {
     try {
       console.log('[IntelligenceManager] Initializing...')
-      await migrateAISDKSettings()
-      console.log('[IntelligenceManager] Current providers:', aisdkStorage.data.providers)
-      console.log('[IntelligenceManager] Providers count:', aisdkStorage.data.providers.length)
+      console.log('[IntelligenceManager] Current providers:', intelligenceSettings.get().providers)
+      console.log('[IntelligenceManager] Providers count:', intelligenceSettings.get().providers.length)
     } catch (error) {
-      console.error('[AISDK Management] Failed to migrate settings:', error)
+      console.error('[Intelligence Management] Failed to initialize:', error)
     }
   })
 
@@ -188,16 +189,14 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * Adds a provider configuration
    */
   function addProvider(provider: AiProviderConfig): void {
-    aisdkStorage.data.providers.push(provider)
+    intelligenceSettings.addProvider(provider)
   }
 
   /**
    * Removes a provider by id
    */
   function removeProvider(id: string): void {
-    const index = aisdkStorage.data.providers.findIndex((p) => p.id === id)
-    if (index === -1) return
-    aisdkStorage.data.providers.splice(index, 1)
+    intelligenceSettings.removeProvider(id)
     if (selectedProviderId.value === id) {
       selectedProviderId.value = null
     }
@@ -212,14 +211,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @param updates - Partial provider configuration to merge
    */
   function updateProvider(id: string, updates: Partial<AiProviderConfig>): void {
-    const index = aisdkStorage.data.providers.findIndex((p) => p.id === id)
-    if (index === -1) return
-
-    // Update the provider in storage (auto-save will handle persistence)
-    aisdkStorage.data.providers[index] = {
-      ...aisdkStorage.data.providers[index],
-      ...updates
-    }
+    intelligenceSettings.updateProvider(id, updates)
   }
 
   /**
@@ -230,7 +222,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @param id - The unique identifier of the provider to toggle
    */
   function toggleProvider(id: string): void {
-    const provider = aisdkStorage.data.providers.find((p) => p.id === id)
+    const provider = intelligenceSettings.get().providers.find((p) => p.id === id)
     if (!provider) return
 
     const newEnabledState = !provider.enabled
@@ -243,23 +235,22 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   }
 
   /**
-   * Updates the global AISDK configuration.
+   * Updates the global Intelligence configuration.
    * Merges the updates with the existing configuration.
    * Changes are automatically persisted via TouchStorage auto-save.
    *
    * @param updates - Partial global configuration to merge
    */
   function updateGlobalConfig(updates: Partial<AISDKGlobalConfig>): void {
-    // Update global config in storage (auto-save will handle persistence)
-    Object.assign(aisdkStorage.data.globalConfig, updates)
+    intelligenceSettings.updateGlobalConfig(updates)
   }
 
   /**
    * Updates capability metadata
    */
   function updateCapability(id: string, updates: Partial<AISDKCapabilityConfig>): void {
-    if (!aisdkStorage.data.capabilities[id]) {
-      aisdkStorage.data.capabilities[id] = {
+    if (!capabilities.value[id]) {
+      capabilities.value[id] = {
         id,
         label: id,
         providers: [],
@@ -267,22 +258,22 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
       }
       return
     }
-    Object.assign(aisdkStorage.data.capabilities[id], updates)
+    Object.assign(capabilities.value[id], updates)
   }
 
   /**
    * Replaces bindings for a capability
    */
   function setCapabilityProviders(id: string, providers: AiCapabilityProviderBinding[]): void {
-    if (!aisdkStorage.data.capabilities[id]) {
-      aisdkStorage.data.capabilities[id] = {
+    if (!capabilities.value[id]) {
+      capabilities.value[id] = {
         id,
         label: id,
         providers
       }
       return
     }
-    aisdkStorage.data.capabilities[id].providers = providers
+    capabilities.value[id].providers = providers
   }
 
   /**
@@ -311,7 +302,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @returns The provider configuration or undefined if not found
    */
   function getProvider(id: string): AiProviderConfig | undefined {
-    return aisdkStorage.data.providers.find((p) => p.id === id)
+    return intelligenceSettings.get().providers.find((p) => p.id === id)
   }
 
   return {

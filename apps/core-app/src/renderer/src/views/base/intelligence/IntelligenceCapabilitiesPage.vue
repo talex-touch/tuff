@@ -47,9 +47,9 @@ import type {
   AiCapabilityProviderBinding,
   AiVisionOcrResult
 } from '~/types/aisdk'
-import type { AiInvokeResult } from '@talex-touch/utils/types/aisdk'
+import type { AiInvokeResult } from '@talex-touch/utils'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
-import { createAiSDKClient } from '@talex-touch/utils/aisdk/client'
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { touchChannel } from '~/modules/channel/channel-core'
 import AISDKCapabilityList from '~/components/intelligence/capabilities/AISDKCapabilityList.vue'
 import AISDKCapabilityDetails from '~/components/intelligence/capabilities/AISDKCapabilityDetails.vue'
@@ -59,7 +59,7 @@ import type {
 } from '~/components/intelligence/capabilities/types'
 
 const { t } = useI18n()
-const aiClient = createAiSDKClient(touchChannel as any)
+const aiClient = createIntelligenceClient(touchChannel as any)
 
 const {
   providers,

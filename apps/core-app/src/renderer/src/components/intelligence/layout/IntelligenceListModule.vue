@@ -40,7 +40,6 @@
         :is-selected="provider.id === modelValue"
         role="listitem"
         @click="handleSelect(provider.id)"
-        @toggle="handleToggle"
       />
     </transition-group>
   </section>
@@ -78,17 +77,12 @@ defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [id: string]
-  toggle: [provider: AiProviderConfig]
 }>()
 
 const { t } = useI18n()
 
 function handleSelect(id: string) {
   emits('update:modelValue', id)
-}
-
-function handleToggle(provider: AiProviderConfig) {
-  emits('toggle', provider)
 }
 </script>
 

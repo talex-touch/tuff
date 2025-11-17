@@ -4,7 +4,6 @@
     <IntelligenceHeader
       :provider="localProvider"
       :is-testing="isTesting"
-      @toggle="handleToggle"
       @test="handleTest"
       @delete="handleDelete"
     />
@@ -46,6 +45,7 @@
       >
         <IntelligenceModelConfig
           v-model="localProvider"
+          :disabled="isModelConfigDisabled"
           @change="handleChange"
         />
       </TuffGroupBlock>
@@ -73,20 +73,6 @@
         <IntelligenceRateLimitConfig
           v-model="localProvider"
           @change="handleChange"
-        />
-      </TuffGroupBlock>
-
-      <!-- Global Settings -->
-      <TuffGroupBlock
-        :name="t('aisdk.global.title')"
-        :description="t('aisdk.global.description')"
-        default-icon="i-carbon-settings-adjust"
-        active-icon="i-carbon-settings-adjust"
-        memory-name="aisdk-global-settings"
-      >
-        <IntelligenceGlobalSettings 
-          v-model="localGlobalConfig"
-          @change="handleGlobalChange"
         />
       </TuffGroupBlock>
     </div>
@@ -117,7 +103,7 @@
  * />
  * ```
  */
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import IntelligenceHeader from './IntelligenceHeader.vue'
@@ -126,12 +112,10 @@ import IntelligenceModelConfig from '../config/IntelligenceModelConfig.vue'
 import IntelligenceAdvancedConfig from '../config/IntelligenceAdvancedConfig.vue'
 import IntelligenceRateLimitConfig from '../config/IntelligenceRateLimitConfig.vue'
 import IntelligenceTestResults from './IntelligenceTestResults.vue'
-import IntelligenceGlobalSettings from '../config/IntelligenceGlobalSettings.vue'
-import type { AiProviderConfig, AISDKGlobalConfig, TestResult } from '~/types/aisdk'
+import type { AiProviderConfig, TestResult } from '~/types/aisdk'
 
 const props = defineProps<{
   provider: AiProviderConfig
-  globalConfig: AISDKGlobalConfig
   testResult?: TestResult | null
   isTesting?: boolean
 }>()
@@ -139,32 +123,31 @@ const props = defineProps<{
 const emits = defineEmits<{
   update: [provider: AiProviderConfig]
   test: []
-  updateGlobal: [config: AISDKGlobalConfig]
   delete: []
 }>()
 
 const { t } = useI18n()
 
-// Local state for provider and global config
+// Local state for provider
 const localProvider = ref<AiProviderConfig>({ ...props.provider })
-const localGlobalConfig = ref<AISDKGlobalConfig>({ ...props.globalConfig })
 const testResult = ref<TestResult | null>(props.testResult || null)
 const isTesting = ref(props.isTesting || false)
+
+// Check if API key is configured (model config should be disabled when no key)
+const isModelConfigDisabled = computed(() => {
+  // Local providers don't need API keys
+  if (localProvider.value.type === 'local') {
+    return false
+  }
+  // For remote providers, require API key
+  return !localProvider.value.apiKey || localProvider.value.apiKey.trim().length === 0
+})
 
 // Watch for external provider changes
 watch(
   () => props.provider,
   (newProvider) => {
     localProvider.value = { ...newProvider }
-  },
-  { deep: true }
-)
-
-// Watch for external global config changes
-watch(
-  () => props.globalConfig,
-  (newConfig) => {
-    localGlobalConfig.value = { ...newConfig }
   },
   { deep: true }
 )
@@ -186,17 +169,6 @@ watch(
 )
 
 /**
- * Handle provider toggle (enable/disable)
- */
-function handleToggle() {
-  localProvider.value = {
-    ...localProvider.value,
-    enabled: !localProvider.value.enabled
-  }
-  emits('update', localProvider.value)
-}
-
-/**
  * Handle test button click
  */
 function handleTest() {
@@ -216,13 +188,6 @@ function handleDelete() {
  */
 function handleChange() {
   emits('update', localProvider.value)
-}
-
-/**
- * Handle global configuration changes
- */
-function handleGlobalChange() {
-  emits('updateGlobal', localGlobalConfig.value)
 }
 
 /**

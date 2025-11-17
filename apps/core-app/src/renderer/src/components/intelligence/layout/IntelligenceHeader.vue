@@ -17,28 +17,6 @@
         <p id="provider-type" class="text-sm text-gray-600 dark:text-gray-400">
           {{ provider.type }}
         </p>
-        <div class="flex gap-2 mt-1" role="group" aria-label="Provider status">
-          <span
-            class="badge"
-            :class="localEnabled ? 'badge-success' : 'badge-gray'"
-            role="status"
-            :aria-label="`Status: ${localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')}`"
-          >
-            <i
-              :class="localEnabled ? 'i-carbon-checkmark' : 'i-carbon-close'"
-              aria-hidden="true"
-            />
-            {{ localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled') }}
-          </span>
-          <span
-            v-if="provider.priority"
-            class="badge badge-info"
-            role="status"
-            :aria-label="`${t('aisdk.priority.label')}: ${getPriorityLabel(provider.priority)}`"
-          >
-            {{ t('aisdk.priority.label') }}: {{ getPriorityLabel(provider.priority) }}
-          </span>
-        </div>
       </div>
     </div>
 
@@ -83,18 +61,18 @@
       <TSwitch
         v-model="localEnabled"
         :aria-label="`Toggle ${provider.name}`"
-        @change="handleToggle"
       />
     </div>
   </header>
 </template>
 
 <script lang="ts" name="IntelligenceHeader" setup>
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 
 enum AiProviderType {
   OPENAI = 'openai',
@@ -129,21 +107,19 @@ const props = defineProps<{
 }>()
 
 const emits = defineEmits<{
-  toggle: []
   test: []
   delete: []
 }>()
 
 const { t } = useI18n()
-const localEnabled = ref(props.provider.enabled)
 
-// Watch for external changes to provider.enabled
-watch(
-  () => props.provider.enabled,
-  (newValue) => {
-    localEnabled.value = newValue
+// 直接使用 reactive 对象，无需本地状态
+const localEnabled = computed({
+  get: () => props.provider.enabled,
+  set: (value: boolean) => {
+    intelligenceSettings.updateProvider(props.provider.id, { enabled: value })
   }
-)
+})
 
 function getProviderIconClass(type: string): string {
   const iconClasses: Record<string, string> = {
@@ -155,19 +131,6 @@ function getProviderIconClass(type: string): string {
     [AiProviderType.CUSTOM]: 'i-carbon-settings text-gray-500'
   }
   return iconClasses[type] || 'i-carbon-ibm-watson-machine-learning text-gray-400'
-}
-
-function getPriorityLabel(priority: number): string {
-  const labels: Record<number, string> = {
-    1: t('aisdk.priority.high'),
-    2: t('aisdk.priority.medium'),
-    3: t('aisdk.priority.low')
-  }
-  return labels[priority] || String(priority)
-}
-
-function handleToggle() {
-  emits('toggle')
 }
 
 function handleTest() {

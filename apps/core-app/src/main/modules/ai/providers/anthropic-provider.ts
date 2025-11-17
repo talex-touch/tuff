@@ -4,8 +4,8 @@ import type {
   AiInvokeResult,
   AiStreamChunk,
   AiUsageInfo
-} from '@talex-touch/utils/types/aisdk'
-import { AiProviderType } from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
+import { AiProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'

@@ -6,8 +6,8 @@ import type {
   AiStreamChunk,
   AiTranslatePayload,
   AiUsageInfo
-} from '@talex-touch/utils/types/aisdk'
-import { AiProviderType } from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
+import { AiProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 export class LocalProvider extends IntelligenceProvider {

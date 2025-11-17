@@ -106,25 +106,21 @@ export function useLanguage() {
     try {
       const i18n = getI18nInstance()
 
-      // 加载语言包
       await loadLocaleMessages(i18n, lang)
 
-      // 设置语言
       setI18nLanguage(i18n, lang)
       currentLanguage.value = lang
 
-      // 保存到本地存储
       localStorage.setItem('app-language', lang)
       if (appSetting?.lang) {
         appSetting.lang.locale = lang
       }
 
-      // 只有在手动切换语言时才关闭跟随系统
       if (!followSystemLanguage.value) {
         localStorage.setItem('app-follow-system-language', 'false')
       }
 
-      console.log(`[useLanguage] Language switched to: ${lang}`)
+      console.debug(`[useLanguage] Language switched to: ${lang}`)
     } catch (error) {
       console.error('[useLanguage] Failed to switch language:', error)
     }

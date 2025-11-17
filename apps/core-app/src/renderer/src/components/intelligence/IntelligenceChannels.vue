@@ -16,11 +16,11 @@ const enabledCount = computed(() => providers.value?.filter(p => p.enabled).leng
 const totalConsumption = ref(0) // TODO: 实际从数据存储获取
 
 function handleChannelsClick() {
-  router.push('/aisdk/channels')
+  router.push('/intelligence/channels')
 }
 
 function handleAudit() {
-  console.log('Open channel audit')
+  router.push('/intelligence/audit')
 }
 
 function handleViewStats() {

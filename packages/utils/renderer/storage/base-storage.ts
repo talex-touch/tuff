@@ -388,4 +388,34 @@ export class TouchStorage<T extends object> {
 
     return this;
   }
+
+  /**
+   * Gets the current data state.
+   *
+   * @returns Current data
+   *
+   * @example
+   * ```ts
+   * const currentData = store.get();
+   * ```
+   */
+  get(): T {
+    return this.data as T;
+  }
+
+  /**
+   * Sets the entire data state.
+   *
+   * @param newData New data to replace current state
+   * @returns The current instance for chaining
+   *
+   * @example
+   * ```ts
+   * store.set({ theme: 'dark', lang: 'en' });
+   * ```
+   */
+  set(newData: T): this {
+    this.assignData(newData as Partial<T>);
+    return this;
+  }
 }

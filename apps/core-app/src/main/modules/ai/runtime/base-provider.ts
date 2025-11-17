@@ -10,7 +10,7 @@ import type {
   AiTranslatePayload,
   AiVisionOcrPayload,
   AiVisionOcrResult
-} from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
 
 export abstract class IntelligenceProvider implements AiProviderAdapter {
   abstract readonly type: AiProviderType

@@ -19,7 +19,7 @@ const totalCalls = ref(0) // TODO: 实际从数据存储获取
 const avgFrequency = ref(0) // TODO: 每小时平均调用次数
 
 function handleCapabilitiesClick() {
-  router.push('/aisdk/capabilities')
+  router.push('/intelligence/capabilities')
 }
 
 function handleAudit() {
