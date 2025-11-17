@@ -1,7 +1,7 @@
 import type {
   AiCapabilityProviderBinding,
   AiProviderConfig
-} from '~/types/aisdk'
+} from '@talex-touch/utils/types/intelligence'
 
 /**
  * Capability binding enriched with provider metadata for UI rendering.

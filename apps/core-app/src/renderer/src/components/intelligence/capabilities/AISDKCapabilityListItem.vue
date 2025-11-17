@@ -1,29 +1,20 @@
 <template>
-  <div
-    class="capability-item group relative my-3 flex cursor-pointer items-center rounded-xl border-2 border-transparent p-3 transition-all duration-200"
-    :class="{ selected: isSelected }"
+  <TuffBlockSlot
+    class="capability-item-slot"
+    :title="capability.label || capability.id"
+    :description="capability.description || capability.id"
+    default-icon="i-carbon-cube"
+    active-icon="i-carbon-cube"
+    :active="isSelected"
     role="button"
-    :tabindex="0"
+    tabindex="0"
     :aria-pressed="isSelected"
     :aria-label="capability.label || capability.id"
     @click="handleSelect"
     @keydown.enter.prevent="handleSelect"
     @keydown.space.prevent="handleSelect"
   >
-    <div class="capability-icon" aria-hidden="true">
-      <i class="i-carbon-cube text-xl" />
-    </div>
-
-    <div class="ml-3 min-w-0 flex-1">
-      <p class="text-sm font-semibold text-[var(--el-text-color-primary)] truncate">
-        {{ capability.label || capability.id }}
-      </p>
-      <p class="mt-1 text-xs text-[var(--el-text-color-secondary)] truncate">
-        {{ capability.description || capability.id }}
-      </p>
-    </div>
-
-    <div class="ml-auto flex flex-col items-end gap-1">
+    <template #tags>
       <span
         class="badge"
         role="status"
@@ -35,14 +26,15 @@
       <span v-if="providerCount > activeProviderCount" class="badge badge-gray text-xs">
         {{ t('settings.aisdk.capabilityProvidersTotal', { count: providerCount }) }}
       </span>
-    </div>
-  </div>
+    </template>
+  </TuffBlockSlot>
 </template>
 
 <script lang="ts" name="AISDKCapabilityListItem" setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AISDKCapabilityConfig } from '~/types/aisdk'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 
 const props = defineProps<{
   capability: AISDKCapabilityConfig
@@ -68,9 +60,14 @@ function handleSelect(): void {
 </script>
 
 <style lang="scss" scoped>
-.capability-item {
-  background: var(--el-bg-color);
+.capability-item-slot {
+  border-radius: 12px;
+  border: 1px solid transparent;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  background: var(--el-bg-color);
+  width: 100%;
 
   &:hover {
     border-color: var(--el-border-color);
@@ -78,22 +75,26 @@ function handleSelect(): void {
     transform: translateY(-1px);
   }
 
-  &.selected {
+  &[aria-pressed='true'] {
     border-color: var(--el-color-primary-light-3);
     box-shadow: 0 4px 20px rgba(var(--el-color-primary-rgb), 0.15);
     background: rgba(var(--el-color-primary-rgb), 0.04);
   }
-}
 
-.capability-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--el-fill-color);
-  color: var(--el-color-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  :deep(.TBlockSlot-Slot) {
+    display: none;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .badge-gray {
+    color: var(--el-text-color-secondary);
+  }
 }
 </style>

@@ -71,7 +71,7 @@ import { ref, watch, getCurrentInstance } from 'vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
-import type { AISDKGlobalConfig } from '~/types/aisdk'
+import type { AISDKGlobalConfig } from '@talex-touch/utils/types/intelligence'
 
 const props = defineProps<{
   modelValue: AISDKGlobalConfig

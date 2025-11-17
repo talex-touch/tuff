@@ -1,4 +1,4 @@
-import { TouchStorage } from '.';
+import { TouchStorage, getOrCreateStorageSingleton } from '.';
 import { appSettingOriginData, StorageList, type AppSetting } from '../..';
 
 /**
@@ -31,4 +31,9 @@ class AppSettingsStorage extends TouchStorage<AppSetting> {
 /**
  * Global instance of the application settings
  */
-export const appSettings = new AppSettingsStorage();
+const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`;
+
+export const appSettings = getOrCreateStorageSingleton<AppSettingsStorage>(
+  APP_SETTINGS_SINGLETON_KEY,
+  () => new AppSettingsStorage()
+);

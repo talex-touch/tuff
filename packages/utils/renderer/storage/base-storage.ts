@@ -64,7 +64,49 @@ export function initStorageChannel(c: IStorageChannel): void {
 /**
  * Global registry of storage instances.
  */
-export const storages = new Map<string, TouchStorage<any>>();
+const GLOBAL_STORAGE_MAP_KEY = '__talex_touch_storages__';
+
+type GlobalStorageMap = Map<string, TouchStorage<any>>;
+
+function getGlobalStorageMap(): GlobalStorageMap {
+  const globalObj = globalThis as typeof globalThis & {
+    [GLOBAL_STORAGE_MAP_KEY]?: GlobalStorageMap;
+  };
+  if (!globalObj[GLOBAL_STORAGE_MAP_KEY]) {
+    globalObj[GLOBAL_STORAGE_MAP_KEY] = new Map<string, TouchStorage<any>>();
+  }
+  return globalObj[GLOBAL_STORAGE_MAP_KEY]!;
+}
+
+export const storages: GlobalStorageMap = getGlobalStorageMap();
+
+const GLOBAL_SINGLETON_KEY = '__talex_touch_storage_singletons__';
+type StorageSingletonMap = Map<string, unknown>;
+
+function getSingletonMap(): StorageSingletonMap {
+  const globalObj = globalThis as typeof globalThis & {
+    [GLOBAL_SINGLETON_KEY]?: StorageSingletonMap;
+  };
+  if (!globalObj[GLOBAL_SINGLETON_KEY]) {
+    globalObj[GLOBAL_SINGLETON_KEY] = new Map<string, unknown>();
+  }
+  return globalObj[GLOBAL_SINGLETON_KEY]!;
+}
+
+/**
+ * Retrieves an existing storage singleton registered on the global scope,
+ * or creates it lazily when missing. Useful to avoid duplicate TouchStorage
+ * instantiations under HMR or multi-renderer scenarios.
+ */
+export function getOrCreateStorageSingleton<T>(key: string, factory: () => T): T {
+  const map = getSingletonMap();
+  if (map.has(key)) {
+    return map.get(key) as T;
+  }
+  const instance = factory();
+  map.set(key, instance);
+  return instance;
+}
 
 /**
  * A reactive storage utility with optional auto-save and update subscriptions.

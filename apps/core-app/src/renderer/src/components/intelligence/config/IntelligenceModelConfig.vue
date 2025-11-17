@@ -22,23 +22,23 @@
     </TuffBlockSlot>
 
     <!-- Default Model Selector -->
-    <TuffBlockSelect
-      v-model="localDefaultModel"
+    <TuffBlockSlot
       :title="t('aisdk.config.model.defaultModel')"
       :description="defaultModelError || t('aisdk.config.model.defaultModelPlaceholder')"
       default-icon="i-carbon-checkmark"
       active-icon="i-carbon-checkmark"
+      :active="!!localDefaultModel"
       :disabled="disabled || localModels.length === 0"
-      @update:model-value="handleDefaultModelChange"
     >
-      <TSelectItem
-        v-for="model in localModels"
-        :key="model"
-        :model-value="model"
+      <FlatButton
+        class="config-action-button"
+        :disabled="disabled || localModels.length === 0"
+        @click="openDefaultModelDrawer"
       >
-        {{ model }}
-      </TSelectItem>
-    </TuffBlockSelect>
+        <span>{{ defaultModelSummary }}</span>
+        <i class="i-carbon-chevron-right" />
+      </FlatButton>
+    </TuffBlockSlot>
 
     <!-- Instructions Prompt Selector -->
     <TuffBlockSlot
@@ -50,17 +50,14 @@
       :disabled="disabled"
       guidance
     >
-      <IntelligencePromptSelector
-        v-model="localInstructions"
-        @update:model-value="handleInstructionsChange"
-      />
+      <FlatButton :disabled="disabled" @click="openInstructionsDrawer">
+        <span>{{ instructionsSummary }}</span>
+        <i class="i-carbon-chevron-right" />
+      </FlatButton>
     </TuffBlockSlot>
 
     <!-- Models Drawer -->
-    <TDrawer
-      v-model:visible="showModelsDrawer"
-      :title="t('aisdk.config.model.manageModels')"
-    >
+    <TDrawer v-model:visible="showModelsDrawer" :title="t('aisdk.config.model.manageModels')">
       <div class="models-drawer-content">
         <p class="text-sm text-[var(--el-text-color-secondary)] mb-4">
           {{ t('aisdk.config.model.modelsHint') }}
@@ -68,18 +65,14 @@
 
         <!-- Model Tags -->
         <div class="model-tags-list">
-          <div
-            v-for="model in localModels"
-            :key="model"
-            class="model-tag-item"
-          >
+          <div v-for="model in localModels" :key="model" class="model-tag-item">
             <span>{{ model }}</span>
             <i
               class="i-carbon-close cursor-pointer text-[var(--el-text-color-secondary)] hover:text-[var(--el-color-error)]"
               @click="handleRemoveModel(model)"
             />
           </div>
-          
+
           <div v-if="localModels.length === 0" class="empty-state">
             <i class="i-carbon-model text-4xl text-[var(--el-text-color-placeholder)]" />
             <p class="text-[var(--el-text-color-secondary)]">
@@ -128,6 +121,37 @@
           {{ modelsError }}
         </p>
       </div>
+    </TDrawer>
+
+    <!-- Default Model Drawer -->
+    <TDrawer v-model:visible="showDefaultModelDrawer" :title="t('aisdk.config.model.defaultModel')">
+      <p class="drawer-description">
+        {{ t('aisdk.config.model.defaultModelPlaceholder') }}
+      </p>
+      <TuffBlockSelect
+        v-model="localDefaultModel"
+        :title="t('aisdk.config.model.defaultModel')"
+        :description="defaultModelError || t('aisdk.config.model.defaultModelPlaceholder')"
+        default-icon="i-carbon-checkmark"
+        active-icon="i-carbon-checkmark"
+        :disabled="disabled || localModels.length === 0"
+        @update:model-value="handleDefaultModelChange"
+      >
+        <TSelectItem v-for="model in localModels" :key="model" :model-value="model">
+          {{ model }}
+        </TSelectItem>
+      </TuffBlockSelect>
+    </TDrawer>
+
+    <!-- Instructions Drawer -->
+    <TDrawer v-model:visible="showInstructionsDrawer" :title="t('aisdk.config.model.instructions')">
+      <p class="drawer-description">
+        {{ t('aisdk.config.model.instructionsHint') }}
+      </p>
+      <IntelligencePromptSelector
+        v-model="localInstructions"
+        @update:model-value="handleInstructionsChange"
+      />
     </TDrawer>
   </div>
 </template>
@@ -192,7 +216,38 @@ const newModelInput = ref('')
 const modelsError = ref('')
 const defaultModelError = ref('')
 const showModelsDrawer = ref(false)
+const showDefaultModelDrawer = ref(false)
+const showInstructionsDrawer = ref(false)
 const isFetching = ref(false)
+
+const defaultModelSummary = computed(() => {
+  if (!localDefaultModel.value) {
+    return t('aisdk.config.model.defaultModelPlaceholder')
+  }
+
+  return localDefaultModel.value
+})
+
+const instructionsSummary = computed(() => {
+  const content = (localInstructions.value || '').trim()
+
+  if (!content) {
+    return t('aisdk.config.model.instructionsEmpty')
+  }
+
+  const singleLine = content.replace(/\s+/g, ' ')
+  return singleLine.length > 60 ? `${singleLine.slice(0, 57)}...` : singleLine
+})
+
+function openDefaultModelDrawer() {
+  if (props.disabled || localModels.value.length === 0) return
+  showDefaultModelDrawer.value = true
+}
+
+function openInstructionsDrawer() {
+  if (props.disabled) return
+  showInstructionsDrawer.value = true
+}
 
 // 检查是否可以获取模型（需要 API Key 且不是本地模型）
 const canFetchModels = computed(() => {
@@ -250,7 +305,7 @@ function handleAddModel() {
 }
 
 function handleRemoveModel(model: string) {
-  const newModels = localModels.value.filter(m => m !== model)
+  const newModels = localModels.value.filter((m) => m !== model)
   localModels.value = newModels
 
   // If removed model was the default, clear default or set to first available
@@ -324,6 +379,12 @@ async function handleFetchModels() {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .drawer-description {
+    margin-bottom: 12px;
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
   }
 }
 
@@ -425,11 +486,11 @@ async function handleFetchModels() {
     color: var(--el-text-color-primary);
     font-size: 14px;
     outline: none;
-    
+
     &:focus {
       border-color: var(--el-color-primary);
     }
-    
+
     &::placeholder {
       color: var(--el-text-color-placeholder);
     }

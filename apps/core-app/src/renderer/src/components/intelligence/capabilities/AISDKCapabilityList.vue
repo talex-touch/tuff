@@ -62,7 +62,7 @@ import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import AISDKCapabilityListItem from './AISDKCapabilityListItem.vue'
-import type { AISDKCapabilityConfig } from '~/types/aisdk'
+import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 
 const props = defineProps<{
   capabilities: AISDKCapabilityConfig[]

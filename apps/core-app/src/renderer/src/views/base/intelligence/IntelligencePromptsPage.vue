@@ -1,40 +1,16 @@
 <template>
   <div class="prompt-page h-full flex flex-col" role="main" aria-label="Intelligence Prompt Manager">
-    <header class="aisdk-hero">
-      <div>
-        <p class="aisdk-hero__eyebrow">{{ t('flatNavBar.aisdk') }}</p>
-        <h1>{{ t('settings.aisdk.promptPageTitle') }}</h1>
-        <p class="aisdk-hero__desc">{{ t('settings.aisdk.promptPageDesc') }}</p>
-      </div>
-      <div class="aisdk-hero__actions">
-        <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
-          <i class="i-carbon-link" aria-hidden="true" />
-          <span>{{ t('settings.aisdk.docsButton') }}</span>
-        </button>
-        <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
-          <i class="i-carbon-folder-open" aria-hidden="true" />
-          <span>{{ t('settings.aisdk.landing.prompts.folderButton') }}</span>
-        </button>
-        <button class="aisdk-btn ghost" type="button" @click="triggerImport">
-          <i class="i-carbon-download" aria-hidden="true" />
-          <span>{{ t('settings.aisdk.promptImportButton') }}</span>
-        </button>
-        <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
-          <i class="i-carbon-upload" aria-hidden="true" />
-          <span>{{ t('settings.aisdk.promptExportButton') }}</span>
-        </button>
-      </div>
-    </header>
-
-    <div
-      class="prompt-layout flex-1 overflow-hidden border border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]"
+    <tuff-aside-template
+      v-model="searchQuery"
+      class="prompt-shell flex-1"
+      :search-id="'prompt-search'"
+      :search-label="t('settings.aisdk.promptSearchLabel')"
+      :search-placeholder="t('settings.aisdk.promptSearchPlaceholder')"
+      :clear-label="t('common.close')"
     >
-      <aside
-        class="prompt-sidebar flex h-full w-80 flex-shrink-0 flex-col gap-4 border-r border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color)] p-4"
-        aria-label="Prompt list sidebar"
-      >
-        <div>
-          <p class="text-xs uppercase tracking-wide text-[var(--el-text-color-secondary)]">
+      <template #aside-header>
+        <div class="prompt-sidebar__summary">
+          <p class="prompt-sidebar__eyebrow">
             {{ t('settings.aisdk.promptStatsLabel', promptStats) }}
           </p>
           <button class="aisdk-btn primary mt-3 w-full" type="button" @click="handleCreatePrompt">
@@ -42,33 +18,9 @@
             <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
           </button>
         </div>
+      </template>
 
-        <div class="prompt-field">
-          <label class="prompt-label" for="prompt-search">
-            {{ t('settings.aisdk.promptSearchLabel') }}
-          </label>
-          <div class="prompt-search">
-            <i class="i-carbon-search" aria-hidden="true" />
-            <input
-              id="prompt-search"
-              v-model="searchQuery"
-              class="prompt-search__input"
-              type="search"
-              :placeholder="t('settings.aisdk.promptSearchPlaceholder')"
-              autocomplete="off"
-            />
-            <button
-              v-if="searchQuery"
-              class="prompt-search__clear"
-              type="button"
-              @click="searchQuery = ''"
-              :aria-label="t('common.close')"
-            >
-              <i class="i-carbon-close" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
+      <template #filter>
         <div class="prompt-filters" role="tablist">
           <button
             v-for="option in filterOptions"
@@ -82,129 +34,133 @@
             {{ option.label }}
           </button>
         </div>
-
         <p class="prompt-list__hint text-xs text-[var(--el-text-color-secondary)]">
           {{ t('settings.aisdk.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
         </p>
+      </template>
 
-        <ul class="prompt-list" role="listbox">
-          <li v-for="prompt in visiblePrompts" :key="prompt.id">
-            <button
-              class="prompt-item"
-              type="button"
-              :class="{ 'is-active': prompt.id === selectedPromptId }"
-              role="option"
-              @click="handleSelectPrompt(prompt.id)"
-            >
-              <div class="prompt-item__content">
-                <p class="prompt-item__title">{{ prompt.name }}</p>
-                <p class="prompt-item__desc">
-                  {{ prompt.description || t('settings.aisdk.promptMetaDescription') }}
-                </p>
-              </div>
-              <span
-                class="prompt-item__badge"
-                :class="prompt.builtin ? 'is-builtin' : 'is-custom'"
-              >
-                {{ prompt.builtin ? t('settings.aisdk.builtin') : t('settings.aisdk.custom') }}
-              </span>
-            </button>
-          </li>
-        </ul>
-        <p
-          v-if="!visiblePrompts.length"
-          class="rounded-lg border border-dashed border-[var(--el-border-color-lighter)] p-4 text-center text-sm text-[var(--el-text-color-secondary)]"
-        >
-          {{ t('settings.aisdk.promptListEmpty') }}
-        </p>
-      </aside>
+      <template #default>
+        <tuff-aside-list
+          v-model:selected-id="selectedPromptId"
+          :items="promptListItems"
+          :empty-text="t('settings.aisdk.promptListEmpty')"
+          @select="handleSelectPrompt"
+        />
+      </template>
 
-      <section class="prompt-details flex-1 overflow-hidden">
-        <Transition name="fade-slide" mode="out-in">
-          <div
-            v-if="selectedPrompt"
-            :key="selectedPrompt.id"
-            class="prompt-detail h-full overflow-y-auto p-6"
-            :aria-live="isBuiltinSelected ? 'polite' : 'off'"
-          >
-            <header class="prompt-detail__header">
-              <div>
-                <p class="text-xs uppercase tracking-wide text-[var(--el-text-color-secondary)]">
-                  {{ selectedPrompt.builtin ? t('settings.aisdk.builtin') : t('settings.aisdk.custom') }}
-                </p>
-                <h2 class="prompt-detail__title">{{ promptDraft.name }}</h2>
-                <p class="prompt-detail__desc">
-                  {{ promptDraft.description || t('settings.aisdk.promptMetaDescription') }}
-                </p>
-              </div>
-              <div class="prompt-detail__meta text-sm text-[var(--el-text-color-secondary)]">
-                <p>
-                  {{ t('settings.aisdk.promptMetaUpdated') }}:
-                  {{ formatTimestamp(selectedPrompt.updatedAt) }}
-                </p>
-                <p>
-                  {{ t('settings.aisdk.promptMetaCreated') }}:
-                  {{ formatTimestamp(selectedPrompt.createdAt) }}
-                </p>
-              </div>
-            </header>
-
-            <div
-              v-if="selectedPrompt.builtin"
-              class="prompt-readonly-hint"
-              role="status"
-            >
-              <i class="i-carbon-information" aria-hidden="true" />
-              <span>{{ t('settings.aisdk.promptReadonlyHint') }}</span>
+      <template #main>
+        <div class="prompt-main-panel flex-1 overflow-hidden">
+          <header class="prompt-main-header">
+            <div>
+              <p class="prompt-main-eyebrow">{{ t('flatNavBar.aisdk') }}</p>
+              <h1>{{ t('settings.aisdk.promptPageTitle') }}</h1>
+              <p class="prompt-main-desc">{{ t('settings.aisdk.promptPageDesc') }}</p>
             </div>
+            <div class="prompt-main-actions">
+              <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
+                <i class="i-carbon-link" aria-hidden="true" />
+                <span>{{ t('settings.aisdk.docsButton') }}</span>
+              </button>
+              <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
+                <i class="i-carbon-folder-open" aria-hidden="true" />
+                <span>{{ t('settings.aisdk.landing.prompts.folderButton') }}</span>
+              </button>
+              <button class="aisdk-btn ghost" type="button" @click="triggerImport">
+                <i class="i-carbon-download" aria-hidden="true" />
+                <span>{{ t('settings.aisdk.promptImportButton') }}</span>
+              </button>
+              <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
+                <i class="i-carbon-upload" aria-hidden="true" />
+                <span>{{ t('settings.aisdk.promptExportButton') }}</span>
+              </button>
+            </div>
+          </header>
 
-            <div class="prompt-form">
-              <label class="prompt-label" for="prompt-name">
-                {{ t('settings.aisdk.promptNameLabel') }}
-              </label>
-              <input
-                id="prompt-name"
-                v-model="promptDraft.name"
-                class="prompt-input"
-                type="text"
-                :placeholder="t('settings.aisdk.promptNamePlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
+          <section class="prompt-details flex-1 overflow-hidden">
+            <Transition name="fade-slide" mode="out-in">
+              <div
+                v-if="selectedPrompt"
+                :key="selectedPrompt.id"
+                class="prompt-detail h-full overflow-y-auto p-6"
+                :aria-live="isBuiltinSelected ? 'polite' : 'off'"
+              >
+                <header class="prompt-detail__header">
+                  <div>
+                    <p class="text-xs uppercase tracking-wide text-[var(--el-text-color-secondary)]">
+                      {{ selectedPrompt.builtin ? t('settings.aisdk.builtin') : t('settings.aisdk.custom') }}
+                    </p>
+                    <h2 class="prompt-detail__title">{{ promptDraft.name }}</h2>
+                    <p class="prompt-detail__desc">
+                      {{ promptDraft.description || t('settings.aisdk.promptMetaDescription') }}
+                    </p>
+                  </div>
+                  <div class="prompt-detail__meta text-sm text-[var(--el-text-color-secondary)]">
+                    <p>
+                      {{ t('settings.aisdk.promptMetaUpdated') }}:
+                      {{ formatTimestamp(selectedPrompt.updatedAt) }}
+                    </p>
+                    <p>
+                      {{ t('settings.aisdk.promptMetaCreated') }}:
+                      {{ formatTimestamp(selectedPrompt.createdAt) }}
+                    </p>
+                  </div>
+                </header>
 
-              <label class="prompt-label" for="prompt-category">
-                {{ t('settings.aisdk.promptMetaCategory') }}
-              </label>
-              <input
-                id="prompt-category"
-                v-model="promptDraft.category"
-                class="prompt-input"
-                type="text"
-                :placeholder="t('settings.aisdk.promptCategoryPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
+                <div
+                  v-if="selectedPrompt.builtin"
+                  class="prompt-readonly-hint"
+                  role="status"
+                >
+                  <i class="i-carbon-information" aria-hidden="true" />
+                  <span>{{ t('settings.aisdk.promptReadonlyHint') }}</span>
+                </div>
 
-              <label class="prompt-label" for="prompt-description">
-                {{ t('settings.aisdk.promptDescriptionLabel') }}
-              </label>
-              <textarea
-                id="prompt-description"
-                v-model="promptDraft.description"
-                class="prompt-textarea"
-                rows="2"
-                :placeholder="t('settings.aisdk.promptDescriptionPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
+                <div class="prompt-form">
+                  <label class="prompt-label" for="prompt-name">
+                    {{ t('settings.aisdk.promptNameLabel') }}
+                  </label>
+                  <input
+                    id="prompt-name"
+                    v-model="promptDraft.name"
+                    class="prompt-input"
+                    type="text"
+                    :placeholder="t('settings.aisdk.promptNamePlaceholder')"
+                    :disabled="isBuiltinSelected"
+                  />
+
+                  <label class="prompt-label" for="prompt-category">
+                    {{ t('settings.aisdk.promptMetaCategory') }}
+                  </label>
+                  <input
+                    id="prompt-category"
+                    v-model="promptDraft.category"
+                    class="prompt-input"
+                    type="text"
+                    :placeholder="t('settings.aisdk.promptCategoryPlaceholder')"
+                    :disabled="isBuiltinSelected"
+                  />
+
+                  <label class="prompt-label" for="prompt-description">
+                    {{ t('settings.aisdk.promptDescriptionLabel') }}
+                  </label>
+                  <textarea
+                    id="prompt-description"
+                    v-model="promptDraft.description"
+                    class="prompt-textarea"
+                    rows="2"
+                    :placeholder="t('settings.aisdk.promptDescriptionPlaceholder')"
+                    :disabled="isBuiltinSelected"
+                  />
 
               <label class="prompt-label" for="prompt-content">
                 {{ t('settings.aisdk.promptContentLabel') }}
               </label>
-              <textarea
-                id="prompt-content"
-                v-model="promptDraft.content"
-                class="prompt-textarea prompt-textarea--large"
-                :placeholder="t('settings.aisdk.promptContentPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
+              <div class="prompt-markdown">
+                <FlatMarkdown
+                  v-model="promptDraft.content"
+                  :readonly="isBuiltinSelected"
+                />
+              </div>
             </div>
 
             <div class="prompt-actions">
@@ -212,50 +168,63 @@
                 <button class="aisdk-btn ghost" type="button" @click="handleDuplicatePrompt">
                   <i class="i-carbon-copy" aria-hidden="true" />
                   <span>{{ t('settings.aisdk.promptDuplicateButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
-                  <i class="i-carbon-document" aria-hidden="true" />
-                  <span>{{ t('settings.aisdk.promptCopyButton') }}</span>
-                </button>
-              </div>
-              <div class="prompt-actions__secondary">
-                <button
-                  class="aisdk-btn danger"
-                  type="button"
-                  :disabled="!isCustomEditable"
-                  @click="handleDeletePrompt"
-                >
-                  <i class="i-carbon-trash-can" aria-hidden="true" />
-                  <span>{{ t('settings.aisdk.promptDeleteButton') }}</span>
-                </button>
-                <button
-                  class="aisdk-btn primary"
-                  type="button"
-                  :disabled="!isCustomEditable || !isDirty"
-                  @click="handleSavePrompt"
-                >
-                  <i class="i-carbon-checkmark" aria-hidden="true" />
+                    </button>
+                    <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
+                      <i class="i-carbon-document" aria-hidden="true" />
+                      <span>{{ t('settings.aisdk.promptCopyButton') }}</span>
+                    </button>
+                  </div>
+                  <div class="prompt-actions__secondary">
+                    <button
+                      class="aisdk-btn danger"
+                      type="button"
+                      :disabled="!isCustomEditable"
+                      @click="handleDeletePrompt"
+                    >
+                      <i class="i-carbon-trash-can" aria-hidden="true" />
+                      <span>{{ t('settings.aisdk.promptDeleteButton') }}</span>
+                    </button>
+                    <button
+                      class="aisdk-btn primary"
+                      type="button"
+                      :disabled="!isCustomEditable || !isDirty"
+                      @click="handleSavePrompt"
+                    >
+                      <i class="i-carbon-checkmark" aria-hidden="true" />
                   <span>{{ t('settings.aisdk.promptSaveButton') }}</span>
                 </button>
               </div>
+              <div v-if="isCustomEditable" class="prompt-actions__status" :data-status="autoSaveStatus">
+                <i
+                  v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
+                  class="i-carbon-renew animate-spin text-[var(--el-text-color-secondary)]"
+                />
+                <i
+                  v-else-if="autoSaveStatus === 'saved'"
+                  class="i-carbon-checkmark text-[var(--el-color-success)]"
+                />
+                <span>{{ autoSaveStatusText }}</span>
+              </div>
             </div>
-          </div>
-          <div v-else class="prompt-empty-state" role="status">
-            <i class="i-carbon-idea text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
-            <p class="prompt-empty-state__title">
-              {{ t('settings.aisdk.promptEmptyStateTitle') }}
-            </p>
-            <p class="prompt-empty-state__desc">
-              {{ t('settings.aisdk.promptEmptyStateDesc') }}
-            </p>
-            <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
-              <i class="i-carbon-add" aria-hidden="true" />
-              <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
-            </button>
-          </div>
-        </Transition>
-      </section>
-    </div>
+              </div>
+              <div v-else class="prompt-empty-state" role="status">
+                <i class="i-carbon-idea text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
+                <p class="prompt-empty-state__title">
+                  {{ t('settings.aisdk.promptEmptyStateTitle') }}
+                </p>
+                <p class="prompt-empty-state__desc">
+                  {{ t('settings.aisdk.promptEmptyStateDesc') }}
+                </p>
+                <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
+                  <i class="i-carbon-add" aria-hidden="true" />
+                  <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
+                </button>
+              </div>
+            </Transition>
+          </section>
+        </div>
+      </template>
+    </tuff-aside-template>
 
     <input
       ref="importInputRef"
@@ -268,11 +237,14 @@
 </template>
 
 <script lang="ts" name="IntelligencePromptsPage" setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { getPromptManager, type PromptTemplate } from '~/modules/hooks/usePromptManager'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 type FilterMode = 'all' | 'builtin' | 'custom'
 
@@ -289,6 +261,9 @@ const promptDraft = reactive({
   description: '',
   content: ''
 })
+const autoSaveStatus = ref<'idle' | 'pending' | 'saving' | 'saved'>('idle')
+let isApplyingDraft = false
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 const filterOptions = computed(() => [
   { value: 'all', label: t('settings.aisdk.promptFilterAll') },
@@ -322,6 +297,16 @@ const visiblePrompts = computed(() => {
   })
 })
 
+const promptListItems = computed(() =>
+  visiblePrompts.value.map((prompt) => ({
+    id: prompt.id,
+    title: prompt.name,
+    description: prompt.description || t('settings.aisdk.promptMetaDescription'),
+    badgeLabel: prompt.builtin ? t('settings.aisdk.builtin') : t('settings.aisdk.custom'),
+    badgeVariant: prompt.builtin ? 'info' : 'success'
+  }))
+)
+
 watch(
   visiblePrompts,
   (list) => {
@@ -347,17 +332,30 @@ const isCustomEditable = computed(() => !!selectedPrompt.value && !selectedPromp
 watch(
   selectedPrompt,
   (prompt) => {
+    isApplyingDraft = true
     if (!prompt) {
       promptDraft.name = ''
       promptDraft.category = ''
       promptDraft.description = ''
       promptDraft.content = ''
+      autoSaveStatus.value = 'idle'
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer)
+        autoSaveTimer = null
+      }
+      isApplyingDraft = false
       return
     }
     promptDraft.name = prompt.name
     promptDraft.category = prompt.category ?? ''
     promptDraft.description = prompt.description ?? ''
     promptDraft.content = prompt.content
+    autoSaveStatus.value = 'idle'
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer)
+      autoSaveTimer = null
+    }
+    isApplyingDraft = false
   },
   { immediate: true }
 )
@@ -388,7 +386,44 @@ const totalWordsApprox = computed(() =>
   }, 0)
 )
 
+const autoSaveStatusText = computed(() => {
+  switch (autoSaveStatus.value) {
+    case 'pending':
+      return '待保存...'
+    case 'saving':
+      return '保存中...'
+    case 'saved':
+      return '已保存'
+    default:
+      return '自动保存已启用'
+  }
+})
+
+function flushPendingPromptChanges(): void {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+  if (!selectedPrompt.value || !isCustomEditable.value) {
+    autoSaveStatus.value = 'idle'
+    return
+  }
+  if (!isDirty.value) {
+    autoSaveStatus.value = 'idle'
+    return
+  }
+  autoSaveStatus.value = 'saving'
+  const ok = persistPrompt(false)
+  autoSaveStatus.value = ok ? 'saved' : 'idle'
+  if (ok) {
+    window.setTimeout(() => {
+      if (autoSaveStatus.value === 'saved') autoSaveStatus.value = 'idle'
+    }, 1200)
+  }
+}
+
 function handleSelectPrompt(id: string): void {
+  flushPendingPromptChanges()
   selectedPromptId.value = id
 }
 
@@ -407,6 +442,7 @@ async function handleOpenFolder(): Promise<void> {
 }
 
 function handleCreatePrompt(): void {
+  flushPendingPromptChanges()
   const name = t('settings.aisdk.promptNewDefaultName', { index: promptStats.value.custom + 1 })
   const newId = promptManager.addCustomPrompt({
     name,
@@ -422,6 +458,7 @@ function handleCreatePrompt(): void {
 
 function handleDuplicatePrompt(): void {
   if (!selectedPrompt.value) return
+  flushPendingPromptChanges()
   const suffix = t('settings.aisdk.promptDuplicateSuffix')
   const name = `${selectedPrompt.value.name} ${suffix}`.trim()
   const newId = promptManager.addCustomPrompt({
@@ -435,8 +472,8 @@ function handleDuplicatePrompt(): void {
   toast.success(t('settings.aisdk.promptDuplicateSuccess'))
 }
 
-function handleSavePrompt(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value) return
+function persistPrompt(showSuccessToast: boolean, showErrorToast: boolean = true): boolean {
+  if (!selectedPrompt.value || !isCustomEditable.value) return false
   const ok = promptManager.updateCustomPrompt(selectedPrompt.value.id, {
     name: promptDraft.name,
     category: promptDraft.category,
@@ -444,14 +481,62 @@ function handleSavePrompt(): void {
     content: promptDraft.content
   })
   if (ok) {
-    toast.success(t('settings.aisdk.promptSaveSuccess'))
-  } else {
+    if (showSuccessToast) toast.success(t('settings.aisdk.promptSaveSuccess'))
+  } else if (showErrorToast) {
     toast.error(t('settings.aisdk.promptSaveFailed'))
+  }
+  return ok
+}
+
+function handleSavePrompt(): void {
+  persistPrompt(true)
+}
+
+function scheduleAutoSave(): void {
+  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft) return
+  autoSaveStatus.value = 'pending'
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = null
+    runAutoSave()
+  }, 900)
+}
+
+function runAutoSave(): void {
+  if (!selectedPrompt.value || !isCustomEditable.value) {
+    autoSaveStatus.value = 'idle'
+    return
+  }
+  if (!isDirty.value) {
+    autoSaveStatus.value = 'idle'
+    return
+  }
+  autoSaveStatus.value = 'saving'
+  const ok = persistPrompt(false)
+  autoSaveStatus.value = ok ? 'saved' : 'idle'
+  if (ok) {
+    window.setTimeout(() => {
+      if (autoSaveStatus.value === 'saved') {
+        autoSaveStatus.value = 'idle'
+      }
+    }, 1500)
   }
 }
 
+watch(
+  () => ({ ...promptDraft }),
+  () => {
+    if (isApplyingDraft || !isCustomEditable.value) return
+    scheduleAutoSave()
+  },
+  { deep: true }
+)
+
 function handleDeletePrompt(): void {
   if (!selectedPrompt.value || !isCustomEditable.value) return
+  flushPendingPromptChanges()
   if (!window.confirm(t('settings.aisdk.promptDeleteConfirm'))) return
   const deletedId = selectedPrompt.value.id
   const deleted = promptManager.deleteCustomPrompt(deletedId)
@@ -521,67 +606,44 @@ function formatTimestamp(value?: number): string {
     minute: '2-digit'
   }).format(value)
 }
+
+onBeforeUnmount(() => {
+  flushPendingPromptChanges()
+})
 </script>
 
 <style lang="scss" scoped>
 @import './intelligence-shared.scss';
 
-.prompt-sidebar {
-  .prompt-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .prompt-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--el-text-color-secondary);
-  }
+.prompt-shell {
+  min-height: 0;
 }
 
-.prompt-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--el-border-color);
-  border-radius: 0.75rem;
-  padding: 0 0.75rem;
-  background: var(--el-fill-color-light);
+.prompt-sidebar__summary {
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--el-fill-color);
+  border: 1px solid var(--el-border-color-lighter);
+}
 
-  i {
-    color: var(--el-text-color-placeholder);
-  }
-
-  &__input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    padding: 0.5rem;
-    font-size: 0.9rem;
-    color: var(--el-text-color-primary);
-    outline: none;
-  }
-
-  &__clear {
-    border: none;
-    background: transparent;
-    color: var(--el-text-color-placeholder);
-    cursor: pointer;
-    padding: 0.25rem;
-  }
+.prompt-sidebar__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--el-text-color-secondary);
 }
 
 .prompt-filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .prompt-filter {
   border: 1px solid var(--el-border-color);
   border-radius: 999px;
-  padding: 0.35rem 0.25rem;
+  padding: 0.35rem 0.8rem;
   font-size: 0.85rem;
   color: var(--el-text-color-secondary);
   background: var(--el-bg-color);
@@ -595,68 +657,60 @@ function formatTimestamp(value?: number): string {
   }
 }
 
-.prompt-list {
-  flex: 1;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  li + li {
-    margin-top: 0.5rem;
-  }
+.prompt-list__hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
 }
 
-.prompt-item {
-  width: 100%;
-  border: 1px solid var(--el-border-color);
-  border-radius: 0.75rem;
-  padding: 0.75rem;
+.prompt-main-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.prompt-main-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 1rem;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding-bottom: 1rem;
+}
+
+.prompt-main-eyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--el-text-color-secondary);
+}
+
+.prompt-main-desc {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--el-text-color-secondary);
+}
+
+.prompt-main-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  background: var(--el-bg-color);
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.2s ease, background 0.2s ease;
 
-  &.is-active {
-    border-color: var(--el-color-primary);
-    background: rgba(var(--el-color-primary-rgb), 0.06);
-  }
-
-  &__title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-  }
-
-  &__desc {
-    font-size: 0.8rem;
-    color: var(--el-text-color-secondary);
-  }
-
-  &__badge {
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 0.2rem 0.5rem;
-    border-radius: 999px;
-
-    &.is-builtin {
-      background: rgba(99, 102, 241, 0.1);
-      color: #6366f1;
-    }
-
-    &.is-custom {
-      background: rgba(16, 185, 129, 0.12);
-      color: #10b981;
-    }
+  .aisdk-btn {
+    gap: 0.35rem;
   }
 }
 
 .prompt-details {
   background: var(--el-bg-color);
+}
+
+.prompt-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
 }
 
 .prompt-detail__header {
@@ -698,6 +752,22 @@ function formatTimestamp(value?: number): string {
   gap: 0.5rem;
 }
 
+.prompt-markdown {
+  border: 1px solid var(--el-border-color);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  min-height: 260px;
+
+  :deep(.FlatMarkdown-Container) {
+    border: none;
+    height: 100%;
+
+    .el-scrollbar {
+      height: 260px;
+    }
+  }
+}
+
 .prompt-input,
 .prompt-textarea {
   width: 100%;
@@ -730,6 +800,14 @@ function formatTimestamp(value?: number): string {
   .aisdk-btn {
     gap: 0.35rem;
   }
+}
+
+.prompt-actions__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--el-text-color-secondary);
 }
 
 .prompt-empty-state {

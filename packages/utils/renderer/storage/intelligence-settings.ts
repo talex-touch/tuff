@@ -2,28 +2,13 @@
  * Intelligence Storage for AI Provider Configuration
  * 管理 AI 智能模块的数据存储，包括提供商配置、全局设置等
  */
-import { TouchStorage } from './base-storage'
+import { TouchStorage, getOrCreateStorageSingleton } from './base-storage'
 import { StorageList } from '../../common/storage/constants'
-import { AiProviderType, type AiProviderConfig } from '../../types/intelligence'
+import { AiProviderType, type AiProviderConfig, type AISDKGlobalConfig } from '../../types/intelligence'
 
 // Re-export types for convenience
 export { AiProviderType }
-export type { AiProviderConfig }
-
-export interface AISDKGlobalConfig {
-  maxRetries: number
-  defaultTimeout: number
-  enableLogging: boolean
-  logLevel: 'debug' | 'info' | 'warn' | 'error'
-  enableCaching: boolean
-  cacheSize: number
-  fallbackStrategy: 'next-available' | 'fail-fast' | 'round-robin'
-  parallelRequests: boolean
-  defaultStrategy: string
-  enableAudit: boolean
-  enableCache: boolean
-  cacheExpiration?: number
-}
+export type { AiProviderConfig, AISDKGlobalConfig }
 
 export interface IntelligenceSetting {
   providers: AiProviderConfig[]
@@ -199,4 +184,9 @@ class IntelligenceSettingsStorage extends TouchStorage<IntelligenceSetting> {
   }
 }
 
-export const intelligenceSettings = new IntelligenceSettingsStorage()
+const INTELLIGENCE_SETTINGS_KEY = `storage:${StorageList.INTELLIGENCE_SETTING}`
+
+export const intelligenceSettings = getOrCreateStorageSingleton<IntelligenceSettingsStorage>(
+  INTELLIGENCE_SETTINGS_KEY,
+  () => new IntelligenceSettingsStorage()
+)
