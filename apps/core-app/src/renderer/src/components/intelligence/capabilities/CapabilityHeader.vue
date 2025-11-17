@@ -23,9 +23,6 @@ defineProps<{
   align-items: flex-start;
   gap: 1.5rem;
   padding: 1.5rem;
-  background: var(--el-bg-color);
-  border-radius: 1rem;
-  border: 1px solid var(--el-border-color-lighter);
 }
 
 .capability-header__content {

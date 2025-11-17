@@ -29,25 +29,20 @@
     </template>
 
     <template #main>
-      <IntelligenceCapabilityInfo
-        v-if="selectedCapability"
-        :key="selectedCapability.id"
-        :capability="selectedCapability"
-        :providers="providers"
-        :bindings="activeBindings(selectedCapability.id)"
-        :is-testing="!!capabilityTesting[selectedCapability.id]"
-        :test-result="capabilityTests[selectedCapability.id]"
-        @toggle-provider="onToggleProvider"
-        @update-models="onUpdateModels"
-        @update-prompt="onUpdatePrompt"
-        @reorder-providers="onReorderProviders"
-        @test="handleCapabilityTest(selectedCapability.id)"
-      />
-      <div v-else class="capability-empty-state" role="status">
-        <i class="i-carbon-cube text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
-        <p class="capability-empty-state__title">
-          {{ t('settings.intelligence.capabilityListEmpty') }}
-        </p>
+      <div :key="selectedCapabilityId ?? 'empty'" class="h-full overflow-hidden">
+        <IntelligenceCapabilityInfo
+          v-if="selectedCapability"
+          :capability="selectedCapability"
+          :providers="providers"
+          :bindings="activeBindings(selectedCapability.id)"
+          :is-testing="!!capabilityTesting[selectedCapability.id]"
+          :test-result="capabilityTests[selectedCapability.id]"
+          @toggle-provider="onToggleProvider"
+          @update-models="onUpdateModels"
+          @update-prompt="onUpdatePrompt"
+          @reorder-providers="onReorderProviders"
+          @test="handleCapabilityTest(selectedCapability.id)"
+        />
       </div>
     </template>
   </tuff-aside-template>
@@ -126,12 +121,7 @@ watch(filteredCapabilities, (list) => {
 })
 
 function handleSelectCapability(id: string): void {
-  console.log('[IntelligenceCapabilitiesPage] Selecting capability:', id)
   selectedCapabilityId.value = id
-  console.log('[IntelligenceCapabilitiesPage] selectedCapabilityId:', selectedCapabilityId.value)
-  console.log('[IntelligenceCapabilitiesPage] capabilityList:', capabilityList.value)
-  console.log('[IntelligenceCapabilitiesPage] Selected capability:', selectedCapability.value)
-  console.log('[IntelligenceCapabilitiesPage] providers:', providers.value)
 }
 
 function getCapabilityIcon(capability: AISDKCapabilityConfig): ITuffIcon {
