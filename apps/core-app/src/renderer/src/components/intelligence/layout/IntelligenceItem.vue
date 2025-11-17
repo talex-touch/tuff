@@ -1,6 +1,6 @@
 <template>
   <div
-    class="aisdk-item my-2 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
+    class="aisdk-item group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
     :class="{
       selected: isSelected,
       enabled: provider.enabled,
