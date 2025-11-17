@@ -135,7 +135,7 @@ defineExpose({
 }
 
 .native-scroll-wrapper {
-  :deep(header, .header) {
+  :deep(> header, .header) {
     z-index: var(--touch-scroll-z-index, 100);
     position: sticky;
 
