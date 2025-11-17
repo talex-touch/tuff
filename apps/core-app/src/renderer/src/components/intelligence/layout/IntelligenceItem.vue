@@ -12,7 +12,6 @@
 </template>
 
 <script lang="ts" name="IntelligenceItemRefactored" setup>
-import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ITuffIcon } from '@talex-touch/utils'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
