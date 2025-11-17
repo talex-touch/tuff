@@ -123,7 +123,26 @@ function handleUpdateGlobal(updatedConfig: AISDKGlobalConfig): void {
 
 function handleDeleteProvider(): void {
   if (!selectedProvider.value) return
-  removeProvider(selectedProvider.value.id)
+  const deletedId = selectedProvider.value.id
+
+  // Find current index before deletion
+  const currentIndex = providers.value.findIndex(p => p.id === deletedId)
+
+  // Remove the provider
+  removeProvider(deletedId)
+
+  // Smoothly select next provider after deletion
+  const remainingProviders = providers.value
+  if (remainingProviders.length > 0) {
+    // Try to select the provider at the same index, or the last one if index is out of bounds
+    const newIndex = Math.min(currentIndex, remainingProviders.length - 1)
+    selectedProviderId.value = remainingProviders[newIndex].id
+  } else {
+    selectedProviderId.value = null
+  }
+
+  // Clear test result when switching
+  testResult.value = null
 }
 
 function navigateToNextProvider(): void {

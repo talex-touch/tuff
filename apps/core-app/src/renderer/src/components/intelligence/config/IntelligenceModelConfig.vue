@@ -40,30 +40,21 @@
       </TSelectItem>
     </TuffBlockSelect>
 
-    <!-- Instructions Textarea -->
-    <TuffBlockInput
-      v-model="localInstructions"
+    <!-- Instructions Prompt Selector -->
+    <TuffBlockSlot
       :title="t('aisdk.config.model.instructions')"
       :description="t('aisdk.config.model.instructionsHint')"
       default-icon="i-carbon-document"
       active-icon="i-carbon-document"
+      :active="!!localInstructions"
       :disabled="disabled"
-      :placeholder="t('aisdk.config.model.instructionsPlaceholder')"
-      @blur="handleInstructionsBlur"
+      guidance
     >
-      <template #control="{ modelValue, update, focus, blur }">
-        <textarea
-          :value="modelValue"
-          :placeholder="t('aisdk.config.model.instructionsPlaceholder')"
-          :disabled="disabled"
-          class="instructions-textarea"
-          rows="4"
-          @input="update(($event.target as HTMLTextAreaElement).value)"
-          @focus="focus"
-          @blur="blur(); handleInstructionsBlur()"
-        />
-      </template>
-    </TuffBlockInput>
+      <IntelligencePromptSelector
+        v-model="localInstructions"
+        @update:model-value="handleInstructionsChange"
+      />
+    </TuffBlockSlot>
 
     <!-- Models Drawer -->
     <el-drawer
@@ -132,9 +123,9 @@ import { useI18n } from 'vue-i18n'
 import { ElDrawer } from 'element-plus'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
-import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 
 interface AiProviderConfig {
   id: string
@@ -266,7 +257,7 @@ function handleDefaultModelChange() {
   }
 }
 
-function handleInstructionsBlur() {
+function handleInstructionsChange() {
   emitUpdate()
 }
 
@@ -288,32 +279,6 @@ function emitUpdate() {
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .instructions-textarea {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--el-border-color);
-    border-radius: 6px;
-    background: var(--el-fill-color-blank);
-    color: var(--el-text-color-primary);
-    font-size: 14px;
-    font-family: inherit;
-    outline: none;
-    resize: vertical;
-    
-    &:focus {
-      border-color: var(--el-color-primary);
-    }
-    
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
-    &::placeholder {
-      color: var(--el-text-color-placeholder);
-    }
   }
 }
 

@@ -1,130 +1,62 @@
 <template>
-  <div class="aisdk-page h-full flex flex-col" role="main" aria-label="Intelligence Capability Binding">
-    <header class="aisdk-hero">
-      <div>
-        <p class="aisdk-hero__eyebrow">{{ t('flatNavBar.aisdk') }}</p>
-        <h1>{{ t('settings.aisdk.capabilityPageTitle') }}</h1>
-        <p class="aisdk-hero__desc">
-          {{ t('settings.aisdk.capabilityPageDesc') }}
-        </p>
-      </div>
-    </header>
-
-    <div class="aisdk-body flex-1 flex flex-col gap-4 overflow-hidden">
-      <div class="capability-grid">
-        <article
-          v-for="capability in capabilityList"
-          :key="capability.id"
-          class="capability-card"
-        >
-          <header class="capability-card__header">
-            <div>
-              <h3>{{ capability.label || capability.id }}</h3>
-              <p>{{ capability.description }}</p>
-            </div>
-            <FlatButton
-              :primary="!capabilityTesting[capability.id]"
-              @click="handleCapabilityTest(capability.id)"
-            >
-              <i :class="capabilityTesting[capability.id] ? 'i-carbon-renew animate-spin' : 'i-carbon-flash'" aria-hidden="true" />
-              <span>
-                {{ capabilityTesting[capability.id] ? t('settings.aisdk.testing') : t('settings.aisdk.capabilityTest') }}
-              </span>
-            </FlatButton>
-          </header>
-
-          <div class="capability-card__section">
-            <p class="section-title">{{ t('settings.aisdk.capabilityProviderLabel') }}</p>
-            <div class="provider-pills">
-              <label
-                v-for="provider in providers"
-                :key="provider.id"
-                class="provider-pill"
-              >
-                <input
-                  type="checkbox"
-                  :checked="isCapabilityProviderSelected(capability.id, provider.id)"
-                  @change="handleCapabilityProviderToggle(capability.id, provider.id, ($event.target as HTMLInputElement).checked)"
-                />
-                <span>{{ provider.name }}</span>
-              </label>
-            </div>
-          </div>
-
+  <div class="flex h-full flex-col" role="main" aria-label="Intelligence Capability Binding">
+    <div class="flex flex-1 overflow-hidden border border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]">
+      <AISDKCapabilityList
+        class="h-full w-80 flex-shrink-0 border-r border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color)]"
+        :capabilities="capabilityList"
+        :selected-id="selectedCapabilityId"
+        @select="handleSelectCapability"
+      />
+      <section
+        class="h-full flex-1 overflow-hidden"
+        :aria-live="selectedCapability ? 'polite' : 'off'"
+      >
+        <Transition name="fade-slide" mode="out-in">
+          <AISDKCapabilityDetails
+            v-if="selectedCapability"
+            :key="selectedCapability.id"
+            :capability="selectedCapability"
+            :providers="providers"
+            :bindings="activeBindings(selectedCapability.id)"
+            :is-testing="!!capabilityTesting[selectedCapability.id]"
+            :test-result="capabilityTests[selectedCapability.id]"
+            @toggle-provider="onToggleProvider"
+            @update-models="onUpdateModels"
+            @update-prompt="onUpdatePrompt"
+            @test="handleCapabilityTest(selectedCapability.id)"
+          />
           <div
-            v-for="binding in activeBindings(capability.id)"
-            :key="`${capability.id}-${binding.providerId}`"
-            class="capability-card__section"
+            v-else
+            class="flex h-full flex-col items-center justify-center gap-2 text-[var(--el-text-color-secondary)]"
+            role="status"
           >
-            <p class="section-title">{{ binding.provider?.name || binding.providerId }}</p>
-            <input
-              type="text"
-              class="aisdk-input"
-              :value="getBindingModels(capability.id, binding.providerId)"
-              :placeholder="binding.provider?.defaultModel || 'model-1, model-2'"
-              @change="handleCapabilityModels(capability.id, binding.providerId, ($event.target as HTMLInputElement).value)"
-            />
+            <i class="i-carbon-cube text-3xl" aria-hidden="true" />
+            <p>{{ t('settings.aisdk.capabilityListEmpty') }}</p>
           </div>
-
-          <div class="capability-card__section">
-            <p class="section-title">{{ t('settings.aisdk.capabilityPromptLabel') }}</p>
-            <textarea
-              class="aisdk-textarea"
-              rows="3"
-              :value="capability.promptTemplate || ''"
-              :placeholder="t('settings.settingAISDK.instructionsPlaceholder')"
-              @change="handleCapabilityPrompt(capability.id, ($event.target as HTMLTextAreaElement).value)"
-            />
-          </div>
-
-          <div
-            v-if="capabilityTests[capability.id]"
-            class="capability-card__result"
-          >
-            <p class="result-title">
-              <i
-                :class="capabilityTests[capability.id]?.success ? 'i-carbon-checkmark-filled text-green-500' : 'i-carbon-warning-filled text-red-500'"
-                aria-hidden="true"
-              />
-              <span>
-                {{ capabilityTests[capability.id]?.success ? t('settings.aisdk.testSuccess') : t('settings.aisdk.testFailed') }}
-              </span>
-            </p>
-            <p v-if="capabilityTests[capability.id]?.textPreview" class="result-snippet">
-              {{ capabilityTests[capability.id]?.textPreview }}
-            </p>
-            <p class="result-meta">
-              <span v-if="capabilityTests[capability.id]?.provider">
-                {{ capabilityTests[capability.id]?.provider }}
-              </span>
-              <span v-if="capabilityTests[capability.id]?.model">
-                · {{ capabilityTests[capability.id]?.model }}
-              </span>
-              <span v-if="capabilityTests[capability.id]?.latency">
-                · {{ capabilityTests[capability.id]?.latency }}ms
-              </span>
-            </p>
-          </div>
-        </article>
-      </div>
+        </Transition>
+      </section>
     </div>
   </div>
 </template>
 
 <script lang="ts" name="IntelligenceCapabilitiesPage" setup>
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 import type {
   AISDKCapabilityConfig,
   AiCapabilityProviderBinding,
-  AiVisionOcrResult,
-  AiProviderConfig
+  AiVisionOcrResult
 } from '~/types/aisdk'
 import type { AiInvokeResult } from '@talex-touch/utils/types/aisdk'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { createAiSDKClient } from '@talex-touch/utils/aisdk/client'
 import { touchChannel } from '~/modules/channel/channel-core'
+import AISDKCapabilityList from '~/components/intelligence/capabilities/AISDKCapabilityList.vue'
+import AISDKCapabilityDetails from '~/components/intelligence/capabilities/AISDKCapabilityDetails.vue'
+import type {
+  CapabilityBinding,
+  CapabilityTestResult
+} from '~/components/intelligence/capabilities/types'
 
 const { t } = useI18n()
 const aiClient = createAiSDKClient(touchChannel as any)
@@ -141,13 +73,32 @@ const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
 )
 const providerMap = computed(() => new Map(providers.value.map((provider) => [provider.id, provider])))
 
-const capabilityTests = reactive<Record<string, { success: boolean; message?: string; latency?: number; provider?: string; model?: string; textPreview?: string; timestamp: number } | null>>({})
-const capabilityTesting = reactive<Record<string, boolean>>({})
+const selectedCapabilityId = ref<string | null>(capabilityList.value[0]?.id ?? null)
+const selectedCapability = computed<AISDKCapabilityConfig | null>(() => {
+  if (!selectedCapabilityId.value) return null
+  return capabilityList.value.find((entry) => entry.id === selectedCapabilityId.value) ?? null
+})
 
-function isCapabilityProviderSelected(capabilityId: string, providerId: string): boolean {
-  const capability = capabilities.value[capabilityId]
-  return capability?.providers?.some((binding) => binding.providerId === providerId) ?? false
+watch(
+  capabilityList,
+  (list) => {
+    if (list.length === 0) {
+      selectedCapabilityId.value = null
+      return
+    }
+    if (!selectedCapabilityId.value || !list.some((item) => item.id === selectedCapabilityId.value)) {
+      selectedCapabilityId.value = list[0].id
+    }
+  },
+  { immediate: true }
+)
+
+function handleSelectCapability(id: string): void {
+  selectedCapabilityId.value = id
 }
+
+const capabilityTests = reactive<Record<string, CapabilityTestResult | null>>({})
+const capabilityTesting = reactive<Record<string, boolean>>({})
 
 function updateCapabilityBinding(
   capabilityId: string,
@@ -185,12 +136,6 @@ function handleCapabilityProviderToggle(
   }
 }
 
-function getBindingModels(capabilityId: string, providerId: string): string {
-  const capability = capabilities.value[capabilityId]
-  const binding = capability?.providers?.find((entry) => entry.providerId === providerId)
-  return binding?.models?.join(', ') ?? ''
-}
-
 function handleCapabilityModels(
   capabilityId: string,
   providerId: string,
@@ -207,7 +152,7 @@ function handleCapabilityPrompt(capabilityId: string, prompt: string): void {
   updateCapability(capabilityId, { promptTemplate: prompt })
 }
 
-function activeBindings(capabilityId: string): Array<AiCapabilityProviderBinding & { provider?: AiProviderConfig }> {
+function activeBindings(capabilityId: string): CapabilityBinding[] {
   const capability = capabilities.value[capabilityId]
   if (!capability?.providers) return []
   return capability.providers
@@ -216,6 +161,21 @@ function activeBindings(capabilityId: string): Array<AiCapabilityProviderBinding
       ...binding,
       provider: providerMap.value.get(binding.providerId)
     }))
+}
+
+function onToggleProvider(providerId: string, enabled: boolean): void {
+  if (!selectedCapability.value) return
+  handleCapabilityProviderToggle(selectedCapability.value.id, providerId, enabled)
+}
+
+function onUpdateModels(providerId: string, value: string): void {
+  if (!selectedCapability.value) return
+  handleCapabilityModels(selectedCapability.value.id, providerId, value)
+}
+
+function onUpdatePrompt(prompt: string): void {
+  if (!selectedCapability.value) return
+  handleCapabilityPrompt(selectedCapability.value.id, prompt)
 }
 
 async function handleCapabilityTest(capabilityId: string): Promise<void> {
