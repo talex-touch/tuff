@@ -1,18 +1,11 @@
-import path from 'node:path'
-import { readdirSync, existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { AiCapabilityType, AiProviderType } from '@talex-touch/utils'
-import type {
-  AiProviderConfig,
-  AiVisionOcrPayload,
-  AiVisionOcrResult
-} from '@talex-touch/utils'
+import { AiProviderType } from '@talex-touch/utils'
+import type { AiProviderConfig } from '@talex-touch/utils'
 import { aiCapabilityRegistry } from './ai-capability-registry'
 import { ai, setIntelligenceProviderManager } from './ai-sdk'
 import { genTouchChannel } from '../../core/channel-core'
-import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from './ai-config'
+import { ensureAiConfigLoaded, getCapabilityOptions } from './ai-config'
+import { capabilityTesterRegistry } from './capability-testers'
 import { OpenAIProvider } from './providers/openai-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
@@ -104,10 +97,11 @@ export function initAiSdkService(): void {
       throw new Error('Invalid capability test payload')
     }
 
-    const { capabilityId, providerId, source } = data as {
+    const { capabilityId, providerId, userInput, ...rest } = data as {
       capabilityId: string
       providerId?: string
-      source?: AiVisionOcrPayload['source']
+      userInput?: string
+      [key: string]: any
     }
 
     const capability = aiCapabilityRegistry.get(capabilityId)
@@ -115,39 +109,35 @@ export function initAiSdkService(): void {
       throw new Error(`Capability ${capabilityId} not registered`)
     }
 
+    const tester = capabilityTesterRegistry.get(capabilityId)
+    if (!tester) {
+      throw new Error(`No tester registered for capability ${capabilityId}`)
+    }
+
     ensureAiConfigLoaded()
     const options = getCapabilityOptions(capabilityId)
     const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
 
     logInfo(`Testing capability ${capabilityId}`)
-    switch (capability.type) {
-      case AiCapabilityType.VISION: {
-        if (capabilityId !== 'vision.ocr') {
-          throw new Error(`Vision capability ${capabilityId} is not testable yet`)
-        }
 
-        const payload: AiVisionOcrPayload = {
-          source: source ?? (await loadSampleImageSource('ocr')),
-          prompt: getCapabilityPrompt(capabilityId),
-          includeKeywords: true,
-          includeLayout: true
-        }
+    // 使用测试器生成 payload
+    const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
 
-        const result = await ai.invoke<AiVisionOcrResult>('vision.ocr', payload, {
-          modelPreference: options.modelPreference,
-          allowedProviderIds
-        })
+    // 执行测试
+    const result = await ai.invoke(capabilityId, payload, {
+      modelPreference: options.modelPreference,
+      allowedProviderIds
+    })
 
-        logInfo(`Capability ${capabilityId} test success via provider ${result.provider}`)
-        reply(DataCode.SUCCESS, {
-          ok: true,
-          result
-        })
-        break
-      }
-      default:
-        throw new Error(`Capability type ${capability.type} not supported for testing`)
-    }
+    // 格式化结果
+    const formattedResult = tester.formatTestResult(result)
+
+    logInfo(`Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`)
+    
+    reply(DataCode.SUCCESS, {
+      ok: true,
+      result: formattedResult
+    })
   } catch (error) {
     logError('Capability test failed:', error)
     reply(DataCode.ERROR, {
@@ -184,61 +174,4 @@ export function initAiSdkService(): void {
   })
 }
 
-async function loadSampleImageSource(folder: string): Promise<AiVisionOcrPayload['source']> {
-  const dir = resolveSampleDirectory(folder)
-  if (!dir) {
-    throw new Error('Sample image directory not found')
-  }
 
-  const files = readdirSync(dir).filter((file) =>
-    /\.(png|jpe?g|webp|gif|bmp)$/i.test(file)
-  )
-
-  if (files.length === 0) {
-    throw new Error('Sample image folder is empty')
-  }
-
-  const fileName = files[Math.floor(Math.random() * files.length)]
-  const filePath = path.join(dir, fileName)
-  const buffer = await readFile(filePath)
-  const mime = detectMime(fileName)
-
-  return {
-    type: 'data-url',
-    dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
-  }
-}
-
-function resolveSampleDirectory(folder: string): string | null {
-  const guesses = [
-    path.resolve(process.cwd(), 'apps/core-app/resources/intelligence/test-capability', folder),
-    path.resolve(process.cwd(), 'resources/intelligence/test-capability', folder),
-    path.resolve(process.resourcesPath, 'intelligence/test-capability', folder)
-  ]
-
-  for (const guess of guesses) {
-    if (existsSync(guess)) {
-      return guess
-    }
-  }
-
-  console.warn('[AISDK] Sample folder not found in guesses:', guesses)
-  return null
-}
-
-function detectMime(fileName: string): string {
-  const ext = path.extname(fileName).toLowerCase()
-  switch (ext) {
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg'
-    case '.webp':
-      return 'image/webp'
-    case '.gif':
-      return 'image/gif'
-    case '.bmp':
-      return 'image/bmp'
-    default:
-      return 'image/png'
-  }
-}

@@ -256,6 +256,15 @@
       <FlatMarkdown v-model="promptValue" :readonly="false" />
     </div>
   </TuffDrawer>
+
+  <CapabilityTestDialog
+    v-model="showTestDialog"
+    :capability-id="capability.id"
+    :enabled-providers="enabledProvidersForTest"
+    :is-testing="isTesting"
+    :test-meta="testMeta"
+    @test="handleTestWithParams"
+  />
 </template>
 
 <script lang="ts" name="AISDKCapabilityDetails" setup>
@@ -275,6 +284,8 @@ import type {
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import CapabilityTestDialog from './CapabilityTestDialog.vue'
+import { useIntelligence } from '@talex-touch/utils/renderer/hooks/use-intelligence'
 
 const props = defineProps<{
   capability: AISDKCapabilityConfig
@@ -288,15 +299,18 @@ const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
   updatePrompt: [prompt: string]
-  test: []
+  test: [params?: { providerId?: string; userInput?: string }]
   reorderProviders: [bindings: AiCapabilityProviderBinding[]]
 }>()
 
 const { t } = useI18n()
+const intelligence = useIntelligence()
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
 const showModelDrawer = ref(false)
 const showPromptDrawer = ref(false)
+const showTestDialog = ref(false)
+const testMeta = ref({ requiresUserInput: false, inputHint: '' })
 let promptTimer: ReturnType<typeof setTimeout> | null = null
 let syncingFromProps = false
 
@@ -433,6 +447,12 @@ const testSummary = computed(() => {
   return pieces.join(' · ')
 })
 
+const enabledProvidersForTest = computed(() => {
+  return props.providers.filter((provider) =>
+    selectedProviderIds.value.has(provider.id) && provider.enabled
+  )
+})
+
 watch(
   () => props.capability.promptTemplate,
   (value) => {
@@ -507,9 +527,25 @@ function openPromptDrawer(): void {
   showPromptDrawer.value = true
 }
 
-function handleTest(): void {
+async function handleTest(): Promise<void> {
   if (props.isTesting) return
-  emits('test')
+  
+  // 获取测试元数据
+  try {
+    const meta = await intelligence.getCapabilityTestMeta({ capabilityId: props.capability.id })
+    testMeta.value = meta
+    showTestDialog.value = true
+  } catch (error) {
+    console.error('Failed to get test meta:', error)
+    // 如果获取失败，使用默认值并继续
+    testMeta.value = { requiresUserInput: false, inputHint: '' }
+    showTestDialog.value = true
+  }
+}
+
+function handleTestWithParams(providerId: string, userInput?: string): void {
+  showTestDialog.value = false
+  emits('test', { providerId, userInput })
 }
 
 watch(
