@@ -127,17 +127,6 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   const testResults = ref<Map<string, TestResult>>(new Map())
   const loading = ref(false)
 
-  // Initialize storage on mount
-  onMounted(async () => {
-    try {
-      console.log('[IntelligenceManager] Initializing...')
-      console.log('[IntelligenceManager] Current providers:', intelligenceSettings.get().providers)
-      console.log('[IntelligenceManager] Providers count:', intelligenceSettings.get().providers.length)
-    } catch (error) {
-      console.error('[Intelligence Management] Failed to initialize:', error)
-    }
-  })
-
   /**
    * Currently selected provider object.
    * Automatically returns null when:
