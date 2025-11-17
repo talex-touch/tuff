@@ -65,7 +65,7 @@ function handleKeyActivate(event: KeyboardEvent): void {
   user-select: none;
   text-indent: 0;
 
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--el-border-color);
   transition: 0.25s;
 
