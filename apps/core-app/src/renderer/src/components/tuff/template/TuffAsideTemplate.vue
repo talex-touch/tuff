@@ -65,6 +65,9 @@ const emit = defineEmits<{
           </div>
         </TouchScroll>
       </slot>
+      <div v-if="$slots.footer" class="TuffAsideTemplate-Footer fake-background">
+        <slot name="footer" />
+      </div>
     </aside>
 
     <section class="TuffAsideTemplate-Main" :aria-live="props.mainAriaLive">
@@ -80,16 +83,18 @@ const emit = defineEmits<{
   display: flex;
   height: 100%;
   overflow: hidden;
-  background: var(--el-bg-color-page);
 }
 
 .TuffAsideTemplate-Aside {
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .TuffAsideTemplate-AsideDefault {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -115,10 +120,13 @@ const emit = defineEmits<{
   gap: 0.75rem;
 }
 
+.TuffAsideTemplate-Footer {
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding: 0.5rem 0.5rem;
+}
+
 .TuffAsideTemplate-Main {
   flex: 1;
-  background: var(--el-bg-color);
-  padding: 1.5rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;

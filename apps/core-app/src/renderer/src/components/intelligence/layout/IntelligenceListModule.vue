@@ -1,11 +1,8 @@
 <template>
-  <section 
-    class="mb-12 min-h-16"
-    :aria-labelledby="`${sectionId}-heading`"
-  >
-    <h2 
+  <section class="IntelligenceListModule" :aria-labelledby="`${sectionId}-heading`">
+    <h2
       :id="`${sectionId}-heading`"
-      class="my-4 flex justify-between items-center text-xs opacity-70"
+      class="my-2 flex justify-between items-center text-xs opacity-70"
     >
       <span class="flex items-center gap-2">
         <i :class="icon" class="text-base text-[var(--el-color-primary)]" aria-hidden="true" />
@@ -19,20 +16,11 @@
       </span>
     </h2>
 
-    <p
-      v-if="providers.length === 0"
-      class="text-center opacity-75 text-sm"
-      role="status"
-    >
+    <p v-if="providers.length === 0" class="text-center opacity-75 text-sm" role="status">
       {{ t('intelligence.list.empty') }}
     </p>
 
-    <transition-group 
-      name="list" 
-      tag="div"
-      role="list"
-      :aria-label="title"
-    >
+    <transition-group name="list" tag="div" role="list" :aria-label="title">
       <IntelligenceItem
         v-for="provider in providers"
         :key="provider.id"
@@ -115,7 +103,7 @@ function handleSelect(id: string) {
 :deep(.aisdk-item) {
   animation: fadeInSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   animation-fill-mode: both;
-  
+
   @for $i from 1 through 20 {
     &:nth-child(#{$i}) {
       animation-delay: #{$i * 0.05}s;

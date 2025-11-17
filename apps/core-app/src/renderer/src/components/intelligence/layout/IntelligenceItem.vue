@@ -1,7 +1,7 @@
 <template>
   <div
-    class="aisdk-item my-4 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
-    :class="{ 
+    class="aisdk-item my-2 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
+    :class="{
       selected: isSelected,
       enabled: provider.enabled,
       'has-error': hasConfigError
@@ -144,19 +144,19 @@ function handleClick() {
 .aisdk-item {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  
+
   &:hover {
     border-color: var(--el-border-color);
     --fake-inner-opacity: 0.25;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
   }
-  
+
   &:active {
     transform: translateY(0);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   }
-  
+
   &:focus-visible {
     outline: 3px solid var(--el-color-primary);
     outline-offset: 2px;
@@ -168,7 +168,7 @@ function handleClick() {
     --fake-opacity: 0.5;
     --fake-inner-opacity: 0.5;
     box-shadow: 0 2px 12px rgba(var(--el-color-primary-rgb), 0.15);
-    
+
     &:hover {
       box-shadow: 0 4px 16px rgba(var(--el-color-primary-rgb), 0.2);
     }
@@ -235,11 +235,11 @@ function handleClick() {
 .main-content {
   z-index: 1;
   transition: all 0.3s ease;
-  
+
   p {
     transition: color 0.3s ease;
   }
-  
+
   .aisdk-item:hover & p:first-child {
     color: var(--el-color-primary);
   }
@@ -248,7 +248,7 @@ function handleClick() {
 .status-dot {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 0 0 2px var(--el-fill-color-blank);
-  
+
   &.bg-green-500 {
     animation: pulse-success 2s ease-in-out infinite;
   }
@@ -266,7 +266,7 @@ function handleClick() {
 .issue-badge {
   transition: all 0.3s ease;
   animation: shake 0.5s ease-in-out;
-  
+
   &:hover {
     transform: scale(1.2);
   }
