@@ -142,6 +142,7 @@ defineExpose({
     top: 0;
 
     backdrop-filter: blur(18px) saturate(180%);
+    border-bottom: 1px solid var(--el-border-color-light);
   }
   width: 100%;
   height: 100%;
