@@ -1,46 +1,5 @@
 <template>
   <aside class="AISDKList-Container h-full flex flex-col">
-    <!-- Search Section -->
-    <div class="AISDKList-Search-Section flex-shrink-0 p-3 border-b border-[var(--el-border-color-lighter)]">
-      <div class="search-wrapper">
-        <label for="provider-search" class="sr-only">{{ t('intelligence.search.label') }}</label>
-        <i class="i-ri-search-line search-icon" aria-hidden="true" />
-        <input
-          id="provider-search"
-          v-model="searchQuery"
-          type="search"
-          :placeholder="t('intelligence.search.placeholder')"
-          :aria-label="t('intelligence.search.label')"
-          :aria-describedby="searchQuery ? 'search-results-count' : undefined"
-          class="search-input"
-          autocomplete="off"
-        />
-        <FlatButton
-          v-if="searchQuery"
-          class="clear-icon"
-          mini
-          :aria-label="t('intelligence.search.clear')"
-          @click="clearSearch"
-          @keydown.enter="clearSearch"
-          @keydown.space.prevent="clearSearch"
-        >
-          <i class="i-ri-close-line" aria-hidden="true" />
-        </FlatButton>
-      </div>
-
-      <div
-        v-if="searchQuery"
-        id="search-results-count"
-        class="sr-only"
-        role="status"
-        aria-live="polite"
-      >
-        {{ t('intelligence.search.results', {
-          count: filteredEnabledProviders.length + filteredDisabledProviders.length
-        }) }}
-      </div>
-    </div>
-
     <!-- Providers List Section -->
     <div class="AISDKList-Content flex-1 overflow-hidden">
       <TouchScroll>
@@ -106,6 +65,7 @@ interface AiProviderConfig {
 const props = defineProps<{
   providers: AiProviderConfig[]
   selectedId?: string | null
+  searchQuery?: string
 }>()
 
 const emits = defineEmits<{
@@ -114,8 +74,8 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const searchQuery = ref('')
 const selectedId = ref<string | null>(props.selectedId || null)
+const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?? '')
 
 // Separate enabled and disabled providers
 const enabledProviders = computed(() =>
@@ -128,28 +88,26 @@ const disabledProviders = computed(() =>
 
 // Filter providers based on search query
 const filteredEnabledProviders = computed(() => {
-  if (!searchQuery.value.trim()) {
+  if (!normalizedQuery.value) {
     return enabledProviders.value
   }
 
-  const query = searchQuery.value.toLowerCase()
   return enabledProviders.value.filter(
     (provider) =>
-      provider.name.toLowerCase().includes(query) ||
-      provider.type.toLowerCase().includes(query)
+      provider.name.toLowerCase().includes(normalizedQuery.value) ||
+      provider.type.toLowerCase().includes(normalizedQuery.value)
   )
 })
 
 const filteredDisabledProviders = computed(() => {
-  if (!searchQuery.value.trim()) {
+  if (!normalizedQuery.value) {
     return disabledProviders.value
   }
 
-  const query = searchQuery.value.toLowerCase()
   return disabledProviders.value.filter(
     (provider) =>
-      provider.name.toLowerCase().includes(query) ||
-      provider.type.toLowerCase().includes(query)
+      provider.name.toLowerCase().includes(normalizedQuery.value) ||
+      provider.type.toLowerCase().includes(normalizedQuery.value)
   )
 })
 
@@ -175,9 +133,6 @@ function handleAddProvider() {
   emits('addProvider')
 }
 
-function clearSearch() {
-  searchQuery.value = ''
-}
 </script>
 
 <style lang="scss" scoped>
@@ -186,102 +141,8 @@ function clearSearch() {
   position: relative;
 }
 
-.AISDKList-Search-Section {
+.AISDKList-Content {
   background: var(--el-bg-color);
-}
-
-.search-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: var(--el-fill-color-lighter);
-  border-radius: 12px;
-  padding: 0 12px;
-  height: 36px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid var(--el-border-color-lighter);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-
-  &:hover {
-    background: var(--el-fill-color-light);
-    border-color: var(--el-border-color);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-  }
-
-  &:focus-within {
-    background: var(--el-fill-color);
-    border-color: var(--el-color-primary-light-5);
-    box-shadow: 0 0 0 3px var(--el-color-primary-light-9), 0 2px 4px rgba(0, 0, 0, 0.06);
-  }
-}
-
-.search-icon {
-  color: var(--el-text-color-placeholder);
-  font-size: 14px;
-  margin-right: 8px;
-  transition: color 0.3s ease;
-
-  .search-wrapper:focus-within & {
-    color: var(--el-color-primary);
-  }
-}
-
-.search-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--el-text-color-primary);
-  font-size: 13px;
-  height: 100%;
-
-  &::placeholder {
-    color: var(--el-text-color-placeholder);
-    transition: color 0.3s ease;
-  }
-
-  &:focus::placeholder {
-    color: var(--el-text-color-disabled);
-  }
-}
-
-.clear-icon {
-  color: var(--el-text-color-placeholder);
-  font-size: 14px;
-  margin-left: 8px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  min-height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  box-shadow: none;
-  background: transparent;
-  padding: 0;
-
-  &:hover {
-    color: var(--el-text-color-regular);
-    background: var(--el-fill-color);
-    transform: scale(1.1);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--el-color-primary);
-    outline-offset: 2px;
-  }
-
-  :deep(> div) {
-    padding: 0;
-  }
 }
 
 .AISDKList-AddButton-Section {
@@ -327,15 +188,4 @@ function clearSearch() {
   }
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
 </style>

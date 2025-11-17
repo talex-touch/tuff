@@ -33,32 +33,34 @@ const emit = defineEmits<{
   <div class="TuffAsideTemplate">
     <aside class="TuffAsideTemplate-Aside w-76" aria-label="Tuff aside layout">
       <slot name="aside">
-        <div class="tuff-aside-template__aside-default">
-          <div v-if="$slots['aside-header']" class="tuff-aside-template__aside-header">
-            <slot name="aside-header" />
-          </div>
+        <TouchScroll class="TuffAsideTemplate-AsideDefault">
+          <template #header>
+            <header v-if="$slots['aside-header']" class="TuffAsideTemplate-AsideHeader">
+              <slot name="aside-header" />
+            </header>
 
-          <div v-if="props.searchable" class="tuff-aside-template__search">
-            <TuffAsideSearchBar
-              :model-value="props.modelValue"
-              :search-label="props.searchLabel"
-              :search-placeholder="props.searchPlaceholder"
-              :search-id="props.searchId"
-              :clear-label="props.clearLabel"
-              @update:model-value="emit('update:modelValue', $event)"
-              @search="emit('search', $event)"
-              @clear="emit('clear')"
-            />
-          </div>
+            <header v-if="props.searchable" class="TuffAsideTemplate-Search">
+              <TuffAsideSearchBar
+                :model-value="props.modelValue"
+                :search-label="props.searchLabel"
+                :search-placeholder="props.searchPlaceholder"
+                :search-id="props.searchId"
+                :clear-label="props.clearLabel"
+                @update:model-value="emit('update:modelValue', $event)"
+                @search="emit('search', $event)"
+                @clear="emit('clear')"
+              />
+            </header>
+          </template>
 
-          <div v-if="$slots.filter" class="tuff-aside-template__filters">
+          <div v-if="$slots.filter" class="TuffAsideTemplate-Filters">
             <slot name="filter" />
           </div>
 
-          <div class="tuff-aside-template__aside-body">
+          <div class="TuffAsideTemplate-AsideBody">
             <slot />
           </div>
-        </div>
+        </TouchScroll>
       </slot>
     </aside>
 
@@ -84,20 +86,25 @@ const emit = defineEmits<{
   overflow-y: auto;
 }
 
-.tuff-aside-template__aside-default {
+.TuffAsideTemplate-AsideDefault {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   height: 100%;
+  width: 100%;
 }
 
-.tuff-aside-template__filters {
+.TuffAsideTemplate-AsideHeader {
+  padding: 1.5rem;
+}
+
+.TuffAsideTemplate-Filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.tuff-aside-template__aside-body {
+.TuffAsideTemplate-AsideBody {
   flex: 1;
   overflow-y: auto;
   display: flex;

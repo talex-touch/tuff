@@ -1,8 +1,10 @@
 <template>
   <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
     <tuff-aside-template
+      v-model="searchQuery"
       class="flex-1"
-      :searchable="false"
+      :search-placeholder="t('intelligence.search.placeholder')"
+      :clear-label="t('intelligence.search.clear')"
       :main-aria-live="selectedProvider ? 'polite' : 'off'"
     >
       <template #default>
@@ -11,16 +13,14 @@
           aria-label="AI Provider List"
           :providers="providers"
           :selected-id="selectedProviderId"
+          :search-query="searchQuery"
           @select="handleSelectProvider"
           @add-provider="handleAddProvider"
         />
       </template>
 
       <template #main>
-        <div
-          class="h-full overflow-hidden"
-          :key="selectedProvider ? selectedProvider.id : 'empty'"
-        >
+        <div :key="selectedProvider ? selectedProvider.id : 'empty'" class="h-full overflow-hidden">
           <IntelligenceInfo
             v-if="selectedProvider"
             :provider="selectedProvider"
@@ -69,6 +69,7 @@ const {
 
 const testResult = ref<TestResult | null>(null)
 const isTesting = ref(false)
+const searchQuery = ref('')
 
 function handleAddProvider(): void {
   const nextIndex = providers.value.length + 1
@@ -118,7 +119,7 @@ function handleDeleteProvider(): void {
   const deletedId = selectedProvider.value.id
 
   // Find current index before deletion
-  const currentIndex = providers.value.findIndex(p => p.id === deletedId)
+  const currentIndex = providers.value.findIndex((p) => p.id === deletedId)
 
   // Remove the provider
   removeProvider(deletedId)
