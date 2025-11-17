@@ -9,7 +9,6 @@ import {
 import { appSetting } from '~/modules/channel/storage/index'
 import { useApplicationUpgrade } from './useUpdate'
 import { useCoreBox } from './core-box'
-import { nextTick } from 'vue'
 
 /**
  * Application lifecycle management hook.
