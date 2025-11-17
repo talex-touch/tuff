@@ -15,8 +15,19 @@
           :selected-id="selectedProviderId"
           :search-query="searchQuery"
           @select="handleSelectProvider"
-          @add-provider="handleAddProvider"
         />
+      </template>
+
+      <template #footer>
+        <FlatButton
+          class="w-full"
+          type="button"
+          :aria-label="t('settings.intelligence.addChannel')"
+          @click="handleAddProvider"
+        >
+          <i class="i-carbon-add" aria-hidden="true" />
+          <span>{{ t('settings.intelligence.addChannel') }}</span>
+        </FlatButton>
       </template>
 
       <template #main>
@@ -48,6 +59,7 @@ import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import type { AiProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
 import { AiProviderType } from '@talex-touch/utils/types/intelligence'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'

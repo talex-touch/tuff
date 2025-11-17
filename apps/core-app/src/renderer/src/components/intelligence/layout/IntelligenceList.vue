@@ -1,39 +1,20 @@
 <template>
-  <aside class="AISDKList-Container h-full flex flex-col">
-    <!-- Providers List Section -->
-    <div class="AISDKList-Content flex-1 overflow-hidden">
-      <TouchScroll>
-        <IntelligenceListModule
-          v-model="selectedId"
-          :providers="filteredEnabledProviders"
-          :title="t('intelligence.list.enabled')"
-          icon="i-ri-check-line"
-          section-id="enabled-providers"
-        />
+  <aside class="IntelligenceList h-full flex flex-col">
+    <IntelligenceListModule
+      v-model="selectedId"
+      :providers="filteredEnabledProviders"
+      :title="t('intelligence.list.enabled')"
+      icon="i-ri-check-line"
+      section-id="enabled-providers"
+    />
 
-        <IntelligenceListModule
-          v-model="selectedId"
-          :providers="filteredDisabledProviders"
-          :title="t('intelligence.list.disabled')"
-          icon="i-ri-close-line"
-          section-id="disabled-providers"
-        />
-      </TouchScroll>
-    </div>
-
-    <!-- Add Provider Button -->
-    <div
-      class="AISDKList-AddButton-Section flex-shrink-0 p-3 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]"
-    >
-      <FlatButton
-        class="add-provider-btn w-full"
-        :aria-label="t('settings.intelligence.addChannel')"
-        @click="handleAddProvider"
-      >
-        <i class="i-carbon-add" aria-hidden="true" />
-        <span>{{ t('settings.intelligence.addChannel') }}</span>
-      </FlatButton>
-    </div>
+    <IntelligenceListModule
+      v-model="selectedId"
+      :providers="filteredDisabledProviders"
+      :title="t('intelligence.list.disabled')"
+      icon="i-ri-close-line"
+      section-id="disabled-providers"
+    />
   </aside>
 </template>
 
@@ -42,7 +23,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import IntelligenceListModule from './IntelligenceListModule.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 
 interface AiProviderConfig {
   id: string
@@ -70,7 +50,6 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   select: [id: string]
-  addProvider: []
 }>()
 
 const { t } = useI18n()
@@ -124,62 +103,4 @@ watch(
     selectedId.value = newId || null
   }
 )
-
-function handleAddProvider() {
-  emits('addProvider')
-}
 </script>
-
-<style lang="scss" scoped>
-.AISDKList-Container {
-  background: var(--el-bg-color);
-  position: relative;
-}
-
-.AISDKList-Content {
-  background: var(--el-bg-color);
-}
-
-.AISDKList-AddButton-Section {
-  background: var(--el-bg-color);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.add-provider-btn {
-  height: 40px;
-  border-radius: 12px;
-  border: none;
-  background: var(--el-color-primary);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  font-size: 14px;
-  font-weight: 500;
-
-  &:hover {
-    background: var(--el-color-primary-light-3);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.3);
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(var(--el-color-primary-rgb), 0.3);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--el-color-primary);
-    outline-offset: 2px;
-  }
-
-  i {
-    font-size: 16px;
-  }
-}
-</style>
