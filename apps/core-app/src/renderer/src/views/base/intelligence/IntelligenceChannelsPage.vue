@@ -1,24 +1,28 @@
 <template>
   <div class="flex h-full flex-col" role="main" aria-label="AI Intelligence Channels">
-    <div
-      class="flex flex-1 overflow-hidden border border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]"
+    <tuff-aside-template
+      class="flex-1"
+      :searchable="false"
+      :main-aria-live="selectedProvider ? 'polite' : 'off'"
     >
-      <IntelligenceList
-        class="h-full w-76 flex-shrink-0 overflow-hidden border-r border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color)]"
-        aria-label="AI Provider List"
-        :providers="providers"
-        :selected-id="selectedProviderId"
-        @select="handleSelectProvider"
-        @add-provider="handleAddProvider"
-      />
-      <section
-        class="h-full flex-1 overflow-hidden"
-        :aria-live="selectedProvider ? 'polite' : 'off'"
-      >
-        <Transition name="fade-slide" mode="out-in">
+      <template #default>
+        <IntelligenceList
+          class="h-full w-full"
+          aria-label="AI Provider List"
+          :providers="providers"
+          :selected-id="selectedProviderId"
+          @select="handleSelectProvider"
+          @add-provider="handleAddProvider"
+        />
+      </template>
+
+      <template #main>
+        <div
+          class="h-full overflow-hidden"
+          :key="selectedProvider ? selectedProvider.id : 'empty'"
+        >
           <IntelligenceInfo
             v-if="selectedProvider"
-            :key="selectedProvider.id"
             :provider="selectedProvider"
             :test-result="testResult"
             :is-testing="isTesting"
@@ -27,9 +31,10 @@
             @delete="handleDeleteProvider"
           />
           <IntelligenceEmptyState v-else />
-        </Transition>
-      </section>
-    </div>
+        </div>
+      </template>
+    </tuff-aside-template>
+
     <p v-if="providers.length === 0" class="text-sm text-[var(--el-text-color-secondary)]">
       {{ t('settings.intelligence.emptyProviders') }}
     </p>
@@ -42,6 +47,7 @@ import { useI18n } from 'vue-i18n'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import type { AiProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
 import { AiProviderType } from '@talex-touch/utils/types/intelligence'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
