@@ -30,13 +30,8 @@ export interface IStorageChannel extends ITouchClientChannel {
 let channel: IStorageChannel | null = null;
 
 /**
- * Queue of initialization callbacks waiting for channel initialization
- */
-const pendingInitializations: Array<() => void> = [];
-
-/**
  * Initializes the global channel for communication.
- * Processes all pending storage initializations after initialization.
+ * Must be called before creating any TouchStorage instances.
  *
  * @example
  * ```ts
@@ -51,14 +46,6 @@ const pendingInitializations: Array<() => void> = [];
  */
 export function initStorageChannel(c: IStorageChannel): void {
   channel = c;
-
-  // Process all pending storage initializations
-  for (const initFn of pendingInitializations) {
-    initFn();
-  }
-
-  // Clear the queue
-  pendingInitializations.length = 0;
 }
 
 /**
@@ -129,18 +116,31 @@ export class TouchStorage<T extends object> {
 
   /**
    * Creates a new reactive storage instance.
-   * If channel is not initialized, the instance will be queued for initialization.
+   * IMPORTANT: `initStorageChannel()` must be called before creating any TouchStorage instances.
    *
    * @param qName Globally unique name for the instance
    * @param initData Initial data to populate the storage
    * @param onUpdate Optional callback when data is updated
    *
+   * @throws {Error} If channel is not initialized or if storage with same name already exists
+   *
    * @example
    * ```ts
+   * // First initialize the channel
+   * initStorageChannel(touchChannel);
+   *
+   * // Then create storage instances
    * const settings = new TouchStorage('settings', { darkMode: false });
    * ```
    */
   constructor(qName: string, initData: T, onUpdate?: () => void) {
+    if (!channel) {
+      throw new Error(
+        `TouchStorage: Cannot create storage "${qName}" before channel is initialized. ` +
+        'Please call initStorageChannel() first.'
+      );
+    }
+
     if (storages.has(qName)) {
       throw new Error(`Storage "${qName}" already exists`);
     }
@@ -154,36 +154,39 @@ export class TouchStorage<T extends object> {
     // Register to storages map immediately
     storages.set(qName, this);
 
-    // Initialize channel-dependent operations
-    if (channel) {
-      this.#initializeChannel();
-    } else {
-      // Queue initialization callback for later
-      pendingInitializations.push(() => this.#initializeChannel());
-    }
+    // Initialize channel-dependent operations immediately
+    this.#initializeChannel();
   }
 
   /**
-   * Initialize channel-dependent operations
+   * Initialize channel-dependent operations.
+   * Called immediately in constructor after channel validation.
    */
   #initializeChannel(): void {
     if (this.#channelInitialized) {
       return;
     }
 
-    if (!channel) {
-      throw new Error(
-        'TouchStorage: channel is not initialized. Please call initStorageChannel(...) before using.'
-      );
-    }
-
     this.#channelInitialized = true;
 
-    // Load data from remote
-    this.loadFromRemote();
+    // Load data from remote immediately (synchronously)
+    console.log(`[TouchStorage] ${this.#qualifiedName} - Loading data from remote...`);
+    const result = channel!.sendSync('storage:get', this.#qualifiedName);
+    console.log(`[TouchStorage] ${this.#qualifiedName} - Raw result:`, result);
+    const parsed = result ? (result as Partial<T>) : {};
+    console.log(`[TouchStorage] ${this.#qualifiedName} - Parsed result:`, parsed);
+    console.log(`[TouchStorage] ${this.#qualifiedName} - Current data before assign:`, JSON.parse(JSON.stringify(this.data)));
+
+    if (Object.keys(parsed).length > 0) {
+      // Directly assign without stopWatch to avoid setTimeout delay
+      Object.assign(this.data, parsed);
+      console.log(`[TouchStorage] ${this.#qualifiedName} - Data after assign:`, JSON.parse(JSON.stringify(this.data)));
+    } else {
+      console.log(`[TouchStorage] ${this.#qualifiedName} - No data from remote, using defaults`);
+    }
 
     // Register update listener
-    channel.regChannel('storage:update', ({ data }) => {
+    channel!.regChannel('storage:update', ({ data }) => {
       const { name } = data!
 
       if (name === this.#qualifiedName) {
@@ -191,6 +194,7 @@ export class TouchStorage<T extends object> {
       }
     });
 
+    // Start auto-save watcher AFTER initial data load
     if (this.#autoSave && !this.#autoSaveStopHandle) {
       this.#startAutoSaveWatcher();
     }
@@ -237,11 +241,8 @@ export class TouchStorage<T extends object> {
     }
 
     if (this.#assigning && !options?.force) {
-      console.debug("[Storage] Skip saveToRemote for", this.getQualifiedName());
       return;
     }
-
-    console.debug("Storage saveToRemote triggered", this.getQualifiedName());
 
     await channel.send('storage:save', {
       key: this.#qualifiedName,
@@ -267,15 +268,8 @@ export class TouchStorage<T extends object> {
     this.#autoSaveStopHandle?.();
     this.#autoSaveStopHandle = undefined;
 
-    if (autoSave) {
-      if (this.#channelInitialized) {
-        this.#startAutoSaveWatcher();
-      } else {
-        console.debug(
-          "[Storage] Auto-save requested before channel initialization for",
-          this.getQualifiedName(),
-        );
-      }
+    if (autoSave && this.#channelInitialized) {
+      this.#startAutoSaveWatcher();
     }
 
     return this;
@@ -286,7 +280,6 @@ export class TouchStorage<T extends object> {
       this.data,
       () => {
         if (this.#assigning) {
-          console.debug("[Storage] Skip auto-save watch handle for", this.getQualifiedName());
           return;
         }
 
@@ -356,16 +349,13 @@ export class TouchStorage<T extends object> {
   private assignData(newData: Partial<T>, stopWatch: boolean = true): void {
     if (stopWatch && this.#autoSave) {
       this.#assigning = true;
-      console.debug(`[Storage] Stop auto-save watch handle for ${this.getQualifiedName()}`);
     }
 
     Object.assign(this.data, newData);
-    console.debug(`[Storage] Assign data to ${this.getQualifiedName()}`);
 
     if (stopWatch && this.#autoSave) {
       setTimeout(() => {
         this.#assigning = false;
-        console.debug(`[Storage] Resume auto-save watch handle for ${this.getQualifiedName()}`);
       }, 0);
     }
   }

@@ -9,8 +9,8 @@ const content: Ref<HTMLElement | null> = ref(null)
 const component: Ref<Component | null> = ref(null)
 const last_component: Ref<Component | null> = ref(null)
 
-if (!appSetting.beginner) {
-  appSetting.beginner = {
+if (!appSetting.data.beginner) {
+  appSetting.data.beginner = {
     init: false
   }
 }

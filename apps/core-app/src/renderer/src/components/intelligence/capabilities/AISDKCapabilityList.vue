@@ -2,13 +2,13 @@
   <aside class="AISDKCapabilityList h-full flex flex-col">
     <div class="flex-shrink-0 border-b border-[var(--el-border-color-lighter)] p-3">
       <div class="search-wrapper">
-        <label for="capability-search" class="sr-only">{{ t('settings.aisdk.capabilitySearchLabel') }}</label>
+        <label for="capability-search" class="sr-only">{{ t('settings.intelligence.capabilitySearchLabel') }}</label>
         <i class="i-ri-search-line search-icon" aria-hidden="true" />
         <input
           id="capability-search"
           v-model="searchQuery"
           type="search"
-          :placeholder="t('settings.aisdk.capabilitySearchPlaceholder')"
+          :placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
           class="search-input"
           autocomplete="off"
         />
@@ -16,7 +16,7 @@
           v-if="searchQuery"
           class="clear-icon"
           mini
-          :aria-label="t('settings.aisdk.capabilitySearchClear')"
+          :aria-label="t('settings.intelligence.capabilitySearchClear')"
           @click="clearSearch"
         >
           <i class="i-ri-close-line" aria-hidden="true" />
@@ -32,7 +32,7 @@
             class="py-10 text-center text-sm text-[var(--el-text-color-secondary)]"
             role="status"
           >
-            {{ t('settings.aisdk.capabilityListEmpty') }}
+            {{ t('settings.intelligence.capabilityListEmpty') }}
           </p>
           <transition-group name="list" tag="div" role="list" aria-live="polite">
             <AISDKCapabilityListItem
@@ -50,7 +50,7 @@
 
     <div class="flex-shrink-0 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)] p-3">
       <p class="text-xs text-[var(--el-text-color-secondary)]">
-        {{ t('settings.aisdk.capabilitySummary', { count: capabilities.length }) }}
+        {{ t('settings.intelligence.capabilitySummary', { count: capabilities.length }) }}
       </p>
     </div>
   </aside>

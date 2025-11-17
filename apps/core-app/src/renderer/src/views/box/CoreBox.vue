@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
 })
 
 function handleTogglePin(): void {
-  appSetting.tools.autoHide = !appSetting.tools.autoHide
+  appSetting.data.tools.autoHide = !appSetting.data.tools.autoHide
 }
 
 function handleItemTrigger(index: number, item: TuffItem): void {
@@ -360,7 +360,7 @@ const addon = computed(() => {
 
 const pinIcon = computed<ITuffIcon>(() => ({
   type: 'class',
-  value: appSetting.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
+  value: appSetting.data.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
   status: 'normal'
 }))
 </script>

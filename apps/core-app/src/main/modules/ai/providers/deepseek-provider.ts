@@ -51,7 +51,11 @@ export class DeepSeekProvider extends IntelligenceProvider {
       throw new Error(`DeepSeek API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
-    const data = await response.json()
+    const data = await this.parseJsonResponse<{
+      choices: any[]
+      usage?: any
+      model?: string
+    }>(response, { endpoint: '/chat/completions' })
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = {

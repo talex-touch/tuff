@@ -201,7 +201,7 @@
     "market": "Market",
     "plugin": "Plugin",
     "details": "Details",
-    "aisdk": "Intelligence",
+    "intelligence": "Intelligence",
     "style": "Style",
     "setting": "Setting"
   },
@@ -851,7 +851,7 @@
       "cacheExpiration": "Cache Expiration",
       "cacheExpirationDesc": "How long to keep cached responses"
     },
-    "aisdk": {
+    "intelligence": {
       "pageTitle": "TaTa Intelligence",
       "pageDesc": "With TaTa Intelligence, command every channel and tailor capabilities—all from one refined interface.",
       "channelsSection": "Channels",
@@ -1290,7 +1290,7 @@
     "hoursAgo": "{count} hours ago",
     "daysAgo": "{count} days ago"
   },
-  "aisdk": {
+  "intelligence": {
     "providers": "AI Providers",
     "addProvider": "Add Provider",
     "builtinProviders": "Built-in Providers",

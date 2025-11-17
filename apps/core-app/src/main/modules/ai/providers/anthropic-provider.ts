@@ -47,7 +47,11 @@ export class AnthropicProvider extends IntelligenceProvider {
       throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json()
+    const data = await this.parseJsonResponse<{
+      content?: any[]
+      usage?: any
+      model?: string
+    }>(response, { endpoint: '/messages' })
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = {

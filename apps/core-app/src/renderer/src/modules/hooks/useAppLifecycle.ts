@@ -9,43 +9,43 @@ import {
 import { appSetting } from '~/modules/channel/storage/index'
 import { useApplicationUpgrade } from './useUpdate'
 import { useCoreBox } from './core-box'
+import { nextTick } from 'vue'
 
 /**
- * Application lifecycle management hook
- * Handles complete application initialization and post-initialization tasks
+ * Application lifecycle management hook.
+ * Handles complete application initialization and post-initialization tasks.
  */
 export function useAppLifecycle() {
   /**
-   * Execute main window tasks
-   *
-   * Note: Skip update check on first launch (before onboarding is complete)
-   * to avoid update prompts during onboarding
+   * Execute main window tasks.
+   * Skips update check on first launch before onboarding is complete.
    */
   async function executeMainTask(): Promise<void> {
-    // Call useApplicationUpgrade only when needed, after TouchSDK is initialized
+    console.log('[useAppLifecycle] executeMainTask - appSetting.data:', JSON.parse(JSON.stringify(appSetting.data)))
+    console.log('[useAppLifecycle] executeMainTask - beginner.init:', appSetting.data?.beginner?.init)
+
     const { checkApplicationUpgrade, setupUpdateListener } = useApplicationUpgrade()
 
-    // Setup update listener after TouchSDK is initialized
     setupUpdateListener()
 
-    if (!appSetting?.beginner?.init) {
-      console.log('[useAppLifecycle] Skipping update check on first launch')
+    if (!appSetting.data?.beginner?.init) {
+      console.log('[useAppLifecycle] Skipping update check - beginner.init is false')
       return
     }
+
+    console.log('[useAppLifecycle] Checking for application upgrade')
     checkApplicationUpgrade()
   }
 
   /**
-   * Execute CoreBox window tasks
+   * Execute CoreBox window tasks.
    */
   async function executeCoreboxTask(): Promise<void> {
-    console.log('[useAppLifecycle] executeCoreboxTask')
-    // Add CoreBox-specific tasks here
     useCoreBox()
   }
 
   /**
-   * Start application lifecycle after initialization
+   * Start application lifecycle after initialization.
    */
   async function start(): Promise<void> {
     if (isCoreBox()) {
@@ -56,8 +56,8 @@ export function useAppLifecycle() {
   }
 
   /**
-   * Main application entry point
-   * Handles complete initialization sequence
+   * Main application entry point.
+   * Handles complete initialization sequence including SDK setup, storage initialization, and Sentry.
    */
   async function entry(onReady: () => Promise<void>): Promise<void> {
     try {
@@ -71,9 +71,14 @@ export function useAppLifecycle() {
 
       preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
       useTouchSDK({ channel: touchChannel })
+      console.log('[useAppLifecycle] Before initStorageChannel')
       initStorageChannel(touchChannel)
+      console.log('[useAppLifecycle] After initStorageChannel')
 
-      // Initialize Sentry in renderer process
+      // Wait for Vue's reactivity system to process storage updates
+      await nextTick()
+      console.log('[useAppLifecycle] After nextTick - appSetting.data:', JSON.parse(JSON.stringify(appSetting.data)))
+
       preloadDebugStep('Initializing Sentry...', 0.01)
       void (async () => {
         try {
@@ -92,11 +97,7 @@ export function useAppLifecycle() {
       preloadLog('Tuff is ready.')
       preloadRemoveOverlay()
 
-      // Start application lifecycle after SDK initialization
-      // All tasks that require TouchSDK will be executed here
       await start()
-
-      console.log('[useAppLifecycle] Initialization completed')
     } catch (error) {
       console.error('[useAppLifecycle] Initialization failed', error)
       preloadLog('Renderer initialization failed. Check console output.')

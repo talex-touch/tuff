@@ -201,7 +201,7 @@
     "market": "市场",
     "plugin": "插件",
     "details": "详细信息",
-    "aisdk": "智能",
+    "intelligence": "智能",
     "style": "样式",
     "setting": "设置"
   },
@@ -851,7 +851,7 @@
       "cacheExpiration": "缓存过期时间",
       "cacheExpirationDesc": "缓存响应的保留时间"
     },
-  "aisdk": {
+  "intelligence": {
     "pageTitle": "塔塔智能",
     "pageDesc": "通过塔塔智能，你可以优雅调度每条渠道，编排专属能力，并在一块打磨精致的控制面板中掌控全程。",
     "channelsSection": "渠道",
@@ -1290,7 +1290,7 @@
     "hoursAgo": "{count} 小时前",
     "daysAgo": "{count} 天前"
   },
-  "aisdk": {
+  "intelligence": {
     "providers": "AI 提供商",
     "addProvider": "添加提供商",
     "builtinProviders": "内置提供商",

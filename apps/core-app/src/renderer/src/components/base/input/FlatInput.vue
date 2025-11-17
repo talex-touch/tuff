@@ -1,13 +1,19 @@
-<script name="FlatInput" setup>
+<script lang="ts" name="FlatInput" setup>
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import { ref } from 'vue'
 
-const props = defineProps(['placeholder', 'icon', 'password', 'modelValue', 'nonWin', 'area'])
-const emit = defineEmits(['update:modelValue'])
+const props = defineProps<{
+  modelValue: string
+  placeholder?: string
+  icon?: string
+  password?: boolean
+  nonWin?: boolean
+  area?: boolean
+}>()
+const emits = defineEmits(['update:modelValue'])
 
 const lapsLock = ref(false)
-const value = useModelWrapper(props, emit)
+const value = useModelWrapper(props, emits)
 
 function onKeyDown(e) {
   if (!props.password) return

@@ -2,17 +2,17 @@
   <div class="aisdk-api-config">
     <TuffBlockInput
       v-model="localApiKey"
-      :title="t('aisdk.config.api.apiKey')"
-      :description="apiKeyError || t('aisdk.config.api.apiKeyRequired')"
-      :placeholder="t('aisdk.config.api.apiKeyPlaceholder')"
+      :title="t('intelligence.config.api.apiKey')"
+      :description="apiKeyError || t('intelligence.config.api.apiKeyRequired')"
+      :placeholder="t('intelligence.config.api.apiKeyPlaceholder')"
       default-icon="i-carbon-password"
       active-icon="i-carbon-password"
       @blur="handleApiKeyBlur"
     >
       <template #control="{ modelValue, update, focus }">
         <FlatInput
-          :model-value="modelValue"
-          :placeholder="t('aisdk.config.api.apiKeyPlaceholder')"
+          v-model="modelValue as string"
+          :placeholder="t('intelligence.config.api.apiKeyPlaceholder')"
           password
           @update:model-value="update"
           @focus="focus"
@@ -23,9 +23,9 @@
 
     <TuffBlockInput
       v-model="localBaseUrl"
-      :title="t('aisdk.config.api.baseUrl')"
-      :description="baseUrlError || t('aisdk.config.api.baseUrlHint')"
-      :placeholder="t('aisdk.config.api.baseUrlPlaceholder')"
+      :title="t('intelligence.config.api.baseUrl')"
+      :description="baseUrlError || t('intelligence.config.api.baseUrlHint')"
+      :placeholder="t('intelligence.config.api.baseUrlPlaceholder')"
       default-icon="i-carbon-link"
       active-icon="i-carbon-link"
       clearable
@@ -34,7 +34,7 @@
       <template #control="{ modelValue, update, focus, blur }">
         <FlatInput
           :model-value="modelValue"
-          :placeholder="t('aisdk.config.api.baseUrlPlaceholder')"
+          :placeholder="t('intelligence.config.api.baseUrlPlaceholder')"
           @update:model-value="update"
           @focus="focus"
           @blur="handleBaseUrlBlur"
@@ -43,8 +43,8 @@
     </TuffBlockInput>
 
     <TuffBlockSlot
-      :title="t('aisdk.config.api.testConnection')"
-      :description="t('aisdk.config.api.testConnectionHint')"
+      :title="t('intelligence.config.api.testConnection')"
+      :description="t('intelligence.config.api.testConnectionHint')"
       default-icon="i-carbon-content-delivery-network"
       active-icon="i-carbon-content-delivery-network"
       :active="!!testResult"
@@ -61,10 +61,10 @@
             <span>{{ testError }}</span>
           </div>
         </div>
-        <FlatButton v-if="canTest" :disabled="isTesting" :loading="isTesting" @click="handleTest">
+        <FlatButton :disabled="!canTest || isTesting" :loading="isTesting" @click="handleTest">
           <i v-if="isTesting" class="i-carbon-renew animate-spin" />
           <i v-else class="i-carbon-play-filled" />
-          <span>{{ t('aisdk.config.api.testButton') }}</span>
+          <span>{{ t('intelligence.config.api.testButton') }}</span>
         </FlatButton>
       </div>
     </TuffBlockSlot>
@@ -133,7 +133,7 @@ function validateApiKey(value: string): boolean {
   apiKeyError.value = ''
 
   if (props.modelValue.type !== 'local' && !value.trim()) {
-    apiKeyError.value = t('aisdk.config.api.apiKeyRequired')
+    apiKeyError.value = t('intelligence.config.api.apiKeyRequired')
     return false
   }
 
@@ -147,7 +147,7 @@ function validateBaseUrl(value: string): boolean {
     try {
       new URL(value)
     } catch {
-      baseUrlError.value = t('aisdk.config.api.baseUrlInvalid')
+      baseUrlError.value = t('intelligence.config.api.baseUrlInvalid')
       return false
     }
   }
@@ -205,7 +205,7 @@ async function handleTest() {
     const result = (await aiClient.testProvider(testProvider)) as any
 
     if (result?.success) {
-      testResult.value = t('aisdk.config.api.testSuccess')
+      testResult.value = t('intelligence.config.api.testSuccess')
 
       // 使用 MentionDialog 显示成功消息
       await forDialogMention(

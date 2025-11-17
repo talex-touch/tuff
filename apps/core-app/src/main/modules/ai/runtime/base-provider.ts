@@ -54,6 +54,29 @@ export abstract class IntelligenceProvider implements AiProviderAdapter {
     return `${this.type}-${Date.now()}-${Math.random().toString(36).substring(7)}`
   }
 
+  protected async parseJsonResponse<T>(response: Response, context?: { endpoint?: string }): Promise<T> {
+    const rawBody = await response.text()
+    const trimmedBody = rawBody.trim()
+    const endpointHint = context?.endpoint ? ` ${context.endpoint}` : ''
+    if (!trimmedBody) {
+      throw new Error(
+        `[${this.type}]${endpointHint} returned an empty response (status ${response.status}). Expecting JSON payload.`
+      )
+    }
+
+    try {
+      return JSON.parse(trimmedBody)
+    } catch (error) {
+      const normalized = trimmedBody.replace(/\s+/g, ' ')
+      const snippet =
+        normalized.length > 256 ? `${normalized.slice(0, 256)}...` : normalized || '<unreadable response>'
+      const contentType = response.headers.get('content-type') || 'unknown'
+      throw new Error(
+        `[${this.type}]${endpointHint} expected JSON but received ${contentType} (status ${response.status}). Body snippet: ${snippet}`
+      )
+    }
+  }
+
   protected validateApiKey(): void {
     if (!this.config.apiKey) {
       throw new Error(`[${this.type}] API key is required but not configured`)

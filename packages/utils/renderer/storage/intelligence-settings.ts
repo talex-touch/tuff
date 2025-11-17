@@ -186,7 +186,16 @@ class IntelligenceSettingsStorage extends TouchStorage<IntelligenceSetting> {
 
 const INTELLIGENCE_SETTINGS_KEY = `storage:${StorageList.INTELLIGENCE_SETTING}`
 
-export const intelligenceSettings = getOrCreateStorageSingleton<IntelligenceSettingsStorage>(
-  INTELLIGENCE_SETTINGS_KEY,
-  () => new IntelligenceSettingsStorage()
-)
+/**
+ * Lazy-initialized intelligence settings storage.
+ * The actual instance is created only when first accessed AND after initStorageChannel() is called.
+ */
+export const intelligenceSettings = new Proxy({} as IntelligenceSettingsStorage, {
+  get(_target, prop) {
+    const instance = getOrCreateStorageSingleton<IntelligenceSettingsStorage>(
+      INTELLIGENCE_SETTINGS_KEY,
+      () => new IntelligenceSettingsStorage()
+    );
+    return instance[prop as keyof IntelligenceSettingsStorage];
+  }
+});

@@ -31,7 +31,7 @@
             role="status"
           >
             <i class="i-carbon-cube text-3xl" aria-hidden="true" />
-            <p>{{ t('settings.aisdk.capabilityListEmpty') }}</p>
+            <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
           </div>
         </Transition>
       </section>
@@ -187,7 +187,7 @@ async function handleCapabilityTest(capabilityId: string): Promise<void> {
 
     capabilityTests[capabilityId] = {
       success: true,
-      message: t('settings.aisdk.capabilityTestHint'),
+      message: t('settings.intelligence.capabilityTestHint'),
       latency: invocation.latency,
       provider: invocation.provider,
       model: invocation.model,

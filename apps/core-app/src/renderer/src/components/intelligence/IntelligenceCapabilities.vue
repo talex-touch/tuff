@@ -33,51 +33,51 @@ function handleViewMetrics() {
 
 <template>
   <tuff-group-block
-    :name="t('settings.aisdk.landing.capabilities.title')"
-    :description="t('settings.aisdk.landing.capabilities.desc')"
+    :name="t('settings.intelligence.landing.capabilities.title')"
+    :description="t('settings.intelligence.landing.capabilities.desc')"
     default-icon="i-carbon-flow"
     active-icon="i-carbon-flow"
     memory-name="intelligence-capabilities"
   >
     <!-- 配置能力 -->
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.capabilities.manageTitle')"
-      :description="t('settings.aisdk.landing.capabilities.manageDesc')"
+      :title="t('settings.intelligence.landing.capabilities.manageTitle')"
+      :description="t('settings.intelligence.landing.capabilities.manageDesc')"
       default-icon="i-carbon-settings"
       active-icon="i-carbon-settings"
       @click="handleCapabilitiesClick"
     >
       <FlatButton primary @click="handleCapabilitiesClick">
         <i class="i-carbon-launch" />
-        <span>{{ t('settings.aisdk.landing.capabilities.manageButton') }}</span>
+        <span>{{ t('settings.intelligence.landing.capabilities.manageButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 能力审计 -->
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.capabilities.auditTitle')"
-      :description="t('settings.aisdk.landing.capabilities.auditDesc')"
+      :title="t('settings.intelligence.landing.capabilities.auditTitle')"
+      :description="t('settings.intelligence.landing.capabilities.auditDesc')"
       default-icon="i-carbon-event-schedule"
       active-icon="i-carbon-event-schedule"
       @click="handleAudit"
     >
       <FlatButton @click="handleAudit">
         <i class="i-carbon-chart-bar" />
-        <span>{{ t('settings.aisdk.landing.capabilities.auditButton') }}</span>
+        <span>{{ t('settings.intelligence.landing.capabilities.auditButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 消耗统计 -->
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.capabilities.statsTitle', { count: totalCalls })"
-      :description="t('settings.aisdk.landing.capabilities.statsDesc', { total: capabilityCount, bound: boundCapabilities, freq: avgFrequency })"
+      :title="t('settings.intelligence.landing.capabilities.statsTitle', { count: totalCalls })"
+      :description="t('settings.intelligence.landing.capabilities.statsDesc', { total: capabilityCount, bound: boundCapabilities, freq: avgFrequency })"
       default-icon="i-carbon-chart-line"
       active-icon="i-carbon-chart-line"
       @click="handleViewMetrics"
     >
       <FlatButton @click="handleViewMetrics">
         <i class="i-carbon-view" />
-        <span>{{ t('settings.aisdk.landing.capabilities.statsButton') }}</span>
+        <span>{{ t('settings.intelligence.landing.capabilities.statsButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
   </tuff-group-block>

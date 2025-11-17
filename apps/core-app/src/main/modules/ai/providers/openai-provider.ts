@@ -51,7 +51,11 @@ export class OpenAIProvider extends IntelligenceProvider {
       throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json()
+    const data = await this.parseJsonResponse<{
+      choices: any[]
+      usage?: any
+      model?: string
+    }>(response, { endpoint: '/chat/completions' })
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = {
@@ -150,7 +154,11 @@ export class OpenAIProvider extends IntelligenceProvider {
       throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json()
+    const data = await this.parseJsonResponse<{
+      data: any[]
+      usage?: any
+      model?: string
+    }>(response, { endpoint: '/embeddings' })
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = {

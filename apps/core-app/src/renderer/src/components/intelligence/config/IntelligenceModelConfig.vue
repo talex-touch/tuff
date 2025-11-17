@@ -2,8 +2,8 @@
   <div class="aisdk-model-config">
     <!-- Models Management Button -->
     <TuffBlockSlot
-      :title="t('aisdk.config.model.models')"
-      :description="modelsError || t('aisdk.config.model.modelsHint')"
+      :title="t('intelligence.config.model.models')"
+      :description="modelsError || t('intelligence.config.model.modelsHint')"
       default-icon="i-carbon-model"
       active-icon="i-carbon-model"
       :active="localModels.length > 0"
@@ -13,18 +13,18 @@
     >
       <div class="models-summary">
         <span v-if="localModels.length === 0" class="text-[var(--el-text-color-placeholder)]">
-          {{ t('aisdk.config.model.noModels') }}
+          {{ t('intelligence.config.model.noModels') }}
         </span>
         <span v-else class="text-[var(--el-text-color-primary)]">
-          {{ localModels.length }} {{ t('aisdk.config.model.modelsCount') }}
+          {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
         </span>
       </div>
     </TuffBlockSlot>
 
     <!-- Default Model Selector -->
     <TuffBlockSlot
-      :title="t('aisdk.config.model.defaultModel')"
-      :description="defaultModelError || t('aisdk.config.model.defaultModelPlaceholder')"
+      :title="t('intelligence.config.model.defaultModel')"
+      :description="defaultModelError || t('intelligence.config.model.defaultModelPlaceholder')"
       default-icon="i-carbon-checkmark"
       active-icon="i-carbon-checkmark"
       :active="!!localDefaultModel"
@@ -42,8 +42,8 @@
 
     <!-- Instructions Prompt Selector -->
     <TuffBlockSlot
-      :title="t('aisdk.config.model.instructions')"
-      :description="t('aisdk.config.model.instructionsHint')"
+      :title="t('intelligence.config.model.instructions')"
+      :description="t('intelligence.config.model.instructionsHint')"
       default-icon="i-carbon-document"
       active-icon="i-carbon-document"
       :active="!!localInstructions"
@@ -57,10 +57,10 @@
     </TuffBlockSlot>
 
     <!-- Models Drawer -->
-    <TDrawer v-model:visible="showModelsDrawer" :title="t('aisdk.config.model.manageModels')">
+    <TDrawer v-model:visible="showModelsDrawer" :title="t('intelligence.config.model.manageModels')">
       <div class="models-drawer-content">
         <p class="text-sm text-[var(--el-text-color-secondary)] mb-4">
-          {{ t('aisdk.config.model.modelsHint') }}
+          {{ t('intelligence.config.model.modelsHint') }}
         </p>
 
         <!-- Model Tags -->
@@ -76,7 +76,7 @@
           <div v-if="localModels.length === 0" class="empty-state">
             <i class="i-carbon-model text-4xl text-[var(--el-text-color-placeholder)]" />
             <p class="text-[var(--el-text-color-secondary)]">
-              {{ t('aisdk.config.model.noModels') }}
+              {{ t('intelligence.config.model.noModels') }}
             </p>
           </div>
         </div>
@@ -91,10 +91,10 @@
           >
             <i v-if="isFetching" class="i-carbon-renew animate-spin" />
             <i v-else class="i-carbon-download" />
-            {{ t('aisdk.config.model.fetchModels') }}
+            {{ t('intelligence.config.model.fetchModels') }}
           </FlatButton>
           <p class="text-xs text-[var(--el-text-color-secondary)]">
-            {{ t('aisdk.config.model.fetchModelsHint') }}
+            {{ t('intelligence.config.model.fetchModelsHint') }}
           </p>
         </div>
 
@@ -103,7 +103,7 @@
           <input
             v-model="newModelInput"
             type="text"
-            :placeholder="t('aisdk.config.model.addModelPlaceholder')"
+            :placeholder="t('intelligence.config.model.addModelPlaceholder')"
             class="add-model-input"
             @keyup.enter="handleAddModel"
           />
@@ -113,7 +113,7 @@
             @click="handleAddModel"
           >
             <i class="i-carbon-add" />
-            {{ t('aisdk.config.model.addModel') }}
+            {{ t('intelligence.config.model.addModel') }}
           </FlatButton>
         </div>
 
@@ -124,14 +124,14 @@
     </TDrawer>
 
     <!-- Default Model Drawer -->
-    <TDrawer v-model:visible="showDefaultModelDrawer" :title="t('aisdk.config.model.defaultModel')">
+    <TDrawer v-model:visible="showDefaultModelDrawer" :title="t('intelligence.config.model.defaultModel')">
       <p class="drawer-description">
-        {{ t('aisdk.config.model.defaultModelPlaceholder') }}
+        {{ t('intelligence.config.model.defaultModelPlaceholder') }}
       </p>
       <TuffBlockSelect
         v-model="localDefaultModel"
-        :title="t('aisdk.config.model.defaultModel')"
-        :description="defaultModelError || t('aisdk.config.model.defaultModelPlaceholder')"
+        :title="t('intelligence.config.model.defaultModel')"
+        :description="defaultModelError || t('intelligence.config.model.defaultModelPlaceholder')"
         default-icon="i-carbon-checkmark"
         active-icon="i-carbon-checkmark"
         :disabled="disabled || localModels.length === 0"
@@ -144,9 +144,9 @@
     </TDrawer>
 
     <!-- Instructions Drawer -->
-    <TDrawer v-model:visible="showInstructionsDrawer" :title="t('aisdk.config.model.instructions')">
+    <TDrawer v-model:visible="showInstructionsDrawer" :title="t('intelligence.config.model.instructions')">
       <p class="drawer-description">
-        {{ t('aisdk.config.model.instructionsHint') }}
+        {{ t('intelligence.config.model.instructionsHint') }}
       </p>
       <IntelligencePromptSelector
         v-model="localInstructions"
@@ -222,7 +222,7 @@ const isFetching = ref(false)
 
 const defaultModelSummary = computed(() => {
   if (!localDefaultModel.value) {
-    return t('aisdk.config.model.defaultModelPlaceholder')
+    return t('intelligence.config.model.defaultModelPlaceholder')
   }
 
   return localDefaultModel.value
@@ -232,7 +232,7 @@ const instructionsSummary = computed(() => {
   const content = (localInstructions.value || '').trim()
 
   if (!content) {
-    return t('aisdk.config.model.instructionsEmpty')
+    return t('intelligence.config.model.instructionsEmpty')
   }
 
   const singleLine = content.replace(/\s+/g, ' ')
@@ -260,7 +260,7 @@ function validateModels(): boolean {
   modelsError.value = ''
 
   if (props.modelValue.enabled && localModels.value.length === 0) {
-    modelsError.value = t('aisdk.config.model.modelsRequired')
+    modelsError.value = t('intelligence.config.model.modelsRequired')
     return false
   }
 
@@ -271,12 +271,12 @@ function validateDefaultModel(): boolean {
   defaultModelError.value = ''
 
   if (props.modelValue.enabled && !localDefaultModel.value) {
-    defaultModelError.value = t('aisdk.config.model.defaultModelRequired')
+    defaultModelError.value = t('intelligence.config.model.defaultModelRequired')
     return false
   }
 
   if (localDefaultModel.value && !localModels.value.includes(localDefaultModel.value)) {
-    defaultModelError.value = t('aisdk.config.model.defaultModelInvalid')
+    defaultModelError.value = t('intelligence.config.model.defaultModelInvalid')
     return false
   }
 
@@ -289,7 +289,7 @@ function handleAddModel() {
   if (!modelName) return
 
   if (localModels.value.includes(modelName)) {
-    modelsError.value = t('aisdk.config.model.modelExists')
+    modelsError.value = t('intelligence.config.model.modelExists')
     return
   }
 

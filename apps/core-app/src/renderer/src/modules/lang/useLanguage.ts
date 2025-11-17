@@ -48,7 +48,7 @@ const initialFollowSystem = (() => {
   }
 
   if (appSetting?.lang?.followSystem !== undefined) {
-    return Boolean(appSetting.lang.followSystem)
+    return Boolean(appSetting.data.lang.followSystem)
   }
 
   return false
@@ -113,7 +113,7 @@ export function useLanguage() {
 
       localStorage.setItem('app-language', lang)
       if (appSetting?.lang) {
-        appSetting.lang.locale = lang
+        appSetting.data.lang.locale = lang
       }
 
       if (!followSystemLanguage.value) {
@@ -133,7 +133,7 @@ export function useLanguage() {
     followSystemLanguage.value = follow
     localStorage.setItem('app-follow-system-language', follow.toString())
     if (appSetting?.lang) {
-      appSetting.lang.followSystem = follow
+      appSetting.data.lang.followSystem = follow
     }
 
     if (follow) {

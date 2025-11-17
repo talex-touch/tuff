@@ -8,7 +8,7 @@
     }"
     role="button"
     :tabindex="0"
-    :aria-label="t('aisdk.item.selectProvider', { name: provider.name })"
+    :aria-label="t('intelligence.item.selectProvider', { name: provider.name })"
     :aria-pressed="isSelected"
     :aria-describedby="hasConfigError ? `error-${provider.id}` : undefined"
     @click="handleClick"
@@ -21,7 +21,7 @@
       :id="`error-${provider.id}`"
       class="issue-badge absolute top-1.5 right-1.5 z-10"
       role="status"
-      :aria-label="t('aisdk.item.configError')"
+      :aria-label="t('intelligence.item.configError')"
     >
       <i
         class="i-ri-error-warning-line text-red-500/80 text-xl cursor-help"
@@ -48,7 +48,7 @@
         class="status-dot w-2 h-2 rounded-full"
         :class="localEnabled ? 'bg-green-500' : 'bg-gray-400'"
         role="status"
-        :aria-label="localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')"
+        :aria-label="localEnabled ? t('intelligence.status.enabled') : t('intelligence.status.disabled')"
       />
     </div>
   </div>

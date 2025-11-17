@@ -38,7 +38,11 @@ export class LocalProvider extends IntelligenceProvider {
       throw new Error(`Local provider error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json()
+    const data = await this.parseJsonResponse<{
+      result?: string
+      usage?: AiUsageInfo
+      model?: string
+    }>(response, { endpoint: '/chat' })
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = data.usage || {
@@ -79,7 +83,11 @@ export class LocalProvider extends IntelligenceProvider {
       throw new Error(`Local provider embedding error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json()
+    const data = await this.parseJsonResponse<{
+      embedding?: number[]
+      usage?: AiUsageInfo
+      model?: string
+    }>(response, { endpoint: '/embedding' })
     const latency = Date.now() - startTime
 
     return {

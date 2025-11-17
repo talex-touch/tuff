@@ -23,66 +23,66 @@ function handlePromptsClick() {
 async function handleOpenFolder() {
   try {
     await touchChannel.send('app:open-prompts-folder')
-    toast.success(t('settings.aisdk.landing.prompts.folderOpenSuccess'))
+    toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
   } catch (error) {
     console.error('Failed to open prompts folder:', error)
-    toast.error(t('settings.aisdk.landing.prompts.folderOpenFailed'))
+    toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
 }
 
 function handleCreatePrompt() {
   console.log('Create new prompt file')
-  toast.info(t('settings.aisdk.landing.prompts.createPromptHint'))
+  toast.info(t('settings.intelligence.landing.prompts.createPromptHint'))
 }
 </script>
 
 <template>
   <tuff-group-block
-    :name="t('settings.aisdk.landing.prompts.title')"
-    :description="t('settings.aisdk.landing.prompts.desc')"
+    :name="t('settings.intelligence.landing.prompts.title')"
+    :description="t('settings.intelligence.landing.prompts.desc')"
     default-icon="i-carbon-language"
     active-icon="i-carbon-language"
     memory-name="intelligence-prompts"
   >
     <!-- 编辑提示词 -->
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.prompts.editTitle')"
-      :description="t('settings.aisdk.landing.prompts.editDesc')"
+      :title="t('settings.intelligence.landing.prompts.editTitle')"
+      :description="t('settings.intelligence.landing.prompts.editDesc')"
       default-icon="i-carbon-edit"
       active-icon="i-carbon-edit"
       @click="handlePromptsClick"
     >
       <FlatButton primary @click="handlePromptsClick">
         <i class="i-carbon-launch" />
-        <span>{{ t('settings.aisdk.landing.prompts.editButton') }}</span>
+        <span>{{ t('settings.intelligence.landing.prompts.editButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 打开文件夹 -->
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.prompts.folderTitle')"
-      :description="t('settings.aisdk.landing.prompts.folderDesc')"
+      :title="t('settings.intelligence.landing.prompts.folderTitle')"
+      :description="t('settings.intelligence.landing.prompts.folderDesc')"
       default-icon="i-carbon-folder"
       active-icon="i-carbon-folder"
       @click="handleOpenFolder"
     >
       <FlatButton @click="handleOpenFolder">
         <i class="i-carbon-folder-open" />
-        <span>{{ t('settings.aisdk.landing.prompts.folderButton') }}</span>
+        <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 提示词统计 -->
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.prompts.statsTitle', { count: promptCount })"
-      :description="t('settings.aisdk.landing.prompts.statsDesc', { words: totalWords })"
+      :title="t('settings.intelligence.landing.prompts.statsTitle', { count: promptCount })"
+      :description="t('settings.intelligence.landing.prompts.statsDesc', { words: totalWords })"
       default-icon="i-carbon-chart-bar"
       active-icon="i-carbon-chart-bar"
       @click="handleCreatePrompt"
     >
       <FlatButton @click="handleCreatePrompt">
         <i class="i-carbon-add" />
-        <span>{{ t('settings.aisdk.landing.prompts.newPromptButton') }}</span>
+        <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
   </tuff-group-block>

@@ -16,12 +16,26 @@ const defaultAISDKData: AISDKStorageData = {
 
 const AISDK_STORAGE_KEY = 'storage:aisdk-config'
 
-export const aisdkStorage = getOrCreateStorageSingleton<TouchStorage<AISDKStorageData>>(
-  AISDK_STORAGE_KEY,
-  () => new TouchStorage<AISDKStorageData>('aisdk-config', defaultAISDKData)
-)
+class AISDKStorage extends TouchStorage<AISDKStorageData> {
+  constructor() {
+    super('aisdk-config', defaultAISDKData)
+    this.setAutoSave(true)
+  }
+}
 
-aisdkStorage.setAutoSave(true)
+/**
+ * Lazy-initialized AISDK storage.
+ * The actual instance is created only when first accessed AND after initStorageChannel() is called.
+ */
+export const aisdkStorage = new Proxy({} as TouchStorage<AISDKStorageData>, {
+  get(_target, prop) {
+    const instance = getOrCreateStorageSingleton<AISDKStorage>(
+      AISDK_STORAGE_KEY,
+      () => new AISDKStorage()
+    );
+    return instance[prop as keyof TouchStorage<AISDKStorageData>];
+  }
+});
 
 export async function migrateAISDKSettings(): Promise<void> {
   console.log('[AISDK Storage] Starting migration check...')

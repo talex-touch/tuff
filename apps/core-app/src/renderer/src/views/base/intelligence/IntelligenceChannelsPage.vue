@@ -31,7 +31,7 @@
       </section>
     </div>
     <p v-if="providers.length === 0" class="text-sm text-[var(--el-text-color-secondary)]">
-      {{ t('settings.aisdk.emptyProviders') }}
+      {{ t('settings.intelligence.emptyProviders') }}
     </p>
   </div>
 </template>
@@ -70,7 +70,7 @@ function handleAddProvider(): void {
   addProvider({
     id,
     type: AiProviderType.CUSTOM,
-    name: t('settings.aisdk.providers') + ` ${nextIndex}`,
+    name: t('settings.intelligence.providers') + ` ${nextIndex}`,
     enabled: false,
     priority: 3,
     models: [],

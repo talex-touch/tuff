@@ -12,9 +12,9 @@
       <i class="i-carbon-watson-machine-learning text-3xl text-[var(--el-color-primary)]" />
     </div>
     <div class="max-w-96 content-wrapper">
-      <h3 class="text-lg font-semibold mb-2">{{ t('aisdk.empty.title') }}</h3>
+      <h3 class="text-lg font-semibold mb-2">{{ t('intelligence.empty.title') }}</h3>
       <p class="text-[var(--el-text-color-regular)] opacity-80 mb-6">
-        {{ t('aisdk.empty.description') }}
+        {{ t('intelligence.empty.description') }}
       </p>
     </div>
   </div>

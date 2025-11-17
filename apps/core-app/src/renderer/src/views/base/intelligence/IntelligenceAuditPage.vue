@@ -3,8 +3,8 @@
     <div class="flex-1 overflow-auto p-6">
       <!-- Global Settings Section -->
       <TuffGroupBlock
-        :name="t('aisdk.global.title')"
-        :description="t('aisdk.global.description')"
+        :name="t('intelligence.global.title')"
+        :description="t('intelligence.global.description')"
         default-icon="i-carbon-settings-adjust"
         active-icon="i-carbon-settings-adjust"
         memory-name="intelligence-global-settings"
@@ -17,15 +17,15 @@
 
       <!-- Audit Settings Section -->
       <TuffGroupBlock
-        :name="t('aisdk.audit.title')"
-        :description="t('aisdk.audit.description')"
+        :name="t('intelligence.audit.title')"
+        :description="t('intelligence.audit.description')"
         default-icon="i-carbon-event-schedule"
         active-icon="i-carbon-event-schedule"
         memory-name="intelligence-audit-settings"
       >
         <TuffBlockSlot
-          :title="t('aisdk.audit.enableTitle')"
-          :description="t('aisdk.audit.enableDescription')"
+          :title="t('intelligence.audit.enableTitle')"
+          :description="t('intelligence.audit.enableDescription')"
           default-icon="i-carbon-checkmark"
           active-icon="i-carbon-checkmark"
           :active="globalConfig.enableAudit"
@@ -38,29 +38,29 @@
 
         <TuffBlockSlot
           v-if="globalConfig.enableAudit"
-          :title="t('aisdk.audit.logsTitle')"
-          :description="t('aisdk.audit.logsDescription')"
+          :title="t('intelligence.audit.logsTitle')"
+          :description="t('intelligence.audit.logsDescription')"
           default-icon="i-carbon-document-view"
           active-icon="i-carbon-document-view"
         >
           <FlatButton>
             <i class="i-carbon-view" />
-            {{ t('aisdk.audit.viewLogs') }}
+            {{ t('intelligence.audit.viewLogs') }}
           </FlatButton>
         </TuffBlockSlot>
       </TuffGroupBlock>
 
       <!-- Cache Settings Section -->
       <TuffGroupBlock
-        :name="t('aisdk.cache.title')"
-        :description="t('aisdk.cache.description')"
+        :name="t('intelligence.cache.title')"
+        :description="t('intelligence.cache.description')"
         default-icon="i-carbon-data-base"
         active-icon="i-carbon-data-base"
         memory-name="intelligence-cache-settings"
       >
         <TuffBlockSlot
-          :title="t('aisdk.cache.enableTitle')"
-          :description="t('aisdk.cache.enableDescription')"
+          :title="t('intelligence.cache.enableTitle')"
+          :description="t('intelligence.cache.enableDescription')"
           default-icon="i-carbon-checkmark"
           active-icon="i-carbon-checkmark"
           :active="globalConfig.enableCache"
@@ -74,8 +74,8 @@
         <TuffBlockInput
           v-if="globalConfig.enableCache"
           v-model="cacheExpirationInput"
-          :title="t('aisdk.cache.expirationTitle')"
-          :description="t('aisdk.cache.expirationDescription')"
+          :title="t('intelligence.cache.expirationTitle')"
+          :description="t('intelligence.cache.expirationDescription')"
           default-icon="i-carbon-time"
           active-icon="i-carbon-time"
           @blur="handleCacheExpirationBlur"
@@ -87,13 +87,13 @@
                 type="number"
                 min="60"
                 max="86400"
-                :placeholder="t('aisdk.cache.expirationPlaceholder')"
+                :placeholder="t('intelligence.cache.expirationPlaceholder')"
                 class="tuff-input flex-1"
                 @input="update(($event.target as HTMLInputElement).value)"
                 @focus="focus"
                 @blur="blur"
               />
-              <span class="text-sm text-[var(--el-text-color-secondary)]">{{ t('aisdk.cache.seconds') }}</span>
+              <span class="text-sm text-[var(--el-text-color-secondary)]">{{ t('intelligence.cache.seconds') }}</span>
             </div>
           </template>
         </TuffBlockInput>

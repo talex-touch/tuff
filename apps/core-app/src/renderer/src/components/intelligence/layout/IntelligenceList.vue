@@ -3,14 +3,14 @@
     <!-- Search Section -->
     <div class="AISDKList-Search-Section flex-shrink-0 p-3 border-b border-[var(--el-border-color-lighter)]">
       <div class="search-wrapper">
-        <label for="provider-search" class="sr-only">{{ t('aisdk.search.label') }}</label>
+        <label for="provider-search" class="sr-only">{{ t('intelligence.search.label') }}</label>
         <i class="i-ri-search-line search-icon" aria-hidden="true" />
         <input
           id="provider-search"
           v-model="searchQuery"
           type="search"
-          :placeholder="t('aisdk.search.placeholder')"
-          :aria-label="t('aisdk.search.label')"
+          :placeholder="t('intelligence.search.placeholder')"
+          :aria-label="t('intelligence.search.label')"
           :aria-describedby="searchQuery ? 'search-results-count' : undefined"
           class="search-input"
           autocomplete="off"
@@ -19,7 +19,7 @@
           v-if="searchQuery"
           class="clear-icon"
           mini
-          :aria-label="t('aisdk.search.clear')"
+          :aria-label="t('intelligence.search.clear')"
           @click="clearSearch"
           @keydown.enter="clearSearch"
           @keydown.space.prevent="clearSearch"
@@ -35,7 +35,7 @@
         role="status"
         aria-live="polite"
       >
-        {{ t('aisdk.search.results', {
+        {{ t('intelligence.search.results', {
           count: filteredEnabledProviders.length + filteredDisabledProviders.length
         }) }}
       </div>
@@ -48,7 +48,7 @@
           <IntelligenceListModule
             v-model="selectedId"
             :providers="filteredEnabledProviders"
-            :title="t('aisdk.list.enabled')"
+            :title="t('intelligence.list.enabled')"
             icon="i-ri-check-line"
             section-id="enabled-providers"
           />
@@ -56,7 +56,7 @@
           <IntelligenceListModule
             v-model="selectedId"
             :providers="filteredDisabledProviders"
-            :title="t('aisdk.list.disabled')"
+            :title="t('intelligence.list.disabled')"
             icon="i-ri-close-line"
             section-id="disabled-providers"
           />
@@ -68,11 +68,11 @@
     <div class="AISDKList-AddButton-Section flex-shrink-0 p-3 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]">
       <FlatButton
         class="add-provider-btn w-full"
-        :aria-label="t('settings.aisdk.addChannel')"
+        :aria-label="t('settings.intelligence.addChannel')"
         @click="handleAddProvider"
       >
         <i class="i-carbon-add" aria-hidden="true" />
-        <span>{{ t('settings.aisdk.addChannel') }}</span>
+        <span>{{ t('settings.intelligence.addChannel') }}</span>
       </FlatButton>
     </div>
   </aside>

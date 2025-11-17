@@ -51,9 +51,9 @@ const settings = ref({
 
 const isLoading = ref(false)
 
-// Initialize appSetting.setup if not exists
-if (!appSetting.setup) {
-  appSetting.setup = {
+// Initialize appSetting.data.setup if not exists
+if (!appSetting.data.setup) {
+  appSetting.data.setup = {
     accessibility: false,
     notifications: false,
     autoStart: false,
@@ -107,7 +107,7 @@ async function checkAllPermissions(): Promise<void> {
             checked: true,
             required: false
           }
-          appSetting.setup.accessibility = accResult.status === 'granted'
+          appSetting.data.setup.accessibility = accResult.status === 'granted'
         }
       } catch (error) {
         console.warn('[SetupPermissions] Failed to check accessibility permission:', error)
@@ -127,7 +127,7 @@ async function checkAllPermissions(): Promise<void> {
           checked: true,
           required: false
         }
-        appSetting.setup.notifications = notifResult.status === 'granted'
+        appSetting.data.setup.notifications = notifResult.status === 'granted'
       }
     } catch (error) {
       console.warn('[SetupPermissions] Failed to check notification permission:', error)
@@ -147,7 +147,7 @@ async function checkAllPermissions(): Promise<void> {
             checked: true,
             required: false
           }
-          appSetting.setup.adminPrivileges = adminResult.status === 'granted'
+          appSetting.data.setup.adminPrivileges = adminResult.status === 'granted'
         }
       } catch (error) {
         console.warn('[SetupPermissions] Failed to check admin privileges:', error)
@@ -162,9 +162,9 @@ async function checkAllPermissions(): Promise<void> {
 }
 
 function loadSettings(): void {
-  if (appSetting.setup) {
-    settings.value.autoStart = appSetting.setup.autoStart ?? false
-    settings.value.showTray = appSetting.setup.showTray ?? true
+  if (appSetting.data.setup) {
+    settings.value.autoStart = appSetting.data.setup.autoStart ?? false
+    settings.value.showTray = appSetting.data.setup.showTray ?? true
   }
 
   // Load autoStart from existing setting
@@ -192,7 +192,7 @@ async function requestPermission(type: string): Promise<void> {
 
 async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
-  appSetting.setup.autoStart = value
+  appSetting.data.setup.autoStart = value
   try {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
@@ -208,7 +208,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
 
 function updateShowTray(value: boolean): void {
   settings.value.showTray = value
-  appSetting.setup.showTray = value
+  appSetting.data.setup.showTray = value
   try {
     touchChannel.send('storage:save', {
       key: 'app.setup.showTray',
@@ -250,15 +250,15 @@ async function handleContinue(): Promise<void> {
     },
     () => {
       // Save all settings before proceeding
-      appSetting.setup = {
+      appSetting.data.setup = {
         accessibility: permissions.value.accessibility.status === 'granted',
         notifications: permissions.value.notifications.status === 'granted',
         autoStart: settings.value.autoStart,
         showTray: settings.value.showTray,
         adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
         hideDock: settings.value.hideDock ?? false,
-        runAsAdmin: appSetting.setup.runAsAdmin ?? false,
-        customDesktop: appSetting.setup.customDesktop ?? false
+        runAsAdmin: appSetting.data.setup.runAsAdmin ?? false,
+        customDesktop: appSetting.data.setup.customDesktop ?? false
       }
     }
   )

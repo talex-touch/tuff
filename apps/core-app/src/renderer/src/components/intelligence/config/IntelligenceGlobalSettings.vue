@@ -3,8 +3,8 @@
     <!-- Enable Audit Logging -->
     <TuffBlockSwitch
       v-model="localEnableAudit"
-      :title="t('aisdk.global.auditLogging')"
-      :description="t('aisdk.global.auditLoggingHint')"
+      :title="t('intelligence.global.auditLogging')"
+      :description="t('intelligence.global.auditLoggingHint')"
       default-icon="i-carbon-document-tasks"
       active-icon="i-carbon-document-tasks"
       @update:model-value="handleAuditChange"
@@ -13,8 +13,8 @@
     <!-- Enable Caching -->
     <TuffBlockSwitch
       v-model="localEnableCache"
-      :title="t('aisdk.global.caching')"
-      :description="t('aisdk.global.cachingHint')"
+      :title="t('intelligence.global.caching')"
+      :description="t('intelligence.global.cachingHint')"
       default-icon="i-carbon-data-base"
       active-icon="i-carbon-data-base"
       @update:model-value="handleCacheChange"
@@ -25,8 +25,8 @@
       <TuffBlockSelect
         v-if="localEnableCache"
         v-model="localCacheExpiration"
-        :title="t('aisdk.global.cacheExpiration')"
-        :description="t('aisdk.global.cacheExpirationHint')"
+        :title="t('intelligence.global.cacheExpiration')"
+        :description="t('intelligence.global.cacheExpirationHint')"
         default-icon="i-carbon-time"
         active-icon="i-carbon-time"
         @update:model-value="handleCacheExpirationChange"
@@ -34,31 +34,31 @@
         <TSelectItem :model-value="300">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
-            <span>{{ t('aisdk.global.cacheExpiration5min') }}</span>
+            <span>{{ t('intelligence.global.cacheExpiration5min') }}</span>
           </div>
         </TSelectItem>
         <TSelectItem :model-value="900">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
-            <span>{{ t('aisdk.global.cacheExpiration15min') }}</span>
+            <span>{{ t('intelligence.global.cacheExpiration15min') }}</span>
           </div>
         </TSelectItem>
         <TSelectItem :model-value="3600">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
-            <span>{{ t('aisdk.global.cacheExpiration1hour') }}</span>
+            <span>{{ t('intelligence.global.cacheExpiration1hour') }}</span>
           </div>
         </TSelectItem>
         <TSelectItem :model-value="21600">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
-            <span>{{ t('aisdk.global.cacheExpiration6hours') }}</span>
+            <span>{{ t('intelligence.global.cacheExpiration6hours') }}</span>
           </div>
         </TSelectItem>
         <TSelectItem :model-value="86400">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
-            <span>{{ t('aisdk.global.cacheExpiration24hours') }}</span>
+            <span>{{ t('intelligence.global.cacheExpiration24hours') }}</span>
           </div>
         </TSelectItem>
       </TuffBlockSelect>

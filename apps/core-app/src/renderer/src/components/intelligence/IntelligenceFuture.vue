@@ -13,35 +13,35 @@ function handleDocsClick() {
 
 <template>
   <tuff-group-block
-    :name="t('settings.aisdk.landing.future.title')"
-    :description="t('settings.aisdk.landing.future.desc')"
+    :name="t('settings.intelligence.landing.future.title')"
+    :description="t('settings.intelligence.landing.future.desc')"
     default-icon="i-carbon-cloud-upload"
     active-icon="i-carbon-cloud-upload"
     memory-name="intelligence-future"
   >
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.future.title')"
-      :description="t('settings.aisdk.landing.future.desc')"
+      :title="t('settings.intelligence.landing.future.title')"
+      :description="t('settings.intelligence.landing.future.desc')"
       default-icon="i-carbon-cloud-upload"
       active-icon="i-carbon-cloud-upload"
       disabled
     >
       <TButton variant="ghost" disabled>
         <i class="i-carbon-time" />
-        <span>{{ t('settings.aisdk.landing.future.cta') }}</span>
+        <span>{{ t('settings.intelligence.landing.future.cta') }}</span>
       </TButton>
     </tuff-block-slot>
 
     <tuff-block-slot
-      :title="t('settings.aisdk.landing.docs.title')"
-      :description="t('settings.aisdk.landing.docs.desc')"
+      :title="t('settings.intelligence.landing.docs.title')"
+      :description="t('settings.intelligence.landing.docs.desc')"
       default-icon="i-carbon-notes"
       active-icon="i-carbon-notes"
       @click="handleDocsClick"
     >
       <TButton variant="ghost" @click="handleDocsClick">
         <i class="i-carbon-link" />
-        <span>{{ t('settings.aisdk.docsButton') }}</span>
+        <span>{{ t('settings.intelligence.docsButton') }}</span>
       </TButton>
     </tuff-block-slot>
   </tuff-group-block>
