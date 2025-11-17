@@ -38,43 +38,43 @@ function handleViewStats() {
   >
     <!-- 配置渠道 -->
     <tuff-block-slot
-      title="配置渠道"
-      description="接入 OpenAI、DeepSeek、Siliconflow 等渠道"
+      :title="t('settings.aisdk.landing.channels.manageTitle')"
+      :description="t('settings.aisdk.landing.channels.manageDesc')"
       default-icon="i-carbon-settings"
       active-icon="i-carbon-settings"
       @click="handleChannelsClick"
     >
       <FlatButton primary @click="handleChannelsClick">
         <i class="i-carbon-launch" />
-        <span>进入配置</span>
+        <span>{{ t('settings.aisdk.landing.channels.manageButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 渠道审计 -->
     <tuff-block-slot
-      title="渠道审计"
-      description="查看渠道调用历史和日志"
+      :title="t('settings.aisdk.landing.channels.auditTitle')"
+      :description="t('settings.aisdk.landing.channels.auditDesc')"
       default-icon="i-carbon-event-schedule"
       active-icon="i-carbon-event-schedule"
       @click="handleAudit"
     >
       <FlatButton @click="handleAudit">
         <i class="i-carbon-chart-line" />
-        <span>查看审计</span>
+        <span>{{ t('settings.aisdk.landing.channels.auditButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 累计消耗 -->
     <tuff-block-slot
-      :title="`累计消耗: $${totalConsumption.toFixed(2)}`"
-      :description="`渠道总数: ${providerCount} | 已启用: ${enabledCount}`"
+      :title="t('settings.aisdk.landing.channels.statsTitle', { amount: totalConsumption.toFixed(2) })"
+      :description="t('settings.aisdk.landing.channels.statsDesc', { total: providerCount, enabled: enabledCount })"
       default-icon="i-carbon-chart-bar"
       active-icon="i-carbon-chart-bar"
       @click="handleViewStats"
     >
       <FlatButton @click="handleViewStats">
         <i class="i-carbon-view" />
-        <span>查看统计</span>
+        <span>{{ t('settings.aisdk.landing.channels.statsButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
   </tuff-group-block>

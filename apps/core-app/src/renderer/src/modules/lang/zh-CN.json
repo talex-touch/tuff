@@ -953,17 +953,47 @@
       "channels": {
         "title": "渠道配置商",
         "desc": "接入 OpenAI、DeepSeek、Siliconflow 等渠道，管理密钥与优先级。",
-        "cta": "进入渠道面板"
+        "cta": "进入渠道面板",
+        "manageTitle": "配置渠道",
+        "manageDesc": "接入 OpenAI、DeepSeek、Siliconflow 等渠道",
+        "manageButton": "进入配置",
+        "auditTitle": "渠道审计",
+        "auditDesc": "查看渠道调用历史和日志",
+        "auditButton": "查看审计",
+        "statsTitle": "累计消耗：￥{amount}",
+        "statsDesc": "渠道总数：{total}｜已启用：{enabled}",
+        "statsButton": "查看统计"
       },
       "capabilities": {
         "title": "能力配置商",
         "desc": "为 OCR、Embedding 等能力绑定渠道与模型，支持一键测试。",
-        "cta": "进入能力面板"
+        "cta": "进入能力面板",
+        "manageTitle": "配置能力",
+        "manageDesc": "为 OCR、Embedding 等能力绑定渠道与模型",
+        "manageButton": "进入配置",
+        "auditTitle": "能力审计",
+        "auditDesc": "查看能力调用记录和性能指标",
+        "auditButton": "查看审计",
+        "statsTitle": "总调用：{count} 次",
+        "statsDesc": "能力总数：{total}｜已绑定：{bound}｜调用频率：{freq}/小时",
+        "statsButton": "查看指标"
       },
       "prompts": {
         "title": "提示配置商",
         "desc": "集中管理系统提示词模板，保持产出风格一致。",
-        "cta": "编辑提示词"
+        "cta": "编辑提示词",
+        "editTitle": "编辑提示词",
+        "editDesc": "集中管理系统提示词模板",
+        "editButton": "进入编辑",
+        "folderTitle": "打开文件夹",
+        "folderDesc": "查看提示词存储位置",
+        "folderButton": "打开文件夹",
+        "statsTitle": "提示词统计：{count} 个",
+        "statsDesc": "总字数：{words}",
+        "newPromptButton": "新建提示词",
+        "folderOpenSuccess": "已打开提示词文件夹",
+        "folderOpenFailed": "打开提示词文件夹失败",
+        "createPromptHint": "提示词创建功能开发中"
       },
       "future": {
         "title": "云下载与共享",

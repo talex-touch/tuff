@@ -41,43 +41,43 @@ function handleViewMetrics() {
   >
     <!-- 配置能力 -->
     <tuff-block-slot
-      title="配置能力"
-      description="为 OCR、Embedding 等能力绑定渠道与模型"
+      :title="t('settings.aisdk.landing.capabilities.manageTitle')"
+      :description="t('settings.aisdk.landing.capabilities.manageDesc')"
       default-icon="i-carbon-settings"
       active-icon="i-carbon-settings"
       @click="handleCapabilitiesClick"
     >
       <FlatButton primary @click="handleCapabilitiesClick">
         <i class="i-carbon-launch" />
-        <span>进入配置</span>
+        <span>{{ t('settings.aisdk.landing.capabilities.manageButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 能力审计 -->
     <tuff-block-slot
-      title="能力审计"
-      description="查看能力调用记录和性能指标"
+      :title="t('settings.aisdk.landing.capabilities.auditTitle')"
+      :description="t('settings.aisdk.landing.capabilities.auditDesc')"
       default-icon="i-carbon-event-schedule"
       active-icon="i-carbon-event-schedule"
       @click="handleAudit"
     >
       <FlatButton @click="handleAudit">
         <i class="i-carbon-chart-bar" />
-        <span>查看审计</span>
+        <span>{{ t('settings.aisdk.landing.capabilities.auditButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
 
     <!-- 消耗统计 -->
     <tuff-block-slot
-      :title="`总调用: ${totalCalls} 次`"
-      :description="`能力总数: ${capabilityCount} | 已绑定: ${boundCapabilities} | 调用频率: ${avgFrequency}/小时`"
+      :title="t('settings.aisdk.landing.capabilities.statsTitle', { count: totalCalls })"
+      :description="t('settings.aisdk.landing.capabilities.statsDesc', { total: capabilityCount, bound: boundCapabilities, freq: avgFrequency })"
       default-icon="i-carbon-chart-line"
       active-icon="i-carbon-chart-line"
       @click="handleViewMetrics"
     >
       <FlatButton @click="handleViewMetrics">
         <i class="i-carbon-view" />
-        <span>查看指标</span>
+        <span>{{ t('settings.aisdk.landing.capabilities.statsButton') }}</span>
       </FlatButton>
     </tuff-block-slot>
   </tuff-group-block>
