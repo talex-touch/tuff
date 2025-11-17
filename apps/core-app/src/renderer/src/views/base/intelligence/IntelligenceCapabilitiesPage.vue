@@ -1,65 +1,58 @@
 <template>
-  <div class="capability-page h-full flex flex-col" role="main" aria-label="Intelligence Capability Binding">
-    <tuff-aside-template
-      v-model="searchQuery"
-      class="capability-shell flex-1"
-      :search-id="'capability-search'"
-      :search-label="t('settings.intelligence.capabilitySearchLabel')"
-      :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
-      :clear-label="t('common.close')"
-    >
-      <template #aside-header>
-        <div class="capability-sidebar__summary">
-          <p class="capability-sidebar__eyebrow">
-            {{ t('settings.intelligence.capabilitySummary', { count: capabilityList.length }) }}
+  <tuff-aside-template
+    v-model="searchQuery"
+    class="capability-shell flex-1"
+    :search-id="'capability-search'"
+    :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
+    :clear-label="t('common.close')"
+  >
+    <template #default>
+      <TuffItemTemplate
+        v-for="capability in filteredCapabilities"
+        :key="capability.id"
+        :title="capability.label || capability.id"
+        :subtitle="capability.description"
+        :icon="getCapabilityIcon(capability)"
+        :selected="selectedCapabilityId === capability.id"
+        size="md"
+        @click="handleSelectCapability(capability.id)"
+      />
+      <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">
+        <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
+      </div>
+    </template>
+
+    <template #footer>
+      <span class="w-full text-xs text-center op-50 block">
+        {{ t('settings.intelligence.capabilitySummary', { count: capabilityList.length }) }}
+      </span>
+    </template>
+
+    <template #main>
+      <Transition name="fade-slide" mode="out-in">
+        <AISDKCapabilityDetails
+          v-if="selectedCapability"
+          :key="selectedCapability.id"
+          :capability="selectedCapability"
+          :providers="providers"
+          :bindings="activeBindings(selectedCapability.id)"
+          :is-testing="!!capabilityTesting[selectedCapability.id]"
+          :test-result="capabilityTests[selectedCapability.id]"
+          @toggle-provider="onToggleProvider"
+          @update-models="onUpdateModels"
+          @update-prompt="onUpdatePrompt"
+          @reorder-providers="onReorderProviders"
+          @test="handleCapabilityTest(selectedCapability.id)"
+        />
+        <div v-else class="capability-empty-state" role="status">
+          <i class="i-carbon-cube text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
+          <p class="capability-empty-state__title">
+            {{ t('settings.intelligence.capabilityListEmpty') }}
           </p>
         </div>
-      </template>
-
-      <template #default>
-        <tuff-aside-list
-          v-model:selected-id="selectedCapabilityId"
-          :items="filteredCapabilities"
-          :get-id="(item) => item.id"
-          :get-title="(item) => item.label || item.id"
-          :get-description="(item) => item.description"
-          :empty-text="t('settings.intelligence.capabilityListEmpty')"
-          @select="handleSelectCapability"
-        />
-      </template>
-
-      <template #main>
-        <div class="capability-main-panel flex-1 overflow-hidden">
-          <Transition name="fade-slide" mode="out-in">
-            <AISDKCapabilityDetails
-              v-if="selectedCapability"
-              :key="selectedCapability.id"
-              :capability="selectedCapability"
-              :providers="providers"
-              :bindings="activeBindings(selectedCapability.id)"
-              :is-testing="!!capabilityTesting[selectedCapability.id]"
-              :test-result="capabilityTests[selectedCapability.id]"
-              @toggle-provider="onToggleProvider"
-              @update-models="onUpdateModels"
-              @update-prompt="onUpdatePrompt"
-              @reorder-providers="onReorderProviders"
-              @test="handleCapabilityTest(selectedCapability.id)"
-            />
-            <div
-              v-else
-              class="capability-empty-state"
-              role="status"
-            >
-              <i class="i-carbon-cube text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
-              <p class="capability-empty-state__title">
-                {{ t('settings.intelligence.capabilityListEmpty') }}
-              </p>
-            </div>
-          </Transition>
-        </div>
-      </template>
-    </tuff-aside-template>
-  </div>
+      </Transition>
+    </template>
+  </tuff-aside-template>
 </template>
 
 <script lang="ts" name="IntelligenceCapabilitiesPage" setup>
@@ -70,12 +63,12 @@ import type {
   AiCapabilityProviderBinding,
   AiVisionOcrResult
 } from '@talex-touch/utils/types/intelligence'
-import type { AiInvokeResult } from '@talex-touch/utils'
+import type { AiInvokeResult, ITuffIcon } from '@talex-touch/utils'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { touchChannel } from '~/modules/channel/channel-core'
-import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
+import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 import AISDKCapabilityDetails from '~/components/intelligence/capabilities/AISDKCapabilityDetails.vue'
 import type {
   CapabilityBinding,
@@ -85,18 +78,16 @@ import type {
 const { t } = useI18n()
 const aiClient = createIntelligenceClient(touchChannel as any)
 
-const {
-  providers,
-  capabilities,
-  updateCapability,
-  setCapabilityProviders
-} = useIntelligenceManager()
+const { providers, capabilities, updateCapability, setCapabilityProviders } =
+  useIntelligenceManager()
 
 const searchQuery = ref('')
 const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
   Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
 )
-const providerMap = computed(() => new Map(providers.value.map((provider) => [provider.id, provider])))
+const providerMap = computed(
+  () => new Map(providers.value.map((provider) => [provider.id, provider]))
+)
 
 const filteredCapabilities = computed(() => {
   if (!searchQuery.value.trim()) return capabilityList.value
@@ -122,7 +113,10 @@ watch(
       selectedCapabilityId.value = null
       return
     }
-    if (!selectedCapabilityId.value || !list.some((item) => item.id === selectedCapabilityId.value)) {
+    if (
+      !selectedCapabilityId.value ||
+      !list.some((item) => item.id === selectedCapabilityId.value)
+    ) {
       selectedCapabilityId.value = list[0].id
     }
   },
@@ -131,6 +125,15 @@ watch(
 
 function handleSelectCapability(id: string): void {
   selectedCapabilityId.value = id
+}
+
+function getCapabilityIcon(capability: AISDKCapabilityConfig): ITuffIcon {
+  const iconMap: Record<string, string> = {
+    'chat.completions': 'i-carbon-chat',
+    'embedding.generate': 'i-carbon-data-base',
+    'vision.ocr': 'i-carbon-image-search'
+  }
+  return iconMap[capability.id] || 'i-carbon-cube'
 }
 
 const capabilityTests = reactive<Record<string, CapabilityTestResult | null>>({})
@@ -172,11 +175,7 @@ function handleCapabilityProviderToggle(
   }
 }
 
-function handleCapabilityModels(
-  capabilityId: string,
-  providerId: string,
-  models: string[]
-): void {
+function handleCapabilityModels(capabilityId: string, providerId: string, models: string[]): void {
   const normalized = models.map((token) => token.trim()).filter(Boolean)
   updateCapabilityBinding(capabilityId, providerId, { models: normalized })
 }
@@ -246,70 +245,3 @@ async function handleCapabilityTest(capabilityId: string): Promise<void> {
   }
 }
 </script>
-
-<style lang="scss" scoped>
-@import './intelligence-shared.scss';
-
-.capability-page {
-  min-height: 0;
-}
-
-.capability-shell {
-  min-height: 0;
-}
-
-.capability-sidebar__summary {
-  padding: 1rem;
-  border-radius: 1rem;
-  background: var(--el-fill-color);
-  border: 1px solid var(--el-border-color-lighter);
-}
-
-.capability-sidebar__eyebrow {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--el-text-color-secondary);
-}
-
-.capability-main-panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.capability-empty-state {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  color: var(--el-text-color-secondary);
-  text-align: center;
-
-  &__title {
-    font-size: 1rem;
-    font-weight: 600;
-  }
-}
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition:
-    opacity 0.25s ease,
-    transform 0.25s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
-</style>
