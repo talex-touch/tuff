@@ -17,7 +17,7 @@ const promptCount = computed(() => promptFiles.value.length)
 const totalWords = ref(0)
 
 function handlePromptsClick() {
-  router.push('/aisdk/prompts')
+  router.push('/intelligence/prompts')
 }
 
 async function handleOpenFolder() {

@@ -51,7 +51,6 @@
             :title="t('aisdk.list.enabled')"
             icon="i-ri-check-line"
             section-id="enabled-providers"
-            @toggle="handleToggle"
           />
 
           <IntelligenceListModule
@@ -60,7 +59,6 @@
             :title="t('aisdk.list.disabled')"
             icon="i-ri-close-line"
             section-id="disabled-providers"
-            @toggle="handleToggle"
           />
         </div>
       </TouchScroll>
@@ -112,7 +110,6 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   select: [id: string]
-  toggle: [provider: AiProviderConfig]
   addProvider: []
 }>()
 
@@ -173,10 +170,6 @@ watch(
     selectedId.value = newId || null
   }
 )
-
-function handleToggle(provider: AiProviderConfig) {
-  emits('toggle', provider)
-}
 
 function handleAddProvider() {
   emits('addProvider')

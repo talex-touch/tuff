@@ -57,11 +57,9 @@
     </TuffBlockSlot>
 
     <!-- Models Drawer -->
-    <el-drawer
-      v-model="showModelsDrawer"
+    <TDrawer
+      v-model:visible="showModelsDrawer"
       :title="t('aisdk.config.model.manageModels')"
-      direction="rtl"
-      size="500px"
     >
       <div class="models-drawer-content">
         <p class="text-sm text-[var(--el-text-color-secondary)] mb-4">
@@ -90,6 +88,23 @@
           </div>
         </div>
 
+        <!-- Fetch Models Button -->
+        <div class="fetch-models-section">
+          <FlatButton
+            class="fetch-models-button"
+            :disabled="disabled || !canFetchModels || isFetching"
+            :loading="isFetching"
+            @click="handleFetchModels"
+          >
+            <i v-if="isFetching" class="i-carbon-renew animate-spin" />
+            <i v-else class="i-carbon-download" />
+            {{ t('aisdk.config.model.fetchModels') }}
+          </FlatButton>
+          <p class="text-xs text-[var(--el-text-color-secondary)]">
+            {{ t('aisdk.config.model.fetchModelsHint') }}
+          </p>
+        </div>
+
         <!-- Add Model Input -->
         <div class="add-model-section">
           <input
@@ -113,37 +128,23 @@
           {{ modelsError }}
         </p>
       </div>
-    </el-drawer>
+    </TDrawer>
   </div>
 </template>
 
 <script lang="ts" name="IntelligenceModelConfig" setup>
-import { ref, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElDrawer } from 'element-plus'
+import { toast } from 'vue-sonner'
+import TDrawer from '~/components/base/dialog/TDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
-
-interface AiProviderConfig {
-  id: string
-  type: string
-  name: string
-  enabled: boolean
-  apiKey?: string
-  baseUrl?: string
-  models?: string[]
-  defaultModel?: string
-  instructions?: string
-  timeout?: number
-  rateLimit?: {
-    requestsPerMinute?: number
-    tokensPerMinute?: number
-  }
-  priority?: number
-}
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { intelligenceSettings, type AiProviderConfig } from '@talex-touch/utils/renderer/storage'
 
 const props = defineProps<{
   modelValue: AiProviderConfig
@@ -156,120 +157,164 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const aiClient = createIntelligenceClient(touchChannel as any)
 
-const localModels = ref<string[]>([...(props.modelValue.models || [])])
-const localDefaultModel = ref(props.modelValue.defaultModel || '')
-const localInstructions = ref(props.modelValue.instructions || '')
+// 使用 reactive 计算属性直接操作存储
+const localModels = computed({
+  get: () => props.modelValue.models || [],
+  set: (value: string[]) => {
+    intelligenceSettings.updateProvider(props.modelValue.id, { models: value })
+    emits('change')
+  }
+})
+
+const localDefaultModel = computed({
+  get: () => props.modelValue.defaultModel || '',
+  set: (value: string) => {
+    intelligenceSettings.updateProvider(props.modelValue.id, {
+      defaultModel: value || undefined
+    })
+    emits('change')
+  }
+})
+
+const localInstructions = computed({
+  get: () => props.modelValue.instructions || '',
+  set: (value: string) => {
+    intelligenceSettings.updateProvider(props.modelValue.id, {
+      instructions: value || undefined
+    })
+    emits('change')
+  }
+})
+
 const newModelInput = ref('')
 const modelsError = ref('')
 const defaultModelError = ref('')
 const showModelsDrawer = ref(false)
+const isFetching = ref(false)
 
-// Watch for external changes
-watch(
-  () => props.modelValue.models,
-  (newValue) => {
-    localModels.value = [...(newValue || [])]
-  }
-)
-
-watch(
-  () => props.modelValue.defaultModel,
-  (newValue) => {
-    localDefaultModel.value = newValue || ''
-  }
-)
-
-watch(
-  () => props.modelValue.instructions,
-  (newValue) => {
-    localInstructions.value = newValue || ''
-  }
-)
+// 检查是否可以获取模型（需要 API Key 且不是本地模型）
+const canFetchModels = computed(() => {
+  const hasApiKey = !!props.modelValue.apiKey?.trim()
+  const isNotLocal = props.modelValue.type !== 'local'
+  return hasApiKey && isNotLocal
+})
 
 function validateModels(): boolean {
   modelsError.value = ''
-  
+
   if (props.modelValue.enabled && localModels.value.length === 0) {
     modelsError.value = t('aisdk.config.model.modelsRequired')
     return false
   }
-  
+
   return true
 }
 
 function validateDefaultModel(): boolean {
   defaultModelError.value = ''
-  
+
   if (props.modelValue.enabled && !localDefaultModel.value) {
     defaultModelError.value = t('aisdk.config.model.defaultModelRequired')
     return false
   }
-  
+
   if (localDefaultModel.value && !localModels.value.includes(localDefaultModel.value)) {
     defaultModelError.value = t('aisdk.config.model.defaultModelInvalid')
     return false
   }
-  
+
   return true
 }
 
 function handleAddModel() {
   const modelName = newModelInput.value.trim()
-  
+
   if (!modelName) return
-  
+
   if (localModels.value.includes(modelName)) {
     modelsError.value = t('aisdk.config.model.modelExists')
     return
   }
-  
-  localModels.value.push(modelName)
+
+  const newModels = [...localModels.value, modelName]
+  localModels.value = newModels
   newModelInput.value = ''
   modelsError.value = ''
-  
+
   // If this is the first model, set it as default
-  if (localModels.value.length === 1) {
+  if (newModels.length === 1) {
     localDefaultModel.value = modelName
   }
-  
-  emitUpdate()
 }
 
 function handleRemoveModel(model: string) {
-  const index = localModels.value.indexOf(model)
-  if (index > -1) {
-    localModels.value.splice(index, 1)
-  }
-  
+  const newModels = localModels.value.filter(m => m !== model)
+  localModels.value = newModels
+
   // If removed model was the default, clear default or set to first available
   if (localDefaultModel.value === model) {
-    localDefaultModel.value = localModels.value.length > 0 ? localModels.value[0] : ''
+    localDefaultModel.value = newModels.length > 0 ? newModels[0] : ''
   }
-  
+
   validateModels()
-  emitUpdate()
 }
 
 function handleDefaultModelChange() {
-  if (validateDefaultModel()) {
-    emitUpdate()
-  }
+  validateDefaultModel()
 }
 
 function handleInstructionsChange() {
-  emitUpdate()
+  // Instructions are handled automatically by computed property
 }
 
-function emitUpdate() {
-  const updated = {
-    ...props.modelValue,
-    models: [...localModels.value],
-    defaultModel: localDefaultModel.value || undefined,
-    instructions: localInstructions.value.trim() || undefined
+async function handleFetchModels() {
+  if (!canFetchModels.value || isFetching.value) return
+
+  isFetching.value = true
+  modelsError.value = ''
+
+  try {
+    console.log('[Model Config] Fetching available models...')
+
+    // 创建用于获取模型的临时配置
+    const fetchConfig = {
+      id: props.modelValue.id,
+      type: props.modelValue.type,
+      name: props.modelValue.name,
+      enabled: true,
+      apiKey: props.modelValue.apiKey,
+      baseUrl: props.modelValue.baseUrl,
+      models: [],
+      timeout: props.modelValue.timeout || 30000
+    }
+
+    const result = await aiClient.fetchModels(fetchConfig)
+
+    if (result.success && result.models) {
+      // 合并现有模型和新获取的模型，去重
+      const allModels = [...new Set([...localModels.value, ...result.models])]
+      localModels.value = allModels
+
+      // 如果没有默认模型且有可用模型，设置第一个为默认
+      if (!localDefaultModel.value && allModels.length > 0) {
+        localDefaultModel.value = allModels[0]
+      }
+
+      toast.success(`已获取 ${result.models.length} 个模型`)
+    } else {
+      modelsError.value = result.message || '获取模型失败'
+      toast.error(`获取模型失败: ${result.message}`)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '获取模型失败'
+    modelsError.value = message
+    toast.error(`获取模型失败: ${message}`)
+    console.error('[Model Config] Failed to fetch models:', error)
+  } finally {
+    isFetching.value = false
   }
-  emits('update:modelValue', updated)
-  emits('change')
 }
 </script>
 
@@ -323,6 +368,46 @@ function emitUpdate() {
     justify-content: center;
     padding: 40px 20px;
     text-align: center;
+  }
+
+  .fetch-models-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
+
+  .fetch-models-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--el-color-primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 8px;
+
+    &:hover:not(.is-disabled) {
+      background: var(--el-color-primary-light-3);
+    }
+
+    &.is-disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    i {
+      font-size: 16px;
+    }
+
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
   }
 
   .add-model-section {
@@ -381,6 +466,15 @@ function emitUpdate() {
     color: var(--el-color-error);
     font-size: 12px;
     margin: 0;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 }
 </style>

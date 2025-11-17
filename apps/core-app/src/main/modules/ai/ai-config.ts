@@ -2,7 +2,7 @@ import { ai } from './ai-sdk'
 import type {
   AiCapabilityRoutingConfig,
   AiSDKPersistedConfig
-} from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
 import { storageModule } from '../storage'
 import chalk from 'chalk'
 

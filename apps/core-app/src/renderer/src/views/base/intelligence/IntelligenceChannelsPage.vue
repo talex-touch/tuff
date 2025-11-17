@@ -9,7 +9,6 @@
         :providers="providers"
         :selected-id="selectedProviderId"
         @select="handleSelectProvider"
-        @toggle="handleToggleProvider"
         @add-provider="handleAddProvider"
       />
       <section
@@ -21,12 +20,10 @@
             v-if="selectedProvider"
             :key="selectedProvider.id"
             :provider="selectedProvider"
-            :global-config="globalConfig"
             :test-result="testResult"
             :is-testing="isTesting"
             @update="handleUpdateProvider"
             @test="handleTestProvider"
-            @update-global="handleUpdateGlobal"
             @delete="handleDeleteProvider"
           />
           <IntelligenceEmptyState v-else />
@@ -49,22 +46,19 @@ import type { AiProviderConfig, AISDKGlobalConfig, TestResult } from '~/types/ai
 import { AiProviderType } from '~/types/aisdk'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
-import { createAiSDKClient } from '@talex-touch/utils/aisdk/client'
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
-const aiClient = createAiSDKClient(touchChannel as any)
+const aiClient = createIntelligenceClient(touchChannel as any)
 
 const {
   providers,
   selectedProviderId,
   selectedProvider,
-  globalConfig,
   addProvider,
   updateProvider,
-  removeProvider,
-  toggleProvider: toggleProviderState,
-  updateGlobalConfig
+  removeProvider
 } = useIntelligenceManager()
 
 const testResult = ref<TestResult | null>(null)
@@ -91,10 +85,6 @@ function handleSelectProvider(id: string): void {
   testResult.value = null
 }
 
-function handleToggleProvider(provider: AiProviderConfig): void {
-  toggleProviderState(provider.id)
-}
-
 function handleUpdateProvider(updatedProvider: AiProviderConfig): void {
   updateProvider(updatedProvider.id, updatedProvider)
 }
@@ -115,10 +105,6 @@ async function handleTestProvider(): Promise<void> {
   } finally {
     isTesting.value = false
   }
-}
-
-function handleUpdateGlobal(updatedConfig: AISDKGlobalConfig): void {
-  updateGlobalConfig(updatedConfig)
 }
 
 function handleDeleteProvider(): void {

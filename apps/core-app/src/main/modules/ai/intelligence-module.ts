@@ -3,12 +3,12 @@ import { readdirSync, existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { AiCapabilityType, AiProviderType } from '@talex-touch/utils/types/aisdk'
+import { AiCapabilityType, AiProviderType } from '@talex-touch/utils'
 import type {
   AiProviderConfig,
   AiVisionOcrPayload,
   AiVisionOcrResult
-} from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
 import { aiCapabilityRegistry } from './ai-capability-registry'
 import { ai, setIntelligenceProviderManager } from './ai-sdk'
 import { genTouchChannel } from '../../core/channel-core'

@@ -42,19 +42,13 @@
       </p>
     </div>
 
-    <!-- Status Indicator & Toggle -->
+    <!-- Status Indicator -->
     <div class="ml-auto flex items-center gap-2">
       <div
         class="status-dot w-2 h-2 rounded-full"
         :class="localEnabled ? 'bg-green-500' : 'bg-gray-400'"
         role="status"
         :aria-label="localEnabled ? t('aisdk.status.enabled') : t('aisdk.status.disabled')"
-      />
-      <TSwitch
-        v-model="localEnabled"
-        :aria-label="`Toggle ${provider.name}`"
-        @click.stop
-        @change="handleToggle"
       />
     </div>
   </div>
@@ -63,7 +57,6 @@
 <script lang="ts" name="IntelligenceItem" setup>
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
 
 enum AiProviderType {
   OPENAI = 'openai',
@@ -97,10 +90,6 @@ const props = defineProps<{
   isSelected: boolean
 }>()
 
-const emits = defineEmits<{
-  toggle: [provider: AiProviderConfig]
-}>()
-
 const { t } = useI18n()
 const localEnabled = ref(props.provider.enabled)
 
@@ -115,22 +104,22 @@ watch(
 // Check if provider has configuration errors
 const hasConfigError = computed(() => {
   if (!props.provider.enabled) return false
-  
+
   // Check for missing API key (except for local models)
   if (props.provider.type !== AiProviderType.LOCAL && !props.provider.apiKey) {
     return true
   }
-  
+
   // Check for missing models
   if (!props.provider.models || props.provider.models.length === 0) {
     return true
   }
-  
+
   // Check for missing default model
   if (!props.provider.defaultModel) {
     return true
   }
-  
+
   return false
 })
 
@@ -148,14 +137,6 @@ function getProviderIconClass(type: string): string {
 
 function handleClick() {
   // Click event is handled by parent
-}
-
-function handleToggle() {
-  const updatedProvider = {
-    ...props.provider,
-    enabled: localEnabled.value
-  }
-  emits('toggle', updatedProvider)
 }
 </script>
 

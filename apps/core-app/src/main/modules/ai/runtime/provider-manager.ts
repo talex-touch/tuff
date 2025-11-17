@@ -3,7 +3,7 @@ import type {
   AiProviderType,
   AiProviderAdapter,
   ProviderManagerAdapter
-} from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
 import { createLogger } from '../../../utils/logger'
 
 const providerManagerLog = createLogger('Intelligence').child('ProviderManager')

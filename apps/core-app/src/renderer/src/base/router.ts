@@ -99,7 +99,7 @@ const routes: any = [
     }
   },
   {
-    path: '/aisdk',
+    path: '/intelligence',
     name: 'Intelligence',
     component: () => import('../views/base/intelligence/IntelligencePage.vue'),
     meta: {
@@ -107,7 +107,7 @@ const routes: any = [
     }
   },
   {
-    path: '/aisdk/channels',
+    path: '/intelligence/channels',
     name: 'IntelligenceChannels',
     component: () => import('../views/base/intelligence/IntelligenceChannelsPage.vue'),
     meta: {
@@ -115,7 +115,7 @@ const routes: any = [
     }
   },
   {
-    path: '/aisdk/capabilities',
+    path: '/intelligence/capabilities',
     name: 'IntelligenceCapabilities',
     component: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue'),
     meta: {
@@ -123,9 +123,17 @@ const routes: any = [
     }
   },
   {
-    path: '/aisdk/prompts',
+    path: '/intelligence/prompts',
     name: 'IntelligencePrompts',
     component: () => import('../views/base/intelligence/IntelligencePromptsPage.vue'),
+    meta: {
+      index: 8
+    }
+  },
+  {
+    path: '/intelligence/audit',
+    name: 'IntelligenceAudit',
+    component: () => import('../views/base/intelligence/IntelligenceAuditPage.vue'),
     meta: {
       index: 8
     }

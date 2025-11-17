@@ -12,7 +12,7 @@ import type {
   AiAuditLog,
   ProviderManagerAdapter,
   AiProviderConfig
-} from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
 import { aiCapabilityRegistry } from './ai-capability-registry'
 import { strategyManager } from './ai-strategy-manager'
 

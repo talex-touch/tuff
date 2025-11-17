@@ -7,14 +7,14 @@ import type {
   AiEmbeddingPayload,
   AiVisionOcrPayload,
   AiVisionOcrResult
-} from '../../types/aisdk'
+} from '../../types/intelligence'
 import { useChannel } from './use-channel'
 
-interface UseAiSDKOptions {
+interface UseIntelligenceOptions {
   // Reserved for future options
 }
 
-interface AiSDKComposable {
+interface IntelligenceComposable {
   // Core invoke functions
   invoke: <T = any>(
     capabilityId: string,
@@ -63,13 +63,13 @@ interface AiSDKComposable {
 }
 
 /**
- * AI SDK Composable for Vue components
+ * Intelligence Composable for Vue components
  *
  * Provides a reactive interface to the Intelligence module through channel communication
  *
  * @example
  * ```ts
- * const { invoke, text, isLoading, lastError } = useAiSDK()
+ * const { invoke, text, isLoading, lastError } = useIntelligence()
  *
  * // Basic invoke
  * const result = await invoke('text.chat', {
@@ -87,7 +87,7 @@ interface AiSDKComposable {
  * })
  * ```
  */
-export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
+export function useIntelligence(_options: UseIntelligenceOptions = {}): IntelligenceComposable {
   const isLoading = ref(false)
   const lastError = ref<string | null>(null)
 
@@ -107,7 +107,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
   ): Promise<T> {
     const response = await channel.send<any, ChannelResponse<T>>(eventName, payload)
     if (!response?.ok) {
-      throw new Error(response?.error || 'AI SDK request failed')
+      throw new Error(response?.error || 'Intelligence request failed')
     }
     return response.result as T
   }
@@ -133,7 +133,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
     // Core invoke
     invoke: <T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions) =>
       withLoadingState(() =>
-        sendChannelRequest<AiInvokeResult<T>>('aisdk:invoke', { capabilityId, payload, options })
+        sendChannelRequest<AiInvokeResult<T>>('intelligence:invoke', { capabilityId, payload, options })
       ),
 
     // Provider testing
@@ -144,7 +144,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
           message: string
           latency?: number
           timestamp: number
-        }>('aisdk:test-provider', { provider: config })
+        }>('intelligence:test-provider', { provider: config })
       ),
 
     // Capability testing
@@ -153,14 +153,14 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
         sendChannelRequest<{
           ok: boolean
           result: any
-        }>('aisdk:test-capability', params)
+        }>('intelligence:test-capability', params)
       ),
 
     // Convenient text methods
     text: {
       chat: (payload: AiChatPayload, options?: AiInvokeOptions) =>
         withLoadingState(() =>
-          sendChannelRequest<AiInvokeResult<string>>('aisdk:invoke', {
+          sendChannelRequest<AiInvokeResult<string>>('intelligence:invoke', {
             capabilityId: 'text.chat',
             payload,
             options
@@ -169,7 +169,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
 
       translate: (payload: { text: string; sourceLang?: string; targetLang: string }, options?: AiInvokeOptions) =>
         withLoadingState(() =>
-          sendChannelRequest<AiInvokeResult<string>>('aisdk:invoke', {
+          sendChannelRequest<AiInvokeResult<string>>('intelligence:invoke', {
             capabilityId: 'text.translate',
             payload,
             options
@@ -178,7 +178,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
 
       summarize: (payload: { text: string; maxLength?: number; style?: 'concise' | 'detailed' | 'bullet-points' }, options?: AiInvokeOptions) =>
         withLoadingState(() =>
-          sendChannelRequest<AiInvokeResult<string>>('aisdk:invoke', {
+          sendChannelRequest<AiInvokeResult<string>>('intelligence:invoke', {
             capabilityId: 'text.summarize',
             payload,
             options
@@ -190,7 +190,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
     embedding: {
       generate: (payload: AiEmbeddingPayload, options?: AiInvokeOptions) =>
         withLoadingState(() =>
-          sendChannelRequest<AiInvokeResult<number[]>>('aisdk:invoke', {
+          sendChannelRequest<AiInvokeResult<number[]>>('intelligence:invoke', {
             capabilityId: 'embedding.generate',
             payload,
             options
@@ -202,7 +202,7 @@ export function useAiSDK(_options: UseAiSDKOptions = {}): AiSDKComposable {
     vision: {
       ocr: (payload: AiVisionOcrPayload, options?: AiInvokeOptions) =>
         withLoadingState(() =>
-          sendChannelRequest<AiInvokeResult<AiVisionOcrResult>>('aisdk:invoke', {
+          sendChannelRequest<AiInvokeResult<AiVisionOcrResult>>('intelligence:invoke', {
             capabilityId: 'vision.ocr',
             payload,
             options

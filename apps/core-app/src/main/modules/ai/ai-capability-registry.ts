@@ -1,4 +1,4 @@
-import type { AiCapabilityDescriptor, AiCapabilityType } from '@talex-touch/utils/types/aisdk'
+import type { AiCapabilityDescriptor, AiCapabilityType } from '@talex-touch/utils'
 
 export class AiCapabilityRegistry {
   private capabilities = new Map<string, AiCapabilityDescriptor>()

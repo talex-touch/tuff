@@ -5,6 +5,6 @@ export * from './touch-sdk/utils'
 export * from './hooks'
 export * from '../auth'
 
-// Re-export AI SDK types (client-side only)
-export * from '../types/aisdk'
-export * from '../aisdk/client'
+// Re-export Intelligence types (client-side only)
+export * from '../types/intelligence'
+export * from '../intelligence/client'

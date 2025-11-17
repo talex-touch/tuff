@@ -13,7 +13,7 @@ import type {
   AiVisionOcrPayload,
   AiVisionOcrResult,
   AiInvokeResult
-} from '@talex-touch/utils/types/aisdk'
+} from '@talex-touch/utils'
 import {
   ocrJobs,
   ocrResults,
