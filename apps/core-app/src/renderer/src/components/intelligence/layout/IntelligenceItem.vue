@@ -16,7 +16,10 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ITuffIcon } from '@talex-touch/utils'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
-import type { TuffItemBadge, TuffItemStatusDot } from '~/components/tuff/template/TuffItemTemplate.vue'
+import type {
+  TuffItemBadge,
+  TuffItemStatusDot
+} from '~/components/tuff/template/TuffItemTemplate.vue'
 
 enum AiProviderType {
   OPENAI = 'openai',
@@ -105,9 +108,9 @@ function getProviderIcon(type: string): ITuffIcon {
     [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server',
     [AiProviderType.CUSTOM]: 'i-carbon-settings'
   }
-  
+
   const iconClass = iconMap[type] || 'i-carbon-ibm-watson-machine-learning'
-  
+
   return {
     type: 'class',
     value: iconClass,
