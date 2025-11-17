@@ -35,11 +35,14 @@ const emit = defineEmits<{
       <slot name="aside">
         <TouchScroll class="TuffAsideTemplate-AsideDefault">
           <template #header>
-            <header v-if="$slots['aside-header']" class="TuffAsideTemplate-AsideHeader">
+            <header
+              v-if="$slots['aside-header']"
+              class="TuffAsideTemplate-AsideHeader fake-background"
+            >
               <slot name="aside-header" />
             </header>
 
-            <header v-if="props.searchable" class="TuffAsideTemplate-Search">
+            <header v-if="props.searchable" class="TuffAsideTemplate-Search fake-background">
               <TuffAsideSearchBar
                 :model-value="props.modelValue"
                 :search-label="props.searchLabel"

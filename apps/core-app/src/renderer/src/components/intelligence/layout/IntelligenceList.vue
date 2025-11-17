@@ -3,28 +3,28 @@
     <!-- Providers List Section -->
     <div class="AISDKList-Content flex-1 overflow-hidden">
       <TouchScroll>
-        <div class="p-3 pb-20">
-          <IntelligenceListModule
-            v-model="selectedId"
-            :providers="filteredEnabledProviders"
-            :title="t('intelligence.list.enabled')"
-            icon="i-ri-check-line"
-            section-id="enabled-providers"
-          />
+        <IntelligenceListModule
+          v-model="selectedId"
+          :providers="filteredEnabledProviders"
+          :title="t('intelligence.list.enabled')"
+          icon="i-ri-check-line"
+          section-id="enabled-providers"
+        />
 
-          <IntelligenceListModule
-            v-model="selectedId"
-            :providers="filteredDisabledProviders"
-            :title="t('intelligence.list.disabled')"
-            icon="i-ri-close-line"
-            section-id="disabled-providers"
-          />
-        </div>
+        <IntelligenceListModule
+          v-model="selectedId"
+          :providers="filteredDisabledProviders"
+          :title="t('intelligence.list.disabled')"
+          icon="i-ri-close-line"
+          section-id="disabled-providers"
+        />
       </TouchScroll>
     </div>
 
     <!-- Add Provider Button -->
-    <div class="AISDKList-AddButton-Section flex-shrink-0 p-3 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]">
+    <div
+      class="AISDKList-AddButton-Section flex-shrink-0 p-3 border-t border-[var(--el-border-color-lighter)] bg-[var(--el-bg-color-page)]"
+    >
       <FlatButton
         class="add-provider-btn w-full"
         :aria-label="t('settings.intelligence.addChannel')"
@@ -78,13 +78,9 @@ const selectedId = ref<string | null>(props.selectedId || null)
 const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?? '')
 
 // Separate enabled and disabled providers
-const enabledProviders = computed(() =>
-  props.providers.filter((provider) => provider.enabled)
-)
+const enabledProviders = computed(() => props.providers.filter((provider) => provider.enabled))
 
-const disabledProviders = computed(() =>
-  props.providers.filter((provider) => !provider.enabled)
-)
+const disabledProviders = computed(() => props.providers.filter((provider) => !provider.enabled))
 
 // Filter providers based on search query
 const filteredEnabledProviders = computed(() => {
@@ -132,7 +128,6 @@ watch(
 function handleAddProvider() {
   emits('addProvider')
 }
-
 </script>
 
 <style lang="scss" scoped>
@@ -187,5 +182,4 @@ function handleAddProvider() {
     font-size: 16px;
   }
 }
-
 </style>
