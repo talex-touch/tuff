@@ -879,6 +879,8 @@
       "capabilityBindingModelsDesc": "Customize the preferred models for each channel.",
       "capabilityPromptSectionTitle": "Default prompt",
       "capabilityPromptSectionDesc": "System prompt appended when the capability is invoked.",
+      "manageModels": "Manage models",
+      "editPrompt": "Edit prompt",
       "latestTestResult": "Latest test result",
       "capabilityTest": "Run Capability Test",
       "capabilityTestHint": "Use a built-in sample image to run a quick test.",

@@ -1,136 +1,178 @@
 <template>
-  <div class="capability-details">
-    <header class="capability-details__header">
-      <div>
-        <p class="capability-details__eyebrow">
-          {{ capability.id }}
-        </p>
-        <h1>{{ capability.label || capability.id }}</h1>
-        <p>{{ capability.description }}</p>
-        <div class="capability-details__badges">
-          <span class="capability-details__badge">
-            <i class="i-carbon-flow-logs" aria-hidden="true" />
-            {{ t('settings.intelligence.capabilityProvidersStat', { count: activeBindingCount }) }}
-          </span>
-          <span class="capability-details__badge capability-details__badge--muted">
-            <i class="i-carbon-catalog" aria-hidden="true" />
-            {{ t('settings.intelligence.capabilityBindingsStat', { count: capability.providers?.length || 0 }) }}
-          </span>
-        </div>
-      </div>
-      <FlatButton
-        class="test-button"
-        primary
-        :disabled="isTesting"
-        :aria-busy="isTesting"
-        @click="handleTest"
-      >
-        <i :class="isTesting ? 'i-carbon-renew animate-spin' : 'i-carbon-flash'" aria-hidden="true" />
-        <span>{{ isTesting ? t('settings.intelligence.testing') : t('settings.intelligence.capabilityTest') }}</span>
-      </FlatButton>
-    </header>
-
-    <div class="capability-details__grid">
-      <div class="capability-details__providers">
-        <h2>{{ t('settings.intelligence.capabilityProviderSectionTitle') }}</h2>
-        <p>{{ t('settings.intelligence.capabilityProviderSectionDesc') }}</p>
-        <div class="capability-details__provider-list">
-          <TuffBlockSlot
-            v-for="provider in providers"
-            :key="provider.id"
-            :title="provider.name"
-            :description="provider.type"
-            default-icon="i-carbon-api-1"
-            active-icon="i-carbon-api-1"
-            :active="focusedProviderId === provider.id"
-            @click="handleSelectProvider(provider.id)"
-          >
-            <template #tags>
-              <span
-                class="capability-details__tag"
-                :class="{ 'is-active': selectedProviderIds.has(provider.id) }"
-              >
-                {{ bindingMap.get(provider.id)?.models?.length || 0 }} 个模型
+  <TuffGroupBlock
+    :name="capability.label || capability.id"
+    :description="capability.description"
+    default-icon="i-carbon-flow"
+    active-icon="i-carbon-flow"
+    :memory-name="`capability-details-${capability.id}`"
+  >
+    <template #default>
+      <div class="capability-details">
+        <header class="capability-details__header">
+          <div>
+            <p class="capability-details__eyebrow">
+              {{ capability.id }}
+            </p>
+            <h1>{{ capability.label || capability.id }}</h1>
+            <p>{{ capability.description }}</p>
+            <div class="capability-details__badges">
+              <span class="capability-details__badge">
+                <i class="i-carbon-flow-logs" aria-hidden="true" />
+                {{ t('settings.intelligence.capabilityProvidersStat', { count: activeBindingCount }) }}
               </span>
-            </template>
-            <div class="capability-details__provider-actions" @click.stop>
-              <TSwitch
-                :model-value="selectedProviderIds.has(provider.id)"
-                @change="(value: boolean) => handleProviderToggle(provider.id, value)"
-              />
+              <span class="capability-details__badge capability-details__badge--muted">
+                <i class="i-carbon-catalog" aria-hidden="true" />
+                {{ t('settings.intelligence.capabilityBindingsStat', { count: capability.providers?.length || 0 }) }}
+              </span>
             </div>
-          </TuffBlockSlot>
+          </div>
+          <FlatButton
+            class="test-button"
+            primary
+            :disabled="isTesting"
+            :aria-busy="isTesting"
+            @click="handleTest"
+          >
+            <i :class="isTesting ? 'i-carbon-renew animate-spin' : 'i-carbon-flash'" aria-hidden="true" />
+            <span>{{ isTesting ? t('settings.intelligence.testing') : t('settings.intelligence.capabilityTest') }}</span>
+          </FlatButton>
+        </header>
+
+        <div class="capability-details__grid">
+          <div class="capability-details__providers">
+            <h2>{{ t('settings.intelligence.capabilityProviderSectionTitle') }}</h2>
+            <p>{{ t('settings.intelligence.capabilityProviderSectionDesc') }}</p>
+            <div class="capability-details__provider-list">
+              <TuffBlockSlot
+                v-for="provider in providers"
+                :key="provider.id"
+                :title="provider.name"
+                :description="provider.type"
+                default-icon="i-carbon-api-1"
+                active-icon="i-carbon-api-1"
+                :active="focusedProviderId === provider.id"
+                @click="handleSelectProvider(provider.id)"
+              >
+                <template #tags>
+                  <span
+                    class="capability-details__tag"
+                    :class="{ 'is-active': selectedProviderIds.has(provider.id) }"
+                  >
+                    {{ bindingMap.get(provider.id)?.models?.length || 0 }} 个模型
+                  </span>
+                </template>
+                <div class="capability-details__provider-actions" @click.stop>
+                  <TSwitch
+                    :model-value="selectedProviderIds.has(provider.id)"
+                    @change="(value: boolean) => handleProviderToggle(provider.id, value)"
+                  />
+                </div>
+              </TuffBlockSlot>
+            </div>
+          </div>
+
+          <div class="capability-details__actions">
+            <TuffBlockSlot
+              :title="focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')"
+              :description="modelTransferDescription"
+              default-icon="i-carbon-model"
+              active-icon="i-carbon-model"
+              :active="!!focusedBinding"
+              guidance
+            >
+              <template #default>
+                <div class="capability-details__slot-row">
+                  <p class="capability-details__slot-summary">{{ modelSummary }}</p>
+                  <FlatButton
+                    primary
+                    :disabled="!canEditModels"
+                    @click="openModelDrawer"
+                  >
+                    <i class="i-carbon-settings" aria-hidden="true" />
+                    <span>{{ t('settings.intelligence.manageModels') }}</span>
+                  </FlatButton>
+                </div>
+              </template>
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              :title="t('settings.intelligence.capabilityPromptSectionTitle')"
+              :description="t('settings.intelligence.capabilityPromptSectionDesc')"
+              default-icon="i-carbon-notebook"
+              active-icon="i-carbon-notebook"
+              guidance
+            >
+              <template #default>
+                <div class="capability-details__slot-row">
+                  <p class="capability-details__slot-summary">{{ promptSummary }}</p>
+                  <FlatButton text @click="openPromptDrawer">
+                    <i class="i-carbon-edit" aria-hidden="true" />
+                    <span>{{ t('settings.intelligence.editPrompt') }}</span>
+                  </FlatButton>
+                </div>
+              </template>
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              v-if="testResult"
+              :title="t('settings.intelligence.latestTestResult')"
+              :description="testSummary"
+              default-icon="i-carbon-result"
+              active-icon="i-carbon-result"
+              :active="true"
+            >
+              <div
+                class="test-result"
+                :class="testResult.success ? 'test-result--success' : 'test-result--fail'"
+                role="status"
+              >
+                <p class="font-semibold">
+                  {{ testResult.success ? t('settings.intelligence.testSuccess') : t('settings.intelligence.testFailed') }}
+                </p>
+                <p class="mt-2 text-sm">
+                  {{ testResult.message }}
+                </p>
+                <p v-if="testResult.textPreview" class="mt-2 text-xs text-[var(--el-text-color-secondary)]">
+                  {{ testResult.textPreview }}
+                </p>
+              </div>
+            </TuffBlockSlot>
+          </div>
         </div>
       </div>
+    </template>
+  </TuffGroupBlock>
 
-      <div class="capability-details__models">
-        <TuffBlockSlot
-          :title="focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')"
-          :description="modelTransferDescription"
-          default-icon="i-carbon-model"
-          active-icon="i-carbon-model"
-          :active="!!focusedBinding"
-          guidance
-        >
-          <CapabilityModelTransfer
-            :model-value="focusedBinding?.models || []"
-            :available-models="focusedProvider?.models || []"
-            :disabled="!selectedProviderIds.has(focusedProviderId || '')"
-            @update:model-value="handleModelTransferUpdates"
-          />
-        </TuffBlockSlot>
-      </div>
+  <TDrawer v-model:visible="showModelDrawer" :title="t('settings.intelligence.capabilityBindingModelsTitle')">
+    <CapabilityModelTransfer
+      :model-value="focusedBinding?.models || []"
+      :available-models="focusedProvider?.models || []"
+      :disabled="!canEditModels"
+      @update:model-value="handleModelTransferUpdates"
+    />
+  </TDrawer>
+
+  <TDrawer v-model:visible="showPromptDrawer" :title="t('settings.intelligence.capabilityPromptSectionTitle')">
+    <div class="capability-details__drawer">
+      <p class="capability-details__drawer-description">
+        {{ t('settings.intelligence.capabilityPromptSectionDesc') }}
+      </p>
+      <FlatMarkdown
+        v-model="promptValue"
+        :readonly="false"
+      />
     </div>
-
-    <TuffBlockSlot
-      class="capability-details__prompt"
-      :title="t('settings.intelligence.capabilityPromptSectionTitle')"
-      :description="t('settings.intelligence.capabilityPromptSectionDesc')"
-      default-icon="i-carbon-notebook"
-      active-icon="i-carbon-notebook"
-      guidance
-    >
-      <div class="capability-details__prompt-editor">
-        <FlatMarkdown
-          v-model="promptValue"
-          :readonly="false"
-        />
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="testResult"
-      :title="t('settings.intelligence.latestTestResult')"
-      :description="testSummary"
-      default-icon="i-carbon-result"
-      active-icon="i-carbon-result"
-      :active="true"
-    >
-      <div
-        class="test-result"
-        :class="testResult.success ? 'test-result--success' : 'test-result--fail'"
-        role="status"
-      >
-        <p class="font-semibold">
-          {{ testResult.success ? t('settings.intelligence.testSuccess') : t('settings.intelligence.testFailed') }}
-        </p>
-        <p class="mt-2 text-sm">
-          {{ testResult.message }}
-        </p>
-        <p v-if="testResult.textPreview" class="mt-2 text-xs text-[var(--el-text-color-secondary)]">
-          {{ testResult.textPreview }}
-        </p>
-      </div>
-    </TuffBlockSlot>
-  </div>
+  </TDrawer>
 </template>
 
 <script lang="ts" name="AISDKCapabilityDetails" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
+import TDrawer from '~/components/base/dialog/TDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import CapabilityModelTransfer from './CapabilityModelTransfer.vue'
 import type {
@@ -160,6 +202,8 @@ const emits = defineEmits<{
 const { t } = useI18n()
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
+const showModelDrawer = ref(false)
+const showPromptDrawer = ref(false)
 let promptTimer: ReturnType<typeof setTimeout> | null = null
 let syncingFromProps = false
 
@@ -188,6 +232,38 @@ const focusedProvider = computed(() =>
 const focusedBinding = computed(() => {
   if (!focusedProviderId.value) return null
   return bindingMap.value.get(focusedProviderId.value) ?? null
+})
+
+const canEditModels = computed(() => {
+  return !!focusedProvider.value && selectedProviderIds.value.has(focusedProviderId.value)
+})
+
+const modelSummary = computed(() => {
+  if (!focusedProvider.value) {
+    return t('settings.intelligence.selectProviderHint')
+  }
+
+  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
+    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
+    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint' ? '开启渠道后再配置模型' : hint
+  }
+
+  const count = focusedBinding?.models?.length ?? 0
+  if (count === 0) {
+    return t('settings.intelligence.capabilityBindingModelsDesc')
+  }
+
+  return t('settings.intelligence.capabilityBindingsStat', { count })
+})
+
+const promptSummary = computed(() => {
+  const trimmed = (promptValue.value || '').trim()
+  if (!trimmed) {
+    return t('settings.intelligence.capabilityPromptSectionDesc')
+  }
+
+  const singleLine = trimmed.replace(/\s+/g, ' ')
+  return singleLine.length > 100 ? `${singleLine.slice(0, 97)}...` : singleLine
 })
 
 const modelTransferDescription = computed(() => {
@@ -260,6 +336,15 @@ function handleSelectProvider(providerId: string): void {
 function handleModelTransferUpdates(models: string[]): void {
   if (!focusedProviderId.value) return
   emits('updateModels', focusedProviderId.value, models)
+}
+
+function openModelDrawer(): void {
+  if (!canEditModels.value) return
+  showModelDrawer.value = true
+}
+
+function openPromptDrawer(): void {
+  showPromptDrawer.value = true
 }
 
 function handleTest(): void {
@@ -354,15 +439,20 @@ onBeforeUnmount(() => {
 
 .capability-details__grid {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 1fr;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
   gap: 1rem;
 }
 
-.capability-details__providers,
-.capability-details__models {
+.capability-details__providers {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.capability-details__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .capability-details__provider-list {
@@ -392,12 +482,38 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.capability-details__prompt-editor {
-  height: 280px;
+.capability-details__slot-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
 
-  :deep(.FlatMarkdown-Container) {
-    height: 100%;
-  }
+.capability-details__slot-summary {
+  flex: 1;
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-details__drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.capability-details__drawer-description {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 0.9rem;
+}
+
+.capability-details__drawer :deep(.FlatMarkdown-Container) {
+  min-height: 280px;
 }
 
 .test-result {

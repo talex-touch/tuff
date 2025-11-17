@@ -23,13 +23,13 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   },
   webPreferences: {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    scrollBounce: true,
     webSecurity: false,
     nodeIntegration: true,
     nodeIntegrationInSubFrames: true,
     contextIsolation: false,
     sandbox: false,
     webviewTag: true,
-    scrollBounce: true,
     additionalArguments: ['--touch-type=main']
   }
 }
