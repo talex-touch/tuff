@@ -12,12 +12,12 @@ import {
 import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import crypto from 'node:crypto'
-import { ensureAiConfigLoaded } from '../../../ai/ai-config'
-import { ai } from '../../../ai/ai-sdk'
+import { ensureAiConfigLoaded } from '../../../ai/intelligence-config'
+import { ai } from '../../../ai/intelligence-sdk'
 import { coreBoxManager } from '../../core-box/manager'
 import { windowManager } from '../../core-box/window'
 import { ProviderContext } from '../types'
-import { genTouchApp } from '../../../core'
+import { genTouchApp } from '../../../../core/'
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'

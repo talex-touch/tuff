@@ -1004,6 +1004,11 @@ export interface TuffMeta {
     /** 所需权限列表 */
     permissions?: string[];
   };
+
+  /**
+   * TuffIntelligence
+   */
+  intelligence?: any
 }
 
 // ==================== 前端展示结构 ====================
