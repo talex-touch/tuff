@@ -125,6 +125,7 @@ export class TouchStorage<T extends object> {
   readonly originalData: T;
   private readonly _onUpdate: Array<() => void> = [];
   #channelInitialized = false;
+  #skipNextWatchTrigger = false;
 
   /**
    * The reactive data exposed to users.
@@ -289,18 +290,27 @@ export class TouchStorage<T extends object> {
           return;
         }
 
-        this._onUpdate.forEach((fn) => {
-          try {
-            fn();
-          } catch (e) {
-            console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
-          }
-        });
+        if (this.#skipNextWatchTrigger) {
+          this.#skipNextWatchTrigger = false;
+          return;
+        }
 
-        this.saveToRemote();
+        this.#runAutoSavePipeline();
       },
       { deep: true, immediate: true },
     );
+  }
+
+  #runAutoSavePipeline(options?: { force?: boolean }): void {
+    this._onUpdate.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {
+        console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
+      }
+    });
+
+    this.saveToRemote(options);
   }
 
   /**
@@ -360,9 +370,18 @@ export class TouchStorage<T extends object> {
     Object.assign(this.data, newData);
 
     if (stopWatch && this.#autoSave) {
-      setTimeout(() => {
+      this.#skipNextWatchTrigger = true;
+      const resetAssigning = () => {
         this.#assigning = false;
-      }, 0);
+      };
+
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(resetAssigning);
+      } else {
+        Promise.resolve().then(resetAssigning);
+      }
+
+      this.#runAutoSavePipeline({ force: true });
     }
   }
 

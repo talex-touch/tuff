@@ -236,7 +236,7 @@ async function handleCapabilityTest(
 
     // 使用格式化后的结果
     capabilityTests[capabilityId] = {
-      ...response.result,
+      ...response,
       timestamp: Date.now()
     }
   } catch (error) {
