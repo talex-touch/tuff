@@ -5,7 +5,9 @@ import { shortcutModule } from '../../global-shortcon'
 import { BaseModule } from '../../abstract-base-module'
 import { ModuleKey } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { ChannelType } from '@talex-touch/utils/channel'
 import { getConfig } from '../../storage'
+import { genTouchApp } from '../../../core'
 export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined
@@ -62,6 +64,32 @@ export class CoreBoxModule extends BaseModule {
         coreBoxManager.trigger(true)
         lastScreenId = curScreen.id
       }
+    })
+
+    shortcutModule.registerMainShortcut('core.box.aiQuickCall', 'CommandOrControl+Shift+I', () => {
+      const touchApp = genTouchApp()
+      const curScreen = windowManager.getCurScreen()
+      const currentWindow = windowManager.current
+
+      if (currentWindow) {
+        windowManager.updatePosition(currentWindow, curScreen)
+      }
+
+      coreBoxManager.trigger(true)
+      lastScreenId = curScreen.id
+
+      const targetWindow = windowManager.current?.window
+      if (!targetWindow || targetWindow.isDestroyed()) {
+        return
+      }
+
+      setTimeout(() => {
+        touchApp.channel
+          .sendTo(targetWindow, ChannelType.MAIN, 'core-box:set-query', { value: 'ai ' })
+          .catch((error) => {
+            console.error('[CoreBox] Failed to set AI quick call query:', error)
+          })
+      }, 80)
     })
 
     console.log('[CoreBox] Core-box module initialized!')

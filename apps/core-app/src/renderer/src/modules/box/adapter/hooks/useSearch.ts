@@ -191,9 +191,13 @@ export function useSearch(
 
     const isPluginFeature =
       itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
-    const shouldRestoreAfterExecute = isPluginFeature || !appSetting.tools.autoHide
+    const keepCoreBoxOpen =
+      itemToExecute.meta?.keepCoreBoxOpen === true ||
+      itemToExecute.meta?.intelligence?.keepCoreBoxOpen === true
+    const shouldRestoreAfterExecute =
+      isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
 
-    if (!isPluginFeature) {
+    if (!isPluginFeature && !keepCoreBoxOpen) {
       touchChannel.sendSync('core-box:hide')
     }
 
@@ -392,6 +396,39 @@ export function useSearch(
     } else {
       // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
+  })
+
+  touchChannel.regChannel('core-box:intelligence:upsert-item', ({ data }) => {
+    const incoming = (data?.item ?? null) as TuffItem | null
+    if (!incoming) {
+      return
+    }
+
+    const requestId = incoming.meta?.intelligence?.requestId
+    if (requestId) {
+      const existingIndex = res.value.findIndex(
+        (entry) => entry.meta?.intelligence?.requestId === requestId
+      )
+      if (existingIndex >= 0) {
+        res.value.splice(existingIndex, 1, incoming)
+      } else {
+        res.value.push(incoming)
+      }
+    } else {
+      res.value.push(incoming)
+    }
+
+    if (res.value.length > 0 && boxOptions.focus === -1) {
+      boxOptions.focus = res.value.length - 1
+    }
+
+    loading.value = false
+  })
+
+  touchChannel.regChannel('core-box:set-query', ({ data }) => {
+    const value = typeof data?.value === 'string' ? data.value : ''
+    searchVal.value = value
+    window.dispatchEvent(new CustomEvent('corebox:focus-input'))
   })
 
   onMounted(() => {

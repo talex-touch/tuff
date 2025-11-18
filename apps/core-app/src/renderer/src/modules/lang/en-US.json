@@ -390,6 +390,20 @@
       "actions": "Actions",
       "quickSelect": "Quick Select"
     },
+    "intelligence": {
+      "emptyPrompt": "Type a question to ask the AI",
+      "pending": "Preparing AI response…",
+      "ready": "AI response ready",
+      "error": "Failed to retrieve AI response",
+      "unknown": "AI status unknown",
+      "genericError": "We couldn't get an answer right now. Please try again.",
+      "usage": "Tokens: total {total}, prompt {prompt}, completion {completion}",
+      "model": "Model: {model}",
+      "copy": "Copy answer",
+      "copySuccess": "Answer copied",
+      "copyFailed": "Copy failed",
+      "thinking": "AI is thinking…"
+    },
     "sourceTypes": {
       "application": "Application",
       "app": "Application",
