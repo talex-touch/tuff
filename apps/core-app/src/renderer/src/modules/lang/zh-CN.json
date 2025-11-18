@@ -390,6 +390,20 @@
       "actions": "操作",
       "quickSelect": "快速选择"
     },
+    "intelligence": {
+      "emptyPrompt": "输入要询问 AI 的问题",
+      "pending": "AI 正在准备回答…",
+      "ready": "AI 回答已生成",
+      "error": "获取 AI 回答失败",
+      "unknown": "AI 状态未知",
+      "genericError": "暂时无法获取回答，请稍后再试。",
+      "usage": "令牌消耗：总计 {total}，提示 {prompt}，回答 {completion}",
+      "model": "模型：{model}",
+      "copy": "复制回答",
+      "copySuccess": "回答已复制",
+      "copyFailed": "复制失败",
+      "thinking": "AI 正在思考…"
+    },
     "sourceTypes": {
       "application": "应用",
       "app": "应用",

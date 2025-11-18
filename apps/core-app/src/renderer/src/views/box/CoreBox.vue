@@ -179,6 +179,10 @@ function focusMainInput(): void {
   boxInputRef.value?.focus?.()
 }
 
+function handleFocusInputEvent(): void {
+  focusMainInput()
+}
+
 async function loadPreviewHistory(): Promise<void> {
   previewHistory.loading = true
   try {
@@ -318,6 +322,7 @@ onMounted(() => {
   window.addEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.addEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.addEventListener('corebox:copy-preview', handleCopyPreviewEvent)
+  window.addEventListener('corebox:focus-input', handleFocusInputEvent)
   window.addEventListener('mousedown', handleGlobalMouseDown)
   window.addEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -326,6 +331,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)
+  window.removeEventListener('corebox:focus-input', handleFocusInputEvent)
   window.removeEventListener('mousedown', handleGlobalMouseDown)
   window.removeEventListener('keydown', handleHistoryKeydown, true)
 })

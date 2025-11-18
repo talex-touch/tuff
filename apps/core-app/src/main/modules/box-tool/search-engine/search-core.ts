@@ -36,6 +36,7 @@ import { QueryCompletionService } from './query-completion-service'
 import { UsageStatsCache, getUsageStatsBatchCached } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { previewProvider } from '../addon/preview'
+import intelligenceSearchProvider from './providers/intelligence-provider'
 
 /**
  * Generates a unique key for an activation request.
@@ -92,6 +93,7 @@ export class SearchEngineCore
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)
+    this.registerProvider(intelligenceSearchProvider)
   }
 
   static getInstance(): SearchEngineCore {
