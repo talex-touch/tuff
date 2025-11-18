@@ -247,31 +247,41 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * Updates capability metadata
    */
   function updateCapability(id: string, updates: Partial<AISDKCapabilityConfig>): void {
-    if (!capabilities.value[id]) {
-      capabilities.value[id] = {
+    const updated = { ...capabilities.value }
+    if (!updated[id]) {
+      updated[id] = {
         id,
         label: id,
         providers: [],
         ...updates
       }
-      return
+    } else {
+      updated[id] = {
+        ...updated[id],
+        ...updates
+      }
     }
-    Object.assign(capabilities.value[id], updates)
+    capabilities.value = updated
   }
 
   /**
    * Replaces bindings for a capability
    */
   function setCapabilityProviders(id: string, providers: AiCapabilityProviderBinding[]): void {
-    if (!capabilities.value[id]) {
-      capabilities.value[id] = {
+    const updated = { ...capabilities.value }
+    if (!updated[id]) {
+      updated[id] = {
         id,
         label: id,
         providers
       }
-      return
+    } else {
+      updated[id] = {
+        ...updated[id],
+        providers
+      }
     }
-    capabilities.value[id].providers = providers
+    capabilities.value = updated
   }
 
   /**

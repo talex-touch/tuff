@@ -1,76 +1,58 @@
 <template>
-  <div class="provider-list">
-    <div class="provider-list__section">
-      <p class="provider-list__label">{{ t('settings.intelligence.capabilityActionsLabel') }}</p>
-      <p class="provider-list__hint">{{ t('settings.intelligence.capabilityActionsHint') }}</p>
-    </div>
-
-    <div class="provider-list__container">
-      <div v-if="enabledBindings.length === 0" class="provider-list__empty">
-        <p>{{ t('settings.intelligence.capabilityActionsEmpty') }}</p>
-      </div>
-      <draggable
-        v-else
-        v-model="sortableBindings"
-        item-key="providerId"
-        class="provider-list__draggable"
-        :handle="'.provider-item__grab'"
-        @end="handleDragEnd"
+  <TuffBlockSlot
+    :title="providerSummary"
+    default-icon="i-carbon-api-1"
+  >
+    <el-select
+      v-model="selectedProviderIds"
+      multiple
+      collapse-tags
+      collapse-tags-tooltip
+      :max-collapse-tags="3"
+      :placeholder="t('settings.intelligence.selectProviderPlaceholder')"
+      class="provider-list__select"
+      @change="handleSelectionChange"
+    >
+      <el-option
+        v-for="provider in allProviders"
+        :key="provider.providerId"
+        :label="provider.provider?.name || provider.providerId"
+        :value="provider.providerId"
       >
-        <template #item="{ element }">
-          <button
-            type="button"
-            class="provider-item"
-            :class="{ 'is-selected': focusedProviderId === element.providerId }"
-            @click="$emit('select', element.providerId)"
-          >
-            <i class="i-carbon-drag-horizontal provider-item__grab" aria-hidden="true" />
-            <div class="provider-item__content">
-              <span class="provider-item__name">{{
-                element.provider?.name || element.providerId
-              }}</span>
-              <span class="provider-item__meta">
-                {{ element.provider?.type || element.providerId }}
-                <span v-if="element.models?.length" class="provider-item__badge">
-                  {{ element.models.length }} {{ t('settings.intelligence.models') }}
-                </span>
-              </span>
-            </div>
-            <i class="i-carbon-checkmark provider-item__check" aria-hidden="true" />
-          </button>
-        </template>
-      </draggable>
-    </div>
-
-    <div v-if="disabledBindings.length" class="provider-list__section">
-      <p class="provider-list__label">{{ t('settings.intelligence.capabilityDisabledLabel') }}</p>
-    </div>
-    <div v-if="disabledBindings.length" class="provider-list__disabled">
-      <button
-        v-for="entry in disabledBindings"
-        :key="entry.providerId"
-        class="provider-item provider-item--disabled"
-        type="button"
-        @click="$emit('select', entry.providerId)"
-      >
-        <div class="provider-item__content">
-          <span class="provider-item__name">{{
-            entry.provider?.name || entry.providerId
-          }}</span>
-          <span class="provider-item__meta">{{
-            entry.provider?.type || entry.providerId
-          }}</span>
+        <div class="provider-option">
+          <span class="provider-option__name">{{ provider.provider?.name || provider.providerId }}</span>
+          <span class="provider-option__type">{{ provider.provider?.type || provider.providerId }}</span>
         </div>
-        <span class="provider-item__status">{{ t('settings.intelligence.disabled') }}</span>
-      </button>
+      </el-option>
+    </el-select>
+  </TuffBlockSlot>
+
+  <div v-if="enabledBindings.length > 0" class="provider-list__selected">
+    <p class="provider-list__label">{{ t('settings.intelligence.selectedProviders') }}</p>
+    <div class="provider-list__tags">
+      <el-tag
+        v-for="binding in enabledBindings"
+        :key="binding.providerId"
+        closable
+        :type="focusedProviderId === binding.providerId ? 'primary' : ''"
+        @close="handleRemoveProvider(binding.providerId)"
+        @click="$emit('select', binding.providerId)"
+      >
+        <span class="provider-tag__content">
+          {{ binding.provider?.name || binding.providerId }}
+          <span v-if="binding.models?.length" class="provider-tag__badge">
+            {{ binding.models.length }}
+          </span>
+        </span>
+      </el-tag>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { VueDraggable as draggable } from 'vue-draggable-plus'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import type { CapabilityBinding } from './types'
 
 const props = defineProps<{
@@ -86,153 +68,159 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-const sortableBindings = ref<CapabilityBinding[]>([])
+const selectedProviderIds = ref<string[]>([])
 
+// 合并所有可用的 provider
+const allProviders = computed(() => {
+  return [...props.enabledBindings, ...props.disabledBindings]
+})
+
+// 提供商摘要文本
+const providerSummary = computed(() => {
+  const count = selectedProviderIds.value.length
+  if (count === 0) {
+    return t('settings.intelligence.capabilityActionsEmpty')
+  }
+  return t('settings.intelligence.capabilityProvidersStat', { count })
+})
+
+// 同步选中状态
 watch(
   () => props.enabledBindings,
   (list) => {
-    sortableBindings.value = list
+    selectedProviderIds.value = list.map(binding => binding.providerId)
   },
   { immediate: true, deep: true }
 )
 
-function handleDragEnd(): void {
-  emits('reorder', sortableBindings.value)
+function handleSelectionChange(values: string[]): void {
+  const oldIds = props.enabledBindings.map(b => b.providerId)
+  const oldSet = new Set(oldIds)
+  const newSet = new Set(values)
+  
+  // 构建新的 bindings 列表
+  const newBindings: CapabilityBinding[] = []
+  
+  // 保留原有顺序的已选中项
+  props.enabledBindings.forEach(binding => {
+    if (newSet.has(binding.providerId)) {
+      newBindings.push({
+        ...binding,
+        enabled: true
+      })
+    }
+  })
+  
+  // 添加新选中的项（按照 values 中的顺序）
+  values.forEach(providerId => {
+    if (!oldSet.has(providerId)) {
+      // 从 disabledBindings 或 allProviders 中查找
+      const disabledProvider = props.disabledBindings.find(p => p.providerId === providerId)
+      if (disabledProvider) {
+        newBindings.push({
+          providerId: disabledProvider.providerId,
+          provider: disabledProvider.provider,
+          enabled: true,
+          priority: newBindings.length + 1,
+          models: disabledProvider.models || []
+        })
+      } else {
+        // 如果在 disabledBindings 中找不到，从 allProviders 中查找
+        const provider = allProviders.value.find(p => p.providerId === providerId)
+        if (provider) {
+          newBindings.push({
+            providerId: provider.providerId,
+            provider: provider.provider,
+            enabled: true,
+            priority: newBindings.length + 1,
+            models: provider.models || []
+          })
+        }
+      }
+    }
+  })
+  
+  emits('reorder', newBindings)
+  
+  // 如果有新选中的，自动聚焦到第一个新选中的
+  const newlyAdded = values.find(id => !oldSet.has(id))
+  if (newlyAdded) {
+    emits('select', newlyAdded)
+  }
+}
+
+function handleRemoveProvider(providerId: string): void {
+  const newValues = selectedProviderIds.value.filter(id => id !== providerId)
+  handleSelectionChange(newValues)
 }
 </script>
 
 <style lang="scss" scoped>
-.provider-list__section {
-  margin-bottom: 0.75rem;
+.provider-list__select {
+  width: 100%;
+}
+
+.provider-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.provider-option__name {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.provider-option__type {
+  font-size: 0.75rem;
+  color: var(--el-text-color-secondary);
+}
+
+.provider-list__selected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .provider-list__label {
   font-weight: 600;
   font-size: 0.9rem;
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 0.5rem 0;
   color: var(--el-text-color-primary);
 }
 
-.provider-list__hint {
-  margin: 0;
-  color: var(--el-text-color-secondary);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.provider-list__container {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 0.75rem;
-  background: var(--el-fill-color-blank);
-  padding: 0.5rem;
-  min-height: 100px;
-}
-
-.provider-list__empty {
-  color: var(--el-text-color-secondary);
-  font-size: 0.85rem;
-  text-align: center;
-  padding: 1.5rem 1rem;
-}
-
-.provider-list__draggable {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.provider-list__disabled {
+.provider-list__tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.5rem;
 }
 
-.provider-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.625rem;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color);
-  color: var(--el-text-color-primary);
+.provider-list__tags :deep(.el-tag) {
   cursor: pointer;
   transition: all 0.2s ease;
-
+  
   &:hover {
-    border-color: var(--el-border-color);
-    background: var(--el-fill-color-light);
-  }
-
-  &.is-selected {
-    border-color: var(--el-color-primary);
-    background: color-mix(in srgb, var(--el-color-primary) 8%, var(--el-fill-color-blank));
-
-    .provider-item__check {
-      opacity: 1;
-      color: var(--el-color-primary);
-    }
-  }
-
-  &--disabled {
-    opacity: 0.7;
+    opacity: 0.8;
   }
 }
 
-.provider-item__grab {
-  font-size: 1rem;
-  color: var(--el-text-color-placeholder);
-  cursor: grab;
-  flex-shrink: 0;
-}
-
-.provider-item__content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  text-align: left;
-  gap: 0.25rem;
-}
-
-.provider-item__name {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.provider-item__meta {
-  font-size: 0.8rem;
-  color: var(--el-text-color-secondary);
+.provider-tag__content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
-.provider-item__badge {
-  padding: 0.125rem 0.5rem;
+.provider-tag__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.25rem;
   border-radius: 999px;
-  background: var(--el-fill-color-light);
-  font-size: 0.75rem;
-}
-
-.provider-item__check {
-  font-size: 1.125rem;
-  color: var(--el-text-color-placeholder);
-  opacity: 0;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.provider-item__status {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
-}
-
-.provider-list__draggable :deep(.sortable-ghost) {
-  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.3);
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 </style>
