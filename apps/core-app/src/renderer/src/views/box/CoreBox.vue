@@ -23,6 +23,7 @@ import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { toast } from 'vue-sonner'
+import { useI18n } from 'vue-i18n'
 
 declare global {
   interface Window {
@@ -47,11 +48,13 @@ const clipboardOptions = reactive<any>({
   lastClearedTimestamp: null
 })
 
+const { t } = useI18n()
+
 const {
   searchVal,
   select,
   res,
-  // loading,
+  loading,
   activeItem,
   activeActivations,
   handleExecute,
@@ -91,6 +94,37 @@ const completionDisplay = computed(() => {
 
   return completion
 })
+
+const shouldShowAiSuggestion = computed(() => {
+  if (loading.value) return false
+  if (res.value.length > 0) return false
+  if (boxOptions.mode !== BoxMode.INPUT && boxOptions.mode !== BoxMode.COMMAND) return false
+  if (activeActivations.value && activeActivations.value.length > 0) return false
+
+  const trimmed = searchVal.value.trim()
+  if (!trimmed.length) return false
+  const lower = trimmed.toLowerCase()
+  if (lower === 'ai' || lower.startsWith('ai ')) return false
+
+  return true
+})
+
+const aiSuggestionTitle = computed(() => t('coreBox.intelligence.suggestionTitle'))
+const aiSuggestionDescription = computed(() => t('coreBox.intelligence.suggestionDesc'))
+const aiSuggestionAction = computed(() => t('coreBox.intelligence.suggestionAction'))
+
+function handleAskAiSuggestion(): void {
+  const current = searchVal.value.trim()
+  const suggestion = current ? `ai ${current}` : 'ai '
+
+  if (searchVal.value !== suggestion) {
+    searchVal.value = suggestion
+  } else {
+    void handleSearchImmediate()
+  }
+
+  focusMainInput()
+}
 
 useVisibility(
   boxOptions,
@@ -416,13 +450,20 @@ const pinIcon = computed<ITuffIcon>(() => ({
         />
         <!-- @mousemove="boxOptions.focus = index" -->
       </TouchScroll>
-      <!-- <div v-if="searchVal.trim() && res.length === 0" class="CoreBoxRes-Empty">
-        <div class="placeholder-graphic">
-          <img :src="EmptySearchStatus" />
+      <div v-if="shouldShowAiSuggestion" class="CoreBoxRes-Empty CoreBoxRes-AI">
+        <div class="AiSuggestion">
+          <div class="AiSuggestion-Icon">🤖</div>
+          <div class="AiSuggestion-Body">
+            <h3 class="AiSuggestion-Title">{{ aiSuggestionTitle }}</h3>
+            <p class="AiSuggestion-Description">
+              {{ aiSuggestionDescription }}
+            </p>
+          </div>
+          <button class="AiSuggestion-Action" type="button" @click="handleAskAiSuggestion">
+            {{ aiSuggestionAction }}
+          </button>
         </div>
-        <span class="title">CoreBox</span>
-        <span class="subtitle">暂无结果，试试其他关键词</span>
-      </div> -->
+      </div>
       <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
     </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
@@ -535,6 +576,64 @@ div.CoreBoxRes {
 
   .subtitle {
     font-size: 12px;
+  }
+}
+
+.CoreBoxRes-AI {
+  background: var(--el-bg-color);
+  border: 1px dashed var(--el-border-color);
+  border-radius: 12px;
+  padding: 24px;
+  color: var(--el-text-color-primary);
+
+  .AiSuggestion {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 520px;
+  }
+
+  .AiSuggestion-Icon {
+    font-size: 36px;
+    line-height: 1;
+  }
+
+  .AiSuggestion-Body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+  }
+
+  .AiSuggestion-Title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--el-text-color-primary);
+  }
+
+  .AiSuggestion-Description {
+    margin: 0;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+  }
+
+  .AiSuggestion-Action {
+    border: none;
+    background: var(--el-color-primary);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(79, 70, 229, 0.2);
+    }
   }
 }
 
