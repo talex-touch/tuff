@@ -85,6 +85,11 @@ export class StorageModule extends BaseModule {
       this.configs.set(name, JSON.parse(configData))
     }
 
+    // 使用 setImmediate 确保文件系统完全写入后再广播更新事件
+    setImmediate(() => {
+      broadcastUpdate(name)
+    })
+
     return true
   }
 
@@ -108,13 +113,14 @@ export class StorageModule extends BaseModule {
       if (!data || typeof data !== 'object') return false
       const { key, content, clear } = data
       if (typeof key !== 'string') return false
-      broadcastUpdate(key)
+      // saveConfig 内部会调用 broadcastUpdate,无需在这里重复调用
       return this.saveConfig(key, content, clear)
     })
 
     channel.regChannel(ChannelType.MAIN, 'storage:reload', ({ data }) => {
       if (!data || typeof data !== 'string') return {}
       const result = this.reloadConfig(data)
+      // 重新加载配置后也需要广播更新
       broadcastUpdate(data)
       return result
     })

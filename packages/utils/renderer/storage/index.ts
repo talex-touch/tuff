@@ -1,5 +1,5 @@
 export * from './base-storage'
 export * from './app-settings'
-export * from './intelligence-settings'
-export * from './aisdk-storage'
+export * from './intelligence-storage'
 export * from './openers'
+

@@ -8,7 +8,7 @@ import { databaseModule } from '../database'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchChannel } from '../../core/channel-core'
 import { windowManager } from '../box-tool/core-box/window'
-import { ai } from '../ai/ai-sdk'
+import { ai } from '../ai/intelligence-sdk'
 import type {
   AiVisionOcrPayload,
   AiVisionOcrResult,
@@ -26,7 +26,7 @@ import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import chalk from 'chalk'
-import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from '../ai/ai-config'
+import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from '../ai/intelligence-config'
 
 export interface ClipboardOcrPayload {
   clipboardId: number

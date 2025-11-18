@@ -71,7 +71,7 @@ import type {
 const { t } = useI18n()
 const aiClient = createIntelligenceClient(touchChannel as any)
 
-const { providers, capabilities, updateCapability, setCapabilityProviders } =
+const { providers, capabilities, updateCapability, setCapabilityProviders, updateProvider } =
   useIntelligenceManager()
 
 const searchQuery = ref('')
@@ -167,6 +167,10 @@ function handleCapabilityProviderToggle(
 ): void {
   if (enabled) {
     updateCapabilityBinding(capabilityId, providerId, { enabled: true })
+    const provider = providerMap.value.get(providerId)
+    if (provider && !provider.enabled) {
+      updateProvider(providerId, { enabled: true })
+    }
   } else {
     const capability = capabilities.value[capabilityId]
     if (!capability?.providers) return
