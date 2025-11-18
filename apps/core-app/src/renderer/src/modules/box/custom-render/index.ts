@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import PreviewResultCard from '~/components/render/custom/PreviewResultCard.vue'
+import CoreIntelligenceAnswer from '~/components/render/custom/CoreIntelligenceAnswer.vue'
 
 const registry = new Map<string, Component>()
 let defaultsRegistered = false
@@ -17,4 +18,5 @@ export function registerDefaultCustomRenderers(): void {
   defaultsRegistered = true
 
   registerCustomRenderer('core-preview-card', PreviewResultCard)
+  registerCustomRenderer('core-intelligence-answer', CoreIntelligenceAnswer)
 }
