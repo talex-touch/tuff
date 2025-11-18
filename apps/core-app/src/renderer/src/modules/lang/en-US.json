@@ -402,7 +402,11 @@
       "copy": "Copy answer",
       "copySuccess": "Answer copied",
       "copyFailed": "Copy failed",
-      "thinking": "AI is thinking…"
+      "thinking": "AI is thinking…",
+      "hotkey": "Ask Talex AI",
+      "suggestionTitle": "Not finding what you need?",
+      "suggestionDesc": "Ask Talex AI to dig deeper, summarize results, or provide next steps based on your query.",
+      "suggestionAction": "Ask Talex AI"
     },
     "sourceTypes": {
       "application": "Application",

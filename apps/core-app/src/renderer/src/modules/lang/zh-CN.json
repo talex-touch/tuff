@@ -402,7 +402,11 @@
       "copy": "复制回答",
       "copySuccess": "回答已复制",
       "copyFailed": "复制失败",
-      "thinking": "AI 正在思考…"
+      "thinking": "AI 正在思考…",
+      "hotkey": "唤起 Talex AI",
+      "suggestionTitle": "没有找到想要的结果？",
+      "suggestionDesc": "试试让 Talex AI 深入搜索、总结信息或给出下一步建议。",
+      "suggestionAction": "询问 Talex AI"
     },
     "sourceTypes": {
       "application": "应用",
