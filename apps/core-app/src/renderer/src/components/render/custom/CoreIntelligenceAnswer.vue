@@ -134,12 +134,7 @@ function copyAnswer(): void {
           {{ statusLabel }}
         </div>
       </div>
-      <button
-        v-if="hasAnswer"
-        class="CoreIntelligence__action"
-        type="button"
-        @click="copyAnswer"
-      >
+      <button v-if="hasAnswer" class="CoreIntelligence__action" type="button" @click="copyAnswer">
         {{ t('coreBox.intelligence.copy') }}
       </button>
     </header>
@@ -257,6 +252,5 @@ function copyAnswer(): void {
   padding: 4px 8px;
   border-radius: 999px;
   background: var(--el-fill-color);
-}
 }
 </style>
