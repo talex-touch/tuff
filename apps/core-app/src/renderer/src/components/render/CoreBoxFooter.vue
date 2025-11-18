@@ -41,6 +41,8 @@ const displayIcon = computed(() => {
 const title = computed(() => props.item?.render?.basic?.title || 'CoreBox')
 const subtitleMeta = computed(() => resolveSourceMeta(props.item || undefined, t))
 
+const isMacPlatform = process.platform === 'darwin'
+
 const primaryActionLabel = computed(() => {
   const item = props.item
   const isPluginFeature =
@@ -52,20 +54,23 @@ const primaryActionLabel = computed(() => {
 })
 
 const keyHints = computed(() => {
-  const actionsLabelKey = 'coreBox.hints.actions'
   const quickSelectLabelKey = 'coreBox.hints.quickSelect'
+  const aiHotkeyLabelKey = 'coreBox.intelligence.hotkey'
 
-  const actionsLabel = t(actionsLabelKey)
   const quickSelectLabel = t(quickSelectLabelKey)
+  const aiHotkeyLabel = t(aiHotkeyLabelKey)
+
+  const aiHotkey = isMacPlatform ? '⌘⇧I' : 'Ctrl+Shift+I'
+  const quickSelectHotkey = isMacPlatform ? '⌘1-0' : 'Alt+1-0'
 
   return [
     { key: '↵', label: primaryActionLabel.value },
     {
-      key: '⌘K',
-      label: actionsLabel === actionsLabelKey ? 'Actions' : actionsLabel
+      key: aiHotkey,
+      label: aiHotkeyLabel === aiHotkeyLabelKey ? 'Ask Talex AI' : aiHotkeyLabel
     },
     {
-      key: '⌘1-0',
+      key: quickSelectHotkey,
       label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel
     }
   ]
