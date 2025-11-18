@@ -1,11 +1,11 @@
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { AiCapabilityType, AiProviderType } from '@talex-touch/utils'
 import type { AiProviderConfig } from '@talex-touch/utils'
-import { aiCapabilityRegistry } from './ai-capability-registry'
-import { ai, setIntelligenceProviderManager } from './ai-sdk'
+import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
 import { genTouchChannel } from '../../core/channel-core'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import { ensureAiConfigLoaded, getCapabilityOptions } from './ai-config'
+import { ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener, debugPrintConfig } from './intelligence-config'
 import { capabilityTesterRegistry } from './capability-testers'
 import { OpenAIProvider } from './providers/openai-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
@@ -67,6 +67,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 注册 IPC 通道
     this.registerChannels()
+
+    // 设置配置更新监听器
+    setupConfigUpdateListener()
+    
+    // 打印配置文件内容（调试用）
+    debugPrintConfig()
+    
+    // 强制加载初始配置（force=true 确保即使 signature 相同也会重新加载）
+    ensureAiConfigLoaded(true)
 
     intelligenceLog.success('Intelligence module initialized')
   }

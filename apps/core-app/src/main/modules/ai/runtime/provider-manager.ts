@@ -32,7 +32,7 @@ export class IntelligenceProviderManager implements ProviderManagerAdapter {
     }
     const provider = factory(config)
     this.register(provider)
-    providerManagerLog.info(`Registered provider ${config.id} (${config.type})`)
+    providerManagerLog.info(`Registered provider ${config.id} (${config.type}), enabled: ${provider.isEnabled()}`)
     return provider
   }
 

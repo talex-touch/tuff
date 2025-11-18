@@ -3,7 +3,7 @@ import { readdirSync, existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { AiInvokeResult, AiVisionOcrPayload, AiVisionOcrResult } from '@talex-touch/utils'
 import { BaseCapabilityTester, type CapabilityTestPayload } from './base-tester'
-import { getCapabilityPrompt } from '../ai-config'
+import { getCapabilityPrompt } from '../intelligence-config'
 
 export class VisionCapabilityTester extends BaseCapabilityTester {
   readonly capabilityType = 'vision'

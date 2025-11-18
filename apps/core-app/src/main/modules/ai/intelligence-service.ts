@@ -1,10 +1,10 @@
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { AiProviderType } from '@talex-touch/utils'
 import type { AiProviderConfig } from '@talex-touch/utils'
-import { aiCapabilityRegistry } from './ai-capability-registry'
-import { ai, setIntelligenceProviderManager } from './ai-sdk'
+import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
 import { genTouchChannel } from '../../core/channel-core'
-import { ensureAiConfigLoaded, getCapabilityOptions } from './ai-config'
+import { ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener } from './intelligence-config'
 import { capabilityTesterRegistry } from './capability-testers'
 import { OpenAIProvider } from './providers/openai-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
@@ -39,6 +39,12 @@ export function initAiSdkService(): void {
   manager.registerFactory(AiProviderType.ANTHROPIC, (config) => new AnthropicProvider(config))
   setIntelligenceProviderManager(manager)
   logInfo('Provider factories registered')
+
+  // Setup config update listener to reload when frontend saves config
+  setupConfigUpdateListener()
+  
+  // Load initial config
+  ensureAiConfigLoaded()
 
   channel.regChannel(ChannelType.MAIN, 'intelligence:invoke', async ({ data, reply }) => {
   try {
@@ -166,6 +172,20 @@ export function initAiSdkService(): void {
     })
   } catch (error) {
     logError('Fetch models failed:', error)
+    reply(DataCode.ERROR, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+  })
+
+  channel.regChannel(ChannelType.MAIN, 'intelligence:reload-config', async ({ reply }) => {
+  try {
+    logInfo('Reloading config on demand')
+    ensureAiConfigLoaded(true)
+    reply(DataCode.SUCCESS, { ok: true })
+  } catch (error) {
+    logError('Reload config failed:', error)
     reply(DataCode.ERROR, {
       ok: false,
       error: error instanceof Error ? error.message : String(error)
