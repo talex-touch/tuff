@@ -148,6 +148,12 @@ watch(res, () => {
   itemRefs.value = []
 })
 
+function setItemRef(el: any, index: number) {
+  if (el) {
+    itemRefs.value[index] = el
+  }
+}
+
 useKeyboard(
   boxOptions,
   res,
@@ -477,7 +483,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
         <CoreBoxRender
           v-for="(item, index) in res"
           :key="index"
-          :ref="(el: any) => { if (el) itemRefs.value[index] = el }"
+          :ref="(el) => setItemRef(el, index)"
           :active="boxOptions.focus === index"
           :item="item"
           :index="index"

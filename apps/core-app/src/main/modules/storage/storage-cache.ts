@@ -7,7 +7,7 @@ export class StorageCache {
   private cache = new Map<string, object>()
   private dirtySet = new Set<string>()
   private lastAccessTime = new Map<string, number>()
-  private weakRefs = new WeakMap<object, string>()
+
 
   /**
    * Get configuration from cache
@@ -36,7 +36,7 @@ export class StorageCache {
     this.cache.set(name, data)
     this.dirtySet.add(name)
     this.lastAccessTime.set(name, Date.now())
-    this.weakRefs.set(data, name)
+
   }
 
   /**
