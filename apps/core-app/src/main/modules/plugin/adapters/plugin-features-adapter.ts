@@ -1,4 +1,5 @@
-import type { IExecuteArgs, IProviderActivate, ISearchProvider, ITuffIcon, TuffFactory, TuffIconType, TuffInputType, TuffItem, TuffQuery, TuffSearchResult, TuffSourceType } from '@talex-touch/utils'
+import type { IExecuteArgs, IProviderActivate, ISearchProvider, ITuffIcon, TuffIconType, TuffItem, TuffQuery, TuffSearchResult, TuffSourceType } from '@talex-touch/utils'
+import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 import type {
   IFeatureCommand,
   IPluginFeature,

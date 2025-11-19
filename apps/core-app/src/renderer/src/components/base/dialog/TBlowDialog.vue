@@ -1,5 +1,5 @@
 <script lang="ts" name="TBlowDialog" setup>
-import type { type Component, VNode } from 'vue'
+import { type Component, VNode } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
 
 /**

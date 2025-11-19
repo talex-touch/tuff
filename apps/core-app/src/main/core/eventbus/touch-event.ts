@@ -55,6 +55,9 @@ export enum TalexEvents {
 
   // Update Events
   UPDATE_AVAILABLE = 'update/available',
+
+  // Search Engine Events
+  PROVIDER_DEACTIVATED = 'search-engine/provider-deactivated',
 }
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
@@ -388,6 +391,20 @@ export class UpdateAvailableEvent implements ITouchEvent<TalexEvents> {
   constructor(version: string, channel: AppPreviewChannel) {
     this.version = version
     this.channel = channel
+  }
+}
+
+// Search Engine Event Classes
+export class ProviderDeactivatedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PROVIDER_DEACTIVATED
+  providerId: string
+  isPluginFeature: boolean
+  allProvidersDeactivated: boolean
+
+  constructor(providerId: string, isPluginFeature: boolean, allProvidersDeactivated: boolean) {
+    this.providerId = providerId
+    this.isPluginFeature = isPluginFeature
+    this.allProvidersDeactivated = allProvidersDeactivated
   }
 }
 

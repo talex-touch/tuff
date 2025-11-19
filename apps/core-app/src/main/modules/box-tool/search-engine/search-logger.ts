@@ -26,6 +26,11 @@ export class SearchLogger {
     // Watch for app settings changes
     setInterval(async () => {
       try {
+        // Check if storageModule is initialized
+        if (!storageModule.filePath) {
+          return
+        }
+
         const appSettingsData = (await storageModule.getConfig(
           'app-setting.ini',
         )) as unknown as string
@@ -58,6 +63,13 @@ export class SearchLogger {
    */
   private async loadSettings(): Promise<void> {
     try {
+      // Check if storageModule is initialized before trying to get config
+      if (!storageModule.filePath) {
+        // Storage module not yet initialized, use default
+        this.enabled = false
+        return
+      }
+
       // Try to get from app settings first
       const appSettingsData = await storageModule.getConfig('app-setting.ini')
       if (appSettingsData) {
@@ -71,7 +83,7 @@ export class SearchLogger {
       this.enabled = (settings as unknown as string) === 'true'
     }
     catch (error) {
-      console.debug('[SearchLogger] Failed to load settings, using default:', error)
+      // Silently fail if storage is not ready yet
       this.enabled = false
     }
   }
