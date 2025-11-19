@@ -1,8 +1,8 @@
-import { createInternalAiPlugin } from './internal-ai-plugin'
 import type { TouchPlugin } from '../../modules/plugin'
+import { createInternalAiPlugin } from './internal-ai-plugin'
 
 export const internalPlugins: (() => TouchPlugin)[] = [
-  createInternalAiPlugin
+  createInternalAiPlugin,
 ]
 
 export * from './internal-ai-plugin'

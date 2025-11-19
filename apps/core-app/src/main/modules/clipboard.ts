@@ -1,22 +1,23 @@
-import { clipboard, nativeImage } from 'electron'
+import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
+import type * as schema from '../db/schema'
 import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import { pathToFileURL } from 'node:url'
 import path from 'node:path'
-import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
-import { desc, gt, sql, eq, inArray, and } from 'drizzle-orm'
-import { LibSQLDatabase } from 'drizzle-orm/libsql'
-import * as schema from '../db/schema'
-import { DataCode, MaybePromise, ModuleKey } from '@talex-touch/utils'
-import { genTouchChannel } from '../core/channel-core'
-import { windowManager } from './box-tool/core-box/window'
-import { coreBoxManager } from './box-tool/core-box/manager'
+import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
+import { DataCode } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { databaseModule } from './database'
+import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm'
+import { clipboard, nativeImage } from 'electron'
+import { genTouchChannel } from '../core/channel-core'
+import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { BaseModule } from './abstract-base-module'
-import { activeAppService } from './system/active-app'
+import { coreBoxManager } from './box-tool/core-box/manager'
+import { windowManager } from './box-tool/core-box/window'
+import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
+import { activeAppService } from './system/active-app'
 
 const FILE_URL_FORMATS = new Set([
   'public.file-url',
@@ -24,7 +25,7 @@ const FILE_URL_FORMATS = new Set([
   'text/uri-list',
   'text/x-moz-url',
   'NSFilenamesPboardType',
-  'com.apple.pasteboard.promised-file-url'
+  'com.apple.pasteboard.promised-file-url',
 ])
 
 const IMAGE_FORMATS = new Set([
@@ -35,7 +36,7 @@ const IMAGE_FORMATS = new Set([
   'image/png',
   'image/jpeg',
   'image/webp',
-  'NSTIFFPboardType'
+  'NSTIFFPboardType',
 ])
 
 const TEXT_FORMATS = new Set([
@@ -44,16 +45,16 @@ const TEXT_FORMATS = new Set([
   'text/plain',
   'text/html',
   'public.html',
-  'NSStringPboardType'
+  'NSStringPboardType',
 ])
 
-type ClipboardMetaEntry = {
+interface ClipboardMetaEntry {
   key: string
   value: unknown
 }
 
 function includesAny(formats: string[], candidates: Set<string>): boolean {
-  return formats.some((format) => candidates.has(format))
+  return formats.some(format => candidates.has(format))
 }
 
 export interface IClipboardItem {
@@ -69,7 +70,7 @@ export interface IClipboardItem {
   meta?: Record<string, unknown> | null
 }
 
-type ClipboardApplyPayload = {
+interface ClipboardApplyPayload {
   item?: Partial<IClipboardItem> & { type?: IClipboardItem['type'] }
   text?: string
   html?: string | null
@@ -92,14 +93,16 @@ class ClipboardHelper {
 
   public readClipboardFiles(): string[] {
     const raw = clipboard.read('public.file-url').toString()
-    if (!raw) return []
+    if (!raw)
+      return []
     return raw
       .split(/\r\n|\n|\r/)
       .filter(Boolean)
       .map((url) => {
         try {
           return decodeURI(new URL(url).pathname)
-        } catch {
+        }
+        catch {
           return ''
         }
       })
@@ -107,10 +110,11 @@ class ClipboardHelper {
   }
 
   public didFilesChange(nextFiles: string[]): boolean {
-    if (nextFiles.length === 0) return false
+    if (nextFiles.length === 0)
+      return false
     if (
-      nextFiles.length === this.lastFiles.length &&
-      nextFiles.every((file, index) => file === this.lastFiles[index])
+      nextFiles.length === this.lastFiles.length
+      && nextFiles.every((file, index) => file === this.lastFiles[index])
     ) {
       return false
     }
@@ -123,9 +127,11 @@ class ClipboardHelper {
   }
 
   public didImageChange(image: NativeImage): boolean {
-    if (image.isEmpty()) return false
+    if (image.isEmpty())
+      return false
     const hash = image.toDataURL()
-    if (hash === this.lastImageHash) return false
+    if (hash === this.lastImageHash)
+      return false
     this.lastImageHash = hash
     return true
   }
@@ -139,7 +145,8 @@ class ClipboardHelper {
   }
 
   public didTextChange(text: string): boolean {
-    if (!text || text === this.lastText) return false
+    if (!text || text === this.lastText)
+      return false
     this.lastText = text
     return true
   }
@@ -162,18 +169,18 @@ export class ClipboardModule extends BaseModule {
   constructor() {
     super(ClipboardModule.key, {
       create: true,
-      dirName: 'clipboard'
+      dirName: 'clipboard',
     })
   }
 
-  private async hydrateWithMeta<T extends { id?: number | null; metadata?: string | null }>(
-    rows: readonly T[]
+  private async hydrateWithMeta<T extends { id?: number | null, metadata?: string | null }>(
+    rows: readonly T[],
   ): Promise<Array<T & { meta: Record<string, unknown> | null }>> {
     if (!this.db || rows.length === 0) {
-      return rows.map((row) => ({ ...row, meta: null }))
+      return rows.map(row => ({ ...row, meta: null }))
     }
 
-    const ids = rows.map((item) => item.id).filter((id): id is number => typeof id === 'number')
+    const ids = rows.map(item => item.id).filter((id): id is number => typeof id === 'number')
 
     const metaMap = new Map<number, Record<string, unknown>>()
 
@@ -184,11 +191,13 @@ export class ClipboardModule extends BaseModule {
         .where(inArray(clipboardHistoryMeta.clipboardId, ids))
 
       for (const metaRow of metaRows) {
-        if (typeof metaRow.clipboardId !== 'number') continue
+        if (typeof metaRow.clipboardId !== 'number')
+          continue
         const existing = metaMap.get(metaRow.clipboardId) ?? {}
         try {
           existing[metaRow.key] = metaRow.value ? JSON.parse(metaRow.value) : null
-        } catch {
+        }
+        catch {
           existing[metaRow.key] = metaRow.value
         }
         metaMap.set(metaRow.clipboardId, existing)
@@ -200,7 +209,8 @@ export class ClipboardModule extends BaseModule {
       if (typeof row.metadata === 'string' && row.metadata.trim().length > 0) {
         try {
           fallback = JSON.parse(row.metadata)
-        } catch {
+        }
+        catch {
           fallback = null
         }
       }
@@ -208,13 +218,14 @@ export class ClipboardModule extends BaseModule {
       const meta = row.id ? (metaMap.get(row.id) ?? fallback) : fallback
       return {
         ...row,
-        meta: meta ?? null
+        meta: meta ?? null,
       }
     })
   }
 
   private async loadInitialCache() {
-    if (!this.db) return
+    if (!this.db)
+      return
 
     const rows = await this.db
       .select()
@@ -233,22 +244,25 @@ export class ClipboardModule extends BaseModule {
     const oneHourAgo = Date.now() - CACHE_MAX_AGE_MS
     this.memoryCache = this.memoryCache.filter((i) => {
       const ts = i.timestamp
-      if (!ts) return false
+      if (!ts)
+        return false
       const timeValue = ts instanceof Date ? ts.getTime() : new Date(ts).getTime()
       return Number.isFinite(timeValue) && timeValue > oneHourAgo
     })
   }
 
   private parseFileList(content?: string | null): string[] {
-    if (!content) return []
+    if (!content)
+      return []
     try {
       const parsed = JSON.parse(content)
       if (Array.isArray(parsed)) {
         return parsed.filter(
-          (entry): entry is string => typeof entry === 'string' && entry.length > 0
+          (entry): entry is string => typeof entry === 'string' && entry.length > 0,
         )
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.debug('[Clipboard] Failed to parse file list from clipboard item:', error)
     }
     return []
@@ -279,7 +293,7 @@ export class ClipboardModule extends BaseModule {
       return {
         type: 'text',
         content,
-        rawContent
+        rawContent,
       }
     }
 
@@ -290,7 +304,7 @@ export class ClipboardModule extends BaseModule {
       }
       return {
         type: 'image',
-        content
+        content,
       }
     }
 
@@ -301,7 +315,7 @@ export class ClipboardModule extends BaseModule {
 
     return {
       type: 'files',
-      content: JSON.stringify(files)
+      content: JSON.stringify(files),
     }
   }
 
@@ -310,7 +324,7 @@ export class ClipboardModule extends BaseModule {
       const html = item.rawContent ?? payload.html ?? undefined
       clipboard.write({
         text: item.content ?? '',
-        html: html ?? undefined
+        html: html ?? undefined,
       })
       this.clipboardHelper?.markText(item.content ?? '')
       return
@@ -334,13 +348,14 @@ export class ClipboardModule extends BaseModule {
     const resolvedPaths = files.map((filePath) => {
       try {
         return path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
-      } catch {
+      }
+      catch {
         return filePath
       }
     })
 
     const fileUrlContent = resolvedPaths
-      .map((filePath) => pathToFileURL(filePath).toString())
+      .map(filePath => pathToFileURL(filePath).toString())
       .join('\n')
     const buffer = Buffer.from(fileUrlContent, 'utf8')
 
@@ -348,7 +363,8 @@ export class ClipboardModule extends BaseModule {
       for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
         clipboard.writeBuffer(format, buffer)
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('[Clipboard] Failed to populate file clipboard formats:', error)
     }
 
@@ -358,8 +374,9 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async wait(ms: number): Promise<void> {
-    if (!ms || ms <= 0) return
-    await new Promise((resolve) => setTimeout(resolve, ms))
+    if (!ms || ms <= 0)
+      return
+    await new Promise(resolve => setTimeout(resolve, ms))
   }
 
   private async simulatePasteCommand(): Promise<void> {
@@ -367,14 +384,14 @@ export class ClipboardModule extends BaseModule {
       if (process.platform === 'darwin') {
         await execFileAsync('osascript', [
           '-e',
-          'tell application "System Events" to keystroke "v" using {command down}'
+          'tell application "System Events" to keystroke "v" using {command down}',
         ])
         return
       }
 
       if (process.platform === 'win32') {
-        const script =
-          "$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys('^v')"
+        const script
+          = '$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 30; $wshell.SendKeys(\'^v\')'
         await execFileAsync('powershell', ['-NoLogo', '-NonInteractive', '-Command', script])
         return
       }
@@ -385,7 +402,8 @@ export class ClipboardModule extends BaseModule {
       }
 
       throw new Error(`Auto paste is not supported on platform: ${process.platform}`)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[Clipboard] Failed to simulate paste command:', error)
       throw error instanceof Error ? error : new Error(String(error))
     }
@@ -399,7 +417,8 @@ export class ClipboardModule extends BaseModule {
     if (payload.hideCoreBox !== false) {
       try {
         coreBoxManager.trigger(false)
-      } catch (error) {
+      }
+      catch (error) {
         console.debug('[Clipboard] Failed to hide CoreBox before auto paste:', error)
       }
     }
@@ -412,13 +431,14 @@ export class ClipboardModule extends BaseModule {
 
   private mergeMetadataString(
     original: string | null | undefined,
-    patch: Record<string, unknown>
+    patch: Record<string, unknown>,
   ): string {
     let base: Record<string, unknown> = {}
     if (original) {
       try {
         base = JSON.parse(original)
-      } catch {
+      }
+      catch {
         base = {}
       }
     }
@@ -426,8 +446,9 @@ export class ClipboardModule extends BaseModule {
   }
 
   private handleMetaPatch = (clipboardId: number, patch: Record<string, unknown>): void => {
-    const index = this.memoryCache.findIndex((entry) => entry.id === clipboardId)
-    if (index === -1) return
+    const index = this.memoryCache.findIndex(entry => entry.id === clipboardId)
+    if (index === -1)
+      return
 
     const current = this.memoryCache[index]
     const nextMeta = { ...(current.meta ?? {}), ...patch }
@@ -436,24 +457,26 @@ export class ClipboardModule extends BaseModule {
     this.memoryCache[index] = {
       ...current,
       meta: nextMeta,
-      metadata
+      metadata,
     }
   }
 
   private async persistMetaEntries(
     clipboardId: number,
-    meta: Record<string, unknown>
+    meta: Record<string, unknown>,
   ): Promise<void> {
-    if (!this.db) return
+    if (!this.db)
+      return
     const values = Object.entries(meta)
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => ({
         clipboardId,
         key,
-        value: JSON.stringify(value ?? null)
+        value: JSON.stringify(value ?? null),
       }))
 
-    if (values.length === 0) return
+    if (values.length === 0)
+      return
 
     await this.db.insert(clipboardHistoryMeta).values(values)
   }
@@ -462,14 +485,15 @@ export class ClipboardModule extends BaseModule {
     content,
     rawContent,
     source = 'virtual',
-    meta
+    meta,
   }: {
     content: string
     rawContent?: string | null
     source?: string
     meta?: Record<string, unknown>
   }): Promise<IClipboardItem | null> {
-    if (!this.db) return null
+    if (!this.db)
+      return null
 
     const metaEntries: ClipboardMetaEntry[] = [{ key: 'source', value: source }]
     if (meta) {
@@ -492,7 +516,7 @@ export class ClipboardModule extends BaseModule {
       timestamp: new Date(),
       sourceApp: 'Talex Touch',
       isFavorite: false,
-      metadata
+      metadata,
     }
 
     const inserted = await this.db.insert(clipboardHistory).values(record).returning()
@@ -556,7 +580,7 @@ export class ClipboardModule extends BaseModule {
         item = {
           type: 'image',
           content: image.toDataURL(),
-          thumbnail: image.resize({ width: 128 }).toDataURL()
+          thumbnail: image.resize({ width: 128 }).toDataURL(),
         }
       }
     }
@@ -567,7 +591,7 @@ export class ClipboardModule extends BaseModule {
       if (helper.didFilesChange(files)) {
         const serialized = JSON.stringify(files)
         let thumbnail: string | undefined
-        let imageSize: { width: number; height: number } | undefined
+        let imageSize: { width: number, height: number } | undefined
 
         if (includesAny(formats, IMAGE_FORMATS)) {
           const image = clipboard.readImage()
@@ -575,10 +599,12 @@ export class ClipboardModule extends BaseModule {
             helper.primeImage(image)
             imageSize = image.getSize()
             thumbnail = image.resize({ width: 128 }).toDataURL()
-          } else {
+          }
+          else {
             helper.primeImage(null)
           }
-        } else {
+        }
+        else {
           helper.primeImage(null)
         }
 
@@ -591,7 +617,7 @@ export class ClipboardModule extends BaseModule {
         item = {
           type: 'files',
           content: serialized,
-          thumbnail
+          thumbnail,
         }
       }
     }
@@ -607,7 +633,7 @@ export class ClipboardModule extends BaseModule {
         item = {
           type: 'text',
           content: text,
-          rawContent: html || null
+          rawContent: html || null,
         }
       }
     }
@@ -626,7 +652,7 @@ export class ClipboardModule extends BaseModule {
           displayName: activeApp.displayName ?? null,
           processId: activeApp.processId ?? null,
           executablePath: activeApp.executablePath ?? null,
-          icon: activeApp.icon ?? null
+          icon: activeApp.icon ?? null,
         }
 
         for (const [key, value] of Object.entries(activeAppMeta)) {
@@ -637,13 +663,15 @@ export class ClipboardModule extends BaseModule {
 
         metaEntries.push({ key: 'source', value: activeAppMeta })
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[Clipboard] Failed to resolve active app info:', error)
     }
 
     const metaObject: Record<string, unknown> = {}
     for (const { key, value } of metaEntries) {
-      if (value === undefined) continue
+      if (value === undefined)
+        continue
       metaObject[key] = value
     }
 
@@ -651,7 +679,7 @@ export class ClipboardModule extends BaseModule {
     const record = {
       ...item,
       metadata: metadataPayload,
-      timestamp: new Date()
+      timestamp: new Date(),
     }
 
     const inserted = await this.db.insert(clipboardHistory).values(record).returning()
@@ -667,7 +695,7 @@ export class ClipboardModule extends BaseModule {
       await ocrService.enqueueFromClipboard({
         clipboardId: persisted.id,
         item: persisted,
-        formats
+        formats,
       })
     }
 
@@ -702,14 +730,10 @@ export class ClipboardModule extends BaseModule {
       touchChannel.regChannel(type, 'clipboard:get-history', async ({ data: payload, reply }) => {
         const { page = 1 } = payload ?? {}
         const offset = (page - 1) * PAGE_SIZE
-        const historyRows = await this.db!.select()
-          .from(clipboardHistory)
-          .orderBy(desc(clipboardHistory.timestamp))
-          .limit(PAGE_SIZE)
-          .offset(offset)
+        const historyRows = await this.db!.select().from(clipboardHistory).orderBy(desc(clipboardHistory.timestamp)).limit(PAGE_SIZE).offset(offset)
         const history = await this.hydrateWithMeta(historyRows)
         const totalResult = await this.db!.select({ count: sql<number>`count(*)` }).from(
-          clipboardHistory
+          clipboardHistory,
         )
         const total = totalResult[0]?.count ?? 0
         reply(DataCode.SUCCESS, { history, total, page, pageSize: PAGE_SIZE })
@@ -717,16 +741,14 @@ export class ClipboardModule extends BaseModule {
 
       touchChannel.regChannel(type, 'clipboard:set-favorite', async ({ data, reply }) => {
         const { id, isFavorite } = data ?? {}
-        await this.db!.update(clipboardHistory)
-          .set({ isFavorite })
-          .where(eq(clipboardHistory.id, id))
+        await this.db!.update(clipboardHistory).set({ isFavorite }).where(eq(clipboardHistory.id, id))
         reply(DataCode.SUCCESS, null)
       })
 
       touchChannel.regChannel(type, 'clipboard:delete-item', async ({ data, reply }) => {
         const { id } = data ?? {}
         await this.db!.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
-        this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
+        this.memoryCache = this.memoryCache.filter(item => item.id !== id)
         reply(DataCode.SUCCESS, null)
       })
 
@@ -741,7 +763,8 @@ export class ClipboardModule extends BaseModule {
         try {
           await this.applyToActiveApp((data ?? {}) as ClipboardApplyPayload)
           reply(DataCode.SUCCESS, { success: true })
-        } catch (error) {
+        }
+        catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           reply(DataCode.ERROR, { success: false, message })
         }
@@ -751,7 +774,8 @@ export class ClipboardModule extends BaseModule {
         try {
           clipboard.writeText((data?.text ?? '') as string)
           reply(DataCode.SUCCESS, null)
-        } catch (error) {
+        }
+        catch (error) {
           reply(DataCode.ERROR, (error as Error).message)
         }
       })
@@ -762,7 +786,7 @@ export class ClipboardModule extends BaseModule {
           reply(DataCode.ERROR, null)
           return
         }
-        
+
         const { source, limit: requestedLimit } = data ?? {}
         if (!source) {
           reply(DataCode.ERROR, { error: 'source parameter is required' })
@@ -770,31 +794,31 @@ export class ClipboardModule extends BaseModule {
         }
 
         const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
-        
+
         const idRows = await this.db
           .select({ clipboardId: clipboardHistoryMeta.clipboardId })
           .from(clipboardHistoryMeta)
           .where(
             and(
               eq(clipboardHistoryMeta.key, 'source'),
-              eq(clipboardHistoryMeta.value, JSON.stringify(source))
-            )
+              eq(clipboardHistoryMeta.value, JSON.stringify(source)),
+            ),
           )
           .orderBy(desc(clipboardHistoryMeta.createdAt))
           .limit(limit)
-        
-        const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
+
+        const ids = idRows.map(row => row.clipboardId).filter((id): id is number => !!id)
         if (ids.length === 0) {
           reply(DataCode.SUCCESS, [])
           return
         }
-        
+
         const rows = await this.db
           .select()
           .from(clipboardHistory)
           .where(inArray(clipboardHistory.id, ids))
           .orderBy(desc(clipboardHistory.timestamp))
-        
+
         const history = await this.hydrateWithMeta(rows)
         reply(DataCode.SUCCESS, history)
       })
@@ -805,7 +829,7 @@ export class ClipboardModule extends BaseModule {
           reply(DataCode.ERROR, null)
           return
         }
-        
+
         const { key, value, limit: requestedLimit } = data ?? {}
         if (!key) {
           reply(DataCode.ERROR, { error: 'key parameter is required' })
@@ -813,33 +837,33 @@ export class ClipboardModule extends BaseModule {
         }
 
         const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
-        
+
         const whereConditions = value !== undefined
           ? and(
               eq(clipboardHistoryMeta.key, key),
-              eq(clipboardHistoryMeta.value, JSON.stringify(value))
+              eq(clipboardHistoryMeta.value, JSON.stringify(value)),
             )
           : eq(clipboardHistoryMeta.key, key)
-        
+
         const idRows = await this.db
           .select({ clipboardId: clipboardHistoryMeta.clipboardId })
           .from(clipboardHistoryMeta)
           .where(whereConditions)
           .orderBy(desc(clipboardHistoryMeta.createdAt))
           .limit(limit)
-        
-        const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
+
+        const ids = idRows.map(row => row.clipboardId).filter((id): id is number => !!id)
         if (ids.length === 0) {
           reply(DataCode.SUCCESS, [])
           return
         }
-        
+
         const rows = await this.db
           .select()
           .from(clipboardHistory)
           .where(inArray(clipboardHistory.id, ids))
           .orderBy(desc(clipboardHistory.timestamp))
-        
+
         const history = await this.hydrateWithMeta(rows)
         reply(DataCode.SUCCESS, history)
       })
@@ -864,7 +888,7 @@ export class ClipboardModule extends BaseModule {
     this.loadInitialCache()
     ocrService
       .start()
-      .catch((error) => console.error('[Clipboard] Failed to start OCR service:', error))
+      .catch(error => console.error('[Clipboard] Failed to start OCR service:', error))
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
   }
 

@@ -1,17 +1,15 @@
+import type { IManifest } from '@talex-touch/utils/plugin'
+import type { PluginInstallRequest, PluginInstallResult, PluginProvider, PluginProviderContext } from '@talex-touch/utils/plugin/providers'
+import os from 'node:os'
+import path from 'node:path'
+import {
+
+  PluginProviderType,
+} from '@talex-touch/utils/plugin/providers'
 import compressing from 'compressing'
 import fse from 'fs-extra'
-import os from 'os'
-import path from 'path'
-import {
-  PluginProviderType,
-  type PluginInstallRequest,
-  type PluginInstallResult,
-  type PluginProvider,
-  type PluginProviderContext
-} from '@talex-touch/utils/plugin/providers'
-import type { IManifest } from '@talex-touch/utils/plugin'
-import { downloadToTempFile } from './utils'
 import { createProviderLogger } from './logger'
+import { downloadToTempFile } from './utils'
 
 async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined> {
   const tempDir = path.join(os.tmpdir(), `talex-tpex-preview-${Date.now()}`)
@@ -19,13 +17,16 @@ async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined
     await fse.ensureDir(tempDir)
     await compressing.tar.uncompress(tpexPath, tempDir)
     const manifestPath = path.join(tempDir, 'manifest.json')
-    if (!(await fse.pathExists(manifestPath))) return undefined
+    if (!(await fse.pathExists(manifestPath)))
+      return undefined
     const manifestContent = await fse.readJSON(manifestPath)
     return manifestContent as IManifest
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('[TpexProvider] Failed to peek manifest:', error)
     return undefined
-  } finally {
+  }
+  finally {
     await fse.rm(tempDir, { recursive: true, force: true })
   }
 }
@@ -44,10 +45,10 @@ export class TpexPluginProvider implements PluginProvider {
 
   async install(
     request: PluginInstallRequest,
-    context?: PluginProviderContext
+    context?: PluginProviderContext,
   ): Promise<PluginInstallResult> {
     this.log.info('准备处理 TPEX 插件资源', {
-      meta: { source: request.source }
+      meta: { source: request.source },
     })
 
     try {
@@ -55,15 +56,16 @@ export class TpexPluginProvider implements PluginProvider {
 
       if (isRemote(request.source)) {
         this.log.debug('检测到远程 TPEX 资源，开始下载', {
-          meta: { url: request.source }
+          meta: { url: request.source },
         })
         filePath = await downloadToTempFile(request.source, '.tpex', context?.downloadOptions)
-      } else {
+      }
+      else {
         filePath = path.resolve(request.source)
         const exists = await fse.pathExists(filePath)
         if (!exists) {
           this.log.error('本地 TPEX 文件不存在', {
-            meta: { filePath }
+            meta: { filePath },
           })
           throw new Error('指定的 TPEX 文件不存在')
         }
@@ -72,14 +74,15 @@ export class TpexPluginProvider implements PluginProvider {
       const manifest = await peekTpexManifest(filePath)
       if (!manifest) {
         this.log.warn('无法从 TPEX 包中解析 manifest', {
-          meta: { filePath }
+          meta: { filePath },
         })
-      } else {
+      }
+      else {
         this.log.debug('成功解析 TPEX manifest', {
           meta: {
             name: manifest.name ?? 'unknown',
-            version: manifest.version ?? 'unknown'
-          }
+            version: manifest.version ?? 'unknown',
+          },
         })
       }
 
@@ -88,8 +91,8 @@ export class TpexPluginProvider implements PluginProvider {
       this.log.success('TPEX 插件准备完成', {
         meta: {
           filePath,
-          official: official ? 'true' : 'false'
-        }
+          official: official ? 'true' : 'false',
+        },
       })
 
       return {
@@ -100,13 +103,14 @@ export class TpexPluginProvider implements PluginProvider {
         metadata: {
           icon: manifest?.icon,
           name: manifest?.name,
-          version: manifest?.version
-        }
+          version: manifest?.version,
+        },
       }
-    } catch (error) {
+    }
+    catch (error) {
       this.log.error('TPEX 插件处理失败', {
         meta: { source: request.source },
-        error
+        error,
       })
       throw error
     }

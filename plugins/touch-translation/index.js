@@ -8,7 +8,7 @@ const {
   URLSearchParams,
   TuffItemBuilder,
   $box,
-  storage
+  storage,
 } = globalThis
 
 const crypto = require('node:crypto')
@@ -47,7 +47,7 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
       sl: from,
       tl: to,
       dt: 't',
-      q: text
+      q: text,
     })
 
     const url = `https://translate.googleapis.com/translate_a/single?${params.toString()}`
@@ -56,8 +56,8 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
       signal,
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
     })
 
     const data = response.data || response
@@ -68,8 +68,9 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
 
     let translatedText = ''
     if (Array.isArray(data[0])) {
-      translatedText = data[0].map((item) => (item && item[0] ? item[0] : '')).join('')
-    } else {
+      translatedText = data[0].map(item => (item && item[0] ? item[0] : '')).join('')
+    }
+    else {
       translatedText = data[0] || text
     }
 
@@ -79,16 +80,17 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
       text: translatedText.trim() || text,
       from: detectedLang,
       to,
-      service: 'google'
+      service: 'google',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Google Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'google',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -103,7 +105,7 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
  */
 async function translateWithDeepL(text, from = 'auto', to = 'zh', apiKey, signal) {
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   }
   if (apiKey) {
     headers.Authorization = `DeepL-Auth-Key ${apiKey}`
@@ -115,12 +117,12 @@ async function translateWithDeepL(text, from = 'auto', to = 'zh', apiKey, signal
       {
         text: [text],
         source_lang: from === 'auto' ? undefined : from.toUpperCase(),
-        target_lang: to.toUpperCase()
+        target_lang: to.toUpperCase(),
       },
       {
         signal,
-        headers
-      }
+        headers,
+      },
     )
 
     const data = response.data
@@ -132,16 +134,17 @@ async function translateWithDeepL(text, from = 'auto', to = 'zh', apiKey, signal
       text: data.translations[0].text,
       from: data.translations[0].detected_source_language,
       to,
-      service: 'deepl'
+      service: 'deepl',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('DeepL Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'deepl',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -162,13 +165,13 @@ async function translateWithBing(text, from = 'auto', to = 'zh', apiKey, region,
       from,
       to,
       service: 'bing',
-      error: 'API Key is missing.'
+      error: 'API Key is missing.',
     }
   }
 
   const params = new URLSearchParams({
     'api-version': '3.0',
-    to
+    to,
   })
 
   if (from !== 'auto') {
@@ -184,9 +187,9 @@ async function translateWithBing(text, from = 'auto', to = 'zh', apiKey, region,
         headers: {
           'Ocp-Apim-Subscription-Key': apiKey,
           'Ocp-Apim-Subscription-Region': region,
-          'Content-Type': 'application/json'
-        }
-      }
+          'Content-Type': 'application/json',
+        },
+      },
     )
 
     const data = response.data
@@ -200,16 +203,17 @@ async function translateWithBing(text, from = 'auto', to = 'zh', apiKey, region,
       text: translation.text,
       from: data[0]?.detectedLanguage?.language || from,
       to,
-      service: 'bing'
+      service: 'bing',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Bing Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'bing',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -230,7 +234,7 @@ async function translateWithBaidu(text, from = 'auto', to = 'zh', appId, appKey,
       from,
       to,
       service: 'baidu',
-      error: 'App ID or App Key is missing.'
+      error: 'App ID or App Key is missing.',
     }
   }
 
@@ -242,15 +246,15 @@ async function translateWithBaidu(text, from = 'auto', to = 'zh', appId, appKey,
     to,
     appid: appId,
     salt,
-    sign
+    sign,
   })
 
   try {
     const response = await http.get(
       `https://api.fanyi.baidu.com/api/trans/vip/translate?${params.toString()}`,
       {
-        signal
-      }
+        signal,
+      },
     )
 
     const data = response.data
@@ -263,16 +267,17 @@ async function translateWithBaidu(text, from = 'auto', to = 'zh', appId, appKey,
       text: translation.dst,
       from: translation.from,
       to: translation.to,
-      service: 'baidu'
+      service: 'baidu',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Baidu Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'baidu',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -293,7 +298,7 @@ async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, se
       from,
       to,
       service: 'tencent',
-      error: 'Secret ID or Secret Key is missing.'
+      error: 'Secret ID or Secret Key is missing.',
     }
   }
 
@@ -308,7 +313,7 @@ async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, se
     SourceText: text,
     Source: from,
     Target: to,
-    ProjectId: 0
+    ProjectId: 0,
   })
 
   // 1. Create canonical request
@@ -340,20 +345,20 @@ async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, se
     const response = await http.post(`https://${host}`, payload, {
       signal,
       headers: {
-        Authorization: authorization,
+        'Authorization': authorization,
         'Content-Type': 'application/json',
-        Host: host,
+        'Host': host,
         'X-TC-Action': action,
         'X-TC-Timestamp': timestamp.toString(),
         'X-TC-Version': version,
-        'X-TC-Region': region
-      }
+        'X-TC-Region': region,
+      },
     })
 
     const data = response.data
     if (data.Response.Error) {
       throw new Error(
-        `Tencent API Error: ${data.Response.Error.Message} (code: ${data.Response.Error.Code})`
+        `Tencent API Error: ${data.Response.Error.Message} (code: ${data.Response.Error.Code})`,
       )
     }
 
@@ -361,16 +366,17 @@ async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, se
       text: data.Response.TargetText,
       from: data.Response.Source,
       to: data.Response.Target,
-      service: 'tencent'
+      service: 'tencent',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Tencent Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'tencent',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -385,7 +391,7 @@ async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, se
  */
 async function translateWithCaiyun(text, from = 'auto', to = 'zh', token, signal) {
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   }
   if (token) {
     headers['x-authorization'] = `token ${token}`
@@ -401,12 +407,12 @@ async function translateWithCaiyun(text, from = 'auto', to = 'zh', token, signal
         source,
         trans_type: transType,
         request_id: 'touch_plugin',
-        detect: from === 'auto'
+        detect: from === 'auto',
       },
       {
         signal,
-        headers
-      }
+        headers,
+      },
     )
 
     const data = response.data
@@ -418,16 +424,17 @@ async function translateWithCaiyun(text, from = 'auto', to = 'zh', token, signal
       text: data.target[0],
       from,
       to,
-      service: 'caiyun'
+      service: 'caiyun',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Caiyun Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'caiyun',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -447,7 +454,7 @@ async function translateWithCustom(text, from = 'auto', to = 'zh', config, signa
       from,
       to,
       service: 'custom',
-      error: 'URL is missing in Custom provider config.'
+      error: 'URL is missing in Custom provider config.',
     }
   }
 
@@ -462,14 +469,14 @@ async function translateWithCustom(text, from = 'auto', to = 'zh', config, signa
       JSON.stringify(config.headers || {})
         .replace('{{text}}', text)
         .replace('{{from}}', from)
-        .replace('{{to}}', to)
+        .replace('{{to}}', to),
     )
 
     const body = JSON.parse(
       JSON.stringify(config.body || {})
         .replace('{{text}}', text)
         .replace('{{from}}', from)
-        .replace('{{to}}', to)
+        .replace('{{to}}', to),
     )
 
     const response = await http.post(url, body, { signal, headers })
@@ -487,16 +494,17 @@ async function translateWithCustom(text, from = 'auto', to = 'zh', config, signa
       text: translatedText,
       from,
       to,
-      service: 'custom'
+      service: 'custom',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('Custom Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'custom',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -512,15 +520,15 @@ async function translateWithMyMemory(text, from = 'auto', to = 'zh', signal) {
   const langPair = `${from}|${to}`
   const params = new URLSearchParams({
     q: text,
-    langpair: langPair
+    langpair: langPair,
   })
 
   try {
     const response = await http.get(
       `https://api.mymemory.translated.net/get?${params.toString()}`,
       {
-        signal
-      }
+        signal,
+      },
     )
 
     const data = response.data
@@ -532,16 +540,17 @@ async function translateWithMyMemory(text, from = 'auto', to = 'zh', signal) {
       text: data.responseData.translatedText,
       from,
       to,
-      service: 'mymemory'
+      service: 'mymemory',
     }
-  } catch (error) {
+  }
+  catch (error) {
     logger.error('MyMemory Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
       to,
       service: 'mymemory',
-      error: error.message
+      error: error.message,
     }
   }
 }
@@ -572,7 +581,7 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
       translatedText,
       fromLang: from,
       toLang: to,
-      serviceName: service
+      serviceName: service,
     })
     .build()
 }
@@ -597,7 +606,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
     // Fallback to old behavior if no config is found
     const result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
     const searchItem = createTranslationSearchItem(textToTranslate, result, featureId)
-    logger.debug('[touch-translation] pushItems fallback meta ' + JSON.stringify(searchItem.meta))
+    logger.debug(`[touch-translation] pushItems fallback meta ${JSON.stringify(searchItem.meta)}`)
     pushItems([searchItem])
     return
   }
@@ -627,7 +636,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
           'auto',
           targetLang,
           provider.config?.apiKey,
-          signal
+          signal,
         )
       case 'bing':
         if (!provider.config?.apiKey) {
@@ -636,7 +645,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
             from: 'plugin',
             to: 'config',
             service: 'bing',
-            error: 'API Key is missing.'
+            error: 'API Key is missing.',
           })
         }
         return translateWithBing(
@@ -645,7 +654,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
           targetLang,
           provider.config.apiKey,
           provider.config.region,
-          signal
+          signal,
         )
       case 'baidu':
         if (!provider.config?.appId || !provider.config?.appKey) {
@@ -654,7 +663,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
             from: 'plugin',
             to: 'config',
             service: 'baidu',
-            error: 'App ID or App Key is missing.'
+            error: 'App ID or App Key is missing.',
           })
         }
         return translateWithBaidu(
@@ -663,7 +672,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
           targetLang,
           provider.config.appId,
           provider.config.appKey,
-          signal
+          signal,
         )
       case 'tencent':
         if (!provider.config?.secretId || !provider.config?.secretKey) {
@@ -672,7 +681,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
             from: 'plugin',
             to: 'config',
             service: 'tencent',
-            error: 'Secret ID or Secret Key is missing.'
+            error: 'Secret ID or Secret Key is missing.',
           })
         }
         return translateWithTencent(
@@ -681,7 +690,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
           targetLang,
           provider.config.secretId,
           provider.config.secretKey,
-          signal
+          signal,
         )
       case 'caiyun':
         return translateWithCaiyun(
@@ -689,7 +698,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
           'auto',
           targetLang,
           provider.config?.token,
-          signal
+          signal,
         )
       case 'custom':
         if (!provider.config) {
@@ -698,7 +707,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
             from: 'plugin',
             to: 'config',
             service: 'custom',
-            error: 'Configuration is missing.'
+            error: 'Configuration is missing.',
           })
         }
         return translateWithCustom(textToTranslate, 'auto', targetLang, provider.config, signal)
@@ -713,17 +722,18 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
   const results = await Promise.allSettled(translationPromises)
 
   const searchItems = results
-    .filter((result) => result.status === 'fulfilled' && result.value)
-    .map((result) => createTranslationSearchItem(textToTranslate, result.value, featureId))
+    .filter(result => result.status === 'fulfilled' && result.value)
+    .map(result => createTranslationSearchItem(textToTranslate, result.value, featureId))
 
   logger.debug(
-    '[touch-translation] built search items meta ' +
-      JSON.stringify(searchItems.map((item) => item.meta))
+    `[touch-translation] built search items meta ${
+      JSON.stringify(searchItems.map(item => item.meta))}`,
   )
 
   if (searchItems.length > 0) {
     pushItems(searchItems)
-  } else {
+  }
+  else {
     const errorItem = new TuffItemBuilder('translation-error')
       .setTitle('All translations failed')
       .setSubtitle('Check logs for more details.')
@@ -750,7 +760,8 @@ const pluginLifecycle = {
         logger.debug('[touch-translation] Storage files:', storage.listFiles())
         await translateAndPushResults(queryText.trim(), featureId, signal)
       }
-    } catch (error) {
+    }
+    catch (error) {
       logger.error('Error processing translation feature:', error)
     }
   },
@@ -761,7 +772,7 @@ const pluginLifecycle = {
   async onItemAction(item) {
     if (item.meta?.defaultAction === 'copy') {
       // Find the action with type 'copy' from the actions array
-      const copyAction = item.actions.find((action) => action.type === 'copy')
+      const copyAction = item.actions.find(action => action.type === 'copy')
       if (copyAction && copyAction.payload) {
         clipboard.writeText(copyAction.payload)
         logger.log('Copied to clipboard:', copyAction.payload)
@@ -770,11 +781,12 @@ const pluginLifecycle = {
         if (!isFeatureExecution) {
           $box.hide()
         }
-      } else {
+      }
+      else {
         logger.warn('No copy action or payload found for item:', item)
       }
     }
-  }
+  },
 }
 
 module.exports = pluginLifecycle

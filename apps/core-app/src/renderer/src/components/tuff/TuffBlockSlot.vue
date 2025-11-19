@@ -1,6 +1,6 @@
 <script lang="ts" name="TuffBlockSlot" setup>
-import { computed } from 'vue'
 import type { ITuffIcon } from '@talex-touch/utils'
+import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 
 type IconValue = ITuffIcon | string | null | undefined
@@ -20,8 +20,8 @@ const props = withDefaults(
     description: '',
     iconSize: 20,
     disabled: false,
-    active: false
-  }
+    active: false,
+  },
 )
 
 const emits = defineEmits<{
@@ -29,11 +29,12 @@ const emits = defineEmits<{
 }>()
 
 function toIcon(icon?: IconValue): ITuffIcon | null {
-  if (!icon) return null
+  if (!icon)
+    return null
   if (typeof icon === 'string') {
     return {
       type: 'class',
-      value: icon
+      value: icon,
     }
   }
   return icon
@@ -50,7 +51,8 @@ const currentIcon = computed(() => {
 })
 
 function handleClick(event: MouseEvent) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emits('click', event)
 }
 </script>
@@ -74,7 +76,9 @@ function handleClick(event: MouseEvent) {
         </template>
         <template v-else>
           <div class="TBlockSlot-TitleRow">
-            <h5 class="text-sm">{{ title }}</h5>
+            <h5 class="text-sm">
+              {{ title }}
+            </h5>
             <div v-if="$slots.tags" class="TBlockSlot-Tags">
               <slot name="tags" />
             </div>

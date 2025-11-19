@@ -1,3 +1,86 @@
+<script lang="ts" name="IntelligenceGlobalSettings" setup>
+import type { AISDKGlobalConfig } from '@talex-touch/utils/types/intelligence'
+import { getCurrentInstance, ref, watch } from 'vue'
+import TSelectItem from '~/components/base/select/TSelectItem.vue'
+import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+
+const props = defineProps<{
+  modelValue: AISDKGlobalConfig
+}>()
+
+const emits = defineEmits<{
+  'update:modelValue': [value: AISDKGlobalConfig]
+  'change': []
+}>()
+
+const instance = getCurrentInstance()
+const t = (key: string) => instance?.proxy?.$t(key) || key
+
+const localEnableAudit = ref(props.modelValue.enableAudit)
+const localEnableCache = ref(props.modelValue.enableCache)
+const localCacheExpiration = ref(props.modelValue.cacheExpiration || 3600)
+
+// Watch for external changes
+watch(
+  () => props.modelValue.enableAudit,
+  (newValue) => {
+    localEnableAudit.value = newValue
+  },
+)
+
+watch(
+  () => props.modelValue.enableCache,
+  (newValue) => {
+    localEnableCache.value = newValue
+  },
+)
+
+watch(
+  () => props.modelValue.cacheExpiration,
+  (newValue) => {
+    localCacheExpiration.value = newValue || 3600
+  },
+)
+
+function handleAuditChange() {
+  const updated: AISDKGlobalConfig = {
+    ...props.modelValue,
+    enableAudit: localEnableAudit.value,
+  }
+  emits('update:modelValue', updated)
+  emits('change')
+}
+
+function handleCacheChange() {
+  const updated: AISDKGlobalConfig = {
+    ...props.modelValue,
+    enableCache: localEnableCache.value,
+  }
+
+  // If disabling cache, remove cacheExpiration
+  if (!localEnableCache.value) {
+    delete updated.cacheExpiration
+  }
+  else {
+    // If enabling cache, set default expiration if not set
+    updated.cacheExpiration = localCacheExpiration.value
+  }
+
+  emits('update:modelValue', updated)
+  emits('change')
+}
+
+function handleCacheExpirationChange() {
+  const updated: AISDKGlobalConfig = {
+    ...props.modelValue,
+    cacheExpiration: localCacheExpiration.value,
+  }
+  emits('update:modelValue', updated)
+  emits('change')
+}
+</script>
+
 <template>
   <div class="aisdk-global-settings">
     <!-- Enable Audit Logging -->
@@ -65,88 +148,6 @@
     </Transition>
   </div>
 </template>
-
-<script lang="ts" name="IntelligenceGlobalSettings" setup>
-import { ref, watch, getCurrentInstance } from 'vue'
-import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
-import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
-import type { AISDKGlobalConfig } from '@talex-touch/utils/types/intelligence'
-
-const props = defineProps<{
-  modelValue: AISDKGlobalConfig
-}>()
-
-const emits = defineEmits<{
-  'update:modelValue': [value: AISDKGlobalConfig]
-  change: []
-}>()
-
-const instance = getCurrentInstance()
-const t = (key: string) => instance?.proxy?.$t(key) || key
-
-const localEnableAudit = ref(props.modelValue.enableAudit)
-const localEnableCache = ref(props.modelValue.enableCache)
-const localCacheExpiration = ref(props.modelValue.cacheExpiration || 3600)
-
-// Watch for external changes
-watch(
-  () => props.modelValue.enableAudit,
-  (newValue) => {
-    localEnableAudit.value = newValue
-  }
-)
-
-watch(
-  () => props.modelValue.enableCache,
-  (newValue) => {
-    localEnableCache.value = newValue
-  }
-)
-
-watch(
-  () => props.modelValue.cacheExpiration,
-  (newValue) => {
-    localCacheExpiration.value = newValue || 3600
-  }
-)
-
-function handleAuditChange() {
-  const updated: AISDKGlobalConfig = {
-    ...props.modelValue,
-    enableAudit: localEnableAudit.value
-  }
-  emits('update:modelValue', updated)
-  emits('change')
-}
-
-function handleCacheChange() {
-  const updated: AISDKGlobalConfig = {
-    ...props.modelValue,
-    enableCache: localEnableCache.value
-  }
-  
-  // If disabling cache, remove cacheExpiration
-  if (!localEnableCache.value) {
-    delete updated.cacheExpiration
-  } else {
-    // If enabling cache, set default expiration if not set
-    updated.cacheExpiration = localCacheExpiration.value
-  }
-  
-  emits('update:modelValue', updated)
-  emits('change')
-}
-
-function handleCacheExpirationChange() {
-  const updated: AISDKGlobalConfig = {
-    ...props.modelValue,
-    cacheExpiration: localCacheExpiration.value
-  }
-  emits('update:modelValue', updated)
-  emits('change')
-}
-</script>
 
 <style lang="scss" scoped>
 .fade-enter-active,

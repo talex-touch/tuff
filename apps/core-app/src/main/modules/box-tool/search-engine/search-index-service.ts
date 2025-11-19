@@ -1,12 +1,12 @@
-import { sql, eq } from 'drizzle-orm'
-import { searchLogger } from './search-logger'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
+import { performance } from 'node:perf_hooks'
+import { eq, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
-import { performance } from 'perf_hooks'
+import { searchLogger } from './search-logger'
 
-const CHINESE_CHAR_REGEX = /[\u4e00-\u9fa5]/
-const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4e00-\u9fa5]+/i
+const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
+const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]+/i
 const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
 
@@ -50,11 +50,12 @@ export class SearchIndexService {
   constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
 
   async indexItems(items: SearchIndexItem[]): Promise<void> {
-    if (items.length === 0) return
+    if (items.length === 0)
+      return
     const start = performance.now()
     await this.ensureInitialized()
 
-    const preparedDocs = await Promise.all(items.map((item) => this.prepareDocument(item)))
+    const preparedDocs = await Promise.all(items.map(item => this.prepareDocument(item)))
 
     await this.db.transaction(async (tx) => {
       for (const doc of preparedDocs) {
@@ -63,13 +64,14 @@ export class SearchIndexService {
     })
     console.debug(
       `[SearchIndexService] Indexed ${items.length} items in ${(performance.now() - start).toFixed(
-        0
-      )}ms`
+        0,
+      )}ms`,
     )
   }
 
   async removeItems(itemIds: string[]): Promise<void> {
-    if (itemIds.length === 0) return
+    if (itemIds.length === 0)
+      return
     const start = performance.now()
     await this.ensureInitialized()
 
@@ -82,31 +84,32 @@ export class SearchIndexService {
     console.debug(
       `[SearchIndexService] Removed ${itemIds.length} items in ${(
         performance.now() - start
-      ).toFixed(0)}ms`
+      ).toFixed(0)}ms`,
     )
   }
 
   async removeByProvider(providerId: string): Promise<void> {
     await this.ensureInitialized()
     const rows = await this.db.all<{ item_id: string }>(
-      sql`SELECT item_id FROM search_index WHERE provider = ${providerId}`
+      sql`SELECT item_id FROM search_index WHERE provider = ${providerId}`,
     )
-    const itemIds = rows.map((row) => row.item_id)
-    if (itemIds.length === 0) return
+    const itemIds = rows.map(row => row.item_id)
+    if (itemIds.length === 0)
+      return
     const start = performance.now()
     await this.removeItems(itemIds)
     console.debug(
       `[SearchIndexService] removeByProvider(${providerId}) removed ${itemIds.length} items in ${(
         performance.now() - start
-      ).toFixed(0)}ms`
+      ).toFixed(0)}ms`,
     )
   }
 
   async search(
     providerId: string,
     ftsQuery: string,
-    limit = 50
-  ): Promise<Array<{ itemId: string; score: number }>> {
+    limit = 50,
+  ): Promise<Array<{ itemId: string, score: number }>> {
     searchLogger.logSearchPhase('FTS Search', `Provider: ${providerId}, Query: "${ftsQuery}"`)
     searchLogger.indexSearchStart(providerId, ftsQuery, limit)
     const start = performance.now()
@@ -118,22 +121,23 @@ export class SearchIndexService {
     }
 
     searchLogger.indexSearchExecuting()
-    const rows = await this.db.all<{ item_id: string; score: number }>(
-      sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${trimmed} ORDER BY score LIMIT ${limit}`
+    const rows = await this.db.all<{ item_id: string, score: number }>(
+      sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${trimmed} ORDER BY score LIMIT ${limit}`,
     )
 
-    const results = rows.map((row) => ({ itemId: row.item_id, score: row.score }))
+    const results = rows.map(row => ({ itemId: row.item_id, score: row.score }))
     searchLogger.indexSearchComplete(results.length, performance.now() - start)
     console.debug(
       `[SearchIndexService] search(provider=${providerId}, limit=${limit}) returned ${results.length} matches in ${(
         performance.now() - start
-      ).toFixed(0)}ms`
+      ).toFixed(0)}ms`,
     )
     return results
   }
 
   private async ensureInitialized(): Promise<void> {
-    if (this.initialized) return
+    if (this.initialized)
+      return
     const initStart = performance.now()
     await this.createSearchIndexTable()
     await this.createFileFtsTable()
@@ -141,8 +145,8 @@ export class SearchIndexService {
     this.initialized = true
     console.log(
       `[SearchIndexService] Initialization completed in ${(performance.now() - initStart).toFixed(
-        0
-      )}ms`
+        0,
+      )}ms`,
     )
   }
 
@@ -172,7 +176,7 @@ export class SearchIndexService {
 
   private async applyDocument(
     tx: LibSQLTransaction<typeof schema, any>,
-    doc: PreparedIndexDocument
+    doc: PreparedIndexDocument,
   ): Promise<void> {
     await tx.run(sql`DELETE FROM search_index WHERE item_id = ${doc.itemId}`)
 
@@ -208,8 +212,8 @@ export class SearchIndexService {
           keyword: value,
           itemId: doc.itemId,
           providerId: doc.providerId,
-          priority: priority ?? 1
-        }))
+          priority: priority ?? 1,
+        })),
       )
     }
   }
@@ -240,9 +244,12 @@ export class SearchIndexService {
     if (CHINESE_CHAR_REGEX.test(titleSource)) {
       // 中文：生成完整拼音和首字母
       const { full, first } = await this.generatePinyin(titleSource)
-      if (full) this.appendKeyword(keywordMap, full, 1.15)
-      if (first) this.appendKeyword(keywordMap, first, 1.2)
-    } else {
+      if (full)
+        this.appendKeyword(keywordMap, full, 1.15)
+      if (first)
+        this.appendKeyword(keywordMap, first, 1.2)
+    }
+    else {
       // 英文：生成首字母缩写作为拼音（如果还没有生成过）
       // 这样可以支持通过拼音首字母搜索英文文件名
       // 例如 "My Document" 可以通过 "md" 搜索到
@@ -282,7 +289,8 @@ export class SearchIndexService {
       for (const alias of item.aliases) {
         const { value, priority } = alias
         const normalized = value.trim().toLowerCase()
-        if (!normalized) continue
+        if (!normalized)
+          continue
         this.appendKeyword(keywordMap, normalized, priority ?? 1.4)
       }
     }
@@ -291,7 +299,8 @@ export class SearchIndexService {
       for (const keyword of item.keywords) {
         const { value, priority } = keyword
         const normalized = value.trim().toLowerCase()
-        if (!normalized) continue
+        if (!normalized)
+          continue
         this.appendKeyword(keywordMap, normalized, priority ?? 1.1)
       }
     }
@@ -300,8 +309,8 @@ export class SearchIndexService {
       .map(([value, priority]) => ({ value, priority }))
       .filter(({ value }) => this.isKeywordValid(value))
 
-    const tags = (item.tags || []).map((tag) => tag.toLowerCase()).join(' ')
-    const keywordField = keywordEntries.map((entry) => entry.value).join(' ')
+    const tags = (item.tags || []).map(tag => tag.toLowerCase()).join(' ')
+    const keywordField = keywordEntries.map(entry => entry.value).join(' ')
 
     return {
       itemId: item.itemId,
@@ -313,13 +322,14 @@ export class SearchIndexService {
       tags,
       path: item.path?.toLowerCase() ?? '',
       content: item.content?.toLowerCase() ?? '',
-      keywordEntries
+      keywordEntries,
     }
   }
 
   private appendKeyword(store: Map<string, number>, keyword: string, priority: number): void {
     const normalized = keyword.trim().toLowerCase()
-    if (!normalized) return
+    if (!normalized)
+      return
     const existing = store.get(normalized) ?? 0
     if (priority > existing) {
       store.set(normalized, priority)
@@ -329,38 +339,41 @@ export class SearchIndexService {
   private splitWords(text: string): string[] {
     return text
       .split(WORD_SPLIT_REGEX)
-      .map((token) => token.trim())
-      .filter((token) => token.length > 1)
+      .map(token => token.trim())
+      .filter(token => token.length > 1)
   }
 
   private splitPath(path?: string): string[] {
-    if (!path) return []
+    if (!path)
+      return []
     return path
       .split(PATH_SPLIT_REGEX)
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 1)
+      .map(segment => segment.trim())
+      .filter(segment => segment.length > 1)
   }
 
   private generateAcronym(text: string): string {
     const words = text
       .split(WORD_SPLIT_REGEX)
-      .map((word) => word.trim())
-      .filter((word) => word.length > 0)
+      .map(word => word.trim())
+      .filter(word => word.length > 0)
 
-    if (words.length <= 1) return ''
+    if (words.length <= 1)
+      return ''
 
-    return words.map((word) => word.charAt(0).toLowerCase()).join('')
+    return words.map(word => word.charAt(0).toLowerCase()).join('')
   }
 
   private isKeywordValid(keyword: string): boolean {
-    if (keyword.length === 0) return false
+    if (keyword.length === 0)
+      return false
     if (keyword.length === 1) {
-      return /[a-z0-9\u4e00-\u9fa5]/.test(keyword)
+      return /[a-z0-9\u4E00-\u9FA5]/.test(keyword)
     }
     return !INVALID_KEYWORD_REGEX.test(keyword)
   }
 
-  private async generatePinyin(text: string): Promise<{ full: string; first: string }> {
+  private async generatePinyin(text: string): Promise<{ full: string, first: string }> {
     const module = await this.loadPinyinModule()
     const full = module.pinyin(text, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
     const first = module
@@ -372,7 +385,8 @@ export class SearchIndexService {
   }
 
   private async loadPinyinModule(): Promise<typeof import('pinyin-pro')> {
-    if (this.pinyinModule) return this.pinyinModule
+    if (this.pinyinModule)
+      return this.pinyinModule
     if (!this.pinyinPromise) {
       const start = performance.now()
       this.pinyinPromise = import('pinyin-pro')
@@ -380,8 +394,8 @@ export class SearchIndexService {
         .then(() => {
           console.log(
             `[SearchIndexService] pinyin-pro module loaded in ${(performance.now() - start).toFixed(
-              0
-            )}ms`
+              0,
+            )}ms`,
           )
         })
         .catch(() => {

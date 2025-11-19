@@ -1,7 +1,7 @@
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
-import zhCN from './zh-CN.json'
 import enUS from './en-US.json'
+import zhCN from './zh-CN.json'
 
 /**
  * Setup i18n instance with provided options
@@ -12,7 +12,7 @@ export async function setupI18n(options: { locale: string } = { locale: 'en-US' 
   const i18n = createI18n({
     legacy: false,
     locale: options.locale,
-    messages: {}
+    messages: {},
   })
 
   await loadLocaleMessages(i18n, options.locale)
@@ -29,7 +29,8 @@ export async function setupI18n(options: { locale: string } = { locale: 'en-US' 
 export function setI18nLanguage(i18n: any, locale: string): void {
   if (i18n.mode === 'legacy') {
     i18n.global.locale = locale
-  } else {
+  }
+  else {
     i18n.global.locale.value = locale
   }
 
@@ -45,7 +46,7 @@ export function setI18nLanguage(i18n: any, locale: string): void {
 
 const localeMessages: Record<string, any> = {
   'zh-CN': zhCN,
-  'en-US': enUS
+  'en-US': enUS,
 }
 
 /**
@@ -56,13 +57,14 @@ const localeMessages: Record<string, any> = {
  */
 export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
   let messages: any
-  
+
   try {
     messages = localeMessages[locale]
     if (!messages) {
       throw new Error(`Locale "${locale}" not found`)
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error(`[loadLocaleMessages] Failed to load locale "${locale}":`, error)
     try {
       const fallbackLocale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'
@@ -71,7 +73,8 @@ export async function loadLocaleMessages(i18n: any, locale: string): Promise<voi
         throw new Error(`Fallback locale "${fallbackLocale}" not found`)
       }
       console.warn(`[loadLocaleMessages] Fallback to "${fallbackLocale}"`)
-    } catch (fallbackError) {
+    }
+    catch (fallbackError) {
       console.error(`[loadLocaleMessages] Fallback locale also failed:`, fallbackError)
       throw error
     }
@@ -79,17 +82,21 @@ export async function loadLocaleMessages(i18n: any, locale: string): Promise<voi
 
   if (typeof i18n.global.setLocaleMessage === 'function') {
     i18n.global.setLocaleMessage(locale, messages)
-  } else if (i18n.global.messages) {
+  }
+  else if (i18n.global.messages) {
     // Handle both reactive and non-reactive messages
     if (typeof i18n.global.messages.value === 'object') {
       i18n.global.messages.value[locale] = messages
-    } else if (typeof i18n.global.messages === 'object') {
+    }
+    else if (typeof i18n.global.messages === 'object') {
       i18n.global.messages[locale] = messages
-    } else {
+    }
+    else {
       // Fallback: directly set messages
       ;(i18n.global as any).messages = { [locale]: messages }
     }
-  } else {
+  }
+  else {
     // Direct fallback
     ;(i18n.global as any).messages = { [locale]: messages }
   }

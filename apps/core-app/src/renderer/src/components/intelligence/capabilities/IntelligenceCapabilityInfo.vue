@@ -1,3 +1,296 @@
+<script lang="ts" name="IntelligenceCapabilityInfo" setup>
+import type {
+  AiCapabilityProviderBinding,
+  AiProviderConfig,
+  AISDKCapabilityConfig,
+} from '@talex-touch/utils/types/intelligence'
+import type { CapabilityBinding, CapabilityTestResult } from './types'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import CapabilityHeader from './CapabilityHeader.vue'
+import CapabilityModelTransfer from './CapabilityModelTransfer.vue'
+import CapabilityOverview from './CapabilityOverview.vue'
+import ProviderList from './ProviderList.vue'
+import TestSection from './TestSection.vue'
+
+const props = defineProps<{
+  capability: AISDKCapabilityConfig
+  providers: AiProviderConfig[]
+  bindings: CapabilityBinding[]
+  isTesting: boolean
+  testResult?: CapabilityTestResult | null
+}>()
+
+const emits = defineEmits<{
+  toggleProvider: [providerId: string, enabled: boolean]
+  updateModels: [providerId: string, value: string[]]
+  updatePrompt: [prompt: string]
+  test: []
+  reorderProviders: [bindings: AiCapabilityProviderBinding[]]
+}>()
+
+const { t } = useI18n()
+
+const promptValue = ref(props.capability.promptTemplate || '')
+const focusedProviderId = ref<string>('')
+const showModelDrawer = ref(false)
+const showPromptDrawer = ref(false)
+let promptTimer: ReturnType<typeof setTimeout> | null = null
+let syncingFromProps = false
+
+const providerMetaMap = computed(
+  () => new Map(props.providers.map(provider => [provider.id, provider])),
+)
+
+const selectedProviderIds = computed(() => {
+  return new Set(
+    (props.capability.providers || [])
+      .filter(binding => binding.enabled !== false)
+      .map(binding => binding.providerId),
+  )
+})
+
+const activeBindingCount = computed(() => selectedProviderIds.value.size)
+
+const totalModelsCount = computed(() => {
+  return (props.capability.providers || [])
+    .filter(binding => binding.enabled !== false)
+    .reduce((sum, binding) => sum + (binding.models?.length || 0), 0)
+})
+
+const bindingMap = computed(() => {
+  const map = new Map<string, CapabilityBinding>()
+  props.bindings.forEach((binding) => {
+    map.set(binding.providerId, binding)
+  })
+  return map
+})
+
+const enabledBindings = computed<CapabilityBinding[]>(() => {
+  return (props.capability.providers || [])
+    .filter(binding => binding.enabled !== false)
+    .slice()
+    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+    .map(binding => ({
+      ...binding,
+      provider: providerMetaMap.value.get(binding.providerId),
+    }))
+})
+
+const disabledProviders = computed<CapabilityBinding[]>(() => {
+  const enabledIds = new Set(enabledBindings.value.map(binding => binding.providerId))
+  const disabledSet = new Set<string>()
+  const leftover = (props.capability.providers || [])
+    .filter(binding => binding.enabled === false)
+    .map((binding) => {
+      disabledSet.add(binding.providerId)
+      return {
+        ...binding,
+        provider: providerMetaMap.value.get(binding.providerId),
+      }
+    })
+
+  const remaining = props.providers
+    .filter(provider => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
+    .map(provider => ({
+      providerId: provider.id,
+      enabled: false,
+      priority: undefined,
+      provider,
+    }))
+
+  return [...leftover, ...remaining]
+})
+
+const focusedProvider = computed(
+  () => props.providers.find(provider => provider.id === focusedProviderId.value) || null,
+)
+
+const focusedBinding = computed(() => {
+  if (!focusedProviderId.value)
+    return null
+  return bindingMap.value.get(focusedProviderId.value) ?? null
+})
+
+const canEditModels = computed(() => {
+  return !!focusedProvider.value && selectedProviderIds.value.has(focusedProviderId.value)
+})
+
+const modelSummary = computed(() => {
+  if (!focusedProvider.value) {
+    return t('settings.intelligence.selectProviderHint')
+  }
+
+  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
+    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
+    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
+      ? '开启渠道后再配置模型'
+      : hint
+  }
+
+  const count = focusedBinding.value?.models?.length ?? 0
+  if (count === 0) {
+    return t('settings.intelligence.capabilityBindingModelsDesc')
+  }
+
+  return t('settings.intelligence.capabilityBindingsStat', { count })
+})
+
+const promptSummary = computed(() => {
+  const trimmed = (promptValue.value || '').trim()
+  if (!trimmed) {
+    return t('settings.intelligence.capabilityPromptSectionDesc')
+  }
+
+  const singleLine = trimmed.replace(/\s+/g, ' ')
+  return singleLine.length > 100 ? `${singleLine.slice(0, 97)}...` : singleLine
+})
+
+const modelTransferDescription = computed(() => {
+  if (!focusedProvider.value) {
+    return t('settings.intelligence.capabilityBindingModelsDesc')
+  }
+  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
+    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
+    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
+      ? '开启渠道后再配置模型'
+      : hint
+  }
+  return t('settings.intelligence.capabilityBindingModelsDesc')
+})
+
+const testProviderName = computed(() => {
+  const firstBinding = enabledBindings.value[0]
+  if (!firstBinding)
+    return t('settings.intelligence.noProvider')
+  return firstBinding.provider?.name || firstBinding.providerId
+})
+
+const testModelName = computed(() => {
+  const firstBinding = enabledBindings.value[0]
+  if (!firstBinding || !firstBinding.models?.length)
+    return t('settings.intelligence.defaultModel')
+  return firstBinding.models[0]
+})
+
+watch(
+  () => props.capability.promptTemplate,
+  (value) => {
+    syncingFromProps = true
+    promptValue.value = value || ''
+    syncingFromProps = false
+  },
+)
+
+function flushPrompt(): void {
+  if (syncingFromProps)
+    return
+  emits('updatePrompt', promptValue.value)
+}
+
+function schedulePromptSync(): void {
+  if (syncingFromProps)
+    return
+  if (promptTimer) {
+    clearTimeout(promptTimer)
+  }
+  promptTimer = window.setTimeout(() => {
+    flushPrompt()
+    promptTimer = null
+  }, 800)
+}
+
+watch(promptValue, () => {
+  schedulePromptSync()
+})
+
+watch(
+  () => props.capability.id,
+  () => {
+    flushPrompt()
+  },
+)
+
+function handleProviderToggle(providerId: string, enabled: boolean): void {
+  emits('toggleProvider', providerId, enabled)
+  if (enabled) {
+    focusedProviderId.value = providerId
+  }
+}
+
+function handleProviderCardClick(providerId: string): void {
+  const currentlyEnabled = selectedProviderIds.value.has(providerId)
+  handleProviderToggle(providerId, !currentlyEnabled)
+  focusedProviderId.value = providerId
+}
+
+function emitProvidersOrder(bindings: CapabilityBinding[]): void {
+  const reordered = bindings.map((binding, index) => {
+    const { provider, ...rest } = binding
+    return {
+      ...rest,
+      priority: index + 1,
+    }
+  })
+  emits('reorderProviders', reordered)
+}
+
+function handleModelTransferUpdates(models: string[]): void {
+  if (!focusedProviderId.value)
+    return
+  emits('updateModels', focusedProviderId.value, models)
+}
+
+function openModelDrawer(): void {
+  if (!canEditModels.value)
+    return
+  showModelDrawer.value = true
+}
+
+function openPromptDrawer(): void {
+  showPromptDrawer.value = true
+}
+
+function handleTest(): void {
+  if (props.isTesting)
+    return
+  emits('test')
+}
+
+watch(
+  () => [props.providers, props.capability.id],
+  () => {
+    if (!props.providers.length) {
+      focusedProviderId.value = ''
+      return
+    }
+    if (
+      focusedProviderId.value
+      && props.providers.some(provider => provider.id === focusedProviderId.value)
+    ) {
+      return
+    }
+    const firstActive = props.capability.providers?.find(
+      binding => binding.enabled !== false,
+    )?.providerId
+    focusedProviderId.value = firstActive ?? props.providers[0].id
+  },
+  { immediate: true, deep: true },
+)
+
+onBeforeUnmount(() => {
+  if (promptTimer) {
+    clearTimeout(promptTimer)
+  }
+  flushPrompt()
+})
+</script>
+
 <template>
   <TouchScroll>
     <template #header>
@@ -123,291 +416,6 @@
   </TuffDrawer>
 </template>
 
-<script lang="ts" name="IntelligenceCapabilityInfo" setup>
-import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
-import CapabilityHeader from './CapabilityHeader.vue'
-import CapabilityOverview from './CapabilityOverview.vue'
-import ProviderList from './ProviderList.vue'
-import TestSection from './TestSection.vue'
-import CapabilityModelTransfer from './CapabilityModelTransfer.vue'
-import type {
-  AISDKCapabilityConfig,
-  AiProviderConfig,
-  AiCapabilityProviderBinding
-} from '@talex-touch/utils/types/intelligence'
-import type { CapabilityBinding, CapabilityTestResult } from './types'
-
-const props = defineProps<{
-  capability: AISDKCapabilityConfig
-  providers: AiProviderConfig[]
-  bindings: CapabilityBinding[]
-  isTesting: boolean
-  testResult?: CapabilityTestResult | null
-}>()
-
-const emits = defineEmits<{
-  toggleProvider: [providerId: string, enabled: boolean]
-  updateModels: [providerId: string, value: string[]]
-  updatePrompt: [prompt: string]
-  test: []
-  reorderProviders: [bindings: AiCapabilityProviderBinding[]]
-}>()
-
-const { t } = useI18n()
-
-const promptValue = ref(props.capability.promptTemplate || '')
-const focusedProviderId = ref<string>('')
-const showModelDrawer = ref(false)
-const showPromptDrawer = ref(false)
-let promptTimer: ReturnType<typeof setTimeout> | null = null
-let syncingFromProps = false
-
-const providerMetaMap = computed(
-  () => new Map(props.providers.map((provider) => [provider.id, provider]))
-)
-
-const selectedProviderIds = computed(() => {
-  return new Set(
-    (props.capability.providers || [])
-      .filter((binding) => binding.enabled !== false)
-      .map((binding) => binding.providerId)
-  )
-})
-
-const activeBindingCount = computed(() => selectedProviderIds.value.size)
-
-const totalModelsCount = computed(() => {
-  return (props.capability.providers || [])
-    .filter((binding) => binding.enabled !== false)
-    .reduce((sum, binding) => sum + (binding.models?.length || 0), 0)
-})
-
-const bindingMap = computed(() => {
-  const map = new Map<string, CapabilityBinding>()
-  props.bindings.forEach((binding) => {
-    map.set(binding.providerId, binding)
-  })
-  return map
-})
-
-const enabledBindings = computed<CapabilityBinding[]>(() => {
-  return (props.capability.providers || [])
-    .filter((binding) => binding.enabled !== false)
-    .slice()
-    .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-    .map((binding) => ({
-      ...binding,
-      provider: providerMetaMap.value.get(binding.providerId)
-    }))
-})
-
-const disabledProviders = computed<CapabilityBinding[]>(() => {
-  const enabledIds = new Set(enabledBindings.value.map((binding) => binding.providerId))
-  const disabledSet = new Set<string>()
-  const leftover = (props.capability.providers || [])
-    .filter((binding) => binding.enabled === false)
-    .map((binding) => {
-      disabledSet.add(binding.providerId)
-      return {
-        ...binding,
-        provider: providerMetaMap.value.get(binding.providerId)
-      }
-    })
-
-  const remaining = props.providers
-    .filter((provider) => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
-    .map((provider) => ({
-      providerId: provider.id,
-      enabled: false,
-      priority: undefined,
-      provider
-    }))
-
-  return [...leftover, ...remaining]
-})
-
-const focusedProvider = computed(
-  () => props.providers.find((provider) => provider.id === focusedProviderId.value) || null
-)
-
-const focusedBinding = computed(() => {
-  if (!focusedProviderId.value) return null
-  return bindingMap.value.get(focusedProviderId.value) ?? null
-})
-
-const canEditModels = computed(() => {
-  return !!focusedProvider.value && selectedProviderIds.value.has(focusedProviderId.value)
-})
-
-const modelSummary = computed(() => {
-  if (!focusedProvider.value) {
-    return t('settings.intelligence.selectProviderHint')
-  }
-
-  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
-    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
-      ? '开启渠道后再配置模型'
-      : hint
-  }
-
-  const count = focusedBinding.value?.models?.length ?? 0
-  if (count === 0) {
-    return t('settings.intelligence.capabilityBindingModelsDesc')
-  }
-
-  return t('settings.intelligence.capabilityBindingsStat', { count })
-})
-
-const promptSummary = computed(() => {
-  const trimmed = (promptValue.value || '').trim()
-  if (!trimmed) {
-    return t('settings.intelligence.capabilityPromptSectionDesc')
-  }
-
-  const singleLine = trimmed.replace(/\s+/g, ' ')
-  return singleLine.length > 100 ? `${singleLine.slice(0, 97)}...` : singleLine
-})
-
-const modelTransferDescription = computed(() => {
-  if (!focusedProvider.value) {
-    return t('settings.intelligence.capabilityBindingModelsDesc')
-  }
-  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
-    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
-      ? '开启渠道后再配置模型'
-      : hint
-  }
-  return t('settings.intelligence.capabilityBindingModelsDesc')
-})
-
-const testProviderName = computed(() => {
-  const firstBinding = enabledBindings.value[0]
-  if (!firstBinding) return t('settings.intelligence.noProvider')
-  return firstBinding.provider?.name || firstBinding.providerId
-})
-
-const testModelName = computed(() => {
-  const firstBinding = enabledBindings.value[0]
-  if (!firstBinding || !firstBinding.models?.length) return t('settings.intelligence.defaultModel')
-  return firstBinding.models[0]
-})
-
-watch(
-  () => props.capability.promptTemplate,
-  (value) => {
-    syncingFromProps = true
-    promptValue.value = value || ''
-    syncingFromProps = false
-  }
-)
-
-function flushPrompt(): void {
-  if (syncingFromProps) return
-  emits('updatePrompt', promptValue.value)
-}
-
-function schedulePromptSync(): void {
-  if (syncingFromProps) return
-  if (promptTimer) {
-    clearTimeout(promptTimer)
-  }
-  promptTimer = window.setTimeout(() => {
-    flushPrompt()
-    promptTimer = null
-  }, 800)
-}
-
-watch(promptValue, () => {
-  schedulePromptSync()
-})
-
-watch(
-  () => props.capability.id,
-  () => {
-    flushPrompt()
-  }
-)
-
-function handleProviderToggle(providerId: string, enabled: boolean): void {
-  emits('toggleProvider', providerId, enabled)
-  if (enabled) {
-    focusedProviderId.value = providerId
-  }
-}
-
-function handleProviderCardClick(providerId: string): void {
-  const currentlyEnabled = selectedProviderIds.value.has(providerId)
-  handleProviderToggle(providerId, !currentlyEnabled)
-  focusedProviderId.value = providerId
-}
-
-function emitProvidersOrder(bindings: CapabilityBinding[]): void {
-  const reordered = bindings.map((binding, index) => {
-    const { provider, ...rest } = binding
-    return {
-      ...rest,
-      priority: index + 1
-    }
-  })
-  emits('reorderProviders', reordered)
-}
-
-function handleModelTransferUpdates(models: string[]): void {
-  if (!focusedProviderId.value) return
-  emits('updateModels', focusedProviderId.value, models)
-}
-
-function openModelDrawer(): void {
-  if (!canEditModels.value) return
-  showModelDrawer.value = true
-}
-
-function openPromptDrawer(): void {
-  showPromptDrawer.value = true
-}
-
-function handleTest(): void {
-  if (props.isTesting) return
-  emits('test')
-}
-
-watch(
-  () => [props.providers, props.capability.id],
-  () => {
-    if (!props.providers.length) {
-      focusedProviderId.value = ''
-      return
-    }
-    if (
-      focusedProviderId.value &&
-      props.providers.some((provider) => provider.id === focusedProviderId.value)
-    ) {
-      return
-    }
-    const firstActive = props.capability.providers?.find(
-      (binding) => binding.enabled !== false
-    )?.providerId
-    focusedProviderId.value = firstActive ?? props.providers[0].id
-  },
-  { immediate: true, deep: true }
-)
-
-onBeforeUnmount(() => {
-  if (promptTimer) {
-    clearTimeout(promptTimer)
-  }
-  flushPrompt()
-})
-</script>
-
 <style lang="scss" scoped>
 .capability-info__config-section {
   margin: 1rem 0 0.5rem 0;
@@ -427,8 +435,6 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
   margin: 0;
 }
-
-
 
 .capability-info__drawer {
   display: flex;

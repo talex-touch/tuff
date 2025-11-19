@@ -1,15 +1,16 @@
 <script setup lang="ts" name="SettingUpdate">
+import type { UpdateSettings } from '@talex-touch/utils'
+import { AppPreviewChannel } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { AppPreviewChannel, type UpdateSettings } from '@talex-touch/utils'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
-import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
+import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
@@ -23,7 +24,7 @@ const {
   getUpdateSettings,
   updateSettings,
   clearUpdateCache,
-  getUpdateStatus
+  getUpdateStatus,
 } = useApplicationUpgrade()
 
 const settings = ref<UpdateSettings | null>(null)
@@ -44,10 +45,10 @@ const channelOptions = computed(() => {
   const base = [
     { value: AppPreviewChannel.RELEASE, label: t('settings.settingUpdate.channels.release') },
     { value: AppPreviewChannel.BETA, label: t('settings.settingUpdate.channels.beta') },
-    { value: AppPreviewChannel.SNAPSHOT, label: t('settings.settingUpdate.channels.snapshot') }
+    { value: AppPreviewChannel.SNAPSHOT, label: t('settings.settingUpdate.channels.snapshot') },
   ]
 
-  return isSnapshotBuild ? base.filter((item) => item.value === AppPreviewChannel.SNAPSHOT) : base
+  return isSnapshotBuild ? base.filter(item => item.value === AppPreviewChannel.SNAPSHOT) : base
 })
 
 const frequencyOptions = computed(() => [
@@ -56,24 +57,28 @@ const frequencyOptions = computed(() => [
   { value: '3day', label: t('settings.settingUpdate.frequency.every3days') },
   { value: '7day', label: t('settings.settingUpdate.frequency.weekly') },
   { value: '1month', label: t('settings.settingUpdate.frequency.monthly') },
-  { value: 'never', label: t('settings.settingUpdate.frequency.never') }
+  { value: 'never', label: t('settings.settingUpdate.frequency.never') },
 ])
 
 const channelSelectDisabled = computed(() => fetching.value || channelSaving.value || isSnapshotBuild)
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
 
 const statusDescription = computed(() => {
-  if (fetching.value) return t('settings.settingUpdate.status.loading')
-  if (!lastCheck.value) return t('settings.settingUpdate.status.never')
+  if (fetching.value)
+    return t('settings.settingUpdate.status.loading')
+  if (!lastCheck.value)
+    return t('settings.settingUpdate.status.never')
 
   return t('settings.settingUpdate.status.lastChecked', {
-    time: formatTimestamp(lastCheck.value)
+    time: formatTimestamp(lastCheck.value),
   })
 })
 
 const updateStateMessage = computed(() => {
-  if (appStates.hasUpdate) return t('settings.settingUpdate.status.updateAvailable')
-  if (appStates.noUpdateAvailable) return t('settings.settingUpdate.status.upToDate')
+  if (appStates.hasUpdate)
+    return t('settings.settingUpdate.status.updateAvailable')
+  if (appStates.noUpdateAvailable)
+    return t('settings.settingUpdate.status.upToDate')
   return ''
 })
 
@@ -92,10 +97,12 @@ async function loadSettings(): Promise<void> {
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = (fetched as any).autoDownload ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingUpdate] Failed to load settings:', error)
     toast.error(t('settings.settingUpdate.messages.loadFailed'))
-  } finally {
+  }
+  finally {
     fetching.value = false
   }
 }
@@ -104,13 +111,15 @@ async function refreshStatus(): Promise<void> {
   try {
     const status = await getUpdateStatus()
     lastCheck.value = (status as any).lastCheck ?? null
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('[SettingUpdate] Failed to refresh status:', error)
   }
 }
 
 async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
-  if (!settings.value || channelSaving.value) return
+  if (!settings.value || channelSaving.value)
+    return
 
   const previous = selectedChannel.value
   selectedChannel.value = value
@@ -119,17 +128,20 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
     await updateSettings({ updateChannel: value })
     settings.value.updateChannel = value
     toast.success(t('settings.settingUpdate.messages.channelSaved'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingUpdate] Failed to update channel:', error)
     selectedChannel.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
-  } finally {
+  }
+  finally {
     channelSaving.value = false
   }
 }
 
 async function handleFrequencyChange(value: UpdateSettings['frequency']): Promise<void> {
-  if (!settings.value || frequencySaving.value) return
+  if (!settings.value || frequencySaving.value)
+    return
 
   const previous = selectedFrequency.value
   selectedFrequency.value = value
@@ -138,17 +150,20 @@ async function handleFrequencyChange(value: UpdateSettings['frequency']): Promis
     await updateSettings({ frequency: value })
     settings.value.frequency = value
     toast.success(t('settings.settingUpdate.messages.frequencySaved'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingUpdate] Failed to update frequency:', error)
     selectedFrequency.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
-  } finally {
+  }
+  finally {
     frequencySaving.value = false
   }
 }
 
 async function handleAutoDownloadChange(value: boolean): Promise<void> {
-  if (!settings.value || autoDownloadSaving.value) return
+  if (!settings.value || autoDownloadSaving.value)
+    return
 
   const previous = autoDownloadEnabled.value
   autoDownloadEnabled.value = value
@@ -157,11 +172,13 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
     await updateSettings({ autoDownload: value } as any)
     ;(settings.value as any).autoDownload = value
     toast.success(t('settings.settingUpdate.messages.autoDownloadSaved'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingUpdate] Failed to update auto download:', error)
     autoDownloadEnabled.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
-  } finally {
+  }
+  finally {
     autoDownloadSaving.value = false
   }
 }
@@ -175,22 +192,26 @@ async function handleManualCheck(): Promise<void> {
     if (result?.hasUpdate && result.release) {
       toast.success(
         t('settings.settingUpdate.messages.manualCheckFound', {
-          version: result.release.tag_name
-        })
+          version: result.release.tag_name,
+        }),
       )
-    } else if (result?.release) {
+    }
+    else if (result?.release) {
       toast.success(
         t('settings.settingUpdate.messages.manualCheckNoUpdate', {
-          version: result.release.tag_name
-        })
+          version: result.release.tag_name,
+        }),
       )
-    } else {
+    }
+    else {
       toast.success(t('settings.settingUpdate.messages.manualCheckStarted'))
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingUpdate] Manual update check failed:', error)
     toast.error(t('settings.settingUpdate.messages.manualCheckFailed'))
-  } finally {
+  }
+  finally {
     manualChecking.value = false
   }
 }
@@ -200,18 +221,22 @@ async function handleClearCache(): Promise<void> {
   try {
     await clearUpdateCache()
     toast.success(t('settings.settingUpdate.messages.cacheCleared'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingUpdate] Failed to clear cache:', error)
     toast.error(t('settings.settingUpdate.messages.cacheClearFailed'))
-  } finally {
+  }
+  finally {
     clearingCache.value = false
   }
 }
 
 function normalizeBuildChannel(channel?: string): AppPreviewChannel {
   const normalized = (channel || '').toUpperCase()
-  if (normalized === AppPreviewChannel.SNAPSHOT) return AppPreviewChannel.SNAPSHOT
-  if (normalized === AppPreviewChannel.BETA) return AppPreviewChannel.BETA
+  if (normalized === AppPreviewChannel.SNAPSHOT)
+    return AppPreviewChannel.SNAPSHOT
+  if (normalized === AppPreviewChannel.BETA)
+    return AppPreviewChannel.BETA
   return AppPreviewChannel.RELEASE
 }
 
@@ -226,19 +251,19 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
   }
   if (result.hasUpdate && result.release) {
     lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFound', {
-      version: result.release.tag_name
+      version: result.release.tag_name,
     })
     return
   }
   if (result.error) {
     lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFailedWithReason', {
-      reason: result.error
+      reason: result.error,
     })
     return
   }
   if (result.release) {
     lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckNoUpdate', {
-      version: result.release.tag_name
+      version: result.release.tag_name,
     })
     return
   }
@@ -247,14 +272,14 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settings.settingUpdate.groupTitle')"
     :description="t('settings.settingUpdate.groupDesc')"
     default-icon="i-carbon-update-now"
     active-icon="i-carbon-upgrade"
     memory-name="setting-update"
   >
-    <tuff-block-select
+    <TuffBlockSelect
       v-model="selectedChannel"
       :title="t('settings.settingUpdate.channelTitle')"
       :description="
@@ -267,16 +292,16 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
       :disabled="channelSelectDisabled"
       @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
     >
-      <t-select-item
+      <TSelectItem
         v-for="item in channelOptions"
         :key="item.value"
         :model-value="item.value"
       >
         {{ item.label }}
-      </t-select-item>
-    </tuff-block-select>
+      </TSelectItem>
+    </TuffBlockSelect>
 
-    <tuff-block-select
+    <TuffBlockSelect
       v-model="selectedFrequency"
       :title="t('settings.settingUpdate.frequencyTitle')"
       :description="t('settings.settingUpdate.frequencyDesc')"
@@ -285,14 +310,14 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
       :disabled="frequencySelectDisabled"
       @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
     >
-      <t-select-item
+      <TSelectItem
         v-for="freq in frequencyOptions"
         :key="freq.value"
         :model-value="freq.value"
       >
         {{ freq.label }}
-      </t-select-item>
-    </tuff-block-select>
+      </TSelectItem>
+    </TuffBlockSelect>
 
     <tuff-block-switch
       v-model="autoDownloadEnabled"
@@ -304,24 +329,24 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
       @update:model-value="handleAutoDownloadChange"
     />
 
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.settingUpdate.statusTitle')"
       :description="statusDescription"
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <div class="status-message" v-if="updateStateMessage">
+      <div v-if="updateStateMessage" class="status-message">
         {{ updateStateMessage }}
       </div>
-      <div class="status-message warning" v-if="updateErrorMessage">
+      <div v-if="updateErrorMessage" class="status-message warning">
         {{ updateErrorMessage }}
       </div>
-      <div class="status-message" v-if="lastResultMessage">
+      <div v-if="lastResultMessage" class="status-message">
         {{ lastResultMessage }}
       </div>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.settingUpdate.actionsTitle')"
       :description="t('settings.settingUpdate.actionsDesc')"
       default-icon="i-carbon-settings-adjust"
@@ -333,8 +358,8 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
       <FlatButton :loading="clearingCache" @click="handleClearCache">
         {{ t('settings.settingUpdate.actions.clearCache') }}
       </FlatButton>
-    </tuff-block-slot>
-  </tuff-group-block>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
 </template>
 
 <style scoped>

@@ -1,20 +1,23 @@
-import { ref, h } from 'vue'
-import { toast } from 'vue-sonner'
-import { blowMention } from '../mention/dialog-mention'
-import AppUpdateView from '~/components/base/AppUpgradationView.vue'
-import { useAppState } from './useAppStates'
-import { useDownloadCenter } from './useDownloadCenter'
-import { getTouchSDK } from '@talex-touch/utils/renderer'
-import {
-  AppPreviewChannel,
+import type {
   GitHubRelease,
   UpdateCheckResult,
-  UpdateProviderType,
+  UpdateSettings,
+} from '@talex-touch/utils'
+import {
+  AppPreviewChannel,
   DownloadModule,
   DownloadPriority,
-  type UpdateSettings
+  UpdateProviderType,
+
 } from '@talex-touch/utils'
-import { withTimeout, TimeoutError } from '@talex-touch/utils/common/utils/time'
+import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
+import { getTouchSDK } from '@talex-touch/utils/renderer'
+import { h, ref } from 'vue'
+import { toast } from 'vue-sonner'
+import AppUpdateView from '~/components/base/AppUpgradationView.vue'
+import { blowMention } from '../mention/dialog-mention'
+import { useAppState } from './useAppStates'
+import { useDownloadCenter } from './useDownloadCenter'
 
 export interface GithubAuthor {
   login: string
@@ -63,7 +66,8 @@ export class AppUpdate {
     this.version = this._versionResolver(pkg.version)
     try {
       this.touchSDK = getTouchSDK()
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('TouchSDK not initialized, using fallback:', error)
       this.touchSDK = null as any
     }
@@ -88,8 +92,8 @@ export class AppUpdate {
     return {
       channel,
       major: +versionNumArr[0],
-      minor: parseInt(versionNumArr[1]),
-      patch: parseInt(versionNumArr[2])
+      minor: Number.parseInt(versionNumArr[1]),
+      patch: Number.parseInt(versionNumArr[2]),
     }
   }
 
@@ -110,7 +114,7 @@ export class AppUpdate {
   }
 
   private normalizeFrequencyLabel(
-    value?: string
+    value?: string,
   ): UpdateSettings['frequency'] {
     switch (value) {
       case 'everyday':
@@ -156,19 +160,21 @@ export class AppUpdate {
 
       if (response.success) {
         return response.data
-      } else {
+      }
+      else {
         return {
           hasUpdate: false,
           error: response.error || 'Update check failed',
-          source: 'Unknown'
+          source: 'Unknown',
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[AppUpdate] Check failed:', error)
       return {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        source: 'Unknown'
+        source: 'Unknown',
       }
     }
   }
@@ -188,14 +194,14 @@ export class AppUpdate {
 
     const asset = assets.find((a: unknown) => {
       const name = (a as any).name.toLowerCase()
-      const platformMatch =
-        (currentPlatform === 'win32' && (name.includes('win') || name.includes('.exe'))) ||
-        (currentPlatform === 'darwin' && (name.includes('mac') || name.includes('.dmg'))) ||
-        (currentPlatform === 'linux' && (name.includes('linux') || name.includes('.AppImage')))
+      const platformMatch
+        = (currentPlatform === 'win32' && (name.includes('win') || name.includes('.exe')))
+          || (currentPlatform === 'darwin' && (name.includes('mac') || name.includes('.dmg')))
+          || (currentPlatform === 'linux' && (name.includes('linux') || name.includes('.AppImage')))
 
-      const archMatch =
-        (currentArch === 'x64' && (name.includes('x64') || name.includes('amd64'))) ||
-        (currentArch === 'arm64' && (name.includes('arm64') || name.includes('aarch64')))
+      const archMatch
+        = (currentArch === 'x64' && (name.includes('x64') || name.includes('amd64')))
+          || (currentArch === 'arm64' && (name.includes('arm64') || name.includes('aarch64')))
 
       return platformMatch && archMatch
     })
@@ -216,9 +222,9 @@ export class AppUpdate {
         releaseName: release.name,
         releaseNotes: release.body,
         platform: currentPlatform,
-        arch: currentArch
+        arch: currentArch,
       },
-      checksum: (asset as any).checksum
+      checksum: (asset as any).checksum,
     })
   }
 
@@ -227,8 +233,8 @@ export class AppUpdate {
    * @returns Default update settings
    */
   private getDefaultSettings(): UpdateSettings {
-    const defaultChannel =
-      this.version.channel === AppPreviewChannel.SNAPSHOT
+    const defaultChannel
+      = this.version.channel === AppPreviewChannel.SNAPSHOT
         ? AppPreviewChannel.SNAPSHOT
         : AppPreviewChannel.RELEASE
 
@@ -240,7 +246,7 @@ export class AppUpdate {
         name: 'GitHub Releases',
         url: 'https://api.github.com/repos/talex-touch/tuff/releases',
         enabled: true,
-        priority: 1
+        priority: 1,
       },
       updateChannel: defaultChannel,
       ignoredVersions: [],
@@ -250,7 +256,7 @@ export class AppUpdate {
       rateLimitEnabled: true,
       maxRetries: 3,
       retryDelay: 2000, // 2 seconds base retry delay
-      lastCheckedAt: null
+      lastCheckedAt: null,
     }
   }
 
@@ -267,7 +273,8 @@ export class AppUpdate {
         this.settings = serverSettings
       }
       return this.settings
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[AppUpdate] Failed to get settings:', error)
       return this.settings
     }
@@ -296,10 +303,12 @@ export class AppUpdate {
       const response = await this.sendRequest('update:update-settings', payload)
       if (response.success) {
         this.settings = { ...this.settings, ...payload }
-      } else {
+      }
+      else {
         throw new Error(response.error || 'Failed to update settings')
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[AppUpdate] Failed to update settings:', error)
       throw error
     }
@@ -314,7 +323,8 @@ export class AppUpdate {
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear cache')
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[AppUpdate] Failed to clear cache:', error)
       throw error
     }
@@ -328,10 +338,12 @@ export class AppUpdate {
       const response = await this.sendRequest('update:get-status')
       if (response.success) {
         return response.data
-      } else {
+      }
+      else {
         throw new Error(response.error || 'Failed to get status')
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[AppUpdate] Failed to get status:', error)
       throw error
     }
@@ -345,12 +357,13 @@ export class AppUpdate {
     try {
       return await withTimeout(
         this.touchSDK.rawChannel.send(channel, payload),
-        AppUpdate.CHANNEL_TIMEOUT
+        AppUpdate.CHANNEL_TIMEOUT,
       )
-    } catch (error) {
+    }
+    catch (error) {
       if (error instanceof TimeoutError) {
         console.warn(
-          `[AppUpdate] ${channel} timed out after ${AppUpdate.CHANNEL_TIMEOUT}ms`
+          `[AppUpdate] ${channel} timed out after ${AppUpdate.CHANNEL_TIMEOUT}ms`,
         )
       }
       throw error
@@ -391,26 +404,30 @@ export function useApplicationUpgrade() {
         if (result.release) {
           await blowMention('New Version Available', () => {
             return h(AppUpdateView, {
-              release: result.release as unknown as Record<string, unknown>
+              release: result.release as unknown as Record<string, unknown>,
             })
           })
         }
-      } else if (result.error) {
+      }
+      else if (result.error) {
         appStates.noUpdateAvailable = false
         handleUpdateError(result.error, result.source)
-      } else {
+      }
+      else {
         appStates.hasUpdate = false
         appStates.noUpdateAvailable = true
         clearUpdateErrorMessage()
       }
       return result
-    } catch (err) {
+    }
+    catch (err) {
       console.error('[useApplicationUpgrade] Update check failed:', err)
       error.value = err instanceof Error ? err.message : 'Unknown error'
       handleUpdateError(error.value, 'Unknown')
       appStates.noUpdateAvailable = false
       return undefined
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -426,7 +443,8 @@ export function useApplicationUpgrade() {
 
       // 可以在这里打开下载中心
       // openDownloadCenter()
-    } catch (err) {
+    }
+    catch (err) {
       console.error('[useApplicationUpgrade] Download failed:', err)
       toast.error(`下载失败: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
@@ -444,7 +462,8 @@ export function useApplicationUpgrade() {
         await appUpdate.updateSettings({ ignoredVersions: settings.ignoredVersions })
         toast.success('已忽略此版本')
       }
-    } catch (err) {
+    }
+    catch (err) {
       console.error('[useApplicationUpgrade] Failed to ignore version:', err)
       toast.error('忽略版本失败')
     }
@@ -504,7 +523,8 @@ export function useApplicationUpgrade() {
     try {
       await appUpdate.clearCache()
       toast.success('更新缓存已清空')
-    } catch (err) {
+    }
+    catch (err) {
       console.error('[useApplicationUpgrade] Failed to clear cache:', err)
       toast.error('清空缓存失败')
     }
@@ -533,12 +553,13 @@ export function useApplicationUpgrade() {
 
           blowMention('New Version Available', () => {
             return h(AppUpdateView, {
-              release: (data as any).release as unknown as Record<string, unknown>
+              release: (data as any).release as unknown as Record<string, unknown>,
             })
           })
         }
       })
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('Failed to setup update listener:', error)
     }
   }
@@ -553,6 +574,6 @@ export function useApplicationUpgrade() {
     getUpdateStatus,
     setupUpdateListener,
     loading,
-    error
+    error,
   }
 }

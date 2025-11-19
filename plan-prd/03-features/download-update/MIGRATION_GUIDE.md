@@ -38,7 +38,7 @@ manager.on('progress', (progress) => {
 Handles database schema migrations and upgrades.
 
 ```typescript
-import { MigrationRunner, allMigrations } from './migrations'
+import { allMigrations, MigrationRunner } from './migrations'
 
 const runner = new MigrationRunner(dbPath)
 
@@ -211,13 +211,13 @@ export const allMigrations: Migration[] = [
 The `MigrationProgress.vue` component displays migration progress:
 
 ```vue
-<template>
-  <MigrationProgress />
-</template>
-
 <script setup>
 import MigrationProgress from '@/components/download/MigrationProgress.vue'
 </script>
+
+<template>
+  <MigrationProgress />
+</template>
 ```
 
 ### IPC Channels

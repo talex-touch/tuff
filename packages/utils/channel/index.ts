@@ -1,12 +1,12 @@
 export enum ChannelType {
-  MAIN = "main",
-  PLUGIN = "plugin"
+  MAIN = 'main',
+  PLUGIN = 'plugin',
 }
 
 export enum DataCode {
   SUCCESS = 200,
   NETWORK_ERROR = 500,
-  ERROR = 100
+  ERROR = 100,
 }
 
 export type ChannelCallback = (data: StandardChannelData) => any
@@ -20,7 +20,7 @@ export interface ITouchChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param callback {Function} The callback function
    */
-  regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void
+  regChannel: (type: ChannelType, eventName: string, callback: ChannelCallback) => () => void
 
   /**
    * Unregister a channel
@@ -30,7 +30,7 @@ export interface ITouchChannel {
    * @param callback {Function} The callback function to unregister
    * @returns {boolean} Returns true if the channel was successfully unregistered, false otherwise
    */
-  unregChannel(type: ChannelType, eventName: string, callback: ChannelCallback): boolean
+  unregChannel: (type: ChannelType, eventName: string, callback: ChannelCallback) => boolean
 
   /**
    * @deprecated Use sendMain instead
@@ -39,7 +39,7 @@ export interface ITouchChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  send(type: ChannelType, eventName: string, arg?: any): Promise<any>
+  send: (type: ChannelType, eventName: string, arg?: any) => Promise<any>
 
   /**
    * @deprecated Use sendToMain instead
@@ -49,14 +49,14 @@ export interface ITouchChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  sendTo(win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: any): Promise<any>
+  sendTo: (win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg: any) => Promise<any>
 
   /**
    * Send a message to main process
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  sendMain(eventName: string, arg?: any): Promise<any>
+  sendMain: (eventName: string, arg?: any) => Promise<any>
 
   /**
    * Send a message to main process with settled window
@@ -64,14 +64,14 @@ export interface ITouchChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  sendToMain(win: Electron.BrowserWindow, eventName: string, arg?: any): Promise<any>
+  sendToMain: (win: Electron.BrowserWindow, eventName: string, arg?: any) => Promise<any>
 
   /**
    * Send a message to all plugin process with settled window
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+  sendPlugin: (pluginName: string, eventName: string, arg?: any) => Promise<any>
 
   /**
    * Send a message to plugin process with settled window
@@ -79,7 +79,7 @@ export interface ITouchChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  sendToPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+  sendToPlugin: (pluginName: string, eventName: string, arg?: any) => Promise<any>
 
   /**
    * Request a encrypted name key. This key cannot decrypted to get the original name.
@@ -106,7 +106,7 @@ export interface ITouchClientChannel {
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType
    * @param callback {Function} The callback function
    */
-  regChannel(eventName: string, callback: (data: StandardChannelData) => any): () => void
+  regChannel: (eventName: string, callback: (data: StandardChannelData) => any) => () => void
 
   /**
    * Unregister a channel
@@ -115,21 +115,21 @@ export interface ITouchClientChannel {
    * @param callback {Function} The callback function to unregister
    * @returns {boolean} Returns true if the channel was successfully unregistered, false otherwise
    */
-  unRegChannel(eventName: string, callback: (data: StandardChannelData) => any): boolean
+  unRegChannel: (eventName: string, callback: (data: StandardChannelData) => any) => boolean
 
   /**
    * Send a message to a channel
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  send(eventName: string, arg?: any): Promise<any>
+  send: (eventName: string, arg?: any) => Promise<any>
 
   /**
    * Send a message to a channel and get the response
    * @param eventName {string} The name of event, must be unique in the channel {@link ChannelType}
    * @param arg {any} The arguments of the message
    */
-  sendSync(eventName: string, arg?: any): any
+  sendSync: (eventName: string, arg?: any) => any
 }
 
 export interface RawChannelSyncData {
@@ -149,11 +149,11 @@ export interface RawChannelSyncData {
 }
 
 export interface RawChannelHeaderData {
-  status: "reply" | "request";
-  type: ChannelType;
-  _originData?: any;
+  status: 'reply' | 'request'
+  type: ChannelType
+  _originData?: any
   uniqueKey?: string
-  event?: Electron.IpcMainEvent | Electron.IpcRendererEvent;
+  event?: Electron.IpcMainEvent | Electron.IpcRendererEvent
 }
 
 export interface RawChannelData {
@@ -172,12 +172,12 @@ export interface StandardChannelData extends RawStandardChannelData {
   reply: (code: DataCode, data: IChannelData) => void
 }
 
-export type IChannelData = any //boolean | number | string | null | undefined | {
-  // [prop: string]: any
+export type IChannelData = any // boolean | number | string | null | undefined | {
+// [prop: string]: any
 // }
 
 // Default export for Vite compatibility (only values, not types)
 export default {
   ChannelType,
-  DataCode
+  DataCode,
 }

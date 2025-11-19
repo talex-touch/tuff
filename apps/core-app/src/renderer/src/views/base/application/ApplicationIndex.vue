@@ -1,8 +1,8 @@
 <script name="ApplicationIndex" setup lang="ts">
-import AppList from './AppList.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
 import AppConfigure from './AppConfigure.vue'
 import ApplicationEmpty from './ApplicationEmpty.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import AppList from './AppList.vue'
 
 defineProps<{
   modelValue?: boolean
@@ -21,14 +21,16 @@ onMounted(() => {
 
   unregisterUpdate = touchChannel.regChannel('core-box:search-update', (channelData) => {
     const { searchId, items } = channelData.data as any
-    if (searchId !== currentSearchId) return
+    if (searchId !== currentSearchId)
+      return
     // append to list
     appList.value = [...appList.value, ...items]
   })
 
   unregisterEnd = touchChannel.regChannel('core-box:search-end', (channelData) => {
     const { searchId } = channelData.data as any
-    if (searchId !== currentSearchId) return
+    if (searchId !== currentSearchId)
+      return
     console.log('[ApplicationIndex] Search ended', channelData)
   })
 })

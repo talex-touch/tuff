@@ -1,4 +1,4 @@
-import { DownloadProgress } from '@talex-touch/utils'
+import type { DownloadProgress } from '@talex-touch/utils'
 
 /**
  * 进度数据点，用于计算移动平均
@@ -42,13 +42,13 @@ export class ProgressTracker {
 
   constructor(
     taskId: string,
-    config: Partial<ProgressTrackerConfig> = {}
+    config: Partial<ProgressTrackerConfig> = {},
   ) {
     this.taskId = taskId
     this.config = {
       windowSize: config.windowSize || 10, // 默认使用最近10个数据点
       updateInterval: config.updateInterval || 1000, // 默认每秒更新一次
-      minSpeedSamples: config.minSpeedSamples || 2 // 至少需要2个样本才能计算速度
+      minSpeedSamples: config.minSpeedSamples || 2, // 至少需要2个样本才能计算速度
     }
 
     this.currentProgress = {
@@ -56,7 +56,7 @@ export class ProgressTracker {
       downloadedSize: 0,
       speed: 0,
       remainingTime: undefined,
-      percentage: 0
+      percentage: 0,
     }
   }
 
@@ -72,7 +72,7 @@ export class ProgressTracker {
     // 添加新的数据点
     this.dataPoints.push({
       timestamp: now,
-      downloadedSize
+      downloadedSize,
     })
 
     // 保持窗口大小
@@ -97,7 +97,7 @@ export class ProgressTracker {
       downloadedSize,
       speed,
       remainingTime,
-      percentage
+      percentage,
     }
 
     // 检查是否应该触发更新（节流）
@@ -149,7 +149,7 @@ export class ProgressTracker {
   private calculateRemainingTime(
     downloadedSize: number,
     totalSize: number | undefined,
-    speed: number
+    speed: number,
   ): number | undefined {
     if (!totalSize || speed <= 0 || downloadedSize >= totalSize) {
       return undefined
@@ -177,7 +177,7 @@ export class ProgressTracker {
       speed: this.formatSpeed(this.currentProgress.speed),
       downloaded: this.formatSize(this.currentProgress.downloadedSize),
       total: this.formatSize(this.currentProgress.totalSize || 0),
-      remainingTime: this.formatTime(this.currentProgress.remainingTime)
+      remainingTime: this.formatTime(this.currentProgress.remainingTime),
     }
   }
 
@@ -200,7 +200,7 @@ export class ProgressTracker {
       downloadedSize: 0,
       speed: 0,
       remainingTime: undefined,
-      percentage: 0
+      percentage: 0,
     }
   }
 

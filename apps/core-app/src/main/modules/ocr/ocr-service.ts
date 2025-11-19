@@ -1,32 +1,32 @@
-import path from 'node:path'
+import type {
+  AiInvokeResult,
+  AiVisionOcrPayload,
+  AiVisionOcrResult,
+} from '@talex-touch/utils'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type * as schema from '../../db/schema'
+import type { IClipboardItem } from '../clipboard'
+
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-
-import type { IClipboardItem } from '../clipboard'
-import { databaseModule } from '../database'
+import path from 'node:path'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import chalk from 'chalk'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { genTouchChannel } from '../../core/channel-core'
-import { windowManager } from '../box-tool/core-box/window'
-import { ai } from '../ai/intelligence-sdk'
-import type {
-  AiVisionOcrPayload,
-  AiVisionOcrResult,
-  AiInvokeResult
-} from '@talex-touch/utils'
 import {
+  clipboardHistory,
+  clipboardHistoryMeta,
+  config,
   ocrJobs,
   ocrResults,
-  clipboardHistoryMeta,
-  clipboardHistory,
-  config
 } from '../../db/schema'
-import * as schema from '../../db/schema'
-import { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { desc, eq, inArray, sql } from 'drizzle-orm'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import chalk from 'chalk'
 import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from '../ai/intelligence-config'
+import { ai } from '../ai/intelligence-sdk'
+import { windowManager } from '../box-tool/core-box/window'
+import { databaseModule } from '../database'
 
 export interface ClipboardOcrPayload {
   clipboardId: number
@@ -58,7 +58,7 @@ const WORKER_CONCURRENCY = 1
 const RETRY_DELAYS = {
   'No enabled providers available': 3600, // 1小时
   'Provider factory missing': 300, // 5分钟
-  default: 60 // 默认1分钟
+  'default': 60, // 默认1分钟
 }
 
 function dataUrlToHash(dataUrl: string): string {
@@ -79,10 +79,12 @@ class OcrService {
   private clipboardMetaListener:
     | ((clipboardId: number, patch: Record<string, unknown>) => void)
     | null = null
+
   private channelRegistered = false
 
   private ensureInitialized(): void {
-    if (this.initialized) return
+    if (this.initialized)
+      return
 
     this.db = databaseModule.getDb()
 
@@ -98,8 +100,8 @@ class OcrService {
       {
         interval: PROCESS_INTERVAL_SECONDS,
         unit: 'seconds',
-        runImmediately: true
-      }
+        runImmediately: true,
+      },
     )
 
     this.initialized = true
@@ -118,13 +120,14 @@ class OcrService {
         const snapshot = await this.getDashboardSnapshot(limit)
         reply(DataCode.SUCCESS, {
           ok: true,
-          snapshot
+          snapshot,
         })
-      } catch (error) {
+      }
+      catch (error) {
         console.error(chalk.red('[OCR] Failed to build dashboard snapshot:'), error)
         reply(DataCode.ERROR, {
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         })
       }
     })
@@ -147,20 +150,20 @@ class OcrService {
           lastQueued: null,
           lastDispatch: null,
           lastSuccess: null,
-          lastFailure: null
+          lastFailure: null,
         },
         indexes: {
           fileSources: [],
           dataUrlSourceCount: 0,
           clipboardIds: [],
-          payloadHashes: []
-        }
+          payloadHashes: [],
+        },
       }
     }
 
     const jobs = await this.db.select().from(ocrJobs).orderBy(desc(ocrJobs.queuedAt)).limit(limit)
 
-    const jobIds = jobs.map((job) => job.id).filter((id): id is number => typeof id === 'number')
+    const jobIds = jobs.map(job => job.id).filter((id): id is number => typeof id === 'number')
 
     const resultsMap = new Map<number, typeof ocrResults.$inferSelect | null>()
 
@@ -178,7 +181,7 @@ class OcrService {
     const statusCounts = await this.db
       .select({
         status: ocrJobs.status,
-        count: sql<number>`COUNT(*)`
+        count: sql<number>`COUNT(*)`,
       })
       .from(ocrJobs)
       .groupBy(ocrJobs.status)
@@ -196,17 +199,19 @@ class OcrService {
       'ocr:last-queued',
       'ocr:last-dispatch',
       'ocr:last-success',
-      'ocr:last-failure'
+      'ocr:last-failure',
     ]
 
     const configRows = await this.db.select().from(config).where(inArray(config.key, configKeys))
 
     const configMap: Record<string, unknown> = {}
     for (const row of configRows) {
-      if (!row.key) continue
+      if (!row.key)
+        continue
       try {
         configMap[row.key] = row.value ? JSON.parse(row.value) : null
-      } catch {
+      }
+      catch {
         configMap[row.key] = row.value
       }
     }
@@ -217,8 +222,10 @@ class OcrService {
     let dataUrlSourceCount = 0
 
     const toIsoString = (value: unknown): string | null => {
-      if (!value) return null
-      if (value instanceof Date) return value.toISOString()
+      if (!value)
+        return null
+      if (value instanceof Date)
+        return value.toISOString()
       if (typeof value === 'number') {
         // drizzle timestamp mode returns seconds since epoch by default
         return new Date(value * 1000).toISOString()
@@ -231,7 +238,8 @@ class OcrService {
       if (job.meta) {
         try {
           parsedMeta = JSON.parse(job.meta)
-        } catch {
+        }
+        catch {
           parsedMeta = null
         }
       }
@@ -241,7 +249,8 @@ class OcrService {
 
       if (source?.type === 'file' && typeof source.filePath === 'string') {
         fileSources.add(source.filePath)
-      } else if (source?.type === 'data-url') {
+      }
+      else if (source?.type === 'data-url') {
         dataUrlSourceCount += 1
       }
 
@@ -274,9 +283,9 @@ class OcrService {
               textSnippet: result.text?.slice(0, 280) ?? '',
               confidence: result.confidence,
               language: result.language,
-              createdAt: toIsoString(result.createdAt)
+              createdAt: toIsoString(result.createdAt),
             }
-          : null
+          : null,
       }
     })
 
@@ -288,14 +297,14 @@ class OcrService {
         lastQueued: configMap['ocr:last-queued'] ?? null,
         lastDispatch: configMap['ocr:last-dispatch'] ?? null,
         lastSuccess: configMap['ocr:last-success'] ?? null,
-        lastFailure: configMap['ocr:last-failure'] ?? null
+        lastFailure: configMap['ocr:last-failure'] ?? null,
       },
       indexes: {
         fileSources: Array.from(fileSources),
         dataUrlSourceCount,
         clipboardIds: Array.from(clipboardIds),
-        payloadHashes: Array.from(payloadHashes)
-      }
+        payloadHashes: Array.from(payloadHashes),
+      },
     }
   }
 
@@ -305,14 +314,15 @@ class OcrService {
   }
 
   registerClipboardMetaListener(
-    listener: (clipboardId: number, patch: Record<string, unknown>) => void
+    listener: (clipboardId: number, patch: Record<string, unknown>) => void,
   ): void {
     this.clipboardMetaListener = listener
   }
 
   async enqueueFromClipboard(payload: ClipboardOcrPayload): Promise<void> {
     this.ensureInitialized()
-    if (!this.db) return
+    if (!this.db)
+      return
 
     const jobInput = await this.buildJobPayload(payload)
     if (!jobInput) {
@@ -345,14 +355,14 @@ class OcrService {
       payloadHash: payloadHash ?? null,
       meta: JSON.stringify({
         source,
-        options
-      })
+        options,
+      }),
     })
 
     const initialMeta: Record<string, unknown> = {
       ocr_status: 'pending',
       ocr_source_type: source.type,
-      ocr_payload_hash: payloadHash
+      ocr_payload_hash: payloadHash,
     }
 
     if (source.type === 'file' && source.filePath) {
@@ -364,7 +374,7 @@ class OcrService {
     await this.upsertConfig('ocr:last-queued', {
       clipboardId,
       payloadHash,
-      at: new Date().toISOString()
+      at: new Date().toISOString(),
     })
 
     await this.processQueue()
@@ -378,10 +388,11 @@ class OcrService {
   } | null> {
     const { clipboardId, item } = payload
 
-    if (!clipboardId) return null
+    if (!clipboardId)
+      return null
 
     if (item.meta && typeof item.meta === 'object') {
-      const status = (item.meta as Record<string, unknown>)['ocr_status']
+      const status = (item.meta as Record<string, unknown>).ocr_status
       if (status === 'done') {
         return null
       }
@@ -392,24 +403,25 @@ class OcrService {
     }
 
     if (item.type === 'image') {
-      if (!item.content) return null
+      if (!item.content)
+        return null
       return {
         clipboardId,
         source: {
           type: 'data-url',
-          dataUrl: item.content
+          dataUrl: item.content,
         },
         options: {
-          language: 'eng'
+          language: 'eng',
         },
-        payloadHash: dataUrlToHash(item.content)
+        payloadHash: dataUrlToHash(item.content),
       }
     }
 
     if (item.type === 'files') {
       try {
         const files = JSON.parse(item.content) as string[]
-        const imagePath = files.find((file) => this.isImageFile(file))
+        const imagePath = files.find(file => this.isImageFile(file))
         if (!imagePath || !existsSync(imagePath)) {
           return null
         }
@@ -418,14 +430,15 @@ class OcrService {
           clipboardId,
           source: {
             type: 'file',
-            filePath: imagePath
+            filePath: imagePath,
           },
           options: {
-            language: 'eng'
+            language: 'eng',
           },
-          payloadHash: fileHashKey(imagePath)
+          payloadHash: fileHashKey(imagePath),
         }
-      } catch {
+      }
+      catch {
         return null
       }
     }
@@ -460,7 +473,7 @@ class OcrService {
   }
 
   private async normalizeSourceForAgent(
-    source: AgentJobPayload['source']
+    source: AgentJobPayload['source'],
   ): Promise<AiVisionOcrPayload['source']> {
     if (source.type === 'data-url' && source.dataUrl) {
       return { type: 'data-url', dataUrl: source.dataUrl }
@@ -471,7 +484,7 @@ class OcrService {
       const mime = this.detectMimeType(source.filePath)
       return {
         type: 'data-url',
-        dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
+        dataUrl: `data:${mime};base64,${buffer.toString('base64')}`,
       }
     }
 
@@ -479,8 +492,10 @@ class OcrService {
   }
 
   private async processQueue(): Promise<void> {
-    if (this.processing) return
-    if (!this.db) return
+    if (this.processing)
+      return
+    if (!this.db)
+      return
 
     this.processing = true
     try {
@@ -496,7 +511,8 @@ class OcrService {
 
         // 在应用层过滤:只处理未尝试或已超过重试延迟的任务
         const readyJobs = allPending.filter((job) => {
-          if (!job.id) return false
+          if (!job.id)
+            return false
 
           // 首先检查是否已达到最大重试次数
           const currentAttempts = job.attempts ?? 0
@@ -504,23 +520,24 @@ class OcrService {
             // 这种情况不应该发生,说明数据库状态不一致,直接标记为失败
             console.warn(
               chalk.yellow(
-                `[OCR] Found pending job ${job.id} with attempts=${currentAttempts} >= MAX_ATTEMPTS, marking as failed`
-              )
+                `[OCR] Found pending job ${job.id} with attempts=${currentAttempts} >= MAX_ATTEMPTS, marking as failed`,
+              ),
             )
             this.failJob(job.id, 'Max attempts exceeded').catch(console.error)
             return false
           }
 
           // 如果没有错误记录,说明是首次尝试
-          if (!job.lastError) return true
+          if (!job.lastError)
+            return true
 
           // 检查内存中的最后尝试时间
           const lastAttempt = this.lastAttemptMap.get(job.id)
           if (!lastAttempt) {
             // 内存中没有记录(可能是应用重启),检查数据库中的 startedAt
             if (job.startedAt) {
-              const startedAtMs =
-                typeof job.startedAt === 'number'
+              const startedAtMs
+                = typeof job.startedAt === 'number'
                   ? job.startedAt * 1000
                   : new Date(job.startedAt).getTime()
 
@@ -555,7 +572,7 @@ class OcrService {
           .set({
             status: 'processing',
             attempts: attemptCount,
-            startedAt: new Date()
+            startedAt: new Date(),
           })
           .where(eq(ocrJobs.id, job.id))
 
@@ -565,19 +582,20 @@ class OcrService {
           jobId: job.id,
           clipboardId: job.clipboardId,
           attempts: attemptCount,
-          at: new Date().toISOString()
+          at: new Date().toISOString(),
         })
 
         const task = this.runAgentJob(job.id!, job).finally(() => {
           this.activeJobs.delete(job.id!)
           setImmediate(() => {
-            this.processQueue().catch((error) => console.error('[OCR] Queue resume error:', error))
+            this.processQueue().catch(error => console.error('[OCR] Queue resume error:', error))
           })
         })
 
         this.activeJobs.set(job.id!, task)
       }
-    } finally {
+    }
+    finally {
       this.processing = false
     }
   }
@@ -588,17 +606,18 @@ class OcrService {
       return
     }
 
-    let parsed: { source: AgentJobPayload['source']; options: AgentJobPayload['options'] }
+    let parsed: { source: AgentJobPayload['source'], options: AgentJobPayload['options'] }
     try {
       parsed = JSON.parse(job.meta)
-    } catch (error) {
+    }
+    catch (error) {
       await this.failJob(jobId, 'Invalid job metadata JSON', error)
       return
     }
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
-        ocr_status: 'processing'
+        ocr_status: 'processing',
       })
     }
 
@@ -615,17 +634,18 @@ class OcrService {
       metadata: {
         jobId,
         clipboardId: job.clipboardId,
-        payloadHash: job.payloadHash
-      }
+        payloadHash: job.payloadHash,
+      },
     }
 
     try {
       const invocation = await ai.invoke<AiVisionOcrResult>('vision.ocr', payload, {
         modelPreference: capabilityOptions.modelPreference,
-        allowedProviderIds: capabilityOptions.allowedProviderIds
+        allowedProviderIds: capabilityOptions.allowedProviderIds,
       })
       await this.persistAgentSuccess(job, invocation)
-    } catch (error) {
+    }
+    catch (error) {
       const retryReason = this.classifyRetryableAgentError(error)
       if (retryReason) {
         await this.deferJob(job, retryReason)
@@ -648,7 +668,8 @@ class OcrService {
   }
 
   private async deferJob(job: typeof ocrJobs.$inferSelect, reason: string): Promise<void> {
-    if (!this.db || !job.id) return
+    if (!this.db || !job.id)
+      return
 
     const currentAttempts = job.attempts ?? 0
 
@@ -656,8 +677,8 @@ class OcrService {
     if (currentAttempts >= MAX_ATTEMPTS) {
       console.warn(
         chalk.yellow(
-          `[OCR] Job ${job.id} reached max attempts (${MAX_ATTEMPTS}), marking as failed: ${reason}`
-        )
+          `[OCR] Job ${job.id} reached max attempts (${MAX_ATTEMPTS}), marking as failed: ${reason}`,
+        ),
       )
       await this.failJob(job.id, `Max attempts reached: ${reason}`)
       return
@@ -671,7 +692,7 @@ class OcrService {
       .set({
         status: 'pending',
         lastError: reason,
-        startedAt: null
+        startedAt: null,
       })
       .where(eq(ocrJobs.id, job.id))
 
@@ -679,7 +700,7 @@ class OcrService {
       await this.updateClipboardMeta(job.clipboardId, {
         ocr_status: 'pending',
         ocr_last_error: reason,
-        ocr_retry_count: currentAttempts
+        ocr_retry_count: currentAttempts,
       })
     }
 
@@ -687,8 +708,8 @@ class OcrService {
     const delaySeconds = (RETRY_DELAYS as any)[reason] || RETRY_DELAYS.default
     const delayMinutes = Math.floor(delaySeconds / 60)
     const delayHours = Math.floor(delayMinutes / 60)
-    const delayDisplay =
-      delayHours > 0
+    const delayDisplay
+      = delayHours > 0
         ? `${delayHours}小时${delayMinutes % 60}分钟`
         : delayMinutes > 0
           ? `${delayMinutes}分钟`
@@ -696,8 +717,8 @@ class OcrService {
 
     console.debug(
       chalk.gray(
-        `[OCR] Job ${job.id} deferred (attempt ${currentAttempts}/${MAX_ATTEMPTS}): ${reason} (下次重试: ${delayDisplay}后)`
-      )
+        `[OCR] Job ${job.id} deferred (attempt ${currentAttempts}/${MAX_ATTEMPTS}): ${reason} (下次重试: ${delayDisplay}后)`,
+      ),
     )
   }
 
@@ -707,9 +728,9 @@ class OcrService {
       return payload.options.config.prompt
     }
     if (
-      payload.options &&
-      'prompt' in payload.options &&
-      typeof (payload.options as any).prompt === 'string'
+      payload.options
+      && 'prompt' in payload.options
+      && typeof (payload.options as any).prompt === 'string'
     ) {
       return String((payload.options as any).prompt)
     }
@@ -721,15 +742,16 @@ class OcrService {
       '1. 识别图片中全部文字，保持原有换行。',
       '2. 输出 JSON，对象包含 text、language、confidence、keywords(数组)、blocks(可选)。',
       '3. keywords 限制 5 个以内，倾向于可搜索的词或短语。',
-      '4. 如果检测到多种语言，需要在 text 中附上主要内容的中文翻译。'
+      '4. 如果检测到多种语言，需要在 text 中附上主要内容的中文翻译。',
     ].join('\n')
   }
 
   private async persistAgentSuccess(
     job: typeof ocrJobs.$inferSelect,
-    invocation: AiInvokeResult<AiVisionOcrResult>
+    invocation: AiInvokeResult<AiVisionOcrResult>,
   ): Promise<void> {
-    if (!this.db) return
+    if (!this.db)
+      return
 
     const { result } = invocation
     const jobId = job.id!
@@ -746,7 +768,7 @@ class OcrService {
       embedding,
       provider: invocation.provider,
       model: invocation.model,
-      usage: invocation.usage
+      usage: invocation.usage,
     }
 
     await this.db.insert(ocrResults).values({
@@ -755,7 +777,7 @@ class OcrService {
       confidence: result.confidence ?? null,
       language: result.language ?? null,
       checksum: job.payloadHash ?? null,
-      extra: JSON.stringify(extra)
+      extra: JSON.stringify(extra),
     })
 
     await this.db
@@ -779,7 +801,7 @@ class OcrService {
         ocr_usage_completion: invocation.usage.completionTokens,
         ocr_last_error: null,
         ocr_retry_count: job.attempts ?? 0,
-        ocr_embedding_status: embedding ? 'generated' : 'skipped'
+        ocr_embedding_status: embedding ? 'generated' : 'skipped',
       })
 
       await this.upsertConfig('ocr:last-success', {
@@ -789,20 +811,21 @@ class OcrService {
         language: result.language,
         provider: invocation.provider,
         model: invocation.model,
-        at: new Date().toISOString()
+        at: new Date().toISOString(),
       })
     }
   }
 
   private buildSummary(text: string): string {
-    if (!text) return ''
+    if (!text)
+      return ''
     const normalized = text.replace(/\s+/g, ' ').trim()
     return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized
   }
 
   private normalizeKeywords(keywords?: string[], fallback?: string): string[] {
     if (keywords && keywords.length > 0) {
-      return Array.from(new Set(keywords.map((kw) => kw.trim()).filter(Boolean))).slice(0, 5)
+      return Array.from(new Set(keywords.map(kw => kw.trim()).filter(Boolean))).slice(0, 5)
     }
 
     if (!fallback) {
@@ -813,9 +836,9 @@ class OcrService {
       new Set(
         fallback
           .split(/[\s,.;，。；、]+/)
-          .map((token) => token.trim())
-          .filter((token) => token.length > 1)
-      )
+          .map(token => token.trim())
+          .filter(token => token.length > 1),
+      ),
     ).slice(0, 5)
   }
 
@@ -829,22 +852,25 @@ class OcrService {
         { text },
         {
           modelPreference: capabilityOptions.modelPreference,
-          allowedProviderIds: capabilityOptions.allowedProviderIds
-        }
+          allowedProviderIds: capabilityOptions.allowedProviderIds,
+        },
       )
       return response.result
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('[OCR] Embedding generation failed:', error)
       return null
     }
   }
 
   private async failJob(jobId: number, reason: string, details?: unknown): Promise<void> {
-    if (!this.db) return
+    if (!this.db)
+      return
 
     const jobs = await this.db.select().from(ocrJobs).where(eq(ocrJobs.id, jobId)).limit(1)
 
-    if (jobs.length === 0) return
+    if (jobs.length === 0)
+      return
 
     const job = jobs[0]
     const attempts = job.attempts ?? 0
@@ -855,7 +881,7 @@ class OcrService {
       .set({
         status,
         lastError: reason,
-        finishedAt: status === 'failed' ? new Date() : null
+        finishedAt: status === 'failed' ? new Date() : null,
       })
       .where(eq(ocrJobs.id, jobId))
 
@@ -864,7 +890,7 @@ class OcrService {
         ocr_status: status === 'failed' ? 'failed' : 'retrying',
         ocr_last_error: reason,
         ocr_job_id: jobId,
-        ocr_retry_count: attempts
+        ocr_retry_count: attempts,
       })
 
       if (status === 'failed') {
@@ -872,7 +898,7 @@ class OcrService {
           jobId,
           clipboardId: job.clipboardId,
           reason,
-          at: new Date().toISOString()
+          at: new Date().toISOString(),
         })
       }
     }
@@ -882,18 +908,20 @@ class OcrService {
       if (details) {
         console.warn(chalk.red('[OCR] Failure details:'), details)
       }
-    } else {
+    }
+    else {
       setImmediate(() => {
-        this.processQueue().catch((error) => console.error('[OCR] Queue resume error:', error))
+        this.processQueue().catch(error => console.error('[OCR] Queue resume error:', error))
       })
     }
   }
 
   private async updateClipboardMeta(
     clipboardId: number,
-    entries: Record<string, unknown>
+    entries: Record<string, unknown>,
   ): Promise<void> {
-    if (!this.db) return
+    if (!this.db)
+      return
 
     const patch: Record<string, unknown> = { ...entries }
     if (!Object.prototype.hasOwnProperty.call(patch, 'ocr_updated_at')) {
@@ -903,7 +931,7 @@ class OcrService {
     const insertValues = Object.entries(patch).map(([key, value]) => ({
       clipboardId,
       key,
-      value: JSON.stringify(value ?? null)
+      value: JSON.stringify(value ?? null),
     }))
 
     if (insertValues.length > 0) {
@@ -921,7 +949,8 @@ class OcrService {
       if (existing[0].metadata) {
         try {
           base = JSON.parse(existing[0].metadata)
-        } catch {
+        }
+        catch {
           base = {}
         }
       }
@@ -943,7 +972,7 @@ class OcrService {
       if (!win.window.isDestroyed()) {
         touchChannel.sendToMain(win.window, 'clipboard:meta-updated', {
           clipboardId,
-          patch
+          patch,
         })
       }
     }
@@ -953,7 +982,7 @@ class OcrService {
       touchChannel
         .sendToPlugin(activePlugin.name, 'core-box:clipboard-meta-updated', {
           clipboardId,
-          patch
+          patch,
         })
         .catch((error) => {
           console.warn('[OCR] Failed to notify plugin about meta update:', error)
@@ -962,14 +991,15 @@ class OcrService {
   }
 
   private async upsertConfig(key: string, value: unknown): Promise<void> {
-    if (!this.db) return
+    if (!this.db)
+      return
     const serialized = JSON.stringify(value ?? null)
     await this.db
       .insert(config)
       .values({ key, value: serialized })
       .onConflictDoUpdate({
         target: config.key,
-        set: { value: serialized }
+        set: { value: serialized },
       })
   }
 }

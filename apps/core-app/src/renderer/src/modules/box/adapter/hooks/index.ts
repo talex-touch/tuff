@@ -1,7 +1,7 @@
-export { useClipboard } from './useClipboard'
-export { useSearch } from './useSearch'
-export { useKeyboard } from './useKeyboard'
-export { useVisibility } from './useVisibility'
+export type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 export { useChannel } from './useChannel'
+export { useClipboard } from './useClipboard'
+export { useKeyboard } from './useKeyboard'
+export { useSearch } from './useSearch'
 
-export type { IClipboardItem, IClipboardOptions, IClipboardHook } from './types'
+export { useVisibility } from './useVisibility'

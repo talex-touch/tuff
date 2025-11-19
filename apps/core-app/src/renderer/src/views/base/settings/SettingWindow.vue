@@ -5,12 +5,12 @@
   Allows users to configure window closing, minimizing, and auto-start behavior
 -->
 <script setup lang="ts" name="SettingWindow">
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ref, onMounted } from 'vue'
 
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 // Import UI components
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 
 // Import storage
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -21,7 +21,7 @@ const windowSettings = ref({
   closeToTray: true,
   startMinimized: false,
   startSilent: false,
-  autoStart: false
+  autoStart: false,
 })
 
 onMounted(async () => {
@@ -42,11 +42,12 @@ onMounted(async () => {
       closeToTray: closeToTray as boolean,
       startMinimized: startMinimized as boolean,
       startSilent: startSilent as boolean,
-      autoStart: autoStart as boolean
+      autoStart: autoStart as boolean,
     }
 
     console.log('[SettingWindow] Window settings loaded:', windowSettings.value)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingWindow] Failed to load window settings:', error)
   }
 })
@@ -56,11 +57,12 @@ async function updateCloseToTray(value: boolean) {
     await touchChannel.send('storage:save', {
       key: 'app.window.closeToTray',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     windowSettings.value.closeToTray = value
     console.log('[SettingWindow] Close to tray setting updated:', value)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingWindow] Failed to update close to tray setting:', error)
   }
 }
@@ -70,11 +72,12 @@ async function updateStartMinimized(value: boolean) {
     await touchChannel.send('storage:save', {
       key: 'app.window.startMinimized',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     windowSettings.value.startMinimized = value
     console.log('[SettingWindow] Start minimized setting updated:', value)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingWindow] Failed to update start minimized setting:', error)
   }
 }
@@ -84,11 +87,12 @@ async function updateStartSilent(value: boolean) {
     await touchChannel.send('storage:save', {
       key: 'app.window.startSilent',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     windowSettings.value.startSilent = value
     console.log('[SettingWindow] Start silent setting updated:', value)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingWindow] Failed to update start silent setting:', error)
   }
 }
@@ -98,19 +102,20 @@ async function updateAutoStart(value: boolean) {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     await touchChannel.send('tray:autostart:update', value)
     windowSettings.value.autoStart = value
     console.log('[SettingWindow] Auto start setting updated:', value)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingWindow] Failed to update auto start setting:', error)
   }
 }
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settings.window.groupTitle')"
     :description="t('settings.window.groupDesc')"
     default-icon="i-carbon-laptop"
@@ -118,7 +123,7 @@ async function updateAutoStart(value: boolean) {
     memory-name="setting-window"
   >
     <!-- Close window to tray switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="windowSettings.closeToTray"
       :title="t('settings.window.closeToTray')"
       :description="t('settings.window.closeToTrayDesc')"
@@ -128,7 +133,7 @@ async function updateAutoStart(value: boolean) {
     />
 
     <!-- Start minimized switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="windowSettings.startMinimized"
       :title="t('settings.window.startMinimized')"
       :description="t('settings.window.startMinimizedDesc')"
@@ -138,7 +143,7 @@ async function updateAutoStart(value: boolean) {
     />
 
     <!-- Start silent switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="windowSettings.startSilent"
       :title="t('settings.window.startSilent')"
       :description="t('settings.window.startSilentDesc')"
@@ -148,7 +153,7 @@ async function updateAutoStart(value: boolean) {
     />
 
     <!-- Auto start switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="windowSettings.autoStart"
       :title="t('settings.window.autoStart')"
       :description="t('settings.window.autoStartDesc')"
@@ -156,7 +161,7 @@ async function updateAutoStart(value: boolean) {
       active-icon="i-carbon-play-filled"
       @update:model-value="updateAutoStart"
     />
-  </tuff-group-block>
+  </TuffGroupBlock>
 </template>
 
 <style scoped>

@@ -1,27 +1,8 @@
-<template>
-  <aside class="IntelligenceList h-full">
-    <TuffListTemplate
-      :groups="listGroups"
-      :empty-text="t('intelligence.list.empty')"
-      class="h-full"
-    >
-      <template #item="{ item }">
-        <IntelligenceItem
-          :provider="item"
-          :is-selected="item.id === selectedId"
-          role="listitem"
-          @click="handleItemClick(item.id)"
-        />
-      </template>
-    </TuffListTemplate>
-  </aside>
-</template>
-
 <script lang="ts" name="IntelligenceList" setup>
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import IntelligenceItem from './IntelligenceItem.vue'
 import TuffListTemplate from '~/components/tuff/template/TuffListTemplate.vue'
+import IntelligenceItem from './IntelligenceItem.vue'
 
 interface AiProviderConfig {
   id: string
@@ -56,9 +37,9 @@ const selectedId = ref<string | null>(props.selectedId || null)
 const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?? '')
 
 // Separate enabled and disabled providers
-const enabledProviders = computed(() => props.providers.filter((provider) => provider.enabled))
+const enabledProviders = computed(() => props.providers.filter(provider => provider.enabled))
 
-const disabledProviders = computed(() => props.providers.filter((provider) => !provider.enabled))
+const disabledProviders = computed(() => props.providers.filter(provider => !provider.enabled))
 
 // Filter providers based on search query
 const filteredEnabledProviders = computed(() => {
@@ -67,9 +48,9 @@ const filteredEnabledProviders = computed(() => {
   }
 
   return enabledProviders.value.filter(
-    (provider) =>
-      provider.name.toLowerCase().includes(normalizedQuery.value) ||
-      provider.type.toLowerCase().includes(normalizedQuery.value)
+    provider =>
+      provider.name.toLowerCase().includes(normalizedQuery.value)
+      || provider.type.toLowerCase().includes(normalizedQuery.value),
   )
 })
 
@@ -79,9 +60,9 @@ const filteredDisabledProviders = computed(() => {
   }
 
   return disabledProviders.value.filter(
-    (provider) =>
-      provider.name.toLowerCase().includes(normalizedQuery.value) ||
-      provider.type.toLowerCase().includes(normalizedQuery.value)
+    provider =>
+      provider.name.toLowerCase().includes(normalizedQuery.value)
+      || provider.type.toLowerCase().includes(normalizedQuery.value),
   )
 })
 
@@ -92,7 +73,7 @@ watch(
     if (newId) {
       emits('select', newId)
     }
-  }
+  },
 )
 
 // Watch for external selectedId changes
@@ -100,7 +81,7 @@ watch(
   () => props.selectedId,
   (newId) => {
     selectedId.value = newId || null
-  }
+  },
 )
 
 const listGroups = computed(() => [
@@ -112,7 +93,7 @@ const listGroups = computed(() => [
     items: filteredEnabledProviders.value,
     collapsible: false,
     badgeVariant: 'success',
-    itemKey: (provider: AiProviderConfig) => provider.id
+    itemKey: (provider: AiProviderConfig) => provider.id,
   },
   {
     id: 'disabled',
@@ -123,11 +104,30 @@ const listGroups = computed(() => [
     collapsible: true,
     collapsed: false,
     badgeVariant: 'info',
-    itemKey: (provider: AiProviderConfig) => provider.id
-  }
+    itemKey: (provider: AiProviderConfig) => provider.id,
+  },
 ])
 
 function handleItemClick(id: string): void {
   selectedId.value = id
 }
 </script>
+
+<template>
+  <aside class="IntelligenceList h-full">
+    <TuffListTemplate
+      :groups="listGroups"
+      :empty-text="t('intelligence.list.empty')"
+      class="h-full"
+    >
+      <template #item="{ item }">
+        <IntelligenceItem
+          :provider="item"
+          :is-selected="item.id === selectedId"
+          role="listitem"
+          @click="handleItemClick(item.id)"
+        />
+      </template>
+    </TuffListTemplate>
+  </aside>
+</template>

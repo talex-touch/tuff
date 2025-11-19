@@ -10,19 +10,19 @@ To display a toast notification, use the `toast` object provided by the plugin S
 
 ```javascript [Basic Toast Usage]
 // In your plugin's main file or preload script
-import { toast } from '@polyglot-toolbox/plugin-sdk';
+import { toast } from '@polyglot-toolbox/plugin-sdk'
 
 // Show a simple info message
-toast.info('Operation completed successfully');
+toast.info('Operation completed successfully')
 
 // Show a success message
-toast.success('File saved successfully');
+toast.success('File saved successfully')
 
 // Show a warning message
-toast.warning('This action cannot be undone');
+toast.warning('This action cannot be undone')
 
 // Show an error message
-toast.error('Failed to connect to server');
+toast.error('Failed to connect to server')
 ```
 
 :::
@@ -38,7 +38,7 @@ Info toasts are used for general information messages.
 ::: code-group
 
 ```javascript [Info Toast]
-toast.info('This is an informational message');
+toast.info('This is an informational message')
 ```
 
 :::
@@ -50,7 +50,7 @@ Success toasts indicate that an operation has completed successfully.
 ::: code-group
 
 ```javascript [Success Toast]
-toast.success('Operation completed successfully');
+toast.success('Operation completed successfully')
 ```
 
 :::
@@ -62,7 +62,7 @@ Warning toasts alert users to potential issues or important information.
 ::: code-group
 
 ```javascript [Warning Toast]
-toast.warning('Please check your input');
+toast.warning('Please check your input')
 ```
 
 :::
@@ -74,7 +74,7 @@ Error toasts indicate that something has gone wrong.
 ::: code-group
 
 ```javascript [Error Toast]
-toast.error('An error occurred while processing your request');
+toast.error('An error occurred while processing your request')
 ```
 
 :::
@@ -91,10 +91,10 @@ By default, toasts disappear after a few seconds. You can specify a custom durat
 
 ```javascript [Custom Duration]
 // Show a toast for 5 seconds (5000 milliseconds)
-toast.info('This message will stay longer', { duration: 5000 });
+toast.info('This message will stay longer', { duration: 5000 })
 
 // Show a toast that doesn't auto-dismiss
-toast.info('This message stays until dismissed', { duration: 0 });
+toast.info('This message stays until dismissed', { duration: 0 })
 ```
 
 :::
@@ -107,22 +107,22 @@ Toasts can appear in different positions on the screen:
 
 ```javascript [Positioning Toasts]
 // Top center (default)
-toast.info('Top center message');
+toast.info('Top center message')
 
 // Top left
-toast.info('Top left message', { position: 'top-left' });
+toast.info('Top left message', { position: 'top-left' })
 
 // Top right
-toast.info('Top right message', { position: 'top-right' });
+toast.info('Top right message', { position: 'top-right' })
 
 // Bottom center
-toast.info('Bottom center message', { position: 'bottom-center' });
+toast.info('Bottom center message', { position: 'bottom-center' })
 
 // Bottom left
-toast.info('Bottom left message', { position: 'bottom-left' });
+toast.info('Bottom left message', { position: 'bottom-left' })
 
 // Bottom right
-toast.info('Bottom right message', { position: 'bottom-right' });
+toast.info('Bottom right message', { position: 'bottom-right' })
 ```
 
 :::
@@ -148,18 +148,18 @@ toast.info('File download complete', {
       text: 'Open File',
       onClick: () => {
         // Open the downloaded file
-        openFile('/path/to/downloaded/file.txt');
+        openFile('/path/to/downloaded/file.txt')
       }
     },
     {
       text: 'Show in Folder',
       onClick: () => {
         // Show the file in the file explorer
-        showInFolder('/path/to/downloaded/file.txt');
+        showInFolder('/path/to/downloaded/file.txt')
       }
     }
   ]
-});
+})
 ```
 
 :::
@@ -178,13 +178,13 @@ For long-running operations, you can show a progress indicator:
 const toastId = toast.info('Processing file...', {
   duration: 0, // Don't auto-dismiss
   showProgress: true
-});
+})
 
 // Update the progress
 toast.update(toastId, {
   message: 'Processing file... 50%',
   progress: 50
-});
+})
 
 // Complete the operation
 toast.update(toastId, {
@@ -192,7 +192,7 @@ toast.update(toastId, {
   type: 'success',
   duration: 3000, // Auto-dismiss after 3 seconds
   showProgress: false
-});
+})
 ```
 
 :::
@@ -211,7 +211,7 @@ toast.info('Custom styled message', {
     borderRadius: '8px',
     fontSize: '16px'
   }
-});
+})
 ```
 
 :::
@@ -225,12 +225,12 @@ Add custom icons to toasts:
 ```javascript [Custom Icons]
 toast.info('Message with custom icon', {
   icon: '<svg>...</svg>' // SVG icon string
-});
+})
 
 // Or use a predefined icon
 toast.info('Message with info icon', {
   icon: 'info'
-});
+})
 ```
 
 :::
@@ -248,14 +248,15 @@ Choose the right type of toast for your message to convey the correct level of i
 ```javascript [Appropriate Toast Types]
 // Good - Using appropriate toast types
 if (operationSuccessful) {
-  toast.success('Operation completed successfully');
-} else {
-  toast.error('Operation failed. Please try again.');
+  toast.success('Operation completed successfully')
+}
+else {
+  toast.error('Operation failed. Please try again.')
 }
 
 // Avoid - Using info for errors
 if (operationFailed) {
-  toast.info('Operation failed. Please try again.'); // Misleading
+  toast.info('Operation failed. Please try again.') // Misleading
 }
 ```
 
@@ -269,10 +270,10 @@ Toast messages should be brief and to the point:
 
 ```javascript [Concise Messages]
 // Good - Concise message
-toast.info('Settings saved');
+toast.info('Settings saved')
 
 // Avoid - Too verbose
-toast.info('Your settings have been successfully saved to the configuration file');
+toast.info('Your settings have been successfully saved to the configuration file')
 ```
 
 :::
@@ -296,7 +297,7 @@ toast.error('Failed to save file', {
       onClick: () => saveFileAs()
     }
   ]
-});
+})
 ```
 
 :::
@@ -309,28 +310,28 @@ Avoid showing too many toasts in a short period, as this can overwhelm users:
 
 ```javascript [Avoid Overuse]
 // Avoid - Showing multiple toasts rapidly
-files.forEach(file => {
-  processFile(file);
-  toast.info(`Processing ${file.name}`); // This could create many toasts
-});
+files.forEach((file) => {
+  processFile(file)
+  toast.info(`Processing ${file.name}`) // This could create many toasts
+})
 
 // Better - Show a single toast with progress
-const toastId = toast.info('Processing files...', { duration: 0 });
-let processed = 0;
+const toastId = toast.info('Processing files...', { duration: 0 })
+let processed = 0
 
-files.forEach(file => {
-  processFile(file);
-  processed++;
+files.forEach((file) => {
+  processFile(file)
+  processed++
   toast.update(toastId, {
     message: `Processing files... ${processed}/${files.length}`
-  });
-});
+  })
+})
 
 toast.update(toastId, {
   message: 'All files processed successfully',
   type: 'success',
   duration: 3000
-});
+})
 ```
 
 :::
@@ -343,54 +344,55 @@ Here's a complete example of a plugin that uses toast notifications to inform us
 
 ```javascript [File Processing Plugin Example]
 // plugin.js
-import { toast } from '@polyglot-toolbox/plugin-sdk';
+import { toast } from '@polyglot-toolbox/plugin-sdk'
 
 class FileProcessingPlugin {
   constructor() {
-    this.setupEventListeners();
+    this.setupEventListeners()
   }
-  
+
   setupEventListeners() {
     document.getElementById('process-files-btn').addEventListener('click', () => {
-      this.processFiles();
-    });
+      this.processFiles()
+    })
   }
-  
+
   async processFiles() {
-    const files = this.getSelectedFiles();
-    
+    const files = this.getSelectedFiles()
+
     if (files.length === 0) {
-      toast.warning('Please select files to process');
-      return;
+      toast.warning('Please select files to process')
+      return
     }
-    
+
     // Show initial toast with progress
     const toastId = toast.info(`Processing ${files.length} files...`, {
       duration: 0,
       showProgress: true
-    });
-    
-    let processed = 0;
-    let errors = 0;
-    
+    })
+
+    let processed = 0
+    let errors = 0
+
     try {
       for (const file of files) {
         try {
-          await this.processFile(file);
-          processed++;
-        } catch (error) {
-          console.error(`Error processing file ${file.name}:`, error);
-          errors++;
+          await this.processFile(file)
+          processed++
         }
-        
+        catch (error) {
+          console.error(`Error processing file ${file.name}:`, error)
+          errors++
+        }
+
         // Update progress
-        const progress = Math.round((processed + errors) / files.length * 100);
+        const progress = Math.round((processed + errors) / files.length * 100)
         toast.update(toastId, {
           message: `Processing files... ${processed + errors}/${files.length}`,
-          progress: progress
-        });
+          progress
+        })
       }
-      
+
       // Show completion message
       if (errors === 0) {
         toast.update(toastId, {
@@ -398,52 +400,55 @@ class FileProcessingPlugin {
           type: 'success',
           duration: 3000,
           showProgress: false
-        });
-      } else {
+        })
+      }
+      else {
         toast.update(toastId, {
           message: `Processed ${processed} files with ${errors} errors`,
           type: 'warning',
           duration: 5000,
           showProgress: false
-        });
+        })
       }
-    } catch (error) {
-      console.error('Error processing files:', error);
+    }
+    catch (error) {
+      console.error('Error processing files:', error)
       toast.update(toastId, {
         message: 'An error occurred while processing files',
         type: 'error',
         duration: 5000,
         showProgress: false
-      });
+      })
     }
   }
-  
+
   getSelectedFiles() {
     // Implementation to get selected files
     return [
       { name: 'file1.txt' },
       { name: 'file2.txt' },
       { name: 'file3.txt' }
-    ];
+    ]
   }
-  
+
   processFile(file) {
     // Implementation to process a file
     return new Promise((resolve, reject) => {
       // Simulate file processing
       setTimeout(() => {
         if (Math.random() > 0.1) { // 90% success rate
-          resolve();
-        } else {
-          reject(new Error('Processing failed'));
+          resolve()
         }
-      }, 500);
-    });
+        else {
+          reject(new Error('Processing failed'))
+        }
+      }, 500)
+    })
   }
 }
 
 // Initialize the plugin
-new FileProcessingPlugin();
+new FileProcessingPlugin()
 ```
 
 :::

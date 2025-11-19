@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import Loading from '~/components/icon/LoadingIcon.vue'
-import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import PluginIcon from '~/components/plugin/PluginIcon.vue'
+import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import Loading from '~/components/icon/LoadingIcon.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
+import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 /**
  * Button interface for defining button properties
@@ -62,7 +62,7 @@ const props = withDefaults(defineProps<Props>(), {
   stay: 0,
   btns: () => [],
   icon: '',
-  loading: false
+  loading: false,
 })
 
 // Refs
@@ -84,12 +84,12 @@ watchEffect(() => {
       content: btn.content,
       type: btn.type,
       onClick: btn.onClick,
-      loading: false // Initialize loading as false
+      loading: false, // Initialize loading as false
     }
 
     // Create reactive object
     const obj = {
-      value: buttonState
+      value: buttonState,
     }
 
     // Handle loading callback
@@ -112,7 +112,7 @@ watchEffect(() => {
  */
 function listener(): void {
   window.scrollTo({
-    top: 0
+    top: 0,
   })
 }
 
@@ -146,7 +146,7 @@ onUnmounted(() => {
 /**
  * Close dialog function
  */
-const forClose = async (): Promise<void> => {
+async function forClose(): Promise<void> {
   if (wholeDom.value) {
     const style = wholeDom.value.style
 
@@ -169,12 +169,13 @@ const forClose = async (): Promise<void> => {
  * Handle button click event
  * @param btn Button object
  */
-const clickBtn = async (btn: { value: ButtonState }): Promise<void> => {
+async function clickBtn(btn: { value: ButtonState }): Promise<void> {
   btn.value.loading = true
 
   await sleep(200)
 
-  if (await btn.value.onClick()) forClose()
+  if (await btn.value.onClick())
+    forClose()
 
   btn.value.loading = false
 }
@@ -226,7 +227,7 @@ const clickBtn = async (btn: { value: ButtonState }): Promise<void> => {
               'warn-tip': btn.value?.type === 'warning',
               'error-tip': btn.value?.type === 'error',
               'success-tip': btn.value?.type === 'success',
-              'loading-tip': btn.value.loading
+              'loading-tip': btn.value.loading,
             }"
             class="TDialogTip-Btn-Item"
             role="button"
@@ -249,7 +250,7 @@ const clickBtn = async (btn: { value: ButtonState }): Promise<void> => {
       <div class="TDialogTip-Icon">
         <PluginIcon v-if="icon instanceof Object" :icon="icon" />
         <RemixIcon v-else-if="icon && icon.at(0) === '#'" :name="icon.substring(1)" />
-        <img v-else-if="icon" :src="icon" :alt="title" />
+        <img v-else-if="icon" :src="icon" :alt="title">
         <span v-else class="tip-icon" v-text="`Tip`" />
       </div>
     </div>

@@ -13,7 +13,7 @@ export class FrequencyManager {
     daily: 24 * 60 * 60 * 1000, // 24 hours
     weekly: 7 * 24 * 60 * 60 * 1000, // 7 days
     monthly: 30 * 24 * 60 * 60 * 1000, // 30 days
-    never: Number.MAX_SAFE_INTEGER // Never
+    never: Number.MAX_SAFE_INTEGER, // Never
   } as const
 
   /**
@@ -26,7 +26,7 @@ export class FrequencyManager {
   shouldCheck(
     key: string,
     frequency: keyof typeof FrequencyManager.prototype.frequencyTypes,
-    force = false
+    force = false,
   ): boolean {
     if (force) {
       return true
@@ -65,7 +65,7 @@ export class FrequencyManager {
    */
   getTimeUntilNextCheck(
     key: string,
-    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes
+    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes,
   ): number {
     if (frequency === 'never') {
       return Number.MAX_SAFE_INTEGER
@@ -91,7 +91,7 @@ export class FrequencyManager {
    */
   getTimeUntilNextCheckString(
     key: string,
-    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes
+    frequency: keyof typeof FrequencyManager.prototype.frequencyTypes,
   ): string {
     const timeUntilNext = this.getTimeUntilNextCheck(key, frequency)
 
@@ -108,9 +108,11 @@ export class FrequencyManager {
 
     if (hours > 0) {
       return `${hours}h ${minutes}m`
-    } else if (minutes > 0) {
+    }
+    else if (minutes > 0) {
       return `${minutes}m`
-    } else {
+    }
+    else {
       return 'Less than 1 minute'
     }
   }

@@ -1,6 +1,7 @@
-import { promises as fs } from 'fs'
-import path from 'path'
-import { ChunkInfo, ChunkStatus, DownloadTask } from '@talex-touch/utils'
+import type { ChunkInfo, DownloadTask } from '@talex-touch/utils'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { ChunkStatus } from '@talex-touch/utils'
 
 export class ChunkManager {
   private readonly chunkSize: number = 1024 * 1024 // 1MB per chunk
@@ -38,7 +39,7 @@ export class ChunkManager {
         size,
         downloaded: 0,
         status: ChunkStatus.PENDING,
-        filePath: chunkPath
+        filePath: chunkPath,
       })
     }
 
@@ -60,11 +61,13 @@ export class ChunkManager {
         if (chunk.status === ChunkStatus.COMPLETED) {
           const chunkData = await fs.readFile(chunk.filePath)
           await writeStream.write(chunkData)
-        } else {
+        }
+        else {
           throw new Error(`Chunk ${chunk.index} is not completed`)
         }
       }
-    } finally {
+    }
+    finally {
       await writeStream.close()
     }
 
@@ -84,11 +87,12 @@ export class ChunkManager {
         const stats = await fs.stat(chunk.filePath)
         if (stats.size !== chunk.size) {
           console.warn(
-            `Chunk ${chunk.index} size mismatch: expected ${chunk.size}, got ${stats.size}`
+            `Chunk ${chunk.index} size mismatch: expected ${chunk.size}, got ${stats.size}`,
           )
           return false
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`Chunk ${chunk.index} file not found:`, error)
         return false
       }
@@ -102,7 +106,8 @@ export class ChunkManager {
     for (const chunk of chunks) {
       try {
         await fs.unlink(chunk.filePath)
-      } catch (error: unknown) {
+      }
+      catch (error: unknown) {
         // 忽略文件不存在错误
         if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
           console.error(`Failed to cleanup chunk file ${chunk.filePath}:`, error)
@@ -135,23 +140,23 @@ export class ChunkManager {
       totalSize,
       downloadedSize,
       completedChunks,
-      totalChunks: chunks.length
+      totalChunks: chunks.length,
     }
   }
 
   // 检查切片是否可以断点续传
   canResume(chunks: ChunkInfo[]): boolean {
     return chunks.some(
-      (chunk) =>
-        chunk.status === ChunkStatus.COMPLETED ||
-        (chunk.status === ChunkStatus.DOWNLOADING && chunk.downloaded > 0)
+      chunk =>
+        chunk.status === ChunkStatus.COMPLETED
+        || (chunk.status === ChunkStatus.DOWNLOADING && chunk.downloaded > 0),
     )
   }
 
   // 获取需要重新下载的切片
   getChunksToRetry(chunks: ChunkInfo[]): ChunkInfo[] {
     return chunks.filter(
-      (chunk) => chunk.status === ChunkStatus.FAILED || chunk.status === ChunkStatus.PENDING
+      chunk => chunk.status === ChunkStatus.FAILED || chunk.status === ChunkStatus.PENDING,
     )
   }
 
@@ -177,7 +182,8 @@ export class ChunkManager {
     try {
       await fs.rm(tempDir, { recursive: true, force: true })
       console.log(`Cleaned up temp directory for task ${task.id}: ${tempDir}`)
-    } catch (error: unknown) {
+    }
+    catch (error: unknown) {
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         console.error(`Failed to cleanup temp directory ${tempDir}:`, error)
       }

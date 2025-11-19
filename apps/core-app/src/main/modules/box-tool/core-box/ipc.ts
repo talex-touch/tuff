@@ -1,10 +1,10 @@
+import type { TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import type { TouchApp } from '../../../core/touch-app'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { coreBoxManager } from './manager'
-import searchEngineCore from '../search-engine/search-core'
-import { TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
-import { TouchApp } from '../../../core/touch-app'
 import { genTouchApp } from '../../../core'
 import { pluginModule } from '../../plugin/plugin-module'
+import searchEngineCore from '../search-engine/search-core'
+import { coreBoxManager } from './manager'
 
 /**
  * @class IpcManager
@@ -62,20 +62,19 @@ export class IpcManager {
 
           const buffer = fileIcon(path, 32)
           reply(DataCode.SUCCESS, {
-            buffer
+            buffer,
           })
-        } catch (error) {
+        }
+        catch (error) {
           console.log('Cannot find target file icon:', data.path, error)
         }
-      }
+      },
     )
 
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () =>
-      coreBoxManager.trigger(false)
-    )
+      coreBoxManager.trigger(false))
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show', () =>
-      coreBoxManager.trigger(true)
-    )
+      coreBoxManager.trigger(true))
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
       if (typeof data === 'object' && data) {
         if (data.mode === 'collapse') {
@@ -96,7 +95,8 @@ export class IpcManager {
 
       if (typeof data === 'number' && data > 0) {
         coreBoxManager.expand({ length: data })
-      } else {
+      }
+      else {
         coreBoxManager.shrink()
       }
     })
@@ -108,7 +108,7 @@ export class IpcManager {
         // The search engine now manages its own activation state.
         const result = await coreBoxManager.search(query)
         reply(DataCode.SUCCESS, result)
-      }
+      },
     )
 
     this.touchApp.channel.regChannel(
@@ -118,7 +118,7 @@ export class IpcManager {
         const { id } = data as { id: string }
         searchEngineCore.deactivateProvider(id)
         reply(DataCode.SUCCESS, searchEngineCore.getActivationState())
-      }
+      },
     )
 
     this.touchApp.channel.regChannel(
@@ -128,7 +128,7 @@ export class IpcManager {
         searchEngineCore.deactivateProviders()
         // Return the new, empty state for consistency
         reply(DataCode.SUCCESS, searchEngineCore.getActivationState())
-      }
+      },
     )
 
     this.touchApp.channel.regChannel(
@@ -141,30 +141,31 @@ export class IpcManager {
         }
 
         const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
-        const nativeProviderDetails = nativeProviders.map((p) => ({
+        const nativeProviderDetails = nativeProviders.map(p => ({
           id: p.id,
           name: p.name,
-          icon: p.icon
+          icon: p.icon,
         }))
 
-        const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
-        const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
+        const nativeProviderIds = new Set(nativeProviders.map(p => p.id))
+        const pluginIdsToFetch = providerIds.filter(id => !nativeProviderIds.has(id))
 
         const pluginDetails = pluginIdsToFetch
           .map((id) => {
             const plugin = pluginModule.pluginManager!.plugins.get(id)
-            if (!plugin) return null
+            if (!plugin)
+              return null
             return {
               id: plugin.name,
               name: plugin.name,
-              icon: plugin.icon
+              icon: plugin.icon,
             }
           })
-          .filter((p): p is { id: string; name: string; icon: any } => !!p)
+          .filter((p): p is { id: string, name: string, icon: any } => !!p)
 
         const allDetails = [...nativeProviderDetails, ...pluginDetails]
         reply(DataCode.SUCCESS, allDetails)
-      }
+      },
     )
 
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:enter-ui-mode', ({ data }) => {
@@ -187,10 +188,11 @@ export class IpcManager {
           console.debug(`[CoreBox] Canceling search with ID: ${searchId}`)
           searchEngineCore.cancelSearch(searchId)
           reply(DataCode.SUCCESS, { cancelled: true })
-        } else {
+        }
+        else {
           reply(DataCode.SUCCESS, { cancelled: false })
         }
-      }
+      },
     )
   }
 

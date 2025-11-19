@@ -1,59 +1,61 @@
+<script>
+</script>
+
+<script setup>
+import SearchResults from '@comp/music/layout/SearchResults.vue'
+import { axios } from '@modules/axios.js'
+import { player } from '@modules/entity/play-manager'
+import { SingleSong } from '@modules/entity/song-resolver'
+import { ref } from 'vue'
+
+export default {
+  name: 'Header',
+}
+
+const searchState = ref('')
+const searchResults = ref()
+
+async function searchQuery() {
+  if (!searchState.value)
+    return []
+
+  const res = await axios.get('/cloudsearch', {
+    params: { keywords: searchState.value },
+  })
+  if (res.code !== 200) {
+    return console.log('none')
+  }
+
+  searchResults.value = res.result
+  const songs = res.result.songs
+
+  return songs
+}
+
+function selectSong(song) {
+  const singleSong = new SingleSong(song)
+
+  player.addSong(singleSong)
+
+  if (player.isPause) {
+    player.play()
+  }
+}
+</script>
+
 <template>
   <div class="Header-Container">
-    <el-input v-model="searchState" @blur="searchQuery" placeholder="搜索音乐..." />
+    <el-input v-model="searchState" placeholder="搜索音乐..." @blur="searchQuery" />
   </div>
 
   <div class="Header-List">
     <SearchResults
+      :res="searchResults"
       @select="selectSong"
       @close="searchResults = null"
-      :res="searchResults"
     />
   </div>
 </template>
-
-<script>
-export default {
-  name: "Header",
-};
-</script>
-
-<script setup>
-import { ref } from "vue";
-import SearchResults from "@comp/music/layout/SearchResults.vue";
-import { SingleSong } from "@modules/entity/song-resolver";
-import { axios } from "@modules/axios.js";
-import { player } from "@modules/entity/play-manager";
-
-const searchState = ref("");
-const searchResults = ref();
-
-async function searchQuery() {
-  if (!searchState.value) return [];
-
-  const res = await axios.get("/cloudsearch", {
-    params: { keywords: searchState.value },
-  });
-  if (res.code !== 200) {
-    return console.log("none");
-  }
-
-  searchResults.value = res.result;
-  const songs = res.result.songs;
-
-  return songs;
-}
-
-function selectSong(song) {
-  const singleSong = new SingleSong(song);
-
-  player.addSong(singleSong);
-
-  if (player.isPause) {
-    player.play();
-  }
-}
-</script>
 
 <style lang="scss" scoped>
 .Header-Info {

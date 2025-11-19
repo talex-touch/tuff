@@ -1,8 +1,8 @@
 import type {
+  AiProviderAdapter,
   AiProviderConfig,
   AiProviderType,
-  AiProviderAdapter,
-  ProviderManagerAdapter
+  ProviderManagerAdapter,
 } from '@talex-touch/utils'
 import { createLogger } from '../../../utils/logger'
 
@@ -37,7 +37,7 @@ export class IntelligenceProviderManager implements ProviderManagerAdapter {
   }
 
   getEnabled(): AiProviderAdapter[] {
-    return Array.from(this.providers.values()).filter((provider) => provider.isEnabled())
+    return Array.from(this.providers.values()).filter(provider => provider.isEnabled())
   }
 
   get(providerId: string): AiProviderAdapter | undefined {

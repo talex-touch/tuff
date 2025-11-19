@@ -1,3 +1,39 @@
+<script lang="ts" setup>
+import { ref } from 'vue'
+import TuffItemTemplate from './TuffItemTemplate.vue'
+
+const selectedId = ref('item-1')
+
+const listItems = [
+  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: 'i-simple-icons-openai', enabled: true },
+  {
+    id: 'item-2',
+    name: 'Anthropic',
+    type: 'anthropic',
+    icon: 'i-simple-icons-anthropic',
+    enabled: true,
+  },
+  {
+    id: 'item-3',
+    name: 'DeepSeek',
+    type: 'deepseek',
+    icon: 'i-carbon-search-advanced',
+    enabled: false,
+  },
+  {
+    id: 'item-4',
+    name: 'Local Model',
+    type: 'local',
+    icon: 'i-carbon-bare-metal-server',
+    enabled: true,
+  },
+]
+
+function handleClick(type: string) {
+  console.log('Clicked:', type)
+}
+</script>
+
 <template>
   <div class="example-container">
     <h2>TuffItemTemplate 使用示例</h2>
@@ -97,13 +133,17 @@
       <TuffItemTemplate icon="i-carbon-user">
         <template #title>
           <span style="color: var(--el-color-primary)">Custom Title</span>
-          <el-tag size="small" type="success">Pro</el-tag>
+          <el-tag size="small" type="success">
+            Pro
+          </el-tag>
         </template>
         <template #subtitle>
           <span>Custom subtitle with <strong>formatting</strong></span>
         </template>
         <template #trailing>
-          <el-button size="small" type="primary" text>Action</el-button>
+          <el-button size="small" type="primary" text>
+            Action
+          </el-button>
         </template>
       </TuffItemTemplate>
     </section>
@@ -125,42 +165,6 @@
     </section>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { ref } from 'vue'
-import TuffItemTemplate from './TuffItemTemplate.vue'
-
-const selectedId = ref('item-1')
-
-const listItems = [
-  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: 'i-simple-icons-openai', enabled: true },
-  {
-    id: 'item-2',
-    name: 'Anthropic',
-    type: 'anthropic',
-    icon: 'i-simple-icons-anthropic',
-    enabled: true
-  },
-  {
-    id: 'item-3',
-    name: 'DeepSeek',
-    type: 'deepseek',
-    icon: 'i-carbon-search-advanced',
-    enabled: false
-  },
-  {
-    id: 'item-4',
-    name: 'Local Model',
-    type: 'local',
-    icon: 'i-carbon-bare-metal-server',
-    enabled: true
-  }
-]
-
-function handleClick(type: string) {
-  console.log('Clicked:', type)
-}
-</script>
 
 <style scoped>
 .example-container {

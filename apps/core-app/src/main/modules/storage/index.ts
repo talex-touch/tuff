@@ -1,10 +1,10 @@
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
+import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
-import fse from 'fs-extra'
-import path from 'path'
 import { BrowserWindow } from 'electron'
+import fse from 'fs-extra'
 import { BaseModule } from '../abstract-base-module'
-import { ModuleInitContext, MaybePromise, ModuleKey } from '@talex-touch/utils'
-import { TalexEvents } from '../../core/eventbus/touch-event'
 
 let pluginConfigPath: string
 
@@ -27,7 +27,7 @@ export class StorageModule extends BaseModule {
   constructor() {
     super(StorageModule.key, {
       create: true,
-      dirName: 'config'
+      dirName: 'config',
     })
   }
 
@@ -35,11 +35,12 @@ export class StorageModule extends BaseModule {
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
     console.log(
-      `[Config] Init config path ${file.dirPath} and plugin config path ${pluginConfigPath}`
+      `[Config] Init config path ${file.dirPath} and plugin config path ${pluginConfigPath}`,
     )
 
     this.setupListeners()
   }
+
   onDestroy(): MaybePromise<void> {
     this.saveAllConfig()
     this.configs.clear()
@@ -47,7 +48,8 @@ export class StorageModule extends BaseModule {
   }
 
   getConfig(name: string): object {
-    if (!this.filePath) throw new Error(`Config ${name} not found! Path not set: ` + this.filePath)
+    if (!this.filePath)
+      throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
 
     if (this.configs.has(name)) {
       return this.configs.get(name)!
@@ -61,7 +63,8 @@ export class StorageModule extends BaseModule {
   }
 
   reloadConfig(name: string): object {
-    if (!this.filePath) throw new Error(`Config ${name} not found`)
+    if (!this.filePath)
+      throw new Error(`Config ${name} not found`)
 
     const filePath = path.resolve(this.filePath, name)
     const file = JSON.parse(fse.readFileSync(filePath, 'utf-8'))
@@ -71,7 +74,8 @@ export class StorageModule extends BaseModule {
   }
 
   saveConfig(name: string, content?: string, clear?: boolean): boolean {
-    if (!this.filePath) throw new Error(`Config ${name} not found`)
+    if (!this.filePath)
+      throw new Error(`Config ${name} not found`)
 
     const configData = content ?? JSON.stringify(this.configs.get(name) ?? {})
     const p = path.join(this.filePath, name)
@@ -81,7 +85,8 @@ export class StorageModule extends BaseModule {
 
     if (clear) {
       this.configs.delete(name)
-    } else {
+    }
+    else {
       this.configs.set(name, JSON.parse(configData))
     }
 
@@ -94,7 +99,8 @@ export class StorageModule extends BaseModule {
   }
 
   saveAllConfig(): void {
-    if (!this.filePath) throw new Error(`Config path not found!`)
+    if (!this.filePath)
+      throw new Error(`Config path not found!`)
 
     this.configs.forEach((_value, key) => {
       this.saveConfig(key)
@@ -105,20 +111,24 @@ export class StorageModule extends BaseModule {
     const channel = $app.channel
 
     channel.regChannel(ChannelType.MAIN, 'storage:get', ({ data }) => {
-      if (!data || typeof data !== 'string') return {}
+      if (!data || typeof data !== 'string')
+        return {}
       return this.getConfig(data)
     })
 
     channel.regChannel(ChannelType.MAIN, 'storage:save', ({ data }) => {
-      if (!data || typeof data !== 'object') return false
+      if (!data || typeof data !== 'object')
+        return false
       const { key, content, clear } = data
-      if (typeof key !== 'string') return false
+      if (typeof key !== 'string')
+        return false
       // saveConfig 内部会调用 broadcastUpdate,无需在这里重复调用
       return this.saveConfig(key, content, clear)
     })
 
     channel.regChannel(ChannelType.MAIN, 'storage:reload', ({ data }) => {
-      if (!data || typeof data !== 'string') return {}
+      if (!data || typeof data !== 'string')
+        return {}
       const result = this.reloadConfig(data)
       // 重新加载配置后也需要广播更新
       broadcastUpdate(data)

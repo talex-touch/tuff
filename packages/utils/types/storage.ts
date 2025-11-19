@@ -53,4 +53,3 @@ export interface FileDetails {
   /** Whether content was truncated due to size */
   truncated?: boolean
 }
-

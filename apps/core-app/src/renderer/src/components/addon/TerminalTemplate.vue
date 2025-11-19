@@ -1,17 +1,17 @@
 <script lang="ts" name="TerminalTemplate" setup>
-import InteractiveTerminal from '../terminal/InteractiveTerminal.vue'
 import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
+import InteractiveTerminal from '../terminal/InteractiveTerminal.vue'
 
 withDefaults(
   defineProps<{
     title?: string
   }>(),
   {
-    title: 'terminal.title'
-  }
+    title: 'terminal.title',
+  },
 )
+
+const { t } = useI18n()
 
 const terminal = ref()
 
@@ -22,7 +22,9 @@ onMounted(() => {
 
 <template>
   <div class="TerminalTemplate-Container">
-    <p font-600>{{ t(title) }}</p>
+    <p font-600>
+      {{ t(title) }}
+    </p>
     <el-scrollbar>
       <div class="TerminalTemplate-Content">
         <InteractiveTerminal ref="terminal" />

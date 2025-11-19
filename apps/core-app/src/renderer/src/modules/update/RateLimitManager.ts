@@ -30,10 +30,10 @@ export class RateLimitManager {
    */
   updateRateLimit(source: string, headers: Record<string, string>): void {
     try {
-      const limit = parseInt(headers['x-ratelimit-limit'] || '0', 10)
-      const remaining = parseInt(headers['x-ratelimit-remaining'] || '0', 10)
-      const resetTime = parseInt(headers['x-ratelimit-reset'] || '0', 10) * 1000 // Convert to milliseconds
-      const retryAfter = parseInt(headers['retry-after'] || '0', 10) * 1000 // Convert to milliseconds
+      const limit = Number.parseInt(headers['x-ratelimit-limit'] || '0', 10)
+      const remaining = Number.parseInt(headers['x-ratelimit-remaining'] || '0', 10)
+      const resetTime = Number.parseInt(headers['x-ratelimit-reset'] || '0', 10) * 1000 // Convert to milliseconds
+      const retryAfter = Number.parseInt(headers['retry-after'] || '0', 10) * 1000 // Convert to milliseconds
 
       // Validate parsed values
       if (limit > 0 && !isNaN(limit) && !isNaN(remaining) && !isNaN(resetTime)) {
@@ -41,10 +41,11 @@ export class RateLimitManager {
           limit,
           remaining: Math.max(0, remaining), // Ensure non-negative
           resetTime: Math.max(Date.now(), resetTime), // Ensure reset time is in the future
-          retryAfter: retryAfter > 0 && !isNaN(retryAfter) ? retryAfter : undefined
+          retryAfter: retryAfter > 0 && !isNaN(retryAfter) ? retryAfter : undefined,
         })
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.warn(`Failed to update rate limit for ${source}:`, error)
     }
   }
@@ -115,7 +116,8 @@ export class RateLimitManager {
 
     if (minutes > 0) {
       return `${minutes}m ${seconds}s`
-    } else {
+    }
+    else {
       return `${seconds}s`
     }
   }
@@ -202,7 +204,7 @@ export class RateLimitManager {
    * @returns Calculated delay
    */
   calculateBackoffDelay(attempt: number, baseDelay = 1000, maxDelay = 60000): number {
-    const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay)
+    const delay = Math.min(baseDelay * 2 ** attempt, maxDelay)
     // Add some jitter to prevent thundering herd
     const jitter = Math.random() * 0.1 * delay
     return delay + jitter

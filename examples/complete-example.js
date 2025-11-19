@@ -10,7 +10,7 @@ const PLUGIN_CONFIG = {
   name: 'Example Plugin',
   version: '1.0.0',
   description: 'A complete example plugin',
-  author: 'Talex Touch Team'
+  author: 'Talex Touch Team',
 }
 
 // 插件初始化
@@ -21,12 +21,12 @@ async function initializePlugin() {
     // 发送初始化消息
     await sdk.sendMessage('init', {
       config: PLUGIN_CONFIG,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
 
     // 加载用户配置
     const userConfig = await sdk.sendMessage('storage:get', {
-      key: 'user_config'
+      key: 'user_config',
     })
 
     if (!userConfig) {
@@ -36,14 +36,14 @@ async function initializePlugin() {
         value: {
           theme: 'auto',
           language: 'zh-CN',
-          notifications: true
-        }
+          notifications: true,
+        },
       })
     }
 
     console.log(`[${PLUGIN_CONFIG.name}] Initialized successfully`)
-
-  } catch (error) {
+  }
+  catch (error) {
     console.error(`[${PLUGIN_CONFIG.name}] Initialization failed:`, error)
   }
 }
@@ -57,7 +57,7 @@ async function demonstrateAllFeatures() {
     console.log('1. Testing search...')
     await sdk.sendMessage('search', {
       query: 'hello world',
-      type: 'text'
+      type: 'text',
     })
 
     // 2. 翻译功能
@@ -65,7 +65,7 @@ async function demonstrateAllFeatures() {
     await sdk.sendMessage('translate', {
       text: 'Hello World',
       from: 'en',
-      to: 'zh'
+      to: 'zh',
     })
 
     // 3. 通知功能
@@ -75,8 +75,8 @@ async function demonstrateAllFeatures() {
       body: 'All features working!',
       options: {
         icon: 'success',
-        timeout: 2000
-      }
+        timeout: 2000,
+      },
     })
 
     // 4. 存储功能
@@ -85,12 +85,12 @@ async function demonstrateAllFeatures() {
       key: 'demo_data',
       value: {
         message: 'Hello from plugin',
-        timestamp: Date.now()
-      }
+        timestamp: Date.now(),
+      },
     })
 
     const storedData = await sdk.sendMessage('storage:get', {
-      key: 'demo_data'
+      key: 'demo_data',
     })
     console.log('Stored data:', storedData)
 
@@ -98,17 +98,17 @@ async function demonstrateAllFeatures() {
     console.log('5. Testing clipboard...')
     await sdk.sendMessage('clipboard:write', {
       content: 'Hello from Talex Touch Plugin!',
-      type: 'text'
+      type: 'text',
     })
 
     const clipboardContent = await sdk.sendMessage('clipboard:read', {
-      type: 'text'
+      type: 'text',
     })
     console.log('Clipboard content:', clipboardContent)
 
     console.log('=== All features demonstrated successfully ===')
-
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Feature demonstration failed:', error)
   }
 }
@@ -156,7 +156,7 @@ function handleClipboardWrite(data) {
 // 导出
 window.completeExample = {
   initializePlugin,
-  demonstrateAllFeatures
+  demonstrateAllFeatures,
 }
 
 // 自动初始化

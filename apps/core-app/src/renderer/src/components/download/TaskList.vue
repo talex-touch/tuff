@@ -1,3 +1,61 @@
+<script setup lang="ts">
+import type { DownloadTask } from '@talex-touch/utils'
+import { ref, watch } from 'vue'
+import { VueDraggable as draggable } from 'vue-draggable-plus'
+import { useI18n } from 'vue-i18n'
+import TaskCard from './TaskCard.vue'
+
+interface Props {
+  tasks: DownloadTask[]
+  viewMode: 'detailed' | 'compact'
+  draggable?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  draggable: false,
+})
+
+const emit = defineEmits<{
+  'pause': [taskId: string]
+  'resume': [taskId: string]
+  'cancel': [taskId: string]
+  'retry': [taskId: string]
+  'remove': [taskId: string]
+  'delete': [taskId: string]
+  'open-file': [taskId: string]
+  'show-in-folder': [taskId: string]
+  'show-details': [taskId: string]
+  'priority-change': [taskId: string, newPriority: number]
+}>()
+
+useI18n()
+
+const taskList = ref<DownloadTask[]>([...props.tasks])
+
+watch(() => props.tasks, (newTasks) => {
+  taskList.value = [...newTasks]
+}, { deep: true })
+
+function handleDragEnd(event: any) {
+  const { oldIndex, newIndex } = event
+  if (oldIndex !== newIndex && taskList.value[newIndex]) {
+    const task = taskList.value[newIndex]
+    // Calculate new priority based on position
+    const newPriority = calculatePriority(newIndex, taskList.value.length)
+    emit('priority-change', task.id, newPriority)
+  }
+}
+
+function calculatePriority(index: number, total: number): number {
+  // Higher index = lower priority
+  // Map index to priority range (100 to 10)
+  const maxPriority = 100
+  const minPriority = 10
+  const range = maxPriority - minPriority
+  return maxPriority - Math.floor((index / Math.max(total - 1, 1)) * range)
+}
+</script>
+
 <template>
   <div class="task-list" :class="{ 'compact-mode': viewMode === 'compact' }">
     <div v-if="tasks.length === 0" class="empty-state">
@@ -29,64 +87,6 @@
     </draggable>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { VueDraggable as draggable } from 'vue-draggable-plus'
-import { DownloadTask } from '@talex-touch/utils'
-import TaskCard from './TaskCard.vue'
-
-interface Props {
-  tasks: DownloadTask[]
-  viewMode: 'detailed' | 'compact'
-  draggable?: boolean
-}
-
-useI18n()
-
-const props = withDefaults(defineProps<Props>(), {
-  draggable: false
-})
-
-const emit = defineEmits<{
-  pause: [taskId: string]
-  resume: [taskId: string]
-  cancel: [taskId: string]
-  retry: [taskId: string]
-  remove: [taskId: string]
-  delete: [taskId: string]
-  'open-file': [taskId: string]
-  'show-in-folder': [taskId: string]
-  'show-details': [taskId: string]
-  'priority-change': [taskId: string, newPriority: number]
-}>()
-
-const taskList = ref<DownloadTask[]>([...props.tasks])
-
-watch(() => props.tasks, (newTasks) => {
-  taskList.value = [...newTasks]
-}, { deep: true })
-
-const handleDragEnd = (event: any) => {
-  const { oldIndex, newIndex } = event
-  if (oldIndex !== newIndex && taskList.value[newIndex]) {
-    const task = taskList.value[newIndex]
-    // Calculate new priority based on position
-    const newPriority = calculatePriority(newIndex, taskList.value.length)
-    emit('priority-change', task.id, newPriority)
-  }
-}
-
-const calculatePriority = (index: number, total: number): number => {
-  // Higher index = lower priority
-  // Map index to priority range (100 to 10)
-  const maxPriority = 100
-  const minPriority = 10
-  const range = maxPriority - minPriority
-  return maxPriority - Math.floor((index / Math.max(total - 1, 1)) * range)
-}
-</script>
 
 <style scoped>
 .task-list {

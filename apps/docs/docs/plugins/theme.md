@@ -168,15 +168,15 @@ To register your theme with the application, use the `themes` API:
 
 ```javascript [Registering a Theme]
 // In your plugin's main file
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 // Import your theme definition
-import themeDefinition from './theme.json';
+import themeDefinition from './theme.json'
 
 // Register the theme
-themes.register('ocean-breeze', themeDefinition);
+themes.register('ocean-breeze', themeDefinition)
 
-console.log('Ocean Breeze theme registered');
+console.log('Ocean Breeze theme registered')
 ```
 
 :::
@@ -192,7 +192,7 @@ You can extend an existing theme by providing only the properties you want to ch
 ::: code-group
 
 ```javascript [Extending a Theme]
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 // Extend the default theme
 const extendedTheme = {
@@ -205,10 +205,10 @@ const extendedTheme = {
       borderRadius: 20 // Make buttons more rounded
     }
   }
-};
+}
 
 // Apply the extended theme
-themes.extend('default', extendedTheme);
+themes.extend('default', extendedTheme)
 ```
 
 :::
@@ -220,21 +220,21 @@ Create variants of existing themes:
 ::: code-group
 
 ```javascript [Theme Variants]
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 // Create a dark variant of the default theme
 const darkVariant = {
-  name: "Default Dark",
+  name: 'Default Dark',
   colors: {
-    background: "#1a1a1a",
-    surface: "#2d2d2d",
-    text: "#ffffff",
-    textSecondary: "#cccccc"
+    background: '#1a1a1a',
+    surface: '#2d2d2d',
+    text: '#ffffff',
+    textSecondary: '#cccccc'
   }
-};
+}
 
 // Register the dark variant
-themes.register('default-dark', darkVariant);
+themes.register('default-dark', darkVariant)
 ```
 
 :::
@@ -248,17 +248,17 @@ Access the current theme in your plugin to style components dynamically.
 ::: code-group
 
 ```javascript [Using Themes in Plugins]
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 // Get the current theme
-const currentTheme = themes.getCurrent();
+const currentTheme = themes.getCurrent()
 
 // Access specific theme values
-const primaryColor = currentTheme.colors.primary;
-const fontFamily = currentTheme.typography.fontFamily;
+const primaryColor = currentTheme.colors.primary
+const fontFamily = currentTheme.typography.fontFamily
 
-console.log('Primary color:', primaryColor);
-console.log('Font family:', fontFamily);
+console.log('Primary color:', primaryColor)
+console.log('Font family:', fontFamily)
 ```
 
 :::
@@ -270,14 +270,14 @@ React to theme changes to update your plugin's UI:
 ::: code-group
 
 ```javascript [Listening to Theme Changes]
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 // Listen for theme changes
 const unsubscribe = themes.onChange((newTheme) => {
-  console.log('Theme changed to:', newTheme.name);
+  console.log('Theme changed to:', newTheme.name)
   // Update your plugin's UI with the new theme
-  this.updateThemedComponents(newTheme);
-});
+  this.updateThemedComponents(newTheme)
+})
 
 // Don't forget to unsubscribe when your plugin is unloaded
 // unsubscribe();
@@ -380,14 +380,14 @@ Test your plugin with different themes to ensure it looks good and remains funct
 
 ```javascript [Test with Different Themes]
 // In development, you might want to quickly switch themes
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 // Function to cycle through themes for testing
 function cycleThemes() {
-  const availableThemes = themes.list();
-  const currentIndex = availableThemes.indexOf(themes.getCurrent().name);
-  const nextIndex = (currentIndex + 1) % availableThemes.length;
-  themes.set(availableThemes[nextIndex]);
+  const availableThemes = themes.list()
+  const currentIndex = availableThemes.indexOf(themes.getCurrent().name)
+  const nextIndex = (currentIndex + 1) % availableThemes.length
+  themes.set(availableThemes[nextIndex])
 }
 ```
 
@@ -401,89 +401,90 @@ Here's a complete example of a plugin that uses themes effectively:
 
 ```javascript [Themed Plugin UI Example]
 // plugin.js
-import { themes } from '@polyglot-toolbox/plugin-sdk';
+import { themes } from '@polyglot-toolbox/plugin-sdk'
 
 class ThemedPlugin {
   constructor() {
-    this.init();
+    this.init()
   }
-  
+
   init() {
     // Create plugin UI
-    this.createUI();
-    
+    this.createUI()
+
     // Apply current theme
-    this.applyTheme(themes.getCurrent());
-    
+    this.applyTheme(themes.getCurrent())
+
     // Listen for theme changes
     this.unsubscribe = themes.onChange((newTheme) => {
-      this.applyTheme(newTheme);
-    });
+      this.applyTheme(newTheme)
+    })
   }
-  
+
   createUI() {
     // Create a simple UI with themed elements
-    const container = document.createElement('div');
-    container.className = 'themed-plugin-container';
-    
-    const title = document.createElement('h2');
-    title.textContent = 'Themed Plugin';
-    title.className = 'themed-plugin-title';
-    
-    const button = document.createElement('button');
-    button.textContent = 'Click Me';
-    button.className = 'themed-plugin-button';
-    
-    const card = document.createElement('div');
-    card.className = 'themed-plugin-card';
-    card.innerHTML = '<p>This is a themed card component.</p>';
-    
-    container.appendChild(title);
-    container.appendChild(button);
-    container.appendChild(card);
-    
-    document.body.appendChild(container);
+    const container = document.createElement('div')
+    container.className = 'themed-plugin-container'
+
+    const title = document.createElement('h2')
+    title.textContent = 'Themed Plugin'
+    title.className = 'themed-plugin-title'
+
+    const button = document.createElement('button')
+    button.textContent = 'Click Me'
+    button.className = 'themed-plugin-button'
+
+    const card = document.createElement('div')
+    card.className = 'themed-plugin-card'
+    card.innerHTML = '<p>This is a themed card component.</p>'
+
+    container.appendChild(title)
+    container.appendChild(button)
+    container.appendChild(card)
+
+    document.body.appendChild(container)
   }
-  
+
   applyTheme(theme) {
-    console.log('Applying theme:', theme.name);
-    
+    console.log('Applying theme:', theme.name)
+
     // Update CSS variables for maximum compatibility
-    const root = document.documentElement;
-    root.style.setProperty('--plugin-primary', theme.colors.primary);
-    root.style.setProperty('--plugin-secondary', theme.colors.secondary);
-    root.style.setProperty('--plugin-background', theme.colors.background);
-    root.style.setProperty('--plugin-text', theme.colors.text);
-    
+    const root = document.documentElement
+    root.style.setProperty('--plugin-primary', theme.colors.primary)
+    root.style.setProperty('--plugin-secondary', theme.colors.secondary)
+    root.style.setProperty('--plugin-background', theme.colors.background)
+    root.style.setProperty('--plugin-text', theme.colors.text)
+
     // You can also directly manipulate elements if needed
-    const buttons = document.querySelectorAll('.themed-plugin-button');
-    buttons.forEach(btn => {
-      btn.style.backgroundColor = theme.colors.primary;
-      btn.style.color = theme.colors.background;
-      btn.style.borderRadius = theme.components?.button?.borderRadius ?
-        `${theme.components.button.borderRadius}px` : '4px';
-    });
+    const buttons = document.querySelectorAll('.themed-plugin-button')
+    buttons.forEach((btn) => {
+      btn.style.backgroundColor = theme.colors.primary
+      btn.style.color = theme.colors.background
+      btn.style.borderRadius = theme.components?.button?.borderRadius
+        ? `${theme.components.button.borderRadius}px`
+        : '4px'
+    })
   }
-  
+
   destroy() {
     // Clean up when plugin is unloaded
     if (this.unsubscribe) {
-      this.unsubscribe();
+      this.unsubscribe()
     }
-    
+
     // Remove plugin UI
-    const container = document.querySelector('.themed-plugin-container');
+    const container = document.querySelector('.themed-plugin-container')
     if (container) {
-      container.remove();
+      container.remove()
     }
   }
 }
 
 // Initialize the plugin
-const plugin = new ThemedPlugin();
+const plugin = new ThemedPlugin()
 
 // Export destroy function for proper cleanup
-export default () => plugin.destroy();
+export default () => plugin.destroy()
 ```
 
 :::

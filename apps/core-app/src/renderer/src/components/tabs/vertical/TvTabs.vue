@@ -1,25 +1,26 @@
 <script lang="ts">
+import type { Component, VNode } from 'vue'
+import { ElScrollbar } from 'element-plus'
 import {
+
+  defineComponent,
   h,
+  nextTick,
+  onMounted,
   reactive,
   ref,
-  defineComponent,
-  type VNode,
-  type Component,
   useSlots,
-  nextTick,
-  onMounted
+
 } from 'vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
-import { ElScrollbar } from 'element-plus'
 
 export default defineComponent({
   name: 'TvTabs',
   props: {
     modelValue: {
       type: Object,
-      default: () => ({})
-    }
+      default: () => ({}),
+    },
   },
   emits: ['update:modelValue'],
   setup(props, { emit }) {
@@ -35,7 +36,8 @@ export default defineComponent({
 
     // 更新指示器位置
     const updateIndicator = (targetElement: HTMLElement) => {
-      if (!indicator.value || !headerWrapper.value) return
+      if (!indicator.value || !headerWrapper.value)
+        return
 
       const headerRect = headerWrapper.value.getBoundingClientRect()
       const targetRect = targetElement.getBoundingClientRect()
@@ -62,10 +64,10 @@ export default defineComponent({
     const initializeIndicator = () => {
       // 使用setTimeout确保所有样式都已应用
       setTimeout(() => {
-        const activeKey = Object.keys(activeNodes).find((key) => activeNodes[key])
+        const activeKey = Object.keys(activeNodes).find(key => activeNodes[key])
         if (activeKey && headerWrapper.value) {
           const tabElements = headerWrapper.value.querySelectorAll('.TvTabItem-Container')
-          const activeIndex = parseInt(activeKey) - 1
+          const activeIndex = Number.parseInt(activeKey) - 1
           const activeTab = tabElements[activeIndex] as HTMLElement
 
           if (activeTab) {
@@ -99,9 +101,9 @@ export default defineComponent({
       })
 
       // 如果有激活状态但没有lastActive，初始化它
-      const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
+      const currentActiveKey = Object.keys(activeNodes).find(key => activeNodes[key])
       if (currentActiveKey && !lastActive.value) {
-        const activeIndex = parseInt(currentActiveKey) - 1
+        const activeIndex = Number.parseInt(currentActiveKey) - 1
         if (children[activeIndex]) {
           lastActive.value = children[activeIndex]
         }
@@ -119,11 +121,12 @@ export default defineComponent({
             ...vnode.props,
             onClick: (event: Event) => {
               // 如果禁用则不处理点击
-              if (vnode.props && Object.hasOwn(vnode.props, 'disabled')) return
+              if (vnode.props && Object.hasOwn(vnode.props, 'disabled'))
+                return
 
               // 获取之前激活的标签索引
-              const previousActiveIndex = Object.keys(activeNodes).find((key) => activeNodes[key])
-              const previousIndex = previousActiveIndex ? parseInt(previousActiveIndex) : 0
+              const previousActiveIndex = Object.keys(activeNodes).find(key => activeNodes[key])
+              const previousIndex = previousActiveIndex ? Number.parseInt(previousActiveIndex) : 0
 
               // 更新指示器位置
               const targetEl = event.currentTarget as HTMLElement
@@ -143,7 +146,8 @@ export default defineComponent({
                 if (previousActiveIndex && lastActive.value) {
                   if (tabIndex > previousIndex) {
                     classList.add('slideOutLeft')
-                  } else {
+                  }
+                  else {
                     classList.add('slideOutRight')
                   }
 
@@ -151,7 +155,7 @@ export default defineComponent({
                     classList.remove('slideOutLeft', 'slideOutRight')
 
                     // 更新激活状态
-                    Object.keys(activeNodes).forEach((key) => delete activeNodes[key])
+                    Object.keys(activeNodes).forEach(key => delete activeNodes[key])
                     lastActive.value = vnode
                     activeNodes[tabIndex] = vnode.props?.name
                     emit('update:modelValue', { ...activeNodes })
@@ -159,14 +163,16 @@ export default defineComponent({
                     nextTick(() => {
                       if (tabIndex > previousIndex) {
                         classList.add('slideInRight')
-                      } else {
+                      }
+                      else {
                         classList.add('slideInLeft')
                       }
                     })
                   }, 200)
-                } else {
+                }
+                else {
                   // 没有之前的激活标签，直接更新状态
-                  Object.keys(activeNodes).forEach((key) => delete activeNodes[key])
+                  Object.keys(activeNodes).forEach(key => delete activeNodes[key])
                   lastActive.value = vnode
                   activeNodes[tabIndex] = vnode.props?.name
                   emit('update:modelValue', { ...activeNodes })
@@ -176,14 +182,14 @@ export default defineComponent({
                   })
                 }
               }
-            }
+            },
           },
           {
             icon:
               typeof vnode.children === 'object' && vnode.children && 'icon' in vnode.children
                 ? vnode.children.icon
-                : null
-          }
+                : null,
+          },
         )
       }
 
@@ -194,7 +200,8 @@ export default defineComponent({
           let componentName = ''
           if (typeof child.type === 'object' && child.type !== null && 'name' in child.type) {
             componentName = (child.type as Component & { name: string }).name
-          } else if (typeof child.type === 'string') {
+          }
+          else if (typeof child.type === 'string') {
             componentName = child.type
           }
 
@@ -202,25 +209,26 @@ export default defineComponent({
             return h(
               'div',
               {
-                class: 'TvTabs-TabGroup'
+                class: 'TvTabs-TabGroup',
               },
               [
                 h(
                   'div',
                   {
-                    class: 'TvTabs-TabGroup-Name'
+                    class: 'TvTabs-TabGroup-Name',
                   },
-                  child.props?.name || ''
+                  child.props?.name || '',
                 ),
                 // 处理子节点
                 child.children && typeof child.children === 'object' && 'default' in child.children
                   ? (child.children as { default: () => VNode[] })
                       .default?.()
-                      .map?.((c) => getTab(c, index)) || []
-                  : []
-              ]
+                      .map?.(c => getTab(c, index)) || []
+                  : [],
+              ],
             )
-          } else {
+          }
+          else {
             return getTab(child, index)
           }
         })
@@ -230,20 +238,21 @@ export default defineComponent({
       const getSelectSlotContent = (): VNode => {
         // 获取当前激活的内容
         let activeContent: any = null
-        const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
+        const currentActiveKey = Object.keys(activeNodes).find(key => activeNodes[key])
 
         if (currentActiveKey) {
-          const activeIndex = parseInt(currentActiveKey) - 1
+          const activeIndex = Number.parseInt(currentActiveKey) - 1
           const activeChild = children[activeIndex]
 
           if (activeChild && activeChild.children) {
             if (
-              typeof activeChild.children === 'object' &&
-              activeChild.children &&
-              'default' in activeChild.children
+              typeof activeChild.children === 'object'
+              && activeChild.children
+              && 'default' in activeChild.children
             ) {
               activeContent = (activeChild.children as { default: () => any }).default?.()
-            } else if (typeof activeChild.children === 'object') {
+            }
+            else if (typeof activeChild.children === 'object') {
               activeContent = activeChild.children
             }
           }
@@ -252,12 +261,13 @@ export default defineComponent({
         // 如果没有找到激活内容，尝试使用lastActive
         if (!activeContent && lastActive.value && lastActive.value.children) {
           if (
-            typeof lastActive.value.children === 'object' &&
-            lastActive.value.children &&
-            'default' in lastActive.value.children
+            typeof lastActive.value.children === 'object'
+            && lastActive.value.children
+            && 'default' in lastActive.value.children
           ) {
             activeContent = (lastActive.value.children as { default: () => any }).default?.()
-          } else if (typeof lastActive.value.children === 'object') {
+          }
+          else if (typeof lastActive.value.children === 'object') {
             activeContent = lastActive.value.children
           }
         }
@@ -266,56 +276,56 @@ export default defineComponent({
           'div',
           {
             ref: slotWrapper,
-            class: 'TTabs-SelectSlot animated'
+            class: 'TTabs-SelectSlot animated',
           },
-          activeContent ||
-            h(
-              'div',
-              {
-                class: 'TTabs-SelectSlot-Empty'
-              },
-              'No item selected.'
-            )
+          activeContent
+          || h(
+            'div',
+            {
+              class: 'TTabs-SelectSlot-Empty',
+            },
+            'No item selected.',
+          ),
         )
       }
 
       return h(
         'div',
         {
-          class: 'TvTabs-Container'
+          class: 'TvTabs-Container',
         },
         [
           h(
             'div',
             {
-              class: 'TvTabs-Header'
+              class: 'TvTabs-Header',
             },
             [
               h(
                 'div',
                 {
                   class: 'TvTabs-HeaderWrapper',
-                  ref: headerWrapper
+                  ref: headerWrapper,
                 },
-                getTabs()
+                getTabs(),
               ),
               h('div', {
                 class: 'TvTabs-Indicator',
-                ref: indicator
-              })
-            ]
+                ref: indicator,
+              }),
+            ],
           ),
           h(
             'div',
             {
-              class: 'TvTabs-Main'
+              class: 'TvTabs-Main',
             },
-            h(ElScrollbar, {}, () => getSelectSlotContent())
-          )
-        ]
+            h(ElScrollbar, {}, () => getSelectSlotContent()),
+          ),
+        ],
       )
     }
-  }
+  },
 })
 </script>
 

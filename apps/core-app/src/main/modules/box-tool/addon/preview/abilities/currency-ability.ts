@@ -1,9 +1,9 @@
 import type { PreviewAbilityResult, PreviewCardPayload } from '@talex-touch/utils'
 import type { PreviewAbilityContext } from '../preview-ability'
+import { performance } from 'node:perf_hooks'
 import { BasePreviewAbility } from '../preview-ability'
-import { performance } from 'perf_hooks'
 
-type RateEntry = {
+interface RateEntry {
   name: string
   rate: number // rate against base USD
 }
@@ -25,7 +25,7 @@ const CURRENCY_TABLE: Record<string, RateEntry> = {
   inr: { name: '印度卢比', rate: 83.2 },
   CHF: { name: '瑞士法郎', rate: 0.86 },
   btc: { name: '比特币', rate: 0.000018 },
-  eth: { name: '以太坊', rate: 0.00026 }
+  eth: { name: '以太坊', rate: 0.00026 },
 }
 
 const SYMBOL_MAP: Record<string, string> = {
@@ -38,16 +38,17 @@ const SYMBOL_MAP: Record<string, string> = {
   '₫': 'vnd',
   '฿': 'thb',
   '₿': 'btc',
-  'Ξ': 'eth'
+  'Ξ': 'eth',
 }
 
-const CURRENCY_PATTERN =
-  /^\s*([$€¥£₩₫฿₿Ξ]|[a-zA-Z]{3})?\s*([-+]?\d*\.?\d+)\s*([a-zA-Z]{3})?\s*(?:to|in|=|->)\s*([a-zA-Z]{3})\s*$/i
+const CURRENCY_PATTERN
+  = /^\s*(?:([$€¥£₩₫฿₿Ξ]|[a-z]{3})\s*)?([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:([a-z]{3})\s*)?(?:to|in|=|->)\s*([a-z]{3})\s*$/i
 
 function normalizeCurrency(rawSymbol?: string, rawCode?: string): string | null {
   if (rawCode) {
     const code = rawCode.toLowerCase()
-    if (CURRENCY_TABLE[code]) return code
+    if (CURRENCY_TABLE[code])
+      return code
   }
   if (rawSymbol && SYMBOL_MAP[rawSymbol]) {
     return SYMBOL_MAP[rawSymbol]
@@ -60,7 +61,8 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
   readonly priority = 40
 
   override canHandle(query: { text?: string }): boolean {
-    if (!query.text) return false
+    if (!query.text)
+      return false
     return CURRENCY_PATTERN.test(query.text)
   }
 
@@ -68,11 +70,13 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
     const startedAt = performance.now()
     const text = this.getNormalizedQuery(context.query)
     const match = text.match(CURRENCY_PATTERN)
-    if (!match) return null
+    if (!match)
+      return null
 
     const [, symbol, amountRaw, sourceCode, targetCodeRaw] = match
     const amount = Number(amountRaw)
-    if (Number.isNaN(amount)) return null
+    if (Number.isNaN(amount))
+      return null
 
     const source = normalizeCurrency(symbol, sourceCode) ?? 'usd'
     const target = normalizeCurrency(undefined, targetCodeRaw)
@@ -97,23 +101,23 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
       secondaryValue: usdValue.toFixed(4),
       chips: [
         { label: '源汇率', value: `1 ${source.toUpperCase()} = ${(1 / sourceRate).toFixed(4)} USD` },
-        { label: '目标汇率', value: `1 ${target.toUpperCase()} = ${(targetRate).toFixed(4)} USD` }
+        { label: '目标汇率', value: `1 ${target.toUpperCase()} = ${(targetRate).toFixed(4)} USD` },
       ],
       sections: [
         {
           rows: [
             { label: '源金额', value: `${amount} ${source.toUpperCase()}` },
-            { label: '目标金额', value: `${converted.toFixed(4)} ${target.toUpperCase()}` }
-          ]
-        }
-      ]
+            { label: '目标金额', value: `${converted.toFixed(4)} ${target.toUpperCase()}` },
+          ],
+        },
+      ],
     }
 
     return {
       abilityId: this.id,
       confidence: 0.7,
       payload,
-      durationMs: performance.now() - startedAt
+      durationMs: performance.now() - startedAt,
     }
   }
 }

@@ -1,5 +1,5 @@
+import type { Ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { Ref } from 'vue'
 import { BoxMode } from '../types'
 
 export function useChannel(boxOptions: any, res: Ref<any[]>): void {

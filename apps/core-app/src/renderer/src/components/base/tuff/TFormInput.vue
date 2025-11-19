@@ -1,10 +1,10 @@
 <script lang="ts" name="TFormInput" setup>
-import { computed, ref, useAttrs } from 'vue'
 import type { StyleValue } from 'vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { computed, ref, useAttrs } from 'vue'
 
 defineOptions({
-  inheritAttrs: false
+  inheritAttrs: false,
 })
 
 const props = withDefaults(
@@ -25,8 +25,8 @@ const props = withDefaults(
     textarea: false,
     rows: 3,
     disabled: false,
-    readonly: false
-  }
+    readonly: false,
+  },
 )
 
 const emits = defineEmits<{
@@ -46,14 +46,15 @@ const inputAttrs = computed(() => {
 })
 
 function handleKeydown(event: KeyboardEvent) {
-  if (props.type !== 'password') return
+  if (props.type !== 'password')
+    return
   const keyCode = event.keyCode || event.which
   const shiftKey = event.shiftKey || keyCode === 16
 
   if (!event.getModifierState) {
-    showCapsLock.value =
-      ((keyCode >= 65 && keyCode <= 90) && !shiftKey) ||
-      ((keyCode >= 97 && keyCode <= 122) && shiftKey)
+    showCapsLock.value
+      = ((keyCode >= 65 && keyCode <= 90) && !shiftKey)
+        || ((keyCode >= 97 && keyCode <= 122) && shiftKey)
     return
   }
   showCapsLock.value = event.getModifierState('CapsLock')
@@ -75,10 +76,10 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
       :disabled="disabled"
       :readonly="readonly"
       class="input-element"
+      v-bind="inputAttrs"
       @keydown="handleKeydown"
       @blur="emits('blur', $event)"
       @focus="emits('focus', $event)"
-      v-bind="inputAttrs"
     />
     <input
       v-else
@@ -88,11 +89,11 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
       :disabled="disabled"
       :readonly="readonly"
       class="input-element"
+      v-bind="inputAttrs"
       @keydown="handleKeydown"
       @blur="emits('blur', $event)"
       @focus="emits('focus', $event)"
-      v-bind="inputAttrs"
-    />
+    >
     <span v-if="suffixIcon" class="icon suffix">
       <i :class="suffixIcon" />
     </span>

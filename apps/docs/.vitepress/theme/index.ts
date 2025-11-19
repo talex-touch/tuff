@@ -1,15 +1,15 @@
-// import { h } from 'vue'
-import DefaultTheme from 'vitepress/theme'
-import './style/index.scss'
-import TouchLayout from './components/TouchLayout.vue'
-// import type { VNode } from 'vue'
-
 /**
  * 使用第三方组件库
  *
  * @see fighting-design https://github.com/FightingDesign/fighting-design
  */
 import FightingDesign from 'fighting-design'
+// import { h } from 'vue'
+import DefaultTheme from 'vitepress/theme'
+import TouchLayout from './components/TouchLayout.vue'
+// import type { VNode } from 'vue'
+
+import './style/index.scss'
 import 'fighting-design/dist/index.css'
 
 export default {
@@ -29,5 +29,5 @@ export default {
   // },
   enhanceApp({ app }) {
     app.use(FightingDesign)
-  }
+  },
 }

@@ -1,5 +1,5 @@
 <script lang="ts" name="TuffItemAddon" setup>
-import { TuffItem } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 
 defineProps<{
   type?: 'preview'

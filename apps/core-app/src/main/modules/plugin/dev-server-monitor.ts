@@ -1,8 +1,10 @@
-import {
+import type {
+  DevServerHealthCheckResult,
   IPluginManager,
   ITouchPlugin,
+} from '@talex-touch/utils/plugin'
+import {
   PluginStatus,
-  DevServerHealthCheckResult
 } from '@talex-touch/utils/plugin'
 import axios from 'axios'
 import { createLogger } from '../../utils/logger'
@@ -90,10 +92,11 @@ export class DevServerHealthMonitor {
     if (isHealthy) {
       plugin.status = PluginStatus.ENABLED
       // 清除断连警告
-      plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
+      plugin.issues = plugin.issues.filter(issue => issue.code !== 'DEV_SERVER_DISCONNECTED')
       plugin.logger.info('Successfully reconnected to Dev Server')
       return true
-    } else {
+    }
+    else {
       plugin.status = PluginStatus.DEV_DISCONNECTED
       plugin.logger.error('Failed to reconnect to Dev Server')
       return false
@@ -103,7 +106,7 @@ export class DevServerHealthMonitor {
   /**
    * 获取插件 Dev Server 状态
    */
-  getStatus(pluginName: string): { monitoring: boolean; connected: boolean; lastCheck?: number } {
+  getStatus(pluginName: string): { monitoring: boolean, connected: boolean, lastCheck?: number } {
     const monitoring = this.monitors.has(pluginName)
     const plugin = this.manager.getPluginByName(pluginName)
     const connected = plugin ? plugin.status !== PluginStatus.DEV_DISCONNECTED : false
@@ -111,7 +114,7 @@ export class DevServerHealthMonitor {
     return {
       monitoring,
       connected,
-      lastCheck: this.lastFileStatus.get(pluginName) ? Date.now() : undefined
+      lastCheck: this.lastFileStatus.get(pluginName) ? Date.now() : undefined,
     }
   }
 
@@ -120,10 +123,10 @@ export class DevServerHealthMonitor {
    */
   private shouldMonitor(plugin: ITouchPlugin): boolean {
     return (
-      plugin.dev.enable === true &&
-      plugin.dev.source === true &&
-      !!plugin.dev.address &&
-      (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE)
+      plugin.dev.enable === true
+      && plugin.dev.source === true
+      && !!plugin.dev.address
+      && (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE)
     )
   }
 
@@ -141,15 +144,17 @@ export class DevServerHealthMonitor {
 
       if (result.healthy) {
         await this.handleHealthyResponse(plugin, result)
-      } else {
+      }
+      else {
         await this.handleUnhealthyResponse(plugin, result)
       }
-    } catch (error: any) {
+    }
+    catch (error: any) {
       monitorLog.error(`Health check failed for plugin ${plugin.name}:`, error)
       await this.handleUnhealthyResponse(plugin, {
         healthy: false,
         error: error.message,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
     }
   }
@@ -163,18 +168,19 @@ export class DevServerHealthMonitor {
     try {
       await axios.get(healthUrl, {
         timeout: this.TIMEOUT,
-        validateStatus: (status) => status === 200
+        validateStatus: status => status === 200,
       })
 
       return {
         healthy: true,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
-    } catch (error: any) {
+    }
+    catch (error: any) {
       return {
         healthy: false,
         timestamp: Date.now(),
-        error: error.message
+        error: error.message,
       }
     }
   }
@@ -184,7 +190,7 @@ export class DevServerHealthMonitor {
    */
   private async handleHealthyResponse(
     plugin: ITouchPlugin,
-    _result: DevServerHealthCheckResult
+    _result: DevServerHealthCheckResult,
   ): Promise<void> {
     // 重置失败计数
     this.failureCount.delete(plugin.name)
@@ -192,7 +198,7 @@ export class DevServerHealthMonitor {
     // 如果之前是断连状态，现在恢复了
     if (plugin.status === PluginStatus.DEV_DISCONNECTED) {
       plugin.status = PluginStatus.ENABLED
-      plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
+      plugin.issues = plugin.issues.filter(issue => issue.code !== 'DEV_SERVER_DISCONNECTED')
       plugin.logger.info('Dev Server connection restored')
     }
   }
@@ -202,7 +208,7 @@ export class DevServerHealthMonitor {
    */
   private async handleUnhealthyResponse(
     plugin: ITouchPlugin,
-    _result: DevServerHealthCheckResult
+    _result: DevServerHealthCheckResult,
   ): Promise<void> {
     const failureCount = (this.failureCount.get(plugin.name) || 0) + 1
     this.failureCount.set(plugin.name, failureCount)
@@ -210,7 +216,7 @@ export class DevServerHealthMonitor {
     // 重试机制
     if (failureCount <= this.MAX_RETRIES) {
       monitorLog.debug(
-        `Health check failed for plugin ${plugin.name}, retrying... (${failureCount}/${this.MAX_RETRIES})`
+        `Health check failed for plugin ${plugin.name}, retrying... (${failureCount}/${this.MAX_RETRIES})`,
       )
       return
     }
@@ -225,7 +231,7 @@ export class DevServerHealthMonitor {
         code: 'DEV_SERVER_DISCONNECTED',
         message: 'Dev Server 连接已断开，可能是服务器崩溃或网络中断',
         suggestion: '请检查 Dev Server 是否正常运行，或尝试手动重连',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
 
       plugin.logger.warn('Dev Server disconnected')
@@ -248,7 +254,8 @@ export class DevServerHealthMonitor {
             plugin.logger.info(`Closing view window ${id} due to Dev Server disconnection`)
             window.window.close()
           }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           plugin.logger.warn(`Error closing view window ${id}:`, error)
         }
       })

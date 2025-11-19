@@ -1,6 +1,121 @@
+<script lang="ts" name="LayoutSection" setup>
+import type { Component } from 'vue'
+import { markRaw, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useDynamicTuffLayout } from '~/modules/layout'
+
+const { t } = useI18n()
+
+const { currentLayoutName, availableLayouts, switchLayout } = useDynamicTuffLayout()
+
+const wrapperRef = ref<HTMLElement | null>(null)
+const scrollContainer = ref<HTMLElement | null>(null)
+const tipRef = ref<HTMLElement | null>(null)
+
+interface LayoutPreviewState {
+  component: Component | null
+  loading: boolean
+}
+
+const layoutPreviewStates = reactive<Record<string, LayoutPreviewState>>({})
+
+watch(
+  availableLayouts,
+  (layouts) => {
+    Object.entries(layouts).forEach(([key, layout]) => {
+      if (layoutPreviewStates[key])
+        return
+
+      layoutPreviewStates[key] = reactive<LayoutPreviewState>({
+        component: null,
+        loading: true,
+      })
+
+      layout.component
+        .then((module) => {
+          layoutPreviewStates[key].component = markRaw(module.default)
+        })
+        .catch((error) => {
+          console.error(`[LayoutSection] Failed to load preview for layout "${key}":`, error)
+        })
+        .finally(() => {
+          layoutPreviewStates[key].loading = false
+        })
+    })
+  },
+  { immediate: true },
+)
+
+/**
+ * Handle layout selection
+ */
+async function handleLayoutSelect(layoutName: string): Promise<void> {
+  console.log('[LayoutSection] handleLayoutSelect called:', {
+    layoutName,
+    currentLayoutName: currentLayoutName.value,
+    isSame: layoutName === currentLayoutName.value,
+  })
+
+  if (layoutName === currentLayoutName.value) {
+    console.log('[LayoutSection] Same layout selected, skipping')
+    return
+  }
+
+  try {
+    console.log('[LayoutSection] Calling switchLayout:', layoutName)
+    await switchLayout(layoutName)
+    const layoutConfig = availableLayouts.value[layoutName]
+
+    console.log('[LayoutSection] Layout switch completed:', {
+      layoutName,
+      layoutConfig,
+      currentLayoutName: currentLayoutName.value,
+    })
+
+    updateTip(t('layoutSection.selected', `Selected: ${layoutConfig?.displayName || layoutName}`))
+  }
+  catch (error) {
+    console.error('[LayoutSection] Failed to switch layout:', error)
+    updateTip(t('layoutSection.error', 'Failed to switch layout'))
+  }
+}
+
+/**
+ * Update tip text
+ */
+function updateTip(text: string): void {
+  if (!tipRef.value)
+    return
+
+  tipRef.value.textContent = text
+  tipRef.value.style.opacity = '1'
+
+  setTimeout(() => {
+    if (tipRef.value) {
+      tipRef.value.style.opacity = '0'
+    }
+  }, 2000)
+}
+
+/**
+ * Handle scroll event
+ */
+function handleScroll(): void {
+  // Can be used for scroll effects if needed
+}
+
+onMounted(() => {
+  if (tipRef.value) {
+    tipRef.value.textContent = t('layoutSection.tip', 'Select a layout to switch')
+  }
+})
+</script>
+
 <template>
   <div ref="wrapperRef" class="LayoutSection-Wrapper fake-background">
-    <p font-600 text-lg>{{ t('layoutSection.title', 'Layout Selection') }}</p>
+    <p font-600 text-lg>
+      {{ t('layoutSection.title', 'Layout Selection') }}
+    </p>
     <div ref="scrollContainer" class="LayoutSection-Container" @scroll="handleScroll">
       <div
         v-for="(layout, key) in availableLayouts"
@@ -40,116 +155,6 @@
     <p ref="tipRef" class="LayoutSection-Tip" />
   </div>
 </template>
-
-<script lang="ts" name="LayoutSection" setup>
-import { markRaw, reactive } from 'vue'
-import type { Component } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useDynamicTuffLayout } from '~/modules/layout'
-
-const { t } = useI18n()
-
-const { currentLayoutName, availableLayouts, switchLayout } = useDynamicTuffLayout()
-
-const wrapperRef = ref<HTMLElement | null>(null)
-const scrollContainer = ref<HTMLElement | null>(null)
-const tipRef = ref<HTMLElement | null>(null)
-
-interface LayoutPreviewState {
-  component: Component | null
-  loading: boolean
-}
-
-const layoutPreviewStates = reactive<Record<string, LayoutPreviewState>>({})
-
-watch(
-  availableLayouts,
-  (layouts) => {
-    Object.entries(layouts).forEach(([key, layout]) => {
-      if (layoutPreviewStates[key]) return
-
-      layoutPreviewStates[key] = reactive<LayoutPreviewState>({
-        component: null,
-        loading: true
-      })
-
-      layout.component
-        .then((module) => {
-          layoutPreviewStates[key].component = markRaw(module.default)
-        })
-        .catch((error) => {
-          console.error(`[LayoutSection] Failed to load preview for layout "${key}":`, error)
-        })
-        .finally(() => {
-          layoutPreviewStates[key].loading = false
-        })
-    })
-  },
-  { immediate: true }
-)
-
-/**
- * Handle layout selection
- */
-async function handleLayoutSelect(layoutName: string): Promise<void> {
-  console.log('[LayoutSection] handleLayoutSelect called:', {
-    layoutName,
-    currentLayoutName: currentLayoutName.value,
-    isSame: layoutName === currentLayoutName.value
-  })
-
-  if (layoutName === currentLayoutName.value) {
-    console.log('[LayoutSection] Same layout selected, skipping')
-    return
-  }
-
-  try {
-    console.log('[LayoutSection] Calling switchLayout:', layoutName)
-    await switchLayout(layoutName)
-    const layoutConfig = availableLayouts.value[layoutName]
-
-    console.log('[LayoutSection] Layout switch completed:', {
-      layoutName,
-      layoutConfig,
-      currentLayoutName: currentLayoutName.value
-    })
-
-    updateTip(t('layoutSection.selected', `Selected: ${layoutConfig?.displayName || layoutName}`))
-  } catch (error) {
-    console.error('[LayoutSection] Failed to switch layout:', error)
-    updateTip(t('layoutSection.error', 'Failed to switch layout'))
-  }
-}
-
-/**
- * Update tip text
- */
-function updateTip(text: string): void {
-  if (!tipRef.value) return
-
-  tipRef.value.textContent = text
-  tipRef.value.style.opacity = '1'
-
-  setTimeout(() => {
-    if (tipRef.value) {
-      tipRef.value.style.opacity = '0'
-    }
-  }, 2000)
-}
-
-/**
- * Handle scroll event
- */
-function handleScroll(): void {
-  // Can be used for scroll effects if needed
-}
-
-onMounted(() => {
-  if (tipRef.value) {
-    tipRef.value.textContent = t('layoutSection.tip', 'Select a layout to switch')
-  }
-})
-</script>
 
 <style lang="scss" scoped>
 .LayoutSection-Wrapper {

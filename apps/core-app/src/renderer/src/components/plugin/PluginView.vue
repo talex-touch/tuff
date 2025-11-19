@@ -1,34 +1,26 @@
-<template>
-  <div class="PluginView-Container" :class="{ active: status === 4, done }">
-    <div class="PluginView-Loader cubic-transition">
-      <Loading />
-      <span>Plugin is loading...</span>
-    </div>
-    <webview ref="webviewDom" :class="{ exist: status === 3 || status === 4 }" />
-  </div>
-</template>
-
 <script>
-export default {
-  name: 'PluginView'
-}
 </script>
 
 <script setup>
+import Loading from '~/components/icon/LoadingIcon.vue'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
-import Loading from '~/components/icon/LoadingIcon.vue'
 
 const props = defineProps({
   plugin: {
     type: Object,
-    required: true
+    required: true,
   },
   lists: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
+
+export default {
+  name: 'PluginView',
+}
+
 const loadDone = ref(false)
 const status = computed(() => props.plugin?.status || 0)
 const done = computed(() => (status.value === 3 || status.value === 4) && loadDone.value)
@@ -55,13 +47,13 @@ function handleListeners(viewData, webview) {
       {
         content: 'Ignore Load',
         type: 'info',
-        onClick: () => true
+        onClick: () => true,
       },
       {
         content: 'Restart plugin',
         type: 'warning',
-        onClick: () => pluginSDK.reload(props.plugin.name) && true
-      }
+        onClick: () => pluginSDK.reload(props.plugin.name) && true,
+      },
     ])
 
     // When failed => close devtool
@@ -69,7 +61,8 @@ function handleListeners(viewData, webview) {
   })
 
   webview.addEventListener('did-finish-load', async () => {
-    if (status.value === 4) webview.openDevTools()
+    if (status.value === 4)
+      webview.openDevTools()
 
     webview.insertCSS(`${styles}`)
     await webview.executeJavaScript(`${js}`)
@@ -99,7 +92,8 @@ function handleListeners(viewData, webview) {
 
 function init() {
   const viewData = props.plugin.webview
-  if (!viewData) return
+  if (!viewData)
+    return
   const { _, attrs } = viewData
 
   pluginManager.setPluginWebviewInit(props.plugin.name)
@@ -114,7 +108,7 @@ function init() {
     webview.setAttribute(key, attrs[key])
   })
 
-  _.preload && webview.setAttribute('preload', 'file://' + _.preload)
+  _.preload && webview.setAttribute('preload', `file://${_.preload}`)
 
   handleListeners(viewData, webview)
 
@@ -123,13 +117,25 @@ function init() {
 }
 
 watch(status, (val, oldVal) => {
-  if (props.plugin?.webViewInit) return
+  if (props.plugin?.webViewInit)
+    return
 
-  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init()
+  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4))
+    init()
   // else if ( val === 4 ) webviewDom.value.openDevTools()
   // else webviewDom.value.closeDevTools()
 })
 </script>
+
+<template>
+  <div class="PluginView-Container" :class="{ active: status === 4, done }">
+    <div class="PluginView-Loader cubic-transition">
+      <Loading />
+      <span>Plugin is loading...</span>
+    </div>
+    <webview ref="webviewDom" :class="{ exist: status === 3 || status === 4 }" />
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .PluginView-Loader {

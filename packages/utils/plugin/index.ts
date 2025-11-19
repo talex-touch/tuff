@@ -1,6 +1,10 @@
-import { Arch, SupportOS } from './../base/index';
-import type { IPluginLogger } from './log/types';
-import type { PluginInstallRequest, PluginInstallSummary } from './providers';
+import type { FSWatcher } from 'chokidar'
+import type { ITuffIcon } from '../types/icon'
+import type { Arch, SupportOS } from './../base/index'
+
+import type { IPluginLogger } from './log/types'
+
+import type { PluginInstallRequest, PluginInstallSummary } from './providers'
 
 export enum PluginStatus {
   DISABLED,
@@ -15,8 +19,8 @@ export enum PluginStatus {
   LOADED,
   LOAD_FAILED,
 
-  DEV_DISCONNECTED,  // Dev Server 断连
-  DEV_RECONNECTING,  // 正在重连
+  DEV_DISCONNECTED, // Dev Server 断连
+  DEV_RECONNECTING, // 正在重连
 }
 
 export interface PluginIssue {
@@ -35,9 +39,6 @@ export interface DevServerHealthCheckResult {
   timestamp: number
   error?: string
 }
-
-import type { ITuffIcon } from '../types/icon'
-
 
 export interface IPlatformInfo {
   enable: boolean
@@ -74,25 +75,25 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   features: IPluginFeature[]
   issues: PluginIssue[]
 
-  addFeature(feature: IPluginFeature): boolean
-  delFeature(featureId: string): boolean
-  getFeature(featureId: string): IPluginFeature | null
-  getFeatures(): IPluginFeature[]
-  triggerFeature(feature: IPluginFeature, query: any): void
-  triggerInputChanged(feature: IPluginFeature, query: any): void
+  addFeature: (feature: IPluginFeature) => boolean
+  delFeature: (featureId: string) => boolean
+  getFeature: (featureId: string) => IPluginFeature | null
+  getFeatures: () => IPluginFeature[]
+  triggerFeature: (feature: IPluginFeature, query: any) => void
+  triggerInputChanged: (feature: IPluginFeature, query: any) => void
 
   get status(): PluginStatus
   set status(v: PluginStatus)
 
-  enable(): Promise<boolean>
-  disable(): Promise<boolean>
+  enable: () => Promise<boolean>
+  disable: () => Promise<boolean>
 
   /**
    * Get the plugin file.
    * @param fileName The name of the file.
    * @returns The content of the file.
    */
-  getPluginFile(fileName: string): object
+  getPluginFile: (fileName: string) => object
 
   /**
    * Save the plugin file.
@@ -100,39 +101,39 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    * @param content The content of the file.
    * @returns The result of the save operation.
    */
-  savePluginFile(fileName: string, content: object): { success: boolean; error?: string }
+  savePluginFile: (fileName: string, content: object) => { success: boolean, error?: string }
 
   /**
    * Delete the plugin file.
    * @param fileName The name of the file.
    * @returns The result of the delete operation.
    */
-  deletePluginFile(fileName: string): { success: boolean; error?: string }
+  deletePluginFile: (fileName: string) => { success: boolean, error?: string }
 
   /**
    * List all files in the plugin.
    * @returns The list of files.
    */
-  listPluginFiles(): string[]
+  listPluginFiles: () => string[]
 
   /**
    * Get the plugin configuration.
    * @returns The configuration content.
    */
-  getPluginConfig(): object
+  getPluginConfig: () => object
 
   /**
    * Save the plugin configuration.
    * @param content The configuration content.
    * @returns The result of the save operation.
    */
-  savePluginConfig(content: object): { success: boolean; error?: string }
+  savePluginConfig: (content: object) => { success: boolean, error?: string }
 }
 
 export interface IFeatureCommand {
-  type: "match" | "contain" | "regex" | "function" | "over" | "image" | "files" | "directory" | "window"
+  type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
   value: string | string[] | RegExp | Function
-  onTrigger(): void
+  onTrigger: () => void
 }
 
 export interface IPluginFeature {
@@ -161,7 +162,7 @@ export interface IPluginFeature {
   acceptedInputTypes?: Array<'text' | 'image' | 'files' | 'html'>
 }
 
-export type IFeatureInteraction = {
+export interface IFeatureInteraction {
   type: 'webcontent' | 'widget'
   /**
    * The relative path to the html file from the plugin root.
@@ -178,20 +179,20 @@ export interface IFeatureLifeCycle {
    * onInit is called when the feature is initialized.
    * Can be used to prepare data or UI specific to this session.
    */
-  onInit?(): void
+  onInit?: () => void
 
   /**
    * Called when a message is received from the main application.
    * @param key - The key of the message
    * @param info - The information of the message
    */
-  onMessage?(key: string, info: any): void
+  onMessage?: (key: string, info: any) => void
   /**
    * Called when a feature is actively launched from the launcher.
    * Can be used to prepare data or UI specific to this session.
    * @param feature - The feature instance being launched
    */
-  onLaunch?(feature: IPluginFeature): void
+  onLaunch?: (feature: IPluginFeature) => void
 
   /**
    * Called when a feature is triggered via a matching command.
@@ -203,14 +204,14 @@ export interface IFeatureLifeCycle {
    * @param signal - An AbortSignal to cancel the operation
    * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered(id: string, data: any, feature: IPluginFeature, signal?: AbortSignal): boolean | void
+  onFeatureTriggered: (id: string, data: any, feature: IPluginFeature, signal?: AbortSignal) => boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
    * For example, search text or commands typed.
    * @param input - The new input value
    */
-  onInputChanged?(input: string): void
+  onInputChanged?: (input: string) => void
 
   /**
    * Called when a user selects or clicks an actionable item inside the feature.
@@ -218,14 +219,14 @@ export interface IFeatureLifeCycle {
    * @param actionId - A string identifier for the clicked action
    * @param data - Optional payload associated with that action
    */
-  onActionClick?(actionId: string, data?: any): void
+  onActionClick?: (actionId: string, data?: any) => void
 
   /**
    * Called when the feature is manually closed by the user or by the system.
    * Useful for cleanup or state saving.
    * @param feature - The feature instance being closed
    */
-  onClose?(feature: IPluginFeature): void
+  onClose?: (feature: IPluginFeature) => void
 
   /**
    * Called when an item generated by this feature is executed.
@@ -234,7 +235,7 @@ export interface IFeatureLifeCycle {
    * @param item The TuffItem that was executed.
    * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?(item: any): Promise<{
+  onItemAction?: (item: any) => Promise<{
     /** Whether the action executed an external operation (e.g., opened browser) */
     externalAction?: boolean
     /** Whether the feature should be activated after this action */
@@ -248,7 +249,7 @@ export interface IFeatureLifeCycle {
    * @param key - The storage key that changed
    * @param value - The new value (undefined if key was removed)
    */
-  onStorageChange?(key: string, value: any): void
+  onStorageChange?: (key: string, value: any) => void
 }
 
 /**
@@ -261,7 +262,7 @@ export interface ITargetFeatureLifeCycle {
    * Can be used to prepare data or UI specific to this session.
    * @param feature - The feature instance being launched
    */
-  onLaunch?(feature: IPluginFeature): void
+  onLaunch?: (feature: IPluginFeature) => void
 
   /**
    * Called when the feature is triggered via a matching command.
@@ -271,14 +272,14 @@ export interface ITargetFeatureLifeCycle {
    * @param feature - The full feature definition
    * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered(data: any, feature: IPluginFeature): boolean | void
+  onFeatureTriggered: (data: any, feature: IPluginFeature) => boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
    * For example, search text or commands typed.
    * @param input - The new input value
    */
-  onInputChanged?(input: string): void
+  onInputChanged?: (input: string) => void
 
   /**
    * Called when a user selects or clicks an actionable item inside the feature.
@@ -286,14 +287,14 @@ export interface ITargetFeatureLifeCycle {
    * @param actionId - A string identifier for the clicked action
    * @param data - Optional payload associated with that action
    */
-  onActionClick?(actionId: string, data?: any): void
+  onActionClick?: (actionId: string, data?: any) => void
 
   /**
    * Called when the feature is manually closed by the user or by the system.
    * Useful for cleanup or state saving.
    * @param feature - The feature instance being closed
    */
-  onClose?(feature: IPluginFeature): void
+  onClose?: (feature: IPluginFeature) => void
 
   /**
    * Called when an item generated by this feature is executed.
@@ -302,7 +303,7 @@ export interface ITargetFeatureLifeCycle {
    * @param item The TuffItem that was executed.
    * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?(item: any): Promise<{
+  onItemAction?: (item: any) => Promise<{
     /** Whether the action executed an external operation (e.g., opened browser) */
     externalAction?: boolean
     /** Whether the feature should be activated after this action */
@@ -331,8 +332,6 @@ export enum PluginSourceType {
   FILE_SYSTEM = 'file_system',
 }
 
-import type { FSWatcher } from 'chokidar'
-
 export interface IPluginManager {
   plugins: Map<string, ITouchPlugin>
   active: string | null
@@ -345,24 +344,24 @@ export interface IPluginManager {
   devWatcher: any // Temporarily any, as DevPluginWatcher is internal to core-app
   healthMonitor: any | null // DevServerHealthMonitor instance, set by PluginModule
 
-  getPluginList(): Array<object>
-  setActivePlugin(pluginName: string): boolean
-  hasPlugin(name: string): boolean
-  getPluginByName(name: string): ITouchPlugin | undefined
-  enablePlugin(pluginName: string): Promise<boolean>
-  disablePlugin(pluginName: string): Promise<boolean>
-  reloadPlugin(pluginName: string): Promise<void>
-  persistEnabledPlugins(): Promise<void>
-  listPlugins(): Promise<Array<string>>
-  loadPlugin(pluginName: string): Promise<boolean>
-  unloadPlugin(pluginName: string): Promise<boolean>
-  installFromSource(request: PluginInstallRequest): Promise<PluginInstallSummary>
-  uninstallPlugin(pluginName: string): Promise<boolean>
+  getPluginList: () => Array<object>
+  setActivePlugin: (pluginName: string) => boolean
+  hasPlugin: (name: string) => boolean
+  getPluginByName: (name: string) => ITouchPlugin | undefined
+  enablePlugin: (pluginName: string) => Promise<boolean>
+  disablePlugin: (pluginName: string) => Promise<boolean>
+  reloadPlugin: (pluginName: string) => Promise<void>
+  persistEnabledPlugins: () => Promise<void>
+  listPlugins: () => Promise<Array<string>>
+  loadPlugin: (pluginName: string) => Promise<boolean>
+  unloadPlugin: (pluginName: string) => Promise<boolean>
+  installFromSource: (request: PluginInstallRequest) => Promise<PluginInstallSummary>
+  uninstallPlugin: (pluginName: string) => Promise<boolean>
   /**
    * Register an internal plugin that is created in code (no manifest / scanning).
    * Internal plugins are always hidden from user-facing plugin lists.
    */
-  registerInternalPlugin(plugin: ITouchPlugin): void
+  registerInternalPlugin: (plugin: ITouchPlugin) => void
 }
 
 /**
@@ -375,56 +374,56 @@ export interface IManifest {
    * Unique identifier for the plugin.
    * This is typically the package name for npm plugins or a unique string for tpex plugins.
    */
-  id: string;
+  id: string
   /**
    * Display name of the plugin.
    * This is the human-readable name shown to users.
    */
-  name: string;
+  name: string
   /**
    * Version of the plugin, following semantic versioning (e.g., "1.0.0").
    */
-  version: string;
+  version: string
   /**
    * Short description of the plugin's functionality.
    */
-  description: string;
+  description: string
   /**
    * Author of the plugin, typically a name or email.
    */
-  author: string;
+  author: string
   /**
    * Main entry file for the plugin logic, relative to the plugin's root directory.
    * This file will be loaded when the plugin is activated.
    */
-  main: string;
+  main: string
   /**
    * Optional icon path or definition for the plugin.
    * This could be a file path to an image or a specific icon class/identifier.
    */
-  icon?: string;
+  icon?: string
   /**
    * Optional keywords for activating the plugin, e.g., for search or command matching.
    * These keywords help users discover and launch the plugin.
    */
-  activationKeywords?: string[];
+  activationKeywords?: string[]
   /**
    * Optional runtime development configuration, typically used when running plugins from a dev server.
    */
   dev?: {
-    enable?: boolean;
-    address?: string;
-    source?: boolean;
-  };
+    enable?: boolean
+    address?: string
+    source?: boolean
+  }
   /**
    * Optional digital signature of the plugin package, used for verification.
    */
-  _signature?: string;
+  _signature?: string
   /**
    * Optional list of files included in the plugin package.
    * This can be used for integrity checks or resource management.
    */
-  _files?: string[];
+  _files?: string[]
   /**
    * Development-specific configuration for the plugin.
    * This section is used during plugin development and might not be present in production builds.
@@ -435,14 +434,14 @@ export interface IManifest {
        * Whether development mode is enabled for the plugin.
        * If true, specific development features or debugging tools might be activated.
        */
-      enable: boolean;
+      enable: boolean
       /**
        * Address for development server or resources.
        * For example, a local URL where the plugin's frontend assets are served during development.
        */
-      address: string;
-    };
-  };
+      address: string
+    }
+  }
   /**
    * Build-specific configuration for the plugin.
    * This section defines how the plugin is built, packaged, and verified.
@@ -451,14 +450,14 @@ export interface IManifest {
     /**
      * List of files to include in the build.
      */
-    files: string[];
+    files: string[]
     /**
      * Secret configuration for the build process.
      */
     secret: {
-      pos: string;
-      addon: string[];
-    };
+      pos: string
+      addon: string[]
+    }
     /**
      * Verification settings for the plugin build.
      * Defines how the authenticity and integrity of the plugin are checked.
@@ -467,12 +466,12 @@ export interface IManifest {
       /**
        * Whether online verification is enabled.
        */
-      enable: boolean;
+      enable: boolean
       /**
        * Online verification strategy.
        */
-      online: 'custom' | 'always' | 'once';
-    };
+      online: 'custom' | 'always' | 'once'
+    }
     /**
      * Version update settings for the plugin.
      * Defines how the plugin handles updates and downgrades.
@@ -484,17 +483,17 @@ export interface IManifest {
        * - 'ask': Prompts the user before updating.
        * - 'readable': Provides a readable update notification.
        */
-      update: 'auto' | 'ask' | 'readable';
+      update: 'auto' | 'ask' | 'readable'
       /**
        * Whether downgrading the plugin version is allowed.
        */
-      downgrade: boolean;
-    };
-  };
+      downgrade: boolean
+    }
+  }
 }
 
-export type { LogLevel, LogItem, LogDataType, IPluginLogger } from './log/types'
-export * from './sdk/index'
-export * from './providers'
 export * from './install'
+export type { IPluginLogger, LogDataType, LogItem, LogLevel } from './log/types'
+export * from './providers'
 export * from './risk'
+export * from './sdk/index'

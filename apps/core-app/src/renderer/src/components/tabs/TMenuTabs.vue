@@ -1,8 +1,8 @@
 <script>
-import { defineComponent, h, nextTick, ref } from 'vue'
-import TMenuItem from '~/components/tabs/TMenuItem.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import router from '~/base/router'
+import TMenuItem from '~/components/tabs/TMenuItem.vue'
 
 const qualifiedName = ['TMenuItem']
 const activeNode = ref()
@@ -17,7 +17,8 @@ export default defineComponent({
     async function fixPointer(vnode) {
       const pointerEl = pointer.el
       const nodeEl = vnode.el
-      if (!pointerEl || !nodeEl) return
+      if (!pointerEl || !nodeEl)
+        return
 
       const pointerStyle = pointerEl.style
 
@@ -44,7 +45,8 @@ export default defineComponent({
 
         pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
         pointerStyle.height = `${nodeRect.height * 0.6}px`
-      } else {
+      }
+      else {
         pointerStyle.transform = `translate(0, -${nodeRect.height * 0.2}px)`
         pointerStyle.height = `${nodeRect.height * 0.8}px`
 
@@ -77,14 +79,15 @@ export default defineComponent({
           active: () => activeNode.value?.props.name === vnode.props.name,
           ...vnode.props,
           onClick: () => {
-            if (vnode.props.hasOwnProperty('disabled')) return
+            if (vnode.props.hasOwnProperty('disabled'))
+              return
 
             activeNode.value = vnode
 
             // that.$emit('update:modelValue', vnode.props.name)
 
             fixPointer(tab)
-          }
+          },
         })
 
         map[vnode.props.route] = tab
@@ -112,16 +115,16 @@ export default defineComponent({
             nextTick(fixPointer.bind(null, tab))
           }
         },
-        { lazy: true }
+        { lazy: true },
       )
 
       return defaultSlots
-        .filter((slot) => slot.type.name && qualifiedName.includes(slot.type.name))
+        .filter(slot => slot.type.name && qualifiedName.includes(slot.type.name))
         .map(getTab)
     }
 
     return h('div', { class: 'TMenuTabs-Container' }, [getTabs(), pointer])
-  }
+  },
 })
 </script>
 

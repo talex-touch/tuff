@@ -1,3 +1,128 @@
+<script setup lang="ts">
+import { Delete, Download, Refresh } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import { touchChannel } from '~/modules/channel/channel-core'
+
+const props = defineProps<Props>()
+
+const emit = defineEmits<Emits>()
+
+const { t } = useI18n()
+
+interface Props {
+  modelValue: boolean
+}
+
+interface Emits {
+  (e: 'update:modelValue', value: boolean): void
+}
+
+const visible = ref(props.modelValue)
+const loading = ref(false)
+const logs = ref<string>('')
+const errorStats = ref<any>(null)
+const logLimit = ref(100)
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    visible.value = val
+    if (val) {
+      refreshLogs()
+      loadErrorStats()
+    }
+  },
+)
+
+watch(visible, (val) => {
+  emit('update:modelValue', val)
+})
+
+async function refreshLogs() {
+  loading.value = true
+  try {
+    const result = await touchChannel.send('download:get-logs', logLimit.value)
+    if (result.success) {
+      logs.value = result.logs || t('download.no_logs')
+    }
+    else {
+      toast.error(t('download.load_logs_failed'))
+    }
+  }
+  catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    toast.error(`${t('download.load_logs_failed')}: ${message}`)
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+async function loadErrorStats() {
+  try {
+    const result = await touchChannel.send('download:get-error-stats')
+    if (result.success) {
+      errorStats.value = result.stats
+    }
+  }
+  catch (error: unknown) {
+    console.error('Failed to load error stats:', error)
+  }
+}
+
+async function clearLogs() {
+  try {
+    await ElMessageBox.confirm(
+      t('download.clear_logs_confirm_message'),
+      t('download.clear_logs_confirm_title'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+
+    const result = await touchChannel.send('download:clear-logs')
+    if (result.success) {
+      logs.value = ''
+      errorStats.value = null
+      toast.success(t('download.logs_cleared'))
+    }
+    else {
+      toast.error(t('download.clear_logs_failed'))
+    }
+  }
+  catch (error: unknown) {
+    if (error === 'cancel')
+      return
+    const message = error instanceof Error ? error.message : String(error)
+    toast.error(`${t('download.clear_logs_failed')}: ${message}`)
+  }
+}
+
+function downloadLogs() {
+  if (!logs.value) {
+    toast.warning(t('download.no_logs_to_download'))
+    return
+  }
+
+  const blob = new Blob([logs.value], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `download-errors-${Date.now()}.log`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  toast.success(t('download.logs_downloaded'))
+}
+</script>
+
 <template>
   <el-dialog
     v-model="visible"
@@ -9,17 +134,17 @@
     <!-- 头部工具栏 -->
     <div class="log-toolbar">
       <div class="toolbar-left">
-        <el-button @click="refreshLogs" :loading="loading">
+        <el-button :loading="loading" @click="refreshLogs">
           <el-icon><Refresh /></el-icon>
           {{ $t('common.refresh') }}
         </el-button>
-        <el-button @click="clearLogs" type="danger">
+        <el-button type="danger" @click="clearLogs">
           <el-icon><Delete /></el-icon>
           {{ $t('download.clear_logs') }}
         </el-button>
       </div>
       <div class="toolbar-right">
-        <el-select v-model="logLimit" @change="refreshLogs" style="width: 150px">
+        <el-select v-model="logLimit" style="width: 150px" @change="refreshLogs">
           <el-option :label="$t('download.last_50_lines')" :value="50" />
           <el-option :label="$t('download.last_100_lines')" :value="100" />
           <el-option :label="$t('download.last_500_lines')" :value="500" />
@@ -33,23 +158,33 @@
       <el-card shadow="never">
         <div class="stats-grid">
           <div class="stat-item">
-            <div class="stat-label">{{ $t('download.total_errors') }}</div>
-            <div class="stat-value">{{ errorStats.total }}</div>
+            <div class="stat-label">
+              {{ $t('download.total_errors') }}
+            </div>
+            <div class="stat-value">
+              {{ errorStats.total }}
+            </div>
           </div>
           <div class="stat-item">
-            <div class="stat-label">{{ $t('download.network_errors') }}</div>
+            <div class="stat-label">
+              {{ $t('download.network_errors') }}
+            </div>
             <div class="stat-value error-network">
               {{ errorStats.byType?.network_error || 0 }}
             </div>
           </div>
           <div class="stat-item">
-            <div class="stat-label">{{ $t('download.timeout_errors') }}</div>
+            <div class="stat-label">
+              {{ $t('download.timeout_errors') }}
+            </div>
             <div class="stat-value error-timeout">
               {{ errorStats.byType?.timeout_error || 0 }}
             </div>
           </div>
           <div class="stat-item">
-            <div class="stat-label">{{ $t('download.disk_errors') }}</div>
+            <div class="stat-label">
+              {{ $t('download.disk_errors') }}
+            </div>
             <div class="stat-value error-disk">
               {{ errorStats.byType?.disk_space_error || 0 }}
             </div>
@@ -67,7 +202,9 @@
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">{{ $t('common.close') }}</el-button>
+      <el-button @click="visible = false">
+        {{ $t('common.close') }}
+      </el-button>
       <el-button type="primary" @click="downloadLogs">
         <el-icon><Download /></el-icon>
         {{ $t('download.download_logs') }}
@@ -75,123 +212,6 @@
     </template>
   </el-dialog>
 </template>
-
-<script setup lang="ts">
-import { ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
-import { toast } from 'vue-sonner'
-import { useI18n } from 'vue-i18n'
-import { Refresh, Delete, Download } from '@element-plus/icons-vue'
-import { touchChannel } from '~/modules/channel/channel-core'
-
-const { t } = useI18n()
-
-interface Props {
-  modelValue: boolean
-}
-
-interface Emits {
-  (e: 'update:modelValue', value: boolean): void
-}
-
-const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
-
-const visible = ref(props.modelValue)
-const loading = ref(false)
-const logs = ref<string>('')
-const errorStats = ref<any>(null)
-const logLimit = ref(100)
-
-watch(
-  () => props.modelValue,
-  (val) => {
-    visible.value = val
-    if (val) {
-      refreshLogs()
-      loadErrorStats()
-    }
-  }
-)
-
-watch(visible, (val) => {
-  emit('update:modelValue', val)
-})
-
-const refreshLogs = async () => {
-  loading.value = true
-  try {
-    const result = await touchChannel.send('download:get-logs', logLimit.value)
-    if (result.success) {
-      logs.value = result.logs || t('download.no_logs')
-    } else {
-      toast.error(t('download.load_logs_failed'))
-    }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error)
-    toast.error(`${t('download.load_logs_failed')}: ${message}`)
-  } finally {
-    loading.value = false
-  }
-}
-
-const loadErrorStats = async () => {
-  try {
-    const result = await touchChannel.send('download:get-error-stats')
-    if (result.success) {
-      errorStats.value = result.stats
-    }
-  } catch (error: unknown) {
-    console.error('Failed to load error stats:', error)
-  }
-}
-
-const clearLogs = async () => {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_logs_confirm_message'),
-      t('download.clear_logs_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
-      }
-    )
-
-    const result = await touchChannel.send('download:clear-logs')
-    if (result.success) {
-      logs.value = ''
-      errorStats.value = null
-      toast.success(t('download.logs_cleared'))
-    } else {
-      toast.error(t('download.clear_logs_failed'))
-    }
-  } catch (error: unknown) {
-    if (error === 'cancel') return
-    const message = error instanceof Error ? error.message : String(error)
-    toast.error(`${t('download.clear_logs_failed')}: ${message}`)
-  }
-}
-
-const downloadLogs = () => {
-  if (!logs.value) {
-    toast.warning(t('download.no_logs_to_download'))
-    return
-  }
-
-  const blob = new Blob([logs.value], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `download-errors-${Date.now()}.log`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-  
-  toast.success(t('download.logs_downloaded'))
-}
-</script>
 
 <style scoped>
 .error-log-viewer :deep(.el-dialog__body) {

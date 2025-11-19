@@ -4,16 +4,16 @@
  * Handles error reporting, analytics, and user tracking with privacy controls
  */
 
-import * as Sentry from '@sentry/electron/main'
-import { app } from 'electron'
-import os from 'node:os'
-import { BaseModule } from '../abstract-base-module'
-import { ModuleKey } from '@talex-touch/utils'
-import { storageModule } from '../storage'
-import { getAppVersionSafe } from '../../utils/version-util'
-import { createLogger } from '../../utils/logger'
+import type { ModuleKey } from '@talex-touch/utils'
 import crypto from 'node:crypto'
+import os from 'node:os'
+import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { app } from 'electron'
+import { createLogger } from '../../utils/logger'
+import { getAppVersionSafe } from '../../utils/version-util'
+import { BaseModule } from '../abstract-base-module'
+import { storageModule } from '../storage'
 
 // User type from Clerk
 interface ClerkUser {
@@ -52,7 +52,7 @@ function generateDeviceFingerprint(): string {
     os.arch(),
     os.hostname(),
     os.type(),
-    os.release()
+    os.release(),
   ]
   const hash = crypto.createHash('sha256')
   hash.update(components.join('|'))
@@ -76,7 +76,7 @@ function getEnvironmentContext(): Record<string, unknown> {
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     isPackaged: app.isPackaged,
-    buildTimestamp: Date.now()
+    buildTimestamp: Date.now(),
   }
 }
 
@@ -109,7 +109,8 @@ export class SentryServiceModule extends BaseModule {
     // Initialize Sentry if enabled
     if (this.config.enabled) {
       this.initializeSentry()
-    } else {
+    }
+    else {
       sentryLog.info('Sentry is disabled by configuration')
     }
 
@@ -122,7 +123,8 @@ export class SentryServiceModule extends BaseModule {
    */
   private setupIPCChannels(): void {
     const channel = $app.channel
-    if (!channel) return
+    if (!channel)
+      return
 
     // Listen for user context updates from renderer
     channel.regChannel(ChannelType.MAIN, 'sentry:update-user', ({ data }) => {
@@ -148,7 +150,7 @@ export class SentryServiceModule extends BaseModule {
     // Events are automatically sent
     if (this.isInitialized) {
       // Wait a bit to ensure events are sent
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 500))
     }
   }
 
@@ -160,12 +162,13 @@ export class SentryServiceModule extends BaseModule {
       const config = storageModule.getConfig('sentry-config.json') as Partial<SentryConfig> | undefined
       this.config = {
         enabled: config?.enabled ?? false,
-        anonymous: config?.anonymous ?? true
+        anonymous: config?.anonymous ?? true,
       }
       sentryLog.debug('Loaded Sentry config', { meta: { enabled: this.config.enabled, anonymous: this.config.anonymous } })
-    } catch (error) {
+    }
+    catch (error) {
       sentryLog.warn('Failed to load Sentry config, using defaults', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { error: error instanceof Error ? error.message : String(error) },
       })
       // Use defaults: disabled by default for privacy
       this.config = { enabled: false, anonymous: true }
@@ -176,17 +179,18 @@ export class SentryServiceModule extends BaseModule {
    * Save configuration to storage
    */
   saveConfig(config: Partial<SentryConfig>): void {
-      this.config = { ...this.config, ...config }
-      storageModule.saveConfig('sentry-config.json', JSON.stringify(this.config))
-      sentryLog.info('Saved Sentry config', {
-        meta: { enabled: this.config.enabled, anonymous: this.config.anonymous }
-      })
+    this.config = { ...this.config, ...config }
+    storageModule.saveConfig('sentry-config.json', JSON.stringify(this.config))
+    sentryLog.info('Saved Sentry config', {
+      meta: { enabled: this.config.enabled, anonymous: this.config.anonymous },
+    })
 
     // Reinitialize if enabled state changed
     if (config.enabled !== undefined) {
       if (this.config.enabled && !this.isInitialized) {
         this.initializeSentry()
-      } else if (!this.config.enabled && this.isInitialized) {
+      }
+      else if (!this.config.enabled && this.isInitialized) {
         this.shutdownSentry()
       }
     }
@@ -225,7 +229,7 @@ export class SentryServiceModule extends BaseModule {
           // Always include environment context
           event.contexts = {
             ...event.contexts,
-            environment: getEnvironmentContext()
+            environment: getEnvironmentContext(),
           }
 
           return event
@@ -250,12 +254,13 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.success('Sentry initialized', {
         meta: {
           environment: process.env.BUILD_TYPE || (app.isPackaged ? 'production' : 'development'),
-          anonymous: this.config.anonymous
-        }
+          anonymous: this.config.anonymous,
+        },
       })
-    } catch (error) {
+    }
+    catch (error) {
       sentryLog.error('Failed to initialize Sentry', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { error: error instanceof Error ? error.message : String(error) },
       })
     }
   }
@@ -305,7 +310,7 @@ export class SentryServiceModule extends BaseModule {
       const userContext: Sentry.User = {
         id: user.id,
         username: user.username || undefined,
-        email: undefined // Never send email
+        email: undefined, // Never send email
       }
 
       // Add device fingerprint if available
@@ -317,21 +322,23 @@ export class SentryServiceModule extends BaseModule {
 
       Sentry.setUser(userContext)
       sentryLog.debug('User context updated', {
-        meta: { userId: user.id, hasFingerprint: !!this.deviceFingerprint }
+        meta: { userId: user.id, hasFingerprint: !!this.deviceFingerprint },
       })
-    } else {
+    }
+    else {
       // Not authenticated, but not anonymous mode - use device fingerprint only
       if (this.deviceFingerprint) {
         Sentry.setUser({
           id: `device:${this.deviceFingerprint}`,
           username: undefined,
-          email: undefined
+          email: undefined,
         })
         Sentry.setTag('device.fingerprint', this.deviceFingerprint)
         sentryLog.debug('User context set to device fingerprint', {
-          meta: { fingerprint: this.deviceFingerprint }
+          meta: { fingerprint: this.deviceFingerprint },
         })
-      } else {
+      }
+      else {
         Sentry.setUser(null)
       }
     }
@@ -365,8 +372,8 @@ export class SentryServiceModule extends BaseModule {
     try {
       // Calculate aggregated metrics
       const totalSearches = this.searchMetricsBuffer.length
-      const avgDuration =
-        this.searchMetricsBuffer.reduce((sum, m) => sum + m.totalDuration, 0) / totalSearches
+      const avgDuration
+        = this.searchMetricsBuffer.reduce((sum, m) => sum + m.totalDuration, 0) / totalSearches
       const totalResults = this.searchMetricsBuffer.reduce((sum, m) => sum + m.resultCount, 0)
       const avgResults = totalResults / totalSearches
 
@@ -402,14 +409,14 @@ export class SentryServiceModule extends BaseModule {
           provider_timing_percentages: providerPercentages,
           provider_total_results: providerTotalResults,
           provider_avg_times_ms: Object.fromEntries(
-            Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)])
+            Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)]),
           ),
           sample_queries: this.searchMetricsBuffer.slice(-5).map(m => ({
             text: m.queryText.substring(0, 100), // Truncate for privacy
             inputTypes: m.inputTypes,
             duration: m.totalDuration,
-            results: m.resultCount
-          }))
+            results: m.resultCount,
+          })),
         })
 
         Sentry.captureMessage('Search analytics batch report', 'info')
@@ -422,12 +429,13 @@ export class SentryServiceModule extends BaseModule {
         meta: {
           searchCount: this.searchCount,
           batchSize: totalSearches,
-          avgDuration: avgDuration.toFixed(2)
-        }
+          avgDuration: avgDuration.toFixed(2),
+        },
       })
-    } catch (error) {
+    }
+    catch (error) {
       sentryLog.error('Failed to report search analytics', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { error: error instanceof Error ? error.message : String(error) },
       })
     }
   }
@@ -493,4 +501,3 @@ export function getSentryService(): SentryServiceModule {
   }
   return sentryServiceInstance
 }
-

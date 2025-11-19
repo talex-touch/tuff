@@ -2,17 +2,17 @@ export interface Permission {
   /**
    * permission id
    */
-  id: symbol;
+  id: symbol
 
   /**
    * permission name
    */
-  name: string;
+  name: string
 
   /**
    * permission description
    */
-  description: string;
+  description: string
 }
 
 export interface IPermissionCenter {
@@ -22,7 +22,7 @@ export interface IPermissionCenter {
    * @param permission permission
    * @throws if permission already exists
    */
-  addPermission(pluginScope: string, permission: Permission): void;
+  addPermission: (pluginScope: string, permission: Permission) => void
 
   /**
    * remove a permission
@@ -30,14 +30,14 @@ export interface IPermissionCenter {
    * @param permission permission
    * @throws if permission not exists
    */
-  delPermission(pluginScope: string, permission: Permission): void;
+  delPermission: (pluginScope: string, permission: Permission) => void
 
   /**
    * if pluginScope has permission
    * @param pluginScope plugin name
    * @param permission permission
    */
-  hasPermission(pluginScope: string, permission: Permission): boolean;
+  hasPermission: (pluginScope: string, permission: Permission) => boolean
 
   /**
    * get permission
@@ -45,5 +45,5 @@ export interface IPermissionCenter {
    * @param permission permission id
    * @returns permission
    */
-  getPermission(pluginScope: string, permission: symbol): Permission;
+  getPermission: (pluginScope: string, permission: symbol) => Permission
 }

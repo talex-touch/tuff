@@ -1,6 +1,6 @@
 import type {
   AiCapabilityProviderBinding,
-  AiProviderConfig
+  AiProviderConfig,
 } from '@talex-touch/utils/types/intelligence'
 
 /**

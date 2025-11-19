@@ -1,7 +1,8 @@
 import type { LoadingEvent, LoadingMode, LoadingState, PreloadAPI } from './loading'
 
 function getPreloadApi(): PreloadAPI | null {
-  if (typeof window === 'undefined') return null
+  if (typeof window === 'undefined')
+    return null
   return (window as any).api ?? null
 }
 
@@ -36,6 +37,7 @@ export function preloadDebugStep(message: string, delta = 0.08): void {
 }
 
 export function preloadRemoveOverlay(): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined')
+    return
   window.postMessage({ payload: 'removeLoading' }, '*')
 }

@@ -1,39 +1,22 @@
-<template>
-  <div @click="directSongProcess" v-if="lyric.length" ref='dom' class="WordLyricItem" :class="{ isLyric, 'start': lyricOptions.start }">
-    <div class="WordLyricItem-Wrapper">
-      <span v-if="!isLyric" class="WordLyricItem-Info">
-        {{ _info[0].tx }} {{ _info[1].tx }}
-      </span>
-        <span :style="`--duration: ${item.t[1]}ms`" :data-c="item.c" v-else-if="lyricOptions.text"
-              v-for="item in lyricOptions.text" :class="{ 'end': +item.t[0] + +item.t[1] <= progress.current * 1000,'start': +item.t[0] <= progress.current * 1000, 'en': _tLyric }"></span>
-        <span class="WordLyricItem-Translate" :style="`--duration: ${_tLyricDuration}ms`" v-if="_tLyric">
-        {{ _tLyric }}
-      </span>
-    </div>
-
-    <div class="WordLyricItem-Time">
-      {{ DayJS().startOf('day').add(lyricOptions.time.start_time, 'millisecond').format('mm:ss:SSS') }}
-    </div>
-  </div>
-</template>
-
 <script>
-export default {
-  name: "WordLyricItem"
-}
 </script>
 
 <script setup>
-import { ref, watch, reactive, computed, inject, onMounted } from 'vue'
 import { musicManager } from '@modules/music'
 import DayJS from 'dayjs'
 import gsap from 'gsap'
+import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
+
+const props = defineProps(['lyric', 'index'])
+
+const emits = defineEmits(['index'])
+
+export default {
+  name: 'WordLyricItem',
+}
 
 const dom = ref()
 const isLyric = ref(false)
-const emits = defineEmits(['index'])
-const props = defineProps(['lyric', 'index'])
-
 const song = musicManager.playManager.song
 const progress = song.value.progress
 
@@ -41,15 +24,15 @@ const lyricOptions = reactive({
   text: [],
   time: {
     start_time: 0,
-    duration: 0
+    duration: 0,
   },
-  start: false
+  start: false,
 })
 
 onMounted(() => {
-
   const el = dom.value
-  if ( !el ) return
+  if (!el)
+    return
 
   const rect = el.getBoundingClientRect()
 
@@ -61,17 +44,16 @@ onMounted(() => {
     // scale: 1.2,
     scrollTrigger: {
       trigger: el.parentNode.parentNode,
-      start: "top " + offsetTop + "px",
-      end: "top " + (offsetTop + rect.height) + "px",
+      start: `top ${offsetTop}px`,
+      end: `top ${offsetTop + rect.height}px`,
       scrub: true,
-      markers: true
-    }
+      markers: true,
+    },
   })
-
 })
 function directSongProcess() {
   // if ( lyricOptions.start ) {
-    song.value.audio.seek(lyricOptions.time.start_time / 1000)
+  song.value.audio.seek(lyricOptions.time.start_time / 1000)
   // }
 }
 
@@ -96,28 +78,28 @@ const _info = computed(() => {
 watch(() => progress, () => {
   lyricOptions.start = lyricOptions.time.start_time <= progress.current * 1000 && (+lyricOptions.time.start_time + +lyricOptions.time.duration) >= progress.current * 1000
 
-  if ( lyricOptions.start && progress.current > 0 ) {
+  if (lyricOptions.start && progress.current > 0) {
     emits('index', props.index)
   }
 }, { deep: true, immediate: true })
 
 watch(() => props.lyric, () => {
   isLyric.value = props.lyric[0] === '['
-  if( !isLyric.value ) return
+  if (!isLyric.value)
+    return
 
   const time = props.lyric.substring(1, props.lyric.indexOf(']'))
 
   lyricOptions.time = {
     start_time: time.substring(0, time.indexOf(',')),
-    duration: time.substring(time.indexOf(',') + 1)
+    duration: time.substring(time.indexOf(',') + 1),
   }
 
-  let text = props.lyric.substring(props.lyric.indexOf(']') + 1) //.replace("（", "(").replace("）", ")").split("(")
+  let text = props.lyric.substring(props.lyric.indexOf(']') + 1) // .replace("（", "(").replace("）", ")").split("(")
 
   const resArray = []
 
-  while( text.length ) {
-
+  while (text.length) {
     const index = text.indexOf('(')
     const index2 = text.indexOf(')')
     const index3 = text.indexOf('(', index2)
@@ -132,15 +114,34 @@ watch(() => props.lyric, () => {
 
     resArray.push({
       c,
-      t: ts
+      t: ts,
     })
-
   }
 
   lyricOptions.text = resArray
-
 }, { immediate: true })
 </script>
+
+<template>
+  <div v-if="lyric.length" ref="dom" class="WordLyricItem" :class="{ isLyric, start: lyricOptions.start }" @click="directSongProcess">
+    <div class="WordLyricItem-Wrapper">
+      <span v-if="!isLyric" class="WordLyricItem-Info">
+        {{ _info[0].tx }} {{ _info[1].tx }}
+      </span>
+      <span
+        v-for="item in lyricOptions.text" v-else-if="lyricOptions.text" :style="`--duration: ${item.t[1]}ms`"
+        :data-c="item.c" :class="{ end: +item.t[0] + +item.t[1] <= progress.current * 1000, start: +item.t[0] <= progress.current * 1000, en: _tLyric }"
+      />
+      <span v-if="_tLyric" class="WordLyricItem-Translate" :style="`--duration: ${_tLyricDuration}ms`">
+        {{ _tLyric }}
+      </span>
+    </div>
+
+    <div class="WordLyricItem-Time">
+      {{ DayJS().startOf('day').add(lyricOptions.time.start_time, 'millisecond').format('mm:ss:SSS') }}
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 @keyframes shine {

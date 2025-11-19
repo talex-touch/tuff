@@ -3,7 +3,7 @@
 ## v2.0.0
 
 > 2023/06/??
-> 
+>
 The new refactoring version `2.0.0` is under developing. Soon will meet with you!
 
 ## v1.2.0

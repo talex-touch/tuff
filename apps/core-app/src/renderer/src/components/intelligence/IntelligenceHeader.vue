@@ -12,7 +12,7 @@ const { t } = useI18n()
 
 <template>
   <div class="IntelligenceHeader">
-    <div class="IntelligenceHeader-Glow"></div>
+    <div class="IntelligenceHeader-Glow" />
 
     <div class="IntelligenceHeader-Main">
       <h1>Tuff Intelligence&nbsp;<tuff-beta-tag /></h1>

@@ -1,23 +1,20 @@
-<template>
-  <div class="MusicWaving-Container" :class="{ active, playing: !playing }">
-    <div class="MusicWaving-Icon">
-
-    </div>
-    <slot />
-  </div>
-</template>
-
 <script>
-export default {
-  name: "MusicWaving"
-}
 </script>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
-
 const props = defineProps(['active', 'playing'])
+
+export default {
+  name: 'MusicWaving',
+}
 </script>
+
+<template>
+  <div class="MusicWaving-Container" :class="{ active, playing: !playing }">
+    <div class="MusicWaving-Icon" />
+    <slot />
+  </div>
+</template>
 
 <style lang="scss" scoped>
 @keyframes waving {
@@ -86,10 +83,10 @@ const props = defineProps(['active', 'playing'])
   &.active:before {
     content: "";
     position: absolute;
-    
+
     left: 0;
     top: 0;
-    
+
     width: 100%;
     height: 100%;
 
@@ -104,7 +101,7 @@ const props = defineProps(['active', 'playing'])
 
   width: 100%;
   height: 100%;
-  
+
   border-radius: 8px;
   overflow: hidden;
 }

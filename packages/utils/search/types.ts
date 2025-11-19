@@ -16,8 +16,8 @@
  * @version 1.0.0
  */
 
-import type { IFeatureCommand } from '../plugin';
-import type { ITuffIcon, TuffIconType } from '../types/icon';
+import type { IFeatureCommand } from '../plugin'
+import type { ITuffIcon, TuffIconType } from '../types/icon'
 
 /**
  * Search Result Item Interface
@@ -41,7 +41,7 @@ export interface ISearchItem {
    * @example "Calculator" for an application
    * @example "Translate Text" for a plugin feature
    */
-  name: string;
+  name: string
 
   /**
    * Description or subtitle of the search result item
@@ -52,7 +52,7 @@ export interface ISearchItem {
    * @example "/Applications/Calculator.app" for an application
    * @example "Translate text using Google Translate" for a feature
    */
-  desc: string;
+  desc: string
 
   /**
    * Icon configuration for visual representation
@@ -62,7 +62,7 @@ export interface ISearchItem {
    *
    * @see {@link ITuffIcon} for icon configuration options
    */
-  icon: ITuffIcon;
+  icon: ITuffIcon
 
   /**
    * Whether this item supports push mode functionality
@@ -74,7 +74,7 @@ export interface ISearchItem {
    * @example true for plugin features that accept user input
    * @example false for simple applications or static items
    */
-  push: boolean;
+  push: boolean
 
   /**
    * List of feature commands associated with this item
@@ -85,7 +85,7 @@ export interface ISearchItem {
    * @optional
    * @see {@link IFeatureCommand} for command structure
    */
-  commands?: IFeatureCommand[];
+  commands?: IFeatureCommand[]
 
   /**
    * Array of searchable names for this item
@@ -95,7 +95,7 @@ export interface ISearchItem {
    *
    * @example ["Calculator", "Calc", "Math"] for a calculator app
    */
-  names: string[];
+  names: string[]
 
   /**
    * Array of keywords for search matching
@@ -105,7 +105,7 @@ export interface ISearchItem {
    *
    * @example ["math", "arithmetic", "numbers"] for a calculator
    */
-  keyWords: string[];
+  keyWords: string[]
 
   /**
    * Type of plugin this item belongs to
@@ -117,7 +117,7 @@ export interface ISearchItem {
    * @example "feature" for plugin features
    * @example "file" for file system items
    */
-  pluginType: string;
+  pluginType: string
 
   /**
    * General type classification of the item
@@ -128,7 +128,7 @@ export interface ISearchItem {
    * @example "plugin" for plugin-based items
    * @example "app" for applications
    */
-  type: string;
+  type: string
 
   /**
    * Associated value, typically the plugin name or identifier
@@ -139,7 +139,7 @@ export interface ISearchItem {
    * @example "calculator-plugin" for a plugin feature
    * @example "system" for built-in functionality
    */
-  value: string;
+  value: string
 
   /**
    * Usage frequency counter for ranking and sorting
@@ -151,7 +151,7 @@ export interface ISearchItem {
    * @defaultValue 0
    * @minimum 0
    */
-  amo?: number;
+  amo?: number
 
   /**
    * Matching information from search algorithms
@@ -160,9 +160,9 @@ export interface ISearchItem {
    * Used for highlighting and relevance scoring.
    *
    * @optional
-   * @internal Used by search algorithms
+   * @internal
    */
-  matched?: any;
+  matched?: any
 
   /**
    * Whether this item was matched by its name
@@ -173,7 +173,7 @@ export interface ISearchItem {
    * @optional
    * @defaultValue false
    */
-  matchedByName?: boolean;
+  matchedByName?: boolean
 
   /**
    * Whether this item was matched by its description
@@ -184,7 +184,7 @@ export interface ISearchItem {
    * @optional
    * @defaultValue false
    */
-  descMatched?: boolean;
+  descMatched?: boolean
 
   /**
    * Whether this item was matched by abbreviation
@@ -195,7 +195,7 @@ export interface ISearchItem {
    * @optional
    * @defaultValue false
    */
-  abridgeMatched?: boolean;
+  abridgeMatched?: boolean
 
   /**
    * Unique identifier for this search item
@@ -207,7 +207,7 @@ export interface ISearchItem {
    * @example "app-calculator-v1.0"
    * @example "feature-translate-google"
    */
-  id?: string;
+  id?: string
 
   /**
    * Action to execute when this item is selected
@@ -219,7 +219,7 @@ export interface ISearchItem {
    * @example "open /Applications/Calculator.app" for applications
    * @example "translate:google" for plugin features
    */
-  action?: string;
+  action?: string
 
   /**
    * Reference to original feature object for command matching
@@ -228,9 +228,9 @@ export interface ISearchItem {
    * Maintains a link to the original feature for command resolution.
    *
    * @optional
-   * @internal Used by plugin system
+   * @internal
    */
-  originFeature?: ISearchItem;
+  originFeature?: ISearchItem
 
   /**
    * Additional properties for extensibility
@@ -241,7 +241,7 @@ export interface ISearchItem {
    *
    * @example { customData: "value", metadata: { source: "api" } }
    */
-  [key: string]: any;
+  [key: string]: any
 }
 
 /**
@@ -290,7 +290,7 @@ export interface IDataItem extends ISearchItem {
    * @example "local-analyzer"
    * @example "openai-api"
    */
-  source?: string;
+  source?: string
 
   /**
    * Type of data processing performed
@@ -304,7 +304,7 @@ export interface IDataItem extends ISearchItem {
    * @example "conversion"
    * @example "summarization"
    */
-  dataType?: string;
+  dataType?: string
 
   /**
    * Original input data before processing
@@ -316,7 +316,7 @@ export interface IDataItem extends ISearchItem {
    * @example "Hello World" for translation input
    * @example { text: "...", options: {...} } for complex inputs
    */
-  originalData?: any;
+  originalData?: any
 
   /**
    * Processed output data
@@ -328,7 +328,7 @@ export interface IDataItem extends ISearchItem {
    * @example "你好世界" for translation output
    * @example { summary: "...", keywords: [...] } for analysis results
    */
-  processedData?: any;
+  processedData?: any
 
   /**
    * Quality score of the processing result (0-100)
@@ -342,7 +342,7 @@ export interface IDataItem extends ISearchItem {
    * @example 95 for high-quality translation
    * @example 78 for moderate-quality analysis
    */
-  quality?: number;
+  quality?: number
 
   /**
    * Whether this result was retrieved from cache
@@ -353,7 +353,7 @@ export interface IDataItem extends ISearchItem {
    * @optional
    * @defaultValue false
    */
-  cached?: boolean;
+  cached?: boolean
 
   /**
    * Processing time in milliseconds
@@ -366,7 +366,7 @@ export interface IDataItem extends ISearchItem {
    * @example 120 for a 120ms processing time
    * @example 1500 for a 1.5 second operation
    */
-  duration?: number;
+  duration?: number
 
   /**
    * Confidence level of the result (0-100)
@@ -380,7 +380,7 @@ export interface IDataItem extends ISearchItem {
    * @example 92 for high-confidence translation
    * @example 67 for moderate-confidence analysis
    */
-  confidence?: number;
+  confidence?: number
 
   /**
    * Additional metadata about the processing
@@ -392,7 +392,7 @@ export interface IDataItem extends ISearchItem {
    * @example { apiVersion: "v2", model: "gpt-4", tokens: 150 }
    * @example { processingNode: "server-1", retryCount: 0 }
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any>
 }
 
 /**
@@ -403,7 +403,7 @@ export enum SearchMode {
   COMMAND = 'COMMAND',
   IMAGE = 'IMAGE',
   FILE = 'FILE',
-  FEATURE = 'FEATURE'
+  FEATURE = 'FEATURE',
 }
 
 /**
@@ -411,16 +411,16 @@ export enum SearchMode {
  */
 export interface ISearchOptions {
   /** 搜索模式 */
-  mode: SearchMode;
+  mode: SearchMode
 
   /** 最大结果数量 */
-  maxResults?: number;
+  maxResults?: number
 
   /** 是否启用模糊匹配 */
-  fuzzyMatch?: boolean;
+  fuzzyMatch?: boolean
 
   /** 搜索超时时间（毫秒） */
-  timeout?: number;
+  timeout?: number
 }
 
 /**
@@ -428,22 +428,22 @@ export interface ISearchOptions {
  */
 export interface IPluginSearchResult {
   /** 插件名称 */
-  pluginName: string;
+  pluginName: string
 
   /** 搜索结果列表 */
-  items: ISearchItem[];
+  items: ISearchItem[]
 
   /** 推送时间戳 */
-  timestamp: number;
+  timestamp: number
 
   /** 查询关键词 */
-  query: string;
+  query: string
 
   /** 结果总数 */
-  total: number;
+  total: number
 
   /** 是否有更多结果 */
-  hasMore?: boolean;
+  hasMore?: boolean
 }
 
 /**
@@ -451,22 +451,22 @@ export interface IPluginSearchResult {
  */
 export interface ISearchResultManager {
   /** 推送搜索结果 */
-  pushItems(items: ISearchItem[]): void;
+  pushItems: (items: ISearchItem[]) => void
 
   /** 清空搜索结果 */
-  clearItems(): void;
+  clearItems: () => void
 
   /** 获取当前搜索结果 */
-  getItems(): ISearchItem[];
+  getItems: () => ISearchItem[]
 
   /** 更新单个搜索结果 */
-  updateItem(id: string, item: Partial<ISearchItem>): boolean;
+  updateItem: (id: string, item: Partial<ISearchItem>) => boolean
 
   /** 删除单个搜索结果 */
-  removeItem(id: string): boolean;
+  removeItem: (id: string) => boolean
 
   /** 获取结果数量 */
-  getCount(): number;
+  getCount: () => number
 }
 
 /**
@@ -533,37 +533,37 @@ export interface ISearchResultManager {
  */
 export function createDataItem(options: {
   /** Display name for the processed result */
-  name: string;
+  name: string
   /** Description of the processing or result */
-  desc: string;
+  desc: string
   /** Name of the plugin that created this item */
-  pluginName: string;
+  pluginName: string
   /** Source identifier (e.g., "google-api") */
-  source?: string;
+  source?: string
   /** Type of processing performed (e.g., "translation") */
-  dataType?: string;
+  dataType?: string
   /** Input data before processing */
-  originalData?: any;
+  originalData?: any
   /** Output data after processing */
-  processedData?: any;
+  processedData?: any
   /** Quality score (0-100) */
-  quality?: number;
+  quality?: number
   /** Whether result is from cache */
-  cached?: boolean;
+  cached?: boolean
   /** Processing time in milliseconds */
-  duration?: number;
+  duration?: number
   /** Confidence score (0-100) */
-  confidence?: number;
+  confidence?: number
   /** Additional metadata */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any>
   /** Icon type (defaults to "remix") */
-  iconType?: string;
+  iconType?: string
   /** Icon value (defaults to "function") */
-  iconValue?: string;
+  iconValue?: string
   /** Additional search keywords */
-  keyWords?: string[];
+  keyWords?: string[]
   /** Plugin type (defaults to "data") */
-  pluginType?: string;
+  pluginType?: string
 }): IDataItem {
   // Extract options with defaults for optional parameters
   const {
@@ -579,11 +579,11 @@ export function createDataItem(options: {
     duration,
     confidence,
     metadata,
-    iconType = 'remix',        // Default to remix icon type
-    iconValue = 'function',    // Default to function icon
-    keyWords = [],             // Default to empty keywords array
-    pluginType = 'data'        // Default to data plugin type
-  } = options;
+    iconType = 'remix', // Default to remix icon type
+    iconValue = 'function', // Default to function icon
+    keyWords = [], // Default to empty keywords array
+    pluginType = 'data', // Default to data plugin type
+  } = options
 
   // Create and return the data item with all required and optional properties
   return {
@@ -592,15 +592,15 @@ export function createDataItem(options: {
     desc,
     icon: {
       type: (iconType === 'remix' || iconType === 'base64' ? 'url' : (iconType === 'file' || iconType === 'emoji' ? iconType : 'emoji')) as TuffIconType,
-      value: iconValue
+      value: iconValue,
     },
-    push: false,                    // Data items don't support push mode
-    names: [name],                  // Include name in searchable names
-    keyWords: [name, ...keyWords],  // Combine name with additional keywords
+    push: false, // Data items don't support push mode
+    names: [name], // Include name in searchable names
+    keyWords: [name, ...keyWords], // Combine name with additional keywords
     pluginType,
-    type: 'plugin',                 // All plugin-generated items have type 'plugin'
-    value: pluginName,              // Link to source plugin
-    amo: 0,                         // Initialize usage counter
+    type: 'plugin', // All plugin-generated items have type 'plugin'
+    value: pluginName, // Link to source plugin
+    amo: 0, // Initialize usage counter
 
     // Data-specific properties
     source,
@@ -611,8 +611,8 @@ export function createDataItem(options: {
     cached,
     duration,
     confidence,
-    metadata
-  };
+    metadata,
+  }
 }
 
 /**
@@ -671,25 +671,25 @@ export function createDataItem(options: {
  */
 export function createSearchItem(options: {
   /** Display name of the search result */
-  name: string;
+  name: string
   /** Description or subtitle text */
-  desc: string;
+  desc: string
   /** Icon configuration object */
-  icon: ITuffIcon;
+  icon: ITuffIcon
   /** Name of the plugin creating this item */
-  pluginName: string;
+  pluginName: string
   /** Plugin type (defaults to "feature") */
-  pluginType?: string;
+  pluginType?: string
   /** General type (defaults to "plugin") */
-  type?: string;
+  type?: string
   /** Push mode support (defaults to false) */
-  push?: boolean;
+  push?: boolean
   /** List of available commands */
-  commands?: IFeatureCommand[];
+  commands?: IFeatureCommand[]
   /** Additional search keywords */
-  keyWords?: string[];
+  keyWords?: string[]
   /** Any additional properties to include */
-  [key: string]: any;
+  [key: string]: any
 }): ISearchItem {
   // Extract options with defaults for optional parameters
   const {
@@ -697,13 +697,13 @@ export function createSearchItem(options: {
     desc,
     icon,
     pluginName,
-    pluginType = 'feature',    // Default to feature type
-    type = 'plugin',           // Default to plugin type
-    push = false,              // Default to no push mode
-    commands = [],             // Default to empty commands array
-    keyWords = [],             // Default to empty keywords array
-    ...extra                   // Capture any additional properties
-  } = options;
+    pluginType = 'feature', // Default to feature type
+    type = 'plugin', // Default to plugin type
+    push = false, // Default to no push mode
+    commands = [], // Default to empty commands array
+    keyWords = [], // Default to empty keywords array
+    ...extra // Capture any additional properties
+  } = options
 
   // Create and return the search item with all properties
   return {
@@ -713,14 +713,14 @@ export function createSearchItem(options: {
     icon,
     push,
     commands,
-    names: [name],                  // Include name in searchable names
-    keyWords: [name, ...keyWords],  // Combine name with additional keywords
+    names: [name], // Include name in searchable names
+    keyWords: [name, ...keyWords], // Combine name with additional keywords
     pluginType,
     type,
-    value: pluginName,              // Link to source plugin
-    amo: 0,                         // Initialize usage counter
+    value: pluginName, // Link to source plugin
+    amo: 0, // Initialize usage counter
 
     // Spread any additional properties provided
-    ...extra
-  };
+    ...extra,
+  }
 }

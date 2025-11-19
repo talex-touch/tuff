@@ -1,7 +1,7 @@
 <script lang="ts" name="TuffBlockSwitch" setup>
-import { computed } from 'vue'
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { ITuffIcon } from '@talex-touch/utils'
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { computed } from 'vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
@@ -19,8 +19,8 @@ const props = withDefaults(
   {
     disabled: false,
     guidance: false,
-    loading: false
-  }
+    loading: false,
+  },
 )
 
 const emits = defineEmits<{

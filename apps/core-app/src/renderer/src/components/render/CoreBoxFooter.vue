@@ -1,11 +1,11 @@
 <script lang="ts" name="CoreBoxFooter" setup>
-import { computed } from 'vue'
-import { TuffItem, ITuffIcon } from '@talex-touch/utils'
-import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
+import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import { useDebounce } from '@vueuse/core'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { resolveSourceMeta } from './sourceMeta'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
   display: boolean
@@ -22,7 +22,7 @@ const displayIcon = computed(() => {
   const defaultIcon = {
     type: 'url',
     value: '',
-    status: 'normal'
+    status: 'normal',
   } as ITuffIcon
 
   if (typeof icon === 'string') {
@@ -45,8 +45,8 @@ const isMacPlatform = process.platform === 'darwin'
 
 const primaryActionLabel = computed(() => {
   const item = props.item
-  const isPluginFeature =
-    item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
+  const isPluginFeature
+    = item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
 
   const translationKey = isPluginFeature ? 'coreBox.hints.execute' : 'coreBox.hints.open'
   const translated = t(translationKey)
@@ -65,12 +65,12 @@ const keyHints = computed(() => {
     { key: '↵', label: primaryActionLabel.value },
     {
       key: aiHotkey,
-      label: aiHotkeyLabel
+      label: aiHotkeyLabel,
     },
     {
       key: quickSelectHotkey,
-      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel
-    }
+      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel,
+    },
   ]
 })
 </script>

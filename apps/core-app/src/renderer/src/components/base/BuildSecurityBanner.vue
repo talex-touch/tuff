@@ -1,42 +1,5 @@
-<template>
-  <Transition name="banner-slide">
-    <div
-      v-if="showBanner"
-      class="BuildSecurityBanner"
-      :class="{ 'verification-failed': verificationFailed }"
-    >
-      <div class="BuildSecurityBanner-Bar"></div>
-      <div class="BuildSecurityBanner-Content">
-        <div class="banner-icon">
-          <i v-if="verificationFailed" class="i-ri-error-warning-line" />
-          <i v-else class="i-ri-information-line" />
-        </div>
-        <div class="banner-text">
-          <div class="banner-title">
-            {{
-              verificationFailed
-                ? t('buildSecurity.title.verificationFailed')
-                : t('buildSecurity.title.unofficial')
-            }}
-          </div>
-          <div class="banner-description">
-            {{
-              verificationFailed
-                ? t('buildSecurity.description.verificationFailed')
-                : t('buildSecurity.description.unofficial')
-            }}
-          </div>
-        </div>
-        <button class="banner-close" @click="dismissBanner">
-          <i class="i-ri-close-line" />
-        </button>
-      </div>
-    </div>
-  </Transition>
-</template>
-
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { touchChannel } from '~/modules/channel/channel-core'
 
@@ -71,7 +34,8 @@ onMounted(async () => {
     if (status) {
       handleVerificationStatus(status as VerificationStatus)
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('[BuildSecurityBanner] Failed to get verification status:', error)
   }
 })
@@ -81,6 +45,43 @@ function dismissBanner() {
   dismissed.value = true
 }
 </script>
+
+<template>
+  <Transition name="banner-slide">
+    <div
+      v-if="showBanner"
+      class="BuildSecurityBanner"
+      :class="{ 'verification-failed': verificationFailed }"
+    >
+      <div class="BuildSecurityBanner-Bar" />
+      <div class="BuildSecurityBanner-Content">
+        <div class="banner-icon">
+          <i v-if="verificationFailed" class="i-ri-error-warning-line" />
+          <i v-else class="i-ri-information-line" />
+        </div>
+        <div class="banner-text">
+          <div class="banner-title">
+            {{
+              verificationFailed
+                ? t('buildSecurity.title.verificationFailed')
+                : t('buildSecurity.title.unofficial')
+            }}
+          </div>
+          <div class="banner-description">
+            {{
+              verificationFailed
+                ? t('buildSecurity.description.verificationFailed')
+                : t('buildSecurity.description.unofficial')
+            }}
+          </div>
+        </div>
+        <button class="banner-close" @click="dismissBanner">
+          <i class="i-ri-close-line" />
+        </button>
+      </div>
+    </div>
+  </Transition>
+</template>
 
 <style lang="scss" scoped>
 .BuildSecurityBanner-Bar {

@@ -15,37 +15,37 @@
  */
 
 import { createRouter, createWebHashHistory } from 'vue-router'
-import Home from '../views/base/home/HomePage.vue'
 import { appSetting } from '~/modules/channel/storage'
+import Home from '../views/base/home/HomePage.vue'
 
 const routes: any = [
   {
     path: '/',
-    redirect: '/home'
+    redirect: '/home',
   },
   {
     path: '/home',
     name: 'HomePage',
     component: Home,
     meta: {
-      index: 1
-    }
+      index: 1,
+    },
   },
   {
     path: '/market',
     name: 'Plugin Market',
     component: () => import('../views/base/Market.vue'),
     meta: {
-      index: 2
-    }
+      index: 2,
+    },
   },
   {
     path: '/plugin',
     name: 'Plugin',
     component: () => import('../views/base/Plugin.vue'),
     meta: {
-      index: 3
-    }
+      index: 3,
+    },
   },
   {
     path: '/details',
@@ -53,32 +53,32 @@ const routes: any = [
     component: () => import('../views/base/LingPan.vue'),
     meta: {
       index: 4,
-      requiresDashboard: true
-    }
+      requiresDashboard: true,
+    },
   },
   {
     path: '/styles',
     name: 'Styles',
     component: () => import('../views/base/styles/ThemeStyle.vue'),
     meta: {
-      index: 5
-    }
+      index: 5,
+    },
   },
   {
     path: '/styles/theme',
     name: 'Theme',
     component: () => import('../views/base/styles/sub/ThemePreference.vue'),
     meta: {
-      index: 5
-    }
+      index: 5,
+    },
   },
   {
     path: '/application',
     name: 'Application',
     component: () => import('../views/base/application/ApplicationIndex.vue'),
     meta: {
-      index: 6
-    }
+      index: 6,
+    },
   },
   {
     path: '/setting',
@@ -90,65 +90,66 @@ const routes: any = [
         name: 'Storagable',
         component: () => import('../views/storage/Storagable.vue'),
         meta: {
-          index: 7
-        }
-      }
+          index: 7,
+        },
+      },
     ],
     meta: {
-      index: 7
-    }
+      index: 7,
+    },
   },
   {
     path: '/intelligence',
     name: 'Intelligence',
     component: () => import('../views/base/intelligence/IntelligencePage.vue'),
     meta: {
-      index: 8
-    }
+      index: 8,
+    },
   },
   {
     path: '/intelligence/channels',
     name: 'IntelligenceChannels',
     component: () => import('../views/base/intelligence/IntelligenceChannelsPage.vue'),
     meta: {
-      index: 8
-    }
+      index: 8,
+    },
   },
   {
     path: '/intelligence/capabilities',
     name: 'IntelligenceCapabilities',
     component: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue'),
     meta: {
-      index: 8
-    }
+      index: 8,
+    },
   },
   {
     path: '/intelligence/prompts',
     name: 'IntelligencePrompts',
     component: () => import('../views/base/intelligence/IntelligencePromptsPage.vue'),
     meta: {
-      index: 8
-    }
+      index: 8,
+    },
   },
   {
     path: '/intelligence/audit',
     name: 'IntelligenceAudit',
     component: () => import('../views/base/intelligence/IntelligenceAuditPage.vue'),
     meta: {
-      index: 8
-    }
-  }
+      index: 8,
+    },
+  },
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
 })
 
 router.beforeEach((to, _from, next) => {
   if (to.meta?.requiresDashboard && !appSetting.dashboard.enable) {
     next('/home')
-  } else {
+  }
+  else {
     next()
   }
 })

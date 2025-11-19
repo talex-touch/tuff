@@ -48,45 +48,46 @@ npm install @tuff/utils
 Here's a basic example of a `preload.js` script:
 
 ```javascript
+const child_process = require('node:child_process')
+const path = require('node:path')
+const { init } = require('@tuff/utils')
 // preload.js
-const { ipcRenderer } = require('electron');
-const { init } = require('@tuff/utils');
-const path = require('path');
-const child_process = require('child_process');
+const { ipcRenderer } = require('electron')
 
 // Initialize the bridge between plugin and app
-init(window);
+init(window)
 
 // Listen for the plugin loaded event
 ipcRenderer.once('@plugin-loaded', () => {
   setTimeout(async () => {
     // Access plugin information
-    const { $plugin: plugin } = global;
-    console.log("Plugin loaded!", plugin);
+    const { $plugin: plugin } = global
+    console.log('Plugin loaded!', plugin)
 
     // Example: Start a background API server
     try {
       const apiServer = window.$server = child_process.fork(
-        path.resolve(plugin.path.relative, "api", "app.js"),
+        path.resolve(plugin.path.relative, 'api', 'app.js'),
         {
-          cwd: path.join(plugin.path.relative, "api"),
+          cwd: path.join(plugin.path.relative, 'api'),
         }
-      );
-      console.log("API server started!");
-    } catch (error) {
-      console.error("Failed to start API server:", error);
+      )
+      console.log('API server started!')
+    }
+    catch (error) {
+      console.error('Failed to start API server:', error)
     }
 
     // Example: Set up event listeners
     ipcRenderer.on('@plugin-resumed', () => {
-      console.log("Plugin resumed");
-    });
+      console.log('Plugin resumed')
+    })
 
     ipcRenderer.on('@plugin-paused', () => {
-      console.log("Plugin paused");
-    });
-  }, 100); // Small delay to ensure everything is ready
-});
+      console.log('Plugin paused')
+    })
+  }, 100) // Small delay to ensure everything is ready
+})
 ```
 
 ## Advanced Preload Script Example
@@ -94,69 +95,69 @@ ipcRenderer.once('@plugin-loaded', () => {
 Here's a more advanced example that demonstrates additional capabilities:
 
 ```javascript
+const path = require('node:path')
+const { init } = require('@tuff/utils')
 // preload.js
-const { ipcRenderer } = require('electron');
-const { init } = require('@tuff/utils');
-const path = require('path');
+const { ipcRenderer } = require('electron')
 
 // Initialize the bridge
-init(window);
+init(window)
 
 // Create a custom API for the plugin
 window.myPluginAPI = {
   // Example: Get plugin information
   getPluginInfo: () => {
-    const { $plugin: plugin } = global;
+    const { $plugin: plugin } = global
     return {
       name: plugin.name,
       version: plugin.version,
       path: plugin.path.relative
-    };
+    }
   },
 
   // Example: Send a message to the main process
   sendMessage: (channel, data) => {
-    ipcRenderer.send(channel, data);
+    ipcRenderer.send(channel, data)
   },
 
   // Example: Listen for messages from the main process
   onMessage: (channel, callback) => {
     ipcRenderer.on(channel, (event, data) => {
-      callback(data);
-    });
+      callback(data)
+    })
   }
-};
+}
 
 // Listen for the plugin loaded event
 ipcRenderer.once('@plugin-loaded', () => {
-  console.log("Plugin loaded and preload script executed");
-  
+  console.log('Plugin loaded and preload script executed')
+
   // Example: Load plugin configuration
-  const pluginConfig = window.myPluginAPI.getPluginInfo();
-  console.log("Plugin configuration:", pluginConfig);
-  
+  const pluginConfig = window.myPluginAPI.getPluginInfo()
+  console.log('Plugin configuration:', pluginConfig)
+
   // Example: Set up a periodic task
   const interval = setInterval(() => {
-    console.log("Plugin heartbeat");
-  }, 60000); // Every minute
-  
+    console.log('Plugin heartbeat')
+  }, 60000) // Every minute
+
   // Store the interval ID for cleanup
-  window.pluginHeartbeatInterval = interval;
-});
+  window.pluginHeartbeatInterval = interval
+})
 
 // Listen for plugin unload event for cleanup
 ipcRenderer.once('@plugin-unloaded', () => {
-  console.log("Plugin unloading, cleaning up resources");
-  
+  console.log('Plugin unloading, cleaning up resources')
+
   // Clean up periodic tasks
   if (window.pluginHeartbeatInterval) {
-    clearInterval(window.pluginHeartbeatInterval);
+    clearInterval(window.pluginHeartbeatInterval)
   }
-  
+
   // Clean up event listeners
-  ipcRenderer.removeAllListeners('@plugin-resumed');
-  ipcRenderer.removeAllListeners('@plugin-paused');
-});
+  ipcRenderer.removeAllListeners('@plugin-resumed')
+  ipcRenderer.removeAllListeners('@plugin-paused')
+})
 ```
 
 ## Preload Script Lifecycle

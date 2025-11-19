@@ -14,7 +14,8 @@ export class AiCapabilityRegistry {
   unregister(capabilityId: string): void {
     if (this.capabilities.delete(capabilityId)) {
       console.log(`[AiCapabilityRegistry] Unregistered capability: ${capabilityId}`)
-    } else {
+    }
+    else {
       console.warn(`[AiCapabilityRegistry] Capability ${capabilityId} not found`)
     }
   }

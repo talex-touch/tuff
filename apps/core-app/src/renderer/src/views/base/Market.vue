@@ -1,3 +1,556 @@
+<script lang="ts" name="Market" setup>
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { useToggle } from '@vueuse/core'
+import gsap from 'gsap'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
+import MarketItemCard from '~/components/market/MarketItemCard.vue'
+import { useInstallManager } from '~/modules/install/install-manager'
+import { forTouchTip } from '~/modules/mention/dialog-mention'
+import { pluginSettings } from '~/modules/storage/plugin-settings'
+import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
+
+interface OfficialManifestVersionEntry {
+  version: string
+  path: string
+  timestamp?: string
+}
+
+interface OfficialManifestEntry {
+  id: string
+  name: string
+  author?: string
+  version: string
+  category?: string
+  description?: string
+  path: string
+  timestamp?: string
+  metadata?: {
+    readme_path?: string
+    [key: string]: unknown
+  }
+  versions?: OfficialManifestVersionEntry[]
+}
+
+interface CategoryTag {
+  tag: string
+  filter: string
+  label?: string
+}
+
+interface OfficialPluginListItem {
+  id: string
+  name: string
+  author?: string
+  version: string
+  category?: string
+  description?: string
+  downloadUrl: string
+  readmeUrl?: string
+  official: boolean
+  icon?: string
+  metadata?: Record<string, unknown>
+  timestamp?: string
+}
+
+const { t } = useI18n()
+
+const MANIFEST_URL
+  = 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json'
+const MANIFEST_BASE_URL
+  = 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
+
+const orderType = ref<'grid' | 'list'>('grid')
+const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
+const tagInd = ref(0)
+const tags = ref<CategoryTag[]>([{ tag: 'market.tags.all', filter: '' }])
+
+const loading = ref(false)
+const errorMessage = ref('')
+const lastUpdated = ref<number | null>(null)
+const searchKey = ref('')
+
+const detailVisible = ref(false)
+const activePlugin = ref<OfficialPluginListItem | null>(null)
+
+const officialPlugins = ref<OfficialPluginListItem[]>([])
+let rendererChannel: ITouchClientChannel | undefined
+let channelLoadFailed = false
+
+const installManager = useInstallManager()
+
+const getInstallTask = (pluginId?: string) => installManager.getTaskByPluginId(pluginId)
+
+function isPluginInstalling(pluginId?: string) {
+  return installManager.isActiveStage(getInstallTask(pluginId)?.stage)
+}
+
+function suggestionFetch(key = ''): string[] {
+  const normalized = key.trim()
+  searchKey.value = normalized
+
+  if (!normalized) {
+    return officialPlugins.value.slice(0, 6).map(plugin => plugin.name)
+  }
+
+  const lower = normalized.toLowerCase()
+  return officialPlugins.value
+    .filter(plugin => plugin.name.toLowerCase().includes(lower))
+    .map(plugin => plugin.name)
+}
+
+const selectedTag = computed(() => tags.value[tagInd.value] ?? tags.value[0])
+
+const displayedPlugins = computed(() => {
+  const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
+  const normalizedKey = searchKey.value.trim().toLowerCase()
+
+  return officialPlugins.value.filter((plugin) => {
+    const pluginCategory = plugin.category?.toLowerCase() ?? ''
+    const matchesCategory = !categoryFilter || pluginCategory === categoryFilter
+
+    if (!matchesCategory)
+      return false
+
+    if (!normalizedKey)
+      return true
+
+    return (
+      plugin.name.toLowerCase().includes(normalizedKey)
+      || (plugin.description ?? '').toLowerCase().includes(normalizedKey)
+      || (plugin.author ?? '').toLowerCase().includes(normalizedKey)
+      || plugin.id.toLowerCase().includes(normalizedKey)
+    )
+  })
+})
+
+const lastUpdatedLabel = computed(() => {
+  if (!lastUpdated.value)
+    return ''
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(lastUpdated.value))
+  }
+  catch (error) {
+    console.warn('[Market] Failed to format last updated timestamp', error)
+    return new Date(lastUpdated.value).toLocaleString()
+  }
+})
+
+const detailUpdatedLabel = computed(() => {
+  const timestamp = activePlugin.value?.timestamp
+  if (!timestamp)
+    return ''
+
+  let date: Date | null = null
+
+  if (typeof timestamp === 'number') {
+    date = new Date(timestamp)
+  }
+  else {
+    const numeric = Number(timestamp)
+    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+      date = new Date(numeric)
+    }
+    else {
+      const parsed = Date.parse(timestamp)
+      if (!Number.isNaN(parsed)) {
+        date = new Date(parsed)
+      }
+    }
+  }
+
+  if (!date)
+    return ''
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date)
+  }
+  catch (error) {
+    console.warn('[Market] Failed to format detail timestamp', error)
+    return date.toLocaleString()
+  }
+})
+
+const detailMeta = computed(() => {
+  const plugin = activePlugin.value
+  if (!plugin)
+    return [] as Array<{ icon: string, label: string, value: string }>
+
+  const meta: Array<{ icon: string, label: string, value: string }> = []
+
+  if (plugin.author) {
+    meta.push({ icon: 'i-ri-user-line', label: '作者', value: plugin.author })
+  }
+
+  if (plugin.version) {
+    meta.push({ icon: 'i-ri-price-tag-3-line', label: '版本', value: `v${plugin.version}` })
+  }
+
+  if (detailUpdatedLabel.value) {
+    meta.push({ icon: 'i-ri-time-line', label: '更新时间', value: detailUpdatedLabel.value })
+  }
+
+  meta.push({ icon: 'i-ri-barcode-line', label: '插件标识', value: plugin.id })
+
+  return meta
+})
+
+const detailIconClass = computed(() => {
+  const plugin = activePlugin.value
+  if (!plugin)
+    return ''
+
+  const metadata = plugin.metadata ?? {}
+  const iconClass = typeof metadata?.icon_class === 'string' ? metadata.icon_class.trim() : ''
+  if (iconClass)
+    return iconClass
+
+  const metaIcon = typeof metadata?.icon === 'string' ? metadata.icon.trim() : ''
+  if (metaIcon)
+    return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
+
+  const pluginIcon = (plugin as any).icon
+  if (typeof pluginIcon === 'string' && pluginIcon.trim().length > 0) {
+    const trimmed = pluginIcon.trim()
+    return trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
+  }
+
+  return ''
+})
+
+function updateCategoryTags(): void {
+  const categories = Array.from(
+    new Set(
+      officialPlugins.value
+        .map(plugin => plugin.category)
+        .filter(
+          (category): category is string =>
+            typeof category === 'string' && category.trim().length > 0,
+        ),
+    ),
+  )
+
+  const base: CategoryTag[] = [{ tag: 'market.tags.all', filter: '' }]
+
+  for (const category of categories) {
+    const lower = category.toLowerCase()
+    if (lower === 'tools') {
+      base.push({ tag: 'market.tags.tools', filter: lower })
+      continue
+    }
+
+    base.push({
+      tag: '',
+      filter: lower,
+      label: category,
+    })
+  }
+
+  tags.value = base
+  if (tagInd.value >= tags.value.length)
+    tagInd.value = 0
+}
+
+function mapManifestEntry(entry: OfficialManifestEntry): OfficialPluginListItem {
+  const normalizedPath = entry.path.replace(/^\//, '')
+  const downloadUrl = new URL(normalizedPath, MANIFEST_BASE_URL).toString()
+
+  let readmeUrl: string | undefined
+  const readmePath = entry.metadata?.readme_path
+  if (readmePath && readmePath.trim().length > 0) {
+    readmeUrl = new URL(readmePath.replace(/^\//, ''), MANIFEST_BASE_URL).toString()
+  }
+
+  const metadata = entry.metadata ?? {}
+  let icon: string | undefined
+  if (typeof metadata.icon_class === 'string' && metadata.icon_class.trim().length > 0) {
+    icon = metadata.icon_class.trim()
+  }
+  else if (typeof metadata.icon === 'string' && metadata.icon.trim().length > 0) {
+    const trimmed = metadata.icon.trim()
+    icon = trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
+  }
+
+  return {
+    id: entry.id,
+    name: entry.name,
+    author: entry.author,
+    version: entry.version,
+    category: entry.category,
+    description: entry.description,
+    downloadUrl,
+    readmeUrl,
+    official: true,
+    icon,
+    metadata: entry.metadata,
+    timestamp: entry.timestamp,
+  }
+}
+
+async function fetchManifestDirect(): Promise<{
+  plugins: OfficialPluginListItem[]
+  fetchedAt: number
+}> {
+  const response = await fetch(MANIFEST_URL, {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`OFFICIAL_PLUGIN_HTTP_${response.status}`)
+  }
+
+  const body = await response.json()
+  if (!Array.isArray(body)) {
+    throw new TypeError('OFFICIAL_PLUGIN_INVALID_MANIFEST')
+  }
+
+  const plugins = body.map((entry: OfficialManifestEntry) => mapManifestEntry(entry))
+  return { plugins, fetchedAt: Date.now() }
+}
+
+function isElectronRenderer(): boolean {
+  return Boolean(typeof window !== 'undefined' && window.process?.type === 'renderer')
+}
+
+async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
+  if (rendererChannel)
+    return rendererChannel
+  if (channelLoadFailed || !isElectronRenderer())
+    return undefined
+
+  try {
+    const module = await import('~/modules/channel/channel-core')
+    rendererChannel = module.touchChannel as ITouchClientChannel
+    return rendererChannel
+  }
+  catch (error) {
+    channelLoadFailed = true
+    console.warn('[Market] Failed to load channel-core module:', error)
+    return undefined
+  }
+}
+
+async function loadOfficialPlugins(force = false): Promise<void> {
+  if (loading.value)
+    return
+
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    let result: { plugins: OfficialPluginListItem[], fetchedAt: number } | null = null
+
+    const channel = await getRendererChannel()
+    if (channel) {
+      try {
+        const response: any = await channel.send('plugin:official-list', { force })
+
+        if (!response || !Array.isArray(response.plugins)) {
+          throw new Error(response?.error || 'OFFICIAL_PLUGIN_FETCH_FAILED')
+        }
+
+        result = {
+          plugins: response.plugins as OfficialPluginListItem[],
+          fetchedAt: typeof response.fetchedAt === 'number' ? response.fetchedAt : Date.now(),
+        }
+      }
+      catch (error) {
+        console.warn('[Market] Failed to load official plugins via IPC, fallback to HTTP:', error)
+      }
+    }
+
+    if (!result) {
+      result = await fetchManifestDirect()
+    }
+
+    officialPlugins.value = result.plugins
+    lastUpdated.value = result.fetchedAt
+
+    updateCategoryTags()
+  }
+  catch (error: any) {
+    console.error('[Market] Failed to load official plugins:', error)
+    const reason
+      = typeof error?.message === 'string' && error.message.trim().length > 0
+        ? error.message.trim()
+        : ''
+    const shouldExposeReason
+      = reason && !reason.startsWith('OFFICIAL_PLUGIN_') && reason !== 'OFFICIAL_PLUGIN_FETCH_FAILED'
+
+    errorMessage.value = shouldExposeReason ? reason : t('market.error.loadFailed')
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
+  if (isPluginInstalling(plugin.id))
+    return
+
+  const channel = await getRendererChannel()
+
+  if (!channel) {
+    await forTouchTip(
+      t('market.installation.failureTitle'),
+      t('market.installation.browserNotSupported'),
+    )
+    return
+  }
+
+  try {
+    const payload: Record<string, unknown> = {
+      source: plugin.downloadUrl,
+      metadata: {
+        officialId: plugin.id,
+        officialVersion: plugin.version,
+        officialSource: 'talex-touch/tuff-official-plugins',
+        official: plugin.official === true,
+      },
+      clientMetadata: {
+        pluginId: plugin.id,
+        pluginName: plugin.name,
+      },
+    }
+
+    const result: any = await channel.send('plugin:install-source', payload)
+
+    if (result?.status === 'success') {
+      await forTouchTip(
+        t('market.installation.successTitle'),
+        t('market.installation.successMessage', { name: plugin.name }),
+      )
+    }
+    else {
+      const reason = result?.message || 'INSTALL_FAILED'
+      throw new Error(reason)
+    }
+  }
+  catch (error: any) {
+    console.error('[Market] Plugin install failed:', error)
+    await forTouchTip(
+      t('market.installation.failureTitle'),
+      t('market.installation.failureMessage', {
+        name: plugin.name,
+        reason: error?.message || 'UNKNOWN_ERROR',
+      }),
+    )
+  }
+}
+
+function openPluginDetail(plugin: OfficialPluginListItem): void {
+  activePlugin.value = plugin
+  detailVisible.value = true
+}
+
+function closePluginDetail(): void {
+  if (!detailVisible.value)
+    return
+  detailVisible.value = false
+}
+
+function onDetailAfterLeave(): void {
+  activePlugin.value = null
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && detailVisible.value) {
+    closePluginDetail()
+  }
+}
+
+watch(
+  () => officialPlugins.value,
+  () => {
+    updateCategoryTags()
+  },
+  { deep: true },
+)
+
+watch(
+  () => detailVisible.value,
+  (visible) => {
+    if (typeof document === 'undefined')
+      return
+    const body = document.body
+    if (!body)
+      return
+    if (visible) {
+      body.classList.add('market-detail-open')
+    }
+    else {
+      body.classList.remove('market-detail-open')
+    }
+  },
+)
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleKeydown)
+  }
+
+  void loadOfficialPlugins()
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', handleKeydown)
+  }
+
+  if (typeof document !== 'undefined') {
+    document.body.classList.remove('market-detail-open')
+  }
+})
+
+// Smooth animation functions using GSAP
+function onBeforeEnter(el) {
+  gsap.set(el, {
+    opacity: 0,
+    y: 30,
+    scale: 0.9,
+    rotateX: -15,
+  })
+}
+
+function onEnter(el, done) {
+  const index = Number.parseInt(el.dataset.index) || 0
+
+  gsap.to(el, {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    rotateX: 0,
+    duration: 0.6,
+    delay: index * 0.1,
+    ease: 'back.out(1.2)',
+    onComplete: done,
+  })
+}
+
+function onLeave(el, done) {
+  const index = Number.parseInt(el.dataset.index) || 0
+
+  gsap.to(el, {
+    opacity: 0,
+    y: -20,
+    scale: 0.95,
+    duration: 0.4,
+    delay: index * 0.05,
+    ease: 'power2.in',
+    onComplete: done,
+  })
+}
+</script>
+
 <template>
   <div class="market-container">
     <!-- Header Section -->
@@ -22,9 +575,7 @@
           <FlatButton mini @click="toggleSourceEditorShow()">
             <div class="i-carbon-list" />
           </FlatButton>
-          <span class="source-count"
-            >{{ pluginSettings.source.list.length }} {{ t('market.sources') }}</span
-          >
+          <span class="source-count">{{ pluginSettings.source.list.length }} {{ t('market.sources') }}</span>
         </div>
       </div>
 
@@ -68,7 +619,7 @@
         <transition-group
           name="market-items"
           tag="div"
-          :class="['market-grid', { 'list-view': orderType === 'list' }]"
+          class="market-grid" :class="[{ 'list-view': orderType === 'list' }]"
           @before-enter="onBeforeEnter"
           @enter="onEnter"
           @leave="onLeave"
@@ -208,529 +759,6 @@
 
   <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
 </template>
-
-<script lang="ts" name="Market" setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useToggle } from '@vueuse/core'
-import gsap from 'gsap'
-import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
-import MarketItemCard from '~/components/market/MarketItemCard.vue'
-import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
-import { pluginSettings } from '~/modules/storage/plugin-settings'
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
-import { forTouchTip } from '~/modules/mention/dialog-mention'
-import { useInstallManager } from '~/modules/install/install-manager'
-
-interface OfficialManifestVersionEntry {
-  version: string
-  path: string
-  timestamp?: string
-}
-
-interface OfficialManifestEntry {
-  id: string
-  name: string
-  author?: string
-  version: string
-  category?: string
-  description?: string
-  path: string
-  timestamp?: string
-  metadata?: {
-    readme_path?: string
-    [key: string]: unknown
-  }
-  versions?: OfficialManifestVersionEntry[]
-}
-
-interface CategoryTag {
-  tag: string
-  filter: string
-  label?: string
-}
-
-interface OfficialPluginListItem {
-  id: string
-  name: string
-  author?: string
-  version: string
-  category?: string
-  description?: string
-  downloadUrl: string
-  readmeUrl?: string
-  official: boolean
-  icon?: string
-  metadata?: Record<string, unknown>
-  timestamp?: string
-}
-
-const { t } = useI18n()
-
-const MANIFEST_URL =
-  'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json'
-const MANIFEST_BASE_URL =
-  'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
-
-const orderType = ref<'grid' | 'list'>('grid')
-const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
-const tagInd = ref(0)
-const tags = ref<CategoryTag[]>([{ tag: 'market.tags.all', filter: '' }])
-
-const loading = ref(false)
-const errorMessage = ref('')
-const lastUpdated = ref<number | null>(null)
-const searchKey = ref('')
-
-const detailVisible = ref(false)
-const activePlugin = ref<OfficialPluginListItem | null>(null)
-
-const officialPlugins = ref<OfficialPluginListItem[]>([])
-let rendererChannel: ITouchClientChannel | undefined
-let channelLoadFailed = false
-
-const installManager = useInstallManager()
-
-const getInstallTask = (pluginId?: string) => installManager.getTaskByPluginId(pluginId)
-
-const isPluginInstalling = (pluginId?: string) =>
-  installManager.isActiveStage(getInstallTask(pluginId)?.stage)
-
-const suggestionFetch = (key = ''): string[] => {
-  const normalized = key.trim()
-  searchKey.value = normalized
-
-  if (!normalized) {
-    return officialPlugins.value.slice(0, 6).map((plugin) => plugin.name)
-  }
-
-  const lower = normalized.toLowerCase()
-  return officialPlugins.value
-    .filter((plugin) => plugin.name.toLowerCase().includes(lower))
-    .map((plugin) => plugin.name)
-}
-
-const selectedTag = computed(() => tags.value[tagInd.value] ?? tags.value[0])
-
-const displayedPlugins = computed(() => {
-  const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
-  const normalizedKey = searchKey.value.trim().toLowerCase()
-
-  return officialPlugins.value.filter((plugin) => {
-    const pluginCategory = plugin.category?.toLowerCase() ?? ''
-    const matchesCategory = !categoryFilter || pluginCategory === categoryFilter
-
-    if (!matchesCategory) return false
-
-    if (!normalizedKey) return true
-
-    return (
-      plugin.name.toLowerCase().includes(normalizedKey) ||
-      (plugin.description ?? '').toLowerCase().includes(normalizedKey) ||
-      (plugin.author ?? '').toLowerCase().includes(normalizedKey) ||
-      plugin.id.toLowerCase().includes(normalizedKey)
-    )
-  })
-})
-
-const lastUpdatedLabel = computed(() => {
-  if (!lastUpdated.value) return ''
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(lastUpdated.value))
-  } catch (error) {
-    console.warn('[Market] Failed to format last updated timestamp', error)
-    return new Date(lastUpdated.value).toLocaleString()
-  }
-})
-
-const detailUpdatedLabel = computed(() => {
-  const timestamp = activePlugin.value?.timestamp
-  if (!timestamp) return ''
-
-  let date: Date | null = null
-
-  if (typeof timestamp === 'number') {
-    date = new Date(timestamp)
-  } else {
-    const numeric = Number(timestamp)
-    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
-      date = new Date(numeric)
-    } else {
-      const parsed = Date.parse(timestamp)
-      if (!Number.isNaN(parsed)) {
-        date = new Date(parsed)
-      }
-    }
-  }
-
-  if (!date) return ''
-
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(date)
-  } catch (error) {
-    console.warn('[Market] Failed to format detail timestamp', error)
-    return date.toLocaleString()
-  }
-})
-
-const detailMeta = computed(() => {
-  const plugin = activePlugin.value
-  if (!plugin) return [] as Array<{ icon: string; label: string; value: string }>
-
-  const meta: Array<{ icon: string; label: string; value: string }> = []
-
-  if (plugin.author) {
-    meta.push({ icon: 'i-ri-user-line', label: '作者', value: plugin.author })
-  }
-
-  if (plugin.version) {
-    meta.push({ icon: 'i-ri-price-tag-3-line', label: '版本', value: `v${plugin.version}` })
-  }
-
-  if (detailUpdatedLabel.value) {
-    meta.push({ icon: 'i-ri-time-line', label: '更新时间', value: detailUpdatedLabel.value })
-  }
-
-  meta.push({ icon: 'i-ri-barcode-line', label: '插件标识', value: plugin.id })
-
-  return meta
-})
-
-const detailIconClass = computed(() => {
-  const plugin = activePlugin.value
-  if (!plugin) return ''
-
-  const metadata = plugin.metadata ?? {}
-  const iconClass = typeof metadata?.icon_class === 'string' ? metadata.icon_class.trim() : ''
-  if (iconClass) return iconClass
-
-  const metaIcon = typeof metadata?.icon === 'string' ? metadata.icon.trim() : ''
-  if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
-
-  const pluginIcon = (plugin as any).icon
-  if (typeof pluginIcon === 'string' && pluginIcon.trim().length > 0) {
-    const trimmed = pluginIcon.trim()
-    return trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
-  }
-
-  return ''
-})
-
-function updateCategoryTags(): void {
-  const categories = Array.from(
-    new Set(
-      officialPlugins.value
-        .map((plugin) => plugin.category)
-        .filter(
-          (category): category is string =>
-            typeof category === 'string' && category.trim().length > 0
-        )
-    )
-  )
-
-  const base: CategoryTag[] = [{ tag: 'market.tags.all', filter: '' }]
-
-  for (const category of categories) {
-    const lower = category.toLowerCase()
-    if (lower === 'tools') {
-      base.push({ tag: 'market.tags.tools', filter: lower })
-      continue
-    }
-
-    base.push({
-      tag: '',
-      filter: lower,
-      label: category
-    })
-  }
-
-  tags.value = base
-  if (tagInd.value >= tags.value.length) tagInd.value = 0
-}
-
-function mapManifestEntry(entry: OfficialManifestEntry): OfficialPluginListItem {
-  const normalizedPath = entry.path.replace(/^\//, '')
-  const downloadUrl = new URL(normalizedPath, MANIFEST_BASE_URL).toString()
-
-  let readmeUrl: string | undefined
-  const readmePath = entry.metadata?.readme_path
-  if (readmePath && readmePath.trim().length > 0) {
-    readmeUrl = new URL(readmePath.replace(/^\//, ''), MANIFEST_BASE_URL).toString()
-  }
-
-  const metadata = entry.metadata ?? {}
-  let icon: string | undefined
-  if (typeof metadata.icon_class === 'string' && metadata.icon_class.trim().length > 0) {
-    icon = metadata.icon_class.trim()
-  } else if (typeof metadata.icon === 'string' && metadata.icon.trim().length > 0) {
-    const trimmed = metadata.icon.trim()
-    icon = trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
-  }
-
-  return {
-    id: entry.id,
-    name: entry.name,
-    author: entry.author,
-    version: entry.version,
-    category: entry.category,
-    description: entry.description,
-    downloadUrl,
-    readmeUrl,
-    official: true,
-    icon,
-    metadata: entry.metadata,
-    timestamp: entry.timestamp
-  }
-}
-
-async function fetchManifestDirect(): Promise<{
-  plugins: OfficialPluginListItem[]
-  fetchedAt: number
-}> {
-  const response = await fetch(MANIFEST_URL, {
-    headers: {
-      Accept: 'application/json'
-    }
-  })
-
-  if (!response.ok) {
-    throw new Error(`OFFICIAL_PLUGIN_HTTP_${response.status}`)
-  }
-
-  const body = await response.json()
-  if (!Array.isArray(body)) {
-    throw new Error('OFFICIAL_PLUGIN_INVALID_MANIFEST')
-  }
-
-  const plugins = body.map((entry: OfficialManifestEntry) => mapManifestEntry(entry))
-  return { plugins, fetchedAt: Date.now() }
-}
-
-function isElectronRenderer(): boolean {
-  return Boolean(typeof window !== 'undefined' && window.process?.type === 'renderer')
-}
-
-async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
-  if (rendererChannel) return rendererChannel
-  if (channelLoadFailed || !isElectronRenderer()) return undefined
-
-  try {
-    const module = await import('~/modules/channel/channel-core')
-    rendererChannel = module.touchChannel as ITouchClientChannel
-    return rendererChannel
-  } catch (error) {
-    channelLoadFailed = true
-    console.warn('[Market] Failed to load channel-core module:', error)
-    return undefined
-  }
-}
-
-async function loadOfficialPlugins(force = false): Promise<void> {
-  if (loading.value) return
-
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    let result: { plugins: OfficialPluginListItem[]; fetchedAt: number } | null = null
-
-    const channel = await getRendererChannel()
-    if (channel) {
-      try {
-        const response: any = await channel.send('plugin:official-list', { force })
-
-        if (!response || !Array.isArray(response.plugins)) {
-          throw new Error(response?.error || 'OFFICIAL_PLUGIN_FETCH_FAILED')
-        }
-
-        result = {
-          plugins: response.plugins as OfficialPluginListItem[],
-          fetchedAt: typeof response.fetchedAt === 'number' ? response.fetchedAt : Date.now()
-        }
-      } catch (error) {
-        console.warn('[Market] Failed to load official plugins via IPC, fallback to HTTP:', error)
-      }
-    }
-
-    if (!result) {
-      result = await fetchManifestDirect()
-    }
-
-    officialPlugins.value = result.plugins
-    lastUpdated.value = result.fetchedAt
-
-    updateCategoryTags()
-  } catch (error: any) {
-    console.error('[Market] Failed to load official plugins:', error)
-    const reason =
-      typeof error?.message === 'string' && error.message.trim().length > 0
-        ? error.message.trim()
-        : ''
-    const shouldExposeReason =
-      reason && !reason.startsWith('OFFICIAL_PLUGIN_') && reason !== 'OFFICIAL_PLUGIN_FETCH_FAILED'
-
-    errorMessage.value = shouldExposeReason ? reason : t('market.error.loadFailed')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
-  if (isPluginInstalling(plugin.id)) return
-
-  const channel = await getRendererChannel()
-
-  if (!channel) {
-    await forTouchTip(
-      t('market.installation.failureTitle'),
-      t('market.installation.browserNotSupported')
-    )
-    return
-  }
-
-  try {
-    const payload: Record<string, unknown> = {
-      source: plugin.downloadUrl,
-      metadata: {
-        officialId: plugin.id,
-        officialVersion: plugin.version,
-        officialSource: 'talex-touch/tuff-official-plugins',
-        official: plugin.official === true
-      },
-      clientMetadata: {
-        pluginId: plugin.id,
-        pluginName: plugin.name
-      }
-    }
-
-    const result: any = await channel.send('plugin:install-source', payload)
-
-    if (result?.status === 'success') {
-      await forTouchTip(
-        t('market.installation.successTitle'),
-        t('market.installation.successMessage', { name: plugin.name })
-      )
-    } else {
-      const reason = result?.message || 'INSTALL_FAILED'
-      throw new Error(reason)
-    }
-  } catch (error: any) {
-    console.error('[Market] Plugin install failed:', error)
-    await forTouchTip(
-      t('market.installation.failureTitle'),
-      t('market.installation.failureMessage', {
-        name: plugin.name,
-        reason: error?.message || 'UNKNOWN_ERROR'
-      })
-    )
-  }
-}
-
-function openPluginDetail(plugin: OfficialPluginListItem): void {
-  activePlugin.value = plugin
-  detailVisible.value = true
-}
-
-function closePluginDetail(): void {
-  if (!detailVisible.value) return
-  detailVisible.value = false
-}
-
-function onDetailAfterLeave(): void {
-  activePlugin.value = null
-}
-
-function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && detailVisible.value) {
-    closePluginDetail()
-  }
-}
-
-watch(
-  () => officialPlugins.value,
-  () => {
-    updateCategoryTags()
-  },
-  { deep: true }
-)
-
-watch(
-  () => detailVisible.value,
-  (visible) => {
-    if (typeof document === 'undefined') return
-    const body = document.body
-    if (!body) return
-    if (visible) {
-      body.classList.add('market-detail-open')
-    } else {
-      body.classList.remove('market-detail-open')
-    }
-  }
-)
-
-onMounted(() => {
-  if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', handleKeydown)
-  }
-
-  void loadOfficialPlugins()
-})
-
-onBeforeUnmount(() => {
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('keydown', handleKeydown)
-  }
-
-  if (typeof document !== 'undefined') {
-    document.body.classList.remove('market-detail-open')
-  }
-})
-
-// Smooth animation functions using GSAP
-function onBeforeEnter(el) {
-  gsap.set(el, {
-    opacity: 0,
-    y: 30,
-    scale: 0.9,
-    rotateX: -15
-  })
-}
-
-function onEnter(el, done) {
-  const index = parseInt(el.dataset.index) || 0
-
-  gsap.to(el, {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    rotateX: 0,
-    duration: 0.6,
-    delay: index * 0.1,
-    ease: 'back.out(1.2)',
-    onComplete: done
-  })
-}
-
-function onLeave(el, done) {
-  const index = parseInt(el.dataset.index) || 0
-
-  gsap.to(el, {
-    opacity: 0,
-    y: -20,
-    scale: 0.95,
-    duration: 0.4,
-    delay: index * 0.05,
-    ease: 'power2.in',
-    onComplete: done
-  })
-}
-</script>
 
 <style lang="scss" scoped>
 .market-container {

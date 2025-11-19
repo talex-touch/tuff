@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type'
+        description: Release type
         required: true
-        default: 'snapshot'
+        default: snapshot
         type: choice
         options:
           - snapshot

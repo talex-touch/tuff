@@ -1,14 +1,17 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { ipcRenderer } = require('electron')
-import { IpcRendererEvent } from 'electron'
-import {
-  ChannelType,
-  DataCode,
+import type {
   ITouchClientChannel,
   RawChannelSyncData,
   RawStandardChannelData,
-  StandardChannelData
+  StandardChannelData,
 } from '@talex-touch/utils/channel'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import type { IpcRendererEvent } from 'electron'
+import {
+  ChannelType,
+  DataCode,
+} from '@talex-touch/utils/channel'
+
+const { ipcRenderer } = require('electron')
 
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, ((data: StandardChannelData) => void)[]> = new Map()
@@ -30,13 +33,13 @@ class TouchChannel implements ITouchClientChannel {
             status: header.status || 'request',
             type: ChannelType.MAIN,
             _originData: arg,
-            event: e || undefined
+            event: e || undefined,
           },
           sync,
           code,
           data,
           plugin,
-          name: name as string
+          name: name as string,
         }
       }
     }
@@ -64,10 +67,10 @@ class TouchChannel implements ITouchClientChannel {
         reply: (code: DataCode, data: any) => {
           e.sender.send(
             '@main-process-message',
-            this.__parse_sender(code, rawData, data, rawData.sync)
+            this.__parse_sender(code, rawData, data, rawData.sync),
           )
         },
-        ...rawData
+        ...rawData,
       }
 
       // We can't check the return value of func because it's void
@@ -81,7 +84,7 @@ class TouchChannel implements ITouchClientChannel {
     code: DataCode,
     rawData: RawStandardChannelData,
     data: any,
-    sync?: RawChannelSyncData
+    sync?: RawChannelSyncData,
   ): RawStandardChannelData {
     return {
       code,
@@ -92,14 +95,14 @@ class TouchChannel implements ITouchClientChannel {
             timeStamp: new Date().getTime(),
             // reply sync timeout should follow the request timeout, unless user set it.
             timeout: sync.timeout,
-            id: sync.id
+            id: sync.id,
           },
       name: rawData.name,
       header: {
         status: 'reply',
         type: rawData.header.type,
-        _originData: rawData.header._originData
-      }
+        _originData: rawData.header._originData,
+      },
     }
   }
 
@@ -108,7 +111,8 @@ class TouchChannel implements ITouchClientChannel {
 
     if (!listeners.includes(callback)) {
       listeners.push(callback)
-    } else {
+    }
+    else {
       return () => {}
     }
 
@@ -132,13 +136,13 @@ class TouchChannel implements ITouchClientChannel {
       sync: {
         timeStamp: new Date().getTime(),
         timeout: 10000,
-        id: uniqueId
+        id: uniqueId,
       },
       name: eventName,
       header: {
         status: 'request',
-        type: ChannelType.MAIN
-      }
+        type: ChannelType.MAIN,
+      },
     } as RawStandardChannelData
 
     return new Promise((resolve) => {
@@ -161,15 +165,16 @@ class TouchChannel implements ITouchClientChannel {
       name: eventName,
       header: {
         status: 'request',
-        type: ChannelType.MAIN
-      }
+        type: ChannelType.MAIN,
+      },
     } as RawStandardChannelData
 
     const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@main-process-message', data))
 
     console.debug('sync res', res)
 
-    if (res?.header?.status === 'reply') return res.data
+    if (res?.header?.status === 'reply')
+      return res.data
 
     return res
   }
@@ -187,4 +192,4 @@ class TouchChannel implements ITouchClientChannel {
   }
 }
 
-export const touchChannel: ITouchClientChannel = (window['$channel'] = new TouchChannel())
+export const touchChannel: ITouchClientChannel = (window.$channel = new TouchChannel())

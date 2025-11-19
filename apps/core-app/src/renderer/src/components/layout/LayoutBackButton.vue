@@ -1,3 +1,17 @@
+<script lang="ts" setup>
+import { computed } from 'vue'
+
+const props = defineProps<{
+  visible: boolean
+}>()
+
+defineEmits<{
+  (event: 'click'): void
+}>()
+
+const visible = computed(() => props.visible)
+</script>
+
 <template>
   <transition name="layout-nav-fade" mode="out-in">
     <button
@@ -12,20 +26,6 @@
     </button>
   </transition>
 </template>
-
-<script lang="ts" setup>
-import { computed } from 'vue'
-
-const props = defineProps<{
-  visible: boolean
-}>()
-
-defineEmits<{
-  (event: 'click'): void
-}>()
-
-const visible = computed(() => props.visible)
-</script>
 
 <style lang="scss" scoped>
 .LayoutNavButton {

@@ -6,17 +6,13 @@ export const axios = _axios.create({
   headers: {
     'X-Requested-With': 'XMLHttpRequest',
     'Content-Type': 'application/json',
-  }
+  },
 })
 
 axios.interceptors.response.use(async (res) => {
-
-      return res.data
-
-    },
-    async res => {
-
-      /*if ( !res.response || res.code === "ERR_INTERNET_DISCONNECTED" ) {
+  return res.data
+}, async (res) => {
+  /* if ( !res.response || res.code === "ERR_INTERNET_DISCONNECTED" ) {
         return window.$tipper.tip( '请检查您的网络!', {
           stay: 8200,
           type: TipType.WARNING
@@ -29,11 +25,9 @@ axios.interceptors.response.use(async (res) => {
           stay: 8200,
           type: TipType.WARNING
         } );
-      }*/
+      } */
 
-      console.log(res)
+  console.log(res)
 
-      return res
-
-    }
-)
+  return res
+})

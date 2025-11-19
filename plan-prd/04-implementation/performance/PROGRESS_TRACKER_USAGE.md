@@ -17,9 +17,9 @@ The `ProgressTracker` class provides real-time download progress tracking with t
 import { ProgressTracker } from './progress-tracker'
 
 const tracker = new ProgressTracker('task-id-123', {
-  windowSize: 10,        // Number of data points for moving average
-  updateInterval: 1000,  // Update callback every 1000ms (1 second)
-  minSpeedSamples: 2     // Minimum samples needed to calculate speed
+  windowSize: 10, // Number of data points for moving average
+  updateInterval: 1000, // Update callback every 1000ms (1 second)
+  minSpeedSamples: 2 // Minimum samples needed to calculate speed
 })
 ```
 
@@ -95,30 +95,30 @@ The `ProgressTracker` class provides static methods for formatting that can be u
 ### Format Speed
 
 ```typescript
-ProgressTracker.formatSpeed(0)              // "0 B/s"
-ProgressTracker.formatSpeed(512)            // "512.0 B/s"
-ProgressTracker.formatSpeed(1024)           // "1.0 KB/s"
-ProgressTracker.formatSpeed(1024 * 1024)    // "1.0 MB/s"
+ProgressTracker.formatSpeed(0) // "0 B/s"
+ProgressTracker.formatSpeed(512) // "512.0 B/s"
+ProgressTracker.formatSpeed(1024) // "1.0 KB/s"
+ProgressTracker.formatSpeed(1024 * 1024) // "1.0 MB/s"
 ProgressTracker.formatSpeed(1024 * 1024 * 1024) // "1.0 GB/s"
 ```
 
 ### Format Size
 
 ```typescript
-ProgressTracker.formatSize(0)               // "0 B"
-ProgressTracker.formatSize(512)             // "512.0 B"
-ProgressTracker.formatSize(1024)            // "1.0 KB"
-ProgressTracker.formatSize(1024 * 1024)     // "1.0 MB"
+ProgressTracker.formatSize(0) // "0 B"
+ProgressTracker.formatSize(512) // "512.0 B"
+ProgressTracker.formatSize(1024) // "1.0 KB"
+ProgressTracker.formatSize(1024 * 1024) // "1.0 MB"
 ProgressTracker.formatSize(1024 * 1024 * 1024) // "1.0 GB"
 ```
 
 ### Format Time
 
 ```typescript
-ProgressTracker.formatTime(15)              // "15秒"
-ProgressTracker.formatTime(72)              // "1分12秒"
-ProgressTracker.formatTime(3660)            // "1小时1分"
-ProgressTracker.formatTime(undefined)       // "--"
+ProgressTracker.formatTime(15) // "15秒"
+ProgressTracker.formatTime(72) // "1分12秒"
+ProgressTracker.formatTime(3660) // "1小时1分"
+ProgressTracker.formatTime(undefined) // "--"
 ```
 
 ## Integration with DownloadWorker
@@ -208,9 +208,9 @@ const total = 100 * 1024 * 1024 // 100 MB
 
 const interval = setInterval(() => {
   downloaded += 1024 * 1024 // Download 1 MB per interval
-  
+
   tracker.updateProgress(downloaded, total)
-  
+
   if (downloaded >= total) {
     clearInterval(interval)
     tracker.forceUpdate() // Force final update

@@ -26,7 +26,7 @@ const image = computed(() => {
     for (let i = 0; i < len; i++) {
       storeData += String.fromCharCode(bytes[i])
     }
-    return 'data:image/png;base64,' + window.btoa(storeData)
+    return `data:image/png;base64,${window.btoa(storeData)}`
   }
 
   return ''
@@ -43,7 +43,7 @@ const fileLength = computed(() => props?.paths.length || 0)
 
 <template>
   <div class="FileTag">
-    <img :src="image" alt="" />
+    <img :src="image" alt="">
     <span class="name">{{ firstFileName }}</span>
     <span v-if="fileLength - 1" class="badge" v-text="fileLength" />
   </div>

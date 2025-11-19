@@ -1,14 +1,24 @@
+<script setup>
+import IndexImages from '@comp/display/IndexImages.vue'
+import PlayStation from '@comp/display/PlayStation.vue'
+import Header from './components/music/layout/Header.vue'
+// import Footer from './components/music/layout/Footer.vue'
+</script>
+
 <template>
   <el-scrollbar>
     <div class="App-Wrapper">
       <div class="TouchMusic-Main">
-        <p class="TouchMusic-Title">Home</p>
+        <p class="TouchMusic-Title">
+          Home
+        </p>
 
         <IndexImages />
 
-        <p class="TouchMusic-Title">Trending List</p>
-        <div class="TouchMusic-ListContent">
-        </div>
+        <p class="TouchMusic-Title">
+          Trending List
+        </p>
+        <div class="TouchMusic-ListContent" />
       </div>
 
       <div class="TouchMusic-Sidebar">
@@ -19,17 +29,8 @@
     </div>
 
     <!-- <Footer></Footer> -->
-
   </el-scrollbar>
 </template>
-
-<script setup>
-import Header from "./components/music/layout/Header.vue";
-import IndexImages from "@comp/display/IndexImages.vue";
-import PlayStation from "@comp/display/PlayStation.vue";
-// import Footer from './components/music/layout/Footer.vue'
-
-</script>
 
 <style lang="scss" scoped>
 .TouchMusic-Sidebar {
@@ -64,7 +65,6 @@ import PlayStation from "@comp/display/PlayStation.vue";
 
   box-sizing: border-box;
 }
-
 
 .App-Container {
   :deep(.el-scrollbar__view) {

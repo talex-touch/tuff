@@ -1,14 +1,14 @@
-import { initStorageChannel, isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
-import { touchChannel } from '~/modules/channel/channel-core'
 import {
   preloadDebugStep,
   preloadLog,
   preloadRemoveOverlay,
-  preloadState
+  preloadState,
 } from '@talex-touch/utils/preload'
+import { initStorageChannel, isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
+import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage/index'
-import { useApplicationUpgrade } from './useUpdate'
 import { useCoreBox } from './core-box'
+import { useApplicationUpgrade } from './useUpdate'
 
 /**
  * Application lifecycle management hook.
@@ -45,7 +45,8 @@ export function useAppLifecycle() {
   async function start(): Promise<void> {
     if (isCoreBox()) {
       await executeCoreboxTask()
-    } else {
+    }
+    else {
       await executeMainTask()
     }
   }
@@ -58,7 +59,7 @@ export function useAppLifecycle() {
     try {
       preloadDebugStep('Requesting startup handshake...', 0.05)
       const res: IStartupInfo = touchChannel.sendSync('app-ready', {
-        rendererStartTime: performance.timeOrigin
+        rendererStartTime: performance.timeOrigin,
       })
       preloadDebugStep('Startup handshake acknowledged', 0.05)
 
@@ -73,7 +74,8 @@ export function useAppLifecycle() {
         try {
           const { initSentryRenderer } = await import('~/modules/sentry/sentry-renderer')
           await initSentryRenderer()
-        } catch (error) {
+        }
+        catch (error) {
           console.warn('[useAppLifecycle] Failed to initialize Sentry', error)
         }
       })()
@@ -87,7 +89,8 @@ export function useAppLifecycle() {
       preloadRemoveOverlay()
 
       await start()
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[useAppLifecycle] Initialization failed', error)
       preloadLog('Renderer initialization failed. Check console output.')
     }
@@ -97,6 +100,6 @@ export function useAppLifecycle() {
     entry,
     start,
     executeMainTask,
-    executeCoreboxTask
+    executeCoreboxTask,
   }
 }

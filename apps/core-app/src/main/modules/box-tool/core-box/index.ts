@@ -1,13 +1,14 @@
-import { coreBoxManager } from './manager'
-import SearchEngineCore from '../search-engine/search-core'
-import { windowManager } from './window'
-import { shortcutModule } from '../../global-shortcon'
-import { BaseModule } from '../../abstract-base-module'
-import { ModuleKey } from '@talex-touch/utils'
-import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import type { ModuleKey } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { getConfig } from '../../storage'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { genTouchApp } from '../../../core'
+import { BaseModule } from '../../abstract-base-module'
+import { shortcutModule } from '../../global-shortcon'
+import { getConfig } from '../../storage'
+import SearchEngineCore from '../search-engine/search-core'
+import { coreBoxManager } from './manager'
+import { windowManager } from './window'
+
 export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined
@@ -18,7 +19,7 @@ export class CoreBoxModule extends BaseModule {
 
   constructor() {
     super(CoreBoxModule.key, {
-      create: false
+      create: false,
     })
   }
 
@@ -41,7 +42,8 @@ export class CoreBoxModule extends BaseModule {
           }
           return
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[CoreBox] Failed to check initialization status:', error)
         // If we can't check, allow CoreBox to open (fail-open approach)
       }
@@ -51,16 +53,19 @@ export class CoreBoxModule extends BaseModule {
       if (coreBoxManager.showCoreBox) {
         if (lastScreenId === curScreen.id) {
           coreBoxManager.trigger(false)
-        } else {
+        }
+        else {
           const currentWindow = windowManager.current
           if (currentWindow) {
             windowManager.updatePosition(currentWindow, curScreen)
             lastScreenId = curScreen.id
-          } else {
+          }
+          else {
             console.error('[CoreBox] No current window available')
           }
         }
-      } else {
+      }
+      else {
         coreBoxManager.trigger(true)
         lastScreenId = curScreen.id
       }
@@ -94,6 +99,7 @@ export class CoreBoxModule extends BaseModule {
 
     console.log('[CoreBox] Core-box module initialized!')
   }
+
   async onDestroy(): Promise<void> {
     coreBoxManager.destroy()
   }

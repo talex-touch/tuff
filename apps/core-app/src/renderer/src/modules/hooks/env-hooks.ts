@@ -65,7 +65,8 @@ export function useCPUUsage() {
   function running() {
     value.value = window.process.getCPUUsage()
 
-    if (!cancel) setTimeout(running, 1000)
+    if (!cancel)
+      setTimeout(running, 1000)
   }
 
   running()
@@ -81,7 +82,8 @@ export function useMemoryUsage() {
   function running() {
     value.value = window.process.memoryUsage()
 
-    if (!cancel) setTimeout(running, 1000)
+    if (!cancel)
+      setTimeout(running, 1000)
   }
 
   running()

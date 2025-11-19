@@ -1,7 +1,9 @@
-import { watch, Ref, nextTick } from 'vue'
+import type { Ref } from 'vue'
+import type { IBoxOptions } from '..'
 import { useDocumentVisibility } from '@vueuse/core'
+import { nextTick, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
-import { BoxMode, IBoxOptions } from '..'
+import { BoxMode } from '..'
 
 export function useVisibility(
   boxOptions: IBoxOptions,
@@ -10,7 +12,7 @@ export function useVisibility(
   handleAutoPaste: () => void,
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   _clearClipboard: () => void,
-  boxInputRef: Ref<any>
+  boxInputRef: Ref<any>,
 ) {
   const visibility = useDocumentVisibility()
 
@@ -35,20 +37,22 @@ export function useVisibility(
         const autoClearMs = appSetting.tools.autoClear * 1000
 
         console.debug('[Visibility] CoreBox shown, checking autoClear', {
-          timeSinceHidden: Math.round(timeSinceHidden / 1000) + 's',
-          autoClearThreshold: appSetting.tools.autoClear + 's',
-          shouldClear: timeSinceHidden > autoClearMs
+          timeSinceHidden: `${Math.round(timeSinceHidden / 1000)}s`,
+          autoClearThreshold: `${appSetting.tools.autoClear}s`,
+          shouldClear: timeSinceHidden > autoClearMs,
         })
 
         if (timeSinceHidden > autoClearMs) {
           console.debug('[Visibility] AutoClear triggered, clearing search bar')
-        searchVal.value = ''
-        boxOptions.mode = BoxMode.INPUT
-        boxOptions.data = {}
+          searchVal.value = ''
+          boxOptions.mode = BoxMode.INPUT
+          boxOptions.data = {}
         }
-      } else if (appSetting.tools.autoClear === -1) {
+      }
+      else if (appSetting.tools.autoClear === -1) {
         console.debug('[Visibility] AutoClear disabled (set to -1)')
-      } else if (boxOptions.lastHidden <= 0) {
+      }
+      else if (boxOptions.lastHidden <= 0) {
         console.debug('[Visibility] No lastHidden timestamp, skipping autoClear')
       }
 
@@ -59,10 +63,10 @@ export function useVisibility(
       if (clipboardOptions.last) {
         handleAutoPaste()
       }
-    }
+    },
   )
 
   return {
-    visibility
+    visibility,
   }
 }

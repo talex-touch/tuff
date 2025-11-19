@@ -4,8 +4,8 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
 
 const emits = defineEmits(['update:modelValue'])

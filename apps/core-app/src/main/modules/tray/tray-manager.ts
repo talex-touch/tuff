@@ -1,21 +1,19 @@
-import { Tray, app } from 'electron'
-import { BaseModule } from '../abstract-base-module'
-import { MaybePromise, ModuleKey, ChannelType } from '@talex-touch/utils'
-import { TalexEvents } from '../../core/eventbus/touch-event'
-import { TrayIconProvider } from './tray-icon-provider'
-import { TrayMenuBuilder } from './tray-menu-builder'
-import { TrayStateManager, TrayState } from './tray-state-manager'
-import {
-  touchEventBus,
+import type { AppSetting, MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { ITouchEvent } from '@talex-touch/utils/eventbus'
+import type {
   DownloadTaskChangedEvent,
   UpdateAvailableEvent,
-  WindowHiddenEvent,
-  WindowShownEvent
 } from '../../core/eventbus/touch-event'
-import type { ITouchEvent } from '@talex-touch/utils/eventbus'
-import { getConfig } from '../storage'
+import type { TrayState } from './tray-state-manager'
+import { ChannelType, StorageList } from '@talex-touch/utils'
+import { app, Tray } from 'electron'
+import { TalexEvents, touchEventBus, WindowHiddenEvent, WindowShownEvent } from '../../core/eventbus/touch-event'
 import { TalexTouch } from '../../types'
-import { StorageList, type AppSetting } from '@talex-touch/utils'
+import { BaseModule } from '../abstract-base-module'
+import { getConfig } from '../storage'
+import { TrayIconProvider } from './tray-icon-provider'
+import { TrayMenuBuilder } from './tray-menu-builder'
+import { TrayStateManager } from './tray-state-manager'
 
 /**
  * Main tray manager
@@ -32,7 +30,7 @@ export class TrayManager extends BaseModule {
 
   constructor() {
     super(TrayManager.key, {
-      create: false
+      create: false,
     })
     this.menuBuilder = new TrayMenuBuilder()
     this.stateManager = new TrayStateManager()
@@ -78,7 +76,8 @@ export class TrayManager extends BaseModule {
       this.tray.setToolTip('tuff')
       this.bindTrayEvents()
       this.updateMenu()
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to initialize tray:', error)
     }
   }
@@ -92,7 +91,7 @@ export class TrayManager extends BaseModule {
 
   private shouldShowTray(): boolean {
     try {
-      const config = ($app.config.data as any)
+      const config = $app.config.data as any
       const setupConfig = config?.setup
 
       if (setupConfig?.showTray !== undefined) {
@@ -100,7 +99,8 @@ export class TrayManager extends BaseModule {
       }
 
       return true
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to check shouldShowTray:', error)
       return true
     }
@@ -112,11 +112,12 @@ export class TrayManager extends BaseModule {
 
       const options: Electron.Settings = {
         openAtLogin: autoStart,
-        openAsHidden: ($app.config.data as any)?.window?.startSilent ?? false
+        openAsHidden: ($app.config.data as any)?.window?.startSilent ?? false,
       }
 
       app.setLoginItemSettings(options)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to setup auto-start:', error)
     }
   }
@@ -127,11 +128,12 @@ export class TrayManager extends BaseModule {
 
       const options: Electron.Settings = {
         openAtLogin: enabled,
-        openAsHidden: enabled && startSilent
+        openAsHidden: enabled && startSilent,
       }
 
       app.setLoginItemSettings(options)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to update auto-start:', error)
     }
   }
@@ -140,14 +142,16 @@ export class TrayManager extends BaseModule {
     try {
       const loginItemSettings = app.getLoginItemSettings()
       return loginItemSettings.openAtLogin
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to get auto-start status:', error)
       return false
     }
   }
 
   private bindTrayEvents(): void {
-    if (!this.tray) return
+    if (!this.tray)
+      return
 
     this.tray.on('click', this.handleTrayClick.bind(this))
 
@@ -164,17 +168,20 @@ export class TrayManager extends BaseModule {
     if (mainWindow.isVisible()) {
       if (mainWindow.isFocused()) {
         mainWindow.hide()
-      } else {
+      }
+      else {
         mainWindow.focus()
       }
-    } else {
+    }
+    else {
       mainWindow.show()
       mainWindow.focus()
     }
   }
 
   public updateMenu(state?: Partial<TrayState>): void {
-    if (!this.tray) return
+    if (!this.tray)
+      return
 
     if (state) {
       this.stateManager.updateState(state)
@@ -183,7 +190,8 @@ export class TrayManager extends BaseModule {
     try {
       const menu = this.menuBuilder.buildMenu(this.stateManager.getState())
       this.tray.setContextMenu(menu)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to update menu:', error)
     }
   }
@@ -272,14 +280,16 @@ export class TrayManager extends BaseModule {
     try {
       const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
       return appConfig?.setup?.hideDock ?? false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to read hideDock config:', error)
       return false
     }
   }
 
   private setupDockIcon(): void {
-    if (process.platform !== 'darwin') return
+    if (process.platform !== 'darwin')
+      return
 
     try {
       const appIconPath = TrayIconProvider.getAppIconPath()
@@ -290,13 +300,15 @@ export class TrayManager extends BaseModule {
           app.dock.setBadge($app.version)
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[TrayManager] Failed to setup Dock icon:', error)
     }
   }
 
   private updateDockVisibility(): void {
-    if (process.platform !== 'darwin') return
+    if (process.platform !== 'darwin')
+      return
 
     const mainWindow = $app.window.window
     const hideDock = this.getHideDockConfig()
@@ -304,14 +316,16 @@ export class TrayManager extends BaseModule {
     if (hideDock) {
       if (mainWindow.isVisible()) {
         app.dock?.show()
-      } else {
+      }
+      else {
         app.dock?.hide()
       }
     }
   }
 
   private setupChannels(): void {
-    if (!$app.channel) return
+    if (!$app.channel)
+      return
 
     $app.channel.regChannel(ChannelType.MAIN, 'tray:show:get', () => {
       return this.tray !== null
@@ -322,7 +336,8 @@ export class TrayManager extends BaseModule {
       if (show && !this.tray) {
         this.initializeTray()
         this.updateMenu()
-      } else if (!show && this.tray) {
+      }
+      else if (!show && this.tray) {
         this.destroyTray()
       }
       return true

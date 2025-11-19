@@ -1,4 +1,5 @@
-import { TouchSDK, TouchSDKOptions } from './index'
+import type { TouchSDKOptions } from './index'
+import { TouchSDK } from './index'
 
 /**
  * Factory function to create a TouchSDK instance
@@ -26,7 +27,7 @@ export function getTouchSDK(): TouchSDK {
 
 export function useTouchSDK(options?: TouchSDKOptions) {
   if (!sdkInstance) {
-    if ( !options ) {
+    if (!options) {
       throw new Error('TouchSDK not initialized. Call initTouchSDK first. Cannot use hook here.')
     }
     initTouchSDK(options)
@@ -57,5 +58,5 @@ export const TouchUtils = {
 
   async openPluginFolder(pluginName: string): Promise<void> {
     return getTouchSDK().openPluginFolder(pluginName)
-  }
+  },
 }

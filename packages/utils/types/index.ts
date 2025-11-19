@@ -1,4 +1,4 @@
-export * from './touch-app-core'
+export * from './intelligence'
 export * from './modules'
 export * from './storage'
-export * from './intelligence'
+export * from './touch-app-core'

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
-import { axios } from "@modules/axios";
-import { sleep } from "@modules/utils";
+import { axios } from '@modules/axios'
+import { sleep } from '@modules/utils'
+import { onMounted, reactive, ref } from 'vue'
 
 const img1 = ref<HTMLElement>()
 const img2 = ref<HTMLElement>()
@@ -11,21 +11,23 @@ const banner = reactive({
   now: 0,
   t: {
     n: 0,
-    m: 500
-  }
+    m: 500,
+  },
 })
 
 onMounted(async () => {
   const res = await axios.get('/banner')
-  if ( res['code'] !== 200 ) return
+  if (res.code !== 200)
+    return
 
-  Object.assign(banners, res['banners'])
+  Object.assign(banners, res.banners)
 })
 
 async function setImage() {
   const _1 = img1.value
   const _2 = img2.value
-  if ( !_1 || !_2 ) return
+  if (!_1 || !_2)
+    return
 
   const now = banner.now
   const next = (now + 2) % banners.length
@@ -56,19 +58,18 @@ async function setImage() {
   _1.style.opacity = '1'
 
   banner.now = next
-
 }
 
 async function refresh() {
-  if ( banners.length ) {
-    if ( banner.t.n <= 0 ) {
+  if (banners.length) {
+    if (banner.t.n <= 0) {
       banner.t.n = banner.t.m
 
       await setImage()
-    } else {
+    }
+    else {
       banner.t.n -= 1
     }
-
   }
 
   requestAnimationFrame(refresh)
@@ -79,12 +80,10 @@ requestAnimationFrame(refresh)
 
 <template>
   <div class="IndexImages-Container">
-    <div ref="img1" class="IndexImages-Item img1 cubic-transition"></div>
-    <div ref="img2" class="IndexImages-Item img2 cubic-transition"></div>
+    <div ref="img1" class="IndexImages-Item img1 cubic-transition" />
+    <div ref="img2" class="IndexImages-Item img2 cubic-transition" />
 
-    <div :style="`--p: ${banner.t.n / banner.t.m * 100}%`" class="IndexImages-Progressbar">
-
-    </div>
+    <div :style="`--p: ${banner.t.n / banner.t.m * 100}%`" class="IndexImages-Progressbar" />
   </div>
 </template>
 

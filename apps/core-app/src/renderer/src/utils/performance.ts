@@ -8,7 +8,7 @@
  */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
 ): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
 
@@ -30,7 +30,7 @@ export function debounce<T extends (...args: any[]) => any>(
  */
 export function throttle<T extends (...args: any[]) => any>(
   func: T,
-  limit: number
+  limit: number,
 ): (...args: Parameters<T>) => void {
   let inThrottle: boolean = false
 
@@ -49,7 +49,7 @@ export function throttle<T extends (...args: any[]) => any>(
  * Request Animation Frame throttle - throttles to browser's animation frame rate
  */
 export function rafThrottle<T extends (...args: any[]) => any>(
-  func: T
+  func: T,
 ): (...args: Parameters<T>) => void {
   let rafId: number | null = null
 
@@ -70,7 +70,7 @@ export function rafThrottle<T extends (...args: any[]) => any>(
  */
 export function memoize<T extends (...args: any[]) => any>(
   func: T,
-  maxCacheSize: number = 100
+  maxCacheSize: number = 100,
 ): T {
   const cache = new Map<string, ReturnType<T>>()
   const cacheOrder: string[] = []
@@ -101,7 +101,7 @@ export function memoize<T extends (...args: any[]) => any>(
  */
 export function batch<T>(
   func: (items: T[]) => void,
-  wait: number = 100
+  wait: number = 100,
 ): (item: T) => void {
   let items: T[] = []
   let timeout: ReturnType<typeof setTimeout> | null = null

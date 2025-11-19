@@ -1,21 +1,21 @@
-<template>
-  <i class="remix" :class="`i-ri-${name}${style ? `-${style}` : ''}`"></i>
-</template>
-
 <script lang="ts" name="RemixIcon" setup>
 defineProps({
   name: {
     type: String,
-    required: true
+    required: true,
   },
   style: {
     type: String,
     validator(value: string) {
       return ['line', 'fill', ''].includes(value)
-    }
-  }
+    },
+  },
 })
 </script>
+
+<template>
+  <i class="remix" :class="`i-ri-${name}${style ? `-${style}` : ''}`" />
+</template>
 
 <style scoped>
 .remix {

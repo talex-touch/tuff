@@ -1,5 +1,5 @@
-import { genChannel } from '../../channel';
-import { IService } from "../../../service";
+import type { IService } from '../../../service'
+import { genChannel } from '../../channel'
 
 export function regService(service: IService, handler: Function): boolean {
   const res = !!genChannel().sendSync('service:reg', { service: service.name })

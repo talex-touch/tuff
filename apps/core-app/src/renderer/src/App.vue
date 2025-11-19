@@ -1,15 +1,15 @@
 <script name="App" lang="ts" setup>
-import AppLayout from '~/views/layout/AppLayout.vue'
+import { isCoreBox } from '@talex-touch/utils/renderer'
+import { useI18n } from 'vue-i18n'
+import { appSetting } from '~/modules/channel/storage/index'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
+import { useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
 // urlHooker,
 // clipBoardResolver,
 import Beginner from '~/views/base/begin/Beginner.vue'
-import { appSetting } from '~/modules/channel/storage/index'
-import { isCoreBox } from '@talex-touch/utils/renderer'
+import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
-import { useI18n } from 'vue-i18n'
-import { useLanguage } from '~/modules/lang'
 
 const { t } = useI18n()
 const { initializeLanguage } = useLanguage()
@@ -27,7 +27,8 @@ async function init(): Promise<void> {
 
   try {
     await initializeLanguage()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[App] Failed to initialize language:', error)
   }
 
@@ -36,7 +37,8 @@ async function init(): Promise<void> {
   // screenCapture()
   useDropperResolver()
 
-  if (!appSetting?.beginner?.init) beginner.value = true
+  if (!appSetting?.beginner?.init)
+    beginner.value = true
 }
 </script>
 
@@ -49,8 +51,7 @@ async function init(): Promise<void> {
         <span
           style="--fake-radius: 4px"
           class="px-[3px] py-[1px] rounded-md text-xs version fake-background"
-          >{{ packageJson.version }}</span
-        >
+        >{{ packageJson.version }}</span>
       </template>
     </AppLayout>
 

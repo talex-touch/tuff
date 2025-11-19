@@ -1,16 +1,16 @@
-import { reactive, ref, shallowReactive, ShallowReactive, UnwrapNestedRefs } from "vue";
-import { PlaySong, SingleSong } from "@modules/entity/song-resolver";
-import { axios } from "@modules/axios";
+import type { SingleSong } from '@modules/entity/song-resolver'
+import { axios } from '@modules/axios'
+import { PlaySong } from '@modules/entity/song-resolver'
+import { reactive } from 'vue'
 
 export const enum PlayType {
   SINGLE = 1,
   LIST = 2,
   CYCLE_LIST,
-  RANDOM
+  RANDOM,
 }
 
 export class PlayManager {
-
   /**
    * The song is playing
    */
@@ -35,34 +35,33 @@ export class PlayManager {
   }
 
   async play() {
-    if ( !this.isPause ) return
+    if (!this.isPause)
+      return
     this.isPause = false
 
-    if ( !this.song ) {
-
+    if (!this.song) {
       const song = this.playList[++this.playIndex]
 
       const res = await axios.get(`/song/url?id=${song.id}`)
 
-      if ( res['code'] !== 200 ) {
-        console.log( res )
-        throw Error('Failed to get song url!')
+      if (res.code !== 200) {
+        console.log(res)
+        throw new Error('Failed to get song url!')
       }
 
-      const playSong = new PlaySong(song._originData, res['data'])
+      const playSong = new PlaySong(song._originData, res.data)
 
-      console.log( this, playSong )
+      console.log(this, playSong)
 
       this.song = playSong
-
     }
 
     this.song.play()
-
   }
 
   pause() {
-    if ( this.isPause ) return
+    if (this.isPause)
+      return
     this.isPause = true
 
     this.song.pause()
@@ -75,7 +74,6 @@ export class PlayManager {
   addSongs(songs: SingleSong[]) {
     this.playList = songs
   }
-
 }
 
 export const player = new PlayManager()

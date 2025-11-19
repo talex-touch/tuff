@@ -1,25 +1,24 @@
 <script setup lang="ts" name="PluginNew">
-import FormTemplate from '~/components/base/template/FormTemplate.vue'
+import type { IManifest } from '@talex-touch/utils/plugin'
+import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
+import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TCheckBox from '~/components/base/checkbox/TCheckBox.vue'
+import FlatInput from '~/components/base/input/FlatInput.vue'
+
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import ActionTemplate from '~/components/base/template/ActionTemplate.vue'
 import BlockTemplate from '~/components/base/template/BlockTemplate.vue'
 import BrickTemplate from '~/components/base/template/BrickTemplate.vue'
+import FormTemplate from '~/components/base/template/FormTemplate.vue'
 import LineTemplate from '~/components/base/template/LineTemplate.vue'
-import ActionTemplate from '~/components/base/template/ActionTemplate.vue'
-
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import FlatInput from '~/components/base/input/FlatInput.vue'
-import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import TCheckBox from '~/components/base/checkbox/TCheckBox.vue'
-
-import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
-import { popperMention } from '~/modules/mention/dialog-mention'
-import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
-import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
-import type { IManifest } from '@talex-touch/utils/plugin'
-import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
-import { useI18n } from 'vue-i18n'
 import { useInstallManager } from '~/modules/install/install-manager'
+import { forTouchTip, popperMention } from '~/modules/mention/dialog-mention'
 
 const emits = defineEmits(['close'])
 
@@ -36,11 +35,11 @@ const installState = reactive({
   message: '',
   manifest: undefined as IManifest | undefined,
   provider: '' as '' | PluginProviderType,
-  official: false
+  official: false,
 })
 
 const currentInstallTask = computed(() =>
-  installManager.getTaskBySource(installState.source.trim())
+  installManager.getTaskBySource(installState.source.trim()),
 )
 const currentInstallStage = computed(() => currentInstallTask.value?.stage)
 const currentInstallProgress = computed(() => {
@@ -75,27 +74,27 @@ const currentInstallLabel = computed(() => {
 })
 
 const disableManualInstall = computed(
-  () => installState.installing || installManager.isActiveStage(currentInstallStage.value)
+  () => installState.installing || installManager.isActiveStage(currentInstallStage.value),
 )
 
 const manualProgressStyle = computed(() =>
   currentInstallStage.value === 'downloading' && currentInstallProgress.value !== null
     ? ({ '--progress': `${currentInstallProgress.value}%` } as Record<string, string>)
-    : {}
+    : {},
 )
 
 const manualProgressDisplay = computed(() =>
-  currentInstallProgress.value !== null ? `${currentInstallProgress.value}` : ''
+  currentInstallProgress.value !== null ? `${currentInstallProgress.value}` : '',
 )
 
 const manualShowProgress = computed(
-  () => currentInstallStage.value === 'downloading' && currentInstallProgress.value !== null
+  () => currentInstallStage.value === 'downloading' && currentInstallProgress.value !== null,
 )
 
 const manualShowSpinner = computed(
   () =>
-    currentInstallStage.value === 'installing' ||
-    (!currentInstallStage.value && installState.installing)
+    currentInstallStage.value === 'installing'
+    || (!currentInstallStage.value && installState.installing),
 )
 
 const manualStatusIcon = computed(() => {
@@ -116,7 +115,7 @@ const manualStatusIcon = computed(() => {
 })
 
 const providerOptions = computed(() =>
-  Object.values(PluginProviderType).filter((type) => type !== PluginProviderType.DEV)
+  Object.values(PluginProviderType).filter(type => type !== PluginProviderType.DEV),
 )
 
 const providerLabels: Record<PluginProviderType, string> = {
@@ -124,41 +123,47 @@ const providerLabels: Record<PluginProviderType, string> = {
   [PluginProviderType.NPM]: 'NPM',
   [PluginProviderType.TPEX]: 'TPEX',
   [PluginProviderType.FILE]: '本地文件',
-  [PluginProviderType.DEV]: '开发'
+  [PluginProviderType.DEV]: '开发',
 }
 
 const installPreview = computed(() => {
-  if (!installState.manifest) return []
+  if (!installState.manifest)
+    return []
   const manifest = installState.manifest
   const lines: string[] = []
-  if (manifest.name) lines.push(`名称: ${manifest.name}`)
-  if (manifest.version) lines.push(`版本: ${manifest.version}`)
-  if (manifest.author) lines.push(`作者: ${manifest.author}`)
+  if (manifest.name)
+    lines.push(`名称: ${manifest.name}`)
+  if (manifest.version)
+    lines.push(`版本: ${manifest.version}`)
+  if (manifest.author)
+    lines.push(`作者: ${manifest.author}`)
   return lines
 })
 
 watch(
   () => activeTab.value,
   (tab) => {
-    if (tab === 'install') return
+    if (tab === 'install')
+      return
     installState.status = 'idle'
     installState.message = ''
     installState.manifest = undefined
     installState.provider = ''
     installState.official = false
-  }
+  },
 )
 
 watch(
   () => [installState.source, installState.metadataText, installState.hintType],
   () => {
-    if (installState.status === 'idle' || installState.installing) return
+    if (installState.status === 'idle' || installState.installing)
+      return
     installState.status = 'idle'
     installState.message = ''
     installState.manifest = undefined
     installState.provider = ''
     installState.official = false
-  }
+  },
 )
 
 // Lifecycle hook to initialize component
@@ -208,22 +213,23 @@ const plugin = reactive<Plugin>({
   version: '0.0.1',
   icon: {
     type: 'class',
-    value: 'i-ri-remixicon-line'
+    value: 'i-ri-remixicon-line',
   },
   dev: {
     enable: computed(() => !!plugin.dev.address),
-    address: ''
+    address: '',
   },
   readme: '# Demo Plugin.',
   openInVSC: false,
-  agreement: false
+  agreement: false,
 })
 
 // Reactive environment options object
 const envOptions = reactive<EnvOptions>({})
 
 async function installPluginFromSource(): Promise<void> {
-  if (installState.installing || installManager.isActiveStage(currentInstallStage.value)) return
+  if (installState.installing || installManager.isActiveStage(currentInstallStage.value))
+    return
 
   const trimmedSource = installState.source.trim()
   if (!trimmedSource) {
@@ -235,7 +241,8 @@ async function installPluginFromSource(): Promise<void> {
   if (installState.metadataText.trim()) {
     try {
       metadata = JSON.parse(installState.metadataText)
-    } catch (error) {
+    }
+    catch (error) {
       installState.status = 'error'
       installState.message = '元数据需要是合法的 JSON 字符串。'
       return
@@ -254,8 +261,8 @@ async function installPluginFromSource(): Promise<void> {
       source: trimmedSource,
       clientMetadata: {
         pluginName: (installState.manifest as any)?.name || trimmedSource,
-        source: trimmedSource
-      }
+        source: trimmedSource,
+      },
     }
 
     if (installState.hintType) {
@@ -275,15 +282,18 @@ async function installPluginFromSource(): Promise<void> {
       installState.provider = result.provider as PluginProviderType
       installState.official = Boolean(result.official)
       await forTouchTip('插件安装', '插件已成功安装。')
-    } else {
+    }
+    else {
       installState.status = 'error'
       installState.message = result?.message || '插件安装失败，请检查来源是否可用。'
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error('[PluginNew] Failed to install plugin:', error)
     installState.status = 'error'
     installState.message = error?.message || '插件安装遇到异常，请稍后重试。'
-  } finally {
+  }
+  finally {
     installState.installing = false
   }
 }
@@ -298,18 +308,20 @@ async function envCheck(): Promise<void> {
     if (versionParts[0] < 16) {
       envOptions.node = {
         msg: `Node.js version is too low (v${nodeVersion}), please upgrade it to 16 or higher.`,
-        type: 'error'
-      }
-    } else {
-      envOptions.node = {
-        type: 'success',
-        version: versionParts
+        type: 'error',
       }
     }
-  } else {
+    else {
+      envOptions.node = {
+        type: 'success',
+        version: versionParts,
+      }
+    }
+  }
+  else {
     envOptions.node = {
       msg: 'Cannot find node.js, please install it first.',
-      type: 'error'
+      type: 'error',
     }
   }
 
@@ -317,12 +329,13 @@ async function envCheck(): Promise<void> {
   if (degitExists) {
     envOptions.degit = {
       type: 'success',
-      version: 'installed'
+      version: 'installed',
     }
-  } else {
+  }
+  else {
     envOptions.degit = {
       msg: 'Cannot find degit, please install it first.',
-      type: 'error'
+      type: 'error',
     }
   }
 }
@@ -335,12 +348,13 @@ async function createAction(ctx: any): Promise<void> {
 
   const result = checkForm()
 
-  if (!result) return
+  if (!result)
+    return
 
   if (!plugin.agreement) {
     await forTouchTip(
       'Attention',
-      "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol."
+      'You must agree with <i style=\'color: #4E94B0\'>Touch Plugin Development</i> protocol.',
     )
     return
   }
@@ -357,9 +371,8 @@ async function handleInstallDegit(): Promise<void> {
   await popperMention('', () =>
     createVNode(TerminalTemplate, {
       title: 'Installing degit',
-      command: 'npm install -g degit'
-    })
-  )
+      command: 'npm install -g degit',
+    }))
 }
 </script>
 
@@ -369,7 +382,9 @@ async function handleInstallDegit(): Promise<void> {
       <div class="PluginNew-Header">
         <div class="PluginNew-HeaderRow">
           <div i-ri-arrow-left-s-line class="PluginNew-Back" @click="emits('close')" />
-          <p class="PluginNew-Title">Plugin Workspace</p>
+          <p class="PluginNew-Title">
+            Plugin Workspace
+          </p>
           <div class="PluginNew-TabGroup">
             <FlatButton :primary="activeTab === 'install'" mini @click="activeTab = 'install'">
               <i class="i-ri-download-cloud-2-line" />
@@ -417,7 +432,9 @@ async function handleInstallDegit(): Promise<void> {
             />
           </el-select>
         </div>
-        <p class="InstallHint">支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。</p>
+        <p class="InstallHint">
+          支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。
+        </p>
       </BlockTemplate>
 
       <BlockTemplate title="附加元数据 (可选)">
@@ -426,10 +443,12 @@ async function handleInstallDegit(): Promise<void> {
           <FlatInput
             v-model="installState.metadataText"
             :area="true"
-            placeholder='{ "tag": "v1.0.0" }'
+            placeholder="{ &quot;tag&quot;: &quot;v1.0.0&quot; }"
           />
         </div>
-        <p class="InstallHint">用于指定 tag / branch 等额外信息，留空则自动处理。</p>
+        <p class="InstallHint">
+          用于指定 tag / branch 等额外信息，留空则自动处理。
+        </p>
       </BlockTemplate>
 
       <BlockTemplate title="执行">
@@ -455,7 +474,9 @@ async function handleInstallDegit(): Promise<void> {
               <span v-if="installState.official" class="InstallStatus-Official">官方</span>
             </p>
             <ul v-if="installPreview.length" class="InstallManifest">
-              <li v-for="line in installPreview" :key="line">{{ line }}</li>
+              <li v-for="line in installPreview" :key="line">
+                {{ line }}
+              </li>
             </ul>
           </div>
         </div>
@@ -580,7 +601,7 @@ async function handleInstallDegit(): Promise<void> {
       <BlockTemplate title="General">
         <LineTemplate
           :msg="() => 'You must input the correct plugin name.'"
-          regex='^[^\\\\/:*?"<>|]+(\\.[^\\\\/:*?"<>|]+)*$'
+          regex="^[^\\\\/:*?&quot;<>|]+(\\.[^\\\\/:*?&quot;<>|]+)*$"
           title="name"
         >
           <FlatInput v-model="plugin.name" w="48!" />
@@ -617,20 +638,24 @@ async function handleInstallDegit(): Promise<void> {
       </BlockTemplate>
 
       <BlockTemplate title="Actions">
-        <TCheckBox v-model="plugin.openInVSC" text-sm
-          >Open in
+        <TCheckBox v-model="plugin.openInVSC" text-sm>
+          Open in
           <i>
             <div inline-block style="width: 16px" class="i-simple-icons-visualstudio" />
             VSCode
-          </i></TCheckBox
-        >
-        <TCheckBox v-model="plugin.agreement" text-sm
-          >Agree with <i>Touch Plugin Development</i></TCheckBox
-        >
+          </i>
+        </TCheckBox>
+        <TCheckBox v-model="plugin.agreement" text-sm>
+          Agree with <i>Touch Plugin Development</i>
+        </TCheckBox>
         <div flex relative mt-8 gap-4 w-4>
-          <FlatButton hover:bg-red> Cancel </FlatButton>
+          <FlatButton hover:bg-red>
+            Cancel
+          </FlatButton>
           <ActionTemplate :action="createAction">
-            <FlatButton :primary="true"> Create </FlatButton>
+            <FlatButton :primary="true">
+              Create
+            </FlatButton>
           </ActionTemplate>
         </div>
       </BlockTemplate>

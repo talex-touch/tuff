@@ -1,5 +1,5 @@
+import type { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 export class ShortconApi {
   getAll(): Promise<ShortcutSetting> {

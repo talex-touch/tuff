@@ -5,7 +5,7 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string | number | null
     placeholder?: string
-    options?: Array<{ label: string; value: string | number }>
+    options?: Array<{ label: string, value: string | number }>
     disabled?: boolean
     clearable?: boolean
   }>(),
@@ -13,8 +13,8 @@ const props = withDefaults(
     placeholder: '',
     options: () => [],
     disabled: false,
-    clearable: false
-  }
+    clearable: false,
+  },
 )
 
 const emits = defineEmits<{
@@ -41,7 +41,8 @@ function handleChange(event: Event) {
 }
 
 function clearValue() {
-  if (!props.clearable) return
+  if (!props.clearable)
+    return
   value.value = null
   emits('update:modelValue', null)
   emits('change', null)
@@ -56,7 +57,9 @@ function clearValue() {
       class="select-element"
       @change="handleChange"
     >
-      <option value="">{{ placeholder }}</option>
+      <option value="">
+        {{ placeholder }}
+      </option>
       <option v-for="option in options" :key="option.value" :value="String(option.value)">
         {{ option.label }}
       </option>

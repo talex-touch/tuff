@@ -1,15 +1,15 @@
-import fse from 'fs-extra'
-import path from 'path'
 import type { FSWatcher } from 'chokidar'
+import path from 'node:path'
+import fse from 'fs-extra'
 import { fileWatchService } from '../../../service/file-watch.service'
 import { providersLog } from './logger'
 
 export interface LocalWatcherHandlers {
-  onFileChange(filePath: string): Promise<void> | void
-  onDirectoryAdd(dirPath: string): Promise<void> | void
-  onDirectoryRemove(dirPath: string): Promise<void> | void
-  onReady?(): Promise<void> | void
-  onError?(error: Error): void
+  onFileChange: (filePath: string) => Promise<void> | void
+  onDirectoryAdd: (dirPath: string) => Promise<void> | void
+  onDirectoryRemove: (dirPath: string) => Promise<void> | void
+  onReady?: () => Promise<void> | void
+  onError?: (error: Error) => void
 }
 
 export class LocalPluginProvider {
@@ -28,11 +28,14 @@ export class LocalPluginProvider {
 
     for (const entry of entries) {
       // Skip hidden directories and internal plugin folders
-      if (entry.startsWith('.')) continue
-      if (entry.startsWith('__internal_')) continue
+      if (entry.startsWith('.'))
+        continue
+      if (entry.startsWith('__internal_'))
+        continue
       const entryPath = path.resolve(this.pluginRoot, entry)
       const stats = await fse.stat(entryPath).catch(() => undefined)
-      if (!stats?.isDirectory()) continue
+      if (!stats?.isDirectory())
+        continue
       result.push(entry)
     }
 
@@ -52,8 +55,8 @@ export class LocalPluginProvider {
       depth: 1,
       awaitWriteFinish: {
         stabilityThreshold: 500,
-        pollInterval: 500
-      }
+        pollInterval: 500,
+      },
     })
 
     this.watcher
@@ -66,34 +69,35 @@ export class LocalPluginProvider {
       .on('unlinkDir', (dirPath) => {
         void handlers.onDirectoryRemove(dirPath)
       })
-      .on('error', (error) => handlers.onError?.(error as Error))
+      .on('error', error => handlers.onError?.(error as Error))
       .on('ready', () => void handlers.onReady?.())
 
     this.log.info('Started watching local plugin directory', {
-      meta: { root: this.pluginRoot }
+      meta: { root: this.pluginRoot },
     })
   }
 
   async stopWatching(): Promise<void> {
-    if (!this.watcher) return
+    if (!this.watcher)
+      return
     await fileWatchService.close(this.watcher)
     this.watcher = null
     this.log.info('Stopped watching local plugin directory', {
-      meta: { root: this.pluginRoot }
+      meta: { root: this.pluginRoot },
     })
   }
 
   trackFile(filePath: string): void {
     this.watcher?.add(filePath)
     this.log.debug('Added file watch', {
-      meta: { filePath }
+      meta: { filePath },
     })
   }
 
   untrackFile(filePath: string): void {
     this.watcher?.unwatch(filePath)
     this.log.debug('Removed file watch', {
-      meta: { filePath }
+      meta: { filePath },
     })
   }
 

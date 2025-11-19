@@ -1,4 +1,4 @@
-import { IManifest } from '@talex-touch/utils/plugin'
+import type { IManifest } from '@talex-touch/utils/plugin'
 
 /**
  * Interface for plugin download options.
@@ -7,15 +7,15 @@ export interface IDownloadOptions {
   /**
    * Timeout configuration for download in milliseconds.
    */
-  timeout?: number;
+  timeout?: number
   /**
    * List of fallback download URLs.
    */
-  fallbackUrls?: string[];
+  fallbackUrls?: string[]
   /**
    * Callback function for download progress, with progress value (0-100).
    */
-  onProgress?: (progress: number) => void;
+  onProgress?: (progress: number) => void
 }
 
 /**
@@ -25,7 +25,7 @@ export interface IDownloadResult {
   /**
    * Local file path after download, which can be the plugin's compressed package or the unzipped folder path.
    */
-  filePath?: string;
+  filePath?: string
 }
 
 /**
@@ -43,16 +43,16 @@ export interface IPluginSource {
    * Get the name of the plugin source.
    * @returns The name of the plugin source.
    */
-  getSourceName(): string;
+  getSourceName: () => string
   /**
    * Get the description of the plugin source.
    * @returns The description of the plugin source.
    */
-  getSourceDesc(): string;
+  getSourceDesc: () => string
   /**
    * Timestamp of the last update for this plugin source.
    */
-  lastUpdateTime?: number;
+  lastUpdateTime?: number
 
   /**
    * Attempts to resolve a plugin manifest from the specified path or URL.
@@ -62,7 +62,7 @@ export interface IPluginSource {
    * @param options Resolution options.
    * @returns A Promise containing the plugin manifest, or undefined if resolution fails.
    */
-  resolveManifest(sourcePath: string, options?: IResolveManifestOptions): Promise<IManifest | undefined>
+  resolveManifest: (sourcePath: string, options?: IResolveManifestOptions) => Promise<IManifest | undefined>
 
   /**
    * Downloads the plugin source.
@@ -70,5 +70,5 @@ export interface IPluginSource {
    * @param options Download options.
    * @returns A Promise containing the download result. The filePath must be the path to the plugin's compressed package or unzipped folder.
    */
-  downloadPlugin(sourceUrl: string, options?: IDownloadOptions): Promise<IDownloadResult>
+  downloadPlugin: (sourceUrl: string, options?: IDownloadOptions) => Promise<IDownloadResult>
 }

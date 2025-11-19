@@ -3,22 +3,22 @@ export default defineComponent({
   props: {
     title: {
       type: String,
-      default: 'Demo line'
+      default: 'Demo line',
     },
     regex: {
       type: String,
-      required: false
+      required: false,
     },
     msg: {
       type: Function,
-      default: () => 'Regex mot matched.'
-    }
+      default: () => 'Regex mot matched.',
+    },
   },
   setup() {
     const tip = ref('')
 
     return {
-      tip
+      tip,
     }
   },
   render(vnode) {
@@ -34,7 +34,7 @@ export default defineComponent({
       regFormField(vnode, () => {
         vnode.tip = ''
 
-        const value = defaultSlot[0].component.props['modelValue']
+        const value = defaultSlot[0].component.props.modelValue
         const regex = new RegExp(props.regex)
 
         const access = regex.test(value)
@@ -45,7 +45,7 @@ export default defineComponent({
         if (el && !access) {
           el.scrollIntoView({
             behavior: 'smooth',
-            block: 'nearest'
+            block: 'nearest',
           })
 
           setTimeout(() => {
@@ -57,7 +57,7 @@ export default defineComponent({
 
         return {
           access,
-          msg: vnode.tip
+          msg: vnode.tip,
         }
       })
     }
@@ -78,7 +78,7 @@ export default defineComponent({
         </div>
       </>
     )
-  }
+  },
 })
 </script>
 

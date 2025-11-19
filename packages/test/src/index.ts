@@ -1,2 +1,2 @@
-import "./common";
-import "./core-box";
+import './common'
+import './core-box'

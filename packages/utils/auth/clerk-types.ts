@@ -50,7 +50,7 @@ export interface ClerkConfig {
   afterSignUpUrl?: string
 }
 
-export type ClerkResourceSnapshot = {
+export interface ClerkResourceSnapshot {
   user?: any | null
   session?: { id?: string | null } | null
 }

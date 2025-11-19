@@ -1,6 +1,7 @@
 <script setup lang="ts" name="TuffListTemplate">
 import { reactive } from 'vue'
-export type TuffListGroup<TItem> = {
+
+export interface TuffListGroup<TItem> {
   id: string
   title?: string
   subtitle?: string
@@ -16,7 +17,7 @@ export type TuffListGroup<TItem> = {
   itemKey?: (item: TItem, index: number) => string
 }
 
-export type TuffListTemplateProps<TItem> = {
+export interface TuffListTemplateProps<TItem> {
   groups: TuffListGroup<TItem>[]
   emptyText?: string
 }
@@ -30,7 +31,8 @@ const emits = defineEmits<{
 const collapsedState = reactive<Record<string, boolean>>({})
 
 function isGroupCollapsed(group: TuffListGroup<any>): boolean {
-  if (!group.collapsible) return false
+  if (!group.collapsible)
+    return false
   const stored = collapsedState[group.id]
   if (typeof stored === 'boolean') {
     return stored
@@ -39,15 +41,17 @@ function isGroupCollapsed(group: TuffListGroup<any>): boolean {
 }
 
 function toggleGroup(group: TuffListGroup<any>): void {
-  if (!group.collapsible) return
+  if (!group.collapsible)
+    return
   const next = !isGroupCollapsed(group)
   collapsedState[group.id] = next
   emits('toggle-group', group.id, next)
 }
 
 function setGroupCollapsed(groupId: string, collapsed: boolean): void {
-  const group = props.groups.find((item) => item.id === groupId)
-  if (!group || !group.collapsible) return
+  const group = props.groups.find(item => item.id === groupId)
+  if (!group || !group.collapsible)
+    return
   collapsedState[group.id] = collapsed
 }
 
@@ -55,7 +59,7 @@ const variantTitleColorMap: Record<TuffListGroup<any>['badgeVariant'], string> =
   info: 'var(--el-color-info)',
   success: 'var(--el-color-success)',
   warning: 'var(--el-color-warning)',
-  danger: 'var(--el-color-danger)'
+  danger: 'var(--el-color-danger)',
 }
 
 function resolveTitleColor(group: TuffListGroup<any>): string {
@@ -69,14 +73,14 @@ function resolveTitleColor(group: TuffListGroup<any>): string {
 }
 
 function getGroupItems(groupId: string) {
-  return props.groups.find((group) => group.id === groupId)?.items ?? []
+  return props.groups.find(group => group.id === groupId)?.items ?? []
 }
 
 defineExpose({
   toggleGroup,
   setGroupCollapsed,
   isGroupCollapsed,
-  getGroupItems
+  getGroupItems,
 })
 
 function getItemKey(group: TuffListGroup<any>, item: any, index: number): string {
@@ -127,9 +131,8 @@ function getItemKey(group: TuffListGroup<any>, item: any, index: number): string
               @click.stop="toggleGroup(group)"
             >
               <i
-                :class="[
-                  'transition-transform duration-200',
-                  isGroupCollapsed(group) ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-up-s-line'
+                class="transition-transform duration-200" :class="[
+                  isGroupCollapsed(group) ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-up-s-line',
                 ]"
                 aria-hidden="true"
               />

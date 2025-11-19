@@ -5,7 +5,7 @@ import type {
   AiInvokeResult,
   AiStreamChunk,
   AiTranslatePayload,
-  AiUsageInfo
+  AiUsageInfo,
 } from '@talex-touch/utils'
 import { AiProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
@@ -29,9 +29,9 @@ export class LocalProvider extends IntelligenceProvider {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: options.modelPreference?.[0] || this.config.defaultModel,
-        messages: payload.messages
+        messages: payload.messages,
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
     })
 
     if (!response.ok) {
@@ -48,7 +48,7 @@ export class LocalProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = data.usage || {
       promptTokens: 0,
       completionTokens: 0,
-      totalTokens: 0
+      totalTokens: 0,
     }
 
     return {
@@ -57,11 +57,11 @@ export class LocalProvider extends IntelligenceProvider {
       model: data.model || options.modelPreference?.[0] || 'local',
       latency,
       traceId,
-      provider: this.type
+      provider: this.type,
     }
   }
 
-  async *chatStream(): AsyncGenerator<AiStreamChunk> {
+  async* chatStream(): AsyncGenerator<AiStreamChunk> {
     throw new Error('[LocalProvider] Streaming not implemented')
   }
 
@@ -74,9 +74,9 @@ export class LocalProvider extends IntelligenceProvider {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: payload.model || this.config.defaultModel,
-        input: payload.text
+        input: payload.text,
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
     })
 
     if (!response.ok) {
@@ -96,7 +96,7 @@ export class LocalProvider extends IntelligenceProvider {
       model: data.model || payload.model || 'local',
       latency,
       traceId,
-      provider: this.type
+      provider: this.type,
     }
   }
 
@@ -105,10 +105,10 @@ export class LocalProvider extends IntelligenceProvider {
       {
         messages: [
           { role: 'system', content: `Translate text to ${payload.targetLang}` },
-          { role: 'user', content: payload.text }
-        ]
+          { role: 'user', content: payload.text },
+        ],
       },
-      options
+      options,
     )
   }
 }

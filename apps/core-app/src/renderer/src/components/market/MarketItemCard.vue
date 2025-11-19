@@ -1,14 +1,14 @@
 <!--
   MarketItemCard Component
-  
+
   Enhanced market item component with smooth animations and interactive hover effects
   Based on TopPlugins design for consistency
 -->
 <script setup lang="ts" name="MarketItemCard">
+import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 
 interface MarketItem {
   id?: string
@@ -45,16 +45,17 @@ const activeStages = new Set<PluginInstallProgressEvent['stage']>([
   'queued',
   'downloading',
   'awaiting-confirmation',
-  'installing'
+  'installing',
 ])
 
 const installStage = computed<PluginInstallProgressEvent['stage'] | null>(() => {
-  if (props.installTask?.stage) return props.installTask.stage
+  if (props.installTask?.stage)
+    return props.installTask.stage
   return isInstalling.value ? 'installing' : null
 })
 
 const isActiveStage = computed(() =>
-  installStage.value ? activeStages.has(installStage.value) : false
+  installStage.value ? activeStages.has(installStage.value) : false,
 )
 
 const progressValue = computed(() => {
@@ -62,22 +63,23 @@ const progressValue = computed(() => {
     const normalized = Math.round(props.installTask.progress)
     return Math.max(0, Math.min(100, normalized))
   }
-  if (installStage.value === 'installing') return 100
+  if (installStage.value === 'installing')
+    return 100
   return null
 })
 
 const showProgressCircle = computed(
-  () => installStage.value === 'downloading' && progressValue.value !== null
+  () => installStage.value === 'downloading' && progressValue.value !== null,
 )
 
 const progressCircleStyle = computed(() =>
   showProgressCircle.value
     ? ({ '--progress': `${progressValue.value}%` } as Record<string, string>)
-    : {}
+    : {},
 )
 
 const progressDisplay = computed(() =>
-  progressValue.value !== null ? `${progressValue.value}` : ''
+  progressValue.value !== null ? `${progressValue.value}` : '',
 )
 
 const showSpinner = computed(() => installStage.value === 'installing' && !showProgressCircle.value)
@@ -123,7 +125,8 @@ const buttonLabel = computed(() => {
 const disableInstall = computed(() => isActiveStage.value)
 
 const iconClass = computed(() => {
-  if (!props.item) return ''
+  if (!props.item)
+    return ''
 
   const fromProp = typeof props.item.icon === 'string' ? props.item.icon.trim() : ''
   if (fromProp) {
@@ -133,10 +136,12 @@ const iconClass = computed(() => {
   const metadata = props.item.metadata as Record<string, unknown> | undefined
   if (metadata) {
     const metaIconClass = typeof metadata.icon_class === 'string' ? metadata.icon_class.trim() : ''
-    if (metaIconClass) return metaIconClass
+    if (metaIconClass)
+      return metaIconClass
 
     const metaIcon = typeof metadata.icon === 'string' ? metadata.icon.trim() : ''
-    if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
+    if (metaIcon)
+      return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
   }
 
   return ''
@@ -148,7 +153,8 @@ function handleInstall(event: MouseEvent): void {
 }
 
 function handleOpen(): void {
-  if (isInstalling.value) return
+  if (isInstalling.value)
+    return
   emits('open')
 }
 </script>
@@ -166,13 +172,17 @@ function handleOpen(): void {
       <!-- Info section -->
       <div class="market-item-info">
         <div class="market-item-header">
-          <h3 class="market-item-title">{{ item.name || 'Unnamed Plugin' }}</h3>
+          <h3 class="market-item-title">
+            {{ item.name || 'Unnamed Plugin' }}
+          </h3>
           <span v-if="item.official" class="official-badge">
             <i class="i-ri-shield-check-fill" />
             {{ t('market.officialBadge') }}
           </span>
         </div>
-        <p class="market-item-description">{{ item.description || 'No description available' }}</p>
+        <p class="market-item-description">
+          {{ item.description || 'No description available' }}
+        </p>
 
         <!-- Stats section -->
         <div class="market-item-stats">

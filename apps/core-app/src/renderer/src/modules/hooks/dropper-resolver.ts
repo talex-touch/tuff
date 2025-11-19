@@ -1,7 +1,7 @@
 import { h } from 'vue'
+import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { touchChannel } from '../channel/channel-core'
 import { blowMention, popperMention } from '../mention/dialog-mention'
-import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 
 const bufferCache = new Map<string, Buffer>()
 
@@ -33,8 +33,8 @@ async function handlePluginDrop(file: File): Promise<boolean> {
 
     const data = touchChannel.sendSync('drop:plugin', {
       name: file.name,
-      buffer: buffer,
-      size: file.size
+      buffer,
+      size: file.size,
     })
 
     if (data.status === 'error') {
@@ -43,12 +43,15 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       clearBufferedFile(file.name)
       if (data.msg === '10091') {
         await blowMention('Install Error', 'The plugin has been irreversibly damaged!')
-      } else if (data.msg === '10092') {
+      }
+      else if (data.msg === '10092') {
         await blowMention('Install Error', 'Unable to identify the file!')
-      } else {
+      }
+      else {
         await blowMention('Install Error', `An unknown error occurred: ${data.msg}`)
       }
-    } else {
+    }
+    else {
       const { manifest, path } = data
       console.log('[DropperResolver] Plugin manifest resolved:', manifest)
       await popperMention(manifest.name, () => {
@@ -65,9 +68,9 @@ function parseFile(file: File): any {
   return {
     lastModified: file.lastModified,
     name: file.name,
-    path: file['path'],
+    path: file.path,
     size: file.size,
-    type: file.type
+    type: file.type,
   }
 }
 
@@ -106,8 +109,8 @@ export function useDropperResolver(): void {
       y: e.y,
       data: {
         files: [...files].map(parseFile),
-        types: e.dataTransfer!.types
-      }
+        types: e.dataTransfer!.types,
+      },
     }
 
     console.log('[DropperResolver] Sending drop event to main process.', option)

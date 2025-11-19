@@ -1,44 +1,49 @@
-<template>
-  <el-slider class="PlayerProgressBar-Container" @mouseenter="hover = true" @mouseleave="hover = false"
-             @input="handleProgressChange" @change="debounceFunction(handleProgressChange)"
-             v-model="value" :show-tooltip="false" />
-</template>
-
 <script>
-export default {
-  name: "PlayProgressBar"
-}
 </script>
 
 <script setup>
-import { watch, ref } from 'vue'
-import { useModelWrapper, debounceFunction } from '@modules/utils'
+import { debounceFunction, useModelWrapper } from '@modules/utils'
+import { ref, watch } from 'vue'
+
+const props = defineProps(['modelValue'])
 
 const emits = defineEmits(['update:modelValue', 'change'])
-const props = defineProps(['modelValue'])
+
+export default {
+  name: 'PlayProgressBar',
+}
 
 const hover = ref(false)
 const modelValue = useModelWrapper(props, emits)
 const value = ref(modelValue.value)
 
 watch(() => modelValue.value, () => {
-  if( !hover.value )
+  if (!hover.value)
     value.value = modelValue.value
 })
 
 let _v
 function handleProgressChange(value) {
-  if( _v === value ) return
+  if (_v === value)
+    return
   _v = value
   // console.log( value )
 
-  while( hover.value && _v === value ) {
+  while (hover.value && _v === value) {
     _v = -1
 
     emits('change', value)
   }
 }
 </script>
+
+<template>
+  <el-slider
+    v-model="value" class="PlayerProgressBar-Container" :show-tooltip="false"
+    @mouseenter="hover = true" @mouseleave="hover = false"
+    @input="handleProgressChange" @change="debounceFunction(handleProgressChange)"
+  />
+</template>
 
 <style lang="scss" scoped>
 .PlayerProgressBar-Container {

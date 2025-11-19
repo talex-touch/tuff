@@ -4,4 +4,4 @@
  */
 
 // 导出测试文件
-export * from './tuff-builder.test';
+export * from './tuff-builder.test'

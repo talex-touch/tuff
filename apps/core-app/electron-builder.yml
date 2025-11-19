@@ -101,7 +101,7 @@ linux:
 snap:
   confinement: strict
   grade: stable
-  summary: "A powerful productivity launcher and automation tool"
+  summary: A powerful productivity launcher and automation tool
   description: |
     Talex Touch is a modern productivity launcher that helps you quickly access applications,
     files, and perform various automation tasks with a clean, efficient interface.
@@ -110,18 +110,18 @@ snap:
     - network
     - removable-media
   environment:
-    DISABLE_WAYLAND: "1"
+    DISABLE_WAYLAND: '1'
   # 修复 app-builder 执行问题
   useTemplateApp: false
   desktop:
 appImage:
   artifactName: ${productName}-${version}.${ext}
   category: Utility
-  synopsis: "A powerful productivity launcher and automation tool"
+  synopsis: A powerful productivity launcher and automation tool
 deb:
   artifactName: ${productName}-${version}.${ext}
   category: Utility
-  synopsis: "A powerful productivity launcher and automation tool"
+  synopsis: A powerful productivity launcher and automation tool
 npmRebuild: false
 forceCodeSigning: false
 # Fix for pnpm workspace dependency resolution issues with electron-builder

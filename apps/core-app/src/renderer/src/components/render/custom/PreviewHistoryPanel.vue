@@ -2,7 +2,7 @@
 import dayjs from 'dayjs'
 import { computed, nextTick, ref, watch } from 'vue'
 
-export type CalculationHistoryEntry = {
+export interface CalculationHistoryEntry {
   id?: number
   content: string
   timestamp?: string
@@ -20,8 +20,8 @@ const props = withDefaults(
     visible: false,
     loading: false,
     items: () => [],
-    activeIndex: -1
-  }
+    activeIndex: -1,
+  },
 )
 
 const emit = defineEmits<{
@@ -31,25 +31,26 @@ const emit = defineEmits<{
 const listRef = ref<HTMLUListElement>()
 
 const formattedItems = computed(() =>
-  props.items.map((item) => ({
+  props.items.map(item => ({
     ...item,
     expression: item.meta?.expression ?? item.meta?.payload?.title ?? item.content,
     result: item.meta?.payload?.primaryValue ?? item.content,
     abilityId: item.meta?.abilityId,
-    time: item.timestamp ? dayjs(item.timestamp).format('HH:mm:ss') : ''
-  }))
+    time: item.timestamp ? dayjs(item.timestamp).format('HH:mm:ss') : '',
+  })),
 )
 
 watch(
   () => props.activeIndex,
   (index) => {
-    if (typeof index !== 'number' || index < 0) return
+    if (typeof index !== 'number' || index < 0)
+      return
     nextTick(() => {
       const list = listRef.value
       const el = list?.children[index] as HTMLElement | undefined
       el?.scrollIntoView({ block: 'nearest' })
     })
-  }
+  },
 )
 </script>
 
@@ -67,8 +68,12 @@ watch(
         </div>
       </header>
       <div class="panel-body">
-        <div v-if="loading" class="state">加载中...</div>
-        <div v-else-if="!items.length" class="state">暂无记录</div>
+        <div v-if="loading" class="state">
+          加载中...
+        </div>
+        <div v-else-if="!items.length" class="state">
+          暂无记录
+        </div>
         <ul v-else ref="listRef" class="history-list">
           <li
             v-for="(item, index) in formattedItems"
@@ -76,7 +81,9 @@ watch(
             :class="{ 'is-active': index === props.activeIndex }"
             @click="emit('apply', item)"
           >
-            <div class="expression" :title="item.expression">{{ item.expression }}</div>
+            <div class="expression" :title="item.expression">
+              {{ item.expression }}
+            </div>
             <div class="meta-row">
               <span class="result">{{ item.result }}</span>
               <span class="ability">{{ item.abilityId }}</span>

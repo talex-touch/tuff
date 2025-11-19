@@ -22,7 +22,7 @@ function readJson(filePath) {
 }
 
 function writeJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf8')
+  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
 }
 
 function syncCorePackage() {
@@ -38,7 +38,8 @@ function syncCorePackage() {
   const updatedFields = []
 
   for (const field of fieldsToSync) {
-    if (typeof rootPkg[field] === 'undefined') continue
+    if (typeof rootPkg[field] === 'undefined')
+      continue
     if (corePkg[field] !== rootPkg[field]) {
       corePkg[field] = rootPkg[field]
       updatedFields.push(field)
@@ -48,16 +49,18 @@ function syncCorePackage() {
   if (updatedFields.length > 0) {
     writeJson(corePkgPath, corePkg)
     console.log(
-      `[sync-core-package] Updated apps/core-app/package.json fields: ${updatedFields.join(', ')}`
+      `[sync-core-package] Updated apps/core-app/package.json fields: ${updatedFields.join(', ')}`,
     )
-  } else {
+  }
+  else {
     console.log('[sync-core-package] apps/core-app/package.json already in sync')
   }
 }
 
 try {
   syncCorePackage()
-} catch (error) {
+}
+catch (error) {
   console.error('[sync-core-package] Failed to sync metadata:', error)
   process.exitCode = 1
 }

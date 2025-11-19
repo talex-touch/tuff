@@ -1,52 +1,36 @@
-<template>
-  <div
-    ref="dom"
-    v-wave
-    :data-route="props.route"
-    class="TouchMenuItem-Container fake-background"
-    flex
-    items-center
-    :class="{ active, disabled }"
-    @click="handleClick"
-  >
-    <slot>
-      <span :class="`${icon}`" class="TouchMenu-Tab-Icon"> </span>
-      <span class="TouchMenu-Tab-Name">{{ name }}</span>
-    </slot>
-  </div>
-</template>
-
 <script lang="ts" name="TouchMenuItem" setup>
-import { useRouter, useRoute } from 'vue-router'
 import { onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
   icon: {
     type: String,
-    required: true
+    required: true,
   },
   name: {
     type: String,
-    required: true
+    required: true,
   },
   route: {
     type: String,
-    required: true
+    required: true,
   },
   disabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   doActive: {
     type: Function,
     default: (route, $route) => {
-      if (!$route) return false
+      if (!$route)
+        return false
       // 精确匹配路由路径
-      if ($route.path === route) return true
+      if ($route.path === route)
+        return true
       // 检查是否匹配路由记录
-      return $route.matched.some((record) => record.path === route)
-    }
-  }
+      return $route.matched.some(record => record.path === route)
+    },
+  },
 })
 const emit = defineEmits(['active'])
 
@@ -61,7 +45,8 @@ let removeGuard
 
 onMounted(() => {
   removeGuard = router.afterEach((to, _from) => {
-    if (!to.path.startsWith(props.route)) return
+    if (!to.path.startsWith(props.route))
+      return
 
     if (changePointer && dom.value) {
       ;(changePointer as any)(dom.value)
@@ -69,7 +54,7 @@ onMounted(() => {
   })
 
   if (dom.value) {
-    dom.value['$fixPointer'] = () => {
+    dom.value.$fixPointer = () => {
       if (changePointer && dom.value) {
         ;(changePointer as any)(dom.value)
       }
@@ -84,9 +69,11 @@ onUnmounted(() => {
 })
 
 function handleClick($event) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
 
-  if (props.route) router.push(props.route)
+  if (props.route)
+    router.push(props.route)
 
   if (changePointer && dom.value) {
     ;(changePointer as any)(dom.value)
@@ -94,6 +81,24 @@ function handleClick($event) {
   emit('active', $event)
 }
 </script>
+
+<template>
+  <div
+    ref="dom"
+    v-wave
+    :data-route="props.route"
+    class="TouchMenuItem-Container fake-background"
+    flex
+    items-center
+    :class="{ active, disabled }"
+    @click="handleClick"
+  >
+    <slot>
+      <span :class="`${icon}`" class="TouchMenu-Tab-Icon" />
+      <span class="TouchMenu-Tab-Name">{{ name }}</span>
+    </slot>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .TouchMenuItem-Container {

@@ -1,4 +1,4 @@
-import { TuffUpdate } from "."
+import type { TuffUpdate } from '.'
 
 /**
  * @interface ITuffGatherOptions

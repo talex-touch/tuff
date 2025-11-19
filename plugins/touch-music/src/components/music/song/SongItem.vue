@@ -1,31 +1,75 @@
+<script>
+</script>
+
+<script setup>
+import MusicWaving from '@comp/icon/MusicWaving.vue'
+import Singers from '@comp/music/song/Singers.vue'
+import DayJS from 'dayjs'
+import { onMounted, ref } from 'vue'
+
+const props = defineProps({
+  song: {
+    type: Object,
+  },
+  order: {
+    type: Number,
+  },
+  shrink: {
+    type: Boolean,
+  },
+  active: {
+    type: Boolean,
+  },
+  playing: {
+    type: Boolean,
+  },
+  simple: {
+    type: Boolean,
+  },
+  orderText: {
+    type: String,
+  },
+})
+
+export default {
+  name: 'SongItem',
+}
+
+const time = ref('00:00')
+
+onMounted(() => {
+  time.value = DayJS(props.song.dt).format('mm:ss')
+})
+</script>
+
 <template>
   <div v-if="song" class="SongItem-Container" :class="{ shrink, active, simple }">
     <div class="SongItem-Avatar">
       <MusicWaving :playing="playing" :active="active">
-        <img :src="`${song.al.picUrl}?param=48y48`" :alt="song.name" />
+        <img :src="`${song.al.picUrl}?param=48y48`" :alt="song.name">
       </MusicWaving>
     </div>
     <div class="SongItem-Info">
       <div class="SongItem-Info-Name">
         {{ song.name }}
-        <span class="SongItem-Tag" style="--tag-color: #07a3f6dd" v-if="song.mv" v-text="`MV`" />
+        <span v-if="song.mv" class="SongItem-Tag" style="--tag-color: #07a3f6dd" v-text="`MV`" />
 
-        <span class="SongItem-Tag" style="--tag-color: var(--el-color-danger-light-3)" v-if="song.fee === 1" v-text="`VIP`" />
-        <span class="SongItem-Tag" style="--tag-color: #212121ee" v-if="song.hr" v-text="`Hi-Res`" />
-        <span class="SongItem-Tag" style="--tag-color: #2c2f2fcc" v-else-if="song.sq" v-text="`SQ`" />
+        <span v-if="song.fee === 1" class="SongItem-Tag" style="--tag-color: var(--el-color-danger-light-3)" v-text="`VIP`" />
+        <span v-if="song.hr" class="SongItem-Tag" style="--tag-color: #212121ee" v-text="`Hi-Res`" />
+        <span v-else-if="song.sq" class="SongItem-Tag" style="--tag-color: #2c2f2fcc" v-text="`SQ`" />
 
-        <span class="SongItem-Tag" style="--tag-color: #dd001bcc" v-if="song.pop > 80" v-text="`爆`" />
-        <span class="SongItem-Tag" style="--tag-color: #fa2475cc" v-else-if="song.pop > 50" v-text="`火`" />
+        <span v-if="song.pop > 80" class="SongItem-Tag" style="--tag-color: #dd001bcc" v-text="`爆`" />
+        <span v-else-if="song.pop > 50" class="SongItem-Tag" style="--tag-color: #fa2475cc" v-text="`火`" />
 
-        <span class="SongItem-Tag" style="--tag-color: #59b359" v-if="song.originCoverType === 1" v-text="`原唱`" />
+        <span v-if="song.originCoverType === 1" class="SongItem-Tag" style="--tag-color: #59b359" v-text="`原唱`" />
       </div>
       <div class="SongItem-Info-Artist">
         <Singers :singers="song.ar" />
       </div>
     </div>
-<!--    <div v-if="!simple" class="SongItem-Album">-->
-<!--        {{ song.al.name }}-->
-<!--    </div>-->
+    <!--    <div v-if="!simple" class="SongItem-Album"> -->
+    <!--        {{ song.al.name }} -->
+    <!--    </div> -->
     <div class="SongItem-Suffix">
       <span :style="`${order ? '' : 'font-size: 16px'}`" class="SongItem-Time">{{ time }}</span>
       <span v-if="order && order < 10" class="SongItem-Order">NO.{{ order }}</span>
@@ -33,49 +77,6 @@
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  name: "SongItem"
-}
-</script>
-
-<script setup>
-import { ref, watch, onMounted, onUnmounted, reactive, watchEffect } from 'vue'
-import DayJS from 'dayjs'
-import MusicWaving from '@comp/icon/MusicWaving.vue'
-import Singers from '@comp/music/song/Singers.vue'
-
-const props = defineProps({
-  song: {
-    type: Object
-  },
-  order: {
-    type: Number
-  },
-  shrink: {
-    type: Boolean
-  },
-  active: {
-    type: Boolean
-  },
-  playing: {
-    type: Boolean
-  },
-  simple: {
-    type: Boolean
-  },
-  orderText: {
-    type: String
-  }
-})
-
-const time = ref("00:00")
-
-onMounted(() => {
-  time.value = DayJS( props.song.dt ).format("mm:ss")
-})
-</script>
 
 <style lang="scss" scoped>
 .SongItem-Container {

@@ -1,7 +1,28 @@
+<script lang="ts" name="FlatNavBar" setup>
+/**
+ * Flat Navigation Bar Component
+ *
+ * This component provides a navigation bar for the flat layout.
+ * It includes main navigation items and dynamically loaded plugin items.
+ *
+ * Features:
+ * - Main navigation items (Dashboard, Market, Plugin, Application, Style, Setting)
+ */
+import { useI18n } from 'vue-i18n'
+import TouchMenu from '~/components/menu/TouchMenu.vue'
+
+import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
+import { appSetting } from '~/modules/channel/storage'
+
+const { t } = useI18n()
+</script>
+
 <template>
   <ul class="FlatNavBar-Home">
     <TouchMenu>
-      <p class="FlatNavBar-Title">{{ t('flatNavBar.main') }}</p>
+      <p class="FlatNavBar-Title">
+        {{ t('flatNavBar.main') }}
+      </p>
       <TouchMenuItem route="/home" :name="t('flatNavBar.dashboard')" icon="i-ri-home-3-line" />
       <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
       <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
@@ -22,25 +43,6 @@
     </TouchMenu>
   </ul>
 </template>
-
-<script lang="ts" name="FlatNavBar" setup>
-/**
- * Flat Navigation Bar Component
- *
- * This component provides a navigation bar for the flat layout.
- * It includes main navigation items and dynamically loaded plugin items.
- *
- * Features:
- * - Main navigation items (Dashboard, Market, Plugin, Application, Style, Setting)
- */
-import { useI18n } from 'vue-i18n'
-import { appSetting } from '~/modules/channel/storage'
-
-import TouchMenu from '~/components/menu/TouchMenu.vue'
-import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
-
-const { t } = useI18n()
-</script>
 
 <style lang="scss" scoped>
 /**

@@ -42,63 +42,65 @@
  * };
  * ```
  */
+import type { ITuffIcon } from '../../types/icon'
+
 export interface TuffItem {
   /**
    * 唯一标识符
    * @description 唯一标识符，必须由创建者提供
    * @required
    */
-  id: string;
+  id: string
 
   /**
    * 数据来源信息
    * @description 定义项目的来源，用于权限控制、缓存策略和安全隔离
    * @required
    */
-  source: TuffSource;
+  source: TuffSource
 
   /**
    * 项目类型分类
    * @description 影响展示方式和处理逻辑，系统会根据类型提供默认图标和行为
    */
-  kind?: TuffItemKind;
+  kind?: TuffItemKind
 
   /**
    * 渲染配置
    * @description 控制项目的视觉展示方式
    * @required
    */
-  render: TuffRender;
+  render: TuffRender
 
   /**
    * 图标定义
    * @description 项目的视觉标识，会覆盖 render.basic.icon
    */
-  icon?: TuffIcon;
+  icon?: TuffIcon
 
   /**
    * 交互行为定义
    * @description 定义项目支持的操作和交互方式
    */
-  actions?: TuffAction[];
+  actions?: TuffAction[]
 
   /**
    * 匹配与评分信息
    * @description 用于搜索结果排序和推荐算法
    */
-  scoring?: TuffScoring;
+  scoring?: TuffScoring
 
   /**
    * 扩展元数据
    * @description 携带额外的项目相关信息
    */
-  meta?: TuffMeta;
+  meta?: TuffMeta
 
   /**
    * 上下文信息
    * @description 用于 AI 推荐和关联分析的上下文数据
    */
-  context?: TuffContext;
+  context?: TuffContext
 }
 
 // ==================== 数据来源定义 ====================
@@ -116,32 +118,32 @@ export interface TuffSource {
    * @description 定义数据的基本来源类别
    * @required
    */
-  type: TuffSourceType;
+  type: TuffSourceType
 
   /**
    * 来源标识符
    * @description 如插件ID、模块名等，用于唯一标识来源
    * @required
    */
-  id: string;
+  id: string
 
   /**
    * 来源名称
    * @description 用于用户界面展示的友好名称
    */
-  name?: string;
+  name?: string
 
   /**
    * 来源版本
    * @description 数据提供者的版本信息，用于兼容性检查
    */
-  version?: string;
+  version?: string
 
   /**
    * 权限级别
    * @description 定义该来源的信任级别和权限范围
    */
-  permission?: TuffPermissionLevel;
+  permission?: TuffPermissionLevel
 }
 
 /**
@@ -150,17 +152,17 @@ export interface TuffSource {
  * @description
  * 定义数据的基本来源类别，系统据此应用不同的安全策略和处理逻辑
  */
-export type TuffSourceType =
-  | 'system'        // 系统内置，最高信任级别
-  | 'plugin'        // 本地插件，受插件权限控制
-  | 'remote'        // 远程服务，需网络访问权限
-  | 'ai'            // AI 推荐，基于机器学习生成
-  | 'history'       // 历史记录，基于用户过往行为
-  | 'notification'  // 系统通知，来自系统事件
-  | 'workflow'      // 工作流，用户自定义流程
-  | 'file'         // 文件系统，本地文件
-  | 'application'  // 应用程序，可启动的软件
-  | 'service';      // 系统服务，后台运行的程序
+export type TuffSourceType
+  = | 'system' // 系统内置，最高信任级别
+    | 'plugin' // 本地插件，受插件权限控制
+    | 'remote' // 远程服务，需网络访问权限
+    | 'ai' // AI 推荐，基于机器学习生成
+    | 'history' // 历史记录，基于用户过往行为
+    | 'notification' // 系统通知，来自系统事件
+    | 'workflow' // 工作流，用户自定义流程
+    | 'file' // 文件系统，本地文件
+    | 'application' // 应用程序，可启动的软件
+    | 'service' // 系统服务，后台运行的程序
 
 /**
  * 权限级别
@@ -168,11 +170,11 @@ export type TuffSourceType =
  * @description
  * 定义数据来源的信任级别和权限范围，影响允许执行的操作
  */
-export type TuffPermissionLevel =
-  | 'safe'      // 安全级别，仅允许基本展示和无害操作
-  | 'trusted'   // 信任级别，允许访问用户数据但有限制
-  | 'elevated'  // 提升级别，允许更广泛的系统访问
-  | 'system';   // 系统级别，完全访问权限
+export type TuffPermissionLevel
+  = | 'safe' // 安全级别，仅允许基本展示和无害操作
+    | 'trusted' // 信任级别，允许访问用户数据但有限制
+    | 'elevated' // 提升级别，允许更广泛的系统访问
+    | 'system' // 系统级别，完全访问权限
 
 // ==================== 项目类型分类 ====================
 
@@ -183,38 +185,38 @@ export type TuffPermissionLevel =
  * 定义项目的语义类型，系统据此决定默认图标、行为、分组等。
  * 支持自定义扩展，可通过字符串字面量类型添加新的类型。
  */
-export type TuffItemKind =
+export type TuffItemKind
   // 应用与程序
-  | 'app'              // 应用程序，可启动的软件
-  | 'command'          // 系统命令，终端或系统级指令
-  | 'script'           // 脚本文件，可执行的代码文件
-  | 'workflow'         // 工作流，一系列自动化步骤
-  | 'preview'          // 直接预览卡片
+  = | 'app' // 应用程序，可启动的软件
+    | 'command' // 系统命令，终端或系统级指令
+    | 'script' // 脚本文件，可执行的代码文件
+    | 'workflow' // 工作流，一系列自动化步骤
+    | 'preview' // 直接预览卡片
 
   // 文件与资源
-  | 'file'             // 普通文件，未指定具体类型的文件
-  | 'folder'           // 文件夹，包含其他文件的目录
-  | 'document'         // 文档类文件，如文本、表格、演示文稿等
-  | 'image'            // 图片文件，各种图像格式
-  | 'video'            // 视频文件，影片和动态图像
-  | 'audio'            // 音频文件，声音和音乐
+    | 'file' // 普通文件，未指定具体类型的文件
+    | 'folder' // 文件夹，包含其他文件的目录
+    | 'document' // 文档类文件，如文本、表格、演示文稿等
+    | 'image' // 图片文件，各种图像格式
+    | 'video' // 视频文件，影片和动态图像
+    | 'audio' // 音频文件，声音和音乐
 
   // 网络与链接
-  | 'url'              // 网页链接，可访问的网络地址
-  | 'bookmark'         // 书签，保存的网页引用
-  | 'search-result'    // 搜索结果，来自搜索引擎
+    | 'url' // 网页链接，可访问的网络地址
+    | 'bookmark' // 书签，保存的网页引用
+    | 'search-result' // 搜索结果，来自搜索引擎
 
   // 交互与功能
-  | 'action'           // 功能操作，触发特定行为
-  | 'setting'          // 设置项，配置选项
-  | 'feature'          // 系统功能，内置能力
+    | 'action' // 功能操作，触发特定行为
+    | 'setting' // 设置项，配置选项
+    | 'feature' // 系统功能，内置能力
 
   // 通信与人员
-  | 'contact'          // 联系人，人员信息
-  | 'notification'     // 通知消息，系统或应用通知
+    | 'contact' // 联系人，人员信息
+    | 'notification' // 通知消息，系统或应用通知
 
   // 扩展支持
-  | (string & {});     // 允许自定义扩展类型
+    | (string & {}) // 允许自定义扩展类型
 
 // ==================== 渲染系统 ====================
 
@@ -231,49 +233,49 @@ export interface TuffRender {
    * @description 决定使用哪种渲染策略
    * @required
    */
-  mode: TuffRenderMode;
+  mode: TuffRenderMode
 
   /**
    * 基础渲染信息
    * @description mode='default' 时使用的基本渲染数据
    */
-  basic?: TuffBasicRender;
+  basic?: TuffBasicRender
 
   /**
    * 自定义渲染内容
    * @description mode='custom' 时使用的自定义渲染配置
    */
-  custom?: TuffCustomRender;
+  custom?: TuffCustomRender
 
   /**
    * 布局配置
    * @description 控制项目的布局方式和尺寸
    */
-  layout?: TuffLayout;
+  layout?: TuffLayout
 
   /**
    * 预览配置
    * @description 定义悬停或点击时的预览内容
    */
-  preview?: TuffPreview;
+  preview?: TuffPreview
 
   /**
    * 样式类名
    * @description 应用于渲染容器的 CSS 类名
    */
-  className?: string;
+  className?: string
 
   /**
    * 内联样式
    * @description 应用于渲染容器的内联样式对象
    */
-  style?: Record<string, string>;
+  style?: Record<string, string>
 
   /**
    * 补全
    * @description 用于补全的文本
    */
-  completion?: string;
+  completion?: string
 }
 
 /**
@@ -282,11 +284,11 @@ export interface TuffRender {
  * @description
  * 定义项目的基本渲染策略，从简单到复杂
  */
-export type TuffRenderMode =
-  | 'default'      // 默认渲染（title + desc + icon）
-  | 'rich'         // 富文本渲染，支持格式化文本
-  | 'card'         // 卡片式渲染，适合图文混排
-  | 'custom';      // 完全自定义，最大灵活性
+export type TuffRenderMode
+  = | 'default' // 默认渲染（title + desc + icon）
+    | 'rich' // 富文本渲染，支持格式化文本
+    | 'card' // 卡片式渲染，适合图文混排
+    | 'custom' // 完全自定义，最大灵活性
 
 /**
  * 基础渲染信息
@@ -301,37 +303,37 @@ export interface TuffBasicRender {
    * @description 项目的主要标识文本
    * @required
    */
-  title: string;
+  title: string
 
   /**
    * 副标题/描述
    * @description 对主标题的补充说明，通常显示在主标题下方
    */
-  subtitle?: string;
+  subtitle?: string
 
   /**
    * 详细描述
    * @description 更详细的项目说明，可能在悬停或展开时显示
    */
-  description?: string;
+  description?: string
 
   /**
    * 图标定义
    * @description 项目的视觉标识
    */
-  icon?: TuffIcon;
+  icon?: TuffIcon
 
   /**
    * 标签列表
    * @description 附加在项目上的标签，用于分类和筛选
    */
-  tags?: TuffTag[];
+  tags?: TuffTag[]
 
   /**
    * 右侧信息
    * @description 显示在项目右侧的辅助信息，如快捷键、时间等
    */
-  accessory?: string;
+  accessory?: string
 
 }
 
@@ -348,35 +350,33 @@ export interface TuffCustomRender {
    * @description 指定使用哪种技术进行渲染
    * @required
    */
-  type: 'html' | 'vue' | 'react' | 'markdown';
+  type: 'html' | 'vue' | 'react' | 'markdown'
 
   /**
    * 渲染内容
    * @description 根据type不同，可能是HTML字符串、组件名或Markdown文本
    * @required
    */
-  content: string;
+  content: string
 
   /**
    * 渲染数据
    * @description 传递给渲染器的数据对象
    */
-  data?: Record<string, any>;
+  data?: Record<string, any>
 
   /**
    * 样式资源
    * @description 需要加载的CSS资源URL列表
    */
-  styles?: string[];
+  styles?: string[]
 
   /**
    * 脚本资源
    * @description 需要加载的JavaScript资源URL列表
    */
-  scripts?: string[];
+  scripts?: string[]
 }
-
-import type { ITuffIcon } from '../../types/icon'
 
 /**
  * Icon definition
@@ -398,19 +398,19 @@ export interface TuffTag {
    * @description 标签显示的文本内容
    * @required
    */
-  text: string;
+  text: string
 
   /**
    * 标签颜色
    * @description 标签的背景或边框颜色，可使用预设值或自定义色值
    */
-  color?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | string;
+  color?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | string
 
   /**
    * 标签样式
    * @description 标签的视觉风格
    */
-  variant?: 'filled' | 'outlined' | 'ghost';
+  variant?: 'filled' | 'outlined' | 'ghost'
 }
 
 /**
@@ -425,7 +425,7 @@ export interface TuffLayout {
    * @description 决定项目的基本布局模式
    * @required
    */
-  display: 'list' | 'card' | 'grid' | 'compact' | 'detailed';
+  display: 'list' | 'card' | 'grid' | 'compact' | 'detailed'
 
   /**
    * 网格配置
@@ -433,22 +433,22 @@ export interface TuffLayout {
    */
   grid?: {
     /** 列数 */
-    columns?: number;
+    columns?: number
     /** 间距 */
-    gap?: number;
-  };
+    gap?: number
+  }
 
   /**
    * 尺寸配置
    * @description 控制项目的整体大小
    */
-  size?: 'small' | 'medium' | 'large';
+  size?: 'small' | 'medium' | 'large'
 
   /**
    * 对齐方式
    * @description 控制内容的水平对齐方式
    */
-  align?: 'left' | 'center' | 'right';
+  align?: 'left' | 'center' | 'right'
 }
 
 /**
@@ -464,43 +464,43 @@ export interface TuffPreview {
    * @description 决定预览的展示方式
    * @required
    */
-  type: 'tooltip' | 'panel' | 'modal';
+  type: 'tooltip' | 'panel' | 'modal'
 
   /**
    * 预览标题
    * @description 预览内容的标题
    */
-  title?: string;
+  title?: string
 
   /**
    * 预览内容
    * @description 预览的主体内容，通常是文本
    */
-  content?: string;
+  content?: string
 
   /**
    * 预览图片
    * @description 预览中显示的图片URL
    */
-  image?: string;
+  image?: string
 
   /**
    * 自定义预览组件
    * @description 用于复杂预览内容的自定义渲染配置
    */
-  component?: TuffCustomRender;
+  component?: TuffCustomRender
 
   /**
    * 懒加载配置
    * @description 是否延迟加载预览内容，直到需要显示时
    */
-  lazy?: boolean;
+  lazy?: boolean
 
   /**
    * 加载函数
    * @description 用于异步加载预览内容的函数
    */
-  loader?: () => Promise<TuffPreview>;
+  loader?: () => Promise<TuffPreview>
 }
 
 // ==================== 交互行为系统 ====================
@@ -518,56 +518,56 @@ export interface TuffAction {
    * @description 用于识别和调用特定行为
    * @required
    */
-  id: string;
+  id: string
 
   /**
    * 行为类型
    * @description 指定行为的基本类别，影响默认图标和处理逻辑
    * @required
    */
-  type: TuffActionType;
+  type: TuffActionType
 
   /**
    * 行为标签
    * @description 用于在界面中展示的行为名称
    */
-  label?: string;
+  label?: string
 
   /**
    * 行为描述
    * @description 对行为的详细说明，可能在悬停时显示
    */
-  description?: string;
+  description?: string
 
   /**
    * 行为图标
    * @description 表示该行为的图标
    */
-  icon?: TuffIcon;
+  icon?: TuffIcon
 
   /**
    * 快捷键
    * @description 触发该行为的键盘快捷键
    */
-  shortcut?: string;
+  shortcut?: string
 
   /**
    * 行为参数
    * @description 执行行为时需要的附加数据
    */
-  payload?: any;
+  payload?: any
 
   /**
    * 是否为主要行为
    * @description 标记为主要行为时，可能会获得视觉强调或作为默认操作
    */
-  primary?: boolean;
+  primary?: boolean
 
   /**
    * 行为条件
    * @description 定义该行为何时可用的条件
    */
-  condition?: TuffCondition;
+  condition?: TuffCondition
 
   /**
    * 确认配置
@@ -575,12 +575,12 @@ export interface TuffAction {
    */
   confirm?: {
     /** 确认对话框标题 */
-    title: string;
+    title: string
     /** 确认对话框内容 */
-    message: string;
+    message: string
     /** 是否为危险操作，可能会有特殊样式 */
-    danger?: boolean;
-  };
+    danger?: boolean
+  }
 }
 
 /**
@@ -589,16 +589,16 @@ export interface TuffAction {
  * @description
  * 定义行为的基本类别，系统会根据类型提供默认图标和处理逻辑
  */
-export type TuffActionType =
-  | 'execute'       // 执行命令/程序，运行应用或脚本
-  | 'open'          // 打开文件/链接，访问资源
-  | 'navigate'      // 导航跳转，切换视图或页面
-  | 'copy'          // 复制内容，将信息复制到剪贴板
-  | 'preview'       // 预览内容，查看详情但不完全打开
-  | 'edit'          // 编辑，修改内容
-  | 'delete'        // 删除，移除项目
-  | 'share'         // 分享，发送给他人
-  | 'custom';       // 自定义行为，需要特殊处理
+export type TuffActionType
+  = | 'execute' // 执行命令/程序，运行应用或脚本
+    | 'open' // 打开文件/链接，访问资源
+    | 'navigate' // 导航跳转，切换视图或页面
+    | 'copy' // 复制内容，将信息复制到剪贴板
+    | 'preview' // 预览内容，查看详情但不完全打开
+    | 'edit' // 编辑，修改内容
+    | 'delete' // 删除，移除项目
+    | 'share' // 分享，发送给他人
+    | 'custom' // 自定义行为，需要特殊处理
 
 /**
  * 行为执行条件
@@ -612,25 +612,25 @@ export interface TuffCondition {
    * 平台限制
    * @description 指定行为支持的操作系统平台
    */
-  platform?: ('win32' | 'darwin' | 'linux')[];
+  platform?: ('win32' | 'darwin' | 'linux')[]
 
   /**
    * 权限要求
    * @description 执行行为所需的最低权限级别
    */
-  permission?: TuffPermissionLevel;
+  permission?: TuffPermissionLevel
 
   /**
    * 依赖检查
    * @description 行为依赖的外部组件或服务
    */
-  dependencies?: string[];
+  dependencies?: string[]
 
   /**
    * 自定义条件函数
    * @description 用于复杂条件判断的自定义函数
    */
-  check?: () => boolean | Promise<boolean>;
+  check?: () => boolean | Promise<boolean>
 }
 
 // ==================== 评分与排序系统 ====================
@@ -647,43 +647,43 @@ export interface TuffScoring {
    * 基础得分 (0-1)
    * @description 项目的基础重要性分数
    */
-  base?: number;
+  base?: number
 
   /**
    * 匹配得分 (0-1)
    * @description 与搜索查询的匹配程度
    */
-  match?: number;
+  match?: number
 
   /**
    * 使用频率得分 (0-1)
    * @description 基于用户使用频率的分数
    */
-  frequency?: number;
+  frequency?: number
 
   /**
    * 时间相关性得分 (0-1)
    * @description 基于时间因素的相关性分数
    */
-  recency?: number;
+  recency?: number
 
   /**
    * AI 推荐得分 (0-1)
    * @description 基于AI分析的推荐强度
    */
-  ai?: number;
+  ai?: number
 
   /**
    * 最终综合得分
    * @description 综合各项因素计算的最终分数
    */
-  final?: number;
+  final?: number
 
   /**
    * 排序权重
    * @description 直接影响排序的权重值，越小越靠前
    */
-  priority?: number;
+  priority?: number
 
   /**
    * 匹配详情
@@ -691,14 +691,14 @@ export interface TuffScoring {
    */
   match_details?: {
     /** 匹配类型 */
-    type: 'exact' | 'fuzzy' | 'semantic' | 'ai';
+    type: 'exact' | 'fuzzy' | 'semantic' | 'ai'
     /** 匹配的查询文本 */
-    query: string;
+    query: string
     /** 高亮显示的文本片段 */
-    highlights?: string[];
+    highlights?: string[]
     /** 匹配置信度 */
-    confidence?: number;
-  };
+    confidence?: number
+  }
 
   /**
    * 使用统计
@@ -706,12 +706,12 @@ export interface TuffScoring {
    */
   usage_stats?: {
     /** 使用次数 */
-    count: number;
+    count: number
     /** 最后使用时间 */
-    last_used?: Date;
+    last_used?: Date
     /** 平均评分 */
-    avg_rating?: number;
-  };
+    avg_rating?: number
+  }
 }
 
 // ==================== 上下文信息 ====================
@@ -728,7 +728,7 @@ export interface TuffContext {
    * 会话ID
    * @description 标识当前用户会话
    */
-  session?: string;
+  session?: string
 
   /**
    * 用户当前状态
@@ -736,14 +736,14 @@ export interface TuffContext {
    */
   user_state?: {
     /** 当前活动的应用 */
-    active_app?: string;
+    active_app?: string
     /** 当前打开的文件夹 */
-    current_folder?: string;
+    current_folder?: string
     /** 最近访问的文件列表 */
-    recent_files?: string[];
+    recent_files?: string[]
     /** 当前工作的项目 */
-    current_project?: string;
-  };
+    current_project?: string
+  }
 
   /**
    * 时间上下文
@@ -751,16 +751,16 @@ export interface TuffContext {
    */
   temporal?: {
     /** 创建时间 */
-    created_at?: Date;
+    created_at?: Date
     /** 修改时间 */
-    modified_at?: Date;
+    modified_at?: Date
     /** 访问时间 */
-    accessed_at?: Date;
+    accessed_at?: Date
     /** 一天中的时段 */
-    time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night';
+    time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night'
     /** 星期几 */
-    day_of_week?: string;
-  };
+    day_of_week?: string
+  }
 
   /**
    * 地理位置上下文
@@ -768,12 +768,12 @@ export interface TuffContext {
    */
   location?: {
     /** 国家 */
-    country?: string;
+    country?: string
     /** 城市 */
-    city?: string;
+    city?: string
     /** 时区 */
-    timezone?: string;
-  };
+    timezone?: string
+  }
 
   /**
    * 工作上下文
@@ -781,26 +781,26 @@ export interface TuffContext {
    */
   work_context?: {
     /** 当前任务 */
-    current_task?: string;
+    current_task?: string
     /** 所属项目 */
-    project?: string;
+    project?: string
     /** 所属团队 */
-    team?: string;
+    team?: string
     /** 截止日期 */
-    deadline?: Date;
-  };
+    deadline?: Date
+  }
 
   /**
    * 关联项目
    * @description 与当前项目相关的其他项目ID列表
    */
-  related_items?: string[];
+  related_items?: string[]
 
   /**
    * 标签
    * @description 用于分类和组织的标签列表
    */
-  tags?: string[];
+  tags?: string[]
 }
 
 // ==================== 扩展元数据 ====================
@@ -817,7 +817,7 @@ export interface TuffMeta {
    * Legacy icon identifier used by renderer fallbacks.
    * @description Allows providers to pass through icon class names without building a full TuffIcon.
    */
-  icon?: string;
+  icon?: string
   /**
    * For plugin items, this holds the name of the plugin that generated the item.
    * @description The name of the plugin.
@@ -844,19 +844,19 @@ export interface TuffMeta {
    * This is used to distinguish simple actions (like 'copy') from feature activations.
    * @description The default action type.
    */
-  defaultAction?: string;
+  defaultAction?: string
 
   /**
    * Priority of the item for sorting in search results
    * Higher numbers have higher priority (displayed first)
    * @description Priority value for search result ordering
    */
-  priority?: number;
+  priority?: number
   /**
    * 原始数据
    * @description 项目的原始数据对象，用于特殊处理
    */
-  raw?: any;
+  raw?: any
 
   /**
    * 文件信息
@@ -864,20 +864,20 @@ export interface TuffMeta {
    */
   file?: {
     /** 文件路径 */
-    path: string;
+    path: string
     /** 文件大小（字节） */
-    size?: number;
+    size?: number
     /** MIME类型 */
-    mime_type?: string;
+    mime_type?: string
     /** 文件权限 */
-    permissions?: string;
+    permissions?: string
     /** 创建时间 */
-    created_at?: string;
+    created_at?: string
     /** 修改时间 */
-    modified_at?: string;
+    modified_at?: string
     /** 文件扩展名（不带点） */
-    extension?: string;
-  };
+    extension?: string
+  }
 
   /**
    * 网络信息
@@ -885,18 +885,18 @@ export interface TuffMeta {
    */
   web?: {
     /** 完整URL */
-    url: string;
+    url: string
     /** 域名 */
-    domain?: string;
+    domain?: string
     /** 页面标题 */
-    title?: string;
+    title?: string
     /** 页面描述 */
-    description?: string;
+    description?: string
     /** 网站图标 */
-    favicon?: string;
+    favicon?: string
     /** 页面截图 */
-    screenshot?: string;
-  };
+    screenshot?: string
+  }
 
   /**
    * 应用信息
@@ -904,16 +904,16 @@ export interface TuffMeta {
    */
   app?: {
     /** 应用包标识符 */
-    bundle_id?: string;
+    bundle_id?: string
     /** 应用版本 */
-    version?: string;
+    version?: string
     /** 应用路径 */
-    path?: string;
+    path?: string
     /** 应用图标 */
-    icon?: string;
+    icon?: string
     /** 应用类别 */
-    category?: string;
-  };
+    category?: string
+  }
 
   /**
    * 使用统计信息
@@ -921,10 +921,10 @@ export interface TuffMeta {
    */
   usage?: {
     /** 被触发的次数 */
-    clickCount?: number;
+    clickCount?: number
     /** 最近一次使用时间（ISO 字符串） */
-    lastUsed?: string;
-  };
+    lastUsed?: string
+  }
 
   /**
    * 组合键使用统计信息（基于 source + id）
@@ -932,18 +932,18 @@ export interface TuffMeta {
    */
   usageStats?: {
     /** 执行次数 */
-    executeCount: number;
+    executeCount: number
     /** 搜索次数 */
-    searchCount: number;
+    searchCount: number
     /** 取消/失败次数 */
-    cancelCount?: number;
+    cancelCount?: number
     /** 最后执行时间（ISO 字符串） */
-    lastExecuted: string | null;
+    lastExecuted: string | null
     /** 最后搜索时间（ISO 字符串） */
-    lastSearched: string | null;
+    lastSearched: string | null
     /** 最后取消时间（ISO 字符串） */
-    lastCancelled?: string | null;
-  };
+    lastCancelled?: string | null
+  }
 
   /**
    * 查询完成统计信息
@@ -951,12 +951,12 @@ export interface TuffMeta {
    */
   completion?: {
     /** 完成次数 */
-    count: number;
+    count: number
     /** 最后完成时间（ISO 字符串） */
-    lastCompleted: string;
+    lastCompleted: string
     /** 完成得分 */
-    score: number;
-  };
+    score: number
+  }
 
   /**
    * 预览相关元数据
@@ -964,20 +964,20 @@ export interface TuffMeta {
    */
   preview?: {
     /** 能力ID */
-    abilityId?: string;
+    abilityId?: string
     /** 置信度 */
-    confidence?: number;
+    confidence?: number
     /** 表达式 */
-    expression?: string;
+    expression?: string
     /** 预览负载数据 */
-    payload?: any;
-  };
+    payload?: any
+  }
 
   /**
    * 插件扩展字段
    * @description 供插件存储自定义数据的字段
    */
-  extension?: Record<string, any>;
+  extension?: Record<string, any>
 
   /**
    * 缓存配置
@@ -985,12 +985,12 @@ export interface TuffMeta {
    */
   cache?: {
     /** 缓存生存时间（秒） */
-    ttl?: number;
+    ttl?: number
     /** 缓存键 */
-    key?: string;
+    key?: string
     /** 缓存策略 */
-    strategy?: 'memory' | 'disk' | 'remote';
-  };
+    strategy?: 'memory' | 'disk' | 'remote'
+  }
 
   /**
    * 安全信息
@@ -998,12 +998,12 @@ export interface TuffMeta {
    */
   security?: {
     /** 是否可信 */
-    trusted?: boolean;
+    trusted?: boolean
     /** 数字签名 */
-    signature?: string;
+    signature?: string
     /** 所需权限列表 */
-    permissions?: string[];
-  };
+    permissions?: string[]
+  }
 
   /**
    * TuffIntelligence
@@ -1026,34 +1026,34 @@ export interface TuffDisplayItem {
    * @description 项目的唯一标识符
    * @required
    */
-  id: string;
+  id: string
 
   /**
    * 渲染信息
    * @description 控制项目的视觉呈现
    * @required
    */
-  render: TuffRender;
+  render: TuffRender
 
   /**
    * 可用操作
    * @description 项目支持的交互操作列表
    * @required
    */
-  actions: TuffDisplayAction[];
+  actions: TuffDisplayAction[]
 
   /**
    * 评分信息
    * @description 用于排序和推荐的评分数据
    */
-  scoring?: TuffScoring;
+  scoring?: TuffScoring
 
   /**
    * 原始数据引用
    * @description 对原始TuffItem的引用
    * @required
    */
-  raw: TuffItem;
+  raw: TuffItem
 
   /**
    * 执行主要操作
@@ -1061,14 +1061,14 @@ export interface TuffDisplayItem {
    * @returns 操作执行的Promise
    * @required
    */
-  execute(): Promise<void>;
+  execute: () => Promise<void>
 
   /**
    * 获取预览内容
    * @description 获取项目的预览内容
    * @returns 预览内容的Promise
    */
-  getPreview?(): Promise<TuffPreview>;
+  getPreview?: () => Promise<TuffPreview>
 }
 
 /**
@@ -1086,7 +1086,7 @@ export interface TuffDisplayAction extends Omit<TuffAction, 'payload'> {
    * @returns 操作执行结果
    * @required
    */
-  execute(context?: any): Promise<any>;
+  execute: (context?: any) => Promise<any>
 
   /**
    * 检查是否可用
@@ -1094,7 +1094,7 @@ export interface TuffDisplayAction extends Omit<TuffAction, 'payload'> {
    * @returns 是否可用的Promise
    * @required
    */
-  isAvailable(): Promise<boolean>;
+  isAvailable: () => Promise<boolean>
 }
 
 // ==================== 工具类型 ====================
@@ -1114,7 +1114,7 @@ export enum TuffInputType {
   /** 文件输入（文件路径数组） */
   Files = 'files',
   /** 富文本输入（HTML 格式） */
-  Html = 'html'
+  Html = 'html',
 }
 
 /**
@@ -1130,7 +1130,7 @@ export interface TuffQueryInput {
    * @description 定义输入数据的类型
    * @required
    */
-  type: TuffInputType;
+  type: TuffInputType
 
   /**
    * 输入内容
@@ -1141,25 +1141,25 @@ export interface TuffQueryInput {
    * - html: HTML 格式的富文本
    * @required
    */
-  content: string;
+  content: string
 
   /**
    * 原始内容
    * @description 可选的原始格式内容，如富文本的 HTML 源码
    */
-  rawContent?: string;
+  rawContent?: string
 
   /**
    * 缩略图
    * @description 图像的缩略图 data URL（用于预览）
    */
-  thumbnail?: string;
+  thumbnail?: string
 
   /**
    * 元数据
    * @description 附加的元数据信息
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any>
 }
 
 /**
@@ -1182,13 +1182,13 @@ export interface TuffQuery {
    * @example
    * 用户输入 "translate" → text = "translate"
    */
-  text: string;
+  text: string
 
   /**
    * 查询类型
    * @description 指定查询的输入方式
    */
-  type?: 'text' | 'voice' | 'image';
+  type?: 'text' | 'voice' | 'image'
 
   /**
    * 多类型输入（附加数据）
@@ -1213,7 +1213,7 @@ export interface TuffQuery {
    *   text: "format"
    *   inputs: [{ type: 'html', content: 'plain text', rawContent: '<p>html</p>' }]
    */
-  inputs?: TuffQueryInput[];
+  inputs?: TuffQueryInput[]
 
   /**
    * 过滤条件
@@ -1221,18 +1221,18 @@ export interface TuffQuery {
    */
   filters?: {
     /** 限制结果类型 */
-    kinds?: TuffItemKind[];
+    kinds?: TuffItemKind[]
     /** 限制结果来源 */
-    sources?: string[];
+    sources?: string[]
     /** 限制结果时间范围 */
-    date_range?: [Date, Date];
-  };
+    date_range?: [Date, Date]
+  }
 
   /**
    * 排序方式
    * @description 结果的排序策略
    */
-  sort?: 'relevance' | 'date' | 'frequency' | 'name';
+  sort?: 'relevance' | 'date' | 'frequency' | 'name'
 
   /**
    * 分页信息
@@ -1240,16 +1240,16 @@ export interface TuffQuery {
    */
   pagination?: {
     /** 起始偏移量 */
-    offset: number;
+    offset: number
     /** 每页数量限制 */
-    limit: number;
-  };
+    limit: number
+  }
 
   /**
    * 上下文信息
    * @description 提供搜索的上下文数据
    */
-  context?: TuffContext;
+  context?: TuffContext
 }
 
 /**
@@ -1274,28 +1274,28 @@ export interface TuffSearchResult {
    * A unique identifier for this specific search operation.
    * This is crucial for the streaming model to associate updates with the correct search instance.
    */
-  sessionId?: string;
+  sessionId?: string
 
   /**
    * 结果项目
    * @description 匹配的TuffItem列表
    * @required
    */
-  items: TuffItem[];
+  items: TuffItem[]
 
   /**
    * 查询信息
    * @description 原始查询参数
    * @required
    */
-  query: TuffQuery;
+  query: TuffQuery
 
   /**
    * 搜索耗时
    * @description 搜索执行的毫秒数
    * @required
    */
-  duration: number;
+  duration: number
 
   /**
    * 来源统计
@@ -1304,27 +1304,27 @@ export interface TuffSearchResult {
    */
   sources: Array<{
     /** Provider's unique ID. */
-    providerId: string;
+    providerId: string
     /** Provider's display name. */
-    providerName: string;
+    providerName: string
     /** Search duration in milliseconds. */
-    duration: number;
+    duration: number
     /** Number of results returned. */
-    resultCount: number;
+    resultCount: number
     /** Status of the search operation. */
-    status: 'success' | 'timeout' | 'error';
-  }>;
+    status: 'success' | 'timeout' | 'error'
+  }>
 
   /**
    * AI 推荐
    * @description AI生成的搜索建议
    */
-  suggestions?: string[];
+  suggestions?: string[]
 
   /**
    * The provider(s) to activate after this search result.
    */
-  activate?: IProviderActivate[];
+  activate?: IProviderActivate[]
 
   /** Optional statistics about the sorting process. */
   sort_stats?: SortStat[]
@@ -1337,7 +1337,6 @@ export interface IProviderActivate {
   time?: number
   meta?: Record<string, any>
 }
-
 
 /**
  * Defines the interface for a sort middleware.
@@ -1353,7 +1352,7 @@ export interface ISortMiddleware {
    * @param signal - An AbortSignal to cancel the sorting operation.
    * @returns A sorted array of TuffItems.
    */
-  sort(items: TuffItem[], query: TuffQuery, signal: AbortSignal): TuffItem[]
+  sort: (items: TuffItem[], query: TuffQuery, signal: AbortSignal) => TuffItem[]
 }
 
 /**
@@ -1408,18 +1407,18 @@ export interface ISearchProvider<C> {
    * @returns A promise that resolves to a full TuffSearchResult object, allowing the provider
    * to influence the final result, including the next activation state.
    */
-  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult>
+  onSearch: (query: TuffQuery, signal: AbortSignal) => Promise<TuffSearchResult>
 
   /**
    * Optional method to handle activation.
    * Called when the provider is prioritized, e.g., via an activation keyword.
    */
-  onActivate?(): void
+  onActivate?: () => void
 
   /**
    * Optional method to handle deactivation.
    */
-  onDeactivate?(): void
+  onDeactivate?: () => void
 
   /**
    * Optional method to execute an item.
@@ -1427,13 +1426,13 @@ export interface ISearchProvider<C> {
    * @returns A promise that resolves to an activation object if the provider should be
    * activated, or `null` otherwise.
    */
-  onExecute?(args: IExecuteArgs): Promise<IProviderActivate | null>
+  onExecute?: (args: IExecuteArgs) => Promise<IProviderActivate | null>
 
   /**
    * Optional method to load provider.
    * @param context The context of the provider.
    */
-  onLoad?(context: C): Promise<void>
+  onLoad?: (context: C) => Promise<void>
 }
 
 // ==================== 插件接口预览 ====================
@@ -1453,18 +1452,18 @@ export interface TuffSearchProvider {
    */
   info: {
     /** 插件唯一标识 */
-    id: string;
+    id: string
     /** 插件名称 */
-    name: string;
+    name: string
     /** 插件版本 */
-    version: string;
+    version: string
     /** 插件描述 */
-    description: string;
+    description: string
     /** 插件作者 */
-    author: string;
+    author: string
     /** 插件图标 */
-    icon?: TuffIcon;
-  };
+    icon?: TuffIcon
+  }
 
   /**
    * 搜索能力配置
@@ -1477,36 +1476,36 @@ export interface TuffSearchProvider {
      * @description 插件能处理的输入类型
      * @required
      */
-    query_types: ('text' | 'voice' | 'image')[];
+    query_types: ('text' | 'voice' | 'image')[]
 
     /**
      * 支持的项目类型
      * @description 插件能提供的结果类型
      * @required
      */
-    item_kinds: TuffItemKind[];
+    item_kinds: TuffItemKind[]
 
     /**
      * 是否支持实时搜索
      * @description 是否支持输入时实时返回结果
      * @required
      */
-    realtime: boolean;
+    realtime: boolean
 
     /**
      * 是否支持 AI 增强
      * @description 是否使用AI技术增强搜索结果
      * @required
      */
-    ai_enhanced: boolean;
+    ai_enhanced: boolean
 
     /**
      * 权限要求
      * @description 插件需要的权限级别
      * @required
      */
-    permissions: TuffPermissionLevel;
-  };
+    permissions: TuffPermissionLevel
+  }
 
   /**
    * 搜索方法
@@ -1515,7 +1514,7 @@ export interface TuffSearchProvider {
    * @returns 搜索结果Promise
    * @required
    */
-  search(query: TuffQuery): Promise<TuffItem[]>;
+  search: (query: TuffQuery) => Promise<TuffItem[]>
 
   /**
    * 获取推荐项
@@ -1523,7 +1522,7 @@ export interface TuffSearchProvider {
    * @param context 上下文信息
    * @returns 推荐项目Promise
    */
-  getRecommendations?(context: TuffContext): Promise<TuffItem[]>;
+  getRecommendations?: (context: TuffContext) => Promise<TuffItem[]>
 
   /**
    * 执行操作
@@ -1533,19 +1532,19 @@ export interface TuffSearchProvider {
    * @returns 操作结果Promise
    * @required
    */
-  executeAction(action_id: string, payload: any): Promise<any>;
+  executeAction: (action_id: string, payload: any) => Promise<any>
 
   /**
    * 激活钩子
    * @description 插件被激活时调用
    * @returns 完成Promise
    */
-  onActivate?(): Promise<void>;
+  onActivate?: () => Promise<void>
 
   /**
    * 停用钩子
    * @description 插件被停用时调用
    * @returns 完成Promise
    */
-  onDeactivate?(): Promise<void>;
+  onDeactivate?: () => Promise<void>
 }

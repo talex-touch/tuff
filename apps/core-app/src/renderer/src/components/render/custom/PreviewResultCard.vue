@@ -1,7 +1,7 @@
 <script setup lang="ts" name="PreviewResultCard">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
   item: TuffItem
@@ -30,7 +30,8 @@ onBeforeUnmount(() => {
 })
 
 const resolvedPayload = computed<PreviewCardPayload | undefined>(() => {
-  if (props.payload) return props.payload
+  if (props.payload)
+    return props.payload
   const custom = props.item.render?.custom
   return custom?.data as PreviewCardPayload | undefined
 })
@@ -40,7 +41,7 @@ const chips = computed(() => resolvedPayload.value?.chips ?? [])
 const badges = computed(() => resolvedPayload.value?.badges ?? [])
 
 const detailRows = computed(() => {
-  const rows = sections.value.flatMap((section) => section.rows)
+  const rows = sections.value.flatMap(section => section.rows)
   return rows.slice(0, 4)
 })
 
@@ -72,7 +73,9 @@ const accentStyle = computed(() => {
     </div>
     <div class="card-body">
       <div class="primary">
-        <div class="primary-label">{{ resolvedPayload?.primaryLabel || '结果' }}</div>
+        <div class="primary-label">
+          {{ resolvedPayload?.primaryLabel || '结果' }}
+        </div>
         <div class="primary-value" :style="accentStyle">
           {{ resolvedPayload?.primaryValue || '--' }}
           <span v-if="resolvedPayload?.primaryUnit" class="primary-unit">

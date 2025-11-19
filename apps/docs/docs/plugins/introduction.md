@@ -136,19 +136,19 @@ The `preload.js` file allows you to add functionality to your plugin by accessin
 // preload.js
 
 // Example: Accessing plugin storage
-const pluginStorage = window.pluginAPI.storage;
+const pluginStorage = window.pluginAPI.storage
 
 // Example: Listening to application events
 window.pluginAPI.events.on('app-resumed', () => {
-  console.log('Application resumed');
-});
+  console.log('Application resumed')
+})
 
 // Example: Adding a custom function
 window.myPlugin = {
   greet: (name) => {
-    return `Hello, ${name}! Welcome to my plugin.`;
+    return `Hello, ${name}! Welcome to my plugin.`
   }
-};
+}
 ```
 
 :::

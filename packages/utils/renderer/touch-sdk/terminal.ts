@@ -1,4 +1,4 @@
-import { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 
 type DataCallback = (data: string) => void
 type ExitCallback = (exitCode: number | null) => void
@@ -25,10 +25,10 @@ export class Terminal {
     // If there's an existing process, it should ideally be killed first.
     // However, for simplicity in this refactor, we'll assume exec is called for a new, independent command.
     // A more robust implementation might track multiple concurrent processes.
-    
+
     const { id } = await this.channel.send('terminal:create', { command, args })
     this.id = id
-    
+
     // Re-register listeners for the new process ID
     this.channel.regChannel('terminal:data', (channelData) => {
       if (this.id === channelData.data.id && this.onDataCallback) {
@@ -42,7 +42,7 @@ export class Terminal {
         this.id = null
       }
     })
-    
+
     return id
   }
 

@@ -1,16 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import type { AiProviderConfig } from '@tuff/utils/types/aisdk'
 import { ai } from '@tuff/utils/aisdk'
 import { AiProviderType } from '@tuff/utils/types/aisdk'
-import type { AiProviderConfig } from '@tuff/utils/types/aisdk'
+import { describe, expect, it } from 'vitest'
 
-describe('AISDK Provider Testing Service', () => {
+describe('aISDK Provider Testing Service', () => {
   it('should return error when provider is disabled', async () => {
     const disabledProvider: AiProviderConfig = {
       id: 'test-disabled',
       type: AiProviderType.OPENAI,
       name: 'Test Disabled',
       enabled: false,
-      apiKey: 'test-key'
+      apiKey: 'test-key',
     }
 
     const result = await ai.testProvider(disabledProvider)
@@ -25,7 +25,7 @@ describe('AISDK Provider Testing Service', () => {
       id: 'test-no-key',
       type: AiProviderType.OPENAI,
       name: 'Test No Key',
-      enabled: true
+      enabled: true,
     }
 
     const result = await ai.testProvider(providerWithoutKey)
@@ -43,7 +43,7 @@ describe('AISDK Provider Testing Service', () => {
       enabled: true,
       apiKey: 'invalid-key',
       baseUrl: 'https://invalid-url-that-does-not-exist.example.com',
-      timeout: 5000
+      timeout: 5000,
     }
 
     const result = await ai.testProvider(invalidProvider)
@@ -61,7 +61,7 @@ describe('AISDK Provider Testing Service', () => {
       name: 'Test Timeout',
       enabled: true,
       apiKey: 'test-key',
-      timeout: 1 // Very short timeout to trigger timeout error
+      timeout: 1, // Very short timeout to trigger timeout error
     }
 
     const result = await ai.testProvider(timeoutProvider)
@@ -78,7 +78,7 @@ describe('AISDK Provider Testing Service', () => {
       name: 'Test Latency',
       enabled: true,
       apiKey: 'invalid-key',
-      timeout: 5000
+      timeout: 5000,
     }
 
     const result = await ai.testProvider(provider)

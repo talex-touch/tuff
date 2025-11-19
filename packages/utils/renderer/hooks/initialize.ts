@@ -56,7 +56,8 @@ function checkWebGLSupport(): boolean {
   try {
     const canvas = document.createElement('canvas')
     return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -69,7 +70,8 @@ function checkWebGL2Support(): boolean {
   try {
     const canvas = document.createElement('canvas')
     return !!canvas.getContext('webgl2')
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -109,25 +111,25 @@ export function useInitialize(): IInitializationInfo {
     screenResolution: {
       width: screen.width,
       height: screen.height,
-      pixelRatio: window.devicePixelRatio || 1
+      pixelRatio: window.devicePixelRatio || 1,
     },
     windowSize: {
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       outerWidth: window.outerWidth,
-      outerHeight: window.outerHeight
+      outerHeight: window.outerHeight,
     },
     performance: {
       navigationStart: performance.timeOrigin || now,
       loadEventEnd: (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.loadEventEnd || undefined,
-      domContentLoadedEventEnd: (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.domContentLoadedEventEnd || undefined
+      domContentLoadedEventEnd: (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.domContentLoadedEventEnd || undefined,
     },
     capabilities: {
       webgl: checkWebGLSupport(),
       webgl2: checkWebGL2Support(),
       webAudio: checkWebAudioSupport(),
-      serviceWorker: checkServiceWorkerSupport()
-    }
+      serviceWorker: checkServiceWorkerSupport(),
+    },
   }
 
   return window.$initInfo = initInfo
@@ -191,7 +193,7 @@ export function refreshPerformanceInfo(): IInitializationInfo {
     window.$initInfo.performance = {
       navigationStart: performance.timeOrigin || window.$initInfo.performance.navigationStart,
       loadEventEnd: navigationEntry?.loadEventEnd || undefined,
-      domContentLoadedEventEnd: navigationEntry?.domContentLoadedEventEnd || undefined
+      domContentLoadedEventEnd: navigationEntry?.domContentLoadedEventEnd || undefined,
     }
   }
   return window.$initInfo

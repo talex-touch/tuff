@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { fileURLToPath } from 'url'
+import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 
 /**
@@ -23,7 +23,8 @@ export function getAppVersion(): string {
         return pkg.version
       }
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('[version-util] Failed to read version from package.json:', error)
   }
 
@@ -34,7 +35,7 @@ export function getAppVersion(): string {
 
   // Last resort fallback
   console.error(
-    '[version-util] Unable to determine version from package.json or APP_VERSION env var'
+    '[version-util] Unable to determine version from package.json or APP_VERSION env var',
   )
   return '0.0.0'
 }

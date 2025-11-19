@@ -1,13 +1,13 @@
+import type { MaybePromise } from '@talex-touch/utils'
+import type { TalexTouch } from '../types'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { APP_SCHEMA } from '../config/default'
-import { TalexTouch } from '../types'
-import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
 import { genTouchChannel } from '../core/channel-core'
-import path from 'path'
-import fs from 'fs'
-import os from 'os'
+import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
 import { BaseModule } from './abstract-base-module'
-import { MaybePromise } from '@talex-touch/utils'
 
 function windowsAdapter(touchApp: TalexTouch.TouchApp): void {
   const app = touchApp.app
@@ -15,10 +15,11 @@ function windowsAdapter(touchApp: TalexTouch.TouchApp): void {
   app.on('second-instance', (_, argv) => {
     const win = touchApp.window.window
 
-    if (win.isMinimized()) win.restore()
+    if (win.isMinimized())
+      win.restore()
     win.focus()
 
-    const url = argv.find((v) => v.startsWith(`${APP_SCHEMA}://`))
+    const url = argv.find(v => v.startsWith(`${APP_SCHEMA}://`))
     if (url) {
       onSchema(url)
     }
@@ -34,7 +35,7 @@ function macOSAdapter(touchApp: TalexTouch.TouchApp): void {
 }
 
 function onSchema(url: string): void {
-  console.log('[Addon] Opened schema: ' + url)
+  console.log(`[Addon] Opened schema: ${url}`)
 }
 
 export class AddonOpenerModule extends BaseModule {
@@ -43,7 +44,7 @@ export class AddonOpenerModule extends BaseModule {
 
   constructor() {
     super(AddonOpenerModule.key, {
-      create: false
+      create: false,
     })
   }
 
@@ -57,14 +58,15 @@ export class AddonOpenerModule extends BaseModule {
     if (!$app.app.isDefaultProtocolClient(APP_SCHEMA)) {
       if ($app.app.isPackaged) {
         $app.app.setAsDefaultProtocolClient(APP_SCHEMA)
-      } else {
+      }
+      else {
         $app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.execPath, [
-          path.resolve(process.argv[1])
+          path.resolve(process.argv[1]),
         ])
       }
       // app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.cwd());
 
-      console.log('[Addon] Set as default protocol handler: ' + APP_SCHEMA)
+      console.log(`[Addon] Set as default protocol handler: ${APP_SCHEMA}`)
     }
 
     // protocol.registerFileProtocol('touch-plugin', (request, callback) => {
@@ -80,7 +82,7 @@ export class AddonOpenerModule extends BaseModule {
     $app.app.on('open-file', (event, filePath) => {
       event.preventDefault()
 
-      console.log('[Addon] Opened file: ' + filePath)
+      console.log(`[Addon] Opened file: ${filePath}`)
 
       win.previewFile(filePath)
 
@@ -95,23 +97,25 @@ export class AddonOpenerModule extends BaseModule {
         try {
           await fs.promises.writeFile(tempFilePath, buffer)
           await new PluginResolver(tempFilePath).resolve(({ event, type }: any) => {
-            console.log('[AddonInstaller] Installed file: ' + name)
+            console.log(`[AddonInstaller] Installed file: ${name}`)
 
             reply(DataCode.SUCCESS, {
               status: type,
               msg: event.msg,
-              event
+              event,
             })
           }, true)
-        } catch (e: any) {
+        }
+        catch (e: any) {
           console.error('[AddonInstaller] Error installing plugin:', e)
           reply(DataCode.SUCCESS, { status: 'error', msg: 'INTERNAL_ERROR' })
-        } finally {
+        }
+        finally {
           fs.promises.unlink(tempFilePath).catch((err) => {
             console.error(`[AddonInstaller] Failed to delete temp file: ${tempFilePath}`, err)
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -129,31 +133,35 @@ export class AddonOpenerModule extends BaseModule {
             if (type === 'error') {
               console.log('[AddonDropper] Failed to resolve plugin from buffer: ', event)
               if (
-                event.msg === ResolverStatus.MANIFEST_NOT_FOUND ||
-                event.msg === ResolverStatus.INVALID_MANIFEST
+                event.msg === ResolverStatus.MANIFEST_NOT_FOUND
+                || event.msg === ResolverStatus.INVALID_MANIFEST
               ) {
                 reply(DataCode.SUCCESS, { status: 'error', msg: '10091' }) // Invalid plugin file
-              } else {
+              }
+              else {
                 reply(DataCode.SUCCESS, { status: 'error', msg: '10092' }) // Generic error
               }
-            } else {
+            }
+            else {
               reply(DataCode.SUCCESS, {
                 status: 'success',
                 manifest: event.msg,
-                msg: '10090'
+                msg: '10090',
               })
             }
           })
-        } catch (e) {
+        }
+        catch (e) {
           console.error('[AddonDropper] Error processing dropped plugin:', e)
           reply(DataCode.SUCCESS, { status: 'error', msg: 'INTERNAL_ERROR' })
-        } finally {
+        }
+        finally {
           // Clean up the temporary file
           fs.promises.unlink(tempFilePath).catch((err) => {
             console.error(`[AddonDropper] Failed to delete temp file: ${tempFilePath}`, err)
           })
         }
-      }
+      },
     )
   }
 

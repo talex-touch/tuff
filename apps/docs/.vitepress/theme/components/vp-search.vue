@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
 import { FMessage } from 'fighting-design'
+import { ref } from 'vue'
 
 const value1 = ref('')
 
-const onEnter = (): void => {
+function onEnter(): void {
   FMessage({ type: 'success', message: '开始搜索' })
 }
 </script>
@@ -18,4 +18,3 @@ const onEnter = (): void => {
   width: 200px;
 }
 </style>
-

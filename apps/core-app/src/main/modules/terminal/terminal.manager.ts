@@ -1,15 +1,18 @@
-import { spawn, ChildProcess } from 'child_process'
-import { ChannelType, DataCode, StandardChannelData } from '@talex-touch/utils/channel'
-import { WebContents } from 'electron'
-import { ModuleKey } from '@talex-touch/utils'
-import os from 'os'
+import type { ModuleKey } from '@talex-touch/utils'
+import type { StandardChannelData } from '@talex-touch/utils/channel'
+import type { WebContents } from 'electron'
+import type { ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import os from 'node:os'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { BaseModule } from '../abstract-base-module'
 
 // Determine the default shell based on the operating system
-const getDefaultShell = (): string => {
+function getDefaultShell(): string {
   if (os.platform() === 'win32') {
     return 'cmd.exe'
-  } else {
+  }
+  else {
     // For macOS and Linux, use the SHELL environment variable or default to 'bash'
     return process.env.SHELL || '/bin/bash'
   }
@@ -23,7 +26,7 @@ class TerminalModule extends BaseModule {
 
   constructor() {
     super(TerminalModule.key, {
-      create: false
+      create: false,
     })
   }
 
@@ -31,11 +34,11 @@ class TerminalModule extends BaseModule {
     const channel = $app.channel
 
     // For child_process, 'create' will be used to start a new command process.
-    channel.regChannel(ChannelType.MAIN, 'terminal:create', (data) => this.create(data))
+    channel.regChannel(ChannelType.MAIN, 'terminal:create', data => this.create(data))
     // 'write' is not applicable for non-interactive child_process, but we can keep it for API consistency
     // or repurpose it if needed in the future. For now, it will be a no-op or log a warning.
-    channel.regChannel(ChannelType.MAIN, 'terminal:write', (data) => this.write(data))
-    channel.regChannel(ChannelType.MAIN, 'terminal:kill', (data) => this.kill(data))
+    channel.regChannel(ChannelType.MAIN, 'terminal:write', data => this.write(data))
+    channel.regChannel(ChannelType.MAIN, 'terminal:kill', data => this.kill(data))
   }
 
   /**
@@ -61,9 +64,10 @@ class TerminalModule extends BaseModule {
     let proc: ChildProcess
     if (os.platform() === 'win32') {
       proc = spawn(command, args, { shell: true })
-    } else {
+    }
+    else {
       proc = spawn(getDefaultShell(), ['-c', `${command} ${args.join(' ')}`], {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
       })
     }
 
@@ -75,7 +79,7 @@ class TerminalModule extends BaseModule {
         sender.send('@main-process-message', {
           name: 'terminal:data',
           header: { status: 'request', type: ChannelType.MAIN },
-          data: { id, data: data.toString() }
+          data: { id, data: data.toString() },
         })
       }
     })
@@ -86,7 +90,7 @@ class TerminalModule extends BaseModule {
         sender.send('@main-process-message', {
           name: 'terminal:data',
           header: { status: 'request', type: ChannelType.MAIN },
-          data: { id, data: data.toString() }
+          data: { id, data: data.toString() },
         })
       }
     })
@@ -97,7 +101,7 @@ class TerminalModule extends BaseModule {
         sender.send('@main-process-message', {
           name: 'terminal:exit',
           header: { status: 'request', type: ChannelType.MAIN },
-          data: { id, exitCode: code }
+          data: { id, exitCode: code },
         })
       }
       this.processes.delete(id)
@@ -109,12 +113,12 @@ class TerminalModule extends BaseModule {
         sender.send('@main-process-message', {
           name: 'terminal:data',
           header: { status: 'request', type: ChannelType.MAIN },
-          data: { id, data: `Error: ${err.message}\n` }
+          data: { id, data: `Error: ${err.message}\n` },
         })
         sender.send('@main-process-message', {
           name: 'terminal:exit',
           header: { status: 'request', type: ChannelType.MAIN },
-          data: { id, exitCode: -1 }
+          data: { id, exitCode: -1 },
         })
       }
       this.processes.delete(id)
@@ -136,9 +140,10 @@ class TerminalModule extends BaseModule {
       proc.stdin.write(data)
       // Optionally, end the input stream if it's a one-off command
       // proc.stdin.end();
-    } else {
+    }
+    else {
       console.warn(
-        `[TerminalManager] Attempted to write to non-existent or non-writable process ${id}`
+        `[TerminalManager] Attempted to write to non-existent or non-writable process ${id}`,
       )
     }
   }
@@ -156,7 +161,7 @@ class TerminalModule extends BaseModule {
   }
 
   onDestroy(): void {
-    this.processes.forEach((proc) => proc.kill())
+    this.processes.forEach(proc => proc.kill())
     this.processes.clear()
     console.log('[TerminalManager] Destroying all processes.')
   }

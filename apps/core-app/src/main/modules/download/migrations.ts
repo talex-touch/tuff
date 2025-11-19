@@ -2,8 +2,8 @@
  * Database migration utilities for download center
  */
 
+import { EventEmitter } from 'node:events'
 import { createClient } from '@libsql/client'
-import { EventEmitter } from 'events'
 
 export interface Migration {
   version: number
@@ -35,12 +35,14 @@ export class MigrationRunner extends EventEmitter {
 
     try {
       const result = await client.execute(
-        'SELECT MAX(version) as version FROM migrations'
+        'SELECT MAX(version) as version FROM migrations',
       )
       return (result.rows[0]?.version as number) || 0
-    } catch {
+    }
+    catch {
       return 0
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -53,17 +55,19 @@ export class MigrationRunner extends EventEmitter {
 
     try {
       const result = await client.execute(
-        'SELECT version, name, applied_at FROM migrations ORDER BY version'
+        'SELECT version, name, applied_at FROM migrations ORDER BY version',
       )
 
       return result.rows.map(row => ({
         version: row.version as number,
         name: row.name as string,
-        appliedAt: row.applied_at as number
+        appliedAt: row.applied_at as number,
       }))
-    } catch {
+    }
+    catch {
       return []
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -107,7 +111,7 @@ export class MigrationRunner extends EventEmitter {
           current: i + 1,
           total: pendingMigrations.length,
           migration: migration.name,
-          version: migration.version
+          version: migration.version,
         })
 
         console.log(`[MigrationRunner] Applying migration ${migration.version}: ${migration.name}`)
@@ -116,7 +120,7 @@ export class MigrationRunner extends EventEmitter {
 
         await client.execute({
           sql: 'INSERT INTO migrations (version, name, applied_at) VALUES (?, ?, ?)',
-          args: [migration.version, migration.name, Date.now()]
+          args: [migration.version, migration.name, Date.now()],
         })
 
         console.log(`[MigrationRunner] Migration ${migration.version} applied successfully`)
@@ -124,11 +128,13 @@ export class MigrationRunner extends EventEmitter {
 
       this.emit('complete', { count: pendingMigrations.length })
       console.log('[MigrationRunner] All migrations completed')
-    } catch (error) {
+    }
+    catch (error) {
       this.emit('error', error)
       console.error('[MigrationRunner] Error running migrations:', error)
       throw error
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -142,7 +148,7 @@ export class MigrationRunner extends EventEmitter {
     try {
       const result = await client.execute(
         'SELECT version FROM migrations WHERE version > ? ORDER BY version DESC',
-        [targetVersion]
+        [targetVersion],
       )
 
       const versionsToRollback = result.rows.map(row => row.version as number)
@@ -164,15 +170,17 @@ export class MigrationRunner extends EventEmitter {
 
         await client.execute({
           sql: 'DELETE FROM migrations WHERE version = ?',
-          args: [version]
+          args: [version],
         })
 
         console.log(`[MigrationRunner] Migration ${version} rolled back successfully`)
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationRunner] Error rolling back migrations:', error)
       throw error
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -248,7 +256,7 @@ export const createBaseTables: Migration = {
     await db.execute('DROP TABLE IF EXISTS download_chunks')
     await db.execute('DROP TABLE IF EXISTS download_tasks')
     console.log('[Migration] Dropped base tables')
-  }
+  },
 }
 
 /**
@@ -260,7 +268,7 @@ export const addPerformanceIndexes: Migration = {
   up: async (db: any) => {
     // Check if download_tasks table exists before creating indexes
     const tablesResult = await db.execute(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('download_tasks', 'download_chunks', 'download_history')"
+      'SELECT name FROM sqlite_master WHERE type=\'table\' AND name IN (\'download_tasks\', \'download_chunks\', \'download_history\')',
     )
     const existingTables = new Set(tablesResult.rows.map((row: any) => row.name))
 
@@ -286,7 +294,8 @@ export const addPerformanceIndexes: Migration = {
         ON download_tasks(status, priority)
       `)
       console.log('[Migration] Added indexes for download_tasks')
-    } else {
+    }
+    else {
       console.log('[Migration] Skipping download_tasks indexes - table does not exist')
     }
 
@@ -302,7 +311,8 @@ export const addPerformanceIndexes: Migration = {
         ON download_chunks(task_id, index)
       `)
       console.log('[Migration] Added indexes for download_chunks')
-    } else {
+    }
+    else {
       console.log('[Migration] Skipping download_chunks indexes - table does not exist')
     }
 
@@ -318,7 +328,8 @@ export const addPerformanceIndexes: Migration = {
         ON download_history(completed_at)
       `)
       console.log('[Migration] Added indexes for download_history')
-    } else {
+    }
+    else {
       console.log('[Migration] Skipping download_history indexes - table does not exist')
     }
 
@@ -336,7 +347,7 @@ export const addPerformanceIndexes: Migration = {
     await db.execute('DROP INDEX IF EXISTS idx_history_completed')
 
     console.log('[Migration] Performance indexes removed')
-  }
+  },
 }
 
 /**
@@ -344,7 +355,7 @@ export const addPerformanceIndexes: Migration = {
  */
 export async function runMigrations(dbPath: string, migrations: Migration[]): Promise<void> {
   const client = createClient({
-    url: `file:${dbPath}`
+    url: `file:${dbPath}`,
   })
 
   try {
@@ -370,7 +381,7 @@ export async function runMigrations(dbPath: string, migrations: Migration[]): Pr
 
         await client.execute({
           sql: 'INSERT INTO migrations (version, name, applied_at) VALUES (?, ?, ?)',
-          args: [migration.version, migration.name, Date.now()]
+          args: [migration.version, migration.name, Date.now()],
         })
 
         console.log(`[Migration] Migration ${migration.version} applied successfully`)
@@ -378,10 +389,12 @@ export async function runMigrations(dbPath: string, migrations: Migration[]): Pr
     }
 
     console.log('[Migration] All migrations completed')
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[Migration] Error running migrations:', error)
     throw error
-  } finally {
+  }
+  finally {
     client.close()
   }
 }
@@ -407,7 +420,7 @@ export const addChecksumField: Migration = {
   down: async (_db: any) => {
     // SQLite doesn't support DROP COLUMN easily, so we'd need to recreate the table
     console.log('[Migration] Checksum field removal not implemented (SQLite limitation)')
-  }
+  },
 }
 
 /**
@@ -425,7 +438,7 @@ export const addMetadataField: Migration = {
       await db.execute('ALTER TABLE download_tasks ADD COLUMN metadata TEXT')
       console.log('[Migration] Added metadata field to download_tasks')
     }
-  }
+  },
 }
 
 /**
@@ -443,7 +456,7 @@ export const addErrorField: Migration = {
       await db.execute('ALTER TABLE download_tasks ADD COLUMN error TEXT')
       console.log('[Migration] Added error field to download_tasks')
     }
-  }
+  },
 }
 
 /**
@@ -453,7 +466,7 @@ export const allMigrations: Migration[] = [
   addPerformanceIndexes,
   addChecksumField,
   addMetadataField,
-  addErrorField
+  addErrorField,
 ]
 
 /**
@@ -461,14 +474,14 @@ export const allMigrations: Migration[] = [
  */
 export async function rollbackMigration(
   dbPath: string,
-  migration: Migration
+  migration: Migration,
 ): Promise<void> {
   if (!migration.down) {
     throw new Error(`Migration ${migration.version} does not have a down function`)
   }
 
   const client = createClient({
-    url: `file:${dbPath}`
+    url: `file:${dbPath}`,
   })
 
   try {
@@ -478,14 +491,16 @@ export async function rollbackMigration(
 
     await client.execute({
       sql: 'DELETE FROM migrations WHERE version = ?',
-      args: [migration.version]
+      args: [migration.version],
     })
 
     console.log(`[Migration] Migration ${migration.version} rolled back successfully`)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[Migration] Error rolling back migration:', error)
     throw error
-  } finally {
+  }
+  finally {
     client.close()
   }
 }

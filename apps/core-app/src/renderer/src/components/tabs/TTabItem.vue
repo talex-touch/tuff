@@ -1,47 +1,38 @@
-<template>
-  <div class="TTabItem-Container fake-background" :class="{ active, disabled }">
-    <div class="TTabs-Tab-Icon">
-      <remix-icon :non-style="nonStyle" :name="icon" />
-    </div>
-    <!--    :style="select(type) ? 'fill' : 'line'"-->
-    <div class="TTabs-Tab-Name">{{ name }}</div>
-  </div>
-</template>
-
 <script>
-export default {
-  name: 'TTabItem'
-}
 </script>
 
 <script setup>
+import { ref, watchEffect } from 'vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
-import { inject, ref, watchEffect } from 'vue'
 
 const props = defineProps({
   icon: {
     type: String,
-    required: true
+    required: true,
   },
   name: {
     type: String,
-    required: true
+    required: true,
   },
   active: {
-    type: Function
+    type: Function,
   },
   disabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   nonStyle: {
-    type: Boolean
+    type: Boolean,
   },
   activation: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
+
+export default {
+  name: 'TTabItem',
+}
 
 const active = ref(false)
 watchEffect(() => {
@@ -51,6 +42,18 @@ watchEffect(() => {
 // const select = inject('select')
 // const type = inject('type')()
 </script>
+
+<template>
+  <div class="TTabItem-Container fake-background" :class="{ active, disabled }">
+    <div class="TTabs-Tab-Icon">
+      <RemixIcon :non-style="nonStyle" :name="icon" />
+    </div>
+    <!--    :style="select(type) ? 'fill' : 'line'" -->
+    <div class="TTabs-Tab-Name">
+      {{ name }}
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .TTabItem-Container {

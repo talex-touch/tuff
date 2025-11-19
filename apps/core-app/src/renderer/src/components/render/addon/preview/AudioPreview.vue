@@ -1,11 +1,11 @@
 <script setup lang="ts" name="AudioPreview">
-import { TuffItem } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 
 defineProps<{
   item: TuffItem
 }>()
 
-const handleError = (e: Event): void => {
+function handleError(e: Event): void {
   console.error('Audio load error:', e)
 }
 </script>

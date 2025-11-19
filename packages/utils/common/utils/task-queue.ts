@@ -36,8 +36,9 @@ export interface AdaptiveTaskQueueOptions {
 const DEFAULT_YIELD_INTERVAL_MS = 17
 
 async function delay(ms: number): Promise<void> {
-  if (ms <= 0) return
-  await new Promise<void>((resolve) => setTimeout(resolve, ms))
+  if (ms <= 0)
+    return
+  await new Promise<void>(resolve => setTimeout(resolve, ms))
 }
 
 /**
@@ -50,10 +51,11 @@ async function delay(ms: number): Promise<void> {
 export async function runAdaptiveTaskQueue<T>(
   items: readonly T[],
   handler: (item: T, index: number) => Promise<void> | void,
-  options: AdaptiveTaskQueueOptions = {}
+  options: AdaptiveTaskQueueOptions = {},
 ): Promise<void> {
   const total = items.length
-  if (total === 0) return
+  if (total === 0)
+    return
 
   const {
     estimatedTaskTimeMs = 1,
@@ -61,7 +63,7 @@ export async function runAdaptiveTaskQueue<T>(
     maxBatchSize,
     logger = console,
     label = 'AdaptiveTaskQueue',
-    onYield
+    onYield,
   } = options
 
   const safeTaskMs = Math.max(estimatedTaskTimeMs, 0.1)
@@ -71,11 +73,10 @@ export async function runAdaptiveTaskQueue<T>(
   const currentPerformance = typeof globalThis !== 'undefined' ? (globalThis as any)?.performance : undefined
   const now = () => (currentPerformance ? currentPerformance.now() : Date.now())
 
-
   const startTime = now()
 
   logger.debug?.(
-    `[${label}] Starting queue for ${total} item(s). batchSize=${batchSize}, estimated=${safeTaskMs.toFixed(2)}ms`
+    `[${label}] Starting queue for ${total} item(s). batchSize=${batchSize}, estimated=${safeTaskMs.toFixed(2)}ms`,
   )
 
   for (let index = 0; index < total; index++) {
@@ -90,19 +91,19 @@ export async function runAdaptiveTaskQueue<T>(
       logger.debug?.(
         `[${label}] Yielded after ${processed}/${total} item(s); wait ${(
           afterYield - beforeYield
-        ).toFixed(1)}ms`
+        ).toFixed(1)}ms`,
       )
       onYield?.({
         processed,
         total,
         batchSize,
-        elapsedMs
+        elapsedMs,
       })
     }
   }
 
   const endTime = now()
   logger.debug?.(
-    `[${label}] Completed ${total} item(s) in ${((endTime - startTime) / 1000).toFixed(2)}s`
+    `[${label}] Completed ${total} item(s) in ${((endTime - startTime) / 1000).toFixed(2)}s`,
   )
 }

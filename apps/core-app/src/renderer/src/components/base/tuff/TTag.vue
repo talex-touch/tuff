@@ -8,8 +8,8 @@ const { type, size, pill } = withDefaults(
   {
     type: 'default',
     size: 'md',
-    pill: false
-  }
+    pill: false,
+  },
 )
 </script>
 

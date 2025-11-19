@@ -1,24 +1,24 @@
-<template>
-  <!--  <svg class="remix">-->
-  <!--    <use :xlink:href="`#remix-${name}`"></use>-->
-  <!--  </svg>-->
-  <i class="remix" :class="`ri-${name}-${style || 'line'}`"></i>
-</template>
-
 <script name="RemixIcon" setup>
 const props = defineProps({
   name: {
     type: String,
-    required: true
+    required: true,
   },
   style: {
     type: String,
-    validator( value ) {
-      return ['line', 'fill'].includes( value )
-    }
-  }
+    validator(value) {
+      return ['line', 'fill'].includes(value)
+    },
+  },
 })
 </script>
+
+<template>
+  <!--  <svg class="remix"> -->
+  <!--    <use :xlink:href="`#remix-${name}`"></use> -->
+  <!--  </svg> -->
+  <i class="remix" :class="`ri-${name}-${style || 'line'}`" />
+</template>
 
 <style scoped>
 .remix {

@@ -47,7 +47,8 @@ export class ClipboardHelper {
       for (i = 0; i < length; i++) {
         uuid[i] = chars[0 | (Math.random() * radix)]
       }
-    } else {
+    }
+    else {
       let r: number
       uuid[8] = uuid[13] = uuid[18] = uuid[23] = '-'
       uuid[14] = '4'
@@ -75,7 +76,8 @@ export class ClipboardHelper {
       // Handle multiple files
       const tagContent = clipboard.read('NSFilenamesPboardType').match(/<string>.*<\/string>/g)
       filePath = tagContent ? tagContent.map(item => item.replace(/<string>|<\/string>/g, '')) : []
-    } else {
+    }
+    else {
       // Handle single file
       const clipboardImage = clipboard.readImage('clipboard')
       if (!clipboardImage.isEmpty()) {
@@ -84,10 +86,11 @@ export class ClipboardHelper {
         const fileInfo: ClipboardFileInfo = {
           buffer: png,
           mimetype: 'image/png',
-          originalname: this.generateUuid(8, 16) + '.png'
+          originalname: `${this.generateUuid(8, 16)}.png`,
         }
         filePath = [fileInfo]
-      } else {
+      }
+      else {
         // Handle single file path
         const fileUrl = clipboard.read('public.file-url')
         if (fileUrl) {
@@ -115,7 +118,7 @@ export class ClipboardHelper {
         .join('')
         .replace(/\\/g, '\\\\')
 
-      const drivePrefix = formatFilePathStr.match(/[a-zA-Z]:\\/)
+      const drivePrefix = formatFilePathStr.match(/[a-z]:\\/i)
 
       if (drivePrefix) {
         const drivePrefixIndex = formatFilePathStr.indexOf(drivePrefix[0])
@@ -127,7 +130,8 @@ export class ClipboardHelper {
           .filter(item => item)
           .map(item => drivePrefix[0] + item)
       }
-    } else {
+    }
+    else {
       // Handle single file
       const clipboardImage = clipboard.readImage('clipboard')
       if (!clipboardImage.isEmpty()) {
@@ -136,17 +140,19 @@ export class ClipboardHelper {
         const fileInfo: ClipboardFileInfo = {
           buffer: png,
           mimetype: 'image/png',
-          originalname: this.generateUuid(8, 16) + '.png'
+          originalname: `${this.generateUuid(8, 16)}.png`,
         }
         filePath = [fileInfo]
-      } else {
+      }
+      else {
         // Handle single file path
         try {
-          const fileName = clipboard.readBuffer('FileNameW').toString('ucs2').replace(RegExp(String.fromCharCode(0), 'g'), '')
+          const fileName = clipboard.readBuffer('FileNameW').toString('ucs2').replace(new RegExp(String.fromCharCode(0), 'g'), '')
           if (fileName) {
             filePath = [fileName]
           }
-        } catch (error) {
+        }
+        catch (error) {
           // Ignore read errors for non-file clipboard content
         }
       }
@@ -183,10 +189,12 @@ export class ClipboardHelper {
     try {
       if (this.isMac) {
         return this.getClipboardFilesMac()
-      } else {
+      }
+      else {
         return this.getClipboardFilesWindows()
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to read clipboard files:', error)
       return []
     }

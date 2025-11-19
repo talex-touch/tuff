@@ -1,35 +1,29 @@
-import { BaseModule } from '../abstract-base-module'
-import { ModuleInitContext, ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
+import type { defaultDownloadConfig, DownloadConfig, DownloadRequest, DownloadStatus, DownloadTask, ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { NotificationConfig } from './notification-service'
+import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { eq } from 'drizzle-orm'
+import { downloadTasks } from '../../db/schema'
+import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
-import { downloadTasks, downloadChunks, downloadHistory } from '../../db/schema'
-import { eq, desc, and, lt } from 'drizzle-orm'
-import { TaskQueue } from './task-queue'
-import { DownloadWorker } from './download-worker'
 import { ChunkManager } from './chunk-manager'
-import { NetworkMonitor } from './network-monitor'
-import { PriorityCalculator } from './priority-calculator'
 import { ConcurrencyAdjuster } from './concurrency-adjuster'
-import { NotificationService, NotificationConfig } from './notification-service'
+import { DownloadWorker } from './download-worker'
 import { ErrorLogger } from './error-logger'
-import { RetryStrategy } from './retry-strategy'
 import { DownloadErrorClass } from './error-types'
-import {
-  DownloadRequest,
-  DownloadTask,
-  DownloadStatus,
-  DownloadConfig,
-  defaultDownloadConfig
-} from '@talex-touch/utils'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { NetworkMonitor } from './network-monitor'
+import { NotificationService } from './notification-service'
+import { PriorityCalculator } from './priority-calculator'
+import { RetryStrategy } from './retry-strategy'
+import { TaskQueue } from './task-queue'
 
 /**
  * DownloadCenterModule - Unified download management system
- * 
+ *
  * This module provides centralized download management for all download tasks
  * including application updates, plugin installations, and user downloads.
- * 
+ *
  * Key Features:
  * - Priority-based task queue
  * - Chunk-based downloading with resume support
@@ -39,7 +33,7 @@ import { randomUUID } from 'crypto'
  * - Network monitoring and adaptive concurrency
  * - Error logging and recovery
  * - Data migration from old systems
- * 
+ *
  * @see API.md for complete API documentation
  * @see MIGRATION_GUIDE.md for migration details
  * @see PERFORMANCE_OPTIMIZATIONS.md for performance details
@@ -51,30 +45,30 @@ export class DownloadCenterModule extends BaseModule {
   constructor() {
     super(DownloadCenterModule.key, {
       create: true,
-      dirName: 'download-center'
+      dirName: 'download-center',
     })
   }
 
   // Core components
-  private taskQueue!: TaskQueue                      // Priority-based task queue
-  private downloadWorkers!: DownloadWorker[]         // Worker pool for concurrent downloads
-  private chunkManager!: ChunkManager                // Manages file chunking and merging
-  private networkMonitor!: NetworkMonitor            // Monitors network status
-  private priorityCalculator!: PriorityCalculator    // Calculates task priorities
-  private concurrencyAdjuster!: ConcurrencyAdjuster  // Adjusts concurrency based on network
-  private notificationService!: NotificationService  // System notifications
-  private errorLogger!: ErrorLogger                  // Error logging and tracking
-  private retryStrategy!: RetryStrategy              // Retry logic with backoff
-  
+  private taskQueue!: TaskQueue // Priority-based task queue
+  private downloadWorkers!: DownloadWorker[] // Worker pool for concurrent downloads
+  private chunkManager!: ChunkManager // Manages file chunking and merging
+  private networkMonitor!: NetworkMonitor // Monitors network status
+  private priorityCalculator!: PriorityCalculator // Calculates task priorities
+  private concurrencyAdjuster!: ConcurrencyAdjuster // Adjusts concurrency based on network
+  private notificationService!: NotificationService // System notifications
+  private errorLogger!: ErrorLogger // Error logging and tracking
+  private retryStrategy!: RetryStrategy // Retry logic with backoff
+
   // Configuration and state
-  private config!: DownloadConfig                    // Download configuration
-  private isRunning = false                          // Module running state
+  private config!: DownloadConfig // Download configuration
+  private isRunning = false // Module running state
   private progressUpdateInterval: NodeJS.Timeout | null = null
-  
+
   // Performance optimizations
-  private taskCache: Map<string, DownloadTask> = new Map()        // In-memory task cache
-  private lastProgressBroadcast: Map<string, number> = new Map()  // Progress throttling
-  private progressThrottleMs = 1000                               // Throttle to 1 update/second
+  private taskCache: Map<string, DownloadTask> = new Map() // In-memory task cache
+  private lastProgressBroadcast: Map<string, number> = new Map() // Progress throttling
+  private progressThrottleMs = 1000 // Throttle to 1 update/second
 
   async onInit(ctx: ModuleInitContext<any>): Promise<void> {
     const moduleDir = ctx.file.dirPath
@@ -87,8 +81,8 @@ export class DownloadCenterModule extends BaseModule {
       ...defaultDownloadConfig,
       storage: {
         ...defaultDownloadConfig.storage,
-        tempDir: path.join(moduleDir, 'temp')
-      }
+        tempDir: path.join(moduleDir, 'temp'),
+      },
     }
 
     // 初始化组件
@@ -102,9 +96,9 @@ export class DownloadCenterModule extends BaseModule {
     this.retryStrategy = new RetryStrategy(
       {
         maxRetries: this.config.network.maxRetries,
-        initialDelay: this.config.network.retryDelay
+        initialDelay: this.config.network.retryDelay,
       },
-      this.errorLogger
+      this.errorLogger,
     )
 
     // 初始化错误日志记录器
@@ -181,12 +175,12 @@ export class DownloadCenterModule extends BaseModule {
         totalSize: undefined,
         downloadedSize: 0,
         speed: 0,
-        percentage: 0
+        percentage: 0,
       },
       chunks: [],
       metadata: request.metadata || {},
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     }
 
     // 保存到数据库
@@ -200,7 +194,7 @@ export class DownloadCenterModule extends BaseModule {
       status: DownloadStatus.PENDING,
       metadata: JSON.stringify(request.metadata || {}),
       createdAt: now.getTime(),
-      updatedAt: now.getTime()
+      updatedAt: now.getTime(),
     })
 
     // 添加到队列
@@ -227,7 +221,7 @@ export class DownloadCenterModule extends BaseModule {
       .update(downloadTasks)
       .set({
         status: DownloadStatus.PAUSED,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       })
       .where(eq(downloadTasks.id, taskId))
 
@@ -246,7 +240,7 @@ export class DownloadCenterModule extends BaseModule {
       .update(downloadTasks)
       .set({
         status: DownloadStatus.PENDING,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       })
       .where(eq(downloadTasks.id, taskId))
 
@@ -292,7 +286,7 @@ export class DownloadCenterModule extends BaseModule {
       totalSize: task.progress.totalSize,
       downloadedSize: 0,
       speed: 0,
-      percentage: 0
+      percentage: 0,
     }
     task.updatedAt = new Date()
 
@@ -317,7 +311,8 @@ export class DownloadCenterModule extends BaseModule {
     for (const task of allTasks) {
       try {
         await this.pauseTask(task.id)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`Failed to pause task ${task.id}:`, error)
       }
     }
@@ -326,13 +321,14 @@ export class DownloadCenterModule extends BaseModule {
   // 批量恢复所有任务
   async resumeAllTasks(): Promise<void> {
     const pausedTasks = this.getAllTasks().filter(
-      (task) => task.status === DownloadStatus.PAUSED
+      task => task.status === DownloadStatus.PAUSED,
     )
 
     for (const task of pausedTasks) {
       try {
         await this.resumeTask(task.id)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`Failed to resume task ${task.id}:`, error)
       }
     }
@@ -341,14 +337,15 @@ export class DownloadCenterModule extends BaseModule {
   // 批量取消所有任务
   async cancelAllTasks(): Promise<void> {
     const allTasks = this.getAllTasks().filter(
-      (task) =>
-        task.status !== DownloadStatus.COMPLETED && task.status !== DownloadStatus.CANCELLED
+      task =>
+        task.status !== DownloadStatus.COMPLETED && task.status !== DownloadStatus.CANCELLED,
     )
 
     for (const task of allTasks) {
       try {
         await this.cancelTask(task.id)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`Failed to cancel task ${task.id}:`, error)
       }
     }
@@ -356,7 +353,7 @@ export class DownloadCenterModule extends BaseModule {
 
   // 获取按状态筛选的任务
   getTasksByStatus(status: DownloadStatus): DownloadTask[] {
-    return this.getAllTasks().filter((task) => task.status === status)
+    return this.getAllTasks().filter(task => task.status === status)
   }
 
   // 获取下载历史
@@ -418,7 +415,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const filePath = path.join(task.destination, task.filename)
-    const fs = await import('fs/promises')
+    const fs = await import('node:fs/promises')
     await fs.unlink(filePath)
 
     // 从数据库中删除任务
@@ -432,7 +429,7 @@ export class DownloadCenterModule extends BaseModule {
 
   // 清理临时文件
   async cleanupTempFiles(): Promise<void> {
-    const fs = await import('fs/promises')
+    const fs = await import('node:fs/promises')
     const tempDir = this.config.storage.tempDir
 
     try {
@@ -444,12 +441,12 @@ export class DownloadCenterModule extends BaseModule {
       const activeTaskIds = new Set(
         allTasks
           .filter(
-            (task) =>
-              task.status === DownloadStatus.DOWNLOADING ||
-              task.status === DownloadStatus.PENDING ||
-              task.status === DownloadStatus.PAUSED
+            task =>
+              task.status === DownloadStatus.DOWNLOADING
+              || task.status === DownloadStatus.PENDING
+              || task.status === DownloadStatus.PAUSED,
           )
-          .map((task) => task.id)
+          .map(task => task.id),
       )
 
       // 读取临时目录
@@ -462,12 +459,13 @@ export class DownloadCenterModule extends BaseModule {
           // 检查是否是孤立的任务目录
           if (!activeTaskIds.has(entry.name)) {
             const dirPath = path.join(tempDir, entry.name)
-            
+
             // 计算目录大小
             try {
               const size = await this.getDirectorySize(dirPath)
               cleanedSize += size
-            } catch (error) {
+            }
+            catch (error) {
               // 忽略大小计算错误
             }
 
@@ -475,7 +473,8 @@ export class DownloadCenterModule extends BaseModule {
             cleanedCount++
             console.log(`Cleaned up orphaned temp directory: ${dirPath}`)
           }
-        } else if (entry.isFile()) {
+        }
+        else if (entry.isFile()) {
           // 清理孤立的临时文件（不在任何任务目录中）
           const filePath = path.join(tempDir, entry.name)
           try {
@@ -484,7 +483,8 @@ export class DownloadCenterModule extends BaseModule {
             await fs.unlink(filePath)
             cleanedCount++
             console.log(`Cleaned up orphaned temp file: ${filePath}`)
-          } catch (error) {
+          }
+          catch (error) {
             console.error(`Failed to cleanup temp file ${filePath}:`, error)
           }
         }
@@ -492,17 +492,18 @@ export class DownloadCenterModule extends BaseModule {
 
       if (cleanedCount > 0) {
         console.log(
-          `Temp cleanup completed: ${cleanedCount} items removed, ${this.formatBytes(cleanedSize)} freed`
+          `Temp cleanup completed: ${cleanedCount} items removed, ${this.formatBytes(cleanedSize)} freed`,
         )
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to cleanup temp files:', error)
     }
   }
 
   // 计算目录大小
   private async getDirectorySize(dirPath: string): Promise<number> {
-    const fs = await import('fs/promises')
+    const fs = await import('node:fs/promises')
     let totalSize = 0
 
     try {
@@ -510,15 +511,17 @@ export class DownloadCenterModule extends BaseModule {
 
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name)
-        
+
         if (entry.isDirectory()) {
           totalSize += await this.getDirectorySize(fullPath)
-        } else if (entry.isFile()) {
+        }
+        else if (entry.isFile()) {
           const stats = await fs.stat(fullPath)
           totalSize += stats.size
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       // 忽略错误，返回当前计算的大小
     }
 
@@ -527,11 +530,12 @@ export class DownloadCenterModule extends BaseModule {
 
   // 格式化字节大小
   private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B'
+    if (bytes === 0)
+      return '0 B'
     const k = 1024
     const sizes = ['B', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
+    return `${(bytes / k ** i).toFixed(2)} ${sizes[i]}`
   }
 
   // 获取配置
@@ -558,7 +562,7 @@ export class DownloadCenterModule extends BaseModule {
     directoryCount: number
     orphanedCount: number
   }> {
-    const fs = await import('fs/promises')
+    const fs = await import('node:fs/promises')
     const tempDir = this.config.storage.tempDir
 
     let totalSize = 0
@@ -575,12 +579,12 @@ export class DownloadCenterModule extends BaseModule {
       const activeTaskIds = new Set(
         allTasks
           .filter(
-            (task) =>
-              task.status === DownloadStatus.DOWNLOADING ||
-              task.status === DownloadStatus.PENDING ||
-              task.status === DownloadStatus.PAUSED
+            task =>
+              task.status === DownloadStatus.DOWNLOADING
+              || task.status === DownloadStatus.PENDING
+              || task.status === DownloadStatus.PAUSED,
           )
-          .map((task) => task.id)
+          .map(task => task.id),
       )
 
       // 读取临时目录
@@ -596,14 +600,16 @@ export class DownloadCenterModule extends BaseModule {
           }
           const size = await this.getDirectorySize(fullPath)
           totalSize += size
-        } else if (entry.isFile()) {
+        }
+        else if (entry.isFile()) {
           fileCount++
           orphanedCount++ // 顶层文件都是孤立的
           const stats = await fs.stat(fullPath)
           totalSize += stats.size
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to get temp file stats:', error)
     }
 
@@ -611,7 +617,7 @@ export class DownloadCenterModule extends BaseModule {
       totalSize,
       fileCount,
       directoryCount,
-      orphanedCount
+      orphanedCount,
     }
   }
 
@@ -668,7 +674,7 @@ export class DownloadCenterModule extends BaseModule {
         workerCount,
         this.networkMonitor,
         this.chunkManager,
-        this.config
+        this.config,
       )
       this.downloadWorkers.push(worker)
     }
@@ -683,10 +689,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const taskId = await this.addTask(request)
           return { success: true, taskId }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -696,10 +703,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.pauseTask(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -709,10 +717,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.resumeTask(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -722,17 +731,19 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.cancelTask(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:get-tasks', async () => {
       try {
         const tasks = this.getAllTasks()
         return { success: true, tasks }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -744,10 +755,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const task = this.getTaskStatus(taskId)
           return { success: true, task }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -757,10 +769,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           this.updateConfig(config)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -770,17 +783,19 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.retryTask(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:pause-all-tasks', async () => {
       try {
         await this.pauseAllTasks()
         return { success: true }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -789,7 +804,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await this.resumeAllTasks()
         return { success: true }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -798,7 +814,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await this.cancelAllTasks()
         return { success: true }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -810,10 +827,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const tasks = this.getTasksByStatus(status)
           return { success: true, tasks }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -823,17 +841,19 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const history = await this.getTaskHistory(limit)
           return { success: true, history }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:clear-history', async () => {
       try {
         await this.clearHistory()
         return { success: true }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -845,10 +865,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.clearHistoryItem(historyId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -858,10 +879,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.openFile(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -871,10 +893,11 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.showInFolder(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(
@@ -884,17 +907,19 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.deleteFile(taskId)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:cleanup-temp', async () => {
       try {
         await this.cleanupTempFiles()
         return { success: true }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -903,7 +928,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         const config = this.getConfig()
         return { success: true, config }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -915,17 +941,19 @@ export class DownloadCenterModule extends BaseModule {
         try {
           this.updateNotificationConfig(config)
           return { success: true }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:get-notification-config', async () => {
       try {
         const config = this.getNotificationConfig()
         return { success: true, config }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -938,17 +966,19 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const logs = await this.errorLogger.readLogs(limit)
           return { success: true, logs }
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return { success: false, error: error.message }
         }
-      }
+      },
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:get-error-stats', async () => {
       try {
         const stats = await this.errorLogger.getErrorStats()
         return { success: true, stats }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -957,7 +987,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         await this.errorLogger.clearLogs()
         return { success: true }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -967,7 +998,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         const stats = await this.getTempFileStats()
         return { success: true, stats }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -977,7 +1009,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         const needed = await this.migrationManager.needsMigration()
         return { success: true, needed }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -986,7 +1019,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         const result = await this.migrationManager.migrate()
         return { success: true, result }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -995,7 +1029,8 @@ export class DownloadCenterModule extends BaseModule {
       try {
         const result = await this.migrationManager.migrate()
         return { success: true, result }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -1005,7 +1040,8 @@ export class DownloadCenterModule extends BaseModule {
         const currentVersion = await this.migrationRunner.getCurrentVersion()
         const appliedMigrations = await this.migrationRunner.getAppliedMigrations()
         return { success: true, currentVersion, appliedMigrations }
-      } catch (error: any) {
+      }
+      catch (error: any) {
         return { success: false, error: error.message }
       }
     })
@@ -1060,17 +1096,18 @@ export class DownloadCenterModule extends BaseModule {
         }
 
         // 等待一段时间再检查
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      } catch (error) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      catch (error) {
         console.error('Task scheduler error:', error)
-        await new Promise((resolve) => setTimeout(resolve, 5000))
+        await new Promise(resolve => setTimeout(resolve, 5000))
       }
     }
   }
 
   // 查找可用的工作器
   private findAvailableWorker(): DownloadWorker | null {
-    return this.downloadWorkers.find((worker) => worker.canAcceptTask()) || null
+    return this.downloadWorkers.find(worker => worker.canAcceptTask()) || null
   }
 
   // 启动下载任务
@@ -1089,7 +1126,7 @@ export class DownloadCenterModule extends BaseModule {
           taskId: task.id,
           url: task.url,
           filename: task.filename,
-          module: task.module
+          module: task.module,
         },
         (attempt, error, delay) => {
           // 重试回调
@@ -1097,8 +1134,8 @@ export class DownloadCenterModule extends BaseModule {
             `Retrying download task ${task.id} (attempt ${attempt})`,
             {
               error: error.toErrorObject(),
-              delay
-            }
+              delay,
+            },
           )
 
           // 广播重试事件
@@ -1106,9 +1143,9 @@ export class DownloadCenterModule extends BaseModule {
             taskId: task.id,
             attempt,
             error: error.userMessage,
-            delay
+            delay,
           })
-        }
+        },
       )
 
       if (result.success) {
@@ -1118,20 +1155,22 @@ export class DownloadCenterModule extends BaseModule {
         await this.databaseService.saveToHistory(task as any)
 
         this.broadcastTaskCompleted(task)
-      } else {
+      }
+      else {
         throw result.error || new Error('Download failed')
       }
-    } catch (error: any) {
+    }
+    catch (error: any) {
       // 转换为 DownloadErrorClass
-      const downloadError =
-        error instanceof DownloadErrorClass
+      const downloadError
+        = error instanceof DownloadErrorClass
           ? error
           : DownloadErrorClass.fromError(error, {
               taskId: task.id,
               url: task.url,
               filename: task.filename,
               module: task.module,
-              timestamp: Date.now()
+              timestamp: Date.now(),
             })
 
       // 记录错误
@@ -1149,14 +1188,15 @@ export class DownloadCenterModule extends BaseModule {
 
   private handleTaskProgress(taskId: string, progress: any): void {
     const task = this.taskQueue.getTask(taskId)
-    if (!task) return
+    if (!task)
+      return
 
     task.progress = {
       totalSize: progress.totalSize,
       downloadedSize: progress.downloadedSize,
       speed: progress.speed || 0,
       remainingTime: progress.remainingTime,
-      percentage: progress.percentage
+      percentage: progress.percentage,
     }
 
     task.updatedAt = new Date()
@@ -1200,14 +1240,14 @@ export class DownloadCenterModule extends BaseModule {
 
   private broadcastTaskCompleted(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-completed', task)
-    
+
     // Show notification for completed download
     this.notificationService.showDownloadCompleteNotification(task)
   }
 
   private broadcastTaskFailed(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-failed', task)
-    
+
     // Show notification for failed download
     this.notificationService.showDownloadFailedNotification(task)
   }
@@ -1233,7 +1273,7 @@ export class DownloadCenterModule extends BaseModule {
     // Broadcast notification click event to renderer
     $app.channel.send(ChannelType.MAIN, 'download:notification-clicked', {
       taskId,
-      action
+      action,
     })
   }
 }

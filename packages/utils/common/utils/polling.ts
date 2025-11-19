@@ -6,20 +6,20 @@
  */
 
 interface PollingTask {
-  id: string;
-  callback: () => void | Promise<void>;
-  intervalMs: number;
-  nextRunMs: number;
+  id: string
+  callback: () => void | Promise<void>
+  intervalMs: number
+  nextRunMs: number
 }
 
-type TimeUnit = 'seconds' | 'minutes' | 'hours';
+type TimeUnit = 'seconds' | 'minutes' | 'hours'
 
 export class PollingService {
-  private static instance: PollingService;
-  private tasks = new Map<string, PollingTask>();
-  private timerId: NodeJS.Timeout | null = null;
-  private isRunning = false;
-  private quitListenerCleanup?: () => void;
+  private static instance: PollingService
+  private tasks = new Map<string, PollingTask>()
+  private timerId: NodeJS.Timeout | null = null
+  private isRunning = false
+  private quitListenerCleanup?: () => void
 
   private constructor() {
     // Private constructor to enforce singleton pattern
@@ -27,21 +27,21 @@ export class PollingService {
 
   public static getInstance(): PollingService {
     if (!PollingService.instance) {
-      PollingService.instance = new PollingService();
+      PollingService.instance = new PollingService()
     }
-    return PollingService.instance;
+    return PollingService.instance
   }
 
   private convertToMs(interval: number, unit: TimeUnit): number {
     switch (unit) {
       case 'seconds':
-        return interval * 1000;
+        return interval * 1000
       case 'minutes':
-        return interval * 60 * 1000;
+        return interval * 60 * 1000
       case 'hours':
-        return interval * 60 * 60 * 1000;
+        return interval * 60 * 60 * 1000
       default:
-        throw new Error(`Invalid time unit: ${unit}`);
+        throw new Error(`Invalid time unit: ${unit}`)
     }
   }
 
@@ -54,31 +54,31 @@ export class PollingService {
   public register(
     id: string,
     callback: () => void | Promise<void>,
-    options: { interval: number; unit: TimeUnit; runImmediately?: boolean }
+    options: { interval: number, unit: TimeUnit, runImmediately?: boolean },
   ): void {
     if (this.tasks.has(id)) {
-      console.warn(`[PollingService] Task with ID '${id}' is already registered. Overwriting.`);
+      console.warn(`[PollingService] Task with ID '${id}' is already registered. Overwriting.`)
     }
 
-    const intervalMs = this.convertToMs(options.interval, options.unit);
+    const intervalMs = this.convertToMs(options.interval, options.unit)
     if (intervalMs <= 0) {
-      console.error(`[PollingService] Task '${id}' has an invalid interval of ${intervalMs}ms. Registration aborted.`);
-      return;
+      console.error(`[PollingService] Task '${id}' has an invalid interval of ${intervalMs}ms. Registration aborted.`)
+      return
     }
 
-    const nextRunMs = options.runImmediately ? Date.now() : Date.now() + intervalMs;
+    const nextRunMs = options.runImmediately ? Date.now() : Date.now() + intervalMs
 
     this.tasks.set(id, {
       id,
       callback,
       intervalMs,
       nextRunMs,
-    });
+    })
 
-    console.log(`[PollingService] Task '${id}' registered to run every ${options.interval} ${options.unit}.`);
+    console.log(`[PollingService] Task '${id}' registered to run every ${options.interval} ${options.unit}.`)
 
     if (this.isRunning) {
-      this._reschedule();
+      this._reschedule()
     }
   }
 
@@ -88,12 +88,13 @@ export class PollingService {
    */
   public unregister(id: string): void {
     if (this.tasks.delete(id)) {
-      console.log(`[PollingService] Task '${id}' unregistered.`);
+      console.log(`[PollingService] Task '${id}' unregistered.`)
       if (this.isRunning) {
-        this._reschedule();
+        this._reschedule()
       }
-    } else {
-      console.warn(`[PollingService] Attempted to unregister a non-existent task with ID '${id}'.`);
+    }
+    else {
+      console.warn(`[PollingService] Attempted to unregister a non-existent task with ID '${id}'.`)
     }
   }
 
@@ -103,7 +104,7 @@ export class PollingService {
    * @returns - True if the task is registered, false otherwise.
    */
   public isRegistered(id: string): boolean {
-    return this.tasks.has(id);
+    return this.tasks.has(id)
   }
 
   /**
@@ -112,13 +113,13 @@ export class PollingService {
    */
   public start(): void {
     if (this.isRunning) {
-      console.warn('[PollingService] Already running, skipping start.');
-      return;
+      console.warn('[PollingService] Already running, skipping start.')
+      return
     }
-    this.isRunning = true;
-    console.log('[PollingService] Polling service started');
-    this._setupQuitListener();
-    this._reschedule();
+    this.isRunning = true
+    console.log('[PollingService] Polling service started')
+    this._setupQuitListener()
+    this._reschedule()
   }
 
   /**
@@ -130,25 +131,26 @@ export class PollingService {
     try {
       // Use dynamic require to avoid hard dependency on Electron
       // Similar to the approach used in packages/utils/plugin/channel.ts
-      const electron = (globalThis as any)?.electron ?? 
-                       (typeof require !== 'undefined' ? require('electron') : null);
-      
+      const electron = (globalThis as any)?.electron
+        ?? (typeof require !== 'undefined' ? require('electron') : null)
+
       if (electron?.app) {
-        const app = electron.app;
-        
+        const app = electron.app
+
         // Listen to before-quit event
         const quitHandler = () => {
-          this.stop('app quit');
-        };
-        
-        app.on('before-quit', quitHandler);
-        
+          this.stop('app quit')
+        }
+
+        app.on('before-quit', quitHandler)
+
         // Store cleanup function
         this.quitListenerCleanup = () => {
-          app.removeListener('before-quit', quitHandler);
-        };
+          app.removeListener('before-quit', quitHandler)
+        }
       }
-    } catch (error) {
+    }
+    catch (error) {
       // Not in Electron environment or Electron not available
       // This is fine, just skip the quit listener setup
     }
@@ -160,73 +162,74 @@ export class PollingService {
    */
   public stop(reason?: string): void {
     if (!this.isRunning) {
-      return;
+      return
     }
-    this.isRunning = false;
+    this.isRunning = false
     if (this.timerId) {
-      clearTimeout(this.timerId);
-      this.timerId = null;
+      clearTimeout(this.timerId)
+      this.timerId = null
     }
-    
+
     // Clean up quit listener
     if (this.quitListenerCleanup) {
-      this.quitListenerCleanup();
-      this.quitListenerCleanup = undefined;
+      this.quitListenerCleanup()
+      this.quitListenerCleanup = undefined
     }
-    
+
     if (reason) {
-      console.log(`[PollingService] Stopping polling service: ${reason}`);
-    } else {
-      console.log('[PollingService] Polling service stopped');
+      console.log(`[PollingService] Stopping polling service: ${reason}`)
+    }
+    else {
+      console.log('[PollingService] Polling service stopped')
     }
   }
 
   private _reschedule(): void {
     if (this.timerId) {
-      clearTimeout(this.timerId);
-      this.timerId = null;
+      clearTimeout(this.timerId)
+      this.timerId = null
     }
 
     if (!this.isRunning || this.tasks.size === 0) {
-      return;
+      return
     }
 
-    const now = Date.now();
+    const now = Date.now()
     const nextTask = Array.from(this.tasks.values()).reduce((prev, curr) =>
-      prev.nextRunMs < curr.nextRunMs ? prev : curr
-    );
+      prev.nextRunMs < curr.nextRunMs ? prev : curr,
+    )
 
-    const delay = Math.max(0, nextTask.nextRunMs - now);
-    this.timerId = setTimeout(() => this._tick(), delay);
+    const delay = Math.max(0, nextTask.nextRunMs - now)
+    this.timerId = setTimeout(() => this._tick(), delay)
   }
 
   private async _tick(): Promise<void> {
-    const now = Date.now();
-    const tasksToRun: PollingTask[] = [];
+    const now = Date.now()
+    const tasksToRun: PollingTask[] = []
 
     for (const task of this.tasks.values()) {
       if (task.nextRunMs <= now) {
-        tasksToRun.push(task);
+        tasksToRun.push(task)
       }
     }
 
     if (tasksToRun.length > 0) {
-        // console.debug(`[PollingService] Executing ${tasksToRun.length} tasks.`);
-        for (const task of tasksToRun) {
-          try {
-            await task.callback();
-          } catch (error) {
-            console.error(`[PollingService] Error executing task '${task.id}':`, error);
-          }
-          // Update next run time based on its last scheduled run time, not 'now'.
-          // This prevents drift if a task takes a long time to execute.
-          task.nextRunMs += task.intervalMs;
+      // console.debug(`[PollingService] Executing ${tasksToRun.length} tasks.`);
+      for (const task of tasksToRun) {
+        try {
+          await task.callback()
         }
+        catch (error) {
+          console.error(`[PollingService] Error executing task '${task.id}':`, error)
+        }
+        // Update next run time based on its last scheduled run time, not 'now'.
+        // This prevents drift if a task takes a long time to execute.
+        task.nextRunMs += task.intervalMs
+      }
     }
 
-
-    this._reschedule();
+    this._reschedule()
   }
 }
 
-export const pollingService = PollingService.getInstance();
+export const pollingService = PollingService.getInstance()

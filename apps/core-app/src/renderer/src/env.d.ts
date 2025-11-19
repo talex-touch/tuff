@@ -1,15 +1,16 @@
 /// <reference types="vite/client" />
 
-import { BaseNodeApi } from '~/modules/channel/main/node'
-import { StorageManager } from './modules/channel/storage'
-import { ITouchClientChannel } from '@talex-touch/utils/channel'
-import { I18n } from 'vue-i18n'
-import { ShortconApi } from './modules/channel/main/shortcon'
-import { IArgMapperOptions } from '@talex-touch/utils/electron'
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { IArgMapperOptions } from '@talex-touch/utils/electron'
 import type { PreloadAPI } from '@talex-touch/utils/preload'
+import type { I18n } from 'vue-i18n'
+import type { ShortconApi } from './modules/channel/main/shortcon'
+import type { StorageManager } from './modules/channel/storage'
+import type { BaseNodeApi } from '~/modules/channel/main/node'
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
+
   const component: DefineComponent<object, object, unknown>
   export default component
 }

@@ -27,18 +27,18 @@
 
 ```typescript
 interface ModuleLoggerOptions {
-  module: string        // 模块名称(唯一标识)
-  color?: string        // 日志颜色
-  enabled?: boolean     // 初始启用状态
-  level?: LogLevel      // 最低日志级别
+  module: string // 模块名称(唯一标识)
+  color?: string // 日志颜色
+  enabled?: boolean // 初始启用状态
+  level?: LogLevel // 最低日志级别
 }
 
 enum LogLevel {
-  DEBUG = 0,   // 详细调试
-  INFO = 1,    // 一般信息
-  WARN = 2,    // 警告
-  ERROR = 3,   // 错误
-  NONE = 4     // 禁用
+  DEBUG = 0, // 详细调试
+  INFO = 1, // 一般信息
+  WARN = 2, // 警告
+  ERROR = 3, // 错误
+  NONE = 4 // 禁用
 }
 
 class ModuleLogger {
@@ -46,15 +46,15 @@ class ModuleLogger {
   info(message: string, ...args: any[]): void
   warn(message: string, ...args: any[]): void
   error(message: string, ...args: any[]): void
-  
+
   // 计时功能
   time(label: string): void
   timeEnd(label: string): void
-  
+
   // 分组功能
   group(label: string): void
   groupEnd(): void
-  
+
   // 控制
   setEnabled(enabled: boolean): void
   setLevel(level: LogLevel): void
@@ -67,21 +67,21 @@ class ModuleLogger {
 class LoggerManager {
   private static instance: LoggerManager
   private loggers: Map<string, ModuleLogger>
-  
+
   // 获取模块 logger
   getLogger(module: string, options?: Partial<ModuleLoggerOptions>): ModuleLogger
-  
+
   // 全局控制
   enableAll(): void
   disableAll(): void
   setGlobalLevel(level: LogLevel): void
-  
+
   // 配置管理
   async loadConfig(): Promise<void>
   async saveConfig(): Promise<void>
-  
+
   // 查询
-  listLoggers(): Array<{ module: string; enabled: boolean; level: LogLevel }>
+  listLoggers(): Array<{ module: string, enabled: boolean, level: LogLevel }>
 }
 ```
 
@@ -91,7 +91,7 @@ class LoggerManager {
 
 ```typescript
 interface LoggingConfig {
-  enabled: boolean      // 全局开关
+  enabled: boolean // 全局开关
   globalLevel: 'debug' | 'info' | 'warn' | 'error' | 'none'
   modules: Record<string, {
     enabled: boolean

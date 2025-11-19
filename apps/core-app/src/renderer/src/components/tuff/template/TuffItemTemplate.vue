@@ -1,3 +1,75 @@
+<script lang="ts" name="TuffItemTemplate" setup>
+import type { ITuffIcon } from '@talex-touch/utils'
+import TuffIcon from '../../base/TuffIcon.vue'
+import TuffStatusBadge from '../TuffStatusBadge.vue'
+
+export interface TuffItemBadge {
+  text: string
+  icon?: string
+  status?: 'success' | 'warning' | 'danger' | 'info' | 'muted'
+  statusKey?: string
+}
+
+export interface TuffItemStatusDot {
+  color?: string
+  class?: string
+  label?: string
+}
+
+export interface TuffItemTemplateProps {
+  // Main content
+  title?: string
+  subtitle?: string
+  icon?: ITuffIcon
+  iconClass?: string
+
+  // Badges
+  topBadge?: TuffItemBadge
+  bottomBadge?: TuffItemBadge
+
+  // Status
+  statusDot?: TuffItemStatusDot
+
+  // States
+  selected?: boolean
+  disabled?: boolean
+  clickable?: boolean
+  hasError?: boolean
+
+  // Size
+  size?: 'sm' | 'md' | 'lg'
+
+  // Accessibility
+  ariaLabel?: string
+}
+
+const props = withDefaults(defineProps<TuffItemTemplateProps>(), {
+  title: '',
+  subtitle: '',
+  icon: undefined,
+  iconClass: '',
+  topBadge: undefined,
+  bottomBadge: undefined,
+  statusDot: undefined,
+  selected: false,
+  disabled: false,
+  clickable: true,
+  hasError: false,
+  size: 'md',
+  ariaLabel: '',
+})
+
+const emit = defineEmits<{
+  click: [event: MouseEvent | KeyboardEvent]
+}>()
+
+function handleClick(event: MouseEvent | KeyboardEvent) {
+  if (props.disabled || !props.clickable)
+    return
+  emit('click', event)
+}
+</script>
+
 <template>
   <div
     class="TuffItemTemplate fake-background"
@@ -6,7 +78,7 @@
       'is-disabled': disabled,
       'is-clickable': clickable,
       'has-error': hasError,
-      [`size-${size}`]: true
+      [`size-${size}`]: true,
     }"
     role="button"
     :tabindex="disabled ? -1 : 0"
@@ -84,77 +156,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="TuffItemTemplate" setup>
-import type { ITuffIcon } from '@talex-touch/utils'
-import TuffStatusBadge from '../TuffStatusBadge.vue'
-import TuffIcon from '../../base/TuffIcon.vue'
-
-export type TuffItemBadge = {
-  text: string
-  icon?: string
-  status?: 'success' | 'warning' | 'danger' | 'info' | 'muted'
-  statusKey?: string
-}
-
-export type TuffItemStatusDot = {
-  color?: string
-  class?: string
-  label?: string
-}
-
-export type TuffItemTemplateProps = {
-  // Main content
-  title?: string
-  subtitle?: string
-  icon?: ITuffIcon
-  iconClass?: string
-
-  // Badges
-  topBadge?: TuffItemBadge
-  bottomBadge?: TuffItemBadge
-
-  // Status
-  statusDot?: TuffItemStatusDot
-
-  // States
-  selected?: boolean
-  disabled?: boolean
-  clickable?: boolean
-  hasError?: boolean
-
-  // Size
-  size?: 'sm' | 'md' | 'lg'
-
-  // Accessibility
-  ariaLabel?: string
-}
-
-const props = withDefaults(defineProps<TuffItemTemplateProps>(), {
-  title: '',
-  subtitle: '',
-  icon: undefined,
-  iconClass: '',
-  topBadge: undefined,
-  bottomBadge: undefined,
-  statusDot: undefined,
-  selected: false,
-  disabled: false,
-  clickable: true,
-  hasError: false,
-  size: 'md',
-  ariaLabel: ''
-})
-
-const emit = defineEmits<{
-  click: [event: MouseEvent | KeyboardEvent]
-}>()
-
-function handleClick(event: MouseEvent | KeyboardEvent) {
-  if (props.disabled || !props.clickable) return
-  emit('click', event)
-}
-</script>
 
 <style lang="scss" scoped>
 .TuffItemTemplate {

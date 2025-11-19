@@ -1,7 +1,8 @@
-import { DbUtils } from '../../../db/utils'
-import * as schema from '../../../db/schema'
+import type { DbUtils } from '../../../db/utils'
+import type { Primitive } from '../../../utils/logger'
 import { lt, sql } from 'drizzle-orm'
-import { Primitive, createLogger } from '../../../utils/logger'
+import * as schema from '../../../db/schema'
+import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('UsageSummaryService')
 
@@ -20,7 +21,7 @@ export interface SummaryStats {
 const DEFAULT_CONFIG: SummaryConfig = {
   retentionDays: 30,
   autoCleanup: true,
-  summaryInterval: 24 * 60 * 60 * 1000
+  summaryInterval: 24 * 60 * 60 * 1000,
 }
 
 /** Service for periodically aggregating usage logs and cleaning up old data */
@@ -32,12 +33,12 @@ export class UsageSummaryService {
     totalRuns: 0,
     totalSummarized: 0,
     totalCleaned: 0,
-    avgDuration: 0
+    avgDuration: 0,
   }
 
   constructor(
     private dbUtils: DbUtils,
-    config?: Partial<SummaryConfig>
+    config?: Partial<SummaryConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config }
   }
@@ -50,7 +51,7 @@ export class UsageSummaryService {
 
     this.isRunning = true
     log.info('Starting usage summary service', {
-      meta: { interval: `${this.config.summaryInterval / 1000 / 60 / 60}h` }
+      meta: { interval: `${this.config.summaryInterval / 1000 / 60 / 60}h` },
     })
 
     this.runSummary().catch((error) => {
@@ -89,15 +90,16 @@ export class UsageSummaryService {
       this.stats.totalRuns++
       this.stats.totalSummarized += summarizedCount
       this.stats.totalCleaned += cleanedCount
-      this.stats.avgDuration =
-        (this.stats.avgDuration * (this.stats.totalRuns - 1) + duration) / this.stats.totalRuns
+      this.stats.avgDuration
+        = (this.stats.avgDuration * (this.stats.totalRuns - 1) + duration) / this.stats.totalRuns
 
       log.info('Summary completed', {
-        meta: { summarized: summarizedCount, cleaned: cleanedCount }
+        meta: { summarized: summarizedCount, cleaned: cleanedCount },
       })
 
       return { summarizedLogs: summarizedCount, cleanedLogs: cleanedCount, duration }
-    } catch (error) {
+    }
+    catch (error) {
       log.error('Summary process failed', { error })
       throw error
     }
@@ -114,7 +116,7 @@ export class UsageSummaryService {
           itemId: schema.usageLogs.itemId,
           source: schema.usageLogs.source,
           action: schema.usageLogs.action,
-          timestamp: schema.usageLogs.timestamp
+          timestamp: schema.usageLogs.timestamp,
         })
         .from(schema.usageLogs)
         .where(sql`${schema.usageLogs.itemId} != 'search_session'`)
@@ -150,7 +152,7 @@ export class UsageSummaryService {
             searchCount: 0,
             executeCount: 0,
             lastSearched: null,
-            lastExecuted: null
+            lastExecuted: null,
           })
         }
 
@@ -160,7 +162,8 @@ export class UsageSummaryService {
           if (!stat.lastSearched || log.timestamp > stat.lastSearched) {
             stat.lastSearched = log.timestamp
           }
-        } else if (log.action === 'execute') {
+        }
+        else if (log.action === 'execute') {
           stat.executeCount++
           if (!stat.lastExecuted || log.timestamp > stat.lastExecuted) {
             stat.lastExecuted = log.timestamp
@@ -169,19 +172,20 @@ export class UsageSummaryService {
       }
 
       const updates = Array.from(aggregated.values())
-      
+
       for (const stat of updates) {
         await this.dbUtils.incrementUsageStats(
           stat.sourceId,
           stat.itemId,
           stat.sourceType,
-          'execute'
+          'execute',
         )
       }
 
       timer.end('debug')
       return logs.length
-    } catch (error) {
+    }
+    catch (error) {
       log.error('Failed to summarize usage logs', { error })
       throw error
     }
@@ -202,7 +206,8 @@ export class UsageSummaryService {
 
       timer.end('debug')
       return 0
-    } catch (error) {
+    }
+    catch (error) {
       log.error('Failed to cleanup expired logs', { error })
       throw error
     }
@@ -217,7 +222,7 @@ export class UsageSummaryService {
     const metaConfig: Record<string, Primitive> = {
       retentionDays: this.config.retentionDays,
       autoCleanup: this.config.autoCleanup,
-      summaryInterval: this.config.summaryInterval
+      summaryInterval: this.config.summaryInterval,
     }
     log.info('Configuration updated', { meta: metaConfig })
 

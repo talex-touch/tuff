@@ -1,16 +1,16 @@
 <!--
   SettingSentry Component
-  
+
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ref, onMounted } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { toast } from 'vue-sonner'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
 
@@ -31,10 +31,12 @@ async function loadConfig() {
     try {
       const count = await touchChannel.send('sentry:get-search-count')
       searchCount.value = count || 0
-    } catch {
+    }
+    catch {
       // Ignore if unavailable
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to load Sentry config', error)
   }
 }
@@ -46,14 +48,16 @@ async function saveConfig() {
       key: 'sentry-config.json',
       content: JSON.stringify({
         enabled: enabled.value,
-        anonymous: anonymous.value
-      })
+        anonymous: anonymous.value,
+      }),
     })
     toast.success(t('settingSentry.saveSuccess', '设置已保存'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to save Sentry config', error)
     toast.error(t('settingSentry.saveError', '保存设置失败'))
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -74,7 +78,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settingSentry.title', 'Sentry 数据分析')"
     :description="t('settingSentry.groupDesc', '帮助改进应用体验')"
     default-icon="i-carbon-chart-bar"
@@ -86,13 +90,13 @@ onMounted(() => {
         {{
           t(
             'settingSentry.descriptionText',
-            '启用数据分析可以帮助我们改进应用性能和用户体验。所有数据都经过匿名化处理，不会包含敏感信息。'
+            '启用数据分析可以帮助我们改进应用性能和用户体验。所有数据都经过匿名化处理，不会包含敏感信息。',
           )
         }}
       </p>
     </section>
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="enabled"
       :title="t('settingSentry.enableDataUpload', '启用数据上传')"
       :description="t('settingSentry.enableDesc', '上传匿名性能指标，帮助快速定位问题。')"
@@ -102,7 +106,7 @@ onMounted(() => {
       @update:model-value="updateEnabled"
     />
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-if="enabled"
       v-model="anonymous"
       :title="t('settingSentry.anonymousMode', '匿名模式')"
@@ -113,25 +117,25 @@ onMounted(() => {
       @update:model-value="updateAnonymous"
     />
 
-    <tuff-block-line v-if="enabled" :title="t('settingSentry.searchCount', '已记录搜索次数')">
+    <TuffBlockLine v-if="enabled" :title="t('settingSentry.searchCount', '已记录搜索次数')">
       <template #description>
         <span class="font-mono text-base text-[var(--el-text-color-primary)]">
           {{ searchCount }}
         </span>
       </template>
-    </tuff-block-line>
+    </TuffBlockLine>
 
     <section v-if="enabled && !anonymous" class="SentryBanner warning">
       <p>
         {{
           t(
             'settingSentry.warning',
-            '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。'
+            '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。',
           )
         }}
       </p>
     </section>
-  </tuff-group-block>
+  </TuffGroupBlock>
 </template>
 
 <style scoped>

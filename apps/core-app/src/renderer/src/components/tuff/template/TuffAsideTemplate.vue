@@ -18,8 +18,8 @@ const props = withDefaults(
     searchId: 'tuff-aside-template-search',
     searchable: true,
     clearLabel: 'Clear search',
-    mainAriaLive: 'polite'
-  }
+    mainAriaLive: 'polite',
+  },
 )
 
 const emit = defineEmits<{

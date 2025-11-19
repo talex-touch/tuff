@@ -3,14 +3,15 @@ import { computed, customRef } from 'vue'
 export function useModelWrapper(props: any, emit: any, name = 'modelValue') {
   return computed({
     get: () => props[name],
-    set: (value) => emit(`update:${name}`, value)
+    set: value => emit(`update:${name}`, value),
   })
 }
 
 export function throttleFunction(func: Function, time: number = 100) {
   let ts = 0
   return function () {
-    if ( new Date().getTime() - ts < time ) return
+    if (new Date().getTime() - ts < time)
+      return
 
     func.apply(this, arguments)
     ts = new Date().getTime()
@@ -20,7 +21,8 @@ export function throttleFunction(func: Function, time: number = 100) {
 export function debounceFunction(func: Function, time: number = 100) {
   let timer: any = null
   return function () {
-    if (timer) clearTimeout(timer)
+    if (timer)
+      clearTimeout(timer)
     timer = setTimeout(() => {
       func.apply(this, arguments)
       timer = null
@@ -29,7 +31,6 @@ export function debounceFunction(func: Function, time: number = 100) {
 }
 
 export function throttleRef(value: any, time: number = 100) {
-
   let ts = 0
 
   return customRef((track, trigger) => {
@@ -39,21 +40,19 @@ export function throttleRef(value: any, time: number = 100) {
         return value
       },
       set(newValue) {
-
-        if( new Date().getTime() - ts < time ) return
+        if (new Date().getTime() - ts < time)
+          return
 
         value = newValue
         track()
         trigger()
         ts = new Date().getTime()
-      }
+      },
     }
   })
-
 }
 
 export function debounceRef(value: any, delay: number) {
-
   let timer: any
 
   return customRef((track, trigger) => {
@@ -69,10 +68,9 @@ export function debounceRef(value: any, delay: number) {
           track()
           trigger()
         }, delay)
-      }
+      },
     }
   })
-
 }
 
 export async function sleep(time: number) {

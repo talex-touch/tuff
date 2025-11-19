@@ -1,8 +1,8 @@
-import { defineConfig } from "vitepress";
-import { nav } from "./config/nav";
-import { sidebar } from "./config/sidebar";
-import { PluginTable } from "./plugin";
-import type MarkdownIt from "markdown-it";
+import type MarkdownIt from 'markdown-it'
+import { defineConfig } from 'vitepress'
+import { nav } from './config/nav'
+import { sidebar } from './config/sidebar'
+import { PluginTable } from './plugin'
 
 /**
  * 更多配置项参考：
@@ -10,10 +10,10 @@ import type MarkdownIt from "markdown-it";
  * @see app-configs https://vitepress.vuejs.org/config/app-configs.html
  */
 export default defineConfig({
-  title: "Tuff",
-  base: "/tuff/",
-  head: [["meta", { name: "theme-color", content: "#0c23ff" }]],
-  lang: "en-US",
+  title: 'Tuff',
+  base: '/tuff/',
+  head: [['meta', { name: 'theme-color', content: '#0c23ff' }]],
+  lang: 'en-US',
   /**
    * 是否显示最后更新时间
    *
@@ -25,7 +25,7 @@ export default defineConfig({
    *
    * @see cacheDir https://vitepress.vuejs.org/config/app-configs#cachedir
    */
-  cacheDir: "../../node_modules",
+  cacheDir: '../../node_modules',
   /**
    * 主题配置
    *
@@ -42,16 +42,16 @@ export default defineConfig({
     },
     editLink: {
       pattern:
-        "https://github.com/talex-touch/tuff/edit/main/apps/docs/:path",
-      text: "Edit on GitHub",
+        'https://github.com/talex-touch/tuff/edit/main/apps/docs/:path',
+      text: 'Edit on GitHub',
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/talex-touch/tuff" },
+      { icon: 'github', link: 'https://github.com/talex-touch/tuff' },
     ],
-    lastUpdatedText: "Last Updated",
+    lastUpdatedText: 'Last Updated',
     docFooter: {
-      prev: "Previous Section",
-      next: "Next Section",
+      prev: 'Previous Section',
+      next: 'Next Section',
     },
   },
   appearance: 'force-dark',
@@ -65,10 +65,10 @@ export default defineConfig({
     /**
      * 配置 Markdown-it 实例
      *
-     * @param { Object } md markdown 实例
+     * @param {object} md markdown 实例
      */
     config: (md: MarkdownIt): void => {
-      md.use(PluginTable);
+      md.use(PluginTable)
     },
   },
-});
+})

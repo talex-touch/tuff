@@ -24,8 +24,8 @@ CREATE INDEX idx_item_usage_updated ON item_usage_stats(updated_at DESC);
 
 **实现 PRD 要求的公式（第 64 行）：**
 ```typescript
-score = weight * 1e6 + match * 1e4 + recency * 1e2 + 
-        (executeCount*1 + searchCount*0.3 + cancelCount*(-0.5)) * decayFactor
+score = weight * 1e6 + match * 1e4 + recency * 1e2
+  + (executeCount * 1 + searchCount * 0.3 + cancelCount * (-0.5)) * decayFactor
 
 // 时间衰减
 decayFactor = exp(-lambda * daysSinceLastInteraction)
@@ -70,10 +70,10 @@ incrementUsageStats(
 item.meta.usageStats = {
   executeCount,
   searchCount,
-  cancelCount,      // 新增
+  cancelCount, // 新增
   lastExecuted,
   lastSearched,
-  lastCancelled     // 新增
+  lastCancelled // 新增
 }
 ```
 
@@ -125,8 +125,8 @@ finalScore = weight * 1e6 + match * 1e4 + recency * 100 + frequency * 10
 
 **现在：**
 ```typescript
-frequency = (executeCount*1 + searchCount*0.3 + cancelCount*(-0.5)) * 
-            exp(-0.1 * daysSinceLastInteraction)
+frequency = (executeCount * 1 + searchCount * 0.3 + cancelCount * (-0.5))
+  * exp(-0.1 * daysSinceLastInteraction)
 finalScore = weight * 1e6 + match * 1e4 + recency * 100 + frequency * 10
 ```
 
@@ -229,12 +229,12 @@ const usageCache = new LRUCache<string, UsageStats>({
 class UsageStatsQueue {
   private queue: Map<string, Increment> = new Map()
   private timer: NodeJS.Timeout | null = null
-  
+
   enqueue(key, type) {
     // 聚合到队列
     this.scheduleFlush(100) // 100ms 后批量刷新
   }
-  
+
   async flush() {
     // 批量 onConflictDoUpdate
   }
@@ -320,6 +320,5 @@ db.select()
 
 ---
 
-**符合 PRD 核心要求：** ✅ 90%+  
+**符合 PRD 核心要求：** ✅ 90%+
 **生产就绪度：** ✅ 高（建议添加缓存层后达到 100%）
-

@@ -5,21 +5,21 @@
   Allows users to configure shortcuts, auto-paste, auto-clear, and auto-hide features.
 -->
 <script setup lang="ts" name="SettingTools">
-import { useI18n } from 'vue-i18n'
+import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
+import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
+import TSelectItem from '~/components/base/select/TSelectItem.vue'
+import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 // Import UI components
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
-import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { shortconApi } from '~/modules/channel/main/shortcon'
 // Import application settings
 import { appSetting } from '~/modules/channel/storage'
-import { onMounted, ref } from 'vue'
-import { shortconApi } from '~/modules/channel/main/shortcon'
-import { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 
 // Define component props
 
@@ -33,7 +33,8 @@ onMounted(async () => {
 })
 
 async function updateShortcut(id: string, newAccelerator: string): Promise<void> {
-  if (!id || !newAccelerator) return
+  if (!id || !newAccelerator)
+    return
   const shortcutList = shortcuts.value
   const target = shortcutList?.find(item => item.id === id)
   const previousValue = target?.accelerator
@@ -49,7 +50,7 @@ async function updateShortcut(id: string, newAccelerator: string): Promise<void>
 }
 
 function getShortcutLabel(id: string): string {
-  const normalized = id.replace(/[\.\-]/g, '_')
+  const normalized = id.replace(/[.\-]/g, '_')
   const key = `settingTools.shortcutLabels.${normalized}`
   const translated = t(key)
   return translated === key ? id : translated
@@ -63,7 +64,7 @@ function getShortcutLabel(id: string): string {
 -->
 <template>
   <!-- Utilities group block -->
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settingTools.groupTitle')"
     :description="t('settingTools.groupDesc')"
     default-icon="i-carbon-app-switcher"
@@ -71,7 +72,7 @@ function getShortcutLabel(id: string): string {
     memory-name="setting-tools"
   >
     <!-- Beginner usage guide switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="appSetting.beginner.init"
       :title="t('settingTools.usage')"
       :description="t('settingTools.usageDesc')"
@@ -81,7 +82,7 @@ function getShortcutLabel(id: string): string {
 
     <!-- Shortcut key configuration slot -->
     <template v-if="shortcuts">
-      <tuff-block-slot
+      <TuffBlockSlot
         v-for="shortcut in shortcuts"
         :key="shortcut.id"
         :title="getShortcutLabel(shortcut.id)"
@@ -89,53 +90,89 @@ function getShortcutLabel(id: string): string {
         default-icon="i-carbon-keyboard"
         active-icon="i-carbon-keyboard"
       >
-        <flat-key-input
+        <FlatKeyInput
           :model-value="shortcut.accelerator"
           @update:model-value="(newValue) => updateShortcut(shortcut.id, String(newValue))"
         />
-      </tuff-block-slot>
+      </TuffBlockSlot>
     </template>
 
     <!-- Auto paste time selection -->
-    <tuff-block-select
+    <TuffBlockSelect
       v-model="appSetting.tools.autoPaste.time"
       :title="t('settingTools.autoPaste')"
       :description="t('settingTools.autoPasteDesc')"
       default-icon="i-carbon-copy"
       active-icon="i-carbon-copy"
     >
-      <t-select-item :model-value="-1">{{ t('settingTools.disabled') }}</t-select-item>
-      <t-select-item :model-value="0">{{ t('settingTools.noLimit') }}</t-select-item>
-      <t-select-item :model-value="15">15 {{ t('settingTools.sec') }}</t-select-item>
-      <t-select-item :model-value="30">30 {{ t('settingTools.sec') }}</t-select-item>
-      <t-select-item :model-value="60">1 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="180">3 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="300">5 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="600">10 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="750">15 {{ t('settingTools.min') }}</t-select-item>
-    </tuff-block-select>
+      <TSelectItem :model-value="-1">
+        {{ t('settingTools.disabled') }}
+      </TSelectItem>
+      <TSelectItem :model-value="0">
+        {{ t('settingTools.noLimit') }}
+      </TSelectItem>
+      <TSelectItem :model-value="15">
+        15 {{ t('settingTools.sec') }}
+      </TSelectItem>
+      <TSelectItem :model-value="30">
+        30 {{ t('settingTools.sec') }}
+      </TSelectItem>
+      <TSelectItem :model-value="60">
+        1 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="180">
+        3 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="300">
+        5 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="600">
+        10 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="750">
+        15 {{ t('settingTools.min') }}
+      </TSelectItem>
+    </TuffBlockSelect>
 
     <!-- Auto clear time selection -->
-    <tuff-block-select
+    <TuffBlockSelect
       v-model="appSetting.tools.autoClear"
       :title="t('settingTools.autoClear')"
       :description="t('settingTools.autoClearDesc')"
       default-icon="i-carbon-erase"
       active-icon="i-carbon-erase"
     >
-      <t-select-item :model-value="-1">{{ t('settingTools.disabled') }}</t-select-item>
-      <t-select-item :model-value="0">{{ t('settingTools.noLimit') }}</t-select-item>
-      <t-select-item :model-value="15">15 {{ t('settingTools.sec') }}</t-select-item>
-      <t-select-item :model-value="30">30 {{ t('settingTools.sec') }}</t-select-item>
-      <t-select-item :model-value="60">1 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="180">3 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="300">5 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="600">10 {{ t('settingTools.min') }}</t-select-item>
-      <t-select-item :model-value="750">15 {{ t('settingTools.min') }}</t-select-item>
-    </tuff-block-select>
+      <TSelectItem :model-value="-1">
+        {{ t('settingTools.disabled') }}
+      </TSelectItem>
+      <TSelectItem :model-value="0">
+        {{ t('settingTools.noLimit') }}
+      </TSelectItem>
+      <TSelectItem :model-value="15">
+        15 {{ t('settingTools.sec') }}
+      </TSelectItem>
+      <TSelectItem :model-value="30">
+        30 {{ t('settingTools.sec') }}
+      </TSelectItem>
+      <TSelectItem :model-value="60">
+        1 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="180">
+        3 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="300">
+        5 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="600">
+        10 {{ t('settingTools.min') }}
+      </TSelectItem>
+      <TSelectItem :model-value="750">
+        15 {{ t('settingTools.min') }}
+      </TSelectItem>
+    </TuffBlockSelect>
 
     <!-- Auto hide switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="appSetting.tools.autoHide"
       :title="t('settingTools.autoHide')"
       :description="t('settingTools.autoHideDesc')"
@@ -144,7 +181,7 @@ function getShortcutLabel(id: string): string {
     />
 
     <!-- Dashboard switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="appSetting.dashboard.enable"
       :title="t('settingTools.dashboard')"
       :description="t('settingTools.dashboardDesc')"
@@ -153,12 +190,12 @@ function getShortcutLabel(id: string): string {
     />
 
     <!-- Search Engine Logs switch -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="appSetting.searchEngine.logsEnabled"
       :title="t('settingTools.searchEngineLogs')"
       :description="t('settingTools.searchEngineLogsDesc')"
       default-icon="i-carbon-warning-alt"
       active-icon="i-carbon-warning-alt"
     />
-  </tuff-group-block>
+  </TuffGroupBlock>
 </template>

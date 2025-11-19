@@ -9,39 +9,39 @@
    *
    * @type {Array}
    */
-  let _recordedSequence: Array<any> = [],
-    /**
-     * a callback to invoke after recording a sequence
-     *
-     * @type {Function|null}
-     */
-    _recordedSequenceCallback: any = null,
-    /**
-     * a list of all of the keys currently held down
-     *
-     * @type {Array}
-     */
-    _currentRecordedKeys: any = [],
-    /**
-     * temporary state where we remember if we've already captured a
-     * character key in the current combo
-     *
-     * @type {boolean}
-     */
-    _recordedCharacterKey = false,
-    /**
-     * a handle for the timer of the current recording
-     *
-     * @type {null|number}
-     */
-    _recordTimer: any = null,
-    /**
-     * the original handleKey method to override when Mousetrap.record() is
-     * called
-     *
-     * @type {Function}
-     */
-    _origHandleKey = Mousetrap.prototype.handleKey
+  let _recordedSequence: Array<any> = []
+  /**
+   * a callback to invoke after recording a sequence
+   *
+   * @type {Function|null}
+   */
+  let _recordedSequenceCallback: any = null
+  /**
+   * a list of all of the keys currently held down
+   *
+   * @type {Array}
+   */
+  let _currentRecordedKeys: any = []
+  /**
+   * temporary state where we remember if we've already captured a
+   * character key in the current combo
+   *
+   * @type {boolean}
+   */
+  let _recordedCharacterKey = false
+  /**
+   * a handle for the timer of the current recording
+   *
+   * @type {null|number}
+   */
+  let _recordTimer: any = null
+  /**
+   * the original handleKey method to override when Mousetrap.record() is
+   * called
+   *
+   * @type {Function}
+   */
+  const _origHandleKey = Mousetrap.prototype.handleKey
 
   /**
    * handles a character key event
@@ -73,7 +73,8 @@
 
       // once a key is released, all keys that were held down at the time
       // count as a keypress
-    } else if (e.type == 'keyup' && _currentRecordedKeys.length > 0) {
+    }
+    else if (e.type == 'keyup' && _currentRecordedKeys.length > 0) {
       _recordCurrentCombo()
     }
   }
@@ -127,11 +128,12 @@
     let i
 
     for (i = 0; i < sequence.length; ++i) {
-      sequence[i].sort(function (x: string, y: string) {
+      sequence[i].sort((x: string, y: string) => {
         // modifier keys always come first, in alphabetical order
         if (x.length > 1 && y.length === 1) {
           return -1
-        } else if (x.length === 1 && y.length > 1) {
+        }
+        else if (x.length === 1 && y.length > 1) {
           return 1
         }
 

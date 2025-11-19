@@ -21,10 +21,9 @@ export class InternalPluginLogger {
     console.debug(this.prefix('DEBUG'), ...args)
   }
 
-  getManager(): { destroy(): void } {
+  getManager(): { destroy: () => void } {
     return {
-      destroy() {}
+      destroy() {},
     }
   }
 }
-

@@ -9,7 +9,7 @@ const model = useModelWrapper(props, emits)
 
 watch(
   () => model,
-  () => emits('change', model)
+  () => emits('change', model),
 )
 </script>
 

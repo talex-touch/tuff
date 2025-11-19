@@ -1,5 +1,5 @@
+import type { TalexTouch } from '../types'
 import gsap from 'gsap'
-import { TalexTouch } from '../types'
 
 /**
  * Window animation controller return type
@@ -52,7 +52,7 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
 
   const animationState: AnimationState = {
     tween: null,
-    completed: false
+    completed: false,
   }
 
   /**
@@ -61,9 +61,9 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
    */
   const isWindowValid = (): boolean => {
     return (
-      currentWindow !== null &&
-      currentWindow.window !== null &&
-      !currentWindow.window.isDestroyed()
+      currentWindow !== null
+      && currentWindow.window !== null
+      && !currentWindow.window.isDestroyed()
     )
   }
 
@@ -97,13 +97,13 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       return new Promise<boolean>((resolve) => {
         animationState.tween = gsap.to(
           {
-            height: currentHeight
+            height: currentHeight,
           },
           {
             height: newHeight,
             duration,
             ease: 'cubic-bezier(0.785, 0.135, 0.15, 0.86)',
-            onUpdate: function () {
+            onUpdate() {
               // Check if animation was cancelled or window destroyed
               if (!animationState.tween || !isWindowValid()) {
                 resolve(false)
@@ -122,11 +122,12 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
             onKill: () => {
               animationState.tween = null
               resolve(false)
-            }
-          }
+            },
+          },
         )
       })
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Error in updateHeight:', error)
       return Promise.resolve(false)
     }
@@ -152,12 +153,14 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       if (targetVisible) {
         // Show window
         browserWindow.show()
-      } else {
+      }
+      else {
         // Hide window
         if (process.platform === 'darwin') {
           // On macOS, we can simply hide the window
           browserWindow.hide()
-        } else {
+        }
+        else {
           // On other platforms, move window far off-screen before hiding
           browserWindow.setPosition(-100000, -100000)
           browserWindow.hide()
@@ -165,7 +168,8 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       }
 
       return Promise.resolve(true)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Error in toggleWindow:', error)
       return Promise.resolve(false)
     }
@@ -186,6 +190,6 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
     updateHeight,
     cancel,
     toggleWindow,
-    changeWindow
+    changeWindow,
   }
 }

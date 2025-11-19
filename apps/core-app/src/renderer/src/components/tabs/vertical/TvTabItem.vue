@@ -1,51 +1,54 @@
-<template>
-  <div class="TvTabItem-Container" :class="{ active: isActive, disabled }">
-    <div class="TvTabs-Tab-Icon">
-      <slot name="icon">
-        <remix-icon v-if="icon" :name="icon" />
-      </slot>
-    </div>
-    <div class="TvTabs-Tab-Name">{{ label || name }}</div>
-  </div>
-</template>
-
 <script name="TvTabItem" setup lang="ts">
-import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { computed } from 'vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps({
   icon: {
     type: String,
-    default: ''
+    default: '',
   },
   name: {
     type: String,
-    required: true
+    required: true,
   },
   label: {
     type: String,
-    default: ''
+    default: '',
   },
   active: {
     type: [Boolean, Function],
-    default: false
+    default: false,
   },
   disabled: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
 
 const isActive = computed(() => {
   // 处理active prop可能为布尔值或函数的情况
   if (typeof props.active === 'boolean') {
     return props.active
-  } else if (typeof props.active === 'function') {
+  }
+  else if (typeof props.active === 'function') {
     return props.active(props.name)
   }
   return false
 })
 </script>
+
+<template>
+  <div class="TvTabItem-Container" :class="{ active: isActive, disabled }">
+    <div class="TvTabs-Tab-Icon">
+      <slot name="icon">
+        <RemixIcon v-if="icon" :name="icon" />
+      </slot>
+    </div>
+    <div class="TvTabs-Tab-Name">
+      {{ label || name }}
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .TvTabItem-Container {

@@ -1,3 +1,22 @@
+<script lang="ts" setup>
+withDefaults(
+  defineProps<{
+    variant:
+      | 'personalized'
+      | 'emphasis'
+      | 'palette'
+      | 'wallpaper'
+      | 'coloring'
+      | 'contrast'
+      | 'guide'
+    active?: boolean
+  }>(),
+  {
+    active: false,
+  },
+)
+</script>
+
 <template>
   <div class="ThemePreviewIcon" :class="[`variant-${variant}`, { active }]">
     <svg v-if="variant === 'personalized'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
@@ -62,25 +81,6 @@
     </svg>
   </div>
 </template>
-
-<script lang="ts" setup>
-withDefaults(
-  defineProps<{
-    variant:
-      | 'personalized'
-      | 'emphasis'
-      | 'palette'
-      | 'wallpaper'
-      | 'coloring'
-      | 'contrast'
-      | 'guide'
-    active?: boolean
-  }>(),
-  {
-    active: false
-  }
-)
-</script>
 
 <style scoped>
 .ThemePreviewIcon {

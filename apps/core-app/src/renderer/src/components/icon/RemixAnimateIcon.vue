@@ -1,12 +1,6 @@
-<template>
-  <svg class="remix">
-    <use :xlink:href="`#ri-${from}-${style || 'line'}`"></use>
-  </svg>
-</template>
-
 <script>
 export default {
-  name: 'RemixAnimateIcon'
+  name: 'RemixAnimateIcon',
 }
 </script>
 
@@ -14,20 +8,26 @@ export default {
 const props = defineProps({
   category: {
     type: String,
-    required: true
+    required: true,
   },
   from: {
     type: String,
-    required: true
+    required: true,
   },
   style: {
     type: String,
     validator(value) {
       return ['line', 'fill'].includes(value)
-    }
-  }
+    },
+  },
 })
 </script>
+
+<template>
+  <svg class="remix">
+    <use :xlink:href="`#ri-${from}-${style || 'line'}`" />
+  </svg>
+</template>
 
 <style lang="scss" scoped>
 @keyframes move {

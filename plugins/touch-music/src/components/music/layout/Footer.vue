@@ -1,67 +1,20 @@
-<template>
-  <div class="Footer-Container" :class="{ active: song }">
-    <div class="Footer-Music-Progress" v-if="song?.progress">
-      <!--        <span>-->
-      <!--          {{ song?.progress?.now_time }}-->
-      <!--        </span>-->
-      <PlayProgressBar @change="handleProgressChange" :max="song.progress.total" v-model="song.progress.current" />
-      <!--      <span>-->
-      <!--          {{ song?.progress?.total_time }}-->
-      <!--        </span>-->
-    </div>
-
-    <div class="Footer-Music-Main">
-      <div @click="screenSongModel = true" class="Footer-Music-Image" v-if="song">
-        <img :alt="song?.detail?.song?.name" :src="song?.detail?.song?.al.picUrl" />
-        <remix-icon name="arrow-up-s" />
-      </div>
-
-      <div class="Footer-Music-Main-Info" v-if="song">
-        <span class="Footer-Music-Main-Info-Name">
-          {{ song.detail?.song?.name }}
-        </span>
-        <Singers :singers="song.detail?.song.ar" />
-      </div>
-    </div>
-
-    <div class="Footer-Music-Action" v-if="song">
-      <IconButton plain @click="prevSong" icon="arrow-left-s" />
-      <play-pause v-model="playStatus" />
-      <IconButton plain @click="nextSong" icon="arrow-right-s" />
-    </div>
-
-<!--    <div class="Footer-Music-Function" v-if="song">-->
-<!--      <FooterFunction />-->
-<!--    </div>-->
-
-    <div ref="lyricRef" class="Footer-Music-Function-Lyric" v-if="song">
-      {{ lyric }}
-    </div>
-
-    <teleport to="#app">
-      <FullScreenLyric v-if="song?.progress" v-model="screenSongModel" />
-    </teleport>
-
-  </div>
-</template>
-
 <script>
-export default {
-  name: "Footer"
-}
 </script>
 
 <script setup>
-import { watch, ref } from 'vue'
+import IconButton from '@comp/button/IconButton.vue'
+import RemixIcon from '@comp/icon/RemixIcon.vue'
+import PlayProgressBar from '@comp/music/base/PlayProgressBar.vue'
+import FullScreenLyric from '@comp/music/FullScreenLyric.vue'
+import Singers from '@comp/music/song/Singers.vue'
 import { musicManager } from '@modules/music.ts'
 import { sleep } from '@modules/utils.ts'
+import { ref, watch } from 'vue'
 import PlayPause from '../../icon/PlayPause.vue'
-import PlayProgressBar from '@comp/music/base/PlayProgressBar.vue'
-import RemixIcon from '@comp/icon/RemixIcon.vue'
-import FullScreenLyric from '@comp/music/FullScreenLyric.vue'
-import FooterFunction from '@comp/music/FooterFunction.vue'
-import Singers from '@comp/music/song/Singers.vue'
-import IconButton from '@comp/button/IconButton.vue'
+
+export default {
+  name: 'Footer',
+}
 
 const screenSongModel = ref(false)
 
@@ -71,7 +24,7 @@ const _song = musicManager.playManager.song
 const playStatus = musicManager.playManager.playStatus
 
 const lyricRef = ref()
-const lyric = ref("")
+const lyric = ref('')
 let lyricAnimation = false
 
 function nextSong() {
@@ -83,20 +36,20 @@ function prevSong() {
 }
 
 function handleProgressChange(value) {
-
   _song.value?.changeSeek(Math.round(value))
-
 }
 
 watch(() => _song, async () => {
   song.value = _song.value
 
   const _lyric = _song.value?.progress?.now_lyric
-  if( _lyric?.length && _lyric !== lyric.value ) {
-    if( lyricAnimation ) return
+  if (_lyric?.length && _lyric !== lyric.value) {
+    if (lyricAnimation)
+      return
     lyricAnimation = true
     const style = lyricRef.value?.style
-    if( !style ) return
+    if (!style)
+      return
 
     style.transform = 'translate(-50%, -5px) scaleX(1.05)'
 
@@ -127,9 +80,54 @@ watch(() => _song, async () => {
 
     lyricAnimation = false
   }
-}, { deep: true } )
-
+}, { deep: true })
 </script>
+
+<template>
+  <div class="Footer-Container" :class="{ active: song }">
+    <div v-if="song?.progress" class="Footer-Music-Progress">
+      <!--        <span> -->
+      <!--          {{ song?.progress?.now_time }} -->
+      <!--        </span> -->
+      <PlayProgressBar v-model="song.progress.current" :max="song.progress.total" @change="handleProgressChange" />
+      <!--      <span> -->
+      <!--          {{ song?.progress?.total_time }} -->
+      <!--        </span> -->
+    </div>
+
+    <div class="Footer-Music-Main">
+      <div v-if="song" class="Footer-Music-Image" @click="screenSongModel = true">
+        <img :alt="song?.detail?.song?.name" :src="song?.detail?.song?.al.picUrl">
+        <RemixIcon name="arrow-up-s" />
+      </div>
+
+      <div v-if="song" class="Footer-Music-Main-Info">
+        <span class="Footer-Music-Main-Info-Name">
+          {{ song.detail?.song?.name }}
+        </span>
+        <Singers :singers="song.detail?.song.ar" />
+      </div>
+    </div>
+
+    <div v-if="song" class="Footer-Music-Action">
+      <IconButton plain icon="arrow-left-s" @click="prevSong" />
+      <PlayPause v-model="playStatus" />
+      <IconButton plain icon="arrow-right-s" @click="nextSong" />
+    </div>
+
+    <!--    <div class="Footer-Music-Function" v-if="song"> -->
+    <!--      <FooterFunction /> -->
+    <!--    </div> -->
+
+    <div v-if="song" ref="lyricRef" class="Footer-Music-Function-Lyric">
+      {{ lyric }}
+    </div>
+
+    <teleport to="#app">
+      <FullScreenLyric v-if="song?.progress" v-model="screenSongModel" />
+    </teleport>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .Footer-Music-Function-Lyric {

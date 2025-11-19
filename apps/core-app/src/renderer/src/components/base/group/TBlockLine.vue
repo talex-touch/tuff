@@ -1,3 +1,26 @@
+<script lang="ts">
+export default {
+  name: 'TBlockLine',
+}
+</script>
+
+<script lang="ts" setup>
+defineProps({
+  title: {
+    type: String,
+    default: '',
+  },
+  description: {
+    type: String,
+    default: '',
+  },
+  link: {
+    type: Boolean,
+    default: false,
+  },
+})
+</script>
+
 <template>
   <div class="TBlockLine-Container fake-background index-fix" :class="{ link }">
     <span class="TBlockLine-Title">
@@ -11,29 +34,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts">
-export default {
-  name: 'TBlockLine'
-}
-</script>
-
-<script lang="ts" setup>
-defineProps({
-  title: {
-    type: String,
-    default: ''
-  },
-  description: {
-    type: String,
-    default: ''
-  },
-  link: {
-    type: Boolean,
-    default: false
-  }
-})
-</script>
 
 <style lang="scss" scoped>
 .TBlockLine-Container {

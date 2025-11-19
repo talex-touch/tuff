@@ -1,290 +1,16 @@
-<template>
-  <div
-    class="prompt-page h-full flex flex-col"
-    role="main"
-    aria-label="Intelligence Prompt Manager"
-  >
-    <tuff-aside-template
-      v-model="searchQuery"
-      class="prompt-shell flex-1"
-      :search-id="'prompt-search'"
-      :search-placeholder="t('settings.intelligence.promptSearchPlaceholder')"
-      :clear-label="t('common.close')"
-    >
-      <template #default>
-        <div>
-          <div class="prompt-filters" role="tablist">
-            <button
-              v-for="option in filterOptions"
-              :key="option.value"
-              class="prompt-filter"
-              type="button"
-              role="tab"
-              :class="{ 'is-active': filterMode === option.value }"
-              @click="filterMode = option.value"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
-
-        <tuff-aside-list
-          v-model:selected-id="selectedPromptId"
-          :items="promptListItems"
-          :empty-text="t('settings.intelligence.promptListEmpty')"
-          @select="handleSelectPrompt"
-        />
-      </template>
-
-      <template #footer>
-        <div>
-          <p class="prompt-footer-stats">
-            {{ t('settings.intelligence.promptStatsLabel', promptStats) }}
-          </p>
-          <p v-if="false" class="prompt-footer-hint">
-            {{ t('settings.intelligence.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
-          </p>
-          <FlatButton class="primary mt-2" type="button" @click="handleCreatePrompt">
-            <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-          </FlatButton>
-        </div>
-      </template>
-
-      <template #main>
-        <TouchScroll v-if="selectedPrompt" :key="selectedPrompt.id" class="h-full">
-          <template #header>
-            <div class="prompt-main-header">
-              <div>
-                <p class="prompt-main-eyebrow">{{ t('flatNavBar.intelligence') }}</p>
-                <h1>{{ t('settings.intelligence.promptPageTitle') }}</h1>
-                <p class="prompt-main-desc">{{ t('settings.intelligence.promptPageDesc') }}</p>
-              </div>
-              <div class="prompt-main-actions">
-                <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
-                  <i class="i-carbon-link" aria-hidden="true" />
-                  <span>{{ t('settings.intelligence.docsButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
-                  <i class="i-carbon-folder-open" aria-hidden="true" />
-                  <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="triggerImport">
-                  <i class="i-carbon-download" aria-hidden="true" />
-                  <span>{{ t('settings.intelligence.promptImportButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
-                  <i class="i-carbon-upload" aria-hidden="true" />
-                  <span>{{ t('settings.intelligence.promptExportButton') }}</span>
-                </button>
-              </div>
-            </div>
-          </template>
-
-          <div v-if="selectedPrompt.builtin" class="prompt-readonly-hint mx-4 mb-4" role="status">
-            <i class="i-carbon-information" aria-hidden="true" />
-            <span>{{ t('settings.intelligence.promptReadonlyHint') }}</span>
-          </div>
-
-          <tuff-group-block
-            :name="t('settings.intelligence.promptMetaTitle')"
-            :description="t('settings.intelligence.promptMetaDesc')"
-            default-icon="i-carbon-information"
-            active-icon="i-carbon-information"
-            memory-name="prompt-meta-info"
-            :default-expand="true"
-          >
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptNameLabel')"
-              :description="promptDraft.name || t('settings.intelligence.promptNamePlaceholder')"
-              default-icon="i-carbon-text-font"
-              active-icon="i-carbon-text-font"
-            >
-              <input
-                v-model="promptDraft.name"
-                class="prompt-inline-input"
-                type="text"
-                :placeholder="t('settings.intelligence.promptNamePlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
-            </tuff-block-slot>
-
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptMetaCategory')"
-              :description="
-                promptDraft.category || t('settings.intelligence.promptCategoryPlaceholder')
-              "
-              default-icon="i-carbon-tag"
-              active-icon="i-carbon-tag"
-            >
-              <input
-                v-model="promptDraft.category"
-                class="prompt-inline-input"
-                type="text"
-                :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
-            </tuff-block-slot>
-
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptDescriptionLabel')"
-              :description="
-                promptDraft.description || t('settings.intelligence.promptDescriptionPlaceholder')
-              "
-              default-icon="i-carbon-document"
-              active-icon="i-carbon-document"
-            >
-              <textarea
-                v-model="promptDraft.description"
-                class="prompt-inline-textarea"
-                rows="2"
-                :placeholder="t('settings.intelligence.promptDescriptionPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
-            </tuff-block-slot>
-          </tuff-group-block>
-
-          <tuff-group-block
-            :name="t('settings.intelligence.promptContentLabel')"
-            :description="t('settings.intelligence.promptContentDesc')"
-            default-icon="i-carbon-code"
-            active-icon="i-carbon-code"
-            memory-name="prompt-content"
-            :default-expand="true"
-          >
-            <div class="prompt-markdown-wrapper">
-              <FlatMarkdown v-model="promptDraft.content" :readonly="isBuiltinSelected" />
-            </div>
-          </tuff-group-block>
-
-          <tuff-group-block
-            :name="t('settings.intelligence.promptActionsTitle')"
-            :description="t('settings.intelligence.promptActionsDesc')"
-            default-icon="i-carbon-settings"
-            active-icon="i-carbon-settings"
-            memory-name="prompt-actions"
-            :default-expand="true"
-          >
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptDuplicateButton')"
-              :description="t('settings.intelligence.promptDuplicateDesc')"
-              default-icon="i-carbon-copy"
-              active-icon="i-carbon-copy"
-              @click="handleDuplicatePrompt"
-            >
-              <button class="aisdk-btn ghost" type="button" @click="handleDuplicatePrompt">
-                <i class="i-carbon-copy" aria-hidden="true" />
-                <span>{{ t('settings.intelligence.promptDuplicateButton') }}</span>
-              </button>
-            </tuff-block-slot>
-
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptCopyButton')"
-              :description="t('settings.intelligence.promptCopyDesc')"
-              default-icon="i-carbon-document"
-              active-icon="i-carbon-document"
-              @click="handleCopyContent"
-            >
-              <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
-                <i class="i-carbon-document" aria-hidden="true" />
-                <span>{{ t('settings.intelligence.promptCopyButton') }}</span>
-              </button>
-            </tuff-block-slot>
-
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptDeleteButton')"
-              :description="t('settings.intelligence.promptDeleteDesc')"
-              default-icon="i-carbon-trash-can"
-              active-icon="i-carbon-trash-can"
-              :disabled="!isCustomEditable"
-              @click="handleDeletePrompt"
-            >
-              <button
-                class="aisdk-btn danger"
-                type="button"
-                :disabled="!isCustomEditable"
-                @click="handleDeletePrompt"
-              >
-                <i class="i-carbon-trash-can" aria-hidden="true" />
-                <span>{{ t('settings.intelligence.promptDeleteButton') }}</span>
-              </button>
-            </tuff-block-slot>
-
-            <tuff-block-slot
-              :title="t('settings.intelligence.promptSaveButton')"
-              :description="autoSaveStatusText"
-              default-icon="i-carbon-checkmark"
-              active-icon="i-carbon-checkmark"
-              :disabled="!isCustomEditable || !isDirty"
-              @click="handleSavePrompt"
-            >
-              <div class="flex items-center gap-2">
-                <div
-                  v-if="isCustomEditable"
-                  class="prompt-actions__status"
-                  :data-status="autoSaveStatus"
-                >
-                  <i
-                    v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
-                    class="i-carbon-renew animate-spin text-[var(--el-text-color-secondary)]"
-                  />
-                  <i
-                    v-else-if="autoSaveStatus === 'saved'"
-                    class="i-carbon-checkmark text-[var(--el-color-success)]"
-                  />
-                </div>
-                <button
-                  class="aisdk-btn primary"
-                  type="button"
-                  :disabled="!isCustomEditable || !isDirty"
-                  @click="handleSavePrompt"
-                >
-                  <i class="i-carbon-checkmark" aria-hidden="true" />
-                  <span>{{ t('settings.intelligence.promptSaveButton') }}</span>
-                </button>
-              </div>
-            </tuff-block-slot>
-          </tuff-group-block>
-        </TouchScroll>
-
-        <div v-else class="prompt-empty-state" role="status">
-          <i class="i-carbon-idea text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
-          <p class="prompt-empty-state__title">
-            {{ t('settings.intelligence.promptEmptyStateTitle') }}
-          </p>
-          <p class="prompt-empty-state__desc">
-            {{ t('settings.intelligence.promptEmptyStateDesc') }}
-          </p>
-          <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
-            <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-          </button>
-        </div>
-      </template>
-    </tuff-aside-template>
-
-    <input
-      ref="importInputRef"
-      class="sr-only"
-      type="file"
-      accept="application/json"
-      @change="handleImport"
-    />
-  </div>
-</template>
-
 <script lang="ts" name="IntelligencePromptsPage" setup>
-import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
+import type { PromptTemplate } from '~/modules/hooks/usePromptManager'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
-import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
-import { getPromptManager, type PromptTemplate } from '~/modules/hooks/usePromptManager'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
+import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { getPromptManager } from '~/modules/hooks/usePromptManager'
 
 type FilterMode = 'all' | 'builtin' | 'custom'
 
@@ -299,7 +25,7 @@ const promptDraft = reactive({
   name: '',
   category: '',
   description: '',
-  content: ''
+  content: '',
 })
 const autoSaveStatus = ref<'idle' | 'pending' | 'saving' | 'saved'>('idle')
 let isApplyingDraft = false
@@ -308,7 +34,7 @@ let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 const filterOptions = computed(() => [
   { value: 'all', label: t('settings.intelligence.promptFilterAll') },
   { value: 'builtin', label: t('settings.intelligence.builtin') },
-  { value: 'custom', label: t('settings.intelligence.custom') }
+  { value: 'custom', label: t('settings.intelligence.custom') },
 ])
 
 const orderedPrompts = computed<PromptTemplate[]>(() => {
@@ -320,33 +46,35 @@ const orderedPrompts = computed<PromptTemplate[]>(() => {
 const visiblePrompts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return orderedPrompts.value.filter((prompt) => {
-    const matchesFilter =
-      filterMode.value === 'all'
+    const matchesFilter
+      = filterMode.value === 'all'
         ? true
         : filterMode.value === 'builtin'
           ? prompt.builtin
           : !prompt.builtin
 
-    if (!matchesFilter) return false
-    if (!query) return true
+    if (!matchesFilter)
+      return false
+    if (!query)
+      return true
     return (
-      prompt.name.toLowerCase().includes(query) ||
-      (prompt.description && prompt.description.toLowerCase().includes(query)) ||
-      prompt.content.toLowerCase().includes(query)
+      prompt.name.toLowerCase().includes(query)
+      || (prompt.description && prompt.description.toLowerCase().includes(query))
+      || prompt.content.toLowerCase().includes(query)
     )
   })
 })
 
 const promptListItems = computed(() =>
-  visiblePrompts.value.map((prompt) => ({
+  visiblePrompts.value.map(prompt => ({
     id: prompt.id,
     title: prompt.name,
     description: prompt.description || t('settings.intelligence.promptMetaDescription'),
     badgeLabel: prompt.builtin
       ? t('settings.intelligence.builtin')
       : t('settings.intelligence.custom'),
-    badgeVariant: prompt.builtin ? 'info' : 'success'
-  }))
+    badgeVariant: prompt.builtin ? 'info' : 'success',
+  })),
 )
 
 watch(
@@ -356,16 +84,17 @@ watch(
       selectedPromptId.value = null
       return
     }
-    if (!selectedPromptId.value || !list.some((prompt) => prompt.id === selectedPromptId.value)) {
+    if (!selectedPromptId.value || !list.some(prompt => prompt.id === selectedPromptId.value)) {
       selectedPromptId.value = list[0].id
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const selectedPrompt = computed<PromptTemplate | null>(() => {
-  if (!selectedPromptId.value) return null
-  return orderedPrompts.value.find((prompt) => prompt.id === selectedPromptId.value) ?? null
+  if (!selectedPromptId.value)
+    return null
+  return orderedPrompts.value.find(prompt => prompt.id === selectedPromptId.value) ?? null
 })
 
 const isBuiltinSelected = computed(() => !!selectedPrompt.value?.builtin)
@@ -399,30 +128,31 @@ watch(
     }
     isApplyingDraft = false
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const isDirty = computed(() => {
-  if (!selectedPrompt.value || !isCustomEditable.value) return false
+  if (!selectedPrompt.value || !isCustomEditable.value)
+    return false
   return (
-    selectedPrompt.value.name !== promptDraft.name ||
-    (selectedPrompt.value.category ?? '') !== promptDraft.category ||
-    (selectedPrompt.value.description ?? '') !== promptDraft.description ||
-    selectedPrompt.value.content !== promptDraft.content
+    selectedPrompt.value.name !== promptDraft.name
+    || (selectedPrompt.value.category ?? '') !== promptDraft.category
+    || (selectedPrompt.value.description ?? '') !== promptDraft.description
+    || selectedPrompt.value.content !== promptDraft.content
   )
 })
 
 const promptStats = computed(() => ({
   total: orderedPrompts.value.length,
   builtin: promptManager.prompts.builtin.length,
-  custom: promptManager.prompts.custom.length
+  custom: promptManager.prompts.custom.length,
 }))
 
 const totalWordsApprox = computed(() =>
   orderedPrompts.value.reduce((sum, prompt) => {
     const words = prompt.content.trim().split(/\s+/).filter(Boolean).length
     return sum + words
-  }, 0)
+  }, 0),
 )
 
 const autoSaveStatusText = computed(() => {
@@ -456,7 +186,8 @@ function flushPendingPromptChanges(): void {
   autoSaveStatus.value = ok ? 'saved' : 'idle'
   if (ok) {
     window.setTimeout(() => {
-      if (autoSaveStatus.value === 'saved') autoSaveStatus.value = 'idle'
+      if (autoSaveStatus.value === 'saved')
+        autoSaveStatus.value = 'idle'
     }, 1200)
   }
 }
@@ -474,7 +205,8 @@ async function handleOpenFolder(): Promise<void> {
   try {
     await touchChannel.send('app:open-prompts-folder')
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[PromptManager] Failed to open folder', error)
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
@@ -483,13 +215,13 @@ async function handleOpenFolder(): Promise<void> {
 function handleCreatePrompt(): void {
   flushPendingPromptChanges()
   const name = t('settings.intelligence.promptNewDefaultName', {
-    index: promptStats.value.custom + 1
+    index: promptStats.value.custom + 1,
   })
   const newId = promptManager.addCustomPrompt({
     name,
     category: 'custom',
     description: t('settings.intelligence.promptDescriptionPlaceholder'),
-    content: ''
+    content: '',
   })
   filterMode.value = 'custom'
   searchQuery.value = ''
@@ -498,7 +230,8 @@ function handleCreatePrompt(): void {
 }
 
 function handleDuplicatePrompt(): void {
-  if (!selectedPrompt.value) return
+  if (!selectedPrompt.value)
+    return
   flushPendingPromptChanges()
   const suffix = t('settings.intelligence.promptDuplicateSuffix')
   const name = `${selectedPrompt.value.name} ${suffix}`.trim()
@@ -506,7 +239,7 @@ function handleDuplicatePrompt(): void {
     name,
     category: selectedPrompt.value.category ?? '',
     description: selectedPrompt.value.description ?? '',
-    content: selectedPrompt.value.content
+    content: selectedPrompt.value.content,
   })
   filterMode.value = 'custom'
   selectedPromptId.value = newId
@@ -514,16 +247,19 @@ function handleDuplicatePrompt(): void {
 }
 
 function persistPrompt(showSuccessToast: boolean, showErrorToast: boolean = true): boolean {
-  if (!selectedPrompt.value || !isCustomEditable.value) return false
+  if (!selectedPrompt.value || !isCustomEditable.value)
+    return false
   const ok = promptManager.updateCustomPrompt(selectedPrompt.value.id, {
     name: promptDraft.name,
     category: promptDraft.category,
     description: promptDraft.description,
-    content: promptDraft.content
+    content: promptDraft.content,
   })
   if (ok) {
-    if (showSuccessToast) toast.success(t('settings.intelligence.promptSaveSuccess'))
-  } else if (showErrorToast) {
+    if (showSuccessToast)
+      toast.success(t('settings.intelligence.promptSaveSuccess'))
+  }
+  else if (showErrorToast) {
     toast.error(t('settings.intelligence.promptSaveFailed'))
   }
   return ok
@@ -534,7 +270,8 @@ function handleSavePrompt(): void {
 }
 
 function scheduleAutoSave(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft) return
+  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft)
+    return
   autoSaveStatus.value = 'pending'
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer)
@@ -569,16 +306,19 @@ function runAutoSave(): void {
 watch(
   () => ({ ...promptDraft }),
   () => {
-    if (isApplyingDraft || !isCustomEditable.value) return
+    if (isApplyingDraft || !isCustomEditable.value)
+      return
     scheduleAutoSave()
   },
-  { deep: true }
+  { deep: true },
 )
 
 function handleDeletePrompt(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value) return
+  if (!selectedPrompt.value || !isCustomEditable.value)
+    return
   flushPendingPromptChanges()
-  if (!window.confirm(t('settings.intelligence.promptDeleteConfirm'))) return
+  if (!window.confirm(t('settings.intelligence.promptDeleteConfirm')))
+    return
   const deletedId = selectedPrompt.value.id
   const deleted = promptManager.deleteCustomPrompt(deletedId)
   if (!deleted) {
@@ -586,16 +326,18 @@ function handleDeletePrompt(): void {
     return
   }
   toast.success(t('settings.intelligence.promptDeleteSuccess'))
-  const next = visiblePrompts.value.find((prompt) => prompt.id !== deletedId)
+  const next = visiblePrompts.value.find(prompt => prompt.id !== deletedId)
   selectedPromptId.value = next?.id ?? orderedPrompts.value[0]?.id ?? null
 }
 
 async function handleCopyContent(): Promise<void> {
-  if (!selectedPrompt.value) return
+  if (!selectedPrompt.value)
+    return
   try {
     await navigator.clipboard.writeText(selectedPrompt.value.content)
     toast.success(t('settings.intelligence.promptCopySuccess'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[PromptManager] Failed to copy prompt', error)
   }
 }
@@ -607,16 +349,19 @@ function triggerImport(): void {
 async function handleImport(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file) return
+  if (!file)
+    return
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
     const imported = promptManager.importPrompts(payload)
     toast.success(t('settings.intelligence.promptImportSuccess', { count: imported }))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[PromptManager] Failed to import prompts', error)
     toast.error(t('settings.intelligence.promptImportFailed'))
-  } finally {
+  }
+  finally {
     input.value = ''
   }
 }
@@ -638,13 +383,14 @@ function handleExportPrompts(): void {
 }
 
 function formatTimestamp(value?: number): string {
-  if (!value) return t('settings.intelligence.promptTimestampUnknown')
+  if (!value)
+    return t('settings.intelligence.promptTimestampUnknown')
   return new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   }).format(value)
 }
 
@@ -652,6 +398,285 @@ onBeforeUnmount(() => {
   flushPendingPromptChanges()
 })
 </script>
+
+<template>
+  <div
+    class="prompt-page h-full flex flex-col"
+    role="main"
+    aria-label="Intelligence Prompt Manager"
+  >
+    <TuffAsideTemplate
+      v-model="searchQuery"
+      class="prompt-shell flex-1"
+      search-id="prompt-search"
+      :search-placeholder="t('settings.intelligence.promptSearchPlaceholder')"
+      :clear-label="t('common.close')"
+    >
+      <template #default>
+        <div>
+          <div class="prompt-filters" role="tablist">
+            <button
+              v-for="option in filterOptions"
+              :key="option.value"
+              class="prompt-filter"
+              type="button"
+              role="tab"
+              :class="{ 'is-active': filterMode === option.value }"
+              @click="filterMode = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <TuffAsideList
+          v-model:selected-id="selectedPromptId"
+          :items="promptListItems"
+          :empty-text="t('settings.intelligence.promptListEmpty')"
+          @select="handleSelectPrompt"
+        />
+      </template>
+
+      <template #footer>
+        <div>
+          <p class="prompt-footer-stats">
+            {{ t('settings.intelligence.promptStatsLabel', promptStats) }}
+          </p>
+          <p v-if="false" class="prompt-footer-hint">
+            {{ t('settings.intelligence.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
+          </p>
+          <FlatButton class="primary mt-2" type="button" @click="handleCreatePrompt">
+            <i class="i-carbon-add" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
+          </FlatButton>
+        </div>
+      </template>
+
+      <template #main>
+        <TouchScroll v-if="selectedPrompt" :key="selectedPrompt.id" class="h-full">
+          <template #header>
+            <div class="prompt-main-header">
+              <div>
+                <p class="prompt-main-eyebrow">
+                  {{ t('flatNavBar.intelligence') }}
+                </p>
+                <h1>{{ t('settings.intelligence.promptPageTitle') }}</h1>
+                <p class="prompt-main-desc">
+                  {{ t('settings.intelligence.promptPageDesc') }}
+                </p>
+              </div>
+              <div class="prompt-main-actions">
+                <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
+                  <i class="i-carbon-link" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.docsButton') }}</span>
+                </button>
+                <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
+                  <i class="i-carbon-folder-open" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
+                </button>
+                <button class="aisdk-btn ghost" type="button" @click="triggerImport">
+                  <i class="i-carbon-download" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.promptImportButton') }}</span>
+                </button>
+                <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
+                  <i class="i-carbon-upload" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.promptExportButton') }}</span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <div v-if="selectedPrompt.builtin" class="prompt-readonly-hint mx-4 mb-4" role="status">
+            <i class="i-carbon-information" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.promptReadonlyHint') }}</span>
+          </div>
+
+          <TuffGroupBlock
+            :name="t('settings.intelligence.promptMetaTitle')"
+            :description="t('settings.intelligence.promptMetaDesc')"
+            default-icon="i-carbon-information"
+            active-icon="i-carbon-information"
+            memory-name="prompt-meta-info"
+            :default-expand="true"
+          >
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptNameLabel')"
+              :description="promptDraft.name || t('settings.intelligence.promptNamePlaceholder')"
+              default-icon="i-carbon-text-font"
+              active-icon="i-carbon-text-font"
+            >
+              <input
+                v-model="promptDraft.name"
+                class="prompt-inline-input"
+                type="text"
+                :placeholder="t('settings.intelligence.promptNamePlaceholder')"
+                :disabled="isBuiltinSelected"
+              >
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptMetaCategory')"
+              :description="
+                promptDraft.category || t('settings.intelligence.promptCategoryPlaceholder')
+              "
+              default-icon="i-carbon-tag"
+              active-icon="i-carbon-tag"
+            >
+              <input
+                v-model="promptDraft.category"
+                class="prompt-inline-input"
+                type="text"
+                :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
+                :disabled="isBuiltinSelected"
+              >
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptDescriptionLabel')"
+              :description="
+                promptDraft.description || t('settings.intelligence.promptDescriptionPlaceholder')
+              "
+              default-icon="i-carbon-document"
+              active-icon="i-carbon-document"
+            >
+              <textarea
+                v-model="promptDraft.description"
+                class="prompt-inline-textarea"
+                rows="2"
+                :placeholder="t('settings.intelligence.promptDescriptionPlaceholder')"
+                :disabled="isBuiltinSelected"
+              />
+            </TuffBlockSlot>
+          </TuffGroupBlock>
+
+          <TuffGroupBlock
+            :name="t('settings.intelligence.promptContentLabel')"
+            :description="t('settings.intelligence.promptContentDesc')"
+            default-icon="i-carbon-code"
+            active-icon="i-carbon-code"
+            memory-name="prompt-content"
+            :default-expand="true"
+          >
+            <div class="prompt-markdown-wrapper">
+              <FlatMarkdown v-model="promptDraft.content" :readonly="isBuiltinSelected" />
+            </div>
+          </TuffGroupBlock>
+
+          <TuffGroupBlock
+            :name="t('settings.intelligence.promptActionsTitle')"
+            :description="t('settings.intelligence.promptActionsDesc')"
+            default-icon="i-carbon-settings"
+            active-icon="i-carbon-settings"
+            memory-name="prompt-actions"
+            :default-expand="true"
+          >
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptDuplicateButton')"
+              :description="t('settings.intelligence.promptDuplicateDesc')"
+              default-icon="i-carbon-copy"
+              active-icon="i-carbon-copy"
+              @click="handleDuplicatePrompt"
+            >
+              <button class="aisdk-btn ghost" type="button" @click="handleDuplicatePrompt">
+                <i class="i-carbon-copy" aria-hidden="true" />
+                <span>{{ t('settings.intelligence.promptDuplicateButton') }}</span>
+              </button>
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptCopyButton')"
+              :description="t('settings.intelligence.promptCopyDesc')"
+              default-icon="i-carbon-document"
+              active-icon="i-carbon-document"
+              @click="handleCopyContent"
+            >
+              <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
+                <i class="i-carbon-document" aria-hidden="true" />
+                <span>{{ t('settings.intelligence.promptCopyButton') }}</span>
+              </button>
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptDeleteButton')"
+              :description="t('settings.intelligence.promptDeleteDesc')"
+              default-icon="i-carbon-trash-can"
+              active-icon="i-carbon-trash-can"
+              :disabled="!isCustomEditable"
+              @click="handleDeletePrompt"
+            >
+              <button
+                class="aisdk-btn danger"
+                type="button"
+                :disabled="!isCustomEditable"
+                @click="handleDeletePrompt"
+              >
+                <i class="i-carbon-trash-can" aria-hidden="true" />
+                <span>{{ t('settings.intelligence.promptDeleteButton') }}</span>
+              </button>
+            </TuffBlockSlot>
+
+            <TuffBlockSlot
+              :title="t('settings.intelligence.promptSaveButton')"
+              :description="autoSaveStatusText"
+              default-icon="i-carbon-checkmark"
+              active-icon="i-carbon-checkmark"
+              :disabled="!isCustomEditable || !isDirty"
+              @click="handleSavePrompt"
+            >
+              <div class="flex items-center gap-2">
+                <div
+                  v-if="isCustomEditable"
+                  class="prompt-actions__status"
+                  :data-status="autoSaveStatus"
+                >
+                  <i
+                    v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
+                    class="i-carbon-renew animate-spin text-[var(--el-text-color-secondary)]"
+                  />
+                  <i
+                    v-else-if="autoSaveStatus === 'saved'"
+                    class="i-carbon-checkmark text-[var(--el-color-success)]"
+                  />
+                </div>
+                <button
+                  class="aisdk-btn primary"
+                  type="button"
+                  :disabled="!isCustomEditable || !isDirty"
+                  @click="handleSavePrompt"
+                >
+                  <i class="i-carbon-checkmark" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.promptSaveButton') }}</span>
+                </button>
+              </div>
+            </TuffBlockSlot>
+          </TuffGroupBlock>
+        </TouchScroll>
+
+        <div v-else class="prompt-empty-state" role="status">
+          <i class="i-carbon-idea text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
+          <p class="prompt-empty-state__title">
+            {{ t('settings.intelligence.promptEmptyStateTitle') }}
+          </p>
+          <p class="prompt-empty-state__desc">
+            {{ t('settings.intelligence.promptEmptyStateDesc') }}
+          </p>
+          <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
+            <i class="i-carbon-add" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
+          </button>
+        </div>
+      </template>
+    </TuffAsideTemplate>
+
+    <input
+      ref="importInputRef"
+      class="sr-only"
+      type="file"
+      accept="application/json"
+      @change="handleImport"
+    >
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .prompt-shell {

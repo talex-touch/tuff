@@ -1,3 +1,162 @@
+<script setup lang="ts">
+import type { DownloadHistory } from '@talex-touch/utils'
+import {
+  Box,
+  Calendar,
+  Check,
+  Close,
+  Delete,
+  Files,
+  Folder,
+  FolderOpened,
+  Odometer,
+  Remove,
+  Timer,
+} from '@element-plus/icons-vue'
+import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+interface Props {
+  history: DownloadHistory
+}
+
+const props = defineProps<Props>()
+
+defineEmits<{
+  'open-file': [historyId: string]
+  'show-in-folder': [historyId: string]
+  'clear': [historyId: string]
+}>()
+
+const { t } = useI18n()
+
+const statusClass = computed(() => `status-${props.history.status}`)
+
+const statusColor = computed(() => {
+  switch (props.history.status) {
+    case DownloadStatus.COMPLETED:
+      return '#67C23A'
+    case DownloadStatus.FAILED:
+      return '#F56C6C'
+    case DownloadStatus.CANCELLED:
+      return '#909399'
+    default:
+      return '#909399'
+  }
+})
+
+const statusIcon = computed(() => {
+  switch (props.history.status) {
+    case DownloadStatus.COMPLETED:
+      return Check
+    case DownloadStatus.FAILED:
+      return Close
+    case DownloadStatus.CANCELLED:
+      return Remove
+    default:
+      return Check
+  }
+})
+
+function getModuleName(module: DownloadModule): string {
+  const moduleNames = {
+    [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
+    [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
+    [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
+    [DownloadModule.USER_MANUAL]: t('download.module_user_manual'),
+  }
+  return moduleNames[module] || t('download.module_unknown')
+}
+
+function getStatusText(status: DownloadStatus): string {
+  const statusTexts = {
+    [DownloadStatus.COMPLETED]: t('download.status_completed'),
+    [DownloadStatus.FAILED]: t('download.status_failed'),
+    [DownloadStatus.CANCELLED]: t('download.status_cancelled'),
+  }
+  return statusTexts[status] || status
+}
+
+function formatDate(date: Date | undefined): string {
+  if (!date)
+    return '-'
+
+  const d = new Date(date)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+
+  // 小于1分钟
+  if (diff < 60 * 1000) {
+    return t('download.just_now')
+  }
+
+  // 小于1小时
+  if (diff < 60 * 60 * 1000) {
+    const minutes = Math.floor(diff / (60 * 1000))
+    return t('download.minutes_ago', { count: minutes })
+  }
+
+  // 小于1天
+  if (diff < 24 * 60 * 60 * 1000) {
+    const hours = Math.floor(diff / (60 * 60 * 1000))
+    return t('download.hours_ago', { count: hours })
+  }
+
+  // 小于7天
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000))
+    return t('download.days_ago', { count: days })
+  }
+
+  // 显示完整日期
+  return d.toLocaleDateString()
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  }
+  else if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+  else if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  else {
+    return `${bytes} B`
+  }
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}${t('download.seconds')}`
+  }
+  else if (seconds < 3600) {
+    const minutes = Math.floor(seconds / 60)
+    const secs = Math.round(seconds % 60)
+    return `${minutes}${t('download.minutes')}${secs}${t('download.seconds')}`
+  }
+  else {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    return `${hours}${t('download.hours')}${minutes}${t('download.minutes')}`
+  }
+}
+
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond >= 1024 * 1024) {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+  }
+  else if (bytesPerSecond >= 1024) {
+    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  }
+  else {
+    return `${bytesPerSecond.toFixed(0)} B/s`
+  }
+}
+</script>
+
 <template>
   <div class="history-card" :class="statusClass">
     <div class="card-content">
@@ -88,156 +247,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import {
-  Check,
-  Close,
-  Calendar,
-  Files,
-  Box,
-  Timer,
-  Odometer,
-  FolderOpened,
-  Folder,
-  Delete,
-  Remove
-} from '@element-plus/icons-vue'
-import { DownloadHistory, DownloadStatus, DownloadModule } from '@talex-touch/utils'
-
-interface Props {
-  history: DownloadHistory
-}
-
-const { t } = useI18n()
-
-const props = defineProps<Props>()
-
-defineEmits<{
-  'open-file': [historyId: string]
-  'show-in-folder': [historyId: string]
-  clear: [historyId: string]
-}>()
-
-const statusClass = computed(() => `status-${props.history.status}`)
-
-const statusColor = computed(() => {
-  switch (props.history.status) {
-    case DownloadStatus.COMPLETED:
-      return '#67C23A'
-    case DownloadStatus.FAILED:
-      return '#F56C6C'
-    case DownloadStatus.CANCELLED:
-      return '#909399'
-    default:
-      return '#909399'
-  }
-})
-
-const statusIcon = computed(() => {
-  switch (props.history.status) {
-    case DownloadStatus.COMPLETED:
-      return Check
-    case DownloadStatus.FAILED:
-      return Close
-    case DownloadStatus.CANCELLED:
-      return Remove
-    default:
-      return Check
-  }
-})
-
-const getModuleName = (module: DownloadModule): string => {
-  const moduleNames = {
-    [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
-    [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
-    [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
-    [DownloadModule.USER_MANUAL]: t('download.module_user_manual')
-  }
-  return moduleNames[module] || t('download.module_unknown')
-}
-
-const getStatusText = (status: DownloadStatus): string => {
-  const statusTexts = {
-    [DownloadStatus.COMPLETED]: t('download.status_completed'),
-    [DownloadStatus.FAILED]: t('download.status_failed'),
-    [DownloadStatus.CANCELLED]: t('download.status_cancelled')
-  }
-  return statusTexts[status] || status
-}
-
-const formatDate = (date: Date | undefined): string => {
-  if (!date) return '-'
-  
-  const d = new Date(date)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  
-  // 小于1分钟
-  if (diff < 60 * 1000) {
-    return t('download.just_now')
-  }
-  
-  // 小于1小时
-  if (diff < 60 * 60 * 1000) {
-    const minutes = Math.floor(diff / (60 * 1000))
-    return t('download.minutes_ago', { count: minutes })
-  }
-  
-  // 小于1天
-  if (diff < 24 * 60 * 60 * 1000) {
-    const hours = Math.floor(diff / (60 * 60 * 1000))
-    return t('download.hours_ago', { count: hours })
-  }
-  
-  // 小于7天
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    const days = Math.floor(diff / (24 * 60 * 60 * 1000))
-    return t('download.days_ago', { count: days })
-  }
-  
-  // 显示完整日期
-  return d.toLocaleDateString()
-}
-
-const formatSize = (bytes: number): string => {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  } else if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  } else if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  } else {
-    return `${bytes} B`
-  }
-}
-
-const formatDuration = (seconds: number): string => {
-  if (seconds < 60) {
-    return `${Math.round(seconds)}${t('download.seconds')}`
-  } else if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60)
-    const secs = Math.round(seconds % 60)
-    return `${minutes}${t('download.minutes')}${secs}${t('download.seconds')}`
-  } else {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    return `${hours}${t('download.hours')}${minutes}${t('download.minutes')}`
-  }
-}
-
-const formatSpeed = (bytesPerSecond: number): string => {
-  if (bytesPerSecond >= 1024 * 1024) {
-    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  } else if (bytesPerSecond >= 1024) {
-    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  } else {
-    return `${bytesPerSecond.toFixed(0)} B/s`
-  }
-}
-</script>
 
 <style scoped>
 .history-card {

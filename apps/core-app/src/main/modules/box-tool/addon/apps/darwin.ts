@@ -1,7 +1,7 @@
-import { exec } from 'child_process'
-import fs from 'fs/promises'
-import os from 'os'
-import path from 'path'
+import { exec } from 'node:child_process'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { createRetrier } from '@talex-touch/utils'
 import { reportAppScanError } from './app-error-reporter'
 
@@ -19,7 +19,7 @@ async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<stri
   })
 }
 
-async function getAppIcon(app: { path: string; name: string }): Promise<string | null> {
+async function getAppIcon(app: { path: string, name: string }): Promise<string | null> {
   const safeName = app.name.replace(/[/\\?%*:|"<>]/g, '-')
   const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeName}.png`)
   const noneMarkerPath = path.join(ICON_CACHE_DIR, `${safeName}.none`)
@@ -44,7 +44,7 @@ async function getAppIcon(app: { path: string; name: string }): Promise<string |
     try {
       const plistContent = await fs.readFile(plistPath, 'utf-8')
       const iconNameMatch = plistContent.match(
-        /<key>CFBundleIconFile<\/key>\s*<string>(.*?)<\/string>/
+        /<key>CFBundleIconFile<\/key>\s*<string>(.*?)<\/string>/,
       )
       if (iconNameMatch?.[1]) {
         let iconFile = iconNameMatch[1]
@@ -56,13 +56,14 @@ async function getAppIcon(app: { path: string; name: string }): Promise<string |
           icnsFile = potentialPath
         }
       }
-    } catch {
+    }
+    catch {
       // Plist might not exist or be readable, continue to scan directory
     }
 
     if (!icnsFile) {
       const files = await fs.readdir(resourcesPath).catch(() => [])
-      const found = files.find((f) => f.endsWith('.icns'))
+      const found = files.find(f => f.endsWith('.icns'))
       if (found) {
         icnsFile = path.join(resourcesPath, found)
       }
@@ -77,7 +78,8 @@ async function getAppIcon(app: { path: string; name: string }): Promise<string |
     await convertIcnsToPng(icnsFile, cachedIconPath)
     const buffer = await fs.readFile(cachedIconPath)
     return buffer.toString('base64')
-  } catch (error) {
+  }
+  catch (error) {
     console.warn(`[Darwin] Failed to get icon for ${app.name}:`, error)
     await fs.writeFile(noneMarkerPath, '').catch(() => {})
     return null
@@ -124,7 +126,8 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   // Pre-check if Info.plist exists before proceeding
   try {
     await fs.access(plistPath, fs.constants.F_OK)
-  } catch {
+  }
+  catch {
     // If Info.plist doesn't exist, this is not a valid/complete app bundle.
     throw new Error(`Info.plist not found at ${plistPath}`)
   }
@@ -153,7 +156,7 @@ async function getAppInfoUnstable(appPath: string): Promise<{
     icon: icon ? `data:image/png;base64,${icon}` : '',
     bundleId,
     uniqueId: bundleId || appPath,
-    lastModified: stats.mtime
+    lastModified: stats.mtime,
   }
 }
 
@@ -161,7 +164,7 @@ async function getAppInfoUnstable(appPath: string): Promise<{
 const getAppInfoRetrier = createRetrier({
   maxRetries: 2, // Total of 3 attempts
   timeoutMs: 5000, // 5-second timeout for each attempt
-  shouldRetry: (error: any) => error.code === 'ENOENT' // Only retry if Info.plist is not found
+  shouldRetry: (error: any) => error.code === 'ENOENT', // Only retry if Info.plist is not found
 })
 
 // Wrap the unstable function with the retry logic
@@ -185,20 +188,21 @@ export async function getAppInfo(appPath: string): Promise<{
   try {
     // Call the reliable, wrapped function
     return await reliableGetAppInfo(appPath)
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : typeof error === 'string' ? error : String(error)
+  }
+  catch (error) {
+    const errorMessage
+      = error instanceof Error ? error.message : typeof error === 'string' ? error : String(error)
     // This block will execute if all retry attempts fail
     console.warn(
       `[Darwin] Failed to get app info for ${appPath} after retries, likely incomplete or invalid bundle. Error: ${
         errorMessage
-      }`
+      }`,
     )
     reportAppScanError({
       platform: process.platform,
       path: appPath,
       message: errorMessage,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
     return null
   }
@@ -225,15 +229,15 @@ export async function getAppsViaMdfind(): Promise<
           return reject(new Error(`mdfind command failed: ${error.message}`))
         }
 
-        const appPaths = stdout.split('\n').filter((p) => p.trim().endsWith('.app'))
-        const appPromises = appPaths.map((appPath) => getAppInfo(appPath))
+        const appPaths = stdout.split('\n').filter(p => p.trim().endsWith('.app'))
+        const appPromises = appPaths.map(appPath => getAppInfo(appPath))
 
         const settledApps = await Promise.allSettled(appPromises)
 
         const successfulApps = settledApps
           .filter(
             (
-              result
+              result,
             ): result is PromiseFulfilledResult<{
               name: string
               displayName: string | undefined
@@ -243,12 +247,12 @@ export async function getAppsViaMdfind(): Promise<
               bundleId: string
               uniqueId: string
               lastModified: Date
-            }> => result.status === 'fulfilled' && !!result.value
+            }> => result.status === 'fulfilled' && !!result.value,
           )
-          .map((result) => result.value)
+          .map(result => result.value)
 
         resolve(successfulApps)
-      }
+      },
     )
   })
 }

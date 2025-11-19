@@ -11,7 +11,8 @@ export interface Range {
  * e.g., [0, 1, 4, 5, 6] -> [{ start: 0, end: 2 }, { start: 4, end: 7 }]
  */
 function convertIndicesToRanges(indices: number[]): Range[] {
-  if (!indices?.length) return []
+  if (!indices?.length)
+    return []
   const arr = Array.from(new Set(indices)).sort((a, b) => a - b) // 去重 + 拷贝 + 排序
 
   const ranges: Range[] = []
@@ -22,7 +23,8 @@ function convertIndicesToRanges(indices: number[]): Range[] {
     const x = arr[i]
     if (x === prev + 1) {
       prev = x // 连续，延长
-    } else {
+    }
+    else {
       ranges.push({ start, end: prev + 1 }) // 右开
       start = prev = x
     }
@@ -41,7 +43,8 @@ function matchAcronym(text: string, query: string): Range[] | null {
   const lowerQuery = query.toLowerCase()
 
   const words = lowerText.split(/[\s-]+/).filter(Boolean) // 分割单词并去除空字符串
-  if (words.length === 0 || lowerQuery.length === 0) return null
+  if (words.length === 0 || lowerQuery.length === 0)
+    return null
 
   const ranges: Range[] = []
   let textCurrentIndex = 0 // 用于在原始文本中查找单词的起始位置
@@ -56,13 +59,15 @@ function matchAcronym(text: string, query: string): Range[] | null {
         queryCharIndex++
         textCurrentIndex = wordStartIndex + word.length // 更新下一个单词的查找起始位置
       }
-    } else {
+    }
+    else {
       textCurrentIndex = lowerText.indexOf(word, textCurrentIndex) + word.length // 跳过不匹配的单词
     }
     // 如果当前单词不匹配，且query还有字符，需要重置textCurrentIndex到下一个单词的开始
     if (queryCharIndex < lowerQuery.length && !word.startsWith(lowerQuery[queryCharIndex - 1])) {
       textCurrentIndex = lowerText.indexOf(words[i + 1], textCurrentIndex) // 尝试找到下一个单词的起始
-      if (textCurrentIndex === -1) textCurrentIndex = lowerText.length // 如果没有下一个单词，设置为文本末尾
+      if (textCurrentIndex === -1)
+        textCurrentIndex = lowerText.length // 如果没有下一个单词，设置为文本末尾
     }
   }
 
@@ -91,7 +96,8 @@ export function calculateHighlights(text: string, query: string): Range[] | null
     if (index !== -1) {
       exactMatches.push({ start: index, end: index + part.length })
       currentTextIndex = index + part.length // 更新下一个部分的搜索起始位置
-    } else {
+    }
+    else {
       allPartsMatched = false
       break
     }
@@ -117,7 +123,7 @@ export function calculateHighlights(text: string, query: string): Range[] | null
   // 3. 拼音匹配 (使用 pinyin-pro，但只用它来获取索引)
   // 仅在查询不含非字母字符时进行，避免符号干扰
   // 检查 query 是否主要是字母，避免对特殊字符进行拼音匹配
-  if (/^[a-zA-Z]+$/.test(lowerQuery)) {
+  if (/^[a-z]+$/i.test(lowerQuery)) {
     const pinyinResult = pinyinMatch(text, query) // 这是 pinyin-pro 的 match
     if (pinyinResult && pinyinResult.length > 0) {
       return convertIndicesToRanges(pinyinResult) // 使用我们自己的转换函数

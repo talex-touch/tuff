@@ -4,7 +4,7 @@ export enum AiProviderType {
   DEEPSEEK = 'deepseek',
   SILICONFLOW = 'siliconflow',
   LOCAL = 'local',
-  CUSTOM = 'custom'
+  CUSTOM = 'custom',
 }
 
 export enum AiCapabilityType {
@@ -15,7 +15,7 @@ export enum AiCapabilityType {
   TRANSLATE = 'translate',
   TTS = 'tts',
   STT = 'stt',
-  VISION = 'vision'
+  VISION = 'vision',
 }
 
 export interface AiProviderRateLimit {
@@ -229,28 +229,28 @@ export interface AiSDKPersistedConfig {
 
 export interface AiProviderAdapter {
   readonly type: AiProviderType
-  getConfig(): AiProviderConfig
-  updateConfig(config: Partial<AiProviderConfig>): void
-  isEnabled(): boolean
-  chat(payload: AiChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>>
-  chatStream(
+  getConfig: () => AiProviderConfig
+  updateConfig: (config: Partial<AiProviderConfig>) => void
+  isEnabled: () => boolean
+  chat: (payload: AiChatPayload, options: AiInvokeOptions) => Promise<AiInvokeResult<string>>
+  chatStream: (
     payload: AiChatPayload,
-    options: AiInvokeOptions
-  ): AsyncGenerator<AiStreamChunk>
-  embedding(payload: AiEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>>
-  translate(payload: AiTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>>
-  visionOcr(
+    options: AiInvokeOptions,
+  ) => AsyncGenerator<AiStreamChunk>
+  embedding: (payload: AiEmbeddingPayload, options: AiInvokeOptions) => Promise<AiInvokeResult<number[]>>
+  translate: (payload: AiTranslatePayload, options: AiInvokeOptions) => Promise<AiInvokeResult<string>>
+  visionOcr: (
     payload: AiVisionOcrPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<AiVisionOcrResult>>
+    options: AiInvokeOptions,
+  ) => Promise<AiInvokeResult<AiVisionOcrResult>>
 }
 
 export interface ProviderManagerAdapter {
-  clear(): void
-  registerFromConfig(config: AiProviderConfig): AiProviderAdapter
-  getEnabled(): AiProviderAdapter[]
-  get(providerId: string): AiProviderAdapter | undefined
-  createProviderInstance(config: AiProviderConfig): AiProviderAdapter
+  clear: () => void
+  registerFromConfig: (config: AiProviderConfig) => AiProviderAdapter
+  getEnabled: () => AiProviderAdapter[]
+  get: (providerId: string) => AiProviderAdapter | undefined
+  createProviderInstance: (config: AiProviderConfig) => AiProviderAdapter
 }
 
 export interface AISDKGlobalConfig {
@@ -302,7 +302,7 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     defaultModel: 'gpt-4o-mini',
     timeout: 30000,
-    rateLimit: {}
+    rateLimit: {},
   },
   {
     id: 'anthropic-default',
@@ -313,7 +313,7 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
     models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
     defaultModel: 'claude-3-5-sonnet-20241022',
     timeout: 30000,
-    rateLimit: {}
+    rateLimit: {},
   },
   {
     id: 'deepseek-default',
@@ -324,7 +324,7 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
     models: ['deepseek-chat', 'deepseek-coder'],
     defaultModel: 'deepseek-chat',
     timeout: 30000,
-    rateLimit: {}
+    rateLimit: {},
   },
   {
     id: 'siliconflow-default',
@@ -342,11 +342,11 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
       'BAAI/bge-reranker-v2-m3',
       'netease-youdao/bce-embedding-base_v1',
       'Kwai-Kolors/Kolors',
-      'BAAI/bge-m3'
+      'BAAI/bge-m3',
     ],
     defaultModel: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
     timeout: 30000,
-    rateLimit: {}
+    rateLimit: {},
   },
   {
     id: 'local-default',
@@ -357,15 +357,15 @@ export const DEFAULT_PROVIDERS: AiProviderConfig[] = [
     models: [],
     baseUrl: 'http://localhost:11434',
     timeout: 60000,
-    rateLimit: {}
-  }
+    rateLimit: {},
+  },
 ]
 
 export const DEFAULT_GLOBAL_CONFIG: AISDKGlobalConfig = {
   defaultStrategy: 'adaptive-default',
   enableAudit: false,
   enableCache: true,
-  cacheExpiration: 3600
+  cacheExpiration: 3600,
 }
 
 export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
@@ -377,8 +377,8 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
       { providerId: 'openai-default', priority: 1, enabled: true },
       { providerId: 'anthropic-default', priority: 2, enabled: true },
       { providerId: 'deepseek-default', priority: 3, enabled: true },
-      { providerId: 'siliconflow-default', priority: 4, enabled: true }
-    ]
+      { providerId: 'siliconflow-default', priority: 4, enabled: true },
+    ],
   },
   'embedding.generate': {
     id: 'embedding.generate',
@@ -389,9 +389,9 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
         providerId: 'siliconflow-default',
         models: ['netease-youdao/bce-embedding-base_v1', 'BAAI/bge-m3'],
         priority: 1,
-        enabled: true
-      }
-    ]
+        enabled: true,
+      },
+    ],
   },
   'vision.ocr': {
     id: 'vision.ocr',
@@ -406,8 +406,8 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
         models: ['deepseek-ai/DeepSeek-OCR', 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'],
         priority: 1,
         enabled: true,
-        metadata: { defaultVisionModel: 'deepseek-ai/DeepSeek-OCR' }
-      }
-    ]
-  }
+        metadata: { defaultVisionModel: 'deepseek-ai/DeepSeek-OCR' },
+      },
+    ],
+  },
 }

@@ -1,6 +1,6 @@
-import { protocol, net } from 'electron'
 import path from 'node:path'
 import url from 'node:url'
+import { net, protocol } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'stream', privileges: { bypassCSP: true } }])
@@ -11,7 +11,7 @@ touchEventBus.on(TalexEvents.APP_READY, () => {
   protocol.handle('atom', (request) => {
     const filePath = decodeURI(request.url.slice('atom:///'.length))
 
-    return net.fetch(url.pathToFileURL(path.normalize(filePath)).toString()) //net.fetch(decodeURI(filePath))
+    return net.fetch(url.pathToFileURL(path.normalize(filePath)).toString()) // net.fetch(decodeURI(filePath))
   })
   // protocol.interceptFileProtocol('atom', (request, callback) => {
   //   console.log('[Service] 2 Stream protocol', request.url)

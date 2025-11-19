@@ -1,22 +1,22 @@
-<template>
-  <marquee scrolldelay="200" truespeed="false" >
-     <span v-if="singers" v-for="singer in singers">
-    {{ singer.name }}
-  </span>
-  </marquee>
-</template>
-
 <script>
 export default {
-  name: "Singers",
+  name: 'Singers',
   props: {
     singers: {
       type: Array,
-      default: () => []
-    }
-  }
+      default: () => [],
+    },
+  },
 }
 </script>
+
+<template>
+  <marquee scrolldelay="200" truespeed="false">
+    <span v-for="singer in singers" v-if="singers">
+      {{ singer.name }}
+    </span>
+  </marquee>
+</template>
 
 <style lang="scss" scoped>
 span {

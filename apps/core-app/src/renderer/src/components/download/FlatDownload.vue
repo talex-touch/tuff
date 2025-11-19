@@ -1,11 +1,11 @@
 <script setup lang="ts" name="FlatDownload">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { ipcRenderer } = require('electron')
-import FlatButton from '../base/button/FlatButton.vue'
 import { Download } from '@element-plus/icons-vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
+import FlatButton from '../base/button/FlatButton.vue'
 import DownloadCenter from './DownloadCenter.vue'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+// const { ipcRenderer } = require('electron')
 
 const { isLoggedIn } = useAuth()
 const downloadDialogVisible = ref(false)
@@ -18,16 +18,16 @@ function handleClose(): void {
   downloadDialogVisible.value = false
 }
 
-function handleOpenDownloadCenter(): void {
-  downloadDialogVisible.value = true
-}
+// function handleOpenDownloadCenter(): void {
+//   downloadDialogVisible.value = true
+// }
 
 onMounted(() => {
-  ipcRenderer.on('open-download-center', handleOpenDownloadCenter)
+  // ipcRenderer.on('open-download-center', handleOpenDownloadCenter)
 })
 
 onBeforeUnmount(() => {
-  ipcRenderer.removeListener('open-download-center', handleOpenDownloadCenter)
+  // ipcRenderer.removeListener('open-download-center', handleOpenDownloadCenter)
 })
 </script>
 

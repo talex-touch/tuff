@@ -1,32 +1,8 @@
-<template>
-  <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
-    <template v-if="useNative">
-      <div ref="nativeScrollRef" class="native-scroll-wrapper" @scroll="handleScroll">
-        <slot name="header" />
-
-        <div class="py-2 pl-2 pr-3" :style="noPadding ? 'padding: 0 !important' : ''">
-          <slot></slot>
-        </div>
-      </div>
-    </template>
-    <template v-else>
-      <el-scrollbar
-        ref="elScrollRef"
-        v-bind="$attrs"
-        class="el-scroll-wrapper w-full"
-        @scroll="handleScroll"
-      >
-        <slot></slot>
-      </el-scrollbar>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ElScrollbar } from 'element-plus'
 
 defineOptions({
-  name: 'TouchScroll'
+  name: 'TouchScroll',
 })
 
 const props = withDefaults(
@@ -36,12 +12,12 @@ const props = withDefaults(
   }>(),
   {
     noPadding: false,
-    native: false
-  }
+    native: false,
+  },
 )
 
 const emit = defineEmits<{
-  scroll: [scrollInfo: { scrollTop: number; scrollLeft: number }]
+  scroll: [scrollInfo: { scrollTop: number, scrollLeft: number }]
 }>()
 
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -49,7 +25,8 @@ const nativeScrollRef = ref<HTMLElement | null>(null)
 const elScrollRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
 
 const isDarwin = computed(() => {
-  if (typeof window === 'undefined') return false
+  if (typeof window === 'undefined')
+    return false
 
   return window.$initInfo.platform === 'darwin'
 })
@@ -58,22 +35,23 @@ const useNative = computed(() => {
   return props.native || isDarwin.value
 })
 
-const handleScroll = (event: Event | { scrollTop: number; scrollLeft: number }) => {
+function handleScroll(event: Event | { scrollTop: number, scrollLeft: number }) {
   let scrollInfo = {
     scrollTop: 0,
-    scrollLeft: 0
+    scrollLeft: 0,
   }
 
   if (event instanceof Event) {
     const target = event.target as HTMLElement
     scrollInfo = {
       scrollTop: target.scrollTop,
-      scrollLeft: target.scrollLeft
+      scrollLeft: target.scrollLeft,
     }
-  } else {
+  }
+  else {
     scrollInfo = {
       scrollTop: event.scrollTop,
-      scrollLeft: event.scrollLeft
+      scrollLeft: event.scrollLeft,
     }
   }
 
@@ -88,7 +66,8 @@ defineExpose({
       if (nativeScrollRef.value) {
         nativeScrollRef.value.scrollTo(x, y)
       }
-    } else {
+    }
+    else {
       if (elScrollRef.value && elScrollRef.value.scrollTo) {
         elScrollRef.value.scrollTo(x, y)
       }
@@ -103,10 +82,11 @@ defineExpose({
           scrollHeight: nativeScrollRef.value.scrollHeight,
           scrollWidth: nativeScrollRef.value.scrollWidth,
           clientHeight: nativeScrollRef.value.clientHeight,
-          clientWidth: nativeScrollRef.value.clientWidth
+          clientWidth: nativeScrollRef.value.clientWidth,
         }
       }
-    } else {
+    }
+    else {
       if (elScrollRef.value && (elScrollRef.value as any).wrapRef) {
         const wrap = (elScrollRef.value as any).wrapRef
         return {
@@ -115,7 +95,7 @@ defineExpose({
           scrollHeight: wrap.scrollHeight,
           scrollWidth: wrap.scrollWidth,
           clientHeight: wrap.clientHeight,
-          clientWidth: wrap.clientWidth
+          clientWidth: wrap.clientWidth,
         }
       }
     }
@@ -125,11 +105,35 @@ defineExpose({
       scrollHeight: 0,
       scrollWidth: 0,
       clientHeight: 0,
-      clientWidth: 0
+      clientWidth: 0,
     }
-  }
+  },
 })
 </script>
+
+<template>
+  <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
+    <template v-if="useNative">
+      <div ref="nativeScrollRef" class="native-scroll-wrapper" @scroll="handleScroll">
+        <slot name="header" />
+
+        <div class="py-2 pl-2 pr-3" :style="noPadding ? 'padding: 0 !important' : ''">
+          <slot />
+        </div>
+      </div>
+    </template>
+    <template v-else>
+      <ElScrollbar
+        ref="elScrollRef"
+        v-bind="$attrs"
+        class="el-scroll-wrapper w-full"
+        @scroll="handleScroll"
+      >
+        <slot />
+      </ElScrollbar>
+    </template>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .touch-scroll {

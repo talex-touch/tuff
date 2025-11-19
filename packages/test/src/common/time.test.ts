@@ -1,4 +1,3 @@
-
 // // 模拟一个异步操作，可能成功，可能失败，可能超时
 // let callCount = 0;
 // async function mockAsyncTask(shouldFail: boolean, id: string): Promise<string> {

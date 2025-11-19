@@ -24,7 +24,7 @@ const DEFAULT_HISTORY_LIMIT = 50
 export const DEFAULT_TIMING_LOG_THRESHOLDS: Readonly<ResolvedTimingLogThresholds> = Object.freeze({
   none: 16.7,
   info: 200,
-  warn: 500
+  warn: 500,
 })
 
 export const DEFAULT_TIMING_OPTIONS: Readonly<Required<Pick<TimingOptions, 'autoLog' | 'storeHistory'>> & {
@@ -32,7 +32,7 @@ export const DEFAULT_TIMING_OPTIONS: Readonly<Required<Pick<TimingOptions, 'auto
 }> = Object.freeze({
   autoLog: DEFAULT_AUTO_LOG,
   storeHistory: DEFAULT_STORE_HISTORY,
-  logThresholds: DEFAULT_TIMING_LOG_THRESHOLDS
+  logThresholds: DEFAULT_TIMING_LOG_THRESHOLDS,
 })
 
 export const DEFAULT_TIMING_MANAGER_CONFIG: Readonly<
@@ -43,7 +43,7 @@ export const DEFAULT_TIMING_MANAGER_CONFIG: Readonly<
   autoLog: DEFAULT_AUTO_LOG,
   storeHistory: DEFAULT_STORE_HISTORY,
   historyLimit: DEFAULT_HISTORY_LIMIT,
-  logThresholds: DEFAULT_TIMING_LOG_THRESHOLDS
+  logThresholds: DEFAULT_TIMING_LOG_THRESHOLDS,
 })
 
 export interface TimingStats {
@@ -83,7 +83,7 @@ export interface TimingOptions {
   logThresholds?: TimingLogThresholdOverrides
 }
 
-type ResolvedTimingOptions = {
+interface ResolvedTimingOptions {
   autoLog: boolean
   storeHistory: boolean
   historyLimit: number
@@ -101,13 +101,13 @@ export class TimingManager {
   constructor(config: TimingManagerConfig = {}) {
     const mergedThresholds: ResolvedTimingLogThresholds = {
       ...DEFAULT_TIMING_LOG_THRESHOLDS,
-      ...(config.logThresholds ?? {})
+      ...(config.logThresholds ?? {}),
     }
 
     this.config = {
       ...DEFAULT_TIMING_MANAGER_CONFIG,
       ...config,
-      logThresholds: mergedThresholds
+      logThresholds: mergedThresholds,
     }
   }
 
@@ -142,12 +142,13 @@ export class TimingManager {
 
   getStats(label: string): TimingStats | undefined {
     const stats = this.stats.get(label)
-    if (!stats) return undefined
+    if (!stats)
+      return undefined
     return { ...stats }
   }
 
   getAllStats(): TimingStats[] {
-    return Array.from(this.stats.values()).map((s) => ({ ...s }))
+    return Array.from(this.stats.values()).map(s => ({ ...s }))
   }
 
   getHistory(label: string): TimingRecord[] {
@@ -159,7 +160,7 @@ export class TimingManager {
       const stats = this.moduleStats.get(moduleKey)
       return stats ? { ...stats } : undefined
     }
-    return Array.from(this.moduleStats.values()).map((s) => ({ ...s }))
+    return Array.from(this.moduleStats.values()).map(s => ({ ...s }))
   }
 
   reset(label?: string): void {
@@ -183,7 +184,7 @@ export class TimingManager {
       maxMs: Number.NEGATIVE_INFINITY,
       minMs: Number.POSITIVE_INFINITY,
       lastMs: 0,
-      errorCount: 0
+      errorCount: 0,
     }
 
     next.count += 1
@@ -214,7 +215,7 @@ export class TimingManager {
     const logThresholds: ResolvedTimingLogThresholds = {
       ...DEFAULT_TIMING_LOG_THRESHOLDS,
       ...(this.config.logThresholds ?? {}),
-      ...(options.logThresholds ?? {})
+      ...(options.logThresholds ?? {}),
     }
 
     return {
@@ -223,7 +224,7 @@ export class TimingManager {
       historyLimit: options.historyLimit ?? this.config.historyLimit ?? DEFAULT_HISTORY_LIMIT,
       logThresholds,
       formatter: options.formatter ?? this.config.formatter ?? defaultFormatter,
-      logger: options.logger ?? this.config.logger ?? defaultLogger
+      logger: options.logger ?? this.config.logger ?? defaultLogger,
     }
   }
 }
@@ -232,7 +233,7 @@ export class TimingScope {
   constructor(
     private readonly manager: TimingManager,
     private readonly label: string,
-    private readonly options: TimingOptions
+    private readonly options: TimingOptions,
   ) {}
 
   async cost<T>(fn: () => Promise<T> | T, meta: TimingMeta = {}, overrides: TimingOptions = {}): Promise<T> {
@@ -241,7 +242,8 @@ export class TimingScope {
       const result = await fn()
       this.finish(startedAt, meta, undefined, overrides)
       return result
-    } catch (error) {
+    }
+    catch (error) {
       this.finish(startedAt, meta, error, overrides)
       throw error
     }
@@ -256,7 +258,8 @@ export class TimingScope {
         const value = await fn(index)
         this.finish(startedAt, { ...iterationMeta, iteration: index }, undefined, overrides)
         results.push(value)
-      } catch (error) {
+      }
+      catch (error) {
         this.finish(startedAt, { ...iterationMeta, iteration: index }, error, overrides)
         throw error
       }
@@ -274,9 +277,9 @@ export class TimingScope {
         durationMs,
         startedAt,
         endedAt,
-        meta
+        meta,
       },
-      { ...this.options, ...overrides }
+      { ...this.options, ...overrides },
     )
   }
 
@@ -296,7 +299,7 @@ export class TimingScope {
       startedAt,
       endedAt,
       meta,
-      error
+      error,
     }
 
     this.manager.record(this.label, record, { ...this.options, ...overrides })
@@ -305,10 +308,10 @@ export class TimingScope {
 
 function defaultFormatter(record: TimingRecord, stats: TimingStats): string {
   const duration = record.durationMs.toFixed(2)
-  const levelTag =
-    record.logLevel && record.logLevel !== 'info' ? ` [${record.logLevel.toUpperCase()}]` : ''
+  const levelTag
+    = record.logLevel && record.logLevel !== 'info' ? ` [${record.logLevel.toUpperCase()}]` : ''
   return `⏱  [${record.label}] ${duration} ms${levelTag} (avg: ${stats.avgMs.toFixed(
-    2
+    2,
   )} ms, max: ${stats.maxMs.toFixed(2)} ms, count: ${stats.count})`
 }
 
@@ -370,7 +373,7 @@ export function completeTiming(
   label: string,
   startedAt: number,
   meta: TimingMeta = {},
-  options: TimingOptions = {}
+  options: TimingOptions = {},
 ): number {
   const endedAt = now()
   const durationMs = endedAt - startedAt
@@ -381,9 +384,9 @@ export function completeTiming(
       durationMs,
       startedAt,
       endedAt,
-      meta
+      meta,
     },
-    options
+    options,
   )
   return durationMs
 }
@@ -392,7 +395,7 @@ export function logTiming(
   label: string,
   durationMs: number,
   meta: TimingMeta = {},
-  options: TimingOptions = {}
+  options: TimingOptions = {},
 ): void {
   const endedAt = now()
   const startedAt = endedAt - durationMs
@@ -403,9 +406,9 @@ export function logTiming(
       durationMs,
       startedAt,
       endedAt,
-      meta
+      meta,
     },
-    options
+    options,
   )
 }
 
@@ -422,14 +425,14 @@ export const timingLogger = {
       label,
       startedAt: startTiming(),
       meta,
-      options
+      options,
     }
   },
 
   finish(
     token: TimingLoggerToken,
     meta: TimingMeta = {},
-    overrides: TimingOptions = {}
+    overrides: TimingOptions = {},
   ): number {
     const mergedMeta = { ...token.meta, ...meta }
     const mergedOptions = mergeTimingOptions(token.options, overrides)
@@ -440,7 +443,7 @@ export const timingLogger = {
     label: string,
     durationMs: number,
     meta: TimingMeta = {},
-    options: TimingOptions = {}
+    options: TimingOptions = {},
   ): number {
     logTiming(label, durationMs, meta, options)
     return durationMs
@@ -450,7 +453,7 @@ export const timingLogger = {
     label: string,
     fn: () => Promise<T> | T,
     meta: TimingMeta = {},
-    options: TimingOptions = {}
+    options: TimingOptions = {},
   ): Promise<T> {
     const scope = createTiming(label, options)
     return scope.cost(fn, meta)
@@ -460,11 +463,11 @@ export const timingLogger = {
     label: string,
     durationMs: number,
     meta: TimingMeta = {},
-    options: TimingOptions = {}
+    options: TimingOptions = {},
   ): number {
     logTiming(label, durationMs, meta, options)
     return durationMs
-  }
+  },
 }
 
 export function createTiming(label: string, options: TimingOptions = {}): TimingScope {
@@ -473,9 +476,10 @@ export function createTiming(label: string, options: TimingOptions = {}): Timing
 
 function mergeTimingOptions(
   base: TimingOptions = {},
-  override: TimingOptions = {}
+  override: TimingOptions = {},
 ): TimingOptions {
-  if (!base && !override) return {}
+  if (!base && !override)
+    return {}
   if (!override || Object.keys(override).length === 0) {
     return { ...base }
   }
@@ -488,7 +492,7 @@ function mergeTimingOptions(
     ...override,
     logThresholds: {
       ...(base.logThresholds ?? {}),
-      ...(override.logThresholds ?? {})
-    }
+      ...(override.logThresholds ?? {}),
+    },
   }
 }

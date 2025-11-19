@@ -1,11 +1,11 @@
 <script setup name="IntelligencePrompts" lang="ts">
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import { ref, computed } from 'vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
@@ -24,7 +24,8 @@ async function handleOpenFolder() {
   try {
     await touchChannel.send('app:open-prompts-folder')
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to open prompts folder:', error)
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
@@ -37,7 +38,7 @@ function handleCreatePrompt() {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settings.intelligence.landing.prompts.title')"
     :description="t('settings.intelligence.landing.prompts.desc')"
     default-icon="i-carbon-language"
@@ -45,7 +46,7 @@ function handleCreatePrompt() {
     memory-name="intelligence-prompts"
   >
     <!-- 编辑提示词 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.prompts.editTitle')"
       :description="t('settings.intelligence.landing.prompts.editDesc')"
       default-icon="i-carbon-edit"
@@ -56,10 +57,10 @@ function handleCreatePrompt() {
         <i class="i-carbon-launch" />
         <span>{{ t('settings.intelligence.landing.prompts.editButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- 打开文件夹 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.prompts.folderTitle')"
       :description="t('settings.intelligence.landing.prompts.folderDesc')"
       default-icon="i-carbon-folder"
@@ -70,10 +71,10 @@ function handleCreatePrompt() {
         <i class="i-carbon-folder-open" />
         <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- 提示词统计 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.prompts.statsTitle', { count: promptCount })"
       :description="t('settings.intelligence.landing.prompts.statsDesc', { words: totalWords })"
       default-icon="i-carbon-chart-bar"
@@ -84,8 +85,8 @@ function handleCreatePrompt() {
         <i class="i-carbon-add" />
         <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
-  </tuff-group-block>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
 </template>
 
 <style lang="scss" scoped>

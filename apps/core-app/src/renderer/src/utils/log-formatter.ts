@@ -2,24 +2,24 @@ import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 
 // ANSI color codes
 const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m'
+  reset: '\x1B[0m',
+  bright: '\x1B[1m',
+  dim: '\x1B[2m',
+  red: '\x1B[31m',
+  green: '\x1B[32m',
+  yellow: '\x1B[33m',
+  blue: '\x1B[34m',
+  magenta: '\x1B[35m',
+  cyan: '\x1B[36m',
+  white: '\x1B[37m',
+  gray: '\x1B[90m',
 }
 
 const levelColors = {
   ERROR: colors.red,
   WARN: colors.yellow,
   INFO: colors.green,
-  DEBUG: colors.gray
+  DEBUG: colors.gray,
 }
 
 /**
@@ -40,7 +40,8 @@ export function formatLogForTerminal(log: LogItem): string {
     try {
       const dataStr = JSON.stringify(log.data, null, 2)
       message += `\n${colors.dim}${dataStr}${colors.reset}`
-    } catch (e) {
+    }
+    catch (e) {
       // ignore
     }
   }

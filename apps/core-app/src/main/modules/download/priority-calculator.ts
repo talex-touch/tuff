@@ -1,8 +1,10 @@
-import {
+import type {
   DownloadRequest,
-  DownloadPriority,
+  NetworkStatus,
+} from '@talex-touch/utils'
+import {
   DownloadModule,
-  NetworkStatus
+  DownloadPriority,
 } from '@talex-touch/utils'
 
 export class PriorityCalculator {
@@ -28,7 +30,7 @@ export class PriorityCalculator {
 
     const finalPriority = Math.min(
       100,
-      Math.max(1, basePriority * moduleMultiplier * sizeMultiplier * networkMultiplier)
+      Math.max(1, basePriority * moduleMultiplier * sizeMultiplier * networkMultiplier),
     )
 
     return Math.round(finalPriority) as DownloadPriority
@@ -40,35 +42,41 @@ export class PriorityCalculator {
       [DownloadModule.USER_MANUAL]: 1.2, // 用户手动触发优先级最高
       [DownloadModule.PLUGIN_INSTALL]: 1.1, // 插件安装优先级较高
       [DownloadModule.APP_UPDATE]: 1.0, // 应用更新标准优先级
-      [DownloadModule.RESOURCE_DOWNLOAD]: 0.9 // 资源下载优先级较低
+      [DownloadModule.RESOURCE_DOWNLOAD]: 0.9, // 资源下载优先级较低
     }
     return multipliers[module] || 1.0
   }
 
   // 根据文件大小获取乘数
   private getSizeMultiplier(fileSize?: number): number {
-    if (!fileSize) return 1.0
+    if (!fileSize)
+      return 1.0
 
     // 小文件优先级稍高（下载速度快，用户体验好）
-    if (fileSize < 10 * 1024 * 1024) return 1.1 // < 10MB
-    if (fileSize > 100 * 1024 * 1024) return 0.9 // > 100MB
+    if (fileSize < 10 * 1024 * 1024)
+      return 1.1 // < 10MB
+    if (fileSize > 100 * 1024 * 1024)
+      return 0.9 // > 100MB
     return 1.0
   }
 
   // 根据网络状况获取乘数
   private getNetworkMultiplier(): number {
-    if (!this.networkStatus) return 1.0
+    if (!this.networkStatus)
+      return 1.0
 
     // 根据网络速度动态调整
-    if (this.networkStatus.speed < 1024 * 1024) return 1.2 // 慢网络，提高优先级
-    if (this.networkStatus.speed > 10 * 1024 * 1024) return 0.8 // 快网络，降低优先级
+    if (this.networkStatus.speed < 1024 * 1024)
+      return 1.2 // 慢网络，提高优先级
+    if (this.networkStatus.speed > 10 * 1024 * 1024)
+      return 0.8 // 快网络，降低优先级
     return 1.0
   }
 
   // 根据用户行为调整优先级
   adjustPriorityByUserAction(
     currentPriority: DownloadPriority,
-    action: UserAction
+    action: UserAction,
   ): DownloadPriority {
     switch (action) {
       case UserAction.MANUAL_START:
@@ -107,7 +115,7 @@ export class PriorityCalculator {
   // 根据失败次数调整优先级
   adjustPriorityByFailureCount(
     currentPriority: DownloadPriority,
-    failureCount: number
+    failureCount: number,
   ): DownloadPriority {
     if (failureCount === 0) {
       return currentPriority
@@ -123,7 +131,7 @@ export class PriorityCalculator {
     request: DownloadRequest,
     createdAt: Date,
     failureCount: number = 0,
-    userAction?: UserAction
+    userAction?: UserAction,
   ): DownloadPriority {
     // 基础优先级
     let priority = this.calculatePriority(request)
@@ -146,13 +154,17 @@ export class PriorityCalculator {
   getPriorityDescription(priority: DownloadPriority): string {
     if (priority >= DownloadPriority.CRITICAL) {
       return 'Critical (Critical)'
-    } else if (priority >= DownloadPriority.HIGH) {
+    }
+    else if (priority >= DownloadPriority.HIGH) {
       return 'High (High)'
-    } else if (priority >= DownloadPriority.NORMAL) {
+    }
+    else if (priority >= DownloadPriority.NORMAL) {
       return 'Normal (Normal)'
-    } else if (priority >= DownloadPriority.LOW) {
+    }
+    else if (priority >= DownloadPriority.LOW) {
       return 'Low (Low)'
-    } else {
+    }
+    else {
       return 'Background (Background)'
     }
   }
@@ -161,13 +173,17 @@ export class PriorityCalculator {
   getPriorityColor(priority: DownloadPriority): string {
     if (priority >= DownloadPriority.CRITICAL) {
       return '#ff4757' // 红色
-    } else if (priority >= DownloadPriority.HIGH) {
+    }
+    else if (priority >= DownloadPriority.HIGH) {
       return '#ffa502' // 橙色
-    } else if (priority >= DownloadPriority.NORMAL) {
+    }
+    else if (priority >= DownloadPriority.NORMAL) {
       return '#2ed573' // 绿色
-    } else if (priority >= DownloadPriority.LOW) {
+    }
+    else if (priority >= DownloadPriority.LOW) {
       return '#70a1ff' // 蓝色
-    } else {
+    }
+    else {
       return '#a4b0be' // 灰色
     }
   }
@@ -194,5 +210,5 @@ export enum UserAction {
   FREQUENT_RETRY = 'frequent_retry',
   IGNORE = 'ignore',
   PAUSE = 'pause',
-  RESUME = 'resume'
+  RESUME = 'resume',
 }

@@ -5,8 +5,8 @@
  */
 
 import * as Sentry from '@sentry/electron/renderer'
-import { touchChannel } from '../channel/channel-core'
 import { getBuildInfo } from '../../utils/build-info'
+import { touchChannel } from '../channel/channel-core'
 
 // Initialize Sentry in renderer process
 let isInitialized = false
@@ -49,11 +49,11 @@ export async function initSentryRenderer(): Promise<void> {
             buildType: buildInfo.buildType,
             channel,
             platform: process.platform,
-            userAgent: navigator.userAgent
-          }
+            userAgent: navigator.userAgent,
+          },
         }
         return event
-      }
+      },
     })
 
     // Set environment context
@@ -62,7 +62,7 @@ export async function initSentryRenderer(): Promise<void> {
       buildType: buildInfo.buildType,
       channel,
       platform: process.platform,
-      userAgent: navigator.userAgent
+      userAgent: navigator.userAgent,
     })
 
     // Listen for user context updates
@@ -70,7 +70,8 @@ export async function initSentryRenderer(): Promise<void> {
 
     isInitialized = true
     console.debug('[SentryRenderer] Sentry initialized')
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('[SentryRenderer] Failed to initialize Sentry', error)
   }
 }
@@ -87,7 +88,8 @@ function watchUserContext(): void {
       if (authState.user) {
         updateUserContext(authState.user)
       }
-    } catch {
+    }
+    catch {
       // Auth module not available
     }
   })()
@@ -96,14 +98,14 @@ function watchUserContext(): void {
 /**
  * Update user context (called from auth module)
  */
-export function updateSentryUserContext(user: { id?: string; username?: string } | null): void {
+export function updateSentryUserContext(user: { id?: string, username?: string } | null): void {
   updateUserContext(user)
 }
 
 /**
  * Update user context in Sentry
  */
-function updateUserContext(user: { id?: string; username?: string } | null): void {
+function updateUserContext(user: { id?: string, username?: string } | null): void {
   if (!isInitialized) {
     return
   }
@@ -126,12 +128,14 @@ function updateUserContext(user: { id?: string; username?: string } | null): voi
         Sentry.setUser({
           id: user.id,
           username: user.username || undefined,
-          email: undefined // Never send email
+          email: undefined, // Never send email
         })
-      } else {
+      }
+      else {
         Sentry.setUser(null)
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.debug('[SentryRenderer] Failed to update user context', error)
     }
   })()
@@ -153,7 +157,7 @@ export function captureException(error: Error, context?: Record<string, unknown>
     scope.setContext('environment', {
       version: buildInfo.version,
       buildType: buildInfo.buildType,
-      platform: process.platform
+      platform: process.platform,
     })
     Sentry.captureException(error)
   })
@@ -165,7 +169,7 @@ export function captureException(error: Error, context?: Record<string, unknown>
 export function captureMessage(
   message: string,
   level: Sentry.SeverityLevel = 'info',
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): void {
   if (!isInitialized) {
     return
@@ -180,9 +184,8 @@ export function captureMessage(
     scope.setContext('environment', {
       version: buildInfo.version,
       buildType: buildInfo.buildType,
-      platform: process.platform
+      platform: process.platform,
     })
     Sentry.captureMessage(message)
   })
 }
-

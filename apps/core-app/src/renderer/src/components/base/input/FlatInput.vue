@@ -1,6 +1,6 @@
 <script lang="ts" name="FlatInput" setup>
-import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps<{
   modelValue: string
@@ -16,14 +16,15 @@ const lapsLock = ref(false)
 const value = useModelWrapper(props, emits)
 
 function onKeyDown(e) {
-  if (!props.password) return
+  if (!props.password)
+    return
 
   const valueCapsLock = e.keyCode ? e.keyCode : e.which // 按键
   const valueShift = e.shiftKey ? e.shiftKey : valueCapsLock === 16 // shift键是否按住
 
-  lapsLock.value =
-    (valueCapsLock >= 65 && valueCapsLock <= 90 && !valueShift) || // 输入了大写字母，并且shift键没有按住，说明Caps Lock打开
-    (valueCapsLock >= 97 && valueCapsLock <= 122 && valueShift)
+  lapsLock.value
+    = (valueCapsLock >= 65 && valueCapsLock <= 90 && !valueShift) // 输入了大写字母，并且shift键没有按住，说明Caps Lock打开
+      || (valueCapsLock >= 97 && valueCapsLock <= 122 && valueShift)
 }
 </script>
 
@@ -31,7 +32,7 @@ function onKeyDown(e) {
   <div
     tabindex="0"
     class="FlatInput-Container fake-background"
-    :class="{ 'none-prefix': !$slots?.default, win: nonWin !== true, area }"
+    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true, area }"
     @keydown="onKeyDown"
   >
     <span v-if="$slots.default" class="FlatInput-Prefix">
@@ -46,8 +47,10 @@ function onKeyDown(e) {
       :placeholder="placeholder"
       relative
       :type="password ? 'password' : 'text'"
-    />
-    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain"> Caps Lock </el-tag>
+    >
+    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain">
+      Caps Lock
+    </el-tag>
   </div>
 </template>
 

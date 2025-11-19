@@ -5,14 +5,14 @@
  * Provides a unified SDK for plugin operations with reactive state management
  */
 
-import { touchChannel } from '~/modules/channel/channel-core'
-import type {
-  PluginStateEvent,
-  PluginFilters,
-  TriggerFeatureRequest,
-  InputChangedRequest
-} from '@talex-touch/utils/plugin/sdk/types'
 import type { ITouchPlugin } from '@talex-touch/utils'
+import type {
+  InputChangedRequest,
+  PluginFilters,
+  PluginStateEvent,
+  TriggerFeatureRequest,
+} from '@talex-touch/utils/plugin/sdk/types'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 type PluginStateCallback = (event: PluginStateEvent) => void
 type PluginCallback = (plugin: ITouchPlugin) => void
@@ -30,7 +30,8 @@ class PluginSDK {
    * Initialize the global state change event listener
    */
   private initializeEventListener(): void {
-    if (this.initialized) return
+    if (this.initialized)
+      return
 
     touchChannel.regChannel('plugin:state-changed', (payload) => {
       const event = payload.data as PluginStateEvent
@@ -38,16 +39,17 @@ class PluginSDK {
       this.subscribers.forEach((callback) => {
         try {
           callback(event)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('[PluginSDK] Error in state change subscriber:', error)
         }
       })
 
       if (
-        event.type === 'added' ||
-        event.type === 'updated' ||
-        event.type === 'status-changed' ||
-        event.type === 'readme-updated'
+        event.type === 'added'
+        || event.type === 'updated'
+        || event.type === 'status-changed'
+        || event.type === 'readme-updated'
       ) {
         const pluginName = event.type === 'added' ? event.plugin.name : event.name
         const callbacks = this.pluginSubscribers.get(pluginName)
@@ -59,7 +61,8 @@ class PluginSDK {
                 callbacks.forEach((callback) => {
                   try {
                     callback(plugin)
-                  } catch (error) {
+                  }
+                  catch (error) {
                     console.error('[PluginSDK] Error in plugin-specific subscriber:', error)
                   }
                 })
@@ -73,18 +76,19 @@ class PluginSDK {
     })
 
     touchChannel.regChannel('plugin-status-updated', (payload) => {
-      const { plugin: pluginName, status } = payload.data as { plugin: string; status: number }
+      const { plugin: pluginName, status } = payload.data as { plugin: string, status: number }
 
       const event: PluginStateEvent = {
         type: 'status-changed',
         name: pluginName,
-        status
+        status,
       }
 
       this.subscribers.forEach((callback) => {
         try {
           callback(event)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('[PluginSDK] Error in status update subscriber:', error)
         }
       })
@@ -97,7 +101,8 @@ class PluginSDK {
               callbacks.forEach((callback) => {
                 try {
                   callback(plugin)
-                } catch (error) {
+                }
+                catch (error) {
                   console.error('[PluginSDK] Error in plugin-specific status subscriber:', error)
                 }
               })
@@ -123,7 +128,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:list', { filters })
       return response || []
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to list plugins:', error)
       return []
     }
@@ -136,7 +142,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:get', { name })
       return response
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to get plugin:', error)
       return null
     }
@@ -149,7 +156,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:get-status', { name })
       return response
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to get plugin status:', error)
       throw error
     }
@@ -166,7 +174,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:enable', { name })
       return response?.success || false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to enable plugin:', error)
       return false
     }
@@ -179,7 +188,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:disable', { name })
       return response?.success || false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to disable plugin:', error)
       return false
     }
@@ -192,7 +202,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:reload', { name })
       return response?.success || false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to reload plugin:', error)
       return false
     }
@@ -205,7 +216,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:reconnect-dev-server', { pluginName: name })
       return response?.success || false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to reconnect dev server:', error)
       return false
     }
@@ -227,15 +239,16 @@ class PluginSDK {
       hintType?: string
       metadata?: Record<string, unknown>
       clientMetadata?: Record<string, unknown>
-    }
+    },
   ): Promise<boolean> {
     try {
       const response = await touchChannel.send('plugin:api:install', {
         source,
-        ...options
+        ...options,
       })
       return response?.success || false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to install plugin:', error)
       return false
     }
@@ -248,7 +261,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:uninstall', { name })
       return response?.success || false
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to uninstall plugin:', error)
       return false
     }
@@ -267,7 +281,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:trigger-feature', request)
       return response
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to trigger feature:', error)
       throw error
     }
@@ -279,7 +294,8 @@ class PluginSDK {
   async onInputChanged(request: InputChangedRequest): Promise<void> {
     try {
       await touchChannel.send('plugin:api:feature-input-changed', request)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to handle input changed:', error)
     }
   }
@@ -294,7 +310,8 @@ class PluginSDK {
   async openFolder(name: string): Promise<void> {
     try {
       await touchChannel.send('plugin:api:open-folder', { name })
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to open plugin folder:', error)
       throw error
     }
@@ -309,7 +326,8 @@ class PluginSDK {
     try {
       const response = await touchChannel.send('plugin:api:get-official-list', { force })
       return response?.plugins || []
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginSDK] Failed to get official plugin list:', error)
       return []
     }

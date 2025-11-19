@@ -4,7 +4,7 @@ import AppIcon from '~/assets/logo.svg'
 
 <template>
   <div class="PrefixIcon transition-cubic">
-    <img class="transition-cubic" :src="AppIcon" />
+    <img class="transition-cubic" :src="AppIcon">
   </div>
 </template>
 

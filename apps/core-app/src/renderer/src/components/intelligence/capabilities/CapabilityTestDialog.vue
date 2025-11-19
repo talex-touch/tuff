@@ -1,3 +1,64 @@
+<script lang="ts" setup>
+import type { AiProviderConfig } from '@talex-touch/utils/types/intelligence'
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+
+const props = defineProps<{
+  modelValue: boolean
+  capabilityId: string
+  enabledProviders: AiProviderConfig[]
+  isTesting: boolean
+  testMeta: {
+    requiresUserInput: boolean
+    inputHint: string
+  }
+}>()
+
+const emits = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'test': [providerId: string, userInput?: string]
+}>()
+
+const { t } = useI18n()
+
+const visible = computed({
+  get: () => props.modelValue,
+  set: value => emits('update:modelValue', value),
+})
+
+const selectedProviderId = ref<string>('')
+const userInput = ref('')
+
+watch(
+  () => props.enabledProviders,
+  (providers) => {
+    if (providers.length > 0 && !selectedProviderId.value) {
+      selectedProviderId.value = providers[0].id
+    }
+  },
+  { immediate: true },
+)
+
+watch(visible, (isVisible) => {
+  if (!isVisible) {
+    userInput.value = ''
+  }
+})
+
+function handleTest(): void {
+  if (!selectedProviderId.value)
+    return
+  emits('test', selectedProviderId.value, userInput.value || undefined)
+}
+
+function handleCancel(): void {
+  visible.value = false
+}
+</script>
+
 <template>
   <TuffDrawer v-model:visible="visible" :title="t('settings.intelligence.capabilityTestTitle')">
     <div class="capability-test-dialog">
@@ -75,66 +136,6 @@
     </div>
   </TuffDrawer>
 </template>
-
-<script lang="ts" setup>
-import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import type { AiProviderConfig } from '@talex-touch/utils/types/intelligence'
-
-const props = defineProps<{
-  modelValue: boolean
-  capabilityId: string
-  enabledProviders: AiProviderConfig[]
-  isTesting: boolean
-  testMeta: {
-    requiresUserInput: boolean
-    inputHint: string
-  }
-}>()
-
-const emits = defineEmits<{
-  'update:modelValue': [value: boolean]
-  test: [providerId: string, userInput?: string]
-}>()
-
-const { t } = useI18n()
-
-const visible = computed({
-  get: () => props.modelValue,
-  set: (value) => emits('update:modelValue', value)
-})
-
-const selectedProviderId = ref<string>('')
-const userInput = ref('')
-
-watch(
-  () => props.enabledProviders,
-  (providers) => {
-    if (providers.length > 0 && !selectedProviderId.value) {
-      selectedProviderId.value = providers[0].id
-    }
-  },
-  { immediate: true }
-)
-
-watch(visible, (isVisible) => {
-  if (!isVisible) {
-    userInput.value = ''
-  }
-})
-
-function handleTest(): void {
-  if (!selectedProviderId.value) return
-  emits('test', selectedProviderId.value, userInput.value || undefined)
-}
-
-function handleCancel(): void {
-  visible.value = false
-}
-</script>
 
 <style lang="scss" scoped>
 .capability-test-dialog {

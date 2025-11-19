@@ -1,10 +1,10 @@
-import { computed, reactive } from 'vue'
-import { DataCode } from '@talex-touch/utils/channel'
 import type {
   PluginInstallConfirmRequest,
   PluginInstallConfirmResponse,
-  PluginInstallProgressEvent
+  PluginInstallProgressEvent,
 } from '@talex-touch/utils/plugin'
+import { DataCode } from '@talex-touch/utils/channel'
+import { computed, reactive } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
@@ -22,7 +22,7 @@ const ACTIVE_STAGES: Set<PluginInstallProgressEvent['stage']> = new Set([
   'queued',
   'downloading',
   'awaiting-confirmation',
-  'installing'
+  'installing',
 ])
 
 const tasks = reactive(new Map<string, InstallTaskState>())
@@ -73,7 +73,7 @@ function updateTask(event: PluginInstallProgressEvent): void {
   const next: InstallTaskState = {
     ...(existing ?? ({ stage: event.stage } as InstallTaskState)),
     ...event,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
   }
 
   tasks.set(event.taskId, next)
@@ -94,7 +94,8 @@ function updateTask(event: PluginInstallProgressEvent): void {
 async function sendDecision(response: PluginInstallConfirmResponse): Promise<void> {
   try {
     await touchChannel.send('plugin:install-confirm-response', response)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[InstallManager] Failed to send confirm response:', error)
   }
 }
@@ -116,7 +117,7 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
           decisionMade = true
           await sendDecision({ taskId: request.taskId, decision: 'accept' })
           return true
-        }
+        },
       },
       {
         content: t('market.installation.confirmReject'),
@@ -125,9 +126,9 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
           decisionMade = true
           await sendDecision({ taskId: request.taskId, decision: 'reject' })
           return true
-        }
-      }
-    ]
+        },
+      },
+    ],
   )
 
   if (!decisionMade) {
@@ -136,7 +137,8 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent): void {
-  if (activeTaskCount.value === 0) return
+  if (activeTaskCount.value === 0)
+    return
   const t = getTranslator()
   const message = t('market.installation.beforeExitPrompt')
   event.preventDefault()
@@ -144,7 +146,8 @@ function handleBeforeUnload(event: BeforeUnloadEvent): void {
 }
 
 function ensureInitialized(): void {
-  if (initialized) return
+  if (initialized)
+    return
 
   touchChannel.regChannel('plugin:install-progress', ({ data, reply }) => {
     updateTask(data as PluginInstallProgressEvent)
@@ -163,19 +166,22 @@ function ensureInitialized(): void {
 const activeTaskCount = computed(() => {
   let count = 0
   tasks.forEach((task) => {
-    if (ACTIVE_STAGES.has(task.stage)) count += 1
+    if (ACTIVE_STAGES.has(task.stage))
+      count += 1
   })
   return count
 })
 
 function getTaskByPluginId(pluginId?: string) {
-  if (!pluginId) return undefined
+  if (!pluginId)
+    return undefined
   const taskId = pluginIndex.get(pluginId)
   return taskId ? tasks.get(taskId) : undefined
 }
 
 function getTaskBySource(source?: string) {
-  if (!source) return undefined
+  if (!source)
+    return undefined
   const taskId = sourceIndex.get(source)
   return taskId ? tasks.get(taskId) : undefined
 }
@@ -190,6 +196,6 @@ export function useInstallManager() {
     getTaskByPluginId,
     getTaskBySource,
     isActiveStage: (stage?: PluginInstallProgressEvent['stage']) =>
-      stage ? ACTIVE_STAGES.has(stage) : false
+      stage ? ACTIVE_STAGES.has(stage) : false,
   }
 }

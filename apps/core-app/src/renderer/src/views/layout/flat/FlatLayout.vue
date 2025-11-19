@@ -1,3 +1,31 @@
+<script lang="ts" name="AppLayoutFlat" setup>
+/**
+ * FlatLayout Component
+ *
+ * This component provides a flat layout structure for the application.
+ * It includes a header with a controller, a sidebar navigation, and a main content area.
+ *
+ * Slots:
+ * - title: For the title content in the header
+ * - icon: For icons in the footer
+ * - view: For the main content area
+ */
+import FlatController from './FlatController.vue'
+import FlatFooter from './FlatFooter.vue'
+import FlatNavBar from './FlatNavBar.vue'
+
+const props = withDefaults(
+  defineProps<{
+    display?: boolean
+  }>(),
+  {
+    display: false,
+  },
+)
+
+const isDisplayMode = computed(() => props.display)
+</script>
+
 <template>
   <div class="AppLayout-Container Flat" :class="{ 'is-display': isDisplayMode }">
     <div class="AppLayout-Header fake-background">
@@ -28,34 +56,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="AppLayoutFlat" setup>
-/**
- * FlatLayout Component
- *
- * This component provides a flat layout structure for the application.
- * It includes a header with a controller, a sidebar navigation, and a main content area.
- *
- * Slots:
- * - title: For the title content in the header
- * - icon: For icons in the footer
- * - view: For the main content area
- */
-import FlatController from './FlatController.vue'
-import FlatNavBar from './FlatNavBar.vue'
-import FlatFooter from './FlatFooter.vue'
-
-const props = withDefaults(
-  defineProps<{
-    display?: boolean
-  }>(),
-  {
-    display: false
-  }
-)
-
-const isDisplayMode = computed(() => props.display)
-</script>
 
 <style lang="scss" scoped>
 /**

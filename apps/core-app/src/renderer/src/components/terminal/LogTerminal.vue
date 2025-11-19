@@ -1,25 +1,22 @@
-<template>
-  <div ref="terminal" class="LogTerminal-Container"></div>
-</template>
-
 <script>
-export default {
-  name: 'LogTerminal'
-}
 </script>
 
 <script setup>
-import { onMounted, reactive, ref, watchEffect } from 'vue'
+import { onMounted, ref } from 'vue'
 import { Terminal } from 'xterm'
-import 'xterm/css/xterm.css'
 import * as TerminalFit from 'xterm-addon-fit'
+import 'xterm/css/xterm.css'
 
 const props = defineProps({
   logs: {
     type: Array,
-    required: true
-  }
+    required: true,
+  },
 })
+
+export default {
+  name: 'LogTerminal',
+}
 
 // Terminal.applyAddon(TerminalFit)
 
@@ -28,7 +25,7 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 12,
-  lineHeight: 1
+  lineHeight: 1,
 })
 
 watch(
@@ -49,7 +46,7 @@ watch(
       term.writeln(log)
     })
   },
-  { deep: true }
+  { deep: true },
 )
 
 onMounted(() => {
@@ -71,6 +68,10 @@ onMounted(() => {
   })
 })
 </script>
+
+<template>
+  <div ref="terminal" class="LogTerminal-Container" />
+</template>
 
 <style lang="scss" scoped>
 .LogTerminal-Container {

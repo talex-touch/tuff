@@ -1,8 +1,17 @@
+<script setup lang="ts">
+import { useAuth } from '~/modules/auth/useAuth'
+
+const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, getPrimaryEmail }
+  = useAuth()
+</script>
+
 <template>
   <div class="clerk-test">
     <h2>Clerk 认证测试</h2>
 
-    <div v-if="isLoading" class="loading">正在加载 Clerk...</div>
+    <div v-if="isLoading" class="loading">
+      正在加载 Clerk...
+    </div>
 
     <div v-else-if="isAuthenticated" class="authenticated">
       <h3>已登录</h3>
@@ -10,12 +19,16 @@
       <p>邮箱: {{ getPrimaryEmail() }}</p>
       <p>会话ID: {{ authState.sessionId }}</p>
 
-      <el-button type="danger" @click="signOut"> 登出 </el-button>
+      <el-button type="danger" @click="signOut">
+        登出
+      </el-button>
     </div>
 
     <div v-else class="not-authenticated">
       <h3>未登录</h3>
-      <el-button type="primary" @click="signIn"> 登录 </el-button>
+      <el-button type="primary" @click="signIn">
+        登录
+      </el-button>
     </div>
 
     <div class="debug-info">
@@ -24,13 +37,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { useAuth } from '~/modules/auth/useAuth'
-
-const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, getPrimaryEmail } =
-  useAuth()
-</script>
 
 <style scoped>
 .clerk-test {

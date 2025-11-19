@@ -1,4 +1,4 @@
-import type { TranslationProvider, TranslationResult, TranslationProviderRequest } from '../types/translation'
+import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
 
 export class BingTranslateProvider implements TranslationProvider {
   name = 'Bing 翻译'
@@ -8,16 +8,15 @@ export class BingTranslateProvider implements TranslationProvider {
   config = {
     apiKey: '', // 需要用户配置 Azure Cognitive Services key
     region: 'global',
-    apiUrl: 'https://api.cognitive.microsofttranslator.com/translate'
+    apiUrl: 'https://api.cognitive.microsofttranslator.com/translate',
   }
 
   async translate(request: TranslationProviderRequest): Promise<TranslationResult> {
     const { text, targetLanguage: targetLang = 'zh-Hans', sourceLanguage: sourceLang = 'auto' } = request
     try {
-
       const params = new URLSearchParams({
         'api-version': '3.0',
-        'to': targetLang
+        'to': targetLang,
       })
 
       if (sourceLang !== 'auto') {
@@ -29,9 +28,9 @@ export class BingTranslateProvider implements TranslationProvider {
         headers: {
           'Ocp-Apim-Subscription-Key': this.config.apiKey,
           'Ocp-Apim-Subscription-Region': this.config.region,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify([{ text }])
+        body: JSON.stringify([{ text }]),
       })
 
       if (!response.ok) {
@@ -46,9 +45,10 @@ export class BingTranslateProvider implements TranslationProvider {
         sourceLanguage: data[0]?.detectedLanguage?.language || sourceLang,
         targetLanguage: targetLang,
         provider: this.name,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Bing Translate error:', error)
       throw new Error(`Bing 翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }

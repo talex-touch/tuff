@@ -1,12 +1,13 @@
+import type { Shortcut, ShortcutSetting } from './entity/shortcut-settings'
 import { StorageList } from './constants'
-import { shortcutSettingOriginData, ShortcutSetting, Shortcut } from './entity/shortcut-settings'
+import { shortcutSettingOriginData } from './entity/shortcut-settings'
 
 class ShortcutStorage {
   private _config: ShortcutSetting = []
 
   constructor(private readonly storage: {
-    getConfig: (name: string) => any,
-    saveConfig: (name: string, content?: string) => void,
+    getConfig: (name: string) => any
+    saveConfig: (name: string, content?: string) => void
   }) {
     this.init()
   }
@@ -16,7 +17,8 @@ class ShortcutStorage {
     if (!config || !Array.isArray(config) || config.length === 0) {
       this._config = [...shortcutSettingOriginData]
       this._save()
-    } else {
+    }
+    else {
       this._config = config
     }
   }

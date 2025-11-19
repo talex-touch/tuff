@@ -1,5 +1,5 @@
-import { IPluginLogger, LogLevel, LogItem, LogDataType } from '../log/types'
-import { PluginLoggerManager } from './logger-manager'
+import type { IPluginLogger, LogDataType, LogItem, LogLevel } from '../log/types'
+import type { PluginLoggerManager } from './logger-manager'
 import chalk from 'chalk'
 
 /**
@@ -71,7 +71,7 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
       : 'INFO')
     if (resolvedLevel === 'INFO' && normalizedLevel !== 'INFO') {
       console.warn(
-        `${chalk.bgMagenta('[PluginLog]')} ${chalk.bgYellow('WARN')} ${this.pluginName} - Unknown log level "${String(level)}", fallback to INFO`
+        `${chalk.bgMagenta('[PluginLog]')} ${chalk.bgYellow('WARN')} ${this.pluginName} - Unknown log level "${String(level)}", fallback to INFO`,
       )
     }
 
@@ -79,7 +79,7 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
       INFO: chalk.bgBlue,
       WARN: chalk.bgYellow,
       ERROR: chalk.bgRed,
-      DEBUG: chalk.bgGray
+      DEBUG: chalk.bgGray,
     }
     const colorize = levelColorMap[resolvedLevel] ?? ((input: string) => input)
 
@@ -96,14 +96,14 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
     if (resolvedLevel === 'DEBUG') {
       console.debug(
         `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
-        ...data
-      )
-    } else {
-      console.log(
-        `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
-        ...data
+        ...data,
       )
     }
-
+    else {
+      console.log(
+        `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
+        ...data,
+      )
+    }
   }
 }

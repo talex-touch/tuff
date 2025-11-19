@@ -7,7 +7,8 @@ const props = defineProps<{
 
 // Parse images - content can be single data URL or array
 const images = computed(() => {
-  if (!props.data?.content) return []
+  if (!props.data?.content)
+    return []
 
   // If content is array (multiple images)
   if (Array.isArray(props.data.content)) {
@@ -30,7 +31,7 @@ const stackWidth = computed(() => {
 
 <template>
   <div class="ClipboardImageTag">
-    <div class="image-stack" :style="{ width: stackWidth + 'px' }">
+    <div class="image-stack" :style="{ width: `${stackWidth}px` }">
       <img
         v-for="(img, index) in displayImages"
         :key="index"
@@ -38,11 +39,11 @@ const stackWidth = computed(() => {
         :style="{
           zIndex: displayImages.length - index,
           transform: `translateX(${index * 12}px) rotate(${(index - 1) * 3}deg)`,
-          left: 0
+          left: 0,
         }"
         class="preview-image"
         alt="clipboard image"
-      />
+      >
     </div>
     <span class="label">{{ imageCount > 1 ? `${imageCount} 张图像` : '图像' }}</span>
   </div>

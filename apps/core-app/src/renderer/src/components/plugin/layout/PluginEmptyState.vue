@@ -1,3 +1,7 @@
+<script lang="ts" name="PluginEmptyState" setup>
+import FlatButton from '~/components/base/button/FlatButton.vue'
+</script>
+
 <template>
   <div
     class="relative w-full h-full flex flex-col items-center justify-center text-center overflow-hidden"
@@ -18,10 +22,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="PluginEmptyState" setup>
-import FlatButton from '~/components/base/button/FlatButton.vue'
-</script>
 
 <style lang="scss" scoped>
 .cta-button :deep(.FlatButton-Container) {

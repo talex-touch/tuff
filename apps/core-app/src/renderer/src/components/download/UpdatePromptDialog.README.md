@@ -71,22 +71,10 @@ enum DownloadStatus {
 ### Basic Usage
 
 ```vue
-<template>
-  <UpdatePromptDialog
-    v-model="showUpdateDialog"
-    :release="updateRelease"
-    :current-version="currentVersion"
-    @download="handleDownload"
-    @install="handleInstall"
-    @ignore-version="handleIgnoreVersion"
-    @remind-later="handleRemindLater"
-  />
-</template>
-
 <script setup lang="ts">
+import { GitHubRelease } from '@talex-touch/utils'
 import { ref } from 'vue'
 import UpdatePromptDialog from '@/components/download/UpdatePromptDialog.vue'
-import { GitHubRelease } from '@talex-touch/utils'
 
 const showUpdateDialog = ref(false)
 const currentVersion = ref('v2.4.6')
@@ -107,49 +95,47 @@ const updateRelease = ref<GitHubRelease>({
   ]
 })
 
-const handleDownload = (release: GitHubRelease) => {
+function handleDownload(release: GitHubRelease) {
   console.log('Downloading:', release.tag_name)
   // Start download logic
 }
 
-const handleInstall = (taskId: string) => {
+function handleInstall(taskId: string) {
   console.log('Installing:', taskId)
   // Install update logic
 }
 
-const handleIgnoreVersion = (version: string) => {
+function handleIgnoreVersion(version: string) {
   console.log('Ignoring version:', version)
   // Save ignored version
 }
 
-const handleRemindLater = () => {
+function handleRemindLater() {
   console.log('Remind later')
   // Schedule reminder
 }
 </script>
-```
 
-### With Download Progress
-
-```vue
 <template>
   <UpdatePromptDialog
     v-model="showUpdateDialog"
     :release="updateRelease"
     :current-version="currentVersion"
-    :download-task-id="downloadTaskId"
-    :download-progress="downloadProgress"
-    :download-status="downloadStatus"
     @download="handleDownload"
     @install="handleInstall"
-    @cancel-download="handleCancelDownload"
+    @ignore-version="handleIgnoreVersion"
+    @remind-later="handleRemindLater"
   />
 </template>
+```
 
+### With Download Progress
+
+```vue
 <script setup lang="ts">
+import { DownloadStatus } from '@talex-touch/utils'
 import { ref } from 'vue'
 import UpdatePromptDialog from '@/components/download/UpdatePromptDialog.vue'
-import { DownloadStatus } from '@talex-touch/utils'
 
 const showUpdateDialog = ref(false)
 const currentVersion = ref('v2.4.6')
@@ -164,17 +150,31 @@ const downloadProgress = ref({
   remainingTime: 68 // seconds
 })
 
-const handleDownload = (release) => {
+function handleDownload(release) {
   downloadTaskId.value = 'task-123'
   downloadStatus.value = DownloadStatus.DOWNLOADING
   // Start actual download
 }
 
-const handleCancelDownload = (taskId: string) => {
+function handleCancelDownload(taskId: string) {
   downloadStatus.value = DownloadStatus.CANCELLED
   downloadTaskId.value = undefined
 }
 </script>
+
+<template>
+  <UpdatePromptDialog
+    v-model="showUpdateDialog"
+    :release="updateRelease"
+    :current-version="currentVersion"
+    :download-task-id="downloadTaskId"
+    :download-progress="downloadProgress"
+    :download-status="downloadStatus"
+    @download="handleDownload"
+    @install="handleInstall"
+    @cancel-download="handleCancelDownload"
+  />
+</template>
 ```
 
 ## Markdown Support

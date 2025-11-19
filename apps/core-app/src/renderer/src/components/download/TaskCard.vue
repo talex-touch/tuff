@@ -1,5 +1,122 @@
+<script setup lang="ts">
+import type { DownloadTask } from '@talex-touch/utils'
+import {
+  Check,
+  Clock,
+  Close,
+  Delete,
+  Folder,
+  FolderOpened,
+  InfoFilled,
+  Loading,
+  MoreFilled,
+  Refresh,
+  Remove,
+  VideoPause,
+  VideoPlay,
+} from '@element-plus/icons-vue'
+import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import ProgressBar from './ProgressBar.vue'
+
+interface Props {
+  task: DownloadTask
+  viewMode: 'detailed' | 'compact'
+}
+
+const props = defineProps<Props>()
+
+defineEmits<{
+  'pause': [taskId: string]
+  'resume': [taskId: string]
+  'cancel': [taskId: string]
+  'retry': [taskId: string]
+  'remove': [taskId: string]
+  'delete': [taskId: string]
+  'open-file': [taskId: string]
+  'show-in-folder': [taskId: string]
+  'show-details': [taskId: string]
+}>()
+
+useI18n()
+
+const statusClass = computed(() => `status-${props.task.status}`)
+
+const statusColor = computed(() => {
+  switch (props.task.status) {
+    case DownloadStatus.DOWNLOADING:
+      return '#409EFF'
+    case DownloadStatus.COMPLETED:
+      return '#67C23A'
+    case DownloadStatus.FAILED:
+      return '#F56C6C'
+    case DownloadStatus.PAUSED:
+      return '#E6A23C'
+    case DownloadStatus.CANCELLED:
+      return '#909399'
+    default:
+      return '#909399'
+  }
+})
+
+const statusIcon = computed(() => {
+  switch (props.task.status) {
+    case DownloadStatus.COMPLETED:
+      return Check
+    case DownloadStatus.FAILED:
+      return Close
+    case DownloadStatus.PAUSED:
+      return VideoPause
+    case DownloadStatus.CANCELLED:
+      return Remove
+    case DownloadStatus.PENDING:
+      return Clock
+    default:
+      return Clock
+  }
+})
+
+const showProgress = computed(() => {
+  return [
+    DownloadStatus.DOWNLOADING,
+    DownloadStatus.PAUSED,
+    DownloadStatus.COMPLETED,
+  ].includes(props.task.status as DownloadStatus)
+})
+
+const showMoreActions = computed(() => {
+  return props.viewMode === 'detailed'
+})
+
+function getModuleName(module: DownloadModule): string {
+  const moduleNames = {
+    [DownloadModule.APP_UPDATE]: '应用更新',
+    [DownloadModule.PLUGIN_INSTALL]: '插件安装',
+    [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
+    [DownloadModule.USER_MANUAL]: '手动下载',
+  }
+  return moduleNames[module] || '未知'
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  }
+  else if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+  else if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  else {
+    return `${bytes} B`
+  }
+}
+</script>
+
 <template>
-  <div class="task-card" :class="[statusClass, { 'compact': viewMode === 'compact' }]">
+  <div class="task-card" :class="[statusClass, { compact: viewMode === 'compact' }]">
     <div class="task-header">
       <div class="task-info">
         <div class="task-icon">
@@ -11,7 +128,9 @@
           </el-icon>
         </div>
         <div class="task-details">
-          <div class="task-name" :title="task.filename">{{ task.filename }}</div>
+          <div class="task-name" :title="task.filename">
+            {{ task.filename }}
+          </div>
           <div v-if="viewMode === 'detailed'" class="task-meta">
             <span class="task-module">{{ getModuleName(task.module) }}</span>
             <span class="task-size">{{ formatSize(task.progress?.totalSize || 0) }}</span>
@@ -119,119 +238,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import {
-  Loading,
-  Check,
-  Close,
-  VideoPause,
-  VideoPlay,
-  Refresh,
-  Delete,
-  Clock,
-  Remove,
-  FolderOpened,
-  Folder,
-  MoreFilled,
-  InfoFilled
-} from '@element-plus/icons-vue'
-import { DownloadTask, DownloadStatus, DownloadModule } from '@talex-touch/utils'
-import ProgressBar from './ProgressBar.vue'
-
-interface Props {
-  task: DownloadTask
-  viewMode: 'detailed' | 'compact'
-}
-
-useI18n()
-
-const props = defineProps<Props>()
-
-defineEmits<{
-  pause: [taskId: string]
-  resume: [taskId: string]
-  cancel: [taskId: string]
-  retry: [taskId: string]
-  remove: [taskId: string]
-  delete: [taskId: string]
-  'open-file': [taskId: string]
-  'show-in-folder': [taskId: string]
-  'show-details': [taskId: string]
-}>()
-
-const statusClass = computed(() => `status-${props.task.status}`)
-
-const statusColor = computed(() => {
-  switch (props.task.status) {
-    case DownloadStatus.DOWNLOADING:
-      return '#409EFF'
-    case DownloadStatus.COMPLETED:
-      return '#67C23A'
-    case DownloadStatus.FAILED:
-      return '#F56C6C'
-    case DownloadStatus.PAUSED:
-      return '#E6A23C'
-    case DownloadStatus.CANCELLED:
-      return '#909399'
-    default:
-      return '#909399'
-  }
-})
-
-const statusIcon = computed(() => {
-  switch (props.task.status) {
-    case DownloadStatus.COMPLETED:
-      return Check
-    case DownloadStatus.FAILED:
-      return Close
-    case DownloadStatus.PAUSED:
-      return VideoPause
-    case DownloadStatus.CANCELLED:
-      return Remove
-    case DownloadStatus.PENDING:
-      return Clock
-    default:
-      return Clock
-  }
-})
-
-const showProgress = computed(() => {
-  return [
-    DownloadStatus.DOWNLOADING,
-    DownloadStatus.PAUSED,
-    DownloadStatus.COMPLETED
-  ].includes(props.task.status as DownloadStatus)
-})
-
-const showMoreActions = computed(() => {
-  return props.viewMode === 'detailed'
-})
-
-const getModuleName = (module: DownloadModule): string => {
-  const moduleNames = {
-    [DownloadModule.APP_UPDATE]: '应用更新',
-    [DownloadModule.PLUGIN_INSTALL]: '插件安装',
-    [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
-    [DownloadModule.USER_MANUAL]: '手动下载'
-  }
-  return moduleNames[module] || '未知'
-}
-
-const formatSize = (bytes: number): string => {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  } else if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  } else if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  } else {
-    return `${bytes} B`
-  }
-}
-</script>
 
 <style scoped>
 .task-card {

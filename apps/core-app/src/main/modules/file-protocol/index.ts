@@ -1,8 +1,8 @@
-import { net, session } from 'electron'
-import url from 'url'
-import { BaseModule } from '../abstract-base-module'
-import { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import url from 'node:url'
 import chalk from 'chalk'
+import { net, session } from 'electron'
+import { BaseModule } from '../abstract-base-module'
 
 class FileProtocolModule extends BaseModule {
   static key: symbol = Symbol.for('FileProtocolModule')
@@ -10,7 +10,7 @@ class FileProtocolModule extends BaseModule {
 
   constructor() {
     super(FileProtocolModule.key, {
-      create: false
+      create: false,
     })
   }
 
@@ -26,7 +26,8 @@ class FileProtocolModule extends BaseModule {
       try {
         const response = await net.fetch(fileUrl)
         return response
-      } catch (error) {
+      }
+      catch (error) {
         console.error(chalk.red('[FileProtocolModule] tfile request error:'), error)
         return new Response('File not found', { status: 404 })
       }

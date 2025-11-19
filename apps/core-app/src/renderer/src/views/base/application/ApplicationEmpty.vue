@@ -7,7 +7,7 @@ const { t } = useI18n()
 <template>
   <div class="ApplicationEmpty">
     <div class="spinner">
-      <div class="spinner1"></div>
+      <div class="spinner1" />
     </div>
 
     <div class="Describer">

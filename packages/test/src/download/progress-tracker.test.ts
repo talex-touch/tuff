@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 // Since ProgressTracker is in core-app and not exported as a package,
 // we'll test the formatting utilities as static methods
@@ -61,8 +61,7 @@ class ProgressTrackerUtils {
   }
 }
 
-describe('ProgressTracker Utilities', () => {
-
+describe('progressTracker Utilities', () => {
   describe('formatSpeed', () => {
     it('should format bytes per second', () => {
       expect(ProgressTrackerUtils.formatSpeed(0)).toBe('0 B/s')

@@ -1,10 +1,10 @@
 <script lang="ts" name="PluginItem" setup>
-import { computed } from 'vue'
+import type { ITouchPlugin } from '@talex-touch/utils'
 import { ElPopover } from 'element-plus'
-import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
-import { ITouchPlugin } from '@talex-touch/utils'
+import { computed } from 'vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -20,7 +20,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     class="plugin-item my-4 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
     :class="{ shrink, target: isTarget, dev: plugin.dev?.enable }"
   >
-    <el-popover
+    <ElPopover
       v-if="hasIssues"
       placement="top-start"
       title="Plugin Issues"
@@ -40,23 +40,27 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
           class="issue-item flex items-start p-1.5 mb-1.5 last:mb-0 rounded"
           :class="{
             'bg-red-500/10': issue.type === 'error',
-            'bg-yellow-500/10': issue.type === 'warning'
+            'bg-yellow-500/10': issue.type === 'warning',
           }"
         >
           <i
             class="flex-shrink-0 mt-0.5"
             :class="{
               'i-ri-close-circle-fill text-red-500': issue.type === 'error',
-              'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
+              'i-ri-alert-fill text-yellow-500': issue.type === 'warning',
             }"
           />
           <div class="ml-2 text-xs">
-            <p class="font-bold">{{ issue.source }}</p>
-            <p class="mt-0.5 text-gray-600 dark:text-gray-300">{{ issue.message }}</p>
+            <p class="font-bold">
+              {{ issue.source }}
+            </p>
+            <p class="mt-0.5 text-gray-600 dark:text-gray-300">
+              {{ issue.message }}
+            </p>
           </div>
         </div>
       </div>
-    </el-popover>
+    </ElPopover>
 
     <TuffIcon
       class="flex-shrink-0"
@@ -67,7 +71,9 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     />
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">
-      <p class="font-semibold text-base truncate">{{ plugin.name }}</p>
+      <p class="font-semibold text-base truncate">
+        {{ plugin.name }}
+      </p>
 
       <p class="text-xs text-gray-400 mt-1 truncate">
         {{ plugin.desc }}

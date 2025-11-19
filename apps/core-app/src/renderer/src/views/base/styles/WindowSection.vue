@@ -1,40 +1,15 @@
-<template>
-  <div ref="wrapperRef" class="WindowSection-Wrapper fake-background">
-    <p font-600 text-lg>{{ t('windowSection.title') }}</p>
-    <div
-      gap-4
-      box-border
-      relative
-      w-full
-      flex
-      items-center
-      justify-center
-      class="WindowsSection-Container"
-    >
-      <slot />
-    </div>
-    <div ref="pointerRef" class="Pointer">
-      <div class="pointer-border top"></div>
-      <div class="pointer-border bottom"></div>
-      <div class="pointer-border left"></div>
-      <div class="pointer-border right"></div>
-    </div>
-    <p ref="tipRef" style="transition: 0.1s" />
-  </div>
-</template>
-
 <script lang="ts" name="WindowsSection" setup>
-import { useI18n } from 'vue-i18n'
 import { sleep } from '@talex-touch/utils/common'
-
-const { t } = useI18n()
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps({
   tip: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
+
+const { t } = useI18n()
 
 const pointerRef = ref<HTMLElement | null>()
 const wrapperRef = ref<HTMLElement | null>()
@@ -47,14 +22,16 @@ const pointerOptions = reactive({
   },
   hide() {
     pointerRef.value!.style.opacity = '0'
-  }
+  },
 })
 
 async function mention(html: string | undefined) {
-  if (!html) return props.tip ? mention(props.tip) : 0
+  if (!html)
+    return props.tip ? mention(props.tip) : 0
 
   const el = tipRef.value
-  if (!el.innerHTML) return (el.innerHTML = html)
+  if (!el.innerHTML)
+    return (el.innerHTML = html)
 
   const style = el.style
 
@@ -86,12 +63,16 @@ provide('mention', mention)
 async function readSectionItems() {
   const wrapper = wrapperRef.value
 
-  if (!wrapper) return
+  if (!wrapper)
+    return
 
   function hoverEl(el: HTMLElement) {
     if (el.classList.contains('disabled')) {
       pointerRef.value!.classList.add('disabled')
-    } else pointerRef.value!.classList.remove('disabled')
+    }
+    else {
+      pointerRef.value!.classList.remove('disabled')
+    }
 
     const rect = el.getBoundingClientRect()
 
@@ -99,10 +80,10 @@ async function readSectionItems() {
     pointerOptions.show()
 
     pointerOptions.pos = [
-      el.offsetLeft + 'px',
-      el.parentElement!.offsetTop + el.offsetTop / 3 + 'px',
-      rect.width + 16 + 'px',
-      rect.height + 16 + 'px'
+      `${el.offsetLeft}px`,
+      `${el.parentElement!.offsetTop + el.offsetTop / 3}px`,
+      `${rect.width + 16}px`,
+      `${rect.height + 16}px`,
     ]
   }
 
@@ -114,7 +95,8 @@ async function readSectionItems() {
 
   // read
   wrapper.querySelectorAll('.SectionItem-Container').forEach((el: Element) => {
-    if (!(el instanceof HTMLElement)) return
+    if (!(el instanceof HTMLElement))
+      return
 
     // el.addEventListener('click', () => {
     //   pointerRef.value = el
@@ -133,11 +115,15 @@ async function readSectionItems() {
     el.addEventListener('mouseenter', () => {
       if (el.classList.contains('active')) {
         activeEl(el)
-      } else hoverEl(el)
+      }
+      else {
+        hoverEl(el)
+      }
     })
 
     el.addEventListener('click', () => {
-      if (!el.classList.contains('disabled')) activeEl(el)
+      if (!el.classList.contains('disabled'))
+        activeEl(el)
     })
   })
 }
@@ -148,6 +134,33 @@ onMounted(() => {
   mention(props.tip)
 })
 </script>
+
+<template>
+  <div ref="wrapperRef" class="WindowSection-Wrapper fake-background">
+    <p font-600 text-lg>
+      {{ t('windowSection.title') }}
+    </p>
+    <div
+      gap-4
+      box-border
+      relative
+      w-full
+      flex
+      items-center
+      justify-center
+      class="WindowsSection-Container"
+    >
+      <slot />
+    </div>
+    <div ref="pointerRef" class="Pointer">
+      <div class="pointer-border top" />
+      <div class="pointer-border bottom" />
+      <div class="pointer-border left" />
+      <div class="pointer-border right" />
+    </div>
+    <p ref="tipRef" style="transition: 0.1s" />
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .pointer-border {

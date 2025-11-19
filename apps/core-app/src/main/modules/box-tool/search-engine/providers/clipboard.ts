@@ -1,9 +1,10 @@
-import { ISearchProvider, TuffItem, TuffQuery, TuffSearchResult, ProviderContext } from '../types'
-import { TuffRender, TuffInputType } from '@talex-touch/utils'
-import { clipboardHistory } from '../../../../db/schema'
+import type { TuffRender } from '@talex-touch/utils'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type * as schema from '../../../../db/schema'
+import type { ISearchProvider, ProviderContext, TuffItem, TuffQuery, TuffSearchResult } from '../types'
+import { TuffInputType } from '@talex-touch/utils'
 import { desc, like, or } from 'drizzle-orm'
-import { LibSQLDatabase } from 'drizzle-orm/libsql'
-import * as schema from '../../../../db/schema'
+import { clipboardHistory } from '../../../../db/schema'
 
 export class ClipboardProvider implements ISearchProvider<ProviderContext> {
   public readonly id = 'clipboard-history'
@@ -30,9 +31,9 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
             providerName: this.name,
             duration: 0,
             resultCount: 0,
-            status: 'success'
-          }
-        ]
+            status: 'success',
+          },
+        ],
       }
     }
 
@@ -47,21 +48,22 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
         .from(clipboardHistory)
         .orderBy(desc(clipboardHistory.timestamp))
         .limit(20)
-    } else {
+    }
+    else {
       results = await this.db
         .select()
         .from(clipboardHistory)
         .where(
           or(
             like(clipboardHistory.content, `%${keyword}%`),
-            like(clipboardHistory.metadata, `%${keyword}%`)
-          )
+            like(clipboardHistory.metadata, `%${keyword}%`),
+          ),
         )
         .orderBy(desc(clipboardHistory.timestamp))
         .limit(20)
     }
 
-    const items = results.map((item) => this.transformToSearchItem(item))
+    const items = results.map(item => this.transformToSearchItem(item))
     const duration = Date.now() - startTime
 
     return {
@@ -74,9 +76,9 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
           providerName: this.name,
           duration,
           resultCount: items.length,
-          status: 'success'
-        }
-      ]
+          status: 'success',
+        },
+      ],
     }
   }
 
@@ -85,7 +87,8 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
     if (item.metadata) {
       try {
         metadata = JSON.parse(item.metadata)
-      } catch {
+      }
+      catch {
         metadata = null
       }
     }
@@ -93,8 +96,8 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
     const render: TuffRender = {
       mode: 'default',
       basic: {
-        title: ''
-      }
+        title: '',
+      },
     }
 
     let kind: TuffItem['kind'] = 'document'
@@ -102,61 +105,67 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
     if (item.type === 'text') {
       kind = 'document'
       if (render.basic) {
-        render.basic.title =
-          item.content.length > 100 ? `${item.content.substring(0, 97)}...` : item.content
+        render.basic.title
+          = item.content.length > 100 ? `${item.content.substring(0, 97)}...` : item.content
         render.basic.subtitle = `Text from ${item.sourceApp || 'Unknown'}`
         render.basic.icon = {
           type: 'emoji',
-          value: '📄'
+          value: '📄',
         }
       }
       render.preview = {
         type: 'panel',
-        content: item.content
+        content: item.content,
       }
-    } else if (item.type === 'image') {
+    }
+    else if (item.type === 'image') {
       kind = 'image'
       if (render.basic) {
         render.basic.title = `Image from ${item.sourceApp || 'Unknown'}`
-        render.basic.icon = item.thumbnail ? {
-          type: 'url',
-          value: item.thumbnail
-        } : {
-          type: 'emoji',
-          value: '🖼️'
-        }
+        render.basic.icon = item.thumbnail
+          ? {
+              type: 'url',
+              value: item.thumbnail,
+            }
+          : {
+              type: 'emoji',
+              value: '🖼️',
+            }
       }
       render.preview = {
         type: 'panel',
-        image: item.content // Full image data URL
+        image: item.content, // Full image data URL
       }
-    } else if (item.type === 'files') {
+    }
+    else if (item.type === 'files') {
       kind = 'file'
       if (render.basic) {
         try {
           const files = JSON.parse(item.content)
           if (files.length === 1) {
             const filePath = files[0]
-            render.basic.title =
-              typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
-          } else {
+            render.basic.title
+              = typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
+          }
+          else {
             render.basic.title = `${files.length} files`
           }
-        } catch {
+        }
+        catch {
           render.basic.title = 'Files from clipboard'
         }
         render.basic.icon = {
           type: 'emoji',
-          value: '📁'
+          value: '📁',
         }
       }
     }
 
     if (
-      metadata?.ocr_excerpt &&
-      typeof metadata.ocr_excerpt === 'string' &&
-      metadata.ocr_excerpt.trim() &&
-      render.basic
+      metadata?.ocr_excerpt
+      && typeof metadata.ocr_excerpt === 'string'
+      && metadata.ocr_excerpt.trim()
+      && render.basic
     ) {
       const snippet = metadata.ocr_excerpt.trim()
       render.basic.subtitle = render.basic.subtitle
@@ -169,7 +178,7 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
       source: {
         id: this.id,
         type: this.type,
-        name: this.name
+        name: this.name,
       },
       kind,
       render,
@@ -178,18 +187,18 @@ export class ClipboardProvider implements ISearchProvider<ProviderContext> {
           id: 'paste',
           type: 'execute',
           label: 'Paste',
-          shortcut: 'Enter'
+          shortcut: 'Enter',
         },
         {
           id: 'copy',
           type: 'copy',
           label: 'Copy',
-          shortcut: 'CmdOrCtrl+C'
-        }
+          shortcut: 'CmdOrCtrl+C',
+        },
       ],
       meta: {
-        raw: item
-      }
+        raw: item,
+      },
     }
   }
 }

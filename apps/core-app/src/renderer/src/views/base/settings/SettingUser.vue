@@ -1,11 +1,11 @@
 <script setup lang="ts" name="SettingUser">
 import { useI18n } from 'vue-i18n'
-import { useAuth } from '~/modules/auth/useAuth'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 // import { appSetting } from '~/modules/channel/storage'
 import { toast } from 'vue-sonner'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { useAuth } from '~/modules/auth/useAuth'
 
 const { t } = useI18n()
 const { isLoggedIn, currentUser, login, logout } = useAuth()
@@ -17,7 +17,8 @@ async function handleLogin() {
     if (result.success) {
       console.log('登录结果:', result)
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('登录过程出错:', error)
     toast.error('登录过程中发生错误')
   }
@@ -27,7 +28,8 @@ async function handleLogout() {
   try {
     await logout()
     toast.success('已登出')
-  } catch (error) {
+  }
+  catch (error) {
     console.error('登出失败:', error)
     toast.error('登出失败')
   }
@@ -35,14 +37,14 @@ async function handleLogout() {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settingUser.groupTitle')"
     :description="t('settingUser.groupDesc')"
     default-icon="i-carbon-user"
     active-icon="i-carbon-user-avatar"
     memory-name="setting-user"
   >
-    <tuff-block-slot
+    <TuffBlockSlot
       v-if="isLoggedIn"
       :title="currentUser?.name || '用户'"
       disabled
@@ -53,9 +55,9 @@ async function handleLogout() {
       <FlatButton type="danger" @click="handleLogout">
         {{ t('settingUser.logout') }}
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
-    <tuff-block-slot
+    <TuffBlockSlot
       v-else
       :title="t('settingUser.noAccount')"
       disabled
@@ -66,6 +68,6 @@ async function handleLogout() {
       <FlatButton type="primary" @click="handleLogin">
         {{ t('settingUser.login') }}
       </FlatButton>
-    </tuff-block-slot>
-  </tuff-group-block>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
 </template>

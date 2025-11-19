@@ -1,3 +1,9 @@
+<script lang="ts" setup>
+defineOptions({
+  name: 'LayoutSkeleton',
+})
+</script>
+
 <template>
   <div class="LayoutSkeleton fake-background">
     <div class="LayoutSkeleton-Container">
@@ -34,12 +40,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-defineOptions({
-  name: 'LayoutSkeleton'
-})
-</script>
 
 <style lang="scss" scoped>
 .LayoutSkeleton {
@@ -151,6 +151,3 @@ defineOptions({
   }
 }
 </style>
-
-
-

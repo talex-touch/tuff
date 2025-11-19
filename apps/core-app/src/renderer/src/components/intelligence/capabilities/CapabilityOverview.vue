@@ -1,3 +1,15 @@
+<script lang="ts" setup>
+import { useI18n } from 'vue-i18n'
+
+defineProps<{
+  activeCount: number
+  totalBindings: number
+  totalModels: number
+}>()
+
+const { t } = useI18n()
+</script>
+
 <template>
   <div class="capability-overview">
     <div class="overview-card">
@@ -27,18 +39,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { useI18n } from 'vue-i18n'
-
-defineProps<{
-  activeCount: number
-  totalBindings: number
-  totalModels: number
-}>()
-
-const { t } = useI18n()
-</script>
 
 <style lang="scss" scoped>
 .capability-overview {

@@ -22,9 +22,9 @@
 
 ```typescript
 const {
-  providers,           // 所有翻译提供者
-  enabledProviders,    // 已启用的提供者
-  toggleProvider,      // 切换提供者启用状态
+  providers, // 所有翻译提供者
+  enabledProviders, // 已启用的提供者
+  toggleProvider, // 切换提供者启用状态
   updateProviderConfig // 更新提供者配置
 } = useTranslationProvider()
 ```
@@ -34,12 +34,12 @@ const {
 
 ```typescript
 const {
-  translate,           // 执行翻译
-  currentResponse,     // 当前翻译响应
-  history,            // 翻译历史
-  isTranslating,      // 翻译状态
-  hasResults,         // 是否有结果
-  retryTranslation    // 重试翻译
+  translate, // 执行翻译
+  currentResponse, // 当前翻译响应
+  history, // 翻译历史
+  isTranslating, // 翻译状态
+  hasResults, // 是否有结果
+  retryTranslation // 重试翻译
 } = useTranslation()
 ```
 

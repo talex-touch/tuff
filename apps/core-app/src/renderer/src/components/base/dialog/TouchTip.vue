@@ -1,7 +1,7 @@
 <script lang="ts" name="TouchTip" setup>
-import Loading from '~/components/icon/LoadingIcon.vue'
-import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
+import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import Loading from '~/components/icon/LoadingIcon.vue'
 
 /**
  * Button interface for defining button properties
@@ -51,7 +51,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
-  buttons: () => []
+  buttons: () => [],
 })
 
 // Refs
@@ -73,12 +73,12 @@ watchEffect(() => {
       content: btn.content,
       type: btn.type,
       onClick: btn.onClick,
-      loading: false // Initialize loading as false
+      loading: false, // Initialize loading as false
     }
 
     // Create reactive object
     const obj = {
-      value: buttonState
+      value: buttonState,
     }
 
     // Handle loading callback
@@ -100,12 +100,13 @@ watchEffect(() => {
  * Handle button click event
  * @param btn Button object
  */
-const clickBtn = async (btn: { value: ButtonState }): Promise<void> => {
+async function clickBtn(btn: { value: ButtonState }): Promise<void> {
   btn.value.loading = true
 
   await sleep(200)
 
-  if (await btn.value.onClick()) await forClose()
+  if (await btn.value.onClick())
+    await forClose()
 
   btn.value.loading = false
 }
@@ -115,16 +116,17 @@ const clickBtn = async (btn: { value: ButtonState }): Promise<void> => {
  */
 function listener(): void {
   window.scrollTo({
-    top: 0
+    top: 0,
   })
 }
 
 /**
  * Close dialog function
  */
-const forClose = async (): Promise<void> => {
+async function forClose(): Promise<void> {
   const el = wholeDom.value
-  if (!el) return
+  if (!el)
+    return
 
   const style = el.style
 
@@ -211,7 +213,7 @@ onUnmounted(() => {
             'warn-tip': btn.value?.type === 'warning',
             'error-tip': btn.value?.type === 'error',
             'success-tip': btn.value?.type === 'success',
-            'loading-tip': btn.value.loading
+            'loading-tip': btn.value.loading,
           }"
           class="TDialogTip-Btn-Item"
           role="button"

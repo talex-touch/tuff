@@ -1,12 +1,13 @@
 <script lang="ts">
-import { defineComponent, h, nextTick, Teleport, type VNode } from 'vue'
+import type { VNode } from 'vue'
 import { computePosition } from '@floating-ui/vue'
 import { extractFromSlots } from '@talex-touch/utils/renderer/slots'
 import { onClickOutside } from '@vueuse/core'
+import { defineComponent, h, nextTick, Teleport } from 'vue'
 
 const qualifiedName = 'TSelectItem'
 
-const isQualifiedVNode = (vnode: VNode): boolean => {
+function isQualifiedVNode(vnode: VNode): boolean {
   const type = vnode.type as { name?: string } | string | undefined
   if (typeof type === 'object' && type !== null && 'name' in type) {
     return type.name === qualifiedName
@@ -22,32 +23,14 @@ export default defineComponent({
   props: {
     modelValue: {
       type: [String, Number],
-      required: true
-    }
+      required: true,
+    },
   },
   data() {
     return {
       activeIndex: 0,
       click: false,
-      stopClickOutside: null as null | (() => void)
-    }
-  },
-  methods: {
-    clickListener(event: MouseEvent) {
-      if (!this.click) return
-      const path =
-        typeof event.composedPath === 'function'
-          ? event.composedPath()
-          : (event as unknown as { path?: EventTarget[] }).path
-      if (!Array.isArray(path)) {
-        this.click = false
-        return
-      }
-      this.click = path.some((node) => {
-        const element = node as HTMLElement | undefined
-        const className = element?.className
-        return typeof className === 'string' && className.includes('TSelectItem-Container')
-      })
+      stopClickOutside: null as null | (() => void),
     }
   },
   mounted() {
@@ -63,39 +46,60 @@ export default defineComponent({
       this.stopClickOutside()
     }
   },
+  methods: {
+    clickListener(event: MouseEvent) {
+      if (!this.click)
+        return
+      const path
+        = typeof event.composedPath === 'function'
+          ? event.composedPath()
+          : (event as unknown as { path?: EventTarget[] }).path
+      if (!Array.isArray(path)) {
+        this.click = false
+        return
+      }
+      this.click = path.some((node) => {
+        const element = node as HTMLElement | undefined
+        const className = element?.className
+        return typeof className === 'string' && className.includes('TSelectItem-Container')
+      })
+    },
+  },
   render() {
     const rawSlots = extractFromSlots(
       this.$slots,
       'default',
-      (vnode) => isQualifiedVNode(vnode as VNode)
+      vnode => isQualifiedVNode(vnode as VNode),
     )
 
     const slots = rawSlots.map((vnode, index) => ({
       vnode,
       index,
       value: vnode.props?.value !== undefined ? vnode.props.value : index,
-      disabled: Object.prototype.hasOwnProperty.call(vnode.props ?? {}, 'disabled')
+      disabled: Object.prototype.hasOwnProperty.call(vnode.props ?? {}, 'disabled'),
     }))
 
-    const matchedIndex = slots.findIndex((slot) => slot.value === this.modelValue)
+    const matchedIndex = slots.findIndex(slot => slot.value === this.modelValue)
     this.activeIndex = matchedIndex > -1 ? matchedIndex : 0
 
     const that = this
 
     function getContent() {
       if (that.click) {
-        const wrapper = h('div', { class: 'TSelect-Wrapper' }, slots.map((slot) => slot.vnode)) as VNode
+        const wrapper = h('div', { class: 'TSelect-Wrapper' }, slots.map(slot => slot.vnode)) as VNode
 
         nextTick(() => {
           let height = 0
 
           slots.forEach((slot) => {
             const el = slot.vnode.el as HTMLElement | null
-            if (!el) return
+            if (!el)
+              return
 
             if (slot.disabled) {
               el.style.cursor = 'not-allowed'
-            } else {
+            }
+            else {
               el.onclick = (e) => {
                 that.$emit('update:modelValue', slot.value)
                 that.$emit('change', slot.vnode.props?.name ?? slot.value, e)
@@ -111,7 +115,8 @@ export default defineComponent({
           async function adaptPosition() {
             const referenceEl = that.$el as HTMLElement | null
             const floatingEl = wrapper.el as HTMLElement | null
-            if (!referenceEl || !floatingEl) return
+            if (!referenceEl || !floatingEl)
+              return
             const floating = await computePosition(referenceEl, floatingEl)
 
             if (floatingEl) {
@@ -119,7 +124,7 @@ export default defineComponent({
               Object.assign(floatingEl.style, {
                 top: `${floating.y}px`,
                 left: `${floating.x}px`,
-                transform: `translate(0, ${-height}px)`
+                transform: `translate(0, ${-height}px)`,
               })
             }
           }
@@ -136,16 +141,16 @@ export default defineComponent({
     const v = h(
       'div',
       {
-        class: 'TSelect-Container win' + (that.click ? 'selection' : ''),
+        class: `TSelect-Container win${that.click ? 'selection' : ''}`,
         onclick() {
           that.click = !that.click
-        }
+        },
       },
-      getContent()
+      getContent(),
     )
 
     return v
-  }
+  },
 })
 </script>
 

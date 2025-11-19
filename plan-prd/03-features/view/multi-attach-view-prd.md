@@ -68,7 +68,8 @@
 // 主进程: 注册多视图
 function attachUIView(panelId: string, descriptor: AttachDescriptor) {
   const host = multiViewHost.ensure(panelId)
-  if (host.size >= host.maxViews) throw new Error('VIEW_LIMIT_EXCEEDED')
+  if (host.size >= host.maxViews)
+    throw new Error('VIEW_LIMIT_EXCEEDED')
 
   const view = createWebContentsView(descriptor)
   host.add(view)

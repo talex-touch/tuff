@@ -15,15 +15,15 @@ export enum DownloadErrorType {
   FILE_NOT_FOUND = 'file_not_found',
   INVALID_URL = 'invalid_url',
   CANCELLED = 'cancelled',
-  UNKNOWN_ERROR = 'unknown_error'
+  UNKNOWN_ERROR = 'unknown_error',
 }
 
 // 错误严重程度
 export enum ErrorSeverity {
-  LOW = 'low',       // 可以自动重试
+  LOW = 'low', // 可以自动重试
   MEDIUM = 'medium', // 需要用户注意
-  HIGH = 'high',     // 需要用户干预
-  CRITICAL = 'critical' // 严重错误
+  HIGH = 'high', // 需要用户干预
+  CRITICAL = 'critical', // 严重错误
 }
 
 // 下载错误接口
@@ -68,7 +68,7 @@ export class DownloadErrorClass extends Error {
     severity: ErrorSeverity,
     canRetry: boolean,
     context?: ErrorContext,
-    originalError?: Error
+    originalError?: Error,
   ) {
     super(message)
     this.name = 'DownloadError'
@@ -96,7 +96,7 @@ export class DownloadErrorClass extends Error {
       taskId: this.context?.taskId || '',
       canRetry: this.canRetry,
       details: this.context,
-      stackTrace: this.stack
+      stackTrace: this.stack,
     }
   }
 
@@ -120,15 +120,15 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.MEDIUM,
         true,
         context,
-        error
+        error,
       )
     }
 
     if (
-      errorMessage.includes('network') ||
-      errorMessage.includes('econnrefused') ||
-      errorMessage.includes('enotfound') ||
-      errorMessage.includes('econnreset')
+      errorMessage.includes('network')
+      || errorMessage.includes('econnrefused')
+      || errorMessage.includes('enotfound')
+      || errorMessage.includes('econnreset')
     ) {
       return new DownloadErrorClass(
         DownloadErrorType.NETWORK_ERROR,
@@ -137,7 +137,7 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.MEDIUM,
         true,
         context,
-        error
+        error,
       )
     }
 
@@ -149,7 +149,7 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.HIGH,
         false,
         context,
-        error
+        error,
       )
     }
 
@@ -161,7 +161,7 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.HIGH,
         false,
         context,
-        error
+        error,
       )
     }
 
@@ -173,7 +173,7 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.HIGH,
         false,
         context,
-        error
+        error,
       )
     }
 
@@ -185,7 +185,7 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.MEDIUM,
         true,
         context,
-        error
+        error,
       )
     }
 
@@ -197,7 +197,7 @@ export class DownloadErrorClass extends Error {
         ErrorSeverity.LOW,
         false,
         context,
-        error
+        error,
       )
     }
 
@@ -209,7 +209,7 @@ export class DownloadErrorClass extends Error {
       ErrorSeverity.MEDIUM,
       true,
       context,
-      error
+      error,
     )
   }
 
@@ -223,7 +223,7 @@ export class DownloadErrorClass extends Error {
       t('downloadErrors.network_error'),
       ErrorSeverity.MEDIUM,
       true,
-      context
+      context,
     )
   }
 
@@ -237,7 +237,7 @@ export class DownloadErrorClass extends Error {
       t('downloadErrors.timeout_error'),
       ErrorSeverity.MEDIUM,
       true,
-      context
+      context,
     )
   }
 
@@ -251,7 +251,7 @@ export class DownloadErrorClass extends Error {
       t('downloadErrors.disk_space_error'),
       ErrorSeverity.HIGH,
       false,
-      context
+      context,
     )
   }
 
@@ -265,7 +265,7 @@ export class DownloadErrorClass extends Error {
       t('downloadErrors.permission_error'),
       ErrorSeverity.HIGH,
       false,
-      context
+      context,
     )
   }
 
@@ -279,7 +279,7 @@ export class DownloadErrorClass extends Error {
       t('downloadErrors.checksum_error'),
       ErrorSeverity.MEDIUM,
       true,
-      context
+      context,
     )
   }
 }

@@ -1,11 +1,11 @@
-export type PluginInstallTaskStage =
-  | 'queued'
-  | 'downloading'
-  | 'awaiting-confirmation'
-  | 'installing'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
+export type PluginInstallTaskStage
+  = | 'queued'
+    | 'downloading'
+    | 'awaiting-confirmation'
+    | 'installing'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
 
 export interface PluginInstallProgressEvent {
   taskId: string

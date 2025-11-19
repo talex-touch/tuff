@@ -1,42 +1,43 @@
 <script name="TBlockSelect" setup>
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import TSelect from '~/components/base/select/TSelect.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 
 const props = defineProps({
   title: {
     type: String,
-    required: true
+    required: true,
   },
   description: {
     type: String,
-    required: true
+    required: true,
   },
   modelValue: {
     type: [String, Number],
-    required: true
+    required: true,
   },
   disabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   icon: {
     type: String,
-    required: true
+    required: true,
   },
   iconChange: {
-    type: String
-  }
+    type: String,
+  },
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
 const value = useModelWrapper(props, emits)
 const iconStyle = computed(() =>
-  props.iconChange === null ? (value.value ? 'fill' : 'line') : props.iconChange
+  props.iconChange === null ? (value.value ? 'fill' : 'line') : props.iconChange,
 )
 
 function handleChange(val, e) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
 
   emits('change', val, e)
 }

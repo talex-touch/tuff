@@ -1,5 +1,6 @@
+import type { RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 import { computed, watchEffect } from 'vue'
-import { useRoute, useRouter, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 type RouteRecordTree = RouteRecordRaw & { children?: RouteRecordTree[] }
 
@@ -19,15 +20,16 @@ interface FlattenedRouteEntry {
 /**
  * Normalizes route paths by collapsing duplicate slashes and removing trailing slash.
  */
-const normalizePath = (path?: string | null): string => {
-  if (!path || path === '/') return '/'
+function normalizePath(path?: string | null): string {
+  if (!path || path === '/')
+    return '/'
   return path.replace(/\/+$/, '') || '/'
 }
 
 /**
  * Joins base and segment paths, respecting leading/trailing slashes.
  */
-const joinPaths = (basePath: string, segment: string): string => {
+function joinPaths(basePath: string, segment: string): string {
   if (!segment) {
     return basePath || '/'
   }
@@ -47,11 +49,7 @@ const joinPaths = (basePath: string, segment: string): string => {
 /**
  * Flattens a nested route tree into absolute paths with depth info.
  */
-const flattenRouteTree = (
-  records: RouteRecordTree[],
-  parentAbsolutePath = '',
-  depth = 0
-): FlattenedRouteEntry[] => {
+function flattenRouteTree(records: RouteRecordTree[], parentAbsolutePath = '', depth = 0): FlattenedRouteEntry[] {
   const entries: FlattenedRouteEntry[] = []
 
   for (const record of records) {
@@ -59,12 +57,12 @@ const flattenRouteTree = (
     entries.push({
       record,
       absolutePath,
-      depth
+      depth,
     })
 
     if (record.children?.length) {
       entries.push(
-        ...flattenRouteTree((record.children as RouteRecordTree[]) ?? [], absolutePath, depth + 1)
+        ...flattenRouteTree((record.children as RouteRecordTree[]) ?? [], absolutePath, depth + 1),
       )
     }
   }
@@ -75,20 +73,15 @@ const flattenRouteTree = (
 /**
  * Attempts to find the declared parent route using the router options tree.
  */
-const findParentRouteInTree = (
-  records: RouteRecordTree[],
-  targetName: RouteRecordRaw['name'] | null | undefined,
-  targetPath: string,
-  parentAbsolutePath = ''
-): ParentLookupResult | null => {
+function findParentRouteInTree(records: RouteRecordTree[], targetName: RouteRecordRaw['name'] | null | undefined, targetPath: string, parentAbsolutePath = ''): ParentLookupResult | null {
   for (const record of records) {
     const absoluteRecordPath = joinPaths(parentAbsolutePath, record.path ?? '')
     const children = (record.children ?? []) as RouteRecordTree[]
 
     for (const child of children) {
       const absoluteChildPath = joinPaths(absoluteRecordPath, child.path ?? '')
-      const matchesByName =
-        targetName != null && child.name != null && targetName === child.name
+      const matchesByName
+        = targetName != null && child.name != null && targetName === child.name
       const matchesByPath = normalizePath(absoluteChildPath) === normalizePath(targetPath)
 
       if (matchesByName || matchesByPath) {
@@ -96,7 +89,7 @@ const findParentRouteInTree = (
           parent: record,
           child,
           parentPath: normalizePath(absoluteRecordPath),
-          childPath: normalizePath(absoluteChildPath)
+          childPath: normalizePath(absoluteChildPath),
         }
       }
 
@@ -104,7 +97,7 @@ const findParentRouteInTree = (
         (child.children ?? []) as RouteRecordTree[],
         targetName,
         targetPath,
-        absoluteChildPath
+        absoluteChildPath,
       )
 
       if (nested) {
@@ -119,14 +112,12 @@ const findParentRouteInTree = (
 /**
  * Finds the nearest ancestor based on shared path prefixes.
  */
-const findParentByPathPrefix = (
-  flattenedRoutes: FlattenedRouteEntry[],
-  targetPath: string
-): { parent: RouteRecordTree; parentPath: string } | null => {
+function findParentByPathPrefix(flattenedRoutes: FlattenedRouteEntry[], targetPath: string): { parent: RouteRecordTree, parentPath: string } | null {
   const normalizedTarget = normalizePath(targetPath)
-  if (normalizedTarget === '/' || normalizedTarget === '') return null
+  if (normalizedTarget === '/' || normalizedTarget === '')
+    return null
 
-  let bestMatch: { entry: FlattenedRouteEntry; normalizedPath: string } | null = null
+  let bestMatch: { entry: FlattenedRouteEntry, normalizedPath: string } | null = null
 
   for (const entry of flattenedRoutes) {
     const normalizedParent = normalizePath(entry.absolutePath)
@@ -143,16 +134,17 @@ const findParentByPathPrefix = (
     if (!bestMatch || normalizedParent.length > bestMatch.normalizedPath.length) {
       bestMatch = {
         entry,
-        normalizedPath: normalizedParent
+        normalizedPath: normalizedParent,
       }
     }
   }
 
-  if (!bestMatch) return null
+  if (!bestMatch)
+    return null
 
   return {
     parent: bestMatch.entry.record,
-    parentPath: normalizePath(bestMatch.entry.absolutePath)
+    parentPath: normalizePath(bestMatch.entry.absolutePath),
   }
 }
 
@@ -163,54 +155,55 @@ interface UseSecondaryNavigationOptions {
 /**
  * Provides parent route detection and back navigation for secondary layouts.
  */
-export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) => {
+export function useSecondaryNavigation(options?: UseSecondaryNavigationOptions) {
   const route = useRoute()
   const router = useRouter()
 
   const routeRecords = computed(
-    () => ((router.options.routes ?? []) as RouteRecordTree[]) ?? ([] as RouteRecordTree[])
+    () => ((router.options.routes ?? []) as RouteRecordTree[]) ?? ([] as RouteRecordTree[]),
   )
 
   const flattenedRoutes = computed(() => flattenRouteTree(routeRecords.value))
 
   const parentLookupFromRoutes = computed(() =>
-    findParentRouteInTree(routeRecords.value, route.name, route.path)
+    findParentRouteInTree(routeRecords.value, route.name, route.path),
   )
 
   const parentByPrefix = computed(() =>
-    findParentByPathPrefix(flattenedRoutes.value, route.path)
+    findParentByPathPrefix(flattenedRoutes.value, route.path),
   )
 
   const parentRouteRecord = computed(() => {
     const matched = route.matched
-    if (!matched || matched.length < 2) return null
+    if (!matched || matched.length < 2)
+      return null
     const candidate = matched[matched.length - 2]
     return candidate.children?.length ? candidate : null
   })
 
   const parentRouteTarget = computed<RouteLocationRaw | null>(() => {
-    const resolvedParent =
-      parentLookupFromRoutes.value ??
-      (parentByPrefix.value
-        ? {
-            parent: parentByPrefix.value.parent,
-            parentPath: parentByPrefix.value.parentPath,
-            child: {} as RouteRecordTree,
-            childPath: normalizePath(route.path)
-          }
-        : null)
+    const resolvedParent
+      = parentLookupFromRoutes.value
+        ?? (parentByPrefix.value
+          ? {
+              parent: parentByPrefix.value.parent,
+              parentPath: parentByPrefix.value.parentPath,
+              child: {} as RouteRecordTree,
+              childPath: normalizePath(route.path),
+            }
+          : null)
 
     if (resolvedParent?.parent) {
       if (resolvedParent.parent.name) {
         return {
           name: resolvedParent.parent.name,
           params: route.params,
-          query: route.query
+          query: route.query,
         }
       }
 
       return {
-        path: resolvedParent.parentPath
+        path: resolvedParent.parentPath,
       }
     }
 
@@ -220,12 +213,12 @@ export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) 
         return {
           name: fallbackParent.name,
           params: route.params,
-          query: route.query
+          query: route.query,
         }
       }
 
       return {
-        path: fallbackParent.path
+        path: fallbackParent.path,
       }
     }
 
@@ -236,7 +229,8 @@ export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) 
 
   const navigateBack = (): void => {
     const target = parentRouteTarget.value
-    if (!target) return
+    if (!target)
+      return
     void router.push(target)
   }
 
@@ -245,36 +239,36 @@ export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) 
       return true
     }
 
-    const metaEnv =
-      typeof import.meta !== 'undefined' && (import.meta as any).env
+    const metaEnv
+      = typeof import.meta !== 'undefined' && (import.meta as any).env
         ? (import.meta as any).env
         : {}
-    const flag =
-      metaEnv.VITE_SECONDARY_NAV_DEBUG ??
-      metaEnv.TALEX_SECONDARY_NAV_DEBUG ??
-      metaEnv.SECONDARY_NAV_DEBUG
+    const flag
+      = metaEnv.VITE_SECONDARY_NAV_DEBUG
+        ?? metaEnv.TALEX_SECONDARY_NAV_DEBUG
+        ?? metaEnv.SECONDARY_NAV_DEBUG
 
     return flag === true || flag === 'true'
   }
 
   if (isDebugEnabled()) {
     watchEffect(() => {
-      const matchedRoutes = route.matched.map((record) => ({
+      const matchedRoutes = route.matched.map(record => ({
         name: record.name,
         path: normalizePath(record.path),
-        childCount: record.children?.length ?? 0
+        childCount: record.children?.length ?? 0,
       }))
 
       const treeDebug = parentLookupFromRoutes.value
         ? {
             parent: {
               name: parentLookupFromRoutes.value.parent.name,
-              path: parentLookupFromRoutes.value.parentPath
+              path: parentLookupFromRoutes.value.parentPath,
             },
             child: {
               name: parentLookupFromRoutes.value.child.name,
-              path: parentLookupFromRoutes.value.childPath
-            }
+              path: parentLookupFromRoutes.value.childPath,
+            },
           }
         : null
 
@@ -282,15 +276,15 @@ export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) 
         ? {
             parent: {
               name: parentByPrefix.value.parent.name,
-              path: parentByPrefix.value.parentPath
-            }
+              path: parentByPrefix.value.parentPath,
+            },
           }
         : null
 
       const matchedDebug = parentRouteRecord.value
         ? {
             name: parentRouteRecord.value.name,
-            path: normalizePath(parentRouteRecord.value.path)
+            path: normalizePath(parentRouteRecord.value.path),
           }
         : null
 
@@ -300,14 +294,14 @@ export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) 
           route: {
             name: route.name,
             path: normalizePath(route.path),
-            matched: matchedRoutes
+            matched: matchedRoutes,
           },
           treeParent: treeDebug,
           prefixParent: prefixDebug,
           matchedParent: matchedDebug,
           target: parentRouteTarget.value,
-          canNavigateBack: canNavigateBack.value
-        }
+          canNavigateBack: canNavigateBack.value,
+        },
       )
     })
   }
@@ -315,6 +309,6 @@ export const useSecondaryNavigation = (options?: UseSecondaryNavigationOptions) 
   return {
     canNavigateBack,
     parentRouteTarget,
-    navigateBack
+    navigateBack,
   }
 }

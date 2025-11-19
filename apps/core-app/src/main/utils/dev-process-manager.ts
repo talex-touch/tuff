@@ -102,13 +102,14 @@ export class DevProcessManager {
             window.webContents.send('app-will-quit')
 
             // Wait for a short period to allow the renderer process to clean up
-            await new Promise((resolve) => setTimeout(resolve, 100))
+            await new Promise(resolve => setTimeout(resolve, 100))
 
             // If the renderer process is still running, forcefully crash it
             if (!window.webContents.isDestroyed()) {
               try {
                 window.webContents.forcefullyCrashRenderer()
-              } catch (error) {
+              }
+              catch (error) {
                 console.warn('[DevProcessManager] Error crashing renderer:', error)
               }
             }
@@ -116,13 +117,14 @@ export class DevProcessManager {
 
           // Close the Window
           window.destroy()
-        } catch (error) {
+        }
+        catch (error) {
           console.warn(`[DevProcessManager] Error cleaning up window:`, error)
         }
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await new Promise(resolve => setTimeout(resolve, 200))
 
     console.log('[DevProcessManager] Process cleanup completed')
   }

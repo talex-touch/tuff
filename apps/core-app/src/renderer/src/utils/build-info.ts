@@ -31,9 +31,11 @@ export function getBuildTypeDisplayName(): string {
 
   if (info.isBeta) {
     return 'BETA'
-  } else if (info.isSnapshot) {
+  }
+  else if (info.isSnapshot) {
     return 'SNAPSHOT'
-  } else if (info.isRelease) {
+  }
+  else if (info.isRelease) {
     return 'RELEASE'
   }
 

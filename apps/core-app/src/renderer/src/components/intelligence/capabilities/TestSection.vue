@@ -1,3 +1,37 @@
+<script lang="ts" setup>
+import type { CapabilityTestResult } from './types'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+
+const props = defineProps<{
+  providerName: string
+  modelName: string
+  isTesting: boolean
+  disabled?: boolean
+  testResult?: CapabilityTestResult | null
+}>()
+
+defineEmits<{
+  test: []
+}>()
+
+const { t } = useI18n()
+
+const testSummary = computed(() => {
+  if (!props.testResult)
+    return ''
+  const pieces: string[] = []
+  if (props.testResult.provider)
+    pieces.push(props.testResult.provider)
+  if (props.testResult.model)
+    pieces.push(props.testResult.model)
+  if (props.testResult.latency)
+    pieces.push(`${props.testResult.latency}ms`)
+  return pieces.join(' · ')
+})
+</script>
+
 <template>
   <div class="test-section">
     <div class="test-section__info">
@@ -48,44 +82,18 @@
           }}
         </p>
       </div>
-      <p class="test-result__message">{{ testResult.message }}</p>
-      <div v-if="testSummary" class="test-result__meta">{{ testSummary }}</div>
+      <p class="test-result__message">
+        {{ testResult.message }}
+      </p>
+      <div v-if="testSummary" class="test-result__meta">
+        {{ testSummary }}
+      </div>
       <p v-if="testResult.textPreview" class="test-result__preview">
         {{ testResult.textPreview }}
       </p>
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import type { CapabilityTestResult } from './types'
-
-const props = defineProps<{
-  providerName: string
-  modelName: string
-  isTesting: boolean
-  disabled?: boolean
-  testResult?: CapabilityTestResult | null
-}>()
-
-defineEmits<{
-  test: []
-}>()
-
-const { t } = useI18n()
-
-const testSummary = computed(() => {
-  if (!props.testResult) return ''
-  const pieces: string[] = []
-  if (props.testResult.provider) pieces.push(props.testResult.provider)
-  if (props.testResult.model) pieces.push(props.testResult.model)
-  if (props.testResult.latency) pieces.push(`${props.testResult.latency}ms`)
-  return pieces.join(' · ')
-})
-</script>
 
 <style lang="scss" scoped>
 .test-section {

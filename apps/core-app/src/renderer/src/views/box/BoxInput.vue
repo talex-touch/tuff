@@ -19,26 +19,25 @@ interface Emits {
   (e: 'update:modelValue', value: string): void
 }
 
-const slots = useSlots()
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-
+const slots = useSlots()
 const { t } = useI18n()
 
 const inputEl = ref<HTMLInputElement | null>(null)
 
 defineExpose({
   inputEl,
-  focus: () => inputEl.value?.focus()
+  focus: () => inputEl.value?.focus(),
 })
 
 const options = reactive({
-  focus: false
+  focus: false,
 })
 
 const inputValue = computed({
   get: () => props.modelValue,
-  set: (value: string) => emit('update:modelValue', value)
+  set: (value: string) => emit('update:modelValue', value),
 })
 
 const placeholder = computed(() => {
@@ -59,7 +58,7 @@ const placeholder = computed(() => {
       v-model="inputValue"
       @focus="options.focus = true"
       @blur="options.focus = false"
-    />
+    >
     <div class="BoxInput-Display">
       <span class="opacity-0">{{ modelValue }}</span>
       <div v-show="slots.completion" class="BoxInput-Display-Completion fake-background">

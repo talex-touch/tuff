@@ -1,18 +1,18 @@
 import type { ModuleKey } from '@talex-touch/utils'
+import fs from 'node:fs/promises'
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import * as chokidar from 'chokidar'
-import fs from 'fs/promises'
 import { dialog } from 'electron'
 import {
-  touchEventBus,
-  TalexEvents,
+  DirectoryAddedEvent,
+  DirectoryUnlinkedEvent,
   FileAddedEvent,
   FileChangedEvent,
   FileUnlinkedEvent,
-  DirectoryAddedEvent,
-  DirectoryUnlinkedEvent
+  TalexEvents,
+  touchEventBus,
 } from '../../../core/eventbus/touch-event'
 import { BaseModule } from '../../abstract-base-module'
-import { pollingService } from '@talex-touch/utils/common/utils/polling'
 
 const isMac = process.platform === 'darwin'
 const isWindows = process.platform === 'win32'
@@ -36,7 +36,7 @@ export class FileSystemWatcherModule extends BaseModule {
 
   constructor() {
     super(FileSystemWatcherModule.key, {
-      create: false
+      create: false,
     })
   }
 
@@ -47,12 +47,14 @@ export class FileSystemWatcherModule extends BaseModule {
       if (isWindows) {
         try {
           await fs.readdir(p)
-        } catch {
+        }
+        catch {
           return false
         }
       }
       return true
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -66,7 +68,7 @@ export class FileSystemWatcherModule extends BaseModule {
         title: 'Permission Request',
         message: 'TalexTouch needs access to your Applications folder to watch for new apps.',
         detail: `Please grant access to the following folder to continue: ${p}`,
-        buttons: ['Open Folder Picker', 'Cancel']
+        buttons: ['Open Folder Picker', 'Cancel'],
       })
 
       if (response === 1) {
@@ -77,7 +79,7 @@ export class FileSystemWatcherModule extends BaseModule {
       const { filePaths } = await dialog.showOpenDialog({
         title: `Grant Access to ${p}`,
         properties: ['openDirectory'],
-        defaultPath: p
+        defaultPath: p,
       })
 
       if (filePaths && filePaths.length > 0) {
@@ -87,7 +89,8 @@ export class FileSystemWatcherModule extends BaseModule {
 
       console.warn(`[FileSystemWatcher] User did not select a directory for ${p}`)
       return false
-    } else if (isWindows) {
+    }
+    else if (isWindows) {
       // Windows: Show dialog to request folder access
       console.log(`[FileSystemWatcher] Requesting access to ${p}`)
       const { response } = await dialog.showMessageBox({
@@ -96,7 +99,7 @@ export class FileSystemWatcherModule extends BaseModule {
         message: 'TalexTouch needs access to this folder to watch for file changes.',
         detail: `Path: ${p}\n\nPlease grant access to this folder or run TalexTouch as administrator.`,
         buttons: ['Open Folder', 'Cancel'],
-        defaultId: 0
+        defaultId: 0,
       })
 
       if (response === 0) {
@@ -104,7 +107,7 @@ export class FileSystemWatcherModule extends BaseModule {
         const { filePaths } = await dialog.showOpenDialog({
           title: `Grant Access to ${p}`,
           properties: ['openDirectory'],
-          defaultPath: p
+          defaultPath: p,
         })
 
         if (filePaths && filePaths.length > 0) {
@@ -131,11 +134,11 @@ export class FileSystemWatcherModule extends BaseModule {
     const newWatcher = chokidar.watch([], {
       persistent: true,
       ignoreInitial: true,
-      depth: depth,
+      depth,
       awaitWriteFinish: {
         stabilityThreshold: 2000,
-        pollInterval: 100
-      }
+        pollInterval: 100,
+      },
     })
 
     newWatcher
@@ -157,7 +160,7 @@ export class FileSystemWatcherModule extends BaseModule {
       })
       .on('unlinkDir', (dirPath: string) => {
         console.debug(
-          `[FileSystemWatcher] Raw 'unlinkDir' event from chokidar for path: ${dirPath}`
+          `[FileSystemWatcher] Raw 'unlinkDir' event from chokidar for path: ${dirPath}`,
         )
         touchEventBus.emit(TalexEvents.DIRECTORY_UNLINKED, new DirectoryUnlinkedEvent(dirPath))
       })
@@ -193,11 +196,13 @@ export class FileSystemWatcherModule extends BaseModule {
           await this.addPathInternal(path, pending.depth)
           this.pendingPaths.delete(path)
           console.log(`[FileSystemWatcher] Successfully added pending path: ${path}`)
-        } catch (error) {
+        }
+        catch (error) {
           console.warn(`[FileSystemWatcher] Failed to add pending path ${path}:`, error)
           pathsToRetry.push(path)
         }
-      } else {
+      }
+      else {
         pathsToRetry.push(path)
       }
     }
@@ -237,7 +242,8 @@ export class FileSystemWatcherModule extends BaseModule {
         console.warn(`[FileSystemWatcher] Path is not a directory, skipping: ${p}`)
         return
       }
-    } catch {
+    }
+    catch {
       // Path likely doesn't exist, ignore for now.
       return
     }
@@ -257,12 +263,14 @@ export class FileSystemWatcherModule extends BaseModule {
     // Permission granted or available, add to watcher
     try {
       await this.addPathInternal(p, depth)
-    } catch (error: any) {
+    }
+    catch (error: any) {
       // If still fails (e.g., operation not permitted), add to pending
       if (error.code === 'EPERM' || error.code === 'EACCES') {
         this.pendingPaths.set(p, { path: p, depth })
         console.warn(`[FileSystemWatcher] Permission denied for ${p}, added to pending queue:`, error.message)
-      } else {
+      }
+      else {
         throw error
       }
     }
@@ -270,7 +278,7 @@ export class FileSystemWatcherModule extends BaseModule {
 
   async onInit(): Promise<void> {
     console.debug(
-      '[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.'
+      '[FileSystemWatcher] Initializing... Watch paths will be added by consumer modules.',
     )
 
     // Start periodic permission checking for pending paths
@@ -283,8 +291,8 @@ export class FileSystemWatcherModule extends BaseModule {
       {
         interval: 30,
         unit: 'seconds',
-        runImmediately: false
-      }
+        runImmediately: false,
+      },
     )
   }
 

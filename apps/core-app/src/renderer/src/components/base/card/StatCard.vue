@@ -1,3 +1,22 @@
+<script name="StatCard" lang="ts" setup>
+import NumberFlow from '@number-flow/vue'
+import { sleep } from '@talex-touch/utils'
+
+const props = defineProps<{
+  value: number | string
+  label: string
+  iconClass: string
+}>()
+
+const displayValue = ref(0)
+
+onMounted(() => {
+  sleep(Math.random() * 500 + 100).then(() => {
+    displayValue.value = Number(props.value)
+  })
+})
+</script>
+
 <template>
   <div
     class="StatCard fake-background relative overflow-hidden backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
@@ -19,25 +38,6 @@
     </div>
   </div>
 </template>
-
-<script name="StatCard" lang="ts" setup>
-import NumberFlow from '@number-flow/vue'
-import { sleep } from '@talex-touch/utils'
-
-const props = defineProps<{
-  value: number | string
-  label: string
-  iconClass: string
-}>()
-
-const displayValue = ref(0)
-
-onMounted(() => {
-  sleep(Math.random() * 500 + 100).then(() => {
-    displayValue.value = Number(props.value)
-  })
-})
-</script>
 
 <style lang="scss" scoped>
 .StatCard {

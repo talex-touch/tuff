@@ -1,11 +1,11 @@
-import fs from 'fs/promises'
-import path from 'path'
-import {
+import type {
   FileParser,
   FileParserContext,
   FileParserProgress,
-  FileParserResult
+  FileParserResult,
 } from '../types'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 const TEXTUAL_EXTENSIONS = new Set(
   [
@@ -48,8 +48,8 @@ const TEXTUAL_EXTENSIONS = new Set(
     '.fish',
     '.bat',
     '.ps1',
-    '.sql'
-  ].map((ext) => ext.toLowerCase())
+    '.sql',
+  ].map(ext => ext.toLowerCase()),
 )
 
 export class TextFileParser implements FileParser {
@@ -59,7 +59,7 @@ export class TextFileParser implements FileParser {
 
   async parse(
     context: FileParserContext,
-    onProgress?: (progress: FileParserProgress) => void
+    onProgress?: (progress: FileParserProgress) => void,
   ): Promise<FileParserResult> {
     const { filePath, extension, size, maxBytes } = context
     if (maxBytes && size > maxBytes) {
@@ -69,15 +69,15 @@ export class TextFileParser implements FileParser {
         totalBytes: size,
         processedBytes: 0,
         warnings: [
-          `File size ${(size / (1024 * 1024)).toFixed(2)}MB exceeds limit ${(maxBytes / (1024 * 1024)).toFixed(2)}MB`
-        ]
+          `File size ${(size / (1024 * 1024)).toFixed(2)}MB exceeds limit ${(maxBytes / (1024 * 1024)).toFixed(2)}MB`,
+        ],
       }
     }
 
     if (!TEXTUAL_EXTENSIONS.has(extension)) {
       return {
         status: 'skipped',
-        reason: 'unsupported-extension'
+        reason: 'unsupported-extension',
       }
     }
 
@@ -92,15 +92,16 @@ export class TextFileParser implements FileParser {
         content,
         metadata: {
           length: content.length,
-          basename: path.basename(filePath)
+          basename: path.basename(filePath),
         },
         processedBytes: size,
-        totalBytes: size
+        totalBytes: size,
       }
-    } catch (error) {
+    }
+    catch (error) {
       return {
         status: 'failed',
-        reason: error instanceof Error ? error.message : 'unknown-error'
+        reason: error instanceof Error ? error.message : 'unknown-error',
       }
     }
   }

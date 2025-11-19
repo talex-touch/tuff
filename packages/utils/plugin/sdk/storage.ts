@@ -1,4 +1,4 @@
-import type { StorageStats, StorageTreeNode, FileDetails } from '../../types/storage'
+import type { FileDetails, StorageStats, StorageTreeNode } from '../../types/storage'
 
 /**
  * Get the storage for the current plugin.
@@ -103,8 +103,8 @@ export function usePluginStorage() {
      */
     onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
       const listener = (data: { name: string, fileName?: string }) => {
-        if (data.name === pluginName &&
-            (data.fileName === fileName || data.fileName === undefined)) {
+        if (data.name === pluginName
+          && (data.fileName === fileName || data.fileName === undefined)) {
           callback(data)
         }
       }
@@ -114,6 +114,6 @@ export function usePluginStorage() {
       return () => {
         channel.unRegChannel('plugin:storage:update', listener)
       }
-    }
+    },
   }
 }

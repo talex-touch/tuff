@@ -1,40 +1,44 @@
+import type { ModuleLoadMetric } from './modules/analytics'
+
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { app, protocol } from 'electron'
+import { commonChannelModule } from './channel/common'
+import { genTouchApp } from './core'
+import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
+import { addonOpenerModule } from './modules/addon-opener'
+import { intelligenceModule } from './modules/ai/intelligence-module'
+
+import { getStartupAnalytics } from './modules/analytics'
+import { coreBoxModule } from './modules/box-tool/core-box/index'
+import FileSystemWatcher from './modules/box-tool/file-system-watcher'
+import { buildVerificationModule } from './modules/build-verification'
+import { clipboardModule } from './modules/clipboard'
+import { databaseModule } from './modules/database'
+import { downloadCenterModule } from './modules/download/download-center'
+import { extensionLoaderModule } from './modules/extension-loader'
+import { fileProtocolModule } from './modules/file-protocol'
+// import DropManager from './modules/drop-manager'
+import { shortcutModule } from './modules/global-shortcon'
+import { pluginModule } from './modules/plugin/plugin-module'
+import { sentryModule } from './modules/sentry'
+import { storageModule } from './modules/storage'
+import { permissionCheckerModule } from './modules/system/permission-checker'
+import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { terminalModule } from './modules/terminal/terminal.manager'
+// import { trayHolderModule } from './modules/tray-holder'
+import { trayManagerModule } from './modules/tray/tray-manager'
+import { updateServiceModule } from './modules/update/UpdateService'
+// import PermissionCenter from './modules/permission-center'
+// import ServiceCenter from './service/service-center'
+import { pluginLogModule } from './service/plugin-log.service'
+
+import { mainLog } from './utils/logger'
 import './polyfills'
+import './core/precore'
 
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
 process.env.WS_NO_BUFFER_UTIL = 'true'
-
-import './core/precore'
-import { app, protocol } from 'electron'
-import { storageModule } from './modules/storage'
-import { commonChannelModule } from './channel/common'
-import { pluginModule } from './modules/plugin/plugin-module'
-// import PermissionCenter from './modules/permission-center'
-// import ServiceCenter from './service/service-center'
-import { pluginLogModule } from './service/plugin-log.service'
-import { coreBoxModule } from './modules/box-tool/core-box/index'
-
-import { addonOpenerModule } from './modules/addon-opener'
-// import DropManager from './modules/drop-manager'
-import { shortcutModule } from './modules/global-shortcon'
-// import { trayHolderModule } from './modules/tray-holder'
-import { trayManagerModule } from './modules/tray/tray-manager'
-import { clipboardModule } from './modules/clipboard'
-import { databaseModule } from './modules/database'
-import FileSystemWatcher from './modules/box-tool/file-system-watcher'
-import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
-import { fileProtocolModule } from './modules/file-protocol'
-import { terminalModule } from './modules/terminal/terminal.manager'
-import { extensionLoaderModule } from './modules/extension-loader'
-import { downloadCenterModule } from './modules/download/download-center'
-import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import { genTouchApp } from './core'
-import { tuffDashboardModule } from './modules/system/tuff-dashboard'
-import { permissionCheckerModule } from './modules/system/permission-checker'
-import { mainLog } from './utils/logger'
-import { getStartupAnalytics } from './modules/analytics'
-import type { ModuleLoadMetric } from './modules/analytics'
-import { intelligenceModule } from './modules/ai/intelligence-module'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -43,14 +47,10 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
-      stream: true
-    }
-  }
+      stream: true,
+    },
+  },
 ])
-
-import { sentryModule } from './modules/sentry'
-import { buildVerificationModule } from './modules/build-verification'
-import { updateServiceModule } from './modules/update/UpdateService'
 
 const modulesToLoad = [
   databaseModule,
@@ -73,7 +73,7 @@ const modulesToLoad = [
   tuffDashboardModule,
   FileSystemWatcher,
   terminalModule,
-  downloadCenterModule
+  downloadCenterModule,
 ]
 
 // Record when Electron becomes ready
@@ -98,8 +98,8 @@ app.whenReady().then(async () => {
 
     const moduleLoadTime = Date.now() - moduleStartTime
     // Convert module name to string (handle symbol case)
-    const moduleName =
-      typeof moduleCtor.name === 'string'
+    const moduleName
+      = typeof moduleCtor.name === 'string'
         ? moduleCtor.name
         : typeof moduleCtor.name === 'symbol'
           ? moduleCtor.name.toString()
@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
     moduleLoadMetrics.push({
       name: moduleName,
       loadTime: moduleLoadTime,
-      order: i
+      order: i,
     })
 
     analytics.trackModuleLoad(moduleName, moduleLoadTime, i)
@@ -122,7 +122,7 @@ app.whenReady().then(async () => {
     electronReadyTime,
     modulesLoadTime: totalModulesLoadTime,
     totalModules: modulesToLoad.length,
-    moduleDetails: moduleLoadMetrics
+    moduleDetails: moduleLoadMetrics,
   })
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
@@ -131,6 +131,6 @@ app.whenReady().then(async () => {
   pollingService.start()
 
   startupTimer.end('All modules loaded', {
-    meta: { modules: modulesToLoad.length }
+    meta: { modules: modulesToLoad.length },
   })
 })

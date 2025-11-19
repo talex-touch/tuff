@@ -1,22 +1,23 @@
 <script setup lang="ts" name="LanguageSetup">
+import type { SupportedLanguage } from '~/modules/lang'
 import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
 import Greeting from './Greeting.vue'
-import { SUPPORTED_LANGUAGES, type SupportedLanguage, useLanguage } from '~/modules/lang'
 
-type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
+type StepFunction = (call: { comp: any, rect?: { width: number, height: number } }) => void
 
 const step = inject<StepFunction>('step')!
 const { t } = useI18n()
-const { currentLanguage, followSystemLanguage, switchLanguage, setFollowSystemLanguage, getSystemLanguage } =
-  useLanguage()
+const { currentLanguage, followSystemLanguage, switchLanguage, setFollowSystemLanguage, getSystemLanguage }
+  = useLanguage()
 
 const selectedLanguage = ref<SupportedLanguage>(currentLanguage.value)
 const followSystem = ref<boolean>(followSystemLanguage.value)
 
 const systemLanguage = computed(() => getSystemLanguage())
 const systemLanguageName = computed(
-  () => SUPPORTED_LANGUAGES.find((lang) => lang.key === systemLanguage.value)?.name ?? systemLanguage.value
+  () => SUPPORTED_LANGUAGES.find(lang => lang.key === systemLanguage.value)?.name ?? systemLanguage.value,
 )
 
 watch(currentLanguage, (lang) => {
@@ -46,7 +47,7 @@ async function handleNext(): Promise<void> {
   }
 
   step({
-    comp: Greeting
+    comp: Greeting,
   })
 }
 </script>
@@ -60,7 +61,7 @@ async function handleNext(): Promise<void> {
 
     <div class="LanguageSetup-System fake-background">
       <label class="LanguageSetup-SystemToggle">
-        <input v-model="followSystem" type="checkbox" />
+        <input v-model="followSystem" type="checkbox">
         <span>{{ t('beginner.language.followSystem') }}</span>
       </label>
       <p class="LanguageSetup-SystemDetected">

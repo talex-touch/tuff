@@ -1,9 +1,9 @@
-<template></template>
-
 <script>
 export default {
-  name: 'TTabItemGroup'
+  name: 'TTabItemGroup',
 }
 </script>
+
+<template></template>
 
 <style scoped></style>

@@ -1,5 +1,5 @@
 <script name="TSelectItem" setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
  * Props definition
@@ -23,11 +23,12 @@ const isActive = ref(false)
  * @param event - MouseEvent triggered on document
  */
 function handleDocumentClick(event: MouseEvent): void {
-  if (!isActive.value) return
+  if (!isActive.value)
+    return
 
   // Use composedPath (standard), fallback to legacy .path if needed
   const path = (event.composedPath?.() || (event as any).path) as HTMLElement[]
-  isActive.value = path.some((node) => node?.className?.includes('TSelectItem-Container'))
+  isActive.value = path.some(node => node?.className?.includes('TSelectItem-Container'))
 }
 
 /**

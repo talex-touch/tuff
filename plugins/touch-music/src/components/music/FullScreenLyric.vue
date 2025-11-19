@@ -1,11 +1,53 @@
+<script>
+</script>
+
+<script setup>
+import IconButton from '@comp/button/IconButton.vue'
+import PlayPause from '@comp/icon/PlayPause.vue'
+import PlayProgressBar from '@comp/music/base/PlayProgressBar.vue'
+import BlurBackGround from '@comp/music/bg/BlurBackGround.vue'
+import WavingParticle from '@comp/music/particle/bg/WavingParticle.vue'
+import LyricScroller from '@comp/music/word-lyric/leaf/LyricScroller.vue'
+import { musicManager } from '@modules/music'
+import { useModelWrapper } from '@modules/utils'
+import { watch } from 'vue'
+
+const props = defineProps(['modelValue'])
+
+const emits = defineEmits(['update:modelValue'])
+
+export default {
+  name: 'FullScreenLyric',
+}
+
+const active = useModelWrapper(props, emits)
+
+const playStatus = musicManager.playManager.playStatus
+const _song = musicManager.playManager.song
+
+watch(() => _song.value, () => {
+  if (!_song.value)
+    active.value = false
+})
+
+function changeFullScreen() {
+  window.$asyncMainProcessMessage('apply-for', {
+    action: 'fullscreen',
+  })
+}
+
+function handleProgressChange(value) {
+  _song.value?.changeSeek(Math.round(value))
+}
+</script>
+
 <template>
   <div :class="{ active, play: playStatus }" class="FullScreenLyric-Wrapper">
-
-    <BlurBackGround @click="active = false" v-if="_song?.audio?._src" :song="_song" />
+    <BlurBackGround v-if="_song?.audio?._src" :song="_song" @click="active = false" />
 
     <div class="FullScreenLyric-Header">
       <div class="FullScreenLyric-Header-Content">
-        <IconButton @click="changeFullScreen" plain icon="fullscreen" active-icon="fullscreen-exit" />
+        <IconButton plain icon="fullscreen" active-icon="fullscreen-exit" @click="changeFullScreen" />
       </div>
       <div class="Footer-Music-Main-Info-Name">
         {{ _song?.detail?.song?.name }}
@@ -18,12 +60,12 @@
     <div class="FullScreenLyric-Container">
       <div class="FullScreenLyric-Main">
         <div class="FullScreenLyric-Image">
-          <img class="img-bg" :alt="_song?.detail?.song?.name" :src="_song?.detail?.song?.al.picUrl" />
-          <img :alt="_song?.detail?.song?.name" :src="_song?.detail?.song?.al.picUrl" />
+          <img class="img-bg" :alt="_song?.detail?.song?.name" :src="_song?.detail?.song?.al.picUrl">
+          <img :alt="_song?.detail?.song?.name" :src="_song?.detail?.song?.al.picUrl">
         </div>
 
         <div class="FullScreenLyric-Music-Progress">
-          <PlayProgressBar @change="handleProgressChange" v-if="_song?.progress" :max="_song.progress.total" v-model="_song.progress.current" />
+          <PlayProgressBar v-if="_song?.progress" v-model="_song.progress.current" :max="_song.progress.total" @change="handleProgressChange" />
           <div class="progress-time-wrapper">
             <span>
               {{ _song?.progress?.now_time.substring(0, 5) }}
@@ -35,66 +77,21 @@
         </div>
 
         <div class="FullScreenLyric-Controller">
-          <IconButton plain @click="musicManager.playManager.prevSong" icon="arrow-left-s" />
-          <play-pause v-model="playStatus" />
-          <IconButton plain @click="musicManager.playManager.nextSong" icon="arrow-right-s" />
+          <IconButton plain icon="arrow-left-s" @click="musicManager.playManager.prevSong" />
+          <PlayPause v-model="playStatus" />
+          <IconButton plain icon="arrow-right-s" @click="musicManager.playManager.nextSong" />
         </div>
       </div>
 
       <div v-if="_song?._songManager?.wordLyric?.wordLyric" class="FullScreenLyric-Lyrics">
         <LyricScroller />
-<!--        <WordLyricScroller />-->
+        <!--        <WordLyricScroller /> -->
       </div>
 
       <WavingParticle v-else-if="_song?.audio?._sounds?.[0]?._node" :song="_song" />
     </div>
-
   </div>
 </template>
-
-<script>
-export default {
-  name: "FullScreenLyric"
-}
-</script>
-
-<script setup>
-import { watch, ref } from 'vue'
-import { useModelWrapper } from '@modules/utils'
-import { musicManager } from '@modules/music'
-import PlayProgressBar from '@comp/music/base/PlayProgressBar.vue'
-import WordLyricScroller from '@comp/music/word-lyric/WordLyricScroller.vue'
-import WavingParticle from '@comp/music/particle/bg/WavingParticle.vue'
-import BlurBackGround from '@comp/music/bg/BlurBackGround.vue'
-import IconButton from '@comp/button/IconButton.vue'
-import LyricScroller from '@comp/music/word-lyric/leaf/LyricScroller.vue'
-import PlayPause from '@comp/icon/PlayPause.vue'
-
-const props = defineProps(['modelValue'])
-const emits = defineEmits(['update:modelValue'])
-
-const active = useModelWrapper(props, emits)
-
-const playStatus = musicManager.playManager.playStatus
-const _song = musicManager.playManager.song
-
-watch(() => _song.value, () => {
-  if( !_song.value )
-    active.value = false
-})
-
-function changeFullScreen() {
-  window.$asyncMainProcessMessage('apply-for', {
-    action: 'fullscreen'
-  })
-}
-
-function handleProgressChange(value) {
-
-  _song.value?.changeSeek(Math.round(value))
-
-}
-</script>
 
 <style lang="scss" scoped>
 :deep(.WavingParticle-Container) {

@@ -1,11 +1,11 @@
-import { createApp } from 'vue'
-import './style.css'
-import App from './App.vue'
 import { init, initBridge } from '@talex-touch/utils/plugin/preload'
+import { createApp } from 'vue'
 import { createI18n } from 'vue-i18n'
+import App from './App.vue'
+import './style.css'
+
 import 'uno.css'
 import 'virtual:unocss-devtools'
-
 const { ipcRenderer } = require('electron')
 
 ipcRenderer.on('@loaded', (event: any, name: string) => {
@@ -15,8 +15,8 @@ ipcRenderer.on('@loaded', (event: any, name: string) => {
     legacy: false,
     locale: 'zh-CN',
     messages: {
-      'zh-CN': {}
-    }
+      'zh-CN': {},
+    },
   })
 
   const app = createApp(App)
@@ -24,7 +24,7 @@ ipcRenderer.on('@loaded', (event: any, name: string) => {
   app.use({
     install: () => {
       initBridge(window)
-    }
+    },
   })
   app.mount('#app')
 })

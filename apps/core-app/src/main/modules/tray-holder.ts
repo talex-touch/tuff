@@ -1,15 +1,15 @@
-import { TalexTouch } from '../types'
-import { Menu, Tray, nativeImage } from 'electron'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { TalexEvents } from '../core/eventbus/touch-event'
+import path from 'node:path'
+import { Menu, nativeImage, Tray } from 'electron'
 import fse from 'fs-extra'
 import { APP_SCHEMA } from '../config/default'
+import { TalexTouch } from '../types'
 import { BaseModule } from './abstract-base-module'
-import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import { TalexEvents } from '../core/eventbus/touch-event'
-import path from 'path'
 import { TrayIconProvider } from './tray/tray-icon-provider'
 
 const legacyTrayRef: { value: Tray | null } = {
-  value: null
+  value: null,
 }
 
 interface IconItem {
@@ -53,7 +53,7 @@ const iconItems: IconItem[] = [
           type: 'radio',
           click() {
             contextMenu.items[1].checked = !contextMenu.items[1].checked
-          }
+          },
         },
         {
           label: 'Exit',
@@ -61,8 +61,8 @@ const iconItems: IconItem[] = [
           click() {
             app.app.quit()
             process.exit(0)
-          }
-        }
+          },
+        },
       ])
 
       contextMenu.items[1].checked = false
@@ -77,7 +77,7 @@ const iconItems: IconItem[] = [
       })
 
       legacyTrayRef.value = tray
-    }
+    },
   },
   {
     name: 'app-icon',
@@ -95,11 +95,12 @@ const iconItems: IconItem[] = [
         if (app.version === TalexTouch.AppVersion.DEV) {
           app.app.dock?.setBadge(app.version)
         }
-      } else {
+      }
+      else {
         app.window.window.setIcon(filePath)
       }
-    }
-  }
+    },
+  },
 ]
 
 /**
@@ -113,9 +114,8 @@ export class TrayHolderModule extends BaseModule {
   constructor() {
     super(TrayHolderModule.key, {
       create: true,
-      dirName: 'tray'
+      dirName: 'tray',
     })
-
   }
 
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
@@ -145,7 +145,8 @@ export class TrayHolderModule extends BaseModule {
             fse.copyFileSync(retinaSource, retinaTarget)
           }
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[TrayHolder] Failed to copy icon for ${item.name}:`, error)
         return
       }
@@ -153,7 +154,8 @@ export class TrayHolderModule extends BaseModule {
       if (item.apply) {
         try {
           item.apply($app, targetPath)
-        } catch (error) {
+        }
+        catch (error) {
           console.error(`[TrayHolder] Failed to apply icon for ${item.name}:`, error)
         }
       }
@@ -164,9 +166,11 @@ export class TrayHolderModule extends BaseModule {
     if (legacyTrayRef.value) {
       try {
         legacyTrayRef.value.destroy()
-      } catch (error) {
+      }
+      catch (error) {
         console.warn('[TrayHolder] Failed to destroy legacy tray:', error)
-      } finally {
+      }
+      finally {
         legacyTrayRef.value = null
       }
     }

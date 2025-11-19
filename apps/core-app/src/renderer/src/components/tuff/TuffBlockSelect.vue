@@ -1,7 +1,7 @@
 <script lang="ts" name="TuffBlockSelect" setup>
-import { computed } from 'vue'
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { computed } from 'vue'
 import TSelect from '~/components/base/select/TSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
@@ -15,8 +15,8 @@ const props = withDefaults(
     disabled?: boolean
   }>(),
   {
-    disabled: false
-  }
+    disabled: false,
+  },
 )
 
 const emits = defineEmits<{

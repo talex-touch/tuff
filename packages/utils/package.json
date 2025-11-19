@@ -1,13 +1,13 @@
 {
-  "main": "index.ts",
   "name": "@talex-touch/utils",
-  "author": "TalexDreamSoul",
-  "module": "./index.ts",
-  "license": "MPL-2.0",
-  "private": false,
   "version": "1.0.31",
-  "scripts": {
-    "publish": "npm publish --access public"
+  "private": false,
+  "description": "Tuff series utils",
+  "author": "TalexDreamSoul",
+  "license": "MPL-2.0",
+  "repository": {
+    "url": "https://github.com/talex-touch/talex-touch.git",
+    "type": "git"
   },
   "keywords": [
     "vue",
@@ -15,18 +15,18 @@
     "launcher",
     "talex-touch"
   ],
-  "repository": {
-    "url": "https://github.com/talex-touch/talex-touch.git",
-    "type": "git"
-  },
-  "description": "Tuff series utils",
-  "dependencies": {
-    "@vueuse/core": "^13.6.0",
-    "path-browserify": "^1.0.1",
-    "vue": "^3.5.18"
+  "main": "index.ts",
+  "module": "./index.ts",
+  "scripts": {
+    "publish": "npm publish --access public"
   },
   "peerDependencies": {
     "electron": "^37.2.4",
     "vue": "^3.5.15"
+  },
+  "dependencies": {
+    "@vueuse/core": "^13.6.0",
+    "path-browserify": "^1.0.1",
+    "vue": "^3.5.18"
   }
 }

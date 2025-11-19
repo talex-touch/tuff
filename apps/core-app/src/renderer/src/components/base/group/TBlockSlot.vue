@@ -1,7 +1,37 @@
+<script>
+</script>
+
+<script setup>
+import RemixIcon from '~/components/icon/RemixIcon.vue'
+
+const props = defineProps({
+  title: {
+    type: String,
+    required: true,
+  },
+  description: {
+    type: String,
+    required: true,
+  },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
+  icon: {
+    type: String,
+    required: true,
+  },
+})
+
+export default {
+  name: 'TBlockSlot',
+}
+</script>
+
 <template>
   <div class="TBlockSlot-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
     <div class="TBlockSlot-Content TBlockSelection-Content">
-      <remix-icon :name="icon" :style="`line`" />
+      <RemixIcon :name="icon" style="line" />
       <div class="TBlockSlot-Label TBlockSelection-Label">
         <slot name="label">
           <h3>{{ title }}</h3>
@@ -14,35 +44,6 @@
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  name: 'TBlockSlot'
-}
-</script>
-
-<script setup>
-import RemixIcon from '~/components/icon/RemixIcon.vue'
-
-const props = defineProps({
-  title: {
-    type: String,
-    required: true
-  },
-  description: {
-    type: String,
-    required: true
-  },
-  disabled: {
-    type: Boolean,
-    default: false
-  },
-  icon: {
-    type: String,
-    required: true
-  }
-})
-</script>
 
 <style lang="scss" scoped>
 //.TBlockSlot-Container + .TBlockSlot-Container {

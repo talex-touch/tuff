@@ -1,19 +1,19 @@
-import path from 'path'
-import { files as filesSchema } from '../../../../db/schema'
-import { ScannedFileInfo } from './types'
+import type { TuffItem } from '@core-box/tuff'
+import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
+import type { files as filesSchema } from '../../../../db/schema'
+import type { ScannedFileInfo } from './types'
+import path from 'node:path'
 import {
   isIndexableFile as globalIsIndexableFile,
-  scanDirectory as globalScanDirectory
+  scanDirectory as globalScanDirectory,
 } from '@talex-touch/utils/common/file-scan-utils'
-import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
 import { WHITELISTED_EXTENSIONS } from './constants'
-import { TuffItem } from '@core-box/tuff'
 
 export function isIndexableFile(
   fullPath: string,
   extension: string,
   fileName: string,
-  options?: FileScanOptions
+  options?: FileScanOptions,
 ): boolean {
   // 使用全局工具进行基础过滤
   if (!globalIsIndexableFile(fullPath, extension, fileName, options)) {
@@ -31,19 +31,19 @@ export function isIndexableFile(
 export async function scanDirectory(
   dirPath: string,
   excludePaths?: Set<string>,
-  options?: FileScanOptions
+  options?: FileScanOptions,
 ): Promise<ScannedFileInfo[]> {
   // 使用全局扫描工具
   const globalFiles = await globalScanDirectory(dirPath, options, excludePaths)
 
   // 转换为本地 ScannedFileInfo 格式
-  return globalFiles.map((file) => ({
+  return globalFiles.map(file => ({
     path: file.path,
     name: file.name,
     extension: file.extension,
     size: file.size,
     ctime: file.ctime,
-    mtime: file.mtime
+    mtime: file.mtime,
   }))
 }
 
@@ -51,14 +51,14 @@ export function mapFileToTuffItem(
   file: typeof filesSchema.$inferSelect,
   extensions: Record<string, string>,
   providerId: string,
-  providerName: string
+  providerName: string,
 ): TuffItem {
   return {
     id: file.path,
     source: {
       type: 'file',
       id: providerId,
-      name: providerName
+      name: providerName,
     },
     kind: 'file',
     render: {
@@ -68,9 +68,9 @@ export function mapFileToTuffItem(
         subtitle: file.path,
         icon: {
           type: 'url',
-          value: extensions.icon ?? ''
-        }
-      }
+          value: extensions.icon ?? '',
+        },
+      },
     },
     actions: [
       {
@@ -79,17 +79,17 @@ export function mapFileToTuffItem(
         label: 'Open',
         primary: true,
         payload: {
-          path: file.path
-        }
+          path: file.path,
+        },
       },
       {
         id: 'open-folder',
         type: 'open',
         label: 'Open Folder',
         payload: {
-          path: path.dirname(file.path)
-        }
-      }
+          path: path.dirname(file.path),
+        },
+      },
     ],
     meta: {
       file: {
@@ -99,8 +99,8 @@ export function mapFileToTuffItem(
         modified_at: file.mtime.toISOString(),
         extension: (file.extension || path.extname(file.name) || '')
           .replace(/^\./, '')
-          .toLowerCase()
-      }
-    }
+          .toLowerCase(),
+      },
+    },
   }
 }

@@ -1,15 +1,16 @@
-import { ref, computed, watch, onMounted, type Ref, type ComputedRef } from 'vue'
+import type { AiProviderConfig, AISDKGlobalConfig } from '@talex-touch/utils/renderer/storage'
 import type {
-  AISDKCapabilityConfig,
   AiCapabilityProviderBinding,
-  TestResult
+  AISDKCapabilityConfig,
+  TestResult,
 } from '@talex-touch/utils/types/intelligence'
+import type { ComputedRef, Ref } from 'vue'
 import {
+
   aisdkStorage,
   intelligenceSettings,
-  type AiProviderConfig,
-  type AISDKGlobalConfig
 } from '@talex-touch/utils/renderer/storage'
+import { computed, ref, watch } from 'vue'
 
 /**
  * Return type for the useIntelligenceManager composable
@@ -99,9 +100,9 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
       const currentData = intelligenceSettings.get()
       intelligenceSettings.set({
         ...currentData,
-        providers: value
+        providers: value,
       })
-    }
+    },
   })
 
   const selectedProviderId = ref<string | null>(null)
@@ -112,16 +113,16 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
       const currentData = intelligenceSettings.get()
       intelligenceSettings.set({
         ...currentData,
-        globalConfig: value
+        globalConfig: value,
       })
-    }
+    },
   })
 
   const capabilities = computed<Record<string, AISDKCapabilityConfig>>({
     get: () => aisdkStorage.data.capabilities,
     set: (value) => {
       aisdkStorage.data.capabilities = value
-    }
+    },
   })
 
   const testResults = ref<Map<string, TestResult>>(new Map())
@@ -134,8 +135,9 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * - Selected provider ID doesn't exist
    */
   const selectedProvider = computed<AiProviderConfig | null>(() => {
-    if (!selectedProviderId.value) return null
-    return providers.value.find((p) => p.id === selectedProviderId.value) ?? null
+    if (!selectedProviderId.value)
+      return null
+    return providers.value.find(p => p.id === selectedProviderId.value) ?? null
   })
 
   /**
@@ -143,7 +145,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    */
   const enabledProviders = computed<AiProviderConfig[]>(() => {
     return providers.value
-      .filter((p) => p.enabled)
+      .filter(p => p.enabled)
       .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
   })
 
@@ -152,7 +154,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    */
   const disabledProviders = computed<AiProviderConfig[]>(() => {
     return providers.value
-      .filter((p) => !p.enabled)
+      .filter(p => !p.enabled)
       .sort((a, b) => a.name.localeCompare(b.name))
   })
 
@@ -162,14 +164,15 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   watch(
     () => providers.value,
     (newProviders) => {
-      if (!selectedProviderId.value) return
+      if (!selectedProviderId.value)
+        return
 
-      const exists = newProviders.some((p) => p.id === selectedProviderId.value)
+      const exists = newProviders.some(p => p.id === selectedProviderId.value)
       if (!exists) {
         selectedProviderId.value = null
       }
     },
-    { deep: true }
+    { deep: true },
   )
 
   /**
@@ -179,7 +182,8 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @param id - The unique identifier of the provider to select, or null to clear
    */
   function selectProvider(id: string | null): void {
-    if (id === selectedProviderId.value) return
+    if (id === selectedProviderId.value)
+      return
     selectedProviderId.value = id
   }
 
@@ -220,8 +224,9 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @param id - The unique identifier of the provider to toggle
    */
   function toggleProvider(id: string): void {
-    const provider = intelligenceSettings.get().providers.find((p) => p.id === id)
-    if (!provider) return
+    const provider = intelligenceSettings.get().providers.find(p => p.id === id)
+    if (!provider)
+      return
 
     const newEnabledState = !provider.enabled
     updateProvider(id, { enabled: newEnabledState })
@@ -253,12 +258,13 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
         id,
         label: id,
         providers: [],
-        ...updates
+        ...updates,
       }
-    } else {
+    }
+    else {
       updated[id] = {
         ...updated[id],
-        ...updates
+        ...updates,
       }
     }
     capabilities.value = updated
@@ -273,12 +279,13 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
       updated[id] = {
         id,
         label: id,
-        providers
+        providers,
       }
-    } else {
+    }
+    else {
       updated[id] = {
         ...updated[id],
-        providers
+        providers,
       }
     }
     capabilities.value = updated
@@ -310,7 +317,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @returns The provider configuration or undefined if not found
    */
   function getProvider(id: string): AiProviderConfig | undefined {
-    return intelligenceSettings.get().providers.find((p) => p.id === id)
+    return intelligenceSettings.get().providers.find(p => p.id === id)
   }
 
   return {
@@ -333,6 +340,6 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
     setCapabilityProviders,
     setTestResult,
     clearTestResult,
-    getProvider
+    getProvider,
   }
 }

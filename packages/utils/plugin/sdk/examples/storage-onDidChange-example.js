@@ -185,7 +185,7 @@ window.storageOnDidChangeExample = {
   setupMultipleFileListeners,
   setupDynamicListener,
   setupConditionalListener,
-  setupBatchOperationListener
+  setupBatchOperationListener,
 }
 
 // 自动运行示例（可选）

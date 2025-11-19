@@ -1,22 +1,23 @@
 import type { AiInvokeOptions, AiInvokeResult, AiProviderConfig } from '../types/intelligence'
 
 export interface IntelligenceClientChannel {
-  send(eventName: string, payload: unknown): Promise<any>
+  send: (eventName: string, payload: unknown) => Promise<any>
 }
 
 export type IntelligenceChannelResolver = () => IntelligenceClientChannel | null | undefined
 
 const defaultResolvers: IntelligenceChannelResolver[] = [
   () => {
-    if (typeof globalThis === 'undefined') return null
-    const maybe =
-      (globalThis as any).touchChannel ||
-      (globalThis as any).$touchChannel ||
-      (globalThis as any).channel ||
-      (globalThis as any).window?.touchChannel ||
-      (globalThis as any).window?.$touchChannel
+    if (typeof globalThis === 'undefined')
+      return null
+    const maybe
+      = (globalThis as any).touchChannel
+        || (globalThis as any).$touchChannel
+        || (globalThis as any).channel
+        || (globalThis as any).window?.touchChannel
+        || (globalThis as any).window?.$touchChannel
     return maybe ?? null
-  }
+  },
 ]
 
 export function resolveIntelligenceChannel(resolvers: IntelligenceChannelResolver[] = defaultResolvers): IntelligenceClientChannel | null {
@@ -26,7 +27,8 @@ export function resolveIntelligenceChannel(resolvers: IntelligenceChannelResolve
       if (channel) {
         return channel
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('[Intelligence Client] Channel resolver failed:', error)
     }
   }
@@ -48,10 +50,10 @@ async function assertResponse<T>(promise: Promise<ChannelResponse<T>>): Promise<
 }
 
 export interface IntelligenceClient {
-  invoke<T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions): Promise<AiInvokeResult<T>>
-  testProvider(config: AiProviderConfig): Promise<unknown>
-  testCapability(params: Record<string, any>): Promise<unknown>
-  fetchModels(config: AiProviderConfig): Promise<{ success: boolean; models?: string[]; message?: string }>
+  invoke: <T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions) => Promise<AiInvokeResult<T>>
+  testProvider: (config: AiProviderConfig) => Promise<unknown>
+  testCapability: (params: Record<string, any>) => Promise<unknown>
+  fetchModels: (config: AiProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
 }
 
 export function createIntelligenceClient(channel?: IntelligenceClientChannel, resolvers?: IntelligenceChannelResolver[]): IntelligenceClient {
@@ -63,23 +65,23 @@ export function createIntelligenceClient(channel?: IntelligenceClientChannel, re
   return {
     invoke<T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions) {
       return assertResponse<AiInvokeResult<T>>(
-        resolvedChannel.send('intelligence:invoke', { capabilityId, payload, options })
+        resolvedChannel.send('intelligence:invoke', { capabilityId, payload, options }),
       )
     },
     testProvider(config: AiProviderConfig) {
       return assertResponse(
-        resolvedChannel.send('intelligence:test-provider', { provider: config })
+        resolvedChannel.send('intelligence:test-provider', { provider: config }),
       )
     },
     testCapability(params: Record<string, any>) {
       return assertResponse(
-        resolvedChannel.send('intelligence:test-capability', params)
+        resolvedChannel.send('intelligence:test-capability', params),
       )
     },
     fetchModels(config: AiProviderConfig) {
-      return assertResponse<{ success: boolean; models?: string[]; message?: string }>(
-        resolvedChannel.send('intelligence:fetch-models', { provider: config })
+      return assertResponse<{ success: boolean, models?: string[], message?: string }>(
+        resolvedChannel.send('intelligence:fetch-models', { provider: config }),
       )
-    }
+    },
   }
 }

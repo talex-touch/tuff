@@ -1,8 +1,8 @@
-import { LibSQLDatabase } from 'drizzle-orm/libsql'
-import * as schema from './schema'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, eq, inArray, sql } from 'drizzle-orm'
+import * as schema from './schema'
 
-const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
+function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>): DbUtils {
   return {
     getDb: () => db,
 
@@ -53,21 +53,23 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
         .values({ fileId, key, value })
         .onConflictDoUpdate({
           target: [schema.fileExtensions.fileId, schema.fileExtensions.key],
-          set: { value }
+          set: { value },
         })
     },
-    async addFileExtensions(extensions: { fileId: number; key: string; value: string }[]) {
-      if (extensions.length === 0) return
+    async addFileExtensions(extensions: { fileId: number, key: string, value: string }[]) {
+      if (extensions.length === 0)
+        return
       return db
         .insert(schema.fileExtensions)
         .values(extensions)
         .onConflictDoUpdate({
           target: [schema.fileExtensions.fileId, schema.fileExtensions.key],
-          set: { value: sql`excluded.value` }
+          set: { value: sql`excluded.value` },
         })
     },
     async getFileExtensionsByFileIds(fileIds: number[], keys?: string[]) {
-      if (fileIds.length === 0) return []
+      if (fileIds.length === 0)
+        return []
       const filters = [inArray(schema.fileExtensions.fileId, fileIds)]
       if (keys && keys.length > 0) {
         filters.push(inArray(schema.fileExtensions.key, keys))
@@ -77,7 +79,7 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
         .select({
           fileId: schema.fileExtensions.fileId,
           key: schema.fileExtensions.key,
-          value: schema.fileExtensions.value
+          value: schema.fileExtensions.value,
         })
         .from(schema.fileExtensions)
         .where(condition)
@@ -88,11 +90,11 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
 
     async setFileIndexProgress(
       fileId: number,
-      data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>
+      data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>,
     ) {
       const updatePayload = {
         ...data,
-        updatedAt: data.updatedAt ?? new Date()
+        updatedAt: data.updatedAt ?? new Date(),
       }
 
       return db
@@ -101,13 +103,14 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
         .onConflictDoUpdate({
           target: schema.fileIndexProgress.fileId,
           set: {
-            ...updatePayload
-          }
+            ...updatePayload,
+          },
         })
     },
 
     async getFileIndexProgressByFileIds(fileIds: number[]) {
-      if (fileIds.length === 0) return []
+      if (fileIds.length === 0)
+        return []
       return db
         .select()
         .from(schema.fileIndexProgress)
@@ -115,7 +118,8 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
     },
 
     async getFileIndexProgressByPaths(paths: string[]) {
-      if (paths.length === 0) return []
+      if (paths.length === 0)
+        return []
       return db
         .select({
           path: schema.files.path,
@@ -124,7 +128,7 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           processedBytes: schema.fileIndexProgress.processedBytes,
           totalBytes: schema.fileIndexProgress.totalBytes,
           updatedAt: schema.fileIndexProgress.updatedAt,
-          lastError: schema.fileIndexProgress.lastError
+          lastError: schema.fileIndexProgress.lastError,
         })
         .from(schema.files)
         .leftJoin(schema.fileIndexProgress, eq(schema.files.id, schema.fileIndexProgress.fileId))
@@ -150,12 +154,13 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           target: schema.usageSummary.itemId,
           set: {
             clickCount: sql`${schema.usageSummary.clickCount} + 1`,
-            lastUsed: new Date()
-          }
+            lastUsed: new Date(),
+          },
         })
     },
     async getUsageSummaryByItemIds(itemIds: string[]) {
-      if (itemIds.length === 0) return []
+      if (itemIds.length === 0)
+        return []
       return db
         .select()
         .from(schema.usageSummary)
@@ -167,20 +172,22 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
       sourceId: string,
       itemId: string,
       sourceType: string,
-      type: 'search' | 'execute' | 'cancel'
+      type: 'search' | 'execute' | 'cancel',
     ) {
       const now = new Date()
       const updateFields: any = {
-        updatedAt: now
+        updatedAt: now,
       }
 
       if (type === 'search') {
         updateFields.searchCount = sql`${schema.itemUsageStats.searchCount} + 1`
         updateFields.lastSearched = now
-      } else if (type === 'execute') {
+      }
+      else if (type === 'execute') {
         updateFields.executeCount = sql`${schema.itemUsageStats.executeCount} + 1`
         updateFields.lastExecuted = now
-      } else if (type === 'cancel') {
+      }
+      else if (type === 'cancel') {
         updateFields.cancelCount = sql`${schema.itemUsageStats.cancelCount} + 1`
         updateFields.lastCancelled = now
       }
@@ -198,23 +205,24 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           lastExecuted: type === 'execute' ? now : null,
           lastCancelled: type === 'cancel' ? now : null,
           createdAt: now,
-          updatedAt: now
+          updatedAt: now,
         })
         .onConflictDoUpdate({
           target: [schema.itemUsageStats.sourceId, schema.itemUsageStats.itemId],
-          set: updateFields
+          set: updateFields,
         })
     },
 
-    async getUsageStatsBatch(keys: Array<{ sourceId: string; itemId: string }>) {
-      if (keys.length === 0) return []
+    async getUsageStatsBatch(keys: Array<{ sourceId: string, itemId: string }>) {
+      if (keys.length === 0)
+        return []
 
       // 构建 OR 条件查询
-      const conditions = keys.map((key) =>
+      const conditions = keys.map(key =>
         and(
           eq(schema.itemUsageStats.sourceId, key.sourceId),
-          eq(schema.itemUsageStats.itemId, key.itemId)
-        )
+          eq(schema.itemUsageStats.itemId, key.itemId),
+        ),
       )
 
       // SQLite 的 IN 查询对复合键支持不好，使用 OR 条件
@@ -223,8 +231,8 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
       }
 
       // 对于多个条件，使用 sql 模板构建查询
-      const sourceIds = keys.map((k) => k.sourceId)
-      const itemIds = keys.map((k) => k.itemId)
+      const sourceIds = keys.map(k => k.sourceId)
+      const itemIds = keys.map(k => k.itemId)
 
       // 使用 IN 查询优化（预过滤）
       return db
@@ -233,8 +241,8 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
         .where(
           and(
             inArray(schema.itemUsageStats.sourceId, sourceIds),
-            inArray(schema.itemUsageStats.itemId, itemIds)
-          )
+            inArray(schema.itemUsageStats.itemId, itemIds),
+          ),
         )
     },
 
@@ -260,7 +268,7 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
         .values({ pluginId, key, value: stringValue })
         .onConflictDoUpdate({
           target: [schema.pluginData.pluginId, schema.pluginData.key],
-          set: { value: stringValue }
+          set: { value: stringValue },
         })
     },
     async deletePluginData(pluginId: string, key?: string) {
@@ -270,17 +278,17 @@ const createDbUtilsInternal = (db: LibSQLDatabase<typeof schema>): DbUtils => {
           .where(and(eq(schema.pluginData.pluginId, pluginId), eq(schema.pluginData.key, key)))
       }
       return db.delete(schema.pluginData).where(eq(schema.pluginData.pluginId, pluginId))
-    }
+    },
   }
 }
 
-export type DbUtils = {
+export interface DbUtils {
   getDb: () => LibSQLDatabase<typeof schema>
   addKeywordMapping: (
     keyword: string,
     itemId: string,
     providerId: string,
-    priority?: number
+    priority?: number,
   ) => Promise<any>
   getKeywordMapping: (keyword: string) => Promise<any>
   removeKeywordMapping: (keyword: string) => Promise<any>
@@ -292,10 +300,10 @@ export type DbUtils = {
   getFilesByType: (type: string) => Promise<any[]>
   clearFilesByType: (type: string) => Promise<any>
   addFileExtension: (fileId: number, key: string, value: string) => Promise<any>
-  addFileExtensions: (extensions: { fileId: number; key: string; value: string }[]) => Promise<any>
+  addFileExtensions: (extensions: { fileId: number, key: string, value: string }[]) => Promise<any>
   getFileExtensionsByFileIds: (
     fileIds: number[],
-    keys?: string[]
+    keys?: string[],
   ) => Promise<
     Array<{
       fileId: number
@@ -306,7 +314,7 @@ export type DbUtils = {
   getFileExtensions: (fileId: number) => Promise<any[]>
   setFileIndexProgress: (
     fileId: number,
-    data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>
+    data: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>,
   ) => Promise<any>
   getFileIndexProgressByFileIds: (fileIds: number[]) => Promise<any[]>
   getFileIndexProgressByPaths: (paths: string[]) => Promise<
@@ -324,19 +332,19 @@ export type DbUtils = {
   addUsageLog: (log: typeof schema.usageLogs.$inferInsert) => Promise<any>
   incrementUsageSummary: (itemId: string) => Promise<any>
   getUsageSummaryByItemIds: (
-    itemIds: string[]
+    itemIds: string[],
   ) => Promise<(typeof schema.usageSummary.$inferSelect)[]>
   incrementUsageStats: (
     sourceId: string,
     itemId: string,
     sourceType: string,
-    type: 'search' | 'execute' | 'cancel'
+    type: 'search' | 'execute' | 'cancel',
   ) => Promise<any>
   getUsageStatsBatch: (
-    keys: Array<{ sourceId: string; itemId: string }>
+    keys: Array<{ sourceId: string, itemId: string }>,
   ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
   getUsageStatsBySource: (
-    sourceId: string
+    sourceId: string,
   ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>

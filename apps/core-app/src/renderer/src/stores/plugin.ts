@@ -1,7 +1,7 @@
+import type { ITouchPlugin } from '@talex-touch/utils'
+import type { PluginStateEvent } from '@talex-touch/utils/plugin/sdk/types'
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
-import { ITouchPlugin } from '@talex-touch/utils'
-import type { PluginStateEvent } from '@talex-touch/utils/plugin/sdk/types'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
 /**
@@ -92,7 +92,8 @@ export const usePluginStore = defineStore('plugin', () => {
     const plugin = getPlugin(name)
     if (plugin) {
       plugin.status = status
-    } else {
+    }
+    else {
       console.warn(`[PluginStore] Plugin "${name}" not found when updating status`)
     }
   }
@@ -125,7 +126,8 @@ export const usePluginStore = defineStore('plugin', () => {
         return unsubscribe
       }
       initPlugins(pluginList)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginStore] Failed to load initial plugin list:', error)
     }
 
@@ -141,6 +143,6 @@ export const usePluginStore = defineStore('plugin', () => {
     handleStateEvent,
     updatePluginStatus,
     updatePluginReadme,
-    initialize
+    initialize,
   }
 })

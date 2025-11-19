@@ -1,6 +1,6 @@
-import { MaybePromise, ModuleDirectory, ModuleFileConfig, ModuleKey, ResolvedModuleFileConfig } from "./base";
-import { IBaseModule, ModuleCtor, ModuleRegistrant } from "./module";
-import { ModuleStopContext } from "./module-lifecycle";
+import type { MaybePromise, ModuleDirectory, ModuleFileConfig, ModuleKey, ResolvedModuleFileConfig } from './base'
+import type { IBaseModule, ModuleCtor, ModuleRegistrant } from './module'
+import type { ModuleStopContext } from './module-lifecycle'
 
 /**
  * Interface of the Module Manager.
@@ -32,7 +32,7 @@ export interface IBaseModuleManager<E = any> {
    * - If an instance is provided, step (2) is skipped; the same lifecycle calls apply.
    * - The manager must preserve **singleton semantics** per {@link ModuleKey}.
    */
-  loadModule<T extends IBaseModule<E>>(module: ModuleRegistrant<T, E>): boolean | Promise<boolean>;
+  loadModule: <T extends IBaseModule<E>>(module: ModuleRegistrant<T, E>) => boolean | Promise<boolean>
 
   /**
    * Unloads a module by key.
@@ -45,7 +45,7 @@ export interface IBaseModuleManager<E = any> {
    * The manager should invoke `stop?()` (with a `ModuleStopContext`) followed by `destroy()`
    * (with a `ModuleDestroyContext`), then remove the singleton instance.
    */
-  unloadModule(moduleKey: ModuleKey, reason?: ModuleStopContext<E>["reason"]): boolean | Promise<boolean>;
+  unloadModule: (moduleKey: ModuleKey, reason?: ModuleStopContext<E>['reason']) => boolean | Promise<boolean>
 
   /**
    * Retrieves a module instance by key.
@@ -54,7 +54,7 @@ export interface IBaseModuleManager<E = any> {
    * @param moduleKey - The unique key of the module.
    * @returns The module instance if loaded; otherwise `undefined`.
    */
-  getModule<T extends IBaseModule<E> = IBaseModule<E>>(moduleKey: ModuleKey): T | undefined;
+  getModule: <T extends IBaseModule<E> = IBaseModule<E>>(moduleKey: ModuleKey) => T | undefined
 
   /**
    * Optional class-based getter for stronger typing.
@@ -63,17 +63,17 @@ export interface IBaseModuleManager<E = any> {
    * @param ctor - The module class used at registration time (or a class with the same static `key`).
    * @returns The module instance if loaded; otherwise `undefined`.
    */
-  get<T extends IBaseModule<E>>(ctor: ModuleCtor<T, E>): T | undefined;
+  get: <T extends IBaseModule<E>>(ctor: ModuleCtor<T, E>) => T | undefined
 
   /**
    * Returns whether a module is currently loaded.
    */
-  hasModule(moduleKey: ModuleKey): boolean;
+  hasModule: (moduleKey: ModuleKey) => boolean
 
   /**
    * Lists keys of all currently loaded modules.
    */
-  listModules(): readonly ModuleKey[];
+  listModules: () => readonly ModuleKey[]
 }
 
 /**
@@ -89,11 +89,11 @@ export interface IModuleDirectoryService {
   /**
    * Resolves a {@link ModuleFileConfig} to {@link ResolvedModuleFileConfig} without creating anything.
    */
-  resolve(moduleKey: ModuleKey, input?: ModuleFileConfig): ResolvedModuleFileConfig;
+  resolve: (moduleKey: ModuleKey, input?: ModuleFileConfig) => ResolvedModuleFileConfig
 
   /**
    * Creates (or returns) the single {@link ModuleDirectory} for a module if configured to `create: true`.
    * If `create !== true`, implementations should return `undefined`.
    */
-  ensure(moduleKey: ModuleKey, input?: ModuleFileConfig): MaybePromise<ModuleDirectory | undefined>;
+  ensure: (moduleKey: ModuleKey, input?: ModuleFileConfig) => MaybePromise<ModuleDirectory | undefined>
 }

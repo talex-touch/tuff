@@ -1,51 +1,34 @@
-<template>
-  <div
-    :class="{ plain, small, select: _select, undot, scaleUpper, middle }"
-    role="button"
-    class="IconButton-Container fake-background transition"
-    @click="handleClick"
-    @mouseenter="hover = true"
-    @mouseleave="hover = false"
-  >
-    <div class="IconButton-Icon">
-      <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
-        <remix-icon :name="icon" :style="_select || hover ? 'fill' : 'line'" />
-      </slot>
-    </div>
-  </div>
-</template>
-
 <script name="IconButton" lang="ts" setup>
-import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps({
   icon: {
-    type: String
+    type: String,
   },
   direct: {
     type: String,
-    required: false
+    required: false,
   },
   plain: {
-    type: Boolean
+    type: Boolean,
   },
   small: {
-    type: Boolean
+    type: Boolean,
   },
   select: {
-    type: Boolean
+    type: Boolean,
   },
   undot: {
-    type: Boolean
+    type: Boolean,
   },
   scaleUpper: {
-    type: Boolean
+    type: Boolean,
   },
   middle: {
-    type: Boolean
-  }
+    type: Boolean,
+  },
 })
 
 const router = useRouter()
@@ -57,20 +40,38 @@ const _select = ref(false)
 watch(
   () => route.path,
   () => {
-    if (props.hasOwnProperty('select')) _select.value = props.select
+    if (props.hasOwnProperty('select'))
+      _select.value = props.select
     if (props.direct) {
       _select.value = route.path === props.direct
 
       // if (  _select.value )
       // console.log( route, props.direct, _select.value )
     }
-  }
+  },
 )
 
 function handleClick() {
   props.direct && router.push(props.direct)
 }
 </script>
+
+<template>
+  <div
+    :class="{ plain, small, select: _select, undot, scaleUpper, middle }"
+    role="button"
+    class="IconButton-Container fake-background transition"
+    @click="handleClick"
+    @mouseenter="hover = true"
+    @mouseleave="hover = false"
+  >
+    <div class="IconButton-Icon">
+      <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
+        <RemixIcon :name="icon" :style="_select || hover ? 'fill' : 'line'" />
+      </slot>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .IconButton-Container {

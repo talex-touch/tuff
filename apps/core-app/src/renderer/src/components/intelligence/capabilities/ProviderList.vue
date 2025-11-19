@@ -1,59 +1,8 @@
-<template>
-  <TuffBlockSlot
-    :title="providerSummary"
-    default-icon="i-carbon-api-1"
-  >
-    <el-select
-      v-model="selectedProviderIds"
-      multiple
-      collapse-tags
-      collapse-tags-tooltip
-      :max-collapse-tags="3"
-      :placeholder="t('settings.intelligence.selectProviderPlaceholder')"
-      class="provider-list__select"
-      @change="handleSelectionChange"
-    >
-      <el-option
-        v-for="provider in allProviders"
-        :key="provider.providerId"
-        :label="provider.provider?.name || provider.providerId"
-        :value="provider.providerId"
-      >
-        <div class="provider-option">
-          <span class="provider-option__name">{{ provider.provider?.name || provider.providerId }}</span>
-          <span class="provider-option__type">{{ provider.provider?.type || provider.providerId }}</span>
-        </div>
-      </el-option>
-    </el-select>
-  </TuffBlockSlot>
-
-  <div v-if="enabledBindings.length > 0" class="provider-list__selected">
-    <p class="provider-list__label">{{ t('settings.intelligence.selectedProviders') }}</p>
-    <div class="provider-list__tags">
-      <el-tag
-        v-for="binding in enabledBindings"
-        :key="binding.providerId"
-        closable
-        :type="focusedProviderId === binding.providerId ? 'primary' : ''"
-        @close="handleRemoveProvider(binding.providerId)"
-        @click="$emit('select', binding.providerId)"
-      >
-        <span class="provider-tag__content">
-          {{ binding.provider?.name || binding.providerId }}
-          <span v-if="binding.models?.length" class="provider-tag__badge">
-            {{ binding.models.length }}
-          </span>
-        </span>
-      </el-tag>
-    </div>
-  </div>
-</template>
-
 <script lang="ts" setup>
-import { ref, computed, watch } from 'vue'
+import type { CapabilityBinding } from './types'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import type { CapabilityBinding } from './types'
 
 const props = defineProps<{
   enabledBindings: CapabilityBinding[]
@@ -90,29 +39,29 @@ watch(
   (list) => {
     selectedProviderIds.value = list.map(binding => binding.providerId)
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 )
 
 function handleSelectionChange(values: string[]): void {
   const oldIds = props.enabledBindings.map(b => b.providerId)
   const oldSet = new Set(oldIds)
   const newSet = new Set(values)
-  
+
   // 构建新的 bindings 列表
   const newBindings: CapabilityBinding[] = []
-  
+
   // 保留原有顺序的已选中项
-  props.enabledBindings.forEach(binding => {
+  props.enabledBindings.forEach((binding) => {
     if (newSet.has(binding.providerId)) {
       newBindings.push({
         ...binding,
-        enabled: true
+        enabled: true,
       })
     }
   })
-  
+
   // 添加新选中的项（按照 values 中的顺序）
-  values.forEach(providerId => {
+  values.forEach((providerId) => {
     if (!oldSet.has(providerId)) {
       // 从 disabledBindings 或 allProviders 中查找
       const disabledProvider = props.disabledBindings.find(p => p.providerId === providerId)
@@ -122,9 +71,10 @@ function handleSelectionChange(values: string[]): void {
           provider: disabledProvider.provider,
           enabled: true,
           priority: newBindings.length + 1,
-          models: disabledProvider.models || []
+          models: disabledProvider.models || [],
         })
-      } else {
+      }
+      else {
         // 如果在 disabledBindings 中找不到，从 allProviders 中查找
         const provider = allProviders.value.find(p => p.providerId === providerId)
         if (provider) {
@@ -133,15 +83,15 @@ function handleSelectionChange(values: string[]): void {
             provider: provider.provider,
             enabled: true,
             priority: newBindings.length + 1,
-            models: provider.models || []
+            models: provider.models || [],
           })
         }
       }
     }
   })
-  
+
   emits('reorder', newBindings)
-  
+
   // 如果有新选中的，自动聚焦到第一个新选中的
   const newlyAdded = values.find(id => !oldSet.has(id))
   if (newlyAdded) {
@@ -154,6 +104,59 @@ function handleRemoveProvider(providerId: string): void {
   handleSelectionChange(newValues)
 }
 </script>
+
+<template>
+  <TuffBlockSlot
+    :title="providerSummary"
+    default-icon="i-carbon-api-1"
+  >
+    <el-select
+      v-model="selectedProviderIds"
+      multiple
+      collapse-tags
+      collapse-tags-tooltip
+      :max-collapse-tags="3"
+      :placeholder="t('settings.intelligence.selectProviderPlaceholder')"
+      class="provider-list__select"
+      @change="handleSelectionChange"
+    >
+      <el-option
+        v-for="provider in allProviders"
+        :key="provider.providerId"
+        :label="provider.provider?.name || provider.providerId"
+        :value="provider.providerId"
+      >
+        <div class="provider-option">
+          <span class="provider-option__name">{{ provider.provider?.name || provider.providerId }}</span>
+          <span class="provider-option__type">{{ provider.provider?.type || provider.providerId }}</span>
+        </div>
+      </el-option>
+    </el-select>
+  </TuffBlockSlot>
+
+  <div v-if="enabledBindings.length > 0" class="provider-list__selected">
+    <p class="provider-list__label">
+      {{ t('settings.intelligence.selectedProviders') }}
+    </p>
+    <div class="provider-list__tags">
+      <el-tag
+        v-for="binding in enabledBindings"
+        :key="binding.providerId"
+        closable
+        :type="focusedProviderId === binding.providerId ? 'primary' : ''"
+        @close="handleRemoveProvider(binding.providerId)"
+        @click="$emit('select', binding.providerId)"
+      >
+        <span class="provider-tag__content">
+          {{ binding.provider?.name || binding.providerId }}
+          <span v-if="binding.models?.length" class="provider-tag__badge">
+            {{ binding.models.length }}
+          </span>
+        </span>
+      </el-tag>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .provider-list__select {
@@ -199,7 +202,7 @@ function handleRemoveProvider(providerId: string): void {
 .provider-list__tags :deep(.el-tag) {
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover {
     opacity: 0.8;
   }

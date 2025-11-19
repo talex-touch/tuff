@@ -12,28 +12,28 @@ async function sendMessageExamples() {
     // 发送搜索消息
     await sdk.sendMessage('search', {
       query: 'hello world',
-      type: 'text'
+      type: 'text',
     })
 
     // 发送翻译消息
     await sdk.sendMessage('translate', {
       text: 'Hello',
       from: 'en',
-      to: 'zh'
+      to: 'zh',
     })
 
     // 发送通知消息
     await sdk.sendMessage('notify', {
       title: 'Plugin Message',
-      body: 'This is a notification from plugin'
+      body: 'This is a notification from plugin',
     })
-
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to send messages:', error)
   }
 }
 
 // 导出函数
 window.messageSystemExample = {
-  sendMessageExamples
+  sendMessageExamples,
 }

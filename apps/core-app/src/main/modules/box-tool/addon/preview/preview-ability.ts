@@ -1,5 +1,5 @@
-import type { TuffQuery } from '../../search-engine/types'
 import type { PreviewAbilityResult } from '@talex-touch/utils'
+import type { TuffQuery } from '../../search-engine/types'
 
 export interface PreviewAbilityContext {
   query: TuffQuery
@@ -9,8 +9,8 @@ export interface PreviewAbilityContext {
 export interface PreviewAbility {
   readonly id: string
   readonly priority: number
-  canHandle(query: TuffQuery): boolean | Promise<boolean>
-  execute(context: PreviewAbilityContext): Promise<PreviewAbilityResult | null>
+  canHandle: (query: TuffQuery) => boolean | Promise<boolean>
+  execute: (context: PreviewAbilityContext) => Promise<PreviewAbilityResult | null>
 }
 
 export abstract class BasePreviewAbility implements PreviewAbility {

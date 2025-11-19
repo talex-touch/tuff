@@ -1,4 +1,4 @@
-import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import type { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { createLogger } from '../../../utils/logger'
 
 const providersLog = createLogger('PluginProviders')

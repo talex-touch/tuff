@@ -1,16 +1,19 @@
-import axios, { AxiosRequestConfig } from 'axios'
-import { createWriteStream } from 'fs'
-import {
-  DownloadTask,
+import type {
   ChunkInfo,
+  DownloadConfig,
+  DownloadTask,
+} from '@talex-touch/utils'
+import type { AxiosRequestConfig } from 'axios'
+import type { ChunkManager } from './chunk-manager'
+import type { NetworkMonitor } from './network-monitor'
+import { createWriteStream } from 'node:fs'
+import {
   ChunkStatus,
   DownloadStatus,
-  DownloadConfig
 } from '@talex-touch/utils'
-import { ChunkManager } from './chunk-manager'
-import { NetworkMonitor } from './network-monitor'
-import { ProgressTracker } from './progress-tracker'
+import axios from 'axios'
 import { DownloadErrorClass } from './error-types'
+import { ProgressTracker } from './progress-tracker'
 
 export class DownloadWorker {
   private readonly maxConcurrent: number
@@ -24,7 +27,7 @@ export class DownloadWorker {
     maxConcurrent: number,
     networkMonitor: NetworkMonitor,
     chunkManager: ChunkManager,
-    config: DownloadConfig
+    config: DownloadConfig,
   ) {
     this.maxConcurrent = maxConcurrent
     this.networkMonitor = networkMonitor
@@ -35,7 +38,7 @@ export class DownloadWorker {
   // 启动下载任务
   async startTask(
     task: DownloadTask,
-    onProgress?: (taskId: string, progress: any) => void
+    onProgress?: (taskId: string, progress: any) => void,
   ): Promise<void> {
     if (this.activeTasks.has(task.id)) {
       throw new Error(`Task ${task.id} is already active`)
@@ -51,7 +54,7 @@ export class DownloadWorker {
     const progressTracker = new ProgressTracker(task.id, {
       windowSize: 10,
       updateInterval: 1000, // 每秒更新一次
-      minSpeedSamples: 2
+      minSpeedSamples: 2,
     })
 
     // 设置节流回调
@@ -65,7 +68,8 @@ export class DownloadWorker {
 
     try {
       await this.downloadTask(task, progressTracker, onProgress)
-    } finally {
+    }
+    finally {
       this.activeTasks.delete(task.id)
       this.progressTrackers.delete(task.id)
     }
@@ -95,14 +99,14 @@ export class DownloadWorker {
   private async downloadTask(
     task: DownloadTask,
     progressTracker: ProgressTracker,
-    onProgress?: (taskId: string, progress: any) => void
+    onProgress?: (taskId: string, progress: any) => void,
   ): Promise<void> {
     const errorContext = {
       taskId: task.id,
       url: task.url,
       filename: task.filename,
       module: task.module,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     }
 
     try {
@@ -113,7 +117,7 @@ export class DownloadWorker {
       if (!totalSize) {
         throw DownloadErrorClass.networkError(
           'Unable to determine file size',
-          errorContext
+          errorContext,
         )
       }
 
@@ -134,7 +138,7 @@ export class DownloadWorker {
       if (!isValid) {
         throw DownloadErrorClass.checksumError(
           'File validation failed',
-          errorContext
+          errorContext,
         )
       }
 
@@ -153,13 +157,14 @@ export class DownloadWorker {
           totalSize,
           downloadedSize: totalSize,
           speed: 0,
-          remainingTime: 0
+          remainingTime: 0,
         })
       }
-    } catch (error: unknown) {
+    }
+    catch (error: unknown) {
       // 转换为 DownloadErrorClass
-      const downloadError =
-        error instanceof DownloadErrorClass
+      const downloadError
+        = error instanceof DownloadErrorClass
           ? error
           : DownloadErrorClass.fromError(error as Error, errorContext)
 
@@ -168,7 +173,7 @@ export class DownloadWorker {
       if (onProgress) {
         onProgress(task.id, {
           status: DownloadStatus.FAILED,
-          error: downloadError.userMessage
+          error: downloadError.userMessage,
         })
       }
 
@@ -181,7 +186,7 @@ export class DownloadWorker {
     task: DownloadTask,
     chunks: ChunkInfo[],
     progressTracker: ProgressTracker,
-    _onProgress?: (taskId: string, progress: any) => void
+    _onProgress?: (taskId: string, progress: any) => void,
   ): Promise<void> {
     const concurrentLimit = Math.min(this.maxConcurrent, chunks.length)
     const semaphore = new Array(concurrentLimit).fill(null)
@@ -203,7 +208,8 @@ export class DownloadWorker {
         if (completedChunks % Math.max(1, Math.floor(chunks.length / 10)) === 0) {
           progressTracker.forceUpdate()
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`Chunk ${chunk.index} download failed:`, error)
         throw error
       }
@@ -216,7 +222,7 @@ export class DownloadWorker {
   private async downloadChunk(
     chunk: ChunkInfo,
     task: DownloadTask,
-    _progressTracker: ProgressTracker
+    _progressTracker: ProgressTracker,
   ): Promise<void> {
     const maxRetries = this.config.chunk.maxRetries
     let retryCount = 0
@@ -230,8 +236,8 @@ export class DownloadWorker {
       additionalInfo: {
         chunkIndex: chunk.index,
         chunkStart: chunk.start,
-        chunkEnd: chunk.end
-      }
+        chunkEnd: chunk.end,
+      },
     }
 
     while (retryCount <= maxRetries) {
@@ -244,16 +250,16 @@ export class DownloadWorker {
           url: task.url,
           headers: {
             ...headers,
-            Range: `bytes=${chunk.start + chunk.downloaded}-${chunk.end}`
+            Range: `bytes=${chunk.start + chunk.downloaded}-${chunk.end}`,
           },
           responseType: 'stream',
           timeout: this.config.network.timeout,
-          validateStatus: (status) => status === 206 || status === 200 // Accept partial content
+          validateStatus: status => status === 206 || status === 200, // Accept partial content
         }
 
         const response = await axios(config)
         const writeStream = createWriteStream(chunk.filePath, {
-          flags: chunk.downloaded > 0 ? 'a' : 'w'
+          flags: chunk.downloaded > 0 ? 'a' : 'w',
         })
 
         try {
@@ -263,7 +269,7 @@ export class DownloadWorker {
 
             response.data.on('data', (data: Buffer) => {
               chunk.downloaded += data.length
-              
+
               // 实时更新进度跟踪器（会自动节流）
               // 注意：这里我们需要计算所有切片的总下载量
               // 这个会在 downloadChunksConcurrently 中统一处理
@@ -279,24 +285,26 @@ export class DownloadWorker {
             writeStream.on('error', reject)
             writeStream.on('finish', resolve)
           })
-        } finally {
+        }
+        finally {
           writeStream.destroy()
         }
 
         // 下载成功
         return
-      } catch (error) {
+      }
+      catch (error) {
         retryCount++
-        
+
         // 转换为 DownloadErrorClass
-        const downloadError =
-          error instanceof DownloadErrorClass
+        const downloadError
+          = error instanceof DownloadErrorClass
             ? error
             : DownloadErrorClass.fromError(error as Error, errorContext)
 
         console.warn(
           `Chunk ${chunk.index} download failed (attempt ${retryCount}):`,
-          downloadError.userMessage
+          downloadError.userMessage,
         )
 
         if (retryCount > maxRetries) {
@@ -305,7 +313,7 @@ export class DownloadWorker {
         }
 
         // 等待重试
-        await new Promise((resolve) => setTimeout(resolve, this.config.network.retryDelay))
+        await new Promise(resolve => setTimeout(resolve, this.config.network.retryDelay))
       }
     }
   }
@@ -317,19 +325,20 @@ export class DownloadWorker {
         method: 'HEAD',
         url,
         headers,
-        timeout: this.config.network.timeout
+        timeout: this.config.network.timeout,
       }
 
       const response = await axios(config)
       const contentLength = response.headers['content-length']
 
-      return contentLength ? parseInt(contentLength, 10) : null
-    } catch (error) {
-      const downloadError =
-        error instanceof DownloadErrorClass
+      return contentLength ? Number.parseInt(contentLength, 10) : null
+    }
+    catch (error) {
+      const downloadError
+        = error instanceof DownloadErrorClass
           ? error
           : DownloadErrorClass.fromError(error as Error)
-      
+
       console.warn('Failed to get file size:', downloadError.userMessage)
       return null
     }
@@ -368,7 +377,7 @@ export class DownloadWorker {
       activeTasks: this.activeTasks.size,
       maxConcurrent: this.maxConcurrent,
       networkQuality: this.networkMonitor.getNetworkQuality(),
-      recommendedConcurrency: networkStatus.recommendedConcurrency
+      recommendedConcurrency: networkStatus.recommendedConcurrency,
     }
   }
 

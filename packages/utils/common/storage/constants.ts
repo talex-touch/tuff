@@ -2,7 +2,7 @@ export enum StorageList {
   APP_SETTING = 'app-setting.ini',
   SHORTCUT_SETTING = 'shortcut-setting.ini',
   OPENERS = 'openers.json',
-  IntelligenceConfig = 'aisdk-config'
+  IntelligenceConfig = 'aisdk-config',
 }
 
 /**
@@ -14,5 +14,5 @@ export enum ConfigKeys {
    * Stores the timestamp of the last successful full application scan using mdfind.
    * This is used to schedule the next comprehensive scan.
    */
-  APP_PROVIDER_LAST_MDFIND_SCAN = 'app_provider_last_mdfind_scan'
+  APP_PROVIDER_LAST_MDFIND_SCAN = 'app_provider_last_mdfind_scan',
 }

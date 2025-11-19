@@ -1,3 +1,9 @@
+<script lang="ts" setup>
+import { useAuth } from '~/modules/auth/useAuth'
+
+const { currentUser, isLoggedIn } = useAuth()
+</script>
+
 <template>
   <div :class="{ active: isLoggedIn }" class="FlatUserInfo">
     <template v-if="isLoggedIn && currentUser?.name">
@@ -7,7 +13,7 @@
           :src="currentUser.avatar"
           :alt="currentUser.name"
           class="avatar-image"
-        />
+        >
         <div v-else class="avatar-placeholder">
           {{ currentUser.name.charAt(0).toUpperCase() }}
         </div>
@@ -23,12 +29,6 @@
     </template>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { useAuth } from '~/modules/auth/useAuth'
-
-const { currentUser, isLoggedIn } = useAuth()
-</script>
 
 <style lang="scss" scoped>
 /**

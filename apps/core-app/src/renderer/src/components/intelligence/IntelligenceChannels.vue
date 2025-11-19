@@ -1,11 +1,11 @@
 <script setup name="IntelligenceChannels" lang="ts">
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
-import { computed, ref } from 'vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -29,7 +29,7 @@ function handleViewStats() {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settings.intelligence.landing.channels.title')"
     :description="t('settings.intelligence.landing.channels.desc')"
     default-icon="i-carbon-api-1"
@@ -37,7 +37,7 @@ function handleViewStats() {
     memory-name="intelligence-channels"
   >
     <!-- 配置渠道 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.channels.manageTitle')"
       :description="t('settings.intelligence.landing.channels.manageDesc')"
       default-icon="i-carbon-settings"
@@ -47,10 +47,10 @@ function handleViewStats() {
         <i class="i-carbon-launch" />
         <span>{{ t('settings.intelligence.landing.channels.manageButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- 渠道审计 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.channels.auditTitle')"
       :description="t('settings.intelligence.landing.channels.auditDesc')"
       default-icon="i-carbon-event-schedule"
@@ -61,10 +61,10 @@ function handleViewStats() {
         <i class="i-carbon-chart-line" />
         <span>{{ t('settings.intelligence.landing.channels.auditButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- 累计消耗 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.channels.statsTitle', { amount: totalConsumption.toFixed(2) })"
       :description="t('settings.intelligence.landing.channels.statsDesc', { total: providerCount, enabled: enabledCount })"
       default-icon="i-carbon-chart-bar"
@@ -75,8 +75,8 @@ function handleViewStats() {
         <i class="i-carbon-view" />
         <span>{{ t('settings.intelligence.landing.channels.statsButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
-  </tuff-group-block>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
 </template>
 
 <style lang="scss" scoped>

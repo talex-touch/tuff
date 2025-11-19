@@ -1,11 +1,3 @@
-<template>
-  <div class="TouchBubbles-Container">
-    <div class="TouchBubbles-Bubble" v-for="item in bubbles" :style="`width: 128px;${item.color}`">
-      <div :style="`--iconScale: ${item.iconScale}`" class="TouchBubbles-Bubble-Icon" v-html="item.icon"></div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 const bubbles = [
   {
@@ -37,9 +29,17 @@ const bubbles = [
     name: 'iOS',
     icon: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M2.09 16.8h1.66V9.76H2.09m.83-.92a.9.9 0 0 0 .92-.9c0-.5-.4-.9-.92-.9a.9.9 0 0 0-.92.9c0 .5.4.9.92.9m6.33-1.78C6.46 7.06 4.7 8.96 4.7 12c0 3.06 1.76 4.96 4.55 4.96s4.55-1.9 4.55-4.96c0-3.04-1.76-4.94-4.55-4.94m0 1.44c1.71 0 2.8 1.37 2.8 3.5c0 2.15-1.09 3.5-2.8 3.5c-1.71 0-2.79-1.35-2.79-3.5c0-2.13 1.08-3.5 2.79-3.5m5.25 5.61c.07 1.76 1.5 2.85 3.72 2.85c2.32 0 3.78-1.14 3.78-2.96c0-1.43-.82-2.23-2.77-2.68l-1.1-.25c-1.18-.28-1.66-.65-1.66-1.29c0-.78.73-1.33 1.81-1.33c1.1 0 1.85.55 1.93 1.44h1.63c-.04-1.69-1.43-2.83-3.55-2.83c-2.08 0-3.56 1.15-3.56 2.85c0 1.37.83 2.22 2.6 2.62l1.24.29c1.21.29 1.7.68 1.7 1.38c0 .8-.8 1.37-1.96 1.37s-2.05-.57-2.15-1.46H14.5Z"/></svg>',
     color: 'background-color: #DCD9F4; background-image: linear-gradient(to bottom, rgba(255,255,255,0.50) 0%, rgba(0,0,0,0.50) 100%), radial-gradient(at 50% 0%, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.50) 50%); background-blend-mode: soft-light,screen;',
-  }
+  },
 ]
 </script>
+
+<template>
+  <div class="TouchBubbles-Container">
+    <div v-for="item in bubbles" class="TouchBubbles-Bubble" :style="`width: 128px;${item.color}`">
+      <div :style="`--iconScale: ${item.iconScale}`" class="TouchBubbles-Bubble-Icon" v-html="item.icon" />
+    </div>
+  </div>
+</template>
 
 <style lang="scss">
 .TouchBubbles-Bubble-Icon {

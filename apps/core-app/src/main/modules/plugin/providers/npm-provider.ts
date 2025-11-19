@@ -1,13 +1,11 @@
-import axios from 'axios'
+import type { PluginInstallRequest, PluginInstallResult, PluginProvider, PluginProviderContext } from '@talex-touch/utils/plugin/providers'
 import {
+
   PluginProviderType,
-  type PluginInstallRequest,
-  type PluginInstallResult,
-  type PluginProvider,
-  type PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
-import { ensureRiskAccepted, downloadToTempFile } from './utils'
+import axios from 'axios'
 import { createProviderLogger } from './logger'
+import { downloadToTempFile, ensureRiskAccepted } from './utils'
 
 interface ParsedNpmSource {
   name: string
@@ -18,7 +16,8 @@ const OFFICIAL_NPM_PREFIX = '@talex-touch/'
 
 function parseNpmSource(source: string): ParsedNpmSource | undefined {
   let trimmed = source.trim()
-  if (!trimmed) return undefined
+  if (!trimmed)
+    return undefined
 
   if (trimmed.startsWith('npm:')) {
     trimmed = trimmed.slice(4)
@@ -33,7 +32,8 @@ function parseNpmSource(source: string): ParsedNpmSource | undefined {
       name = trimmed.slice(0, atIndex)
       version = trimmed.slice(atIndex + 1) || undefined
     }
-  } else {
+  }
+  else {
     const atIndex = trimmed.indexOf('@')
     if (atIndex > 0) {
       name = trimmed.slice(0, atIndex)
@@ -54,17 +54,17 @@ export class NpmPluginProvider implements PluginProvider {
 
   async install(
     request: PluginInstallRequest,
-    context?: PluginProviderContext
+    context?: PluginProviderContext,
   ): Promise<PluginInstallResult> {
     this.log.info('准备从 NPM 安装插件', {
-      meta: { source: request.source }
+      meta: { source: request.source },
     })
 
     try {
       const parsed = parseNpmSource(request.source)
       if (!parsed) {
         this.log.error('NPM 来源解析失败', {
-          meta: { source: request.source }
+          meta: { source: request.source },
         })
         throw new Error('无法解析的 NPM 插件来源')
       }
@@ -72,7 +72,7 @@ export class NpmPluginProvider implements PluginProvider {
       const official = parsed.name.startsWith(OFFICIAL_NPM_PREFIX)
       if (!official) {
         this.log.warn('检测到第三方 NPM 包，执行风险确认', {
-          meta: { package: parsed.name }
+          meta: { package: parsed.name },
         })
         await ensureRiskAccepted(
           this.type,
@@ -80,13 +80,13 @@ export class NpmPluginProvider implements PluginProvider {
           context,
           'needs_confirmation',
           '即将下载来自第三方 NPM 包的插件，存在潜在风险。',
-          { package: parsed.name }
+          { package: parsed.name },
         )
       }
 
       const metadataUrl = `https://registry.npmjs.org/${encodeURIComponent(parsed.name)}`
       this.log.debug('请求 NPM 元数据', {
-        meta: { url: metadataUrl }
+        meta: { url: metadataUrl },
       })
       const response = await axios.get(metadataUrl, { timeout: 30_000, proxy: false })
       const body = response.data
@@ -107,12 +107,12 @@ export class NpmPluginProvider implements PluginProvider {
       }
 
       this.log.debug('即将下载 NPM tarball', {
-        meta: { tarballUrl }
+        meta: { tarballUrl },
       })
       const filePath = await downloadToTempFile(tarballUrl, '.tgz', context?.downloadOptions)
 
       this.log.success('NPM 插件下载完成', {
-        meta: { filePath, package: parsed.name, version }
+        meta: { filePath, package: parsed.name, version },
       })
 
       return {
@@ -122,13 +122,14 @@ export class NpmPluginProvider implements PluginProvider {
         metadata: {
           package: parsed.name,
           version,
-          tarballUrl
-        }
+          tarballUrl,
+        },
       }
-    } catch (error) {
+    }
+    catch (error) {
       this.log.error('NPM 插件安装流程失败', {
         meta: { source: request.source },
-        error
+        error,
       })
       throw error
     }

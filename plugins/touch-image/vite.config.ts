@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite'
+import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
-import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
+import { defineConfig } from 'vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -9,12 +9,12 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        
-      }
-    }
+
+      },
+    },
   },
   // set server port
   server: {
-    port: 6001
-  }
+    port: 6001,
+  },
 })

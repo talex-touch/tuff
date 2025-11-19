@@ -129,11 +129,13 @@ const description = t('myFeature.description')
 
 ```vue
 <template>
-  <p>{{ $t('download.downloadCompleteBody', { 
-    filename: 'file.zip', 
-    size: '10MB', 
-    duration: '2分钟' 
-  }) }}</p>
+  <p>
+    {{ $t('download.downloadCompleteBody', {
+      filename: 'file.zip',
+      size: '10MB',
+      duration: '2分钟',
+    }) }}
+  </p>
 </template>
 ```
 
@@ -156,10 +158,10 @@ const message = t('notifications.downloadCompleteBody', {
 The i18n helper provides utility functions for common formatting needs:
 
 ```typescript
-import { 
-  formatDuration, 
-  formatFileSize, 
-  formatRelativeTime 
+import {
+  formatDuration,
+  formatFileSize,
+  formatRelativeTime
 } from '../../utils/i18n-helper'
 
 // Format duration in seconds
@@ -169,7 +171,7 @@ const duration = formatDuration(125) // "2分5秒" or "2min5s"
 const size = formatFileSize(1048576) // "1.0 MB"
 
 // Format relative time
-const time = formatRelativeTime(new Date(Date.now() - 3600000)) 
+const time = formatRelativeTime(new Date(Date.now() - 3600000))
 // "1 小时前" or "1 hours ago"
 ```
 
@@ -209,7 +211,7 @@ await setFollowSystemLanguage(false)
 
 ❌ **Bad:**
 ```typescript
-const title = "下载中心"
+const title = '下载中心'
 ```
 
 ✅ **Good:**

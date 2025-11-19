@@ -1,21 +1,23 @@
 <script setup lang="ts" name="TagSection">
+import type { IBoxOptions } from '../../../modules/box/adapter'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FileTag from './FileTag.vue'
-import ClipboardImageTag from './ClipboardImageTag.vue'
+import { BoxMode } from '../../../modules/box/adapter'
 import ClipboardFileTag from './ClipboardFileTag.vue'
-import { BoxMode, IBoxOptions } from '../../../modules/box/adapter'
-
-const { t } = useI18n()
+import ClipboardImageTag from './ClipboardImageTag.vue'
+import FileTag from './FileTag.vue'
 
 const props = defineProps<{
   boxOptions: IBoxOptions
   clipboardOptions: any
 }>()
 
+const { t } = useI18n()
+
 // Truncate clipboard content for display (text only)
 const clipboardPreview = computed(() => {
-  if (!props.clipboardOptions.last) return ''
+  if (!props.clipboardOptions.last)
+    return ''
 
   const data = props.clipboardOptions.last
   let preview = ''
@@ -24,17 +26,19 @@ const clipboardPreview = computed(() => {
   if (data.type === 'text') {
     preview = data.content || ''
     totalLength = preview.length
-  } else if (data.type === 'html') {
+  }
+  else if (data.type === 'html') {
     preview = data.content || '' // Plain text version
     totalLength = preview.length
   }
 
-  if (!preview) return ''
+  if (!preview)
+    return ''
 
   // If text is too long, truncate and show character count
   const maxLength = 30
   if (totalLength > maxLength) {
-    return preview.substring(0, maxLength) + `... 共${totalLength}字`
+    return `${preview.substring(0, maxLength)}... 共${totalLength}字`
   }
   return preview
 })
@@ -52,7 +56,7 @@ const activeTag = computed(() => {
     return {
       type: 'file',
       iconPath: props.boxOptions.file.iconPath,
-      paths: props.boxOptions.file.paths
+      paths: props.boxOptions.file.paths,
     }
   }
   if (props.clipboardOptions.last?.type === 'files') {
@@ -61,8 +65,8 @@ const activeTag = computed(() => {
 
   // Priority 3: Text (clipboard text/html)
   if (
-    props.clipboardOptions.last?.type === 'text' ||
-    props.clipboardOptions.last?.type === 'html'
+    props.clipboardOptions.last?.type === 'text'
+    || props.clipboardOptions.last?.type === 'html'
   ) {
     return { type: 'clipboard-text', data: props.clipboardOptions.last }
   }

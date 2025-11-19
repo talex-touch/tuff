@@ -1,7 +1,7 @@
-import { Menu, MenuItemConstructorOptions } from 'electron'
-import { app, shell } from 'electron'
-import path from 'path'
-import { TrayState } from './tray-state-manager'
+import type { MenuItemConstructorOptions } from 'electron'
+import type { TrayState } from './tray-state-manager'
+import path from 'node:path'
+import { app, Menu, shell } from 'electron'
 
 // TODO: 导入 i18n 函数
 function t(key: string, params?: Record<string, any>): string {
@@ -24,7 +24,7 @@ function t(key: string, params?: Record<string, any>): string {
     'tray.visitWebsite': '访问官网',
     'tray.restart': '重启应用',
     'tray.quit': '退出 Talex Touch',
-    'tray.tooltip': 'Talex Touch'
+    'tray.tooltip': 'Talex Touch',
   }
 
   let result = translations[key] || key
@@ -68,7 +68,7 @@ export class TrayMenuBuilder {
       { type: 'separator' },
 
       // 应用控制组
-      ...this.buildAppControlGroup()
+      ...this.buildAppControlGroup(),
     ]
 
     return Menu.buildFromTemplate(template)
@@ -86,11 +86,12 @@ export class TrayMenuBuilder {
         const mainWindow = $app.window.window
         if (mainWindow.isVisible()) {
           mainWindow.hide()
-        } else {
+        }
+        else {
           mainWindow.show()
           mainWindow.focus()
         }
-      }
+      },
     }
   }
 
@@ -108,7 +109,7 @@ export class TrayMenuBuilder {
           // TODO: 触发 CoreBox 模块的显示方法
           // coreBoxModule.show()
           console.log('[TrayMenu] Open CoreBox requested')
-        }
+        },
       },
       {
         label:
@@ -119,8 +120,8 @@ export class TrayMenuBuilder {
           const mainWindow = $app.window.window
           mainWindow.show()
           mainWindow.webContents.send('open-download-center')
-        }
-      }
+        },
+      },
     ]
   }
 
@@ -136,7 +137,7 @@ export class TrayMenuBuilder {
           const mainWindow = $app.window.window
           mainWindow.show()
           mainWindow.webContents.send('navigate-to', '/clipboard')
-        }
+        },
       },
       {
         label: t('tray.terminal'),
@@ -144,7 +145,7 @@ export class TrayMenuBuilder {
           // TODO: 打开终端模块
           // terminalModule.createWindow()
           console.log('[TrayMenu] Open Terminal requested')
-        }
+        },
       },
       {
         label: t('tray.settings'),
@@ -152,8 +153,8 @@ export class TrayMenuBuilder {
           const mainWindow = $app.window.window
           mainWindow.show()
           mainWindow.webContents.send('navigate-to', '/settings')
-        }
-      }
+        },
+      },
     ]
   }
 
@@ -168,35 +169,35 @@ export class TrayMenuBuilder {
       submenu: [
         {
           label: t('tray.version', { version: app.getVersion() }),
-          enabled: false
+          enabled: false,
         },
         { type: 'separator' },
         {
           label: state.hasUpdate ? t('tray.checkUpdateAvailable') : t('tray.checkUpdate'),
           click: () => {
             $app.window.window.webContents.send('trigger-update-check')
-          }
+          },
         },
         {
           label: t('tray.viewLogs'),
           click: () => {
             const logPath = path.join(app.getPath('userData'), 'logs')
             shell.openPath(logPath)
-          }
+          },
         },
         {
           label: t('tray.openDataDir'),
           click: () => {
             shell.openPath(app.getPath('userData'))
-          }
+          },
         },
         {
           label: t('tray.visitWebsite'),
           click: () => {
             shell.openExternal('https://tuff.tagzxia.com')
-          }
-        }
-      ]
+          },
+        },
+      ],
     }
   }
 
@@ -211,15 +212,15 @@ export class TrayMenuBuilder {
         click: () => {
           app.relaunch()
           app.quit()
-        }
+        },
       },
       {
         label: t('tray.quit'),
         click: () => {
           app.quit()
           process.exit(0)
-        }
-      }
+        },
+      },
     ]
   }
 }

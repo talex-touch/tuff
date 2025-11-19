@@ -1,14 +1,14 @@
+<script lang="ts" setup>
+import TuffUserInfo from '~/components/base/TuffUserInfo.vue'
+import FlatDownload from '~/components/download/FlatDownload.vue'
+</script>
+
 <template>
   <div class="FlatFooter">
     <FlatDownload />
     <TuffUserInfo />
   </div>
 </template>
-
-<script lang="ts" setup>
-import TuffUserInfo from '~/components/base/TuffUserInfo.vue'
-import FlatDownload from '~/components/download/FlatDownload.vue'
-</script>
 
 <style lang="scss" scoped>
 .FlatFooter {

@@ -1,18 +1,18 @@
-<template>
-  <div class="TTabHeader-Container fake-background">
-    <slot :props="props" />
-  </div>
-</template>
-
 <script>
 export default {
-  name: 'TTabHeader'
+  name: 'TTabHeader',
 }
 </script>
 
 <script setup>
 const props = defineProps(['node'])
 </script>
+
+<template>
+  <div class="TTabHeader-Container fake-background">
+    <slot :props="props" />
+  </div>
+</template>
 
 <style lang="scss">
 .TTabHeader-Container {

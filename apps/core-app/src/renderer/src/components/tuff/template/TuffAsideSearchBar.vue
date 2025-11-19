@@ -16,8 +16,8 @@ const props = withDefaults(
     searchLabel: '',
     searchPlaceholder: '',
     searchId: 'tuff-aside-template-search',
-    clearLabel: 'Clear search'
-  }
+    clearLabel: 'Clear search',
+  },
 )
 
 const emit = defineEmits<{
@@ -31,7 +31,7 @@ const searchValue = computed({
   set: (value: string) => {
     emit('update:modelValue', value)
     emit('search', value)
-  }
+  },
 })
 
 function handleClear(): void {

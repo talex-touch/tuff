@@ -1,6 +1,6 @@
+import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { BaseModule } from '../abstract-base-module'
-import { ModuleInitContext, MaybePromise } from '@talex-touch/utils'
-import { TalexEvents } from '../../core/eventbus/touch-event'
 
 /**
  * 构建完整性验证模块
@@ -132,10 +132,9 @@ export class BuildVerificationModule extends BaseModule {
     return {
       isVerified: this.isVerified,
       isOfficialBuild: this.isOfficialBuild,
-      verificationFailed: this.verificationFailed
+      verificationFailed: this.verificationFailed,
     }
   }
 }
 
 export const buildVerificationModule = new BuildVerificationModule()
-

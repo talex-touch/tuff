@@ -5,20 +5,20 @@
   Allows users to configure permissions, auto-start, and tray visibility
 -->
 <script setup lang="ts" name="SettingSetup">
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { toast } from 'vue-sonner'
 
-// Import UI components
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
+import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
 import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'
 import TuffWindowsTag from '~/components/tuff/tags/TuffWindowsTag.vue'
-import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
-import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+// Import UI components
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
 // Import storage and channel
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -35,16 +35,16 @@ const isLinux = computed(() => platform.value === 'linux')
 const permissions = ref({
   accessibility: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
   },
   notifications: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
+    checked: false,
   },
   adminPrivileges: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false
-  }
+    checked: false,
+  },
 })
 
 // Settings
@@ -54,7 +54,7 @@ const settings = ref({
   hideDock: false,
   startSilent: false,
   runAsAdmin: false,
-  customDesktop: false
+  customDesktop: false,
 })
 
 const isLoading = ref(false)
@@ -78,7 +78,7 @@ function ensureWindowSettings(): void {
     appSetting.window = {
       closeToTray: true,
       startMinimized: false,
-      startSilent: false
+      startSilent: false,
     }
     return
   }
@@ -104,7 +104,7 @@ if (!appSetting.setup) {
     adminPrivileges: false,
     hideDock: false,
     runAsAdmin: false,
-    customDesktop: false
+    customDesktop: false,
   }
 }
 
@@ -137,7 +137,7 @@ function setupIndexingProgressListener(): void {
         stage: progressData.stage,
         current: progressData.current,
         total: progressData.total,
-        progress: progressData.progress
+        progress: progressData.progress,
       }
       // Reset to null when completed
       if (progressData.stage === 'completed') {
@@ -174,7 +174,7 @@ async function checkAllPermissions(): Promise<void> {
       const accResult = await touchChannel.send('system:permission:check', 'accessibility' as any)
       permissions.value.accessibility = {
         status: accResult.status,
-        checked: true
+        checked: true,
       }
       appSetting.setup.accessibility = accResult.status === 'granted'
     }
@@ -183,7 +183,7 @@ async function checkAllPermissions(): Promise<void> {
     const notifResult = await touchChannel.send('system:permission:check', 'notifications' as any)
     permissions.value.notifications = {
       status: notifResult.status,
-      checked: true
+      checked: true,
     }
     appSetting.setup.notifications = notifResult.status === 'granted'
 
@@ -191,18 +191,20 @@ async function checkAllPermissions(): Promise<void> {
     if (isWindows.value) {
       const adminResult = await touchChannel.send(
         'system:permission:check',
-        'adminPrivileges' as any
+        'adminPrivileges' as any,
       )
       permissions.value.adminPrivileges = {
         status: adminResult.status,
-        checked: true
+        checked: true,
       }
       appSetting.setup.adminPrivileges = adminResult.status === 'granted'
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to check permissions:', error)
     toast.error(t('setupPermissions.checkFailed'))
-  } finally {
+  }
+  finally {
     isLoading.value = false
   }
 }
@@ -224,7 +226,8 @@ function loadSettings(): void {
     if (autoStartResult !== null) {
       settings.value.autoStart = autoStartResult as boolean
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to load autoStart:', error)
   }
 
@@ -233,13 +236,15 @@ function loadSettings(): void {
     const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
     if (startSilentResult !== null && startSilentResult !== undefined) {
       settings.value.startSilent = startSilentResult as boolean
-    } else {
+    }
+    else {
       const windowSettings = appSetting.window
       if (windowSettings && windowSettings.startSilent !== undefined) {
         settings.value.startSilent = windowSettings.startSilent
       }
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to load startSilent:', error)
   }
 }
@@ -254,7 +259,8 @@ async function requestPermission(type: string): Promise<void> {
     setTimeout(async () => {
       await checkAllPermissions()
     }, 2000)
-  } catch (error) {
+  }
+  catch (error) {
     console.error(`[SettingSetup] Failed to request permission ${type}:`, error)
     toast.error(t('setupPermissions.requestFailed'))
   }
@@ -267,11 +273,12 @@ async function updateAutoStart(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     await touchChannel.send('tray:autostart:update', value)
     toast.success(t('common.success'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to update autoStart:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -284,11 +291,12 @@ function updateShowTray(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.setup.showTray',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     touchChannel.send('tray:show:set', value)
     toast.success(t('common.success'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to update showTray:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -301,11 +309,12 @@ function updateHideDock(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.setup.hideDock',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     touchChannel.send('tray:hidedock:set', value)
     toast.success(t('common.success'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to update hideDock:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -319,12 +328,13 @@ function updateStartSilent(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.window.startSilent',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     // Update auto-start setting to apply the change
     touchChannel.send('tray:autostart:update', settings.value.autoStart)
     toast.success(t('common.success'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -337,10 +347,11 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.setup.runAsAdmin',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     toast.success(t('common.success'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to update runAsAdmin:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -353,10 +364,11 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.setup.customDesktop',
       content: JSON.stringify(value),
-      clear: false
+      clear: false,
     })
     toast.success(t('common.success'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[SettingSetup] Failed to update customDesktop:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -392,7 +404,7 @@ function getStatusIconClass(status: string): string {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settings.setup.groupTitle')"
     :description="t('settings.setup.groupDesc')"
     default-icon="i-carbon-settings-services"
@@ -400,7 +412,7 @@ function getStatusIconClass(status: string): string {
     memory-name="setting-setup"
   >
     <!-- Permissions Section -->
-    <tuff-block-slot
+    <TuffBlockSlot
       v-if="isMacOS"
       :title="t('settings.setup.accessibility')"
       :description="t('settings.setup.accessibilityDesc')"
@@ -428,9 +440,9 @@ function getStatusIconClass(status: string): string {
           {{ t('setupPermissions.openSettings') }}
         </FlatButton>
       </div>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
-    <tuff-block-slot
+    <TuffBlockSlot
       v-if="isWindows"
       :title="t('settings.setup.adminPrivileges')"
       :description="t('settings.setup.adminPrivilegesDesc')"
@@ -458,9 +470,9 @@ function getStatusIconClass(status: string): string {
           {{ t('setupPermissions.recheck') }}
         </FlatButton>
       </div>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.setup.notifications')"
       :description="t('settings.setup.notificationsDesc')"
       :active="permissions.notifications.status === 'granted'"
@@ -484,10 +496,10 @@ function getStatusIconClass(status: string): string {
           {{ t('setupPermissions.openSettings') }}
         </FlatButton>
       </div>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- Settings Section -->
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="settings.autoStart"
       :title="t('settings.setup.autoStart')"
       :description="t('settings.setup.autoStartDesc')"
@@ -496,7 +508,7 @@ function getStatusIconClass(status: string): string {
       @update:model-value="updateAutoStart"
     />
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="settings.showTray"
       :title="t('settings.setup.showTray')"
       :description="t('settings.setup.showTrayDesc')"
@@ -505,7 +517,7 @@ function getStatusIconClass(status: string): string {
       @update:model-value="updateShowTray"
     />
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-if="isMacOS"
       v-model="settings.hideDock"
       :title="t('settings.setup.hideDock')"
@@ -517,9 +529,9 @@ function getStatusIconClass(status: string): string {
       <template #tags>
         <TuffMacOSTag />
       </template>
-    </tuff-block-switch>
+    </TuffBlockSwitch>
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="settings.startSilent"
       :title="t('settings.setup.startSilent')"
       :description="t('settings.setup.startSilentDesc')"
@@ -528,7 +540,7 @@ function getStatusIconClass(status: string): string {
       @update:model-value="updateStartSilent"
     />
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-if="isWindows"
       v-model="settings.runAsAdmin"
       :title="t('settings.setup.runAsAdmin')"
@@ -540,9 +552,9 @@ function getStatusIconClass(status: string): string {
       <template #tags>
         <TuffWindowsTag />
       </template>
-    </tuff-block-switch>
+    </TuffBlockSwitch>
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-if="isLinux"
       v-model="settings.customDesktop"
       :title="t('settings.setup.customDesktop')"
@@ -555,7 +567,7 @@ function getStatusIconClass(status: string): string {
         <TuffLinuxTag />
         <TuffBetaTag />
       </template>
-    </tuff-block-switch>
+    </TuffBlockSwitch>
 
     <!-- File Indexing Progress -->
     <div v-if="indexingProgress && indexingProgress.stage !== 'idle'" class="IndexingProgress">
@@ -575,7 +587,7 @@ function getStatusIconClass(status: string): string {
         <span :style="{ width: `${Math.min(indexingProgress.progress, 100)}%` }" />
       </div>
     </div>
-  </tuff-group-block>
+  </TuffGroupBlock>
 </template>
 
 <style lang="scss" scoped>

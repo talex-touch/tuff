@@ -1,0 +1,24 @@
+# 构建产物
+dist/
+build/
+release/
+*.min.js
+
+# 依赖
+node_modules/
+
+# 缓存
+.cache/
+.temp/
+*.tsbuildinfo
+.eslintcache
+
+# 配置文件
+.husky/
+.kiro/
+.serena/
+.spec-workflow/
+
+# 其他
+apps/core-app/tuff
+apps/core-app/.electron-builder-cache/

@@ -19,32 +19,33 @@ export class PerformanceMonitor {
   async measure<T>(
     operationName: string,
     operation: () => Promise<T>,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ): Promise<T> {
     const startTime = performance.now()
-    
+
     try {
       const result = await operation()
       const duration = performance.now() - startTime
-      
+
       this.recordMetric({
         operationName,
         duration,
         timestamp: Date.now(),
-        metadata
+        metadata,
       })
-      
+
       return result
-    } catch (error) {
+    }
+    catch (error) {
       const duration = performance.now() - startTime
-      
+
       this.recordMetric({
         operationName: `${operationName}_error`,
         duration,
         timestamp: Date.now(),
-        metadata: { ...metadata, error: String(error) }
+        metadata: { ...metadata, error: String(error) },
       })
-      
+
       throw error
     }
   }
@@ -55,32 +56,33 @@ export class PerformanceMonitor {
   measureSync<T>(
     operationName: string,
     operation: () => T,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ): T {
     const startTime = performance.now()
-    
+
     try {
       const result = operation()
       const duration = performance.now() - startTime
-      
+
       this.recordMetric({
         operationName,
         duration,
         timestamp: Date.now(),
-        metadata
+        metadata,
       })
-      
+
       return result
-    } catch (error) {
+    }
+    catch (error) {
       const duration = performance.now() - startTime
-      
+
       this.recordMetric({
         operationName: `${operationName}_error`,
         duration,
         timestamp: Date.now(),
-        metadata: { ...metadata, error: String(error) }
+        metadata: { ...metadata, error: String(error) },
       })
-      
+
       throw error
     }
   }
@@ -90,7 +92,7 @@ export class PerformanceMonitor {
    */
   private recordMetric(metric: PerformanceMetrics): void {
     this.metrics.push(metric)
-    
+
     // Keep only the last N metrics
     if (this.metrics.length > this.maxMetrics) {
       this.metrics.shift()
@@ -100,7 +102,7 @@ export class PerformanceMonitor {
     if (metric.duration > 100) {
       console.warn(
         `[Performance] Slow operation detected: ${metric.operationName} took ${metric.duration.toFixed(2)}ms`,
-        metric.metadata
+        metric.metadata,
       )
     }
   }
@@ -117,8 +119,9 @@ export class PerformanceMonitor {
    */
   getAverageDuration(operationName: string): number {
     const metrics = this.getMetrics(operationName)
-    if (metrics.length === 0) return 0
-    
+    if (metrics.length === 0)
+      return 0
+
     const total = metrics.reduce((sum, m) => sum + m.duration, 0)
     return total / metrics.length
   }
@@ -136,7 +139,7 @@ export class PerformanceMonitor {
     p99: number
   } {
     const metrics = this.getMetrics(operationName)
-    
+
     if (metrics.length === 0) {
       return {
         count: 0,
@@ -145,7 +148,7 @@ export class PerformanceMonitor {
         max: 0,
         p50: 0,
         p95: 0,
-        p99: 0
+        p99: 0,
       }
     }
 
@@ -159,7 +162,7 @@ export class PerformanceMonitor {
       max: durations[durations.length - 1],
       p50: this.percentile(durations, 0.5),
       p95: this.percentile(durations, 0.95),
-      p99: this.percentile(durations, 0.99)
+      p99: this.percentile(durations, 0.99),
     }
   }
 
@@ -167,8 +170,9 @@ export class PerformanceMonitor {
    * Calculate percentile
    */
   private percentile(sortedArray: number[], p: number): number {
-    if (sortedArray.length === 0) return 0
-    
+    if (sortedArray.length === 0)
+      return 0
+
     const index = Math.ceil(sortedArray.length * p) - 1
     return sortedArray[Math.max(0, index)]
   }
@@ -193,11 +197,11 @@ export class PerformanceMonitor {
    */
   getSummary(): Record<string, ReturnType<typeof this.getStatistics>> {
     const summary: Record<string, ReturnType<typeof this.getStatistics>> = {}
-    
+
     for (const operationName of this.getOperationNames()) {
       summary[operationName] = this.getStatistics(operationName)
     }
-    
+
     return summary
   }
 
@@ -206,12 +210,12 @@ export class PerformanceMonitor {
    */
   logSummary(): void {
     const summary = this.getSummary()
-    
+
     console.log('[Performance] Summary:')
     for (const [operation, stats] of Object.entries(summary)) {
       console.log(
-        `  ${operation}: count=${stats.count}, avg=${stats.average.toFixed(2)}ms, ` +
-        `p50=${stats.p50.toFixed(2)}ms, p95=${stats.p95.toFixed(2)}ms, p99=${stats.p99.toFixed(2)}ms`
+        `  ${operation}: count=${stats.count}, avg=${stats.average.toFixed(2)}ms, `
+        + `p50=${stats.p50.toFixed(2)}ms, p95=${stats.p95.toFixed(2)}ms, p99=${stats.p99.toFixed(2)}ms`,
       )
     }
   }

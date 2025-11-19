@@ -1,3 +1,194 @@
+<script setup lang="ts">
+import type { DownloadTask } from '@talex-touch/utils'
+import {
+  Check,
+  Clock,
+  Close,
+  Delete,
+  Loading,
+  Refresh,
+  Remove,
+  VideoPause,
+  VideoPlay,
+} from '@element-plus/icons-vue'
+import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import { computed } from 'vue'
+
+// Props
+interface Props {
+  task: DownloadTask
+}
+
+const props = defineProps<Props>()
+
+// Emits - defined for type safety, even if not used directly
+defineEmits<{
+  pause: [taskId: string]
+  resume: [taskId: string]
+  cancel: [taskId: string]
+  retry: [taskId: string]
+  remove: [taskId: string]
+}>()
+
+// 任务状态样式类
+const taskStatusClass = computed(() => ({
+  'task-downloading': props.task.status === DownloadStatus.DOWNLOADING,
+  'task-completed': props.task.status === DownloadStatus.COMPLETED,
+  'task-failed': props.task.status === DownloadStatus.FAILED,
+  'task-paused': props.task.status === DownloadStatus.PAUSED,
+  'task-cancelled': props.task.status === DownloadStatus.CANCELLED,
+  'task-pending': props.task.status === DownloadStatus.PENDING,
+}))
+
+// 是否显示进度条
+const showProgress = computed(() => {
+  return [DownloadStatus.DOWNLOADING, DownloadStatus.COMPLETED, DownloadStatus.FAILED].includes(
+    props.task.status as DownloadStatus,
+  )
+})
+
+// 获取模块名称
+function getModuleName(module: DownloadModule): string {
+  const moduleNames = {
+    [DownloadModule.APP_UPDATE]: '应用更新',
+    [DownloadModule.PLUGIN_INSTALL]: '插件安装',
+    [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
+    [DownloadModule.USER_MANUAL]: '手动下载',
+  }
+  return moduleNames[module] || '未知'
+}
+
+// 获取任务状态颜色
+function getTaskStatusColor(status: DownloadStatus): string {
+  switch (status) {
+    case DownloadStatus.DOWNLOADING:
+      return '#409EFF'
+    case DownloadStatus.COMPLETED:
+      return '#67C23A'
+    case DownloadStatus.FAILED:
+      return '#F56C6C'
+    case DownloadStatus.PAUSED:
+      return '#E6A23C'
+    case DownloadStatus.CANCELLED:
+      return '#909399'
+    default:
+      return '#909399'
+  }
+}
+
+// 获取任务状态图标
+function getTaskStatusIcon(status: DownloadStatus) {
+  switch (status) {
+    case DownloadStatus.COMPLETED:
+      return Check
+    case DownloadStatus.FAILED:
+      return Close
+    case DownloadStatus.PAUSED:
+      return VideoPause
+    case DownloadStatus.CANCELLED:
+      return Remove
+    case DownloadStatus.PENDING:
+      return Clock
+    default:
+      return Clock
+  }
+}
+
+// 获取进度条状态
+function getProgressStatus(status: DownloadStatus): '' | 'success' | 'warning' | 'exception' | undefined {
+  switch (status) {
+    case DownloadStatus.COMPLETED:
+      return 'success'
+    case DownloadStatus.FAILED:
+      return 'exception'
+    default:
+      return ''
+  }
+}
+
+// 获取优先级颜色
+function getPriorityColor(priority: DownloadPriority): string {
+  if (priority >= DownloadPriority.CRITICAL) {
+    return '#ff4757'
+  }
+  else if (priority >= DownloadPriority.HIGH) {
+    return '#ffa502'
+  }
+  else if (priority >= DownloadPriority.NORMAL) {
+    return '#2ed573'
+  }
+  else if (priority >= DownloadPriority.LOW) {
+    return '#70a1ff'
+  }
+  else {
+    return '#a4b0be'
+  }
+}
+
+// 获取优先级名称
+function getPriorityName(priority: DownloadPriority): string {
+  if (priority >= DownloadPriority.CRITICAL) {
+    return '关键'
+  }
+  else if (priority >= DownloadPriority.HIGH) {
+    return '高'
+  }
+  else if (priority >= DownloadPriority.NORMAL) {
+    return '普通'
+  }
+  else if (priority >= DownloadPriority.LOW) {
+    return '低'
+  }
+  else {
+    return '后台'
+  }
+}
+
+// 格式化速度显示
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond >= 1024 * 1024) {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+  }
+  else if (bytesPerSecond >= 1024) {
+    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  }
+  else {
+    return `${bytesPerSecond.toFixed(0)} B/s`
+  }
+}
+
+// 格式化大小显示
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  }
+  else if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+  else if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  else {
+    return `${bytes.toFixed(0)} B`
+  }
+}
+
+// 格式化剩余时间
+function formatRemainingTime(seconds: number): string {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}秒`
+  }
+  else if (seconds < 3600) {
+    const minutes = Math.round(seconds / 60)
+    return `${minutes}分钟`
+  }
+  else {
+    const hours = Math.round(seconds / 3600)
+    return `${hours}小时`
+  }
+}
+</script>
+
 <template>
   <div class="download-task" :class="taskStatusClass">
     <div class="task-header">
@@ -11,7 +202,9 @@
           </el-icon>
         </div>
         <div class="task-details">
-          <div class="task-name">{{ task.filename }}</div>
+          <div class="task-name">
+            {{ task.filename }}
+          </div>
           <div class="task-meta">
             <span class="task-module">{{ getModuleName(task.module) }}</span>
             <span class="task-size">{{ formatSize(task.progress?.totalSize || 0) }}</span>
@@ -116,181 +309,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import {
-  Loading,
-  Check,
-  Close,
-  VideoPause,
-  VideoPlay,
-  Refresh,
-  Delete,
-  Clock,
-  Remove
-} from '@element-plus/icons-vue'
-import { DownloadTask, DownloadStatus, DownloadModule, DownloadPriority } from '@talex-touch/utils'
-
-// Props
-interface Props {
-  task: DownloadTask
-}
-
-const props = defineProps<Props>()
-
-// Emits - defined for type safety, even if not used directly
-defineEmits<{
-  pause: [taskId: string]
-  resume: [taskId: string]
-  cancel: [taskId: string]
-  retry: [taskId: string]
-  remove: [taskId: string]
-}>()
-
-// 任务状态样式类
-const taskStatusClass = computed(() => ({
-  'task-downloading': props.task.status === DownloadStatus.DOWNLOADING,
-  'task-completed': props.task.status === DownloadStatus.COMPLETED,
-  'task-failed': props.task.status === DownloadStatus.FAILED,
-  'task-paused': props.task.status === DownloadStatus.PAUSED,
-  'task-cancelled': props.task.status === DownloadStatus.CANCELLED,
-  'task-pending': props.task.status === DownloadStatus.PENDING
-}))
-
-// 是否显示进度条
-const showProgress = computed(() => {
-  return [DownloadStatus.DOWNLOADING, DownloadStatus.COMPLETED, DownloadStatus.FAILED].includes(
-    props.task.status as DownloadStatus
-  )
-})
-
-// 获取模块名称
-const getModuleName = (module: DownloadModule): string => {
-  const moduleNames = {
-    [DownloadModule.APP_UPDATE]: '应用更新',
-    [DownloadModule.PLUGIN_INSTALL]: '插件安装',
-    [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
-    [DownloadModule.USER_MANUAL]: '手动下载'
-  }
-  return moduleNames[module] || '未知'
-}
-
-// 获取任务状态颜色
-const getTaskStatusColor = (status: DownloadStatus): string => {
-  switch (status) {
-    case DownloadStatus.DOWNLOADING:
-      return '#409EFF'
-    case DownloadStatus.COMPLETED:
-      return '#67C23A'
-    case DownloadStatus.FAILED:
-      return '#F56C6C'
-    case DownloadStatus.PAUSED:
-      return '#E6A23C'
-    case DownloadStatus.CANCELLED:
-      return '#909399'
-    default:
-      return '#909399'
-  }
-}
-
-// 获取任务状态图标
-const getTaskStatusIcon = (status: DownloadStatus) => {
-  switch (status) {
-    case DownloadStatus.COMPLETED:
-      return Check
-    case DownloadStatus.FAILED:
-      return Close
-    case DownloadStatus.PAUSED:
-      return VideoPause
-    case DownloadStatus.CANCELLED:
-      return Remove
-    case DownloadStatus.PENDING:
-      return Clock
-    default:
-      return Clock
-  }
-}
-
-// 获取进度条状态
-const getProgressStatus = (status: DownloadStatus): '' | 'success' | 'warning' | 'exception' | undefined => {
-  switch (status) {
-    case DownloadStatus.COMPLETED:
-      return 'success'
-    case DownloadStatus.FAILED:
-      return 'exception'
-    default:
-      return ''
-  }
-}
-
-// 获取优先级颜色
-const getPriorityColor = (priority: DownloadPriority): string => {
-  if (priority >= DownloadPriority.CRITICAL) {
-    return '#ff4757'
-  } else if (priority >= DownloadPriority.HIGH) {
-    return '#ffa502'
-  } else if (priority >= DownloadPriority.NORMAL) {
-    return '#2ed573'
-  } else if (priority >= DownloadPriority.LOW) {
-    return '#70a1ff'
-  } else {
-    return '#a4b0be'
-  }
-}
-
-// 获取优先级名称
-const getPriorityName = (priority: DownloadPriority): string => {
-  if (priority >= DownloadPriority.CRITICAL) {
-    return '关键'
-  } else if (priority >= DownloadPriority.HIGH) {
-    return '高'
-  } else if (priority >= DownloadPriority.NORMAL) {
-    return '普通'
-  } else if (priority >= DownloadPriority.LOW) {
-    return '低'
-  } else {
-    return '后台'
-  }
-}
-
-// 格式化速度显示
-const formatSpeed = (bytesPerSecond: number): string => {
-  if (bytesPerSecond >= 1024 * 1024) {
-    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  } else if (bytesPerSecond >= 1024) {
-    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  } else {
-    return `${bytesPerSecond.toFixed(0)} B/s`
-  }
-}
-
-// 格式化大小显示
-const formatSize = (bytes: number): string => {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  } else if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  } else if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  } else {
-    return `${bytes.toFixed(0)} B`
-  }
-}
-
-// 格式化剩余时间
-const formatRemainingTime = (seconds: number): string => {
-  if (seconds < 60) {
-    return `${Math.round(seconds)}秒`
-  } else if (seconds < 3600) {
-    const minutes = Math.round(seconds / 60)
-    return `${minutes}分钟`
-  } else {
-    const hours = Math.round(seconds / 3600)
-    return `${hours}小时`
-  }
-}
-</script>
 
 <style scoped>
 .download-task {

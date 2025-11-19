@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { execSync } from 'child_process'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { execSync } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -18,7 +18,7 @@ function checkUncommittedChanges() {
     // 检查是否有未暂存的更改或已暂存但未提交的更改
     const status = execSync('git status --porcelain', {
       encoding: 'utf-8',
-      cwd: rootDir
+      cwd: rootDir,
     }).trim()
 
     if (status) {
@@ -30,7 +30,8 @@ function checkUncommittedChanges() {
     }
 
     console.log('✅ Git 工作区干净，可以继续')
-  } catch (error) {
+  }
+  catch (error) {
     console.error('❌ 检查 git 状态时出错:', error.message)
     process.exit(1)
   }
@@ -58,9 +59,10 @@ function runVersionSync() {
   try {
     execSync(`bumpp ${bumppArgs.join(' ')}`, {
       stdio: 'inherit',
-      cwd: rootDir
+      cwd: rootDir,
     })
-  } catch (error) {
+  }
+  catch (error) {
     console.error('❌ bumpp 执行失败')
     process.exit(1)
   }
@@ -71,4 +73,3 @@ function runVersionSync() {
 
 // 执行主流程
 runVersionSync()
-

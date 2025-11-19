@@ -1,3 +1,40 @@
+<script lang="ts" name="IntelligenceAuditPage" setup>
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TSwitch from '~/components/base/switch/TSwitch.vue'
+import IntelligenceGlobalSettings from '~/components/intelligence/config/IntelligenceGlobalSettings.vue'
+import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
+
+const { t } = useI18n()
+
+const {
+  globalConfig,
+  updateGlobalConfig,
+} = useIntelligenceManager()
+
+const cacheExpirationInput = ref(String(globalConfig.value.cacheExpiration || 3600))
+
+function handleGlobalChange() {
+  updateGlobalConfig(globalConfig.value)
+}
+
+function handleCacheExpirationBlur() {
+  const value = Number.parseInt(cacheExpirationInput.value, 10)
+  if (!isNaN(value) && value >= 60 && value <= 86400) {
+    globalConfig.value.cacheExpiration = value
+    handleGlobalChange()
+  }
+  else {
+    // Reset to current value if invalid
+    cacheExpirationInput.value = String(globalConfig.value.cacheExpiration || 3600)
+  }
+}
+</script>
+
 <template>
   <div class="flex h-full flex-col" role="main" aria-label="Intelligence Audit & Settings">
     <div class="flex-1 overflow-auto p-6">
@@ -92,7 +129,7 @@
                 @input="update(($event.target as HTMLInputElement).value)"
                 @focus="focus"
                 @blur="blur"
-              />
+              >
               <span class="text-sm text-[var(--el-text-color-secondary)]">{{ t('intelligence.cache.seconds') }}</span>
             </div>
           </template>
@@ -101,42 +138,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="IntelligenceAuditPage" setup>
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import IntelligenceGlobalSettings from '~/components/intelligence/config/IntelligenceGlobalSettings.vue'
-import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
-
-const { t } = useI18n()
-
-const {
-  globalConfig,
-  updateGlobalConfig
-} = useIntelligenceManager()
-
-const cacheExpirationInput = ref(String(globalConfig.value.cacheExpiration || 3600))
-
-function handleGlobalChange() {
-  updateGlobalConfig(globalConfig.value)
-}
-
-function handleCacheExpirationBlur() {
-  const value = parseInt(cacheExpirationInput.value, 10)
-  if (!isNaN(value) && value >= 60 && value <= 86400) {
-    globalConfig.value.cacheExpiration = value
-    handleGlobalChange()
-  } else {
-    // Reset to current value if invalid
-    cacheExpirationInput.value = String(globalConfig.value.cacheExpiration || 3600)
-  }
-}
-</script>
 
 <style lang="scss" scoped>
 .tuff-input {

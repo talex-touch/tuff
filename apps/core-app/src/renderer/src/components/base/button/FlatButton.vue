@@ -1,3 +1,17 @@
+<script name="FlatButton" lang="ts" setup>
+const props = defineProps<{
+  primary?: boolean
+  mini?: boolean
+  disabled?: boolean
+}>()
+
+function handleKeyActivate(event: KeyboardEvent): void {
+  if (props.disabled) {
+    return
+  }(event.currentTarget as HTMLElement | null)?.click()
+}
+</script>
+
 <template>
   <div
     v-wave
@@ -17,19 +31,6 @@
     </div>
   </div>
 </template>
-
-<script name="FlatButton" lang="ts" setup>
-const props = defineProps<{
-  primary?: boolean
-  mini?: boolean
-  disabled?: boolean
-}>()
-
-function handleKeyActivate(event: KeyboardEvent): void {
-  if (props.disabled) return
-  ;(event.currentTarget as HTMLElement | null)?.click()
-}
-</script>
 
 <style lang="scss" scoped>
 .FlatButton-Container {

@@ -1,24 +1,15 @@
-<template>
-  <div class="LyricScroller-Container" :class="{ shine }" :style="`--theme-word-color: ${song.colors && song.colors[song.colors.length > 4 ? 1 : 0].color}`">
-    <el-scrollbar ref="scroll">
-      <WordLyricItem @index="handleIndex"
-                     :class="{ 'start': index === ind, 'far-away': index + 2 === ind || index - 2 === ind, 'far': index + 1 === ind || index - 1 === ind }"
-                     v-for="(item, index) in wordLyrics || []" :key="index" :index="index" :lyric="item" />
-    </el-scrollbar>
-  </div>
-</template>
-
 <script>
-export default {
-  name: "WordLyricScroller"
-}
 </script>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import WordLyricItem from '@comp/music/word-lyric/WordLyricItem.vue'
 import { musicManager } from '@modules/music'
-import { sleep, throttleRef } from '@modules/utils'
+import { throttleRef } from '@modules/utils'
+import { onMounted, provide, ref, watch } from 'vue'
+
+export default {
+  name: 'WordLyricScroller',
+}
 
 const ind = ref(-1)
 const scroll = ref()
@@ -36,7 +27,7 @@ provide('trans-lyric', (time) => {
   let _lyric = ''
 
   // find the minimum time offset lyric
-  lyricList.filter(lyric => lyric.ms <= time).forEach(lyric => {
+  lyricList.filter(lyric => lyric.ms <= time).forEach((lyric) => {
     _lyric = lyric.lyric
   })
 
@@ -44,23 +35,23 @@ provide('trans-lyric', (time) => {
 })
 
 onMounted(() => {
-
-  let draw;
+  let draw
 
   watch(() => song.value, () => {
     const lyric = song.value?._songManager?.wordLyric?.wordLyric
-    if( !lyric ) return
+    if (!lyric)
+      return
 
     wordLyrics.value = lyric.split('\n')
 
     const lyrics = song.value?._songManager?.lyric?.tlyric?.lyric?.split('\n')
-    lyrics.forEach(lyrics => {
-      const time = lyrics.match(/\[(\d{2}):(\d{2})\.(\d{2,3})]/)
-      if( time ) {
-        const ms = parseInt(time[1]) * 60 * 1000 + parseInt(time[2]) * 1000 + parseInt(time[3])
+    lyrics.forEach((lyrics) => {
+      const time = lyrics.match(/\[(\d{2}):(\d{2})\.(\d{2,3})\]/)
+      if (time) {
+        const ms = Number.parseInt(time[1]) * 60 * 1000 + Number.parseInt(time[2]) * 1000 + Number.parseInt(time[3])
         tlyric.value.push({
           ms,
-          lyric: lyrics.replace(/\[(\d{2}):(\d{2})\.(\d{2,3})]/, '')
+          lyric: lyrics.replace(/\[(\d{2}):(\d{2})\.(\d{2,3})\]/, ''),
         })
       }
     })
@@ -102,22 +93,33 @@ onMounted(() => {
 
     draw(analyser, dataArray)
   }, { immediate: true })
-
 })
 
 async function handleIndex(i) {
-  if ( ind.value === i ) return
+  if (ind.value === i)
+    return
   ind.value = i
 
   const el = scroll.value.$el.children[0].children[0]
-  if ( !el ) return
+  if (!el)
+    return
   const target = el.children[i].offsetTop - 150
 
-  scroll.value.scrollTo( 0, target )
-
+  scroll.value.scrollTo(0, target)
 }
-
 </script>
+
+<template>
+  <div class="LyricScroller-Container" :class="{ shine }" :style="`--theme-word-color: ${song.colors && song.colors[song.colors.length > 4 ? 1 : 0].color}`">
+    <el-scrollbar ref="scroll">
+      <WordLyricItem
+        v-for="(item, index) in wordLyrics || []"
+        :key="index"
+        :class="{ 'start': index === ind, 'far-away': index + 2 === ind || index - 2 === ind, 'far': index + 1 === ind || index - 1 === ind }" :index="index" :lyric="item" @index="handleIndex"
+      />
+    </el-scrollbar>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .LyricScroller-Container {

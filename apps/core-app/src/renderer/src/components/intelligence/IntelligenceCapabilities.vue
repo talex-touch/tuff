@@ -1,11 +1,11 @@
 <script setup name="IntelligenceCapabilities" lang="ts">
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
-import { computed, ref } from 'vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -13,7 +13,7 @@ const { capabilities } = useIntelligenceManager()
 
 const capabilityCount = computed(() => Object.keys(capabilities.value || {}).length)
 const boundCapabilities = computed(() =>
-  Object.values(capabilities.value || {}).filter(c => c.providers && c.providers.length > 0).length
+  Object.values(capabilities.value || {}).filter(c => c.providers && c.providers.length > 0).length,
 )
 const totalCalls = ref(0) // TODO: 实际从数据存储获取
 const avgFrequency = ref(0) // TODO: 每小时平均调用次数
@@ -32,7 +32,7 @@ function handleViewMetrics() {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     :name="t('settings.intelligence.landing.capabilities.title')"
     :description="t('settings.intelligence.landing.capabilities.desc')"
     default-icon="i-carbon-flow"
@@ -40,7 +40,7 @@ function handleViewMetrics() {
     memory-name="intelligence-capabilities"
   >
     <!-- 配置能力 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.capabilities.manageTitle')"
       :description="t('settings.intelligence.landing.capabilities.manageDesc')"
       default-icon="i-carbon-settings"
@@ -51,10 +51,10 @@ function handleViewMetrics() {
         <i class="i-carbon-launch" />
         <span>{{ t('settings.intelligence.landing.capabilities.manageButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- 能力审计 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.capabilities.auditTitle')"
       :description="t('settings.intelligence.landing.capabilities.auditDesc')"
       default-icon="i-carbon-event-schedule"
@@ -65,10 +65,10 @@ function handleViewMetrics() {
         <i class="i-carbon-chart-bar" />
         <span>{{ t('settings.intelligence.landing.capabilities.auditButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
+    </TuffBlockSlot>
 
     <!-- 消耗统计 -->
-    <tuff-block-slot
+    <TuffBlockSlot
       :title="t('settings.intelligence.landing.capabilities.statsTitle', { count: totalCalls })"
       :description="t('settings.intelligence.landing.capabilities.statsDesc', { total: capabilityCount, bound: boundCapabilities, freq: avgFrequency })"
       default-icon="i-carbon-chart-line"
@@ -79,8 +79,8 @@ function handleViewMetrics() {
         <i class="i-carbon-view" />
         <span>{{ t('settings.intelligence.landing.capabilities.statsButton') }}</span>
       </FlatButton>
-    </tuff-block-slot>
-  </tuff-group-block>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
 </template>
 
 <style lang="scss" scoped>

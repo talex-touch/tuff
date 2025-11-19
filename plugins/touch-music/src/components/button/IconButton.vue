@@ -1,24 +1,4 @@
-<template>
-  <div @click="handleClick" @mouseenter="hover = true"
-       :class="{ plain, small, select }"
-       @mouseleave="hover = false" role="button" class="IconButton-Container fake-background transition">
-    <div class="IconButton-Icon">
-      <remix-icon v-if="activeIcon && icon && select" :name="activeIcon" />
-      <remix-icon v-else-if="activeIcon && icon" :name="icon" />
-      <remix-icon v-else-if="icon" :name="icon" :style="select || hover ? 'fill' : 'line'" />
-      <slot v-else name="icon" :hover="hover" :select="select"></slot>
-    </div>
-
-<!--    <div v-if="display !== 'popover'" class="IconButton-Text">-->
-<!--      <slot name="text" />-->
-<!--    </div>-->
-  </div>
-</template>
-
 <script>
-export default {
-  name: "IconButton"
-}
 </script>
 
 <script setup>
@@ -27,29 +7,34 @@ import { ref, watchEffect } from 'vue'
 
 const props = defineProps({
   icon: {
-    type: String
+    type: String,
   },
   plain: {
-    type: Boolean
+    type: Boolean,
   },
   small: {
-    type: Boolean
+    type: Boolean,
   },
   select: {
-    type: Boolean
+    type: Boolean,
   },
   activeIcon: {
     type: String,
-    required: false
-  }
+    required: false,
+  },
 })
+
+export default {
+  name: 'IconButton',
+}
 
 const hover = ref(false)
 const select = ref(false)
 
 watchEffect(() => {
   // if (props.direct) select.value = (route.path === props.direct)
-  if ( props.hasOwnProperty('select') ) select.value = props.select
+  if (props.hasOwnProperty('select'))
+    select.value = props.select
 })
 
 // function handleClick() {
@@ -57,8 +42,26 @@ watchEffect(() => {
 // }
 </script>
 
-<style lang="scss" scoped>
+<template>
+  <div
+    :class="{ plain, small, select }" role="button"
+    class="IconButton-Container fake-background transition"
+    @click="handleClick" @mouseenter="hover = true" @mouseleave="hover = false"
+  >
+    <div class="IconButton-Icon">
+      <RemixIcon v-if="activeIcon && icon && select" :name="activeIcon" />
+      <RemixIcon v-else-if="activeIcon && icon" :name="icon" />
+      <RemixIcon v-else-if="icon" :name="icon" :style="select || hover ? 'fill' : 'line'" />
+      <slot v-else name="icon" :hover="hover" :select="select" />
+    </div>
 
+    <!--    <div v-if="display !== 'popover'" class="IconButton-Text"> -->
+    <!--      <slot name="text" /> -->
+    <!--    </div> -->
+  </div>
+</template>
+
+<style lang="scss" scoped>
 .IconButton-Container {
   &.plain {
     background-color: transparent;

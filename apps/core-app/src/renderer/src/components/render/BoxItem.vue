@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
+import type { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import ItemSubtitle from './ItemSubtitle.vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
-import { useOpenerAutoResolve, getOpenerByExtension } from '~/modules/openers'
-import { resolveSourceMeta } from './sourceMeta'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
+import ItemSubtitle from './ItemSubtitle.vue'
+import { resolveSourceMeta } from './sourceMeta'
 
 interface Props {
   item: TuffItem
@@ -24,7 +24,7 @@ const displayIcon = computed(() => {
   const defaultIcon = {
     type: 'url',
     value: '',
-    status: 'normal'
+    status: 'normal',
   } as ITuffIcon
 
   if (typeof icon === 'string') {
@@ -41,11 +41,13 @@ const displayIcon = computed(() => {
 })
 
 const fileExtension = computed(() => {
-  if (props.item.kind !== 'file') return null
+  if (props.item.kind !== 'file')
+    return null
   const metaExt = props.item.meta?.file?.extension
-  if (metaExt) return metaExt
+  if (metaExt)
+    return metaExt
   const pathValue = props.item.meta?.file?.path || props.render.basic?.subtitle || ''
-  const match = /\.([^.\\/]+)$/i.exec(pathValue)
+  const match = /\.([^.\\/]+)$/.exec(pathValue)
   return match ? match[1].toLowerCase() : null
 })
 
@@ -63,7 +65,7 @@ const frequencyLabel = computed(() => clickCount.value.toString())
 const quickKeyLabel = computed(() => props.quickKey || '')
 const showQuickKey = computed(() => quickKeyLabel.value.length > 0)
 
-type Range = { start: number; end: number }
+interface Range { start: number, end: number }
 
 function getHighlightedHTML(
   text: string,
@@ -72,16 +74,17 @@ function getHighlightedHTML(
     className?: string
     base?: 0 | 1 // 起始基：0 基或 1 基，默认 0 基
     inclusiveEnd?: boolean // 右端是否包含，默认不包含 (右开)
-  } = {}
+  } = {},
 ): string {
-  if (!matchedIndices?.length) return text
+  if (!matchedIndices?.length)
+    return text
 
   const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
 
-  let { start, end } = matchedIndices[matchedIndices.length - 1]
+  const { start, end } = matchedIndices[matchedIndices.length - 1]
 
   let s0 = base === 1 ? start - 1 : start
-  let e0 = base === 1 ? end - 1 : end
+  const e0 = base === 1 ? end - 1 : end
 
   let eExclusive = inclusiveEnd ? e0 + 1 : e0
 
@@ -89,14 +92,15 @@ function getHighlightedHTML(
   s0 = Math.max(0, Math.min(s0, n))
   eExclusive = Math.max(s0, Math.min(eExclusive, n))
 
-  if (s0 >= eExclusive) return text
+  if (s0 >= eExclusive)
+    return text
 
   return (
-    text.slice(0, s0) +
-    `<span class="${className}">` +
-    text.slice(s0, eExclusive) +
-    `</span>` +
-    text.slice(eExclusive)
+    `${text.slice(0, s0)
+    }<span class="${className}">${
+      text.slice(s0, eExclusive)
+    }</span>${
+      text.slice(eExclusive)}`
   )
 }
 
@@ -132,7 +136,7 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
           :src="openerLogo"
           :alt="openerName || 'Opener'"
           class="w-[10px] h-[10px] object-contain"
-        />
+        >
       </div>
     </div>
 

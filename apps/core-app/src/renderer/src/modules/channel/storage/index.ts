@@ -1,10 +1,10 @@
-import '~/modules/channel/storage/base'
-import { reactive, unref } from 'vue'
-import { AccountStorage } from '~/modules/channel/storage/accounter'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { storages } from '@talex-touch/utils/renderer'
 import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 import { openersStorage } from '@talex-touch/utils/renderer/storage/openers'
+import { reactive, unref } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { AccountStorage } from '~/modules/channel/storage/accounter'
+import '~/modules/channel/storage/base'
 
 /**
  * StorageManager handles the reactive data storages of the app,
@@ -56,7 +56,7 @@ export class StorageManager {
     await touchChannel.send('storage:save', {
       key: name,
       content: JSON.stringify(unref(data)),
-      clear
+      clear,
     })
   }
 }
@@ -67,7 +67,7 @@ window.onbeforeunload = () => {
     touchChannel.send('storage:save', {
       key: storage.getQualifiedName(),
       content: JSON.stringify(unref(storage.data) || storage.originalData),
-      clear: true
+      clear: true,
     })
   }
 }

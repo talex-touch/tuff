@@ -3,9 +3,9 @@
  * Provides translation support for error messages and notifications in the main process
  */
 
-import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
-import enUS from '../../renderer/src/modules/lang/en-US.json'
 import { app, ipcMain } from 'electron'
+import enUS from '../../renderer/src/modules/lang/en-US.json'
+import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
 
 type TranslationMessages = typeof zhCN
 type TranslationKey = string
@@ -20,7 +20,7 @@ export type Locale = 'zh-CN' | 'en-US'
  */
 const messages: Record<Locale, TranslationMessages> = {
   'zh-CN': zhCN,
-  'en-US': enUS
+  'en-US': enUS,
 }
 
 /**
@@ -35,7 +35,7 @@ export function initI18n(): void {
   const systemLocale = app.getLocale()
   currentLocale = resolveLocale(systemLocale)
   console.log(`[I18n] Initialized with locale: ${currentLocale} (system: ${systemLocale})`)
-  
+
   // Register IPC handler for locale changes from renderer
   ipcMain.on('app:set-locale', (_event, locale: Locale) => {
     console.log(`[I18n] Received locale change request: ${locale}`)
@@ -48,11 +48,11 @@ export function initI18n(): void {
  */
 function resolveLocale(locale: string): Locale {
   const normalized = locale.replace('_', '-').toLowerCase()
-  
+
   if (normalized.startsWith('zh')) {
     return 'zh-CN'
   }
-  
+
   return 'en-US'
 }
 
@@ -63,7 +63,8 @@ export function setLocale(locale: Locale): void {
   if (messages[locale]) {
     currentLocale = locale
     console.log(`[I18n] Locale changed to: ${currentLocale}`)
-  } else {
+  }
+  else {
     console.warn(`[I18n] Unsupported locale: ${locale}, keeping current: ${currentLocale}`)
   }
 }
@@ -81,15 +82,16 @@ export function getLocale(): Locale {
 function getNestedValue(obj: any, path: string): any {
   const keys = path.split('.')
   let value = obj
-  
+
   for (const key of keys) {
     if (value && typeof value === 'object' && key in value) {
       value = value[key]
-    } else {
+    }
+    else {
       return undefined
     }
   }
-  
+
   return value
 }
 
@@ -102,24 +104,24 @@ function getNestedValue(obj: any, path: string): any {
 export function t(key: TranslationKey, params?: Record<string, string | number>): string {
   const message = messages[currentLocale]
   const value = getNestedValue(message, key)
-  
+
   if (value === undefined) {
     console.warn(`[I18n] Translation key not found: ${key}`)
     return key
   }
-  
+
   if (typeof value !== 'string') {
     console.warn(`[I18n] Translation value is not a string: ${key}`)
     return key
   }
-  
+
   // Replace parameters
   if (params) {
     return value.replace(/\{(\w+)\}/g, (match, paramKey) => {
       return params[paramKey] !== undefined ? String(params[paramKey]) : match
     })
   }
-  
+
   return value
 }
 
@@ -154,13 +156,14 @@ export function formatDuration(seconds: number): string {
  * Format file size to human-readable string
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
+  if (bytes === 0)
+    return '0 B'
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const k = 1024
   const i = Math.floor(Math.log(bytes) / Math.log(k))
 
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`
+  return `${(bytes / k ** i).toFixed(1)} ${units[i]}`
 }
 
 /**

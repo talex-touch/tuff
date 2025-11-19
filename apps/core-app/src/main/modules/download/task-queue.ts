@@ -1,4 +1,5 @@
-import { DownloadTask, DownloadPriority, DownloadStatus, QueueStatus } from '@talex-touch/utils'
+import type { DownloadTask, QueueStatus } from '@talex-touch/utils'
+import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 
 // 优先级队列节点
 interface QueueNode {
@@ -17,7 +18,7 @@ export class TaskQueue {
 
     const node: QueueNode = {
       task,
-      priority: task.priority
+      priority: task.priority,
     }
 
     this.priorityQueue.push(node)
@@ -57,7 +58,7 @@ export class TaskQueue {
     task.priority = priority
 
     // 找到队列中的节点并更新
-    const nodeIndex = this.priorityQueue.findIndex((node) => node.task.id === taskId)
+    const nodeIndex = this.priorityQueue.findIndex(node => node.task.id === taskId)
     if (nodeIndex !== -1) {
       this.priorityQueue[nodeIndex].priority = priority
       this.heapifyUp(nodeIndex)
@@ -73,7 +74,7 @@ export class TaskQueue {
     }
 
     // 从队列中移除
-    const nodeIndex = this.priorityQueue.findIndex((node) => node.task.id === taskId)
+    const nodeIndex = this.priorityQueue.findIndex(node => node.task.id === taskId)
     if (nodeIndex !== -1) {
       const lastNode = this.priorityQueue[this.priorityQueue.length - 1]
       this.priorityQueue[nodeIndex] = lastNode
@@ -100,10 +101,10 @@ export class TaskQueue {
 
     return {
       totalTasks: allTasks.length,
-      pendingTasks: allTasks.filter((t) => t.status === DownloadStatus.PENDING).length,
-      activeTasks: allTasks.filter((t) => t.status === DownloadStatus.DOWNLOADING).length,
-      completedTasks: allTasks.filter((t) => t.status === DownloadStatus.COMPLETED).length,
-      failedTasks: allTasks.filter((t) => t.status === DownloadStatus.FAILED).length
+      pendingTasks: allTasks.filter(t => t.status === DownloadStatus.PENDING).length,
+      activeTasks: allTasks.filter(t => t.status === DownloadStatus.DOWNLOADING).length,
+      completedTasks: allTasks.filter(t => t.status === DownloadStatus.COMPLETED).length,
+      failedTasks: allTasks.filter(t => t.status === DownloadStatus.FAILED).length,
     }
   }
 
@@ -115,14 +116,14 @@ export class TaskQueue {
   // 获取等待中的任务
   getPendingTasks(): DownloadTask[] {
     return Array.from(this.tasks.values())
-      .filter((task) => task.status === DownloadStatus.PENDING)
+      .filter(task => task.status === DownloadStatus.PENDING)
       .sort((a, b) => b.priority - a.priority) // 按优先级降序排列
   }
 
   // 获取进行中的任务
   getActiveTasks(): DownloadTask[] {
     return Array.from(this.tasks.values()).filter(
-      (task) => task.status === DownloadStatus.DOWNLOADING
+      task => task.status === DownloadStatus.DOWNLOADING,
     )
   }
 
@@ -171,15 +172,15 @@ export class TaskQueue {
     let smallestIndex = index
 
     if (
-      leftChildIndex < this.priorityQueue.length &&
-      this.priorityQueue[leftChildIndex].priority < this.priorityQueue[smallestIndex].priority
+      leftChildIndex < this.priorityQueue.length
+      && this.priorityQueue[leftChildIndex].priority < this.priorityQueue[smallestIndex].priority
     ) {
       smallestIndex = leftChildIndex
     }
 
     if (
-      rightChildIndex < this.priorityQueue.length &&
-      this.priorityQueue[rightChildIndex].priority < this.priorityQueue[smallestIndex].priority
+      rightChildIndex < this.priorityQueue.length
+      && this.priorityQueue[rightChildIndex].priority < this.priorityQueue[smallestIndex].priority
     ) {
       smallestIndex = rightChildIndex
     }
@@ -199,14 +200,14 @@ export class TaskQueue {
 
   // 查找任务在队列中的位置
   findTaskIndex(taskId: string): number {
-    return this.priorityQueue.findIndex((node) => node.task.id === taskId)
+    return this.priorityQueue.findIndex(node => node.task.id === taskId)
   }
 
   // 获取队列中指定优先级范围的任务
   getTasksByPriorityRange(minPriority: number, maxPriority: number): DownloadTask[] {
     return this.priorityQueue
-      .filter((node) => node.priority >= minPriority && node.priority <= maxPriority)
-      .map((node) => node.task)
+      .filter(node => node.priority >= minPriority && node.priority <= maxPriority)
+      .map(node => node.task)
   }
 
   // 获取高优先级任务（CRITICAL和HIGH）

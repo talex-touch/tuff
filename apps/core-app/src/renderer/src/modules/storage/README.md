@@ -10,9 +10,9 @@ The AISDK storage module provides persistent storage for AI SDK provider configu
 
 ```typescript
 interface AISDKStorageData {
-  providers: AiProviderConfig[]      // Array of AI provider configurations
-  globalConfig: AISDKGlobalConfig    // Global AISDK settings
-  version: number                     // Schema version for migrations
+  providers: AiProviderConfig[] // Array of AI provider configurations
+  globalConfig: AISDKGlobalConfig // Global AISDK settings
+  version: number // Schema version for migrations
 }
 ```
 
@@ -122,15 +122,15 @@ export async function migrateAISDKSettings(): Promise<void> {
   if (currentData.version < 2) {
     // Version 2 migration
     console.log('[AISDK Storage] Migrating settings to version 2')
-    
+
     // Perform migration logic
     // ...
-    
+
     aisdkStorage.applyData({
       // Updated data
       version: 2
     })
-    
+
     await aisdkStorage.saveToRemote({ force: true })
   }
 }
@@ -226,7 +226,8 @@ Always handle migration errors gracefully:
 onMounted(async () => {
   try {
     await migrateAISDKSettings()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[AISDK] Migration failed:', error)
     // Show user notification or fallback to defaults
   }
@@ -300,12 +301,12 @@ import { useAISDKManagement } from '~/modules/hooks/useAISDKManagement'
 describe('useAISDKManagement', () => {
   it('should persist provider updates', async () => {
     const { updateProvider, getProvider } = useAISDKManagement()
-    
+
     updateProvider('openai-default', { apiKey: 'test-key' })
-    
+
     // Wait for debounce
     await new Promise(resolve => setTimeout(resolve, 400))
-    
+
     const provider = getProvider('openai-default')
     expect(provider?.apiKey).toBe('test-key')
   })

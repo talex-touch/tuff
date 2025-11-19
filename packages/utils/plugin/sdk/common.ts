@@ -17,8 +17,10 @@ export function regShortcut(key: string, func: Function): boolean {
   const channel = genChannel()
 
   const res = channel.sendSync('shortcon:reg', { key })
-  if (res instanceof String) throw new Error(String(res))
-  if (res === false) return false
+  if (res instanceof String)
+    throw new Error(String(res))
+  if (res === false)
+    return false
 
   channel.regChannel('shortcon:trigger', ({ data }) => key === data.key && func())
 
@@ -33,16 +35,17 @@ export function regShortcut(key: string, func: Function): boolean {
  */
 export async function communicateWithPlugin(
   key: string,
-  info: any = {}
+  info: any = {},
 ): Promise<any> {
   const channel = genChannel()
 
   try {
     return await channel.send('index:communicate', {
       key,
-      info
+      info,
     })
-  } catch (error) {
+  }
+  catch (error) {
     console.error(`[Plugin SDK] Failed to communicate`, error)
     throw error
   }
@@ -59,7 +62,8 @@ export async function sendMessage(message: string, data: any = {}): Promise<any>
 
   try {
     return await channel.send(`plugin:${message}`, data)
-  } catch (error) {
+  }
+  catch (error) {
     console.error(`[Plugin SDK] Failed to send message: ${message}`, error)
     throw error
   }

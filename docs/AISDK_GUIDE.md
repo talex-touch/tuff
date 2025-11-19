@@ -31,7 +31,7 @@ const result = await ai.text.chat({
 })
 
 console.log(result.result) // AI 的响应
-console.log(result.usage)  // token 使用情况
+console.log(result.usage) // token 使用情况
 console.log(result.latency) // 响应延迟
 ```
 
@@ -66,11 +66,11 @@ const result = await ai.text.chat({
   temperature: 0.7,
   maxTokens: 1000
 }, {
-  strategy: 'adaptive-default',        // 使用自适应策略
-  modelPreference: ['gpt-4o-mini'],   // 首选模型
-  costCeiling: 0.02,                  // 成本上限
-  latencyTarget: 2000,                // 延迟目标（毫秒）
-  timeout: 30000                       // 超时时间
+  strategy: 'adaptive-default', // 使用自适应策略
+  modelPreference: ['gpt-4o-mini'], // 首选模型
+  costCeiling: 0.02, // 成本上限
+  latencyTarget: 2000, // 延迟目标（毫秒）
+  timeout: 30000 // 超时时间
 })
 ```
 
@@ -213,7 +213,7 @@ ai.updateConfig({
 
 // 获取审计日志
 const logs = ai.getAuditLogs(100)
-logs.forEach(log => {
+logs.forEach((log) => {
   console.log(`${log.traceId}: ${log.success ? '成功' : '失败'}`)
   console.log(`模型: ${log.model}, 延迟: ${log.latency}ms`)
   console.log(`Token 使用: ${log.usage.totalTokens}`)
@@ -231,7 +231,7 @@ import { ai } from '@talex-touch/utils'
 // 启用缓存
 ai.updateConfig({
   enableCache: true,
-  cacheExpiration: 1800  // 30 分钟
+  cacheExpiration: 1800 // 30 分钟
 })
 
 // 清除缓存
@@ -249,7 +249,8 @@ try {
   const result = await ai.text.chat({
     messages: [{ role: 'user', content: 'Hello' }]
   })
-} catch (error) {
+}
+catch (error) {
   // 所有提供商都失败了
   console.error('AI 调用失败:', error)
 }
@@ -262,13 +263,15 @@ try {
   const result = await ai.invoke('text.chat', {
     messages: [{ role: 'user', content: 'Hello' }]
   }, {
-    timeout: 5000  // 5 秒超时
+    timeout: 5000 // 5 秒超时
   })
-} catch (error) {
+}
+catch (error) {
   if (error instanceof Error) {
     if (error.message.includes('timeout')) {
       console.error('请求超时')
-    } else if (error.message.includes('API key')) {
+    }
+    else if (error.message.includes('API key')) {
       console.error('API 密钥未配置或无效')
     }
   }
@@ -302,8 +305,8 @@ try {
 ### 添加新的提供商
 
 ```typescript
+import type { AiChatPayload, AiInvokeResult, AiProviderConfig } from '@talex-touch/utils'
 import { AiProvider } from '@talex-touch/utils/aisdk/providers/base'
-import type { AiProviderConfig, AiInvokeResult, AiChatPayload } from '@talex-touch/utils'
 
 class CustomProvider extends AiProvider {
   readonly type = 'custom' as const
@@ -324,7 +327,7 @@ class CustomProvider extends AiProvider {
 }
 
 // 注册工厂
-providerManager.registerFactory('custom', (config) => new CustomProvider(config))
+providerManager.registerFactory('custom', config => new CustomProvider(config))
 ```
 
 ### 添加新的策略

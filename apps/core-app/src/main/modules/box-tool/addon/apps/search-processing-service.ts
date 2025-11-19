@@ -1,13 +1,15 @@
-import { TuffItem, TuffItemBuilder, TuffQuery } from '@talex-touch/utils/core-box'
-import { files as filesSchema } from '../../../../db/schema'
-import path from 'path'
-import { pinyin } from 'pinyin-pro'
-import { calculateHighlights, Range } from './highlighting-service'
+import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box'
+import type { files as filesSchema } from '../../../../db/schema'
+import type { Range } from './highlighting-service'
+import path from 'node:path'
+import { performance } from 'node:perf_hooks'
+import { startTiming, timingLogger } from '@talex-touch/utils'
+import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
-import { formatLog, LogStyle, generateAcronym } from './app-utils'
 import chalk from 'chalk'
-import { performance } from 'perf_hooks'
-import { timingLogger, startTiming } from '@talex-touch/utils'
+import { pinyin } from 'pinyin-pro'
+import { formatLog, generateAcronym, LogStyle } from './app-utils'
+import { calculateHighlights } from './highlighting-service'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
 
@@ -19,7 +21,7 @@ export async function processSearchResults(
   apps: (typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[],
   query: TuffQuery,
   isFuzzySearch: boolean,
-  aliases: Record<string, string[]> // 需要传入别名数据
+  aliases: Record<string, string[]>, // 需要传入别名数据
 ): Promise<ProcessedTuffItem[]> {
   const processStart = startTiming()
   const lowerCaseQuery = query.text.toLowerCase()
@@ -52,11 +54,13 @@ export async function processSearchResults(
       source: string,
       rawHighlights: Range[] | null | undefined,
       newScore: number,
-      fallbackTitle: string
+      fallbackTitle: string,
     ): void => {
-      if (newScore <= score) return
+      if (newScore <= score)
+        return
       const resolvedHighlights = ensureHighlights(rawHighlights, fallbackTitle)
-      if (resolvedHighlights.length === 0) return
+      if (resolvedHighlights.length === 0)
+        return
       bestSource = source
       bestHighlights = resolvedHighlights
       score = newScore
@@ -86,17 +90,18 @@ export async function processSearchResults(
           'name-fuzzy',
           [{ start: clampedStart, end: clampedEnd }],
           0.1 + (2 - minFuzzyDist) * 0.05,
-          displayName
+          displayName,
         )
       }
     }
 
-    if (aliasList.some((alias) => alias.toLowerCase().includes(lowerCaseQuery))) {
+    if (aliasList.some(alias => alias.toLowerCase().includes(lowerCaseQuery))) {
       updateMatch('tag', calculateHighlights(displayName, lowerCaseQuery), 0.7, displayName)
     }
 
     for (const title of potentialTitles) {
-      if (!title) continue
+      if (!title)
+        continue
       const normalizedTitle = title.toLowerCase()
 
       if (normalizedTitle.includes(lowerCaseQuery)) {
@@ -107,14 +112,14 @@ export async function processSearchResults(
       if (acronym) {
         const normalizedAcronym = acronym.toLowerCase()
         if (
-          lowerCaseQuery.includes(normalizedAcronym) ||
-          normalizedAcronym.includes(lowerCaseQuery)
+          lowerCaseQuery.includes(normalizedAcronym)
+          || normalizedAcronym.includes(lowerCaseQuery)
         ) {
           updateMatch('initials', calculateHighlights(title, acronym), 0.8, title)
         }
       }
 
-      if (/[\u4e00-\u9fa5]/.test(title)) {
+      if (/[\u4E00-\u9FA5]/.test(title)) {
         const fullPinyin = pinyin(title, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
         const firstPinyin = pinyin(title, { pattern: 'first', toneType: 'none' })
           .replace(/\s/g, '')
@@ -122,7 +127,8 @@ export async function processSearchResults(
 
         if (fullPinyin.includes(lowerCaseQuery)) {
           updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.65, title)
-        } else if (firstPinyin.includes(lowerCaseQuery)) {
+        }
+        else if (firstPinyin.includes(lowerCaseQuery)) {
           updateMatch('initials', calculateHighlights(title, lowerCaseQuery), 0.6, title)
         }
       }
@@ -140,7 +146,7 @@ export async function processSearchResults(
       .setSubtitle(app.path)
       .setIcon({
         type: 'url',
-        value: app.extensions.icon ?? ''
+        value: app.extensions.icon ?? '',
       })
       .setActions([
         {
@@ -149,25 +155,25 @@ export async function processSearchResults(
           label: 'Open',
           primary: true,
           payload: {
-            path: app.path
-          }
-        }
+            path: app.path,
+          },
+        },
       ])
       .setMeta({
         app: {
           path: app.path,
-          bundle_id: app.extensions.bundleId || ''
+          bundle_id: app.extensions.bundleId || '',
         },
         extension: {
           matchResult: bestHighlights,
           source: bestSource, // 添加来源信息
           keyWords: [...new Set([name, path.basename(app.path).split('.')[0] || ''])].filter(
-            Boolean
-          )
-        }
+            Boolean,
+          ),
+        },
       })
       .setScoring({
-        final: score
+        final: score,
       })
       .build()
 
@@ -186,25 +192,25 @@ export async function processSearchResults(
       durationMs,
       {
         message: `Slow post-processing: ${chalk.green(sortedResults.length)} / ${chalk.cyan(
-          apps.length
+          apps.length,
         )} items processed`,
         style: 'warning',
         unit: 's',
         precision: 2,
-        suffix: ''
+        suffix: '',
       },
       {
         logThresholds: { none: SLOW_PROCESS_THRESHOLD_MS, info: 600, warn: 1200 },
-        formatter: (entry) =>
+        formatter: entry =>
           formatLog(
             'SearchProcessor',
             `${entry.meta?.message ?? 'Post-processing'} in ${chalk.cyan(
-              (entry.durationMs / 1000).toFixed(2)
+              (entry.durationMs / 1000).toFixed(2),
             )}s`,
-            LogStyle.warning
+            LogStyle.warning,
           ),
-        logger: (message) => console.warn(message)
-      }
+        logger: message => console.warn(message),
+      },
     )
   }
 

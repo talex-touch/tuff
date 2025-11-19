@@ -1,4 +1,3 @@
-
 /**
  * Interface for command line argument mapper options
  * @interface IArgMapperOptions
@@ -33,7 +32,7 @@ declare global {
  * @returns Mapped command line arguments as key-value pairs
  */
 export function useArgMapper(args: string[] = process.argv): IArgMapperOptions {
-  if ( window.$argMapper ) {
+  if (window.$argMapper) {
     return window.$argMapper
   }
 

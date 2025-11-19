@@ -6,7 +6,7 @@
 >
 type BadgeVariant = 'default' | 'info' | 'success' | 'warning' | 'muted'
 
-type BadgeInfo = {
+interface BadgeInfo {
   label?: string
   variant?: BadgeVariant
 }
@@ -25,8 +25,8 @@ const props = withDefaults(
   {
     items: () => [] as T[],
     selectedId: null,
-    emptyText: ''
-  }
+    emptyText: '',
+  },
 )
 
 const emit = defineEmits<{
@@ -35,7 +35,8 @@ const emit = defineEmits<{
 }>()
 
 function resolveId(item: T): string | number {
-  if (props.getId) return props.getId(item)
+  if (props.getId)
+    return props.getId(item)
   const fallback = (item as { id?: string | number }).id
   if (fallback === undefined) {
     throw new Error('[TuffAsideList] item id is required when getId is not provided')
@@ -44,7 +45,8 @@ function resolveId(item: T): string | number {
 }
 
 function resolveTitle(item: T): string {
-  if (props.getTitle) return props.getTitle(item)
+  if (props.getTitle)
+    return props.getTitle(item)
   return (item as { title?: string }).title ?? ''
 }
 
@@ -55,21 +57,24 @@ function resolveDescription(item: T): string | undefined {
 }
 
 function resolveBadge(item: T): BadgeInfo {
-  if (props.getBadge) return props.getBadge(item) ?? {}
-  const meta = item as { badgeLabel?: string; badgeVariant?: BadgeVariant }
+  if (props.getBadge)
+    return props.getBadge(item) ?? {}
+  const meta = item as { badgeLabel?: string, badgeVariant?: BadgeVariant }
   return {
     label: meta.badgeLabel,
-    variant: meta.badgeVariant
+    variant: meta.badgeVariant,
   }
 }
 
 function resolveDisabled(item: T): boolean {
-  if (props.isDisabled) return props.isDisabled(item)
+  if (props.isDisabled)
+    return props.isDisabled(item)
   return Boolean((item as { disabled?: boolean }).disabled)
 }
 
 function handleSelect(item: T): void {
-  if (resolveDisabled(item)) return
+  if (resolveDisabled(item))
+    return
   const id = resolveId(item)
   emit('update:selectedId', id)
   emit('select', id)
@@ -86,14 +91,16 @@ function handleSelect(item: T): void {
           role="option"
           :class="{
             'is-active': resolveId(item) === props.selectedId,
-            'is-disabled': resolveDisabled(item)
+            'is-disabled': resolveDisabled(item),
           }"
           :aria-pressed="resolveId(item) === props.selectedId"
           @click="handleSelect(item)"
         >
           <slot name="item" :item="item" :is-active="resolveId(item) === props.selectedId">
             <div class="tuff-aside-list__content">
-              <p class="tuff-aside-list__title">{{ resolveTitle(item) }}</p>
+              <p class="tuff-aside-list__title">
+                {{ resolveTitle(item) }}
+              </p>
               <p v-if="resolveDescription(item)" class="tuff-aside-list__desc">
                 {{ resolveDescription(item) }}
               </p>
