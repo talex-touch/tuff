@@ -20,6 +20,7 @@ import { windowManager } from '../../core-box/window'
 import { ProviderContext } from '../types'
 import { genTouchApp } from '../../../../core/'
 import searchEngineCore from '../search-core'
+import { clipboardModule } from '../../../clipboard'
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
@@ -72,7 +73,12 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     const items: TuffItem[] = []
 
     if (!prompt) {
+      // 没有输入时，显示占位符和历史记录
       items.push(this.createPlaceholderItem())
+      
+      // 加载最近的 AI 历史记录
+      const historyItems = await this.loadAiHistory(5) // 加载最近 5 条
+      items.push(...historyItems)
     } else {
       items.push(this.createActionItem(prompt))
     }
@@ -139,18 +145,48 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
         ]
       }
 
-      const result = await ai.text.chat(payload)
-      const answerPayload: IntelligencePayload = {
-        requestId,
-        prompt,
-        status: 'ready',
-        answer: result?.result?.trim() ?? '',
-        model: result?.model,
-        usage: result?.usage,
-        createdAt: Date.now()
-      }
+      let accumulatedAnswer = ''
+      let finalModel: string | undefined
+      let finalUsage: AiUsageInfo | undefined
 
-      this.emitResultItem(this.createResultItem(answerPayload))
+      // 使用流式调用
+      for await (const chunk of ai.text.chatStream(payload)) {
+        if (chunk.done) {
+          // 流式响应完成，发送最终结果
+          const answerPayload: IntelligencePayload = {
+            requestId,
+            prompt,
+            status: 'ready',
+            answer: accumulatedAnswer.trim(),
+            model: finalModel,
+            usage: finalUsage,
+            createdAt: Date.now()
+          }
+          this.emitResultItem(this.createResultItem(answerPayload))
+
+          // 保存到 clipboard 数据库
+          await this.saveToClipboardHistory(prompt, accumulatedAnswer.trim(), {
+            requestId,
+            model: finalModel,
+            usage: finalUsage
+          })
+        } else {
+          // 累积增量文本
+          accumulatedAnswer += chunk.delta
+
+          // 实时更新显示（streaming 状态）
+          const streamingPayload: IntelligencePayload = {
+            requestId,
+            prompt,
+            status: 'pending',
+            answer: accumulatedAnswer,
+            model: finalModel,
+            usage: finalUsage,
+            createdAt: Date.now()
+          }
+          this.emitResultItem(this.createResultItem(streamingPayload))
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const errorPayload: IntelligencePayload = {
@@ -162,6 +198,91 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       }
 
       this.emitResultItem(this.createResultItem(errorPayload))
+    }
+  }
+
+  private async saveToClipboardHistory(
+    prompt: string,
+    answer: string,
+    meta: {
+      requestId: string
+      model?: string
+      usage?: AiUsageInfo
+    }
+  ): Promise<void> {
+    try {
+      // 构造问答内容
+      const content = `Q: ${prompt}\n\nA: ${answer}`
+
+      // 保存到 clipboard 数据库
+      await clipboardModule.saveVirtualEntry({
+        content,
+        rawContent: null,
+        source: 'ai-intelligence',
+        meta: {
+          requestId: meta.requestId,
+          prompt,
+          answer,
+          model: meta.model,
+          usage: meta.usage,
+          type: 'ai-qa'
+        }
+      })
+
+      console.log('[Intelligence] AI Q&A saved to clipboard history:', meta.requestId)
+    } catch (error) {
+      console.error('[Intelligence] Failed to save AI Q&A to clipboard:', error)
+    }
+  }
+
+  private async loadAiHistory(limit: number = 5): Promise<TuffItem[]> {
+    try {
+      const touchChannel = genTouchApp().channel
+      const coreWindow = windowManager.current?.window
+      
+      if (!coreWindow || coreWindow.isDestroyed()) {
+        return []
+      }
+
+      // 使用通用查询接口按 source 筛选 AI 历史记录
+      const response = await touchChannel.send(
+        ChannelType.MAIN,
+        'clipboard:query-by-source',
+        { 
+          source: 'ai-intelligence',
+          limit 
+        }
+      )
+
+      if (!response || !Array.isArray(response.data)) {
+        return []
+      }
+
+      const historyItems: TuffItem[] = response.data.map((item: any) => {
+        const meta = item.meta || {}
+        const prompt = meta.prompt || ''
+        const answer = meta.answer || ''
+        const model = meta.model || 'Unknown'
+        const requestId = meta.requestId || crypto.randomUUID()
+
+        // 创建历史记录的结果 item
+        const payload: IntelligencePayload = {
+          requestId,
+          prompt,
+          status: 'ready',
+          answer,
+          model,
+          usage: meta.usage,
+          createdAt: item.timestamp ? new Date(item.timestamp).getTime() : Date.now()
+        }
+
+        return this.createResultItem(payload)
+      })
+
+      return historyItems
+    } catch (error) {
+      console.error('[Intelligence] Failed to load AI history:', error)
+      return []
     }
   }
 

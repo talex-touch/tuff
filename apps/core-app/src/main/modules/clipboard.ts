@@ -756,35 +756,92 @@ export class ClipboardModule extends BaseModule {
         }
       })
 
-      touchChannel.regChannel(type, 'preview-history:get', async ({ data, reply }) => {
+      // 通用查询接口：按 source 筛选 clipboard 记录
+      touchChannel.regChannel(type, 'clipboard:query-by-source', async ({ data, reply }) => {
         if (!this.db) {
           reply(DataCode.ERROR, null)
           return
         }
-        const limit = Math.min(Math.max(data?.limit ?? 15, 1), 50)
+        
+        const { source, limit: requestedLimit } = data ?? {}
+        if (!source) {
+          reply(DataCode.ERROR, { error: 'source parameter is required' })
+          return
+        }
+
+        const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
+        
         const idRows = await this.db
           .select({ clipboardId: clipboardHistoryMeta.clipboardId })
           .from(clipboardHistoryMeta)
           .where(
             and(
               eq(clipboardHistoryMeta.key, 'source'),
-              eq(clipboardHistoryMeta.value, JSON.stringify('calculation'))
+              eq(clipboardHistoryMeta.value, JSON.stringify(source))
             )
           )
           .orderBy(desc(clipboardHistoryMeta.createdAt))
           .limit(limit)
+        
         const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
         if (ids.length === 0) {
-          reply(DataCode.SUCCESS, { items: [] })
+          reply(DataCode.SUCCESS, [])
           return
         }
+        
         const rows = await this.db
           .select()
           .from(clipboardHistory)
           .where(inArray(clipboardHistory.id, ids))
           .orderBy(desc(clipboardHistory.timestamp))
+        
         const history = await this.hydrateWithMeta(rows)
-        reply(DataCode.SUCCESS, { items: history })
+        reply(DataCode.SUCCESS, history)
+      })
+
+      // 通用查询接口：按 meta key-value 筛选 clipboard 记录
+      touchChannel.regChannel(type, 'clipboard:query-by-meta', async ({ data, reply }) => {
+        if (!this.db) {
+          reply(DataCode.ERROR, null)
+          return
+        }
+        
+        const { key, value, limit: requestedLimit } = data ?? {}
+        if (!key) {
+          reply(DataCode.ERROR, { error: 'key parameter is required' })
+          return
+        }
+
+        const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
+        
+        const whereConditions = value !== undefined
+          ? and(
+              eq(clipboardHistoryMeta.key, key),
+              eq(clipboardHistoryMeta.value, JSON.stringify(value))
+            )
+          : eq(clipboardHistoryMeta.key, key)
+        
+        const idRows = await this.db
+          .select({ clipboardId: clipboardHistoryMeta.clipboardId })
+          .from(clipboardHistoryMeta)
+          .where(whereConditions)
+          .orderBy(desc(clipboardHistoryMeta.createdAt))
+          .limit(limit)
+        
+        const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
+        if (ids.length === 0) {
+          reply(DataCode.SUCCESS, [])
+          return
+        }
+        
+        const rows = await this.db
+          .select()
+          .from(clipboardHistory)
+          .where(inArray(clipboardHistory.id, ids))
+          .orderBy(desc(clipboardHistory.timestamp))
+        
+        const history = await this.hydrateWithMeta(rows)
+        reply(DataCode.SUCCESS, history)
       })
     }
 
