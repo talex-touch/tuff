@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { FileType, getFileTypeFromPath, TuffItem, TuffRender } from '@talex-touch/utils'
+import { getFileTypeFromPath } from '@talex-touch/utils'
+import type { FileType, TuffItem, TuffRender } from '@talex-touch/utils'
 import dayjs from 'dayjs'
 import path from 'path-browserify'
 import { computed } from 'vue'

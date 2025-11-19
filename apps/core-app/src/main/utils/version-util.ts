@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+
 import fse from 'fs-extra'
 
 /**
@@ -9,13 +9,22 @@ import fse from 'fs-extra'
  * @returns Application version string (e.g., "2.1.0")
  */
 export function getAppVersion(): string {
-  // Try to read from package.json first (priority 1)
+  // Priority 1: Environment variable (set by polyfills.ts or build process)
+  if (process.env.APP_VERSION) {
+    return process.env.APP_VERSION
+  }
+
+  // Priority 2: Global package object (set by polyfills.ts)
+  // @ts-ignore - globalThis.$pkg is defined in polyfills.ts
+  if (typeof globalThis.$pkg !== 'undefined' && globalThis.$pkg?.version) {
+    // @ts-ignore
+    return globalThis.$pkg.version
+  }
+
+  // Priority 3: Try to read from package.json using process.env.DIST
   try {
-    // Use the same path resolution as in polyfills.ts
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = path.dirname(__filename)
-    // Go up from utils to main, then to core-app root
-    const packageJsonPath = path.resolve(__dirname, '../../../package.json')
+    const distPath = process.env.DIST || path.join(__dirname, '..')
+    const packageJsonPath = path.resolve(distPath, '../../package.json')
 
     if (fse.existsSync(packageJsonPath)) {
       const pkg = fse.readJsonSync(packageJsonPath)
@@ -26,11 +35,6 @@ export function getAppVersion(): string {
   }
   catch (error) {
     console.warn('[version-util] Failed to read version from package.json:', error)
-  }
-
-  // Fallback to environment variable (priority 2)
-  if (process.env.APP_VERSION) {
-    return process.env.APP_VERSION
   }
 
   // Last resort fallback
