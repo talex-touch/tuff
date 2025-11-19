@@ -1,5 +1,9 @@
 <template>
-  <div class="prompt-page h-full flex flex-col" role="main" aria-label="Intelligence Prompt Manager">
+  <div
+    class="prompt-page h-full flex flex-col"
+    role="main"
+    aria-label="Intelligence Prompt Manager"
+  >
     <tuff-aside-template
       v-model="searchQuery"
       class="prompt-shell flex-1"
@@ -8,46 +12,42 @@
       :clear-label="t('common.close')"
     >
       <template #default>
-        <TouchScroll>
-          <template #header>
-            <div class="prompt-filters-header">
-              <div class="prompt-filters" role="tablist">
-                <button
-                  v-for="option in filterOptions"
-                  :key="option.value"
-                  class="prompt-filter"
-                  type="button"
-                  role="tab"
-                  :class="{ 'is-active': filterMode === option.value }"
-                  @click="filterMode = option.value"
-                >
-                  {{ option.label }}
-                </button>
-              </div>
-            </div>
-          </template>
+        <div>
+          <div class="prompt-filters" role="tablist">
+            <button
+              v-for="option in filterOptions"
+              :key="option.value"
+              class="prompt-filter"
+              type="button"
+              role="tab"
+              :class="{ 'is-active': filterMode === option.value }"
+              @click="filterMode = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
 
-          <tuff-aside-list
-            v-model:selected-id="selectedPromptId"
-            :items="promptListItems"
-            :empty-text="t('settings.intelligence.promptListEmpty')"
-            @select="handleSelectPrompt"
-          />
-        </TouchScroll>
+        <tuff-aside-list
+          v-model:selected-id="selectedPromptId"
+          :items="promptListItems"
+          :empty-text="t('settings.intelligence.promptListEmpty')"
+          @select="handleSelectPrompt"
+        />
       </template>
 
       <template #footer>
-        <div class="prompt-footer-content">
+        <div>
           <p class="prompt-footer-stats">
             {{ t('settings.intelligence.promptStatsLabel', promptStats) }}
           </p>
-          <p class="prompt-footer-hint">
+          <p v-if="false" class="prompt-footer-hint">
             {{ t('settings.intelligence.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
           </p>
-          <button class="aisdk-btn primary w-full mt-2" type="button" @click="handleCreatePrompt">
+          <FlatButton class="primary mt-2" type="button" @click="handleCreatePrompt">
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-          </button>
+          </FlatButton>
         </div>
       </template>
 
@@ -81,11 +81,7 @@
             </div>
           </template>
 
-          <div
-            v-if="selectedPrompt.builtin"
-            class="prompt-readonly-hint mx-4 mb-4"
-            role="status"
-          >
+          <div v-if="selectedPrompt.builtin" class="prompt-readonly-hint mx-4 mb-4" role="status">
             <i class="i-carbon-information" aria-hidden="true" />
             <span>{{ t('settings.intelligence.promptReadonlyHint') }}</span>
           </div>
@@ -115,7 +111,9 @@
 
             <tuff-block-slot
               :title="t('settings.intelligence.promptMetaCategory')"
-              :description="promptDraft.category || t('settings.intelligence.promptCategoryPlaceholder')"
+              :description="
+                promptDraft.category || t('settings.intelligence.promptCategoryPlaceholder')
+              "
               default-icon="i-carbon-tag"
               active-icon="i-carbon-tag"
             >
@@ -130,7 +128,9 @@
 
             <tuff-block-slot
               :title="t('settings.intelligence.promptDescriptionLabel')"
-              :description="promptDraft.description || t('settings.intelligence.promptDescriptionPlaceholder')"
+              :description="
+                promptDraft.description || t('settings.intelligence.promptDescriptionPlaceholder')
+              "
               default-icon="i-carbon-document"
               active-icon="i-carbon-document"
             >
@@ -153,10 +153,7 @@
             :default-expand="true"
           >
             <div class="prompt-markdown-wrapper">
-              <FlatMarkdown
-                v-model="promptDraft.content"
-                :readonly="isBuiltinSelected"
-              />
+              <FlatMarkdown v-model="promptDraft.content" :readonly="isBuiltinSelected" />
             </div>
           </tuff-group-block>
 
@@ -222,7 +219,11 @@
               @click="handleSavePrompt"
             >
               <div class="flex items-center gap-2">
-                <div v-if="isCustomEditable" class="prompt-actions__status" :data-status="autoSaveStatus">
+                <div
+                  v-if="isCustomEditable"
+                  class="prompt-actions__status"
+                  :data-status="autoSaveStatus"
+                >
                   <i
                     v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
                     class="i-carbon-renew animate-spin text-[var(--el-text-color-secondary)]"
@@ -341,12 +342,12 @@ const promptListItems = computed(() =>
     id: prompt.id,
     title: prompt.name,
     description: prompt.description || t('settings.intelligence.promptMetaDescription'),
-    badgeLabel: prompt.builtin ? t('settings.intelligence.builtin') : t('settings.intelligence.custom'),
+    badgeLabel: prompt.builtin
+      ? t('settings.intelligence.builtin')
+      : t('settings.intelligence.custom'),
     badgeVariant: prompt.builtin ? 'info' : 'success'
   }))
 )
-
-
 
 watch(
   visiblePrompts,
@@ -419,10 +420,7 @@ const promptStats = computed(() => ({
 
 const totalWordsApprox = computed(() =>
   orderedPrompts.value.reduce((sum, prompt) => {
-    const words = prompt.content
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean).length
+    const words = prompt.content.trim().split(/\s+/).filter(Boolean).length
     return sum + words
   }, 0)
 )
@@ -484,7 +482,9 @@ async function handleOpenFolder(): Promise<void> {
 
 function handleCreatePrompt(): void {
   flushPendingPromptChanges()
-  const name = t('settings.intelligence.promptNewDefaultName', { index: promptStats.value.custom + 1 })
+  const name = t('settings.intelligence.promptNewDefaultName', {
+    index: promptStats.value.custom + 1
+  })
   const newId = promptManager.addCustomPrompt({
     name,
     category: 'custom',
@@ -658,11 +658,6 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.prompt-filters-header {
-  padding: 1rem;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
 .prompt-filters {
   display: flex;
   flex-wrap: wrap;
@@ -672,12 +667,15 @@ onBeforeUnmount(() => {
 .prompt-filter {
   border: 1px solid var(--el-border-color);
   border-radius: 999px;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.85rem;
+  padding: 0.125rem 0.4rem;
+  font-size: 0.65rem;
   color: var(--el-text-color-secondary);
   background: var(--el-bg-color);
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 
   &.is-active {
     border-color: var(--el-color-primary);
@@ -686,21 +684,15 @@ onBeforeUnmount(() => {
   }
 }
 
-.prompt-footer-content {
-  padding: 0.5rem;
-}
-
 .prompt-footer-stats {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--el-text-color-secondary);
-  margin: 0 0 0.25rem 0;
 }
 
 .prompt-footer-hint {
-  margin: 0 0 0.5rem 0;
   font-size: 0.7rem;
   color: var(--el-text-color-secondary);
   opacity: 0.7;
@@ -727,16 +719,6 @@ onBeforeUnmount(() => {
   margin-top: 0.35rem;
   font-size: 0.9rem;
   color: var(--el-text-color-secondary);
-}
-
-.prompt-main-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-
-  .aisdk-btn {
-    gap: 0.35rem;
-  }
 }
 
 .prompt-readonly-hint {

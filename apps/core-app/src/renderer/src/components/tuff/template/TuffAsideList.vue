@@ -1,4 +1,5 @@
-<script setup
+<script
+  setup
   lang="ts"
   name="TuffAsideList"
   generic="T extends Record<string, any> = Record<string, any>"
@@ -12,7 +13,7 @@ type BadgeInfo = {
 
 const props = withDefaults(
   defineProps<{
-    items: T[]
+    items?: T[]
     selectedId?: string | number | null
     getId?: (item: T) => string | number
     getTitle?: (item: T) => string
@@ -48,7 +49,9 @@ function resolveTitle(item: T): string {
 }
 
 function resolveDescription(item: T): string | undefined {
-  return props.getDescription ? props.getDescription(item) : (item as { description?: string }).description
+  return props.getDescription
+    ? props.getDescription(item)
+    : (item as { description?: string }).description
 }
 
 function resolveBadge(item: T): BadgeInfo {
@@ -78,7 +81,7 @@ function handleSelect(item: T): void {
     <ul v-if="props.items.length" class="tuff-aside-list__items" role="listbox">
       <li v-for="item in props.items" :key="resolveId(item)">
         <button
-          class="tuff-aside-list__item"
+          class="tuff-aside-list__item fake-background"
           type="button"
           role="option"
           :class="{
@@ -126,14 +129,17 @@ function handleSelect(item: T): void {
   width: 100%;
   border: 1px solid transparent;
   border-radius: 1rem;
-  background: var(--el-fill-color-light);
+  overflow: hidden;
   padding: 0.9rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
   cursor: pointer;
 
   &:hover {
@@ -144,7 +150,6 @@ function handleSelect(item: T): void {
   &.is-active {
     border-color: rgba(99, 102, 241, 0.6);
     background: rgba(99, 102, 241, 0.08);
-    transform: translateX(2px);
   }
 
   &.is-disabled {
