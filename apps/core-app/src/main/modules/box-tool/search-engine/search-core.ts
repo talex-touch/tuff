@@ -36,7 +36,7 @@ import { QueryCompletionService } from './query-completion-service'
 import { UsageStatsCache, getUsageStatsBatchCached } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { previewProvider } from '../addon/preview'
-import intelligenceSearchProvider from './providers/intelligence-provider'
+// import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
  * Generates a unique key for an activation request.
@@ -93,7 +93,7 @@ export class SearchEngineCore
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)
-    this.registerProvider(intelligenceSearchProvider)
+    // Removed intelligenceSearchProvider - AI功能现在由 internal-ai-plugin 提供
   }
 
   static getInstance(): SearchEngineCore {

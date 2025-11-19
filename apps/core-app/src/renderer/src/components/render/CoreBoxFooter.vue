@@ -55,19 +55,17 @@ const primaryActionLabel = computed(() => {
 
 const keyHints = computed(() => {
   const quickSelectLabelKey = 'coreBox.hints.quickSelect'
-  const aiHotkeyLabelKey = 'coreBox.intelligence.hotkey'
-
   const quickSelectLabel = t(quickSelectLabelKey)
-  const aiHotkeyLabel = t(aiHotkeyLabelKey)
+  const aiHotkeyLabel = 'Meta+K'
 
-  const aiHotkey = isMacPlatform ? '⌘⇧I' : 'Ctrl+Shift+I'
+  const aiHotkey = isMacPlatform ? '⌘K' : 'Meta+K'
   const quickSelectHotkey = isMacPlatform ? '⌘1-0' : 'Alt+1-0'
 
   return [
     { key: '↵', label: primaryActionLabel.value },
     {
       key: aiHotkey,
-      label: aiHotkeyLabel === aiHotkeyLabelKey ? 'Ask Talex AI' : aiHotkeyLabel
+      label: aiHotkeyLabel
     },
     {
       key: quickSelectHotkey,
