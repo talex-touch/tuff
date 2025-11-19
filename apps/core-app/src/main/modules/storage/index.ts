@@ -4,7 +4,12 @@ import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
+import chalk from 'chalk'
 import { BaseModule } from '../abstract-base-module'
+import { StorageCache } from './storage-cache'
+import { StoragePollingService } from './storage-polling-service'
+import { StorageLRUManager } from './storage-lru-manager'
+import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 
 let pluginConfigPath: string
 
@@ -15,13 +20,25 @@ function broadcastUpdate(name: string) {
   }
 }
 
+/**
+ * StorageModule - Main storage module with caching and auto-save
+ * 
+ * Features:
+ * - In-memory caching to avoid direct file I/O
+ * - Periodic persistence via polling service
+ * - LRU-based automatic eviction
+ * - Frequency monitoring with warnings
+ */
 export class StorageModule extends BaseModule {
   static key: symbol = Symbol.for('Storage')
   name: ModuleKey = StorageModule.key
 
-  configs = new Map<string, object>()
-  pluginConfigs = new Map<string, object>()
+  private cache = new StorageCache()
+  private pollingService: StoragePollingService
+  private lruManager: StorageLRUManager
+  private frequencyMonitor = new StorageFrequencyMonitor()
 
+  pluginConfigs = new Map<string, object>()
   PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
   constructor() {
@@ -29,36 +46,55 @@ export class StorageModule extends BaseModule {
       create: true,
       dirName: 'config',
     })
+
+    this.pollingService = new StoragePollingService(
+      this.cache,
+      async (name) => await this.persistConfig(name),
+    )
+
+    this.lruManager = new StorageLRUManager(
+      this.cache,
+      async (name) => await this.evictConfig(name),
+    )
   }
 
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
-    console.log(
-      `[Config] Init config path ${file.dirPath} and plugin config path ${pluginConfigPath}`,
+    console.info(
+      chalk.blue(`[StorageModule] Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`),
     )
+
+    this.pollingService.start()
+    this.lruManager.startCleanup()
 
     this.setupListeners()
   }
 
-  onDestroy(): MaybePromise<void> {
-    this.saveAllConfig()
-    this.configs.clear()
+  async onDestroy(): Promise<void> {
+    await this.pollingService.stop()
+    this.lruManager.stopCleanup()
+    this.cache.clear()
     this.pluginConfigs.clear()
+    console.info(chalk.green('[StorageModule] Shutdown complete'))
   }
 
   getConfig(name: string): object {
     if (!this.filePath)
       throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
 
-    if (this.configs.has(name)) {
-      return this.configs.get(name)!
+    this.frequencyMonitor.trackGet(name)
+
+    if (this.cache.has(name)) {
+      return this.cache.get(name)!
     }
 
     const p = path.resolve(this.filePath!, name)
     const file = fse.existsSync(p) ? JSON.parse(fse.readFileSync(p, 'utf-8')) : {}
 
-    this.configs.set(name, file)
+    this.cache.set(name, file)
+    this.cache.clearDirty(name)
+
     return file
   }
 
@@ -68,7 +104,9 @@ export class StorageModule extends BaseModule {
 
     const filePath = path.resolve(this.filePath, name)
     const file = JSON.parse(fse.readFileSync(filePath, 'utf-8'))
-    this.configs.set(name, file)
+    
+    this.cache.set(name, file)
+    this.cache.clearDirty(name)
 
     return file
   }
@@ -77,20 +115,18 @@ export class StorageModule extends BaseModule {
     if (!this.filePath)
       throw new Error(`Config ${name} not found`)
 
-    const configData = content ?? JSON.stringify(this.configs.get(name) ?? {})
-    const p = path.join(this.filePath, name)
+    this.frequencyMonitor.trackSave(name)
 
-    fse.ensureFileSync(p)
-    fse.writeFileSync(p, configData)
+    const configData = content ?? JSON.stringify(this.cache.get(name) ?? {})
 
     if (clear) {
-      this.configs.delete(name)
+      this.cache.evict(name)
     }
     else {
-      this.configs.set(name, JSON.parse(configData))
+      const parsed = JSON.parse(configData)
+      this.cache.set(name, parsed)
     }
 
-    // 使用 setImmediate 确保文件系统完全写入后再广播更新事件
     setImmediate(() => {
       broadcastUpdate(name)
     })
@@ -98,13 +134,36 @@ export class StorageModule extends BaseModule {
     return true
   }
 
-  saveAllConfig(): void {
-    if (!this.filePath)
+  /**
+   * Persist config to disk (called by polling service)
+   */
+  private async persistConfig(name: string): Promise<void> {
+    if (!this.filePath) {
       throw new Error(`Config path not found!`)
+    }
 
-    this.configs.forEach((_value, key) => {
-      this.saveConfig(key)
-    })
+    const data = this.cache.get(name)
+    if (!data) {
+      console.warn(chalk.yellow(`[StorageModule] Attempted to save non-existent config: ${name}`))
+      return
+    }
+
+    const configData = JSON.stringify(data)
+    const p = path.join(this.filePath, name)
+
+    fse.ensureFileSync(p)
+    await fse.writeFile(p, configData, 'utf-8')
+  }
+
+  /**
+   * Evict config from cache (called by LRU manager)
+   * Saves dirty configs before eviction
+   */
+  private async evictConfig(name: string): Promise<void> {
+    if (this.cache.isDirty(name)) {
+      await this.persistConfig(name)
+      this.cache.clearDirty(name)
+    }
   }
 
   setupListeners() {
@@ -122,7 +181,6 @@ export class StorageModule extends BaseModule {
       const { key, content, clear } = data
       if (typeof key !== 'string')
         return false
-      // saveConfig 内部会调用 broadcastUpdate,无需在这里重复调用
       return this.saveConfig(key, content, clear)
     })
 
@@ -130,13 +188,12 @@ export class StorageModule extends BaseModule {
       if (!data || typeof data !== 'string')
         return {}
       const result = this.reloadConfig(data)
-      // 重新加载配置后也需要广播更新
       broadcastUpdate(data)
       return result
     })
 
-    channel.regChannel(ChannelType.MAIN, 'storage:saveall', () => {
-      this.saveAllConfig()
+    channel.regChannel(ChannelType.MAIN, 'storage:saveall', async () => {
+      await this.pollingService.forceSave()
     })
   }
 }
@@ -146,4 +203,6 @@ const storageModule = new StorageModule()
 export { storageModule }
 
 export const getConfig = (name: string) => storageModule.getConfig(name)
-export const saveConfig = storageModule.saveConfig.bind(module)
+export const saveConfig = storageModule.saveConfig.bind(storageModule)
+
+

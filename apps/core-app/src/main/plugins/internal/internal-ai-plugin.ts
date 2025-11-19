@@ -12,8 +12,8 @@ import { TouchPlugin } from '../../modules/plugin'
 import { normalizePrompt } from './internal-ai-utils'
 import { InternalPluginLogger } from './internal-plugin-logger'
 
-const AI_SYSTEM_PROMPT
-  = '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
+const AI_SYSTEM_PROMPT =
+  '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
 
 export function createInternalAiPlugin(): TouchPlugin {
   const pluginPath = path.join(app.getPath('userData'), '__internal_ai__')
@@ -27,22 +27,14 @@ export function createInternalAiPlugin(): TouchPlugin {
     { enable: false, address: '' },
     pluginPath,
     {},
-    { skipDataInit: false },
+    { skipDataInit: false }
   )
 
   ;(aiPlugin as any).logger = new InternalPluginLogger(aiPlugin.name)
   const feature = createAiFeature()
   const featureAdded = aiPlugin.addFeature(feature)
 
-  if (featureAdded) {
-    console.log('[InternalAI] Feature added successfully:', {
-      id: feature.id,
-      name: feature.name,
-      commands: feature.commands,
-      totalFeatures: aiPlugin.getFeatures().length,
-    })
-  }
-  else {
+  if (!featureAdded) {
     console.error('[InternalAI] Failed to add feature!')
   }
 
@@ -65,20 +57,20 @@ function createAiFeature(): IPluginFeature {
     icon: {
       type: 'emoji',
       value: '🤖',
-      status: 'normal',
+      status: 'normal'
     } as any, // 传入普通对象，让 PluginFeature 构造函数创建 TuffIconImpl
     push: true, // Push mode: 主动推送 AI 回答
     platform: {},
     commands: [
       {
         type: 'over',
-        value: ['ai', '@ai', '/ai'],
-      } as any,
+        value: ['ai', '@ai', '/ai']
+      } as any
     ],
     interaction: {
-      type: 'widget',
+      type: 'widget'
     },
-    priority: 999,
+    priority: 999
   }
 }
 
@@ -111,8 +103,8 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           requestId,
           prompt,
           status: 'pending',
-          createdAt: Date.now(),
-        },
+          createdAt: Date.now()
+        }
       } as any)
       .build()
   }
@@ -122,7 +114,7 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
     prompt: string,
     answer: string,
     model?: string,
-    usage?: AiUsageInfo,
+    usage?: AiUsageInfo
   ): TuffItem => {
     return buildBaseItem(`internal-ai:answer:${requestId}`)
       .setTitle(prompt || 'Talex AI')
@@ -134,7 +126,7 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
         answer,
         model,
         usage,
-        createdAt: Date.now(),
+        createdAt: Date.now()
       })
       .setMeta({
         keepCoreBoxOpen: true,
@@ -145,8 +137,8 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           answer,
           model,
           usage,
-          createdAt: Date.now(),
-        },
+          createdAt: Date.now()
+        }
       } as any)
       .build()
   }
@@ -162,8 +154,8 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           prompt,
           status: 'error',
           error: message,
-          createdAt: Date.now(),
-        },
+          createdAt: Date.now()
+        }
       } as any)
       .build()
   }
@@ -186,21 +178,20 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           const payload: AiChatPayload = {
             messages: [
               { role: 'system', content: AI_SYSTEM_PROMPT },
-              { role: 'user', content: prompt },
-            ],
+              { role: 'user', content: prompt }
+            ]
           }
 
           const result = await ai.text.chat(payload)
           const answerText = result?.result?.trim() ?? ''
           await pushItems([
-            createAnswerItem(requestId, prompt, answerText, result?.model, result?.usage),
+            createAnswerItem(requestId, prompt, answerText, result?.model, result?.usage)
           ])
-        }
-        catch (error) {
+        } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           await pushItems([createErrorItem(requestId, prompt, message)])
         }
       })()
-    },
+    }
   }
 }

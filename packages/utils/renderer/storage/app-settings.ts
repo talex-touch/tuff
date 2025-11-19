@@ -1,5 +1,5 @@
 import type { AppSetting } from '../..'
-import { createStorageProxy, TouchStorage } from '.'
+import { createStorageProxy, TouchStorage } from './base-storage'
 import { appSettingOriginData, StorageList } from '../..'
 
 /**
