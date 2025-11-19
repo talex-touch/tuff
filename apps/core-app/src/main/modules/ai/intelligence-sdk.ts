@@ -16,7 +16,7 @@ import type {
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
 import { strategyManager } from './intelligence-strategy-manager'
 
-const INTELLIGENCE_TAG = chalk.hex('#8e24aa').bold('[Intelligence]')
+const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const logInfo = (...args: any[]) => console.log(INTELLIGENCE_TAG, ...args)
 const logWarn = (...args: any[]) => console.warn(INTELLIGENCE_TAG, ...args)
 const logError = (...args: any[]) => console.error(INTELLIGENCE_TAG, ...args)
@@ -74,33 +74,14 @@ export class AiSDK {
 
     if (config.providers) {
       const manager = ensureProviderManager()
-      logInfo(`[DEBUG] ========== ai.updateConfig: Registering providers ==========`)
-      logInfo(`[DEBUG] Clearing existing providers...`)
       manager.clear()
-      logInfo(`[DEBUG] Registering ${config.providers.length} providers:`)
-      config.providers.forEach((providerConfig, idx) => {
+      config.providers.forEach((providerConfig) => {
         try {
-          logInfo(`[DEBUG]   [${idx}] Registering provider:`, {
-            id: providerConfig.id,
-            type: providerConfig.type,
-            enabled: providerConfig.enabled,
-            hasApiKey: !!providerConfig.apiKey,
-            hasBaseUrl: !!providerConfig.baseUrl
-          })
-          const provider = manager.registerFromConfig(providerConfig)
-          logInfo(`[DEBUG]   [${idx}] Provider registered, isEnabled=${provider.isEnabled()}`)
+          manager.registerFromConfig(providerConfig)
         } catch (error) {
-          logError(`[DEBUG]   [${idx}] Failed to register provider ${providerConfig.id}:`, error)
+          logError(`Failed to register provider ${providerConfig.id}:`, error)
         }
       })
-      
-      const enabledProviders = manager.getEnabled()
-      logInfo(`[DEBUG] After registration, enabled providers count: ${enabledProviders.length}`)
-      enabledProviders.forEach((p, idx) => {
-        const cfg = p.getConfig()
-        logInfo(`[DEBUG]   [${idx}] ${cfg.id} (${cfg.type})`)
-      })
-      logInfo(`[DEBUG] ========== ai.updateConfig: Registration complete ==========`)
     }
 
     if (this.config.defaultStrategy) {
@@ -154,31 +135,10 @@ export class AiSDK {
 
     const manager = ensureProviderManager()
 
-    logInfo(`[DEBUG] ========== invoke ${capabilityId} - Getting providers ==========`)
-    const allProviders = manager.getEnabled()
-    logInfo(`[DEBUG] manager.getEnabled() returned ${allProviders.length} providers`)
-    allProviders.forEach((p, idx) => {
-      const cfg = p.getConfig()
-      logInfo(`[DEBUG]   [${idx}] ${cfg.id} (${cfg.type}), enabled=${cfg.enabled}, isEnabled()=${p.isEnabled()}`)
-    })
-    
-    const enabledProviders = allProviders.map(p => p.getConfig())
-    logInfo(`[DEBUG] enabledProviders for ${capabilityId}:`, {
-      count: enabledProviders.length,
-      providers: enabledProviders.map(p => ({ id: p.id, type: p.type, enabled: p.enabled }))
-    })
-
+    const enabledProviders = manager.getEnabled().map(p => p.getConfig())
     const typeFilteredProviders = enabledProviders.filter(config => 
       capability.supportedProviders.includes(config.type)
     )
-    logInfo(`[DEBUG] after type filter:`, {
-      count: typeFilteredProviders.length,
-      supportedTypes: capability.supportedProviders,
-      providers: typeFilteredProviders.map(p => ({ id: p.id, type: p.type }))
-    })
-
-    logInfo(`[DEBUG] runtimeOptions.allowedProviderIds:`, runtimeOptions.allowedProviderIds)
-    logInfo(`[DEBUG] configuredProviders:`, configuredProviders)
 
     const availableProviders = typeFilteredProviders.filter(config => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
@@ -187,13 +147,7 @@ export class AiSDK {
       return runtimeOptions.allowedProviderIds.includes(config.id)
     })
 
-    logInfo(`[DEBUG] final availableProviders:`, {
-      count: availableProviders.length,
-      providers: availableProviders.map(p => ({ id: p.id, type: p.type }))
-    })
-
     if (availableProviders.length === 0) {
-      logError(`[DEBUG] capabilityRouting:`, capabilityRouting)
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
@@ -337,22 +291,9 @@ export class AiSDK {
     const manager = ensureProviderManager()
 
     const enabledProviders = manager.getEnabled().map(p => p.getConfig())
-    logInfo(`[DEBUG-Stream] enabledProviders for ${capabilityId}:`, {
-      count: enabledProviders.length,
-      providers: enabledProviders.map(p => ({ id: p.id, type: p.type, enabled: p.enabled }))
-    })
-
     const typeFilteredProviders = enabledProviders.filter(config => 
       capability.supportedProviders.includes(config.type)
     )
-    logInfo(`[DEBUG-Stream] after type filter:`, {
-      count: typeFilteredProviders.length,
-      supportedTypes: capability.supportedProviders,
-      providers: typeFilteredProviders.map(p => ({ id: p.id, type: p.type }))
-    })
-
-    logInfo(`[DEBUG-Stream] runtimeOptions.allowedProviderIds:`, runtimeOptions.allowedProviderIds)
-    logInfo(`[DEBUG-Stream] configuredProviders:`, configuredProviders)
 
     const availableProviders = typeFilteredProviders.filter(config => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
@@ -361,13 +302,7 @@ export class AiSDK {
       return runtimeOptions.allowedProviderIds.includes(config.id)
     })
 
-    logInfo(`[DEBUG-Stream] final availableProviders:`, {
-      count: availableProviders.length,
-      providers: availableProviders.map(p => ({ id: p.id, type: p.type }))
-    })
-
     if (availableProviders.length === 0) {
-      logError(`[DEBUG-Stream] capabilityRouting:`, capabilityRouting)
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
