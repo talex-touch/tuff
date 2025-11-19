@@ -14,8 +14,11 @@ if (!process.env.APP_VERSION) {
   process.env.APP_VERSION = packageJson.version
 }
 
-globalThis.__filename = fileURLToPath(import.meta.url)
-globalThis.__dirname = path.dirname(__filename)
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+globalThis.__filename = __filename
+globalThis.__dirname = __dirname
 
 process.env.DIST = path.join(__dirname, '..')
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public')
@@ -27,8 +30,7 @@ console.log = (...args: any[]) => {
   globalThis.logger.info(args)
 }
 console.log = (message: any, ...args: any[]) => {
-  if (args?.length)
-    globalThis.logger.info(message, args)
+  if (args?.length) globalThis.logger.info(message, args)
   else globalThis.logger.info(message)
 }
 
@@ -37,8 +39,7 @@ console.error = (...args: any[]) => {
   globalThis.errLogger.error(args)
 }
 console.error = (message: any, ...args: any[]) => {
-  if (args?.length)
-    globalThis.errLogger.error(message, args)
+  if (args?.length) globalThis.errLogger.error(message, args)
   else globalThis.errLogger.error(message)
 }
 
@@ -47,8 +48,7 @@ console.warn = (...args: any[]) => {
   globalThis.logger.warn(args)
 }
 console.warn = (message: any, ...args: any[]) => {
-  if (args?.length)
-    globalThis.logger.warn(message, args)
+  if (args?.length) globalThis.logger.warn(message, args)
   else globalThis.logger.warn(message)
 }
 
@@ -57,8 +57,7 @@ console.debug = (...args: any[]) => {
   globalThis.logger.debug(args)
 }
 console.debug = (message: any, ...args: any[]) => {
-  if (args?.length)
-    globalThis.logger.debug(message, args)
+  if (args?.length) globalThis.logger.debug(message, args)
   else globalThis.logger.debug(message)
 }
 
@@ -66,9 +65,8 @@ console.debug = (message: any, ...args: any[]) => {
 if (fse.existsSync(path.join(app.getPath('userData'), 'debug.talex'))) {
   process.env.DEBUG = 'true'
   globalThis.logger.level = 'debug'
-}
-else {
-  globalThis.logger.level = app.isPackaged ? 'info' : 'debug'
+} else {
+  globalThis.logger.level = app.isPackaged ? 'warn' : 'info'
 }
 
 // Remove electron security warnings

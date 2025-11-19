@@ -14,10 +14,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
      */
     if (process.platform === 'darwin') {
       this.window.setVibrancy('fullscreen-ui')
-
-      console.debug('[TouchWindow] Apply Vibrancy on window')
-    }
-    else {
+    } else {
       this.window.setBackgroundMaterial('mica')
 
       console.debug('[TouchWindow] Apply MicaMaterial on window')
@@ -51,34 +48,34 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   async __beforeLoad(
     target: string,
-    options?: TalexTouch.LoadURLOptions | undefined,
+    options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<void> {
     this.window.webContents.on(
       'did-fail-load',
       (event: any, errorCode: number, errorDescription: string, url: string) => {
         console.error(
           `[TouchWindow] Failed to load from target [${target}] - [${JSON.stringify(
-            options ?? {},
+            options ?? {}
           )}] with error:`,
           errorCode,
           errorDescription,
           url,
-          event,
+          event
         )
-      },
+      }
     )
 
     this.window.webContents.addListener('render-process-gone', (_event: any, details: any) => {
       console.error(
         `[TouchWindow] Render process gone! Reason: ${details.reason}, Exit Code: ${
           details.exitCode
-        }. Details: ${JSON.stringify(details)}`,
+        }. Details: ${JSON.stringify(details)}`
       )
 
       // In development mode, if the process is killed, it's likely due to a hot reload
       if (!app.isPackaged && details.reason === 'killed') {
         console.log(
-          '[TouchWindow] Development mode: Process killed during hot reload, this is expected.',
+          '[TouchWindow] Development mode: Process killed during hot reload, this is expected.'
         )
         return
       }
@@ -94,7 +91,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   async loadURL(
     url: string,
-    options?: TalexTouch.LoadURLOptions | undefined,
+    options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<WebContents> {
     this.__beforeLoad(url, options)
 
@@ -102,7 +99,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     if (options && options.devtools) {
       this.window.webContents.openDevTools({
-        mode: options.devtools === true ? 'detach' : options.devtools,
+        mode: options.devtools === true ? 'detach' : options.devtools
       })
     }
 
@@ -111,7 +108,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   async loadFile(
     filePath: string,
-    options?: TalexTouch.LoadFileOptions | undefined,
+    options?: TalexTouch.LoadFileOptions | undefined
   ): Promise<WebContents> {
     this.__beforeLoad(filePath, options)
 
@@ -119,7 +116,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     if (options && options.devtools) {
       this.window.webContents.openDevTools({
-        mode: options.devtools === true ? 'detach' : options.devtools,
+        mode: options.devtools === true ? 'detach' : options.devtools
       })
     }
 
