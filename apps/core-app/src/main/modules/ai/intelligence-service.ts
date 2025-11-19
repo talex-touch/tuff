@@ -15,7 +15,7 @@ import chalk from 'chalk'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 import { fetchProviderModels } from './provider-models'
 
-const LOG = chalk.hex('#b388ff').bold('[Intelligence]')
+const LOG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const logInfo = (...args: any[]) => console.log(LOG, ...args)
 const logError = (...args: any[]) => console.error(LOG, ...args)
 

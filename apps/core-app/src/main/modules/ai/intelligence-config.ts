@@ -8,7 +8,7 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { storageModule } from '../storage'
 import chalk from 'chalk'
 
-const LOG = chalk.hex('#b388ff').bold('[Intelligence]')
+const LOG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const SUPPORTED_PROVIDER_TYPES = new Set(['openai', 'anthropic', 'deepseek', 'siliconflow', 'local'])
 
 const normalizeStrategyId = (value?: string) => {
