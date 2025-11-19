@@ -55,10 +55,10 @@ function handleCopyPrimary(): void {
 
 <template>
   <div class="CoreBoxRender" @click="emits('trigger', item)">
-    <template v-if="render.mode === 'default'">
+    <template v-if="render?.mode === 'default'">
       <BoxItem :item="item" :active="active" :render="render" :quick-key="quickKey" />
     </template>
-    <template v-else-if="render.mode === 'custom' && customRenderer">
+    <template v-else-if="render?.mode === 'custom' && customRenderer">
       <div class="CoreBoxRender-Custom" :class="{ active }">
         <component
           :is="customRenderer"

@@ -20,6 +20,7 @@ export function useKeyboard(
   clipboardOptions: any,
   clearClipboard: () => void,
   activeActivations: Ref<any>,
+  handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   itemRefs: Ref<any[]>,
 ) {
   function onKeyDown(event: KeyboardEvent): void {
@@ -132,7 +133,16 @@ export function useKeyboard(
 
     // Dynamic scrolling logic
     requestAnimationFrame(() => {
+      // Safety check: ensure focus index is valid
+      if (boxOptions.focus < 0 || boxOptions.focus >= itemRefs.value.length) {
+        return
+      }
+
       const activeItemComponent = itemRefs.value[boxOptions.focus]
+      if (!activeItemComponent) {
+        return
+      }
+
       const activeEl = activeItemComponent?.$el || activeItemComponent
       const sb = scrollbar.value
 

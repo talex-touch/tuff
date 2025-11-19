@@ -4,11 +4,9 @@ import type {
 } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import chalk from 'chalk'
 import { storageModule } from '../storage'
 import { ai } from './intelligence-sdk'
 
-const LOG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const SUPPORTED_PROVIDER_TYPES = new Set(['openai', 'anthropic', 'deepseek', 'siliconflow', 'local'])
 
 function normalizeStrategyId(value?: string) {
@@ -29,7 +27,7 @@ function getLatestConfig(): AiSDKPersistedConfig | undefined {
   return stored
 }
 
-export function ensureAiConfigLoaded(force = false): void {
+export function ensureAiConfigLoaded(): void {
   // 每次都实时从 storage 读取最新配置
   const stored = getLatestConfig()
 
@@ -114,7 +112,7 @@ export function setupConfigUpdateListener(): void {
 
   channel.regChannel(ChannelType.MAIN, 'storage:update', ({ data }) => {
     if (data && typeof data === 'object' && 'name' in data && data.name === StorageList.IntelligenceConfig) {
-      ensureAiConfigLoaded(true)
+      ensureAiConfigLoaded()
     }
   })
 }
