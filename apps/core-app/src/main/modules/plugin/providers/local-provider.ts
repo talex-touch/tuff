@@ -27,7 +27,9 @@ export class LocalPluginProvider {
     const result: string[] = []
 
     for (const entry of entries) {
+      // Skip hidden directories and internal plugin folders
       if (entry.startsWith('.')) continue
+      if (entry.startsWith('__internal_')) continue
       const entryPath = path.resolve(this.pluginRoot, entry)
       const stats = await fse.stat(entryPath).catch(() => undefined)
       if (!stats?.isDirectory()) continue

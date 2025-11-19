@@ -2,6 +2,7 @@ import {
   AiChatPayload,
   AiUsageInfo,
   IExecuteArgs,
+  IProviderActivate,
   ISearchProvider,
   TuffFactory,
   TuffInputType,
@@ -18,6 +19,7 @@ import { coreBoxManager } from '../../core-box/manager'
 import { windowManager } from '../../core-box/window'
 import { ProviderContext } from '../types'
 import { genTouchApp } from '../../../../core/'
+import searchEngineCore from '../search-core'
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
@@ -54,24 +56,31 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const normalized = query.text?.trim() ?? ''
+
+    // 模仿插件：如果 AI 已经被激活，则不再要求前缀，直接把输入当作 prompt
+    const activationState = searchEngineCore.getActivationState()
+    const isAiActive = activationState?.some((a) => a.id === this.id)
+
     const parsedPrompt = this.extractPrompt(normalized)
 
-    if (!parsedPrompt) {
+    if (!isAiActive && !parsedPrompt) {
       return TuffFactory.createSearchResult(query).build()
     }
 
+    const prompt = isAiActive ? normalized : parsedPrompt?.prompt ?? ''
+
     const items: TuffItem[] = []
 
-    if (parsedPrompt.prompt.length === 0) {
+    if (!prompt) {
       items.push(this.createPlaceholderItem())
     } else {
-      items.push(this.createActionItem(parsedPrompt.prompt))
+      items.push(this.createActionItem(prompt))
     }
 
     return TuffFactory.createSearchResult(query).setItems(items).build()
   }
 
-  async onExecute({ item }: IExecuteArgs): Promise<null> {
+  async onExecute({ item }: IExecuteArgs): Promise<IProviderActivate | null> {
     const meta = item.meta?.intelligence as
       | (Partial<IntelligencePayload> & { keepCoreBoxOpen?: boolean; placeholder?: boolean })
       | undefined
@@ -85,7 +94,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       return null
     }
 
-    const prompt = meta.prompt.trim()
+    const prompt = (meta.prompt ?? '').trim()
     if (!prompt) {
       this.focusInputWithPrefix()
       return null
@@ -101,6 +110,26 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
 
     this.emitResultItem(this.createResultItem(pendingPayload))
 
+    void this.dispatchPrompt(requestId, prompt)
+
+    // 模仿插件：返回一个 activation，让 SearchEngineCore 锁定到 AI provider
+    const activation: IProviderActivate = {
+      id: this.id,
+      name: this.name,
+      icon: item.render?.basic?.icon ?? item.icon,
+      meta: {
+        keepCoreBoxOpen: true,
+        intelligence: {
+          requestId,
+          prompt
+        }
+      }
+    }
+
+    return activation
+  }
+
+  private async dispatchPrompt(requestId: string, prompt: string): Promise<void> {
     try {
       ensureAiConfigLoaded()
       const payload: AiChatPayload = {
@@ -134,8 +163,6 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
 
       this.emitResultItem(this.createResultItem(errorPayload))
     }
-
-    return null
   }
 
   private extractPrompt(value: string): { prompt: string } | null {

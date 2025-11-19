@@ -9,7 +9,7 @@ import path from 'path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TouchPlugin } from './plugin'
 import { TuffIconImpl } from '../../core/tuff-icon'
-import { shell } from 'electron'
+import { shell, app } from 'electron'
 import { createDbUtils } from '../../db/utils'
 import { databaseModule } from '../database'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
@@ -27,6 +27,7 @@ import { getOfficialPlugins } from '../../service/official-plugin.service'
 import util from 'util'
 import { createLogger } from '../../utils/logger'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+
 
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
@@ -144,6 +145,8 @@ class DevPluginWatcher {
  * @param pluginPath - Base directory for plugins
  * @returns Plugin manager instance
  */
+const INTERNAL_PLUGIN_NAMES = new Set<string>()
+
 const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
@@ -238,6 +241,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const getPluginList = (): Array<object> => {
     logInfo('getPluginList called.')
     const list = new Array<object>()
+    const isDevEnv = !app.isPackaged
 
     try {
       for (const plugin of plugins.values()) {
@@ -245,13 +249,22 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           logWarn('Skipping null/undefined plugin')
           continue
         }
+
         logDebug(
           'Processing plugin entry',
           pluginTag(plugin.name),
           'status:',
           PluginStatus[(plugin as TouchPlugin).status]
         )
-        list.push((plugin as TouchPlugin).toJSONObject())
+        const json = (plugin as TouchPlugin).toJSONObject() as any
+        if ((plugin as any).internal) {
+          if (!isDevEnv) {
+            logDebug('Skipping internal plugin from list in production', pluginTag(plugin.name))
+            continue
+          }
+          json.internal = true
+        }
+        list.push(json)
       }
 
       logInfo(`Returning plugin list with ${list.length} item(s).`)
@@ -465,6 +478,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   }
 
   const loadPlugin = async (pluginName: string): Promise<boolean> => {
+    if (INTERNAL_PLUGIN_NAMES.has(pluginName)) {
+      logInfo('Skipping disk load for internal plugin', pluginTag(pluginName))
+      return true
+    }
     if (loadingPlugins.has(pluginName)) {
       logDebug('Skip load because plugin is already loading.', pluginTag(pluginName))
       return false
@@ -697,6 +714,30 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     return true
   }
 
+  /**
+   * Register an internal plugin instance that is created in code (no manifest / scanning).
+   * It is added to the plugins map but is treated as hidden in user-facing lists.
+   */
+  const registerInternalPlugin = (pluginInstance: ITouchPlugin): void => {
+    const pluginName = pluginInstance.name
+    if (!pluginName) {
+      logWarn('Cannot register internal plugin without name')
+      return
+    }
+
+    if (plugins.has(pluginName)) {
+      logWarn('Internal plugin already registered, skipping:', pluginTag(pluginName))
+      return
+    }
+
+    ;(pluginInstance as any).internal = true
+
+    plugins.set(pluginName, pluginInstance)
+    INTERNAL_PLUGIN_NAMES.add(pluginName)
+
+    logInfo('Internal plugin registered', pluginTag(pluginName))
+  }
+
   const managerInstance: IPluginManager = {
     plugins,
     active,
@@ -720,7 +761,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     loadPlugin,
     unloadPlugin,
     installFromSource,
-    uninstallPlugin
+    uninstallPlugin,
+    registerInternalPlugin
   }
 
   ;(managerInstance as any).__installQueue = installQueue
@@ -963,6 +1005,32 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   return managerInstance
 }
 
+import { internalPlugins } from '../../plugins/internal'
+
+/**
+ * Register built-in internal plugins that are created purely in code.
+ * These plugins are not loaded from disk and are hidden from user-facing lists.
+ */
+function registerBuiltInInternalPlugins(manager: IPluginManager): void {
+  try {
+    for (const createPlugin of internalPlugins) {
+      try {
+        const plugin = createPlugin()
+        manager.registerInternalPlugin(plugin)
+
+        // Default start: enable internal plugin, but do NOT persist to enabledPlugins
+        void plugin.enable().catch((error) => {
+          pluginLog.warn(`Failed to enable internal plugin ${plugin.name}`, { error })
+        })
+      } catch (error) {
+        pluginLog.warn('Failed to create internal plugin', { error })
+      }
+    }
+  } catch (error) {
+    pluginLog.warn('Failed to register built-in internal plugins', { error })
+  }
+}
+
 export class PluginModule extends BaseModule {
   pluginManager?: IPluginManager
   installQueue?: PluginInstallQueue
@@ -983,6 +1051,9 @@ export class PluginModule extends BaseModule {
     this.installQueue = (this.pluginManager as any).__installQueue as PluginInstallQueue
     this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
     this.pluginManager.healthMonitor = this.healthMonitor
+
+    // Register built-in internal plugins (e.g. internal AI)
+    registerBuiltInInternalPlugins(this.pluginManager)
   }
   onDestroy(): MaybePromise<void> {
     this.pluginManager?.plugins.forEach((plugin) => plugin.disable())

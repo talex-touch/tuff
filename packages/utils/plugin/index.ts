@@ -358,6 +358,11 @@ export interface IPluginManager {
   unloadPlugin(pluginName: string): Promise<boolean>
   installFromSource(request: PluginInstallRequest): Promise<PluginInstallSummary>
   uninstallPlugin(pluginName: string): Promise<boolean>
+  /**
+   * Register an internal plugin that is created in code (no manifest / scanning).
+   * Internal plugins are always hidden from user-facing plugin lists.
+   */
+  registerInternalPlugin(plugin: ITouchPlugin): void
 }
 
 /**
