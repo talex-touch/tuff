@@ -144,6 +144,10 @@ useVisibility(
 )
 const itemRefs = ref<HTMLElement[]>([])
 
+watch(res, () => {
+  itemRefs.value = []
+})
+
 useKeyboard(
   boxOptions,
   res,
@@ -473,7 +477,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
         <CoreBoxRender
           v-for="(item, index) in res"
           :key="index"
-          ref="itemRefs"
+          :ref="(el: any) => { if (el) itemRefs.value[index] = el }"
           :active="boxOptions.focus === index"
           :item="item"
           :index="index"

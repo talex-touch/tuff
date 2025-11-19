@@ -2,8 +2,10 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { ProviderDeactivatedEvent, TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getConfig } from '../../storage'
 import { SearchEngineCore } from '../search-engine/search-core'
+import { searchLogger } from '../search-engine/search-logger'
 import { ipcManager } from './ipc'
 import { windowManager } from './window'
 
@@ -13,7 +15,7 @@ interface ExpandOptions {
 }
 
 export class CoreBoxManager {
-  searchEngine: SearchEngineCore
+  private _searchEngine: SearchEngineCore | null = null
   private static instance: CoreBoxManager
   private _show: boolean = false
   private _isCollapsed = true
@@ -23,7 +25,38 @@ export class CoreBoxManager {
   private currentFeature: IPluginFeature | null = null
 
   private constructor() {
-    this.searchEngine = SearchEngineCore.getInstance()
+    // Lazy initialization to avoid circular dependency
+    // Set up event listeners
+    this.setupEventListeners()
+  }
+
+  private setupEventListeners(): void {
+    // Listen for provider deactivation events
+    touchEventBus.on(TalexEvents.PROVIDER_DEACTIVATED, (event) => {
+      const deactivationEvent = event as ProviderDeactivatedEvent
+      
+      if (searchLogger.isEnabled()) {
+        searchLogger.logSearchPhase(
+          'CoreBoxManager Event',
+          `Provider deactivated: ${deactivationEvent.providerId}, isPluginFeature: ${deactivationEvent.isPluginFeature}, allDeactivated: ${deactivationEvent.allProvidersDeactivated}`
+        )
+      }
+
+      // If a plugin feature was deactivated or all providers were deactivated, exit UI mode
+      if ((deactivationEvent.isPluginFeature || deactivationEvent.allProvidersDeactivated) && this.isUIMode) {
+        if (searchLogger.isEnabled()) {
+          searchLogger.logSearchPhase('CoreBoxManager Event', 'Exiting UI mode')
+        }
+        this.exitUIMode()
+      }
+    })
+  }
+
+  public get searchEngine(): SearchEngineCore {
+    if (!this._searchEngine) {
+      this._searchEngine = SearchEngineCore.getInstance()
+    }
+    return this._searchEngine
   }
 
   public static getInstance(): CoreBoxManager {

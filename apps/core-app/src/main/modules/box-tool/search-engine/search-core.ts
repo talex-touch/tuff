@@ -20,7 +20,7 @@ import {
   TuffInputType,
 } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
+import { ProviderDeactivatedEvent, TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { createDbUtils } from '../../../db/utils'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
@@ -30,7 +30,6 @@ import { appProvider } from '../addon/apps/app-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
 import { systemProvider } from '../addon/system/system-provider'
-import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
 import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
 import { gatherAggregator } from './search-gather'
@@ -196,16 +195,13 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         searchLogger.logSearchPhase('Deactivate Provider', `Deactivated: ${uniqueKey}`)
       }
 
-      // If the deactivated provider was a plugin feature and we are in UI mode, exit UI mode.
-      if (deactivatedActivation?.id === 'plugin-features' && coreBoxManager.isUIMode) {
-        if (searchLogger.isEnabled()) {
-          searchLogger.logSearchPhase(
-            'Exit UI Mode',
-            `PluginFeaturesAdapter deactivated for key: ${uniqueKey}`,
-          )
-        }
-        coreBoxManager.exitUIMode()
-      }
+      // Emit event for provider deactivation
+      const isPluginFeature = deactivatedActivation?.id === 'plugin-features'
+      const allProvidersDeactivated = this.activatedProviders.size === 0
+      touchEventBus.emit(
+        TalexEvents.PROVIDER_DEACTIVATED,
+        new ProviderDeactivatedEvent(uniqueKey, isPluginFeature, allProvidersDeactivated)
+      )
 
       if (this.activatedProviders.size === 0) {
         this.activatedProviders = null
@@ -227,14 +223,11 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
   deactivateProviders(): void {
     this.activatedProviders = null
 
-    // When all providers are deactivated, ensure any active UI mode is exited.
-    // This addresses the issue where UI view might remain attached if not explicitly closed.
-    if (coreBoxManager.isUIMode) {
-      if (searchLogger.isEnabled()) {
-        searchLogger.logSearchPhase('Deactivate Providers', 'Exiting UI mode')
-      }
-      coreBoxManager.exitUIMode()
-    }
+    // Emit event to notify that all providers have been deactivated
+    touchEventBus.emit(
+      TalexEvents.PROVIDER_DEACTIVATED,
+      new ProviderDeactivatedEvent('*', false, true)
+    )
   }
 
   getActiveProviders(): ISearchProvider<ProviderContext>[] {
