@@ -129,9 +129,9 @@ const featureLifeCycle = {
     // 处理项目动作
     return Promise.resolve({
       externalAction: false,
-      shouldActivate: false
+      shouldActivate: false,
     })
-  }
+  },
 }
 
 // 辅助函数
@@ -145,15 +145,15 @@ function performSearch(query, type) {
       title: `Search Result for "${query}"`,
       description: 'This is a search result',
       action: 'open',
-      data: { url: `https://example.com/search?q=${encodeURIComponent(query)}` }
+      data: { url: `https://example.com/search?q=${encodeURIComponent(query)}` },
     },
     {
       id: 'search-result-2',
       title: `Another Result for "${query}"`,
       description: 'Another search result',
       action: 'copy',
-      data: { text: query }
-    }
+      data: { text: query },
+    },
   ]
 }
 
@@ -166,7 +166,7 @@ function performTranslation(text, from, to) {
     translated: `[${from}→${to}] ${text}`,
     from,
     to,
-    confidence: 0.95
+    confidence: 0.95,
   }
 }
 
@@ -217,5 +217,5 @@ function handleNotifyMessage(info) {
 module.exports = {
   onMessage,
   lifecycle,
-  ...featureLifeCycle
+  ...featureLifeCycle,
 }

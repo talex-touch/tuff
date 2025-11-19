@@ -4,7 +4,7 @@
 export enum UpdateProviderType {
   GITHUB = 'github',
   OFFICIAL = 'official',
-  CUSTOM = 'custom'
+  CUSTOM = 'custom',
 }
 
 /**
@@ -67,7 +67,7 @@ export interface CustomUpdateConfig {
 export enum AppPreviewChannel {
   RELEASE = 'RELEASE',
   BETA = 'BETA',
-  SNAPSHOT = 'SNAPSHOT'
+  SNAPSHOT = 'SNAPSHOT',
 }
 
 /**
@@ -122,7 +122,7 @@ export const defaultUpdateSettings: UpdateSettings = {
     name: 'GitHub Releases',
     url: 'https://api.github.com/repos/talex-touch/tuff/releases',
     enabled: true,
-    priority: 1
+    priority: 1,
   },
   updateChannel: AppPreviewChannel.RELEASE,
   ignoredVersions: [],
@@ -132,7 +132,7 @@ export const defaultUpdateSettings: UpdateSettings = {
   cacheTTL: 30,
   rateLimitEnabled: true,
   maxRetries: 3,
-  retryDelay: 2000
+  retryDelay: 2000,
 }
 
 /**
@@ -144,7 +144,7 @@ export enum UpdateErrorType {
   API_ERROR = 'api_error',
   PARSE_ERROR = 'parse_error',
   VERSION_ERROR = 'version_error',
-  UNKNOWN_ERROR = 'unknown_error'
+  UNKNOWN_ERROR = 'unknown_error',
 }
 
 /**

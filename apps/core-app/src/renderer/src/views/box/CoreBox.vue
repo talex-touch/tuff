@@ -1,29 +1,29 @@
 <script setup lang="ts" name="CoreBox">
-import { reactive, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { BoxMode, IBoxOptions } from '../../modules/box/adapter'
-import BoxInput from './BoxInput.vue'
-import TagSection from './tag/TagSection.vue'
-import { appSetting } from '~/modules/channel/storage'
-import TouchScroll from '~/components/base/TouchScroll.vue'
-import PrefixPart from './PrefixPart.vue'
-
-import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
-import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
-import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
-import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
-import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
-import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
-import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
-import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
-import PreviewHistoryPanel, {
-  type CalculationHistoryEntry
-} from '~/components/render/custom/PreviewHistoryPanel.vue'
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
-import TuffIcon from '~/components/base/TuffIcon.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
-import { toast } from 'vue-sonner'
+import type { IBoxOptions } from '../../modules/box/adapter'
+import type { CalculationHistoryEntry } from '~/components/render/custom/PreviewHistoryPanel.vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import TouchScroll from '~/components/base/TouchScroll.vue'
+
+import TuffIcon from '~/components/base/TuffIcon.vue'
+import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
+import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
+import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
+import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { appSetting } from '~/modules/channel/storage'
+import { BoxMode } from '../../modules/box/adapter'
+import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
+import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
+import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
+import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
+import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
+import BoxInput from './BoxInput.vue'
+import PrefixPart from './PrefixPart.vue'
+import TagSection from './tag/TagSection.vue'
 
 declare global {
   interface Window {
@@ -38,14 +38,14 @@ const boxOptions = reactive<IBoxOptions>({
   mode: BoxMode.INPUT,
   focus: 0,
   file: { buffer: null, paths: [] },
-  data: {}
+  data: {},
 })
 
 // Create shared clipboard state
 const clipboardOptions = reactive<any>({
   last: null,
   detectedAt: null,
-  lastClearedTimestamp: null
+  lastClearedTimestamp: null,
 })
 
 const { t } = useI18n()
@@ -60,11 +60,11 @@ const {
   handleExecute,
   handleExit,
   handleSearchImmediate,
-  deactivateProvider
+  deactivateProvider,
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
-const handleClipboardChange = () => {
+function handleClipboardChange() {
   // Force immediate search when clipboard changes (paste or clear)
   handleSearchImmediate()
 }
@@ -72,21 +72,21 @@ const handleClipboardChange = () => {
 const { handlePaste, handleAutoPaste, clearClipboard } = useClipboard(
   boxOptions,
   clipboardOptions,
-  handleClipboardChange
+  handleClipboardChange,
 )
 
 const completionDisplay = computed(() => {
   if (
-    !searchVal.value.trim() ||
-    !activeItem.value ||
-    boxOptions.mode === BoxMode.FEATURE ||
-    !activeItem.value.render
+    !searchVal.value.trim()
+    || !activeItem.value
+    || boxOptions.mode === BoxMode.FEATURE
+    || !activeItem.value.render
   ) {
     return ''
   }
 
-  const completion =
-    activeItem.value.render.completion ?? activeItem.value.render.basic?.title ?? ''
+  const completion
+    = activeItem.value.render.completion ?? activeItem.value.render.basic?.title ?? ''
 
   if (completion.startsWith(searchVal.value)) {
     return completion.substring(searchVal.value.length)
@@ -96,15 +96,21 @@ const completionDisplay = computed(() => {
 })
 
 const shouldShowAiSuggestion = computed(() => {
-  if (loading.value) return false
-  if (res.value.length > 0) return false
-  if (boxOptions.mode !== BoxMode.INPUT && boxOptions.mode !== BoxMode.COMMAND) return false
-  if (activeActivations.value && activeActivations.value.length > 0) return false
+  if (loading.value)
+    return false
+  if (res.value.length > 0)
+    return false
+  if (boxOptions.mode !== BoxMode.INPUT && boxOptions.mode !== BoxMode.COMMAND)
+    return false
+  if (activeActivations.value && activeActivations.value.length > 0)
+    return false
 
   const trimmed = searchVal.value.trim()
-  if (!trimmed.length) return false
+  if (!trimmed.length)
+    return false
   const lower = trimmed.toLowerCase()
-  if (lower === 'ai' || lower.startsWith('ai ')) return false
+  if (lower === 'ai' || lower.startsWith('ai '))
+    return false
 
   return true
 })
@@ -119,7 +125,8 @@ function handleAskAiSuggestion(): void {
 
   if (searchVal.value !== suggestion) {
     searchVal.value = suggestion
-  } else {
+  }
+  else {
     void handleSearchImmediate()
   }
 
@@ -133,25 +140,25 @@ useVisibility(
   handleAutoPaste,
   handlePaste,
   clearClipboard,
-  boxInputRef
+  boxInputRef,
 )
-  const itemRefs = ref<HTMLElement[]>([])
+const itemRefs = ref<HTMLElement[]>([])
 
-  useKeyboard(
-    boxOptions,
-    res,
-    select,
-    scrollbar,
-    searchVal,
-    handleExecute,
-    handleExit,
-    computed(() => boxInputRef.value?.inputEl),
-    clipboardOptions,
-    clearClipboard,
-    activeActivations,
-    handlePaste,
-    itemRefs
-  )
+useKeyboard(
+  boxOptions,
+  res,
+  select,
+  scrollbar,
+  searchVal,
+  handleExecute,
+  handleExit,
+  computed(() => boxInputRef.value?.inputEl),
+  clipboardOptions,
+  clearClipboard,
+  activeActivations,
+  handlePaste,
+  itemRefs,
+)
 useChannel(boxOptions, res)
 
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
@@ -164,15 +171,15 @@ const previewHistory = reactive<{
 }>({
   visible: false,
   loading: false,
-  items: []
+  items: [],
 })
 
 function broadcastHistoryVisibility(visible: boolean): void {
   window.__coreboxHistoryVisible = visible
   window.dispatchEvent(
     new CustomEvent('corebox:history-visibility-change', {
-      detail: { visible }
-    })
+      detail: { visible },
+    }),
   )
 }
 
@@ -198,18 +205,19 @@ watch(
     broadcastHistoryVisibility(visible)
     if (!visible) {
       historyActiveIndex.value = -1
-    } else {
+    }
+    else {
       ensureHistorySelection(true)
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(
   () => previewHistory.items.length,
   () => {
     ensureHistorySelection()
-  }
+  },
 )
 
 function focusMainInput(): void {
@@ -223,16 +231,18 @@ function handleFocusInputEvent(): void {
 async function loadPreviewHistory(): Promise<void> {
   previewHistory.loading = true
   try {
-    const response = await touchChannel.send('clipboard:query-by-source', { 
+    const response = await touchChannel.send('clipboard:query-by-source', {
       source: 'calculation',
-      limit: 20 
+      limit: 20,
     })
     previewHistory.items = response?.data ?? []
     ensureHistorySelection()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[CoreBox] Failed to load calculation history:', error)
     toast.error('加载最近处理失败')
-  } finally {
+  }
+  finally {
     previewHistory.loading = false
   }
 }
@@ -245,7 +255,8 @@ function openPreviewHistory(): void {
 }
 
 function shrinkPreviewHistory(options?: { focusInput?: boolean }): void {
-  if (!previewHistory.visible) return
+  if (!previewHistory.visible)
+    return
   previewHistory.visible = false
   historyActiveIndex.value = -1
   if (options?.focusInput ?? true) {
@@ -255,14 +266,16 @@ function shrinkPreviewHistory(options?: { focusInput?: boolean }): void {
 
 function applyPreviewHistory(entry: CalculationHistoryEntry): void {
   const expression = entry.meta?.expression ?? entry.meta?.payload?.title ?? entry.content ?? ''
-  if (!expression) return
+  if (!expression)
+    return
   searchVal.value = expression
   shrinkPreviewHistory({ focusInput: false })
   focusMainInput()
 }
 
 function applyHistorySelection(): void {
-  if (historyActiveIndex.value < 0) return
+  if (historyActiveIndex.value < 0)
+    return
   const entry = previewHistory.items[historyActiveIndex.value]
   if (entry) {
     applyPreviewHistory(entry)
@@ -280,7 +293,8 @@ function handleHistoryHideEvent(): void {
 function handleCopyPreviewEvent(event: Event): void {
   const detail = (event as CustomEvent<{ value: string }>).detail
   const value = detail?.value
-  if (!value) return
+  if (!value)
+    return
   touchChannel
     .send('clipboard:write-text', { text: value })
     .then(() => {
@@ -298,15 +312,20 @@ function isClickInsideHistory(target: EventTarget | null): boolean {
 }
 
 function handleGlobalMouseDown(event: MouseEvent): void {
-  if (event.button !== 0 || !previewHistory.visible) return
-  if (!document.body.classList.contains('core-box')) return
-  if (isClickInsideHistory(event.target)) return
+  if (event.button !== 0 || !previewHistory.visible)
+    return
+  if (!document.body.classList.contains('core-box'))
+    return
+  if (isClickInsideHistory(event.target))
+    return
   shrinkPreviewHistory()
 }
 
 function handleHistoryKeydown(event: KeyboardEvent): void {
-  if (!previewHistory.visible) return
-  if (!document.body.classList.contains('core-box')) return
+  if (!previewHistory.visible)
+    return
+  if (!document.body.classList.contains('core-box'))
+    return
 
   const key = event.key
   if (key === 'Escape') {
@@ -320,7 +339,8 @@ function handleHistoryKeydown(event: KeyboardEvent): void {
     if (previewHistory.items.length) {
       if (historyActiveIndex.value < 0) {
         historyActiveIndex.value = 0
-      } else if (historyActiveIndex.value < previewHistory.items.length - 1) {
+      }
+      else if (historyActiveIndex.value < previewHistory.items.length - 1) {
         historyActiveIndex.value += 1
       }
     }
@@ -333,7 +353,8 @@ function handleHistoryKeydown(event: KeyboardEvent): void {
     if (previewHistory.items.length) {
       if (historyActiveIndex.value === -1) {
         historyActiveIndex.value = previewHistory.items.length - 1
-      } else if (historyActiveIndex.value > 0) {
+      }
+      else if (historyActiveIndex.value > 0) {
         historyActiveIndex.value -= 1
       }
     }
@@ -352,8 +373,10 @@ function handleHistoryKeydown(event: KeyboardEvent): void {
 }
 
 function handleHistoryContextMenu(event: MouseEvent): void {
-  if (!document.body.classList.contains('core-box')) return
-  if (previewHistory.visible) return
+  if (!document.body.classList.contains('core-box'))
+    return
+  if (previewHistory.visible)
+    return
   event.preventDefault()
   openPreviewHistory()
 }
@@ -392,7 +415,8 @@ function handleItemTrigger(index: number, item: TuffItem): void {
 }
 
 const addon = computed(() => {
-  if (!activeItem.value) return undefined
+  if (!activeItem.value)
+    return undefined
 
   const item = activeItem.value
 
@@ -406,7 +430,7 @@ const addon = computed(() => {
 const pinIcon = computed<ITuffIcon>(() => ({
   type: 'class',
   value: appSetting.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
-  status: 'normal'
+  status: 'normal',
 }))
 </script>
 
@@ -459,9 +483,13 @@ const pinIcon = computed<ITuffIcon>(() => ({
       </TouchScroll>
       <div v-if="shouldShowAiSuggestion" class="CoreBoxRes-Empty CoreBoxRes-AI">
         <div class="AiSuggestion">
-          <div class="AiSuggestion-Icon">🤖</div>
+          <div class="AiSuggestion-Icon">
+            🤖
+          </div>
           <div class="AiSuggestion-Body">
-            <h3 class="AiSuggestion-Title">{{ aiSuggestionTitle }}</h3>
+            <h3 class="AiSuggestion-Title">
+              {{ aiSuggestionTitle }}
+            </h3>
             <p class="AiSuggestion-Description">
               {{ aiSuggestionDescription }}
             </p>

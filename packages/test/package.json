@@ -1,16 +1,16 @@
 {
   "name": "test",
+  "type": "module",
   "version": "1.0.0",
   "description": "",
+  "author": "TalexDreamSoul",
+  "license": "ISC",
   "main": "src/index.ts",
-  "type": "module",
   "scripts": {
     "test:nodemon": "nodemon",
     "test": "vitest",
     "coverage": "vitest --coverage"
   },
-  "author": "TalexDreamSoul",
-  "license": "ISC",
   "dependencies": {
     "@talex-touch/utils": "workspace:^1.0.0",
     "ts-node": "^10.9.2",

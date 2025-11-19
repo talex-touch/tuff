@@ -1,26 +1,31 @@
-import { touchChannel } from '../channel/channel-core'
-import { forTouchTip, blowMention } from '../mention/dialog-mention'
-import { DataCode } from '@talex-touch/utils/channel'
 import { isLocalhostUrl } from '@talex-touch/utils'
+import { DataCode } from '@talex-touch/utils/channel'
+import { touchChannel } from '../channel/channel-core'
+import { blowMention, forTouchTip } from '../mention/dialog-mention'
 
 export async function urlHooker(): Promise<void> {
   function directListener(event: Event): void {
     const target = event.target as HTMLElement
 
     if (target.nodeName.toLocaleLowerCase() === 'a') {
-      if (target.getAttribute('ignoreSafeCheck') === 'true') return
+      if (target.getAttribute('ignoreSafeCheck') === 'true')
+        return
 
       const url = target.getAttribute('href')
 
-      if (!url) return
+      if (!url)
+        return
 
-      const regex =
-        /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
+      const regex
+        = /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
 
       event.preventDefault()
       if (!regex.test(url) || url.startsWith(window.location.origin) || url.startsWith('/')) {
         touchChannel.send('url:open', url)
-      } else touchChannel.send('open-external', { url })
+      }
+      else {
+        touchChannel.send('open-external', { url })
+      }
 
       // if(/^\//.test(target)) {
       //   // Relative to this website url
@@ -55,7 +60,7 @@ export async function urlHooker(): Promise<void> {
         onClick: async () => {
           reply(DataCode.SUCCESS, false)
           return true
-        }
+        },
       },
       {
         content: 'Sure',
@@ -63,8 +68,8 @@ export async function urlHooker(): Promise<void> {
         onClick: async () => {
           reply(DataCode.SUCCESS, true)
           return true
-        }
-      }
+        },
+      },
     ])
   })
 }
@@ -73,10 +78,11 @@ export function screenCapture(): void {
   const widthStr = document.body.style.getPropertyValue('--winWidth')
   const heightStr = document.body.style.getPropertyValue('--winHeight')
 
-  const winWidth = widthStr ? parseInt(widthStr) : 0
-  const winHeight = heightStr ? parseInt(heightStr) : 0
+  const winWidth = widthStr ? Number.parseInt(widthStr) : 0
+  const winHeight = heightStr ? Number.parseInt(heightStr) : 0
 
-  if (winWidth === 0 || winHeight === 0) return
+  if (winWidth === 0 || winHeight === 0)
+    return
   // @ts-ignore: registerTypeProcess is attached to window object
   window.registerTypeProcess('@screen-capture', async ({ data }) => {
     const width = document.body.clientWidth
@@ -96,8 +102,8 @@ export function screenCapture(): void {
         minHeight: height,
         maxHeight: winHeight,
         height,
-        width
-      }
+        width,
+      },
     })
 
     console.log(data, media.getTracks())
@@ -116,16 +122,19 @@ export function screenCapture(): void {
 export function clipBoardResolver(): void {
   touchChannel.regChannel(
     'clipboard:trigger',
-    ({ data }: { data?: { type: string; data: string } }) => {
-      if (!data) return
+    ({ data }: { data?: { type: string, data: string } }) => {
+      if (!data)
+        return
 
       if (data.type === 'text') {
         blowMention('Clipboard', `You may copied "${data.data}"`)
-      } else if (data.type === 'image') {
-        blowMention('Clipboard', data.data)
-      } else if (data.type === 'html') {
+      }
+      else if (data.type === 'image') {
         blowMention('Clipboard', data.data)
       }
-    }
+      else if (data.type === 'html') {
+        blowMention('Clipboard', data.data)
+      }
+    },
   )
 }

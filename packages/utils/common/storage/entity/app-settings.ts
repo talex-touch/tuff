@@ -55,7 +55,7 @@ const _appSettingOriginData = {
     customDesktop: false,
   },
   layout: 'simple',
-};
+}
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)
 
@@ -65,5 +65,5 @@ export const appSettingOriginData = Object.freeze(_appSettingOriginData)
  * Combines the default configuration with support for dynamic additional properties.
  */
 export type AppSetting = typeof _appSettingOriginData & {
-  [key: string]: any;
-};
+  [key: string]: any
+}

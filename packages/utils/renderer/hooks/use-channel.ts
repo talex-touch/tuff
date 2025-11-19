@@ -1,15 +1,16 @@
-import { inject, type InjectionKey } from 'vue'
+import type { InjectionKey } from 'vue'
+import { inject } from 'vue'
 
 export interface TouchChannel {
-  send<TRequest = any, TResponse = any>(
+  send: <TRequest = any, TResponse = any>(
     eventName: string,
-    data?: TRequest
-  ): Promise<TResponse>
+    data?: TRequest,
+  ) => Promise<TResponse>
 
-  regChannel?<TRequest = any>(
+  regChannel?: <TRequest = any>(
     eventName: string,
-    handler: (data: TRequest) => Promise<any> | any
-  ): () => void
+    handler: (data: TRequest) => Promise<any> | any,
+  ) => () => void
 }
 
 // Injection key for the TouchChannel
@@ -36,26 +37,30 @@ function resolveTouchChannel(): TouchChannel | null {
   // Try dependency injection first
   try {
     const injectedChannel = inject(TouchChannelKey, null)
-    if (injectedChannel) return injectedChannel
-  } catch {
+    if (injectedChannel)
+      return injectedChannel
+  }
+  catch {
     // Ignore injection errors outside of Vue context
   }
 
   // Try global variables
   if (typeof globalThis !== 'undefined') {
-    const channel =
-      (globalThis as any).touchChannel ||
-      (globalThis as any).$touchChannel ||
-      (globalThis as any).window?.touchChannel ||
-      (globalThis as any).window?.$touchChannel
+    const channel
+      = (globalThis as any).touchChannel
+        || (globalThis as any).$touchChannel
+        || (globalThis as any).window?.touchChannel
+        || (globalThis as any).window?.$touchChannel
 
-    if (channel) return channel
+    if (channel)
+      return channel
   }
 
   // Try window object (browser environment)
   if (typeof window !== 'undefined') {
     const channel = window.touchChannel || window.$touchChannel
-    if (channel) return channel
+    if (channel)
+      return channel
   }
 
   return null
@@ -94,8 +99,8 @@ export function useChannel(): TouchChannel {
 
   if (!channel) {
     throw new Error(
-      '[useChannel] TouchChannel not available. ' +
-      'Make sure the TouchChannel is properly injected by the main process.'
+      '[useChannel] TouchChannel not available. '
+      + 'Make sure the TouchChannel is properly injected by the main process.',
     )
   }
 
@@ -136,10 +141,10 @@ export function useTypedChannel<TChannelMap extends Record<string, any>>() {
     > {
       return channel.send(
         eventName as string,
-        args.length > 0 ? args[0] : undefined
+        args.length > 0 ? args[0] : undefined,
       )
     },
 
-    regChannel: channel.regChannel
+    regChannel: channel.regChannel,
   }
 }

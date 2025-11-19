@@ -1,33 +1,5 @@
-<template>
-  <div class="memory-leak-test">
-    <h2>内存泄漏测试</h2>
-
-    <div class="test-controls">
-      <el-button type="primary" @click="createComponent"> 创建组件 </el-button>
-      <el-button type="danger" @click="destroyComponent"> 销毁组件 </el-button>
-      <el-button type="default" @click="clearLogs"> 清除日志 </el-button>
-    </div>
-
-    <div class="test-info">
-      <p><strong>组件状态:</strong> {{ componentStatus }}</p>
-      <p><strong>创建次数:</strong> {{ createCount }}</p>
-      <p><strong>销毁次数:</strong> {{ destroyCount }}</p>
-    </div>
-
-    <div class="test-logs">
-      <h3>测试日志</h3>
-      <div class="logs-container">
-        <div v-for="(log, index) in logs" :key="index" class="log-item">
-          {{ log }}
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref } from 'vue'
-import { createApp } from 'vue'
+import { createApp, ref } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
 
 const componentStatus = ref('未创建')
@@ -73,14 +45,14 @@ function createComponent() {
       setup() {
         const { isAuthenticated, isLoading, isLoggedIn, currentUser } = useAuth()
 
-        addLog('测试组件已挂载，认证状态: ' + isAuthenticated.value)
-        addLog('测试组件已挂载，登录状态: ' + isLoggedIn.value)
+        addLog(`测试组件已挂载，认证状态: ${isAuthenticated.value}`)
+        addLog(`测试组件已挂载，登录状态: ${isLoggedIn.value}`)
 
         return {
           isAuthenticated,
           isLoading,
           isLoggedIn,
-          currentUser
+          currentUser,
         }
       },
       template: `
@@ -95,8 +67,8 @@ function createComponent() {
         close() {
           addLog('测试组件关闭按钮被点击')
           destroyComponent()
-        }
-      }
+        },
+      },
     }
 
     testApp = createApp(TestComponent)
@@ -106,8 +78,9 @@ function createComponent() {
     componentStatus.value = '已创建'
     createCount.value++
     addLog('测试组件创建成功')
-  } catch (error) {
-    addLog('创建组件失败: ' + error)
+  }
+  catch (error) {
+    addLog(`创建组件失败: ${error}`)
     console.error('Create component error:', error)
   }
 }
@@ -133,11 +106,13 @@ function destroyComponent() {
       setTimeout(() => {
         addLog('内存检查: 组件应该已被完全清理')
       }, 1000)
-    } else {
+    }
+    else {
       addLog('没有可销毁的组件')
     }
-  } catch (error) {
-    addLog('销毁组件失败: ' + error)
+  }
+  catch (error) {
+    addLog(`销毁组件失败: ${error}`)
     console.error('Destroy component error:', error)
   }
 }
@@ -147,6 +122,39 @@ function clearLogs() {
   addLog('日志已清除')
 }
 </script>
+
+<template>
+  <div class="memory-leak-test">
+    <h2>内存泄漏测试</h2>
+
+    <div class="test-controls">
+      <el-button type="primary" @click="createComponent">
+        创建组件
+      </el-button>
+      <el-button type="danger" @click="destroyComponent">
+        销毁组件
+      </el-button>
+      <el-button type="default" @click="clearLogs">
+        清除日志
+      </el-button>
+    </div>
+
+    <div class="test-info">
+      <p><strong>组件状态:</strong> {{ componentStatus }}</p>
+      <p><strong>创建次数:</strong> {{ createCount }}</p>
+      <p><strong>销毁次数:</strong> {{ destroyCount }}</p>
+    </div>
+
+    <div class="test-logs">
+      <h3>测试日志</h3>
+      <div class="logs-container">
+        <div v-for="(log, index) in logs" :key="index" class="log-item">
+          {{ log }}
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .memory-leak-test {

@@ -1,3 +1,227 @@
+<script lang="ts" setup>
+import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { StorageStats } from '@talex-touch/utils/types/storage'
+import { ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import StatCard from '../../base/card/StatCard.vue'
+
+// Props
+const props = defineProps<{
+  plugin: ITouchPlugin
+}>()
+
+// Composables
+const { t } = useI18n()
+
+// State
+const loading = ref(false)
+const clearing = ref(false)
+const storageStats = ref<StorageStats>({
+  totalSize: 0,
+  fileCount: 0,
+  dirCount: 0,
+  maxSize: 10 * 1024 * 1024,
+  usagePercent: 0,
+})
+const fileList = ref<
+  Array<{
+    name: string
+    path: string
+    size: number
+    modified: number
+  }>
+>([])
+
+// Computed
+const usageColorClass = computed(() => {
+  const percent = storageStats.value.usagePercent
+  if (percent >= 90)
+    return 'text-[var(--el-color-danger)]'
+  if (percent >= 70)
+    return 'text-[var(--el-color-warning)]'
+  return 'text-[var(--el-color-success)]'
+})
+
+// Methods
+function toMB(bytes: number): string {
+  if (!bytes || !Number.isFinite(bytes))
+    return '0.00'
+  return (bytes / (1024 * 1024)).toFixed(2)
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes || !Number.isFinite(bytes))
+    return '0 MB'
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+async function loadStorageData(): Promise<void> {
+  loading.value = true
+  try {
+    const [statsResponse, treeResponse] = await Promise.all([
+      window.$channel.send('plugin:storage:get-stats', { pluginName: props.plugin.name }),
+      window.$channel.send('plugin:storage:get-tree', { pluginName: props.plugin.name }),
+    ])
+
+    if (statsResponse && typeof statsResponse === 'object') {
+      storageStats.value = {
+        totalSize: Number(statsResponse.totalSize) || 0,
+        fileCount: Number(statsResponse.fileCount) || 0,
+        dirCount: Number(statsResponse.dirCount) || 0,
+        maxSize: Number(statsResponse.maxSize) || 10 * 1024 * 1024,
+        usagePercent: Number(statsResponse.usagePercent) || 0,
+      }
+    }
+
+    if (treeResponse && Array.isArray(treeResponse)) {
+      fileList.value = flattenTree(treeResponse)
+    }
+  }
+  catch (error) {
+    console.error('Failed to load storage data:', error)
+    toast.error(t('plugin.storage.message.loadFailed'))
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+function flattenTree(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  nodes: any[],
+): Array<{ name: string, path: string, size: number, modified: number }> {
+  const files: Array<{ name: string, path: string, size: number, modified: number }> = []
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function traverse(nodeList: any[]) {
+    for (const node of nodeList) {
+      if (node.type === 'file') {
+        files.push({
+          name: node.name,
+          path: node.path,
+          size: node.size || 0,
+          modified: node.modified || Date.now(),
+        })
+      }
+      if (node.children && Array.isArray(node.children)) {
+        traverse(node.children)
+      }
+    }
+  }
+
+  traverse(nodes)
+  return files
+}
+
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp)
+  return date.toLocaleString()
+}
+
+function getFileIcon(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  const iconMap: Record<string, string> = {
+    json: 'i-ri-file-code-line',
+    log: 'i-ri-file-text-line',
+    txt: 'i-ri-file-text-line',
+    md: 'i-ri-markdown-line',
+    png: 'i-ri-image-line',
+    jpg: 'i-ri-image-line',
+    jpeg: 'i-ri-image-line',
+    gif: 'i-ri-image-line',
+    webp: 'i-ri-image-line',
+    svg: 'i-ri-image-line',
+  }
+  return iconMap[ext || ''] || 'i-ri-file-line'
+}
+
+function getFileColor(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  const colorMap: Record<string, string> = {
+    json: 'var(--el-color-success)',
+    log: 'var(--el-color-info)',
+    txt: 'var(--el-color-info)',
+    md: 'var(--el-color-info)',
+    png: 'var(--el-color-primary)',
+    jpg: 'var(--el-color-primary)',
+    jpeg: 'var(--el-color-primary)',
+    gif: 'var(--el-color-primary)',
+    webp: 'var(--el-color-primary)',
+    svg: 'var(--el-color-primary)',
+  }
+  return colorMap[ext || ''] || 'var(--el-text-color-secondary)'
+}
+
+async function handleOpenInEditor(): Promise<void> {
+  try {
+    await window.$channel.send('plugin:storage:open-in-editor', {
+      pluginName: props.plugin.name,
+    })
+  }
+  catch (error) {
+    console.error('Failed to open in editor:', error)
+    toast.error(t('plugin.storage.message.openEditorFailed'))
+  }
+}
+
+async function handleClearStorage(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      t('plugin.storage.confirm.clearMessage'),
+      t('plugin.storage.confirm.clearTitle'),
+      {
+        confirmButtonText: t('plugin.storage.confirm.clearConfirm'),
+        cancelButtonText: t('plugin.storage.confirm.cancel'),
+        type: 'error',
+      },
+    )
+
+    clearing.value = true
+    const response = await window.$channel.send('plugin:storage:clear', {
+      pluginName: props.plugin.name,
+    })
+
+    if (response.success) {
+      toast.success(t('plugin.storage.message.clearSuccess'))
+      await refreshData()
+    }
+    else {
+      toast.error(response.error || t('plugin.storage.message.clearFailed'))
+    }
+  }
+  catch (error) {
+    if (error !== 'cancel') {
+      toast.error(t('plugin.storage.message.clearFailed'))
+    }
+  }
+  finally {
+    clearing.value = false
+  }
+}
+
+async function handleOpenFolder(): Promise<void> {
+  try {
+    await window.$channel.send('plugin:storage:open-folder', {
+      pluginName: props.plugin.name,
+    })
+  }
+  catch {
+    toast.error(t('plugin.storage.message.openFolderFailed'))
+  }
+}
+
+async function refreshData(): Promise<void> {
+  await loadStorageData()
+}
+
+// Lifecycle
+onMounted(() => {
+  loadStorageData()
+})
+</script>
+
 <template>
   <div class="PluginStorage w-full h-full flex flex-col space-y-6">
     <!-- Storage Overview -->
@@ -138,219 +362,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue'
-import { ElMessageBox } from 'element-plus'
-import { toast } from 'vue-sonner'
-import { useI18n } from 'vue-i18n'
-import type { StorageStats } from '@talex-touch/utils/types/storage'
-import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import StatCard from '../../base/card/StatCard.vue'
-
-// Props
-const props = defineProps<{
-  plugin: ITouchPlugin
-}>()
-
-// Composables
-const { t } = useI18n()
-
-// State
-const loading = ref(false)
-const clearing = ref(false)
-const storageStats = ref<StorageStats>({
-  totalSize: 0,
-  fileCount: 0,
-  dirCount: 0,
-  maxSize: 10 * 1024 * 1024,
-  usagePercent: 0
-})
-const fileList = ref<
-  Array<{
-    name: string
-    path: string
-    size: number
-    modified: number
-  }>
->([])
-
-// Computed
-const usageColorClass = computed(() => {
-  const percent = storageStats.value.usagePercent
-  if (percent >= 90) return 'text-[var(--el-color-danger)]'
-  if (percent >= 70) return 'text-[var(--el-color-warning)]'
-  return 'text-[var(--el-color-success)]'
-})
-
-// Methods
-function toMB(bytes: number): string {
-  if (!bytes || !Number.isFinite(bytes)) return '0.00'
-  return (bytes / (1024 * 1024)).toFixed(2)
-}
-
-function formatSize(bytes: number): string {
-  if (!bytes || !Number.isFinite(bytes)) return '0 MB'
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-}
-
-async function loadStorageData(): Promise<void> {
-  loading.value = true
-  try {
-    const [statsResponse, treeResponse] = await Promise.all([
-      window.$channel.send('plugin:storage:get-stats', { pluginName: props.plugin.name }),
-      window.$channel.send('plugin:storage:get-tree', { pluginName: props.plugin.name })
-    ])
-
-    if (statsResponse && typeof statsResponse === 'object') {
-      storageStats.value = {
-        totalSize: Number(statsResponse.totalSize) || 0,
-        fileCount: Number(statsResponse.fileCount) || 0,
-        dirCount: Number(statsResponse.dirCount) || 0,
-        maxSize: Number(statsResponse.maxSize) || 10 * 1024 * 1024,
-        usagePercent: Number(statsResponse.usagePercent) || 0
-      }
-    }
-
-    if (treeResponse && Array.isArray(treeResponse)) {
-      fileList.value = flattenTree(treeResponse)
-    }
-  } catch (error) {
-    console.error('Failed to load storage data:', error)
-    toast.error(t('plugin.storage.message.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
-function flattenTree(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes: any[]
-): Array<{ name: string; path: string; size: number; modified: number }> {
-  const files: Array<{ name: string; path: string; size: number; modified: number }> = []
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function traverse(nodeList: any[]) {
-    for (const node of nodeList) {
-      if (node.type === 'file') {
-        files.push({
-          name: node.name,
-          path: node.path,
-          size: node.size || 0,
-          modified: node.modified || Date.now()
-        })
-      }
-      if (node.children && Array.isArray(node.children)) {
-        traverse(node.children)
-      }
-    }
-  }
-
-  traverse(nodes)
-  return files
-}
-
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp)
-  return date.toLocaleString()
-}
-
-function getFileIcon(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase()
-  const iconMap: Record<string, string> = {
-    json: 'i-ri-file-code-line',
-    log: 'i-ri-file-text-line',
-    txt: 'i-ri-file-text-line',
-    md: 'i-ri-markdown-line',
-    png: 'i-ri-image-line',
-    jpg: 'i-ri-image-line',
-    jpeg: 'i-ri-image-line',
-    gif: 'i-ri-image-line',
-    webp: 'i-ri-image-line',
-    svg: 'i-ri-image-line'
-  }
-  return iconMap[ext || ''] || 'i-ri-file-line'
-}
-
-function getFileColor(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase()
-  const colorMap: Record<string, string> = {
-    json: 'var(--el-color-success)',
-    log: 'var(--el-color-info)',
-    txt: 'var(--el-color-info)',
-    md: 'var(--el-color-info)',
-    png: 'var(--el-color-primary)',
-    jpg: 'var(--el-color-primary)',
-    jpeg: 'var(--el-color-primary)',
-    gif: 'var(--el-color-primary)',
-    webp: 'var(--el-color-primary)',
-    svg: 'var(--el-color-primary)'
-  }
-  return colorMap[ext || ''] || 'var(--el-text-color-secondary)'
-}
-
-async function handleOpenInEditor(): Promise<void> {
-  try {
-    await window.$channel.send('plugin:storage:open-in-editor', {
-      pluginName: props.plugin.name
-    })
-  } catch (error) {
-    console.error('Failed to open in editor:', error)
-    toast.error(t('plugin.storage.message.openEditorFailed'))
-  }
-}
-
-async function handleClearStorage(): Promise<void> {
-  try {
-    await ElMessageBox.confirm(
-      t('plugin.storage.confirm.clearMessage'),
-      t('plugin.storage.confirm.clearTitle'),
-      {
-        confirmButtonText: t('plugin.storage.confirm.clearConfirm'),
-        cancelButtonText: t('plugin.storage.confirm.cancel'),
-        type: 'error'
-      }
-    )
-
-    clearing.value = true
-    const response = await window.$channel.send('plugin:storage:clear', {
-      pluginName: props.plugin.name
-    })
-
-    if (response.success) {
-      toast.success(t('plugin.storage.message.clearSuccess'))
-      await refreshData()
-    } else {
-      toast.error(response.error || t('plugin.storage.message.clearFailed'))
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
-      toast.error(t('plugin.storage.message.clearFailed'))
-    }
-  } finally {
-    clearing.value = false
-  }
-}
-
-async function handleOpenFolder(): Promise<void> {
-  try {
-    await window.$channel.send('plugin:storage:open-folder', {
-      pluginName: props.plugin.name
-    })
-  } catch {
-    toast.error(t('plugin.storage.message.openFolderFailed'))
-  }
-}
-
-async function refreshData(): Promise<void> {
-  await loadStorageData()
-}
-
-// Lifecycle
-onMounted(() => {
-  loadStorageData()
-})
-</script>
 
 <style lang="scss" scoped>
 .PluginStorage-ProgressBar {

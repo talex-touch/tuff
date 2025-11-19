@@ -58,10 +58,14 @@ export class AccountStorage {
   }
 
   analyzeFromObj(data: any): void {
-    if (!data) return
-    if (data.user) this.user = data.user
-    if (data.token) this.token = data.token
-    if (data.eller) this.eller = data.eller
+    if (!data)
+      return
+    if (data.user)
+      this.user = data.user
+    if (data.token)
+      this.token = data.token
+    if (data.eller)
+      this.eller = data.eller
 
     setTimeout(() => this.__save())
   }
@@ -72,7 +76,7 @@ export class AccountStorage {
     touchChannel.send('storage:save', {
       key: 'account.ini',
       content: JSON.stringify({ user, eller, token }),
-      clear: false
+      clear: false,
     })
   }
 
@@ -84,14 +88,14 @@ export class AccountStorage {
       JSON.stringify({
         user,
         eller,
-        token
-      })
+        token,
+      }),
     )
 
     return JSON.stringify({
       user,
       eller,
-      token
+      token,
     })
   }
 }

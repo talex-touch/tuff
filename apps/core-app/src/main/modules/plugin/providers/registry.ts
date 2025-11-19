@@ -1,18 +1,19 @@
-import { defaultRiskPromptHandler, type RiskPromptHandler } from '@talex-touch/utils/plugin/risk'
 import type {
   PluginInstallRequest,
   PluginInstallResult,
   PluginProvider,
   PluginProviderContext,
-  PluginProviderType
+  PluginProviderType,
 } from '@talex-touch/utils/plugin/providers'
-import { createProviderLogger, providerRegistryLog } from './logger'
+import type { RiskPromptHandler } from '@talex-touch/utils/plugin/risk'
+import { defaultRiskPromptHandler } from '@talex-touch/utils/plugin/risk'
 import { FilePluginProvider } from './file-provider'
 import { GithubPluginProvider } from './github-provider'
+import { createProviderLogger, providerRegistryLog } from './logger'
 import { NpmPluginProvider } from './npm-provider'
 import { TpexPluginProvider } from './tpex-provider'
 
-type ProviderEntry = {
+interface ProviderEntry {
   provider: PluginProvider
   log: ReturnType<typeof createProviderLogger>
 }
@@ -28,19 +29,19 @@ export function registerProvider(provider: PluginProvider): void {
   const existing = registeredProviders.get(provider.type)
   if (existing) {
     providerRegistryLog.warn('Provider already registered, skip duplicate', {
-      meta: { provider: provider.type }
+      meta: { provider: provider.type },
     })
     return
   }
 
   const entry: ProviderEntry = {
     provider,
-    log: createProviderLogger(provider.type)
+    log: createProviderLogger(provider.type),
   }
 
   registeredProviders.set(provider.type, entry)
   providerRegistryLog.info('Registered plugin provider', {
-    meta: { provider: provider.type }
+    meta: { provider: provider.type },
   })
 }
 
@@ -48,11 +49,12 @@ const DEFAULT_PROVIDER_FACTORIES: Array<() => PluginProvider> = [
   () => new GithubPluginProvider(),
   () => new NpmPluginProvider(),
   () => new TpexPluginProvider(),
-  () => new FilePluginProvider()
+  () => new FilePluginProvider(),
 ]
 
 export function ensureDefaultProvidersRegistered(): void {
-  if (defaultsRegistered) return
+  if (defaultsRegistered)
+    return
 
   for (const createProvider of DEFAULT_PROVIDER_FACTORIES) {
     const provider = createProvider()
@@ -63,17 +65,17 @@ export function ensureDefaultProvidersRegistered(): void {
 }
 
 export function getRegisteredProviders(): PluginProvider[] {
-  return Array.from(registeredProviders.values(), (entry) => entry.provider)
+  return Array.from(registeredProviders.values(), entry => entry.provider)
 }
 
 export async function installFromRegistry(
   request: PluginInstallRequest,
-  context: PluginProviderContext = {}
+  context: PluginProviderContext = {},
 ): Promise<PluginInstallResult | undefined> {
   ensureDefaultProvidersRegistered()
 
   providerRegistryLog.debug('Resolving provider for request', {
-    meta: { source: request.source, hint: request.hintType }
+    meta: { source: request.source, hint: request.hintType },
   })
 
   let selected: ProviderEntry | undefined
@@ -82,10 +84,11 @@ export async function installFromRegistry(
     let handled = false
     try {
       handled = entry.provider.canHandle(request)
-    } catch (error) {
+    }
+    catch (error) {
       entry.log.error('canHandle() 抛出异常', {
         meta: { source: request.source },
-        error
+        error,
       })
       handled = false
     }
@@ -93,8 +96,8 @@ export async function installFromRegistry(
     entry.log.debug('Provider capability check', {
       meta: {
         source: request.source,
-        handled: handled ? 'true' : 'false'
-      }
+        handled: handled ? 'true' : 'false',
+      },
     })
 
     if (handled) {
@@ -105,7 +108,7 @@ export async function installFromRegistry(
 
   if (!selected) {
     providerRegistryLog.warn('没有找到可处理该请求的插件 provider', {
-      meta: { source: request.source, hint: request.hintType }
+      meta: { source: request.source, hint: request.hintType },
     })
     return undefined
   }
@@ -113,12 +116,12 @@ export async function installFromRegistry(
   const timer = selected.log.time('install')
   const resolvedContext: PluginProviderContext = {
     ...context,
-    riskPrompt: resolveRiskPrompt(context.riskPrompt)
+    riskPrompt: resolveRiskPrompt(context.riskPrompt),
   }
 
   try {
     selected.log.info('开始安装插件资源', {
-      meta: { source: request.source }
+      meta: { source: request.source },
     })
 
     const result = await selected.provider.install(request, resolvedContext)
@@ -127,19 +130,20 @@ export async function installFromRegistry(
       meta: {
         provider: selected.provider.type,
         official: result.official ? 'true' : 'false',
-        filePath: result.filePath ?? 'N/A'
-      }
+        filePath: result.filePath ?? 'N/A',
+      },
     })
 
     timer.end('install')
     return result
-  } catch (error) {
+  }
+  catch (error) {
     selected.log.error('插件资源安装失败', {
       meta: {
         source: request.source,
-        provider: selected.provider.type
+        provider: selected.provider.type,
       },
-      error
+      error,
     })
     timer.end('install', { level: 'error' as any })
     throw error

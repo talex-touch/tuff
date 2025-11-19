@@ -1,14 +1,14 @@
-<template>
-  <div class="LoadingIcon-Container">
-    <div class="LoadingIcon-Floater"></div>
-  </div>
-</template>
-
 <script>
 export default {
-  name: 'LoadingIcon'
+  name: 'LoadingIcon',
 }
 </script>
+
+<template>
+  <div class="LoadingIcon-Container">
+    <div class="LoadingIcon-Floater" />
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .LoadingIcon-Container {

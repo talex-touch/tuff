@@ -1,23 +1,20 @@
-<template>
-  <div class="BlurBackGround-Container">
-    <img :alt="song?.detail?.song?.name" :src="song?.detail?.song?.al.picUrl" />
-<!--    <WavingParticle :song="song" />-->
-  </div>
-</template>
-
 <script>
-export default {
-  name: "BlurBackGround"
-}
 </script>
 
 <script setup>
-import WavingParticle from '@comp/music/particle/bg/WavingParticle.outdate.vue'
-import { ref } from 'vue'
-
 const props = defineProps(['song'])
 
+export default {
+  name: 'BlurBackGround',
+}
 </script>
+
+<template>
+  <div class="BlurBackGround-Container">
+    <img :alt="song?.detail?.song?.name" :src="song?.detail?.song?.al.picUrl">
+    <!--    <WavingParticle :song="song" /> -->
+  </div>
+</template>
 
 <style lang="scss" scoped>
 //.BlurBackground-BackWrapper {

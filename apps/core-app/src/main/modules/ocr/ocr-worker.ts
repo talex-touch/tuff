@@ -1,7 +1,7 @@
-import { parentPort, workerData } from 'node:worker_threads'
 import { readFile } from 'node:fs/promises'
-import { createWorker } from 'tesseract.js'
+import { parentPort, workerData } from 'node:worker_threads'
 import chalk from 'chalk'
+import { createWorker } from 'tesseract.js'
 
 interface WorkerData {
   jobId: number
@@ -47,15 +47,15 @@ async function run(): Promise<void> {
 
   console.log(
     chalk.blueBright(
-      `[OCR Worker] Starting job ${payload.jobId} with language ${language} and source type ${payload.source.type}`
-    )
+      `[OCR Worker] Starting job ${payload.jobId} with language ${language} and source type ${payload.source.type}`,
+    ),
   )
 
   const worker = await createWorker(language, undefined, {
-    logger: (_message) => undefined,
+    logger: _message => undefined,
     cacheMethod: 'read',
     gzip: true,
-    langPath: 'https://tessdata.projectnaptha.com/4.0.0'
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0',
   })
 
   try {
@@ -66,7 +66,7 @@ async function run(): Promise<void> {
           parameters[key] = String(value)
         }
       }
-      parameters['tessedit_pageseg_mode'] = String(payload.options.tesseditPagesegMode ?? 3)
+      parameters.tessedit_pageseg_mode = String(payload.options.tesseditPagesegMode ?? 3)
       await worker.setParameters(parameters)
     }
 
@@ -74,8 +74,8 @@ async function run(): Promise<void> {
 
     console.log(
       chalk.greenBright(
-        `[OCR Worker] Job ${payload.jobId} completed with confidence ${data.confidence ?? 0}`
-      )
+        `[OCR Worker] Job ${payload.jobId} completed with confidence ${data.confidence ?? 0}`,
+      ),
     )
 
     parentPort?.postMessage({
@@ -87,21 +87,23 @@ async function run(): Promise<void> {
       extra: {
         symbols: (data as any).symbols?.length ?? 0,
         words: (data as any).words?.length ?? 0,
-        lines: (data as any).lines?.length ?? 0
-      }
+        lines: (data as any).lines?.length ?? 0,
+      },
     })
-  } catch (error) {
+  }
+  catch (error) {
     console.error(
       chalk.redBright(
-        `[OCR Worker] Job ${payload.jobId} failed: ${error instanceof Error ? error.message : String(error)}`
-      )
+        `[OCR Worker] Job ${payload.jobId} failed: ${error instanceof Error ? error.message : String(error)}`,
+      ),
     )
     parentPort?.postMessage({
       status: 'error',
       jobId: payload.jobId,
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     })
-  } finally {
+  }
+  finally {
     await worker.terminate()
   }
 }
@@ -111,12 +113,12 @@ run().catch((error) => {
     chalk.redBright(
       `[OCR Worker] Unhandled failure for job ${(workerData as WorkerData).jobId}: ${
         error instanceof Error ? error.message : String(error)
-      }`
-    )
+      }`,
+    ),
   )
   parentPort?.postMessage({
     status: 'error',
     jobId: (workerData as WorkerData).jobId,
-    error: error instanceof Error ? error.message : String(error)
+    error: error instanceof Error ? error.message : String(error),
   })
 })

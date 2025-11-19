@@ -32,7 +32,6 @@ export class BaseNodeApi {
   getCWD() {
     return touchChannel.sendSync('common:cwd')
   }
-
 }
 
 export const baseNodeApi = new BaseNodeApi()

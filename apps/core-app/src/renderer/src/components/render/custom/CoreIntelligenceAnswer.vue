@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 interface IntelligencePayload {
   requestId: string
@@ -41,7 +41,7 @@ const aiData = computed<IntelligencePayload>(() => {
     requestId: props.item.id ?? `core-intelligence-${Date.now()}`,
     prompt: props.item.render?.basic?.title ?? '',
     status: 'pending',
-    createdAt: Date.now()
+    createdAt: Date.now(),
   }
 })
 
@@ -74,12 +74,12 @@ const usageLabel = computed(() => {
   return t('coreBox.intelligence.usage', {
     total: usage.totalTokens ?? 0,
     prompt: usage.promptTokens ?? 0,
-    completion: usage.completionTokens ?? 0
+    completion: usage.completionTokens ?? 0,
   })
 })
 
 const modelLabel = computed(() =>
-  aiData.value.model ? t('coreBox.intelligence.model', { model: aiData.value.model }) : ''
+  aiData.value.model ? t('coreBox.intelligence.model', { model: aiData.value.model }) : '',
 )
 
 const answerHtml = computed(() => {
@@ -125,7 +125,9 @@ function copyAnswer(): void {
 <template>
   <div class="CoreIntelligence">
     <header class="CoreIntelligence__header">
-      <div class="CoreIntelligence__icon">🤖</div>
+      <div class="CoreIntelligence__icon">
+        🤖
+      </div>
       <div class="CoreIntelligence__headings">
         <div class="CoreIntelligence__prompt">
           {{ formattedPrompt }}

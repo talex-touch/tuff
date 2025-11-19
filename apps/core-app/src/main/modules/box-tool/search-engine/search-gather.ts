@@ -1,14 +1,16 @@
-import {
-  TuffQuery,
-  withTimeout,
-  TuffSearchResult,
-  ITuffGatherOptions,
+import type {
+  IGatherController,
   ISearchProvider,
+  ITuffGatherOptions,
   TuffAggregatorCallback,
-  IGatherController
+  TuffQuery,
+  TuffSearchResult,
 } from '@talex-touch/utils'
-import { ProviderContext } from './types'
-import { performance } from 'perf_hooks'
+import type { ProviderContext } from './types'
+import { performance } from 'node:perf_hooks'
+import {
+  withTimeout,
+} from '@talex-touch/utils'
 import chalk from 'chalk'
 
 import { debounce } from 'lodash'
@@ -35,7 +37,7 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   coalesceGapMs: 100,
   firstBatchGraceMs: 50,
   debouncePushMs: 10,
-  taskTimeoutMs: 5000
+  taskTimeoutMs: 5000,
 }
 
 /**
@@ -46,8 +48,8 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
 function createGatherController(
   callback: (
     signal: AbortSignal,
-    resolve: (value: number | PromiseLike<number>) => void
-  ) => Promise<number>
+    resolve: (value: number | PromiseLike<number>) => void,
+  ) => Promise<number>,
 ): IGatherController {
   const controller = new AbortController()
   const { signal } = controller
@@ -64,7 +66,7 @@ function createGatherController(
         controller.abort()
       }
     },
-    signal
+    signal,
   }
 }
 
@@ -92,7 +94,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
   return function executeSearch(
     providers: ISearchProvider<ProviderContext>[],
     params: TuffQuery,
-    onUpdate: TuffAggregatorCallback
+    onUpdate: TuffAggregatorCallback,
   ): IGatherController {
     searchLogger.logSearchPhase('Gatherer Setup', `Initializing ${providers.length} providers`)
     searchLogger.gathererStart(providers.length, params.text)
@@ -105,7 +107,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
      */
     async function handleGather(
       signal: AbortSignal,
-      resolve: (value: number | PromiseLike<number>) => void
+      resolve: (value: number | PromiseLike<number>) => void,
     ): Promise<number> {
       const allResults: TuffSearchResult[] = []
       const sourceStats: ExtendedSourceStat[] = []
@@ -132,7 +134,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
             newResults: pushBuffer,
             totalCount: itemsCount,
             isDone: false,
-            sourceStats: sourceStats as TuffSearchResult['sources']
+            sourceStats: sourceStats as TuffSearchResult['sources'],
           })
           pushBuffer = []
         }
@@ -143,7 +145,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
             newResults: [],
             totalCount: itemsCount,
             isDone: true,
-            sourceStats: sourceStats as TuffSearchResult['sources']
+            sourceStats: sourceStats as TuffSearchResult['sources'],
           })
           resolve(itemsCount)
         }
@@ -166,9 +168,11 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
           searchLogger.firstBatch(firstBatchGraceMs)
           // For the first result, wait a short grace period before flushing.
           coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
-        } else {
+        }
+        else {
           // For subsequent results, reset the coalescing gap.
-          if (coalesceTimeoutId) clearTimeout(coalesceTimeoutId)
+          if (coalesceTimeoutId)
+            clearTimeout(coalesceTimeoutId)
           coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
         }
 
@@ -200,23 +204,23 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
             totalCount: allResults.reduce((acc, curr) => acc + curr.items.length, 0),
             isDone: true,
             cancelled: true,
-            sourceStats: sourceStats as TuffSearchResult['sources']
+            sourceStats: sourceStats as TuffSearchResult['sources'],
           })
           resolve(0) // Resolve with 0 to indicate cancellation
-          return
         })
 
         searchLogger.logSearchPhase('Worker Pool', `Starting ${concurrency} workers`)
 
-        const workers = Array(concurrency)
+        const workers = new Array(concurrency)
           .fill(0)
           .map(async (_, i) => {
             // Stagger the start of each worker to avoid resource contention.
-            await new Promise((resolve) => setTimeout(resolve, i * 10))
+            await new Promise(resolve => setTimeout(resolve, i * 10))
             searchLogger.workerStart(i)
             while (taskQueue.length > 0) {
               const provider = taskQueue.shift()
-              if (!provider) continue
+              if (!provider)
+                continue
 
               searchLogger.workerProcessing(i, provider.id)
               const startTime = performance.now()
@@ -224,7 +228,8 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
               let resultCount = 0
 
               try {
-                if (signal.aborted) return
+                if (signal.aborted)
+                  return
 
                 searchLogger.providerCall(provider.id)
                 const searchPromise = provider.onSearch(params, signal)
@@ -233,19 +238,22 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
                 resultCount = searchResult.items.length
                 searchLogger.providerResult(provider.id, resultCount)
                 onNewResult(searchResult)
-              } catch (error) {
+              }
+              catch (error) {
                 status = 'error'
                 if (error instanceof Error && error.name === 'TimeoutError') {
                   status = 'timeout'
                   searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-                } else {
+                }
+                else {
                   searchLogger.providerError(
                     provider.id,
-                    error instanceof Error ? error.message : 'Unknown error'
+                    error instanceof Error ? error.message : 'Unknown error',
                   )
                 }
                 console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
-              } finally {
+              }
+              finally {
                 const duration = performance.now() - startTime
                 // Do not log or record stats for aborted tasks.
                 if (!signal.aborted) {
@@ -255,7 +263,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
                     providerName: provider.name || provider.constructor.name,
                     duration,
                     resultCount,
-                    status
+                    status,
                   })
                 }
               }
@@ -276,20 +284,22 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
         provider: ISearchProvider<ProviderContext>,
         duration: number,
         resultCount: number,
-        status: 'success' | 'timeout' | 'error'
+        status: 'success' | 'timeout' | 'error',
       ): void => {
         let durationStr: string
         if (duration < 50) {
           durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
-        } else if (duration < 200) {
+        }
+        else if (duration < 200) {
           durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
-        } else {
+        }
+        else {
           durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
         }
-        const logMethod =
-          status === 'success' ? console.debug : status === 'timeout' ? console.warn : console.warn
+        const logMethod
+          = status === 'success' ? console.debug : status === 'timeout' ? console.warn : console.warn
         logMethod(
-          `[SearchGatherer] Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
+          `[SearchGatherer] Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`,
         )
       }
 

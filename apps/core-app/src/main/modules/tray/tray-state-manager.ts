@@ -14,7 +14,7 @@ export class TrayStateManager {
   private state: TrayState = {
     windowVisible: true,
     activeDownloads: 0,
-    hasUpdate: false
+    hasUpdate: false,
   }
 
   /**
@@ -89,7 +89,7 @@ export class TrayStateManager {
     this.state = {
       windowVisible: true,
       activeDownloads: 0,
-      hasUpdate: false
+      hasUpdate: false,
     }
   }
 }

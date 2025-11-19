@@ -19,11 +19,11 @@ export class TimeoutError extends Error {
    * @param message - An optional message describing the timeout error. Defaults to 'Operation timed out'.
    */
   constructor(message: string = 'Operation timed out') {
-    super(message);
-    this.name = 'TimeoutError';
+    super(message)
+    this.name = 'TimeoutError'
     // Maintain proper stack trace for the error.
     if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, TimeoutError);
+      Error.captureStackTrace(this, TimeoutError)
     }
   }
 }
@@ -62,19 +62,19 @@ export class TimeoutError extends Error {
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   if (ms <= 0) {
     // If timeout is 0 or negative, return the original Promise without a timeout mechanism.
-    return promise;
+    return promise
   }
 
   // Create a promise that rejects in <ms> milliseconds
   const timeout = new Promise<never>((_, reject) => {
     const id = setTimeout(() => {
-      clearTimeout(id);
-      reject(new TimeoutError(`Promise timed out after ${ms} ms`));
-    }, ms);
-  });
+      clearTimeout(id)
+      reject(new TimeoutError(`Promise timed out after ${ms} ms`))
+    }, ms)
+  })
 
   // Race the input promise against the timeout promise
-  return Promise.race([promise, timeout]);
+  return Promise.race([promise, timeout])
 }
 
 /**
@@ -82,13 +82,13 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * computes `T` based on the current attempt number.
  * @template T The type of the value.
  */
-type DynamicValue<T> = T | ((attempt: number) => T);
+type DynamicValue<T> = T | ((attempt: number) => T)
 
 /**
  * Defines a generic asynchronous function type that returns a Promise.
  * @template T The type of the Promise's resolution value.
  */
-type AsyncFunction<T> = (...args: any[]) => Promise<T>;
+type AsyncFunction<T> = (...args: any[]) => Promise<T>
 
 /**
  * Defines the options for configuring the retrier behavior.
@@ -100,45 +100,45 @@ export interface RetrierOptions {
    * - If a `function`, it dynamically calculates the maximum retries based on the current attempt number (starting from 1).
    * @defaultValue 2 (meaning 1 initial attempt + 2 retries, total 3 attempts)
    */
-  maxRetries?: DynamicValue<number>;
+  maxRetries?: DynamicValue<number>
   /**
    * The timeout duration for each individual attempt in milliseconds.
    * - If a `number`, it represents a fixed timeout for each attempt.
    * - If a `function`, it dynamically calculates the timeout based on the current attempt number.
    * @defaultValue 5000 (5 seconds)
    */
-  timeoutMs?: DynamicValue<number>;
+  timeoutMs?: DynamicValue<number>
   /**
    * Callback invoked at the beginning of each attempt.
    * @param attempt - The current attempt number (starts from 1).
    * @param error - The error from the previous attempt, if any (undefined for the first attempt).
    */
-  onAttempt?: (attempt: number, error?: Error) => void;
+  onAttempt?: (attempt: number, error?: Error) => void
   /**
    * Callback invoked upon successful completion of the operation.
    * @template T The type of the successful result.
    * @param result - The successful result of the operation.
    * @param attempt - The attempt number on which the operation succeeded.
    */
-  onSuccess?: <T>(result: T, attempt: number) => void;
+  onSuccess?: <T>(result: T, attempt: number) => void
   /**
    * Callback invoked when all retries have been exhausted and the operation ultimately fails.
    * @param error - The final error that caused the operation to fail.
    * @param attempt - The total number of attempts made before final failure.
    */
-  onFailure?: (error: Error, attempt: number) => void;
+  onFailure?: (error: Error, attempt: number) => void
   /**
    * Callback invoked before initiating a retry, indicating that a retry will occur.
    * @param attempt - The attempt number that just failed and will lead to the next retry.
    * @param error - The error that caused the current attempt to fail.
    */
-  onRetry?: (attempt: number, error: Error) => void;
+  onRetry?: (attempt: number, error: Error) => void
   /**
    * Callback invoked when a single attempt times out. Note that this is a specific type of failure that leads to a retry.
    * @param attempt - The attempt number that timed out.
    * @param ms - The timeout duration (in milliseconds) that was set for this specific attempt.
    */
-  onTimeout?: (attempt: number, ms: number) => void;
+  onTimeout?: (attempt: number, ms: number) => void
   /**
    * A predicate function that determines whether a given error should trigger a retry.
    * If this function returns `false`, the retrier will immediately stop and throw the error.
@@ -147,7 +147,7 @@ export interface RetrierOptions {
    * @param attempt - The current attempt number.
    * @returns `true` if a retry should occur, `false` otherwise.
    */
-  shouldRetry?: (error: Error, attempt: number) => boolean;
+  shouldRetry?: (error: Error, attempt: number) => boolean
 }
 
 /**
@@ -218,7 +218,7 @@ export function createRetrier(options: RetrierOptions = {}) {
     onRetry,
     onTimeout,
     shouldRetry = () => true, // Default: retry on all errors
-  } = options;
+  } = options
 
   /**
    * Resolves a DynamicValue to its concrete value for the given attempt.
@@ -228,8 +228,8 @@ export function createRetrier(options: RetrierOptions = {}) {
    * @returns The concrete value.
    */
   const resolveDynamicValue = <T_Val>(value: DynamicValue<T_Val>, attempt: number): T_Val => {
-    return typeof value === 'function' ? (value as (attempt: number) => T_Val)(attempt) : value;
-  };
+    return typeof value === 'function' ? (value as (attempt: number) => T_Val)(attempt) : value
+  }
 
   /**
    * A higher-order function that takes an asynchronous function and returns a new function
@@ -243,53 +243,55 @@ export function createRetrier(options: RetrierOptions = {}) {
    */
   return function <T, Func extends AsyncFunction<T>>(func: Func): ((...args: Parameters<Func>) => Promise<T>) {
     return async function (this: ThisParameterType<Func>, ...args: Parameters<Func>): Promise<T> {
-      let currentAttempt = 0;
-      let lastError: Error | undefined;
+      let currentAttempt = 0
+      let lastError: Error | undefined
 
       // Resolve maxRetries once or dynamically per attempt based on DynamicValue type
-      const calculatedMaxRetries = resolveDynamicValue(maxRetries, 1); // Calculate for the first attempt as starting point
+      const calculatedMaxRetries = resolveDynamicValue(maxRetries, 1) // Calculate for the first attempt as starting point
 
       // Loop through attempts up to the maximum allowed retries
       while (currentAttempt <= calculatedMaxRetries) {
-        currentAttempt++;
-        onAttempt?.(currentAttempt, lastError); // Notify about current attempt, including previous error if any
+        currentAttempt++
+        onAttempt?.(currentAttempt, lastError) // Notify about current attempt, including previous error if any
 
         // Resolve timeoutMs dynamically for the current attempt
-        const currentTimeoutMs = resolveDynamicValue(timeoutMs, currentAttempt);
+        const currentTimeoutMs = resolveDynamicValue(timeoutMs, currentAttempt)
 
         try {
           // Execute the original function with its original `this` context and arguments,
           // wrapped by the `withTimeout` utility.
-          const result = await withTimeout(func.apply(this, args), currentTimeoutMs);
-          onSuccess?.(result, currentAttempt); // Notify success
-          return result; // Return the successful result
-        } catch (error: any) {
-          lastError = error; // Store the error for the next attempt's `onAttempt` callback
+          const result = await withTimeout(func.apply(this, args), currentTimeoutMs)
+          onSuccess?.(result, currentAttempt) // Notify success
+          return result // Return the successful result
+        }
+        catch (error: any) {
+          lastError = error // Store the error for the next attempt's `onAttempt` callback
 
           // Notify if the specific error was a timeout
           if (error instanceof TimeoutError) {
-            onTimeout?.(currentAttempt, currentTimeoutMs);
-          } else {
+            onTimeout?.(currentAttempt, currentTimeoutMs)
+          }
+          else {
             // console.warn(`Attempt ${currentAttempt} failed with error:`, error.message); // Example internal logging
           }
 
           // Determine if a retry should proceed based on the `shouldRetry` predicate and max attempts
-          const shouldProceedRetry = shouldRetry(error, currentAttempt);
+          const shouldProceedRetry = shouldRetry(error, currentAttempt)
 
           if (!shouldProceedRetry || currentAttempt > calculatedMaxRetries) {
-            onFailure?.(error, currentAttempt); // Notify final failure
-            throw error; // Throw the error if no more retries or `shouldRetry` returns false
+            onFailure?.(error, currentAttempt) // Notify final failure
+            throw error // Throw the error if no more retries or `shouldRetry` returns false
           }
 
-          onRetry?.(currentAttempt, error); // Notify that a retry will occur
+          onRetry?.(currentAttempt, error) // Notify that a retry will occur
           // Optional: Add a delay here for exponential backoff or other retry strategies.
           // e.g., `await new Promise(resolve => setTimeout(resolve, Math.pow(2, currentAttempt) * 100));`
         }
       }
       // This line should ideally not be reached if the loop's conditions are correct and errors are always thrown.
-      throw new Error('Retrier exhausted all attempts without success. This is an unexpected state.');
-    };
-  };
+      throw new Error('Retrier exhausted all attempts without success. This is an unexpected state.')
+    }
+  }
 }
 
 /**
@@ -359,16 +361,17 @@ export function useRetrier<T, Func extends AsyncFunction<T>>(func: Func): ((...a
     timeoutMs: 5000, // Default: 5 seconds timeout
     onAttempt: (attempt, error) => {
       if (attempt > 1) {
-        console.log(`[UseRetrier Default] Attempt ${attempt} (after previous error: ${error?.message || 'None'})...`);
-      } else {
-        console.log(`[UseRetrier Default] Starting initial attempt ${attempt}...`);
+        console.log(`[UseRetrier Default] Attempt ${attempt} (after previous error: ${error?.message || 'None'})...`)
+      }
+      else {
+        console.log(`[UseRetrier Default] Starting initial attempt ${attempt}...`)
       }
     },
     onSuccess: (result, attempt) => console.log(`[UseRetrier Default] ✅ Succeeded on attempt ${attempt}. Result:`, result),
     onFailure: (error, attempt) => console.error(`[UseRetrier Default] ❌ Failed after ${attempt} attempts. Final Error:`, error.message),
     onRetry: (attempt, error) => console.warn(`[UseRetrier Default] 🔄 Will retry. Attempt ${attempt} failed with: ${error.message}`),
     onTimeout: (attempt, ms) => console.warn(`[UseRetrier Default] ⏰ Attempt ${attempt} timed out after ${ms}ms.`),
-  });
+  })
   // Use the created default retrier to wrap the provided function.
-  return defaultRetrier(func);
+  return defaultRetrier(func)
 }

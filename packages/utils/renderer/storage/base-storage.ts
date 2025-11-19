@@ -1,11 +1,12 @@
+import type { UnwrapNestedRefs, WatchHandle } from 'vue'
+import type { ITouchClientChannel } from '../../channel'
+import { useDebounceFn } from '@vueuse/core'
 import {
   reactive,
+
   watch,
-  type UnwrapNestedRefs,
-  type WatchHandle,
-} from 'vue';
-import { useDebounceFn } from '@vueuse/core'
-import type { ITouchClientChannel } from '../../channel';
+
+} from 'vue'
 
 /**
  * Interface representing the external communication channel.
@@ -17,17 +18,17 @@ export interface IStorageChannel extends ITouchClientChannel {
    * @param event Event name
    * @param payload Event payload
    */
-  send(event: string, payload: unknown): Promise<unknown>;
+  send: (event: string, payload: unknown) => Promise<unknown>
 
   /**
    * Synchronous send interface
    * @param event Event name
    * @param payload Event payload
    */
-  sendSync(event: string, payload: unknown): unknown;
+  sendSync: (event: string, payload: unknown) => unknown
 }
 
-let channel: IStorageChannel | null = null;
+let channel: IStorageChannel | null = null
 
 /**
  * Initializes the global channel for communication.
@@ -45,39 +46,39 @@ let channel: IStorageChannel | null = null;
  * ```
  */
 export function initStorageChannel(c: IStorageChannel): void {
-  channel = c;
+  channel = c
 }
 
 /**
  * Global registry of storage instances.
  */
-const GLOBAL_STORAGE_MAP_KEY = '__talex_touch_storages__';
+const GLOBAL_STORAGE_MAP_KEY = '__talex_touch_storages__'
 
-type GlobalStorageMap = Map<string, TouchStorage<any>>;
+type GlobalStorageMap = Map<string, TouchStorage<any>>
 
 function getGlobalStorageMap(): GlobalStorageMap {
   const globalObj = globalThis as typeof globalThis & {
-    [GLOBAL_STORAGE_MAP_KEY]?: GlobalStorageMap;
-  };
-  if (!globalObj[GLOBAL_STORAGE_MAP_KEY]) {
-    globalObj[GLOBAL_STORAGE_MAP_KEY] = new Map<string, TouchStorage<any>>();
+    [GLOBAL_STORAGE_MAP_KEY]?: GlobalStorageMap
   }
-  return globalObj[GLOBAL_STORAGE_MAP_KEY]!;
+  if (!globalObj[GLOBAL_STORAGE_MAP_KEY]) {
+    globalObj[GLOBAL_STORAGE_MAP_KEY] = new Map<string, TouchStorage<any>>()
+  }
+  return globalObj[GLOBAL_STORAGE_MAP_KEY]!
 }
 
-export const storages: GlobalStorageMap = getGlobalStorageMap();
+export const storages: GlobalStorageMap = getGlobalStorageMap()
 
-const GLOBAL_SINGLETON_KEY = '__talex_touch_storage_singletons__';
-type StorageSingletonMap = Map<string, unknown>;
+const GLOBAL_SINGLETON_KEY = '__talex_touch_storage_singletons__'
+type StorageSingletonMap = Map<string, unknown>
 
 function getSingletonMap(): StorageSingletonMap {
   const globalObj = globalThis as typeof globalThis & {
-    [GLOBAL_SINGLETON_KEY]?: StorageSingletonMap;
-  };
-  if (!globalObj[GLOBAL_SINGLETON_KEY]) {
-    globalObj[GLOBAL_SINGLETON_KEY] = new Map<string, unknown>();
+    [GLOBAL_SINGLETON_KEY]?: StorageSingletonMap
   }
-  return globalObj[GLOBAL_SINGLETON_KEY]!;
+  if (!globalObj[GLOBAL_SINGLETON_KEY]) {
+    globalObj[GLOBAL_SINGLETON_KEY] = new Map<string, unknown>()
+  }
+  return globalObj[GLOBAL_SINGLETON_KEY]!
 }
 
 /**
@@ -86,13 +87,13 @@ function getSingletonMap(): StorageSingletonMap {
  * instantiations under HMR or multi-renderer scenarios.
  */
 export function getOrCreateStorageSingleton<T>(key: string, factory: () => T): T {
-  const map = getSingletonMap();
+  const map = getSingletonMap()
   if (map.has(key)) {
-    return map.get(key) as T;
+    return map.get(key) as T
   }
-  const instance = factory();
-  map.set(key, instance);
-  return instance;
+  const instance = factory()
+  map.set(key, instance)
+  return instance
 }
 
 /**
@@ -103,13 +104,13 @@ export function getOrCreateStorageSingleton<T>(key: string, factory: () => T): T
 export function createStorageProxy<T extends object>(key: string, factory: () => T): T {
   return new Proxy({} as T, {
     get(_target, prop) {
-      const instance = getOrCreateStorageSingleton(key, factory);
-      const property = (instance as Record<PropertyKey, unknown>)[prop as PropertyKey];
+      const instance = getOrCreateStorageSingleton(key, factory)
+      const property = (instance as Record<PropertyKey, unknown>)[prop as PropertyKey]
       return typeof property === 'function'
         ? property.bind(instance)
-        : property;
-    }
-  });
+        : property
+    },
+  })
 }
 
 /**
@@ -118,19 +119,19 @@ export function createStorageProxy<T extends object>(key: string, factory: () =>
  * @template T Shape of the stored data.
  */
 export class TouchStorage<T extends object> {
-  readonly #qualifiedName: string;
-  #autoSave = false;
-  #autoSaveStopHandle?: WatchHandle;
-  #assigning = false;
-  readonly originalData: T;
-  private readonly _onUpdate: Array<() => void> = [];
-  #channelInitialized = false;
-  #skipNextWatchTrigger = false;
+  readonly #qualifiedName: string
+  #autoSave = false
+  #autoSaveStopHandle?: WatchHandle
+  #assigning = false
+  readonly originalData: T
+  private readonly _onUpdate: Array<() => void> = []
+  #channelInitialized = false
+  #skipNextWatchTrigger = false
 
   /**
    * The reactive data exposed to users.
    */
-  public data: UnwrapNestedRefs<T>;
+  public data: UnwrapNestedRefs<T>
 
   /**
    * Creates a new reactive storage instance.
@@ -154,26 +155,27 @@ export class TouchStorage<T extends object> {
   constructor(qName: string, initData: T, onUpdate?: () => void) {
     if (!channel) {
       throw new Error(
-        `TouchStorage: Cannot create storage "${qName}" before channel is initialized. ` +
-        'Please call initStorageChannel() first.'
-      );
+        `TouchStorage: Cannot create storage "${qName}" before channel is initialized. `
+        + 'Please call initStorageChannel() first.',
+      )
     }
 
     if (storages.has(qName)) {
-      throw new Error(`Storage "${qName}" already exists`);
+      throw new Error(`Storage "${qName}" already exists`)
     }
 
-    this.#qualifiedName = qName;
-    this.originalData = initData;
-    this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>;
+    this.#qualifiedName = qName
+    this.originalData = initData
+    this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>
 
-    if (onUpdate) this._onUpdate.push(onUpdate);
+    if (onUpdate)
+      this._onUpdate.push(onUpdate)
 
     // Register to storages map immediately
-    storages.set(qName, this);
+    storages.set(qName, this)
 
     // Initialize channel-dependent operations immediately
-    this.#initializeChannel();
+    this.#initializeChannel()
   }
 
   /**
@@ -182,13 +184,13 @@ export class TouchStorage<T extends object> {
    */
   #initializeChannel(): void {
     if (this.#channelInitialized) {
-      return;
+      return
     }
 
-    this.#channelInitialized = true;
+    this.#channelInitialized = true
 
-    const result = channel!.sendSync('storage:get', this.#qualifiedName);
-    const parsed = result ? (result as Partial<T>) : {};
+    const result = channel!.sendSync('storage:get', this.#qualifiedName)
+    const parsed = result ? (result as Partial<T>) : {}
 
     this.assignData(parsed)
 
@@ -199,11 +201,11 @@ export class TouchStorage<T extends object> {
       if (name === this.#qualifiedName) {
         this.loadFromRemote()
       }
-    });
+    })
 
     // Start auto-save watcher AFTER initial data load
     if (this.#autoSave && !this.#autoSaveStopHandle) {
-      this.#startAutoSaveWatcher();
+      this.#startAutoSaveWatcher()
     }
   }
 
@@ -216,7 +218,7 @@ export class TouchStorage<T extends object> {
    * ```
    */
   getQualifiedName(): string {
-    return this.#qualifiedName;
+    return this.#qualifiedName
   }
 
   /**
@@ -228,7 +230,7 @@ export class TouchStorage<T extends object> {
    * ```
    */
   isAutoSave(): boolean {
-    return this.#autoSave;
+    return this.#autoSave
   }
 
   /**
@@ -244,19 +246,19 @@ export class TouchStorage<T extends object> {
    */
   saveToRemote = useDebounceFn(async (options?: { force?: boolean }): Promise<void> => {
     if (!channel) {
-      throw new Error("TouchStorage: channel not initialized");
+      throw new Error('TouchStorage: channel not initialized')
     }
 
     if (this.#assigning && !options?.force) {
-      return;
+      return
     }
 
     await channel.send('storage:save', {
       key: this.#qualifiedName,
       content: JSON.stringify(this.data),
       clear: false,
-    });
-  }, 300);
+    })
+  }, 300)
 
   /**
    * Enables or disables auto-saving.
@@ -270,16 +272,16 @@ export class TouchStorage<T extends object> {
    * ```
    */
   setAutoSave(autoSave: boolean): this {
-    this.#autoSave = autoSave;
+    this.#autoSave = autoSave
 
-    this.#autoSaveStopHandle?.();
-    this.#autoSaveStopHandle = undefined;
+    this.#autoSaveStopHandle?.()
+    this.#autoSaveStopHandle = undefined
 
     if (autoSave && this.#channelInitialized) {
-      this.#startAutoSaveWatcher();
+      this.#startAutoSaveWatcher()
     }
 
-    return this;
+    return this
   }
 
   #startAutoSaveWatcher(): void {
@@ -287,30 +289,31 @@ export class TouchStorage<T extends object> {
       this.data,
       () => {
         if (this.#assigning) {
-          return;
+          return
         }
 
         if (this.#skipNextWatchTrigger) {
-          this.#skipNextWatchTrigger = false;
-          return;
+          this.#skipNextWatchTrigger = false
+          return
         }
 
-        this.#runAutoSavePipeline();
+        this.#runAutoSavePipeline()
       },
       { deep: true, immediate: true },
-    );
+    )
   }
 
   #runAutoSavePipeline(options?: { force?: boolean }): void {
     this._onUpdate.forEach((fn) => {
       try {
-        fn();
-      } catch (e) {
-        console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e);
+        fn()
       }
-    });
+      catch (e) {
+        console.error(`[TouchStorage] onUpdate error in "${this.#qualifiedName}":`, e)
+      }
+    })
 
-    this.saveToRemote(options);
+    this.saveToRemote(options)
   }
 
   /**
@@ -326,7 +329,7 @@ export class TouchStorage<T extends object> {
    * ```
    */
   onUpdate(fn: () => void): void {
-    this._onUpdate.push(fn);
+    this._onUpdate.push(fn)
   }
 
   /**
@@ -342,9 +345,9 @@ export class TouchStorage<T extends object> {
    * ```
    */
   offUpdate(fn: () => void): void {
-    const index = this._onUpdate.indexOf(fn);
+    const index = this._onUpdate.indexOf(fn)
     if (index !== -1) {
-      this._onUpdate.splice(index, 1);
+      this._onUpdate.splice(index, 1)
     }
   }
 
@@ -364,24 +367,25 @@ export class TouchStorage<T extends object> {
    */
   private assignData(newData: Partial<T>, stopWatch: boolean = true): void {
     if (stopWatch && this.#autoSave) {
-      this.#assigning = true;
+      this.#assigning = true
     }
 
-    Object.assign(this.data, newData);
+    Object.assign(this.data, newData)
 
     if (stopWatch && this.#autoSave) {
-      this.#skipNextWatchTrigger = true;
+      this.#skipNextWatchTrigger = true
       const resetAssigning = () => {
-        this.#assigning = false;
-      };
-
-      if (typeof queueMicrotask === 'function') {
-        queueMicrotask(resetAssigning);
-      } else {
-        Promise.resolve().then(resetAssigning);
+        this.#assigning = false
       }
 
-      this.#runAutoSavePipeline({ force: true });
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(resetAssigning)
+      }
+      else {
+        Promise.resolve().then(resetAssigning)
+      }
+
+      this.#runAutoSavePipeline({ force: true })
     }
   }
 
@@ -397,8 +401,8 @@ export class TouchStorage<T extends object> {
    * ```
    */
   applyData(data: Partial<T>): this {
-    this.assignData(data);
-    return this;
+    this.assignData(data)
+    return this
   }
 
   /**
@@ -413,15 +417,16 @@ export class TouchStorage<T extends object> {
    */
   async reloadFromRemote(): Promise<this> {
     if (!channel) {
-      throw new Error("TouchStorage: channel not initialized");
+      throw new Error('TouchStorage: channel not initialized')
     }
 
-    const result = await channel.send('storage:reload', this.#qualifiedName);
-    const parsed = result ? (result as Partial<T>) : {};
-    this.assignData(parsed, true);
+    const result = await channel.send('storage:reload', this.#qualifiedName)
+    const parsed = result ? (result as Partial<T>) : {}
+    this.assignData(parsed, true)
 
-    return this;
+    return this
   }
+
   /**
    * Loads data from remote storage and applies it.
    * If channel is not initialized yet, this method will do nothing.
@@ -436,14 +441,14 @@ export class TouchStorage<T extends object> {
   loadFromRemote(): this {
     if (!channel) {
       // Channel not initialized yet, data will be loaded when channel is ready
-      return this;
+      return this
     }
 
     const result = channel.sendSync('storage:get', this.#qualifiedName)
-    const parsed = result ? (result as Partial<T>) : {};
-    this.assignData(parsed, true);
+    const parsed = result ? (result as Partial<T>) : {}
+    this.assignData(parsed, true)
 
-    return this;
+    return this
   }
 
   /**
@@ -457,7 +462,7 @@ export class TouchStorage<T extends object> {
    * ```
    */
   get(): T {
-    return this.data as T;
+    return this.data as T
   }
 
   /**
@@ -472,7 +477,7 @@ export class TouchStorage<T extends object> {
    * ```
    */
   set(newData: T): this {
-    this.assignData(newData as Partial<T>);
-    return this;
+    this.assignData(newData as Partial<T>)
+    return this
   }
 }

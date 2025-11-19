@@ -1,3 +1,49 @@
+<script lang="ts" name="PluginList" setup>
+import type { ITouchPlugin } from '@talex-touch/utils'
+import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
+
+const props = defineProps<{
+  plugins: ITouchPlugin[]
+}>()
+const emits = defineEmits(['select', 'add-plugin'])
+const target = ref(-1)
+const searchQuery = ref('')
+
+const runningPlugins = computed(() =>
+  props.plugins.filter(plugin => plugin.status === 3 || plugin.status === 4),
+)
+
+// Filtered plugins based on search query
+const filteredRunningPlugins = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return runningPlugins.value
+  }
+
+  return runningPlugins.value.filter(
+    plugin =>
+      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      || plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  )
+})
+
+const filteredAllPlugins = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return props.plugins
+  }
+
+  return props.plugins.filter(
+    plugin =>
+      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      || plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  )
+})
+
+watch(
+  () => target.value,
+  () => emits('select', target.value),
+)
+</script>
+
 <template>
   <TouchScroll v-if="plugins" class="PluginList-Container cubic-transition">
     <div class="PluginList-Toolbox w-full">
@@ -8,16 +54,20 @@
           type="text"
           placeholder="Search plugins..."
           class="search-input"
-        />
+        >
         <i v-if="searchQuery" class="i-ri-close-line clear-icon" @click="searchQuery = ''" />
       </div>
     </div>
 
     <PluginListModule v-model="target" shrink="true" :plugins="filteredRunningPlugins">
-      <template #name>Running</template>
+      <template #name>
+        Running
+      </template>
     </PluginListModule>
     <PluginListModule v-model="target" :plugins="filteredAllPlugins">
-      <template #name>All</template>
+      <template #name>
+        All
+      </template>
     </PluginListModule>
 
     <div class="PluginList-Add transition-cubic fake-background">
@@ -25,52 +75,6 @@
     </div>
   </TouchScroll>
 </template>
-
-<script lang="ts" name="PluginList" setup>
-import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
-import { ITouchPlugin } from '@talex-touch/utils'
-
-const props = defineProps<{
-  plugins: ITouchPlugin[]
-}>()
-const emits = defineEmits(['select', 'add-plugin'])
-const target = ref(-1)
-const searchQuery = ref('')
-
-const runningPlugins = computed(() =>
-  props.plugins.filter((plugin) => plugin.status === 3 || plugin.status === 4)
-)
-
-// Filtered plugins based on search query
-const filteredRunningPlugins = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return runningPlugins.value
-  }
-
-  return runningPlugins.value.filter(
-    (plugin) =>
-      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
-})
-
-const filteredAllPlugins = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return props.plugins
-  }
-
-  return props.plugins.filter(
-    (plugin) =>
-      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
-})
-
-watch(
-  () => target.value,
-  () => emits('select', target.value)
-)
-</script>
 
 <style lang="scss" scoped>
 .PluginList-Add {

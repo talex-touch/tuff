@@ -1,6 +1,6 @@
 <script name="TouchMenu" lang="ts" setup>
-import { ref, provide, nextTick, onMounted } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
+import { nextTick, onMounted, provide, ref } from 'vue'
 
 const pointer = ref<HTMLElement | null>(null)
 
@@ -10,7 +10,8 @@ provide<(el: HTMLElement) => void>('changePointer', (el: HTMLElement) => {
 
 async function fixPointer(targetEl: HTMLElement): Promise<void> {
   const pointerEl = pointer.value
-  if (!pointerEl || !targetEl) return
+  if (!pointerEl || !targetEl)
+    return
 
   const pointerStyle = pointerEl.style
 
@@ -38,7 +39,8 @@ async function fixPointer(targetEl: HTMLElement): Promise<void> {
 
     pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
     pointerStyle.height = `${nodeRect.height * 0.6}px`
-  } else {
+  }
+  else {
     pointerStyle.transform = `translate(0, -${nodeRect.height * 0.2}px)`
     pointerStyle.height = `${nodeRect.height * 0.8}px`
 

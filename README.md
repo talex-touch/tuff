@@ -74,7 +74,6 @@ The design style of Tuff is inspired by TDesignS, which is simple and elegant. T
 
 ![New Plugin](https://files.catbox.moe/xksrfv.gif)
 
-
 ## 🗻 Rich Functionality
 
 Tuff integrates a variety of practical functions to make your desktop smarter and more efficient.
@@ -99,7 +98,6 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 ## 🤝 License
 
 This project is open-sourced under the **MIT License**.
-
 
 ## ⁉️ Issue
 

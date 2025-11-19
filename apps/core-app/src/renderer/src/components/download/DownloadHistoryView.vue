@@ -1,3 +1,207 @@
+<script setup lang="ts">
+import type { DownloadHistory } from '@talex-touch/utils'
+import {
+  Clock,
+  Delete,
+  Search,
+} from '@element-plus/icons-vue'
+import { DownloadModule } from '@talex-touch/utils'
+import { ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
+import HistoryCard from './HistoryCard.vue'
+
+const { t } = useI18n()
+
+const {
+  getHistory,
+  clearHistory,
+  clearHistoryItem,
+  openFile,
+  showInFolder,
+} = useDownloadCenter()
+
+const historyList = ref<DownloadHistory[]>([])
+const loading = ref(false)
+const searchQuery = ref('')
+const filterModule = ref<string>('')
+const sortBy = ref('time_desc')
+const currentPage = ref(1)
+const pageSize = 20
+
+// 加载历史记录
+async function loadHistory() {
+  try {
+    loading.value = true
+    const history = await getHistory()
+    historyList.value = history
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`${t('download.load_history_failed')}: ${message}`)
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+// 搜索过滤
+const filteredHistory = computed(() => {
+  let result = [...historyList.value]
+
+  // 搜索过滤
+  const query = searchQuery.value.toLowerCase().trim()
+  if (query) {
+    result = result.filter(item =>
+      item.filename.toLowerCase().includes(query)
+      || item.url.toLowerCase().includes(query),
+    )
+  }
+
+  // 模块过滤
+  if (filterModule.value) {
+    result = result.filter(item => item.module === filterModule.value)
+  }
+
+  // 排序
+  switch (sortBy.value) {
+    case 'time_desc':
+      result.sort((a, b) => {
+        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0
+        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0
+        return timeB - timeA
+      })
+      break
+    case 'time_asc':
+      result.sort((a, b) => {
+        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0
+        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0
+        return timeA - timeB
+      })
+      break
+    case 'size_desc':
+      result.sort((a, b) => (b.totalSize || 0) - (a.totalSize || 0))
+      break
+    case 'size_asc':
+      result.sort((a, b) => (a.totalSize || 0) - (b.totalSize || 0))
+      break
+    case 'name_asc':
+      result.sort((a, b) => a.filename.localeCompare(b.filename))
+      break
+    case 'name_desc':
+      result.sort((a, b) => b.filename.localeCompare(a.filename))
+      break
+  }
+
+  return result
+})
+
+// 分页数据
+const paginatedHistory = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return filteredHistory.value.slice(start, end)
+})
+
+function handleSearch() {
+  currentPage.value = 1
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+}
+
+async function handleOpenFile(historyId: string) {
+  try {
+    const item = historyList.value.find(h => h.id === historyId)
+    if (!item)
+      return
+
+    await openFile(item.taskId)
+    toast.success(t('download.file_opened'))
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`${t('download.open_file_failed')}: ${message}`)
+  }
+}
+
+async function handleShowInFolder(historyId: string) {
+  try {
+    const item = historyList.value.find(h => h.id === historyId)
+    if (!item)
+      return
+
+    await showInFolder(item.taskId)
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`${t('download.show_folder_failed')}: ${message}`)
+  }
+}
+
+async function handleClearHistoryItem(historyId: string) {
+  try {
+    await ElMessageBox.confirm(
+      t('download.clear_history_item_confirm_message'),
+      t('download.clear_history_item_confirm_title'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      },
+    )
+
+    await clearHistoryItem(historyId)
+
+    // 从列表中移除
+    const index = historyList.value.findIndex(h => h.id === historyId)
+    if (index !== -1) {
+      historyList.value.splice(index, 1)
+    }
+
+    toast.success(t('download.history_item_cleared'))
+  }
+  catch (err: unknown) {
+    if (err === 'cancel')
+      return
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
+  }
+}
+
+async function handleClearAllHistory() {
+  try {
+    await ElMessageBox.confirm(
+      t('download.clear_all_history_confirm_message'),
+      t('download.clear_all_history_confirm_title'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+
+    await clearHistory()
+    historyList.value = []
+    toast.success(t('download.all_history_cleared'))
+  }
+  catch (err: unknown) {
+    if (err === 'cancel')
+      return
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
+  }
+}
+
+onMounted(() => {
+  loadHistory()
+})
+</script>
+
 <template>
   <div class="download-history-view">
     <!-- 头部 -->
@@ -91,199 +295,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElMessageBox } from 'element-plus'
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
-import {
-  Clock,
-  Search,
-  Delete
-} from '@element-plus/icons-vue'
-import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
-import { DownloadHistory, DownloadModule } from '@talex-touch/utils'
-import HistoryCard from './HistoryCard.vue'
-
-const { t } = useI18n()
-
-const {
-  getHistory,
-  clearHistory,
-  clearHistoryItem,
-  openFile,
-  showInFolder
-} = useDownloadCenter()
-
-const historyList = ref<DownloadHistory[]>([])
-const loading = ref(false)
-const searchQuery = ref('')
-const filterModule = ref<string>('')
-const sortBy = ref('time_desc')
-const currentPage = ref(1)
-const pageSize = 20
-
-// 加载历史记录
-const loadHistory = async () => {
-  try {
-    loading.value = true
-    const history = await getHistory()
-    historyList.value = history
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.load_history_failed')}: ${message}`)
-  } finally {
-    loading.value = false
-  }
-}
-
-// 搜索过滤
-const filteredHistory = computed(() => {
-  let result = [...historyList.value]
-
-  // 搜索过滤
-  const query = searchQuery.value.toLowerCase().trim()
-  if (query) {
-    result = result.filter(item =>
-      item.filename.toLowerCase().includes(query) ||
-      item.url.toLowerCase().includes(query)
-    )
-  }
-
-  // 模块过滤
-  if (filterModule.value) {
-    result = result.filter(item => item.module === filterModule.value)
-  }
-
-  // 排序
-  switch (sortBy.value) {
-    case 'time_desc':
-      result.sort((a, b) => {
-        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0
-        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0
-        return timeB - timeA
-      })
-      break
-    case 'time_asc':
-      result.sort((a, b) => {
-        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0
-        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0
-        return timeA - timeB
-      })
-      break
-    case 'size_desc':
-      result.sort((a, b) => (b.totalSize || 0) - (a.totalSize || 0))
-      break
-    case 'size_asc':
-      result.sort((a, b) => (a.totalSize || 0) - (b.totalSize || 0))
-      break
-    case 'name_asc':
-      result.sort((a, b) => a.filename.localeCompare(b.filename))
-      break
-    case 'name_desc':
-      result.sort((a, b) => b.filename.localeCompare(a.filename))
-      break
-  }
-
-  return result
-})
-
-// 分页数据
-const paginatedHistory = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredHistory.value.slice(start, end)
-})
-
-const handleSearch = () => {
-  currentPage.value = 1
-}
-
-const handlePageChange = (page: number) => {
-  currentPage.value = page
-}
-
-const handleOpenFile = async (historyId: string) => {
-  try {
-    const item = historyList.value.find(h => h.id === historyId)
-    if (!item) return
-
-    await openFile(item.taskId)
-    toast.success(t('download.file_opened'))
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.open_file_failed')}: ${message}`)
-  }
-}
-
-const handleShowInFolder = async (historyId: string) => {
-  try {
-    const item = historyList.value.find(h => h.id === historyId)
-    if (!item) return
-
-    await showInFolder(item.taskId)
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.show_folder_failed')}: ${message}`)
-  }
-}
-
-const handleClearHistoryItem = async (historyId: string) => {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_history_item_confirm_message'),
-      t('download.clear_history_item_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
-      }
-    )
-
-    await clearHistoryItem(historyId)
-    
-    // 从列表中移除
-    const index = historyList.value.findIndex(h => h.id === historyId)
-    if (index !== -1) {
-      historyList.value.splice(index, 1)
-    }
-
-    toast.success(t('download.history_item_cleared'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
-  }
-}
-
-const handleClearAllHistory = async () => {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_all_history_confirm_message'),
-      t('download.clear_all_history_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger'
-      }
-    )
-
-    await clearHistory()
-    historyList.value = []
-    toast.success(t('download.all_history_cleared'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
-  }
-}
-
-onMounted(() => {
-  loadHistory()
-})
-</script>
 
 <style scoped>
 .download-history-view {

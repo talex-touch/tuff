@@ -1,31 +1,16 @@
-<template>
-  <div class="FlatCodeInput-Container">
-    <span
-      v-for="i in 9"
-      :class="{
-        active: codes.indexOf(i) !== -1,
-        disabled: codes.length > 0 && codes[codes.length - 1] !== i
-      }"
-      class="FlatCodeInput-Item"
-      @click="inputCode(i)"
-      v-text="i"
-    />
-  </div>
-</template>
-
 <script>
 import FlatButton from '~/components/base/button//FlatButton.vue'
-
-export default {
-  name: 'FlatCodeInput',
-  components: { FlatButton }
-}
 </script>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, watch } from 'vue'
 
 const emits = defineEmits(['input'])
+
+export default {
+  name: 'FlatCodeInput',
+  components: { FlatButton },
+}
 
 const codes = reactive([])
 
@@ -33,7 +18,8 @@ function inputCode(code) {
   const i = codes.indexOf(code)
   if (i !== -1) {
     codes.splice(i, 1)
-  } else {
+  }
+  else {
     codes.push(code)
   }
 }
@@ -44,6 +30,21 @@ watch(codes, (val) => {
   }
 })
 </script>
+
+<template>
+  <div class="FlatCodeInput-Container">
+    <span
+      v-for="i in 9"
+      :class="{
+        active: codes.includes(i),
+        disabled: codes.length > 0 && codes[codes.length - 1] !== i,
+      }"
+      class="FlatCodeInput-Item"
+      @click="inputCode(i)"
+      v-text="i"
+    />
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .FlatCodeInput-Container {

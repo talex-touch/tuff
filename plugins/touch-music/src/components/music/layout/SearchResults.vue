@@ -1,27 +1,16 @@
-<template>
-  <div class="SearchResults-Container cubic-transition" :class="{ active: res }">
-    <span @click="close" class="SearchResults-Controller">
-
-    </span>
-    <el-scrollbar>
-      <div class="SearchResults-Content" v-if="res?.songs">
-        <song-item @click="select(song)" :shrink="false" :playing="false" v-for="(song, index) in res.songs" :key="song.id" :song="song" />
-      </div>
-    </el-scrollbar>
-  </div>
-</template>
-
 <script>
-export default {
-  name: "SearchResults"
-}
 </script>
 
 <script setup>
 import SongItem from '@comp/music/song/SongItem.vue'
 
 const props = defineProps(['res'])
+
 const emits = defineEmits(['close', 'select'])
+
+export default {
+  name: 'SearchResults',
+}
 
 function close() {
   emits('close')
@@ -31,6 +20,17 @@ function select(song) {
   emits('select', song)
 }
 </script>
+
+<template>
+  <div class="SearchResults-Container cubic-transition" :class="{ active: res }">
+    <span class="SearchResults-Controller" @click="close" />
+    <el-scrollbar>
+      <div v-if="res?.songs" class="SearchResults-Content">
+        <SongItem v-for="(song, index) in res.songs" :key="song.id" :shrink="false" :playing="false" :song="song" @click="select(song)" />
+      </div>
+    </el-scrollbar>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .SearchResults-Content {

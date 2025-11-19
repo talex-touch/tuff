@@ -1,11 +1,13 @@
-import {
+import type {
+  DownloadAsset,
+  GitHubRelease,
+  UpdateError,
   UpdateProviderType,
   UpdateSourceConfig,
+} from '@talex-touch/utils'
+import {
   AppPreviewChannel,
-  GitHubRelease,
-  DownloadAsset,
-  UpdateError,
-  UpdateErrorType
+  UpdateErrorType,
 } from '@talex-touch/utils'
 
 // 更新源抽象基类
@@ -51,7 +53,7 @@ export abstract class UpdateProvider {
     if (config.type !== this.type) {
       throw this.createError(
         UpdateErrorType.API_ERROR,
-        `Invalid provider type: expected ${this.type}, got ${config.type}`
+        `Invalid provider type: expected ${this.type}, got ${config.type}`,
       )
     }
   }
@@ -77,8 +79,10 @@ export abstract class UpdateProvider {
       const part1 = parts1[i] || 0
       const part2 = parts2[i] || 0
 
-      if (part1 > part2) return 1
-      if (part1 < part2) return -1
+      if (part1 > part2)
+        return 1
+      if (part1 < part2)
+        return -1
     }
 
     return 0
@@ -92,7 +96,7 @@ export abstract class UpdateProvider {
   // 根据渠道过滤版本
   protected filterByChannel(
     releases: GitHubRelease[],
-    channel: AppPreviewChannel
+    channel: AppPreviewChannel,
   ): GitHubRelease[] {
     return releases.filter((release) => {
       const tagName = release.tag_name.toLowerCase()
@@ -108,9 +112,9 @@ export abstract class UpdateProvider {
       }
 
       return (
-        !tagName.includes('snapshot') &&
-        !tagName.includes('beta') &&
-        !tagName.includes('alpha')
+        !tagName.includes('snapshot')
+        && !tagName.includes('beta')
+        && !tagName.includes('alpha')
       )
     })
   }
@@ -154,25 +158,25 @@ export abstract class UpdateProvider {
   }
 
   // 解析版本标签
-  protected parseVersionTag(tagName: string): { version: string; channel: AppPreviewChannel } {
+  protected parseVersionTag(tagName: string): { version: string, channel: AppPreviewChannel } {
     const tag = tagName.toLowerCase()
 
     if (tag.includes('snapshot') || tag.includes('alpha')) {
       return {
         version: tagName,
-        channel: AppPreviewChannel.SNAPSHOT
+        channel: AppPreviewChannel.SNAPSHOT,
       }
     }
     if (tag.includes('beta')) {
       return {
         version: tagName,
-        channel: AppPreviewChannel.BETA
+        channel: AppPreviewChannel.BETA,
       }
     }
 
     return {
       version: tagName,
-      channel: AppPreviewChannel.RELEASE
+      channel: AppPreviewChannel.RELEASE,
     }
   }
 
@@ -196,18 +200,18 @@ export abstract class UpdateProvider {
     if (!release.tag_name || !release.name || !release.published_at) {
       throw this.createError(
         UpdateErrorType.PARSE_ERROR,
-        'Invalid release: missing required fields'
+        'Invalid release: missing required fields',
       )
     }
 
     if (!release.assets || !Array.isArray(release.assets)) {
       throw this.createError(
         UpdateErrorType.PARSE_ERROR,
-        'Invalid release: missing or invalid assets'
+        'Invalid release: missing or invalid assets',
       )
     }
 
     // 验证每个资源
-    release.assets.forEach((asset) => this.validateAsset(asset))
+    release.assets.forEach(asset => this.validateAsset(asset))
   }
 }

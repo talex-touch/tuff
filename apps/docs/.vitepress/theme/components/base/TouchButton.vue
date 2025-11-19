@@ -1,23 +1,23 @@
-<template>
-  <button class="touch-button" :class="{ 'touch-button--loading': loading }" :disabled="disabled || loading">
-    <div class="touch-button__content">
-      <slot></slot>
-      <div v-if="loading" class="touch-button__spinner"></div>
-    </div>
-  </button>
-</template>
-
 <script setup lang="ts">
 interface Props {
-  loading?: boolean;
-  disabled?: boolean;
+  loading?: boolean
+  disabled?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   loading: false,
-  disabled: false
-});
+  disabled: false,
+})
 </script>
+
+<template>
+  <button class="touch-button" :class="{ 'touch-button--loading': loading }" :disabled="disabled || loading">
+    <div class="touch-button__content">
+      <slot />
+      <div v-if="loading" class="touch-button__spinner" />
+    </div>
+  </button>
+</template>
 
 <style scoped>
 .touch-button {
@@ -68,10 +68,10 @@ withDefaults(defineProps<Props>(), {
   bottom: 0;
   border-radius: inherit;
   z-index: -2;
-  background: linear-gradient(45deg, 
-    rgba(255, 0, 150, 0.5), 
-    rgba(0, 255, 255, 0.5), 
-    rgba(255, 255, 0, 0.5), 
+  background: linear-gradient(45deg,
+    rgba(255, 0, 150, 0.5),
+    rgba(0, 255, 255, 0.5),
+    rgba(255, 255, 0, 0.5),
     rgba(0, 255, 0, 0.5));
   background-size: 300% 300%;
   animation: gradientShift 3s ease infinite;

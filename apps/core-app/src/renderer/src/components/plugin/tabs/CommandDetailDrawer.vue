@@ -1,38 +1,3 @@
-<template>
-  <transition name="drawer">
-    <div v-if="visible" class="command-drawer-overlay" @click.self="closeDrawer">
-      <div class="command-drawer">
-        <div class="drawer-header">
-          <h3>Command Details</h3>
-          <button class="close-button" @click="closeDrawer">
-            <i class="i-ri-close-line" />
-          </button>
-        </div>
-
-        <div class="drawer-content">
-          <div class="command-overview glass-card">
-            <div class="overview-header">
-              <code class="command-name">{{ commandData?.name }}</code>
-              <span v-if="commandData?.shortcut" class="command-shortcut">{{
-                commandData?.shortcut
-              }}</span>
-            </div>
-            <p v-if="commandData?.desc" class="command-description">{{ commandData?.desc }}</p>
-          </div>
-
-          <div class="command-json glass-card">
-            <div class="card-header">
-              <i class="i-ri-code-s-slash-line" />
-              <h4>Command Data</h4>
-            </div>
-            <pre class="json-content">{{ JSON.stringify(command, null, 2) }}</pre>
-          </div>
-        </div>
-      </div>
-    </div>
-  </transition>
-</template>
-
 <script lang="ts" setup>
 import type { IFeatureCommand } from '@talex-touch/utils/plugin'
 
@@ -57,6 +22,43 @@ function closeDrawer(): void {
   emit('close')
 }
 </script>
+
+<template>
+  <transition name="drawer">
+    <div v-if="visible" class="command-drawer-overlay" @click.self="closeDrawer">
+      <div class="command-drawer">
+        <div class="drawer-header">
+          <h3>Command Details</h3>
+          <button class="close-button" @click="closeDrawer">
+            <i class="i-ri-close-line" />
+          </button>
+        </div>
+
+        <div class="drawer-content">
+          <div class="command-overview glass-card">
+            <div class="overview-header">
+              <code class="command-name">{{ commandData?.name }}</code>
+              <span v-if="commandData?.shortcut" class="command-shortcut">{{
+                commandData?.shortcut
+              }}</span>
+            </div>
+            <p v-if="commandData?.desc" class="command-description">
+              {{ commandData?.desc }}
+            </p>
+          </div>
+
+          <div class="command-json glass-card">
+            <div class="card-header">
+              <i class="i-ri-code-s-slash-line" />
+              <h4>Command Data</h4>
+            </div>
+            <pre class="json-content">{{ JSON.stringify(command, null, 2) }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </transition>
+</template>
 
 <style lang="scss" scoped>
 .command-drawer-overlay {

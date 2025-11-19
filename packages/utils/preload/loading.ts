@@ -4,12 +4,12 @@ export type LoadingMode = 'classic' | 'progress' | 'debug'
 
 export type LoadingState = 'start' | 'finish'
 
-export type LoadingEvent =
-  | { type: 'mode'; mode: LoadingMode }
-  | { type: 'message'; message: string }
-  | { type: 'progress'; delta?: number; reset?: boolean }
-  | { type: 'state'; state: LoadingState }
+export type LoadingEvent
+  = | { type: 'mode', mode: LoadingMode }
+    | { type: 'message', message: string }
+    | { type: 'progress', delta?: number, reset?: boolean }
+    | { type: 'state', state: LoadingState }
 
 export interface PreloadAPI {
-  sendPreloadEvent(event: LoadingEvent): void
+  sendPreloadEvent: (event: LoadingEvent) => void
 }

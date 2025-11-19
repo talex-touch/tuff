@@ -1,23 +1,22 @@
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { AiCapabilityType, AiProviderType } from '@talex-touch/utils'
-import type { AiProviderConfig } from '@talex-touch/utils'
-import { aiCapabilityRegistry } from './intelligence-capability-registry'
-import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
-import { genTouchChannel } from '../../core/channel-core'
+import type { AiProviderConfig, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import { ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener, debugPrintConfig } from './intelligence-config'
-import { capabilityTesterRegistry } from './capability-testers'
-import { OpenAIProvider } from './providers/openai-provider'
-import { DeepSeekProvider } from './providers/deepseek-provider'
-import { SiliconflowProvider } from './providers/siliconflow-provider'
-import { LocalProvider } from './providers/local-provider'
-import { AnthropicProvider } from './providers/anthropic-provider'
-import { IntelligenceProviderManager } from './runtime/provider-manager'
-import { BaseModule } from '../abstract-base-module'
-import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { AiCapabilityType, AiProviderType } from '@talex-touch/utils'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { genTouchChannel } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
-import { TalexEvents } from '../../core/eventbus/touch-event'
+import { BaseModule } from '../abstract-base-module'
+import { capabilityTesterRegistry } from './capability-testers'
+import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { debugPrintConfig, ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener } from './intelligence-config'
+import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
 import { fetchProviderModels } from './provider-models'
+import { AnthropicProvider } from './providers/anthropic-provider'
+import { DeepSeekProvider } from './providers/deepseek-provider'
+import { LocalProvider } from './providers/local-provider'
+import { OpenAIProvider } from './providers/openai-provider'
+import { SiliconflowProvider } from './providers/siliconflow-provider'
+import { IntelligenceProviderManager } from './runtime/provider-manager'
 
 const intelligenceLog = createLogger('Intelligence')
 
@@ -70,10 +69,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 设置配置更新监听器
     setupConfigUpdateListener()
-    
+
     // 打印配置文件内容（调试用）
     debugPrintConfig()
-    
+
     // 强制加载初始配置（force=true 确保即使 signature 相同也会重新加载）
     ensureAiConfigLoaded(true)
 
@@ -90,18 +89,19 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册内置 Provider Factories
    */
   private registerBuiltinProviders(): void {
-    if (!this.manager) return
+    if (!this.manager)
+      return
 
     intelligenceLog.info('Registering builtin provider factories')
 
-    this.manager.registerFactory(AiProviderType.OPENAI, (config) => new OpenAIProvider(config))
-    this.manager.registerFactory(AiProviderType.ANTHROPIC, (config) => new AnthropicProvider(config))
-    this.manager.registerFactory(AiProviderType.DEEPSEEK, (config) => new DeepSeekProvider(config))
+    this.manager.registerFactory(AiProviderType.OPENAI, config => new OpenAIProvider(config))
+    this.manager.registerFactory(AiProviderType.ANTHROPIC, config => new AnthropicProvider(config))
+    this.manager.registerFactory(AiProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
     this.manager.registerFactory(
       AiProviderType.SILICONFLOW,
-      (config) => new SiliconflowProvider(config)
+      config => new SiliconflowProvider(config),
     )
-    this.manager.registerFactory(AiProviderType.LOCAL, (config) => new LocalProvider(config))
+    this.manager.registerFactory(AiProviderType.LOCAL, config => new LocalProvider(config))
 
     intelligenceLog.success('Builtin provider factories registered')
   }
@@ -110,7 +110,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册自定义 Provider Factory (OpenAI-compatible)
    */
   private registerCustomProvider(): void {
-    if (!this.manager) return
+    if (!this.manager)
+      return
 
     intelligenceLog.info('Registering custom provider factory')
 
@@ -141,8 +142,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         AiProviderType.DEEPSEEK,
         AiProviderType.SILICONFLOW,
         AiProviderType.LOCAL,
-        AiProviderType.CUSTOM
-      ]
+        AiProviderType.CUSTOM,
+      ],
     })
 
     // 注册 Embedding 能力
@@ -156,8 +157,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         AiProviderType.DEEPSEEK,
         AiProviderType.SILICONFLOW,
         AiProviderType.LOCAL,
-        AiProviderType.CUSTOM
-      ]
+        AiProviderType.CUSTOM,
+      ],
     })
 
     // 注册 Vision OCR 能力
@@ -170,8 +171,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         AiProviderType.OPENAI,
         AiProviderType.ANTHROPIC,
         AiProviderType.SILICONFLOW,
-        AiProviderType.CUSTOM
-      ]
+        AiProviderType.CUSTOM,
+      ],
     })
 
     intelligenceLog.success('Capabilities registered')
@@ -181,7 +182,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册 IPC 通道处理器
    */
   private registerChannels(): void {
-    if (!this.channel) return
+    if (!this.channel)
+      return
 
     intelligenceLog.info('Registering IPC channels')
 
@@ -202,14 +204,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
         const result = await ai.invoke(capabilityId, payload, options)
         intelligenceLog.success(
-          `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
+          `Capability ${capabilityId} completed via ${result.provider} (${result.model})`,
         )
         reply(DataCode.SUCCESS, { ok: true, result })
-      } catch (error) {
+      }
+      catch (error) {
         intelligenceLog.error('Invoke failed:', { error })
         reply(DataCode.ERROR, {
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         })
       }
     })
@@ -229,13 +232,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
         reply(DataCode.SUCCESS, {
           ok: true,
-          result
+          result,
         })
-      } catch (error) {
+      }
+      catch (error) {
         intelligenceLog.error('Provider test failed:', { error })
         reply(DataCode.ERROR, {
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         })
       }
     })
@@ -258,8 +262,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
               ok: true,
               result: {
                 requiresUserInput: false,
-                inputHint: ''
-              }
+                inputHint: '',
+              },
             })
             return
           }
@@ -268,17 +272,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             ok: true,
             result: {
               requiresUserInput: tester.requiresUserInput(),
-              inputHint: tester.getDefaultInputHint()
-            }
+              inputHint: tester.getDefaultInputHint(),
+            },
           })
-        } catch (error) {
+        }
+        catch (error) {
           intelligenceLog.error('Get capability test meta failed:', { error })
           reply(DataCode.ERROR, {
             ok: false,
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
           })
         }
-      }
+      },
     )
 
     // 测试能力
@@ -320,28 +325,29 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           // 执行测试
           const result = await ai.invoke(capabilityId, payload, {
             modelPreference: options.modelPreference,
-            allowedProviderIds
+            allowedProviderIds,
           })
 
           // 格式化结果
           const formattedResult = tester.formatTestResult(result)
 
           intelligenceLog.success(
-            `Capability ${capabilityId} test success via ${result.provider} (${result.model})`
+            `Capability ${capabilityId} test success via ${result.provider} (${result.model})`,
           )
-          
+
           reply(DataCode.SUCCESS, {
             ok: true,
-            result: formattedResult
+            result: formattedResult,
           })
-        } catch (error) {
+        }
+        catch (error) {
           intelligenceLog.error('Capability test failed:', { error })
           reply(DataCode.ERROR, {
             ok: false,
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
           })
         }
-      }
+      },
     )
 
     // 获取可用模型
@@ -362,23 +368,22 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           ok: true,
           result: {
             success: true,
-            models
-          }
+            models,
+          },
         })
-      } catch (error) {
+      }
+      catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         intelligenceLog.error('Fetch models failed:', { error })
         reply(DataCode.ERROR, {
           ok: false,
-          error: message
+          error: message,
         })
       }
     })
 
     intelligenceLog.success('IPC channels registered')
   }
-
-
 }
 
 export const intelligenceModule = new IntelligenceModule()

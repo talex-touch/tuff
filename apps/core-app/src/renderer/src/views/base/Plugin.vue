@@ -1,3 +1,42 @@
+<script lang="ts" name="Plugin" setup>
+import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
+import PluginList from '~/components/plugin/layout/PluginList.vue'
+import PluginInfo from '~/components/plugin/PluginInfo.vue'
+import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
+import PluginNew from './plugin/PluginNew.vue'
+
+const { t } = useI18n()
+
+const { plugins, curSelect, selectPlugin } = usePluginSelection()
+
+const drawerVisible = ref(false)
+const touchSdk = useTouchSDK()
+
+const loadingStates = ref({
+  openFolder: false,
+})
+
+async function handleOpenPluginFolder(): Promise<void> {
+  if (loadingStates.value.openFolder)
+    return
+
+  loadingStates.value.openFolder = true
+  try {
+    await touchSdk.openModuleFolder('plugins')
+  }
+  catch (error) {
+    console.error('Failed to open plugin folder:', error)
+  }
+  finally {
+    loadingStates.value.openFolder = false
+  }
+}
+</script>
+
 <template>
   <div class="relative flex w-full h-full transition-cubic overflow-hidden">
     <div
@@ -40,42 +79,6 @@
     </el-drawer>
   </div>
 </template>
-
-<script lang="ts" name="Plugin" setup>
-import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import PluginInfo from '~/components/plugin/PluginInfo.vue'
-import PluginList from '~/components/plugin/layout/PluginList.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import PluginNew from './plugin/PluginNew.vue'
-import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
-import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
-
-const { t } = useI18n()
-
-const { plugins, curSelect, selectPlugin } = usePluginSelection()
-
-const drawerVisible = ref(false)
-const touchSdk = useTouchSDK()
-
-const loadingStates = ref({
-  openFolder: false
-})
-
-async function handleOpenPluginFolder(): Promise<void> {
-  if (loadingStates.value.openFolder) return
-
-  loadingStates.value.openFolder = true
-  try {
-    await touchSdk.openModuleFolder('plugins')
-  } catch (error) {
-    console.error('Failed to open plugin folder:', error)
-  } finally {
-    loadingStates.value.openFolder = false
-  }
-}
-</script>
 
 <style lang="scss" scoped>
 .action-btn :deep(.FlatButton-Container) {

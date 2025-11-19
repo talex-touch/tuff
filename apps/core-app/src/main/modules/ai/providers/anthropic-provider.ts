@@ -3,7 +3,7 @@ import type {
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  AiUsageInfo
+  AiUsageInfo,
 } from '@talex-touch/utils'
 import { AiProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
@@ -21,7 +21,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey || '',
-      'anthropic-version': '2023-06-01'
+      'anthropic-version': '2023-06-01',
     }
   }
 
@@ -38,9 +38,9 @@ export class AnthropicProvider extends IntelligenceProvider {
         system: payload.messages.find(msg => msg.role === 'system')?.content,
         messages: payload.messages.filter(msg => msg.role !== 'system'),
         max_tokens: payload.maxTokens ?? 1024,
-        temperature: payload.temperature ?? 0.7
+        temperature: payload.temperature ?? 0.7,
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
     })
 
     if (!response.ok) {
@@ -57,7 +57,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.input_tokens ?? 0,
       completionTokens: data.usage?.output_tokens ?? 0,
-      totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
+      totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0),
     }
 
     return {
@@ -66,13 +66,13 @@ export class AnthropicProvider extends IntelligenceProvider {
       model: data.model,
       latency,
       traceId,
-      provider: this.type
+      provider: this.type,
     }
   }
 
-  async *chatStream(
+  async* chatStream(
     payload: AiChatPayload,
-    options: AiInvokeOptions
+    options: AiInvokeOptions,
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
@@ -85,9 +85,9 @@ export class AnthropicProvider extends IntelligenceProvider {
         messages: payload.messages.filter(msg => msg.role !== 'system'),
         max_tokens: payload.maxTokens ?? 1024,
         temperature: payload.temperature ?? 0.7,
-        stream: true
+        stream: true,
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
     })
 
     if (!response.ok || !response.body) {
@@ -101,15 +101,18 @@ export class AnthropicProvider extends IntelligenceProvider {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done)
+          break
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === 'data: [DONE]') continue
-          if (!line.startsWith('data: ')) continue
+          if (!line.trim() || line.trim() === 'data: [DONE]')
+            continue
+          if (!line.startsWith('data: '))
+            continue
 
           try {
             const event = JSON.parse(line.substring(6))
@@ -117,14 +120,16 @@ export class AnthropicProvider extends IntelligenceProvider {
             if (delta) {
               yield { delta, done: false }
             }
-          } catch (error) {
+          }
+          catch (error) {
             console.error('[AnthropicProvider] Stream parse error:', error)
           }
         }
       }
 
       yield { delta: '', done: true }
-    } finally {
+    }
+    finally {
       reader.releaseLock()
     }
   }

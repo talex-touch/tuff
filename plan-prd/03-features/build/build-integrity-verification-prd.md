@@ -50,10 +50,10 @@
 **验证状态**：
 ```typescript
 enum BuildVerificationStatus {
-  OFFICIAL = 'official',           // 官方构建，签名验证通过
-  UNOFFICIAL = 'unofficial',       // 非官方构建（无签名或签名缺失）
-  TAMPERED = 'tampered',           // 签名验证失败，可能被篡改
-  UNKNOWN = 'unknown'              // 无法确定（开发模式或缺少信息）
+  OFFICIAL = 'official', // 官方构建，签名验证通过
+  UNOFFICIAL = 'unofficial', // 非官方构建（无签名或签名缺失）
+  TAMPERED = 'tampered', // 签名验证失败，可能被篡改
+  UNKNOWN = 'unknown' // 无法确定（开发模式或缺少信息）
 }
 ```
 
@@ -120,20 +120,20 @@ enum BuildVerificationStatus {
 class BuildVerificationModule extends BaseModule {
   private signaturePath: string
   private buildInfo: BuildInfo | null = null
-  
+
   onInit(ctx: ModuleInitContext): Promise<void> {
     // 初始化验证路径
     // 读取构建信息
   }
-  
+
   async verify(): Promise<BuildVerificationResult> {
     // 执行验证逻辑
   }
-  
+
   private verifySignature(): boolean {
     // 验证签名完整性
   }
-  
+
   private verifyBuildInfo(): boolean {
     // 验证构建信息完整性
   }
@@ -149,14 +149,14 @@ async function verifyBuildSignature(buildInfo: BuildInfo): Promise<boolean> {
   if (!buildInfo.officialSignature || !buildInfo.hasOfficialKey) {
     return false // 非官方构建
   }
-  
+
   // 2. 获取当前环境的 SSH 密钥指纹
   const currentFingerprint = getSSHKeyFingerprint()
   if (!currentFingerprint) {
     console.warn('Cannot verify: no SSH key found')
     return false
   }
-  
+
   // 3. 重新计算签名
   const payload = JSON.stringify({
     version: buildInfo.version,
@@ -164,11 +164,11 @@ async function verifyBuildSignature(buildInfo: BuildInfo): Promise<boolean> {
     buildType: buildInfo.buildType,
     gitCommitHash: buildInfo.gitCommitHash
   })
-  
+
   const hmac = crypto.createHmac('sha256', currentFingerprint)
   hmac.update(payload)
   const expectedSignature = hmac.digest('hex')
-  
+
   // 4. 对比签名
   return expectedSignature === buildInfo.officialSignature
 }
@@ -290,4 +290,3 @@ async function verifyBuildSignature(buildInfo: BuildInfo): Promise<boolean> {
 2. **增量验证**：只验证修改过的文件，提高性能
 3. **自动更新验证**：区分应用更新和恶意篡改
 4. **多签名支持**：支持多个构建密钥，提高灵活性
-

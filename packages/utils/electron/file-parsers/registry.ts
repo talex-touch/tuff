@@ -1,9 +1,9 @@
-import {
+import type {
   FileParser,
   FileParserContext,
   FileParserProgress,
   FileParserResult,
-  FileParserSelectionOptions
+  FileParserSelectionOptions,
 } from './types'
 
 interface RegisteredParser {
@@ -17,7 +17,7 @@ export class FileParserRegistry {
 
   register(parser: FileParser): void {
     const extensions = new Set(
-      Array.from(parser.supportedExtensions).map((ext) => ext.trim().toLowerCase())
+      Array.from(parser.supportedExtensions).map(ext => ext.trim().toLowerCase()),
     )
     if (extensions.size === 0) {
       throw new Error(`[FileParserRegistry] Parser ${parser.id} registered without extensions`)
@@ -35,7 +35,8 @@ export class FileParserRegistry {
   }
 
   getParsersForExtension(extension: string): FileParser[] {
-    if (!extension) return []
+    if (!extension)
+      return []
     const normalized = extension.toLowerCase()
     return this.parsers
       .filter(({ extensions }) => extensions.has(normalized))
@@ -54,7 +55,7 @@ export class FileParserRegistry {
 
   async parseWithBestParser(
     context: FileParserContext,
-    onProgress?: (progress: FileParserProgress) => void
+    onProgress?: (progress: FileParserProgress) => void,
   ): Promise<FileParserResult | null> {
     const candidates = this.getParsersForExtension(context.extension)
     const allParsers = context.extension !== '*' ? candidates : []
@@ -76,11 +77,12 @@ export class FileParserRegistry {
         if (result.status !== 'skipped') {
           return result
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FileParserRegistry] Parser ${parser.id} failed:`, error)
         return {
           status: 'failed',
-          reason: error instanceof Error ? error.message : 'unknown-error'
+          reason: error instanceof Error ? error.message : 'unknown-error',
         }
       }
     }

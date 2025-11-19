@@ -1,3 +1,23 @@
+<script lang="ts" name="View" setup>
+import { useRoute, useRouter } from 'vue-router'
+// import TouchScroll from '../TouchScroll.vue'
+
+const props = withDefaults(
+  defineProps<{
+    title?: string
+    len?: number
+  }>(),
+  {
+    title: 'ViewTemplate',
+    len: 1,
+  },
+)
+
+const route = useRoute()
+const router = useRouter()
+const subRouterMode = computed(() => route.matched?.length > props.len)
+</script>
+
 <template>
   <div :class="{ router: subRouterMode }" class="ViewTemplate">
     <div
@@ -23,31 +43,11 @@
           <div i-ri-arrow-left-s-line />
           {{ title }}
         </div>
-        <router-view></router-view>
+        <router-view />
       </view-template>
     </div>
   </div>
 </template>
-
-<script lang="ts" name="View" setup>
-import { useRoute, useRouter } from 'vue-router'
-// import TouchScroll from '../TouchScroll.vue'
-
-const props = withDefaults(
-  defineProps<{
-    title?: string
-    len?: number
-  }>(),
-  {
-    title: 'ViewTemplate',
-    len: 1
-  }
-)
-
-const route = useRoute()
-const router = useRouter()
-const subRouterMode = computed(() => route.matched?.length > props.len)
-</script>
 
 <style lang="scss" scoped>
 .ViewTemplate-Router {

@@ -23,7 +23,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Advanced clipboard manager with history and sync',
     icon: 'ri-clipboard-line',
     downloads: '2.3M',
-    rating: 4.8
+    rating: 4.8,
   },
   {
     name: 'Universal Translator',
@@ -31,7 +31,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Real-time translation for 100+ languages',
     icon: 'ri-translate-2',
     downloads: '1.8M',
-    rating: 4.7
+    rating: 4.7,
   },
   {
     name: 'Quick Search',
@@ -39,7 +39,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Lightning-fast search across all your files and web',
     icon: 'ri-search-line',
     downloads: '3.1M',
-    rating: 4.9
+    rating: 4.9,
   },
   {
     name: 'AI Assistant',
@@ -47,7 +47,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Your intelligent coding companion powered by AI',
     icon: 'ri-robot-line',
     downloads: '1.5M',
-    rating: 4.6
+    rating: 4.6,
   },
   {
     name: 'Password Manager',
@@ -55,7 +55,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Secure password generation and management',
     icon: 'ri-shield-keyhole-line',
     downloads: '2.7M',
-    rating: 4.8
+    rating: 4.8,
   },
   {
     name: 'Color Picker Pro',
@@ -63,7 +63,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Advanced color picker with palette management',
     icon: 'ri-palette-line',
     downloads: '890K',
-    rating: 4.5
+    rating: 4.5,
   },
   {
     name: 'Screenshot Tool',
@@ -71,7 +71,7 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Capture, annotate and share screenshots instantly',
     icon: 'ri-screenshot-line',
     downloads: '2.1M',
-    rating: 4.7
+    rating: 4.7,
   },
   {
     name: 'File Organizer',
@@ -79,8 +79,8 @@ const topPlugins = reactive<Plugin[]>([
     description: 'Smart file organization and duplicate finder',
     icon: 'ri-folder-line',
     downloads: '1.2M',
-    rating: 4.4
-  }
+    rating: 4.4,
+  },
 ])
 
 /**
@@ -106,8 +106,8 @@ function handleMove(event: MouseEvent): void {
     const distanceY = mouseY - elementY
 
     element.style.setProperty('--op', '1')
-    element.style.setProperty('--x', distanceX + 'px')
-    element.style.setProperty('--y', distanceY + 'px')
+    element.style.setProperty('--x', `${distanceX}px`)
+    element.style.setProperty('--y', `${distanceY}px`)
   }
 }
 
@@ -134,7 +134,9 @@ function cancelColor(): void {
   <div class="BoxContentWrapper">
     <!-- Header section with title and subtitle -->
     <div class="BoxContent-Header">
-      <p text-xl font-bold>TOP PLUGINS</p>
+      <p text-xl font-bold>
+        TOP PLUGINS
+      </p>
       <span text-lg>Popular worldwide choices</span>
     </div>
 
@@ -148,24 +150,26 @@ function cancelColor(): void {
           <div class="BoxContent-ItemContent">
             <!-- Plugin icon -->
             <div class="plugin-icon">
-              <i :class="`i-${item.icon}`"></i>
+              <i :class="`i-${item.icon}`" />
             </div>
             <!-- Plugin information -->
             <div class="plugin-info">
               <!-- Plugin name -->
               <h3>{{ item.name }}</h3>
               <!-- Plugin description -->
-              <p class="plugin-description">{{ item.description }}</p>
+              <p class="plugin-description">
+                {{ item.description }}
+              </p>
               <!-- Plugin statistics -->
               <div class="plugin-stats">
                 <!-- Download count -->
                 <span class="downloads">
-                  <i class="ri-download-line"></i>
+                  <i class="ri-download-line" />
                   {{ item.downloads }}
                 </span>
                 <!-- Rating -->
                 <span class="rating">
-                  <i class="ri-star-fill"></i>
+                  <i class="ri-star-fill" />
                   {{ item.rating }}
                 </span>
               </div>

@@ -1,4 +1,4 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { ElectronAPI } from '@electron-toolkit/preload'
 
 import type { PreloadAPI } from '@talex-touch/utils/preload'
 

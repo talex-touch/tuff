@@ -1,9 +1,9 @@
 export {
-  intelligenceStorage,
-  migrateIntelligenceSettings,
-  resetIntelligenceConfig,
   // Backward compatibility aliases
   aisdkStorage,
+  intelligenceStorage,
   migrateAISDKSettings,
-  resetAISDKConfig
+  migrateIntelligenceSettings,
+  resetAISDKConfig,
+  resetIntelligenceConfig,
 } from '@talex-touch/utils/renderer/storage'

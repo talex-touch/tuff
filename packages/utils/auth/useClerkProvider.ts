@@ -22,7 +22,8 @@ export function useClerkProvider() {
 
       console.log('Clerk initialized successfully')
       return clerkInstance
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to initialize Clerk:', error)
       throw error
     }
@@ -46,6 +47,6 @@ export function useClerkProvider() {
     initializeClerk,
     getClerk,
     isClerkInitialized,
-    cleanupClerk
+    cleanupClerk,
   }
 }

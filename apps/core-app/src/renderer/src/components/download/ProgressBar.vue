@@ -1,5 +1,80 @@
+<script setup lang="ts">
+import { DownloadStatus } from '@talex-touch/utils'
+import { computed } from 'vue'
+
+interface Props {
+  percentage: number
+  speed: number
+  downloaded: number
+  total: number
+  remainingTime: number
+  status: DownloadStatus
+  compact?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  compact: false,
+})
+
+const progressStatus = computed(() => {
+  switch (props.status) {
+    case DownloadStatus.COMPLETED:
+      return 'success'
+    case DownloadStatus.FAILED:
+      return 'exception'
+    case DownloadStatus.PAUSED:
+      return 'warning'
+    default:
+      return undefined
+  }
+})
+
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond >= 1024 * 1024) {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+  }
+  else if (bytesPerSecond >= 1024) {
+    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  }
+  else {
+    return `${bytesPerSecond.toFixed(0)} B/s`
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  }
+  else if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+  else if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  else {
+    return `${bytes} B`
+  }
+}
+
+function formatRemainingTime(seconds: number): string {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}秒`
+  }
+  else if (seconds < 3600) {
+    const minutes = Math.floor(seconds / 60)
+    const secs = Math.round(seconds % 60)
+    return secs > 0 ? `${minutes}分${secs}秒` : `${minutes}分钟`
+  }
+  else {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`
+  }
+}
+</script>
+
 <template>
-  <div class="progress-bar-component" :class="{ 'compact': compact }">
+  <div class="progress-bar-component" :class="{ compact }">
     <div class="progress-info">
       <div class="progress-left">
         <span class="progress-percentage">{{ percentage.toFixed(1) }}%</span>
@@ -21,78 +96,10 @@
       :status="progressStatus"
       :show-text="false"
       :stroke-width="compact ? 4 : 8"
-      :class="{ 'animated': status === 'downloading' }"
+      :class="{ animated: status === 'downloading' }"
     />
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import { DownloadStatus } from '@talex-touch/utils'
-
-interface Props {
-  percentage: number
-  speed: number
-  downloaded: number
-  total: number
-  remainingTime: number
-  status: DownloadStatus
-  compact?: boolean
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  compact: false
-})
-
-const progressStatus = computed(() => {
-  switch (props.status) {
-    case DownloadStatus.COMPLETED:
-      return 'success'
-    case DownloadStatus.FAILED:
-      return 'exception'
-    case DownloadStatus.PAUSED:
-      return 'warning'
-    default:
-      return undefined
-  }
-})
-
-const formatSpeed = (bytesPerSecond: number): string => {
-  if (bytesPerSecond >= 1024 * 1024) {
-    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  } else if (bytesPerSecond >= 1024) {
-    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  } else {
-    return `${bytesPerSecond.toFixed(0)} B/s`
-  }
-}
-
-const formatSize = (bytes: number): string => {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  } else if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  } else if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  } else {
-    return `${bytes} B`
-  }
-}
-
-const formatRemainingTime = (seconds: number): string => {
-  if (seconds < 60) {
-    return `${Math.round(seconds)}秒`
-  } else if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60)
-    const secs = Math.round(seconds % 60)
-    return secs > 0 ? `${minutes}分${secs}秒` : `${minutes}分钟`
-  } else {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`
-  }
-}
-</script>
 
 <style scoped>
 .progress-bar-component {

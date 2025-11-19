@@ -1,24 +1,25 @@
 <script lang="ts" name="AgreementTemplate" setup>
-import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 const props = defineProps({
   agreement: {
     type: String,
-    required: true
+    required: true,
   },
   agree: {
     type: Function,
-    required: true
+    required: true,
   },
   title: {
     type: String,
-    default: 'agreement.title'
-  }
+    default: 'agreement.title',
+  },
 })
+
+const { t } = useI18n()
+
 const content = ref('')
 
 watchEffect(() => {
@@ -32,7 +33,9 @@ async function dispose(agree: boolean): Promise<void> {
 
 <template>
   <div class="AgreeTemplate-Container">
-    <p font-600>{{ t(title) }}</p>
+    <p font-600>
+      {{ t(title) }}
+    </p>
     <span mb-2> {{ t('agreement.description') }} </span>
     <div class="AgreeTemplate-Content">
       <el-scrollbar>
@@ -41,8 +44,12 @@ async function dispose(agree: boolean): Promise<void> {
     </div>
 
     <div justify-center box-border w="85%" mt-4 flex gap-8>
-      <FlatButton hover:bg-red @click="dispose(false)"> {{ t('agreement.decline') }} </FlatButton>
-      <FlatButton :primary="true" @click="dispose(true)"> {{ t('agreement.accept') }} </FlatButton>
+      <FlatButton hover:bg-red @click="dispose(false)">
+        {{ t('agreement.decline') }}
+      </FlatButton>
+      <FlatButton :primary="true" @click="dispose(true)">
+        {{ t('agreement.accept') }}
+      </FlatButton>
     </div>
   </div>
 </template>

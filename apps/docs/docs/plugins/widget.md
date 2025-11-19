@@ -25,13 +25,13 @@ Here's a simple example of a widget that displays the current time:
 
 ```javascript
 // widget.js
-import { widget } from '@polyglot-toolbox/plugin-sdk';
+import { widget } from '@polyglot-toolbox/plugin-sdk'
 
 class ClockWidget {
   constructor() {
-    this.interval = null;
+    this.interval = null
   }
-  
+
   // Widget metadata
   static get metadata() {
     return {
@@ -39,9 +39,9 @@ class ClockWidget {
       name: 'Clock',
       description: 'Displays the current time',
       version: '1.0.0'
-    };
+    }
   }
-  
+
   // Widget configuration schema
   static get configSchema() {
     return {
@@ -59,58 +59,59 @@ class ClockWidget {
         label: 'Show Seconds',
         default: false
       }
-    };
+    }
   }
-  
+
   // Initialize the widget
   async init(config) {
-    this.config = config;
-    this.element = document.createElement('div');
-    this.element.className = 'clock-widget';
-    
+    this.config = config
+    this.element = document.createElement('div')
+    this.element.className = 'clock-widget'
+
     // Start the clock
-    this.updateTime();
-    this.interval = setInterval(() => this.updateTime(), 1000);
-    
-    return this.element;
+    this.updateTime()
+    this.interval = setInterval(() => this.updateTime(), 1000)
+
+    return this.element
   }
-  
+
   // Update the time display
   updateTime() {
-    const now = new Date();
-    let timeString;
-    
+    const now = new Date()
+    let timeString
+
     if (this.config.timeFormat === '12h') {
-      timeString = now.toLocaleTimeString('en-US', { 
+      timeString = now.toLocaleTimeString('en-US', {
         hour12: true,
         second: this.config.showSeconds ? '2-digit' : undefined
-      });
-    } else {
-      timeString = now.toLocaleTimeString('en-US', { 
+      })
+    }
+    else {
+      timeString = now.toLocaleTimeString('en-US', {
         hour12: false,
         second: this.config.showSeconds ? '2-digit' : undefined
-      });
+      })
     }
-    
-    this.element.innerHTML = `<div class="clock-time">${timeString}</div>`;
+
+    this.element.innerHTML = `<div class="clock-time">${timeString}</div>`
   }
-  
+
   // Handle configuration changes
   async onConfigChange(newConfig) {
-    this.config = newConfig;
-    this.updateTime();
+    this.config = newConfig
+    this.updateTime()
   }
-  
+
   // Clean up when the widget is removed
   async destroy() {
     if (this.interval) {
-      clearInterval(this.interval);
+      clearInterval(this.interval)
     }
   }
 }
 
 // Register the widget
-widget.register(ClockWidget);
+widget.register(ClockWidget)
 ```
 
 ### Widget Styles
@@ -137,11 +138,11 @@ Widgets should include their own CSS styles:
 To make your widget available in the application, you need to register it:
 
 ```javascript
-import { widget } from '@polyglot-toolbox/plugin-sdk';
-import { ClockWidget } from './widget.js';
+import { widget } from '@polyglot-toolbox/plugin-sdk'
+import { ClockWidget } from './widget.js'
 
 // Register the widget
-widget.register(ClockWidget);
+widget.register(ClockWidget)
 ```
 
 ### Registration Options
@@ -152,16 +153,16 @@ You can provide additional options when registering a widget:
 widget.register(ClockWidget, {
   // Specify where the widget can be placed
   placement: ['sidebar', 'dashboard'],
-  
+
   // Set default configuration
   defaultConfig: {
     timeFormat: '24h',
     showSeconds: true
   },
-  
+
   // Provide tags for categorization
   tags: ['time', 'utility', 'display']
-});
+})
 ```
 
 ## Widget Configuration
@@ -213,7 +214,7 @@ React to configuration changes in your widget:
 ```javascript
 async onConfigChange(newConfig) {
   this.config = newConfig;
-  
+
   // Update the widget based on new configuration
   this.updateStyles();
   this.restartRefreshTimer();
@@ -229,35 +230,36 @@ Widgets can fetch data from external sources:
 ```javascript
 class WeatherWidget {
   // ... other widget code ...
-  
+
   async init(config) {
-    this.config = config;
-    this.element = document.createElement('div');
-    this.element.className = 'weather-widget';
-    
+    this.config = config
+    this.element = document.createElement('div')
+    this.element.className = 'weather-widget'
+
     // Load initial data
-    await this.loadData();
-    
+    await this.loadData()
+
     // Set up refresh interval
-    this.setupRefresh();
-    
-    return this.element;
+    this.setupRefresh()
+
+    return this.element
   }
-  
+
   async loadData() {
     try {
       const response = await fetch(
         `https://api.weather.com/v1/current?location=${this.config.location}&key=${this.config.apiKey}`
-      );
-      const data = await response.json();
-      
-      this.displayWeather(data);
-    } catch (error) {
-      console.error('Failed to load weather data:', error);
-      this.displayError('Failed to load weather data');
+      )
+      const data = await response.json()
+
+      this.displayWeather(data)
+    }
+    catch (error) {
+      console.error('Failed to load weather data:', error)
+      this.displayError('Failed to load weather data')
     }
   }
-  
+
   displayWeather(data) {
     this.element.innerHTML = `
       <div class="weather-info">
@@ -265,32 +267,32 @@ class WeatherWidget {
         <div class="temperature">${data.temperature}°${data.unit}</div>
         <div class="condition">${data.condition}</div>
       </div>
-    `;
+    `
   }
-  
+
   displayError(message) {
-    this.element.innerHTML = `<div class="error">${message}</div>`;
+    this.element.innerHTML = `<div class="error">${message}</div>`
   }
-  
+
   setupRefresh() {
     if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
+      clearInterval(this.refreshInterval)
     }
-    
+
     this.refreshInterval = setInterval(() => {
-      this.loadData();
-    }, this.config.refreshInterval * 1000);
+      this.loadData()
+    }, this.config.refreshInterval * 1000)
   }
-  
+
   async onConfigChange(newConfig) {
-    this.config = newConfig;
-    await this.loadData();
-    this.setupRefresh();
+    this.config = newConfig
+    await this.loadData()
+    this.setupRefresh()
   }
-  
+
   async destroy() {
     if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
+      clearInterval(this.refreshInterval)
     }
   }
 }
@@ -303,18 +305,18 @@ Widgets can emit events and listen to events from other parts of the application
 ```javascript
 class InteractiveWidget {
   // ... other widget code ...
-  
+
   async init(config) {
-    this.config = config;
-    this.element = document.createElement('div');
-    this.element.className = 'interactive-widget';
-    
-    this.render();
-    this.setupEventListeners();
-    
-    return this.element;
+    this.config = config
+    this.element = document.createElement('div')
+    this.element.className = 'interactive-widget'
+
+    this.render()
+    this.setupEventListeners()
+
+    return this.element
   }
-  
+
   render() {
     this.element.innerHTML = `
       <div class="counter">
@@ -323,55 +325,55 @@ class InteractiveWidget {
         <button id="increment-btn">+</button>
         <button id="reset-btn">Reset</button>
       </div>
-    `;
+    `
   }
-  
+
   setupEventListeners() {
-    const decrementBtn = this.element.querySelector('#decrement-btn');
-    const incrementBtn = this.element.querySelector('#increment-btn');
-    const resetBtn = this.element.querySelector('#reset-btn');
-    const countDisplay = this.element.querySelector('#count-display');
-    
-    let count = 0;
-    
+    const decrementBtn = this.element.querySelector('#decrement-btn')
+    const incrementBtn = this.element.querySelector('#increment-btn')
+    const resetBtn = this.element.querySelector('#reset-btn')
+    const countDisplay = this.element.querySelector('#count-display')
+
+    let count = 0
+
     decrementBtn.addEventListener('click', () => {
-      count--;
-      countDisplay.textContent = count;
-      
+      count--
+      countDisplay.textContent = count
+
       // Emit an event when the count changes
-      this.emitEvent('countChanged', { count });
-    });
-    
+      this.emitEvent('countChanged', { count })
+    })
+
     incrementBtn.addEventListener('click', () => {
-      count++;
-      countDisplay.textContent = count;
-      
+      count++
+      countDisplay.textContent = count
+
       // Emit an event when the count changes
-      this.emitEvent('countChanged', { count });
-    });
-    
+      this.emitEvent('countChanged', { count })
+    })
+
     resetBtn.addEventListener('click', () => {
-      count = 0;
-      countDisplay.textContent = count;
-      
+      count = 0
+      countDisplay.textContent = count
+
       // Emit an event when the count is reset
-      this.emitEvent('countReset', { count });
-    });
+      this.emitEvent('countReset', { count })
+    })
   }
-  
+
   // Emit a custom event
   emitEvent(eventName, data) {
     // Use the widget API to emit events
     widget.emit(eventName, {
       widgetId: this.constructor.metadata.id,
       ...data
-    });
+    })
   }
-  
+
   // Listen to events from other widgets or the application
   async onAppEvent(eventName, data) {
     if (eventName === 'applicationStarted') {
-      console.log('Application started, initializing widget');
+      console.log('Application started, initializing widget')
     }
   }
 }
@@ -387,27 +389,27 @@ Widgets should be lightweight and load quickly:
 
 ```javascript
 // Good - Lazy loading heavy dependencies
+// Avoid - Loading everything upfront
+import { HeavyChartLibrary } from './heavy-chart-library.js'
+
 class DataVisualizationWidget {
   async init(config) {
-    this.config = config;
-    this.element = document.createElement('div');
-    
-    // Show loading state initially
-    this.element.innerHTML = '<div class="loading">Loading...</div>';
-    
-    // Load heavy visualization library only when needed
-    const { Chart } = await import('./chart-library.js');
-    this.Chart = Chart;
-    
-    // Render the actual widget
-    this.render();
-    
-    return this.element;
-  }
-}
+    this.config = config
+    this.element = document.createElement('div')
 
-// Avoid - Loading everything upfront
-import { HeavyChartLibrary } from './heavy-chart-library.js'; // This slows down the app
+    // Show loading state initially
+    this.element.innerHTML = '<div class="loading">Loading...</div>'
+
+    // Load heavy visualization library only when needed
+    const { Chart } = await import('./chart-library.js')
+    this.Chart = Chart
+
+    // Render the actual widget
+    this.render()
+
+    return this.element
+  }
+} // This slows down the app
 
 class SlowWidget {
   // ...
@@ -422,26 +424,27 @@ Always handle potential errors in widgets:
 class DataWidget {
   async loadData() {
     try {
-      const data = await this.fetchData();
-      this.displayData(data);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-      this.displayError('Failed to load data. Please try again later.');
+      const data = await this.fetchData()
+      this.displayData(data)
+    }
+    catch (error) {
+      console.error('Failed to load data:', error)
+      this.displayError('Failed to load data. Please try again later.')
     }
   }
-  
+
   displayError(message) {
     this.element.innerHTML = `
       <div class="error-container">
         <div class="error-message">${message}</div>
         <button id="retry-btn">Retry</button>
       </div>
-    `;
-    
-    const retryBtn = this.element.querySelector('#retry-btn');
+    `
+
+    const retryBtn = this.element.querySelector('#retry-btn')
     retryBtn.addEventListener('click', () => {
-      this.loadData();
-    });
+      this.loadData()
+    })
   }
 }
 ```
@@ -453,21 +456,21 @@ Consider user preferences like theme and accessibility settings:
 ```javascript
 class AccessibleWidget {
   async init(config) {
-    this.config = config;
-    this.element = document.createElement('div');
-    
+    this.config = config
+    this.element = document.createElement('div')
+
     // Respect reduced motion preference
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      this.element.classList.add('reduced-motion');
+      this.element.classList.add('reduced-motion')
     }
-    
+
     // Respect high contrast preference
     if (window.matchMedia('(prefers-contrast: high)').matches) {
-      this.element.classList.add('high-contrast');
+      this.element.classList.add('high-contrast')
     }
-    
-    this.render();
-    return this.element;
+
+    this.render()
+    return this.element
   }
 }
 ```
@@ -479,31 +482,31 @@ Always clean up resources when a widget is destroyed:
 ```javascript
 class TimerWidget {
   async init(config) {
-    this.config = config;
-    this.element = document.createElement('div');
-    
+    this.config = config
+    this.element = document.createElement('div')
+
     // Set up interval
     this.interval = setInterval(() => {
-      this.updateDisplay();
-    }, 1000);
-    
+      this.updateDisplay()
+    }, 1000)
+
     // Set up event listener
-    this.resizeHandler = () => this.handleResize();
-    window.addEventListener('resize', this.resizeHandler);
-    
-    this.render();
-    return this.element;
+    this.resizeHandler = () => this.handleResize()
+    window.addEventListener('resize', this.resizeHandler)
+
+    this.render()
+    return this.element
   }
-  
+
   async destroy() {
     // Clean up interval
     if (this.interval) {
-      clearInterval(this.interval);
+      clearInterval(this.interval)
     }
-    
+
     // Remove event listener
     if (this.resizeHandler) {
-      window.removeEventListener('resize', this.resizeHandler);
+      window.removeEventListener('resize', this.resizeHandler)
     }
   }
 }
@@ -515,14 +518,14 @@ Here's a complete example of a plugin that provides a comprehensive widget:
 
 ```javascript
 // plugin.js
-import { widget, toast } from '@polyglot-toolbox/plugin-sdk';
+import { toast, widget } from '@polyglot-toolbox/plugin-sdk'
 
 class TaskManagerWidget {
   constructor() {
-    this.tasks = [];
-    this.filter = 'all';
+    this.tasks = []
+    this.filter = 'all'
   }
-  
+
   // Widget metadata
   static get metadata() {
     return {
@@ -530,9 +533,9 @@ class TaskManagerWidget {
       name: 'Task Manager',
       description: 'Manage your tasks and to-do lists',
       version: '1.0.0'
-    };
+    }
   }
-  
+
   // Widget configuration schema
   static get configSchema() {
     return {
@@ -551,206 +554,210 @@ class TaskManagerWidget {
         label: 'Show Due Dates',
         default: true
       }
-    };
+    }
   }
-  
+
   // Initialize the widget
   async init(config) {
-    this.config = config;
-    this.filter = config.defaultFilter;
-    
+    this.config = config
+    this.filter = config.defaultFilter
+
     // Create the widget element
-    this.element = document.createElement('div');
-    this.element.className = 'task-manager-widget';
-    
+    this.element = document.createElement('div')
+    this.element.className = 'task-manager-widget'
+
     // Load tasks from storage
-    await this.loadTasks();
-    
+    await this.loadTasks()
+
     // Render the widget
-    this.render();
-    
+    this.render()
+
     // Set up event listeners
-    this.setupEventListeners();
-    
-    return this.element;
+    this.setupEventListeners()
+
+    return this.element
   }
-  
+
   // Load tasks from storage
   async loadTasks() {
     try {
-      const storedTasks = await widget.storage.get('tasks', []);
-      this.tasks = storedTasks;
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
-      toast.error('Failed to load tasks');
+      const storedTasks = await widget.storage.get('tasks', [])
+      this.tasks = storedTasks
+    }
+    catch (error) {
+      console.error('Failed to load tasks:', error)
+      toast.error('Failed to load tasks')
     }
   }
-  
+
   // Save tasks to storage
   async saveTasks() {
     try {
-      await widget.storage.set('tasks', this.tasks);
-    } catch (error) {
-      console.error('Failed to save tasks:', error);
-      toast.error('Failed to save tasks');
+      await widget.storage.set('tasks', this.tasks)
+    }
+    catch (error) {
+      console.error('Failed to save tasks:', error)
+      toast.error('Failed to save tasks')
     }
   }
-  
+
   // Render the widget UI
   render() {
-    const filteredTasks = this.getFilteredTasks();
-    
+    const filteredTasks = this.getFilteredTasks()
+
     this.element.innerHTML = `
       <div class="task-manager-container">
         <h2>Task Manager</h2>
-        
+
         <div class="task-input-container">
           <input type="text" id="task-input" placeholder="Add a new task..." />
           <button id="add-task-btn">Add</button>
         </div>
-        
+
         <div class="task-filters">
           <button class="filter-btn ${this.filter === 'all' ? 'active' : ''}" data-filter="all">All</button>
           <button class="filter-btn ${this.filter === 'active' ? 'active' : ''}" data-filter="active">Active</button>
           <button class="filter-btn ${this.filter === 'completed' ? 'active' : ''}" data-filter="completed">Completed</button>
         </div>
-        
+
         <ul class="task-list">
           ${filteredTasks.map(task => this.renderTask(task)).join('')}
         </ul>
-        
+
         <div class="task-stats">
           ${this.tasks.filter(t => !t.completed).length} tasks remaining
         </div>
       </div>
-    `;
+    `
   }
-  
+
   // Render a single task
   renderTask(task) {
     return `
       <li class="task-item ${task.completed ? 'completed' : ''}" data-id="${task.id}">
         <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} />
         <span class="task-text">${task.text}</span>
-        ${this.config.showDueDates && task.dueDate ? 
-          `<span class="task-due-date">${new Date(task.dueDate).toLocaleDateString()}</span>` : 
-          ''
+        ${this.config.showDueDates && task.dueDate
+            ? `<span class="task-due-date">${new Date(task.dueDate).toLocaleDateString()}</span>`
+            : ''
         }
         <button class="task-delete-btn">✕</button>
       </li>
-    `;
+    `
   }
-  
+
   // Get filtered tasks based on current filter
   getFilteredTasks() {
     switch (this.filter) {
       case 'active':
-        return this.tasks.filter(task => !task.completed);
+        return this.tasks.filter(task => !task.completed)
       case 'completed':
-        return this.tasks.filter(task => task.completed);
+        return this.tasks.filter(task => task.completed)
       default:
-        return this.tasks;
+        return this.tasks
     }
   }
-  
+
   // Set up event listeners
   setupEventListeners() {
     // Add task button
-    const addTaskBtn = this.element.querySelector('#add-task-btn');
-    addTaskBtn.addEventListener('click', () => this.addTask());
-    
+    const addTaskBtn = this.element.querySelector('#add-task-btn')
+    addTaskBtn.addEventListener('click', () => this.addTask())
+
     // Task input
-    const taskInput = this.element.querySelector('#task-input');
+    const taskInput = this.element.querySelector('#task-input')
     taskInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        this.addTask();
+        this.addTask()
       }
-    });
-    
+    })
+
     // Filter buttons
-    const filterButtons = this.element.querySelectorAll('.filter-btn');
-    filterButtons.forEach(btn => {
+    const filterButtons = this.element.querySelectorAll('.filter-btn')
+    filterButtons.forEach((btn) => {
       btn.addEventListener('click', (e) => {
-        this.setFilter(e.target.dataset.filter);
-      });
-    });
-    
+        this.setFilter(e.target.dataset.filter)
+      })
+    })
+
     // Task list (using event delegation)
-    const taskList = this.element.querySelector('.task-list');
+    const taskList = this.element.querySelector('.task-list')
     taskList.addEventListener('click', (e) => {
-      const taskItem = e.target.closest('.task-item');
-      if (!taskItem) return;
-      
-      const taskId = taskItem.dataset.id;
-      
+      const taskItem = e.target.closest('.task-item')
+      if (!taskItem)
+        return
+
+      const taskId = taskItem.dataset.id
+
       if (e.target.classList.contains('task-checkbox')) {
-        this.toggleTask(taskId);
-      } else if (e.target.classList.contains('task-delete-btn')) {
-        this.deleteTask(taskId);
+        this.toggleTask(taskId)
       }
-    });
+      else if (e.target.classList.contains('task-delete-btn')) {
+        this.deleteTask(taskId)
+      }
+    })
   }
-  
+
   // Add a new task
   async addTask() {
-    const input = this.element.querySelector('#task-input');
-    const text = input.value.trim();
-    
+    const input = this.element.querySelector('#task-input')
+    const text = input.value.trim()
+
     if (text) {
       const newTask = {
         id: Date.now().toString(),
-        text: text,
+        text,
         completed: false,
         createdAt: new Date().toISOString()
-      };
-      
-      this.tasks.push(newTask);
-      await this.saveTasks();
-      this.render();
-      input.value = '';
+      }
+
+      this.tasks.push(newTask)
+      await this.saveTasks()
+      this.render()
+      input.value = ''
     }
   }
-  
+
   // Toggle task completion status
   async toggleTask(taskId) {
-    const task = this.tasks.find(t => t.id === taskId);
+    const task = this.tasks.find(t => t.id === taskId)
     if (task) {
-      task.completed = !task.completed;
-      await this.saveTasks();
-      this.render();
+      task.completed = !task.completed
+      await this.saveTasks()
+      this.render()
     }
   }
-  
+
   // Delete a task
   async deleteTask(taskId) {
-    this.tasks = this.tasks.filter(t => t.id !== taskId);
-    await this.saveTasks();
-    this.render();
+    this.tasks = this.tasks.filter(t => t.id !== taskId)
+    await this.saveTasks()
+    this.render()
   }
-  
+
   // Set the current filter
   setFilter(filter) {
-    this.filter = filter;
-    this.render();
+    this.filter = filter
+    this.render()
   }
-  
+
   // Handle configuration changes
   async onConfigChange(newConfig) {
-    this.config = newConfig;
-    this.render();
+    this.config = newConfig
+    this.render()
   }
-  
+
   // Clean up when the widget is removed
   async destroy() {
     // Any cleanup code would go here
-    console.log('Task Manager widget destroyed');
+    console.log('Task Manager widget destroyed')
   }
 }
 
 // Register the widget
-widget.register(TaskManagerWidget);
+widget.register(TaskManagerWidget)
 
-export default TaskManagerWidget;
+export default TaskManagerWidget
 ```
 
 Corresponding CSS file:

@@ -1,11 +1,13 @@
-import { UpdateProvider } from './UpdateProvider'
-import {
-  UpdateProviderType,
-  UpdateSourceConfig,
+import type {
   AppPreviewChannel,
   GitHubRelease,
-  UpdateErrorType
+  UpdateSourceConfig,
 } from '@talex-touch/utils'
+import {
+  UpdateErrorType,
+  UpdateProviderType,
+} from '@talex-touch/utils'
+import { UpdateProvider } from './UpdateProvider'
 
 export class OfficialUpdateProvider extends UpdateProvider {
   readonly name = 'Official Website'
@@ -20,7 +22,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
   async fetchLatestRelease(_channel: AppPreviewChannel): Promise<GitHubRelease> {
     throw this.createError(
       UpdateErrorType.API_ERROR,
-      'Official update server is not ready yet. Please use GitHub Releases for now.'
+      'Official update server is not ready yet. Please use GitHub Releases for now.',
     )
   }
 
@@ -29,7 +31,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
     // Note: _release parameter is unused but required by interface
     throw this.createError(
       UpdateErrorType.API_ERROR,
-      'Official update server is not ready yet. Please use GitHub Releases for now.'
+      'Official update server is not ready yet. Please use GitHub Releases for now.',
     )
   }
 
@@ -48,7 +50,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
     return {
       available: false,
       message: 'Official update server is under development',
-      estimatedLaunchDate: 'TBD'
+      estimatedLaunchDate: 'TBD',
     }
   }
 
@@ -67,8 +69,8 @@ export class OfficialUpdateProvider extends UpdateProvider {
         'Faster download speeds',
         'Regional optimization',
         'Advanced analytics',
-        'Custom update channels'
-      ]
+        'Custom update channels',
+      ],
     }
   }
 
@@ -81,7 +83,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
     return {
       inMaintenance: false,
       maintenanceMessage: undefined,
-      estimatedEndTime: undefined
+      estimatedEndTime: undefined,
     }
   }
 
@@ -96,7 +98,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       cpu: 0,
       memory: 0,
       network: 0,
-      status: 'healthy'
+      status: 'healthy',
     }
   }
 }

@@ -1,33 +1,38 @@
 import type { IpcRenderer, IpcRendererEvent } from 'electron'
-import {
-  ChannelType,
-  DataCode,
+import type {
   ITouchClientChannel,
   RawChannelSyncData,
   RawStandardChannelData,
   StandardChannelData,
-} from "../channel";
+} from '../channel'
+import {
+  ChannelType,
+  DataCode,
+} from '../channel'
 
 let cachedIpcRenderer: IpcRenderer | null = null
 
 // 使用惰性解析避免在打包阶段静态引入 electron
-const resolveIpcRenderer = (): IpcRenderer | null => {
+function resolveIpcRenderer(): IpcRenderer | null {
   if (typeof window !== 'undefined') {
     const bridge = (window as any)?.electron
-    if (bridge?.ipcRenderer) return bridge.ipcRenderer as IpcRenderer
+    if (bridge?.ipcRenderer)
+      return bridge.ipcRenderer as IpcRenderer
   }
 
   try {
     const electron = (globalThis as any)?.electron ?? (eval('require') as any)?.('electron')
-    if (electron?.ipcRenderer) return electron.ipcRenderer as IpcRenderer
-  } catch (error) {
+    if (electron?.ipcRenderer)
+      return electron.ipcRenderer as IpcRenderer
+  }
+  catch (error) {
     // ignore – will throw below if no ipcRenderer is resolved
   }
 
   return null
 }
 
-const ensureIpcRenderer = (): IpcRenderer => {
+function ensureIpcRenderer(): IpcRenderer {
   if (!cachedIpcRenderer) {
     cachedIpcRenderer = resolveIpcRenderer()
   }
@@ -44,55 +49,56 @@ const ensureIpcRenderer = (): IpcRenderer => {
  * Due to the new secret system, ipc message transmission should unique Key, and will inject when ui view attached.
  */
 class TouchChannel implements ITouchClientChannel {
-  channelMap: Map<string, Function[]> = new Map();
+  channelMap: Map<string, Function[]> = new Map()
 
-  pendingMap: Map<string, Function> = new Map();
+  pendingMap: Map<string, Function> = new Map()
 
-  plugin: string;
+  plugin: string
 
   private ipcRenderer: IpcRenderer
 
   constructor(pluginName: string) {
-    this.plugin = pluginName;
+    this.plugin = pluginName
     this.ipcRenderer = ensureIpcRenderer()
-    this.ipcRenderer.on("@plugin-process-message", this.__handle_main.bind(this));
+    this.ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this))
   }
 
   __parse_raw_data(e: IpcRendererEvent | undefined, arg: any): RawStandardChannelData | null {
-    console.debug("Raw data: ", arg, e);
+    console.debug('Raw data: ', arg, e)
     if (arg) {
-      const { name, header, code, data, sync } = arg;
+      const { name, header, code, data, sync } = arg
 
       if (header) {
         return {
           header: {
-            status: header.status || "request",
+            status: header.status || 'request',
             type: ChannelType.PLUGIN,
             _originData: arg,
-            event: e
+            event: e,
           },
           sync,
           code,
           data,
           name: name as string,
-        };
+        }
       }
     }
 
-    console.error(e, arg);
-    return null;
+    console.error(e, arg)
+    return null
     // throw new Error("Invalid message!");
   }
 
   __handle_main(e: IpcRendererEvent, _arg: any): any {
     const arg = JSON.parse(_arg)
-    const rawData = this.__parse_raw_data(e, arg);
-    if ( !rawData ) return
+    const rawData = this.__parse_raw_data(e, arg)
+    if (!rawData)
+      return
 
-    if ( rawData.header.status === 'reply' && rawData.sync ) {
-      const { id } = rawData.sync;
+    if (rawData.header.status === 'reply' && rawData.sync) {
+      const { id } = rawData.sync
 
-      return this.pendingMap.get(id)?.(rawData);
+      return this.pendingMap.get(id)?.(rawData)
     }
 
     // if ( rawData.plugin !== this.plugin ) return
@@ -101,26 +107,27 @@ class TouchChannel implements ITouchClientChannel {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any) => {
           e.sender.send(
-            "@plugin-process-message",
-            this.__parse_sender(code, rawData, data, rawData.sync)
-          );
+            '@plugin-process-message',
+            this.__parse_sender(code, rawData, data, rawData.sync),
+          )
         },
         ...rawData,
-      };
+      }
 
-      const res = func(handInData);
+      const res = func(handInData)
 
-      if (res && res instanceof Promise) return;
+      if (res && res instanceof Promise)
+        return
 
-      handInData.reply(DataCode.SUCCESS, res);
-    });
+      handInData.reply(DataCode.SUCCESS, res)
+    })
   }
 
   __parse_sender(
     code: DataCode,
     rawData: RawStandardChannelData,
     data: any,
-    sync?: RawChannelSyncData
+    sync?: RawChannelSyncData,
   ): RawStandardChannelData {
     return {
       code,
@@ -136,61 +143,64 @@ class TouchChannel implements ITouchClientChannel {
       name: rawData.name,
       header: {
         event: rawData.header.event,
-        status: "reply",
+        status: 'reply',
         type: rawData.header.type,
         _originData: rawData.header._originData,
       },
-    };
+    }
   }
 
   regChannel(
     eventName: string,
-    callback: Function
+    callback: Function,
   ): () => void {
-    const listeners = this.channelMap.get(eventName) || [];
+    const listeners = this.channelMap.get(eventName) || []
 
     if (!listeners.includes(callback)) {
-      listeners.push(callback);
-    } else return () => void 0;
+      listeners.push(callback)
+    }
+    else {
+      return () => void 0
+    }
 
-    this.channelMap.set(eventName, listeners);
+    this.channelMap.set(eventName, listeners)
 
     return () => {
-      const index = listeners.indexOf(callback);
+      const index = listeners.indexOf(callback)
 
       if (index !== -1) {
-        listeners.splice(index, 1);
+        listeners.splice(index, 1)
       }
-    };
+    }
   }
 
   unRegChannel(eventName: string, callback: Function): boolean {
-    const listeners = this.channelMap.get(eventName);
+    const listeners = this.channelMap.get(eventName)
 
     if (!listeners) {
-      return false;
+      return false
     }
 
-    const index = listeners.indexOf(callback);
+    const index = listeners.indexOf(callback)
 
     if (index === -1) {
-      return false;
+      return false
     }
 
-    listeners.splice(index, 1);
+    listeners.splice(index, 1)
 
     // If no listeners remain for this event, remove the event from the map
     if (listeners.length === 0) {
-      this.channelMap.delete(eventName);
+      this.channelMap.delete(eventName)
     }
 
-    return true;
+    return true
   }
 
   send(eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(
-      12
-    )}`;
+      12,
+    )}`
 
     const data = {
       code: DataCode.SUCCESS,
@@ -203,21 +213,20 @@ class TouchChannel implements ITouchClientChannel {
       name: eventName,
       plugin: this.plugin,
       header: {
-        status: "request",
+        status: 'request',
         type: ChannelType.PLUGIN,
       },
-    } as RawStandardChannelData;
+    } as RawStandardChannelData
 
     return new Promise((resolve) => {
-
-      this.ipcRenderer.send("@plugin-process-message", data);
+      this.ipcRenderer.send('@plugin-process-message', data)
 
       this.pendingMap.set(uniqueId, (res: any) => {
-        this.pendingMap.delete(uniqueId);
+        this.pendingMap.delete(uniqueId)
 
-        resolve(res.data);
-      });
-    });
+        resolve(res.data)
+      })
+    })
   }
 
   sendSync(eventName: string, arg?: any): any {
@@ -227,17 +236,17 @@ class TouchChannel implements ITouchClientChannel {
       name: eventName,
       plugin: this.plugin,
       header: {
-        status: "request",
+        status: 'request',
         type: ChannelType.PLUGIN,
       },
-    } as RawStandardChannelData;
+    } as RawStandardChannelData
 
-    const res = this.__parse_raw_data(void 0, this.ipcRenderer.sendSync("@plugin-process-message", data))!
+    const res = this.__parse_raw_data(void 0, this.ipcRenderer.sendSync('@plugin-process-message', data))!
 
-    if ( res.header.status === 'reply' ) return res.data;
+    if (res.header.status === 'reply')
+      return res.data
 
-    return res;
-
+    return res
   }
 }
 

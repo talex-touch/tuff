@@ -1,9 +1,9 @@
 <script lang="ts" name="CoreBoxRender" setup>
-import { computed } from 'vue'
-import { TuffItem } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
-import BoxItem from './BoxItem.vue'
+import { computed } from 'vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
+import BoxItem from './BoxItem.vue'
 
 const props = defineProps<{
   active: boolean
@@ -18,15 +18,18 @@ const emits = defineEmits<{
 const render = computed(() => props.item?.render)
 
 const quickKey = computed(() => {
-  if (props.index > 9) return ''
+  if (props.index > 9)
+    return ''
   const key = props.index === 9 ? 0 : props.index + 1
   return `⌘${key}`
 })
 
 const customRenderer = computed(() => {
-  if (render.value?.mode !== 'custom') return null
+  if (render.value?.mode !== 'custom')
+    return null
   const custom = render.value?.custom
-  if (!custom || custom.type !== 'vue') return null
+  if (!custom || custom.type !== 'vue')
+    return null
   return getCustomRenderer(custom.content) ?? null
 })
 
@@ -40,11 +43,12 @@ function handleShowHistory(): void {
 
 function handleCopyPrimary(): void {
   const value = customPayload.value?.primaryValue
-  if (!value) return
+  if (!value)
+    return
   window.dispatchEvent(
     new CustomEvent('corebox:copy-preview', {
-      detail: { value, item: props.item }
-    })
+      detail: { value, item: props.item },
+    }),
   )
 }
 </script>

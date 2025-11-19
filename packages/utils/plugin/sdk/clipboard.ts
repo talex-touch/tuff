@@ -1,6 +1,6 @@
 import type { PluginClipboardHistoryResponse, PluginClipboardItem } from './types'
 
-const ensurePluginChannel = () => {
+function ensurePluginChannel() {
   const channel = (window as any)?.$channel
   if (!channel) {
     throw new Error('[Plugin SDK] Clipboard channel requires plugin renderer context with $channel available.')
@@ -8,13 +8,15 @@ const ensurePluginChannel = () => {
   return channel
 }
 
-const normalizeItem = (item: PluginClipboardItem | null): PluginClipboardItem | null => {
-  if (!item) return item
+function normalizeItem(item: PluginClipboardItem | null): PluginClipboardItem | null {
+  if (!item)
+    return item
   if (!item.meta && typeof item.metadata === 'string') {
     try {
       const parsed = JSON.parse(item.metadata)
       return { ...item, meta: parsed }
-    } catch {
+    }
+    catch {
       return { ...item, meta: null }
     }
   }
@@ -61,7 +63,7 @@ export function useClipboardHistory() {
         : []
       return {
         ...response,
-        history
+        history,
       }
     },
 
@@ -94,6 +96,6 @@ export function useClipboardHistory() {
         return Boolean((response as any).success)
       }
       return true
-    }
+    },
   }
 }

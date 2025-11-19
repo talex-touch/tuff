@@ -68,7 +68,7 @@ class CalendarPlugin {
   updateEvent(id: string, event: Partial<CalendarEvent>): Promise<void>
   deleteEvent(id: string): Promise<void>
   getEvents(startDate: Date, endDate: Date): Promise<CalendarEvent[]>
-  
+
   // 提醒管理
   scheduleReminder(event: CalendarEvent): void
   cancelReminder(eventId: string): void

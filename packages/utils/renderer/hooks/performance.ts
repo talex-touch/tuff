@@ -41,7 +41,7 @@ export function getRendererPerformanceMetrics(): RendererPerformanceMetrics {
     loadEventEnd: navEntry?.loadEventEnd,
     domInteractive: navEntry?.domInteractive,
     firstPaint: firstPaint?.startTime,
-    firstContentfulPaint: firstContentfulPaint?.startTime
+    firstContentfulPaint: firstContentfulPaint?.startTime,
   }
 }
 
@@ -55,7 +55,8 @@ export function collectPerformanceMetricsOnLoad(): Promise<RendererPerformanceMe
       setTimeout(() => {
         resolve(getRendererPerformanceMetrics())
       }, 0)
-    } else {
+    }
+    else {
       // Wait for load event
       window.addEventListener('load', () => {
         setTimeout(() => {
@@ -81,7 +82,6 @@ export function getPerformanceSummary(): {
     domReady: metrics.domContentLoadedEventEnd || 0,
     pageLoad: metrics.loadEventEnd || 0,
     firstPaint: metrics.firstPaint,
-    firstContentfulPaint: metrics.firstContentfulPaint
+    firstContentfulPaint: metrics.firstContentfulPaint,
   }
 }
-

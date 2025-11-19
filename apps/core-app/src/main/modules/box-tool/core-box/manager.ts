@@ -1,11 +1,11 @@
-import { SearchEngineCore } from '../search-engine/search-core'
-import { TuffQuery, TuffSearchResult } from '../search-engine/types'
-import { windowManager } from './window'
-import { IPluginFeature } from '@talex-touch/utils/plugin'
-import { ipcManager } from './ipc'
-import { TouchPlugin } from '../../plugin/plugin'
+import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { TouchPlugin } from '../../plugin/plugin'
+import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getConfig } from '../../storage'
+import { SearchEngineCore } from '../search-engine/search-core'
+import { ipcManager } from './ipc'
+import { windowManager } from './window'
 
 interface ExpandOptions {
   length?: number
@@ -66,7 +66,8 @@ export class CoreBoxManager {
           }
           return
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[CoreBoxManager] Failed to check initialization status:', error)
         // If we can't check, allow CoreBox to open (fail-open approach)
       }
@@ -83,7 +84,8 @@ export class CoreBoxManager {
     if (show) {
       this.applyExpandState()
       windowManager.show()
-    } else {
+    }
+    else {
       windowManager.hide()
     }
   }
@@ -114,7 +116,8 @@ export class CoreBoxManager {
       this.currentFeature = null
       windowManager.detachUIView()
       this.shrink()
-    } else {
+    }
+    else {
       console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')
     }
   }
@@ -135,7 +138,8 @@ export class CoreBoxManager {
   public async search(query: TuffQuery): Promise<TuffSearchResult | null> {
     try {
       return await this.searchEngine.search(query)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[CoreBoxManager] Search failed:', error)
       return null
     }

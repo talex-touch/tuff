@@ -1,20 +1,20 @@
-import axios from 'axios'
-import crypto from 'crypto'
-import fse from 'fs-extra'
-import os from 'os'
-import path from 'path'
+import type { IDownloadOptions } from '@talex-touch/utils/plugin/plugin-source'
 import type {
   PluginInstallRequest,
   PluginProviderContext,
-  PluginProviderType
+  PluginProviderType,
 } from '@talex-touch/utils/plugin/providers'
 import type { RiskLevel } from '@talex-touch/utils/plugin/risk'
-import type { IDownloadOptions } from '@talex-touch/utils/plugin/plugin-source'
+import crypto from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
+import axios from 'axios'
+import fse from 'fs-extra'
 
 export async function downloadToTempFile(
   url: string,
   fallbackExt = '.tar',
-  options?: IDownloadOptions
+  options?: IDownloadOptions,
 ): Promise<string> {
   const requestTimeout = options?.timeout ?? 30_000
   const resolvedExt = (() => {
@@ -22,7 +22,8 @@ export async function downloadToTempFile(
       const parsed = new URL(url)
       const ext = path.extname(parsed.pathname)
       return ext || fallbackExt
-    } catch (error) {
+    }
+    catch (error) {
       return fallbackExt
     }
   })()
@@ -33,7 +34,7 @@ export async function downloadToTempFile(
   const response = await axios.get<NodeJS.ReadableStream>(url, {
     responseType: 'stream',
     timeout: requestTimeout,
-    proxy: false
+    proxy: false,
   })
 
   const totalLength = Number(response.headers['content-length'] ?? 0)
@@ -42,11 +43,13 @@ export async function downloadToTempFile(
   const writer = fse.createWriteStream(filePath)
 
   const reportProgress = (value: number): void => {
-    if (!options?.onProgress) return
+    if (!options?.onProgress)
+      return
     try {
       const normalized = Math.max(0, Math.min(100, value))
       options.onProgress(normalized)
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('[PluginProvider] Failed to emit download progress:', error)
     }
   }
@@ -95,17 +98,18 @@ export async function ensureRiskAccepted(
   context?: PluginProviderContext,
   level: RiskLevel = 'needs_confirmation',
   description?: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
 ): Promise<void> {
   const handler = context?.riskPrompt
-  if (!handler || level === 'trusted') return
+  if (!handler || level === 'trusted')
+    return
 
   const accepted = await handler({
     sourceType: provider,
     sourceId: request.source,
     level,
     description,
-    metadata
+    metadata,
   })
 
   if (!accepted) {

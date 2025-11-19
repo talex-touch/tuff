@@ -8,7 +8,7 @@
  * @module plugin/sdk/features
  */
 
-import { IPluginFeature } from '../index'
+import type { IPluginFeature } from '../index'
 
 /**
  * Features管理器接口
@@ -22,27 +22,27 @@ export interface IFeaturesManager {
    * @param feature - 功能定义
    * @returns 是否添加成功
    */
-  addFeature(feature: IPluginFeature): boolean
+  addFeature: (feature: IPluginFeature) => boolean
 
   /**
    * 删除功能
    * @param featureId - 功能ID
    * @returns 是否删除成功
    */
-  removeFeature(featureId: string): boolean
+  removeFeature: (featureId: string) => boolean
 
   /**
    * 获取所有功能
    * @returns 所有功能列表
    */
-  getFeatures(): IPluginFeature[]
+  getFeatures: () => IPluginFeature[]
 
   /**
    * 获取指定功能
    * @param featureId - 功能ID
    * @returns 功能对象，如果不存在返回null
    */
-  getFeature(featureId: string): IPluginFeature | null
+  getFeature: (featureId: string) => IPluginFeature | null
 
   /**
    * 设置功能优先级
@@ -50,40 +50,40 @@ export interface IFeaturesManager {
    * @param priority - 优先级值（数字越大优先级越高）
    * @returns 是否设置成功
    */
-  setPriority(featureId: string, priority: number): boolean
+  setPriority: (featureId: string, priority: number) => boolean
 
   /**
    * 获取功能优先级
    * @param featureId - 功能ID
    * @returns 优先级值，如果功能不存在返回null
    */
-  getPriority(featureId: string): number | null
+  getPriority: (featureId: string) => number | null
 
   /**
    * 按优先级排序获取所有功能
    * @returns 按优先级排序的功能列表（高优先级在前）
    */
-  getFeaturesByPriority(): IPluginFeature[]
+  getFeaturesByPriority: () => IPluginFeature[]
 
   /**
    * 批量设置功能优先级
    * @param priorities - 优先级映射对象 {featureId: priority}
    * @returns 设置成功的功能数量
    */
-  setPriorities(priorities: Record<string, number>): number
+  setPriorities: (priorities: Record<string, number>) => number
 
   /**
    * 重置功能优先级为默认值（0）
    * @param featureId - 功能ID
    * @returns 是否重置成功
    */
-  resetPriority(featureId: string): boolean
+  resetPriority: (featureId: string) => boolean
 
   /**
    * 获取功能统计信息
    * @returns 功能统计对象
    */
-  getStats(): {
+  getStats: () => {
     total: number
     byPriority: Record<number, number>
     averagePriority: number
@@ -122,7 +122,7 @@ export interface IFeaturesManager {
  */
 export function createFeaturesManager(
   _pluginName: string,
-  utils: any
+  utils: any,
 ): IFeaturesManager {
   return {
     /**
@@ -131,7 +131,8 @@ export function createFeaturesManager(
     addFeature(feature: IPluginFeature): boolean {
       try {
         return utils.features.addFeature(feature)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to add feature ${feature.id}:`, error)
         return false
       }
@@ -143,7 +144,8 @@ export function createFeaturesManager(
     removeFeature(featureId: string): boolean {
       try {
         return utils.features.removeFeature(featureId)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to remove feature ${featureId}:`, error)
         return false
       }
@@ -155,7 +157,8 @@ export function createFeaturesManager(
     getFeatures(): IPluginFeature[] {
       try {
         return utils.features.getFeatures()
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to get features:`, error)
         return []
       }
@@ -167,7 +170,8 @@ export function createFeaturesManager(
     getFeature(featureId: string): IPluginFeature | null {
       try {
         return utils.features.getFeature(featureId)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to get feature ${featureId}:`, error)
         return null
       }
@@ -179,7 +183,8 @@ export function createFeaturesManager(
     setPriority(featureId: string, priority: number): boolean {
       try {
         return utils.features.setPriority(featureId, priority)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to set priority for ${featureId}:`, error)
         return false
       }
@@ -191,7 +196,8 @@ export function createFeaturesManager(
     getPriority(featureId: string): number | null {
       try {
         return utils.features.getPriority(featureId)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to get priority for ${featureId}:`, error)
         return null
       }
@@ -203,7 +209,8 @@ export function createFeaturesManager(
     getFeaturesByPriority(): IPluginFeature[] {
       try {
         return utils.features.getFeaturesByPriority()
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to get features by priority:`, error)
         return []
       }
@@ -244,7 +251,7 @@ export function createFeaturesManager(
         const byPriority: Record<number, number> = {}
         let totalPriority = 0
 
-        features.forEach(feature => {
+        features.forEach((feature) => {
           const priority = feature.priority ?? 0
           byPriority[priority] = (byPriority[priority] || 0) + 1
           totalPriority += priority
@@ -255,17 +262,18 @@ export function createFeaturesManager(
         return {
           total,
           byPriority,
-          averagePriority
+          averagePriority,
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FeaturesManager] Failed to get stats:`, error)
         return {
           total: 0,
           byPriority: {},
-          averagePriority: 0
+          averagePriority: 0,
         }
       }
-    }
+    },
   }
 }
 
@@ -299,7 +307,7 @@ export const FEATURE_PRIORITIES = {
   /** 低优先级 */
   LOW: -500,
   /** 最低优先级 */
-  LOWEST: -1000
+  LOWEST: -1000,
 } as const
 
 /**
@@ -320,5 +328,5 @@ export const FEATURE_TYPES = {
   /** 文件功能 */
   FILE: 'file',
   /** 应用功能 */
-  APP: 'app'
+  APP: 'app',
 } as const

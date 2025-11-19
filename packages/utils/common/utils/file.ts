@@ -1,12 +1,13 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const path = (() => {
   if (typeof window === 'undefined') {
-    return require('path')
+    return require('node:path')
   }
   try {
     return require('path-browserify')
-  } catch {
-    return require('path')
+  }
+  catch {
+    return require('node:path')
   }
 })()
 
@@ -28,7 +29,7 @@ export enum FileType {
   Spreadsheet = 'Spreadsheet',
   Presentation = 'Presentation',
   Ebook = 'Ebook',
-  Other = 'Other'
+  Other = 'Other',
 }
 
 const extensionMap: Map<FileType, Set<string>> = new Map([
@@ -44,8 +45,8 @@ const extensionMap: Map<FileType, Set<string>> = new Map([
   [FileType.Font, new Set(['.ttf', '.otf', '.woff', '.woff2'])],
   [FileType.Spreadsheet, new Set(['.xls', '.xlsx', '.csv', '.numbers'])],
   [FileType.Presentation, new Set(['.ppt', '.pptx', '.key'])],
-  [FileType.Ebook, new Set(['.epub', '.mobi', '.azw'])]
-]);
+  [FileType.Ebook, new Set(['.epub', '.mobi', '.azw'])],
+])
 
 /**
  * Get the file type from a file path.

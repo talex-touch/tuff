@@ -1,29 +1,18 @@
 {
   "name": "@talex-touch/tuff",
+  "type": "module",
   "version": "2.4.6",
+  "private": false,
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
   "license": "MPL-2.0 license",
-  "private": false,
-  "type": "module",
   "engines": {
     "node": ">=22.0.0"
-  },
-  "devDependencies": {
-    "@antfu/eslint-config": "^5.4.1",
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
-    "@typescript-eslint/parser": "^8.46.2",
-    "bumpp": "^10.3.1",
-    "eslint": "^9.39.0",
-    "husky": "^9.1.7",
-    "typescript": "^5.9.3",
-    "vite": "^7.1.12",
-    "vitest": "^3.2.4"
   },
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
+    "lint:staged": "lint-staged",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
     "postinstall": "node scripts/sync-core-package.mjs",
@@ -53,8 +42,26 @@
     "@sentry/vite-plugin": "^4.6.0",
     "vite-plugin-electron": "^0.29.0"
   },
+  "devDependencies": {
+    "@antfu/eslint-config": "^5.4.1",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@typescript-eslint/parser": "^8.46.2",
+    "bumpp": "^10.3.1",
+    "eslint": "^9.39.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
+  },
   "volta": {
     "node": "22.16.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,vue}": [
+      "eslint --fix"
+    ]
   },
   "pnpm": {
     "onlyBuiltDependencies": [

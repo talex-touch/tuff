@@ -1,24 +1,11 @@
-<template>
-  <TuffItemTemplate
-    :title="provider.name"
-    :subtitle="provider.type"
-    :icon="getProviderIcon(provider.type)"
-    :selected="isSelected"
-    :top-badge="hasConfigError ? errorBadge : undefined"
-    :status-dot="statusDot"
-    :aria-label="t('intelligence.item.selectProvider', { name: provider.name })"
-    @click="handleClick"
-  />
-</template>
-
 <script lang="ts" name="IntelligenceItemRefactored" setup>
-import { useI18n } from 'vue-i18n'
 import type { ITuffIcon } from '@talex-touch/utils'
-import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 import type {
   TuffItemBadge,
-  TuffItemStatusDot
+  TuffItemStatusDot,
 } from '~/components/tuff/template/TuffItemTemplate.vue'
+import { useI18n } from 'vue-i18n'
+import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 
 enum AiProviderType {
   OPENAI = 'openai',
@@ -26,7 +13,7 @@ enum AiProviderType {
   DEEPSEEK = 'deepseek',
   SILICONFLOW = 'siliconflow',
   LOCAL = 'local',
-  CUSTOM = 'custom'
+  CUSTOM = 'custom',
 }
 
 interface AiProviderConfig {
@@ -60,12 +47,13 @@ watch(
   () => props.provider.enabled,
   (newValue) => {
     localEnabled.value = newValue
-  }
+  },
 )
 
 // Check if provider has configuration errors
 const hasConfigError = computed(() => {
-  if (!props.provider.enabled) return false
+  if (!props.provider.enabled)
+    return false
 
   // Check for missing API key (except for local models)
   if (props.provider.type !== AiProviderType.LOCAL && !props.provider.apiKey) {
@@ -89,13 +77,13 @@ const hasConfigError = computed(() => {
 const errorBadge = computed<TuffItemBadge>(() => ({
   text: t('intelligence.item.configError'),
   status: 'danger',
-  icon: 'i-ri-error-warning-line'
+  icon: 'i-ri-error-warning-line',
 }))
 
 // Status dot configuration
 const statusDot = computed<TuffItemStatusDot>(() => ({
   class: localEnabled.value ? 'is-active' : 'is-inactive',
-  label: localEnabled.value ? t('intelligence.status.enabled') : t('intelligence.status.disabled')
+  label: localEnabled.value ? t('intelligence.status.enabled') : t('intelligence.status.disabled'),
 }))
 
 function getProviderIcon(type: string): ITuffIcon {
@@ -105,7 +93,7 @@ function getProviderIcon(type: string): ITuffIcon {
     [AiProviderType.DEEPSEEK]: 'i-carbon-search-advanced',
     [AiProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning',
     [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server',
-    [AiProviderType.CUSTOM]: 'i-carbon-settings'
+    [AiProviderType.CUSTOM]: 'i-carbon-settings',
   }
 
   const iconClass = iconMap[type] || 'i-carbon-ibm-watson-machine-learning'
@@ -113,7 +101,7 @@ function getProviderIcon(type: string): ITuffIcon {
   return {
     type: 'class',
     value: iconClass,
-    status: 'success'
+    status: 'success',
   }
 }
 
@@ -121,3 +109,16 @@ function handleClick() {
   // Click event is handled by parent
 }
 </script>
+
+<template>
+  <TuffItemTemplate
+    :title="provider.name"
+    :subtitle="provider.type"
+    :icon="getProviderIcon(provider.type)"
+    :selected="isSelected"
+    :top-badge="hasConfigError ? errorBadge : undefined"
+    :status-dot="statusDot"
+    :aria-label="t('intelligence.item.selectProvider', { name: provider.name })"
+    @click="handleClick"
+  />
+</template>

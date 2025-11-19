@@ -1,9 +1,9 @@
-import fse from 'fs-extra'
-import path from 'path'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { TalexEvents } from '../core/eventbus/touch-event'
+import path from 'node:path'
 import { session } from 'electron'
+import fse from 'fs-extra'
 import { BaseModule } from './abstract-base-module'
-import { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import { TalexEvents } from '../core/eventbus/touch-event'
 
 export class ExtensionLoaderModule extends BaseModule {
   static key: symbol = Symbol.for('ExtensionLoader')
@@ -14,7 +14,7 @@ export class ExtensionLoaderModule extends BaseModule {
   constructor() {
     super(ExtensionLoaderModule.key, {
       create: true,
-      dirName: 'extensions'
+      dirName: 'extensions',
     })
   }
 

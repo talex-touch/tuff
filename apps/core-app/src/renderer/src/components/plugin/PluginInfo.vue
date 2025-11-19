@@ -1,3 +1,147 @@
+<script lang="ts" name="PluginInfo" setup>
+import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { VNode } from 'vue'
+import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
+import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { ElMessageBox, ElPopover } from 'element-plus'
+import { computed, ref, useSlots, watchEffect } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import TuffIcon from '~/components/base/TuffIcon.vue'
+import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
+import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
+import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
+import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import PluginDetails from './tabs/PluginDetails.vue'
+import PluginFeatures from './tabs/PluginFeatures.vue'
+import PluginIssues from './tabs/PluginIssues.vue'
+import PluginLogs from './tabs/PluginLogs.vue'
+import PluginOverview from './tabs/PluginOverview.vue'
+import PluginStorage from './tabs/PluginStorage.vue'
+
+// Props
+const props = defineProps<{
+  plugin: ITouchPlugin
+}>()
+
+// SDK and state
+const touchSdk = useTouchSDK()
+const pluginLogsRef = ref<InstanceType<typeof PluginLogs> | null>(null)
+const { t } = useI18n()
+
+// Tabs state
+const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
+
+// Loading states
+const loadingStates = ref({
+  reload: false,
+  openFolder: false,
+  uninstall: false,
+})
+
+const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
+const hasErrors = computed(() => props.plugin.issues?.some(issue => issue.type === 'error'))
+
+// Watch for errors and auto-select the 'Issues' tab
+const slots = useSlots()
+const tabItems = computed(() => {
+  const defaultSlots = slots.default?.() || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return defaultSlots.filter((vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem')
+})
+
+watchEffect(() => {
+  if (hasErrors.value) {
+    const issuesTabIndex = tabItems.value.findIndex(
+      (vnode: VNode) => vnode.props?.name === 'Issues',
+    )
+    if (issuesTabIndex !== -1) {
+      tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
+    }
+  }
+})
+
+// Status mapping
+const statusMap = {
+  [EPluginStatus.ACTIVE]: { indicator: 'bg-green-500' },
+  [EPluginStatus.ENABLED]: { indicator: 'bg-green-500' },
+  [EPluginStatus.DISABLED]: { indicator: 'bg-yellow-500' },
+  [EPluginStatus.CRASHED]: { indicator: 'bg-red-500' },
+  [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
+  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' },
+  [EPluginStatus.DEV_DISCONNECTED]: { indicator: 'bg-orange-500' },
+  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' },
+}
+
+const statusClass = computed(() => {
+  if (!props.plugin)
+    return { indicator: 'bg-gray-400' }
+  return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
+})
+
+async function handleReloadPlugin(): Promise<void> {
+  if (!props.plugin)
+    return
+
+  await touchSdk.reloadPlugin(props.plugin.name)
+}
+
+async function handleOpenPluginFolder(): Promise<void> {
+  if (!props.plugin || loadingStates.value.openFolder)
+    return
+
+  loadingStates.value.openFolder = true
+  try {
+    await touchSdk.openPluginFolder(props.plugin.name)
+  }
+  catch (error) {
+    console.error('Failed to open plugin folder:', error)
+  }
+  finally {
+    loadingStates.value.openFolder = false
+  }
+}
+
+async function handleUninstallPlugin(): Promise<void> {
+  if (!props.plugin || loadingStates.value.uninstall)
+    return
+
+  try {
+    await ElMessageBox.confirm(
+      t('plugin.uninstall.confirmMessage', { name: props.plugin.name }),
+      t('plugin.uninstall.confirmTitle'),
+      {
+        type: 'warning',
+        confirmButtonText: t('plugin.uninstall.confirmButton'),
+        cancelButtonText: t('plugin.uninstall.cancelButton'),
+      },
+    )
+  }
+  catch {
+    return
+  }
+
+  loadingStates.value.uninstall = true
+  try {
+    const success = await pluginSDK.uninstall(props.plugin.name)
+    if (success) {
+      toast.success(t('plugin.uninstall.success', { name: props.plugin.name }))
+    }
+    else {
+      toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
+    }
+  }
+  catch (error) {
+    console.error('Failed to uninstall plugin:', error)
+    toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
+  }
+  finally {
+    loadingStates.value.uninstall = false
+  }
+}
+</script>
+
 <template>
   <div
     class="plugin-info-root h-full flex flex-col bg-gray-50 dark:bg-gray-900 relative"
@@ -40,7 +184,7 @@
         </div>
       </div>
 
-      <el-popover
+      <ElPopover
         placement="bottom-end"
         :width="200"
         trigger="click"
@@ -92,7 +236,7 @@
             }}</span>
           </div>
         </div>
-      </el-popover>
+      </ElPopover>
     </div>
 
     <!-- Status Section -->
@@ -129,139 +273,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="PluginInfo" setup>
-import { ref, computed, watchEffect, useSlots, VNode } from 'vue'
-import { ElPopover, ElMessageBox } from 'element-plus'
-import { toast } from 'vue-sonner'
-import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
-import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
-import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
-import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
-import PluginOverview from './tabs/PluginOverview.vue'
-import PluginFeatures from './tabs/PluginFeatures.vue'
-import PluginStorage from './tabs/PluginStorage.vue'
-import PluginLogs from './tabs/PluginLogs.vue'
-import PluginDetails from './tabs/PluginDetails.vue'
-import PluginIssues from './tabs/PluginIssues.vue'
-import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
-import { useI18n } from 'vue-i18n'
-import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
-import TuffIcon from '~/components/base/TuffIcon.vue'
-import { pluginSDK } from '~/modules/sdk/plugin-sdk'
-
-// Props
-const props = defineProps<{
-  plugin: ITouchPlugin
-}>()
-
-// SDK and state
-const touchSdk = useTouchSDK()
-const pluginLogsRef = ref<InstanceType<typeof PluginLogs> | null>(null)
-const { t } = useI18n()
-
-// Tabs state
-const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
-
-// Loading states
-const loadingStates = ref({
-  reload: false,
-  openFolder: false,
-  uninstall: false
-})
-
-const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
-const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
-
-// Watch for errors and auto-select the 'Issues' tab
-const slots = useSlots()
-const tabItems = computed(() => {
-  const defaultSlots = slots.default?.() || []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return defaultSlots.filter((vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem')
-})
-
-watchEffect(() => {
-  if (hasErrors.value) {
-    const issuesTabIndex = tabItems.value.findIndex(
-      (vnode: VNode) => vnode.props?.name === 'Issues'
-    )
-    if (issuesTabIndex !== -1) {
-      tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
-    }
-  }
-})
-
-// Status mapping
-const statusMap = {
-  [EPluginStatus.ACTIVE]: { indicator: 'bg-green-500' },
-  [EPluginStatus.ENABLED]: { indicator: 'bg-green-500' },
-  [EPluginStatus.DISABLED]: { indicator: 'bg-yellow-500' },
-  [EPluginStatus.CRASHED]: { indicator: 'bg-red-500' },
-  [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
-  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' },
-  [EPluginStatus.DEV_DISCONNECTED]: { indicator: 'bg-orange-500' },
-  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' }
-}
-
-const statusClass = computed(() => {
-  if (!props.plugin) return { indicator: 'bg-gray-400' }
-  return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
-})
-
-async function handleReloadPlugin(): Promise<void> {
-  if (!props.plugin) return
-
-  await touchSdk.reloadPlugin(props.plugin.name)
-}
-
-async function handleOpenPluginFolder(): Promise<void> {
-  if (!props.plugin || loadingStates.value.openFolder) return
-
-  loadingStates.value.openFolder = true
-  try {
-    await touchSdk.openPluginFolder(props.plugin.name)
-  } catch (error) {
-    console.error('Failed to open plugin folder:', error)
-  } finally {
-    loadingStates.value.openFolder = false
-  }
-}
-
-async function handleUninstallPlugin(): Promise<void> {
-  if (!props.plugin || loadingStates.value.uninstall) return
-
-  try {
-    await ElMessageBox.confirm(
-      t('plugin.uninstall.confirmMessage', { name: props.plugin.name }),
-      t('plugin.uninstall.confirmTitle'),
-      {
-        type: 'warning',
-        confirmButtonText: t('plugin.uninstall.confirmButton'),
-        cancelButtonText: t('plugin.uninstall.cancelButton')
-      }
-    )
-  } catch {
-    return
-  }
-
-  loadingStates.value.uninstall = true
-  try {
-    const success = await pluginSDK.uninstall(props.plugin.name)
-    if (success) {
-      toast.success(t('plugin.uninstall.success', { name: props.plugin.name }))
-    } else {
-      toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
-    }
-  } catch (error) {
-    console.error('Failed to uninstall plugin:', error)
-    toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
-  } finally {
-    loadingStates.value.uninstall = false
-  }
-}
-</script>
 
 <style lang="scss" scoped>
 .plugin-actions-menu {

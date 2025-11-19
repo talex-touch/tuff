@@ -1,13 +1,3 @@
-<template>
-  <header class="capability-header">
-    <div class="capability-header__content">
-      <p class="capability-header__id">{{ capability.id }}</p>
-      <h1 class="capability-header__title">{{ capability.label || capability.id }}</h1>
-      <p class="capability-header__description">{{ capability.description }}</p>
-    </div>
-  </header>
-</template>
-
 <script lang="ts" setup>
 import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 
@@ -15,6 +5,22 @@ defineProps<{
   capability: AISDKCapabilityConfig
 }>()
 </script>
+
+<template>
+  <header class="capability-header">
+    <div class="capability-header__content">
+      <p class="capability-header__id">
+        {{ capability.id }}
+      </p>
+      <h1 class="capability-header__title">
+        {{ capability.label || capability.id }}
+      </h1>
+      <p class="capability-header__description">
+        {{ capability.description }}
+      </p>
+    </div>
+  </header>
+</template>
 
 <style lang="scss" scoped>
 .capability-header {

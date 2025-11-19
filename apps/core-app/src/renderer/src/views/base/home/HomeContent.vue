@@ -33,7 +33,7 @@ import TopPlugins from './TopPlugins.vue'
       </div>
 
       <!-- Logo image -->
-      <img src="~/assets/logo.svg" alt="logo" />
+      <img src="~/assets/logo.svg" alt="logo">
     </div>
 
     <!-- Top plugins section -->

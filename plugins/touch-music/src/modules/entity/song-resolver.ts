@@ -1,10 +1,10 @@
-import { axios } from "@modules/axios";
-import { Howl } from "howler";
-import { computed, ComputedRef } from "vue";
+import type { ComputedRef } from 'vue'
+import { Howl } from 'howler'
+import { computed } from 'vue'
 
 export enum SongPlatform {
-  NETEASE, QQ, XIA_MI, APPLE_MUSIC, SPOTIFY, KU_GOU, KU_WO, MIGU, JIU_KU, BILIBILI
-  , QI_SHUI
+  NETEASE, QQ, XIA_MI, APPLE_MUSIC, SPOTIFY, KU_GOU, KU_WO, MIGU, JIU_KU, BILIBILI,
+  QI_SHUI,
 }
 
 export class SongArtist {
@@ -13,8 +13,8 @@ export class SongArtist {
   platform: SongPlatform = SongPlatform.NETEASE
 
   constructor(data: object) {
-    this.name = data['name']
-    this.id = data['id']
+    this.name = data.name
+    this.id = data.id
   }
 }
 
@@ -25,14 +25,13 @@ export class SongAlbum {
   platform: SongPlatform = SongPlatform.NETEASE
 
   constructor(data: object) {
-    this.name = data['name']
-    this.id = data['id']
-    this.picUrl = data['picUrl']
+    this.name = data.name
+    this.id = data.id
+    this.picUrl = data.picUrl
   }
 }
 
 export class SingleSong {
-
   name: string
   id: number
   platform: SongPlatform = SongPlatform.NETEASE
@@ -45,39 +44,38 @@ export class SingleSong {
   constructor(data: object) {
     this._originData = data
 
-    console.log( this )
+    console.log(this)
 
-    this.name = data['name']
-    this.id = data['id']
-    this.artists = data['ar']?.map( (artist: object) => new SongArtist(artist) )
-    this.popularity = data['pop']
-    this.album = new SongAlbum(data['al'])
+    this.name = data.name
+    this.id = data.id
+    this.artists = data.ar?.map((artist: object) => new SongArtist(artist))
+    this.popularity = data.pop
+    this.album = new SongAlbum(data.al)
   }
 }
 
 export class PlaySong extends SingleSong {
-
   size: number
   url: string
   time: number
 
   sound: Howl
 
-  state: ComputedRef<"unloaded" | "loading" | "loaded">
+  state: ComputedRef<'unloaded' | 'loading' | 'loaded'>
   duration: ComputedRef<number>
 
   _data: object
 
   constructor(data: object, detail: object) {
-    super(data);
+    super(data)
 
     this.url = detail[0].url
     this.size = detail[0].size
     this.time = detail[0].time
 
     this.sound = new Howl({
-      src: [ this.url ],
-      html5: true
+      src: [this.url],
+      html5: true,
     })
 
     this.state = computed(() => this.sound.state())

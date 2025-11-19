@@ -5,22 +5,22 @@
  * - No coupling to implementation details of ModuleManager
  * - Keeps modules clean and strongly-typed
  */
-import {
-  TalexTouch,
-  ModuleKey,
-  ModuleFileConfig,
+import type {
+  EventHandler,
+  ITouchEvent,
+  MaybePromise,
   ModuleCreateContext,
-  ModuleInitContext,
-  ModuleStartContext,
-  ModuleStopContext,
   ModuleDestroyContext,
   ModuleDirectory,
-  MaybePromise,
-  EventHandler,
-  ITouchEvent
+  ModuleFileConfig,
+  ModuleInitContext,
+  ModuleKey,
+  ModuleStartContext,
+  ModuleStopContext,
+  TalexTouch,
 } from '@talex-touch/utils'
+import type { TalexEvents } from '../core/eventbus/touch-event'
 import * as path from 'node:path'
-import { TalexEvents } from '../core/eventbus/touch-event'
 
 export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<E> {
   /** Unique key the manager uses as singleton id */
@@ -36,6 +36,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
     this.name = key
     this.file = file
   }
+
   filePath?: string | undefined
   created?(ctx: ModuleCreateContext<E>): MaybePromise<void>
   init(ctx: ModuleInitContext<E>): MaybePromise<void> {
@@ -43,6 +44,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
 
     this.onInit(ctx)
   }
+
   abstract onInit(ctx: ModuleInitContext<E>): MaybePromise<void>
   start?(ctx: ModuleStartContext<E>): MaybePromise<void>
   stop?(ctx: ModuleStopContext<E>): MaybePromise<void>
@@ -58,7 +60,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleInitContext<E>
       | ModuleStartContext<E>
       | ModuleStopContext<E>
-      | ModuleDestroyContext<E>
+      | ModuleDestroyContext<E>,
   ): ModuleDirectory | undefined {
     return ctx.directory
   }
@@ -70,7 +72,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleInitContext<E>
       | ModuleStartContext<E>
       | ModuleStopContext<E>
-      | ModuleDestroyContext<E>
+      | ModuleDestroyContext<E>,
   ): string | undefined {
     return ctx.file?.dirPath
   }
@@ -83,12 +85,12 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStartContext<E>
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
-    hint?: string
+    hint?: string,
   ): string {
     const p = this.dirPath(ctx)
     if (!p) {
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] Module directory is not created${hint ? `: ${hint}` : ''}`
+        `[${String(this.name.description ?? this.name)}] Module directory is not created${hint ? `: ${hint}` : ''}`,
       )
     }
     return p
@@ -119,10 +121,11 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
     ...segments: string[]
   ): Promise<string> {
     const dir = this.directory(ctx)
-    if (!dir)
+    if (!dir) {
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory instance is undefined; enable file.create.`
+        `[${String(this.name.description ?? this.name)}] directory instance is undefined; enable file.create.`,
       )
+    }
     const sub = dir.join(...segments)
     await dir.ensure() // ensure root
     // ensure sub
@@ -144,23 +147,26 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     relativePath: string,
-    fallback?: T
+    fallback?: T,
   ): Promise<T> {
     const dir = this.directory(ctx)
     if (!dir) {
-      if (fallback !== undefined) return fallback
+      if (fallback !== undefined)
+        return fallback
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot read ${relativePath}`
+        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot read ${relativePath}`,
       )
     }
     try {
       const data = await dir.readFile(relativePath)
       const text = Buffer.isBuffer(data) ? data.toString('utf8') : (data as string)
       return JSON.parse(text) as T
-    } catch {
-      if (fallback !== undefined) return fallback
+    }
+    catch {
+      if (fallback !== undefined)
+        return fallback
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`
+        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`,
       )
     }
   }
@@ -174,13 +180,14 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     relativePath: string,
-    value: unknown
+    value: unknown,
   ): Promise<void> {
     const dir = this.directory(ctx)
-    if (!dir)
+    if (!dir) {
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`
+        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`,
       )
+    }
     const text = JSON.stringify(value, null, 2)
     await dir.writeFile(relativePath, text)
   }
@@ -194,7 +201,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     event: E,
-    args: T
+    args: T,
   ): void {
     ctx.events?.emit(event, args)
   }
@@ -208,7 +215,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     event: E,
-    handler: EventHandler
+    handler: EventHandler,
   ): () => void {
     ctx.events?.on(event, handler)
     return () => ctx.events?.off(event, handler)
@@ -222,7 +229,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStartContext<E>
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
-    key: ModuleKey
+    key: ModuleKey,
   ): T | undefined {
     return ctx.manager.getModule<T>(key)
   }

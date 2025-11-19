@@ -1,5 +1,5 @@
-import tseslint from '@electron-toolkit/eslint-config-ts'
 import eslintConfigPrettier from '@electron-toolkit/eslint-config-prettier'
+import tseslint from '@electron-toolkit/eslint-config-ts'
 import eslintPluginVue from 'eslint-plugin-vue'
 import vueParser from 'vue-eslint-parser'
 
@@ -13,12 +13,12 @@ export default tseslint.config(
       parser: vueParser,
       parserOptions: {
         ecmaFeatures: {
-          jsx: true
+          jsx: true,
         },
         extraFileExtensions: ['.vue'],
-        parser: tseslint.parser
-      }
-    }
+        parser: tseslint.parser,
+      },
+    },
   },
   {
     files: ['src/renderer/**/*.{ts,mts,tsx,vue}'],
@@ -29,21 +29,21 @@ export default tseslint.config(
         'error',
         {
           script: {
-            lang: 'ts'
-          }
-        }
+            lang: 'ts',
+          },
+        },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
-      'no-undef': 'off' // Disable no-undef for auto-imported globals since TypeScript handles this
-    }
+      'no-undef': 'off', // Disable no-undef for auto-imported globals since TypeScript handles this
+    },
   },
   {
     files: ['**/*.{ts,mts,tsx}'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn'
-    }
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
 )

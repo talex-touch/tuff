@@ -1,7 +1,7 @@
-import fs from 'fs'
-import path from 'path'
-import { LogItem } from '../log/types'
-import { ITouchPlugin } from '..'
+import type { ITouchPlugin } from '..'
+import type { LogItem } from '../log/types'
+import fs from 'node:fs'
+import path from 'node:path'
 import { structuredStrictStringify } from '@talex-touch/utils'
 
 /**
@@ -28,7 +28,7 @@ export class PluginLoggerManager {
     this.onLogAppend = onLogAppend
     this.sessionStart = new Date().toISOString()
     const timestamp = this.sessionStart.replace(/[:.]/g, '-')
-    const sessionFolder = `${timestamp}_${pluginInfo.name.replace(/[^a-zA-Z0-9-_]/g, '_')}`
+    const sessionFolder = `${timestamp}_${pluginInfo.name.replace(/[^\w-]/g, '_')}`
 
     this.pluginLogDir = path.resolve(baseDir, 'logs', sessionFolder)
     this.sessionLogPath = path.resolve(this.pluginLogDir, 'session.log')
@@ -51,14 +51,17 @@ export class PluginLoggerManager {
    * Flushes all buffered log items to the current session log file.
    */
   flush(): void {
-    if (this.buffer.length === 0) return
-    const lines = this.buffer.map((item) => structuredStrictStringify(item)).join('\n') + '\n'
+    if (this.buffer.length === 0)
+      return
+    const lines = `${this.buffer.map(item => structuredStrictStringify(item)).join('\n')}\n`
     try {
       this.ensureLogEnvironment()
       fs.appendFileSync(this.sessionLogPath, lines)
       this.buffer = []
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT')
+        throw error
       // Directory or file was removed; rebuild and retry once.
       this.ensureLogEnvironment(true)
       fs.appendFileSync(this.sessionLogPath, lines)
@@ -105,8 +108,8 @@ export class PluginLoggerManager {
       features: this.pluginInfo.features.map(feature => ({
         id: feature.id,
         name: feature.name,
-        desc: feature.desc
-      }))
+        desc: feature.desc,
+      })),
     }
 
     fs.writeFileSync(this.pluginInfoPath, JSON.stringify(pluginInfo, null, 2))

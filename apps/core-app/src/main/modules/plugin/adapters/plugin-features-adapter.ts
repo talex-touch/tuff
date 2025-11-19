@@ -1,28 +1,18 @@
-import {
+import type { IExecuteArgs, IProviderActivate, ISearchProvider, ITuffIcon, TuffFactory, TuffIconType, TuffInputType, TuffItem, TuffQuery, TuffSearchResult, TuffSourceType } from '@talex-touch/utils'
+import type {
   IFeatureCommand,
-  ITouchPlugin,
   IPluginFeature,
-  PluginStatus
+  ITouchPlugin,
 } from '@talex-touch/utils/plugin'
-import { ITuffIcon } from '@talex-touch/utils'
+import type { ProviderContext } from '../../box-tool/search-engine/types'
+import type { TouchPlugin } from '../plugin'
 import {
-  IExecuteArgs,
-  IProviderActivate,
-  ISearchProvider,
-  TuffItem,
-  TuffQuery,
-  TuffSearchResult,
-  TuffSourceType,
-  TuffInputType
-} from '@talex-touch/utils'
-import { TuffFactory } from '@talex-touch/utils'
+  PluginStatus,
+} from '@talex-touch/utils/plugin'
 import searchEngineCore from '../../box-tool/search-engine/search-core'
-import { TouchPlugin } from '../plugin'
-import { PluginViewLoader } from '../view/plugin-view-loader'
 import { pluginModule } from '../plugin-module'
-import { ProviderContext } from '../../box-tool/search-engine/types'
 
-import type { TuffIconType } from '@talex-touch/utils'
+import { PluginViewLoader } from '../view/plugin-view-loader'
 
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
@@ -37,12 +27,12 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
       return true
     case 'match':
       if (Array.isArray(command.value)) {
-        return command.value.some((value) => queryText.startsWith(value))
+        return command.value.some(value => queryText.startsWith(value))
       }
       return queryText.startsWith(command.value as string)
     case 'contain':
       if (Array.isArray(command.value)) {
-        return command.value.some((value) => queryText.includes(value))
+        return command.value.some(value => queryText.includes(value))
       }
       return queryText.includes(command.value as string)
     case 'regex':
@@ -71,7 +61,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     TuffInputType.Text,
     TuffInputType.Image,
     TuffInputType.Files,
-    TuffInputType.Html
+    TuffInputType.Html,
   ]
 
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
@@ -81,7 +71,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       const pluginName = item.meta?.pluginName
       if (!pluginName) {
         console.error(
-          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
+          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.',
         )
         return null
       }
@@ -103,14 +93,16 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           if (result?.shouldActivate) {
             return result.activation || null
           }
-        } catch (error) {
+        }
+        catch (error) {
           console.error(`[PluginFeaturesAdapter] Error in onItemAction for ${pluginName}:`, error)
         }
 
         return null
-      } else {
+      }
+      else {
         console.warn(
-          `[PluginFeaturesAdapter] Plugin ${pluginName} has defaultAction but no onItemAction handler.`
+          `[PluginFeaturesAdapter] Plugin ${pluginName} has defaultAction but no onItemAction handler.`,
         )
         return null
       }
@@ -118,8 +110,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     const meta = item.meta || {}
     const extension = meta.extension || {}
-    const pluginName =
-      meta.pluginName || extension.pluginName || item.actions?.[0]?.payload?.pluginName
+    const pluginName
+      = meta.pluginName || extension.pluginName || item.actions?.[0]?.payload?.pluginName
     const featureId = meta.featureId || extension.featureId || item.actions?.[0]?.payload?.featureId
 
     if (!pluginName || !featureId) {
@@ -130,7 +122,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const plugin = pluginModule.pluginManager!.plugins.get(pluginName)
     if (!plugin || !this.isPluginActive(plugin)) {
       console.error(
-        `[PluginFeaturesAdapter] Plugin not found or not active: ${pluginName} (status: ${plugin?.status})`
+        `[PluginFeaturesAdapter] Plugin not found or not active: ${pluginName} (status: ${plugin?.status})`,
       )
       return null
     }
@@ -138,7 +130,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const feature = plugin.getFeature(featureId)
     if (!feature) {
       console.error(
-        `[PluginFeaturesAdapter] Feature not found: ${featureId} in plugin ${pluginName}`
+        `[PluginFeaturesAdapter] Feature not found: ${featureId} in plugin ${pluginName}`,
       )
       return null
     }
@@ -148,7 +140,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       if (
         plugin.issues.some(
-          (issue) => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`
+          issue => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`,
         )
       ) {
         return null
@@ -159,14 +151,14 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         name: plugin.name,
         icon: {
           type: mapIconType((plugin.icon as ITuffIcon).type),
-          value: (plugin.icon as ITuffIcon).value
+          value: (plugin.icon as ITuffIcon).value,
         },
         meta: {
           pluginName,
           featureId,
           pluginIcon: plugin.icon,
-          feature: item
-        }
+          feature: item,
+        },
       }
     }
 
@@ -184,8 +176,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           pluginName,
           featureId,
           pluginIcon: plugin.icon,
-          feature: item
-        }
+          feature: item,
+        },
       }
     }
 
@@ -202,7 +194,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       source: {
         type: this.type,
         id: this.id,
-        name: this.name
+        name: this.name,
       },
       kind: 'feature',
       render: {
@@ -212,9 +204,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           subtitle: feature.desc,
           icon: {
             type: mapIconType((feature.icon as ITuffIcon).type),
-            value: (feature.icon as ITuffIcon).value
-          }
-        }
+            value: (feature.icon as ITuffIcon).value,
+          },
+        },
       },
       actions: [
         {
@@ -224,9 +216,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           primary: true,
           payload: {
             pluginName: plugin.name,
-            featureId: feature.id
-          }
-        }
+            featureId: feature.id,
+          },
+        },
       ],
       meta: {
         pluginName: plugin.name,
@@ -234,9 +226,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         interaction: feature.interaction,
         priority: feature.priority ?? 0,
         extension: {
-          commands: feature.commands
-        }
-      }
+          commands: feature.commands,
+        },
+      },
     }
   }
 
@@ -244,7 +236,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const activationState = searchEngineCore.getActivationState()
 
     if (activationState) {
-      const activeFeatureActivation = activationState.find((a) => a.id === this.id)
+      const activeFeatureActivation = activationState.find(a => a.id === this.id)
       if (activeFeatureActivation?.meta?.pluginName) {
         const { pluginName, featureId } = activeFeatureActivation.meta
         const plugin = pluginModule.pluginManager!.plugins.get(pluginName) as TouchPlugin
@@ -252,13 +244,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
         if (plugin && feature && this.isPluginActive(plugin)) {
           $app.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-            query: query
+            query,
           })
 
           if (!query.text) {
             const allFeatures = plugin.getFeatures()
             const items = allFeatures
-              .map((f) => this.createTuffItem(plugin, f))
+              .map(f => this.createTuffItem(plugin, f))
               .sort((a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0))
             return TuffFactory.createSearchResult(query)
               .setItems(items)
@@ -278,9 +270,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const matchedItems: TuffItem[] = []
     const plugins = pluginModule.pluginManager!.plugins.values()
 
-    const queryInputTypes = query.inputs?.map((i) => i.type) || []
-    const hasNonTextInput =
-      queryInputTypes.length > 0 && queryInputTypes.some((t) => t !== TuffInputType.Text)
+    const queryInputTypes = query.inputs?.map(i => i.type) || []
+    const hasNonTextInput
+      = queryInputTypes.length > 0 && queryInputTypes.some(t => t !== TuffInputType.Text)
 
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {
@@ -298,8 +290,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
             continue
           }
 
-          const acceptsAllInputs = queryInputTypes.every((type) =>
-            feature.acceptedInputTypes?.includes(type as TuffInputType)
+          const acceptsAllInputs = queryInputTypes.every(type =>
+            feature.acceptedInputTypes?.includes(type as TuffInputType),
           )
 
           if (!acceptsAllInputs) {
@@ -307,7 +299,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           }
         }
 
-        const isMatch = feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
+        const isMatch = feature.commands.some(cmd => isCommandMatch(cmd, queryText))
         if (isMatch) {
           matchedItems.push(this.createTuffItem(plugin, feature))
         }
@@ -315,7 +307,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     const sortedItems = matchedItems.sort(
-      (a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0)
+      (a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0),
     )
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()

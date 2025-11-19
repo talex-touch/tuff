@@ -1,129 +1,8 @@
-<template>
-  <div class="prompt-selector">
-    <div class="flex items-center justify-between mb-3">
-      <label class="block text-sm font-medium text-[var(--el-text-color-primary)]">
-        {{ t('intelligence.instructions') }}
-      </label>
-      <FlatButton
-        mini
-        text
-        class="manage-prompts-btn"
-        :aria-label="t('intelligence.managePrompts')"
-        @click="handleManagePrompts"
-      >
-        <i class="i-carbon-settings" aria-hidden="true" />
-        <span>{{ t('intelligence.managePrompts') }}</span>
-      </FlatButton>
-    </div>
-
-    <!-- Quick Prompt Selection -->
-    <div class="prompt-quick-select mb-3">
-      <el-select
-        :model-value="selectedPromptId"
-        :placeholder="t('intelligence.selectPrompt')"
-        clearable
-        filterable
-        class="w-full"
-        @update:model-value="handlePromptSelect"
-        @clear="handlePromptClear"
-      >
-        <!-- Built-in Prompts Group -->
-        <el-option-group
-          v-if="builtinPrompts.length > 0"
-          :label="t('intelligence.builtinPrompts')"
-        >
-          <el-option
-            v-for="prompt in builtinPrompts"
-            :key="prompt.id"
-            :value="prompt.id"
-            :label="prompt.name"
-          >
-            <div class="flex items-center justify-between w-full">
-              <span>{{ prompt.name }}</span>
-              <el-tag size="small" type="info">{{ t('intelligence.builtin') }}</el-tag>
-            </div>
-          </el-option>
-        </el-option-group>
-
-        <!-- Custom Prompts Group -->
-        <el-option-group
-          v-if="customPrompts.length > 0"
-          :label="t('intelligence.customPrompts')"
-        >
-          <el-option
-            v-for="prompt in customPrompts"
-            :key="prompt.id"
-            :value="prompt.id"
-            :label="prompt.name"
-          >
-            <div class="flex items-center justify-between w-full">
-              <span>{{ prompt.name }}</span>
-              <el-tag size="small" type="success">{{ t('intelligence.custom') }}</el-tag>
-            </div>
-          </el-option>
-        </el-option-group>
-
-        <!-- Add New Prompt Option -->
-        <el-option
-          value="__create_new__"
-          :label="t('intelligence.createNewPrompt')"
-        >
-          <div class="flex items-center gap-2 text-[var(--el-color-primary)]">
-            <i class="i-carbon-add" aria-hidden="true" />
-            <span>{{ t('intelligence.createNewPrompt') }}</span>
-          </div>
-        </el-option>
-      </el-select>
-    </div>
-
-    <!-- Custom Text Input -->
-    <div class="prompt-custom-input">
-      <el-input
-        :model-value="customInstructions"
-        type="textarea"
-        :placeholder="t('intelligence.instructionsPlaceholder')"
-        :rows="4"
-        :disabled="!!selectedPromptId && selectedPromptId !== '__create_new__'"
-        resize="vertical"
-        @update:model-value="handleCustomInstructionsChange"
-      />
-      <div
-        v-if="selectedPromptId && selectedPromptId !== '__create_new__'"
-        class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
-      >
-        {{ t('intelligence.promptSelectedHint') }}
-      </div>
-    </div>
-
-    <!-- Prompt Preview -->
-    <div
-      v-if="selectedPrompt"
-      class="prompt-preview mt-3 p-3 rounded-lg bg-[var(--el-fill-color-lighter)] border border-[var(--el-border-color-lighter)]"
-    >
-      <div class="flex items-center gap-2 mb-2">
-        <i class="i-carbon-view text-[var(--el-color-primary)]" aria-hidden="true" />
-        <span class="text-sm font-medium text-[var(--el-text-color-primary)]">
-          {{ selectedPrompt.name }}
-        </span>
-        <el-tag
-          size="small"
-          :type="selectedPrompt.builtin ? 'info' : 'success'"
-        >
-          {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
-        </el-tag>
-      </div>
-      <div class="text-sm text-[var(--el-text-color-regular)] whitespace-pre-wrap">
-        {{ selectedPrompt.content }}
-      </div>
-    </div>
-  </div>
-</template>
-
 <script lang="ts" name="IntelligencePromptSelector" setup>
-import { ref, computed, watch } from 'vue'
+import { ElInput, ElOption, ElOptionGroup, ElSelect, ElTag } from 'element-plus'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { ElSelect, ElOption, ElOptionGroup, ElInput, ElTag } from 'element-plus'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import { getPromptManager } from '~/modules/hooks/usePromptManager'
 
@@ -148,7 +27,8 @@ const customPrompts = computed(() => promptManager.prompts.custom)
 
 // 当前选中的提示词
 const selectedPrompt = computed(() => {
-  if (!selectedPromptId.value || selectedPromptId.value === '__create_new__') return null
+  if (!selectedPromptId.value || selectedPromptId.value === '__create_new__')
+    return null
   return promptManager.getPromptById(selectedPromptId.value) || null
 })
 
@@ -162,7 +42,7 @@ watch(
       .find(p => p.content === newValue)
     selectedPromptId.value = matchedPrompt?.id || null
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 // 监听选中提示词变化
@@ -173,7 +53,7 @@ watch(
       customInstructions.value = newPrompt.content
       emits('update:modelValue', newPrompt.content)
     }
-  }
+  },
 )
 
 function handlePromptSelect(promptId: string) {
@@ -206,6 +86,131 @@ function handleManagePrompts() {
   router.push('/intelligence/prompts')
 }
 </script>
+
+<template>
+  <div class="prompt-selector">
+    <div class="flex items-center justify-between mb-3">
+      <label class="block text-sm font-medium text-[var(--el-text-color-primary)]">
+        {{ t('intelligence.instructions') }}
+      </label>
+      <FlatButton
+        mini
+        text
+        class="manage-prompts-btn"
+        :aria-label="t('intelligence.managePrompts')"
+        @click="handleManagePrompts"
+      >
+        <i class="i-carbon-settings" aria-hidden="true" />
+        <span>{{ t('intelligence.managePrompts') }}</span>
+      </FlatButton>
+    </div>
+
+    <!-- Quick Prompt Selection -->
+    <div class="prompt-quick-select mb-3">
+      <ElSelect
+        :model-value="selectedPromptId"
+        :placeholder="t('intelligence.selectPrompt')"
+        clearable
+        filterable
+        class="w-full"
+        @update:model-value="handlePromptSelect"
+        @clear="handlePromptClear"
+      >
+        <!-- Built-in Prompts Group -->
+        <ElOptionGroup
+          v-if="builtinPrompts.length > 0"
+          :label="t('intelligence.builtinPrompts')"
+        >
+          <ElOption
+            v-for="prompt in builtinPrompts"
+            :key="prompt.id"
+            :value="prompt.id"
+            :label="prompt.name"
+          >
+            <div class="flex items-center justify-between w-full">
+              <span>{{ prompt.name }}</span>
+              <ElTag size="small" type="info">
+                {{ t('intelligence.builtin') }}
+              </ElTag>
+            </div>
+          </ElOption>
+        </ElOptionGroup>
+
+        <!-- Custom Prompts Group -->
+        <ElOptionGroup
+          v-if="customPrompts.length > 0"
+          :label="t('intelligence.customPrompts')"
+        >
+          <ElOption
+            v-for="prompt in customPrompts"
+            :key="prompt.id"
+            :value="prompt.id"
+            :label="prompt.name"
+          >
+            <div class="flex items-center justify-between w-full">
+              <span>{{ prompt.name }}</span>
+              <ElTag size="small" type="success">
+                {{ t('intelligence.custom') }}
+              </ElTag>
+            </div>
+          </ElOption>
+        </ElOptionGroup>
+
+        <!-- Add New Prompt Option -->
+        <ElOption
+          value="__create_new__"
+          :label="t('intelligence.createNewPrompt')"
+        >
+          <div class="flex items-center gap-2 text-[var(--el-color-primary)]">
+            <i class="i-carbon-add" aria-hidden="true" />
+            <span>{{ t('intelligence.createNewPrompt') }}</span>
+          </div>
+        </ElOption>
+      </ElSelect>
+    </div>
+
+    <!-- Custom Text Input -->
+    <div class="prompt-custom-input">
+      <ElInput
+        :model-value="customInstructions"
+        type="textarea"
+        :placeholder="t('intelligence.instructionsPlaceholder')"
+        :rows="4"
+        :disabled="!!selectedPromptId && selectedPromptId !== '__create_new__'"
+        resize="vertical"
+        @update:model-value="handleCustomInstructionsChange"
+      />
+      <div
+        v-if="selectedPromptId && selectedPromptId !== '__create_new__'"
+        class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+      >
+        {{ t('intelligence.promptSelectedHint') }}
+      </div>
+    </div>
+
+    <!-- Prompt Preview -->
+    <div
+      v-if="selectedPrompt"
+      class="prompt-preview mt-3 p-3 rounded-lg bg-[var(--el-fill-color-lighter)] border border-[var(--el-border-color-lighter)]"
+    >
+      <div class="flex items-center gap-2 mb-2">
+        <i class="i-carbon-view text-[var(--el-color-primary)]" aria-hidden="true" />
+        <span class="text-sm font-medium text-[var(--el-text-color-primary)]">
+          {{ selectedPrompt.name }}
+        </span>
+        <ElTag
+          size="small"
+          :type="selectedPrompt.builtin ? 'info' : 'success'"
+        >
+          {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
+        </ElTag>
+      </div>
+      <div class="text-sm text-[var(--el-text-color-regular)] whitespace-pre-wrap">
+        {{ selectedPrompt.content }}
+      </div>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .prompt-selector {

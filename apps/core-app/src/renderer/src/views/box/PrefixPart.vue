@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import PrefixIcon from './PrefixIcon.vue'
+import type { IUseSearch } from '~/modules/box/adapter/types'
 import ActivatedProviders from './ActivatedProviders.vue'
-import { IUseSearch } from '~/modules/box/adapter/types'
+import PrefixIcon from './PrefixIcon.vue'
 
 defineProps<{
   providers: IUseSearch['activeActivations']['value']

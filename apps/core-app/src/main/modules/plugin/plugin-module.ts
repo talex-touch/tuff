@@ -1,33 +1,35 @@
-import { IManifest, IPluginManager, ITouchPlugin, PluginStatus } from '@talex-touch/utils/plugin'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { IManifest, IPluginManager, ITouchPlugin, PluginInstallConfirmResponse } from '@talex-touch/utils/plugin'
 import type {
   PluginInstallRequest,
-  PluginInstallSummary
+  PluginInstallSummary,
 } from '@talex-touch/utils/plugin/providers'
 import type { FSWatcher } from 'chokidar'
-import fse from 'fs-extra'
-import path from 'path'
+import path from 'node:path'
+import util from 'node:util'
+import { sleep } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { TouchPlugin } from './plugin'
-import { TuffIconImpl } from '../../core/tuff-icon'
-import { shell, app } from 'electron'
-import { createDbUtils } from '../../db/utils'
-import { databaseModule } from '../database'
-import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { createPluginLoader } from './plugin-loaders'
-import { MaybePromise, ModuleInitContext, ModuleKey, sleep } from '@talex-touch/utils'
-import { TouchWindow } from '../../core/touch-window'
+import { PluginStatus } from '@talex-touch/utils/plugin'
+import { app, shell } from 'electron'
+import fse from 'fs-extra'
 import { genTouchChannel } from '../../core/channel-core'
-import { BaseModule } from '../abstract-base-module'
-import { PluginInstaller } from './plugin-installer'
-import { PluginInstallQueue } from './install-queue'
-import type { PluginInstallConfirmResponse } from '@talex-touch/utils/plugin'
-import { LocalPluginProvider } from './providers/local-provider'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { TouchWindow } from '../../core/touch-window'
+import { TuffIconImpl } from '../../core/tuff-icon'
+import { createDbUtils } from '../../db/utils'
+import { internalPlugins } from '../../plugins/internal'
 import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
-import util from 'util'
 import { createLogger } from '../../utils/logger'
+import { BaseModule } from '../abstract-base-module'
+import { databaseModule } from '../database'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+import { PluginInstallQueue } from './install-queue'
+import { TouchPlugin } from './plugin'
+import { PluginInstaller } from './plugin-installer'
+import { createPluginLoader } from './plugin-loaders'
 
+import { LocalPluginProvider } from './providers/local-provider'
 
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
@@ -58,7 +60,7 @@ class DevPluginWatcher {
           this.watcher.add(manifestPath)
         }
         devWatcherLog.info('Watching dev plugin source', {
-          meta: { path: plugin.pluginPath, plugin: plugin.name }
+          meta: { path: plugin.pluginPath, plugin: plugin.name },
         })
       }
     }
@@ -78,7 +80,7 @@ class DevPluginWatcher {
       }
       this.devPlugins.delete(pluginName)
       devWatcherLog.info('Stopped watching dev plugin source', {
-        meta: { path: plugin.pluginPath, plugin: plugin.name }
+        meta: { path: plugin.pluginPath, plugin: plugin.name },
       })
     }
   }
@@ -98,25 +100,25 @@ class DevPluginWatcher {
       ignoreInitial: true,
       awaitWriteFinish: {
         stabilityThreshold: 100,
-        pollInterval: 50
-      }
+        pollInterval: 50,
+      },
     })
 
     this.watcher.on('change', async (filePath) => {
       const pluginName = Array.from(this.devPlugins.values()).find(
-        (p) =>
-          !p.dev.source &&
-          (p.pluginPath === filePath || filePath === path.join(p.pluginPath, 'manifest.json'))
+        p =>
+          !p.dev.source
+          && (p.pluginPath === filePath || filePath === path.join(p.pluginPath, 'manifest.json')),
       )?.name
       if (pluginName) {
         const fileName = path.basename(filePath)
         devWatcherLog.info('Dev plugin source changed, reloading', {
-          meta: { plugin: pluginName, file: filePath, fileName }
+          meta: { plugin: pluginName, file: filePath, fileName },
         })
 
         if (fileName === 'manifest.json') {
           devWatcherLog.info('Manifest.json changed, reloading plugin with new configuration', {
-            meta: { plugin: pluginName }
+            meta: { plugin: pluginName },
           })
         }
 
@@ -125,7 +127,7 @@ class DevPluginWatcher {
     })
 
     devWatcherLog.info('Started watching for dev plugin changes', {
-      meta: { plugins: this.devPlugins.size }
+      meta: { plugins: this.devPlugins.size },
     })
   }
 
@@ -133,7 +135,8 @@ class DevPluginWatcher {
    * Stop watching for file changes
    */
   stop(): void {
-    if (!this.watcher) return
+    if (!this.watcher)
+      return
     void fileWatchService.close(this.watcher)
     this.watcher = null
     devWatcherLog.info('Stopped watching for dev plugin changes')
@@ -147,7 +150,7 @@ class DevPluginWatcher {
  */
 const INTERNAL_PLUGIN_NAMES = new Set<string>()
 
-const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
+function createPluginModuleInternal(pluginPath: string): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
   const reloadingPlugins: Set<string> = new Set()
@@ -165,23 +168,27 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const formatLogArgs = (args: unknown[]): string => {
     return args
       .map((arg) => {
-        if (typeof arg === 'string') return arg
+        if (typeof arg === 'string')
+          return arg
         if (typeof arg === 'number' || typeof arg === 'boolean' || typeof arg === 'bigint') {
           return String(arg)
         }
         if (arg instanceof Error) {
           return arg.stack || arg.message
         }
-        if (arg === null) return 'null'
-        if (typeof arg === 'undefined') return 'undefined'
-        if (typeof arg === 'symbol') return arg.toString()
+        if (arg === null)
+          return 'null'
+        if (typeof arg === 'undefined')
+          return 'undefined'
+        if (typeof arg === 'symbol')
+          return arg.toString()
         return util.inspect(arg, { depth: 3, colors: false })
       })
       .join(' ')
       .trim()
   }
   const extractError = (args: unknown[]): Error | undefined => {
-    return args.find((arg) => arg instanceof Error) as Error | undefined
+    return args.find(arg => arg instanceof Error) as Error | undefined
   }
   const logInfo = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
@@ -207,7 +214,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
   const persistInstallSourceMetadata = async ({
     request,
     manifest,
-    providerResult
+    providerResult,
   }: {
     request: PluginInstallRequest
     manifest?: IManifest
@@ -226,15 +233,16 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         provider: providerResult.provider,
         installedAt: Date.now(),
         metadata: request.metadata ?? null,
-        clientMetadata: request.clientMetadata ?? null
+        clientMetadata: request.clientMetadata ?? null,
       })
-    } catch (error) {
+    }
+    catch (error) {
       logWarn('Failed to save plugin source metadata', pluginTag(pluginName), error as Error)
     }
   }
 
   const installQueue = new PluginInstallQueue(installer, {
-    onInstallCompleted: persistInstallSourceMetadata
+    onInstallCompleted: persistInstallSourceMetadata,
   })
   const localProvider = new LocalPluginProvider(pluginPath)
 
@@ -254,7 +262,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           'Processing plugin entry',
           pluginTag(plugin.name),
           'status:',
-          PluginStatus[(plugin as TouchPlugin).status]
+          PluginStatus[(plugin as TouchPlugin).status],
         )
         const json = (plugin as TouchPlugin).toJSONObject() as any
         if ((plugin as any).internal) {
@@ -269,7 +277,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
       logInfo(`Returning plugin list with ${list.length} item(s).`)
       return list
-    } catch (error) {
+    }
+    catch (error) {
       logError('Error in getPluginList:', error)
       return []
     }
@@ -282,11 +291,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
       if (previousPlugin) {
         logDebug(
-          `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`
+          `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`,
         )
 
         genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:in', {
-          plugin: active
+          plugin: active,
         })
 
         if (previousPlugin.status === PluginStatus.ACTIVE) {
@@ -308,7 +317,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       const validStates = [PluginStatus.ENABLED, PluginStatus.ACTIVE]
       if (!validStates.includes(plugin.status)) {
         logWarn(
-          `Cannot activate plugin ${pluginTag(pluginName)}: invalid status ${PluginStatus[plugin.status]} (expected ENABLED or ACTIVE)`
+          `Cannot activate plugin ${pluginTag(pluginName)}: invalid status ${PluginStatus[plugin.status]} (expected ENABLED or ACTIVE)`,
         )
         return false
       }
@@ -320,16 +329,17 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       }
 
       logDebug(
-        `Activating plugin ${pluginTag(pluginName)}: ${PluginStatus[plugin.status]} → ACTIVE`
+        `Activating plugin ${pluginTag(pluginName)}: ${PluginStatus[plugin.status]} → ACTIVE`,
       )
 
       plugin.status = PluginStatus.ACTIVE
       active = pluginName
 
       genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:ac', {
-        plugin: pluginName
+        plugin: pluginName,
       })
-    } else {
+    }
+    else {
       // Clear active plugin if no name provided
       active = ''
     }
@@ -375,11 +385,12 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
   const enablePlugin = async (pluginName: string): Promise<boolean> => {
     const plugin = plugins.get(pluginName)
-    if (!plugin) return false
+    if (!plugin)
+      return false
 
     if (plugin.status === PluginStatus.LOAD_FAILED) {
       pluginLog.info('Attempting to re-enable failed plugin, reloading', {
-        meta: { plugin: pluginName }
+        meta: { plugin: pluginName },
       })
       await reloadPlugin(pluginName)
       return enabledPlugins.has(pluginName)
@@ -396,7 +407,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
   const disablePlugin = async (pluginName: string): Promise<boolean> => {
     const plugin = plugins.get(pluginName)
-    if (!plugin) return false
+    if (!plugin)
+      return false
 
     stopHealthMonitoring(pluginName)
 
@@ -427,8 +439,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
       stopHealthMonitoring(pluginName)
 
-      const _enabled =
-        plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
+      const _enabled
+        = plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
       if (plugin.status !== PluginStatus.LOAD_FAILED) {
         await plugin.disable()
@@ -450,12 +462,15 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           startHealthMonitoringIfNeeded(newPlugin)
         }
         logInfo('Plugin reloaded successfully', pluginTag(pluginName))
-      } else {
+      }
+      else {
         logError('Plugin failed to reload, it could not be loaded again.', pluginTag(pluginName))
       }
-    } catch (error) {
+    }
+    catch (error) {
       logError('Error while reloading plugin', pluginTag(pluginName), error)
-    } finally {
+    }
+    finally {
       reloadingPlugins.delete(pluginName)
     }
   }
@@ -465,10 +480,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       await dbUtils.setPluginData(
         'internal:plugin-module',
         'enabled_plugins',
-        Array.from(enabledPlugins)
+        Array.from(enabledPlugins),
       )
       logInfo('Persisted enabled plugins state.')
-    } catch (error) {
+    }
+    catch (error) {
       logError('Failed to persist enabled plugins state:', error)
     }
   }
@@ -506,7 +522,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           { enable: false, address: '' },
           currentPluginPath,
           undefined,
-          { skipDataInit: true }
+          { skipDataInit: true },
         )
 
         touchPlugin.issues.push({
@@ -515,13 +531,13 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           source: 'filesystem',
           code: 'MISSING_MANIFEST',
           suggestion: 'Ensure the plugin folder and its manifest.json exist.',
-          timestamp: Date.now()
+          timestamp: Date.now(),
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
-          plugin: touchPlugin.toJSONObject()
+          plugin: touchPlugin.toJSONObject(),
         })
         logWarn('Plugin failed to load: missing manifest.json', pluginTag(pluginName))
         return true
@@ -542,7 +558,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             '| manifestName:',
             normalizedName,
             '| existingFolder:',
-            existingFolderForName
+            existingFolderForName,
           )
           touchPlugin.issues.push({
             type: 'error',
@@ -550,17 +566,19 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             source: 'manifest.json',
             code: 'DUPLICATE_PLUGIN_NAME',
             suggestion: `Ensure plugin names are unique across all plugins. Directory '${existingFolderForName}' currently uses this name.`,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           })
           touchPlugin.status = PluginStatus.LOAD_FAILED
-        } else {
+        }
+        else {
           pluginNameIndex.set(normalizedName, pluginName)
         }
 
         // After all loading attempts, set final status
-        if (touchPlugin.issues.some((issue) => issue.type === 'error')) {
+        if (touchPlugin.issues.some(issue => issue.type === 'error')) {
           touchPlugin.status = PluginStatus.LOAD_FAILED
-        } else {
+        }
+        else {
           touchPlugin.status = PluginStatus.DISABLED
         }
 
@@ -576,14 +594,15 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           '| features:',
           touchPlugin.features.length,
           '| issues:',
-          touchPlugin.issues.length
+          touchPlugin.issues.length,
         )
 
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
-          plugin: touchPlugin.toJSONObject()
+          plugin: touchPlugin.toJSONObject(),
         })
-      } catch (error: any) {
+      }
+      catch (error: any) {
         logError('Unhandled error while loading plugin', pluginTag(pluginName), error)
         // Create a dummy plugin to show the error in the UI
         const placeholderIcon = new TuffIconImpl(currentPluginPath, 'emoji', '')
@@ -597,7 +616,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           { enable: false, address: '' },
           currentPluginPath,
           undefined,
-          { skipDataInit: true }
+          { skipDataInit: true },
         )
         touchPlugin.issues.push({
           type: 'error',
@@ -605,25 +624,27 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           source: 'plugin-loader',
           code: 'LOADER_FATAL',
           meta: { error: error.stack },
-          timestamp: Date.now()
+          timestamp: Date.now(),
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
         genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
-          plugin: touchPlugin.toJSONObject()
+          plugin: touchPlugin.toJSONObject(),
         })
       }
 
       return true
-    } finally {
+    }
+    finally {
       loadingPlugins.delete(pluginName)
     }
   }
 
   const unloadPlugin = (pluginName: string): Promise<boolean> => {
     const plugin = plugins.get(pluginName)
-    if (!plugin) return Promise.resolve(false)
+    if (!plugin)
+      return Promise.resolve(false)
 
     const currentPluginPath = path.resolve(pluginPath, pluginName)
     localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
@@ -641,13 +662,15 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           logWarn('Error disabling plugin during unload:', pluginTag(pluginName), error)
         })
       }
-    } catch (error) {
+    }
+    catch (error) {
       logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
     }
 
     try {
       plugin.logger.getManager().destroy()
-    } catch (error) {
+    }
+    catch (error) {
       logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
     }
 
@@ -658,21 +681,22 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
     genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
       type: 'removed',
-      name: pluginName
+      name: pluginName,
     })
 
     return Promise.resolve(true)
   }
 
   const installFromSource = async (
-    request: PluginInstallRequest
+    request: PluginInstallRequest,
   ): Promise<PluginInstallSummary> => {
     const summary = await installer.install(request)
     return summary
   }
 
   const resolvePluginFolderName = (identifier: string): string | undefined => {
-    if (plugins.has(identifier)) return identifier
+    if (plugins.has(identifier))
+      return identifier
     return pluginNameIndex.get(identifier)
   }
 
@@ -685,8 +709,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     }
 
     const pluginInstance = plugins.get(folderName) as TouchPlugin | undefined
-    const dataDir =
-      pluginInstance instanceof TouchPlugin ? path.dirname(pluginInstance.getConfigPath()) : null
+    const dataDir
+      = pluginInstance instanceof TouchPlugin ? path.dirname(pluginInstance.getConfigPath()) : null
     const manifestName = pluginInstance?.name ?? identifier
     const pluginDir = path.resolve(pluginPath, folderName)
 
@@ -762,7 +786,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
     unloadPlugin,
     installFromSource,
     uninstallPlugin,
-    registerInternalPlugin
+    registerInternalPlugin,
   }
 
   ;(managerInstance as any).__installQueue = installQueue
@@ -781,10 +805,10 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       if (data && data.value) {
         const enabled = JSON.parse(data.value) as string[]
         enabledPlugins.clear()
-        enabled.forEach((p) => enabledPlugins.add(p))
+        enabled.forEach(p => enabledPlugins.add(p))
         logInfo(
           `Loaded ${enabled.length} enabled plugin(s) from database:`,
-          enabled.map(pluginTag).join(' ')
+          enabled.map(pluginTag).join(' '),
         )
 
         for (const pluginName of enabledPlugins) {
@@ -795,7 +819,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             '| found:',
             !!plugin,
             '| status:',
-            plugin ? PluginStatus[plugin.status] : 'N/A'
+            plugin ? PluginStatus[plugin.status] : 'N/A',
           )
           if (plugin && plugin.status === PluginStatus.DISABLED) {
             try {
@@ -803,15 +827,18 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
               await plugin.enable()
 
               logInfo('Auto-enable complete', pluginTag(pluginName))
-            } catch (e) {
+            }
+            catch (e) {
               logError('Failed to auto-enable plugin', pluginTag(pluginName), e)
             }
           }
         }
-      } else {
+      }
+      else {
         logInfo('No persisted plugin state found in database.')
       }
-    } catch (error) {
+    }
+    catch (error) {
       logError('Failed to load persisted plugin state:', error)
     }
   }
@@ -837,10 +864,11 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       const initialPlugins = await localProvider.scan()
       if (initialPlugins.length === 0) {
         logWarn('No plugins found in directory yet.')
-      } else {
+      }
+      else {
         logInfo(
           `Discovered ${initialPlugins.length} plugin(s) on startup:`,
-          initialPlugins.map(pluginTag).join(' ')
+          initialPlugins.map(pluginTag).join(' '),
         )
         for (const pluginName of initialPlugins) {
           initialLoadPromises.push(loadPlugin(pluginName))
@@ -850,7 +878,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
       localProvider.startWatching({
         onFileChange: async (_path) => {
           const baseName = path.basename(_path)
-          if (baseName.indexOf('.') === 0) return
+          if (baseName.indexOf('.') === 0)
+            return
 
           const pluginName = path.basename(path.dirname(_path))
 
@@ -859,7 +888,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
               'File change received while plugin is still loading, ignoring.',
               pluginTag(pluginName),
               'file:',
-              baseName
+              baseName,
             )
             return
           }
@@ -869,7 +898,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
               'File change received while plugin is reloading, ignoring.',
               pluginTag(pluginName),
               'file:',
-              baseName
+              baseName,
             )
             return
           }
@@ -884,7 +913,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           if (plugin.status === PluginStatus.LOAD_FAILED) {
             logWarn(
               'File change detected but plugin previously failed to load; skipping auto reload.',
-              pluginTag(pluginName)
+              pluginTag(pluginName),
             )
             return
           }
@@ -892,7 +921,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           if (plugin.dev.enable) {
             logDebug(
               'Ignore disk change because plugin is running in dev mode.',
-              pluginTag(pluginName)
+              pluginTag(pluginName),
             )
             return
           }
@@ -901,17 +930,17 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             'Detected file change, reloading plugin',
             pluginTag(pluginName),
             'file:',
-            baseName
+            baseName,
           )
 
           if (
-            baseName === 'manifest.json' ||
-            baseName === 'preload.js' ||
-            baseName === 'index.html' ||
-            baseName === 'index.js'
+            baseName === 'manifest.json'
+            || baseName === 'preload.js'
+            || baseName === 'index.html'
+            || baseName === 'index.js'
           ) {
-            const _enabled =
-              plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
+            const _enabled
+              = plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
             await plugin.disable()
             await unloadPlugin(pluginName)
@@ -922,7 +951,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
             genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
               source: 'disk',
-              plugin: (plugin as TouchPlugin).toJSONObject()
+              plugin: (plugin as TouchPlugin).toJSONObject(),
             })
 
             logDebug('plugin reload event sent', pluginTag(pluginName), 'wasEnabled:', _enabled)
@@ -930,35 +959,38 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             if (_enabled) {
               await plugin.enable()
             }
-          } else if (baseName === 'README.md') {
+          }
+          else if (baseName === 'README.md') {
             plugin.readme = fse.readFileSync(_path, 'utf-8')
 
             genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
               source: 'disk',
               plugin: pluginName,
-              readme: plugin.readme
+              readme: plugin.readme,
             })
             genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'readme-updated',
               name: pluginName,
-              readme: plugin.readme
+              readme: plugin.readme,
             })
-          } else {
+          }
+          else {
             logWarn(
               'File change detected but ignored (not a tracked file):',
               pluginTag(pluginName),
-              baseName
+              baseName,
             )
           }
         },
         onDirectoryAdd: async (_path) => {
-          if (!fse.existsSync(_path + '/manifest.json')) return
+          if (!fse.existsSync(`${_path}/manifest.json`))
+            return
           const pluginName = path.basename(_path)
 
           if (
-            pluginName.indexOf('.') !== -1 ||
-            pluginName.indexOf('\\') !== -1 ||
-            pluginName.indexOf('/') !== -1
+            pluginName.includes('.')
+            || pluginName.includes('\\')
+            || pluginName.includes('/')
           ) {
             logWarn('Detected new directory with invalid plugin name, ignoring.', pluginName)
             return
@@ -970,7 +1002,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
             logInfo('Reload existing plugin after directory add', pluginTag(pluginName))
             genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
               source: 'disk',
-              plugin: pluginName
+              plugin: pluginName,
             })
             return
           }
@@ -981,7 +1013,8 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
           const pluginName = path.basename(_path)
           logWarn('Plugin directory removed', pluginTag(pluginName))
 
-          if (!hasPlugin(pluginName)) return
+          if (!hasPlugin(pluginName))
+            return
           await unloadPlugin(pluginName)
         },
         onReady: async () => {
@@ -993,7 +1026,7 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
         },
         onError: (error) => {
           logError('Watcher error occurred:', error)
-        }
+        },
       })
     })().catch((err) => {
       pluginLog.error('Failed to initialize plugin module watchers', { error: err })
@@ -1004,8 +1037,6 @@ const createPluginModuleInternal = (pluginPath: string): IPluginManager => {
 
   return managerInstance
 }
-
-import { internalPlugins } from '../../plugins/internal'
 
 /**
  * Register built-in internal plugins that are created purely in code.
@@ -1022,11 +1053,13 @@ function registerBuiltInInternalPlugins(manager: IPluginManager): void {
         void plugin.enable().catch((error) => {
           pluginLog.warn(`Failed to enable internal plugin ${plugin.name}`, { error })
         })
-      } catch (error) {
+      }
+      catch (error) {
         pluginLog.warn('Failed to create internal plugin', { error })
       }
     }
-  } catch (error) {
+  }
+  catch (error) {
     pluginLog.warn('Failed to register built-in internal plugins', { error })
   }
 }
@@ -1042,7 +1075,7 @@ export class PluginModule extends BaseModule {
   constructor() {
     super(PluginModule.key, {
       create: true,
-      dirName: 'plugins'
+      dirName: 'plugins',
     })
   }
 
@@ -1055,8 +1088,9 @@ export class PluginModule extends BaseModule {
     // Register built-in internal plugins (e.g. internal AI)
     registerBuiltInInternalPlugins(this.pluginManager)
   }
+
   onDestroy(): MaybePromise<void> {
-    this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
+    this.pluginManager?.plugins.forEach(plugin => plugin.disable())
     this.healthMonitor?.destroy()
   }
 
@@ -1068,7 +1102,8 @@ export class PluginModule extends BaseModule {
       try {
         const result = manager.getPluginList()
         return result
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin-list handler:', error)
         return []
       }
@@ -1077,10 +1112,11 @@ export class PluginModule extends BaseModule {
       try {
         const result = await getOfficialPlugins({ force: Boolean(data?.force) })
         return reply(DataCode.SUCCESS, result)
-      } catch (error: any) {
+      }
+      catch (error: any) {
         console.error('Failed to fetch official plugin list:', error)
         return reply(DataCode.ERROR, {
-          error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
+          error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED',
         })
       }
     })
@@ -1099,7 +1135,7 @@ export class PluginModule extends BaseModule {
         source: data.source,
         hintType: data.hintType,
         metadata: data.metadata,
-        clientMetadata: data.clientMetadata
+        clientMetadata: data.clientMetadata,
       }
 
       installQueue.enqueue(request, reply)
@@ -1115,37 +1151,35 @@ export class PluginModule extends BaseModule {
 
         installQueue.handleConfirmResponse(data as PluginInstallConfirmResponse)
         reply(DataCode.SUCCESS, { status: 'received' })
-      }
+      },
     )
     touchChannel.regChannel(ChannelType.MAIN, 'change-active', ({ data }) =>
-      manager.setActivePlugin(data!.name)
-    )
+      manager.setActivePlugin(data!.name))
     touchChannel.regChannel(ChannelType.MAIN, 'enable-plugin', ({ data }) =>
-      manager.enablePlugin(data!.name)
-    )
+      manager.enablePlugin(data!.name))
     touchChannel.regChannel(ChannelType.MAIN, 'disable-plugin', ({ data }) =>
-      manager.disablePlugin(data!.name)
-    )
+      manager.disablePlugin(data!.name))
     touchChannel.regChannel(ChannelType.MAIN, 'reload-plugin', async ({ data }) => {
       const pluginName = data!.name
-      if (!pluginName) return false
-      if (!manager.plugins.has(pluginName)) return false
+      if (!pluginName)
+        return false
+      if (!manager.plugins.has(pluginName))
+        return false
 
       await manager.reloadPlugin(pluginName)
       return true
     })
     touchChannel.regChannel(ChannelType.MAIN, 'get-plugin', ({ data }) =>
-      manager.plugins.get(data!.name)
-    )
+      manager.plugins.get(data!.name))
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'crash', async ({ data, plugin }) => {
       touchChannel.send(ChannelType.MAIN, 'plugin-crashed', {
         plugin,
-        ...data
+        ...data,
       })
       touchChannel.send(ChannelType.PLUGIN, '@lifecycle:cr', {
         plugin,
-        ...data
+        ...data,
       })
     })
 
@@ -1158,7 +1192,7 @@ export class PluginModule extends BaseModule {
       const pluginIns = manager.plugins.get(plugin)
       if (!pluginIns) {
         console.warn('core-box:clear-items target plugin not found', {
-          meta: { plugin }
+          meta: { plugin },
         })
         return false
       }
@@ -1169,7 +1203,7 @@ export class PluginModule extends BaseModule {
       }
 
       console.warn('core-box:clear-items received for unsupported plugin instance', {
-        meta: { plugin }
+        meta: { plugin },
       })
       return false
     })
@@ -1187,31 +1221,37 @@ export class PluginModule extends BaseModule {
         const { feature, query, plugin } = data!
         const pluginIns = manager.plugins.get(plugin!)
         return pluginIns?.triggerInputChanged(feature, query)
-      }
+      },
     )
 
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:explorer', async ({ data }) => {
       const plugin = manager.getPluginByName(data) as TouchPlugin
-      if (!plugin) return
+      if (!plugin)
+        return
       const pluginPath = plugin.pluginPath
       try {
         const err = await shell.openPath(pluginPath)
-        if (err) console.error('Error opening plugin folder:', err)
-      } catch (error) {
+        if (err)
+          console.error('Error opening plugin folder:', err)
+      }
+      catch (error) {
         console.error('Exception while opening plugin folder:', error)
       }
     })
     touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
       const touchPlugin = manager.plugins.get(plugin!) as TouchPlugin
-      if (!touchPlugin) return reply(DataCode.ERROR, { error: 'Plugin not found!' })
+      if (!touchPlugin)
+        return reply(DataCode.ERROR, { error: 'Plugin not found!' })
 
       const win = new TouchWindow(data)
       let webContents: Electron.WebContents
       if (data.file) {
         webContents = await win.loadFile(data.file)
-      } else if (data.url) {
+      }
+      else if (data.url) {
         webContents = await win.loadURL(data.url)
-      } else {
+      }
+      else {
         return reply(DataCode.ERROR, { error: 'No file or url provided!' })
       }
 
@@ -1222,7 +1262,7 @@ export class PluginModule extends BaseModule {
       webContents.send('@loaded', {
         id: webContents.id,
         plugin,
-        type: 'intend'
+        type: 'intend',
       })
 
       touchPlugin._windows.set(webContents.id, win)
@@ -1253,20 +1293,21 @@ export class PluginModule extends BaseModule {
           const lifecycle = plugin.getFeatureLifeCycle?.()
           if (!lifecycle || !lifecycle.onMessage) {
             return reply(DataCode.ERROR, {
-              error: `Plugin ${pluginName} does not have onMessage handler`
+              error: `Plugin ${pluginName} does not have onMessage handler`,
             })
           }
 
           lifecycle.onMessage(key, info)
 
           return reply(DataCode.SUCCESS, { status: 'message_sent' })
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in index:communicate handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     // Plugin Storage Channel Handlers
@@ -1287,13 +1328,14 @@ export class PluginModule extends BaseModule {
 
           const content = plugin.getPluginFile(fileName)
           return reply(DataCode.SUCCESS, content)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-file handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1313,13 +1355,14 @@ export class PluginModule extends BaseModule {
 
           const result = plugin.savePluginFile(fileName, content)
           return reply(DataCode.SUCCESS, result)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:set-file handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1339,13 +1382,14 @@ export class PluginModule extends BaseModule {
 
           const result = plugin.deletePluginFile(fileName)
           return reply(DataCode.SUCCESS, result)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:delete-file handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1364,13 +1408,14 @@ export class PluginModule extends BaseModule {
 
           const files = plugin.listPluginFiles()
           return reply(DataCode.SUCCESS, files)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:list-files handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     // Plugin Storage: get-stats (support both MAIN and PLUGIN channels)
@@ -1391,13 +1436,14 @@ export class PluginModule extends BaseModule {
 
           const stats = plugin.getStorageStats()
           return reply(DataCode.SUCCESS, stats)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-stats handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1416,13 +1462,14 @@ export class PluginModule extends BaseModule {
 
           const stats = plugin.getStorageStats()
           return reply(DataCode.SUCCESS, stats)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-stats handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     // Plugin Storage: get-tree (support both MAIN and PLUGIN channels)
@@ -1443,13 +1490,14 @@ export class PluginModule extends BaseModule {
 
           const tree = plugin.getStorageTree()
           return reply(DataCode.SUCCESS, tree)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-tree handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1468,13 +1516,14 @@ export class PluginModule extends BaseModule {
 
           const tree = plugin.getStorageTree()
           return reply(DataCode.SUCCESS, tree)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-tree handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     // Plugin Storage: get-file-details (support both MAIN and PLUGIN channels)
@@ -1495,13 +1544,14 @@ export class PluginModule extends BaseModule {
 
           const details = plugin.getFileDetails(fileName)
           return reply(DataCode.SUCCESS, details)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-file-details handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1521,13 +1571,14 @@ export class PluginModule extends BaseModule {
 
           const details = plugin.getFileDetails(fileName)
           return reply(DataCode.SUCCESS, details)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:get-file-details handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     // Plugin Storage: clear (support both MAIN and PLUGIN channels)
@@ -1545,10 +1596,11 @@ export class PluginModule extends BaseModule {
 
         const result = plugin.clearStorage()
         return reply(DataCode.SUCCESS, result)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:storage:clear handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1566,10 +1618,11 @@ export class PluginModule extends BaseModule {
 
         const result = plugin.clearStorage()
         return reply(DataCode.SUCCESS, result)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:storage:clear handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1594,13 +1647,14 @@ export class PluginModule extends BaseModule {
           const { shell } = await import('electron')
           await shell.openPath(configPath)
           return reply(DataCode.SUCCESS, { success: true })
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:open-folder handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1621,13 +1675,14 @@ export class PluginModule extends BaseModule {
           const { shell } = await import('electron')
           await shell.openPath(configPath)
           return reply(DataCode.SUCCESS, { success: true })
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:open-folder handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1652,26 +1707,28 @@ export class PluginModule extends BaseModule {
           // On macOS, use 'open -a "Visual Studio Code"' or just 'open' for default
           // On Windows, use 'code' or 'start'
           // On Linux, use 'code' or 'xdg-open'
-          const { exec } = await import('child_process')
-          const { promisify } = await import('util')
+          const { exec } = await import('node:child_process')
+          const { promisify } = await import('node:util')
           const execAsync = promisify(exec)
 
           try {
             // Try VS Code first (most common)
             await execAsync(`code "${configPath}"`)
-          } catch {
+          }
+          catch {
             // Fallback to system default
             await shell.openPath(configPath)
           }
 
           return reply(DataCode.SUCCESS, { success: true })
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:storage:open-in-editor handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(
@@ -1686,13 +1743,14 @@ export class PluginModule extends BaseModule {
 
           const success = (await this.healthMonitor?.reconnectDevServer(pluginName)) || false
           return reply(success ? DataCode.SUCCESS : DataCode.ERROR, { success })
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:reconnect-dev-server handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:dev-server-status', ({ data, reply }) => {
@@ -1704,13 +1762,14 @@ export class PluginModule extends BaseModule {
 
         const status = this.healthMonitor?.getStatus(pluginName) || {
           monitoring: false,
-          connected: false
+          connected: false,
         }
         return reply(DataCode.SUCCESS, status)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:dev-server-status handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1727,22 +1786,23 @@ export class PluginModule extends BaseModule {
         let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
 
         if (filters.status !== undefined) {
-          plugins = plugins.filter((p) => p.status === filters.status)
+          plugins = plugins.filter(p => p.status === filters.status)
         }
         if (filters.enabled !== undefined) {
           const enabledNames = manager.enabledPlugins
-          plugins = plugins.filter((p) => enabledNames.has(p.name) === filters.enabled)
+          plugins = plugins.filter(p => enabledNames.has(p.name) === filters.enabled)
         }
         if (filters.dev !== undefined) {
-          plugins = plugins.filter((p) => p.dev?.enable === filters.dev)
+          plugins = plugins.filter(p => p.dev?.enable === filters.dev)
         }
 
-        const result = plugins.map((p) => p.toJSONObject())
+        const result = plugins.map(p => p.toJSONObject())
         return reply(DataCode.SUCCESS, result)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:list handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1760,10 +1820,11 @@ export class PluginModule extends BaseModule {
         }
 
         return reply(DataCode.SUCCESS, plugin.toJSONObject())
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:get handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1781,10 +1842,11 @@ export class PluginModule extends BaseModule {
         }
 
         return reply(DataCode.SUCCESS, plugin.status)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:get-status handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1804,16 +1866,17 @@ export class PluginModule extends BaseModule {
             touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'status-changed',
               name,
-              status: plugin.status
+              status: plugin.status,
             })
           }
         }
 
         return reply(DataCode.SUCCESS, { success })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:enable handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1833,16 +1896,17 @@ export class PluginModule extends BaseModule {
             touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'status-changed',
               name,
-              status: plugin.status
+              status: plugin.status,
             })
           }
         }
 
         return reply(DataCode.SUCCESS, { success })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:disable handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1860,10 +1924,11 @@ export class PluginModule extends BaseModule {
 
         await manager.reloadPlugin(name)
         return reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:reload handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1881,7 +1946,7 @@ export class PluginModule extends BaseModule {
         source: data.source,
         hintType: data.hintType,
         metadata: data.metadata,
-        clientMetadata: data.clientMetadata
+        clientMetadata: data.clientMetadata,
       }
 
       this.installQueue.enqueue(request, reply)
@@ -1900,10 +1965,11 @@ export class PluginModule extends BaseModule {
         }
 
         return reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:uninstall handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1923,16 +1989,17 @@ export class PluginModule extends BaseModule {
         const feature = pluginIns.getFeature(featureId)
         if (!feature) {
           return reply(DataCode.ERROR, {
-            error: `Feature ${featureId} not found in plugin ${pluginName}`
+            error: `Feature ${featureId} not found in plugin ${pluginName}`,
           })
         }
 
         const result = pluginIns.triggerFeature(feature, query)
         return reply(DataCode.SUCCESS, result)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:trigger-feature handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -1955,19 +2022,20 @@ export class PluginModule extends BaseModule {
           const feature = pluginIns.getFeature(featureId)
           if (!feature) {
             return reply(DataCode.ERROR, {
-              error: `Feature ${featureId} not found in plugin ${pluginName}`
+              error: `Feature ${featureId} not found in plugin ${pluginName}`,
             })
           }
 
           const result = pluginIns.triggerInputChanged(feature, query)
           return reply(DataCode.SUCCESS, result)
-        } catch (error) {
+        }
+        catch (error) {
           console.error('Error in plugin:api:feature-input-changed handler:', error)
           return reply(DataCode.ERROR, {
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
           })
         }
-      }
+      },
     )
 
     touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:open-folder', async ({ data, reply }) => {
@@ -1990,10 +2058,11 @@ export class PluginModule extends BaseModule {
         }
 
         return reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('Error in plugin:api:open-folder handler:', error)
         return reply(DataCode.ERROR, {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     })
@@ -2005,13 +2074,14 @@ export class PluginModule extends BaseModule {
         try {
           const result = await getOfficialPlugins({ force: Boolean(data?.force) })
           return reply(DataCode.SUCCESS, result)
-        } catch (error: any) {
+        }
+        catch (error: any) {
           console.error('Failed to fetch official plugin list:', error)
           return reply(DataCode.ERROR, {
-            error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED'
+            error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED',
           })
         }
-      }
+      },
     )
   }
 }

@@ -1,10 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import type { DownloadTask } from '@talex-touch/utils'
+import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+// Import after mocking
+import { NotificationService } from '../../../../apps/core-app/src/main/modules/download/notification-service'
 
 // Mock Electron BEFORE importing the service
 class MockNotification {
   static isSupported() {
     return true
   }
+
   constructor(public options: any) {}
   show() {}
   on(event: string, callback: Function) {}
@@ -14,22 +20,18 @@ vi.mock('electron', () => ({
   Notification: MockNotification,
   shell: {
     openPath: vi.fn().mockResolvedValue(undefined),
-    showItemInFolder: vi.fn()
-  }
+    showItemInFolder: vi.fn(),
+  },
 }))
 
-// Import after mocking
-import { NotificationService, NotificationConfig } from '../../../../apps/core-app/src/main/modules/download/notification-service'
-import { DownloadTask, DownloadStatus, DownloadModule, DownloadPriority } from '@talex-touch/utils'
-
-describe('NotificationService', () => {
+describe('notificationService', () => {
   let notificationService: NotificationService
 
   beforeEach(() => {
     notificationService = new NotificationService()
   })
 
-  describe('Configuration', () => {
+  describe('configuration', () => {
     it('should initialize with default configuration', () => {
       const config = notificationService.getConfig()
       expect(config.downloadComplete).toBe(true)
@@ -47,7 +49,7 @@ describe('NotificationService', () => {
     it('should support custom initial configuration', () => {
       const customService = new NotificationService({
         downloadComplete: false,
-        updateAvailable: false
+        updateAvailable: false,
       })
       const config = customService.getConfig()
       expect(config.downloadComplete).toBe(false)
@@ -56,13 +58,13 @@ describe('NotificationService', () => {
     })
   })
 
-  describe('Notification Support', () => {
+  describe('notification Support', () => {
     it('should check if notifications are supported', () => {
       expect(notificationService.isSupported()).toBe(true)
     })
   })
 
-  describe('Download Complete Notification', () => {
+  describe('download Complete Notification', () => {
     it('should show notification when download completes', () => {
       const task: DownloadTask = {
         id: 'test-task-1',
@@ -76,12 +78,12 @@ describe('NotificationService', () => {
           totalSize: 1024 * 1024 * 100, // 100 MB
           downloadedSize: 1024 * 1024 * 100,
           speed: 0,
-          percentage: 100
+          percentage: 100,
         },
         chunks: [],
         metadata: {},
         createdAt: new Date(Date.now() - 135000), // 2 minutes 15 seconds ago
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
 
       // Should not throw
@@ -92,7 +94,7 @@ describe('NotificationService', () => {
 
     it('should not show notification when disabled', () => {
       notificationService.updateConfig({ downloadComplete: false })
-      
+
       const task: DownloadTask = {
         id: 'test-task-2',
         url: 'https://example.com/file.zip',
@@ -105,12 +107,12 @@ describe('NotificationService', () => {
           totalSize: 1024 * 1024,
           downloadedSize: 1024 * 1024,
           speed: 0,
-          percentage: 100
+          percentage: 100,
         },
         chunks: [],
         metadata: {},
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
 
       // Should not throw
@@ -120,7 +122,7 @@ describe('NotificationService', () => {
     })
   })
 
-  describe('Update Available Notification', () => {
+  describe('update Available Notification', () => {
     it('should show notification when update is available', () => {
       expect(() => {
         notificationService.showUpdateAvailableNotification('v2.0.0', 'Release notes')
@@ -129,14 +131,14 @@ describe('NotificationService', () => {
 
     it('should not show notification when disabled', () => {
       notificationService.updateConfig({ updateAvailable: false })
-      
+
       expect(() => {
         notificationService.showUpdateAvailableNotification('v2.0.0')
       }).not.toThrow()
     })
   })
 
-  describe('Update Download Complete Notification', () => {
+  describe('update Download Complete Notification', () => {
     it('should show notification when update download completes', () => {
       expect(() => {
         notificationService.showUpdateDownloadCompleteNotification('v2.0.0', 'task-123')
@@ -145,14 +147,14 @@ describe('NotificationService', () => {
 
     it('should not show notification when disabled', () => {
       notificationService.updateConfig({ updateDownloadComplete: false })
-      
+
       expect(() => {
         notificationService.showUpdateDownloadCompleteNotification('v2.0.0', 'task-123')
       }).not.toThrow()
     })
   })
 
-  describe('Download Failed Notification', () => {
+  describe('download Failed Notification', () => {
     it('should show notification when download fails', () => {
       const task: DownloadTask = {
         id: 'test-task-3',
@@ -166,13 +168,13 @@ describe('NotificationService', () => {
           totalSize: 1024 * 1024,
           downloadedSize: 512 * 1024,
           speed: 0,
-          percentage: 50
+          percentage: 50,
         },
         chunks: [],
         metadata: {},
         createdAt: new Date(),
         updatedAt: new Date(),
-        error: 'Network timeout'
+        error: 'Network timeout',
       }
 
       expect(() => {
@@ -181,15 +183,15 @@ describe('NotificationService', () => {
     })
   })
 
-  describe('Notification Click Callback', () => {
+  describe('notification Click Callback', () => {
     it('should set and call notification click callback', () => {
       const callback = vi.fn()
       notificationService.setNotificationClickCallback(callback)
 
       // Simulate notification click by calling the callback directly
-      const testCallback = notificationService['onNotificationClickCallback']
+      const testCallback = notificationService.onNotificationClickCallback
       expect(testCallback).toBeDefined()
-      
+
       if (testCallback) {
         testCallback('task-123', 'show-task')
         expect(callback).toHaveBeenCalledWith('task-123', 'show-task')

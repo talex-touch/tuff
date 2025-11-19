@@ -1,39 +1,41 @@
-import {
+import type { ITuffIcon } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils/core-box'
+import type { ITouchEvent } from '@talex-touch/utils/eventbus'
+import type {
   IFeatureLifeCycle,
-  IPluginChannelBridge,
   IPlatform,
+  IPluginChannelBridge,
   IPluginDev,
+  IPluginFeature,
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
-  PluginStatus,
-  IPluginFeature
 } from '@talex-touch/utils/plugin'
-import { ITuffIcon } from '@talex-touch/utils'
-import { TuffItem, TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
+import type { TouchWindow } from '../../core/touch-window'
+import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
-import path from 'path'
-import { createClipboardManager } from '@talex-touch/utils/plugin'
-import { app, clipboard, dialog, shell, BrowserWindow } from 'electron'
+import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import {
+  createClipboardManager,
+  PluginStatus,
+} from '@talex-touch/utils/plugin'
+import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import axios from 'axios'
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
-import { PluginFeature } from './plugin-feature'
-import { PluginViewLoader } from './view/plugin-view-loader'
-import { loadPluginFeatureContext, loadPluginFeatureContextFromContent } from './plugin-feature'
-import { TouchWindow } from '../../core/touch-window'
 import { genTouchChannel } from '../../core/channel-core'
 import {
   PluginLogAppendEvent,
   PluginStorageUpdatedEvent,
   TalexEvents,
-  touchEventBus
+  touchEventBus,
 } from '../../core/eventbus/touch-event'
-import { ITouchEvent } from '@talex-touch/utils/eventbus'
-import { CoreBoxManager } from '../box-tool/core-box/manager'
-import { getCoreBoxWindow } from '../box-tool/core-box'
-import { getJs, getStyles } from '../../utils/plugin-injection'
 import { TuffIconImpl } from '../../core/tuff-icon'
+import { getJs, getStyles } from '../../utils/plugin-injection'
+import { getCoreBoxWindow } from '../box-tool/core-box'
+import { CoreBoxManager } from '../box-tool/core-box/manager'
+import { loadPluginFeatureContext, loadPluginFeatureContextFromContent, PluginFeature } from './plugin-feature'
+import { PluginViewLoader } from './view/plugin-view-loader'
 
 const disallowedArrays = [
   '官方',
@@ -57,7 +59,7 @@ const disallowedArrays = [
   '首款',
   '首张',
   '排行',
-  '排名系统'
+  '排名系统',
 ]
 
 /**
@@ -83,6 +85,7 @@ export class TouchPlugin implements ITouchPlugin {
     string,
     ITargetFeatureLifeCycle[]
   >()
+
   private featureControllers: Map<string, AbortController> = new Map()
 
   _status: PluginStatus = PluginStatus.DISABLED
@@ -107,7 +110,7 @@ export class TouchPlugin implements ITouchPlugin {
       icon: {
         type: this.icon.type,
         value: this.icon.value,
-        status: this.icon.status
+        status: this.icon.status,
       },
       dev: this.dev,
       status: this.status,
@@ -119,7 +122,7 @@ export class TouchPlugin implements ITouchPlugin {
         }
         // 如果不是 PluginFeature 实例，尝试手动构造对象
         console.warn(
-          `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`
+          `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`,
         )
         return {
           id: feature.id,
@@ -130,10 +133,10 @@ export class TouchPlugin implements ITouchPlugin {
           platform: feature.platform,
           commands: feature.commands,
           interaction: feature.interaction,
-          priority: feature.priority || 0
+          priority: feature.priority || 0,
         }
       }),
-      issues: this.issues
+      issues: this.issues,
     }
   }
 
@@ -145,19 +148,20 @@ export class TouchPlugin implements ITouchPlugin {
     this._status = v
 
     const channel = genTouchChannel()!
-    channel &&
-      channel.send(ChannelType.MAIN, 'plugin-status-updated', {
-        plugin: this.name,
-        status: this._status
-      })
+    channel
+    && channel.send(ChannelType.MAIN, 'plugin-status-updated', {
+      plugin: this.name,
+      status: this._status,
+    })
   }
 
   addFeature(feature: IPluginFeature): boolean {
-    if (this.features.find((f) => f.name === feature.name)) return false
+    if (this.features.find(f => f.name === feature.name))
+      return false
 
     const { id, name, desc, commands } = feature
 
-    const regex = /^[a-zA-Z0-9_-]+$/
+    const regex = /^[\w-]+$/
     if (!regex.test(id)) {
       console.error(`[Plugin] Feature add error, id ${id} not valid.`)
       return false
@@ -165,18 +169,19 @@ export class TouchPlugin implements ITouchPlugin {
 
     if (
       disallowedArrays.filter(
-        (item: string) => name.indexOf(item) !== -1 || desc.indexOf(item) !== -1
+        (item: string) => name.includes(item) || desc.includes(item),
       ).length
     ) {
       console.error(`[Plugin] Feature add error, name or desc contains disallowed words.`)
       return false
     }
 
-    if (commands.length < 1) return false
+    if (commands.length < 1)
+      return false
 
     // 如果已经是 PluginFeature 实例，直接使用；否则创建新实例
-    const pluginFeature =
-      feature instanceof PluginFeature
+    const pluginFeature
+      = feature instanceof PluginFeature
         ? feature
         : new PluginFeature(this.pluginPath, feature, this.dev)
 
@@ -184,18 +189,19 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   delFeature(featureId: string): boolean {
-    if (!this.features.find((f) => f.name === featureId)) return false
+    if (!this.features.find(f => f.name === featureId))
+      return false
 
     return (
       this.features.splice(
-        this.features.findIndex((f) => f.name === featureId),
-        1
+        this.features.findIndex(f => f.name === featureId),
+        1,
       ) !== undefined
     )
   }
 
   getFeature(featureId: string): IPluginFeature | null {
-    return this.features.find((f) => f.id === featureId) || null
+    return this.features.find(f => f.id === featureId) || null
   }
 
   getFeatures(): IPluginFeature[] {
@@ -214,7 +220,7 @@ export class TouchPlugin implements ITouchPlugin {
       const interactionPath = feature.interaction.path
       if (!interactionPath) {
         this.logger.error(
-          `Security Alert: Aborted loading view with invalid path: ${interactionPath}`
+          `Security Alert: Aborted loading view with invalid path: ${interactionPath}`,
         )
         return
       }
@@ -223,7 +229,7 @@ export class TouchPlugin implements ITouchPlugin {
 
       if (!this.pluginLifecycle) {
         this.logger.warn(
-          `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
+          `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`,
         )
       }
       await PluginViewLoader.loadPluginView(this, feature)
@@ -236,7 +242,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
-    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
+    this._featureEvent.get(feature.id)?.forEach(fn => fn.onLaunch?.(feature))
     return result
   }
 
@@ -246,12 +252,12 @@ export class TouchPlugin implements ITouchPlugin {
 
     // For backward compatibility, extract text if query is object
     const queryText = typeof query === 'string' ? query : query?.text
-    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
+    this._featureEvent.get(feature.id)?.forEach(fn => fn.onInputChanged?.(queryText))
   }
 
   public clearCoreBoxItems(): void {
     console.debug(
-      `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
+      `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`,
     )
 
     this._searchItems = []
@@ -265,7 +271,7 @@ export class TouchPlugin implements ITouchPlugin {
 
       const payload = {
         pluginName: this.name,
-        timestamp: this._searchTimestamp
+        timestamp: this._searchTimestamp,
       }
 
       console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload)
@@ -277,9 +283,10 @@ export class TouchPlugin implements ITouchPlugin {
         })
 
       console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
-    } else {
+    }
+    else {
       console.warn(
-        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
+        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`,
       )
     }
   }
@@ -293,7 +300,7 @@ export class TouchPlugin implements ITouchPlugin {
     dev: IPluginDev,
     pluginPath: string,
     platforms: IPlatform = {},
-    options?: { skipDataInit?: boolean }
+    options?: { skipDataInit?: boolean },
   ) {
     this.name = name
     this.icon = icon
@@ -312,7 +319,7 @@ export class TouchPlugin implements ITouchPlugin {
       name,
       new PluginLoggerManager(this.pluginPath, this, (log) => {
         touchEventBus.emit(TalexEvents.PLUGIN_LOG_APPEND, new PluginLogAppendEvent(log))
-      })
+      }),
     )
 
     if (!options?.skipDataInit) {
@@ -351,7 +358,7 @@ export class TouchPlugin implements ITouchPlugin {
       this.getConfigPath(),
       this.getLogsPath(),
       this.getVerifyPath(),
-      this.getTempPath()
+      this.getTempPath(),
     ]
 
     directories.forEach((dir) => {
@@ -365,9 +372,9 @@ export class TouchPlugin implements ITouchPlugin {
       return false
     }
     if (
-      this.status !== PluginStatus.DISABLED &&
-      this.status !== PluginStatus.LOADED &&
-      this.status !== PluginStatus.CRASHED
+      this.status !== PluginStatus.DISABLED
+      && this.status !== PluginStatus.LOADED
+      && this.status !== PluginStatus.CRASHED
     ) {
       this.logger.warn(`Attempted to enable plugin with invalid status: ${this.status}`)
       return false
@@ -387,32 +394,35 @@ export class TouchPlugin implements ITouchPlugin {
         this.pluginLifecycle = loadPluginFeatureContextFromContent(
           this,
           scriptContent,
-          this.getFeatureUtil()
+          this.getFeatureUtil(),
         ) as IFeatureLifeCycle
         this.logger.info(`[Dev] Remote script executed successfully.`)
-      } else {
+      }
+      else {
         // Prod mode: load from local file
         const featureIndex = path.resolve(this.pluginPath, 'index.js')
         if (fse.existsSync(featureIndex)) {
           this.pluginLifecycle = loadPluginFeatureContext(
             this,
             featureIndex,
-            this.getFeatureUtil()
+            this.getFeatureUtil(),
           ) as IFeatureLifeCycle
-        } else {
+        }
+        else {
           this.logger.info(
-            `No index.js found for plugin '${this.name}', running without lifecycle.`
+            `No index.js found for plugin '${this.name}', running without lifecycle.`,
           )
         }
       }
-    } catch (e: any) {
+    }
+    catch (e: any) {
       this.issues.push({
         type: 'error',
         message: `Failed to execute index.js: ${e.message}`,
         source: 'index.js',
         code: 'LIFECYCLE_SCRIPT_FAILED',
         meta: { error: e.stack },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
       this.status = PluginStatus.CRASHED
       return false
@@ -424,13 +434,13 @@ export class TouchPlugin implements ITouchPlugin {
     this.pluginLifecycle?.onInit?.()
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
       ...this.toJSONObject(),
-      plugin: this.name
+      plugin: this.name,
     })
 
     console.log(
-      '[Plugin] Plugin ' + this.name + ' with ' + this.features.length + ' features is enabled.'
+      `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`,
     )
-    console.log('[Plugin] Plugin ' + this.name + ' is enabled.')
+    console.log(`[Plugin] Plugin ${this.name} is enabled.`)
 
     return true
   }
@@ -442,7 +452,7 @@ export class TouchPlugin implements ITouchPlugin {
       PluginStatus.ENABLED,
       PluginStatus.ACTIVE,
       PluginStatus.CRASHED,
-      PluginStatus.LOAD_FAILED
+      PluginStatus.LOAD_FAILED,
     ]
     if (!stoppableStates.includes(this.status)) {
       return Promise.resolve(false)
@@ -453,7 +463,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:di', {
       ...this.toJSONObject(),
-      plugin: this.name
+      plugin: this.name,
     })
 
     this._windows.forEach((win, id) => {
@@ -467,12 +477,14 @@ export class TouchPlugin implements ITouchPlugin {
                 win.close()
               }
             }, 50)
-          } else {
+          }
+          else {
             win.close()
           }
         }
         this._windows.delete(id)
-      } catch (error: any) {
+      }
+      catch (error: any) {
         console.warn(`[Plugin] Error closing window ${id} for plugin ${this.name}:`, error)
         this._windows.delete(id)
       }
@@ -502,7 +514,7 @@ export class TouchPlugin implements ITouchPlugin {
         const listeners = this._featureEvent.get(id) || []
         listeners.splice(listeners.indexOf(callback), 1)
         this._featureEvent.set(id, listeners)
-      }
+      },
     }
   }
 
@@ -528,8 +540,8 @@ export class TouchPlugin implements ITouchPlugin {
         const handler = (event: ITouchEvent<TalexEvents>) => {
           const storageEvent = event as PluginStorageUpdatedEvent
           if (
-            storageEvent.pluginName === pluginName &&
-            (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
+            storageEvent.pluginName === pluginName
+            && (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
           ) {
             const config = this.getPluginFile(fileName)
             callback(config)
@@ -541,7 +553,7 @@ export class TouchPlugin implements ITouchPlugin {
         return () => {
           touchEventBus.off(TalexEvents.PLUGIN_STORAGE_UPDATED, handler)
         }
-      }
+      },
     }
     const clipboardUtil = createClipboardManager(clipboard)
 
@@ -557,7 +569,7 @@ export class TouchPlugin implements ITouchPlugin {
 
           handler(event)
         }),
-      raw: appChannel
+      raw: appChannel,
     }
 
     const searchManager = {
@@ -569,7 +581,7 @@ export class TouchPlugin implements ITouchPlugin {
         console.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`)
         console.debug(
           `[Plugin ${this.name}] Items to push:`,
-          items.map((item) => item.id)
+          items.map(item => item.id),
         )
 
         // 使用 TuffIconImpl 解析 items 中的 icon 相对路径为绝对路径
@@ -582,38 +594,38 @@ export class TouchPlugin implements ITouchPlugin {
               const icon = new TuffIconImpl(
                 this.pluginPath,
                 processedItem.icon.type,
-                processedItem.icon.value
+                processedItem.icon.value,
               )
               await icon.init()
               processedItem.icon = {
                 type: icon.type,
                 value: icon.value,
-                status: icon.status
+                status: icon.status,
               }
             }
 
             // 处理 render.basic.icon
             if (
-              processedItem.render?.basic?.icon &&
-              typeof processedItem.render.basic.icon === 'object' &&
-              processedItem.render.basic.icon.type === 'file'
+              processedItem.render?.basic?.icon
+              && typeof processedItem.render.basic.icon === 'object'
+              && processedItem.render.basic.icon.type === 'file'
             ) {
               const basicIcon = processedItem.render.basic.icon
               const icon = new TuffIconImpl(
                 this.pluginPath,
                 basicIcon.type,
-                basicIcon.value
+                basicIcon.value,
               )
               await icon.init()
               processedItem.render.basic.icon = {
                 type: icon.type,
                 value: icon.value,
-                status: icon.status
+                status: icon.status,
               }
             }
 
             return processedItem
-          })
+          }),
         )
 
         this._searchItems = [...processedItems]
@@ -630,7 +642,7 @@ export class TouchPlugin implements ITouchPlugin {
             items: this._searchItems,
             timestamp: this._searchTimestamp,
             query: this._lastSearchQuery,
-            total: processedItems.length
+            total: processedItems.length,
           }
 
           console.debug(`[Plugin ${this.name}] Sending core-box:push-items with payload:`, payload)
@@ -640,16 +652,17 @@ export class TouchPlugin implements ITouchPlugin {
             .catch((error) => {
               console.error(
                 `[Plugin ${this.name}] Failed to push search results to CoreBox:`,
-                error
+                error,
               )
             })
 
           console.debug(
-            `[Plugin ${this.name}] Successfully sent ${processedItems.length} search results to CoreBox`
+            `[Plugin ${this.name}] Successfully sent ${processedItems.length} search results to CoreBox`,
           )
-        } else {
+        }
+        else {
           console.warn(
-            `[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
+            `[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`,
           )
         }
       },
@@ -675,7 +688,7 @@ export class TouchPlugin implements ITouchPlugin {
 
       getTimestamp: (): number => {
         return this._searchTimestamp
-      }
+      },
     }
 
     const featuresManager = {
@@ -721,7 +734,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @returns True if the feature was found and updated, false otherwise
        */
       setPriority: (featureId: string, priority: number): boolean => {
-        const feature = this.features.find((f) => f.id === featureId)
+        const feature = this.features.find(f => f.id === featureId)
         if (feature) {
           feature.priority = priority
           return true
@@ -735,7 +748,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @returns The priority value if found, null otherwise
        */
       getPriority: (featureId: string): number | null => {
-        const feature = this.features.find((f) => f.id === featureId)
+        const feature = this.features.find(f => f.id === featureId)
         return feature ? feature.priority : null
       },
 
@@ -745,7 +758,7 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getFeaturesByPriority: (): IPluginFeature[] => {
         return [...this.features].sort((a, b) => b.priority - a.priority)
-      }
+      },
     }
 
     const pluginInfo = {
@@ -763,8 +776,8 @@ export class TouchPlugin implements ITouchPlugin {
           status: this.status,
           platforms: this.platforms,
           pluginPath: this.pluginPath,
-          features: this.features.map((f) => f.toJSONObject()),
-          issues: this.issues
+          features: this.features.map(f => f.toJSONObject()),
+          issues: this.issues,
         }
       },
 
@@ -838,7 +851,7 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getPlatforms: () => {
         return this.platforms
-      }
+      },
     }
 
     const pluginsAPI = {
@@ -851,7 +864,8 @@ export class TouchPlugin implements ITouchPlugin {
         try {
           const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:list', { filters })
           return response || []
-        } catch (error) {
+        }
+        catch (error) {
           console.error(`[Plugin ${pluginName}] Failed to list plugins:`, error)
           return []
         }
@@ -866,7 +880,8 @@ export class TouchPlugin implements ITouchPlugin {
         try {
           const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get', { name })
           return response
-        } catch (error) {
+        }
+        catch (error) {
           console.error(`[Plugin ${pluginName}] Failed to get plugin ${name}:`, error)
           return null
         }
@@ -880,14 +895,15 @@ export class TouchPlugin implements ITouchPlugin {
       getStatus: async (name: string) => {
         try {
           const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get-status', {
-            name
+            name,
           })
           return response
-        } catch (error) {
+        }
+        catch (error) {
           console.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}:`, error)
           throw error
         }
-      }
+      },
     }
 
     return {
@@ -912,10 +928,10 @@ export class TouchPlugin implements ITouchPlugin {
         },
         show() {
           CoreBoxManager.getInstance().trigger(true)
-        }
+        },
       },
       TuffItemBuilder,
-      URLSearchParams
+      URLSearchParams,
     }
   }
 
@@ -928,7 +944,8 @@ export class TouchPlugin implements ITouchPlugin {
   __index__(): string | undefined {
     const dev = this.dev && this.dev.enable
 
-    if (dev) console.log('[Plugin] Plugin is now dev-mode: ' + this.name)
+    if (dev)
+      console.log(`[Plugin] Plugin is now dev-mode: ${this.name}`)
 
     return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
@@ -942,7 +959,7 @@ export class TouchPlugin implements ITouchPlugin {
     const _path = {
       relative: path.relative(app.rootPath, this.pluginPath),
       root: app.rootPath,
-      plugin: this.pluginPath
+      plugin: this.pluginPath,
     }
 
     const mainWin = app.window.window
@@ -951,7 +968,7 @@ export class TouchPlugin implements ITouchPlugin {
       _: {
         indexPath,
         preload,
-        isWebviewInit: this.webViewInit
+        isWebviewInit: this.webViewInit,
       },
       attrs: {
         enableRemoteModule: 'false',
@@ -959,11 +976,11 @@ export class TouchPlugin implements ITouchPlugin {
         webpreferences: 'contextIsolation=false',
         // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: 'false',
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
+        useragent: `${mainWin.webContents.userAgent} TalexTouch/${$pkg.version} (Plugins,like ${this.name})`,
         // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
-      js: `${getJs([this.name, JSON.stringify(_path)])}`
+      js: `${getJs([this.name, JSON.stringify(_path)])}`,
     }
   }
 
@@ -999,7 +1016,7 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 文件内容
    * @returns 保存结果
    */
-  savePluginFile(fileName: string, content: object): { success: boolean; error?: string } {
+  savePluginFile(fileName: string, content: object): { success: boolean, error?: string } {
     const configPath = this.getConfigPath()
     const configData = JSON.stringify(content)
 
@@ -1007,7 +1024,7 @@ export class TouchPlugin implements ITouchPlugin {
     if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
       return {
         success: false,
-        error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`
+        error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`,
       }
     }
 
@@ -1026,7 +1043,7 @@ export class TouchPlugin implements ITouchPlugin {
    * @param fileName 文件名
    * @returns 删除结果
    */
-  deletePluginFile(fileName: string): { success: boolean; error?: string } {
+  deletePluginFile(fileName: string): { success: boolean, error?: string } {
     const configPath = this.getConfigPath()
     const p = path.join(configPath, fileName)
 
@@ -1046,9 +1063,10 @@ export class TouchPlugin implements ITouchPlugin {
    */
   listPluginFiles(): string[] {
     const configPath = this.getConfigPath()
-    if (!fse.existsSync(configPath)) return []
+    if (!fse.existsSync(configPath))
+      return []
 
-    return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
+    return fse.readdirSync(configPath).filter(file => file.endsWith('.json'))
   }
 
   /**
@@ -1071,7 +1089,7 @@ export class TouchPlugin implements ITouchPlugin {
         fileCount: 0,
         dirCount: 0,
         maxSize,
-        usagePercent: 0
+        usagePercent: 0,
       }
     }
 
@@ -1088,7 +1106,8 @@ export class TouchPlugin implements ITouchPlugin {
         if (stats.isDirectory()) {
           dirCount++
           calculateSize(itemPath)
-        } else {
+        }
+        else {
           fileCount++
           totalSize += stats.size
         }
@@ -1102,7 +1121,7 @@ export class TouchPlugin implements ITouchPlugin {
       fileCount,
       dirCount,
       maxSize,
-      usagePercent: Math.min(100, (totalSize / maxSize) * 100)
+      usagePercent: Math.min(100, (totalSize / maxSize) * 100),
     }
   }
 
@@ -1126,7 +1145,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     const buildTree = (
       dirPath: string,
-      relativePath: string = ''
+      relativePath: string = '',
     ): Array<{
       name: string
       path: string
@@ -1153,15 +1172,16 @@ export class TouchPlugin implements ITouchPlugin {
             type: 'directory' as const,
             size: dirSize,
             modified: stats.mtimeMs,
-            children
+            children,
           })
-        } else {
+        }
+        else {
           result.push({
             name: item,
             path: itemRelativePath,
             type: 'file' as const,
             size: stats.size,
-            modified: stats.mtimeMs
+            modified: stats.mtimeMs,
           })
         }
       }
@@ -1218,7 +1238,7 @@ export class TouchPlugin implements ITouchPlugin {
       size: stats.size,
       created: stats.birthtimeMs,
       modified: stats.mtimeMs,
-      type: fileType
+      type: fileType,
     }
 
     // 读取文件内容（根据类型和大小限制）
@@ -1230,19 +1250,23 @@ export class TouchPlugin implements ITouchPlugin {
           if (fileType === 'json') {
             try {
               result.content = JSON.parse(result.content)
-            } catch {
+            }
+            catch {
               // 如果解析失败，保持文本格式
             }
           }
-        } else if (fileType === 'image') {
+        }
+        else if (fileType === 'image') {
           // 对于图片，返回 base64
           const buffer = fse.readFileSync(filePath)
           result.content = `data:image/${ext.slice(1)};base64,${buffer.toString('base64')}`
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`Failed to read file content: ${fileName}`, error)
       }
-    } else {
+    }
+    else {
       result.truncated = true
     }
 
@@ -1253,7 +1277,7 @@ export class TouchPlugin implements ITouchPlugin {
    * 清空存储
    * @returns 操作结果
    */
-  clearStorage(): { success: boolean; error?: string } {
+  clearStorage(): { success: boolean, error?: string } {
     const configPath = this.getConfigPath()
 
     if (!fse.existsSync(configPath)) {
@@ -1264,10 +1288,11 @@ export class TouchPlugin implements ITouchPlugin {
       fse.emptyDirSync(configPath)
       this.broadcastStorageUpdate()
       return { success: true }
-    } catch (error) {
+    }
+    catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       }
     }
   }
@@ -1286,7 +1311,7 @@ export class TouchPlugin implements ITouchPlugin {
       '.jpeg': 'image',
       '.gif': 'image',
       '.webp': 'image',
-      '.svg': 'image'
+      '.svg': 'image',
     }
 
     return typeMap[ext] || 'other'
@@ -1301,7 +1326,7 @@ export class TouchPlugin implements ITouchPlugin {
       text: 50 * 1024, // 50KB
       log: 50 * 1024, // 50KB
       image: 5 * 1024 * 1024, // 5MB
-      other: 0 // 不预览
+      other: 0, // 不预览
     }
 
     return sizeMap[fileType] || 0
@@ -1320,7 +1345,7 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 配置内容
    * @returns 保存结果
    */
-  savePluginConfig(content: object): { success: boolean; error?: string } {
+  savePluginConfig(content: object): { success: boolean, error?: string } {
     return this.savePluginFile('config.json', content)
   }
 
@@ -1332,13 +1357,13 @@ export class TouchPlugin implements ITouchPlugin {
     for (const win of windows) {
       $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', {
         name: this.name,
-        fileName: fileName
+        fileName,
       })
     }
 
     touchEventBus.emit(
       TalexEvents.PLUGIN_STORAGE_UPDATED,
-      new PluginStorageUpdatedEvent(this.name, fileName)
+      new PluginStorageUpdatedEvent(this.name, fileName),
     )
   }
 }

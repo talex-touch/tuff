@@ -1,11 +1,16 @@
-import {
-  EventHandlerWrapper,
+import type { AppPreviewChannel } from '@talex-touch/utils'
+import type {
   EventHandler,
-  EventType,
+  EventHandlerWrapper,
   ITouchEvent,
-  ITouchEventBus
+  ITouchEventBus,
 } from '@talex-touch/utils/eventbus'
-import { Event, NotificationResponse } from 'electron'
+import type { LogItem } from '@talex-touch/utils/plugin/log/types'
+
+import type { Event, NotificationResponse } from 'electron'
+import {
+  EventType,
+} from '@talex-touch/utils/eventbus'
 
 export enum TalexEvents {
   BEFORE_APP_START = 'before-app-start',
@@ -49,11 +54,8 @@ export enum TalexEvents {
   DOWNLOAD_TASK_CHANGED = 'download/task-changed',
 
   // Update Events
-  UPDATE_AVAILABLE = 'update/available'
+  UPDATE_AVAILABLE = 'update/available',
 }
-
-import { LogItem } from '@talex-touch/utils/plugin/log/types'
-import { AppPreviewChannel } from '@talex-touch/utils'
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
   handler: EventHandler
@@ -71,13 +73,13 @@ export class TouchEventBus implements ITouchEventBus<TalexEvents> {
   emit<T extends ITouchEvent<TalexEvents>>(event: TalexEvents, data: T): void {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>()
 
-    ;[...handlers].forEach((h) => h.handler(data))
+    ;[...handlers].forEach(h => h.handler(data))
   }
 
   on(event: TalexEvents, handler: EventHandler): boolean | void {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>()
 
-    if ([...handlers].filter((h) => h.handler === handler).length)
+    if ([...handlers].filter(h => h.handler === handler).length)
       throw new Error('EventHandler already exists (Repeat on)')
 
     handlers.add(new TouchEventHandlerWrapper(handler))
@@ -88,7 +90,7 @@ export class TouchEventBus implements ITouchEventBus<TalexEvents> {
   once(event: TalexEvents, handler: EventHandler): boolean | void {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>()
 
-    if ([...handlers].filter((h) => h.handler === handler).length)
+    if ([...handlers].filter(h => h.handler === handler).length)
       throw new Error('EventHandler already exists (Repeat once)')
 
     handlers.add(new TouchEventHandlerWrapper(handler, EventType.CONSUME))
@@ -99,9 +101,9 @@ export class TouchEventBus implements ITouchEventBus<TalexEvents> {
   off(event: TalexEvents, handler: EventHandler): boolean {
     const handlers = this.map.get(event) || new Set<TouchEventHandlerWrapper>()
 
-    const l = [...handlers].filter((h) => h.handler === handler)
+    const l = [...handlers].filter(h => h.handler === handler)
 
-    l.forEach((h) => handlers.delete(h))
+    l.forEach(h => handlers.delete(h))
 
     return !!l.length
   }

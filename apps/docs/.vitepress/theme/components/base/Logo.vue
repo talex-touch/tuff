@@ -1,12 +1,12 @@
-<template>
-  <div class="About-Image">
-    <img :src="Logo" alt="logo" />
-  </div>
-</template>
-
 <script setup>
 import Logo from './../../../../images/logo.svg'
 </script>
+
+<template>
+  <div class="About-Image">
+    <img :src="Logo" alt="logo">
+  </div>
+</template>
 
 <style lang="scss">
 .About-Image {

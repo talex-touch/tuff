@@ -1,5 +1,6 @@
-import { exec, ExecException } from 'child_process'
-import { platform } from 'process'
+import type { ExecException } from 'node:child_process'
+import { exec } from 'node:child_process'
+import { platform } from 'node:process'
 
 export interface IGlobalPkgResult {
   exist: boolean
@@ -14,35 +15,34 @@ export function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkg
       if (error) {
         reject({
           exits: false,
-          error: error
-        });
-        return;
+          error,
+        })
+        return
       }
       if (stderr) {
         reject({
           exits: false,
-          error: stderr
-        });
-        return;
+          error: stderr,
+        })
+        return
       }
 
-      const lines = stdout.split('\n');
-      const lastLine = lines[lines.length - 3];
-      const match = lastLine.match(/(\S+)@(\S+)/);
+      const lines = stdout.split('\n')
+      const lastLine = lines[lines.length - 3]
+      const match = lastLine.match(/(\S+)@(\S+)/)
       if (match) {
         resolve({
           exist: true,
           name: match[1],
-          version: match[2]
-        } as IGlobalPkgResult);
-        return;
+          version: match[2],
+        } as IGlobalPkgResult)
+        return
       }
 
       resolve({
-        exist: false
+        exist: false,
       } as IGlobalPkgResult)
-
-    });
+    })
   })
 }
 
@@ -50,7 +50,8 @@ export function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkg
 export function getNpmVersion(): Promise<string | null> {
   return new Promise((resolve) => {
     exec(`npm --version`, (error, stdout, stderr) => {
-      if (error || stderr) resolve(null)
+      if (error || stderr)
+        resolve(null)
 
       resolve(stdout.trim())
     })

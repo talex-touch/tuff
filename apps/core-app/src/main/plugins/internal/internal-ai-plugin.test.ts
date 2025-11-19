@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { normalizePrompt } from './internal-ai-utils'
 
-describe('Internal AI Plugin', () => {
+describe('internal AI Plugin', () => {
   describe('normalizePrompt', () => {
     it('should return empty string for null/undefined', () => {
       expect(normalizePrompt(null)).toBe('')

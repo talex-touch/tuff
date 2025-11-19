@@ -1,7 +1,7 @@
 <script setup name="SettingHeader" lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnv } from '~/modules/hooks/env-hooks'
-import { ref, onMounted, computed } from 'vue'
 
 const { t } = useI18n()
 const { packageJson, processInfo } = useEnv()
@@ -23,9 +23,9 @@ const vueVersion = computed(() => packageJson.value?.dependencies?.vue || '')
     :style="{ '--inactive-text': `'${t('settingHeader.inactive')}'` }"
   >
     <div class="About-Image">
-      <div class="Home-Logo-Bg"></div>
+      <div class="Home-Logo-Bg" />
 
-      <img src="~/assets/logo.svg" alt="logo" />
+      <img src="~/assets/logo.svg" alt="logo">
     </div>
 
     <div class="About-Content">

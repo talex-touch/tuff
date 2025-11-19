@@ -1,3 +1,119 @@
+<script setup lang="ts">
+import type { DownloadConfig } from '@talex-touch/utils'
+import { computed, reactive, watch } from 'vue'
+// Note: ref is intentionally not imported as it's not used
+import { toast } from 'vue-sonner'
+
+// Props
+interface Props {
+  visible: boolean
+}
+
+const props = defineProps<Props>()
+
+// Emits
+const emit = defineEmits<{
+  'update:visible': [visible: boolean]
+  'update-config': [config: Partial<DownloadConfig>]
+}>()
+
+// 对话框可见性
+const dialogVisible = computed({
+  get: () => props.visible,
+  set: value => emit('update:visible', value),
+})
+
+// 表单数据
+const form = reactive<DownloadConfig>({
+  concurrency: {
+    maxConcurrent: 3,
+    autoAdjust: true,
+    networkAware: true,
+    priorityBased: true,
+  },
+  chunk: {
+    size: 1024 * 1024, // 1MB
+    resume: true,
+    autoRetry: true,
+    maxRetries: 3,
+  },
+  storage: {
+    tempDir: '',
+    historyRetention: 30,
+    autoCleanup: true,
+  },
+  network: {
+    timeout: 30000,
+    retryDelay: 5000,
+    maxRetries: 3,
+  },
+})
+
+// 并发数标记
+const concurrencyMarks = {
+  1: '1',
+  3: '3',
+  5: '5',
+  8: '8',
+  10: '10',
+}
+
+// 切片大小选项
+const chunkSizeOptions = [
+  { label: '512 KB', value: 512 * 1024 },
+  { label: '1 MB', value: 1024 * 1024 },
+  { label: '2 MB', value: 2 * 1024 * 1024 },
+  { label: '4 MB', value: 4 * 1024 * 1024 },
+]
+
+// 历史保留选项
+const historyRetentionOptions = [
+  { label: '7天', value: 7 },
+  { label: '30天', value: 30 },
+  { label: '90天', value: 90 },
+  { label: '永久', value: 0 },
+]
+
+// 选择临时目录
+async function selectTempDir() {
+  try {
+    // 这里应该调用Electron API来选择目录
+    // const result = await window.electronAPI.showOpenDialog({
+    //   properties: ['openDirectory']
+    // })
+    // if (!result.canceled && result.filePaths.length > 0) {
+    //   form.storage.tempDir = result.filePaths[0]
+    // }
+    toast.info('选择目录功能待实现')
+  }
+  catch (error) {
+    toast.error('选择目录失败')
+  }
+}
+
+// 保存配置
+function handleSave() {
+  emit('update-config', form)
+  handleClose()
+}
+
+// 关闭对话框
+function handleClose() {
+  dialogVisible.value = false
+}
+
+// 监听对话框显示状态，重置表单
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) {
+      // 这里可以从存储中加载当前配置
+      // loadCurrentConfig()
+    }
+  },
+)
+</script>
+
 <template>
   <el-dialog
     v-model="dialogVisible"
@@ -20,7 +136,9 @@
             :marks="concurrencyMarks"
             show-stops
           />
-          <div class="form-help">{{ $t('settings.download.concurrency_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.concurrency_help') }}
+          </div>
         </el-form-item>
 
         <el-form-item>
@@ -57,7 +175,9 @@
               :value="size.value"
             />
           </el-select>
-          <div class="form-help">{{ $t('settings.download.chunk_size_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.chunk_size_help') }}
+          </div>
         </el-form-item>
 
         <el-form-item>
@@ -96,7 +216,9 @@
               </el-button>
             </template>
           </el-input>
-          <div class="form-help">{{ $t('settings.download.temp_dir_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.temp_dir_help') }}
+          </div>
         </el-form-item>
 
         <el-form-item :label="$t('settings.download.history_retention')">
@@ -108,7 +230,9 @@
               :value="option.value"
             />
           </el-select>
-          <div class="form-help">{{ $t('settings.download.history_retention_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.history_retention_help') }}
+          </div>
         </el-form-item>
 
         <el-form-item>
@@ -133,7 +257,9 @@
             style="width: 150px"
           />
           <span class="form-unit">ms</span>
-          <div class="form-help">{{ $t('settings.download.timeout_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.timeout_help') }}
+          </div>
         </el-form-item>
 
         <el-form-item :label="$t('settings.download.retry_delay')">
@@ -145,7 +271,9 @@
             style="width: 150px"
           />
           <span class="form-unit">ms</span>
-          <div class="form-help">{{ $t('settings.download.retry_delay_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.retry_delay_help') }}
+          </div>
         </el-form-item>
 
         <el-form-item :label="$t('settings.download.max_retries')">
@@ -155,7 +283,9 @@
             :max="10"
             style="width: 120px"
           />
-          <div class="form-help">{{ $t('settings.download.max_retries_help') }}</div>
+          <div class="form-help">
+            {{ $t('settings.download.max_retries_help') }}
+          </div>
         </el-form-item>
       </el-card>
     </el-form>
@@ -172,121 +302,6 @@
     </template>
   </el-dialog>
 </template>
-
-<script setup lang="ts">
-import { reactive, watch, computed } from 'vue'
-// Note: ref is intentionally not imported as it's not used
-import { toast } from 'vue-sonner'
-import { DownloadConfig } from '@talex-touch/utils'
-
-// Props
-interface Props {
-  visible: boolean
-}
-
-const props = defineProps<Props>()
-
-// Emits
-const emit = defineEmits<{
-  'update:visible': [visible: boolean]
-  'update-config': [config: Partial<DownloadConfig>]
-}>()
-
-// 对话框可见性
-const dialogVisible = computed({
-  get: () => props.visible,
-  set: (value) => emit('update:visible', value)
-})
-
-// 表单数据
-const form = reactive<DownloadConfig>({
-  concurrency: {
-    maxConcurrent: 3,
-    autoAdjust: true,
-    networkAware: true,
-    priorityBased: true
-  },
-  chunk: {
-    size: 1024 * 1024, // 1MB
-    resume: true,
-    autoRetry: true,
-    maxRetries: 3
-  },
-  storage: {
-    tempDir: '',
-    historyRetention: 30,
-    autoCleanup: true
-  },
-  network: {
-    timeout: 30000,
-    retryDelay: 5000,
-    maxRetries: 3
-  }
-})
-
-// 并发数标记
-const concurrencyMarks = {
-  1: '1',
-  3: '3',
-  5: '5',
-  8: '8',
-  10: '10'
-}
-
-// 切片大小选项
-const chunkSizeOptions = [
-  { label: '512 KB', value: 512 * 1024 },
-  { label: '1 MB', value: 1024 * 1024 },
-  { label: '2 MB', value: 2 * 1024 * 1024 },
-  { label: '4 MB', value: 4 * 1024 * 1024 }
-]
-
-// 历史保留选项
-const historyRetentionOptions = [
-  { label: '7天', value: 7 },
-  { label: '30天', value: 30 },
-  { label: '90天', value: 90 },
-  { label: '永久', value: 0 }
-]
-
-// 选择临时目录
-const selectTempDir = async () => {
-  try {
-    // 这里应该调用Electron API来选择目录
-    // const result = await window.electronAPI.showOpenDialog({
-    //   properties: ['openDirectory']
-    // })
-    // if (!result.canceled && result.filePaths.length > 0) {
-    //   form.storage.tempDir = result.filePaths[0]
-    // }
-    toast.info('选择目录功能待实现')
-  } catch (error) {
-    toast.error('选择目录失败')
-  }
-}
-
-// 保存配置
-const handleSave = () => {
-  emit('update-config', form)
-  handleClose()
-}
-
-// 关闭对话框
-const handleClose = () => {
-  dialogVisible.value = false
-}
-
-// 监听对话框显示状态，重置表单
-watch(
-  () => props.visible,
-  (visible) => {
-    if (visible) {
-      // 这里可以从存储中加载当前配置
-      // loadCurrentConfig()
-    }
-  }
-)
-</script>
 
 <style scoped>
 .settings-card {

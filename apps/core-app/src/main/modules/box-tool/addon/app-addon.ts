@@ -38,9 +38,12 @@ class AppDataManager {
    * Check if refresh is needed
    */
   private shouldRefresh(forceRefresh: boolean = false): boolean {
-    if (forceRefresh) return true
-    if (this.apps.length === 0) return true
-    if (this.isUpdating) return false
+    if (forceRefresh)
+      return true
+    if (this.apps.length === 0)
+      return true
+    if (this.isUpdating)
+      return false
 
     const now = Date.now()
     const timeSinceLastUpdate = now - this.lastUpdateTime
@@ -57,9 +60,11 @@ class AppDataManager {
 
     if (env === 'darwin') {
       appSearch = (await import('./apps/darwin')).getApps
-    } else if (env === 'win32') {
+    }
+    else if (env === 'win32') {
       appSearch = (await import('./apps/win')).getApps
-    } else if (env === 'linux') {
+    }
+    else if (env === 'linux') {
       appSearch = (await import('./apps/linux')).getApps
     }
 
@@ -72,7 +77,8 @@ class AppDataManager {
     if (isAsyncFunction(appSearch)) {
       const apps = await appSearch()
       res.push(...apps)
-    } else {
+    }
+    else {
       res.push(...appSearch())
     }
 
@@ -102,9 +108,11 @@ class AppDataManager {
       this.lastUpdateTime = Date.now()
 
       console.log(`[AppDataManager] App data refreshed, found ${newApps.length} apps`)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[AppDataManager] Failed to refresh app data:', error)
-    } finally {
+    }
+    finally {
       this.isUpdating = false
     }
   }
@@ -187,7 +195,7 @@ export default async (keyword: string): Promise<any[]> => {
       if (app) {
         res.push({
           ...app,
-          matched
+          matched,
         })
       }
     }

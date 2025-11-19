@@ -1,10 +1,10 @@
-import fse from 'fs-extra'
-import pkg from './package.json'
-import path from 'path'
-import crypto from 'crypto'
-import { execSync } from 'child_process'
-
 import type { Plugin } from 'vite'
+import { execSync } from 'node:child_process'
+import crypto from 'node:crypto'
+import path from 'node:path'
+import fse from 'fs-extra'
+
+import pkg from './package.json'
 
 console.log('[Talex-Touch] Generate Information ...')
 
@@ -37,10 +37,11 @@ function getGitCommitHash(): string | null {
     const hash = execSync('git rev-parse HEAD', {
       cwd: projectRoot,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
     return hash || null
-  } catch {
+  }
+  catch {
     // 没有就留空
     return null
   }
@@ -53,15 +54,15 @@ function generateOfficialSignature(
   version: string,
   buildTime: number,
   buildType: string,
-  gitCommitHash: string | null
-): { officialSignature: string | null; hasOfficialKey: boolean } {
+  gitCommitHash: string | null,
+): { officialSignature: string | null, hasOfficialKey: boolean } {
   // 直接使用环境变量中的私钥
   const encryptionKey = process.env.TUFF_ENCRYPTION_KEY
 
   if (!encryptionKey) {
     return {
       officialSignature: null,
-      hasOfficialKey: false
+      hasOfficialKey: false,
     }
   }
 
@@ -70,7 +71,7 @@ function generateOfficialSignature(
     version,
     buildTime,
     buildType,
-    gitCommitHash
+    gitCommitHash,
   })
 
   // 使用 HMAC-SHA256 生成签名（私钥作为密钥）
@@ -80,7 +81,7 @@ function generateOfficialSignature(
 
   return {
     officialSignature: signature,
-    hasOfficialKey: true
+    hasOfficialKey: true,
   }
 }
 
@@ -90,9 +91,11 @@ function generateOfficialSignature(
 function getBuildChannel(buildType: string): string {
   if (buildType === 'release') {
     return 'RELEASE'
-  } else if (buildType === 'snapshot') {
+  }
+  else if (buildType === 'snapshot') {
     return 'SNAPSHOT'
-  } else if (buildType === 'beta') {
+  }
+  else if (buildType === 'beta') {
     return 'BETA'
   }
   return 'UNKNOWN'
@@ -122,7 +125,7 @@ function generateBuildInfo() {
     pkg.version,
     buildTime,
     buildType,
-    gitCommitHash
+    gitCommitHash,
   )
 
   return {
@@ -136,13 +139,13 @@ function generateBuildInfo() {
     isRelease,
     gitCommitHash: gitCommitHash || undefined,
     officialSignature: officialSignature || undefined,
-    hasOfficialKey
+    hasOfficialKey,
   }
 }
 
 export default function generatorInformation(): Plugin {
   const virtualModuleId = 'talex-touch:information'
-  const resolvedVirtualModuleId = '\0' + virtualModuleId
+  const resolvedVirtualModuleId = `\0${virtualModuleId}`
 
   let config
 
@@ -173,7 +176,8 @@ export default function generatorInformation(): Plugin {
       console.log(`[Talex-Touch] Official build: ${buildInfo.hasOfficialKey ? 'Yes' : 'No'}`)
     },
     load(id) {
-      if (id !== resolvedVirtualModuleId) return
+      if (id !== resolvedVirtualModuleId)
+        return
 
       const devMode = config.command === 'serve'
 
@@ -182,7 +186,7 @@ export default function generatorInformation(): Plugin {
         const buildInfo = generateBuildInfo()
         const information = {
           refuse: false,
-          ...buildInfo
+          ...buildInfo,
         }
 
         return `
@@ -201,7 +205,7 @@ export default function generatorInformation(): Plugin {
         buildType: 'unknown',
         isSnapshot: false,
         isBeta: false,
-        isRelease: false
+        isRelease: false,
       }
 
       if (fse.existsSync(signaturePath)) {
@@ -209,9 +213,10 @@ export default function generatorInformation(): Plugin {
           const buildInfo = fse.readJsonSync(signaturePath, { encoding: 'utf8' })
           Object.assign(information, {
             refuse: false,
-            ...buildInfo
+            ...buildInfo,
           })
-        } catch (error) {
+        }
+        catch (error) {
           console.warn('[Talex-Touch] Failed to read signature.json:', error)
         }
       }
@@ -222,6 +227,6 @@ export default function generatorInformation(): Plugin {
 
         export default information
       `
-    }
+    },
   }
 }

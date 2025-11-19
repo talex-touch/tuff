@@ -1,7 +1,7 @@
-import { ITouchEventBus } from "../../eventbus";
-import { ModuleKey } from ".";
-import { TalexTouch } from "../touch-app-core";
-import { ModuleDirectory, ResolvedModuleFileConfig } from "./base";
+import type { ModuleKey } from '.'
+import type { ITouchEventBus } from '../../eventbus'
+import type { TalexTouch } from '../touch-app-core'
+import type { ModuleDirectory, ResolvedModuleFileConfig } from './base'
 
 /**
  * Base context available to all lifecycle phases.
@@ -13,17 +13,17 @@ export interface ModuleBaseContext<E> {
   /**
    * The application root object (TalexTouch).
    */
-  app: TalexTouch.TouchApp;
+  app: TalexTouch.TouchApp
 
   /**
    * The module manager controlling creation, lifecycle, and lookup.
    */
-  manager: TalexTouch.IModuleManager<E>;
+  manager: TalexTouch.IModuleManager<E>
 
   /**
    * The unique key for the current module (same as the module's `name`).
    */
-  moduleKey: ModuleKey;
+  moduleKey: ModuleKey
 
   /**
    * Optional configuration accessor bound to the application or module.
@@ -31,12 +31,12 @@ export interface ModuleBaseContext<E> {
    * @param key - Configuration key.
    * @returns The typed configuration value.
    */
-  config?<T = unknown>(key: string): T;
+  config?: <T = unknown>(key: string) => T
 
   /**
    * Optional event bus bound to the application or module layer.
    */
-  events?: ITouchEventBus<E>;
+  events?: ITouchEventBus<E>
 
   /**
    * The module's directory instance if a directory was created; otherwise `undefined`.
@@ -44,7 +44,7 @@ export interface ModuleBaseContext<E> {
    * @remarks
    * **Single-directory rule**: Each module can expose at most one `ModuleDirectory` instance here.
    */
-  directory?: ModuleDirectory;
+  directory?: ModuleDirectory
 }
 
 /**
@@ -57,18 +57,18 @@ export interface ModuleCreateContext<E> extends ModuleBaseContext<E> {
   /**
    * Resolved file/directory configuration for the module.
    */
-  file: ResolvedModuleFileConfig;
+  file: ResolvedModuleFileConfig
 
   /**
    * Fully resolved module entry file path if a custom path was provided,
    * or a default path computed by the manager; otherwise `undefined`.
    */
-  resolvedPath?: string;
+  resolvedPath?: string
 
   /**
    * Indicates whether this load is part of a hot-reload/replace cycle.
    */
-  hot?: boolean;
+  hot?: boolean
 }
 
 /**
@@ -81,12 +81,12 @@ export interface ModuleInitContext<E> extends ModuleBaseContext<E> {
   /**
    * Optional hint that dependencies have been verified and are ready.
    */
-  depsReady?: boolean;
+  depsReady?: boolean
 
   /**
    * Resolved file/directory configuration for the module.
    */
-  file: ResolvedModuleFileConfig;
+  file: ResolvedModuleFileConfig
 }
 
 /**
@@ -99,12 +99,12 @@ export interface ModuleStartContext<E> extends ModuleBaseContext<E> {
   /**
    * Optional startup arguments or mode flags.
    */
-  startArgs?: Record<string, unknown>;
+  startArgs?: Record<string, unknown>
 
   /**
    * Resolved file/directory configuration for the module.
    */
-  file: ResolvedModuleFileConfig;
+  file: ResolvedModuleFileConfig
 }
 
 /**
@@ -121,12 +121,12 @@ export interface ModuleStopContext<E> extends ModuleBaseContext<E> {
    * - `"hot-reload"`: Stop as part of a hot reload / replacement cycle.
    * - `string`: Custom reason.
    */
-  reason?: "normal" | "error" | "hot-reload" | string;
+  reason?: 'normal' | 'error' | 'hot-reload' | string
 
   /**
    * Resolved file/directory configuration for the module.
    */
-  file: ResolvedModuleFileConfig;
+  file: ResolvedModuleFileConfig
 }
 
 /**
@@ -139,10 +139,10 @@ export interface ModuleDestroyContext<E> extends ModuleBaseContext<E> {
   /**
    * Indicates the module is being destroyed as part of application shutdown.
    */
-  appClosing?: boolean;
+  appClosing?: boolean
 
   /**
    * Resolved file/directory configuration for the module.
    */
-  file: ResolvedModuleFileConfig;
+  file: ResolvedModuleFileConfig
 }

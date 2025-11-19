@@ -1,7 +1,7 @@
-import { app } from 'electron'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
+import { app } from 'electron'
 
 const execFileAsync = promisify(execFile)
 
@@ -23,7 +23,7 @@ export interface ActiveAppInfo {
 }
 
 class ActiveAppService {
-  private cache: { info: ActiveAppInfo; expiresAt: number } | null = null
+  private cache: { info: ActiveAppInfo, expiresAt: number } | null = null
   private readonly cacheTTL = 750
   private currentPlatform: Platform
 
@@ -52,7 +52,7 @@ class ActiveAppService {
       // Get active application name
       const { stdout: appName } = await execFileAsync('osascript', [
         '-e',
-        'tell application "System Events" to get name of first application process whose frontmost is true'
+        'tell application "System Events" to get name of first application process whose frontmost is true',
       ])
 
       // Get active window title
@@ -60,10 +60,11 @@ class ActiveAppService {
       try {
         const { stdout: title } = await execFileAsync('osascript', [
           '-e',
-          `tell application "System Events" to get name of front window of application process "${appName.trim()}"`
+          `tell application "System Events" to get name of front window of application process "${appName.trim()}"`,
         ])
         windowTitle = title.trim()
-      } catch {
+      }
+      catch {
         // Some apps don't have window titles
       }
 
@@ -75,10 +76,10 @@ class ActiveAppService {
       try {
         const { stdout: processInfo } = await execFileAsync('sh', [
           '-c',
-          `ps aux | grep -i "${appName.trim()}" | grep -v grep | head -n 1 | awk '{print $2}'`
+          `ps aux | grep -i "${appName.trim()}" | grep -v grep | head -n 1 | awk '{print $2}'`,
         ])
 
-        const pid = parseInt(processInfo.trim(), 10)
+        const pid = Number.parseInt(processInfo.trim(), 10)
         if (!isNaN(pid)) {
           processId = pid
 
@@ -88,17 +89,19 @@ class ActiveAppService {
               'info',
               '-only',
               'bundleid',
-              `${pid}`
+              `${pid}`,
             ])
             const match = bundleInfo.match(/"CFBundleIdentifier"="([^"]+)"/)
             if (match) {
               bundleId = match[1]
             }
-          } catch {
+          }
+          catch {
             // lsappinfo might not work for all processes
           }
         }
-      } catch {
+      }
+      catch {
         // Process info retrieval failed
       }
 
@@ -108,9 +111,10 @@ class ActiveAppService {
         bundleId,
         processId,
         executablePath,
-        platform: 'macos'
+        platform: 'macos',
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[ActiveApp] macOS resolution failed:', error)
       return null
     }
@@ -132,7 +136,7 @@ class ActiveAppService {
       linux: async () => {
         // Linux implementation not yet available
         return null
-      }
+      },
     })
 
     return result ?? null
@@ -142,12 +146,15 @@ class ActiveAppService {
    * Get application icon from executable path
    */
   private async resolveIcon(appPath: string | null): Promise<string | null> {
-    if (!appPath) return null
+    if (!appPath)
+      return null
     try {
       const icon = await app.getFileIcon(appPath, { size: 'small' })
-      if (!icon || icon.isEmpty()) return null
+      if (!icon || icon.isEmpty())
+        return null
       return icon.toDataURL()
-    } catch (error) {
+    }
+    catch (error) {
       console.debug('[ActiveApp] Unable to read app icon:', error)
       return null
     }
@@ -181,7 +188,7 @@ class ActiveAppService {
       windowTitle: activeWindow.windowTitle || null,
       url: activeWindow.url || null,
       icon: null,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
 
     // Try to get application icon
@@ -190,7 +197,7 @@ class ActiveAppService {
     // Cache the result
     this.cache = {
       info,
-      expiresAt: Date.now() + this.cacheTTL
+      expiresAt: Date.now() + this.cacheTTL,
     }
 
     return info

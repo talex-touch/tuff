@@ -2,13 +2,13 @@
  * Migration Manager - Handles data migration from old systems
  */
 
+import type { DownloadHistory, DownloadTask } from './schema'
+import { EventEmitter } from 'node:events'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { createClient } from '@libsql/client'
-import { EventEmitter } from 'events'
-import fs from 'fs/promises'
-import path from 'path'
-import { app } from 'electron'
-import type { DownloadTask, DownloadHistory } from './schema'
 import { DownloadStatus } from '@talex-touch/utils'
+import { app } from 'electron'
 
 export interface MigrationProgress {
   phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'
@@ -70,14 +70,15 @@ export class MigrationManager extends EventEmitter {
 
       const [oldDbExists, oldConfigExists] = await Promise.all([
         this.fileExists(oldDbPath),
-        this.fileExists(oldConfigPath)
+        this.fileExists(oldConfigPath),
       ])
 
       // Check if migration has already been completed
       const migrationCompleted = await this.isMigrationCompleted()
 
       return (oldDbExists || oldConfigExists) && !migrationCompleted
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationManager] Error checking migration status:', error)
       return false
     }
@@ -99,7 +100,7 @@ export class MigrationManager extends EventEmitter {
       migratedHistory: 0,
       migratedConfig: false,
       errors: [],
-      duration: 0
+      duration: 0,
     }
 
     try {
@@ -108,7 +109,7 @@ export class MigrationManager extends EventEmitter {
         current: 0,
         total: 100,
         message: 'Scanning for old data...',
-        percentage: 0
+        percentage: 0,
       })
 
       // Step 1: Migrate old download tasks
@@ -120,7 +121,7 @@ export class MigrationManager extends EventEmitter {
         current: 33,
         total: 100,
         message: `Migrated ${tasks.length} download tasks`,
-        percentage: 33
+        percentage: 33,
       })
 
       // Step 2: Migrate download history
@@ -132,7 +133,7 @@ export class MigrationManager extends EventEmitter {
         current: 66,
         total: 100,
         message: `Migrated ${history.length} history records`,
-        percentage: 66
+        percentage: 66,
       })
 
       // Step 3: Migrate configuration
@@ -144,7 +145,7 @@ export class MigrationManager extends EventEmitter {
         current: 90,
         total: 100,
         message: 'Validating migrated data...',
-        percentage: 90
+        percentage: 90,
       })
 
       // Step 4: Validate migration
@@ -161,11 +162,12 @@ export class MigrationManager extends EventEmitter {
         current: 100,
         total: 100,
         message: 'Migration completed successfully',
-        percentage: 100
+        percentage: 100,
       })
 
       console.log('[MigrationManager] Migration completed:', result)
-    } catch (error) {
+    }
+    catch (error) {
       result.errors.push(error instanceof Error ? error.message : String(error))
       result.duration = Date.now() - startTime
 
@@ -174,11 +176,12 @@ export class MigrationManager extends EventEmitter {
         current: 0,
         total: 100,
         message: `Migration failed: ${error instanceof Error ? error.message : String(error)}`,
-        percentage: 0
+        percentage: 0,
       })
 
       console.error('[MigrationManager] Migration failed:', error)
-    } finally {
+    }
+    finally {
       this.migrationInProgress = false
     }
 
@@ -223,7 +226,7 @@ export class MigrationManager extends EventEmitter {
           createdAt: oldRecord.createdAt || Date.now(),
           updatedAt: Date.now(),
           completedAt: oldRecord.completedAt || null,
-          error: oldRecord.error || null
+          error: oldRecord.error || null,
         }
 
         // Insert into new database
@@ -248,18 +251,20 @@ export class MigrationManager extends EventEmitter {
             newTask.createdAt,
             newTask.updatedAt,
             newTask.completedAt,
-            newTask.error
-          ]
+            newTask.error,
+          ],
         })
 
         migratedTasks.push(newTask)
       }
 
       console.log(`[MigrationManager] Migrated ${migratedTasks.length} download tasks`)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationManager] Error migrating download tasks:', error)
       throw error
-    } finally {
+    }
+    finally {
       oldClient.close()
       newClient.close()
     }
@@ -284,7 +289,7 @@ export class MigrationManager extends EventEmitter {
     try {
       // Check if history table exists in old database
       const tableCheck = await oldClient.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='download_history'"
+        'SELECT name FROM sqlite_master WHERE type=\'table\' AND name=\'download_history\'',
       )
 
       if (tableCheck.rows.length === 0) {
@@ -311,7 +316,7 @@ export class MigrationManager extends EventEmitter {
             : null,
           averageSpeed: null,
           createdAt: oldRecord.createdAt || Date.now(),
-          completedAt: oldRecord.completedAt || null
+          completedAt: oldRecord.completedAt || null,
         }
 
         await newClient.execute({
@@ -332,18 +337,20 @@ export class MigrationManager extends EventEmitter {
             newHistory.duration,
             newHistory.averageSpeed,
             newHistory.createdAt,
-            newHistory.completedAt
-          ]
+            newHistory.completedAt,
+          ],
         })
 
         migratedHistory.push(newHistory)
       }
 
       console.log(`[MigrationManager] Migrated ${migratedHistory.length} history records`)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationManager] Error migrating history:', error)
       // Don't throw - history migration is not critical
-    } finally {
+    }
+    finally {
       oldClient.close()
       newClient.close()
     }
@@ -382,24 +389,24 @@ export class MigrationManager extends EventEmitter {
           maxConcurrent: 3,
           autoAdjust: true,
           networkAware: true,
-          priorityBased: true
+          priorityBased: true,
         },
         chunk: {
           size: 1048576, // 1MB
           resume: true,
           autoRetry: true,
-          maxRetries: 3
+          maxRetries: 3,
         },
         storage: {
           tempDir: path.join(app.getPath('temp'), 'tuff-downloads'),
           historyRetention: 30,
-          autoCleanup: true
+          autoCleanup: true,
         },
         network: {
           timeout: 30000,
           retryDelay: 5000,
-          maxRetries: 3
-        }
+          maxRetries: 3,
+        },
       }
 
       newConfig.update = {
@@ -411,8 +418,8 @@ export class MigrationManager extends EventEmitter {
         ignoredVersions: oldConfig.ignoredVersions || [],
         updateSource: {
           type: 'github',
-          url: undefined
-        }
+          url: undefined,
+        },
       }
 
       // Save new config
@@ -420,7 +427,8 @@ export class MigrationManager extends EventEmitter {
 
       console.log('[MigrationManager] Configuration migrated successfully')
       return true
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationManager] Error migrating configuration:', error)
       return false
     }
@@ -435,7 +443,7 @@ export class MigrationManager extends EventEmitter {
     try {
       // Check if tables exist
       const tables = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
+        'SELECT name FROM sqlite_master WHERE type=\'table\'',
       )
 
       const tableNames = tables.rows.map(row => row.name)
@@ -452,10 +460,12 @@ export class MigrationManager extends EventEmitter {
       console.log(`[MigrationManager] Validation: ${taskCount.rows[0].count} tasks in database`)
 
       console.log('[MigrationManager] Validation completed successfully')
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationManager] Validation failed:', error)
       throw error
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -479,14 +489,16 @@ export class MigrationManager extends EventEmitter {
       // Insert completion record
       await client.execute({
         sql: 'INSERT INTO migration_status (id, completed_at, version) VALUES (?, ?, ?)',
-        args: [1, Date.now(), '1.0.0']
+        args: [1, Date.now(), '1.0.0'],
       })
 
       console.log('[MigrationManager] Migration marked as complete')
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[MigrationManager] Error marking migration complete:', error)
       throw error
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -499,7 +511,7 @@ export class MigrationManager extends EventEmitter {
 
     try {
       const result = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='migration_status'"
+        'SELECT name FROM sqlite_master WHERE type=\'table\' AND name=\'migration_status\'',
       )
 
       if (result.rows.length === 0) {
@@ -508,9 +520,11 @@ export class MigrationManager extends EventEmitter {
 
       const status = await client.execute('SELECT * FROM migration_status WHERE id = 1')
       return status.rows.length > 0
-    } catch (error) {
+    }
+    catch (error) {
       return false
-    } finally {
+    }
+    finally {
       client.close()
     }
   }
@@ -522,7 +536,8 @@ export class MigrationManager extends EventEmitter {
     try {
       await fs.access(filePath)
       return true
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -531,15 +546,16 @@ export class MigrationManager extends EventEmitter {
    * Helper: Map old status to new status
    */
   private mapOldStatus(oldStatus?: string): DownloadStatus {
-    if (!oldStatus) return DownloadStatus.PENDING
+    if (!oldStatus)
+      return DownloadStatus.PENDING
 
     const statusMap: Record<string, DownloadStatus> = {
-      'pending': DownloadStatus.PENDING,
-      'downloading': DownloadStatus.DOWNLOADING,
-      'paused': DownloadStatus.PAUSED,
-      'completed': DownloadStatus.COMPLETED,
-      'failed': DownloadStatus.FAILED,
-      'cancelled': DownloadStatus.CANCELLED
+      pending: DownloadStatus.PENDING,
+      downloading: DownloadStatus.DOWNLOADING,
+      paused: DownloadStatus.PAUSED,
+      completed: DownloadStatus.COMPLETED,
+      failed: DownloadStatus.FAILED,
+      cancelled: DownloadStatus.CANCELLED,
     }
 
     return statusMap[oldStatus.toLowerCase()] || DownloadStatus.PENDING

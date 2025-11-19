@@ -1,13 +1,14 @@
 <script setup lang="ts" name="AccountDo">
+import type { Ref } from 'vue'
+import { inject, ref, watch } from 'vue'
+import { toast } from 'vue-sonner'
+import { useAuth } from '~/modules/auth/useAuth'
 // import Forbidden from './Forbidden.vue'
 // import OptionMode from './OptionMode.vue'
 // import Done from './Done.vue'
 import SetupPermissions from './SetupPermissions.vue'
-import { Ref, ref, inject, watch } from 'vue'
-import { useAuth } from '~/modules/auth/useAuth'
-import { toast } from 'vue-sonner'
 
-type StepFunction = (call: { comp: unknown; rect?: { width: number; height: number } }) => void
+type StepFunction = (call: { comp: unknown, rect?: { width: number, height: number } }) => void
 
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
@@ -21,7 +22,7 @@ watch(isAuthenticated, (authenticated) => {
     toast.success('登录成功！')
     // 登录成功后跳转到权限设置页面
     step({
-      comp: SetupPermissions
+      comp: SetupPermissions,
     })
   }
 })
@@ -29,7 +30,8 @@ watch(isAuthenticated, (authenticated) => {
 async function handleClerkSignIn(): Promise<void> {
   try {
     await signIn()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Clerk sign in failed:', error)
     toast.error('登录失败，请重试')
   }
@@ -48,10 +50,11 @@ function handleAgree(): void {
   if (choice.value === 0) {
     // 选择登录，使用 Clerk
     handleClerkSignIn()
-  } else {
+  }
+  else {
     // 选择离线模式，跳转到权限设置页面
     step({
-      comp: SetupPermissions
+      comp: SetupPermissions,
     })
   }
 }
@@ -60,7 +63,7 @@ function handleAgree(): void {
 <template>
   <div class="AccountDo">
     <div class="AccountDo-Display">
-      <div class="diaplyer transition-cubic" :class="{ fill: choice }"></div>
+      <div class="diaplyer transition-cubic" :class="{ fill: choice }" />
     </div>
 
     <div class="AccountDo-Choice">
@@ -80,8 +83,7 @@ function handleAgree(): void {
           <a
             href="https://talex-touch.github.io/talex-touch/docs/documents/account.html"
             target="_blank"
-            >Learn more</a
-          >
+          >Learn more</a>
         </span>
       </div>
 

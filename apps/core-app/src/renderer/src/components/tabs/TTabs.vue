@@ -1,9 +1,9 @@
 <script lang="ts">
-import { h, nextTick, ref, defineComponent } from 'vue'
-import TTabItem from '~/components/tabs/TTabItem.vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import TTabHeader from '~/components/tabs/TTabHeader.vue'
 import { ElScrollbar } from 'element-plus'
+import { defineComponent, h, nextTick, ref } from 'vue'
+import TTabHeader from '~/components/tabs/TTabHeader.vue'
+import TTabItem from '~/components/tabs/TTabItem.vue'
 
 const qualifiedName = ['TTabItem', 'TTabItemGroup', 'TTabHeader']
 const activeNode = ref()
@@ -13,7 +13,7 @@ export default defineComponent({
   name: 'TTabs',
   props: {
     default: String,
-    offset: [String, Number]
+    offset: [String, Number],
   },
 
   render() {
@@ -23,7 +23,8 @@ export default defineComponent({
     const fixPointer = async (vnode: any): Promise<void> => {
       const pointerEl = pointer.el
       const nodeEl = vnode.el
-      if (!pointerEl || !nodeEl) return
+      if (!pointerEl || !nodeEl)
+        return
 
       const pointerStyle = pointerEl.style
       const pointerRect = pointerEl.getBoundingClientRect()
@@ -32,23 +33,24 @@ export default defineComponent({
       const diffTop = +(this.$props?.offset ?? 0)
 
       if (nodeRect.top > pointerRect.top) {
-        pointerStyle.height = nodeRect.height * 0.8 + 'px'
+        pointerStyle.height = `${nodeRect.height * 0.8}px`
         pointerStyle.transition = 'all 0'
         pointerStyle.opacity = '0'
 
         await sleep(100)
-        pointerStyle.top = nodeRect.top + diffTop + 'px'
+        pointerStyle.top = `${nodeRect.top + diffTop}px`
 
         await sleep(100)
         pointerStyle.transition = 'all .25s'
         pointerStyle.opacity = '1'
 
         await sleep(100)
-        pointerStyle.top = nodeRect.top + nodeRect.height * 0.2 + diffTop + 'px'
-        pointerStyle.height = nodeRect.height * 0.6 + 'px'
-      } else {
+        pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
+        pointerStyle.height = `${nodeRect.height * 0.6}px`
+      }
+      else {
         pointerStyle.transform = `translate(0, -${nodeRect.height * 0.2}px)`
-        pointerStyle.height = nodeRect.height * 0.8 + 'px'
+        pointerStyle.height = `${nodeRect.height * 0.8}px`
 
         await sleep(100)
         pointerStyle.transition = 'all 0'
@@ -56,14 +58,14 @@ export default defineComponent({
 
         await sleep(100)
         pointerStyle.transform = ''
-        pointerStyle.top = nodeRect.top + nodeRect.height * 0.2 + diffTop + 'px'
+        pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
 
         await sleep(100)
         pointerStyle.transition = 'all .25s'
         pointerStyle.opacity = '1'
 
         await sleep(100)
-        pointerStyle.height = nodeRect.height * 0.6 + 'px'
+        pointerStyle.height = `${nodeRect.height * 0.6}px`
       }
     }
 
@@ -72,7 +74,8 @@ export default defineComponent({
         active: () => activeNode.value?.props.name === vnode.props.name,
         ...vnode.props,
         onClick: () => {
-          if ('disabled' in vnode.props) return
+          if ('disabled' in vnode.props)
+            return
 
           const el = slotWrapper.value?.el
           if (el) {
@@ -84,7 +87,7 @@ export default defineComponent({
 
             classList.add('zoomInUp')
           }
-        }
+        },
       })
 
       if (!activeNode.value && tab.props && 'activation' in tab.props) {
@@ -100,38 +103,40 @@ export default defineComponent({
         this.$slots
           .default?.()
           ?.filter(
-            (slot) =>
-              slot.type &&
-              typeof slot.type === 'object' &&
-              'name' in slot.type &&
-              slot.type.name &&
-              qualifiedName.includes(slot.type.name as string)
+            slot =>
+              slot.type
+              && typeof slot.type === 'object'
+              && 'name' in slot.type
+              && slot.type.name
+              && qualifiedName.includes(slot.type.name as string),
           )
           ?.map((child) => {
             if (
-              child.type &&
-              typeof child.type === 'object' &&
-              'name' in child.type &&
-              child.type.name === 'TTabHeader'
+              child.type
+              && typeof child.type === 'object'
+              && 'name' in child.type
+              && child.type.name === 'TTabHeader'
             ) {
               tabHeader = child
               return null
-            } else if (
-              child.type &&
-              typeof child.type === 'object' &&
-              'name' in child.type &&
-              child.type.name === 'TTabItemGroup'
+            }
+            else if (
+              child.type
+              && typeof child.type === 'object'
+              && 'name' in child.type
+              && child.type.name === 'TTabItemGroup'
             ) {
               return h('div', { class: 'TTabs-TabGroup' }, [
                 h('div', { class: 'TTabs-TabGroup-Name' }, child.props?.name),
-                child.children &&
-                typeof child.children === 'object' &&
-                'default' in child.children &&
-                typeof child.children.default === 'function'
+                child.children
+                && typeof child.children === 'object'
+                && 'default' in child.children
+                && typeof child.children.default === 'function'
                   ? child.children.default?.()?.map(createTab)
-                  : []
+                  : [],
               ])
-            } else {
+            }
+            else {
               return createTab(child)
             }
           })
@@ -147,7 +152,7 @@ export default defineComponent({
       const contentWrapper = h(
         'div',
         { class: 'TTabs-ContentWrapper' },
-        activeNode.value.children?.default?.()
+        activeNode.value.children?.default?.(),
       )
 
       const scrollableContent = h(ElScrollbar, {}, () => contentWrapper)
@@ -156,17 +161,17 @@ export default defineComponent({
         return [
           h(
             TTabHeader,
-            tabHeader.children &&
-              typeof tabHeader.children === 'object' &&
-              'default' in tabHeader.children &&
-              typeof tabHeader.children.default === 'function'
+            tabHeader.children
+            && typeof tabHeader.children === 'object'
+            && 'default' in tabHeader.children
+            && typeof tabHeader.children.default === 'function'
               ? tabHeader.children.default?.({
                   ...tabHeader.props,
-                  node: activeNode.value
+                  node: activeNode.value,
                 })
-              : {}
+              : {},
           ),
-          scrollableContent
+          scrollableContent,
         ]
       }
 
@@ -181,13 +186,13 @@ export default defineComponent({
       h(
         'div',
         {
-          class: `TTabs-Main${tabHeader ? ' header-mode' : ''}`
+          class: `TTabs-Main${tabHeader ? ' header-mode' : ''}`,
         },
-        selectSlot
+        selectSlot,
       ),
-      pointer
+      pointer,
     ])
-  }
+  },
 })
 </script>
 

@@ -52,7 +52,7 @@ A comprehensive update prompt dialog component with the following features:
 - `cancel-download`: User cancels download
 
 ### 2. Internationalization Support
-**Locations**: 
+**Locations**:
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 

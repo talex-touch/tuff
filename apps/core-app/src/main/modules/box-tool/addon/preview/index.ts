@@ -1,6 +1,6 @@
-import { PreviewAbilityRegistry, previewAbilityRegistry, registerPreviewAbility } from './preview-registry'
 import { registerDefaultPreviewAbilities } from './abilities'
 import { PreviewProvider } from './preview-provider'
+import { PreviewAbilityRegistry, previewAbilityRegistry, registerPreviewAbility } from './preview-registry'
 
 registerDefaultPreviewAbilities(previewAbilityRegistry)
 

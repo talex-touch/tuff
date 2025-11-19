@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import FlatInput from './FlatInput.vue'
 import { useVModel } from '@vueuse/core'
 import { shortconApi } from '~/modules/channel/main/shortcon'
+import FlatInput from './FlatInput.vue'
 
 const props = defineProps<{
   modelValue: string
@@ -12,8 +12,8 @@ const emits = defineEmits<{
 
 const model = useVModel(props, 'modelValue', emits)
 
-const platform =
-  typeof process !== 'undefined' && process?.platform
+const platform
+  = typeof process !== 'undefined' && process?.platform
     ? process.platform
     : typeof navigator !== 'undefined'
       ? navigator.platform.toLowerCase()
@@ -26,23 +26,23 @@ const MODIFIER_ONLY_KEYS = new Set(['Meta', 'Alt', 'Control', 'Shift'])
 
 const SPECIAL_KEYS: Record<string, string> = {
   ' ': 'Space',
-  Spacebar: 'Space',
-  Space: 'Space',
-  ArrowUp: 'Up',
-  ArrowDown: 'Down',
-  ArrowLeft: 'Left',
-  ArrowRight: 'Right',
-  Escape: 'Esc',
-  Esc: 'Esc',
-  Enter: 'Enter',
-  Return: 'Enter',
-  Tab: 'Tab',
-  Backspace: 'Backspace',
-  Delete: 'Delete',
-  PageUp: 'PageUp',
-  PageDown: 'PageDown',
-  Home: 'Home',
-  End: 'End'
+  'Spacebar': 'Space',
+  'Space': 'Space',
+  'ArrowUp': 'Up',
+  'ArrowDown': 'Down',
+  'ArrowLeft': 'Left',
+  'ArrowRight': 'Right',
+  'Escape': 'Esc',
+  'Esc': 'Esc',
+  'Enter': 'Enter',
+  'Return': 'Enter',
+  'Tab': 'Tab',
+  'Backspace': 'Backspace',
+  'Delete': 'Delete',
+  'PageUp': 'PageUp',
+  'PageDown': 'PageDown',
+  'Home': 'Home',
+  'End': 'End',
 }
 
 const KEY_REPLACEMENTS: Record<string, string> = {
@@ -53,10 +53,10 @@ const KEY_REPLACEMENTS: Record<string, string> = {
   '[': 'BracketLeft',
   ']': 'BracketRight',
   ';': 'Semicolon',
-  "'": 'Quote',
+  '\'': 'Quote',
   ',': 'Comma',
   '.': 'Period',
-  '/': 'Slash'
+  '/': 'Slash',
 }
 
 function normalizePrimaryKey(event: KeyboardEvent): string | null {
@@ -98,10 +98,14 @@ function formatAccelerator(event: KeyboardEvent): string | null {
 
   const modifiers: string[] = []
 
-  if (event.metaKey) modifiers.push(metaModifier)
-  if (event.ctrlKey) modifiers.push('Control')
-  if (event.altKey) modifiers.push(altModifier)
-  if (event.shiftKey) modifiers.push('Shift')
+  if (event.metaKey)
+    modifiers.push(metaModifier)
+  if (event.ctrlKey)
+    modifiers.push('Control')
+  if (event.altKey)
+    modifiers.push(altModifier)
+  if (event.shiftKey)
+    modifiers.push('Shift')
 
   return [...modifiers, key].join('+')
 }
@@ -120,8 +124,8 @@ function startRecord(e: KeyboardEvent) {
 
 <template>
   <FlatInput
-    class="FlatKeyInput-Control"
     v-model="model"
+    class="FlatKeyInput-Control"
     tabindex="0"
     @keydown="startRecord"
     @focus="shortconApi.disableAll"

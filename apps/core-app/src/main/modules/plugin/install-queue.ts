@@ -1,12 +1,8 @@
-import crypto from 'crypto'
-import { ChannelType, DataCode, type StandardChannelData } from '@talex-touch/utils/channel'
-import {
-  type PluginInstallConfirmResponse,
-  type PluginInstallProgressEvent,
-  type PluginInstallRequest,
-  type PluginInstallConfirmRequest
-} from '@talex-touch/utils/plugin'
-import { PluginInstaller, type PreparedPluginInstall } from './plugin-installer'
+import type { StandardChannelData } from '@talex-touch/utils/channel'
+import type { PluginInstallConfirmRequest, PluginInstallConfirmResponse, PluginInstallProgressEvent, PluginInstallRequest } from '@talex-touch/utils/plugin'
+import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
+import crypto from 'node:crypto'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../core/channel-core'
 
 interface InstallTask {
@@ -33,7 +29,7 @@ interface PluginInstallQueueOptions {
 
 function extractClientString(
   meta: Record<string, unknown> | undefined,
-  key: string
+  key: string,
 ): string | undefined {
   const value = meta?.[key]
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
@@ -45,8 +41,9 @@ export class PluginInstallQueue {
   private activeTask: InstallTask | null = null
   private readonly confirmResolvers = new Map<
     string,
-    { resolve: (decision: 'accept' | 'reject') => void; reject: (reason: Error) => void }
+    { resolve: (decision: 'accept' | 'reject') => void, reject: (reason: Error) => void }
   >()
+
   private readonly options?: PluginInstallQueueOptions
 
   constructor(installer: PluginInstaller, options?: PluginInstallQueueOptions) {
@@ -55,8 +52,8 @@ export class PluginInstallQueue {
   }
 
   enqueue(request: PluginInstallRequest, reply: StandardChannelData['reply']): InstallTask {
-    const id =
-      request.metadata?.taskId && typeof request.metadata.taskId === 'string'
+    const id
+      = request.metadata?.taskId && typeof request.metadata.taskId === 'string'
         ? request.metadata.taskId
         : crypto.randomUUID()
 
@@ -67,7 +64,7 @@ export class PluginInstallQueue {
       clientMetadata: request.clientMetadata,
       lastProgress: -1,
       officialHint:
-        typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined
+        typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined,
     }
 
     this.queue.push(task)
@@ -79,13 +76,15 @@ export class PluginInstallQueue {
 
   handleConfirmResponse(response: PluginInstallConfirmResponse): void {
     const resolver = this.confirmResolvers.get(response.taskId)
-    if (!resolver) return
+    if (!resolver)
+      return
 
     this.confirmResolvers.delete(response.taskId)
 
     if (response.decision === 'accept') {
       resolver.resolve('accept')
-    } else {
+    }
+    else {
       const reasonMessage = response.reason || 'User rejected installation'
       resolver.reject(new Error(reasonMessage))
     }
@@ -96,7 +95,8 @@ export class PluginInstallQueue {
   }
 
   private process(): void {
-    if (this.activeTask || this.queue.length === 0) return
+    if (this.activeTask || this.queue.length === 0)
+      return
 
     const next = this.queue.shift()!
     this.activeTask = next
@@ -110,7 +110,7 @@ export class PluginInstallQueue {
         autoResolve: false,
         onDownloadProgress: (progress) => {
           this.emitProgress(task, 'downloading', { progress })
-        }
+        },
       })
 
       task.prepared = prepared
@@ -123,7 +123,7 @@ export class PluginInstallQueue {
       this.emitProgress(task, 'installing', { progress: 100 })
 
       const summary = await this.installer.finalizeInstall(prepared, {
-        installOptions: this.buildInstallOptions(task)
+        installOptions: this.buildInstallOptions(task),
       })
       task.prepared = undefined
 
@@ -133,7 +133,7 @@ export class PluginInstallQueue {
         status: 'success',
         manifest: summary.manifest,
         provider: summary.providerResult.provider,
-        official: summary.providerResult.official ?? false
+        official: summary.providerResult.official ?? false,
       })
 
       const completionHandler = this.options?.onInstallCompleted
@@ -142,19 +142,21 @@ export class PluginInstallQueue {
           await completionHandler({
             request: task.request,
             manifest: summary.manifest,
-            providerResult: summary.providerResult
+            providerResult: summary.providerResult,
           })
-        } catch (error) {
+        }
+        catch (error) {
           console.warn('[PluginInstallQueue] Failed to persist install metadata:', error)
         }
       }
-    } catch (error: any) {
+    }
+    catch (error: any) {
       const message = typeof error?.message === 'string' ? error.message : 'INSTALL_FAILED'
       this.emitProgress(task, 'failed', { progress: 100, error: message })
 
       task.reply(DataCode.ERROR, {
         status: 'error',
-        message
+        message,
       })
 
       if (task.prepared) {
@@ -162,14 +164,15 @@ export class PluginInstallQueue {
           console.warn('[PluginInstallQueue] Failed to cleanup after failed install:', cleanupError)
         })
       }
-    } finally {
+    }
+    finally {
       this.activeTask = null
       this.process()
     }
   }
 
   private buildInstallOptions(
-    task: InstallTask
+    task: InstallTask,
   ): { enforceProdMode: boolean } | undefined {
     if (this.shouldEnforceProdMode(task)) {
       return { enforceProdMode: true }
@@ -182,7 +185,8 @@ export class PluginInstallQueue {
   }
 
   private async requestConfirmation(task: InstallTask): Promise<void> {
-    if (!task.prepared) return
+    if (!task.prepared)
+      return
 
     const channel = genTouchChannel()
     const payload: PluginInstallConfirmRequest = {
@@ -191,7 +195,7 @@ export class PluginInstallQueue {
       pluginId: extractClientString(task.clientMetadata, 'pluginId'),
       pluginName:
         extractClientString(task.clientMetadata, 'pluginName') || task.prepared.manifest?.name,
-      source: task.request.source
+      source: task.request.source,
     }
 
     this.emitProgress(task, 'awaiting-confirmation', { progress: 100 })
@@ -212,7 +216,7 @@ export class PluginInstallQueue {
           }
           this.emitProgress(task, 'cancelled', { progress: 100, message: reason.message })
           reject(reason)
-        }
+        },
       })
     })
   }
@@ -220,11 +224,11 @@ export class PluginInstallQueue {
   private emitProgress(
     task: InstallTask,
     stage: PluginInstallProgressEvent['stage'],
-    extra: Partial<PluginInstallProgressEvent> = {}
+    extra: Partial<PluginInstallProgressEvent> = {},
   ): void {
     const channel = genTouchChannel()
-    const position =
-      this.activeTask?.id === task.id ? 0 : this.queue.findIndex((item) => item.id === task.id) + 1
+    const position
+      = this.activeTask?.id === task.id ? 0 : this.queue.findIndex(item => item.id === task.id) + 1
     const remaining = (this.activeTask ? 1 : 0) + this.queue.length
     const progress = typeof extra.progress === 'number' ? extra.progress : undefined
 
@@ -234,7 +238,8 @@ export class PluginInstallQueue {
         return
       }
       task.lastProgress = rounded
-    } else if (stage !== 'downloading') {
+    }
+    else if (stage !== 'downloading') {
       task.lastProgress = -1
     }
 
@@ -248,7 +253,7 @@ export class PluginInstallQueue {
       source: task.request.source,
       position,
       remaining,
-      ...extra
+      ...extra,
     }
 
     void channel.send(ChannelType.MAIN, PROGRESS_EVENT, payload).catch((error) => {

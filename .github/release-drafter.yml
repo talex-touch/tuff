@@ -1,22 +1,22 @@
-name-template: 'v$NEXT_PATCH_VERSION'
-tag-template: 'v$NEXT_PATCH_VERSION'
+name-template: v$NEXT_PATCH_VERSION
+tag-template: v$NEXT_PATCH_VERSION
 change-template: '- $TITLE (#$NUMBER) by @$AUTHOR'
-no-changes-template: '未检测到需要发布的变更。'
+no-changes-template: 未检测到需要发布的变更。
 filter-by-labels:
   include:
     - needs-release-note
 exclude-labels:
   - skip-changelog
 categories:
-  - title: '✨ 新功能'
+  - title: ✨ 新功能
     labels:
       - feature
       - enhancement
-  - title: '🐞 缺陷修复'
+  - title: 🐞 缺陷修复
     labels:
       - bug
       - fix
-  - title: '🧰 维护与杂项'
+  - title: 🧰 维护与杂项
     labels:
       - chore
       - refactor

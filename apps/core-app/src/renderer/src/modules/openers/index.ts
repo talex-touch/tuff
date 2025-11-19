@@ -3,7 +3,7 @@ import { watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { openers } from '~/modules/channel/storage'
 
-type RemoteOpener = {
+interface RemoteOpener {
   bundleId: string
   name: string
   logo: string
@@ -32,7 +32,7 @@ async function requestOpener(extension: string): Promise<void> {
           name: result.name,
           logo: result.logo,
           path: result.path,
-          lastResolvedAt: result.lastResolvedAt
+          lastResolvedAt: result.lastResolvedAt,
         }
       }
     })
@@ -51,15 +51,17 @@ export function useOpenerAutoResolve(extension: ComputedRef<string | null | unde
   watch(
     extension,
     (ext) => {
-      if (!ext) return
+      if (!ext)
+        return
       void requestOpener(ext)
     },
-    { immediate: true }
+    { immediate: true },
   )
 }
 
 export function getOpenerByExtension(extension?: string | null): RemoteOpener | undefined {
-  if (!extension) return undefined
+  if (!extension)
+    return undefined
   const normalized = extension.replace(/^\./, '').toLowerCase()
   return openers[normalized] as RemoteOpener | undefined
 }

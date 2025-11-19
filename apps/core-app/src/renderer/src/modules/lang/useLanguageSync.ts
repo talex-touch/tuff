@@ -23,6 +23,6 @@ export function setupLanguageSync() {
         console.log(`[LanguageSync] Notified main process of language change: ${newLang}`)
       }
     },
-    { immediate: true }
+    { immediate: true },
   )
 }

@@ -1,6 +1,6 @@
 import type { IPluginRendererChannel } from './types'
 
-const ensurePluginContext = (): { channel: IPluginRendererChannel; pluginName: string } => {
+function ensurePluginContext(): { channel: IPluginRendererChannel, pluginName: string } {
   const plugin = (window as any)?.$plugin
   if (!plugin?.name) {
     throw new Error('[TouchSDK] Unable to resolve plugin name inside renderer context.')
@@ -13,7 +13,7 @@ const ensurePluginContext = (): { channel: IPluginRendererChannel; pluginName: s
 
   return {
     channel,
-    pluginName: plugin.name as string
+    pluginName: plugin.name as string,
   }
 }
 
@@ -24,4 +24,3 @@ export async function clearCoreBoxItems(): Promise<void> {
   const { channel, pluginName } = ensurePluginContext()
   await channel.send('core-box:clear-items', { pluginName })
 }
-

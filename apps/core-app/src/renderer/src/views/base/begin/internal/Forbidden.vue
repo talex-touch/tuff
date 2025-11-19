@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { Ref } from 'vue'
 import HelloData from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
-import { Ref } from 'vue'
 
 type BackFunction = () => void
 
@@ -18,8 +18,12 @@ function close(): void {
     <div class="Forbidden-Content">
       <p>We're sorry, but we are unable to provide service at this time.</p>
       <div flex gap-8>
-        <FlatButton @click="close"> CLOSE </FlatButton>
-        <FlatButton primary @click="back"> BACK </FlatButton>
+        <FlatButton @click="close">
+          CLOSE
+        </FlatButton>
+        <FlatButton primary @click="back">
+          BACK
+        </FlatButton>
       </div>
     </div>
   </div>

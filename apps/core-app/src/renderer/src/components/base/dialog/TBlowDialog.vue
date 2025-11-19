@@ -1,39 +1,5 @@
-<template>
-  <div
-    ref="dialogWrapper"
-    :class="{ close: isClosing }"
-    class="TBlowDialog-Wrapper"
-    role="dialog"
-    aria-modal="true"
-    :aria-labelledby="title ? 'dialog-title' : undefined"
-    @keydown.esc="destroy"
-  >
-    <div class="TBlowDialog-Container">
-      <component :is="renderComp" v-if="renderComp" />
-      <component :is="comp" v-else-if="comp" />
-      <template v-else>
-        <p v-if="title" id="dialog-title">{{ title }}</p>
-        <div class="TBlowDialog-Content">
-          <span style="position: relative; height: 100%" v-html="message"></span>
-        </div>
-        <div
-          v-wave
-          class="TBlowDialog-Confirm"
-          role="button"
-          tabindex="0"
-          @click="destroy"
-          @keydown.enter="destroy"
-          @keydown.space="destroy"
-        >
-          Confirm
-        </div>
-      </template>
-    </div>
-  </div>
-</template>
-
 <script lang="ts" name="TBlowDialog" setup>
-import { type Component, VNode } from 'vue'
+import type { type Component, VNode } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
 
 /**
@@ -59,7 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
   comp: undefined,
-  render: undefined
+  render: undefined,
 })
 
 /** Reactive reference to control dialog closing state */
@@ -86,7 +52,7 @@ onMounted(() => {
 
   if (props.render) {
     renderComp.value = defineComponent({
-      render: props.render
+      render: props.render,
     })
   }
 
@@ -113,7 +79,8 @@ function setFocusToDialog(): void {
   const confirmButton = dialogWrapper.value?.querySelector('.TBlowDialog-Confirm')
   if (confirmButton instanceof HTMLElement) {
     confirmButton.focus()
-  } else if (dialogWrapper.value) {
+  }
+  else if (dialogWrapper.value) {
     // Otherwise, focus on the dialog wrapper
     dialogWrapper.value.setAttribute('tabindex', '-1')
     dialogWrapper.value.focus()
@@ -135,18 +102,20 @@ function restoreFocus(): void {
  */
 function applyBackgroundBlur(apply: boolean): void {
   const app = document.getElementById('app')
-  if (!app) return
+  if (!app)
+    return
 
   if (apply) {
     Object.assign(app.style, {
       transition: '.75s',
       transform: 'scale(1.25)',
-      opacity: '.75'
+      opacity: '.75',
     })
-  } else {
+  }
+  else {
     Object.assign(app.style, {
       transform: 'scale(1)',
-      opacity: '1'
+      opacity: '1',
     })
   }
 }
@@ -176,6 +145,42 @@ async function destroy(): Promise<void> {
 
 provide('destroy', destroy)
 </script>
+
+<template>
+  <div
+    ref="dialogWrapper"
+    :class="{ close: isClosing }"
+    class="TBlowDialog-Wrapper"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="title ? 'dialog-title' : undefined"
+    @keydown.esc="destroy"
+  >
+    <div class="TBlowDialog-Container">
+      <component :is="renderComp" v-if="renderComp" />
+      <component :is="comp" v-else-if="comp" />
+      <template v-else>
+        <p v-if="title" id="dialog-title">
+          {{ title }}
+        </p>
+        <div class="TBlowDialog-Content">
+          <span style="position: relative; height: 100%" v-html="message" />
+        </div>
+        <div
+          v-wave
+          class="TBlowDialog-Confirm"
+          role="button"
+          tabindex="0"
+          @click="destroy"
+          @keydown.enter="destroy"
+          @keydown.space="destroy"
+        >
+          Confirm
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
 
 <style lang="scss">
 // SCSS variables

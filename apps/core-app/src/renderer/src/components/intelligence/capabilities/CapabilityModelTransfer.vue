@@ -11,8 +11,8 @@ const props = withDefaults(
   {
     modelValue: () => [],
     availableModels: () => [],
-    disabled: false
-  }
+    disabled: false,
+  },
 )
 
 const emit = defineEmits<{
@@ -30,7 +30,8 @@ function normalizeModel(value?: string): string {
 
 function trackModel(value?: string): void {
   const normalized = normalizeModel(value)
-  if (!normalized) return
+  if (!normalized)
+    return
   if (!seenModels.value.includes(normalized)) {
     seenModels.value = [...seenModels.value, normalized]
   }
@@ -41,18 +42,18 @@ watch(
   (list) => {
     list?.forEach(trackModel)
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 )
 
 watch(
   () => props.modelValue,
   (list) => {
     list?.forEach(trackModel)
-    selectedSelection.value = selectedSelection.value.filter((item) =>
-      list?.includes(item)
+    selectedSelection.value = selectedSelection.value.filter(item =>
+      list?.includes(item),
     )
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 )
 
 const availableList = computed(() => {
@@ -60,87 +61,103 @@ const availableList = computed(() => {
   const pool = new Set<string>()
   ;(props.availableModels ?? []).forEach((model) => {
     const normalized = normalizeModel(model)
-    if (normalized) pool.add(normalized)
+    if (normalized)
+      pool.add(normalized)
   })
   seenModels.value.forEach((model) => {
-    if (model) pool.add(model)
+    if (model)
+      pool.add(model)
   })
-  return Array.from(pool).filter((model) => !selectedSet.has(model))
+  return Array.from(pool).filter(model => !selectedSet.has(model))
 })
 
 const selectedList = computed(() => (props.modelValue ?? []).map(normalizeModel).filter(Boolean))
 
 watch(availableList, (list) => {
-  availableSelection.value = availableSelection.value.filter((item) => list.includes(item))
+  availableSelection.value = availableSelection.value.filter(item => list.includes(item))
 })
 
 watch(selectedList, (list) => {
-  selectedSelection.value = selectedSelection.value.filter((item) => list.includes(item))
+  selectedSelection.value = selectedSelection.value.filter(item => list.includes(item))
 })
 
 function emitSelection(next: string[]): void {
   const deduped: string[] = []
   next.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (!normalized) return
-    if (!deduped.includes(normalized)) deduped.push(normalized)
+    if (!normalized)
+      return
+    if (!deduped.includes(normalized))
+      deduped.push(normalized)
     trackModel(normalized)
   })
   emit('update:modelValue', deduped)
 }
 
 function handleToggleAvailable(model: string): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   availableSelection.value = availableSelection.value.includes(model)
-    ? availableSelection.value.filter((item) => item !== model)
+    ? availableSelection.value.filter(item => item !== model)
     : [...availableSelection.value, model]
 }
 
 function handleToggleSelected(model: string): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   selectedSelection.value = selectedSelection.value.includes(model)
-    ? selectedSelection.value.filter((item) => item !== model)
+    ? selectedSelection.value.filter(item => item !== model)
     : [...selectedSelection.value, model]
 }
 
 function moveToSelected(model?: string): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const moveList = model ? [model] : availableSelection.value
-  if (!moveList.length) return
-  const ordered = availableList.value.filter((item) => moveList.includes(item))
+  if (!moveList.length)
+    return
+  const ordered = availableList.value.filter(item => moveList.includes(item))
   emitSelection([...selectedList.value, ...ordered])
   availableSelection.value = []
 }
 
 function removeFromSelected(model?: string): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const removeList = model ? [model] : selectedSelection.value
-  if (!removeList.length) return
-  emitSelection(selectedList.value.filter((item) => !removeList.includes(item)))
+  if (!removeList.length)
+    return
+  emitSelection(selectedList.value.filter(item => !removeList.includes(item)))
   selectedSelection.value = []
 }
 
 function moveItem(model: string, direction: number): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const current = [...selectedList.value]
-  const index = current.findIndex((item) => item === model)
-  if (index === -1) return
+  const index = current.findIndex(item => item === model)
+  if (index === -1)
+    return
   const nextIndex = index + direction
-  if (nextIndex < 0 || nextIndex >= current.length) return
-  ;[current[index], current[nextIndex]] = [current[nextIndex], current[index]]
+  if (nextIndex < 0 || nextIndex >= current.length) {
+    return
+  }[current[index], current[nextIndex]] = [current[nextIndex], current[index]]
   emitSelection(current)
 }
 
 function handleAddCustom(): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const model = normalizeModel(customModelInput.value)
-  if (!model) return
+  if (!model)
+    return
   emitSelection([...selectedList.value, model])
   customModelInput.value = ''
 }
 
 function handleKeyAdd(event: KeyboardEvent): void {
-  if (event.key !== 'Enter') return
+  if (event.key !== 'Enter')
+    return
   event.preventDefault()
   handleAddCustom()
 }
@@ -180,7 +197,7 @@ function handleKeyAdd(event: KeyboardEvent): void {
           type="text"
           placeholder="自定义模型 ID"
           @keyup="handleKeyAdd"
-        />
+        >
         <FlatButton :disabled="disabled || !customModelInput.trim()" mini @click="handleAddCustom">
           <i class="i-carbon-add" />
           添加

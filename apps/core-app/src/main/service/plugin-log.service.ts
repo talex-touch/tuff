@@ -1,19 +1,23 @@
-import { touchEventBus, TalexEvents, PluginLogAppendEvent } from '../core/eventbus/touch-event'
-import { WebContents, shell } from 'electron'
-import {
+import type { ModuleKey } from '@talex-touch/utils'
+import type {
   ITouchChannel,
   StandardChannelData,
-  ChannelType,
-  DataCode
 } from '@talex-touch/utils/channel'
-import fs from 'fs'
-import fsp from 'fs/promises'
-import path from 'path'
-import { BaseModule } from '../modules/abstract-base-module'
-import { ModuleKey } from '@talex-touch/utils'
-import { pluginModule } from '../modules/plugin/plugin-module'
-import type { TouchPlugin } from '../modules/plugin/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
+import type { WebContents } from 'electron'
+import type { PluginLogAppendEvent } from '../core/eventbus/touch-event'
+import type { TouchPlugin } from '../modules/plugin/plugin'
+import fs from 'node:fs'
+import fsp from 'node:fs/promises'
+import path from 'node:path'
+import {
+  ChannelType,
+  DataCode,
+} from '@talex-touch/utils/channel'
+import { shell } from 'electron'
+import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { BaseModule } from '../modules/abstract-base-module'
+import { pluginModule } from '../modules/plugin/plugin-module'
 
 interface PluginLogSessionMeta {
   id: string
@@ -47,10 +51,11 @@ export class PluginLogModule extends BaseModule {
     try {
       const sessionLogPath = plugin.logger.getManager().getSessionLogPath()
       return path.dirname(path.dirname(sessionLogPath))
-    } catch (error) {
+    }
+    catch (error) {
       console.error(
         `[PluginLogService] Failed to resolve logs directory for ${plugin.name}:`,
-        error
+        error,
       )
       return null
     }
@@ -59,7 +64,7 @@ export class PluginLogModule extends BaseModule {
   private buildSessionMeta(
     folderName: string,
     logsBaseDir: string,
-    plugin: TouchPlugin
+    plugin: TouchPlugin,
   ): PluginLogSessionMeta {
     const sessionDir = path.join(logsBaseDir, folderName)
     const infoPath = path.join(sessionDir, 'touch-plugin.info')
@@ -67,7 +72,7 @@ export class PluginLogModule extends BaseModule {
     let meta: PluginLogSessionMeta = {
       id: folderName,
       folder: folderName,
-      hasLogFile: fs.existsSync(logPath)
+      hasLogFile: fs.existsSync(logPath),
     }
 
     try {
@@ -80,13 +85,14 @@ export class PluginLogModule extends BaseModule {
         meta = {
           ...meta,
           startedAt: info.sessionStart,
-          version: info.version ?? plugin.version
+          version: info.version ?? plugin.version,
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.warn(
         `[PluginLogService] Failed to parse session meta for ${plugin.name}@${folderName}:`,
-        error
+        error,
       )
     }
 
@@ -98,17 +104,19 @@ export class PluginLogModule extends BaseModule {
       const content = await fsp.readFile(logPath, 'utf-8')
       return content
         .split('\n')
-        .filter((line) => line.trim().length > 0)
+        .filter(line => line.trim().length > 0)
         .map((line) => {
           try {
             return JSON.parse(line) as LogItem
-          } catch (error) {
+          }
+          catch (error) {
             console.warn('[PluginLogService] Failed to parse log line:', error)
             return null
           }
         })
         .filter((item): item is LogItem => item !== null)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[PluginLogService] Failed to read session log:', logPath, error)
       throw error
     }
@@ -126,7 +134,8 @@ export class PluginLogModule extends BaseModule {
           if (!subscriber.isDestroyed()) {
             // TODO: Format log before sending
             subscriber.send('plugin-log-stream', log)
-          } else {
+          }
+          else {
             subscribers.delete(subscriber)
           }
         })
@@ -140,11 +149,12 @@ export class PluginLogModule extends BaseModule {
       'plugin-log:subscribe',
       ({ data, header }: StandardChannelData) => {
         const pluginName = data.pluginName
-        if (!pluginName || !header.event) return
+        if (!pluginName || !header.event)
+          return
 
         const sender = header.event.sender as WebContents
         this.subscribe(pluginName, sender)
-      }
+      },
     )
 
     channel.regChannel(
@@ -152,11 +162,12 @@ export class PluginLogModule extends BaseModule {
       'plugin-log:unsubscribe',
       ({ data, header }: StandardChannelData) => {
         const pluginName = data.pluginName
-        if (!pluginName || !header.event) return
+        if (!pluginName || !header.event)
+          return
 
         const sender = header.event.sender as WebContents
         this.unsubscribe(pluginName, sender)
-      }
+      },
     )
 
     channel.regChannel(
@@ -164,18 +175,20 @@ export class PluginLogModule extends BaseModule {
       'plugin-log:get-sessions',
       ({ data, reply }: StandardChannelData) => {
         const pluginName = data.pluginName
-        if (!pluginName) return reply(DataCode.ERROR, { error: 'pluginName is required' })
+        if (!pluginName)
+          return reply(DataCode.ERROR, { error: 'pluginName is required' })
 
         const page = Math.max(1, Number.parseInt(String(data.page ?? 1), 10) || 1)
         const pageSizeRaw = Number.parseInt(String(data.pageSize ?? 12), 10)
         const pageSize = Math.min(Math.max(pageSizeRaw || 12, 5), 50)
 
         console.info(
-          `[PluginLogService] Getting log sessions for plugin: ${pluginName} | page=${page} pageSize=${pageSize}`
+          `[PluginLogService] Getting log sessions for plugin: ${pluginName} | page=${page} pageSize=${pageSize}`,
         )
 
         const plugin = this.resolvePlugin(pluginName)
-        if (!plugin) return reply(DataCode.ERROR, { error: 'Plugin not found' })
+        if (!plugin)
+          return reply(DataCode.ERROR, { error: 'Plugin not found' })
 
         const logsBaseDir = this.resolveLogsBaseDir(plugin)
         if (!logsBaseDir) {
@@ -185,8 +198,8 @@ export class PluginLogModule extends BaseModule {
         try {
           const sessionFolders = fs
             .readdirSync(logsBaseDir, { withFileTypes: true })
-            .filter((dirent) => dirent.isDirectory())
-            .map((dirent) => dirent.name)
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => dirent.name)
             .sort()
             .reverse()
 
@@ -194,25 +207,26 @@ export class PluginLogModule extends BaseModule {
           const startIndex = Math.min((page - 1) * pageSize, Math.max(total - 1, 0))
           const pageFolders = sessionFolders.slice(startIndex, startIndex + pageSize)
 
-          const sessions = pageFolders.map((folder) =>
-            this.buildSessionMeta(folder, logsBaseDir, plugin)
+          const sessions = pageFolders.map(folder =>
+            this.buildSessionMeta(folder, logsBaseDir, plugin),
           )
 
           console.info(
-            `[PluginLogService] Found ${total} log sessions for ${pluginName}. Returning ${sessions.length} records.`
+            `[PluginLogService] Found ${total} log sessions for ${pluginName}. Returning ${sessions.length} records.`,
           )
           return reply(DataCode.SUCCESS, {
             sessions,
             total,
             page,
             pageSize,
-            latestSessionId: sessionFolders[0] ?? null
+            latestSessionId: sessionFolders[0] ?? null,
           })
-        } catch (error: any) {
+        }
+        catch (error: any) {
           console.error(`[PluginLogService] Error reading log directory for ${pluginName}:`, error)
           return reply(DataCode.ERROR, { error: error.message })
         }
-      }
+      },
     )
 
     channel.regChannel(
@@ -225,14 +239,16 @@ export class PluginLogModule extends BaseModule {
           return { error: 'pluginName and sessionFolder are required' }
 
         console.info(
-          `[PluginLogService] Opening log file for plugin: ${pluginName}, session: ${targetSession}`
+          `[PluginLogService] Opening log file for plugin: ${pluginName}, session: ${targetSession}`,
         )
 
         const plugin = this.resolvePlugin(pluginName)
-        if (!plugin) return { error: 'Plugin not found' }
+        if (!plugin)
+          return { error: 'Plugin not found' }
 
         const logsBaseDir = this.resolveLogsBaseDir(plugin)
-        if (!logsBaseDir) return { error: 'Log directory unavailable' }
+        if (!logsBaseDir)
+          return { error: 'Log directory unavailable' }
 
         const logFilePath = path.join(logsBaseDir, targetSession, 'session.log')
 
@@ -244,7 +260,7 @@ export class PluginLogModule extends BaseModule {
         shell.openPath(logFilePath)
         console.info(`[PluginLogService] Successfully opened ${logFilePath}`)
         return { success: true }
-      }
+      },
     )
 
     channel.regChannel(
@@ -252,13 +268,16 @@ export class PluginLogModule extends BaseModule {
       'plugin-log:open-log-directory',
       ({ data }: StandardChannelData) => {
         const pluginName = data.pluginName
-        if (!pluginName) return { error: 'pluginName is required' }
+        if (!pluginName)
+          return { error: 'pluginName is required' }
 
         const plugin = this.resolvePlugin(pluginName)
-        if (!plugin) return { error: 'Plugin not found' }
+        if (!plugin)
+          return { error: 'Plugin not found' }
 
         const logsBaseDir = this.resolveLogsBaseDir(plugin)
-        if (!logsBaseDir) return { error: 'Log directory unavailable' }
+        if (!logsBaseDir)
+          return { error: 'Log directory unavailable' }
 
         if (!fs.existsSync(logsBaseDir)) {
           console.warn(`[PluginLogService] Log directory missing: ${logsBaseDir}`)
@@ -268,7 +287,7 @@ export class PluginLogModule extends BaseModule {
         shell.openPath(logsBaseDir)
         console.info(`[PluginLogService] Opened log directory ${logsBaseDir}`)
         return { success: true }
-      }
+      },
     )
 
     channel.regChannel(
@@ -276,19 +295,21 @@ export class PluginLogModule extends BaseModule {
       'plugin-log:get-buffer',
       ({ data, reply }: StandardChannelData) => {
         const pluginName = data.pluginName
-        if (!pluginName) return reply(DataCode.ERROR, { error: 'pluginName is required' })
+        if (!pluginName)
+          return reply(DataCode.ERROR, { error: 'pluginName is required' })
 
         console.debug(`[PluginLogService] Getting log buffer for plugin: ${pluginName}`)
 
         const plugin = this.resolvePlugin(pluginName)
-        if (!plugin) return reply(DataCode.ERROR, { error: 'Plugin not found' })
+        if (!plugin)
+          return reply(DataCode.ERROR, { error: 'Plugin not found' })
 
         const buffer = plugin.logger.getManager().getBuffer()
         console.info(
-          `[PluginLogService] Returning ${buffer.length} logs from buffer for ${pluginName}.`
+          `[PluginLogService] Returning ${buffer.length} logs from buffer for ${pluginName}.`,
         )
         return reply(DataCode.SUCCESS, buffer)
-      }
+      },
     )
 
     channel.regChannel(
@@ -300,10 +321,12 @@ export class PluginLogModule extends BaseModule {
           return reply(DataCode.ERROR, { error: 'pluginName and session are required' })
 
         const plugin = this.resolvePlugin(pluginName)
-        if (!plugin) return reply(DataCode.ERROR, { error: 'Plugin not found' })
+        if (!plugin)
+          return reply(DataCode.ERROR, { error: 'Plugin not found' })
 
         const logsBaseDir = this.resolveLogsBaseDir(plugin)
-        if (!logsBaseDir) return reply(DataCode.ERROR, { error: 'Log directory unavailable' })
+        if (!logsBaseDir)
+          return reply(DataCode.ERROR, { error: 'Log directory unavailable' })
 
         const targetLogPath = path.join(logsBaseDir, session, 'session.log')
         if (!fs.existsSync(targetLogPath)) {
@@ -313,10 +336,11 @@ export class PluginLogModule extends BaseModule {
         try {
           const logItems = await this.readSessionLog(targetLogPath)
           return reply(DataCode.SUCCESS, logItems)
-        } catch (error: any) {
+        }
+        catch (error: any) {
           return reply(DataCode.ERROR, { error: error.message })
         }
-      }
+      },
     )
   }
 
@@ -345,7 +369,7 @@ export class PluginLogModule extends BaseModule {
         this.subscriptions.delete(pluginName)
       }
       console.log(
-        `[PluginLogService] WebContents ${webContents.id} unsubscribed from ${pluginName}`
+        `[PluginLogService] WebContents ${webContents.id} unsubscribed from ${pluginName}`,
       )
     }
   }
@@ -353,7 +377,7 @@ export class PluginLogModule extends BaseModule {
   constructor() {
     super(PluginLogModule.key, {
       create: true,
-      dirName: 'plugin-logger'
+      dirName: 'plugin-logger',
     })
   }
 

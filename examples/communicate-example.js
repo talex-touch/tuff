@@ -16,12 +16,13 @@ async function communicateWithPlugin() {
       { // 消息数据
         text: 'Hello World',
         from: 'en',
-        to: 'zh'
-      }
+        to: 'zh',
+      },
     )
 
     console.log('Communication result:', result)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to communicate with plugin:', error)
   }
 }
@@ -34,12 +35,13 @@ async function sendSearchToPlugin() {
       'search',
       {
         query: 'translation',
-        type: 'text'
-      }
+        type: 'text',
+      },
     )
 
     console.log('Search result:', result)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to send search to plugin:', error)
   }
 }
@@ -52,12 +54,13 @@ async function sendNotificationToPlugin() {
       'notify',
       {
         title: 'Plugin Communication',
-        body: 'This is a test notification'
-      }
+        body: 'This is a test notification',
+      },
     )
 
     console.log('Notification result:', result)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to send notification to plugin:', error)
   }
 }
@@ -71,7 +74,8 @@ async function sendToMultiplePlugins() {
   const promises = plugins.map(async (pluginName) => {
     try {
       return await sdk.communicateWithPlugin(pluginName, key, info)
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`Failed to send to ${pluginName}:`, error)
       return null
     }
@@ -86,5 +90,5 @@ window.communicateExample = {
   communicateWithPlugin,
   sendSearchToPlugin,
   sendNotificationToPlugin,
-  sendToMultiplePlugins
+  sendToMultiplePlugins,
 }

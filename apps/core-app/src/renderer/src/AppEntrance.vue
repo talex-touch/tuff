@@ -1,14 +1,14 @@
 <script name="AppEntrance" setup lang="ts">
 import { isCoreBox } from '@talex-touch/utils/renderer'
-import CoreBox from './views/box/CoreBox.vue'
-import { useAppState } from './modules/hooks/useAppStates'
-import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { Toaster } from 'vue-sonner'
+import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
+import { useAppState } from './modules/hooks/useAppStates'
+import CoreBox from './views/box/CoreBox.vue'
 
-const init = ref(false)
 const props = defineProps<{
   onReady: () => Promise<void>
 }>()
+const init = ref(false)
 const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
 

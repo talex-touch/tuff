@@ -1,20 +1,23 @@
-import { ai } from './intelligence-sdk'
 import type {
   AiCapabilityRoutingConfig,
-  AiSDKPersistedConfig
+  AiSDKPersistedConfig,
 } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { storageModule } from '../storage'
 import chalk from 'chalk'
+import { storageModule } from '../storage'
+import { ai } from './intelligence-sdk'
 
 const LOG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const SUPPORTED_PROVIDER_TYPES = new Set(['openai', 'anthropic', 'deepseek', 'siliconflow', 'local'])
 
-const normalizeStrategyId = (value?: string) => {
-  if (!value) return undefined
-  if (value === 'priority') return 'rule-based-default'
-  if (value === 'adaptive') return 'adaptive-default'
+function normalizeStrategyId(value?: string) {
+  if (!value)
+    return undefined
+  if (value === 'priority')
+    return 'rule-based-default'
+  if (value === 'adaptive')
+    return 'adaptive-default'
   return value
 }
 
@@ -48,12 +51,13 @@ export function ensureAiConfigLoaded(force = false): void {
     stored.providers.forEach((p, idx) => {
       console.log(LOG, `[DEBUG]   [${idx}] id=${p.id}, type=${p.type}, enabled=${p.enabled}, hasApiKey=${!!p.apiKey}`)
     })
-  } else {
+  }
+  else {
     console.log(LOG, `[DEBUG] stored.providers is empty or undefined:`, stored.providers)
   }
 
-  const normalizedStrategy =
-    normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
+  const normalizedStrategy
+    = normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
 
   const providers = (stored.providers ?? []).filter((provider) => {
     if (!SUPPORTED_PROVIDER_TYPES.has(provider.type)) {
@@ -69,7 +73,8 @@ export function ensureAiConfigLoaded(force = false): void {
     providers.forEach((p, idx) => {
       console.log(LOG, `[DEBUG]   [${idx}] id=${p.id}, type=${p.type}, enabled=${p.enabled}`)
     })
-  } else {
+  }
+  else {
     console.log(LOG, `[DEBUG] No providers after filtering!`)
   }
 
@@ -79,7 +84,7 @@ export function ensureAiConfigLoaded(force = false): void {
     defaultStrategy: normalizedStrategy,
     enableAudit: stored.globalConfig?.enableAudit ?? true,
     enableCache: stored.globalConfig?.enableCache ?? false,
-    capabilitiesCount: Object.keys(stored.capabilities ?? {}).length
+    capabilitiesCount: Object.keys(stored.capabilities ?? {}).length,
   })
 
   ai.updateConfig({
@@ -88,7 +93,7 @@ export function ensureAiConfigLoaded(force = false): void {
     enableAudit: stored.globalConfig?.enableAudit ?? true,
     enableCache: stored.globalConfig?.enableCache ?? false,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
-    capabilities: stored.capabilities ?? {}
+    capabilities: stored.capabilities ?? {},
   })
 
   console.log(LOG, 'Configuration loaded and applied successfully')
@@ -96,7 +101,7 @@ export function ensureAiConfigLoaded(force = false): void {
 }
 
 export function getCapabilityOptions(
-  capabilityId: string
+  capabilityId: string,
 ): {
   allowedProviderIds?: string[]
   modelPreference?: string[]
@@ -111,13 +116,13 @@ export function getCapabilityOptions(
     return {}
   }
 
-  const enabledBindings = config.providers?.filter((binding) => binding.enabled !== false) ?? []
+  const enabledBindings = config.providers?.filter(binding => binding.enabled !== false) ?? []
   return {
-    allowedProviderIds: enabledBindings.length ? enabledBindings.map((binding) => binding.providerId) : undefined,
+    allowedProviderIds: enabledBindings.length ? enabledBindings.map(binding => binding.providerId) : undefined,
     modelPreference: enabledBindings
-      .flatMap((binding) => binding.models ?? [])
+      .flatMap(binding => binding.models ?? [])
       .filter((model): model is string => Boolean(model)),
-    promptTemplate: config.promptTemplate
+    promptTemplate: config.promptTemplate,
   }
 }
 
@@ -178,7 +183,8 @@ export function debugPrintConfig(): void {
   console.log(LOG, `[DEBUG] ========== Current Config File Content ==========`)
   if (!stored) {
     console.log(LOG, `[DEBUG] No config file found`)
-  } else {
+  }
+  else {
     console.log(LOG, `[DEBUG] Config keys:`, Object.keys(stored))
     console.log(LOG, `[DEBUG] Providers count:`, stored.providers?.length ?? 0)
     console.log(LOG, `[DEBUG] Full config:`)

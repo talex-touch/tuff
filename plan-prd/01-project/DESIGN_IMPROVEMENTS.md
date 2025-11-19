@@ -1,7 +1,7 @@
 # Tuff 项目设计改进建议
 
-> 基于系统性分析的设计优化建议  
-> 生成时间: 2025-10-30  
+> 基于系统性分析的设计优化建议
+> 生成时间: 2025-10-30
 > 适用版本: 2.1.0+
 
 ---
@@ -17,8 +17,8 @@
 ### 1. 插件加载死循环问题 🚨
 
 #### 问题描述
-**严重度**: 🔴 Critical  
-**影响范围**: 所有插件开发者  
+**严重度**: 🔴 Critical
+**影响范围**: 所有插件开发者
 
 **现象**:
 - 两个目录 (`touch-translation`, `quicker-open`) 都有 `manifest.json`,但 `name` 字段相同
@@ -45,18 +45,18 @@ private loadingPlugins = new Set<string>()
 
 async function loadPlugin(path: string) {
   const pluginId = path.split('/').pop()!
-  
+
   // 防止重复加载
   if (this.loadingPlugins.has(pluginId)) {
     logger.warn('插件正在加载中,跳过重复触发', { pluginId })
     return
   }
-  
+
   this.loadingPlugins.add(pluginId)
-  
+
   try {
     const manifest = await this.parseManifest(path)
-    
+
     // 同名检测: 直接返回,不继续
     if (this.plugins.has(manifest.name)) {
       this.issues.add({
@@ -67,7 +67,7 @@ async function loadPlugin(path: string) {
       })
       return // ✅ 阻断后续流程
     }
-    
+
     // 后续正常加载...
   } finally {
     this.loadingPlugins.delete(pluginId)
@@ -84,12 +84,13 @@ class DevPluginLoader {
     if (config.path) {
       // 有路径: 使用本地 manifest,支持监听
       return this.loadFromPath(config.path)
-    } else {
+    }
+    else {
       // 无路径: 仅 manifest 文本,不支持热更新
       throw new Error('Dev 模式无路径时无法热更新,请手动 reload')
     }
   }
-  
+
   private async loadFromPath(path: string): Promise<Plugin> {
     // LocalPluginProvider 仅在此模式监听
     // 且仅在 dev.source !== true 时监听
@@ -108,7 +109,7 @@ class LocalPluginProvider {
       logger.info('Source 模式不监听本地文件变更')
       return
     }
-    
+
     // 正常监听逻辑
     const watcher = chokidar.watch(path, { ... })
     // ...
@@ -127,7 +128,7 @@ class LocalPluginProvider {
 ### 2. 日志系统碎片化问题 📝
 
 #### 问题描述
-**严重度**: 🟡 High  
+**严重度**: 🟡 High
 **影响范围**: 开发调试、生产环境性能
 
 **现状问题**:
@@ -152,12 +153,13 @@ enum LogLevel {
 // 2. ModuleLogger 类
 class ModuleLogger {
   constructor(private module: string, private enabled: boolean, private level: LogLevel) {}
-  
+
   debug(message: string, ...args: any[]): void {
-    if (!this.enabled || this.level > LogLevel.DEBUG) return
+    if (!this.enabled || this.level > LogLevel.DEBUG)
+      return
     this._output('DEBUG', message, args)
   }
-  
+
   // 性能优化: 早期退出,避免参数求值
   private _output(level: string, message: string, args: any[]): void {
     const timestamp = dayjs().format('HH:mm:ss.SSS')
@@ -170,14 +172,14 @@ class ModuleLogger {
 // 3. LoggerManager 单例
 class LoggerManager {
   private loggers = new Map<string, ModuleLogger>()
-  
+
   getLogger(module: string, options?: Partial<ModuleLoggerOptions>): ModuleLogger {
     if (!this.loggers.has(module)) {
       this.loggers.set(module, new ModuleLogger(module, options))
     }
     return this.loggers.get(module)!
   }
-  
+
   // 全局控制
   setGlobalEnabled(enabled: boolean): void
   setGlobalLevel(level: LogLevel): void
@@ -236,7 +238,7 @@ logger.info('搜索完成', { results: 10, duration: 150 })
 ### 3. 托盘系统功能薄弱 🖱️
 
 #### 问题描述
-**严重度**: 🟡 Medium  
+**严重度**: 🟡 Medium
 **影响范围**: 用户体验
 
 **现状不足**:
@@ -291,10 +293,12 @@ tray.on('click', () => {
   if (mainWindow.isVisible()) {
     if (mainWindow.isFocused()) {
       mainWindow.hide() // 已聚焦 → 隐藏
-    } else {
+    }
+    else {
       mainWindow.focus() // 可见但未聚焦 → 聚焦
     }
-  } else {
+  }
+  else {
     mainWindow.show()
     mainWindow.focus() // 隐藏 → 显示并聚焦
   }
@@ -312,7 +316,7 @@ tray.on('click', () => {
 ### 4. 更新系统过于简单 🔄
 
 #### 问题描述
-**严重度**: 🟡 Medium  
+**严重度**: 🟡 Medium
 **影响范围**: 国内用户、用户体验
 
 **现状问题**:
@@ -329,10 +333,10 @@ tray.on('click', () => {
 abstract class UpdateProvider {
   abstract readonly name: string
   abstract readonly type: UpdateProviderType
-  
+
   abstract fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease>
   abstract getDownloadAssets(release: GitHubRelease): DownloadAsset[]
-  
+
   async healthCheck?(): Promise<boolean>
 }
 
@@ -340,18 +344,19 @@ abstract class UpdateProvider {
 class GithubUpdateProvider extends UpdateProvider {
   readonly name = 'GitHub Releases'
   readonly type = UpdateProviderType.GITHUB
-  
+
   async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
     const url = 'https://api.github.com/repos/talex-touch/tuff/releases'
     const response = await axios.get(url, { timeout: 8000 })
     // 过滤并返回最新版本
   }
-  
+
   async healthCheck(): Promise<boolean> {
     try {
       await axios.get('https://api.github.com', { timeout: 5000 })
       return true
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -361,7 +366,7 @@ class GithubUpdateProvider extends UpdateProvider {
 class OfficialUpdateProvider extends UpdateProvider {
   readonly name = 'Official Website'
   readonly type = UpdateProviderType.OFFICIAL
-  
+
   async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
     // TODO: 等待官方服务端实现
     throw new Error('Official update server is not ready yet')
@@ -371,7 +376,7 @@ class OfficialUpdateProvider extends UpdateProvider {
 // 自定义源
 class CustomUpdateProvider extends UpdateProvider {
   constructor(private config: CustomUpdateConfig) {}
-  
+
   async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
     // 使用自定义 API (需兼容 GitHub API 格式)
   }
@@ -383,23 +388,25 @@ class CustomUpdateProvider extends UpdateProvider {
 class UpdateProviderManager {
   private providers: UpdateProvider[] = []
   private activeProvider: UpdateProvider | null = null
-  
+
   registerProvider(provider: UpdateProvider): void {
     this.providers.push(provider)
   }
-  
+
   selectProvider(config: UpdateSourceConfig): UpdateProvider | null {
     // 根据用户配置选择 Provider
   }
-  
+
   async checkUpdate(): Promise<GitHubRelease | null> {
     const provider = this.activeProvider
-    if (!provider) return null
-    
+    if (!provider)
+      return null
+
     try {
       const release = await provider.fetchLatestRelease(currentChannel)
       return release
-    } catch (error) {
+    }
+    catch (error) {
       if (error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT') {
         // 显示网络错误提示
         showNetworkErrorDialog()
@@ -421,7 +428,7 @@ class UpdateProviderManager {
 async function handleDownload() {
   const assets = updateProvider.getDownloadAssets(latestRelease)
   const asset = selectAssetForPlatform(assets, process.platform, process.arch)
-  
+
   // 通过下载中心下载
   await downloadCenter.addTask({
     url: asset.url,
@@ -429,7 +436,7 @@ async function handleDownload() {
     priority: Priority.P0, // 最高优先级
     checksum: asset.checksum
   })
-  
+
   // 跳转到下载中心
   router.push('/downloads')
 }
@@ -446,7 +453,7 @@ async function handleDownload() {
 ### 5. 废弃 extract-icon API ♻️
 
 #### 问题描述
-**严重度**: 🟢 Low (但影响性能)  
+**严重度**: 🟢 Low (但影响性能)
 **影响范围**: 文件图标加载
 
 **现状问题**:
@@ -468,15 +475,17 @@ onMounted(async () => {
   for (let i = 0; i < bytes.length; i++) {
     storeData += String.fromCharCode(bytes[i])
   }
-  iconDataUrl.value = 'data:image/png;base64,' + window.btoa(storeData)
+  iconDataUrl.value = `data:image/png;base64,${window.btoa(storeData)}`
 })
 </script>
+
 <img :src="iconDataUrl" />
 
 <!-- 新方案 (1 行代码) -->
 <script>
 const iconUrl = computed(() => `tfile://${filePath}`)
 </script>
+
 <img :src="iconUrl" />
 ```
 
@@ -503,7 +512,7 @@ const iconUrl = computed(() => `tfile://${filePath}`)
 ### 6. 能力抽象碎片化 🧩
 
 #### 问题描述
-**严重度**: 🟢 Low (但影响长期架构)  
+**严重度**: 🟢 Low (但影响长期架构)
 **影响范围**: 插件开发者体验、代码复用
 
 **现状问题**:
@@ -530,21 +539,21 @@ interface CapabilityDefinition {
 // 2. 能力注册
 class PlatformCoreService {
   private registry = new Map<string, CapabilityDefinition>()
-  
+
   register(capability: CapabilityDefinition): void {
     this.registry.set(capability.id, capability)
   }
-  
+
   async invoke<T>(capabilityId: string, method: string, payload: any): Promise<T> {
     const capability = this.registry.get(capabilityId)
     if (!capability) throw new Error('Capability not found')
-    
+
     // 权限检查
     this.assertPermission(capabilityId, context.pluginId)
-    
+
     // 日志记录
     logger.info('调用能力', { capabilityId, method, pluginId: context.pluginId })
-    
+
     // 执行
     return await capability.handler(context, payload)
   }
@@ -579,7 +588,7 @@ await sdk.platform.invoke('system.notification.show', 'notify', {
 ### 7. AI 能力接入混乱 🤖
 
 #### 问题描述
-**严重度**: 🟢 Low (规划阶段)  
+**严重度**: 🟢 Low (规划阶段)
 **影响范围**: AI 功能扩展
 
 **现状问题**:
@@ -605,13 +614,13 @@ class AiService {
   async invoke(capabilityId: string, payload: any, options?: InvokeOptions): Promise<any> {
     // 策略路由: 根据成本/延迟/质量选择模型
     const provider = this.strategyManager.selectProvider(capabilityId, options)
-    
+
     // 执行调用
     const result = await provider.execute(payload)
-    
+
     // 日志与计费
     this.logUsage(capabilityId, provider.name, result.usage)
-    
+
     return result
   }
 }
@@ -630,7 +639,7 @@ class StrategyManager {
     if (options.modelPreference) {
       return this.getPreferredProvider(options.modelPreference)
     }
-    
+
     // 默认策略: 优先 gpt-4o-mini, 回退 deepseek-chat
     return this.getDefaultProvider(capabilityId)
   }
@@ -696,8 +705,7 @@ class StrategyManager {
 
 ---
 
-**文档版本**: v1.0  
-**生成时间**: 2025-10-30  
-**负责人**: Architecture Team  
+**文档版本**: v1.0
+**生成时间**: 2025-10-30
+**负责人**: Architecture Team
 **下次更新**: 根据实施进度
-

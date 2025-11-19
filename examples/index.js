@@ -6,7 +6,7 @@
 
 // 检查运行环境
 if (typeof window === 'undefined') {
-  throw new Error('[Plugin SDK] This SDK must run in a browser environment')
+  throw new TypeError('[Plugin SDK] This SDK must run in a browser environment')
 }
 
 if (!window.$channel) {
@@ -37,7 +37,8 @@ class PluginSDK {
   async sendMessage(message, data = {}) {
     try {
       return await this.channel.send(`plugin:${this.pluginName}:${message}`, data)
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`[Plugin SDK] Failed to send message: ${message}`, error)
       throw error
     }
@@ -54,9 +55,10 @@ class PluginSDK {
       return await this.channel.send('index:communicate', {
         pluginName: targetPluginName,
         key,
-        info
+        info,
       })
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`[Plugin SDK] Failed to communicate with plugin ${targetPluginName}:`, error)
       throw error
     }
@@ -70,7 +72,7 @@ class PluginSDK {
       name: this.pluginName,
       version: this.plugin?.version || 'unknown',
       description: this.plugin?.desc || '',
-      status: this.plugin?.status || 'unknown'
+      status: this.plugin?.status || 'unknown',
     }
   }
 
@@ -81,4 +83,3 @@ class PluginSDK {
     return this.channel
   }
 }
-

@@ -1,19 +1,20 @@
+import type { LoadingEvent, LoadingMode, PreloadAPI } from '@talex-touch/utils/preload'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import appLogoAsset from '../../public/logo.png?asset'
+import { electronAPI } from '@electron-toolkit/preload'
+import {
+
+  PRELOAD_LOADING_CHANNEL,
+
+} from '@talex-touch/utils/preload'
+import { isCoreBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
-import { isCoreBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
-import {
-  PRELOAD_LOADING_CHANNEL,
-  type LoadingEvent,
-  type LoadingMode,
-  type PreloadAPI
-} from '@talex-touch/utils/preload'
+import appLogoAsset from '../../public/logo.png?asset'
 
-const resolveAssetSource = (asset: string): string => {
-  if (!asset) return asset
+function resolveAssetSource(asset: string): string {
+  if (!asset)
+    return asset
 
   if (/^(?:https?:\/\/|file:|data:)/.test(asset)) {
     return asset
@@ -56,17 +57,19 @@ const api: PreloadAPI = {
    */
   sendPreloadEvent(event: LoadingEvent) {
     window.postMessage({ channel: PRELOAD_LOADING_CHANNEL, data: event }, '*')
-  }
+  },
 } satisfies PreloadAPI
 
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
+  }
+  catch (error) {
     console.error(error)
   }
-} else {
+}
+else {
   // @ts-ignore (define in dts)
   window.electron = electronAPI
   // @ts-ignore (define in dts)
@@ -77,7 +80,8 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
   return new Promise((resolve) => {
     if (condition.includes(document.readyState)) {
       resolve(true)
-    } else {
+    }
+    else {
       document.addEventListener('readystatechange', () => {
         if (condition.includes(document.readyState)) {
           resolve(true)
@@ -89,15 +93,15 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
 
 const safeDOM = {
   append(parent: HTMLElement, child: HTMLElement) {
-    if (!Array.from(parent.children).find((e) => e === child)) {
+    if (!Array.from(parent.children).find(e => e === child)) {
       parent.appendChild(child)
     }
   },
   remove(parent: HTMLElement, child: HTMLElement) {
-    if (Array.from(parent.children).find((e) => e === child)) {
+    if (Array.from(parent.children).find(e => e === child)) {
       parent.removeChild(child)
     }
-  }
+  },
 }
 
 interface LoadingOptions {
@@ -329,7 +333,8 @@ function useLoading(options: LoadingOptions) {
   }
 
   const simulateProgress = () => {
-    if (!progressLoop) return
+    if (!progressLoop)
+      return
     const delta = Math.random() * 0.035 + 0.01
     updateProgress(progressValue + delta)
     rafId = window.setTimeout(simulateProgress, 700 + Math.random() * 900)
@@ -396,7 +401,8 @@ function useLoading(options: LoadingOptions) {
   }
 
   const cleanupOverlay = () => {
-    if (removalCompleted) return
+    if (removalCompleted)
+      return
     removalCompleted = true
     clearFinalizeTimer()
     clearFadeTimer()
@@ -412,7 +418,8 @@ function useLoading(options: LoadingOptions) {
     container.dataset.status = 'hidden'
 
     const handleTransitionEnd = (event: TransitionEvent) => {
-      if (event.target !== container || event.propertyName !== 'opacity') return
+      if (event.target !== container || event.propertyName !== 'opacity')
+        return
       container.removeEventListener('transitionend', handleTransitionEnd)
       transitionCleanup = null
       cleanupOverlay()
@@ -428,7 +435,8 @@ function useLoading(options: LoadingOptions) {
   }
 
   const startRemovalSequence = () => {
-    if (isRemoving || removalCompleted) return
+    if (isRemoving || removalCompleted)
+      return
 
     isRemoving = true
     container.dataset.status = 'completing'
@@ -443,14 +451,17 @@ function useLoading(options: LoadingOptions) {
   }
 
   const attemptFinalize = () => {
-    if (isRemoving || removalCompleted) return
-    if (!removalRequested || !windowLoaded || !rendererFinished) return
+    if (isRemoving || removalCompleted)
+      return
+    if (!removalRequested || !windowLoaded || !rendererFinished)
+      return
     startRemovalSequence()
   }
 
   const ensureDebugPanel = () => {
     const existing = container.querySelector(`.${className}__debug`)
-    if (existing) return existing
+    if (existing)
+      return existing
 
     const wrapper = document.createElement('div')
     wrapper.className = `${className}__debug`
@@ -469,7 +480,8 @@ function useLoading(options: LoadingOptions) {
   const renderDebugMessages = () => {
     const debugWrapper = ensureDebugPanel()
     const body = debugWrapper.querySelector(`.${className}__debug-body`)
-    if (!body) return
+    if (!body)
+      return
 
     body.innerHTML = debugList
       .slice(-12)
@@ -487,7 +499,8 @@ function useLoading(options: LoadingOptions) {
         container.dataset.mode = event.mode
         if (event.mode === 'progress') {
           progressBar.className = `${className}__progress`
-        } else {
+        }
+        else {
           progressBar.className = `${className}__bar`
         }
         if (event.mode === 'debug') {
@@ -503,7 +516,8 @@ function useLoading(options: LoadingOptions) {
       case 'progress':
         if (typeof event.delta === 'number') {
           updateProgress(progressValue + event.delta)
-        } else if (event.reset) {
+        }
+        else if (event.reset) {
           updateProgress(0.05)
         }
         break
@@ -529,9 +543,11 @@ function useLoading(options: LoadingOptions) {
   }
 
   const messageListener = (ev: MessageEvent) => {
-    if (ev.data?.channel !== PRELOAD_LOADING_CHANNEL) return
+    if (ev.data?.channel !== PRELOAD_LOADING_CHANNEL)
+      return
     const payload = ev.data.data as LoadingEvent | undefined
-    if (!payload) return
+    if (!payload)
+      return
 
     handleEvent(payload)
   }
@@ -559,7 +575,8 @@ function useLoading(options: LoadingOptions) {
       }
     },
     removeLoading() {
-      if (removalCompleted) return
+      if (removalCompleted)
+        return
       removalRequested = true
 
       if (!rendererFinished) {
@@ -597,21 +614,22 @@ function useLoading(options: LoadingOptions) {
         updateProgress(FINALIZE_PROGRESS_VALUE, true)
       }
       attemptFinalize()
-    }
+    },
   }
 }
 
 const detectedMode: LoadingMode = isDebugMode ? 'debug' : 'progress'
 
 const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoaded } = useLoading({
-  mode: detectedMode
+  mode: detectedMode,
 })
 
 domReady().then(() => {
   const info = useInitialize()
   if (isMainWindow()) {
     appendLoading()
-  } else if (isCoreBox()) {
+  }
+  else if (isCoreBox()) {
     document.body.classList.add('core-box')
   }
 
@@ -619,7 +637,8 @@ domReady().then(() => {
 })
 
 window.onmessage = (ev) => {
-  if (!ev.data) return
+  if (!ev.data)
+    return
   if (ev.data.payload === 'removeLoading') {
     removeLoading()
     return

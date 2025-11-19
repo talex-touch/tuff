@@ -2,22 +2,23 @@
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
-const { t } = useI18n()
-
 const props = defineProps<{
   list: any[]
   index: number
 }>()
+
 const emits = defineEmits<{
   (e: 'search', val: string): void
   (e: 'select', val: any, ind: number): void
 }>()
 
+const { t } = useI18n()
+
 enum EOrderWay {
   SORT_DESC = 0, // default
   DIC = 1,
   D_DIC = 2,
-  FREQ = 3
+  FREQ = 3,
 }
 
 const _list = ref<any[]>([])
@@ -33,7 +34,7 @@ watch(
 
     emits('select', null, -1)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 function handleOrderWay() {
@@ -51,7 +52,6 @@ function handleOrderWay() {
 
   if (orderWay.value === EOrderWay.D_DIC) {
     _list.value = _list.value!.sort((a, b) => b.name.localeCompare(a.name))
-    return
   }
 
   // The sorting logic is now handled by the backend (main process).
@@ -89,7 +89,7 @@ watch(
   (val) => {
     emits('search', val)
     // _list.value = props.list.filter(item => item.name.includes(val))
-  }
+  },
 )
 
 function highlightText(text: string, matched: Array<any>) {
@@ -101,7 +101,8 @@ function highlightText(text: string, matched: Array<any>) {
   for (let i = 0; i < text.length; i++) {
     if (i >= startIndex && i <= endIndex) {
       result += `<span class="matched">${text[i]}</span>`
-    } else {
+    }
+    else {
       result += text[i]
     }
   }

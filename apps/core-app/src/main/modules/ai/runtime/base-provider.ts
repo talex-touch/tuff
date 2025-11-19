@@ -1,15 +1,15 @@
 import type {
+  AiChatPayload,
+  AiEmbeddingPayload,
+  AiInvokeOptions,
+  AiInvokeResult,
   AiProviderAdapter,
   AiProviderConfig,
   AiProviderType,
-  AiInvokeResult,
-  AiInvokeOptions,
   AiStreamChunk,
-  AiChatPayload,
-  AiEmbeddingPayload,
   AiTranslatePayload,
   AiVisionOcrPayload,
-  AiVisionOcrResult
+  AiVisionOcrResult,
 } from '@talex-touch/utils'
 
 export abstract class IntelligenceProvider implements AiProviderAdapter {
@@ -45,7 +45,7 @@ export abstract class IntelligenceProvider implements AiProviderAdapter {
 
   visionOcr(
     _payload: AiVisionOcrPayload,
-    _options: AiInvokeOptions
+    _options: AiInvokeOptions,
   ): Promise<AiInvokeResult<AiVisionOcrResult>> {
     return Promise.reject(new Error(`[${this.type}] Vision OCR not implemented`))
   }
@@ -60,19 +60,20 @@ export abstract class IntelligenceProvider implements AiProviderAdapter {
     const endpointHint = context?.endpoint ? ` ${context.endpoint}` : ''
     if (!trimmedBody) {
       throw new Error(
-        `[${this.type}]${endpointHint} returned an empty response (status ${response.status}). Expecting JSON payload.`
+        `[${this.type}]${endpointHint} returned an empty response (status ${response.status}). Expecting JSON payload.`,
       )
     }
 
     try {
       return JSON.parse(trimmedBody)
-    } catch (error) {
+    }
+    catch (error) {
       const normalized = trimmedBody.replace(/\s+/g, ' ')
-      const snippet =
-        normalized.length > 256 ? `${normalized.slice(0, 256)}...` : normalized || '<unreadable response>'
+      const snippet
+        = normalized.length > 256 ? `${normalized.slice(0, 256)}...` : normalized || '<unreadable response>'
       const contentType = response.headers.get('content-type') || 'unknown'
       throw new Error(
-        `[${this.type}]${endpointHint} expected JSON but received ${contentType} (status ${response.status}). Body snippet: ${snippet}`
+        `[${this.type}]${endpointHint} expected JSON but received ${contentType} (status ${response.status}). Body snippet: ${snippet}`,
       )
     }
   }

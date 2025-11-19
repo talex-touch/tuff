@@ -1,5 +1,5 @@
-import { TuffItem, TuffQuery } from '@talex-touch/utils'
-import { ISortMiddleware, SortStat } from '../types'
+import type { TuffItem, TuffQuery } from '@talex-touch/utils'
+import type { ISortMiddleware, SortStat } from '../types'
 
 /**
  * The result of a sort operation, including the sorted items and performance statistics.
@@ -46,13 +46,13 @@ export class Sorter {
 
       stats.push({
         name: middleware.name,
-        duration: endTime - startTime
+        duration: endTime - startTime,
       })
     }
 
     return {
       sortedItems: processedItems,
-      stats
+      stats,
     }
   }
 }

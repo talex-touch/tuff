@@ -8,7 +8,7 @@ declare global {
   interface Window {
     $plugin: {
       name: string
-      path: Object
+      path: object
     }
     $channel: ITouchClientChannel
     $crash: (message: string, extraData: any) => void

@@ -1,3 +1,43 @@
+<script lang="ts" name="TPopperDialog" setup>
+import type { Component } from 'vue'
+import { sleep } from '@talex-touch/utils/common'
+import { defineComponent, onMounted, provide, ref } from 'vue'
+
+interface Props {
+  close: () => void
+  title?: string
+  message?: string
+  comp?: Component
+  render?: () => any
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  title: '',
+  message: '',
+  comp: undefined,
+  render: undefined,
+})
+
+const isClosing = ref(false)
+const renderComp = ref<Component | null>(null)
+
+onMounted(() => {
+  if (props.render) {
+    renderComp.value = defineComponent({
+      render: props.render,
+    })
+  }
+})
+
+async function destroy(): Promise<void> {
+  isClosing.value = true
+  await sleep(550)
+  props.close()
+}
+
+provide('destroy', destroy)
+</script>
+
 <template>
   <div
     :class="{ close: isClosing }"
@@ -14,7 +54,9 @@
       <component :is="renderComp" v-if="renderComp" />
       <component :is="comp" v-else-if="comp" />
       <template v-else>
-        <p v-if="title" id="dialog-title" class="text-1.5rem font-600 text-center">{{ title }}</p>
+        <p v-if="title" id="dialog-title" class="text-1.5rem font-600 text-center">
+          {{ title }}
+        </p>
         <div
           id="dialog-content"
           class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px overflow-hidden overflow-y-auto box-border"
@@ -23,7 +65,7 @@
             class="w-full block text-center my-1rem leading-1.25rem"
             style="position: relative; height: 100%"
             v-html="message"
-          ></span>
+          />
         </div>
         <div
           v-wave
@@ -49,45 +91,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="TPopperDialog" setup>
-import { defineComponent, type Component, onMounted, provide, ref } from 'vue'
-import { sleep } from '@talex-touch/utils/common'
-
-interface Props {
-  close: () => void
-  title?: string
-  message?: string
-  comp?: Component
-  render?: () => any
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  title: '',
-  message: '',
-  comp: undefined,
-  render: undefined
-})
-
-const isClosing = ref(false)
-const renderComp = ref<Component | null>(null)
-
-onMounted(() => {
-  if (props.render) {
-    renderComp.value = defineComponent({
-      render: props.render
-    })
-  }
-})
-
-async function destroy(): Promise<void> {
-  isClosing.value = true
-  await sleep(550)
-  props.close()
-}
-
-provide('destroy', destroy)
-</script>
 
 <style lang="scss">
 $dialog-animation-duration: 0.5s;

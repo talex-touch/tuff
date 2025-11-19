@@ -1,32 +1,33 @@
-import path from 'node:path'
-import { readdirSync, existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import type { AiInvokeResult, AiVisionOcrPayload, AiVisionOcrResult } from '@talex-touch/utils'
-import { BaseCapabilityTester, type CapabilityTestPayload } from './base-tester'
+import type { CapabilityTestPayload } from './base-tester'
+import { existsSync, readdirSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { getCapabilityPrompt } from '../intelligence-config'
+import { BaseCapabilityTester } from './base-tester'
 
 export class VisionCapabilityTester extends BaseCapabilityTester {
   readonly capabilityType = 'vision'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<AiVisionOcrPayload> {
     const source = input.source ?? (await this.loadSampleImageSource('ocr'))
-    
+
     return {
       source,
       prompt: getCapabilityPrompt('vision.ocr'),
       includeKeywords: true,
-      includeLayout: true
+      includeLayout: true,
     }
   }
 
   formatTestResult(result: AiInvokeResult<AiVisionOcrResult>) {
     const ocrResult = result.result
-    const preview = ocrResult.text.length > 200 
-      ? `${ocrResult.text.slice(0, 200)}...` 
+    const preview = ocrResult.text.length > 200
+      ? `${ocrResult.text.slice(0, 200)}...`
       : ocrResult.text
 
-    const keywords = ocrResult.keywords?.length 
-      ? `\n关键词: ${ocrResult.keywords.join(', ')}` 
+    const keywords = ocrResult.keywords?.length
+      ? `\n关键词: ${ocrResult.keywords.join(', ')}`
       : ''
 
     return {
@@ -35,7 +36,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
       textPreview: preview + keywords,
       provider: result.provider,
       model: result.model,
-      latency: result.latency
+      latency: result.latency,
     }
   }
 
@@ -53,7 +54,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
       throw new Error('Sample image directory not found')
     }
 
-    const files = readdirSync(dir).filter((file) => /\.(png|jpe?g|webp|gif|bmp)$/i.test(file))
+    const files = readdirSync(dir).filter(file => /\.(png|jpe?g|webp|gif|bmp)$/i.test(file))
 
     if (files.length === 0) {
       throw new Error('Sample image folder is empty')
@@ -66,7 +67,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
 
     return {
       type: 'data-url',
-      dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
+      dataUrl: `data:${mime};base64,${buffer.toString('base64')}`,
     }
   }
 
@@ -74,7 +75,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
     const guesses = [
       path.resolve(process.cwd(), 'apps/core-app/resources/intelligence/test-capability', folder),
       path.resolve(process.cwd(), 'resources/intelligence/test-capability', folder),
-      path.resolve(process.resourcesPath, 'intelligence/test-capability', folder)
+      path.resolve(process.resourcesPath, 'intelligence/test-capability', folder),
     ]
 
     for (const guess of guesses) {

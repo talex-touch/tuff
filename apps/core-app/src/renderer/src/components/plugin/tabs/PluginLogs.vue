@@ -1,123 +1,12 @@
-<template>
-  <div class="plugin-logs-wrapper">
-    <header class="plugin-logs-toolbar">
-      <div class="toolbar-actions">
-        <button class="toolbar-button" type="button" @click="openHistoryDrawer">
-          <i class="i-ri-history-line" />
-          <span>{{ historyActionLabel }}</span>
-        </button>
-        <button class="toolbar-button" type="button" @click="handleManualRefresh">
-          <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
-          <span>{{ refreshLabel }}</span>
-        </button>
-        <button
-          class="toolbar-button"
-          type="button"
-          :disabled="!canOpenLogFile"
-          @click="openSelectedSessionFile"
-        >
-          <i class="i-ri-file-text-line" />
-          <span>{{ openFileLabel }}</span>
-        </button>
-        <button
-          class="toolbar-button"
-          type="button"
-          :disabled="!canOpenLogDirectory"
-          @click="openLogDirectory"
-        >
-          <i class="i-ri-folder-open-line" />
-          <span>{{ openDirectoryLabel }}</span>
-        </button>
-      </div>
-      <div v-if="pendingLiveUpdates" class="toolbar-status">
-        <button class="toolbar-tag" type="button" @click="jumpToLive">
-          <i class="i-ri-sparkling-fill" />
-          <span>{{ pendingUpdatesLabel }}</span>
-        </button>
-      </div>
-    </header>
-
-    <section class="plugin-logs-terminal">
-      <header class="terminal-header">
-        <div class="terminal-title">
-          <h2>{{ activeSessionLabel }}</h2>
-          <span :class="['terminal-state', isViewingLiveSession ? 'state-live' : 'state-archive']">
-            {{ isViewingLiveSession ? liveLabel : archiveLabel }}
-          </span>
-        </div>
-      </header>
-      <div class="terminal-body">
-        <div
-          class="live-indicator"
-          :class="{ collapsed: !liveIndicatorExpanded, inactive: !isViewingLiveSession }"
-          @click="toggleLiveIndicator"
-        >
-          <span class="indicator-dot" />
-          <span v-if="liveIndicatorExpanded" class="indicator-label">{{ liveStreamLabel }}</span>
-        </div>
-        <LogTerminal :logs="terminalLogs" />
-        <div v-if="isLoadingLogs" class="terminal-overlay loading">{{ loadingLabel }}</div>
-        <div v-else-if="noLogs" class="terminal-overlay empty">{{ emptyLabel }}</div>
-      </div>
-    </section>
-  </div>
-
-  <TuffDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
-    <section class="history-panel">
-      <div v-if="historySessions.length" class="history-list">
-        <button
-          v-for="session in historySessions"
-          :key="session.id"
-          type="button"
-          class="history-item"
-          :class="{
-            active: session.id === selectedSessionId,
-            live: session.id === latestSessionId
-          }"
-          @click="selectSession(session.id, { fromHistory: true })"
-        >
-          <div class="history-meta">
-            <span class="history-label">{{ formatSessionLabel(session) }}</span>
-            <span v-if="session.version" class="history-version">v{{ session.version }}</span>
-          </div>
-          <span v-if="session.id === latestSessionId" class="history-live-badge">{{
-            liveLabel
-          }}</span>
-        </button>
-      </div>
-      <div v-else class="history-empty">{{ historyEmpty }}</div>
-      <footer v-if="totalPages > 1" class="history-pagination">
-        <button
-          class="pager"
-          type="button"
-          :disabled="!hasPrevPage"
-          @click="changePage(currentPage - 1)"
-        >
-          <i class="i-ri-arrow-left-s-line" />
-        </button>
-        <span class="pager-info">{{ currentPage }} / {{ totalPages }}</span>
-        <button
-          class="pager"
-          type="button"
-          :disabled="!hasNextPage"
-          @click="changePage(currentPage + 1)"
-        >
-          <i class="i-ri-arrow-right-s-line" />
-        </button>
-      </footer>
-    </section>
-  </TuffDrawer>
-</template>
-
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
-import { formatLogForTerminal } from '~/utils/log-formatter'
-import LogTerminal from '~/components/terminal/LogTerminal.vue'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
+import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import LogTerminal from '~/components/terminal/LogTerminal.vue'
+import { formatLogForTerminal } from '~/utils/log-formatter'
 
 interface LogSessionMeta {
   id: string
@@ -210,16 +99,18 @@ const pendingUpdatesLabel = computed(() => {
 })
 
 const isViewingLiveSession = computed(
-  () => selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value
+  () => selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value,
 )
 
 const selectedSession = computed<LogSessionMeta | null>(() => {
-  if (!selectedSessionId.value) return null
+  if (!selectedSessionId.value)
+    return null
   return sessionCache.value[selectedSessionId.value] ?? null
 })
 
 const activeSessionLabel = computed(() => {
-  if (!selectedSession.value) return ''
+  if (!selectedSession.value)
+    return ''
   return formatSessionLabel(selectedSession.value)
 })
 
@@ -228,7 +119,8 @@ const noLogs = computed(() => !isLoadingLogs.value && terminalLogs.value.length 
 const historySessions = computed(() => sessions.value)
 
 const totalPages = computed(() => {
-  if (!totalSessions.value || !pageSize.value) return 1
+  if (!totalSessions.value || !pageSize.value)
+    return 1
   return Math.max(1, Math.ceil(totalSessions.value / pageSize.value))
 })
 
@@ -244,25 +136,27 @@ const canOpenLogDirectory = computed(() => Boolean(currentPluginName.value))
 
 const logKeySet = new Set<string>()
 
-const computeLogKey = (log: LogItem): string => {
+function computeLogKey(log: LogItem): string {
   const payload = log.data?.length ? JSON.stringify(log.data) : ''
   return `${log.timestamp}|${log.level}|${log.message}|${payload}`
 }
 
-const dedupeLogs = (items: LogItem[]): LogItem[] => {
+function dedupeLogs(items: LogItem[]): LogItem[] {
   const seen = new Set<string>()
   return items
     .filter((item) => {
       const key = computeLogKey(item)
-      if (seen.has(key)) return false
+      if (seen.has(key))
+        return false
       seen.add(key)
       return true
     })
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 }
 
-const upsertSessionCache = (list: LogSessionMeta[]): void => {
-  if (!list.length) return
+function upsertSessionCache(list: LogSessionMeta[]): void {
+  if (!list.length)
+    return
   const next = { ...sessionCache.value }
   for (const item of list) {
     next[item.id] = item
@@ -270,21 +164,22 @@ const upsertSessionCache = (list: LogSessionMeta[]): void => {
   sessionCache.value = next
 }
 
-const setLogs = (items: LogItem[]): void => {
+function setLogs(items: LogItem[]): void {
   const deduped = dedupeLogs(items)
   logKeySet.clear()
-  deduped.forEach((log) => logKeySet.add(computeLogKey(log)))
-  terminalLogs.value = deduped.map((log) => formatLogForTerminal(log))
+  deduped.forEach(log => logKeySet.add(computeLogKey(log)))
+  terminalLogs.value = deduped.map(log => formatLogForTerminal(log))
 }
 
-const appendLog = (log: LogItem): void => {
+function appendLog(log: LogItem): void {
   const key = computeLogKey(log)
-  if (logKeySet.has(key)) return
+  if (logKeySet.has(key))
+    return
   logKeySet.add(key)
   terminalLogs.value = [...terminalLogs.value, formatLogForTerminal(log)]
 }
 
-const formatSessionLabel = (session: LogSessionMeta): string => {
+function formatSessionLabel(session: LogSessionMeta): string {
   if (session.startedAt) {
     const date = new Date(session.startedAt)
     if (!Number.isNaN(date.getTime())) {
@@ -294,20 +189,22 @@ const formatSessionLabel = (session: LogSessionMeta): string => {
   return session.id
 }
 
-const toggleLiveIndicator = (): void => {
+function toggleLiveIndicator(): void {
   liveIndicatorExpanded.value = !liveIndicatorExpanded.value
   scheduleLiveIndicatorCollapse()
 }
 
-const scheduleLiveIndicatorCollapse = (): void => {
-  if (liveIndicatorTimer) window.clearTimeout(liveIndicatorTimer)
+function scheduleLiveIndicatorCollapse(): void {
+  if (liveIndicatorTimer)
+    window.clearTimeout(liveIndicatorTimer)
   liveIndicatorTimer = window.setTimeout(() => {
     liveIndicatorExpanded.value = false
   }, 3200)
 }
 
-const handleLogStream = (log: LogItem): void => {
-  if (!currentPluginName.value || log.plugin !== currentPluginName.value) return
+function handleLogStream(log: LogItem): void {
+  if (!currentPluginName.value || log.plugin !== currentPluginName.value)
+    return
   if (!isViewingLiveSession.value) {
     pendingLiveUpdates.value = true
     return
@@ -315,16 +212,17 @@ const handleLogStream = (log: LogItem): void => {
   appendLog(log)
 }
 
-const detachStream = (): void => {
+function detachStream(): void {
   if (unsubscribeLogStream) {
     unsubscribeLogStream()
     unsubscribeLogStream = null
   }
 }
 
-const cleanup = (): void => {
+function cleanup(): void {
   const pluginName = currentPluginName.value
-  if (!pluginName) return
+  if (!pluginName)
+    return
   detachStream()
   void touchSdk.rawChannel.send('plugin-log:unsubscribe', { pluginName })
   currentPluginName.value = null
@@ -336,11 +234,7 @@ const cleanup = (): void => {
   setLogs([])
 }
 
-const readSessionLogs = async (
-  pluginName: string,
-  sessionId: string,
-  options?: { includeBuffer?: boolean }
-): Promise<void> => {
+async function readSessionLogs(pluginName: string, sessionId: string, options?: { includeBuffer?: boolean }): Promise<void> {
   isLoadingLogs.value = true
   try {
     const chunks: LogItem[] = []
@@ -352,11 +246,12 @@ const readSessionLogs = async (
           'plugin-log:get-session-log',
           {
             pluginName,
-            session: sessionId
-          }
+            session: sessionId,
+          },
         )
         chunks.push(...sessionLogs)
-      } catch (error) {
+      }
+      catch (error) {
         console.warn('[PluginLogs] Failed to load session log:', error)
       }
     }
@@ -364,31 +259,30 @@ const readSessionLogs = async (
     if (options?.includeBuffer) {
       try {
         const buffer: LogItem[] = await touchSdk.rawChannel.send('plugin-log:get-buffer', {
-          pluginName
+          pluginName,
         })
         chunks.push(...buffer)
-      } catch (error) {
+      }
+      catch (error) {
         console.warn('[PluginLogs] Failed to load buffer:', error)
       }
     }
 
     setLogs(chunks)
     pendingLiveUpdates.value = false
-  } finally {
+  }
+  finally {
     isLoadingLogs.value = false
   }
 }
 
-const fetchSessions = async (
-  pluginName: string,
-  options?: { page?: number; preferLatest?: boolean; preserveSelection?: boolean }
-): Promise<void> => {
+async function fetchSessions(pluginName: string, options?: { page?: number, preferLatest?: boolean, preserveSelection?: boolean }): Promise<void> {
   const targetPage = options?.page ?? currentPage.value
   try {
     const response: SessionResponse = await touchSdk.rawChannel.send('plugin-log:get-sessions', {
       pluginName,
       page: targetPage,
-      pageSize: pageSize.value
+      pageSize: pageSize.value,
     })
 
     sessions.value = response.sessions ?? []
@@ -402,11 +296,13 @@ const fetchSessions = async (
 
     if (shouldUseLatest && latestSessionId.value) {
       selectedSessionId.value = latestSessionId.value
-    } else if (!options?.preserveSelection) {
+    }
+    else if (!options?.preserveSelection) {
       const first = response.sessions?.[0]
       selectedSessionId.value = first ? first.id : selectedSessionId.value
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[PluginLogs] Failed to fetch sessions:', error)
     sessions.value = []
     totalSessions.value = 0
@@ -416,12 +312,13 @@ const fetchSessions = async (
   }
 }
 
-const refreshSessions = async (options?: {
+async function refreshSessions(options?: {
   gotoLatest?: boolean
   reloadLogs?: boolean
   preserveSelection?: boolean
-}): Promise<void> => {
-  if (!currentPluginName.value) return
+}): Promise<void> {
+  if (!currentPluginName.value)
+    return
   const gotoLatest = options?.gotoLatest ?? false
   const preserveSelection = options?.preserveSelection ?? !gotoLatest
   const targetPage = gotoLatest ? 1 : currentPage.value
@@ -429,20 +326,20 @@ const refreshSessions = async (options?: {
   await fetchSessions(currentPluginName.value, {
     page: targetPage,
     preferLatest: gotoLatest,
-    preserveSelection
+    preserveSelection,
   })
 
   if (options?.reloadLogs ?? gotoLatest) {
     const sessionId = selectedSessionId.value
     if (sessionId) {
       await readSessionLogs(currentPluginName.value, sessionId, {
-        includeBuffer: sessionId === latestSessionId.value
+        includeBuffer: sessionId === latestSessionId.value,
       })
     }
   }
 }
 
-const attachStream = (pluginName: string): void => {
+function attachStream(pluginName: string): void {
   detachStream()
   void touchSdk.rawChannel.send('plugin-log:subscribe', { pluginName })
   unsubscribeLogStream = touchSdk.onChannelEvent('plugin-log-stream', (log: LogItem) => {
@@ -450,8 +347,9 @@ const attachStream = (pluginName: string): void => {
   })
 }
 
-const initialize = async (pluginName: string): Promise<void> => {
-  if (!pluginName) return
+async function initialize(pluginName: string): Promise<void> {
+  if (!pluginName)
+    return
   if (currentPluginName.value && currentPluginName.value !== pluginName) {
     cleanup()
   }
@@ -463,31 +361,30 @@ const initialize = async (pluginName: string): Promise<void> => {
   attachStream(pluginName)
 }
 
-const selectSession = async (
-  sessionId: string,
-  options?: { fromHistory?: boolean }
-): Promise<void> => {
-  if (!currentPluginName.value) return
-  if (sessionId === selectedSessionId.value && !options?.fromHistory) return
+async function selectSession(sessionId: string, options?: { fromHistory?: boolean }): Promise<void> {
+  if (!currentPluginName.value)
+    return
+  if (sessionId === selectedSessionId.value && !options?.fromHistory)
+    return
 
   selectedSessionId.value = sessionId
 
   if (options?.fromHistory) {
     const session = sessionCache.value[sessionId]
     if (session) {
-      const sessionPageIndex = sessions.value.findIndex((item) => item.id === sessionId)
+      const sessionPageIndex = sessions.value.findIndex(item => item.id === sessionId)
       if (sessionPageIndex === -1) {
         await refreshSessions({
           gotoLatest: sessionId === latestSessionId.value,
           reloadLogs: false,
-          preserveSelection: true
+          preserveSelection: true,
         })
       }
     }
   }
 
   await readSessionLogs(currentPluginName.value, sessionId, {
-    includeBuffer: sessionId === latestSessionId.value
+    includeBuffer: sessionId === latestSessionId.value,
   })
 
   if (options?.fromHistory) {
@@ -495,49 +392,55 @@ const selectSession = async (
   }
 }
 
-const openSelectedSessionFile = (): void => {
-  if (!currentPluginName.value || !selectedSessionId.value || !canOpenLogFile.value) return
+function openSelectedSessionFile(): void {
+  if (!currentPluginName.value || !selectedSessionId.value || !canOpenLogFile.value)
+    return
   void touchSdk.rawChannel.send('plugin-log:open-session-file', {
     pluginName: currentPluginName.value,
-    session: selectedSessionId.value
+    session: selectedSessionId.value,
   })
 }
 
-const openLogDirectory = (): void => {
-  if (!currentPluginName.value || !canOpenLogDirectory.value) return
+function openLogDirectory(): void {
+  if (!currentPluginName.value || !canOpenLogDirectory.value)
+    return
   void touchSdk.rawChannel.send('plugin-log:open-log-directory', {
-    pluginName: currentPluginName.value
+    pluginName: currentPluginName.value,
   })
 }
 
-const handleManualRefresh = async (): Promise<void> => {
-  if (isRefreshing.value) return
+async function handleManualRefresh(): Promise<void> {
+  if (isRefreshing.value)
+    return
   isRefreshing.value = true
   try {
     await refreshSessions({ gotoLatest: false, reloadLogs: true, preserveSelection: true })
-  } finally {
+  }
+  finally {
     isRefreshing.value = false
   }
 }
 
-const openHistoryDrawer = async (): Promise<void> => {
+async function openHistoryDrawer(): Promise<void> {
   isHistoryDrawerOpen.value = true
   await refreshSessions({ gotoLatest: false, reloadLogs: false, preserveSelection: true })
 }
 
-const changePage = async (page: number): Promise<void> => {
-  if (!currentPluginName.value) return
+async function changePage(page: number): Promise<void> {
+  if (!currentPluginName.value)
+    return
   const safePage = Math.min(Math.max(page, 1), totalPages.value)
   currentPage.value = safePage
   await fetchSessions(currentPluginName.value, {
     page: safePage,
     preferLatest: safePage === 1,
-    preserveSelection: true
+    preserveSelection: true,
   })
 }
 
-const jumpToLive = async (): Promise<void> => {
-  if (!currentPluginName.value || !latestSessionId.value) return
+async function jumpToLive(): Promise<void> {
+  if (!currentPluginName.value || !latestSessionId.value)
+    return
   currentPage.value = 1
   await refreshSessions({ gotoLatest: true, reloadLogs: true })
   isHistoryDrawerOpen.value = false
@@ -548,7 +451,7 @@ watch(
   (plugin) => {
     void initialize(plugin.name)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(
@@ -557,7 +460,7 @@ watch(
     if (opened) {
       void refreshSessions({ gotoLatest: false, reloadLogs: false, preserveSelection: true })
     }
-  }
+  },
 )
 
 onMounted(() => {
@@ -575,9 +478,126 @@ onUnmounted(() => {
 defineExpose({
   refreshSessions,
   selectSession,
-  openHistoryDrawer
+  openHistoryDrawer,
 })
 </script>
+
+<template>
+  <div class="plugin-logs-wrapper">
+    <header class="plugin-logs-toolbar">
+      <div class="toolbar-actions">
+        <button class="toolbar-button" type="button" @click="openHistoryDrawer">
+          <i class="i-ri-history-line" />
+          <span>{{ historyActionLabel }}</span>
+        </button>
+        <button class="toolbar-button" type="button" @click="handleManualRefresh">
+          <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
+          <span>{{ refreshLabel }}</span>
+        </button>
+        <button
+          class="toolbar-button"
+          type="button"
+          :disabled="!canOpenLogFile"
+          @click="openSelectedSessionFile"
+        >
+          <i class="i-ri-file-text-line" />
+          <span>{{ openFileLabel }}</span>
+        </button>
+        <button
+          class="toolbar-button"
+          type="button"
+          :disabled="!canOpenLogDirectory"
+          @click="openLogDirectory"
+        >
+          <i class="i-ri-folder-open-line" />
+          <span>{{ openDirectoryLabel }}</span>
+        </button>
+      </div>
+      <div v-if="pendingLiveUpdates" class="toolbar-status">
+        <button class="toolbar-tag" type="button" @click="jumpToLive">
+          <i class="i-ri-sparkling-fill" />
+          <span>{{ pendingUpdatesLabel }}</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="plugin-logs-terminal">
+      <header class="terminal-header">
+        <div class="terminal-title">
+          <h2>{{ activeSessionLabel }}</h2>
+          <span class="terminal-state" :class="[isViewingLiveSession ? 'state-live' : 'state-archive']">
+            {{ isViewingLiveSession ? liveLabel : archiveLabel }}
+          </span>
+        </div>
+      </header>
+      <div class="terminal-body">
+        <div
+          class="live-indicator"
+          :class="{ collapsed: !liveIndicatorExpanded, inactive: !isViewingLiveSession }"
+          @click="toggleLiveIndicator"
+        >
+          <span class="indicator-dot" />
+          <span v-if="liveIndicatorExpanded" class="indicator-label">{{ liveStreamLabel }}</span>
+        </div>
+        <LogTerminal :logs="terminalLogs" />
+        <div v-if="isLoadingLogs" class="terminal-overlay loading">
+          {{ loadingLabel }}
+        </div>
+        <div v-else-if="noLogs" class="terminal-overlay empty">
+          {{ emptyLabel }}
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <TuffDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
+    <section class="history-panel">
+      <div v-if="historySessions.length" class="history-list">
+        <button
+          v-for="session in historySessions"
+          :key="session.id"
+          type="button"
+          class="history-item"
+          :class="{
+            active: session.id === selectedSessionId,
+            live: session.id === latestSessionId,
+          }"
+          @click="selectSession(session.id, { fromHistory: true })"
+        >
+          <div class="history-meta">
+            <span class="history-label">{{ formatSessionLabel(session) }}</span>
+            <span v-if="session.version" class="history-version">v{{ session.version }}</span>
+          </div>
+          <span v-if="session.id === latestSessionId" class="history-live-badge">{{
+            liveLabel
+          }}</span>
+        </button>
+      </div>
+      <div v-else class="history-empty">
+        {{ historyEmpty }}
+      </div>
+      <footer v-if="totalPages > 1" class="history-pagination">
+        <button
+          class="pager"
+          type="button"
+          :disabled="!hasPrevPage"
+          @click="changePage(currentPage - 1)"
+        >
+          <i class="i-ri-arrow-left-s-line" />
+        </button>
+        <span class="pager-info">{{ currentPage }} / {{ totalPages }}</span>
+        <button
+          class="pager"
+          type="button"
+          :disabled="!hasNextPage"
+          @click="changePage(currentPage + 1)"
+        >
+          <i class="i-ri-arrow-right-s-line" />
+        </button>
+      </footer>
+    </section>
+  </TuffDrawer>
+</template>
 
 <style lang="scss" scoped>
 .plugin-logs-wrapper {

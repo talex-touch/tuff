@@ -8,7 +8,7 @@ export const useAppState = createGlobalState(() => {
   const states = shallowReactive({
     hasUpdate: false,
     noUpdateAvailable: false,
-    updateErrorMessage: ''
+    updateErrorMessage: '',
   })
 
   return { appStates: states }

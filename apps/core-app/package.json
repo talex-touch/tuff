@@ -2,9 +2,10 @@
   "name": "@talex-touch/core-app",
   "version": "2.4.6",
   "description": "A strong adaptation more platform all-tool program.",
-  "main": "./out/main/index.js",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
+  "license": "MPL-2.0 license",
   "homepage": "https://tuff.tagzxia.com",
+  "main": "./out/main/index.js",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -41,8 +42,8 @@
     "commander": "^14.0.2",
     "compressing": "^2.0.0",
     "crypto-js": "^4.2.0",
-    "detect-libc": "^2.0.4",
     "dayjs": "^1.11.19",
+    "detect-libc": "^2.0.4",
     "drizzle-orm": "^0.44.7",
     "electron-log": "5.0.0-beta.28",
     "electron-updater": "^6.6.2",
@@ -63,6 +64,10 @@
     "xterm-addon-fit": "^0.8.0",
     "yauzl": "^3.2.0"
   },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate": "^6.0.5"
+  },
   "devDependencies": {
     "@clerk/clerk-js": "^5.103.1",
     "@clerk/types": "^4.96.0",
@@ -77,10 +82,10 @@
     "@intlify/unplugin-vue-i18n": "^11.0.1",
     "@milkdown/core": "^7.17.1",
     "@milkdown/ctx": "^7.17.1",
+    "@milkdown/plugin-listener": "^7.17.1",
     "@milkdown/preset-commonmark": "^7.17.1",
     "@milkdown/prose": "^7.17.1",
     "@milkdown/theme-nord": "^7.17.1",
-    "@milkdown/plugin-listener": "^7.17.1",
     "@milkdown/transformer": "^7.17.1",
     "@number-flow/vue": "^0.4.8",
     "@rollup/plugin-commonjs": "^29.0.0",
@@ -127,10 +132,5 @@
     "vue-router": "^4.6.3",
     "vue-sonner": "^2.0.9",
     "vue-tsc": "^3.1.2"
-  },
-  "optionalDependencies": {
-    "utf-8-validate": "^6.0.5",
-    "bufferutil": "^4.0.9"
-  },
-  "license": "MPL-2.0 license"
+  }
 }

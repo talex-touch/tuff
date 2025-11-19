@@ -14,8 +14,8 @@ const props = withDefaults(
     block: false,
     loading: false,
     disabled: false,
-    nativeType: 'button'
-  }
+    nativeType: 'button',
+  },
 )
 
 const emits = defineEmits<{
@@ -23,7 +23,8 @@ const emits = defineEmits<{
 }>()
 
 function handleClick(event: MouseEvent) {
-  if (props.disabled || props.loading) return
+  if (props.disabled || props.loading)
+    return
   emits('click', event)
 }
 </script>

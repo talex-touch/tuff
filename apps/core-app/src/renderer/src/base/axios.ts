@@ -1,13 +1,14 @@
-import _axios, { AxiosRequestConfig, CreateAxiosDefaults } from 'axios'
+import type { AxiosRequestConfig, CreateAxiosDefaults } from 'axios'
+import _axios from 'axios'
 
 export function wrapperAxios(
   url = 'http://localhost:9981',
-  data: CreateAxiosDefaults = { timeout: 6000, proxy: false }
+  data: CreateAxiosDefaults = { timeout: 6000, proxy: false },
 ) {
   // Encapsulate the complete axios instance code
   const axios = _axios.create({
     baseURL: url,
-    ...data
+    ...data,
   })
 
   // Request interceptor
@@ -19,7 +20,7 @@ export function wrapperAxios(
     (error) => {
       // Do something with request error
       return Promise.reject(error)
-    }
+    },
   )
 
   // Response interceptor
@@ -38,9 +39,9 @@ export function wrapperAxios(
         code: 500,
         message: 'Server error',
         data: null,
-        error
-      } //Promise.reject(error)
-    }
+        error,
+      } // Promise.reject(error)
+    },
   )
 
   function post(url: string, data: any, config?: IReqConfig) {
@@ -84,7 +85,7 @@ export function wrapperAxios(
     patch,
     head,
     options,
-    request
+    request,
   }
 }
 

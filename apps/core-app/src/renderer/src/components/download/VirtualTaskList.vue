@@ -1,30 +1,6 @@
-<template>
-  <div class="virtual-task-list" ref="containerRef" @scroll="handleScroll">
-    <div class="virtual-scroll-spacer" :style="{ height: `${totalHeight}px` }">
-      <div class="virtual-scroll-content" :style="{ transform: `translateY(${offsetY}px)` }">
-        <TaskCard
-          v-for="task in visibleTasks"
-          :key="task.id"
-          :task="task"
-          :view-mode="viewMode"
-          @pause="$emit('pause', task.id)"
-          @resume="$emit('resume', task.id)"
-          @cancel="$emit('cancel', task.id)"
-          @retry="$emit('retry', task.id)"
-          @remove="$emit('remove', task.id)"
-          @delete="$emit('delete', task.id)"
-          @open-file="$emit('open-file', task.id)"
-          @show-in-folder="$emit('show-in-folder', task.id)"
-          @show-details="$emit('show-details', task.id)"
-        />
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { DownloadTask } from '@talex-touch/utils'
+import type { DownloadTask } from '@talex-touch/utils'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { rafThrottle } from '~/utils/performance'
 import TaskCard from './TaskCard.vue'
 
@@ -35,16 +11,16 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  itemHeight: 120 // Default height for detailed view
+  itemHeight: 120, // Default height for detailed view
 })
 
 const emit = defineEmits<{
-  pause: [taskId: string]
-  resume: [taskId: string]
-  cancel: [taskId: string]
-  retry: [taskId: string]
-  remove: [taskId: string]
-  delete: [taskId: string]
+  'pause': [taskId: string]
+  'resume': [taskId: string]
+  'cancel': [taskId: string]
+  'retry': [taskId: string]
+  'remove': [taskId: string]
+  'delete': [taskId: string]
   'open-file': [taskId: string]
   'show-in-folder': [taskId: string]
   'show-details': [taskId: string]
@@ -69,10 +45,10 @@ const totalHeight = computed(() => {
 const visibleRange = computed(() => {
   const start = Math.floor(scrollTop.value / itemHeight.value)
   const end = Math.ceil((scrollTop.value + containerHeight.value) / itemHeight.value)
-  
+
   return {
     start: Math.max(0, start - overscan),
-    end: Math.min(props.tasks.length, end + overscan)
+    end: Math.min(props.tasks.length, end + overscan),
   }
 })
 
@@ -95,7 +71,7 @@ const handleScroll = rafThrottle(() => {
 })
 
 // Update container height on mount and resize
-const updateContainerHeight = () => {
+function updateContainerHeight() {
   if (containerRef.value) {
     containerHeight.value = containerRef.value.clientHeight
   }
@@ -120,6 +96,30 @@ watch(() => props.tasks.length, (newLength, oldLength) => {
   }
 })
 </script>
+
+<template>
+  <div ref="containerRef" class="virtual-task-list" @scroll="handleScroll">
+    <div class="virtual-scroll-spacer" :style="{ height: `${totalHeight}px` }">
+      <div class="virtual-scroll-content" :style="{ transform: `translateY(${offsetY}px)` }">
+        <TaskCard
+          v-for="task in visibleTasks"
+          :key="task.id"
+          :task="task"
+          :view-mode="viewMode"
+          @pause="$emit('pause', task.id)"
+          @resume="$emit('resume', task.id)"
+          @cancel="$emit('cancel', task.id)"
+          @retry="$emit('retry', task.id)"
+          @remove="$emit('remove', task.id)"
+          @delete="$emit('delete', task.id)"
+          @open-file="$emit('open-file', task.id)"
+          @show-in-folder="$emit('show-in-folder', task.id)"
+          @show-details="$emit('show-details', task.id)"
+        />
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .virtual-task-list {

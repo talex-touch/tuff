@@ -1,24 +1,25 @@
-import { BoxWindowOption } from '../../../config/default'
-import { app, screen, WebContentsView, nativeTheme } from 'electron'
-import path from 'path'
-import * as fs from 'fs'
-import fse from 'fs-extra'
-import os from 'os'
-import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
-import chalk from 'chalk'
+import type { AppSetting } from '@talex-touch/utils'
+import type { TouchApp } from '../../../core/touch-app'
+import type { TouchPlugin } from '../../plugin/plugin'
+import * as fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
-import { TalexTouch } from '../../../types'
-import { getConfig } from '../../storage'
-import { sleep, StorageList, type AppSetting } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { coreBoxManager } from './manager'
-import { TouchPlugin } from '../../plugin/plugin'
-import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
-import { TouchWindow } from '../../../core/touch-window'
-import { TouchApp } from '../../../core/touch-app'
-import { genTouchApp } from '../../../core'
-import { pluginModule } from '../../plugin/plugin-module'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
+import chalk from 'chalk'
+import { app, nativeTheme, screen, WebContentsView } from 'electron'
+import fse from 'fs-extra'
+import { BoxWindowOption } from '../../../config/default'
+import { genTouchApp } from '../../../core'
+import { TouchWindow } from '../../../core/touch-window'
+import { TalexTouch } from '../../../types'
+import { pluginModule } from '../../plugin/plugin-module'
+import { getConfig } from '../../storage'
+import { coreBoxManager } from './manager'
+import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 
 const windowAnimation = useWindowAnimation()
 
@@ -27,7 +28,7 @@ const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
 const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
 const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
 
-type ThemeStyleConfig = {
+interface ThemeStyleConfig {
   theme?: {
     style?: {
       dark?: boolean
@@ -107,37 +108,39 @@ export class WindowManager {
           const url = path.join(__dirname, '..', 'renderer', 'index.html')
 
           await window.loadFile(url, {
-            devtools: this.touchApp.version === TalexTouch.AppVersion.DEV
+            devtools: this.touchApp.version === TalexTouch.AppVersion.DEV,
           })
-        } else {
-          const url = process.env['ELECTRON_RENDERER_URL'] as string
+        }
+        else {
+          const url = process.env.ELECTRON_RENDERER_URL as string
 
           await window.loadURL(url)
 
           window.openDevTools({
-            mode: 'detach'
+            mode: 'detach',
           })
         }
 
         window.window.hide()
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[CoreBox] Failed to load content in new box window:', error)
       }
     }, 200)
 
     window.window.webContents.addListener('dom-ready', () => {
       console.debug(
-        '[CoreBox] BoxWindow ' + window.window.webContents.id + ' dom loaded, registering ...'
+        `[CoreBox] BoxWindow ${window.window.webContents.id} dom loaded, registering ...`,
       )
 
       this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
         id: window.window.webContents.id,
-        show: false
+        show: false,
       })
     })
 
     window.window.addListener('closed', () => {
-      this.windows = this.windows.filter((w) => w !== window)
+      this.windows = this.windows.filter(w => w !== window)
       console.debug('[CoreBox] BoxWindow closed!')
     })
 
@@ -199,10 +202,10 @@ export class WindowManager {
     const { bounds } = curScreen
 
     if (
-      typeof bounds.x !== 'number' ||
-      typeof bounds.y !== 'number' ||
-      typeof bounds.width !== 'number' ||
-      typeof bounds.height !== 'number'
+      typeof bounds.x !== 'number'
+      || typeof bounds.y !== 'number'
+      || typeof bounds.width !== 'number'
+      || typeof bounds.height !== 'number'
     ) {
       console.error('[CoreBox] Invalid bounds properties:', bounds)
       return
@@ -218,14 +221,16 @@ export class WindowManager {
 
     try {
       window.window.setPosition(left, top)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[CoreBox] Failed to set window position:', error)
     }
   }
 
   public show(): void {
     const window = this.current
-    if (!window) return
+    if (!window)
+      return
 
     this.updatePosition(window)
     window.window.showInactive()
@@ -236,7 +241,8 @@ export class WindowManager {
 
   public hide(): void {
     const window = this.current
-    if (!window) return
+    if (!window)
+      return
 
     if (process.platform !== 'darwin') {
       window.window.setPosition(-1000000, -1000000)
@@ -248,8 +254,8 @@ export class WindowManager {
   }
 
   public expand(
-    options: { length?: number; forceMax?: boolean } = {},
-    isUIMode: boolean = false
+    options: { length?: number, forceMax?: boolean } = {},
+    isUIMode: boolean = false,
   ): void {
     const { length = 0, forceMax = false } = options
     const effectiveLength = length > 0 ? length : 1
@@ -266,10 +272,11 @@ export class WindowManager {
           x: 0,
           y: 60,
           width: bounds.width,
-          height: bounds.height - 60
+          height: bounds.height - 60,
         })
       }
-    } else {
+    }
+    else {
       console.error('[CoreBox] No current window available for expansion')
     }
 
@@ -287,7 +294,8 @@ export class WindowManager {
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, 60)
       currentWindow.window.setSize(900, 60, false)
-    } else {
+    }
+    else {
       console.error('[CoreBox] No current window available for shrinking')
     }
     console.debug('[CoreBox] Shrunk.')
@@ -304,7 +312,8 @@ export class WindowManager {
       }
 
       return curScreen
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[CoreBox] Error getting current screen:', error)
 
       return screen.getPrimaryDisplay()
@@ -333,7 +342,7 @@ export class WindowManager {
     return { followSystem, dark }
   }
 
-  private resolveThemeStoragePath(): { directory: string; file: string } {
+  private resolveThemeStoragePath(): { directory: string, file: string } {
     const userDataDir = app.getPath('userData')
     const directory = path.join(userDataDir, ...CORE_BOX_THEME_SUBDIR)
     const file = path.join(directory, CORE_BOX_THEME_FILE_NAME)
@@ -361,7 +370,8 @@ export class WindowManager {
 
       const content = fs.readFileSync(file, 'utf-8')
       return content.trim().length > 0 ? content : defaultCss
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[CoreBox] Failed to prepare theme stylesheet, falling back to default.', error)
       return defaultCss
     }
@@ -467,7 +477,7 @@ export class WindowManager {
         currentWindow.window,
         ChannelType.MAIN,
         CORE_BOX_THEME_EVENT,
-        payload
+        payload,
       )
     }
 
@@ -497,14 +507,15 @@ export class WindowManager {
     if (plugin && injections?.js) {
       const tempPreloadPath = path.resolve(
         os.tmpdir(),
-        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
+        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`,
       )
 
       let originalPreloadContent = ''
       if (injections._.preload && fse.existsSync(injections._.preload)) {
         try {
           originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
-        } catch (error) {
+        }
+        catch (error) {
           console.warn(`[CoreBox] Failed to read original preload: ${injections._.preload}`, error)
         }
       }
@@ -694,7 +705,8 @@ export class WindowManager {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
         preloadPath = path.resolve(tempPreloadPath)
         console.log(`[CoreBox] Created dynamic preload script: ${preloadPath}`)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[CoreBox] Failed to create preload script: ${tempPreloadPath}`, error)
         preloadPath = injections._.preload
       }
@@ -708,7 +720,7 @@ export class WindowManager {
       contextIsolation: false,
       sandbox: false,
       webviewTag: true,
-      scrollBounce: true
+      scrollBounce: true,
     }
 
     const view = (this.uiView = new WebContentsView({ webPreferences }))
@@ -743,7 +755,8 @@ export class WindowManager {
         }
         if (pluginModule.pluginManager) {
           pluginModule.pluginManager.setActivePlugin(plugin.name)
-        } else {
+        }
+        else {
           console.warn('[CoreBox] Plugin manager not available, cannot set plugin active')
         }
       }
@@ -754,7 +767,7 @@ export class WindowManager {
       x: 0,
       y: 60,
       width: bounds.width,
-      height: bounds.height - 60
+      height: bounds.height - 60,
     })
 
     this.uiView.webContents.loadURL(url)
@@ -773,8 +786,8 @@ export class WindowManager {
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
-          genTouchApp().channel.send(ChannelType.PLUGIN, '@lifecycle:' + LifecycleHooks.INACTIVE, {
-            plugin: plugin.name
+          genTouchApp().channel.send(ChannelType.PLUGIN, `@lifecycle:${LifecycleHooks.INACTIVE}`, {
+            plugin: plugin.name,
           })
         }
       }
@@ -783,9 +796,10 @@ export class WindowManager {
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         this.uiView.webContents.closeDevTools()
         currentWindow.window.contentView.removeChildView(this.uiView)
-      } else {
+      }
+      else {
         console.warn(
-          '[WindowManager] Cannot remove child view: current window is null or destroyed.'
+          '[WindowManager] Cannot remove child view: current window is null or destroyed.',
         )
       }
       // The WebContents are automatically destroyed when the WebContentsView is removed.

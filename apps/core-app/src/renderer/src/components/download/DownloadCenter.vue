@@ -1,3 +1,85 @@
+<script setup lang="ts">
+import { Check, Clock, Close, Download, Loading, Setting } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { toast } from 'vue-sonner'
+import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
+import DownloadSettings from './DownloadSettings.vue'
+import DownloadTaskItem from './DownloadTask.vue'
+
+const {
+  downloadTasks,
+  taskStats,
+  tasksByStatus,
+  currentDownloadSpeed,
+  pauseTask: pauseTaskHook,
+  resumeTask: resumeTaskHook,
+  cancelTask: cancelTaskHook,
+  updateConfig: updateConfigHook,
+  formatSpeed,
+} = useDownloadCenter()
+
+// Remove unused variables from destructuring if needed
+
+const settingsVisible = ref(false)
+
+function openSettings() {
+  settingsVisible.value = true
+}
+
+async function pauseTask(taskId: string) {
+  try {
+    await pauseTaskHook(taskId)
+    toast.success('任务已暂停')
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`暂停任务失败: ${message}`)
+  }
+}
+
+// 取消任务
+async function cancelTask(taskId: string) {
+  try {
+    await cancelTaskHook(taskId)
+    toast.success('任务已取消')
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`取消任务失败: ${message}`)
+  }
+}
+
+// 重试任务
+async function retryTask(taskId: string) {
+  try {
+    await resumeTaskHook(taskId)
+    toast.success('任务已重试')
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`重试任务失败: ${message}`)
+  }
+}
+
+// 移除任务
+function removeTask(_taskId: string) {
+  // 这里可以实现移除任务的逻辑
+  toast.success('任务已移除')
+}
+
+// 更新配置
+async function updateConfig(config: any) {
+  try {
+    await updateConfigHook(config)
+    toast.success('配置已更新')
+  }
+  catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    toast.error(`更新配置失败: ${message}`)
+  }
+}
+</script>
+
 <template>
   <div class="download-center">
     <!-- 头部 -->
@@ -32,24 +114,36 @@
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-value">{{ formatSpeed(currentDownloadSpeed) }}</div>
-              <div class="stat-label">{{ $t('download.current_speed') }}</div>
+              <div class="stat-value">
+                {{ formatSpeed(currentDownloadSpeed) }}
+              </div>
+              <div class="stat-label">
+                {{ $t('download.current_speed') }}
+              </div>
             </div>
           </el-card>
         </el-col>
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-value">{{ taskStats.downloading }}</div>
-              <div class="stat-label">{{ $t('download.active_downloads') }}</div>
+              <div class="stat-value">
+                {{ taskStats.downloading }}
+              </div>
+              <div class="stat-label">
+                {{ $t('download.active_downloads') }}
+              </div>
             </div>
           </el-card>
         </el-col>
         <el-col :span="6">
           <el-card class="stat-card">
             <div class="stat-content">
-              <div class="stat-value">{{ taskStats.completed }}</div>
-              <div class="stat-label">{{ $t('download.total_completed') }}</div>
+              <div class="stat-value">
+                {{ taskStats.completed }}
+              </div>
+              <div class="stat-label">
+                {{ $t('download.total_completed') }}
+              </div>
             </div>
           </el-card>
         </el-col>
@@ -57,8 +151,12 @@
           <el-card class="stat-card">
             <div class="stat-card">
               <div class="stat-content">
-                <div class="stat-value">{{ taskStats.failed }}</div>
-                <div class="stat-label">{{ $t('download.total_failed') }}</div>
+                <div class="stat-value">
+                  {{ taskStats.failed }}
+                </div>
+                <div class="stat-label">
+                  {{ $t('download.total_failed') }}
+                </div>
               </div>
             </div>
           </el-card>
@@ -149,84 +247,6 @@
     <DownloadSettings v-model:visible="settingsVisible" @update-config="updateConfig" />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-import { toast } from 'vue-sonner'
-import { Download, Setting, Loading, Clock, Check, Close } from '@element-plus/icons-vue'
-import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
-import DownloadTaskItem from './DownloadTask.vue'
-import DownloadSettings from './DownloadSettings.vue'
-
-const {
-  downloadTasks,
-  taskStats,
-  tasksByStatus,
-  currentDownloadSpeed,
-  pauseTask: pauseTaskHook,
-  resumeTask: resumeTaskHook,
-  cancelTask: cancelTaskHook,
-  updateConfig: updateConfigHook,
-  formatSpeed
-} = useDownloadCenter()
-
-// Remove unused variables from destructuring if needed
-
-const settingsVisible = ref(false)
-
-const openSettings = () => {
-  settingsVisible.value = true
-}
-
-const pauseTask = async (taskId: string) => {
-  try {
-    await pauseTaskHook(taskId)
-    toast.success('任务已暂停')
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`暂停任务失败: ${message}`)
-  }
-}
-
-// 取消任务
-const cancelTask = async (taskId: string) => {
-  try {
-    await cancelTaskHook(taskId)
-    toast.success('任务已取消')
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`取消任务失败: ${message}`)
-  }
-}
-
-// 重试任务
-const retryTask = async (taskId: string) => {
-  try {
-    await resumeTaskHook(taskId)
-    toast.success('任务已重试')
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`重试任务失败: ${message}`)
-  }
-}
-
-// 移除任务
-const removeTask = (_taskId: string) => {
-  // 这里可以实现移除任务的逻辑
-  toast.success('任务已移除')
-}
-
-// 更新配置
-const updateConfig = async (config: any) => {
-  try {
-    await updateConfigHook(config)
-    toast.success('配置已更新')
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`更新配置失败: ${message}`)
-  }
-}
-</script>
 
 <style scoped>
 .download-center {

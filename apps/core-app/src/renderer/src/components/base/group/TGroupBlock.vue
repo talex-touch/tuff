@@ -1,3 +1,11 @@
+<script name="TGroupBlock" setup>
+import { ref } from 'vue'
+
+const props = defineProps(['name', 'icon', 'description', 'expandFill', 'shrink'])
+
+const expand = ref(!props.shrink)
+</script>
+
 <template>
   <div class="TGroupBlock-Container" :class="{ expand }">
     <div class="TGroupBlock-Header fake-background index-fix" @click="expand = !expand">
@@ -15,14 +23,6 @@
     </div>
   </div>
 </template>
-
-<script name="TGroupBlock" setup>
-import { ref } from 'vue'
-
-const props = defineProps(['name', 'icon', 'description', 'expandFill', 'shrink'])
-
-const expand = ref(!props.shrink)
-</script>
 
 <style lang="scss">
 .TGroupBlock-Container .TGroupBlock-Main .TBlockSelection {

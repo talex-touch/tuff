@@ -54,15 +54,16 @@ Plugins can check if they have been granted specific permissions at runtime:
 
 ```javascript [Checking Permissions at Runtime]
 // In your plugin's main file or preload script
-import { permissions } from '@polyglot-toolbox/plugin-sdk';
+import { permissions } from '@polyglot-toolbox/plugin-sdk'
 
 // Check if a permission is granted
 if (permissions.has('file-system.read')) {
   // Perform file read operations
-  readFile('/path/to/file.txt');
-} else {
+  readFile('/path/to/file.txt')
+}
+else {
   // Request the permission or handle the lack of permission gracefully
-  console.log('Permission to read files is not granted');
+  console.log('Permission to read files is not granted')
 }
 ```
 
@@ -76,20 +77,22 @@ In some cases, a plugin may need to request permissions dynamically during runti
 
 ```javascript [Requesting Permissions Dynamically]
 // In your plugin's main file or preload script
-import { permissions } from '@polyglot-toolbox/plugin-sdk';
+import { permissions } from '@polyglot-toolbox/plugin-sdk'
 
 async function requestFileAccess() {
   try {
-    const granted = await permissions.request('file-system.read');
+    const granted = await permissions.request('file-system.read')
     if (granted) {
-      console.log('File read permission granted');
+      console.log('File read permission granted')
       // Proceed with file operations
-    } else {
-      console.log('File read permission denied');
+    }
+    else {
+      console.log('File read permission denied')
       // Handle the denial gracefully
     }
-  } catch (error) {
-    console.error('Error requesting permission:', error);
+  }
+  catch (error) {
+    console.error('Error requesting permission:', error)
   }
 }
 ```
@@ -141,15 +144,16 @@ Always check for permissions before using protected features and handle cases wh
 ```javascript [Good Example]
 // Good - Checking permissions and handling denials
 if (permissions.has('network.access')) {
-  fetchDataFromAPI();
-} else {
-  showUserMessage('This feature requires internet access. Please grant network permission in settings.');
+  fetchDataFromAPI()
+}
+else {
+  showUserMessage('This feature requires internet access. Please grant network permission in settings.')
 }
 ```
 
 ```javascript [Avoid Example]
 // Avoid - Not checking permissions
-fetchDataFromAPI(); // This might fail if permission is not granted
+fetchDataFromAPI() // This might fail if permission is not granted
 ```
 
 :::
@@ -164,16 +168,17 @@ Request permissions when the user is about to use a feature that requires them, 
 // Good - Requesting permission when needed
 document.getElementById('sync-button').addEventListener('click', async () => {
   if (!permissions.has('network.access')) {
-    const granted = await permissions.request('network.access');
-    if (!granted) return;
+    const granted = await permissions.request('network.access')
+    if (!granted)
+      return
   }
-  syncData();
-});
+  syncData()
+})
 ```
 
 ```javascript [Avoid Example]
 // Avoid - Requesting permission immediately
-permissions.request('network.access'); // Requested as soon as the plugin loads
+permissions.request('network.access') // Requested as soon as the plugin loads
 ```
 
 :::
@@ -244,88 +249,90 @@ Here's a complete example of a plugin that properly handles file system permissi
 
 ```javascript [Secure File Access Plugin]
 // plugin.js
-import { permissions } from '@polyglot-toolbox/plugin-sdk';
+import { permissions } from '@polyglot-toolbox/plugin-sdk'
 
 class SecureFileAccessPlugin {
   constructor() {
-    this.setupEventListeners();
+    this.setupEventListeners()
   }
-  
+
   setupEventListeners() {
     document.getElementById('open-file-btn').addEventListener('click', () => {
-      this.openFile();
-    });
-    
+      this.openFile()
+    })
+
     document.getElementById('save-file-btn').addEventListener('click', () => {
-      this.saveFile();
-    });
+      this.saveFile()
+    })
   }
-  
+
   async openFile() {
     // Check if we have read permission
     if (!permissions.has('file-system.read')) {
       // Request the permission
-      const granted = await permissions.request('file-system.read');
+      const granted = await permissions.request('file-system.read')
       if (!granted) {
-        alert('File read permission is required to open files.');
-        return;
+        alert('File read permission is required to open files.')
+        return
       }
     }
-    
+
     // Proceed with file opening
     try {
-      const fileContent = await this.readFile('/path/to/file.txt');
-      console.log('File content:', fileContent);
-    } catch (error) {
-      console.error('Error reading file:', error);
+      const fileContent = await this.readFile('/path/to/file.txt')
+      console.log('File content:', fileContent)
+    }
+    catch (error) {
+      console.error('Error reading file:', error)
     }
   }
-  
+
   async saveFile() {
     // Check if we have write permission
     if (!permissions.has('file-system.write')) {
       // Request the permission
-      const granted = await permissions.request('file-system.write');
+      const granted = await permissions.request('file-system.write')
       if (!granted) {
-        alert('File write permission is required to save files.');
-        return;
+        alert('File write permission is required to save files.')
+        return
       }
     }
-    
+
     // Proceed with file saving
     try {
-      await this.writeFile('/path/to/file.txt', 'Hello, world!');
-      console.log('File saved successfully');
-    } catch (error) {
-      console.error('Error saving file:', error);
+      await this.writeFile('/path/to/file.txt', 'Hello, world!')
+      console.log('File saved successfully')
+    }
+    catch (error) {
+      console.error('Error saving file:', error)
     }
   }
-  
+
   readFile(path) {
     // Implementation for reading a file
     // This would use the plugin SDK's file system APIs
     return new Promise((resolve, reject) => {
       // Simulated file read
       setTimeout(() => {
-        resolve('File content');
-      }, 100);
-    });
+        resolve('File content')
+      }, 100)
+    })
   }
-  
+
   writeFile(path, content) {
     // Implementation for writing a file
     // This would use the plugin SDK's file system APIs
     return new Promise((resolve, reject) => {
       // Simulated file write
       setTimeout(() => {
-        resolve();
-      }, 100);
-    });
+        resolve()
+      }, 100)
+    })
   }
 }
 
 // Initialize the plugin
-new SecureFileAccessPlugin();
+new SecureFileAccessPlugin()
 ```
 
 :::

@@ -1,9 +1,10 @@
-import { Component, createVNode, render, getCurrentInstance, type AppContext } from 'vue'
-import TDialogMention from '~/components/base/dialog/TDialogMention.vue'
-import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
+import type { AppContext, Component } from 'vue'
+import { createVNode, getCurrentInstance, render } from 'vue'
 import TBlowDialog from '~/components/base/dialog/TBlowDialog.vue'
-import TPopperDialog from '~/components/base/dialog/TPopperDialog.vue'
+import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
+import TDialogMention from '~/components/base/dialog/TDialogMention.vue'
 import TouchTip from '~/components/base/dialog/TouchTip.vue'
+import TPopperDialog from '~/components/base/dialog/TPopperDialog.vue'
 
 /**
  * Type definition for dialog button click handler
@@ -57,12 +58,11 @@ export function captureAppContext(): void {
 
   if (!instance) {
     throw new Error(
-      '[captureAppContext] Must be called within a Vue component context (setup or lifecycle hooks)'
+      '[captureAppContext] Must be called within a Vue component context (setup or lifecycle hooks)',
     )
   }
 
   globalAppContext = instance.appContext
-
 }
 
 /**
@@ -91,7 +91,7 @@ export function captureAppContext(): void {
 function renderComponent(
   component: Component,
   props: Record<string, unknown>,
-  container: HTMLElement
+  container: HTMLElement,
 ): () => void {
   const vnode = createVNode(component, props)
 
@@ -101,8 +101,8 @@ function renderComponent(
 
   if (!appContext) {
     throw new Error(
-      '[renderComponent] No app context available. ' +
-        'Please call captureAppContext() in a Vue component setup before using dialog functions outside of Vue context.'
+      '[renderComponent] No app context available. '
+      + 'Please call captureAppContext() in a Vue component setup before using dialog functions outside of Vue context.',
     )
   }
 
@@ -127,17 +127,17 @@ function renderComponent(
 export async function forTouchTip(
   title: string,
   message: string,
-  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }]
+  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }],
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')
 
     let index = 0
-    while (document.getElementById('new-touch-tip-' + index)) {
+    while (document.getElementById(`new-touch-tip-${index}`)) {
       index++
     }
 
-    root.id = 'new-touch-tip-' + index
+    root.id = `new-touch-tip-${index}`
     root.style.zIndex = `${100000 + index}`
 
     document.body.appendChild(root)
@@ -152,9 +152,9 @@ export async function forTouchTip(
           cleanup()
           document.body.removeChild(root)
           resolve()
-        }
+        },
       },
-      root
+      root,
     )
   })
 }
@@ -172,17 +172,17 @@ export async function forDialogMention(
   title: string,
   message: string,
   icon: any = null,
-  btns: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }]
+  btns: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }],
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')
 
     let index = 0
-    while (document.getElementById('touch-dialog-tip-' + index)) {
+    while (document.getElementById(`touch-dialog-tip-${index}`)) {
       index++
     }
 
-    root.id = 'touch-dialog-tip-' + index
+    root.id = `touch-dialog-tip-${index}`
     root.style.zIndex = `${10000 + index}`
 
     document.body.appendChild(root)
@@ -200,9 +200,9 @@ export async function forDialogMention(
           cleanup()
           document.body.removeChild(root)
           resolve()
-        }
+        },
       },
-      root
+      root,
     )
   })
 }
@@ -217,16 +217,16 @@ export async function forDialogMention(
 export async function forApplyMention(
   title: string,
   message: string,
-  btns: BottomDialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true, time: 0 }]
+  btns: BottomDialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true, time: 0 }],
 ): Promise<void> {
   const root = document.createElement('div')
 
   let index = 0
-  while (document.getElementById('touch-bottom-dialog-tip-' + index)) {
+  while (document.getElementById(`touch-bottom-dialog-tip-${index}`)) {
     index++
   }
 
-  root.id = 'touch-bottom-dialog-tip-' + index
+  root.id = `touch-bottom-dialog-tip-${index}`
 
   document.body.appendChild(root)
 
@@ -240,9 +240,9 @@ export async function forApplyMention(
       close: async () => {
         cleanup()
         document.body.removeChild(root)
-      }
+      },
     },
-    root
+    root,
   )
 }
 
@@ -255,7 +255,7 @@ export async function forApplyMention(
  */
 export async function blowMention(
   title: string,
-  message: string | Component | DialogButtonClickHandler
+  message: string | Component | DialogButtonClickHandler,
 ): Promise<string> {
   return new Promise((resolve) => {
     const root = document.createElement('div')
@@ -266,10 +266,10 @@ export async function blowMention(
 
     root.id = 'touch-blow-dialog-tip'
 
-    const propName =
-      message instanceof String || typeof message === 'string'
+    const propName
+      = message instanceof String || typeof message === 'string'
         ? 'message'
-        : message instanceof Function
+        : typeof message === 'function'
           ? 'render'
           : 'component'
 
@@ -284,9 +284,9 @@ export async function blowMention(
           resolve(propName)
           cleanup()
           document.body.removeChild(root)
-        }
+        },
       },
-      root
+      root,
     )
   })
 }
@@ -299,7 +299,7 @@ export async function blowMention(
  */
 export async function popperMention(
   title: string,
-  message: string | Component | DialogButtonClickHandler
+  message: string | Component | DialogButtonClickHandler,
 ): Promise<void> {
   const root = document.createElement('div')
 
@@ -309,10 +309,10 @@ export async function popperMention(
 
   root.id = 'touch-popper-dialog-tip'
 
-  const propName =
-    message instanceof String || typeof message === 'string'
+  const propName
+    = message instanceof String || typeof message === 'string'
       ? 'message'
-      : message instanceof Function
+      : typeof message === 'function'
         ? 'render'
         : 'component'
 
@@ -326,8 +326,8 @@ export async function popperMention(
       close: async () => {
         cleanup()
         document.body.removeChild(root)
-      }
+      },
     },
-    root
+    root,
   )
 }

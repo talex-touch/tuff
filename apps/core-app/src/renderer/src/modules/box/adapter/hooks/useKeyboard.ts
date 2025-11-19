@@ -1,5 +1,6 @@
-import { onBeforeUnmount, Ref } from 'vue'
-import { IBoxOptions } from '..'
+import type { Ref } from 'vue'
+import type { IBoxOptions } from '..'
+import { onBeforeUnmount } from 'vue'
 
 declare global {
   interface Window {
@@ -19,7 +20,7 @@ export function useKeyboard(
   clipboardOptions: any,
   clearClipboard: () => void,
   activeActivations: Ref<any>,
-  itemRefs: Ref<any[]>
+  itemRefs: Ref<any[]>,
 ) {
   function onKeyDown(event: KeyboardEvent): void {
     if (!document.body.classList.contains('core-box')) {
@@ -37,7 +38,7 @@ export function useKeyboard(
 
     if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       const key = event.key
-      const index = key === '0' ? 9 : parseInt(key, 10) - 1
+      const index = key === '0' ? 9 : Number.parseInt(key, 10) - 1
       if (!Number.isNaN(index) && index >= 0 && index < 10) {
         if (res.value[index]) {
           boxOptions.focus = index
@@ -51,18 +52,21 @@ export function useKeyboard(
       const target = res.value[boxOptions.focus]
 
       handleExecute(target)
-    } else if (event.key === 'ArrowDown') {
+    }
+    else if (event.key === 'ArrowDown') {
       boxOptions.focus += 1
       event.preventDefault()
-    } else if (event.key === 'ArrowUp') {
+    }
+    else if (event.key === 'ArrowUp') {
       boxOptions.focus -= 1
       event.preventDefault()
-    } else if (
-      event.key === 'ArrowLeft' &&
-      event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      !event.shiftKey
+    }
+    else if (
+      event.key === 'ArrowLeft'
+      && event.metaKey
+      && !event.ctrlKey
+      && !event.altKey
+      && !event.shiftKey
     ) {
       const current = res.value[boxOptions.focus]
       if (current?.source?.id === 'preview-provider') {
@@ -70,24 +74,26 @@ export function useKeyboard(
         event.preventDefault()
         return
       }
-    } else if (
-      event.key === 'ArrowRight' &&
-      event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      !event.shiftKey
+    }
+    else if (
+      event.key === 'ArrowRight'
+      && event.metaKey
+      && !event.ctrlKey
+      && !event.altKey
+      && !event.shiftKey
     ) {
       if (window.__coreboxHistoryVisible) {
         window.dispatchEvent(new CustomEvent('corebox:hide-calculation-history'))
         event.preventDefault()
         return
       }
-    } else if (event.key === 'Tab') {
+    }
+    else if (event.key === 'Tab') {
       if (res.value[boxOptions.focus]) {
-        const completion =
-          res.value[boxOptions.focus].render.completion ??
-          res.value[boxOptions.focus].render.basic?.title ??
-          ''
+        const completion
+          = res.value[boxOptions.focus].render.completion
+            ?? res.value[boxOptions.focus].render.basic?.title
+            ?? ''
         searchVal.value = completion
 
         if (inputEl.value) {
@@ -97,7 +103,8 @@ export function useKeyboard(
         }
       }
       event.preventDefault()
-    } else if (event.key === 'Escape') {
+    }
+    else if (event.key === 'Escape') {
       // Priority: activeProvider → clipboard → mode/search → hide
       // 1. If there's an active provider, exit it first
       if (activeActivations.value && activeActivations.value.length > 0) {
@@ -118,7 +125,8 @@ export function useKeyboard(
 
     if (boxOptions.focus < 0) {
       boxOptions.focus = 0
-    } else if (boxOptions.focus > res.value.length - 1) {
+    }
+    else if (boxOptions.focus > res.value.length - 1) {
       boxOptions.focus = res.value.length - 1
     }
 

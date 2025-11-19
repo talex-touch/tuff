@@ -1,6 +1,6 @@
 import type { ITuffIcon, TuffIconType } from '@talex-touch/utils'
+import path from 'node:path'
 import fse from 'fs-extra'
-import path from 'path'
 
 /**
  * TuffIcon implementation class
@@ -41,7 +41,8 @@ export class TuffIconImpl implements ITuffIcon {
       if (!(await fse.pathExists(iconPath))) {
         this.status = 'error'
         this.value = ''
-      } else {
+      }
+      else {
         this.value = iconPath
         this.status = 'normal'
       }

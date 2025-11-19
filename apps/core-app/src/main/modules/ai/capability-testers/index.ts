@@ -1,5 +1,5 @@
 export * from './base-tester'
-export * from './registry'
 export * from './chat-tester'
 export * from './embedding-tester'
+export * from './registry'
 export * from './vision-tester'

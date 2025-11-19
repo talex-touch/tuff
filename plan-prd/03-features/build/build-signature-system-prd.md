@@ -75,8 +75,8 @@ const signature = HMAC_SHA256(JSON.stringify(payload), TUFF_ENCRYPTION_KEY)
   "isSnapshot": false,
   "isBeta": false,
   "isRelease": true,
-  "officialSignature": "a1b2c3d4e5f6...",  // HMAC-SHA256 签名（可选）
-  "hasOfficialKey": true  // 是否使用了加密密钥
+  "officialSignature": "a1b2c3d4e5f6...", // HMAC-SHA256 签名（可选）
+  "hasOfficialKey": true // 是否使用了加密密钥
 }
 ```
 
@@ -92,16 +92,16 @@ const signature = HMAC_SHA256(JSON.stringify(payload), TUFF_ENCRYPTION_KEY)
 function isOfficialBuild(buildInfo: BuildInfo): boolean {
   // 1. 检查是否有签名密钥可用
   if (!buildInfo.hasOfficialKey) {
-    return false  // 默认非官方
+    return false // 默认非官方
   }
-  
+
   // 2. 如果签名存在，验证签名
   if (buildInfo.officialSignature) {
     // 重新计算签名并对比
     const expectedSignature = calculateSignature(buildInfo)
     return expectedSignature === buildInfo.officialSignature
   }
-  
+
   return false
 }
 ```
@@ -178,4 +178,3 @@ function isOfficialBuild(buildInfo: BuildInfo): boolean {
 1. 在应用启动时验证构建签名，检测应用是否被修改
 2. 提供构建信息展示界面，显示构建标识符和官方状态
 3. 支持签名验证 API，允许远程验证构建完整性
-

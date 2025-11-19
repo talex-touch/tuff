@@ -1,3 +1,389 @@
+<script lang="ts" name="IntelligenceModelConfig" setup>
+import type { AiProviderConfig } from '@talex-touch/utils/renderer/storage'
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import { ElOption, ElOptionGroup, ElSelect, ElTransfer } from 'element-plus'
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
+
+const props = defineProps<{
+  modelValue: AiProviderConfig
+  disabled?: boolean
+}>()
+
+const emits = defineEmits<{
+  'update:modelValue': [value: AiProviderConfig]
+  'change': []
+}>()
+
+const { t } = useI18n()
+const aiClient = createIntelligenceClient(touchChannel as any)
+
+// 使用 reactive 计算属性直接操作存储
+const localModels = computed({
+  get: () => props.modelValue.models || [],
+  set: (value: string[]) => {
+    intelligenceSettings.updateProvider(props.modelValue.id, { models: value })
+    emits('change')
+  },
+})
+
+const localDefaultModel = computed({
+  get: () => props.modelValue.defaultModel || '',
+  set: (value: string) => {
+    intelligenceSettings.updateProvider(props.modelValue.id, {
+      defaultModel: value || undefined,
+    })
+    emits('change')
+  },
+})
+
+const localInstructions = computed({
+  get: () => props.modelValue.instructions || '',
+  set: (value: string) => {
+    intelligenceSettings.updateProvider(props.modelValue.id, {
+      instructions: value || undefined,
+    })
+    emits('change')
+  },
+})
+
+const allModels = ref<string[]>([])
+const DEFAULT_MODEL_GROUP_FALLBACK = '__default_model_group__'
+const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
+  'openai': 'OpenAI',
+  'anthropic': 'Anthropic',
+  'deepseek': 'DeepSeek',
+  'siliconflow': 'SiliconFlow',
+  'ascend-tribe': 'Ascend Tribe',
+  'local': 'Local Model',
+  'custom': 'Custom Provider',
+}
+
+function formatGroupLabel(value: string): string {
+  const cleaned = (value || '').trim()
+  if (!cleaned)
+    return cleaned
+  return cleaned
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map(segment => segment[0].toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function normalizeModel(value?: string): string {
+  return (value ?? '').trim()
+}
+
+function normalizeModelList(list: string[] = []): string[] {
+  const seen = new Set<string>()
+  return list
+    .map(normalizeModel)
+    .filter(Boolean)
+    .filter((model) => {
+      if (seen.has(model))
+        return false
+      seen.add(model)
+      return true
+    })
+}
+
+function addToAllModels(values: string | string[]): void {
+  const items = Array.isArray(values) ? values : [values]
+  const normalized = normalizeModelList(items)
+
+  if (!normalized.length)
+    return
+
+  const merged = new Set(allModels.value)
+  normalized.forEach((model) => {
+    merged.add(model)
+  })
+  allModels.value = Array.from(merged)
+}
+
+function ensureDefaultModelWithin(models: string[]): void {
+  if (!models.length) {
+    if (localDefaultModel.value) {
+      localDefaultModel.value = ''
+    }
+    return
+  }
+
+  if (!localDefaultModel.value) {
+    localDefaultModel.value = models[0]
+    return
+  }
+
+  if (!models.includes(localDefaultModel.value)) {
+    localDefaultModel.value = models[0]
+  }
+}
+
+function applyModelUpdates(nextModels: string[]): void {
+  const normalized = normalizeModelList(nextModels)
+  addToAllModels(normalized)
+  localModels.value = normalized
+  ensureDefaultModelWithin(normalized)
+  validateModels()
+  validateDefaultModel()
+}
+
+const transferData = computed(() => {
+  const pool = new Set<string>()
+  allModels.value.forEach((model) => {
+    const normalized = normalizeModel(model)
+    if (normalized)
+      pool.add(normalized)
+  })
+  localModels.value.forEach((model) => {
+    const normalized = normalizeModel(model)
+    if (normalized)
+      pool.add(normalized)
+  })
+
+  return Array.from(pool)
+    .sort((a, b) => a.localeCompare(b))
+    .map(model => ({
+      key: model,
+      label: model,
+    }))
+})
+
+const transferSelectedModels = computed<string[]>({
+  get: () => localModels.value,
+  set: (value) => {
+    applyModelUpdates(value ?? [])
+  },
+})
+
+const newModelInput = ref('')
+const modelsError = ref('')
+const defaultModelError = ref('')
+const showModelsDrawer = ref(false)
+const showDefaultModelDrawer = ref(false)
+const showInstructionsDrawer = ref(false)
+const isFetching = ref(false)
+
+const defaultModelSummary = computed(() => {
+  if (!localDefaultModel.value) {
+    return t('intelligence.config.model.defaultModelPlaceholder')
+  }
+
+  return localDefaultModel.value
+})
+
+const instructionsSummary = computed(() => {
+  const content = (localInstructions.value || '').trim()
+
+  if (!content) {
+    return t('intelligence.config.model.instructionsEmpty')
+  }
+
+  const singleLine = content.replace(/\s+/g, ' ')
+  return singleLine.length > 60 ? `${singleLine.slice(0, 57)}...` : singleLine
+})
+
+const defaultModelGroups = computed(() => {
+  const fallbackName = (props.modelValue.name || '').trim()
+  const fallbackKey = fallbackName ? fallbackName.toLowerCase() : DEFAULT_MODEL_GROUP_FALLBACK
+  const fallbackLabel = fallbackName || t('intelligence.config.model.group.other')
+
+  const grouped = new Map<string, { label: string, models: Set<string> }>()
+
+  function ensureGroup(key: string, label: string) {
+    if (!grouped.has(key)) {
+      grouped.set(key, { label, models: new Set() })
+    }
+    return grouped.get(key)!
+  }
+
+  localModels.value.forEach((model) => {
+    const normalized = normalizeModel(model)
+    if (!normalized)
+      return
+
+    const slashIndex = normalized.indexOf('/')
+    const hasProviderPrefix = slashIndex > 0
+    const groupKey = hasProviderPrefix
+      ? normalized.slice(0, slashIndex).toLowerCase()
+      : fallbackKey
+    const rawLabel = hasProviderPrefix ? normalized.slice(0, slashIndex) : fallbackLabel
+    const label = hasProviderPrefix
+      ? PROVIDER_NAME_OVERRIDES[groupKey] ?? formatGroupLabel(rawLabel)
+      : fallbackLabel
+
+    const group = ensureGroup(groupKey, label)
+    group.models.add(normalized)
+  })
+
+  const sortedGroups = Array.from(grouped.entries()).sort(([keyA], [keyB]) => {
+    if (keyA === fallbackKey)
+      return 1
+    if (keyB === fallbackKey)
+      return -1
+    return keyA.localeCompare(keyB)
+  })
+
+  return sortedGroups.map(([key, { label, models }]) => ({
+    key,
+    label,
+    models: Array.from(models).sort((a, b) => a.localeCompare(b)),
+  }))
+})
+
+function openDefaultModelDrawer() {
+  if (props.disabled || localModels.value.length === 0)
+    return
+  showDefaultModelDrawer.value = true
+}
+
+function openInstructionsDrawer() {
+  if (props.disabled)
+    return
+  showInstructionsDrawer.value = true
+}
+
+// 检查是否可以获取模型（需要 API Key 且不是本地模型）
+const canFetchModels = computed(() => {
+  const hasApiKey = !!props.modelValue.apiKey?.trim()
+  const isNotLocal = props.modelValue.type !== 'local'
+  return hasApiKey && isNotLocal
+})
+
+function validateModels(): boolean {
+  modelsError.value = ''
+
+  if (props.modelValue.enabled && localModels.value.length === 0) {
+    modelsError.value = t('intelligence.config.model.modelsRequired')
+    return false
+  }
+
+  return true
+}
+
+function validateDefaultModel(): boolean {
+  defaultModelError.value = ''
+
+  if (props.modelValue.enabled && !localDefaultModel.value) {
+    defaultModelError.value = t('intelligence.config.model.defaultModelRequired')
+    return false
+  }
+
+  if (localDefaultModel.value && !localModels.value.includes(localDefaultModel.value)) {
+    defaultModelError.value = t('intelligence.config.model.defaultModelInvalid')
+    return false
+  }
+
+  return true
+}
+
+function handleAddModel() {
+  const modelName = normalizeModel(newModelInput.value)
+
+  if (!modelName)
+    return
+
+  if (localModels.value.includes(modelName)) {
+    modelsError.value = t('intelligence.config.model.modelExists')
+    return
+  }
+
+  applyModelUpdates([...localModels.value, modelName])
+  newModelInput.value = ''
+}
+
+function handleDefaultModelChange() {
+  validateDefaultModel()
+}
+
+function handleDefaultModelCreate(value: string) {
+  const modelName = normalizeModel(value)
+
+  if (!modelName)
+    return
+
+  if (!localModels.value.includes(modelName)) {
+    applyModelUpdates([...localModels.value, modelName])
+  }
+
+  localDefaultModel.value = modelName
+  validateDefaultModel()
+}
+
+function handleInstructionsChange() {
+  // Instructions are handled automatically by computed property
+}
+
+async function handleFetchModels() {
+  if (!canFetchModels.value || isFetching.value)
+    return
+
+  isFetching.value = true
+  modelsError.value = ''
+
+  try {
+    console.log('[Model Config] Fetching available models...')
+
+    // 创建用于获取模型的临时配置
+    const fetchConfig = {
+      id: props.modelValue.id,
+      type: props.modelValue.type,
+      name: props.modelValue.name,
+      enabled: true,
+      apiKey: props.modelValue.apiKey,
+      baseUrl: props.modelValue.baseUrl,
+      models: [],
+      timeout: props.modelValue.timeout || 30000,
+    }
+
+    const result = await aiClient.fetchModels(fetchConfig)
+
+    if (result.success && result.models) {
+      // 合并现有模型和新获取的模型并应用
+      applyModelUpdates([...localModels.value, ...result.models])
+
+      toast.success(`已获取 ${result.models.length} 个模型`)
+    }
+    else {
+      modelsError.value = result.message || '获取模型失败'
+      toast.error(`获取模型失败: ${result.message}`)
+    }
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : '获取模型失败'
+    modelsError.value = message
+    toast.error(`获取模型失败: ${message}`)
+    console.error('[Model Config] Failed to fetch models:', error)
+  }
+  finally {
+    isFetching.value = false
+  }
+}
+
+watch(
+  () => props.modelValue.id,
+  () => {
+    allModels.value = []
+    addToAllModels(localModels.value)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => localModels.value,
+  (models) => {
+    addToAllModels(models)
+  },
+)
+</script>
+
 <template>
   <div class="aisdk-model-config">
     <!-- Models Management Button -->
@@ -13,12 +399,12 @@
     >
       <div class="models-summary">
         <span class="text-sm op-70">
-        <span v-if="localModels.length === 0" class="text-[var(--el-text-color-placeholder)]">
-          {{ t('intelligence.config.model.noModels') }}
-        </span>
-        <span v-else class="text-[var(--el-text-color-primary)]">
-          {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
-        </span></span>
+          <span v-if="localModels.length === 0" class="text-[var(--el-text-color-placeholder)]">
+            {{ t('intelligence.config.model.noModels') }}
+          </span>
+          <span v-else class="text-[var(--el-text-color-primary)]">
+            {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
+          </span></span>
         <FlatButton>{{ t('intelligence.config.model.editModels') }}</FlatButton>
       </div>
     </TuffBlockSlot>
@@ -69,16 +455,16 @@
         </p>
 
         <div class="model-transfer-section">
-          <el-transfer
+          <ElTransfer
             v-model="transferSelectedModels"
             :data="transferData"
             filterable
             :filter-placeholder="t('intelligence.config.model.transferFilterPlaceholder')"
             :titles="[
               t('intelligence.config.model.transferAll'),
-              t('intelligence.config.model.transferEnabled')
+              t('intelligence.config.model.transferEnabled'),
             ]"
-            :target-order="'original'"
+            target-order="original"
           />
         </div>
 
@@ -107,7 +493,7 @@
             :placeholder="t('intelligence.config.model.addModelPlaceholder')"
             class="add-model-input"
             @keyup.enter="handleAddModel"
-          />
+          >
           <FlatButton
             class="add-model-button"
             :disabled="!newModelInput.trim()"
@@ -133,7 +519,7 @@
         {{ t('intelligence.config.model.defaultModelPlaceholder') }}
       </p>
       <div class="default-model-select">
-        <el-select
+        <ElSelect
           v-model="localDefaultModel"
           filterable
           allow-create
@@ -143,25 +529,25 @@
           @change="handleDefaultModelChange"
           @created="handleDefaultModelCreate"
         >
-          <el-option-group
+          <ElOptionGroup
             v-for="group in defaultModelGroups"
             :key="group.key"
             :label="group.label"
           >
-            <el-option
+            <ElOption
               v-for="model in group.models"
               :key="model"
               :label="model"
               :value="model"
             />
-          </el-option-group>
-          <el-option
+          </ElOptionGroup>
+          <ElOption
             v-if="!defaultModelGroups.length"
             :label="t('intelligence.config.model.noModels')"
             value=""
             disabled
           />
-        </el-select>
+        </ElSelect>
         <p v-if="defaultModelError" class="drawer-error">
           {{ defaultModelError }}
         </p>
@@ -183,375 +569,6 @@
     </TuffDrawer>
   </div>
 </template>
-
-<script lang="ts" name="IntelligenceModelConfig" setup>
-import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { ElTransfer, ElSelect, ElOption, ElOptionGroup } from 'element-plus'
-import { toast } from 'vue-sonner'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
-import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
-import { touchChannel } from '~/modules/channel/channel-core'
-import { intelligenceSettings, type AiProviderConfig } from '@talex-touch/utils/renderer/storage'
-
-const props = defineProps<{
-  modelValue: AiProviderConfig
-  disabled?: boolean
-}>()
-
-const emits = defineEmits<{
-  'update:modelValue': [value: AiProviderConfig]
-  change: []
-}>()
-
-const { t } = useI18n()
-const aiClient = createIntelligenceClient(touchChannel as any)
-
-// 使用 reactive 计算属性直接操作存储
-const localModels = computed({
-  get: () => props.modelValue.models || [],
-  set: (value: string[]) => {
-    intelligenceSettings.updateProvider(props.modelValue.id, { models: value })
-    emits('change')
-  }
-})
-
-const localDefaultModel = computed({
-  get: () => props.modelValue.defaultModel || '',
-  set: (value: string) => {
-    intelligenceSettings.updateProvider(props.modelValue.id, {
-      defaultModel: value || undefined
-    })
-    emits('change')
-  }
-})
-
-const localInstructions = computed({
-  get: () => props.modelValue.instructions || '',
-  set: (value: string) => {
-    intelligenceSettings.updateProvider(props.modelValue.id, {
-      instructions: value || undefined
-    })
-    emits('change')
-  }
-})
-
-const allModels = ref<string[]>([])
-const DEFAULT_MODEL_GROUP_FALLBACK = '__default_model_group__'
-const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  deepseek: 'DeepSeek',
-  siliconflow: 'SiliconFlow',
-  'ascend-tribe': 'Ascend Tribe',
-  local: 'Local Model',
-  custom: 'Custom Provider'
-}
-
-function formatGroupLabel(value: string): string {
-  const cleaned = (value || '').trim()
-  if (!cleaned) return cleaned
-  return cleaned
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
-    .join(' ')
-}
-
-function normalizeModel(value?: string): string {
-  return (value ?? '').trim()
-}
-
-function normalizeModelList(list: string[] = []): string[] {
-  const seen = new Set<string>()
-  return list
-    .map(normalizeModel)
-    .filter(Boolean)
-    .filter((model) => {
-      if (seen.has(model)) return false
-      seen.add(model)
-      return true
-    })
-}
-
-function addToAllModels(values: string | string[]): void {
-  const items = Array.isArray(values) ? values : [values]
-  const normalized = normalizeModelList(items)
-
-  if (!normalized.length) return
-
-  const merged = new Set(allModels.value)
-  normalized.forEach((model) => {
-    merged.add(model)
-  })
-  allModels.value = Array.from(merged)
-}
-
-function ensureDefaultModelWithin(models: string[]): void {
-  if (!models.length) {
-    if (localDefaultModel.value) {
-      localDefaultModel.value = ''
-    }
-    return
-  }
-
-  if (!localDefaultModel.value) {
-    localDefaultModel.value = models[0]
-    return
-  }
-
-  if (!models.includes(localDefaultModel.value)) {
-    localDefaultModel.value = models[0]
-  }
-}
-
-function applyModelUpdates(nextModels: string[]): void {
-  const normalized = normalizeModelList(nextModels)
-  addToAllModels(normalized)
-  localModels.value = normalized
-  ensureDefaultModelWithin(normalized)
-  validateModels()
-  validateDefaultModel()
-}
-
-const transferData = computed(() => {
-  const pool = new Set<string>()
-  allModels.value.forEach((model) => {
-    const normalized = normalizeModel(model)
-    if (normalized) pool.add(normalized)
-  })
-  localModels.value.forEach((model) => {
-    const normalized = normalizeModel(model)
-    if (normalized) pool.add(normalized)
-  })
-
-  return Array.from(pool)
-    .sort((a, b) => a.localeCompare(b))
-    .map((model) => ({
-      key: model,
-      label: model
-    }))
-})
-
-const transferSelectedModels = computed<string[]>({
-  get: () => localModels.value,
-  set: (value) => {
-    applyModelUpdates(value ?? [])
-  }
-})
-
-const newModelInput = ref('')
-const modelsError = ref('')
-const defaultModelError = ref('')
-const showModelsDrawer = ref(false)
-const showDefaultModelDrawer = ref(false)
-const showInstructionsDrawer = ref(false)
-const isFetching = ref(false)
-
-const defaultModelSummary = computed(() => {
-  if (!localDefaultModel.value) {
-    return t('intelligence.config.model.defaultModelPlaceholder')
-  }
-
-  return localDefaultModel.value
-})
-
-const instructionsSummary = computed(() => {
-  const content = (localInstructions.value || '').trim()
-
-  if (!content) {
-    return t('intelligence.config.model.instructionsEmpty')
-  }
-
-  const singleLine = content.replace(/\s+/g, ' ')
-  return singleLine.length > 60 ? `${singleLine.slice(0, 57)}...` : singleLine
-})
-
-const defaultModelGroups = computed(() => {
-  const fallbackName = (props.modelValue.name || '').trim()
-  const fallbackKey = fallbackName ? fallbackName.toLowerCase() : DEFAULT_MODEL_GROUP_FALLBACK
-  const fallbackLabel = fallbackName || t('intelligence.config.model.group.other')
-
-  const grouped = new Map<string, { label: string; models: Set<string> }>()
-
-  function ensureGroup(key: string, label: string) {
-    if (!grouped.has(key)) {
-      grouped.set(key, { label, models: new Set() })
-    }
-    return grouped.get(key)!
-  }
-
-  localModels.value.forEach((model) => {
-    const normalized = normalizeModel(model)
-    if (!normalized) return
-
-    const slashIndex = normalized.indexOf('/')
-    const hasProviderPrefix = slashIndex > 0
-    const groupKey = hasProviderPrefix
-      ? normalized.slice(0, slashIndex).toLowerCase()
-      : fallbackKey
-    const rawLabel = hasProviderPrefix ? normalized.slice(0, slashIndex) : fallbackLabel
-    const label = hasProviderPrefix
-      ? PROVIDER_NAME_OVERRIDES[groupKey] ?? formatGroupLabel(rawLabel)
-      : fallbackLabel
-
-    const group = ensureGroup(groupKey, label)
-    group.models.add(normalized)
-  })
-
-  const sortedGroups = Array.from(grouped.entries()).sort(([keyA], [keyB]) => {
-    if (keyA === fallbackKey) return 1
-    if (keyB === fallbackKey) return -1
-    return keyA.localeCompare(keyB)
-  })
-
-  return sortedGroups.map(([key, { label, models }]) => ({
-    key,
-    label,
-    models: Array.from(models).sort((a, b) => a.localeCompare(b))
-  }))
-})
-
-function openDefaultModelDrawer() {
-  if (props.disabled || localModels.value.length === 0) return
-  showDefaultModelDrawer.value = true
-}
-
-function openInstructionsDrawer() {
-  if (props.disabled) return
-  showInstructionsDrawer.value = true
-}
-
-// 检查是否可以获取模型（需要 API Key 且不是本地模型）
-const canFetchModels = computed(() => {
-  const hasApiKey = !!props.modelValue.apiKey?.trim()
-  const isNotLocal = props.modelValue.type !== 'local'
-  return hasApiKey && isNotLocal
-})
-
-function validateModels(): boolean {
-  modelsError.value = ''
-
-  if (props.modelValue.enabled && localModels.value.length === 0) {
-    modelsError.value = t('intelligence.config.model.modelsRequired')
-    return false
-  }
-
-  return true
-}
-
-function validateDefaultModel(): boolean {
-  defaultModelError.value = ''
-
-  if (props.modelValue.enabled && !localDefaultModel.value) {
-    defaultModelError.value = t('intelligence.config.model.defaultModelRequired')
-    return false
-  }
-
-  if (localDefaultModel.value && !localModels.value.includes(localDefaultModel.value)) {
-    defaultModelError.value = t('intelligence.config.model.defaultModelInvalid')
-    return false
-  }
-
-  return true
-}
-
-function handleAddModel() {
-  const modelName = normalizeModel(newModelInput.value)
-
-  if (!modelName) return
-
-  if (localModels.value.includes(modelName)) {
-    modelsError.value = t('intelligence.config.model.modelExists')
-    return
-  }
-
-  applyModelUpdates([...localModels.value, modelName])
-  newModelInput.value = ''
-}
-
-function handleDefaultModelChange() {
-  validateDefaultModel()
-}
-
-function handleDefaultModelCreate(value: string) {
-  const modelName = normalizeModel(value)
-
-  if (!modelName) return
-
-  if (!localModels.value.includes(modelName)) {
-    applyModelUpdates([...localModels.value, modelName])
-  }
-
-  localDefaultModel.value = modelName
-  validateDefaultModel()
-}
-
-function handleInstructionsChange() {
-  // Instructions are handled automatically by computed property
-}
-
-async function handleFetchModels() {
-  if (!canFetchModels.value || isFetching.value) return
-
-  isFetching.value = true
-  modelsError.value = ''
-
-  try {
-    console.log('[Model Config] Fetching available models...')
-
-    // 创建用于获取模型的临时配置
-    const fetchConfig = {
-      id: props.modelValue.id,
-      type: props.modelValue.type,
-      name: props.modelValue.name,
-      enabled: true,
-      apiKey: props.modelValue.apiKey,
-      baseUrl: props.modelValue.baseUrl,
-      models: [],
-      timeout: props.modelValue.timeout || 30000
-    }
-
-    const result = await aiClient.fetchModels(fetchConfig)
-
-    if (result.success && result.models) {
-      // 合并现有模型和新获取的模型并应用
-      applyModelUpdates([...localModels.value, ...result.models])
-
-      toast.success(`已获取 ${result.models.length} 个模型`)
-    } else {
-      modelsError.value = result.message || '获取模型失败'
-      toast.error(`获取模型失败: ${result.message}`)
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '获取模型失败'
-    modelsError.value = message
-    toast.error(`获取模型失败: ${message}`)
-    console.error('[Model Config] Failed to fetch models:', error)
-  } finally {
-    isFetching.value = false
-  }
-}
-
-watch(
-  () => props.modelValue.id,
-  () => {
-    allModels.value = []
-    addToAllModels(localModels.value)
-  },
-  { immediate: true }
-)
-
-watch(
-  () => localModels.value,
-  (models) => {
-    addToAllModels(models)
-  }
-)
-</script>
 
 <style lang="scss" scoped>
 .aisdk-model-config {

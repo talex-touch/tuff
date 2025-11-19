@@ -1,24 +1,24 @@
-import {
+import type { ITuffIcon } from '@talex-touch/utils'
+import type {
   IFeatureCommand,
   IFeatureInteraction,
+  IFeatureLifeCycle,
+  IPlatform,
   IPluginDev,
   IPluginFeature,
-  IPlatform,
-  IFeatureLifeCycle
+  ITouchPlugin,
 } from '@talex-touch/utils/plugin'
+import vm from 'node:vm'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { TuffIconImpl } from '../../core/tuff-icon'
-import { ITuffIcon } from '@talex-touch/utils'
-import vm from 'vm'
-import { ITouchPlugin } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
+import { TuffIconImpl } from '../../core/tuff-icon'
 
 /**
  * Create TuffItemBuilder with plugin context
  * @param pluginName - Plugin name to inject into meta
  * @returns TuffItemBuilder subclass with plugin context
  */
-export const createBuilderWithPluginContext = (pluginName: string): typeof TuffItemBuilder => {
+export function createBuilderWithPluginContext(pluginName: string): typeof TuffItemBuilder {
   return class TuffItemBuilderWithPlugin extends TuffItemBuilder {
     constructor(id: string) {
       super(id, 'plugin', 'plugin-features')
@@ -37,7 +37,7 @@ export const createBuilderWithPluginContext = (pluginName: string): typeof TuffI
 export function loadPluginFeatureContextFromContent(
   plugin: ITouchPlugin,
   scriptContent: string,
-  context: any
+  context: any,
 ): IFeatureLifeCycle {
   const sandbox = {
     exports: {},
@@ -45,7 +45,7 @@ export function loadPluginFeatureContextFromContent(
     require,
     __dirname: plugin.pluginPath,
     __filename: 'index.js',
-    ...context
+    ...context,
   }
 
   vm.createContext(sandbox)
@@ -64,7 +64,7 @@ export function loadPluginFeatureContextFromContent(
 export function loadPluginFeatureContext(
   plugin: ITouchPlugin,
   featureIndex: string,
-  context: any
+  context: any,
 ): IFeatureLifeCycle {
   const scriptContent = fse.readFileSync(featureIndex, 'utf-8')
   return loadPluginFeatureContextFromContent(plugin, scriptContent, context)
@@ -110,13 +110,13 @@ export class PluginFeature implements IPluginFeature {
       icon: {
         type: this.icon.type,
         value: this.icon.value,
-        status: this.icon.status
+        status: this.icon.status,
       },
       push: this.push,
       platform: this.platform,
       commands: this.commands,
       interaction: this.interaction,
-      priority: this.priority
+      priority: this.priority,
     }
   }
 }

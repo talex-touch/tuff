@@ -3,13 +3,14 @@ import { touchChannel } from '~/modules/channel/channel-core'
 export function useCoreBox(): void {
   console.log(
     '%c CoreBox MODE ',
-    'background: #42b983; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;'
+    'background: #42b983; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;',
   )
 
   touchChannel.regChannel('core-box:trigger', ({ data }: any) => {
     const { show, id } = data!
     if (window.$startupInfo?.id !== undefined) {
-      if (id !== window.$startupInfo.id) return
+      if (id !== window.$startupInfo.id)
+        return
     }
 
     if (show) {
@@ -20,6 +21,9 @@ export function useCoreBox(): void {
 
         input?.focus()
       }, 100)
-    } else document.body.classList.remove('core-box')
+    }
+    else {
+      document.body.classList.remove('core-box')
+    }
   })
 }

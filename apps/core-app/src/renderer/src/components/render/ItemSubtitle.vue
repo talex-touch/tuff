@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { TuffItem, TuffRender } from '@talex-touch/utils'
-import { computed } from 'vue'
-import { FileType, getFileTypeFromPath } from '@talex-touch/utils'
+import type { FileType, getFileTypeFromPath, TuffItem, TuffRender } from '@talex-touch/utils'
 import dayjs from 'dayjs'
 import path from 'path-browserify'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -16,12 +15,13 @@ const sourceType = computed(() => props.item.source.type)
 const { t } = useI18n()
 
 function formatBytes(bytes, decimals = 2) {
-  if (bytes === 0) return '0 Bytes'
+  if (bytes === 0)
+    return '0 Bytes'
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
+  return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`
 }
 
 const fileInfo = computed(() => {
@@ -30,12 +30,13 @@ const fileInfo = computed(() => {
   }
   const meta = props.item.meta as any
   const file = meta?.file
-  if (!file) return null
+  if (!file)
+    return null
 
   return file
 })
 
-const FILE_TYPE_META: Record<FileType, { icon: string; key: string }> = {
+const FILE_TYPE_META: Record<FileType, { icon: string, key: string }> = {
   [FileType.Image]: { icon: 'i-ri-image-2-line', key: 'coreBox.fileTypes.image' },
   [FileType.Document]: { icon: 'i-ri-file-text-line', key: 'coreBox.fileTypes.document' },
   [FileType.Audio]: { icon: 'i-ri-music-2-line', key: 'coreBox.fileTypes.audio' },
@@ -49,18 +50,19 @@ const FILE_TYPE_META: Record<FileType, { icon: string; key: string }> = {
   [FileType.Spreadsheet]: { icon: 'i-ri-table-line', key: 'coreBox.fileTypes.spreadsheet' },
   [FileType.Presentation]: { icon: 'i-ri-slideshow-line', key: 'coreBox.fileTypes.presentation' },
   [FileType.Ebook]: { icon: 'i-ri-book-3-line', key: 'coreBox.fileTypes.ebook' },
-  [FileType.Other]: { icon: 'i-ri-more-2-line', key: 'coreBox.fileTypes.other' }
+  [FileType.Other]: { icon: 'i-ri-more-2-line', key: 'coreBox.fileTypes.other' },
 }
 
 const fileTypeMeta = computed(() => {
-  if (!fileInfo.value) return null
+  if (!fileInfo.value)
+    return null
   const type = getFileTypeFromPath(fileInfo.value.path) as FileType
   const meta = FILE_TYPE_META[type] || FILE_TYPE_META[FileType.Other]
   const translated = t(meta.key)
   const label = translated === meta.key ? type : translated
   return {
     icon: meta.icon,
-    label
+    label,
   }
 })
 </script>

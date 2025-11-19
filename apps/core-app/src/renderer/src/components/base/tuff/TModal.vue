@@ -9,8 +9,8 @@ const props = withDefaults(
   }>(),
   {
     title: '',
-    width: '480px'
-  }
+    width: '480px',
+  },
 )
 
 const emits = defineEmits<{

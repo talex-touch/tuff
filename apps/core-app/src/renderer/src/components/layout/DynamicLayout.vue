@@ -1,3 +1,10 @@
+<script lang="ts" setup>
+import LayoutSkeleton from '~/components/layout/LayoutSkeleton.vue'
+import { useDynamicTuffLayout } from '~/modules/layout'
+
+const { layoutComponent, isLoading, currentLayoutName } = useDynamicTuffLayout()
+</script>
+
 <template>
   <div class="DynamicLayout-Wrapper">
     <LayoutSkeleton v-if="isLoading" />
@@ -24,13 +31,6 @@
     </transition>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { useDynamicTuffLayout } from '~/modules/layout'
-import LayoutSkeleton from '~/components/layout/LayoutSkeleton.vue'
-
-const { layoutComponent, isLoading, currentLayoutName } = useDynamicTuffLayout()
-</script>
 
 <style lang="scss" scoped>
 .DynamicLayout-Wrapper {

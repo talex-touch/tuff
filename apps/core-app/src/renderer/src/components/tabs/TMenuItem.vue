@@ -1,62 +1,65 @@
-<template>
-  <div class="TMenuItem-Container fake-background" :class="{ active, disabled }">
-    <div class="TMenu-Tab-Icon">
-      <remix-icon :non-style="nonStyle" :name="icon" />
-    </div>
-    <div class="TMenu-Tab-Name">{{ name }}</div>
-    <span class="TMenu-Referrer">
-      <remix-icon name="arrow-right-s" />
-    </span>
-  </div>
-</template>
-
 <script>
-export default {
-  name: 'TMenuItem'
-}
 </script>
 
 <script setup>
-import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { useRouter } from 'vue-router'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps({
   icon: {
     type: String,
-    required: true
+    required: true,
   },
   name: {
     type: String,
-    required: true
+    required: true,
   },
   active: {
-    type: Function
+    type: Function,
   },
   disabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   activation: {
     type: Boolean,
-    default: false
+    default: false,
   },
   route: {
-    type: String
+    type: String,
   },
   nonStyle: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
+
+export default {
+  name: 'TMenuItem',
+}
 
 const router = useRouter()
 
 const active = computed(() => props?.active?.(props.name))
 watch(
   () => active.value,
-  (val) => val && router.push(props.route)
+  val => val && router.push(props.route),
 )
 </script>
+
+<template>
+  <div class="TMenuItem-Container fake-background" :class="{ active, disabled }">
+    <div class="TMenu-Tab-Icon">
+      <RemixIcon :non-style="nonStyle" :name="icon" />
+    </div>
+    <div class="TMenu-Tab-Name">
+      {{ name }}
+    </div>
+    <span class="TMenu-Referrer">
+      <RemixIcon name="arrow-right-s" />
+    </span>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .TMenuItem-Container {

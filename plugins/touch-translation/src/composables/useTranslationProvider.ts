@@ -1,13 +1,13 @@
-import { ref, reactive, computed } from 'vue'
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
 import type { TranslationProvider } from '../types/translation'
-import { GoogleTranslateProvider } from '../providers/google-translate'
-import { DeepLTranslateProvider } from '../providers/deepl-translate'
+import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+import { computed, reactive, ref } from 'vue'
+import { BaiduTranslateProvider } from '../providers/baidu-translate'
 import { BingTranslateProvider } from '../providers/bing-translate'
 import { CustomTranslateProvider } from '../providers/custom-translate'
-import { BaiduTranslateProvider } from '../providers/baidu-translate'
-import { TencentTranslateProvider } from '../providers/tencent-translate'
+import { DeepLTranslateProvider } from '../providers/deepl-translate'
+import { GoogleTranslateProvider } from '../providers/google-translate'
 import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
+import { TencentTranslateProvider } from '../providers/tencent-translate'
 
 // 全局状态
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
@@ -18,7 +18,8 @@ export function useTranslationProvider() {
 
   // 初始化所有提供者
   const initializeProviders = async () => {
-    if (isInitialized.value) return
+    if (isInitialized.value)
+      return
 
     // 创建提供者实例
     const googleProvider = new GoogleTranslateProvider()
@@ -50,7 +51,7 @@ export function useTranslationProvider() {
     providers.forEach((provider, id) => {
       config[id] = {
         enabled: provider.enabled,
-        config: provider.config || {}
+        config: provider.config || {},
       }
     })
     // 兼容新版本：使用 setFile 代替 setItem
@@ -73,7 +74,8 @@ export function useTranslationProvider() {
           }
         })
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to load providers config:', error)
     }
   }
@@ -129,7 +131,7 @@ export function useTranslationProvider() {
 
   // 重置所有提供者配置
   const resetProvidersConfig = () => {
-    providers.forEach(provider => {
+    providers.forEach((provider) => {
       // 默认只启用 Google 翻译
       provider.enabled = provider.id === 'google'
       if (provider.config) {
@@ -137,37 +139,42 @@ export function useTranslationProvider() {
         if (provider.id === 'deepl') {
           (provider as DeepLTranslateProvider).config = {
             apiKey: '',
-            apiUrl: 'https://api-free.deepl.com/v2/translate'
+            apiUrl: 'https://api-free.deepl.com/v2/translate',
           }
-        } else if (provider.id === 'bing') {
+        }
+        else if (provider.id === 'bing') {
           (provider as BingTranslateProvider).config = {
             apiKey: '',
-            region: 'global'
+            region: 'global',
           }
-        } else if (provider.id === 'custom') {
+        }
+        else if (provider.id === 'custom') {
           (provider as CustomTranslateProvider).config = {
             apiUrl: '',
             apiKey: '',
             model: 'gpt-3.5-turbo',
-            prompt: '请将以下文本翻译成中文，只返回翻译结果：'
+            prompt: '请将以下文本翻译成中文，只返回翻译结果：',
           }
-        } else if (provider.id === 'baidu') {
+        }
+        else if (provider.id === 'baidu') {
           (provider as BaiduTranslateProvider).config = {
             appId: '',
             secretKey: '',
-            apiUrl: 'https://fanyi-api.baidu.com/api/trans/vip/translate'
+            apiUrl: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
           }
-        } else if (provider.id === 'tencent') {
+        }
+        else if (provider.id === 'tencent') {
           (provider as TencentTranslateProvider).config = {
             secretId: '',
             secretKey: '',
             region: 'ap-beijing',
-            apiUrl: 'https://tmt.tencentcloudapi.com'
+            apiUrl: 'https://tmt.tencentcloudapi.com',
           }
-        } else if (provider.id === 'mymemory') {
+        }
+        else if (provider.id === 'mymemory') {
           (provider as MyMemoryTranslateProvider).config = {
             apiUrl: 'https://api.mymemory.translated.net/get',
-            email: ''
+            email: '',
           }
         }
       }
@@ -191,6 +198,6 @@ export function useTranslationProvider() {
     registerProvider,
     unregisterProvider,
     resetProvidersConfig,
-    saveProvidersConfig
+    saveProvidersConfig,
   }
 }

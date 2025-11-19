@@ -18,7 +18,7 @@ const SOURCE_ICON_MAP: Record<string, string> = {
   service: 'i-ri-cpu-line',
   feature: 'i-ri-star-line',
   system: 'i-ri-settings-3-line',
-  default: 'i-ri-hashtag'
+  default: 'i-ri-hashtag',
 }
 
 /**
@@ -27,12 +27,14 @@ const SOURCE_ICON_MAP: Record<string, string> = {
  */
 export function resolveSourceMeta(
   item: TuffItem | null | undefined,
-  t: ComposerTranslation
+  t: ComposerTranslation,
 ): SourceMetaResult | null {
-  if (!item) return null
+  if (!item)
+    return null
 
   const sourceType = item.source?.type
-  if (!sourceType) return null
+  if (!sourceType)
+    return null
 
   const icon = SOURCE_ICON_MAP[sourceType] ?? SOURCE_ICON_MAP.default
   const translationKey = `coreBox.sourceTypes.${sourceType}`
@@ -50,7 +52,7 @@ export function resolveSourceMeta(
   return {
     icon,
     label,
-    type: sourceType
+    type: sourceType,
   }
 }
 

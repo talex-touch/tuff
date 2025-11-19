@@ -370,14 +370,14 @@ updateConfig(config: Partial<UpdateSystemConfig>): void
 
 ```typescript
 interface DownloadRequest {
-  id?: string                    // Optional task ID
-  url: string                    // Download URL
-  destination: string            // Save directory path
-  filename?: string              // Optional filename (defaults to URL basename)
-  priority?: DownloadPriority    // Task priority (default: NORMAL)
-  module: DownloadModule         // Module identifier
+  id?: string // Optional task ID
+  url: string // Download URL
+  destination: string // Save directory path
+  filename?: string // Optional filename (defaults to URL basename)
+  priority?: DownloadPriority // Task priority (default: NORMAL)
+  module: DownloadModule // Module identifier
   metadata?: Record<string, any> // Optional metadata
-  checksum?: string              // Optional SHA256 checksum
+  checksum?: string // Optional SHA256 checksum
 }
 ```
 
@@ -448,26 +448,26 @@ enum DownloadModule {
 ```typescript
 interface DownloadConfig {
   concurrency: {
-    maxConcurrent: number        // 1-10, default: 3
-    autoAdjust: boolean          // default: true
-    networkAware: boolean        // default: true
-    priorityBased: boolean       // default: true
+    maxConcurrent: number // 1-10, default: 3
+    autoAdjust: boolean // default: true
+    networkAware: boolean // default: true
+    priorityBased: boolean // default: true
   }
   chunk: {
-    size: number                 // bytes, default: 1MB
-    resume: boolean              // default: true
-    autoRetry: boolean           // default: true
-    maxRetries: number           // default: 3
+    size: number // bytes, default: 1MB
+    resume: boolean // default: true
+    autoRetry: boolean // default: true
+    maxRetries: number // default: 3
   }
   storage: {
-    tempDir: string              // temporary directory path
-    historyRetention: number     // days, default: 30
-    autoCleanup: boolean         // default: true
+    tempDir: string // temporary directory path
+    historyRetention: number // days, default: 30
+    autoCleanup: boolean // default: true
   }
   network: {
-    timeout: number              // milliseconds, default: 30000
-    retryDelay: number           // milliseconds, default: 5000
-    maxRetries: number           // default: 3
+    timeout: number // milliseconds, default: 30000
+    retryDelay: number // milliseconds, default: 5000
+    maxRetries: number // default: 3
   }
 }
 ```
@@ -509,13 +509,13 @@ const result = await window.electron.ipcRenderer.invoke('update:check')
 
 if (result.hasUpdate && result.release) {
   console.log('New version available:', result.release.tag_name)
-  
+
   // Download update
   const downloadResult = await window.electron.ipcRenderer.invoke(
     'update:download',
     result.release
   )
-  
+
   if (downloadResult.success) {
     console.log('Update download started:', downloadResult.taskId)
   }
@@ -630,7 +630,7 @@ interface DownloadError {
 // Listen for failed tasks
 window.electron.ipcRenderer.on('download:task-failed', (task) => {
   console.error('Download failed:', task.error)
-  
+
   // Retry if needed
   if (shouldRetry(task)) {
     window.electron.ipcRenderer.invoke('download:retry-task', task.id)

@@ -1,10 +1,10 @@
-import { TalexTouch } from '../types'
+import type { TalexTouch } from '../types'
 
-//inquirer
+// inquirer
 
 export default {
   name: Symbol('TerminalCmd'),
   filePath: false,
   init(_touchApp: TalexTouch.TouchApp) {},
-  destroy() {}
+  destroy() {},
 }

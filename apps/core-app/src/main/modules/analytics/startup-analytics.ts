@@ -4,16 +4,16 @@
  * Collects and manages anonymous startup performance metrics
  */
 
-import { randomUUID } from 'node:crypto'
-import { app } from 'electron'
 import type {
-  StartupMetrics,
-  StartupHistory,
   AnalyticsConfig,
   MainProcessMetrics,
+  ModuleLoadMetric,
   RendererProcessMetrics,
-  ModuleLoadMetric
+  StartupHistory,
+  StartupMetrics,
 } from './types'
+import { randomUUID } from 'node:crypto'
+import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { getConfig, saveConfig } from '../storage'
 
@@ -33,7 +33,7 @@ export class StartupAnalytics {
     this.config = {
       enabled: true,
       maxHistory: 10,
-      ...config
+      ...config,
     }
 
     this.startTime = Date.now()
@@ -47,11 +47,11 @@ export class StartupAnalytics {
       version: app.getVersion(),
       electronVersion: process.versions.electron,
       nodeVersion: process.versions.node,
-      isPackaged: app.isPackaged
+      isPackaged: app.isPackaged,
     }
 
     analyticsLog.info('StartupAnalytics initialized', {
-      meta: { sessionId: this.currentMetrics.sessionId }
+      meta: { sessionId: this.currentMetrics.sessionId },
     })
   }
 
@@ -61,7 +61,7 @@ export class StartupAnalytics {
   setMainProcessMetrics(metrics: MainProcessMetrics): void {
     this.currentMetrics.mainProcess = metrics
     analyticsLog.debug('Main process metrics recorded', {
-      meta: { modulesLoadTime: metrics.modulesLoadTime }
+      meta: { modulesLoadTime: metrics.modulesLoadTime },
     })
   }
 
@@ -73,15 +73,15 @@ export class StartupAnalytics {
 
     // Calculate total startup time
     if (this.currentMetrics.mainProcess) {
-      this.currentMetrics.totalStartupTime =
-        metrics.readyTime - this.currentMetrics.mainProcess.processCreationTime
+      this.currentMetrics.totalStartupTime
+        = metrics.readyTime - this.currentMetrics.mainProcess.processCreationTime
     }
 
     analyticsLog.success('Renderer process metrics recorded', {
       meta: {
         totalStartupTime: this.currentMetrics.totalStartupTime,
-        readyTime: metrics.readyTime - metrics.startTime
-      }
+        readyTime: metrics.readyTime - metrics.startTime,
+      },
     })
   }
 
@@ -92,7 +92,7 @@ export class StartupAnalytics {
     this.moduleMetrics.push({
       name: moduleName,
       loadTime,
-      order
+      order,
     })
   }
 
@@ -118,7 +118,8 @@ export class StartupAnalytics {
       if (history && Array.isArray(history.entries)) {
         return history
       }
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.warn('Failed to load startup history', { meta: { error: errorMessage } })
     }
@@ -126,7 +127,7 @@ export class StartupAnalytics {
     return {
       entries: [],
       maxEntries: this.config.maxHistory,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -157,10 +158,11 @@ export class StartupAnalytics {
         meta: {
           sessionId: metrics.sessionId,
           totalStartupTime: metrics.totalStartupTime,
-          historyCount: history.entries.length
-        }
+          historyCount: history.entries.length,
+        },
       })
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.error('Failed to save metrics to history', { meta: { error: errorMessage } })
     }
@@ -192,13 +194,14 @@ export class StartupAnalytics {
 
     try {
       analyticsLog.info('Reporting metrics (anonymous)', {
-        meta: { endpoint: url }
+        meta: { endpoint: url },
       })
 
       // TODO: Implement actual HTTP request
       // For now, just log that we would report
       analyticsLog.success('Metrics report prepared (not sent in current implementation)')
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.error('Failed to report metrics', { meta: { error: errorMessage } })
     }
@@ -215,16 +218,20 @@ export class StartupAnalytics {
     rating: 'excellent' | 'good' | 'fair' | 'poor'
   } | null {
     const metrics = this.getCurrentMetrics()
-    if (!metrics) return null
+    if (!metrics)
+      return null
 
     const totalTime = metrics.totalStartupTime / 1000 // Convert to seconds
     const rendererTime = (metrics.renderer.readyTime - metrics.renderer.startTime) / 1000
     const mainProcessTime = metrics.mainProcess.modulesLoadTime / 1000
 
     let rating: 'excellent' | 'good' | 'fair' | 'poor'
-    if (totalTime < 1) rating = 'excellent'
-    else if (totalTime < 2) rating = 'good'
-    else if (totalTime < 5) rating = 'fair'
+    if (totalTime < 1)
+      rating = 'excellent'
+    else if (totalTime < 2)
+      rating = 'good'
+    else if (totalTime < 5)
+      rating = 'fair'
     else rating = 'poor'
 
     return {
@@ -232,7 +239,7 @@ export class StartupAnalytics {
       mainProcessTime,
       rendererTime,
       moduleCount: metrics.mainProcess.totalModules,
-      rating
+      rating,
     }
   }
 }

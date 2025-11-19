@@ -82,9 +82,9 @@ Currently, all extension APIs are in internal beta or planning phase. To request
 ### Basic Integration
 
 ```typescript
+import { SortConfigManager } from '@tuff/core/search-sorter-config' // Beta only
 // Example plugin with extension API usage
 import { Plugin } from '@tuff/plugin-sdk'
-import { SortConfigManager } from '@tuff/core/search-sorter-config' // Beta only
 
 export class MyAdvancedPlugin extends Plugin {
   async onActivate() {
@@ -98,7 +98,7 @@ export class MyAdvancedPlugin extends Plugin {
     // Custom sorting logic
     SortConfigManager.addDynamicRule(
       'my-plugin-boost',
-      (item) => this.shouldBoostItem(item),
+      item => this.shouldBoostItem(item),
       15
     )
   }

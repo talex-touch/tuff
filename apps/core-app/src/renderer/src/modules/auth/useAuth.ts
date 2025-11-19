@@ -1,14 +1,16 @@
-import { computed, watch, onMounted, onUnmounted, reactive } from 'vue'
-import { toast } from 'vue-sonner'
-import {
-  ClerkUser,
+import type {
   ClerkResourceSnapshot,
-  useClerkProvider,
-  useAuthState,
-  useCurrentUser,
+  ClerkUser,
+  LoginOptions,
   LoginResult,
-  LoginOptions
 } from '@talex-touch/utils/renderer'
+import {
+  useAuthState,
+  useClerkProvider,
+  useCurrentUser,
+} from '@talex-touch/utils/renderer'
+import { computed, onMounted, onUnmounted, reactive, watch } from 'vue'
+import { toast } from 'vue-sonner'
 import { appSetting } from '../channel/storage/index'
 
 let eventListenerCleanup: (() => void) | null = null
@@ -22,7 +24,7 @@ const authLoadingState = reactive({
   isSigningOut: false,
   isLoggingIn: false,
   loginProgress: 0, // 登录进度 0-100
-  loginTimeRemaining: 0 // 剩余时间（秒）
+  loginTimeRemaining: 0, // 剩余时间（秒）
 })
 
 // 错误消息映射
@@ -35,20 +37,21 @@ const ERROR_MESSAGES = {
   LOGIN_TIMEOUT: '登录超时，请重试',
   NETWORK_ERROR: '网络连接失败，请检查网络设置',
   AUTH_ERROR: '认证失败，请重试',
-  UNKNOWN_ERROR: '发生未知错误，请重试'
+  UNKNOWN_ERROR: '发生未知错误，请重试',
 }
 
 // 获取用户友好的错误消息
 function getErrorMessage(error: unknown, defaultType: string): string {
-  if (!error) return ERROR_MESSAGES[defaultType as keyof typeof ERROR_MESSAGES]
+  if (!error)
+    return ERROR_MESSAGES[defaultType as keyof typeof ERROR_MESSAGES]
 
   const errorMessage = (error as Error).message || String(error)
 
   // 网络相关错误
   if (
-    errorMessage.includes('network') ||
-    errorMessage.includes('fetch') ||
-    errorMessage.includes('timeout')
+    errorMessage.includes('network')
+    || errorMessage.includes('fetch')
+    || errorMessage.includes('timeout')
   ) {
     return ERROR_MESSAGES.NETWORK_ERROR
   }
@@ -88,22 +91,22 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
     ? (snapshot?.session ?? null)
     : (clerk?.session ?? null)
 
-  const isUserValid =
-    !!candidateUser &&
-    typeof candidateUser === 'object' &&
-    'id' in candidateUser &&
-    !!candidateUser.id
-  const isSessionValid =
-    !!candidateSession &&
-    typeof candidateSession === 'object' &&
-    'id' in candidateSession &&
-    !!candidateSession.id
+  const isUserValid
+    = !!candidateUser
+      && typeof candidateUser === 'object'
+      && 'id' in candidateUser
+      && !!candidateUser.id
+  const isSessionValid
+    = !!candidateSession
+      && typeof candidateSession === 'object'
+      && 'id' in candidateSession
+      && !!candidateSession.id
 
   console.log('updateAuthState resolved state:', {
     user: candidateUser,
     session: candidateSession,
     isUserValid,
-    isSessionValid
+    isSessionValid,
   })
 
   const resolvedSessionId = isSessionValid ? (candidateSession as { id: string }).id : null
@@ -119,16 +122,18 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
       const { touchChannel } = await import('~/modules/channel/channel-core')
       // Notify main process Sentry
       await touchChannel.send('sentry:update-user', {
-        user: authState.user
+        user: authState.user,
       })
       // Notify renderer process Sentry
       try {
         const { updateSentryUserContext } = await import('~/modules/sentry/sentry-renderer')
         updateSentryUserContext(authState.user)
-      } catch {
+      }
+      catch {
         // Renderer Sentry not initialized yet
       }
-    } catch (error) {
+    }
+    catch (error) {
       // Silently fail if Sentry is not available
       console.debug('[useAuth] Failed to update Sentry user context', error)
     }
@@ -136,7 +141,8 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
 }
 
 function getDisplayName(): string {
-  if (!authState.user) return ''
+  if (!authState.user)
+    return ''
 
   const { firstName, lastName, username } = authState.user
   if (firstName || lastName) {
@@ -146,12 +152,14 @@ function getDisplayName(): string {
 }
 
 function getPrimaryEmail(): string {
-  if (!authState.user?.emailAddresses?.length) return ''
+  if (!authState.user?.emailAddresses?.length)
+    return ''
   return authState.user.emailAddresses[0].emailAddress
 }
 
 async function initializeAuth() {
-  if (isInitialized) return
+  if (isInitialized)
+    return
 
   try {
     const { initializeClerk } = useClerkProvider()
@@ -169,7 +177,7 @@ async function initializeAuth() {
         hasSession: 'session' in clerk,
         userType: typeof clerk.user,
         sessionType: typeof clerk.session,
-        clerkKeys: Object.keys(clerk)
+        clerkKeys: Object.keys(clerk),
       })
 
       updateAuthState(resources)
@@ -177,7 +185,8 @@ async function initializeAuth() {
 
     updateAuthState(clerk)
     isInitialized = true
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to initialize Clerk auth:', error)
     authState.isLoaded = true
     authState.isSignedIn = false
@@ -203,12 +212,14 @@ async function signIn() {
   authLoadingState.isSigningIn = true
   try {
     await clerk.openSignIn()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Sign in failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_IN_FAILED')
     toast.error(errorMessage)
     throw error
-  } finally {
+  }
+  finally {
     authLoadingState.isSigningIn = false
   }
 }
@@ -226,12 +237,14 @@ async function signUp() {
   authLoadingState.isSigningUp = true
   try {
     await clerk.openSignUp()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Sign up failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_UP_FAILED')
     toast.error(errorMessage)
     throw error
-  } finally {
+  }
+  finally {
     authLoadingState.isSigningUp = false
   }
 }
@@ -254,12 +267,14 @@ async function signOut() {
     authState.isSignedIn = false
     authState.user = null
     authState.sessionId = null
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Sign out failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
     throw error
-  } finally {
+  }
+  finally {
     authLoadingState.isSigningOut = false
   }
 }
@@ -304,7 +319,8 @@ async function loginWithClerk(): Promise<LoginResult> {
       // 启动进度更新
       const startTime = Date.now()
       const updateProgress = () => {
-        if (isResolved) return
+        if (isResolved)
+          return
 
         const elapsed = (Date.now() - startTime) / 1000
         const progress = Math.min((elapsed / 10) * 100, 95) // 最多到95%，等待认证完成
@@ -342,7 +358,7 @@ async function loginWithClerk(): Promise<LoginResult> {
           const user = currentUser.value
           resolve({
             success: true,
-            user
+            user,
           })
         }
       })
@@ -361,19 +377,21 @@ async function loginWithClerk(): Promise<LoginResult> {
           authLoadingState.loginTimeRemaining = 0
           resolve({
             success: false,
-            error
+            error,
           })
         }
       }, 10000)
     })
-  } catch (error) {
+  }
+  catch (error) {
     authLoadingState.loginProgress = 0
     authLoadingState.loginTimeRemaining = 0
     return {
       success: false,
-      error
+      error,
     }
-  } finally {
+  }
+  finally {
     authLoadingState.isLoggingIn = false
   }
 }
@@ -386,7 +404,7 @@ async function login(options: LoginOptions = {}): Promise<LoginResult> {
     onSuccess?.(user)
     return {
       success: true,
-      user
+      user,
     }
   }
 
@@ -394,7 +412,8 @@ async function login(options: LoginOptions = {}): Promise<LoginResult> {
 
   if (result.success) {
     onSuccess?.(result.user)
-  } else {
+  }
+  else {
     onError?.(result.error)
   }
 
@@ -408,7 +427,8 @@ async function logout(): Promise<void> {
     }
 
     toast.success('已登出')
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Logout failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
@@ -471,6 +491,6 @@ export function useAuth() {
     checkAuthStatus,
     initializeAuth,
     getDisplayName,
-    getPrimaryEmail
+    getPrimaryEmail,
   }
 }

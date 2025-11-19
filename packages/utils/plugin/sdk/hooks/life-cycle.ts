@@ -4,7 +4,7 @@ export enum LifecycleHooks {
   ACTIVE = 'ac',
   INACTIVE = 'in',
   // FORE_PAUSED = 'fp',
-  CRASH = 'cr'
+  CRASH = 'cr',
 }
 
 // @ts-ignore
@@ -22,27 +22,21 @@ export function injectHook(type: LifecycleHooks, hook: Function, processFunc = (
   const hooks: Array<Function> = __hooks[type] || (__hooks[type] = [])
 
   if (hooks.length === 0) {
-
-    window.$channel.regChannel("@lifecycle:" + type, (obj: any) => {
-
+    window.$channel.regChannel(`@lifecycle:${type}`, (obj: any) => {
       processFunc(obj)
 
       // @ts-ignore
       delete window.$touchSDK.__hooks[type]
     })
-
   }
 
   const wrappedHook = (data: any) => {
-
     try {
-
       hook(data)
-
-    } catch (e) {
+    }
+    catch (e) {
       console.error(`[TouchSDK] ${type} hook error: `, e)
     }
-
   }
 
   hooks.push(wrappedHook)

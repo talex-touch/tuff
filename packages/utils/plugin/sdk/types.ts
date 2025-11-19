@@ -4,13 +4,13 @@
  * @version 1.0.0
  */
 
-import type { ITouchChannel, ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel';
-import type { IPluginFeature } from '../index';
+import type { ITouchChannel, ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
+import type { IPluginFeature } from '../index'
 
 /**
  * Handler signature for plugin channel events.
  */
-export type PluginChannelHandler = (event: StandardChannelData) => any;
+export type PluginChannelHandler = (event: StandardChannelData) => any
 
 /**
  * Bridge exposed to plugin backends for channel-based communication.
@@ -21,14 +21,14 @@ export interface IPluginChannelBridge {
    * @param eventName - Channel event name.
    * @param payload - Optional data payload.
    */
-  sendToMain<T = any>(eventName: string, payload?: any): Promise<T>;
+  sendToMain: <T = any>(eventName: string, payload?: any) => Promise<T>
 
   /**
    * Sends a payload to this plugin's renderer view.
    * @param eventName - Channel event name.
    * @param payload - Optional data payload.
    */
-  sendToRenderer<T = any>(eventName: string, payload?: any): Promise<T>;
+  sendToRenderer: <T = any>(eventName: string, payload?: any) => Promise<T>
 
   /**
    * Registers a handler for main renderer messages.
@@ -36,7 +36,7 @@ export interface IPluginChannelBridge {
    * @param handler - Handler invoked with the raw channel event.
    * @returns Unsubscribe function.
    */
-  onMain(eventName: string, handler: PluginChannelHandler): () => void;
+  onMain: (eventName: string, handler: PluginChannelHandler) => () => void
 
   /**
    * Registers a handler for renderer-originated messages scoped to this plugin.
@@ -44,12 +44,12 @@ export interface IPluginChannelBridge {
    * @param handler - Handler invoked with the raw channel event.
    * @returns Unsubscribe function.
    */
-  onRenderer(eventName: string, handler: PluginChannelHandler): () => void;
+  onRenderer: (eventName: string, handler: PluginChannelHandler) => () => void
 
   /**
    * Access to the underlying channel implementation for advanced scenarios.
    */
-  readonly raw: ITouchChannel;
+  readonly raw: ITouchChannel
 }
 
 /**
@@ -59,29 +59,29 @@ export interface IPluginRendererChannel {
   /**
    * Sends a message asynchronously and resolves with the reply payload.
    */
-  send<T = any>(eventName: string, payload?: any): Promise<T>;
+  send: <T = any>(eventName: string, payload?: any) => Promise<T>
 
   /**
    * Sends a message synchronously and returns the reply payload.
    */
-  sendSync<T = any>(eventName: string, payload?: any): T;
+  sendSync: <T = any>(eventName: string, payload?: any) => T
 
   /**
    * Registers a handler for renderer channel events.
    * @returns Unsubscribe function.
    */
-  on(eventName: string, handler: PluginChannelHandler): () => void;
+  on: (eventName: string, handler: PluginChannelHandler) => () => void
 
   /**
    * Registers a one-off handler for a renderer channel event.
    * @returns Unsubscribe function (no-op after invocation).
    */
-  once(eventName: string, handler: PluginChannelHandler): () => void;
+  once: (eventName: string, handler: PluginChannelHandler) => () => void
 
   /**
    * Provides access to the raw client channel.
    */
-  readonly raw: ITouchClientChannel;
+  readonly raw: ITouchClientChannel
 }
 
 /**
@@ -133,84 +133,84 @@ export interface IPluginUtils {
    * HTTP client for network requests (axios instance)
    * @remarks Provides direct access to axios for making HTTP requests
    */
-  http: any;
+  http: any
 
   /**
    * Data storage manager for persistent data operations
    * @see {@link IStorageManager}
    */
-  storage: IStorageManager;
+  storage: IStorageManager
 
   /**
    * Clipboard manager for system clipboard operations
    * @see {@link IClipboardManager}
    */
-  clipboard: IClipboardManager;
+  clipboard: IClipboardManager
 
   /**
    * Channel bridge for communicating with renderer and main processes
    * @see {@link IPluginChannelBridge}
    */
-  channel: IPluginChannelBridge;
+  channel: IPluginChannelBridge
 
   /**
    * Search result manager for handling search operations
    * @see {@link ISearchManager}
    */
-  search: ISearchManager;
+  search: ISearchManager
 
   /**
    * Dialog manager for system dialog operations
    * @see {@link IDialogManager}
    */
-  dialog: IDialogManager;
+  dialog: IDialogManager
 
   /**
    * Logger for plugin logging operations
    * @see {@link ILogger}
    */
-  logger: ILogger;
+  logger: ILogger
 
   /**
    * Event manager for plugin event handling
    * @see {@link IEventManager}
    */
-  $event: IEventManager;
+  $event: IEventManager
 
   /**
    * Opens a URL in the default browser
    * @param url - The URL to open
    */
-  openUrl: (url: string) => void;
+  openUrl: (url: string) => void
 
   /**
    * Pushes search result items to the search interface
    * @param items - Array of search result items to add
    */
-  pushItems: (items: any[]) => void;
+  pushItems: (items: any[]) => void
 
   /**
    * Clears all current search results
    */
-  clearItems: () => void;
+  clearItems: () => void
 
   /**
    * Gets all current search result items
    * @returns Array of current search result items
    */
-  getItems: () => any[];
+  getItems: () => any[]
 
   /**
    * Features manager for dynamic feature management
    * @see {@link IFeaturesManager}
    */
-  features: IFeaturesManager;
+  features: IFeaturesManager
 
   /**
    * Plugin information manager
    * @see {@link IPluginInfoManager}
    */
-  plugin: IPluginInfoManager;
+  plugin: IPluginInfoManager
 }
 
 /**
@@ -226,7 +226,7 @@ export interface IStorageManager {
    * @param value - The value to store (will be JSON serialized)
    * @returns Promise that resolves when the value is stored
    */
-  set(key: string, value: any): Promise<void>;
+  set: (key: string, value: any) => Promise<void>
 
   /**
    * Gets a value for the given key
@@ -234,33 +234,33 @@ export interface IStorageManager {
    * @param defaultValue - Default value to return if key doesn't exist
    * @returns Promise that resolves to the stored value or default value
    */
-  get(key: string, defaultValue?: any): Promise<any>;
+  get: (key: string, defaultValue?: any) => Promise<any>
 
   /**
    * Checks if a key exists in storage
    * @param key - The storage key to check
    * @returns Promise that resolves to true if key exists, false otherwise
    */
-  has(key: string): Promise<boolean>;
+  has: (key: string) => Promise<boolean>
 
   /**
    * Removes a key from storage
    * @param key - The storage key to remove
    * @returns Promise that resolves when the key is removed
    */
-  remove(key: string): Promise<void>;
+  remove: (key: string) => Promise<void>
 
   /**
    * Clears all stored data
    * @returns Promise that resolves when all data is cleared
    */
-  clear(): Promise<void>;
+  clear: () => Promise<void>
 
   /**
    * Gets all storage keys
    * @returns Promise that resolves to an array of all storage keys
    */
-  keys(): Promise<string[]>;
+  keys: () => Promise<string[]>
 }
 
 /**
@@ -274,42 +274,42 @@ export interface IClipboardManager {
    * Reads text from the clipboard
    * @returns The text content from clipboard
    */
-  readText(): string;
+  readText: () => string
 
   /**
    * Writes text to the clipboard
    * @param text - The text to write to clipboard
    */
-  writeText(text: string): void;
+  writeText: (text: string) => void
 
   /**
    * Reads image from the clipboard
    * @returns The image data from clipboard, or null if no image
    */
-  readImage(): any | null;
+  readImage: () => any | null
 
   /**
    * Writes image to the clipboard
    * @param image - The image data to write to clipboard
    */
-  writeImage(image: any): void;
+  writeImage: (image: any) => void
 
   /**
    * Clears the clipboard content
    */
-  clear(): void;
+  clear: () => void
 
   /**
    * Checks if clipboard contains text
    * @returns True if clipboard has text content, false otherwise
    */
-  hasText(): boolean;
+  hasText: () => boolean
 
   /**
    * Checks if clipboard contains image
    * @returns True if clipboard has image content, false otherwise
    */
-  hasImage(): boolean;
+  hasImage: () => boolean
 }
 
 /**
@@ -323,19 +323,19 @@ export interface ISearchManager {
    * Updates the current search query
    * @param query - The new search query string
    */
-  updateQuery(query: string): void;
+  updateQuery: (query: string) => void
 
   /**
    * Gets the current search query
    * @returns The current search query string
    */
-  getQuery(): string;
+  getQuery: () => string
 
   /**
    * Gets the timestamp of the last query update
    * @returns Timestamp in milliseconds since epoch
    */
-  getTimestamp(): number;
+  getTimestamp: () => number
 }
 
 /**
@@ -355,13 +355,13 @@ export interface IDialogManager {
    * @param options.buttons - Array of button labels
    * @returns Promise that resolves to the dialog result
    */
-  showMessageBox(options: {
-    type?: 'info' | 'warning' | 'error' | 'question';
-    title?: string;
-    message: string;
-    detail?: string;
-    buttons?: string[];
-  }): Promise<any>;
+  showMessageBox: (options: {
+    type?: 'info' | 'warning' | 'error' | 'question'
+    title?: string
+    message: string
+    detail?: string
+    buttons?: string[]
+  }) => Promise<any>
 
   /**
    * Shows an open file/folder dialog
@@ -372,12 +372,12 @@ export interface IDialogManager {
    * @param options.properties - Dialog properties (openFile, openDirectory, etc.)
    * @returns Promise that resolves to the selected file/folder paths
    */
-  showOpenDialog(options: {
-    title?: string;
-    defaultPath?: string;
-    filters?: Array<{ name: string; extensions: string[] }>;
-    properties?: string[];
-  }): Promise<any>;
+  showOpenDialog: (options: {
+    title?: string
+    defaultPath?: string
+    filters?: Array<{ name: string, extensions: string[] }>
+    properties?: string[]
+  }) => Promise<any>
 
   /**
    * Shows a save file dialog
@@ -387,11 +387,11 @@ export interface IDialogManager {
    * @param options.filters - File type filters
    * @returns Promise that resolves to the selected save path
    */
-  showSaveDialog(options: {
-    title?: string;
-    defaultPath?: string;
-    filters?: Array<{ name: string; extensions: string[] }>;
-  }): Promise<any>;
+  showSaveDialog: (options: {
+    title?: string
+    defaultPath?: string
+    filters?: Array<{ name: string, extensions: string[] }>
+  }) => Promise<any>
 }
 
 /**
@@ -406,28 +406,28 @@ export interface ILogger {
    * @param message - The log message
    * @param args - Additional arguments to log
    */
-  info(message: string, ...args: any[]): void;
+  info: (message: string, ...args: any[]) => void
 
   /**
    * Logs a warning message
    * @param message - The warning message
    * @param args - Additional arguments to log
    */
-  warn(message: string, ...args: any[]): void;
+  warn: (message: string, ...args: any[]) => void
 
   /**
    * Logs an error message
    * @param message - The error message
    * @param args - Additional arguments to log
    */
-  error(message: string, ...args: any[]): void;
+  error: (message: string, ...args: any[]) => void
 
   /**
    * Logs a debug message
    * @param message - The debug message
    * @param args - Additional arguments to log
    */
-  debug(message: string, ...args: any[]): void;
+  debug: (message: string, ...args: any[]) => void
 }
 
 /**
@@ -442,21 +442,21 @@ export interface IEventManager {
    * @param event - The event name to listen for
    * @param callback - The callback function to execute when event is emitted
    */
-  on(event: string, callback: Function): void;
+  on: (event: string, callback: Function) => void
 
   /**
    * Removes an event listener
    * @param event - The event name to stop listening for
    * @param callback - The callback function to remove
    */
-  off(event: string, callback: Function): void;
+  off: (event: string, callback: Function) => void
 
   /**
    * Emits an event with optional arguments
    * @param event - The event name to emit
    * @param args - Arguments to pass to event listeners
    */
-  emit(event: string, ...args: any[]): void;
+  emit: (event: string, ...args: any[]) => void
 }
 
 /**
@@ -467,7 +467,7 @@ export interface IEventManager {
  */
 export interface IPluginConfig {
   /** Dynamic configuration properties */
-  [key: string]: any;
+  [key: string]: any
 }
 
 /**
@@ -480,24 +480,24 @@ export interface IPluginContext {
   /**
    * The name of the plugin
    */
-  pluginName: string;
+  pluginName: string
 
   /**
    * The file system path to the plugin directory
    */
-  pluginPath: string;
+  pluginPath: string
 
   /**
    * Plugin configuration object
    * @see {@link IPluginConfig}
    */
-  config: IPluginConfig;
+  config: IPluginConfig
 
   /**
    * Plugin utilities and tools
    * @see {@link IPluginUtils}
    */
-  utils: IPluginUtils;
+  utils: IPluginUtils
 }
 
 /**
@@ -513,7 +513,7 @@ export interface IPluginLifecycle {
    * @returns Promise or void
    * @optional
    */
-  onInit?(context: IPluginContext): Promise<void> | void;
+  onInit?: (context: IPluginContext) => Promise<void> | void
 
   /**
    * Called when a plugin feature is triggered
@@ -542,7 +542,7 @@ export interface IPluginLifecycle {
    * }
    * ```
    */
-  onFeatureTriggered(featureId: string, query: any, feature: any): Promise<void> | void;
+  onFeatureTriggered: (featureId: string, query: any, feature: any) => Promise<void> | void
 
   /**
    * Called when user input changes (for real-time features)
@@ -550,7 +550,7 @@ export interface IPluginLifecycle {
    * @returns Promise or void
    * @optional
    */
-  onInputChanged?(input: string): Promise<void> | void;
+  onInputChanged?: (input: string) => Promise<void> | void
 
   /**
    * Called when an action button is clicked
@@ -559,14 +559,14 @@ export interface IPluginLifecycle {
    * @returns Promise or void
    * @optional
    */
-  onActionClick?(actionId: string, data?: any): Promise<void> | void;
+  onActionClick?: (actionId: string, data?: any) => Promise<void> | void
 
   /**
    * Called when the plugin is being destroyed/unloaded
    * @returns Promise or void
    * @optional
    */
-  onDestroy?(): Promise<void> | void;
+  onDestroy?: () => Promise<void> | void
 }
 
 /**
@@ -588,10 +588,10 @@ export interface IPluginLifecycle {
  */
 export function createStorageManager(
   pluginPath: string,
-  fse: any
+  fse: any,
 ): IStorageManager {
-  const path = require('path');
-  const dataPath = path.join(pluginPath, 'data');
+  const path = require('node:path')
+  const dataPath = path.join(pluginPath, 'data')
 
   /**
    * Ensures the data directory exists
@@ -599,54 +599,54 @@ export function createStorageManager(
    */
   const ensureDataDir = async (): Promise<void> => {
     if (!await fse.pathExists(dataPath)) {
-      await fse.ensureDir(dataPath);
+      await fse.ensureDir(dataPath)
     }
-  };
+  }
 
   return {
     async set(key: string, value: any): Promise<void> {
-      await ensureDataDir();
-      const filePath = path.join(dataPath, `${key}.json`);
-      await fse.writeJSON(filePath, value, { spaces: 2 });
+      await ensureDataDir()
+      const filePath = path.join(dataPath, `${key}.json`)
+      await fse.writeJSON(filePath, value, { spaces: 2 })
     },
 
     async get(key: string, defaultValue?: any): Promise<any> {
-      await ensureDataDir();
-      const filePath = path.join(dataPath, `${key}.json`);
+      await ensureDataDir()
+      const filePath = path.join(dataPath, `${key}.json`)
       if (await fse.pathExists(filePath)) {
-        return await fse.readJSON(filePath);
+        return await fse.readJSON(filePath)
       }
-      return defaultValue;
+      return defaultValue
     },
 
     async has(key: string): Promise<boolean> {
-      await ensureDataDir();
-      const filePath = path.join(dataPath, `${key}.json`);
-      return await fse.pathExists(filePath);
+      await ensureDataDir()
+      const filePath = path.join(dataPath, `${key}.json`)
+      return await fse.pathExists(filePath)
     },
 
     async remove(key: string): Promise<void> {
-      await ensureDataDir();
-      const filePath = path.join(dataPath, `${key}.json`);
+      await ensureDataDir()
+      const filePath = path.join(dataPath, `${key}.json`)
       if (await fse.pathExists(filePath)) {
-        await fse.remove(filePath);
+        await fse.remove(filePath)
       }
     },
 
     async clear(): Promise<void> {
       if (await fse.pathExists(dataPath)) {
-        await fse.emptyDir(dataPath);
+        await fse.emptyDir(dataPath)
       }
     },
 
     async keys(): Promise<string[]> {
-      await ensureDataDir();
-      const files = await fse.readdir(dataPath);
+      await ensureDataDir()
+      const files = await fse.readdir(dataPath)
       return files
         .filter((file: string) => file.endsWith('.json'))
-        .map((file: string) => path.basename(file, '.json'));
-    }
-  };
+        .map((file: string) => path.basename(file, '.json'))
+    },
+  }
 }
 
 /**
@@ -668,34 +668,34 @@ export function createStorageManager(
 export function createClipboardManager(clipboard: any): IClipboardManager {
   return {
     readText(): string {
-      return clipboard.readText();
+      return clipboard.readText()
     },
 
     writeText(text: string): void {
-      clipboard.writeText(text);
+      clipboard.writeText(text)
     },
 
     readImage(): any | null {
-      const image = clipboard.readImage();
-      return image.isEmpty() ? null : image;
+      const image = clipboard.readImage()
+      return image.isEmpty() ? null : image
     },
 
     writeImage(image: any): void {
-      clipboard.writeImage(image);
+      clipboard.writeImage(image)
     },
 
     clear(): void {
-      clipboard.clear();
+      clipboard.clear()
     },
 
     hasText(): boolean {
-      return clipboard.has('text/plain');
+      return clipboard.has('text/plain')
     },
 
     hasImage(): boolean {
-      return clipboard.has('image/png') || clipboard.has('image/jpeg');
-    }
-  };
+      return clipboard.has('image/png') || clipboard.has('image/jpeg')
+    },
+  }
 }
 
 /**
@@ -715,23 +715,23 @@ export function createClipboardManager(clipboard: any): IClipboardManager {
  * ```
  */
 export function createSearchManager(): ISearchManager {
-  let currentQuery = '';
-  let timestamp = Date.now();
+  let currentQuery = ''
+  let timestamp = Date.now()
 
   return {
     updateQuery(query: string): void {
-      currentQuery = query;
-      timestamp = Date.now();
+      currentQuery = query
+      timestamp = Date.now()
     },
 
     getQuery(): string {
-      return currentQuery;
+      return currentQuery
     },
 
     getTimestamp(): number {
-      return timestamp;
-    }
-  };
+      return timestamp
+    },
+  }
 }
 
 /**
@@ -746,27 +746,27 @@ export interface IFeaturesManager {
    * @param feature - 功能定义
    * @returns 是否添加成功
    */
-  addFeature(feature: IPluginFeature): boolean
+  addFeature: (feature: IPluginFeature) => boolean
 
   /**
    * 删除功能
    * @param featureId - 功能ID
    * @returns 是否删除成功
    */
-  removeFeature(featureId: string): boolean
+  removeFeature: (featureId: string) => boolean
 
   /**
    * 获取所有功能
    * @returns 所有功能列表
    */
-  getFeatures(): IPluginFeature[]
+  getFeatures: () => IPluginFeature[]
 
   /**
    * 获取指定功能
    * @param featureId - 功能ID
    * @returns 功能对象，如果不存在返回null
    */
-  getFeature(featureId: string): IPluginFeature | null
+  getFeature: (featureId: string) => IPluginFeature | null
 
   /**
    * 设置功能优先级
@@ -774,40 +774,40 @@ export interface IFeaturesManager {
    * @param priority - 优先级值（数字越大优先级越高）
    * @returns 是否设置成功
    */
-  setPriority(featureId: string, priority: number): boolean
+  setPriority: (featureId: string, priority: number) => boolean
 
   /**
    * 获取功能优先级
    * @param featureId - 功能ID
    * @returns 优先级值，如果功能不存在返回null
    */
-  getPriority(featureId: string): number | null
+  getPriority: (featureId: string) => number | null
 
   /**
    * 按优先级排序获取所有功能
    * @returns 按优先级排序的功能列表（高优先级在前）
    */
-  getFeaturesByPriority(): IPluginFeature[]
+  getFeaturesByPriority: () => IPluginFeature[]
 
   /**
    * 批量设置功能优先级
    * @param priorities - 优先级映射对象 {featureId: priority}
    * @returns 设置成功的功能数量
    */
-  setPriorities(priorities: Record<string, number>): number
+  setPriorities: (priorities: Record<string, number>) => number
 
   /**
    * 重置功能优先级为默认值（0）
    * @param featureId - 功能ID
    * @returns 是否重置成功
    */
-  resetPriority(featureId: string): boolean
+  resetPriority: (featureId: string) => boolean
 
   /**
    * 获取功能统计信息
    * @returns 功能统计对象
    */
-  getStats(): {
+  getStats: () => {
     total: number
     byPriority: Record<number, number>
     averagePriority: number
@@ -825,7 +825,7 @@ export interface IPluginInfoManager {
    * 获取完整插件信息
    * @returns 包含所有插件信息的对象
    */
-  getInfo(): {
+  getInfo: () => {
     name: string
     version: string
     desc: string
@@ -842,25 +842,25 @@ export interface IPluginInfoManager {
    * 获取插件路径
    * @returns 插件文件系统路径
    */
-  getPath(): string
+  getPath: () => string
 
   /**
    * 获取插件状态
    * @returns 当前插件状态
    */
-  getStatus(): number
+  getStatus: () => number
 
   /**
    * 获取开发信息
    * @returns 开发配置信息
    */
-  getDevInfo(): any
+  getDevInfo: () => any
 
   /**
    * 获取平台支持信息
    * @returns 平台兼容性信息
    */
-  getPlatforms(): any
+  getPlatforms: () => any
 }
 
 /**
@@ -869,12 +869,12 @@ export interface IPluginInfoManager {
  * @description
  * Represents different types of plugin state changes for incremental updates
  */
-export type PluginStateEvent =
-  | { type: 'added'; plugin: any }
-  | { type: 'removed'; name: string }
-  | { type: 'updated'; name: string; changes: Partial<any> }
-  | { type: 'status-changed'; name: string; status: number }
-  | { type: 'readme-updated'; name: string; readme: string }
+export type PluginStateEvent
+  = | { type: 'added', plugin: any }
+    | { type: 'removed', name: string }
+    | { type: 'updated', name: string, changes: Partial<any> }
+    | { type: 'status-changed', name: string, status: number }
+    | { type: 'readme-updated', name: string, readme: string }
 
 /**
  * Plugin filter options for list queries

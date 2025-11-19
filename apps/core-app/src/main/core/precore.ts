@@ -1,23 +1,23 @@
+import { release } from 'node:os'
+import path from 'node:path'
 /**
  * This file describes the pre-core of the touch app.
  * Running necessary settings or environment params before startup the touch app.
  */
 import { app, crashReporter } from 'electron'
-import { release } from 'os'
-import path from 'path'
+import * as log4js from 'log4js'
 import { APP_FOLDER_NAME } from '../config/default'
 import { checkDirWithCreate } from '../utils/common-util'
+import { devProcessManager } from '../utils/dev-process-manager'
+import { mainLog } from '../utils/logger'
 import {
   AppReadyEvent,
   AppSecondaryLaunch,
   BeforeAppQuitEvent,
   TalexEvents,
+  touchEventBus,
   WindowAllClosedEvent,
-  touchEventBus
 } from './eventbus/touch-event'
-import * as log4js from 'log4js'
-import { devProcessManager } from '../utils/dev-process-manager'
-import { mainLog } from '../utils/logger'
 
 export const innerRootPath = getRootPath()
 
@@ -33,8 +33,8 @@ crashReporter.start({
   uploadToServer: false,
   ignoreSystemCrashHandler: false,
   extra: {
-    version: app.getVersion()
-  }
+    version: app.getVersion(),
+  },
 })
 
 log4js.configure({
@@ -47,13 +47,13 @@ log4js.configure({
       backups: 3,
       compress: true,
       alwaysIncludePattern: true,
-      pattern: 'yyyy-MM-dd.log'
+      pattern: 'yyyy-MM-dd.log',
     },
     out: {
-      type: 'stdout'
+      type: 'stdout',
     },
     err: {
-      type: 'stderr'
+      type: 'stderr',
     },
     error: {
       type: 'dateFile',
@@ -63,28 +63,30 @@ log4js.configure({
       backups: 3,
       compress: true,
       alwaysIncludePattern: true,
-      pattern: 'yyyy-MM-dd.err'
-    }
+      pattern: 'yyyy-MM-dd.err',
+    },
   },
   categories: {
     default: {
       appenders: ['all', 'out'],
-      level: 'INFO'
+      level: 'INFO',
     },
     error: {
       appenders: ['all', 'err', 'error'],
-      level: 'ERROR'
-    }
-  }
+      level: 'ERROR',
+    },
+  },
 })
 
 mainLog.success('Talex Touch bootstrap started')
 
 // Disable GPU Acceleration for Windows 7
-if (release().startsWith('6.1')) app.disableHardwareAcceleration()
+if (release().startsWith('6.1'))
+  app.disableHardwareAcceleration()
 
 // Set application name for Windows 10+ notifications
-if (process.platform === 'win32') app.setAppUserModelId(app.getName())
+if (process.platform === 'win32')
+  app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {
   mainLog.warn('Secondary launch detected, quitting existing process')
@@ -92,7 +94,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
     touchEventBus.emit(
       TalexEvents.APP_SECONDARY_LAUNCH,
-      new AppSecondaryLaunch(event, argv, workingDirectory, additionalData)
+      new AppSecondaryLaunch(event, argv, workingDirectory, additionalData),
     )
   })
 
@@ -110,7 +112,8 @@ app.on('window-all-closed', () => {
         app.quit()
         process.exit(0)
       }, 200)
-    } else {
+    }
+    else {
       app.quit()
       process.exit(0)
     }
@@ -118,8 +121,7 @@ app.on('window-all-closed', () => {
 })
 
 app.addListener('ready', (event, launchInfo) =>
-  touchEventBus.emit(TalexEvents.APP_READY, new AppReadyEvent(event, launchInfo))
-)
+  touchEventBus.emit(TalexEvents.APP_READY, new AppReadyEvent(event, launchInfo)))
 
 app.on('before-quit', (event) => {
   touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))

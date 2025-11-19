@@ -18,12 +18,12 @@ To listen to an event, use the `on` method provided by the event bus:
 
 ```javascript [Basic Event Listening]
 // In your plugin's main file or preload script
-import { eventBus } from '@polyglot-toolbox/plugin-sdk';
+import { eventBus } from '@polyglot-toolbox/plugin-sdk'
 
 eventBus.on('document-opened', (data) => {
-  console.log('A document was opened:', data);
+  console.log('A document was opened:', data)
   // Perform actions when a document is opened
-});
+})
 ```
 
 :::
@@ -57,13 +57,13 @@ To emit an event, use the `emit` method:
 
 ```javascript [Basic Event Emission]
 // In your plugin's main file or preload script
-import { eventBus } from '@polyglot-toolbox/plugin-sdk';
+import { eventBus } from '@polyglot-toolbox/plugin-sdk'
 
 // Emit an event when a custom action is performed
 eventBus.emit('my-plugin-action', {
   action: 'button-clicked',
   timestamp: new Date().toISOString()
-});
+})
 ```
 
 :::
@@ -108,12 +108,12 @@ Choose clear and descriptive names for your events to make them easy to understa
 
 ```javascript [Good Example]
 // Good
-eventBus.emit('translation-completed', result);
+eventBus.emit('translation-completed', result)
 ```
 
 ```javascript [Avoid Example]
 // Avoid
-eventBus.emit('done', result);
+eventBus.emit('done', result)
 ```
 
 :::
@@ -131,12 +131,12 @@ eventBus.emit('file-processed', {
   fileName: 'document.txt',
   processingTime: 1500, // in milliseconds
   success: true
-});
+})
 ```
 
 ```javascript [Avoid Example]
 // Avoid
-eventBus.emit('file-processed', 'file-123');
+eventBus.emit('file-processed', 'file-123')
 ```
 
 :::
@@ -149,15 +149,15 @@ If your plugin creates event listeners, make sure to remove them when they're no
 
 ```javascript [Handle Event Listener Cleanup]
 // Store the listener function
-const listener = (data) => {
+function listener(data) {
   // Handle the event
-};
+}
 
 // Add the listener
-eventBus.on('document-opened', listener);
+eventBus.on('document-opened', listener)
 
 // Remove the listener when cleaning up
-eventBus.off('document-opened', listener);
+eventBus.off('document-opened', listener)
 ```
 
 :::
@@ -172,8 +172,8 @@ Be careful not to create circular dependencies where events trigger each other i
 // This could create an infinite loop
 eventBus.on('setting-changed', () => {
   // Some logic that changes a setting
-  changeSetting(); // This might emit 'setting-changed' again
-});
+  changeSetting() // This might emit 'setting-changed' again
+})
 ```
 
 :::
@@ -186,7 +186,7 @@ When creating custom events for your plugin, follow these conventions:
    ::: code-group
 
    ```javascript [Custom Event Example]
-   eventBus.emit('my-plugin-name:data-processed', data);
+   eventBus.emit('my-plugin-name:data-processed', data)
    ```
 
    :::
@@ -214,43 +214,43 @@ Here's a complete example of a plugin that uses events:
 
 ```javascript [Simple Event-Based Plugin]
 // plugin.js
-import { eventBus } from '@polyglot-toolbox/plugin-sdk';
+import { eventBus } from '@polyglot-toolbox/plugin-sdk'
 
 class SimpleEventPlugin {
   constructor() {
     // Listen to document events
-    eventBus.on('document-opened', this.handleDocumentOpened.bind(this));
-    
+    eventBus.on('document-opened', this.handleDocumentOpened.bind(this))
+
     // Emit a custom event when the plugin is initialized
     eventBus.emit('simple-event-plugin:initialized', {
       timestamp: new Date().toISOString()
-    });
+    })
   }
-  
+
   handleDocumentOpened(data) {
-    console.log('Document opened:', data.filePath);
-    
+    console.log('Document opened:', data.filePath)
+
     // Perform some action and emit a result
-    const result = this.processDocument(data);
-    
+    const result = this.processDocument(data)
+
     eventBus.emit('simple-event-plugin:document-processed', {
       documentId: data.documentId,
-      result: result,
+      result,
       timestamp: new Date().toISOString()
-    });
+    })
   }
-  
+
   processDocument(data) {
     // Simulate document processing
     return {
       wordCount: Math.floor(Math.random() * 1000),
       processed: true
-    };
+    }
   }
 }
 
 // Initialize the plugin
-new SimpleEventPlugin();
+new SimpleEventPlugin()
 ```
 
 :::

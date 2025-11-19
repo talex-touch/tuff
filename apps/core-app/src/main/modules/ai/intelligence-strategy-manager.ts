@@ -13,8 +13,8 @@ export interface StrategySelectionResult {
 }
 
 export interface StrategyManager {
-  setDefaultStrategy(strategyId: string): void
-  select(request: StrategySelectionRequest): Promise<StrategySelectionResult>
+  setDefaultStrategy: (strategyId: string) => void
+  select: (request: StrategySelectionRequest) => Promise<StrategySelectionResult>
 }
 
 class DefaultStrategyManager implements StrategyManager {
@@ -39,7 +39,7 @@ class DefaultStrategyManager implements StrategyManager {
         return {
           selectedProvider: preferred,
           fallbackProviders: availableProviders.filter(p => p.id !== options.preferredProviderId),
-          reasoning: `Explicit preference for ${options.preferredProviderId}`
+          reasoning: `Explicit preference for ${options.preferredProviderId}`,
         }
       }
     }
@@ -55,13 +55,13 @@ class DefaultStrategyManager implements StrategyManager {
     if (options.modelPreference && options.modelPreference.length > 0) {
       for (const preferredModel of options.modelPreference) {
         const providerWithModel = sortedProviders.find(p =>
-          p.models?.includes(preferredModel) || p.defaultModel === preferredModel
+          p.models?.includes(preferredModel) || p.defaultModel === preferredModel,
         )
         if (providerWithModel) {
           return {
             selectedProvider: providerWithModel,
             fallbackProviders: sortedProviders.filter(p => p.id !== providerWithModel.id),
-            reasoning: `Model preference for ${preferredModel}`
+            reasoning: `Model preference for ${preferredModel}`,
           }
         }
       }
@@ -73,7 +73,7 @@ class DefaultStrategyManager implements StrategyManager {
     return {
       selectedProvider: selected,
       fallbackProviders: fallbacks,
-      reasoning: `Default priority-based selection`
+      reasoning: `Default priority-based selection`,
     }
   }
 }

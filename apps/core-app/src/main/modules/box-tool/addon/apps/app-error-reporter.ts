@@ -1,4 +1,4 @@
-export type AppScanError = {
+export interface AppScanError {
   platform: NodeJS.Platform
   path: string
   message: string
@@ -9,10 +9,10 @@ type AppScanErrorHandler = (error: AppScanError) => void
 
 let handler: AppScanErrorHandler | null = null
 
-export const setAppScanErrorHandler = (nextHandler: AppScanErrorHandler | null): void => {
+export function setAppScanErrorHandler(nextHandler: AppScanErrorHandler | null): void {
   handler = nextHandler
 }
 
-export const reportAppScanError = (error: AppScanError): void => {
+export function reportAppScanError(error: AppScanError): void {
   handler?.(error)
 }

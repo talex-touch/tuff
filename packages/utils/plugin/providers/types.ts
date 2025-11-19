@@ -1,5 +1,5 @@
-import type { IDownloadOptions, IDownloadResult } from '../plugin-source'
 import type { IManifest } from '..'
+import type { IDownloadOptions, IDownloadResult } from '../plugin-source'
 import type { RiskPromptHandler } from '../risk'
 
 export enum PluginProviderType {
@@ -7,7 +7,7 @@ export enum PluginProviderType {
   NPM = 'npm',
   TPEX = 'tpex',
   FILE = 'file',
-  DEV = 'dev'
+  DEV = 'dev',
 }
 
 export interface PluginInstallRequest {
@@ -43,11 +43,11 @@ export interface PluginInstallResult extends IDownloadResult {
 
 export interface PluginProvider {
   readonly type: PluginProviderType
-  canHandle(request: PluginInstallRequest): boolean
-  install(
+  canHandle: (request: PluginInstallRequest) => boolean
+  install: (
     request: PluginInstallRequest,
-    context?: PluginProviderContext
-  ): Promise<PluginInstallResult>
+    context?: PluginProviderContext,
+  ) => Promise<PluginInstallResult>
 }
 
 export interface PluginInstallSummary {

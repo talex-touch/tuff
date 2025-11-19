@@ -1,13 +1,9 @@
-<template>
-  <div ref="terminal" class="InteractiveTerminal-Container"></div>
-</template>
-
 <script name="InteractiveTerminal" setup>
-import { onMounted, reactive, ref, watchEffect } from 'vue'
+import { onMounted, ref } from 'vue'
 import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import 'xterm/lib/xterm.js'
-import { FitAddon } from 'xterm-addon-fit'
 // import * as TerminalFit from "xterm-addon-fit";
 
 // Terminal.applyAddon(TerminalFit);
@@ -18,11 +14,11 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 16,
-  lineHeight: 1
+  lineHeight: 1,
 })
 
 defineExpose({
-  getTerminal: () => terminal.value
+  getTerminal: () => terminal.value,
 })
 
 onMounted(() => {
@@ -41,6 +37,10 @@ onMounted(() => {
   })
 })
 </script>
+
+<template>
+  <div ref="terminal" class="InteractiveTerminal-Container" />
+</template>
 
 <style lang="scss">
 .xterm-screen {

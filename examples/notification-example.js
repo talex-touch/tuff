@@ -14,8 +14,8 @@ async function notificationExamples() {
       body: 'This is a simple notification',
       options: {
         icon: 'info',
-        timeout: 3000
-      }
+        timeout: 3000,
+      },
     })
 
     // 显示带操作的通知
@@ -26,9 +26,9 @@ async function notificationExamples() {
         icon: 'update',
         actions: [
           { id: 'update', label: 'Update Now' },
-          { id: 'later', label: 'Later' }
-        ]
-      }
+          { id: 'later', label: 'Later' },
+        ],
+      },
     })
 
     // 显示进度通知
@@ -37,8 +37,8 @@ async function notificationExamples() {
       body: 'Downloading file...',
       options: {
         icon: 'download',
-        progress: 0
-      }
+        progress: 0,
+      },
     })
 
     // 更新进度
@@ -48,18 +48,18 @@ async function notificationExamples() {
         title: 'Downloading',
         body: `Progress: ${i}%`,
         options: {
-          progress: i
-        }
+          progress: i,
+        },
       })
       await new Promise(resolve => setTimeout(resolve, 200))
     }
 
     // 隐藏通知
     await sdk.sendMessage('notification:hide', {
-      id: 'download-notification'
+      id: 'download-notification',
     })
-
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Notification operations failed:', error)
   }
 }
@@ -79,4 +79,3 @@ function handleNotificationUpdate(data) {
   console.log('Updating notification:', data.id, data.title, data.body)
   // 实现更新逻辑
 }
-

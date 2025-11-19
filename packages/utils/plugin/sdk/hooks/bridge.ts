@@ -10,7 +10,7 @@ export type BridgeHook<T = any> = (data: T) => void
 
 const __hooks: Record<BridgeEvent, Array<BridgeHook>> = {
   [BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE]: [],
-  [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: []
+  [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: [],
 }
 
 /**
@@ -37,15 +37,12 @@ export function injectBridgeEvent<T>(type: BridgeEvent, hook: BridgeHook<T>) {
   }
 
   const wrappedHook = (data: T) => {
-
     try {
-
       hook(data)
-
-    } catch (e) {
+    }
+    catch (e) {
       console.error(`[TouchSDK] ${type} hook error: `, e)
     }
-
   }
 
   hooks.push(wrappedHook)

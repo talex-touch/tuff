@@ -1,29 +1,8 @@
-<template>
-  <div class="update-prompt-example">
-    <el-button type="primary" @click="showUpdateDialog">
-      Show Update Dialog
-    </el-button>
-
-    <UpdatePromptDialog
-      v-model="dialogVisible"
-      :release="mockRelease"
-      :current-version="currentVersion"
-      :download-task-id="downloadTaskId"
-      :download-progress="downloadProgress"
-      :download-status="downloadStatus"
-      @download="handleDownload"
-      @install="handleInstall"
-      @ignore-version="handleIgnoreVersion"
-      @remind-later="handleRemindLater"
-      @cancel-download="handleCancelDownload"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { GitHubRelease } from '@talex-touch/utils'
+import { DownloadStatus } from '@talex-touch/utils'
 import { ref } from 'vue'
 import UpdatePromptDialog from './UpdatePromptDialog.vue'
-import { GitHubRelease, DownloadStatus } from '@talex-touch/utils'
 
 const dialogVisible = ref(false)
 const currentVersion = ref('v2.4.6')
@@ -35,7 +14,7 @@ const downloadProgress = ref({
   speed: 0,
   downloadedSize: 0,
   totalSize: 0,
-  remainingTime: 0
+  remainingTime: 0,
 })
 
 const mockRelease = ref<GitHubRelease>({
@@ -70,30 +49,30 @@ This update is approximately 250 MB.`,
       size: 262144000, // 250 MB
       platform: 'darwin' as const,
       arch: 'x64' as const,
-      checksum: 'abc123def456'
-    }
-  ]
+      checksum: 'abc123def456',
+    },
+  ],
 })
 
-const showUpdateDialog = () => {
+function showUpdateDialog() {
   dialogVisible.value = true
 }
 
-const handleDownload = (release: GitHubRelease) => {
+function handleDownload(release: GitHubRelease) {
   console.log('Download update:', release.tag_name)
   // Simulate download start
-  downloadTaskId.value = 'update-task-' + Date.now()
+  downloadTaskId.value = `update-task-${Date.now()}`
   downloadStatus.value = DownloadStatus.DOWNLOADING
-  
+
   // Simulate download progress
   simulateDownload()
 }
 
-const simulateDownload = () => {
+function simulateDownload() {
   const totalSize = mockRelease.value.assets[0].size
   let downloaded = 0
   const speed = 2 * 1024 * 1024 // 2 MB/s
-  
+
   const interval = setInterval(() => {
     downloaded += speed
     if (downloaded >= totalSize) {
@@ -101,37 +80,59 @@ const simulateDownload = () => {
       downloadStatus.value = DownloadStatus.COMPLETED
       clearInterval(interval)
     }
-    
+
     downloadProgress.value = {
       percentage: (downloaded / totalSize) * 100,
-      speed: speed,
+      speed,
       downloadedSize: downloaded,
-      totalSize: totalSize,
-      remainingTime: (totalSize - downloaded) / speed
+      totalSize,
+      remainingTime: (totalSize - downloaded) / speed,
     }
   }, 1000)
 }
 
-const handleInstall = (taskId: string) => {
+function handleInstall(taskId: string) {
   console.log('Install update:', taskId)
   // Implement installation logic
   dialogVisible.value = false
 }
 
-const handleIgnoreVersion = (version: string) => {
+function handleIgnoreVersion(version: string) {
   console.log('Ignore version:', version)
 }
 
-const handleRemindLater = () => {
+function handleRemindLater() {
   console.log('Remind later')
 }
 
-const handleCancelDownload = (taskId: string) => {
+function handleCancelDownload(taskId: string) {
   console.log('Cancel download:', taskId)
   downloadStatus.value = DownloadStatus.CANCELLED
   downloadTaskId.value = undefined
 }
 </script>
+
+<template>
+  <div class="update-prompt-example">
+    <el-button type="primary" @click="showUpdateDialog">
+      Show Update Dialog
+    </el-button>
+
+    <UpdatePromptDialog
+      v-model="dialogVisible"
+      :release="mockRelease"
+      :current-version="currentVersion"
+      :download-task-id="downloadTaskId"
+      :download-progress="downloadProgress"
+      :download-status="downloadStatus"
+      @download="handleDownload"
+      @install="handleInstall"
+      @ignore-version="handleIgnoreVersion"
+      @remind-later="handleRemindLater"
+      @cancel-download="handleCancelDownload"
+    />
+  </div>
+</template>
 
 <style scoped>
 .update-prompt-example {

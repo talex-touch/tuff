@@ -1,4 +1,3 @@
-
 |   Event Name   |     Event Identifier     |                           Trigger                           |
 | :--------------: | :--------------: | :------------------------------------------------------: |
 |  Plugin Loaded  |  @plugin-loaded  |      If and only if the plugin is loaded for the first time, including overloading, reload after unloading, etc      |

@@ -1,5 +1,5 @@
 <script setup name="FormTemplate" lang="ts">
-import { ref, provide } from 'vue'
+import { provide, ref } from 'vue'
 import LoadingIcon from '../../icon/LoadingIcon.vue'
 
 interface FormField {
@@ -18,7 +18,7 @@ withDefaults(defineProps<FormTemplateProps>(), {
   title: 'FormTemplate',
   description: 'This is a form template.',
   routerBack: false,
-  contentStyle: 'height: calc(100% - 10rem)'
+  contentStyle: 'height: calc(100% - 10rem)',
 })
 
 const loading = ref(false)
@@ -27,7 +27,7 @@ const formFields: FormField[] = []
 provide('regFormFiled', (vnode: any, func: () => { access: boolean }) => {
   formFields.push({
     vnode,
-    func
+    func,
   })
 })
 
@@ -57,7 +57,9 @@ provide('setLoading', (val: boolean) => (loading.value = val))
             class="i-ri-arrow-left-s-line hover-button fake-background transition-cubic"
             @click="() => $router.back()"
           />
-          <p my-4 font-extrabold text-2xl>{{ title }}</p>
+          <p my-4 font-extrabold text-2xl>
+            {{ title }}
+          </p>
         </div>
         <span block text="base" op-75 font-normal>{{ description }}</span>
       </slot>
@@ -72,7 +74,7 @@ provide('setLoading', (val: boolean) => (loading.value = val))
     </div>
 
     <div class="Form-Loading transition-cubic">
-      <loading-icon />
+      <LoadingIcon />
     </div>
   </div>
 </template>

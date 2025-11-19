@@ -1,12 +1,11 @@
-import fse from 'fs-extra'
-import path from 'path'
+import type { IPluginDev, IPluginFeature } from '@talex-touch/utils/plugin'
+import type { TuffIconType } from '@talex-touch/utils/types/icon'
+import path from 'node:path'
 import axios from 'axios'
-import { TouchPlugin } from './plugin'
+import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
-import { IPluginDev } from '@talex-touch/utils/plugin'
-import { IPluginFeature } from '@talex-touch/utils/plugin'
+import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
-import { TuffIconType } from '@talex-touch/utils/types/icon'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -28,7 +27,7 @@ interface PluginManifest {
  * Plugin loader interface
  */
 export interface IPluginLoader {
-  load(): Promise<TouchPlugin>
+  load: () => Promise<TouchPlugin>
 }
 
 abstract class BasePluginLoader {
@@ -49,7 +48,7 @@ abstract class BasePluginLoader {
       'Loading...',
       '',
       { enable: false, address: '' },
-      this.pluginPath
+      this.pluginPath,
     )
   }
 
@@ -66,7 +65,7 @@ abstract class BasePluginLoader {
         code: 'NAME_MISMATCH',
         suggestion: 'Ensure the plugin directory name matches the "name" field in manifest.json.',
         meta: { expected: this.pluginName, actual: pluginInfo.name },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
     }
 
@@ -86,7 +85,7 @@ abstract class BasePluginLoader {
         type: 'warning',
         message: 'Icon loading failed',
         source: 'icon',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
     }
 
@@ -100,7 +99,7 @@ abstract class BasePluginLoader {
             message: `Feature '${feature.name}' could not be added. It might be a duplicate or have an invalid format.`,
             source: `feature:${feature.id}`,
             meta: { feature },
-            timestamp: Date.now()
+            timestamp: Date.now(),
           })
         }
 
@@ -117,7 +116,7 @@ abstract class BasePluginLoader {
             type: 'warning',
             message: `Icon for feature '${pluginFeature.name}' failed to load`,
             source: `feature:${pluginFeature.id}`,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           })
         }
       })
@@ -140,7 +139,8 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
       this.touchPlugin.readme = fse.existsSync(readmePath)
         ? fse.readFileSync(readmePath, 'utf-8')
         : ''
-    } catch (error) {
+    }
+    catch (error) {
       const err = error as Error
       this.touchPlugin.issues.push({
         type: 'error',
@@ -148,7 +148,7 @@ class LocalPluginLoader extends BasePluginLoader implements IPluginLoader {
         source: 'manifest.json',
         code: 'INVALID_MANIFEST_JSON',
         meta: { error: err.stack },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
     }
     return this.touchPlugin
@@ -177,12 +177,12 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         proxy: false,
         headers: {
           'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
-        }
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+        },
       })
       pluginInfo = response.data
       this.touchPlugin.logger.debug(
-        `[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`
+        `[Dev] Remote manifest fetched successfully. Version: ${pluginInfo.version}`,
       )
       // Note: manifest.json is NOT written here to avoid triggering file watchers
       // It will be synced by DevServerHealthMonitor when manifest changes are detected via heartbeat
@@ -191,9 +191,10 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         message: `Plugin is running in development mode, loading from ${this.devConfig.address}.`,
         source: 'dev-mode',
         code: 'DEV_MODE_ACTIVE',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
-    } catch (error) {
+    }
+    catch (error) {
       const err = error as Error
       const remoteManifestUrl = new URL('manifest.json', this.devConfig.address).toString()
       this.touchPlugin.issues.push({
@@ -204,7 +205,7 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
         suggestion:
           'Ensure the dev server is running at the correct address and the manifest.json is accessible.',
         meta: { url: remoteManifestUrl },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
       return this.touchPlugin
     }
@@ -218,11 +219,12 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
       const response = await axios.get(remoteReadmeUrl, {
         timeout: 2000,
         proxy: false,
-        responseType: 'text'
+        responseType: 'text',
       })
       this.touchPlugin.readme = response.data || ''
       this.touchPlugin.logger.debug(`[Dev] Remote README fetched successfully`)
-    } catch {
+    }
+    catch {
       this.touchPlugin.logger.debug(`[Dev] README not found or failed to load from dev server`)
       this.touchPlugin.readme = ''
       // README loading failure is not fatal, so we don't add it to issues
@@ -245,7 +247,8 @@ export function createPluginLoader(pluginName: string, pluginPath: string): IPlu
 
   if (devConfig.enable) {
     return new DevPluginLoader(pluginName, pluginPath, devConfig)
-  } else {
+  }
+  else {
     return new LocalPluginLoader(pluginName, pluginPath)
   }
 }

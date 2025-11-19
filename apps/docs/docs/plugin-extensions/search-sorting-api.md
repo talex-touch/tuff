@@ -1,6 +1,6 @@
 # Search Sorting API Extension
 
-> **⚠️ INTERNAL BETA - NOT YET AVAILABLE**  
+> **⚠️ INTERNAL BETA - NOT YET AVAILABLE**
 > This API is currently in internal beta testing and is not available for public plugin development. It will be released in a future version.
 
 ## Overview
@@ -99,22 +99,22 @@ export class DevToolsPlugin {
   onActivate() {
     // Boost development-related items during work hours
     const hour = new Date().getHours()
-    
+
     if (hour >= 9 && hour <= 17) {
       SortConfigManager.addDynamicRule(
         'dev-tools-work-boost',
         (item: SearchItem) => {
           const devKeywords = ['code', 'git', 'terminal', 'editor', 'ide']
-          return devKeywords.some(keyword => 
-            item.name.toLowerCase().includes(keyword) ||
-            item.keyWords.some(kw => kw.toLowerCase().includes(keyword))
+          return devKeywords.some(keyword =>
+            item.name.toLowerCase().includes(keyword)
+            || item.keyWords.some(kw => kw.toLowerCase().includes(keyword))
           )
         },
         15
       )
     }
   }
-  
+
   onDeactivate() {
     SortConfigManager.removeDynamicRule('dev-tools-work-boost')
   }
@@ -131,17 +131,17 @@ export class ProductivityPlugin {
       'productivity-boost',
       (item: SearchItem) => {
         const productivityApps = ['calendar', 'notes', 'todo', 'task']
-        return productivityApps.some(app => 
+        return productivityApps.some(app =>
           item.name.toLowerCase().includes(app)
         ) && (item.amo || 0) > 5
       },
       12
     )
-    
+
     // Apply feature-first preset for productivity focus
     applyPresetConfig('featureFirst')
   }
-  
+
   onDeactivate() {
     SortConfigManager.removeDynamicRule('productivity-boost')
     applyPresetConfig('default')
@@ -157,34 +157,34 @@ export class ContextAwarePlugin {
     // Adjust weights based on current context
     this.setupContextRules()
   }
-  
+
   private setupContextRules() {
     // Boost items based on current application context
     SortConfigManager.addDynamicRule(
       'context-aware-boost',
       (item: SearchItem) => {
         const currentApp = this.getCurrentActiveApp()
-        
+
         // If user is in a code editor, boost development tools
         if (currentApp.includes('code') || currentApp.includes('editor')) {
-          return item.keyWords.some(kw => 
+          return item.keyWords.some(kw =>
             ['debug', 'compile', 'build', 'test'].includes(kw.toLowerCase())
           )
         }
-        
+
         // If user is in a browser, boost web-related tools
         if (currentApp.includes('browser') || currentApp.includes('chrome')) {
-          return item.keyWords.some(kw => 
+          return item.keyWords.some(kw =>
             ['web', 'http', 'url', 'bookmark'].includes(kw.toLowerCase())
           )
         }
-        
+
         return false
       },
       14
     )
   }
-  
+
   private getCurrentActiveApp(): string {
     // Implementation to get current active application
     return ''
@@ -205,20 +205,20 @@ const score = calculateSortScore(item, searchKeyword)
 // Custom scoring with additional factors
 function customCalculateScore(item: SearchItem, keyword: string): number {
   const baseScore = calculateSortScore(item, keyword)
-  
+
   // Add custom factors
   let customBoost = 0
-  
+
   // Boost recently used items
   if (item.lastUsed && Date.now() - item.lastUsed < 3600000) { // 1 hour
     customBoost += 500
   }
-  
+
   // Boost items with high rating
   if (item.rating && item.rating > 4) {
     customBoost += 200
   }
-  
+
   return baseScore + customBoost
 }
 ```
@@ -229,22 +229,22 @@ function customCalculateScore(item: SearchItem, keyword: string): number {
 // Update multiple configurations at once
 function setupGameModeConfiguration() {
   const gameWeights = {
-    app: 15,      // Prioritize game applications
-    feature: 3,   // Lower feature priority
-    cmd: 2,       // Lower command priority
-    plugin: 8,    // Medium plugin priority
-    file: 1,      // Lowest file priority
-    text: 1       // Lowest text priority
+    app: 15, // Prioritize game applications
+    feature: 3, // Lower feature priority
+    cmd: 2, // Lower command priority
+    plugin: 8, // Medium plugin priority
+    file: 1, // Lowest file priority
+    text: 1 // Lowest text priority
   }
-  
+
   SortConfigManager.updateTypeWeights(gameWeights)
-  
+
   // Add game-specific rules
   SortConfigManager.addDynamicRule(
     'game-mode-boost',
     (item: SearchItem) => {
       const gameKeywords = ['game', 'steam', 'epic', 'launcher']
-      return gameKeywords.some(keyword => 
+      return gameKeywords.some(keyword =>
         item.name.toLowerCase().includes(keyword)
       )
     },

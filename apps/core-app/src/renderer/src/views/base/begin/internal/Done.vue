@@ -8,11 +8,11 @@ const step: any = inject('step')!
 function goon(): void {
   step(
     {
-      comp: null
+      comp: null,
     },
     () => {
       appSetting.beginner.init = true
-    }
+    },
   )
 }
 </script>
@@ -23,7 +23,9 @@ function goon(): void {
 
     <div class="Greeting-Content">
       <p>You're all set! Let's get started.</p>
-      <FlatButton primary @click="goon"> Get Started </FlatButton>
+      <FlatButton primary @click="goon">
+        Get Started
+      </FlatButton>
     </div>
   </div>
 </template>

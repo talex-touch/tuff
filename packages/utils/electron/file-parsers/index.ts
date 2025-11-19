@@ -1,8 +1,8 @@
-import { fileParserRegistry } from './registry'
 import { textFileParser } from './parsers/text-parser'
+import { fileParserRegistry } from './registry'
 
 fileParserRegistry.register(textFileParser)
 
-export * from './types'
 export * from './registry'
+export * from './types'
 export { textFileParser }

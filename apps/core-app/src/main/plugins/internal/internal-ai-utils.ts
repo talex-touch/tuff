@@ -1,5 +1,6 @@
 export function normalizePrompt(data: unknown): string {
-  if (!data) return ''
+  if (!data)
+    return ''
   if (typeof data === 'string') {
     return data.trim()
   }

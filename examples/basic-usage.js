@@ -12,7 +12,7 @@ async function executeActions() {
     // 执行搜索
     const searchResult = await sdk.sendMessage('search', {
       query: 'hello world',
-      type: 'text'
+      type: 'text',
     })
     console.log('Search result:', searchResult)
 
@@ -20,17 +20,17 @@ async function executeActions() {
     const translateResult = await sdk.sendMessage('translate', {
       text: 'Hello',
       from: 'en',
-      to: 'zh'
+      to: 'zh',
     })
     console.log('Translate result:', translateResult)
 
     // 发送通知
     await sdk.sendMessage('notify', {
       title: 'Plugin Message',
-      body: 'This is a notification from plugin'
+      body: 'This is a notification from plugin',
     })
-
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to execute actions:', error)
   }
 }
@@ -53,5 +53,5 @@ function handleNotify(data) {
 
 // 导出函数供外部调用
 window.pluginBasicExample = {
-  executeActions
+  executeActions,
 }

@@ -1,20 +1,19 @@
 <script setup lang="ts" name="TuffItemPreviewer">
-import { TuffItem } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ImagePreview, VideoPreview, AudioPreview, TextPreview, DefaultPreview } from './preview'
-
-const { t } = useI18n()
+import { AudioPreview, DefaultPreview, ImagePreview, TextPreview, VideoPreview } from './preview'
 
 const props = defineProps<{
   item: TuffItem
 }>()
 
-const getFileType = (
-  filePath: string
-): 'image' | 'video' | 'audio' | 'text' | 'pdf' | 'archive' | 'document' | 'default' => {
+const { t } = useI18n()
+
+function getFileType(filePath: string): 'image' | 'video' | 'audio' | 'text' | 'pdf' | 'archive' | 'document' | 'default' {
   const extension = filePath.split('.').pop()?.toLowerCase()
-  if (!extension) return 'default'
+  if (!extension)
+    return 'default'
 
   if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
     return 'image'
@@ -42,7 +41,8 @@ const getFileType = (
 
 const previewComponent = computed(() => {
   const filePath = props.item.meta?.file?.path
-  if (!filePath) return DefaultPreview
+  if (!filePath)
+    return DefaultPreview
 
   const fileType = getFileType(filePath)
 
@@ -68,59 +68,93 @@ const previewComponent = computed(() => {
         <component :is="previewComponent" :item="item" />
       </div>
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-        <h3 class="text-sm font-semibold mb-4">{{ t('fileInfo.title') }}</h3>
+        <h3 class="text-sm font-semibold mb-4">
+          {{ t('fileInfo.title') }}
+        </h3>
         <div class="text-xs space-y-2">
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.path') }}</div>
-            <div class="w-[65%] break-all">{{ item?.meta?.file?.path }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.path') }}
+            </div>
+            <div class="w-[65%] break-all">
+              {{ item?.meta?.file?.path }}
+            </div>
           </div>
           <div
             class="flex border-b justify-between gap-2 border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.source') }}</div>
-            <div class="w-[65%]">{{ item?.source.id }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.source') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.source.id }}
+            </div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.contentType') }}</div>
-            <div class="w-[65%]">{{ item?.meta?.file?.mime_type }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.contentType') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.meta?.file?.mime_type }}
+            </div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.characters') }}</div>
-            <div class="w-[65%]">{{ item?.render.basic?.title?.length || 0 }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.characters') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.render.basic?.title?.length || 0 }}
+            </div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.words') }}</div>
-            <div class="w-[65%]">{{ item?.render.basic?.title.split(' ').length || 0 }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.words') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.render.basic?.title.split(' ').length || 0 }}
+            </div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.fileSize') }}</div>
-            <div class="w-[65%]">{{ item?.meta?.file?.size || 0 }} {{ t('fileInfo.bytes') }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.fileSize') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.meta?.file?.size || 0 }} {{ t('fileInfo.bytes') }}
+            </div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.createdAt') }}</div>
-            <div class="w-[65%]">{{ item?.meta?.file?.created_at || '-' }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.createdAt') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.meta?.file?.created_at || '-' }}
+            </div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"
           >
-            <div class="w-[80px] text-right">{{ t('fileInfo.modifiedAt') }}</div>
-            <div class="w-[65%]">{{ item?.meta?.file?.modified_at || '-' }}</div>
+            <div class="w-[80px] text-right">
+              {{ t('fileInfo.modifiedAt') }}
+            </div>
+            <div class="w-[65%]">
+              {{ item?.meta?.file?.modified_at || '-' }}
+            </div>
           </div>
         </div>
-      </div></TouchScroll
-    >
+      </div>
+    </TouchScroll>
   </div>
 </template>
 

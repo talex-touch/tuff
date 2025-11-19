@@ -1,22 +1,25 @@
-import { ref, watch, computed, onMounted } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
-import { touchChannel } from '~/modules/channel/channel-core'
-import { BoxMode, IBoxOptions } from '..'
-import {
+import type {
   IProviderActivate,
   TuffItem,
-  TuffSearchResult,
-  TuffInputType,
   TuffQuery,
-  TuffQueryInput
+  TuffQueryInput,
+  TuffSearchResult,
 } from '@talex-touch/utils'
-import { IUseSearch } from '../types'
-import { appSetting } from '~/modules/channel/storage'
+import type { IBoxOptions } from '..'
+import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
+import {
+  TuffInputType,
+} from '@talex-touch/utils'
+import { useDebounceFn } from '@vueuse/core'
+import { computed, onMounted, ref, watch } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { appSetting } from '~/modules/channel/storage'
+import { BoxMode } from '..'
 
 export function useSearch(
   boxOptions: IBoxOptions,
-  clipboardOptions?: IClipboardOptions
+  clipboardOptions?: IClipboardOptions,
 ): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
@@ -44,7 +47,7 @@ export function useSearch(
     try {
       const query: TuffQuery = {
         text: searchVal.value,
-        inputs: []
+        inputs: [],
       }
 
       const inputs: TuffQueryInput[] = []
@@ -63,7 +66,7 @@ export function useSearch(
             type: TuffInputType.Image,
             content: clipboardData.content,
             thumbnail: clipboardData.thumbnail,
-            metadata: clipboardData.meta
+            metadata: clipboardData.meta,
           })
         }
       }
@@ -72,15 +75,16 @@ export function useSearch(
         inputs.push({
           type: TuffInputType.Files,
           content: JSON.stringify(boxOptions.file.paths),
-          metadata: undefined
+          metadata: undefined,
         })
-      } else if (clipboardOptions?.last?.type === 'files') {
+      }
+      else if (clipboardOptions?.last?.type === 'files') {
         const clipboardData = touchChannel.sendSync('clipboard:get-latest')
         if (clipboardData && clipboardData.type === 'files') {
           inputs.push({
             type: TuffInputType.Files,
             content: clipboardData.content,
-            metadata: clipboardData.meta
+            metadata: clipboardData.meta,
           })
         }
       }
@@ -94,14 +98,15 @@ export function useSearch(
               type: TuffInputType.Html,
               content: clipboardData.content, // 纯文本版本
               rawContent: clipboardData.rawContent, // HTML 版本
-              metadata: clipboardData.meta
+              metadata: clipboardData.meta,
             })
-          } else {
+          }
+          else {
             // 纯文本：只有纯文本
             inputs.push({
               type: TuffInputType.Text,
               content: clipboardData.content,
-              metadata: clipboardData.meta
+              metadata: clipboardData.meta,
             })
           }
         }
@@ -129,7 +134,8 @@ export function useSearch(
       // Removed else block to prevent premature clearing of activeActivations
       // Subsequent items will arrive via `search-update` events.
       // The loading state will be managed by `search-end`.
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Search initiation failed:', error)
       res.value = []
       searchResult.value = null
@@ -164,7 +170,8 @@ export function useSearch(
   }
 
   async function cancelSearch(): Promise<void> {
-    if (!loading.value || !currentSearchId.value) return
+    if (!loading.value || !currentSearchId.value)
+      return
 
     try {
       // Send cancellation request to main process
@@ -177,7 +184,8 @@ export function useSearch(
         searchResult.value = null
         currentSearchId.value = null
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to cancel search:', error)
     }
   }
@@ -189,13 +197,13 @@ export function useSearch(
       return
     }
 
-    const isPluginFeature =
-      itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
-    const keepCoreBoxOpen =
-      itemToExecute.meta?.keepCoreBoxOpen === true ||
-      itemToExecute.meta?.intelligence?.keepCoreBoxOpen === true
-    const shouldRestoreAfterExecute =
-      isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
+    const isPluginFeature
+      = itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
+    const keepCoreBoxOpen
+      = itemToExecute.meta?.keepCoreBoxOpen === true
+        || itemToExecute.meta?.intelligence?.keepCoreBoxOpen === true
+    const shouldRestoreAfterExecute
+      = isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
       touchChannel.sendSync('core-box:hide')
@@ -228,21 +236,23 @@ export function useSearch(
               type: TuffInputType.Image,
               content: clipboardData.content,
               thumbnail: clipboardData.thumbnail,
-              metadata: clipboardData.meta
+              metadata: clipboardData.meta,
             })
-          } else if (clipboardData.type === 'files') {
+          }
+          else if (clipboardData.type === 'files') {
             inputs.push({
               type: TuffInputType.Files,
               content: clipboardData.content, // Already JSON serialized
-              metadata: clipboardData.meta
+              metadata: clipboardData.meta,
             })
-          } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
+          }
+          else if (clipboardData.type === 'text' && clipboardData.rawContent) {
             // Has HTML content
             inputs.push({
               type: TuffInputType.Html,
               content: clipboardData.content,
               rawContent: clipboardData.rawContent,
-              metadata: clipboardData.meta
+              metadata: clipboardData.meta,
             })
           }
 
@@ -250,7 +260,8 @@ export function useSearch(
             serializedSearchResult.query.inputs = inputs
           }
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.debug('[useSearch] Failed to auto-detect clipboard:', error)
         // Continue execution even if clipboard detection fails
       }
@@ -264,11 +275,11 @@ export function useSearch(
         serializedSearchResult
           ? {
               item: serializedItem,
-              searchResult: serializedSearchResult
+              searchResult: serializedSearchResult,
             }
           : {
-              item: serializedItem
-            }
+              item: serializedItem,
+            },
       )
 
       activeActivations.value = newActivationState
@@ -282,9 +293,11 @@ export function useSearch(
         clipboardOptions.last = null
         clipboardOptions.detectedAt = null
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Execute failed:', error)
-    } finally {
+    }
+    finally {
       loading.value = false
 
       if (shouldRestoreAfterExecute) {
@@ -318,7 +331,7 @@ export function useSearch(
   function handleExit(): void {
     if (activeActivations.value && activeActivations.value.length > 0) {
       console.log(
-        '[useSearch] handleExit: activeActivations exist, calling deactivateAllProviders.'
+        '[useSearch] handleExit: activeActivations exist, calling deactivateAllProviders.',
       )
       deactivateAllProviders()
       searchVal.value = '' // Clear search value to reset state
@@ -332,15 +345,15 @@ export function useSearch(
 
           res.value = res.value.filter((item: TuffItem) => {
             return (
-              !item.meta?.extension?.pushedItemId ||
-              !pushedIds.has(item.meta?.extension?.pushedItemId)
+              !item.meta?.extension?.pushedItemId
+              || !pushedIds.has(item.meta?.extension?.pushedItemId)
             )
           })
         }
 
         if (boxOptions.data?.plugin) {
           touchChannel.send('trigger-plugin-feature-exit', {
-            plugin: boxOptions.data.plugin
+            plugin: boxOptions.data.plugin,
           })
         }
         boxOptions.data.feature = undefined
@@ -348,16 +361,18 @@ export function useSearch(
 
       boxOptions.mode = searchVal.value.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
       boxOptions.data = {}
-    } else if (searchVal.value) {
+    }
+    else if (searchVal.value) {
       searchVal.value = ''
-    } else {
+    }
+    else {
       touchChannel.sendSync('core-box:hide')
     }
   }
 
   const debouncedResize = useDebounceFn(() => {
     touchChannel.sendSync('core-box:expand', {
-      mode: res.value.length > 0 ? 'max' : 'collapse'
+      mode: res.value.length > 0 ? 'max' : 'collapse',
     })
   }, 10)
 
@@ -369,7 +384,7 @@ export function useSearch(
       }
       debouncedResize()
     },
-    { deep: true }
+    { deep: true },
   )
 
   watch(searchVal, (newSearchVal) => {
@@ -393,7 +408,8 @@ export function useSearch(
       // console.log('[useSearch] Received subsequent item batch:', data.items.length)
       // Subsequent batches are already sorted and should be appended.
       res.value.push(...data.items)
-    } else {
+    }
+    else {
       // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
@@ -407,14 +423,16 @@ export function useSearch(
     const requestId = incoming.meta?.intelligence?.requestId
     if (requestId) {
       const existingIndex = res.value.findIndex(
-        (entry) => entry.meta?.intelligence?.requestId === requestId
+        entry => entry.meta?.intelligence?.requestId === requestId,
       )
       if (existingIndex >= 0) {
         res.value.splice(existingIndex, 1, incoming)
-      } else {
+      }
+      else {
         res.value.push(incoming)
       }
-    } else {
+    }
+    else {
       res.value.push(incoming)
     }
 
@@ -465,7 +483,8 @@ export function useSearch(
     // but the plugin is still active and pushing results.
     if (activeActivations.value && activeActivations.value.length > 0) {
       //
-    } else if (searchVal.value === '') {
+    }
+    else if (searchVal.value === '') {
       // If no provider is active and searchVal is empty, ignore pushed items.
       return
     }
@@ -473,7 +492,7 @@ export function useSearch(
     //
 
     // Use a Map to ensure uniqueness and efficient updates.
-    const itemsMap = new Map(res.value.map((item) => [item.id, item]))
+    const itemsMap = new Map(res.value.map(item => [item.id, item]))
     data.items.forEach((item: TuffItem) => {
       itemsMap.set(item.id, item)
     })
@@ -503,6 +522,6 @@ export function useSearch(
     handleExit,
     deactivateProvider,
     deactivateAllProviders,
-    cancelSearch
+    cancelSearch,
   }
 }

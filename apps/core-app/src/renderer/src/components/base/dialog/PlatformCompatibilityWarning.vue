@@ -1,3 +1,51 @@
+<script lang="ts" name="PlatformCompatibilityWarning" setup>
+import { ref } from 'vue'
+
+/**
+ * Props for the PlatformCompatibilityWarning component
+ */
+interface Props {
+  /** Warning message to display */
+  warningMessage: string
+  /** Callback when user clicks continue */
+  onContinue?: () => void
+  /** Callback when user clicks don't show again */
+  onDontShowAgain?: () => void
+}
+
+/**
+ * Component props with default values
+ */
+const props = withDefaults(defineProps<Props>(), {
+  warningMessage: '',
+  onContinue: undefined,
+  onDontShowAgain: undefined,
+})
+
+/** Reactive reference to control dialog closing state */
+const isClosing = ref(false)
+
+/**
+ * Handle continue button click
+ */
+function handleContinue() {
+  isClosing.value = true
+  setTimeout(() => {
+    props.onContinue?.()
+  }, 300)
+}
+
+/**
+ * Handle don't show again button click
+ */
+function handleDontShowAgain() {
+  isClosing.value = true
+  setTimeout(() => {
+    props.onDontShowAgain?.()
+  }, 300)
+}
+</script>
+
 <template>
   <div
     :class="{ close: isClosing }"
@@ -34,8 +82,12 @@
         id="warning-message"
         class="PlatformCompatibilityWarning-Content relative mb-6 text-center text-gray-700 leading-1.5rem"
       >
-        <p class="mb-3">{{ warningMessage }}</p>
-        <p class="text-sm text-gray-500">如果您遇到任何问题，请通过 GitHub 反馈给我们。</p>
+        <p class="mb-3">
+          {{ warningMessage }}
+        </p>
+        <p class="text-sm text-gray-500">
+          如果您遇到任何问题，请通过 GitHub 反馈给我们。
+        </p>
       </div>
 
       <!-- 按钮 -->
@@ -58,54 +110,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="PlatformCompatibilityWarning" setup>
-import { ref } from 'vue'
-
-/**
- * Props for the PlatformCompatibilityWarning component
- */
-interface Props {
-  /** Warning message to display */
-  warningMessage: string
-  /** Callback when user clicks continue */
-  onContinue?: () => void
-  /** Callback when user clicks don't show again */
-  onDontShowAgain?: () => void
-}
-
-/**
- * Component props with default values
- */
-const props = withDefaults(defineProps<Props>(), {
-  warningMessage: '',
-  onContinue: undefined,
-  onDontShowAgain: undefined
-})
-
-/** Reactive reference to control dialog closing state */
-const isClosing = ref(false)
-
-/**
- * Handle continue button click
- */
-function handleContinue() {
-  isClosing.value = true
-  setTimeout(() => {
-    props.onContinue?.()
-  }, 300)
-}
-
-/**
- * Handle don't show again button click
- */
-function handleDontShowAgain() {
-  isClosing.value = true
-  setTimeout(() => {
-    props.onDontShowAgain?.()
-  }, 300)
-}
-</script>
 
 <style lang="scss" scoped>
 .PlatformCompatibilityWarning-Wrapper {

@@ -2,26 +2,26 @@ export interface IService {
   /**
    * service id
    */
-  id: Symbol;
+  id: symbol
 
   /**
    * service name
    */
-  name: string;
+  name: string
 
   /**
    * service description
    */
-  description: string;
+  description: string
 }
 
 export interface IServiceEvent {
 
-  service: IService;
+  service: IService
 
-  setCancelled(cancelled: boolean): void;
+  setCancelled: (cancelled: boolean) => void
 
-  isCancelled(): boolean;
+  isCancelled: () => boolean
 }
 
 export interface IServiceHandler {
@@ -38,7 +38,7 @@ export interface IServiceHandler {
    * Handle the service data
    * @param data service data
    */
-  handle(event: IServiceEvent, data: object): any;
+  handle: (event: IServiceEvent, data: object) => any
 }
 
 export interface IServiceCenter {
@@ -48,14 +48,14 @@ export interface IServiceCenter {
    * @param handler service handler
    * @returns register result (true: success, false: fail)
    */
-  regService(service: IService, handler: IServiceHandler): boolean;
+  regService: (service: IService, handler: IServiceHandler) => boolean
 
   /**
    * The service center will unregister the service
    * @param service will be unregistered service
    * @returns unregister result (true: success, false: fail)
    */
-  unRegService(service: IService): boolean;
+  unRegService: (service: IService) => boolean
 
   /**
    * Get the service by service id
@@ -64,5 +64,5 @@ export interface IServiceCenter {
    */
   // getService(id: symbol): IService;
 
-  useService(service: IService, data: object): Promise<boolean> | boolean;
+  useService: (service: IService, data: object) => Promise<boolean> | boolean
 }

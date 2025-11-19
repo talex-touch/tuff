@@ -17,13 +17,14 @@ async function pluginAtoPluginB() {
       { // 消息数据
         text: 'Hello from Plugin A',
         from: 'en',
-        to: 'zh'
-      }
+        to: 'zh',
+      },
     )
 
     console.log('[Plugin A] Received response:', result)
     return result
-  } catch (error) {
+  }
+  catch (error) {
     console.error('[Plugin A] Communication failed:', error)
     throw error
   }
@@ -34,7 +35,7 @@ async function batchCommunication() {
   const plugins = [
     { name: 'touch-translation', key: 'translate', info: { text: 'Hello', from: 'en', to: 'zh' } },
     { name: 'touch-music', key: 'play', info: { song: 'Test Song', artist: 'Test Artist' } },
-    { name: 'touch-image', key: 'process', info: { imageUrl: 'https://example.com/image.jpg' } }
+    { name: 'touch-image', key: 'process', info: { imageUrl: 'https://example.com/image.jpg' } },
   ]
 
   console.log('[Batch] Starting batch communication...')
@@ -43,11 +44,12 @@ async function batchCommunication() {
     plugins.map(async (plugin) => {
       try {
         return await sdk.communicateWithPlugin(plugin.name, plugin.key, plugin.info)
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[Batch] Failed to communicate with ${plugin.name}:`, error)
         return { error: error.message }
       }
-    })
+    }),
   )
 
   console.log('[Batch] Batch communication results:', results)
@@ -59,14 +61,16 @@ async function errorHandlingExample() {
   try {
     // 尝试与不存在的插件通信
     await sdk.communicateWithPlugin('non-existent-plugin', 'test', {})
-  } catch (error) {
+  }
+  catch (error) {
     console.log('[Error Handling] Expected error:', error.message)
   }
 
   try {
     // 尝试与插件通信但缺少必要参数
     await sdk.communicateWithPlugin('touch-translation', '', {})
-  } catch (error) {
+  }
+  catch (error) {
     console.log('[Error Handling] Expected error:', error.message)
   }
 }
@@ -78,14 +82,14 @@ async function realTimeCommunication() {
   // 发送ping消息
   const pingResult = await sdk.communicateWithPlugin('touch-translation', 'ping', {
     timestamp: Date.now(),
-    source: 'plugin-a'
+    source: 'plugin-a',
   })
 
   console.log('[Real-time] Ping result:', pingResult)
 
   // 发送状态查询
   const statusResult = await sdk.communicateWithPlugin('touch-translation', 'status', {
-    query: 'plugin_status'
+    query: 'plugin_status',
   })
 
   console.log('[Real-time] Status result:', statusResult)
@@ -102,16 +106,16 @@ async function dataExchange() {
       metadata: {
         source: 'plugin-a',
         timestamp: Date.now(),
-        version: '1.0.0'
-      }
-    }
+        version: '1.0.0',
+      },
+    },
   })
 
   console.log('[Data Exchange] Process result:', processResult)
 
   // 请求插件返回处理后的数据
   const result = await sdk.communicateWithPlugin('touch-translation', 'get_result', {
-    requestId: 'test-request-123'
+    requestId: 'test-request-123',
   })
 
   console.log('[Data Exchange] Result:', result)
@@ -126,10 +130,11 @@ async function pluginStatusMonitoring() {
   for (const pluginName of plugins) {
     try {
       const status = await sdk.communicateWithPlugin(pluginName, 'health_check', {
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
       console.log(`[Monitoring] ${pluginName} status:`, status)
-    } catch (error) {
+    }
+    catch (error) {
       console.log(`[Monitoring] ${pluginName} is not responding:`, error.message)
     }
   }
@@ -142,7 +147,7 @@ window.completeCommunicationExample = {
   errorHandlingExample,
   realTimeCommunication,
   dataExchange,
-  pluginStatusMonitoring
+  pluginStatusMonitoring,
 }
 
 // 自动运行示例（可选）
@@ -158,7 +163,8 @@ if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       await realTimeCommunication()
       await dataExchange()
       await pluginStatusMonitoring()
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[Auto] Example execution failed:', error)
     }
   }, 1000)

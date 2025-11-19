@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginListModule" setup>
+import type { ITouchPlugin } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import { ITouchPlugin } from '@talex-touch/utils'
 import PluginItem from './PluginItem.vue'
 
 const props = defineProps<{

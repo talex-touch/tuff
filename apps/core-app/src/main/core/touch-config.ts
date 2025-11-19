@@ -1,6 +1,6 @@
-import { TalexTouch } from '@talex-touch/utils'
-import { TouchApp } from './touch-app'
-import path from 'path'
+import type { TalexTouch } from '@talex-touch/utils'
+import type { TouchApp } from './touch-app'
+import path from 'node:path'
 import fse from 'fs-extra'
 import { checkDirWithCreate } from '../utils/common-util'
 
@@ -16,8 +16,8 @@ export class TouchConfig implements TalexTouch.IConfiguration {
     this.data = {
       frame: {
         height: 1280,
-        width: 780
-      }
+        width: 780,
+      },
     }
   }
 

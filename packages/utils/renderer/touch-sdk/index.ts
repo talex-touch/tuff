@@ -1,4 +1,4 @@
-import { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 
 export interface TouchSDKOptions {
   channel: ITouchClientChannel

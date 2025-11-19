@@ -1,3 +1,27 @@
+<script lang="ts" setup>
+import type { IFeatureCommand } from '@talex-touch/utils/plugin'
+
+const props = defineProps<{
+  feature: any
+}>()
+
+const emit = defineEmits(['click'])
+
+function getCommandName(command: IFeatureCommand): string {
+  if (props.feature.commandsData && props.feature.commandsData[command.type]) {
+    return props.feature.commandsData[command.type].name || command.type
+  }
+  return command.type
+}
+
+function getCommandShortcut(command: IFeatureCommand): string | undefined {
+  if (props.feature.commandsData && props.feature.commandsData[command.type]) {
+    return props.feature.commandsData[command.type].shortcut
+  }
+  return undefined
+}
+</script>
+
 <template>
   <div class="FeatureCard element" @click="emit('click')">
     <div class="FeatureCard-Content">
@@ -53,30 +77,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-import type { IFeatureCommand } from '@talex-touch/utils/plugin'
-
-const props = defineProps<{
-  feature: any
-}>()
-
-const emit = defineEmits(['click'])
-
-function getCommandName(command: IFeatureCommand): string {
-  if (props.feature.commandsData && props.feature.commandsData[command.type]) {
-    return props.feature.commandsData[command.type].name || command.type
-  }
-  return command.type
-}
-
-function getCommandShortcut(command: IFeatureCommand): string | undefined {
-  if (props.feature.commandsData && props.feature.commandsData[command.type]) {
-    return props.feature.commandsData[command.type].shortcut
-  }
-  return undefined
-}
-</script>
 
 <style lang="scss" scoped>
 .FeatureCard {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { vDraggable } from 'vue-draggable-plus'
 import { onClickOutside } from '@vueuse/core'
+import { vDraggable } from 'vue-draggable-plus'
 import { pluginSettings } from '~/modules/storage/plugin-settings'
 
 const props = defineProps<{
@@ -11,14 +11,15 @@ const props = defineProps<{
 const editor = ref()
 onMounted(() => {
   onClickOutside(editor, () => {
-    if (props.show) props.toggle()
+    if (props.show)
+      props.toggle()
   })
 })
 
 const newSource = reactive({
   name: '',
   url: '',
-  adapter: ''
+  adapter: '',
 })
 
 function deleteSource(ind: number) {
@@ -27,27 +28,32 @@ function deleteSource(ind: number) {
 
 function handleAdd() {
   // validate newSource
-  if (!newSource.name || !newSource.url || !newSource.adapter) return
+  if (!newSource.name || !newSource.url || !newSource.adapter)
+    return
 
   pluginSettings.value.source.list.push({
     url: newSource.url,
     name: newSource.name,
-    adapter: newSource.adapter
+    adapter: newSource.adapter,
   })
 }
 </script>
 
 <template>
   <div ref="editor" :class="{ show }" class="transition-cubic MarketSourceEditor">
-    <h2 text-xl my-2 font-bold>Source</h2>
-    <p op-75 text-lg>Edit plugin market source.</p>
+    <h2 text-xl my-2 font-bold>
+      Source
+    </h2>
+    <p op-75 text-lg>
+      Edit plugin market source.
+    </p>
 
     <div class="MarketSourceEditor-Container">
       <el-scrollbar>
         <div
           v-draggable="[
             pluginSettings.source.list,
-            { animation: 150, handle: '.handle', ghostClass: 'ghost' }
+            { animation: 150, handle: '.handle', ghostClass: 'ghost' },
           ]"
           class="MarketSourceEditor-Content"
         >
@@ -63,7 +69,9 @@ function handleAdd() {
               <div class="Item-Title">
                 {{ item.name }}<span class="adapter">({{ item.adapter }})</span>
               </div>
-              <div class="Item-Desc">{{ item.url }}</div>
+              <div class="Item-Desc">
+                {{ item.url }}
+              </div>
             </div>
             <div
               :class="{ disabled: pluginSettings.source.list.length === 1 }"
@@ -93,7 +101,9 @@ function handleAdd() {
               <div mt-2 class="Item-Desc">
                 <FlatInput v-model="newSource.url" placeholder="Source url" />
               </div>
-              <FlatButton mt-2 @click="handleAdd"> Add </FlatButton>
+              <FlatButton mt-2 @click="handleAdd">
+                Add
+              </FlatButton>
             </div>
           </div>
         </div>

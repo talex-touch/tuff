@@ -1,34 +1,36 @@
-import {
+import type {
   AiChatPayload,
   AiUsageInfo,
   IExecuteArgs,
   IProviderActivate,
   ISearchProvider,
-  TuffFactory,
-  TuffInputType,
   TuffItem,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+} from '@talex-touch/utils'
+import type { ProviderContext } from '../types'
+import crypto from 'node:crypto'
+import {
+  TuffFactory,
+  TuffInputType,
 } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import crypto from 'node:crypto'
+import { genTouchApp } from '../../../../core/'
 import { ensureAiConfigLoaded } from '../../../ai/intelligence-config'
 import { ai } from '../../../ai/intelligence-sdk'
+import { clipboardModule } from '../../../clipboard'
 import { coreBoxManager } from '../../core-box/manager'
 import { windowManager } from '../../core-box/window'
-import { ProviderContext } from '../types'
-import { genTouchApp } from '../../../../core/'
 import searchEngineCore from '../search-core'
-import { clipboardModule } from '../../../clipboard'
 
-const AI_SYSTEM_PROMPT =
-  '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
+const AI_SYSTEM_PROMPT
+  = '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
 
 const AI_PREFIX_PATTERNS = [
   /^ai[\s:：，。?？]+(.*)$/i,
   /^\/ai[\s:：，。?？]+(.*)$/i,
-  /^@ai[\s:：，。?？]+(.*)$/i
+  /^@ai[\s:：，。?？]+(.*)$/i,
 ]
 
 type IntelligenceItemStatus = 'pending' | 'ready' | 'error'
@@ -52,7 +54,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     TuffInputType.Text,
     TuffInputType.Image,
     TuffInputType.Files,
-    TuffInputType.Html
+    TuffInputType.Html,
   ]
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
@@ -60,7 +62,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
 
     // 模仿插件：如果 AI 已经被激活，则不再要求前缀，直接把输入当作 prompt
     const activationState = searchEngineCore.getActivationState()
-    const isAiActive = activationState?.some((a) => a.id === this.id)
+    const isAiActive = activationState?.some(a => a.id === this.id)
 
     const parsedPrompt = this.extractPrompt(normalized)
 
@@ -75,11 +77,12 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     if (!prompt) {
       // 没有输入时，显示占位符和历史记录
       items.push(this.createPlaceholderItem())
-      
+
       // 加载最近的 AI 历史记录
       const historyItems = await this.loadAiHistory(5) // 加载最近 5 条
       items.push(...historyItems)
-    } else {
+    }
+    else {
       items.push(this.createActionItem(prompt))
     }
 
@@ -88,7 +91,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
 
   async onExecute({ item }: IExecuteArgs): Promise<IProviderActivate | null> {
     const meta = item.meta?.intelligence as
-      | (Partial<IntelligencePayload> & { keepCoreBoxOpen?: boolean; placeholder?: boolean })
+      | (Partial<IntelligencePayload> & { keepCoreBoxOpen?: boolean, placeholder?: boolean })
       | undefined
 
     if (!meta) {
@@ -111,7 +114,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       requestId,
       prompt,
       status: 'pending',
-      createdAt: Date.now()
+      createdAt: Date.now(),
     }
 
     this.emitResultItem(this.createResultItem(pendingPayload))
@@ -127,9 +130,9 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
         keepCoreBoxOpen: true,
         intelligence: {
           requestId,
-          prompt
-        }
-      }
+          prompt,
+        },
+      },
     }
 
     return activation
@@ -141,8 +144,8 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       const payload: AiChatPayload = {
         messages: [
           { role: 'system', content: AI_SYSTEM_PROMPT },
-          { role: 'user', content: prompt }
-        ]
+          { role: 'user', content: prompt },
+        ],
       }
 
       let accumulatedAnswer = ''
@@ -160,7 +163,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
             answer: accumulatedAnswer.trim(),
             model: finalModel,
             usage: finalUsage,
-            createdAt: Date.now()
+            createdAt: Date.now(),
           }
           this.emitResultItem(this.createResultItem(answerPayload))
 
@@ -168,9 +171,10 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
           await this.saveToClipboardHistory(prompt, accumulatedAnswer.trim(), {
             requestId,
             model: finalModel,
-            usage: finalUsage
+            usage: finalUsage,
           })
-        } else {
+        }
+        else {
           // 累积增量文本
           accumulatedAnswer += chunk.delta
 
@@ -182,19 +186,20 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
             answer: accumulatedAnswer,
             model: finalModel,
             usage: finalUsage,
-            createdAt: Date.now()
+            createdAt: Date.now(),
           }
           this.emitResultItem(this.createResultItem(streamingPayload))
         }
       }
-    } catch (error) {
+    }
+    catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const errorPayload: IntelligencePayload = {
         requestId,
         prompt,
         status: 'error',
         error: message,
-        createdAt: Date.now()
+        createdAt: Date.now(),
       }
 
       this.emitResultItem(this.createResultItem(errorPayload))
@@ -208,7 +213,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       requestId: string
       model?: string
       usage?: AiUsageInfo
-    }
+    },
   ): Promise<void> {
     try {
       // 构造问答内容
@@ -225,12 +230,13 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
           answer,
           model: meta.model,
           usage: meta.usage,
-          type: 'ai-qa'
-        }
+          type: 'ai-qa',
+        },
       })
 
       console.log('[Intelligence] AI Q&A saved to clipboard history:', meta.requestId)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[Intelligence] Failed to save AI Q&A to clipboard:', error)
     }
   }
@@ -239,7 +245,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     try {
       const touchChannel = genTouchApp().channel
       const coreWindow = windowManager.current?.window
-      
+
       if (!coreWindow || coreWindow.isDestroyed()) {
         return []
       }
@@ -248,10 +254,10 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       const response = await touchChannel.send(
         ChannelType.MAIN,
         'clipboard:query-by-source',
-        { 
+        {
           source: 'ai-intelligence',
-          limit 
-        }
+          limit,
+        },
       )
 
       if (!response || !Array.isArray(response.data)) {
@@ -273,14 +279,15 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
           answer,
           model,
           usage: meta.usage,
-          createdAt: item.timestamp ? new Date(item.timestamp).getTime() : Date.now()
+          createdAt: item.timestamp ? new Date(item.timestamp).getTime() : Date.now(),
         }
 
         return this.createResultItem(payload)
       })
 
       return historyItems
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[Intelligence] Failed to load AI history:', error)
       return []
     }
@@ -295,7 +302,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       const match = value.match(pattern)
       if (match) {
         return {
-          prompt: (match[1] ?? '').trim()
+          prompt: (match[1] ?? '').trim(),
         }
       }
     }
@@ -317,9 +324,9 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       .setMeta({
         intelligence: {
           prompt,
-          keepCoreBoxOpen: true
+          keepCoreBoxOpen: true,
         },
-        keepCoreBoxOpen: true
+        keepCoreBoxOpen: true,
       })
 
     return builder.build()
@@ -336,9 +343,9 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
         intelligence: {
           prompt: '',
           placeholder: true,
-          keepCoreBoxOpen: true
+          keepCoreBoxOpen: true,
         },
-        keepCoreBoxOpen: true
+        keepCoreBoxOpen: true,
       })
 
     return builder.build()
@@ -355,9 +362,9 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       .setMeta({
         intelligence: {
           ...payload,
-          keepCoreBoxOpen: true
+          keepCoreBoxOpen: true,
         },
-        keepCoreBoxOpen: true
+        keepCoreBoxOpen: true,
       })
 
     return builder.build()
@@ -384,7 +391,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     }
 
     void app.channel.sendTo(coreWindow, ChannelType.MAIN, 'core-box:intelligence:upsert-item', {
-      item
+      item,
     })
 
     coreBoxManager.expand({ forceMax: true })
@@ -398,7 +405,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     }
 
     void app.channel.sendTo(coreWindow, ChannelType.MAIN, 'core-box:set-query', {
-      value: 'ai '
+      value: 'ai ',
     })
   }
 }

@@ -44,7 +44,8 @@ async function getOneWord(): Promise<void> {
     // Update the quote and cache it
     oneWord.value = res.content
     localStorage.setItem('oneword_content', res.content)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to fetch daily quote:', error)
   }
 }
@@ -65,11 +66,13 @@ getOneWord()
       Wallpaper image
       Currently using local wallpaper instead of external API
     -->
-    <img :src="Wallpaper" alt="Wallpaper" />
+    <img :src="Wallpaper" alt="Wallpaper">
 
     <!-- Content area with title and daily quote -->
     <div class="HomeBanner__Content">
-      <h1 text-3xl font-bold>Home Page</h1>
+      <h1 text-3xl font-bold>
+        Home Page
+      </h1>
       <span text-xl>{{ oneWord }}</span>
     </div>
   </div>

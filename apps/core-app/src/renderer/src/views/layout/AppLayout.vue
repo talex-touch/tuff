@@ -1,10 +1,36 @@
+<script lang="ts" name="AppLayout" setup>
+import { computed } from 'vue'
+import DynamicLayout from '~/components/layout/DynamicLayout.vue'
+import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
+import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
+import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
+
+const mica = computed(() => themeStyle.value.theme.window === 'Mica')
+const coloring = computed(() => themeStyle.value.theme.addon.coloring)
+const contrast = computed(() => themeStyle.value.theme.addon.contrast)
+const { canNavigateBack, navigateBack } = useSecondaryNavigation({
+  debugLabel: 'AppLayout',
+})
+
+onMounted(() => {
+  triggerThemeTransition(
+    [innerWidth / 2, innerHeight / 2],
+    themeStyle.value.theme.style.auto
+      ? 'auto'
+      : themeStyle.value.theme.style.dark
+        ? 'dark'
+        : 'light',
+  )
+})
+</script>
+
 <template>
   <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
     <DynamicLayout>
       <template #view>
         <router-view v-slot="{ Component, route }">
           <transition name="route-slide" appear>
-            <component v-if="Component" :is="Component" :key="route.fullPath" />
+            <component :is="Component" v-if="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </template>
@@ -20,32 +46,6 @@
     </DynamicLayout>
   </div>
 </template>
-
-<script lang="ts" name="AppLayout" setup>
-import { computed } from 'vue'
-import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
-import DynamicLayout from '~/components/layout/DynamicLayout.vue'
-import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
-import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
-
-const mica = computed(() => themeStyle.value.theme.window === 'Mica')
-const coloring = computed(() => themeStyle.value.theme.addon.coloring)
-const contrast = computed(() => themeStyle.value.theme.addon.contrast)
-const { canNavigateBack, navigateBack } = useSecondaryNavigation({
-  debugLabel: 'AppLayout'
-})
-
-onMounted(() => {
-  triggerThemeTransition(
-    [innerWidth / 2, innerHeight / 2],
-    themeStyle.value.theme.style.auto
-      ? 'auto'
-      : themeStyle.value.theme.style.dark
-        ? 'dark'
-        : 'light'
-  )
-})
-</script>
 
 <style lang="scss">
 .AppLayout-Aside {

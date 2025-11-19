@@ -1,14 +1,16 @@
-import { UpdateProvider } from './UpdateProvider'
+import type {
+  AppPreviewChannel,
+  CustomUpdateConfig,
+  UpdateCheckResult,
+  UpdateSourceConfig,
+} from '@talex-touch/utils'
+import type { UpdateProvider } from './UpdateProvider'
+import {
+  UpdateProviderType,
+} from '@talex-touch/utils'
+import { CustomUpdateProvider } from './CustomUpdateProvider'
 import { GithubUpdateProvider } from './GithubUpdateProvider'
 import { OfficialUpdateProvider } from './OfficialUpdateProvider'
-import { CustomUpdateProvider } from './CustomUpdateProvider'
-import {
-  UpdateSourceConfig,
-  AppPreviewChannel,
-  UpdateCheckResult,
-  UpdateProviderType,
-  CustomUpdateConfig
-} from '@talex-touch/utils'
 // Note: GitHubRelease, UpdateError, UpdateErrorType are imported in other files if needed
 
 export class UpdateProviderManager {
@@ -34,7 +36,7 @@ export class UpdateProviderManager {
 
   // 注册Provider
   registerProvider(provider: UpdateProvider): void {
-    if (!this.providers.find((p) => p.type === provider.type)) {
+    if (!this.providers.find(p => p.type === provider.type)) {
       this.providers.push(provider)
       console.log(`[UpdateProviderManager] Registered provider: ${provider.name}`)
     }
@@ -53,7 +55,7 @@ export class UpdateProviderManager {
   removeCustomProvider(url: string): boolean {
     const provider = this.customProviders.get(url)
     if (provider) {
-      this.providers = this.providers.filter((p) => p !== provider)
+      this.providers = this.providers.filter(p => p !== provider)
       this.customProviders.delete(url)
       console.log(`[UpdateProviderManager] Removed custom provider: ${url}`)
       return true
@@ -69,7 +71,7 @@ export class UpdateProviderManager {
     }
 
     // 查找匹配的Provider
-    const provider = this.providers.find((p) => p.canHandle(config))
+    const provider = this.providers.find(p => p.canHandle(config))
 
     if (provider) {
       this.activeProvider = provider
@@ -84,7 +86,7 @@ export class UpdateProviderManager {
   // 检查更新
   async checkUpdate(
     channel: AppPreviewChannel,
-    config?: UpdateSourceConfig
+    config?: UpdateSourceConfig,
   ): Promise<UpdateCheckResult> {
     try {
       // 使用指定的配置或当前激活的Provider
@@ -95,11 +97,13 @@ export class UpdateProviderManager {
         if (selectedProvider) {
           provider = selectedProvider
         }
-      } else if (this.activeProvider) {
+      }
+      else if (this.activeProvider) {
         provider = this.activeProvider
-      } else {
+      }
+      else {
         // 使用默认的GitHub Provider
-        const githubProvider = this.providers.find((p) => p.type === UpdateProviderType.GITHUB)
+        const githubProvider = this.providers.find(p => p.type === UpdateProviderType.GITHUB)
         if (githubProvider) {
           provider = githubProvider
           this.activeProvider = githubProvider
@@ -117,9 +121,10 @@ export class UpdateProviderManager {
       return {
         hasUpdate: true,
         release,
-        source: provider.name
+        source: provider.name,
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[UpdateProviderManager] Update check failed:', error)
 
       let errorMessage = 'Unknown error occurred'
@@ -136,7 +141,7 @@ export class UpdateProviderManager {
       return {
         hasUpdate: false,
         error: errorMessage,
-        source
+        source,
       }
     }
   }
@@ -163,7 +168,8 @@ export class UpdateProviderManager {
         return await provider.healthCheck()
       }
       return true
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`[UpdateProviderManager] Health check failed for ${provider.name}:`, error)
       return false
     }
@@ -184,7 +190,7 @@ export class UpdateProviderManager {
   // 获取推荐的Provider
   getRecommendedProvider(): UpdateProvider | null {
     // 优先级：GitHub > Custom > Official
-    const githubProvider = this.providers.find((p) => p.type === UpdateProviderType.GITHUB)
+    const githubProvider = this.providers.find(p => p.type === UpdateProviderType.GITHUB)
     if (githubProvider) {
       return githubProvider
     }
@@ -194,7 +200,7 @@ export class UpdateProviderManager {
       return customProviders[0]
     }
 
-    const officialProvider = this.providers.find((p) => p.type === UpdateProviderType.OFFICIAL)
+    const officialProvider = this.providers.find(p => p.type === UpdateProviderType.OFFICIAL)
     return officialProvider || null
   }
 
@@ -211,10 +217,12 @@ export class UpdateProviderManager {
 
     if (!config.url || config.url.trim() === '') {
       errors.push('API URL is required')
-    } else {
+    }
+    else {
       try {
         new URL(config.url)
-      } catch {
+      }
+      catch {
         errors.push('Invalid API URL format')
       }
     }
@@ -225,7 +233,7 @@ export class UpdateProviderManager {
 
     return {
       valid: errors.length === 0,
-      errors
+      errors,
     }
   }
 
@@ -240,7 +248,7 @@ export class UpdateProviderManager {
     if (!validation.valid) {
       return {
         success: false,
-        message: `Configuration validation failed: ${validation.errors.join(', ')}`
+        message: `Configuration validation failed: ${validation.errors.join(', ')}`,
       }
     }
 
@@ -252,18 +260,20 @@ export class UpdateProviderManager {
         return {
           success: true,
           message: testResult.message,
-          provider
-        }
-      } else {
-        return {
-          success: false,
-          message: testResult.message
+          provider,
         }
       }
-    } catch (error) {
+      else {
+        return {
+          success: false,
+          message: testResult.message,
+        }
+      }
+    }
+    catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Unknown error occurred'
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
       }
     }
   }
@@ -287,7 +297,7 @@ export class UpdateProviderManager {
       totalProviders: this.providers.length,
       customProviders: this.customProviders.size,
       activeProvider: this.activeProvider?.name || null,
-      availableTypes: this.providers.map((p) => p.type)
+      availableTypes: this.providers.map(p => p.type),
     }
   }
 }

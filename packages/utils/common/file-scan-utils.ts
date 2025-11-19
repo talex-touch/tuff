@@ -7,28 +7,31 @@
  * @version 1.0.0
  */
 
+import type { FileScanOptions } from './file-scan-constants'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const path = (() => {
-  if (typeof window === 'undefined') {
-    return require('path')
-  }
-  try {
-    return require('path-browserify')
-  } catch {
-    return require('path')
-  }
-})()
 import {
-  type FileScanOptions,
-  DEFAULT_SCAN_OPTIONS,
   BASE_BLACKLISTED_DIRS,
   BLACKLISTED_EXTENSIONS,
   BLACKLISTED_FILE_PREFIXES,
   BLACKLISTED_FILE_SUFFIXES,
-  PHOTOS_LIBRARY_CONFIG,
+  DEFAULT_SCAN_OPTIONS,
+
   PATH_PATTERNS,
-  PLATFORM
+  PHOTOS_LIBRARY_CONFIG,
+  PLATFORM,
 } from './file-scan-constants'
+
+const path = (() => {
+  if (typeof window === 'undefined') {
+    return require('node:path')
+  }
+  try {
+    return require('path-browserify')
+  }
+  catch {
+    return require('node:path')
+  }
+})()
 
 // 重新导出类型
 export type { FileScanOptions }
@@ -84,29 +87,33 @@ export function isIndexableFile(
   fullPath: string,
   extension: string,
   fileName: string,
-  options: FileScanOptions = DEFAULT_SCAN_OPTIONS
+  options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
 ): boolean {
   // 合并选项
   const opts = { ...DEFAULT_SCAN_OPTIONS, ...options }
 
   // 基础检查
-  if (!extension) return false
+  if (!extension)
+    return false
 
   // 检查扩展名黑名单
   const blacklistedExtensions = new Set([
     ...BLACKLISTED_EXTENSIONS,
-    ...(opts.customBlacklistedExtensions || [])
+    ...(opts.customBlacklistedExtensions || []),
   ])
 
-  if (blacklistedExtensions.has(extension)) return false
+  if (blacklistedExtensions.has(extension))
+    return false
 
   // 检查文件名前缀和后缀
   if (fileName) {
     const firstChar = fileName[0]
     const lastChar = fileName[fileName.length - 1]
 
-    if (BLACKLISTED_FILE_PREFIXES.has(firstChar)) return false
-    if (BLACKLISTED_FILE_SUFFIXES.has(lastChar)) return false
+    if (BLACKLISTED_FILE_PREFIXES.has(firstChar))
+      return false
+    if (BLACKLISTED_FILE_SUFFIXES.has(lastChar))
+      return false
   }
 
   // Photos Library 智能过滤（仅 macOS）
@@ -134,15 +141,18 @@ export function isIndexableFile(
   // 目录黑名单检查
   const blacklistedDirs = new Set([
     ...BASE_BLACKLISTED_DIRS,
-    ...(opts.customBlacklistedDirs || [])
+    ...(opts.customBlacklistedDirs || []),
   ])
 
   const segments = fullPath.split(path.sep)
   for (let i = 0; i < segments.length - 1; i++) {
     const segment = segments[i]
-    if (!segment) continue
-    if (segment.startsWith('.')) return false
-    if (blacklistedDirs.has(segment)) return false
+    if (!segment)
+      continue
+    if (segment.startsWith('.'))
+      return false
+    if (blacklistedDirs.has(segment))
+      return false
   }
 
   // 自定义排除路径检查
@@ -259,7 +269,7 @@ function isCachePath(fullPath: string): boolean {
 export async function scanDirectory(
   dirPath: string,
   options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
-  excludePaths?: Set<string>
+  excludePaths?: Set<string>,
 ): Promise<ScannedFileInfo[]> {
   const opts = { ...DEFAULT_SCAN_OPTIONS, ...options }
 
@@ -272,7 +282,7 @@ export async function scanDirectory(
   const dirName = path.basename(dirPath)
   const blacklistedDirs = new Set([
     ...BASE_BLACKLISTED_DIRS,
-    ...(opts.customBlacklistedDirs || [])
+    ...(opts.customBlacklistedDirs || []),
   ])
 
   if (blacklistedDirs.has(dirName) || dirName.startsWith('.')) {
@@ -295,9 +305,10 @@ export async function scanDirectory(
   // 读取目录
   let entries: any[] = []
   try {
-    const fs = await import('fs/promises')
+    const fs = await import('node:fs/promises')
     entries = await fs.readdir(dirPath, { withFileTypes: true })
-  } catch {
+  }
+  catch {
     // 忽略权限错误等
     return []
   }
@@ -315,7 +326,8 @@ export async function scanDirectory(
       // 递归扫描子目录
       const subFiles = await scanDirectory(fullPath, opts, excludePaths)
       files.push(...subFiles)
-    } else if (entry.isFile()) {
+    }
+    else if (entry.isFile()) {
       const fileName = entry.name
       const fileExtension = path.extname(fileName).toLowerCase()
 
@@ -325,7 +337,7 @@ export async function scanDirectory(
       }
 
       try {
-        const fs = await import('fs/promises')
+        const fs = await import('node:fs/promises')
         const stats = await fs.stat(fullPath)
         files.push({
           path: fullPath,
@@ -333,9 +345,10 @@ export async function scanDirectory(
           extension: fileExtension,
           size: stats.size,
           ctime: stats.birthtime ?? stats.ctime,
-          mtime: stats.mtime
+          mtime: stats.mtime,
         })
-      } catch (error) {
+      }
+      catch (error) {
         console.error(`[FileScanUtils] Could not stat file ${fullPath}:`, error)
       }
     }
@@ -373,7 +386,7 @@ export async function scanDirectory(
 export async function scanDirectories(
   dirPaths: string[],
   options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
-  excludePaths?: Set<string>
+  excludePaths?: Set<string>,
 ): Promise<ScannedFileInfo[]> {
   const allFiles: ScannedFileInfo[] = []
 
@@ -381,7 +394,8 @@ export async function scanDirectories(
     try {
       const files = await scanDirectory(dirPath, options, excludePaths)
       allFiles.push(...files)
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`[FileScanUtils] Error scanning directory ${dirPath}:`, error)
     }
   }

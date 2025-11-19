@@ -1,13 +1,16 @@
-import axios, { AxiosRequestConfig } from 'axios'
-import { UpdateProvider } from './UpdateProvider'
-import {
-  UpdateProviderType,
-  UpdateSourceConfig,
+import type {
   AppPreviewChannel,
-  GitHubRelease,
   DownloadAsset,
-  UpdateErrorType
+  GitHubRelease,
+  UpdateSourceConfig,
 } from '@talex-touch/utils'
+import type { AxiosRequestConfig } from 'axios'
+import {
+  UpdateErrorType,
+  UpdateProviderType,
+} from '@talex-touch/utils'
+import axios from 'axios'
+import { UpdateProvider } from './UpdateProvider'
 
 export class GithubUpdateProvider extends UpdateProvider {
   readonly name = 'GitHub Releases'
@@ -36,7 +39,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           throw this.createError(
             UpdateErrorType.API_ERROR,
             `Rate limit exceeded. Try again in ${(rateLimitManager as any).getTimeUntilResetString('github')}`,
-            { retryAfter: timeUntilReset }
+            { retryAfter: timeUntilReset },
           )
         }
 
@@ -45,9 +48,9 @@ export class GithubUpdateProvider extends UpdateProvider {
           url: this.apiUrl,
           timeout: this.timeout,
           headers: {
-            Accept: 'application/vnd.github.v3+json',
-            'User-Agent': 'TalexTouch-Updater/1.0'
-          }
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'TalexTouch-Updater/1.0',
+          },
         }
 
         const response = await axios(config)
@@ -59,7 +62,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           throw this.createError(
             UpdateErrorType.API_ERROR,
             `GitHub API returned status ${response.status}`,
-            { response }
+            { response },
           )
         }
 
@@ -68,7 +71,7 @@ export class GithubUpdateProvider extends UpdateProvider {
         if (!releases || !Array.isArray(releases)) {
           throw this.createError(
             UpdateErrorType.PARSE_ERROR,
-            'Invalid response format from GitHub API'
+            'Invalid response format from GitHub API',
           )
         }
 
@@ -78,7 +81,7 @@ export class GithubUpdateProvider extends UpdateProvider {
         if (channelReleases.length === 0) {
           throw this.createError(
             UpdateErrorType.API_ERROR,
-            `No releases found for channel: ${channel}`
+            `No releases found for channel: ${channel}`,
           )
         }
 
@@ -89,7 +92,8 @@ export class GithubUpdateProvider extends UpdateProvider {
         this.validateRelease(latestRelease)
 
         return latestRelease
-      } catch (error) {
+      }
+      catch (error) {
         attempt++
 
         // Check if this is a retryable error
@@ -105,16 +109,16 @@ export class GithubUpdateProvider extends UpdateProvider {
           const delay = (rateLimitManager as any).calculateBackoffDelay(
             attempt - 1,
             baseDelay,
-            maxDelay
+            maxDelay,
           )
 
           console.warn(
             `[GithubUpdateProvider] Attempt ${attempt} failed, retrying in ${delay}ms:`,
-            (error as any).message
+            (error as any).message,
           )
 
           // Wait before retrying
-          await new Promise((resolve) => setTimeout(resolve, delay))
+          await new Promise(resolve => setTimeout(resolve, delay))
           continue
         }
 
@@ -126,7 +130,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           throw this.createError(
             UpdateErrorType.TIMEOUT_ERROR,
             'Request to GitHub API timed out',
-            error
+            error,
           )
         }
 
@@ -135,19 +139,22 @@ export class GithubUpdateProvider extends UpdateProvider {
 
           if (statusCode >= 500) {
             throw this.createError(UpdateErrorType.API_ERROR, 'GitHub API server error', error)
-          } else if (statusCode === 404) {
+          }
+          else if (statusCode === 404) {
             throw this.createError(UpdateErrorType.API_ERROR, 'Repository not found', error)
-          } else if (statusCode === 403) {
+          }
+          else if (statusCode === 403) {
             throw this.createError(
               UpdateErrorType.API_ERROR,
               'GitHub API rate limit exceeded',
-              error
+              error,
             )
-          } else {
+          }
+          else {
             throw this.createError(
               UpdateErrorType.API_ERROR,
               `GitHub API error: ${statusCode}`,
-              error
+              error,
             )
           }
         }
@@ -156,21 +163,21 @@ export class GithubUpdateProvider extends UpdateProvider {
           throw this.createError(
             UpdateErrorType.NETWORK_ERROR,
             'Unable to connect to GitHub API',
-            error
+            error,
           )
         }
 
         throw this.createError(
           UpdateErrorType.UNKNOWN_ERROR,
           'Unknown error occurred while fetching releases',
-          error
+          error,
         )
       }
     }
 
     // If we get here, all retries failed
     throw this.createError(UpdateErrorType.API_ERROR, 'All retry attempts failed', {
-      attempts: maxRetries
+      attempts: maxRetries,
     })
   }
 
@@ -180,13 +187,13 @@ export class GithubUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map((asset) => ({
+    return release.assets.map(asset => ({
       name: asset.name,
       url: (asset as any).browser_download_url || asset.url,
       size: asset.size || 0,
       platform: this.detectPlatform(asset.name),
       arch: this.detectArch(asset.name),
-      checksum: this.extractChecksum(asset)
+      checksum: this.extractChecksum(asset),
     }))
   }
 
@@ -198,14 +205,15 @@ export class GithubUpdateProvider extends UpdateProvider {
         url: 'https://api.github.com',
         timeout: 5000,
         headers: {
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'TalexTouch-Updater/1.0'
-        }
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'TalexTouch-Updater/1.0',
+        },
       }
 
       const response = await axios(config)
       return response.status === 200
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('GitHub health check failed:', error)
       return false
     }
@@ -217,13 +225,15 @@ export class GithubUpdateProvider extends UpdateProvider {
 
     if (lower.includes('win') || lower.includes('windows') || lower.includes('.exe')) {
       return 'win32'
-    } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
+    }
+    else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
       return 'darwin'
-    } else if (
-      lower.includes('linux') ||
-      lower.includes('.deb') ||
-      lower.includes('.rpm') ||
-      lower.includes('.AppImage')
+    }
+    else if (
+      lower.includes('linux')
+      || lower.includes('.deb')
+      || lower.includes('.rpm')
+      || lower.includes('.AppImage')
     ) {
       return 'linux'
     }
@@ -238,7 +248,8 @@ export class GithubUpdateProvider extends UpdateProvider {
 
     if (lower.includes('arm64') || lower.includes('aarch64')) {
       return 'arm64'
-    } else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
+    }
+    else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
       return 'x64'
     }
 
@@ -265,10 +276,10 @@ export class GithubUpdateProvider extends UpdateProvider {
     }
 
     // 提取前几行作为摘要
-    const lines = release.body.split('\n').filter((line) => line.trim())
+    const lines = release.body.split('\n').filter(line => line.trim())
     const summary = lines.slice(0, 3).join('\n')
 
-    return summary.length > 200 ? summary.substring(0, 200) + '...' : summary
+    return summary.length > 200 ? `${summary.substring(0, 200)}...` : summary
   }
 
   // 获取发布标签
@@ -316,7 +327,7 @@ export class GithubUpdateProvider extends UpdateProvider {
     return date.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     })
   }
 

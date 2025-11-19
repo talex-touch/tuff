@@ -64,9 +64,9 @@ const featureLifeCycle = {
     console.log('[Plugin Receiver] Item action:', item)
     return Promise.resolve({
       externalAction: false,
-      shouldActivate: false
+      shouldActivate: false,
     })
-  }
+  },
 }
 
 // 消息处理函数
@@ -79,7 +79,7 @@ function handleTranslateMessage(info) {
     translated: `Translated: ${info.text}`,
     from: info.from,
     to: info.to,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   }
 
   console.log('[Translate] Translation result:', translation)
@@ -95,14 +95,14 @@ function handleSearchMessage(info) {
       id: 'result-1',
       title: 'Search Result 1',
       description: 'This is a search result',
-      score: 0.95
+      score: 0.95,
     },
     {
       id: 'result-2',
       title: 'Search Result 2',
       description: 'Another search result',
-      score: 0.87
-    }
+      score: 0.87,
+    },
   ]
 
   console.log('[Search] Search results:', results)
@@ -117,7 +117,7 @@ function handlePingMessage(info) {
     message: 'pong',
     timestamp: Date.now(),
     source: 'plugin-receiver',
-    originalTimestamp: info.timestamp
+    originalTimestamp: info.timestamp,
   }
 
   console.log('[Ping] Sending pong:', pong)
@@ -135,8 +135,8 @@ function handleStatusMessage(info) {
     features: ['translate', 'search', 'ping'],
     memory: {
       used: Math.random() * 100,
-      total: 100
-    }
+      total: 100,
+    },
   }
 
   console.log('[Status] Plugin status:', status)
@@ -152,12 +152,12 @@ function handleProcessDataMessage(info) {
     processed: {
       ...info.data,
       processedAt: Date.now(),
-      processedBy: 'plugin-receiver'
+      processedBy: 'plugin-receiver',
     },
     metadata: {
       ...info.data.metadata,
-      processingTime: Math.random() * 100
-    }
+      processingTime: Math.random() * 100,
+    },
   }
 
   console.log('[Process Data] Processed data:', processedData)
@@ -173,8 +173,8 @@ function handleGetResultMessage(info) {
     status: 'completed',
     result: {
       message: 'Data processed successfully',
-      timestamp: Date.now()
-    }
+      timestamp: Date.now(),
+    },
   }
 
   console.log('[Get Result] Returning result:', result)
@@ -191,8 +191,8 @@ function handleHealthCheckMessage(info) {
     checks: {
       memory: 'ok',
       cpu: 'ok',
-      network: 'ok'
-    }
+      network: 'ok',
+    },
   }
 
   console.log('[Health Check] Health status:', health)

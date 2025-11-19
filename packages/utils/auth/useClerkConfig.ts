@@ -1,4 +1,4 @@
-import { ClerkConfig } from "./clerk-types"
+import type { ClerkConfig } from './clerk-types'
 
 const clerkPublishableKey = (import.meta.env as any).VITE_CLERK_PUBLISHABLE_KEY
 const clerkDomain = (import.meta.env as any).VITE_CLERK_DOMAIN
@@ -15,7 +15,7 @@ export const defaultClerkConfig: ClerkConfig = {
   signInUrl: '/sign-in',
   signUpUrl: '/sign-up',
   afterSignInUrl: '/home',
-  afterSignUpUrl: '/home'
+  afterSignUpUrl: '/home',
 }
 
 export function useClerkConfig() {
@@ -23,7 +23,7 @@ export function useClerkConfig() {
     return {
       ...defaultClerkConfig,
       publishableKey:
-        localStorage.getItem(CLERK_PUBLISHABLE_KEY_KEY) || defaultClerkConfig.publishableKey
+        localStorage.getItem(CLERK_PUBLISHABLE_KEY_KEY) || defaultClerkConfig.publishableKey,
     }
   }
 
@@ -35,6 +35,6 @@ export function useClerkConfig() {
 
   return {
     getClerkConfig,
-    setClerkConfig
+    setClerkConfig,
   }
 }

@@ -123,14 +123,16 @@
 async function dispatchFlow(payload: FlowPayload, options: DispatchOptions) {
   assertSenderCapability(options.senderId, 'flowSender')
   const target = options.preferredTarget ?? await promptUserSelectTarget(payload)
-  if (!target) return { status: 'CANCELLED' }
+  if (!target)
+    return { status: 'CANCELLED' }
 
   const session = createSession(payload, target)
   try {
     const ack = await sendToTarget(session)
     updateSession(session.id, 'ACKED', ack)
     return { status: 'ACKED', ack }
-  } catch (error) {
+  }
+  catch (error) {
     updateSession(session.id, 'FAILED', error)
     throw error
   }

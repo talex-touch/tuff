@@ -25,44 +25,44 @@
 ## Props
 
 ```typescript
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // 主要内容
-  title?: string              // 标题文本
-  subtitle?: string           // 副标题文本
-  icon?: string              // 图标类名
-  iconClass?: string         // 图标容器额外类名
+  title?: string // 标题文本
+  subtitle?: string // 副标题文本
+  icon?: string // 图标类名
+  iconClass?: string // 图标容器额外类名
 
   // Badge 配置
-  topBadge?: TuffItemBadge      // 右上角 Badge
-  bottomBadge?: TuffItemBadge   // 右下角 Badge
+  topBadge?: TuffItemBadge // 右上角 Badge
+  bottomBadge?: TuffItemBadge // 右下角 Badge
 
   // 状态点
   statusDot?: TuffItemStatusDot
 
   // 状态
-  selected?: boolean         // 是否选中
-  disabled?: boolean         // 是否禁用
-  clickable?: boolean        // 是否可点击
-  hasError?: boolean         // 是否有错误
+  selected?: boolean // 是否选中
+  disabled?: boolean // 是否禁用
+  clickable?: boolean // 是否可点击
+  hasError?: boolean // 是否有错误
 
   // 尺寸
-  size?: 'sm' | 'md' | 'lg'  // 组件尺寸
+  size?: 'sm' | 'md' | 'lg' // 组件尺寸
 
   // 无障碍
-  ariaLabel?: string         // ARIA 标签
+  ariaLabel?: string // ARIA 标签
 }
 
-type TuffItemBadge = {
+interface TuffItemBadge {
   text: string
   icon?: string
   status?: 'success' | 'warning' | 'danger' | 'info' | 'muted'
   statusKey?: string
 }
 
-type TuffItemStatusDot = {
-  color?: string      // 自定义颜色
-  class?: string      // 预设类名：is-active, is-inactive, is-error, is-warning
-  label?: string      // ARIA 标签
+interface TuffItemStatusDot {
+  color?: string // 自定义颜色
+  class?: string // 预设类名：is-active, is-inactive, is-error, is-warning
+  label?: string // ARIA 标签
 }
 ```
 

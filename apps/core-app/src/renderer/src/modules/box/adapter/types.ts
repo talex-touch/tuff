@@ -1,12 +1,12 @@
-import { Ref } from 'vue'
-import { IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { Ref } from 'vue'
 
 export enum BoxMode {
   INPUT = 'input',
   COMMAND = 'command',
   IMAGE = 'image',
   FILE = 'file',
-  FEATURE = 'feature'
+  FEATURE = 'feature',
 }
 
 export type SearchItem = TuffItem

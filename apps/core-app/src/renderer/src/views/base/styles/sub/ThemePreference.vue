@@ -1,7 +1,7 @@
 <script setup lang="ts" name="ThemePreference">
-import FormTemplate from '~/components/base/template/FormTemplate.vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+import FormTemplate from '~/components/base/template/FormTemplate.vue'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -40,7 +40,7 @@ const copyWriting = computed(() => {
         v-shared-element:[`theme-preference-${route.query.theme}-img`]
         class="ThemePreference-Display"
         :class="route.query.theme"
-      ></div>
+      />
     </div>
   </FormTemplate>
 </template>

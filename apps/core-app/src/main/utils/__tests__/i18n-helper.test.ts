@@ -3,16 +3,16 @@
  * Tests for main process internationalization
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import { t, setLocale, getLocale, formatDuration, formatFileSize, formatRelativeTime } from '../i18n-helper'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { formatDuration, formatFileSize, formatRelativeTime, getLocale, setLocale, t } from '../i18n-helper'
 
-describe('I18n Helper', () => {
+describe('i18n Helper', () => {
   beforeEach(() => {
     // Reset to Chinese for each test
     setLocale('zh-CN')
   })
 
-  describe('Translation', () => {
+  describe('translation', () => {
     it('should translate Chinese keys correctly', () => {
       setLocale('zh-CN')
       expect(t('downloadErrors.network_error')).toBe('网络连接失败，请检查网络设置后重试')
@@ -30,7 +30,7 @@ describe('I18n Helper', () => {
       const result = t('notifications.downloadCompleteBody', {
         filename: 'test.zip',
         size: '10MB',
-        duration: '2分钟'
+        duration: '2分钟',
       })
       expect(result).toContain('test.zip')
       expect(result).toContain('10MB')
@@ -49,7 +49,7 @@ describe('I18n Helper', () => {
     })
   })
 
-  describe('Locale Management', () => {
+  describe('locale Management', () => {
     it('should get and set locale', () => {
       setLocale('en-US')
       expect(getLocale()).toBe('en-US')
@@ -67,7 +67,7 @@ describe('I18n Helper', () => {
     })
   })
 
-  describe('Format Helpers', () => {
+  describe('format Helpers', () => {
     describe('formatDuration', () => {
       beforeEach(() => {
         setLocale('zh-CN')
@@ -164,7 +164,7 @@ describe('I18n Helper', () => {
     })
   })
 
-  describe('Error Messages', () => {
+  describe('error Messages', () => {
     it('should provide all error message translations', () => {
       const errorTypes = [
         'network_error',
@@ -175,7 +175,7 @@ describe('I18n Helper', () => {
         'file_not_found',
         'invalid_url',
         'cancelled',
-        'unknown_error'
+        'unknown_error',
       ]
 
       for (const errorType of errorTypes) {
@@ -193,7 +193,7 @@ describe('I18n Helper', () => {
     })
   })
 
-  describe('Notification Messages', () => {
+  describe('notification Messages', () => {
     it('should provide all notification translations', () => {
       const notificationKeys = [
         'downloadComplete',
@@ -203,7 +203,7 @@ describe('I18n Helper', () => {
         'updateAvailable',
         'updateAvailableBody',
         'updateReady',
-        'updateReadyBody'
+        'updateReadyBody',
       ]
 
       for (const key of notificationKeys) {

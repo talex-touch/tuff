@@ -1,3 +1,36 @@
+<script lang="ts" setup>
+import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import { toRef } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+// Props
+const props = defineProps<{
+  plugin: ITouchPlugin
+}>()
+const plugin = toRef(props, 'plugin')
+
+// Copy states
+const copyState = ref({
+  pluginId: false,
+})
+
+const { t } = useI18n()
+
+// Copy functionality
+async function copyToClipboard(text: string, type: keyof typeof copyState.value): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+    copyState.value[type] = true
+    setTimeout(() => {
+      copyState.value[type] = false
+    }, 2000)
+  }
+  catch (error) {
+    console.error('Failed to copy to clipboard:', error)
+  }
+}
+</script>
+
 <template>
   <div class="PluginDetails w-full">
     <div class="PluginDetails-Grid grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -17,13 +50,11 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.pluginId') }}</span
-            >
+            >{{ t('plugin.details.pluginId') }}</span>
             <div class="PluginDetails-ValueWithCopy flex items-center gap-2">
               <code
                 class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)]"
-                >{{ plugin.name }}</code
-              >
+              >{{ plugin.name }}</code>
               <button
                 class="PluginDetails-CopyButton w-6 h-6 bg-[var(--el-fill-color-light)] border border-[var(--el-border-color-lighter)] rounded flex items-center justify-center transition-colors"
                 :class="
@@ -46,30 +77,25 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.version') }}</span
-            >
+            >{{ t('plugin.details.version') }}</span>
             <span
               class="PluginDetails-Value text-sm font-semibold text-[var(--el-color-success)]"
-              >{{ plugin.version }}</span
-            >
+            >{{ plugin.version }}</span>
           </div>
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.mode') }}</span
-            >
+            >{{ t('plugin.details.mode') }}</span>
             <span
               v-if="plugin.dev?.enable"
               class="PluginDetails-Value text-sm font-medium text-[var(--el-color-primary)]"
-              >{{ t('plugin.details.development') }}</span
-            >
+            >{{ t('plugin.details.development') }}</span>
             <span
               v-else
               class="PluginDetails-Value text-sm font-medium text-[var(--el-color-success)]"
-              >{{ t('plugin.details.production') }}</span
-            >
+            >{{ t('plugin.details.production') }}</span>
           </div>
           <div
             v-if="plugin.dev?.address"
@@ -77,8 +103,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.devAddress') }}</span
-            >
+            >{{ t('plugin.details.devAddress') }}</span>
             <a
               :href="plugin.dev.address"
               class="PluginDetails-Link text-sm text-[var(--el-color-primary)] flex items-center gap-1"
@@ -107,8 +132,7 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.autoStart') }}</span
-            >
+            >{{ t('plugin.details.autoStart') }}</span>
             <div class="PluginDetails-Toggle flex items-center gap-2">
               <div class="w-2 h-2 bg-[var(--el-color-success)] rounded-full animate-pulse" />
               <span class="text-sm text-[var(--el-color-success)]">{{
@@ -119,8 +143,7 @@
           <div class="PluginDetails-Row flex justify-between items-center py-3">
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.hotReload') }}</span
-            >
+            >{{ t('plugin.details.hotReload') }}</span>
             <div class="PluginDetails-Toggle flex items-center gap-2">
               <div
                 class="w-2 h-2 rounded-full"
@@ -137,10 +160,9 @@
                     ? 'text-[var(--el-color-success)]'
                     : 'text-[var(--el-text-color-placeholder)]'
                 "
-                >{{
-                  plugin.dev?.enable ? t('plugin.details.enabled') : t('plugin.details.disabled')
-                }}</span
-              >
+              >{{
+                plugin.dev?.enable ? t('plugin.details.enabled') : t('plugin.details.disabled')
+              }}</span>
             </div>
           </div>
         </div>
@@ -162,33 +184,26 @@
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.pluginPath') }}</span
-            >
+            >{{ t('plugin.details.pluginPath') }}</span>
             <code
               class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)] max-w-40 truncate"
-              >~/plugins/{{ plugin.name }}</code
-            >
+            >~/plugins/{{ plugin.name }}</code>
           </div>
           <div
             class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
           >
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.dataDirectory') }}</span
-            >
+            >{{ t('plugin.details.dataDirectory') }}</span>
             <code
               class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)] max-w-40 truncate"
-              >~/data/{{ plugin.name }}</code
-            >
+            >~/data/{{ plugin.name }}</code>
           </div>
           <div class="PluginDetails-Row flex justify-between items-center py-3">
             <span
               class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-              >{{ t('plugin.details.cacheSize') }}</span
-            >
-            <span class="PluginDetails-Value text-sm text-[var(--el-text-color-primary)]"
-              >2.4 MB</span
-            >
+            >{{ t('plugin.details.cacheSize') }}</span>
+            <span class="PluginDetails-Value text-sm text-[var(--el-text-color-primary)]">2.4 MB</span>
           </div>
         </div>
       </div>
@@ -219,8 +234,7 @@
             </div>
             <span
               class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
-              >156ms</span
-            >
+            >156ms</span>
           </div>
           <div
             class="PluginDetails-Metric bg-[var(--el-fill-color-darker)] rounded-xl p-4 flex justify-between items-center"
@@ -237,8 +251,7 @@
             </div>
             <span
               class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
-              >8.2 MB</span
-            >
+            >8.2 MB</span>
           </div>
           <div
             class="PluginDetails-Metric bg-[var(--el-fill-color-darker)] rounded-xl p-4 flex justify-between items-center"
@@ -255,46 +268,13 @@
             </div>
             <span
               class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
-              >0.3%</span
-            >
+            >0.3%</span>
           </div>
         </div>
       </div>
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-import { toRef } from 'vue'
-import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { useI18n } from 'vue-i18n'
-
-// Props
-const props = defineProps<{
-  plugin: ITouchPlugin
-}>()
-const plugin = toRef(props, 'plugin')
-
-// Copy states
-const copyState = ref({
-  pluginId: false
-})
-
-const { t } = useI18n()
-
-// Copy functionality
-async function copyToClipboard(text: string, type: keyof typeof copyState.value): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text)
-    copyState.value[type] = true
-    setTimeout(() => {
-      copyState.value[type] = false
-    }, 2000)
-  } catch (error) {
-    console.error('Failed to copy to clipboard:', error)
-  }
-}
-</script>
 
 <style lang="scss" scoped>
 /* UnoCSS handles most styling, minimal custom styles needed */

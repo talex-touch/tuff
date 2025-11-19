@@ -1,6 +1,6 @@
 <script lang="ts" name="TuffIcon" setup>
-import { useSvgContent } from '~/modules/hooks/useSvgContent'
 import type { ITuffIcon } from '@talex-touch/utils'
+import { useSvgContent } from '~/modules/hooks/useSvgContent'
 
 const props = defineProps<{
   icon: ITuffIcon
@@ -29,7 +29,7 @@ const {
   // loading: svgLoading,
   // error: svgError,
   fetchSvgContent,
-  setUrl
+  setUrl,
 } = useSvgContent()
 
 const isSvg = computed(() => url.value?.endsWith('.svg'))
@@ -46,7 +46,7 @@ watch(
       fetchSvgContent()
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 </script>
 
@@ -62,7 +62,7 @@ watch(
   >
     <span v-if="!icon?.value" class="TuffIcon-Empty">
       <slot name="empty">
-        <img v-if="empty" :alt="alt" :src="empty" />
+        <img v-if="empty" :alt="alt" :src="empty">
       </slot>
     </span>
 
@@ -72,7 +72,7 @@ watch(
 
     <span v-else-if="loading" class="TuffIcon-Loading">
       <span class="TuffIcon-Loading-Skeleton">
-        <span class="skeleton-shimmer"></span>
+        <span class="skeleton-shimmer" />
       </span>
     </span>
 
@@ -94,7 +94,7 @@ watch(
         />
       </template>
       <template v-else>
-        <img :alt="alt" :src="url" />
+        <img :alt="alt" :src="url">
       </template>
     </template>
   </span>

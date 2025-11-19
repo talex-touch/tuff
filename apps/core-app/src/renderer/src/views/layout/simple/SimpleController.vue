@@ -1,3 +1,17 @@
+<script lang="ts" name="FlatController" setup>
+import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
+
+const route = useRoute()
+const { t } = useI18n()
+const { checkApplicationUpgrade } = useApplicationUpgrade()
+
+function handleUpgradeClick() {
+  void checkApplicationUpgrade()
+}
+</script>
+
 <template>
   <div class="SimpleController fake-background">
     <div class="SimpleController-Head flex-shrink-0">
@@ -21,20 +35,6 @@
     </ul>
   </div>
 </template>
-
-<script lang="ts" name="FlatController" setup>
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
-
-const route = useRoute()
-const { t } = useI18n()
-const { checkApplicationUpgrade } = useApplicationUpgrade()
-
-const handleUpgradeClick = () => {
-  void checkApplicationUpgrade()
-}
-</script>
 
 <style lang="scss">
 .SimpleController {

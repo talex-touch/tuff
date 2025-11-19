@@ -17,27 +17,27 @@
  */
 
 import type {
-  TuffItem,
-  TuffSource,
-  TuffSourceType,
-  TuffItemKind,
-  TuffRender,
-  TuffRenderMode,
-  TuffBasicRender,
-  TuffCustomRender,
-  TuffIcon,
-  TuffTag,
-  TuffLayout,
-  TuffPreview,
+  IProviderActivate,
   TuffAction,
   TuffActionType,
-  TuffScoring,
+  TuffBasicRender,
   TuffContext,
+  TuffCustomRender,
+  TuffIcon,
+  TuffItem,
+  TuffItemKind,
+  TuffLayout,
   TuffMeta,
   TuffPermissionLevel,
-  TuffSearchResult,
+  TuffPreview,
   TuffQuery,
-  IProviderActivate
+  TuffRender,
+  TuffRenderMode,
+  TuffScoring,
+  TuffSearchResult,
+  TuffSource,
+  TuffSourceType,
+  TuffTag,
 } from '../tuff/tuff-dsl'
 
 // ==================== Builder 类 ====================
@@ -60,15 +60,15 @@ import type {
  * ```
  */
 class TuffItemBuilder {
-  private item: Partial<TuffItem> = {};
-  private basicRender: Partial<TuffBasicRender> = {};
-  private customRender: Partial<TuffCustomRender> | null = null;
-  private renderMode: TuffRenderMode = 'default';
-  private layout: Partial<TuffLayout> | null = null;
-  private preview: Partial<TuffPreview> | null = null;
-  private renderStyle: Record<string, string> | null = null;
-  private renderClassName: string | null = null;
-  private scoring: Partial<TuffScoring> = {};
+  private item: Partial<TuffItem> = {}
+  private basicRender: Partial<TuffBasicRender> = {}
+  private customRender: Partial<TuffCustomRender> | null = null
+  private renderMode: TuffRenderMode = 'default'
+  private layout: Partial<TuffLayout> | null = null
+  private preview: Partial<TuffPreview> | null = null
+  private renderStyle: Record<string, string> | null = null
+  private renderClassName: string | null = null
+  private scoring: Partial<TuffScoring> = {}
 
   /**
    * 创建一个新的 TuffItemBuilder 实例
@@ -82,8 +82,8 @@ class TuffItemBuilder {
     if (sourceType && sourceId) {
       this.item.source = {
         type: sourceType,
-        id: sourceId
-      };
+        id: sourceId,
+      }
     }
   }
 
@@ -94,8 +94,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setId(id: string): TuffItemBuilder {
-    this.item.id = id;
-    return this;
+    this.item.id = id
+    return this
   }
 
   /**
@@ -113,15 +113,18 @@ class TuffItemBuilder {
     id: string,
     name?: string,
     version?: string,
-    permission?: TuffPermissionLevel
+    permission?: TuffPermissionLevel,
   ): TuffItemBuilder {
-    this.item.source = { type, id };
+    this.item.source = { type, id }
 
-    if (name) this.item.source.name = name;
-    if (version) this.item.source.version = version;
-    if (permission) this.item.source.permission = permission;
+    if (name)
+      this.item.source.name = name
+    if (version)
+      this.item.source.version = version
+    if (permission)
+      this.item.source.permission = permission
 
-    return this;
+    return this
   }
 
   /**
@@ -131,8 +134,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setKind(kind: TuffItemKind): TuffItemBuilder {
-    this.item.kind = kind;
-    return this;
+    this.item.kind = kind
+    return this
   }
 
   /**
@@ -142,8 +145,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setTitle(title: string): TuffItemBuilder {
-    this.basicRender.title = title;
-    return this;
+    this.basicRender.title = title
+    return this
   }
 
   /**
@@ -153,8 +156,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setSubtitle(subtitle: string): this {
-    this.basicRender.subtitle = subtitle;
-    return this;
+    this.basicRender.subtitle = subtitle
+    return this
   }
 
   /**
@@ -164,8 +167,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setDescription(description: string): this {
-    this.basicRender.description = description;
-    return this;
+    this.basicRender.description = description
+    return this
   }
 
   /**
@@ -175,8 +178,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setIcon(icon: TuffIcon): this {
-    this.basicRender.icon = icon;
-    return this;
+    this.basicRender.icon = icon
+    return this
   }
 
   /**
@@ -187,10 +190,10 @@ class TuffItemBuilder {
    */
   addTag(tag: TuffTag): this {
     if (!this.basicRender.tags) {
-      this.basicRender.tags = [];
+      this.basicRender.tags = []
     }
-    this.basicRender.tags.push(tag);
-    return this;
+    this.basicRender.tags.push(tag)
+    return this
   }
 
   /**
@@ -200,8 +203,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setTags(tags: TuffTag[]): this {
-    this.basicRender.tags = tags;
-    return this;
+    this.basicRender.tags = tags
+    return this
   }
 
   /**
@@ -211,8 +214,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setAccessory(accessory: string): this {
-    this.basicRender.accessory = accessory;
-    return this;
+    this.basicRender.accessory = accessory
+    return this
   }
 
   /**
@@ -222,8 +225,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setRenderMode(mode: TuffRenderMode): this {
-    this.renderMode = mode;
-    return this;
+    this.renderMode = mode
+    return this
   }
 
   /**
@@ -241,16 +244,19 @@ class TuffItemBuilder {
     content: string,
     data?: Record<string, any>,
     styles?: string[],
-    scripts?: string[]
+    scripts?: string[],
   ): this {
-    this.renderMode = 'custom';
-    this.customRender = { type, content };
+    this.renderMode = 'custom'
+    this.customRender = { type, content }
 
-    if (data) this.customRender.data = data;
-    if (styles) this.customRender.styles = styles;
-    if (scripts) this.customRender.scripts = scripts;
+    if (data)
+      this.customRender.data = data
+    if (styles)
+      this.customRender.styles = styles
+    if (scripts)
+      this.customRender.scripts = scripts
 
-    return this;
+    return this
   }
 
   /**
@@ -264,14 +270,16 @@ class TuffItemBuilder {
   setLayout(
     display: 'list' | 'card' | 'grid' | 'compact' | 'detailed',
     size?: 'small' | 'medium' | 'large',
-    align?: 'left' | 'center' | 'right'
+    align?: 'left' | 'center' | 'right',
   ): this {
-    this.layout = { display };
+    this.layout = { display }
 
-    if (size) this.layout.size = size;
-    if (align) this.layout.align = align;
+    if (size)
+      this.layout.size = size
+    if (align)
+      this.layout.align = align
 
-    return this;
+    return this
   }
 
   /**
@@ -283,19 +291,21 @@ class TuffItemBuilder {
    */
   setGridLayout(columns: number, gap?: number): this {
     if (!this.layout) {
-      this.layout = { display: 'grid' };
-    } else {
-      this.layout.display = 'grid';
+      this.layout = { display: 'grid' }
+    }
+    else {
+      this.layout.display = 'grid'
     }
 
     if (!this.layout.grid) {
-      this.layout.grid = {};
+      this.layout.grid = {}
     }
 
-    this.layout.grid.columns = columns;
-    if (gap !== undefined) this.layout.grid.gap = gap;
+    this.layout.grid.columns = columns
+    if (gap !== undefined)
+      this.layout.grid.gap = gap
 
-    return this;
+    return this
   }
 
   /**
@@ -313,16 +323,20 @@ class TuffItemBuilder {
     title?: string,
     content?: string,
     image?: string,
-    lazy?: boolean
+    lazy?: boolean,
   ): this {
-    this.preview = { type };
+    this.preview = { type }
 
-    if (title) this.preview.title = title;
-    if (content) this.preview.content = content;
-    if (image) this.preview.image = image;
-    if (lazy !== undefined) this.preview.lazy = lazy;
+    if (title)
+      this.preview.title = title
+    if (content)
+      this.preview.content = content
+    if (image)
+      this.preview.image = image
+    if (lazy !== undefined)
+      this.preview.lazy = lazy
 
-    return this;
+    return this
   }
 
   /**
@@ -333,11 +347,11 @@ class TuffItemBuilder {
    */
   setPreviewComponent(customRender: TuffCustomRender): this {
     if (!this.preview) {
-      this.preview = { type: 'panel' };
+      this.preview = { type: 'panel' }
     }
 
-    this.preview.component = customRender;
-    return this;
+    this.preview.component = customRender
+    return this
   }
 
   /**
@@ -347,8 +361,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setClassName(className: string): this {
-    this.renderClassName = className;
-    return this;
+    this.renderClassName = className
+    return this
   }
 
   /**
@@ -358,8 +372,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setStyle(style: Record<string, string>): this {
-    this.renderStyle = style;
-    return this;
+    this.renderStyle = style
+    return this
   }
 
   /**
@@ -370,10 +384,10 @@ class TuffItemBuilder {
    */
   addAction(action: TuffAction): this {
     if (!this.item.actions) {
-      this.item.actions = [];
+      this.item.actions = []
     }
-    this.item.actions.push(action);
-    return this;
+    this.item.actions.push(action)
+    return this
   }
 
   /**
@@ -383,8 +397,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setActions(actions: TuffAction[]): this {
-    this.item.actions = actions;
-    return this;
+    this.item.actions = actions
+    return this
   }
 
   /**
@@ -403,19 +417,19 @@ class TuffItemBuilder {
     id: string,
     type: TuffActionType,
     label: string,
-    payload?: any
+    payload?: any,
   ): this {
-    const isFirstAction = !this.item.actions || this.item.actions.length === 0;
+    const isFirstAction = !this.item.actions || this.item.actions.length === 0
 
     const action = TuffUtils.createAction(
       id,
       type,
       label,
       isFirstAction, // Set primary to true if it's the first action
-      payload
-    );
+      payload,
+    )
 
-    return this.addAction(action);
+    return this.addAction(action)
   }
 
   /**
@@ -425,8 +439,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setScoring(scoring: TuffScoring): this {
-    this.item.scoring = scoring;
-    return this;
+    this.item.scoring = scoring
+    return this
   }
 
   /**
@@ -437,10 +451,10 @@ class TuffItemBuilder {
    */
   setFinalScore(score: number): this {
     if (score < 0 || score > 1) {
-      throw new Error('Score must be between 0 and 1');
+      throw new Error('Score must be between 0 and 1')
     }
-    this.scoring.final = score;
-    return this;
+    this.scoring.final = score
+    return this
   }
 
   /**
@@ -450,8 +464,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setContext(context: TuffContext): this {
-    this.item.context = context;
-    return this;
+    this.item.context = context
+    return this
   }
 
   /**
@@ -461,8 +475,8 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setMeta(meta: TuffMeta): this {
-    this.item.meta = { ...this.item.meta, ...meta };
-    return this;
+    this.item.meta = { ...this.item.meta, ...meta }
+    return this
   }
 
   /**
@@ -475,48 +489,53 @@ class TuffItemBuilder {
     // 检查并自动生成 ID
     if (!this.item.id) {
       // this.item.id = TuffUtils.generateId();
-      throw new Error('TuffItem 必须设置 id 属性');
+      throw new Error('TuffItem 必须设置 id 属性')
     }
 
     // 检查必要属性
     if (!this.item.source) {
-      throw new Error('TuffItem 必须设置 source 属性');
+      throw new Error('TuffItem 必须设置 source 属性')
     }
 
     // 构建渲染配置
     const render: TuffRender = {
-      mode: this.renderMode
-    };
+      mode: this.renderMode,
+    }
 
     // 根据渲染模式设置相应的渲染配置
     if (this.renderMode === 'default' || this.renderMode === 'rich' || this.renderMode === 'card') {
       if (!this.basicRender.title) {
-        throw new Error('默认渲染模式下 TuffItem 必须设置 title 属性');
+        throw new Error('默认渲染模式下 TuffItem 必须设置 title 属性')
       }
-      render.basic = this.basicRender as TuffBasicRender;
-    } else if (this.renderMode === 'custom') {
+      render.basic = this.basicRender as TuffBasicRender
+    }
+    else if (this.renderMode === 'custom') {
       if (!this.customRender) {
-        throw new Error('自定义渲染模式下必须设置 customRender 属性');
+        throw new Error('自定义渲染模式下必须设置 customRender 属性')
       }
-      render.custom = this.customRender as TuffCustomRender;
+      render.custom = this.customRender as TuffCustomRender
     }
 
     // 设置其他渲染属性
-    if (this.layout) render.layout = this.layout as TuffLayout;
-    if (this.preview) render.preview = this.preview as TuffPreview;
-    if (this.renderClassName) render.className = this.renderClassName;
-    if (this.renderStyle) render.style = this.renderStyle;
+    if (this.layout)
+      render.layout = this.layout as TuffLayout
+    if (this.preview)
+      render.preview = this.preview as TuffPreview
+    if (this.renderClassName)
+      render.className = this.renderClassName
+    if (this.renderStyle)
+      render.style = this.renderStyle
 
     // 设置渲染配置
-    this.item.render = render;
+    this.item.render = render
 
     // 设置评分信息
     if (Object.keys(this.scoring).length > 0) {
-      this.item.scoring = this.scoring as TuffScoring;
+      this.item.scoring = this.scoring as TuffScoring
     }
 
     // 返回完整的 TuffItem
-    return this.item as TuffItem;
+    return this.item as TuffItem
   }
 }
 
@@ -526,7 +545,7 @@ class TuffItemBuilder {
  * A fluent builder for creating TuffSearchResult objects.
  */
 class TuffSearchResultBuilder {
-  private readonly result: TuffSearchResult;
+  private readonly result: TuffSearchResult
 
   constructor(query: TuffQuery) {
     this.result = {
@@ -534,41 +553,40 @@ class TuffSearchResultBuilder {
       items: [],
       duration: 0,
       sources: [],
-      activate: []
-    };
+      activate: [],
+    }
   }
 
   public setItems(items: TuffItem[]): this {
-    this.result.items = items;
-    return this;
+    this.result.items = items
+    return this
   }
 
   public setDuration(duration: number): this {
-    this.result.duration = duration;
-    return this;
+    this.result.duration = duration
+    return this
   }
 
   public setActivate(activate: IProviderActivate[]): this {
-    this.result.activate = activate;
-    return this;
+    this.result.activate = activate
+    return this
   }
 
   public setSources(sources: TuffSearchResult['sources']): this {
-    this.result.sources = sources;
-    return this;
+    this.result.sources = sources
+    return this
   }
 
   public setSortStats(stats: any[]): this {
     // @ts-ignore
-    this.result.sort_stats = stats;
-    return this;
+    this.result.sort_stats = stats
+    return this
   }
 
   public build(): TuffSearchResult {
-    return this.result;
+    return this.result
   }
 }
-
 
 // ==================== 工厂方法 ====================
 
@@ -589,15 +607,16 @@ class TuffFactory {
     title: string,
     sourceType: TuffSourceType,
     sourceId: string,
-    kind?: TuffItemKind
+    kind?: TuffItemKind,
   ): TuffItem {
     const builder = new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
 
-    if (kind) builder.setKind(kind);
+    if (kind)
+      builder.setKind(kind)
 
-    return builder.build();
+    return builder.build()
   }
 
   /**
@@ -611,9 +630,9 @@ class TuffFactory {
   static createSystemItem(
     title: string,
     id: string,
-    kind?: TuffItemKind
+    kind?: TuffItemKind,
   ): TuffItem {
-    return TuffFactory.createBasicItem(title, 'system', id, kind);
+    return TuffFactory.createBasicItem(title, 'system', id, kind)
   }
 
   /**
@@ -627,9 +646,9 @@ class TuffFactory {
   static createPluginItem(
     title: string,
     pluginId: string,
-    kind?: TuffItemKind
+    kind?: TuffItemKind,
   ): TuffItem {
-    return TuffFactory.createBasicItem(title, 'plugin', pluginId, kind);
+    return TuffFactory.createBasicItem(title, 'plugin', pluginId, kind)
   }
 
   /**
@@ -643,9 +662,9 @@ class TuffFactory {
   static createAIItem(
     title: string,
     aiSourceId: string,
-    kind?: TuffItemKind
+    kind?: TuffItemKind,
   ): TuffItem {
-    return TuffFactory.createBasicItem(title, 'ai', aiSourceId, kind);
+    return TuffFactory.createBasicItem(title, 'ai', aiSourceId, kind)
   }
 
   /**
@@ -661,7 +680,7 @@ class TuffFactory {
     title: string,
     path: string,
     sourceType: TuffSourceType,
-    sourceId: string
+    sourceId: string,
   ): TuffItem {
     return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
@@ -669,11 +688,11 @@ class TuffFactory {
       .setKind('file')
       .setMeta({
         file: {
-          path: path
-        }
+          path,
+        },
       })
       .createAndAddAction('open', 'open', '打开')
-      .build();
+      .build()
   }
 
   /**
@@ -689,7 +708,7 @@ class TuffFactory {
     title: string,
     path: string,
     sourceType: TuffSourceType,
-    sourceId: string
+    sourceId: string,
   ): TuffItem {
     return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
@@ -697,11 +716,11 @@ class TuffFactory {
       .setKind('folder')
       .setMeta({
         file: {
-          path: path
-        }
+          path,
+        },
       })
       .createAndAddAction('open', 'open', '打开')
-      .build();
+      .build()
   }
 
   /**
@@ -717,7 +736,7 @@ class TuffFactory {
     title: string,
     url: string,
     sourceType: TuffSourceType,
-    sourceId: string
+    sourceId: string,
   ): TuffItem {
     return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
@@ -725,11 +744,11 @@ class TuffFactory {
       .setKind('url')
       .setMeta({
         web: {
-          url: url
-        }
+          url,
+        },
       })
       .createAndAddAction('open', 'open', '打开')
-      .build();
+      .build()
   }
 
   /**
@@ -747,7 +766,7 @@ class TuffFactory {
     path: string,
     bundleId: string,
     sourceType: TuffSourceType,
-    sourceId: string
+    sourceId: string,
   ): TuffItem {
     return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
@@ -755,12 +774,12 @@ class TuffFactory {
       .setKind('app')
       .setMeta({
         app: {
-          path: path,
-          bundle_id: bundleId
-        }
+          path,
+          bundle_id: bundleId,
+        },
       })
       .createAndAddAction('execute', 'execute', '启动')
-      .build();
+      .build()
   }
 
   /**
@@ -776,14 +795,14 @@ class TuffFactory {
     title: string,
     command: string,
     sourceType: TuffSourceType,
-    sourceId: string
+    sourceId: string,
   ): TuffItem {
     return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('command')
       .createAndAddAction('execute', 'execute', '执行', { command })
-      .build();
+      .build()
   }
 
   /**
@@ -799,18 +818,18 @@ class TuffFactory {
     title: string,
     action: TuffAction,
     sourceType: TuffSourceType,
-    sourceId: string
+    sourceId: string,
   ): TuffItem {
     return new TuffItemBuilder(TuffUtils.generateId())
       .setSource(sourceType, sourceId)
       .setTitle(title)
       .setKind('action')
       .addAction(action)
-      .build();
+      .build()
   }
 
   public static createSearchResult(query: TuffQuery): TuffSearchResultBuilder {
-    return new TuffSearchResultBuilder(query);
+    return new TuffSearchResultBuilder(query)
   }
 }
 
@@ -838,10 +857,10 @@ class TuffFactory {
  * ```
  */
 class TuffListBuilder {
-  private items: TuffItem[] = [];
-  private sharedSource: TuffSource;
-  private sharedKind?: TuffItemKind;
-  private sharedActions: TuffAction[] = [];
+  private items: TuffItem[] = []
+  private sharedSource: TuffSource
+  private sharedKind?: TuffItemKind
+  private sharedActions: TuffAction[] = []
 
   /**
    * 创建一个新的列表构建器
@@ -850,7 +869,7 @@ class TuffListBuilder {
    * @param sourceId - 共享的来源标识符
    */
   constructor(sourceType: TuffSourceType, sourceId: string) {
-    this.sharedSource = { type: sourceType, id: sourceId };
+    this.sharedSource = { type: sourceType, id: sourceId }
   }
 
   /**
@@ -860,8 +879,8 @@ class TuffListBuilder {
    * @returns 当前列表构建器实例，用于链式调用
    */
   setSharedKind(kind: TuffItemKind): TuffListBuilder {
-    this.sharedKind = kind;
-    return this;
+    this.sharedKind = kind
+    return this
   }
 
   /**
@@ -871,8 +890,8 @@ class TuffListBuilder {
    * @returns 当前列表构建器实例，用于链式调用
    */
   addSharedAction(action: TuffAction): TuffListBuilder {
-    this.sharedActions.push(action);
-    return this;
+    this.sharedActions.push(action)
+    return this
   }
 
   /**
@@ -887,23 +906,24 @@ class TuffListBuilder {
 
     // 应用共享配置
     if (this.sharedKind) {
-      builder.setKind(this.sharedKind);
+      builder.setKind(this.sharedKind)
     }
     if (this.sharedActions.length > 0) {
       // 克隆共享操作以避免交叉污染
-      builder.setActions(JSON.parse(JSON.stringify(this.sharedActions)));
+      builder.setActions(JSON.parse(JSON.stringify(this.sharedActions)))
     }
 
     // 应用自定义配置
-    customize(builder);
+    customize(builder)
 
     try {
-      this.items.push(builder.build());
-    } catch (error) {
-      console.error('构建 TuffItem 失败:', error);
+      this.items.push(builder.build())
+    }
+    catch (error) {
+      console.error('构建 TuffItem 失败:', error)
     }
 
-    return this;
+    return this
   }
 
   /**
@@ -915,12 +935,12 @@ class TuffListBuilder {
    */
   addItemsFromData<T>(
     dataItems: T[],
-    customize: (builder: TuffItemBuilder, dataItem: T) => void
+    customize: (builder: TuffItemBuilder, dataItem: T) => void,
   ): TuffListBuilder {
     for (const dataItem of dataItems) {
-      this.addItem(builder => customize(builder, dataItem));
+      this.addItem(builder => customize(builder, dataItem))
     }
-    return this;
+    return this
   }
 
   /**
@@ -929,7 +949,7 @@ class TuffListBuilder {
    * @returns 创建的 TuffItem 对象数组
    */
   build(): TuffItem[] {
-    return this.items;
+    return this.items
   }
 
   /**
@@ -938,8 +958,8 @@ class TuffListBuilder {
    * @returns 当前列表构建器实例，用于链式调用
    */
   clear(): TuffListBuilder {
-    this.items = [];
-    return this;
+    this.items = []
+    return this
   }
 }
 
@@ -962,7 +982,7 @@ class TuffUtils {
    * @returns {string} 生成的唯一 ID
    */
   static generateId(): string {
-    return `tuff_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 5)}`;
+    return `tuff_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 5)}`
   }
 
   /**
@@ -975,8 +995,8 @@ class TuffUtils {
   static createIcon(value: string, type: 'emoji' | 'url' | 'file' = 'emoji'): TuffIcon {
     return {
       type,
-      value
-    };
+      value,
+    }
   }
 
   /**
@@ -988,10 +1008,12 @@ class TuffUtils {
    * @returns 创建的标签对象
    */
   static createTag(text: string, color?: string, variant?: 'filled' | 'outlined' | 'ghost'): TuffTag {
-    const tag: TuffTag = { text };
-    if (color) tag.color = color;
-    if (variant) tag.variant = variant;
-    return tag;
+    const tag: TuffTag = { text }
+    if (color)
+      tag.color = color
+    if (variant)
+      tag.variant = variant
+    return tag
   }
 
   /**
@@ -1009,11 +1031,12 @@ class TuffUtils {
     type: TuffActionType,
     label: string,
     primary: boolean = false,
-    payload?: any
+    payload?: any,
   ): TuffAction {
-    const action: TuffAction = { id, type, label, primary };
-    if (payload) action.payload = payload;
-    return action;
+    const action: TuffAction = { id, type, label, primary }
+    if (payload)
+      action.payload = payload
+    return action
   }
 
   /**
@@ -1024,7 +1047,7 @@ class TuffUtils {
    * @returns 过滤后的项目列表
    */
   static filterItems(items: TuffItem[], predicate: (item: TuffItem) => boolean): TuffItem[] {
-    return items.filter(predicate);
+    return items.filter(predicate)
   }
 
   /**
@@ -1035,7 +1058,7 @@ class TuffUtils {
    * @returns 过滤后的项目列表
    */
   static filterByKind(items: TuffItem[], kind: TuffItemKind): TuffItem[] {
-    return TuffUtils.filterItems(items, item => item.kind === kind);
+    return TuffUtils.filterItems(items, item => item.kind === kind)
   }
 
   /**
@@ -1046,7 +1069,7 @@ class TuffUtils {
    * @returns 过滤后的项目列表
    */
   static filterBySourceType(items: TuffItem[], sourceType: TuffSourceType): TuffItem[] {
-    return TuffUtils.filterItems(items, item => item.source.type === sourceType);
+    return TuffUtils.filterItems(items, item => item.source.type === sourceType)
   }
 
   /**
@@ -1058,13 +1081,14 @@ class TuffUtils {
    * @returns 匹配的项目列表
    */
   static searchByTitle(items: TuffItem[], query: string, caseSensitive: boolean = false): TuffItem[] {
-    const normalizedQuery = caseSensitive ? query : query.toLowerCase();
-    return TuffUtils.filterItems(items, item => {
-      const title = item.render.basic?.title;
-      if (!title) return false;
-      const normalizedTitle = caseSensitive ? title : title.toLowerCase();
-      return normalizedTitle.includes(normalizedQuery);
-    });
+    const normalizedQuery = caseSensitive ? query : query.toLowerCase()
+    return TuffUtils.filterItems(items, (item) => {
+      const title = item.render.basic?.title
+      if (!title)
+        return false
+      const normalizedTitle = caseSensitive ? title : title.toLowerCase()
+      return normalizedTitle.includes(normalizedQuery)
+    })
   }
 
   /**
@@ -1076,10 +1100,10 @@ class TuffUtils {
    */
   static sortByScore(items: TuffItem[], ascending: boolean = false): TuffItem[] {
     return [...items].sort((a, b) => {
-      const scoreA = a.scoring?.final ?? a.scoring?.base ?? 0;
-      const scoreB = b.scoring?.final ?? b.scoring?.base ?? 0;
-      return ascending ? scoreA - scoreB : scoreB - scoreA;
-    });
+      const scoreA = a.scoring?.final ?? a.scoring?.base ?? 0
+      const scoreB = b.scoring?.final ?? b.scoring?.base ?? 0
+      return ascending ? scoreA - scoreB : scoreB - scoreA
+    })
   }
 
   /**
@@ -1091,12 +1115,12 @@ class TuffUtils {
    */
   static sortByTitle(items: TuffItem[], ascending: boolean = true): TuffItem[] {
     return [...items].sort((a, b) => {
-      const titleA = a.render.basic?.title ?? '';
-      const titleB = b.render.basic?.title ?? '';
+      const titleA = a.render.basic?.title ?? ''
+      const titleB = b.render.basic?.title ?? ''
       return ascending
         ? titleA.localeCompare(titleB)
-        : titleB.localeCompare(titleA);
-    });
+        : titleB.localeCompare(titleA)
+    })
   }
 
   /**
@@ -1113,36 +1137,37 @@ class TuffUtils {
 
     // 尝试提取标题
     if (obj.title || obj.name || obj.label) {
-      builder.setTitle(obj.title || obj.name || obj.label);
-    } else {
-      builder.setTitle(String(obj));
+      builder.setTitle(obj.title || obj.name || obj.label)
+    }
+    else {
+      builder.setTitle(String(obj))
     }
 
     // 尝试提取描述
     if (obj.description || obj.desc) {
-      builder.setDescription(obj.description || obj.desc);
+      builder.setDescription(obj.description || obj.desc)
     }
 
     // 尝试提取图标
     if (obj.icon) {
-      builder.setIcon(obj.icon);
+      builder.setIcon(obj.icon)
     }
 
     // 尝试提取类型
     if (obj.kind || obj.type) {
-      const kind = obj.kind || obj.type;
-      builder.setKind(kind as TuffItemKind);
+      const kind = obj.kind || obj.type
+      builder.setKind(kind as TuffItemKind)
     }
 
     // 尝试提取分数
     if (obj.score !== undefined) {
-      builder.setFinalScore(obj.score);
+      builder.setFinalScore(obj.score)
     }
 
     // 保存原始数据
-    builder.setMeta({ raw: obj });
+    builder.setMeta({ raw: obj })
 
-    return builder.build();
+    return builder.build()
   }
 
   /**
@@ -1154,9 +1179,9 @@ class TuffUtils {
    * @returns 创建的 TuffItem 对象数组
    */
   static fromObjects(objects: any[], sourceType: TuffSourceType, sourceId: string): TuffItem[] {
-    return objects.map(obj => TuffUtils.fromObject(obj, sourceType, sourceId));
+    return objects.map(obj => TuffUtils.fromObject(obj, sourceType, sourceId))
   }
 }
 
 // 导出所有工具
-export { TuffItemBuilder, TuffSearchResultBuilder, TuffFactory, TuffListBuilder, TuffUtils };
+export { TuffFactory, TuffItemBuilder, TuffListBuilder, TuffSearchResultBuilder, TuffUtils }

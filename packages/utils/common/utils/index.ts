@@ -10,7 +10,7 @@
  * ```
  */
 export async function sleep(time: number): Promise<number> {
-    return new Promise(resolve => setTimeout(() => resolve(time), time))
+  return new Promise(resolve => setTimeout(() => resolve(time), time))
 }
 
 /**
@@ -28,14 +28,14 @@ export async function sleep(time: number): Promise<number> {
  * ```
  */
 export function anyStr2Num(str: string): bigint {
-    const codes = Array.from(str).map(ch => ch.charCodeAt(0))
-    const minCode = Math.min(...codes)
+  const codes = Array.from(str).map(ch => ch.charCodeAt(0))
+  const minCode = Math.min(...codes)
 
-    const encoded = codes
-        .map(code => (code - minCode).toString().padStart(2, '0'))
-        .join('')
+  const encoded = codes
+    .map(code => (code - minCode).toString().padStart(2, '0'))
+    .join('')
 
-    return BigInt(`${minCode}000${encoded}`)
+  return BigInt(`${minCode}000${encoded}`)
 }
 
 /**
@@ -51,16 +51,16 @@ export function anyStr2Num(str: string): bigint {
  * ```
  */
 export function num2anyStr(num: bigint): string {
-    const [baseStr, encoded] = num.toString().split('000')
-    const base = Number(baseStr)
+  const [baseStr, encoded] = num.toString().split('000')
+  const base = Number(baseStr)
 
-    let result = ''
-    for (let i = 0; i < encoded.length; i += 2) {
-        const offset = Number(encoded.slice(i, i + 2))
-        result += String.fromCharCode(base + offset)
-    }
+  let result = ''
+  for (let i = 0; i < encoded.length; i += 2) {
+    const offset = Number(encoded.slice(i, i + 2))
+    result += String.fromCharCode(base + offset)
+  }
 
-    return result
+  return result
 }
 
 const LOCALHOST_KEYS = ['localhost', '127.0.0.1']
@@ -78,7 +78,7 @@ const LOCALHOST_KEYS = ['localhost', '127.0.0.1']
  * ```
  */
 export function isLocalhostUrl(urlStr: string): boolean {
-    return LOCALHOST_KEYS.includes(new URL(urlStr).hostname)
+  return LOCALHOST_KEYS.includes(new URL(urlStr).hostname)
 }
 
 /**
@@ -90,85 +90,95 @@ export function isLocalhostUrl(urlStr: string): boolean {
  * @throws Error if an unsupported value is found (reports path and type).
  */
 export function structuredStrictStringify(value: unknown): string {
-  const seen = new WeakMap<object, string>();
+  const seen = new WeakMap<object, string>()
   const badTypes = [
-    'symbol'
-  ];
+    'symbol',
+  ]
   // Support Map/Set, but not Error, DOM, Proxy, WeakMap, WeakSet
   function getType(val: any): string {
-    if (val === null) return 'null';
-    if (Array.isArray(val)) return 'Array';
+    if (val === null)
+      return 'null'
+    if (Array.isArray(val))
+      return 'Array'
     if (typeof Document !== 'undefined') {
-      if (val instanceof Node) return 'DOMNode';
+      if (val instanceof Node)
+        return 'DOMNode'
     }
     // if (val instanceof Error) return 'Error';
-    if (val instanceof WeakMap) return 'WeakMap';
-    if (val instanceof WeakSet) return 'WeakSet';
-    if (typeof val === 'object' && val !== null && val.constructor?.name === 'Proxy') return 'Proxy';
-    if (typeof val === 'bigint') return 'BigInt';
-    return typeof val;
+    if (val instanceof WeakMap)
+      return 'WeakMap'
+    if (val instanceof WeakSet)
+      return 'WeakSet'
+    if (typeof val === 'object' && val !== null && val.constructor?.name === 'Proxy')
+      return 'Proxy'
+    if (typeof val === 'bigint')
+      return 'BigInt'
+    return typeof val
   }
 
   function serialize(val: any, path: string): any {
-    const type = getType(val);
+    const type = getType(val)
     // Block disallowed/unsafe types and edge cases for structured-clone
     if (badTypes.includes(typeof val) || type === 'DOMNode' || type === 'Proxy' || type === 'WeakMap' || type === 'WeakSet' || type === 'BigInt') {
-      throw new Error(`Cannot serialize property at path "${path}": type "${type}"`);
+      throw new Error(`Cannot serialize property at path "${path}": type "${type}"`)
     }
     // JSON doesn't support undefined, skip it for values in objects, preserve in arrays as null
-    if (typeof val === 'undefined') return null;
+    if (typeof val === 'undefined')
+      return null
     // Simple value
     if (
-      val === null ||
-      typeof val === 'number' ||
-      typeof val === 'boolean' ||
-      typeof val === 'string'
-    ) return val;
+      val === null
+      || typeof val === 'number'
+      || typeof val === 'boolean'
+      || typeof val === 'string'
+    ) {
+      return val
+    }
     // Cycle check
     if (typeof val === 'object') {
       if (seen.has(val)) {
-        return `[Circular ~${seen.get(val)}]`; // You could just throw if you dislike this fallback!
+        return `[Circular ~${seen.get(val)}]` // You could just throw if you dislike this fallback!
       }
-      seen.set(val, path);
+      seen.set(val, path)
       if (val instanceof Error) {
         return {
           name: val.name,
           message: val.message,
           stack: val.stack,
-        };
+        }
       }
       if (Array.isArray(val)) {
-        return val.map((item, idx) => serialize(item, `${path}[${idx}]`));
+        return val.map((item, idx) => serialize(item, `${path}[${idx}]`))
       }
       if (val instanceof Date) {
-        return val.toISOString();
+        return val.toISOString()
       }
       if (val instanceof Map) {
-        const obj: Record<string, any> = {};
+        const obj: Record<string, any> = {}
         for (const [k, v] of val.entries()) {
-          obj[typeof k === 'string' ? k : JSON.stringify(k)] = serialize(v, `${path}[Map(${typeof k === 'string' ? k : JSON.stringify(k)})]`);
+          obj[typeof k === 'string' ? k : JSON.stringify(k)] = serialize(v, `${path}[Map(${typeof k === 'string' ? k : JSON.stringify(k)})]`)
         }
-        return obj;
+        return obj
       }
       if (val instanceof Set) {
-        return Array.from(val).map((item, idx) => serialize(item, `${path}[SetEntry${idx}]`));
+        return Array.from(val).map((item, idx) => serialize(item, `${path}[SetEntry${idx}]`))
       }
       // General object
-      const res: any = {};
+      const res: any = {}
       for (const key of Object.keys(val)) {
-        res[key] = serialize(val[key], `${path}.${key}`);
+        res[key] = serialize(val[key], `${path}.${key}`)
       }
-      return res;
+      return res
     }
-    throw new Error(`Cannot serialize property at path "${path}": unknown type`);
+    throw new Error(`Cannot serialize property at path "${path}": unknown type`)
   }
 
-  return JSON.stringify(serialize(value, 'root'));
+  return JSON.stringify(serialize(value, 'root'))
 }
 
-export * from './timing'
+export * from './file'
 
-export { runAdaptiveTaskQueue, type AdaptiveTaskQueueOptions } from './task-queue'
+export { type AdaptiveTaskQueueOptions, runAdaptiveTaskQueue } from './task-queue'
 
 export * from './time'
-export * from './file'
+export * from './timing'

@@ -1,3 +1,31 @@
+<script lang="ts" name="AppLayoutSimple" setup>
+/**
+ * SimpleLayout Component
+ *
+ * This component provides a Simple layout structure for the application.
+ * It includes a header with a controller, a sidebar navigation, and a main content area.
+ *
+ * Slots:
+ * - title: For the title content in the header
+ * - icon: For icons in the footer
+ * - view: For the main content area
+ */
+import SimpleController from './SimpleController.vue'
+import SimpleFooter from './SimpleFooter.vue'
+import SimpleNavBar from './SimpleNavBar.vue'
+
+const props = withDefaults(
+  defineProps<{
+    display?: boolean
+  }>(),
+  {
+    display: false,
+  },
+)
+
+const isDisplayMode = computed(() => props.display)
+</script>
+
 <template>
   <div class="AppLayout-Container Simple" :class="{ 'is-display': isDisplayMode }">
     <div class="AppLayout-Header fake-background">
@@ -28,34 +56,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="AppLayoutSimple" setup>
-/**
- * SimpleLayout Component
- *
- * This component provides a Simple layout structure for the application.
- * It includes a header with a controller, a sidebar navigation, and a main content area.
- *
- * Slots:
- * - title: For the title content in the header
- * - icon: For icons in the footer
- * - view: For the main content area
- */
-import SimpleController from './SimpleController.vue'
-import SimpleNavBar from './SimpleNavBar.vue'
-import SimpleFooter from './SimpleFooter.vue'
-
-const props = withDefaults(
-  defineProps<{
-    display?: boolean
-  }>(),
-  {
-    display: false
-  }
-)
-
-const isDisplayMode = computed(() => props.display)
-</script>
 
 <style lang="scss" scoped>
 /**

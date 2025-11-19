@@ -1,7 +1,13 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "compilerOptions": {
+    "composite": true,
+    "jsx": "preserve",
+    // "target": "ES2020",
+    "useDefineForClassFields": true,
     "baseUrl": "../..",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "paths": {
       "@/*": ["src/main/*"],
       "@core-box/*": ["packages/utils/core-box/*"],
@@ -9,28 +15,22 @@
       "@/common/*": ["packages/utils/common/*"],
       "@/typings/*": ["packages/typings/*"]
     },
-    "composite": true,
-    "types": ["electron-vite/node"],
-    "moduleResolution": "bundler",
-    "allowJs": true,
-    // "target": "ES2020",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "preserve",
+    "types": ["electron-vite/node"],
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noImplicitThis": true,
-    "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
     /* Type checking */
     // "types": ["node", "element-plus/global"],
     "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
   },
   "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*", "../../examples"]
 }

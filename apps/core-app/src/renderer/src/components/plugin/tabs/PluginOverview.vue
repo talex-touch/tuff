@@ -1,3 +1,21 @@
+<script lang="ts" setup>
+import type { IPlatform, ITouchPlugin } from '@talex-touch/utils/plugin'
+import { useI18n } from 'vue-i18n'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import OSIcon from '~/components/icon/OSIcon.vue'
+
+// Props
+const props = defineProps<{
+  plugin: ITouchPlugin
+}>()
+
+const { t } = useI18n()
+
+// Computed properties
+const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
+const readme = computed<string>(() => props.plugin.readme)
+</script>
+
 <template>
   <div class="plugin-overview">
     <!-- Environment Cards -->
@@ -16,7 +34,7 @@
           <OSIcon class="platform-icon" :os="platformName" />
           <span class="platform-name">{{ platformName }}</span>
           <div class="platform-status" :class="{ enabled: platform?.enable }">
-            <div class="status-indicator"></div>
+            <div class="status-indicator" />
           </div>
           <div v-if="platform?.enable" class="platform-tags">
             <span v-for="tag in platform.os" :key="tag" class="tag">{{ tag }}</span>
@@ -38,24 +56,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" setup>
-import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import OSIcon from '~/components/icon/OSIcon.vue'
-import type { ITouchPlugin, IPlatform } from '@talex-touch/utils/plugin'
-import { useI18n } from 'vue-i18n'
-
-// Props
-const props = defineProps<{
-  plugin: ITouchPlugin
-}>()
-
-const { t } = useI18n()
-
-// Computed properties
-const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
-const readme = computed<string>(() => props.plugin.readme)
-</script>
 
 <style lang="scss" scoped>
 .plugin-overview {

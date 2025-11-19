@@ -1,30 +1,14 @@
-<template>
-  <div class="AppUpgradation-Container flex flex-col items-center justify-center">
-    <p>{{ t('updateModal.title') }}</p>
-    <span>{{ t('updateModal.publishedAt', { time: publishedAt }) }}</span>
-
-    <div class="AppUpgradation-Content-Markdown h-full overflow-hidden">
-      <FlatMarkdown :model-value="release.body" :readonly="true" />
-    </div>
-
-    <div class="AppUpgradation-Content">
-      <FlatButton @click="close">{{ t('updateModal.notNow') }}</FlatButton>
-      <FlatButton :primary="true" @click="upgrade">{{ t('updateModal.update') }}</FlatButton>
-    </div>
-  </div>
-</template>
-
 <script lang="ts" name="AppUpgradationView" setup>
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import FlatButton from '~/components/base/button//FlatButton.vue'
+import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 const props = defineProps({
   release: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const close = inject('destroy')
@@ -45,7 +29,8 @@ function upgrade(): void {
  * 将 ISO 8601 格式的时间字符串转换为本地化的日期时间格式
  */
 const publishedAt = computed<string>(() => {
-  if (!props.release?.published_at) return ''
+  if (!props.release?.published_at)
+    return ''
 
   const date = new Date(props.release.published_at)
   return Number.isNaN(date.getTime())
@@ -53,6 +38,26 @@ const publishedAt = computed<string>(() => {
     : date.toLocaleString()
 })
 </script>
+
+<template>
+  <div class="AppUpgradation-Container flex flex-col items-center justify-center">
+    <p>{{ t('updateModal.title') }}</p>
+    <span>{{ t('updateModal.publishedAt', { time: publishedAt }) }}</span>
+
+    <div class="AppUpgradation-Content-Markdown h-full overflow-hidden">
+      <FlatMarkdown :model-value="release.body" :readonly="true" />
+    </div>
+
+    <div class="AppUpgradation-Content">
+      <FlatButton @click="close">
+        {{ t('updateModal.notNow') }}
+      </FlatButton>
+      <FlatButton :primary="true" @click="upgrade">
+        {{ t('updateModal.update') }}
+      </FlatButton>
+    </div>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 :deep(.FlatMarkdown-Container) {

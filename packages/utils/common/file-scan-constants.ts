@@ -13,7 +13,7 @@ export const PLATFORM = {
   IS_WINDOWS: process.platform === 'win32',
   IS_MACOS: process.platform === 'darwin',
   IS_LINUX: process.platform === 'linux',
-  IS_UNIX: process.platform !== 'win32'
+  IS_UNIX: process.platform !== 'win32',
 } as const
 
 // ==================== 基础黑名单 ====================
@@ -45,7 +45,7 @@ export const DEV_BLACKLISTED_DIRS = new Set([
   '.next',
   '.nuxt',
   '.vuepress',
-  '.docusaurus'
+  '.docusaurus',
 ])
 
 /** Windows 系统目录黑名单 */
@@ -62,7 +62,7 @@ export const WINDOWS_SYSTEM_DIRS = new Set([
   'Boot',
   'EFI',
   'System Volume Information',
-  '$Recycle.Bin'
+  '$Recycle.Bin',
 ])
 
 /** macOS 系统目录黑名单 */
@@ -79,7 +79,7 @@ export const MACOS_SYSTEM_DIRS = new Set([
   'tmp',
   'opt',
   'etc',
-  'dev'
+  'dev',
 ])
 
 /** Linux 系统目录黑名单 */
@@ -99,14 +99,14 @@ export const LINUX_SYSTEM_DIRS = new Set([
   'lib64',
   'mnt',
   'media',
-  'srv'
+  'srv',
 ])
 
 /** 跨平台系统目录黑名单 */
 export const SYSTEM_BLACKLISTED_DIRS = new Set([
   ...(PLATFORM.IS_WINDOWS ? WINDOWS_SYSTEM_DIRS : []),
   ...(PLATFORM.IS_MACOS ? MACOS_SYSTEM_DIRS : []),
-  ...(PLATFORM.IS_LINUX ? LINUX_SYSTEM_DIRS : [])
+  ...(PLATFORM.IS_LINUX ? LINUX_SYSTEM_DIRS : []),
 ])
 
 /** 临时文件目录黑名单（跨平台） */
@@ -121,14 +121,14 @@ export const TEMP_BLACKLISTED_DIRS = new Set([
   // Windows 临时目录
   ...(PLATFORM.IS_WINDOWS ? ['%TEMP%', '%TMP%'] : []),
   // Unix 临时目录
-  ...(PLATFORM.IS_UNIX ? ['/tmp', '/var/tmp'] : [])
+  ...(PLATFORM.IS_UNIX ? ['/tmp', '/var/tmp'] : []),
 ])
 
 /** 合并的基础目录黑名单 */
 export const BASE_BLACKLISTED_DIRS = new Set([
   ...DEV_BLACKLISTED_DIRS,
   ...SYSTEM_BLACKLISTED_DIRS,
-  ...TEMP_BLACKLISTED_DIRS
+  ...TEMP_BLACKLISTED_DIRS,
 ])
 
 // ==================== 应用特定黑名单 ====================
@@ -140,7 +140,7 @@ export const PHOTOS_LIBRARY_CONFIG = {
     'Masters',
     'Originals',
     'Resources',
-    'Thumbnails'
+    'Thumbnails',
   ]),
 
   /** 禁止扫描的 Photos Library 子目录 */
@@ -152,7 +152,7 @@ export const PHOTOS_LIBRARY_CONFIG = {
     'index.spotlightV3',
     'NSFileProtectionCompleteUnti',
     'com.apple.photoanalysisd',
-    'com.apple.photolibraryd'
+    'com.apple.photolibraryd',
   ]),
 
   /** Photos Library 路径模式（使用路径分隔符） */
@@ -161,16 +161,16 @@ export const PHOTOS_LIBRARY_CONFIG = {
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Masters${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Originals${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Resources${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
-      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Thumbnails${PLATFORM.IS_WINDOWS ? '\\' : '/'}`
+      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Thumbnails${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
     ],
     BLOCKED: [
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}database${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}search${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Spotlight${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Cache${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
-      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}index.spotlightV3${PLATFORM.IS_WINDOWS ? '\\' : '/'}`
-    ]
-  }
+      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}index.spotlightV3${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
+    ],
+  },
 }
 
 /** 其他应用特定目录配置（跨平台） */
@@ -179,12 +179,12 @@ export const APP_SPECIFIC_CONFIG = {
   ICLOUD: {
     BLOCKED_PATHS: [
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}iCloud Drive${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
-      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Mobile Documents${PLATFORM.IS_WINDOWS ? '\\' : '/'}`
+      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Mobile Documents${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
     ],
     ALLOWED_PATHS: [
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}iCloud Drive${PLATFORM.IS_WINDOWS ? '\\' : '/'}Desktop${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
-      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}iCloud Drive${PLATFORM.IS_WINDOWS ? '\\' : '/'}Documents${PLATFORM.IS_WINDOWS ? '\\' : '/'}`
-    ]
+      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}iCloud Drive${PLATFORM.IS_WINDOWS ? '\\' : '/'}Documents${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
+    ],
   },
 
   /** 浏览器缓存目录（跨平台） */
@@ -197,7 +197,7 @@ export const APP_SPECIFIC_CONFIG = {
       'Opera',
       'Brave',
       'Vivaldi',
-      'Tor Browser'
+      'Tor Browser',
     ]),
     BLOCKED_PATHS: [
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Cache${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
@@ -205,8 +205,8 @@ export const APP_SPECIFIC_CONFIG = {
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Local Storage${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}Session Storage${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
       `${PLATFORM.IS_WINDOWS ? '\\' : '/'}IndexedDB${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
-      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}WebStorage${PLATFORM.IS_WINDOWS ? '\\' : '/'}`
-    ]
+      `${PLATFORM.IS_WINDOWS ? '\\' : '/'}WebStorage${PLATFORM.IS_WINDOWS ? '\\' : '/'}`,
+    ],
   },
 
   /** 开发工具目录（跨平台） */
@@ -227,34 +227,38 @@ export const APP_SPECIFIC_CONFIG = {
       '.vuepress',
       '.docusaurus',
       'coverage',
-      '.nyc_output'
-    ])
+      '.nyc_output',
+    ]),
   },
 
   /** Windows 特定应用目录 */
-  WINDOWS_APPS: PLATFORM.IS_WINDOWS ? {
-    BLOCKED_DIRS: new Set([
-      'WindowsApps',
-      'Microsoft',
-      'Windows Defender',
-      'Windows Security',
-      'Windows Update',
-      'Windows.old'
-    ])
-  } : undefined,
+  WINDOWS_APPS: PLATFORM.IS_WINDOWS
+    ? {
+        BLOCKED_DIRS: new Set([
+          'WindowsApps',
+          'Microsoft',
+          'Windows Defender',
+          'Windows Security',
+          'Windows Update',
+          'Windows.old',
+        ]),
+      }
+    : undefined,
 
   /** Linux 特定应用目录 */
-  LINUX_APPS: PLATFORM.IS_LINUX ? {
-    BLOCKED_DIRS: new Set([
-      '.local',
-      '.config',
-      '.cache',
-      '.snap',
-      '.flatpak',
-      'snap',
-      'flatpak'
-    ])
-  } : undefined
+  LINUX_APPS: PLATFORM.IS_LINUX
+    ? {
+        BLOCKED_DIRS: new Set([
+          '.local',
+          '.config',
+          '.cache',
+          '.snap',
+          '.flatpak',
+          'snap',
+          'flatpak',
+        ]),
+      }
+    : undefined,
 }
 
 // ==================== 文件扩展名配置 ====================
@@ -271,7 +275,7 @@ export const TEMP_FILE_EXTENSIONS = new Set([
   '.swo',
   '.~',
   '.DS_Store',
-  '.Thumbs.db'
+  '.Thumbs.db',
 ])
 
 /** 系统文件扩展名黑名单 */
@@ -287,7 +291,7 @@ export const SYSTEM_FILE_EXTENSIONS = new Set([
   '.pkg',
   '.dmg',
   '.iso',
-  '.img'
+  '.img',
 ])
 
 /** 数据库文件扩展名黑名单 */
@@ -299,35 +303,35 @@ export const DATABASE_FILE_EXTENSIONS = new Set([
   '.sqlite',
   '.sqlite3',
   '.sqlite-wal',
-  '.sqlite-shm'
+  '.sqlite-shm',
 ])
 
 /** 合并的文件扩展名黑名单 */
 export const BLACKLISTED_EXTENSIONS = new Set([
   ...TEMP_FILE_EXTENSIONS,
   ...SYSTEM_FILE_EXTENSIONS,
-  ...DATABASE_FILE_EXTENSIONS
+  ...DATABASE_FILE_EXTENSIONS,
 ])
 
 // ==================== 文件名模式配置 ====================
 
 /** 文件名前缀黑名单 */
 export const BLACKLISTED_FILE_PREFIXES = new Set([
-  '.',           // 隐藏文件
-  '~',           // 临时文件
-  '#',           // 临时文件
-  '$'            // 系统文件
+  '.', // 隐藏文件
+  '~', // 临时文件
+  '#', // 临时文件
+  '$', // 系统文件
 ])
 
 /** 文件名后缀黑名单 */
 export const BLACKLISTED_FILE_SUFFIXES = new Set([
-  '~',           // 备份文件
-  '.tmp',        // 临时文件
-  '.bak',        // 备份文件
-  '.old',        // 旧文件
-  '.orig',       // 原始文件
-  '.swp',        // Vim 交换文件
-  '.swo'         // Vim 交换文件
+  '~', // 备份文件
+  '.tmp', // 临时文件
+  '.bak', // 备份文件
+  '.old', // 旧文件
+  '.orig', // 原始文件
+  '.swp', // Vim 交换文件
+  '.swo', // Vim 交换文件
 ])
 
 // ==================== 路径模式配置 ====================
@@ -337,52 +341,58 @@ export const PATH_PATTERNS = {
   /** 系统路径模式（跨平台） */
   SYSTEM_PATHS: [
     // macOS 系统路径
-    ...(PLATFORM.IS_MACOS ? [
-      /^\/System\//,
-      /^\/Library\//,
-      /^\/Applications\//,
-      /^\/usr\//,
-      /^\/bin\//,
-      /^\/sbin\//,
-      /^\/var\//,
-      /^\/tmp\//,
-      /^\/private\//,
-      /^\/opt\//,
-      /^\/Users\/[^\/]+\/Library\//,
-      /^\/Users\/[^\/]+\/\./
-    ] : []),
+    ...(PLATFORM.IS_MACOS
+      ? [
+          /^\/System\//,
+          /^\/Library\//,
+          /^\/Applications\//,
+          /^\/usr\//,
+          /^\/bin\//,
+          /^\/sbin\//,
+          /^\/var\//,
+          /^\/tmp\//,
+          /^\/private\//,
+          /^\/opt\//,
+          /^\/Users\/[^/]+\/Library\//,
+          /^\/Users\/[^/]+\/\./,
+        ]
+      : []),
 
     // Windows 系统路径
-    ...(PLATFORM.IS_WINDOWS ? [
-      /^[A-Za-z]:\\Windows\\/i,
-      /^[A-Za-z]:\\Program Files\\/i,
-      /^[A-Za-z]:\\Program Files \(x86\)\\/i,
-      /^[A-Za-z]:\\ProgramData\\/i,
-      /^[A-Za-z]:\\System32\\/i,
-      /^[A-Za-z]:\\Users\\[^\\]+\\./i,
-      /^[A-Za-z]:\\Users\\[^\\]+\\AppData\\/i
-    ] : []),
+    ...(PLATFORM.IS_WINDOWS
+      ? [
+          /^[A-Z]:\\Windows\\/i,
+          /^[A-Z]:\\Program Files\\/i,
+          /^[A-Z]:\\Program Files \(x86\)\\/i,
+          /^[A-Z]:\\ProgramData\\/i,
+          /^[A-Z]:\\System32\\/i,
+          /^[A-Z]:\\Users\\[^\\]+\\./i,
+          /^[A-Z]:\\Users\\[^\\]+\\AppData\\/i,
+        ]
+      : []),
 
     // Linux 系统路径
-    ...(PLATFORM.IS_LINUX ? [
-      /^\/bin\//,
-      /^\/sbin\//,
-      /^\/usr\//,
-      /^\/var\//,
-      /^\/tmp\//,
-      /^\/opt\//,
-      /^\/etc\//,
-      /^\/dev\//,
-      /^\/proc\//,
-      /^\/sys\//,
-      /^\/boot\//,
-      /^\/lib\//,
-      /^\/lib64\//,
-      /^\/mnt\//,
-      /^\/media\//,
-      /^\/srv\//,
-      /^\/home\/[^\/]+\/\./
-    ] : [])
+    ...(PLATFORM.IS_LINUX
+      ? [
+          /^\/bin\//,
+          /^\/sbin\//,
+          /^\/usr\//,
+          /^\/var\//,
+          /^\/tmp\//,
+          /^\/opt\//,
+          /^\/etc\//,
+          /^\/dev\//,
+          /^\/proc\//,
+          /^\/sys\//,
+          /^\/boot\//,
+          /^\/lib\//,
+          /^\/lib64\//,
+          /^\/mnt\//,
+          /^\/media\//,
+          /^\/srv\//,
+          /^\/home\/[^/]+\/\./,
+        ]
+      : []),
   ],
 
   /** 开发路径模式（跨平台） */
@@ -402,7 +412,7 @@ export const PATH_PATTERNS = {
     /\.vuepress\//,
     /\.docusaurus\//,
     /coverage\//,
-    /\.nyc_output\//
+    /\.nyc_output\//,
   ],
 
   /** 缓存路径模式（跨平台） */
@@ -416,28 +426,34 @@ export const PATH_PATTERNS = {
     /\/logs\//,
     /\/\.logs\//,
     // Windows 特定缓存路径
-    ...(PLATFORM.IS_WINDOWS ? [
-      /\\AppData\\Local\\Temp\\/i,
-      /\\AppData\\Local\\Microsoft\\Windows\\INetCache\\/i,
-      /\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\/i
-    ] : []),
+    ...(PLATFORM.IS_WINDOWS
+      ? [
+          /\\AppData\\Local\\Temp\\/i,
+          /\\AppData\\Local\\Microsoft\\Windows\\INetCache\\/i,
+          /\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\/i,
+        ]
+      : []),
     // Unix 特定缓存路径
-    ...(PLATFORM.IS_UNIX ? [
-      /\/var\/cache\//,
-      /\/var\/tmp\//,
-      /\/home\/[^\/]+\/\.cache\//,
-      /\/home\/[^\/]+\/\.local\/share\//
-    ] : [])
+    ...(PLATFORM.IS_UNIX
+      ? [
+          /\/var\/cache\//,
+          /\/var\/tmp\//,
+          /\/home\/[^/]+\/\.cache\//,
+          /\/home\/[^/]+\/\.local\/share\//,
+        ]
+      : []),
   ],
 
   /** Photos Library 路径模式（仅 macOS） */
-  PHOTOS_LIBRARY_PATHS: PLATFORM.IS_MACOS ? [
-    /Photos Library\.photoslibrary\/database\//,
-    /Photos Library\.photoslibrary\/search\//,
-    /Photos Library\.photoslibrary\/Spotlight\//,
-    /Photos Library\.photoslibrary\/Cache\//,
-    /Photos Library\.photoslibrary\/index\.spotlightV3\//
-  ] : []
+  PHOTOS_LIBRARY_PATHS: PLATFORM.IS_MACOS
+    ? [
+        /Photos Library\.photoslibrary\/database\//,
+        /Photos Library\.photoslibrary\/search\//,
+        /Photos Library\.photoslibrary\/Spotlight\//,
+        /Photos Library\.photoslibrary\/Cache\//,
+        /Photos Library\.photoslibrary\/index\.spotlightV3\//,
+      ]
+    : [],
 }
 
 // ==================== 导出配置 ====================
@@ -521,7 +537,7 @@ export const DEFAULT_SCAN_OPTIONS: FileScanOptions = {
   enableSystemPathFilter: true,
   enableDevPathFilter: true,
   enableCachePathFilter: true,
-  strictMode: false
+  strictMode: false,
 }
 
 /**
@@ -539,5 +555,5 @@ export const STRICT_SCAN_OPTIONS: FileScanOptions = {
   enableSystemPathFilter: true,
   enableDevPathFilter: true,
   enableCachePathFilter: true,
-  strictMode: true
+  strictMode: true,
 }

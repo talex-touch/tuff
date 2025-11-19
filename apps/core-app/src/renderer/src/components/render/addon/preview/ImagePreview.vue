@@ -1,5 +1,5 @@
 <script setup lang="ts" name="ImagePreview">
-import { TuffItem } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 
 defineProps<{
   item: TuffItem
@@ -8,7 +8,7 @@ defineProps<{
 
 <template>
   <div class="ImagePreview">
-    <img :src="`tfile://${item.meta?.file?.path}`" />
+    <img :src="`tfile://${item.meta?.file?.path}`">
   </div>
 </template>
 

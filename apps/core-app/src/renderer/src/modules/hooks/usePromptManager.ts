@@ -1,4 +1,4 @@
-import { ref, reactive } from 'vue'
+import { reactive, ref } from 'vue'
 
 export interface PromptTemplate {
   id: string
@@ -19,7 +19,7 @@ const builtinPrompts: PromptTemplate[] = [
     content: '你是一个有用的AI助手，请友好、准确地回答用户的问题。',
     builtin: true,
     category: 'general',
-    description: '适用于日常对话和通用问题解答'
+    description: '适用于日常对话和通用问题解答',
   },
   {
     id: 'ocr_assistant',
@@ -27,7 +27,7 @@ const builtinPrompts: PromptTemplate[] = [
     content: '你是一名OCR助手，返回JSON，包含text/keywords/blocks等字段。请准确识别图片中的文字内容。',
     builtin: true,
     category: 'image',
-    description: '专门用于图片文字识别和结构化输出'
+    description: '专门用于图片文字识别和结构化输出',
   },
   {
     id: 'translation_assistant',
@@ -35,7 +35,7 @@ const builtinPrompts: PromptTemplate[] = [
     content: '你是一名专业的翻译助手，请准确翻译用户提供的文本，保持原意和语言风格。',
     builtin: true,
     category: 'language',
-    description: '专业翻译服务，支持多语言转换'
+    description: '专业翻译服务，支持多语言转换',
   },
   {
     id: 'code_assistant',
@@ -43,7 +43,7 @@ const builtinPrompts: PromptTemplate[] = [
     content: '你是一名专业的编程助手，请提供准确、清晰的代码解答和编程建议。',
     builtin: true,
     category: 'development',
-    description: '编程相关问题解答和代码生成'
+    description: '编程相关问题解答和代码生成',
   },
   {
     id: 'data_analyst',
@@ -51,7 +51,7 @@ const builtinPrompts: PromptTemplate[] = [
     content: '你是一名专业的数据分析师，擅长数据处理、分析和可视化建议。请用专业的角度分析数据并提供见解。',
     builtin: true,
     category: 'analysis',
-    description: '数据分析和业务洞察'
+    description: '数据分析和业务洞察',
   },
   {
     id: 'creative_writer',
@@ -59,8 +59,8 @@ const builtinPrompts: PromptTemplate[] = [
     content: '你是一名富有创意的写作助手，善于创作各种文体的内容。请根据用户需求提供高质量的创意写作。',
     builtin: true,
     category: 'creative',
-    description: '创意写作和内容创作'
-  }
+    description: '创意写作和内容创作',
+  },
 ]
 
 const customPrompts = ref<PromptTemplate[]>([
@@ -72,14 +72,14 @@ const customPrompts = ref<PromptTemplate[]>([
     category: 'custom',
     description: '用户自定义的提示词模板',
     createdAt: Date.now(),
-    updatedAt: Date.now()
-  }
+    updatedAt: Date.now(),
+  },
 ])
 
 export function usePromptManager() {
   const prompts = reactive({
     builtin: builtinPrompts,
-    custom: customPrompts.value
+    custom: customPrompts.value,
   })
 
   // 获取所有提示词
@@ -101,9 +101,9 @@ export function usePromptManager() {
   const searchPrompts = (query: string): PromptTemplate[] => {
     const lowerQuery = query.toLowerCase()
     return getAllPrompts().filter(prompt =>
-      prompt.name.toLowerCase().includes(lowerQuery) ||
-      prompt.content.toLowerCase().includes(lowerQuery) ||
-      (prompt.description && prompt.description.toLowerCase().includes(lowerQuery))
+      prompt.name.toLowerCase().includes(lowerQuery)
+      || prompt.content.toLowerCase().includes(lowerQuery)
+      || (prompt.description && prompt.description.toLowerCase().includes(lowerQuery)),
     )
   }
 
@@ -115,7 +115,7 @@ export function usePromptManager() {
       id,
       builtin: false,
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     }
 
     prompts.custom.push(newPrompt)
@@ -130,14 +130,15 @@ export function usePromptManager() {
   // 更新自定义提示词
   const updateCustomPrompt = (id: string, updates: Partial<PromptTemplate>): boolean => {
     const index = prompts.custom.findIndex(prompt => prompt.id === id && !prompt.builtin)
-    if (index === -1) return false
+    if (index === -1)
+      return false
 
     const updated = {
       ...prompts.custom[index],
       ...updates,
       id, // 确保ID不被修改
       builtin: false, // 确保builtin标志不被修改
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     }
 
     prompts.custom[index] = updated
@@ -152,7 +153,8 @@ export function usePromptManager() {
   // 删除自定义提示词
   const deleteCustomPrompt = (id: string): boolean => {
     const index = prompts.custom.findIndex(prompt => prompt.id === id && !prompt.builtin)
-    if (index === -1) return false
+    if (index === -1)
+      return false
 
     prompts.custom.splice(index, 1)
     customPrompts.value.splice(index, 1)
@@ -168,7 +170,8 @@ export function usePromptManager() {
     try {
       // TODO: 实现实际的存储逻辑
       console.log('Saving custom prompts:', prompts.custom)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to save custom prompts:', error)
     }
   }
@@ -178,7 +181,8 @@ export function usePromptManager() {
     try {
       // TODO: 实现实际的加载逻辑
       console.log('Loading custom prompts...')
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to load custom prompts:', error)
     }
   }
@@ -186,14 +190,14 @@ export function usePromptManager() {
   // 导入提示词
   const importPrompts = (promptsToImport: PromptTemplate[]): number => {
     let imported = 0
-    promptsToImport.forEach(prompt => {
+    promptsToImport.forEach((prompt) => {
       if (!prompt.builtin && !getPromptById(prompt.id)) {
         const newPrompt = {
           ...prompt,
           id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           builtin: false,
           createdAt: Date.now(),
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
         }
         prompts.custom.push(newPrompt)
         customPrompts.value.push(newPrompt)
@@ -225,7 +229,7 @@ export function usePromptManager() {
     saveCustomPrompts,
     loadCustomPrompts,
     importPrompts,
-    exportCustomPrompts
+    exportCustomPrompts,
   }
 }
 

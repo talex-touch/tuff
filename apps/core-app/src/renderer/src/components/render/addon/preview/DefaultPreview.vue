@@ -1,7 +1,6 @@
 <script setup lang="ts" name="DefaultPreview">
+import type { ITuffIcon, TuffIcon, TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
-import { TuffItem, TuffIcon } from '@talex-touch/utils'
-import { ITuffIcon } from '@talex-touch/utils'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 const props = defineProps<{
@@ -16,12 +15,12 @@ function transformTuffIcon(icon: TuffIcon | undefined): ITuffIcon | null {
     // Convert string to ITuffIcon format
     return {
       type: 'url',
-      value: icon
+      value: icon,
     }
   }
   return {
     type: icon.type,
-    value: icon.value
+    value: icon.value,
   }
 }
 

@@ -1,4 +1,5 @@
-import { RemovableRef, useDark, usePreferredDark, useStorage } from '@vueuse/core'
+import type { RemovableRef } from '@vueuse/core'
+import { useDark, usePreferredDark, useStorage } from '@vueuse/core'
 import { watchEffect } from 'vue'
 
 /**
@@ -26,13 +27,13 @@ const defaultThemeStyle: IThemeStyle = {
     window: 'Mica',
     style: {
       dark: false,
-      auto: true
+      auto: true,
     },
     addon: {
       contrast: false,
-      coloring: false
-    }
-  }
+      coloring: false,
+    },
+  },
 }
 
 /**
@@ -40,7 +41,7 @@ const defaultThemeStyle: IThemeStyle = {
  */
 export const themeStyle: RemovableRef<IThemeStyle> = useStorage<IThemeStyle>(
   'theme-style',
-  defaultThemeStyle
+  defaultThemeStyle,
 )
 
 /**
@@ -86,7 +87,7 @@ type ThemeMode = 'auto' | 'dark' | 'light'
  */
 export async function triggerThemeTransition(
   pos: [number, number],
-  mode: ThemeMode
+  mode: ThemeMode,
 ): Promise<void> {
   const [x, y] = pos
   const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
@@ -99,7 +100,8 @@ export async function triggerThemeTransition(
     // Set dark value based on mode
     if (mode === 'auto') {
       isDark.value = systemDarkMode.value
-    } else {
+    }
+    else {
       isDark.value = mode === 'dark'
     }
 
@@ -127,8 +129,8 @@ export async function triggerThemeTransition(
       [{ clipPath: animationPath[0] } as any, { clipPath: animationPath[1] } as any],
       {
         duration: 300,
-        easing: 'ease-in'
-      } as any
+        easing: 'ease-in',
+      } as any,
     )
   })
 }

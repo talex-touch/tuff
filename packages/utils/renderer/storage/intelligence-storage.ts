@@ -1,14 +1,14 @@
-import { TouchStorage, createStorageProxy } from './base-storage'
+import type { AiProviderConfig, AISDKGlobalConfig, AISDKStorageData } from '../../types/intelligence'
 import { StorageList } from '../../common/storage/constants'
 import {
+
+  AiProviderType,
+
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
-  AiProviderType,
-  type AiProviderConfig,
-  type AISDKGlobalConfig,
-  type AISDKStorageData
 } from '../../types/intelligence'
+import { createStorageProxy, TouchStorage } from './base-storage'
 
 // Re-export types for convenience
 export { AiProviderType }
@@ -18,7 +18,7 @@ const defaultIntelligenceData: AISDKStorageData = {
   providers: [...DEFAULT_PROVIDERS],
   globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
   capabilities: { ...DEFAULT_CAPABILITIES },
-  version: 1
+  version: 1,
 }
 
 const INTELLIGENCE_STORAGE_KEY = `storage:${StorageList.IntelligenceConfig}`
@@ -37,7 +37,7 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
     const updatedProviders = [...currentData.providers, provider]
     this.set({
       ...currentData,
-      providers: updatedProviders
+      providers: updatedProviders,
     })
   }
 
@@ -52,12 +52,12 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
       const updatedProviders = [...currentData.providers]
       updatedProviders[providerIndex] = {
         ...updatedProviders[providerIndex],
-        ...updatedProvider
+        ...updatedProvider,
       }
 
       this.set({
         ...currentData,
-        providers: updatedProviders
+        providers: updatedProviders,
       })
     }
   }
@@ -71,7 +71,7 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
 
     this.set({
       ...currentData,
-      providers: updatedProviders
+      providers: updatedProviders,
     })
   }
 
@@ -85,8 +85,8 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
       ...currentData,
       globalConfig: {
         ...currentData.globalConfig,
-        ...config
-      }
+        ...config,
+      },
     })
   }
 
@@ -109,7 +109,8 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
    */
   isProviderConfigured(id: string): boolean {
     const provider = this.get().providers.find(p => p.id === id)
-    if (!provider || !provider.enabled) return false
+    if (!provider || !provider.enabled)
+      return false
 
     // 检查是否有必要的配置项
     const hasApiKey = provider.type === AiProviderType.LOCAL || !!provider.apiKey
@@ -125,20 +126,20 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
  */
 export const intelligenceStorage = createStorageProxy<IntelligenceStorage>(
   INTELLIGENCE_STORAGE_KEY,
-  () => new IntelligenceStorage()
-);
+  () => new IntelligenceStorage(),
+)
 
 /**
  * Alias for backward compatibility
  * @deprecated Use intelligenceStorage instead
  */
-export const aisdkStorage = intelligenceStorage;
+export const aisdkStorage = intelligenceStorage
 
 /**
  * Alias for backward compatibility
  * @deprecated Use intelligenceStorage instead
  */
-export const intelligenceSettings = intelligenceStorage;
+export const intelligenceSettings = intelligenceStorage
 
 export async function migrateIntelligenceSettings(): Promise<void> {
   console.log('[Intelligence Storage] Starting migration check...')
@@ -147,25 +148,25 @@ export async function migrateIntelligenceSettings(): Promise<void> {
   if (!currentData.version || currentData.version < 1) {
     console.log('[Intelligence Storage] Migrating settings to version 1')
 
-    const migratedProviders = currentData.providers.map((provider) => ({
+    const migratedProviders = currentData.providers.map(provider => ({
       ...provider,
       enabled: provider.enabled ?? false,
       priority: provider.priority ?? 2,
       timeout: provider.timeout ?? 30000,
       rateLimit: provider.rateLimit ?? {},
       models: provider.models ?? [],
-      capabilities: provider.capabilities ?? []
+      capabilities: provider.capabilities ?? [],
     }))
 
     const storedStrategy = currentData.globalConfig?.defaultStrategy
-    const normalizedStrategy =
-      storedStrategy === 'priority' ? 'rule-based-default' : storedStrategy ?? 'adaptive-default'
+    const normalizedStrategy
+      = storedStrategy === 'priority' ? 'rule-based-default' : storedStrategy ?? 'adaptive-default'
 
     const migratedGlobalConfig: AISDKGlobalConfig = {
       defaultStrategy: normalizedStrategy,
       enableAudit: currentData.globalConfig?.enableAudit ?? false,
       enableCache: currentData.globalConfig?.enableCache ?? true,
-      cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600
+      cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600,
     }
 
     const migratedCapabilities = currentData.capabilities ?? { ...DEFAULT_CAPABILITIES }
@@ -174,13 +175,14 @@ export async function migrateIntelligenceSettings(): Promise<void> {
       providers: migratedProviders,
       globalConfig: migratedGlobalConfig,
       capabilities: migratedCapabilities,
-      version: 1
+      version: 1,
     })
 
     await intelligenceStorage.saveToRemote({ force: true })
 
     console.log('[Intelligence Storage] Migration complete')
-  } else {
+  }
+  else {
     console.log('[Intelligence Storage] No migration needed, current version:', currentData.version)
   }
 
@@ -190,7 +192,7 @@ export async function migrateIntelligenceSettings(): Promise<void> {
 /**
  * @deprecated Use migrateIntelligenceSettings instead
  */
-export const migrateAISDKSettings = migrateIntelligenceSettings;
+export const migrateAISDKSettings = migrateIntelligenceSettings
 
 export async function resetIntelligenceConfig(): Promise<void> {
   console.log('[Intelligence Storage] Resetting to default configuration')
@@ -199,7 +201,7 @@ export async function resetIntelligenceConfig(): Promise<void> {
     providers: [...DEFAULT_PROVIDERS],
     globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
     capabilities: { ...DEFAULT_CAPABILITIES },
-    version: 1
+    version: 1,
   })
 
   await intelligenceStorage.saveToRemote({ force: true })
@@ -210,4 +212,4 @@ export async function resetIntelligenceConfig(): Promise<void> {
 /**
  * @deprecated Use resetIntelligenceConfig instead
  */
-export const resetAISDKConfig = resetIntelligenceConfig;
+export const resetAISDKConfig = resetIntelligenceConfig

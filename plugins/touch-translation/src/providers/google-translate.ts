@@ -1,4 +1,4 @@
-import type { TranslationProvider, TranslationResult, TranslationProviderRequest } from '../types/translation'
+import type { TranslationProvider, TranslationProviderRequest, TranslationResult } from '../types/translation'
 
 export class GoogleTranslateProvider implements TranslationProvider {
   name = 'Google 翻译'
@@ -11,12 +11,12 @@ export class GoogleTranslateProvider implements TranslationProvider {
     try {
       // 使用 Google Translate 的免费 API
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
       })
 
       if (!response.ok) {
@@ -24,7 +24,7 @@ export class GoogleTranslateProvider implements TranslationProvider {
       }
 
       const data = await response.json()
-      
+
       // 解析 Google Translate 响应格式
       let translatedText = ''
       if (data[0]) {
@@ -36,9 +36,10 @@ export class GoogleTranslateProvider implements TranslationProvider {
         sourceLanguage: data[2] || sourceLang,
         targetLanguage: targetLang,
         provider: this.name,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Google Translate error:', error)
       throw new Error(`Google 翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }

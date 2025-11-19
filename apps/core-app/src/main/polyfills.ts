@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import fse from 'fs-extra'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { app } from 'electron'
+import fse from 'fs-extra'
 import * as log4js from 'log4js'
-import { fileURLToPath } from 'url'
 import packageJson from '../../../../package.json'
 
 globalThis.$pkg = packageJson
@@ -27,7 +27,8 @@ console.log = (...args: any[]) => {
   globalThis.logger.info(args)
 }
 console.log = (message: any, ...args: any[]) => {
-  if (args?.length) globalThis.logger.info(message, args)
+  if (args?.length)
+    globalThis.logger.info(message, args)
   else globalThis.logger.info(message)
 }
 
@@ -36,7 +37,8 @@ console.error = (...args: any[]) => {
   globalThis.errLogger.error(args)
 }
 console.error = (message: any, ...args: any[]) => {
-  if (args?.length) globalThis.errLogger.error(message, args)
+  if (args?.length)
+    globalThis.errLogger.error(message, args)
   else globalThis.errLogger.error(message)
 }
 
@@ -45,7 +47,8 @@ console.warn = (...args: any[]) => {
   globalThis.logger.warn(args)
 }
 console.warn = (message: any, ...args: any[]) => {
-  if (args?.length) globalThis.logger.warn(message, args)
+  if (args?.length)
+    globalThis.logger.warn(message, args)
   else globalThis.logger.warn(message)
 }
 
@@ -54,7 +57,8 @@ console.debug = (...args: any[]) => {
   globalThis.logger.debug(args)
 }
 console.debug = (message: any, ...args: any[]) => {
-  if (args?.length) globalThis.logger.debug(message, args)
+  if (args?.length)
+    globalThis.logger.debug(message, args)
   else globalThis.logger.debug(message)
 }
 
@@ -62,11 +66,14 @@ console.debug = (message: any, ...args: any[]) => {
 if (fse.existsSync(path.join(app.getPath('userData'), 'debug.talex'))) {
   process.env.DEBUG = 'true'
   globalThis.logger.level = 'debug'
-} else globalThis.logger.level = app.isPackaged ? 'info' : 'debug'
+}
+else {
+  globalThis.logger.level = app.isPackaged ? 'info' : 'debug'
+}
 
 // Remove electron security warnings
 // This warning only shows adopters development mode
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security
-process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
 process.env['trace-warnings'] = 'true'
-process.env['unhandledrejections'] = 'strict'
+process.env.unhandledrejections = 'strict'

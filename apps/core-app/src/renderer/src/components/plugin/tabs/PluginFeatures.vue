@@ -1,3 +1,74 @@
+<script lang="ts" setup>
+import type { IFeatureCommand, ITouchPlugin } from '@talex-touch/utils/plugin'
+import { useI18n } from 'vue-i18n'
+import TuffIcon from '~/components/base/TuffIcon.vue'
+import StatCard from '../../base/card/StatCard.vue'
+import GridLayout from '../../base/layout/GridLayout.vue'
+import FeatureCard from '../FeatureCard.vue'
+
+// Props
+const props = defineProps<{
+  plugin: ITouchPlugin
+}>()
+
+// Features state - with defensive checks
+const features = computed(() => props.plugin?.features || [])
+
+const totalCommands = computed(() =>
+  features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0),
+)
+
+const { t } = useI18n()
+
+// Drawer state
+const showDrawer = ref(false)
+const selectedFeature = ref<any | null>(null)
+
+// Helper function to get icon for input type
+function getInputTypeIcon(type: string): string {
+  const icons: Record<string, string> = {
+    text: 'i-ri-text',
+    image: 'i-ri-image-line',
+    files: 'i-ri-file-copy-line',
+    html: 'i-ri-code-line',
+  }
+  return icons[type] || 'i-ri-question-line'
+}
+
+// Helper functions for drawer content
+function getCommandName(command: IFeatureCommand, feature: any): string {
+  if (feature.commandsData && feature.commandsData[command.type]) {
+    return feature.commandsData[command.type].name || command.type
+  }
+  return command.type
+}
+
+function getCommandShortcut(command: IFeatureCommand, feature: any): string | undefined {
+  if (feature.commandsData && feature.commandsData[command.type]) {
+    return feature.commandsData[command.type].shortcut
+  }
+  return undefined
+}
+
+function getCommandDesc(command: IFeatureCommand, feature: any): string | undefined {
+  if (feature.commandsData && feature.commandsData[command.type]) {
+    return feature.commandsData[command.type].desc
+  }
+  return undefined
+}
+
+// Feature details management
+function showFeatureDetails(feature: any): void {
+  selectedFeature.value = feature
+  showDrawer.value = true
+}
+
+function handleDrawerClose(): void {
+  showDrawer.value = false
+  selectedFeature.value = null
+}
+</script>
+
 <template>
   <div class="PluginFeature w-full">
     <!-- Stats Header -->
@@ -70,7 +141,9 @@
             <h2 class="text-xl font-bold text-[var(--el-text-color-primary)]">
               {{ selectedFeature?.name }}
             </h2>
-            <p class="text-sm text-[var(--el-text-color-regular)]">{{ selectedFeature?.desc }}</p>
+            <p class="text-sm text-[var(--el-text-color-regular)]">
+              {{ selectedFeature?.desc }}
+            </p>
           </div>
         </div>
       </template>
@@ -103,8 +176,7 @@
               </span>
               <span
                 class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
-                >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span
-              >
+              >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span>
             </div>
             <div v-if="selectedFeature.acceptedInputTypes" class="flex justify-between items-start">
               <span class="text-sm text-[var(--el-text-color-regular)]"> 支持的输入类型 </span>
@@ -220,77 +292,6 @@
     </ElDrawer>
   </div>
 </template>
-
-<script lang="ts" setup>
-import type { ITouchPlugin, IFeatureCommand } from '@talex-touch/utils/plugin'
-import StatCard from '../../base/card/StatCard.vue'
-import GridLayout from '../../base/layout/GridLayout.vue'
-import FeatureCard from '../FeatureCard.vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
-import { useI18n } from 'vue-i18n'
-
-// Props
-const props = defineProps<{
-  plugin: ITouchPlugin
-}>()
-
-// Features state - with defensive checks
-const features = computed(() => props.plugin?.features || [])
-
-const totalCommands = computed(() =>
-  features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0)
-)
-
-const { t } = useI18n()
-
-// Drawer state
-const showDrawer = ref(false)
-const selectedFeature = ref<any | null>(null)
-
-// Helper function to get icon for input type
-function getInputTypeIcon(type: string): string {
-  const icons: Record<string, string> = {
-    text: 'i-ri-text',
-    image: 'i-ri-image-line',
-    files: 'i-ri-file-copy-line',
-    html: 'i-ri-code-line'
-  }
-  return icons[type] || 'i-ri-question-line'
-}
-
-// Helper functions for drawer content
-function getCommandName(command: IFeatureCommand, feature: any): string {
-  if (feature.commandsData && feature.commandsData[command.type]) {
-    return feature.commandsData[command.type].name || command.type
-  }
-  return command.type
-}
-
-function getCommandShortcut(command: IFeatureCommand, feature: any): string | undefined {
-  if (feature.commandsData && feature.commandsData[command.type]) {
-    return feature.commandsData[command.type].shortcut
-  }
-  return undefined
-}
-
-function getCommandDesc(command: IFeatureCommand, feature: any): string | undefined {
-  if (feature.commandsData && feature.commandsData[command.type]) {
-    return feature.commandsData[command.type].desc
-  }
-  return undefined
-}
-
-// Feature details management
-function showFeatureDetails(feature: any): void {
-  selectedFeature.value = feature
-  showDrawer.value = true
-}
-
-function handleDrawerClose(): void {
-  showDrawer.value = false
-  selectedFeature.value = null
-}
-</script>
 
 <style lang="scss" scoped>
 pre {

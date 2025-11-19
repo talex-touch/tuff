@@ -5,17 +5,17 @@
   Shows version, build information, system specs, and resource usage.
 -->
 <script setup lang="ts" name="SettingAbout">
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ref, onMounted, computed } from 'vue'
-import { useEnv } from '~/modules/hooks/env-hooks'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { toast } from 'vue-sonner'
-import { getBuildInfo } from '~/utils/build-info'
-
+import OSIcon from '~/components/icon/OSIcon.vue'
 // Import UI components
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import OSIcon from '~/components/icon/OSIcon.vue'
+
+import { touchChannel } from '~/modules/channel/channel-core'
+import { useEnv } from '~/modules/hooks/env-hooks'
+import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
 const { packageJson, os, processInfo } = useEnv()
@@ -34,14 +34,15 @@ onMounted(async () => {
   try {
     const summary = await touchChannel.send('analytics:get-summary')
     performanceSummary.value = summary
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('Failed to load performance summary', error)
   }
 })
 
 // Computed property for version string
 const versionStr = computed(
-  () => `TalexTouch ${dev.value ? 'Dev' : 'Master'} ${packageJson.value?.version}`
+  () => `TalexTouch ${dev.value ? 'Dev' : 'Master'} ${packageJson.value?.version}`,
 )
 
 // Computed property for application start time
@@ -62,7 +63,8 @@ async function exportPerformanceData() {
     URL.revokeObjectURL(url)
 
     toast.success(t('settingAbout.exportSuccess'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to export performance data', error)
     toast.error(t('settingAbout.exportFailed'))
   }
@@ -101,10 +103,12 @@ async function openAppFolder() {
     const result = await touchChannel.send('execute:cmd', { command: rootPath })
     if (result?.success) {
       toast.success(t('settingAbout.folderOpened'))
-    } else {
+    }
+    else {
       toast.error(t('settingAbout.folderOpenFailed'))
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to open app folder', error)
     toast.error(t('settingAbout.folderOpenFailed'))
   }
@@ -112,14 +116,14 @@ async function openAppFolder() {
 </script>
 
 <template>
-  <tuff-group-block
+  <TuffGroupBlock
     v-if="processInfo"
     :name="t('settingAbout.groupTitle')"
     default-icon="i-carbon-apps"
     active-icon="i-carbon-app-switcher"
     memory-name="setting-about"
   >
-    <tuff-block-line :title="t('settingAbout.version')">
+    <TuffBlockLine :title="t('settingAbout.version')">
       <template #description>
         {{ versionStr }}
         <span
@@ -131,42 +135,42 @@ async function openAppFolder() {
         </span>
         <span v-else class="tag" style="color: #6d8b51"> {{ t('settingAbout.latest') }} </span>
       </template>
-    </tuff-block-line>
-    <tuff-block-line
+    </TuffBlockLine>
+    <TuffBlockLine
       :title="t('settingAbout.specification')"
       :description="`${currentQuarter}`"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       v-if="buildInfo.version"
       title="Version"
       :description="buildInfo.version"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       v-if="buildInfo.buildIdentifier"
       title="Build ID"
       :description="buildInfo.buildIdentifier"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       v-if="buildInfo.gitCommitHash"
       title="Git Hash"
       :description="buildInfo.gitCommitHash.substring(0, 7)"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       v-if="buildInfo.channel"
       title="Channel"
       :description="buildInfo.channel"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       v-if="buildInfo.buildType"
       title="Build Type"
       :description="buildInfo.buildType"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       v-if="buildInfo.buildTime"
       title="Build Time"
       :description="new Date(buildInfo.buildTime).toLocaleString()"
-    ></tuff-block-line>
-    <tuff-block-line :title="t('settingAbout.startCosts')">
+    />
+    <TuffBlockLine :title="t('settingAbout.startCosts')">
       <template #description>
         {{ startCosts.toFixed(2) }}s
         <span v-if="startCosts < 1" class="tag" style="color: var(--el-color-success)">
@@ -182,8 +186,8 @@ async function openAppFolder() {
           {{ t('settingAbout.slowly') }}
         </span>
       </template>
-    </tuff-block-line>
-    <tuff-block-line
+    </TuffBlockLine>
+    <TuffBlockLine
       v-if="performanceSummary"
       :title="t('settingAbout.performanceDetails')"
       link
@@ -196,20 +200,24 @@ async function openAppFolder() {
           }}
         </span>
       </template>
-    </tuff-block-line>
+    </TuffBlockLine>
     <template v-if="showPerformanceDetails && performanceSummary">
-      <tuff-block-line :title="t('settingAbout.mainProcessTime')">
-        <template #description> {{ performanceSummary.mainProcessTime.toFixed(3) }}s </template>
-      </tuff-block-line>
-      <tuff-block-line :title="t('settingAbout.rendererTime')">
-        <template #description> {{ performanceSummary.rendererTime.toFixed(3) }}s </template>
-      </tuff-block-line>
-      <tuff-block-line :title="t('settingAbout.modulesLoaded')">
+      <TuffBlockLine :title="t('settingAbout.mainProcessTime')">
+        <template #description>
+          {{ performanceSummary.mainProcessTime.toFixed(3) }}s
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine :title="t('settingAbout.rendererTime')">
+        <template #description>
+          {{ performanceSummary.rendererTime.toFixed(3) }}s
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine :title="t('settingAbout.modulesLoaded')">
         <template #description>
           {{ performanceSummary.moduleCount }}
         </template>
-      </tuff-block-line>
-      <tuff-block-line :title="t('settingAbout.performanceRating')">
+      </TuffBlockLine>
+      <TuffBlockLine :title="t('settingAbout.performanceRating')">
         <template #description>
           <span
             :style="`color: ${
@@ -225,8 +233,8 @@ async function openAppFolder() {
             {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
           </span>
         </template>
-      </tuff-block-line>
-      <tuff-block-line
+      </TuffBlockLine>
+      <TuffBlockLine
         :title="t('settingAbout.exportData')"
         link
         @click="exportPerformanceData"
@@ -236,32 +244,32 @@ async function openAppFolder() {
             {{ t('settingAbout.exportJson') }}
           </span>
         </template>
-      </tuff-block-line>
+      </TuffBlockLine>
     </template>
-    <tuff-block-line
+    <TuffBlockLine
       :title="t('settingAbout.electron')"
       :description="processInfo.versions?.electron"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       :title="t('settingAbout.v8')"
       :description="processInfo.versions?.v8"
-    ></tuff-block-line>
-    <tuff-block-line :title="t('settingAbout.os')">
+    />
+    <TuffBlockLine :title="t('settingAbout.os')">
       <template #description>
         <span flex gap-0 items-center>
           <OSIcon ml-8 :os="os?.version" />
           <span>{{ os?.version }}</span>
         </span>
       </template>
-    </tuff-block-line>
-    <tuff-block-line
+    </TuffBlockLine>
+    <TuffBlockLine
       :title="t('settingAbout.platform')"
       :description="`${processInfo.platform} (${os.value?.arch})`"
-    ></tuff-block-line>
-    <tuff-block-line
+    />
+    <TuffBlockLine
       :title="t('settingAbout.experience')"
       :description="`${t('settingAbout.experiencePack')} ${currentExperiencePack}`"
-    ></tuff-block-line>
+    />
     <!-- <tuff-block-line title="CPU Usage">
       <template #description>
         <span
@@ -289,16 +297,16 @@ async function openAppFolder() {
         </span>
       </template>
     </tuff-block-line> -->
-    <tuff-block-line :title="t('settingAbout.openAppFolder')" link @click="openAppFolder">
+    <TuffBlockLine :title="t('settingAbout.openAppFolder')" link @click="openAppFolder">
       <template #description>
         <span style="cursor: pointer; color: var(--el-color-primary)">
           {{ t('settingAbout.openFolder') }}
         </span>
       </template>
-    </tuff-block-line>
-    <tuff-block-line :title="t('settingAbout.terms')" link></tuff-block-line>
-    <tuff-block-line :title="t('settingAbout.license')" link></tuff-block-line>
-  </tuff-group-block>
+    </TuffBlockLine>
+    <TuffBlockLine :title="t('settingAbout.terms')" link />
+    <TuffBlockLine :title="t('settingAbout.license')" link />
+  </TuffGroupBlock>
 </template>
 
 <style lang="scss">

@@ -22,17 +22,17 @@
 
 ```typescript
 // 扩展 Props
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // ... 现有 props
-  leftTopBadge?: TuffItemBadge      // 左上角（优先级）
-  leftBottomBadge?: TuffItemBadge   // 左下角（分类）
-  iconBadge?: TuffItemIconBadge     // 图标角标（数量）
+  leftTopBadge?: TuffItemBadge // 左上角（优先级）
+  leftBottomBadge?: TuffItemBadge // 左下角（分类）
+  iconBadge?: TuffItemIconBadge // 图标角标（数量）
 }
 
-type TuffItemIconBadge = {
+interface TuffItemIconBadge {
   count?: number
   dot?: boolean
-  max?: number  // 最大显示数量，超过显示 99+
+  max?: number // 最大显示数量，超过显示 99+
 }
 ```
 
@@ -44,8 +44,8 @@ type TuffItemIconBadge = {
 ### 2. 多状态组合
 
 ```typescript
-type TuffItemMultiStatus = {
-  primary: TuffItemStatusDot    // 主状态
+interface TuffItemMultiStatus {
+  primary: TuffItemStatusDot // 主状态
   secondary?: TuffItemStatusDot // 次状态
   layout?: 'horizontal' | 'vertical'
 }
@@ -58,11 +58,11 @@ type TuffItemMultiStatus = {
 ### 3. 进度指示器
 
 ```typescript
-type TuffItemProgress = {
-  value: number        // 0-100
+interface TuffItemProgress {
+  value: number // 0-100
   status?: 'success' | 'warning' | 'danger'
-  showText?: boolean   // 显示百分比文本
-  position?: 'bottom' | 'overlay'  // 底部条或覆盖层
+  showText?: boolean // 显示百分比文本
+  position?: 'bottom' | 'overlay' // 底部条或覆盖层
 }
 ```
 
@@ -74,7 +74,7 @@ type TuffItemProgress = {
 ### 4. 动画状态
 
 ```typescript
-type TuffItemAnimation = {
+interface TuffItemAnimation {
   type: 'pulse' | 'spin' | 'bounce' | 'shimmer'
   target: 'icon' | 'badge' | 'border' | 'background'
   duration?: number
@@ -91,7 +91,7 @@ type TuffItemAnimation = {
 ```typescript
 // 扩展 Emits
 const emit = defineEmits<{
-  click: [event: MouseEvent | KeyboardEvent]
+  'click': [event: MouseEvent | KeyboardEvent]
   'long-press': [event: MouseEvent | TouchEvent]
   'context-menu': [event: MouseEvent]
   'drag-start': [event: DragEvent]
@@ -110,22 +110,22 @@ const emit = defineEmits<{
 ### 6. 内容扩展
 
 ```typescript
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // ... 现有 props
-  
+
   // 多行副标题
-  subtitles?: string[]  // 支持多行
-  
+  subtitles?: string[] // 支持多行
+
   // 图标组
-  icons?: string[]      // 多个图标
+  icons?: string[] // 多个图标
   iconLayout?: 'stack' | 'grid'
-  
+
   // 缩略图
-  thumbnail?: string    // 图片 URL
+  thumbnail?: string // 图片 URL
   thumbnailShape?: 'square' | 'circle'
-  
+
   // 标签列表
-  tags?: Array<{ text: string; color?: string }>
+  tags?: Array<{ text: string, color?: string }>
 }
 ```
 
@@ -141,7 +141,7 @@ type TuffItemTemplateProps = {
 type TuffItemSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'auto'
 type TuffItemDensity = 'compact' | 'comfortable' | 'spacious'
 
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // ... 现有 props
   size?: TuffItemSize
   density?: TuffItemDensity
@@ -164,12 +164,12 @@ type TuffItemTemplateProps = {
 ### 8. 分组和层级
 
 ```typescript
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // ... 现有 props
-  level?: number        // 层级深度（0-5）
-  indent?: boolean      // 是否缩进
-  expandable?: boolean  // 是否可展开
-  expanded?: boolean    // 展开状态
+  level?: number // 层级深度（0-5）
+  indent?: boolean // 是否缩进
+  expandable?: boolean // 是否可展开
+  expanded?: boolean // 展开状态
   hasChildren?: boolean // 是否有子项
 }
 ```
@@ -182,10 +182,10 @@ type TuffItemTemplateProps = {
 ### 9. 虚拟化支持
 
 ```typescript
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // ... 现有 props
-  virtualIndex?: number    // 虚拟索引
-  virtualHeight?: number   // 固定高度（虚拟滚动）
+  virtualIndex?: number // 虚拟索引
+  virtualHeight?: number // 固定高度（虚拟滚动）
 }
 ```
 
@@ -197,14 +197,14 @@ type TuffItemTemplateProps = {
 ### 10. 主题变体
 
 ```typescript
-type TuffItemVariant = 
-  | 'default'    // 标准样式
-  | 'card'       // 卡片样式（更多阴影）
-  | 'flat'       // 扁平样式（无阴影）
-  | 'outlined'   // 轮廓样式（边框）
-  | 'elevated'   // 悬浮样式（强阴影）
+type TuffItemVariant
+  = | 'default' // 标准样式
+    | 'card' // 卡片样式（更多阴影）
+    | 'flat' // 扁平样式（无阴影）
+    | 'outlined' // 轮廓样式（边框）
+    | 'elevated' // 悬浮样式（强阴影）
 
-type TuffItemTemplateProps = {
+interface TuffItemTemplateProps {
   // ... 现有 props
   variant?: TuffItemVariant
 }
@@ -276,30 +276,31 @@ type TuffItemTemplateProps = {
 
 ```vue
 <TuffItemTemplate
-  <!-- 基础内容 -->
+  <!-- 基础内容 --
+>
   title="OpenAI GPT-4"
   subtitle="High-performance AI model"
   icon="i-simple-icons-openai"
-  
+
   <!-- Badge 系统 -->
   :top-badge="{ text: 'New', status: 'info' }"
   :bottom-badge="{ text: 'v4.0', status: 'success' }"
   :icon-badge="{ count: 3 }"
-  
+
   <!-- 状态 -->
   :status-dot="{ class: 'is-active' }"
   :selected="true"
-  
+
   <!-- 进度（扩展） -->
   :progress="{ value: 75, status: 'success' }"
-  
+
   <!-- 动画（扩展） -->
   :animation="{ type: 'pulse', target: 'border' }"
-  
+
   <!-- 尺寸和样式 -->
   size="lg"
   variant="card"
-  
+
   <!-- 交互 -->
   @click="handleClick"
   @long-press="handleLongPress"
@@ -309,7 +310,7 @@ type TuffItemTemplateProps = {
   <template #title-badge>
     <el-tag size="small">Pro</el-tag>
   </template>
-  
+
   <template #trailing>
     <el-button size="small" text>Configure</el-button>
   </template>

@@ -1,35 +1,37 @@
-<template>
-  <div class="PlayList-Container" :class="{ active }">
-    <el-scrollbar>
-      <SongItem simple :playing="playing" :active="playIndex === index" @click="play(index)" :shrink="playList.length > 9" :order="index + 1" :song="item" class="song-item" v-for="(item, index) in playList" :key="index" />
-    </el-scrollbar>
-  </div>
-</template>
-
 <script>
-export default {
-  name: "PlayList"
-}
 </script>
 
 <script setup>
-import { ref } from 'vue'
-import { useModelWrapper } from '@modules/utils'
-import { musicManager } from '@modules/music'
 import SongItem from '@comp/music/song/SongItem.vue'
+import { musicManager } from '@modules/music'
+import { useModelWrapper } from '@modules/utils'
 
 const props = defineProps(['modelValue'])
+
 const emit = defineEmits(['update:modelValue'])
+
+export default {
+  name: 'PlayList',
+}
 
 const playList = musicManager.playManager.playList
 const playIndex = musicManager.playManager.playIndex
 const active = useModelWrapper(props, emit)
 const playing = musicManager.playManager.playStatus
 function play(index) {
-  if( index === playIndex.value ) return
+  if (index === playIndex.value)
+    return
   musicManager.playManager.play(index)
 }
 </script>
+
+<template>
+  <div class="PlayList-Container" :class="{ active }">
+    <el-scrollbar>
+      <SongItem v-for="(item, index) in playList" :key="index" simple :playing="playing" :active="playIndex === index" :shrink="playList.length > 9" :order="index + 1" :song="item" class="song-item" @click="play(index)" />
+    </el-scrollbar>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .blur .PlayList-Container {

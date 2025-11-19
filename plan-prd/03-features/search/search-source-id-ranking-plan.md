@@ -110,8 +110,8 @@ CREATE INDEX idx_item_usage_updated ON item_usage_stats(updated_at DESC);
 
 2. **注册自定义 Levenshtein 函数**
    ```ts
-   import sqlite3 from 'sqlite3'
    import { drizzle } from 'drizzle-orm/sqlite3'
+   import sqlite3 from 'sqlite3'
 
    const sqlite = sqlite3.verbose()
    const rawDb = new sqlite.Database(dbPath)
@@ -119,8 +119,10 @@ CREATE INDEX idx_item_usage_updated ON item_usage_stats(updated_at DESC);
    function levenshtein(a = '', b = ''): number {
      const lenA = a.length
      const lenB = b.length
-     if (lenA === 0) return lenB
-     if (lenB === 0) return lenA
+     if (lenA === 0)
+       return lenB
+     if (lenB === 0)
+       return lenA
      const dp = Array.from({ length: lenA + 1 }, () => new Array<number>(lenB + 1).fill(0))
      for (let i = 0; i <= lenA; i++) dp[i][0] = i
      for (let j = 0; j <= lenB; j++) dp[0][j] = j
@@ -148,11 +150,12 @@ CREATE INDEX idx_item_usage_updated ON item_usage_stats(updated_at DESC);
    import { sql } from 'drizzle-orm'
    import { appsIndex } from '../db/schema' // 假设存储应用别名/热度
 
-   const queryImCandidates = (keyword: string, distance = 2) =>
-     db
+   function queryImCandidates(keyword: string, distance = 2) {
+     return db
        .select()
        .from(appsIndex)
        .where(sql`levenshtein(${appsIndex.alias}, ${keyword}) <= ${distance}`)
+   }
    ```
    - 把热词表（如 QQ、微信、企业微信、飞书等）的别名、拼音、缩写写入 `appsIndex`。
    - 将结果映射为 TuffItem 的候选权重，在排序阶段叠加 “Levenshtein 匹配分”。

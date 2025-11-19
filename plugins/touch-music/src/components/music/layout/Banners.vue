@@ -1,15 +1,15 @@
 <script>
-import { ref, h, nextTick } from 'vue'
 import { sleep } from '@modules/utils.ts'
+import { h, nextTick, ref } from 'vue'
 
-let index = ref(0)
+const index = ref(0)
 export default {
-  name: "Banners",
+  name: 'Banners',
   props: {
     banners: {
       type: Array,
-      default: []
-    }
+      default: [],
+    },
   },
   render() {
     const that = this
@@ -20,27 +20,27 @@ export default {
       const _nowBanner = this.banners[index.value]
 
       const _lastBanner = (() => {
-        if( index.value === this.banners.length - 1 ) return this.banners[0]
+        if (index.value === this.banners.length - 1)
+          return this.banners[0]
         return this.banners[index.value + 1]
-
       })()
 
       nowBanner = h('div', {
-        class: 'Banner-Item-Wrapper now'
+        class: 'Banner-Item-Wrapper now',
       }, h('div', {
         class: 'Banner-Item',
         style: {
           backgroundImage: `url(${_nowBanner.imageUrl})`,
-        }
+        },
       }))
 
       lastBanner = h('div', {
-        class: 'Banner-Item-Wrapper last'
+        class: 'Banner-Item-Wrapper last',
       }, h('div', {
         class: 'Banner-Item',
         style: {
-          backgroundImage: `url(${_lastBanner.imageUrl})`
-        }
+          backgroundImage: `url(${_lastBanner.imageUrl})`,
+        },
       }))
 
       nextTick(async () => {
@@ -51,76 +51,72 @@ export default {
 
         Object.assign(last.style, {
           opacity: 0,
-          transform: 'scale(0.9) translateX(-100%)'
+          transform: 'scale(0.9) translateX(-100%)',
         })
 
         Object.assign(now.style, {
           opacity: 1,
-          transform: 'scale(1) translateX(0)'
+          transform: 'scale(1) translateX(0)',
         })
 
         await sleep(100)
 
         Object.assign(last.style, {
           opacity: 1,
-          transform: 'scale(0.9) translateX(-50%)'
+          transform: 'scale(0.9) translateX(-50%)',
         })
-
       })
 
-      return [ lastBanner, nowBanner ]
+      return [lastBanner, nowBanner]
     })()
 
     function pointer() {
-        const pointers = []
+      const pointers = []
 
-        for (let i = 0; i < that.banners.length; i++) {
-          const el = h('div', {
-            class: {
-              'Banner-Pointer': true,
-              'Banner-Pointer-Active': i === index.value
-            }
-          })
+      for (let i = 0; i < that.banners.length; i++) {
+        const el = h('div', {
+          class: {
+            'Banner-Pointer': true,
+            'Banner-Pointer-Active': i === index.value,
+          },
+        })
 
-          pointers.push(el)
+        pointers.push(el)
 
-          nextTick(() => {
+        nextTick(() => {
+          el.el.addEventListener('click', async () => {
+            const now = nowBanner.el
+            const last = lastBanner.el
 
-            el.el.addEventListener('click',async () => {
-              const now = nowBanner.el
-              const last = lastBanner.el
-
-              Object.assign(now.style, {
-                opacity: 0,
-                transform: 'scale(0.9) translateX(-100%)'
-              })
-
-              Object.assign(last.style, {
-                opacity: 1,
-                transform: 'scale(1) translateX(100%)'
-              })
-
-              await sleep(200)
-
-              Object.assign(now.style, {
-                opacity: 0,
-                transform: 'scale(0.9) translateX(100%)'
-              })
-
-              index.value = i
+            Object.assign(now.style, {
+              opacity: 0,
+              transform: 'scale(0.9) translateX(-100%)',
             })
 
-          })
-        }
+            Object.assign(last.style, {
+              opacity: 1,
+              transform: 'scale(1) translateX(100%)',
+            })
 
-        return pointers
+            await sleep(200)
+
+            Object.assign(now.style, {
+              opacity: 0,
+              transform: 'scale(0.9) translateX(100%)',
+            })
+
+            index.value = i
+          })
+        })
+      }
+
+      return pointers
     }
 
     return h('div', {
-      class: 'Banner-Container'
-    }, [ ...banners, h('div', { class: 'Banner-Pointer-Wrapper' }, pointer()) ])
-
-  }
+      class: 'Banner-Container',
+    }, [...banners, h('div', { class: 'Banner-Pointer-Wrapper' }, pointer())])
+  },
 }
 </script>
 

@@ -1,7 +1,7 @@
 /// <reference types="vite-plugin-electron/electron-env" />
 
-import { Logger } from 'log4js'
-import { TouchApp } from './core/touch-app'
+import type { Logger } from 'log4js'
+import type { TouchApp } from './core/touch-app'
 
 declare namespace NodeJS {
   interface ProcessEnv {

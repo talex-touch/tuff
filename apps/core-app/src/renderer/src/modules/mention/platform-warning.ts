@@ -1,6 +1,7 @@
-import { createApp, type App } from 'vue'
-import PlatformCompatibilityWarning from '~/components/base/dialog/PlatformCompatibilityWarning.vue'
+import type { App } from 'vue'
 import VWave from 'v-wave'
+import { createApp } from 'vue'
+import PlatformCompatibilityWarning from '~/components/base/dialog/PlatformCompatibilityWarning.vue'
 
 /**
  * 显示平台兼容性警告对话框
@@ -12,11 +13,11 @@ export async function showPlatformCompatibilityWarning(warningMessage: string): 
     const root: HTMLDivElement = document.createElement('div')
 
     let index: number = 0
-    while (document.getElementById('platform-warning-' + index)) {
+    while (document.getElementById(`platform-warning-${index}`)) {
       index++
     }
 
-    root.id = 'platform-warning-' + index
+    root.id = `platform-warning-${index}`
     root.style.zIndex = `${100000 + index}`
 
     const app: App<Element> = createApp(PlatformCompatibilityWarning, {
@@ -32,7 +33,7 @@ export async function showPlatformCompatibilityWarning(warningMessage: string): 
         app.unmount()
         document.body.removeChild(root)
         resolve()
-      }
+      },
     })
 
     document.body.appendChild(root)

@@ -1,13 +1,14 @@
-import { ref, type Ref } from 'vue'
+import type { Ref } from 'vue'
 import type {
+  AiChatPayload,
+  AiEmbeddingPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiProviderConfig,
-  AiChatPayload,
-  AiEmbeddingPayload,
   AiVisionOcrPayload,
-  AiVisionOcrResult
+  AiVisionOcrResult,
 } from '../../types/intelligence'
+import { ref } from 'vue'
 import { useChannel } from './use-channel'
 
 interface UseIntelligenceOptions {
@@ -19,7 +20,7 @@ interface IntelligenceComposable {
   invoke: <T = any>(
     capabilityId: string,
     payload: any,
-    options?: AiInvokeOptions
+    options?: AiInvokeOptions,
   ) => Promise<AiInvokeResult<T>>
 
   // Provider testing
@@ -52,8 +53,8 @@ interface IntelligenceComposable {
   // Convenient text methods
   text: {
     chat: (payload: AiChatPayload, options?: AiInvokeOptions) => Promise<AiInvokeResult<string>>
-    translate: (payload: { text: string; sourceLang?: string; targetLang: string }, options?: AiInvokeOptions) => Promise<AiInvokeResult<string>>
-    summarize: (payload: { text: string; maxLength?: number; style?: 'concise' | 'detailed' | 'bullet-points' }, options?: AiInvokeOptions) => Promise<AiInvokeResult<string>>
+    translate: (payload: { text: string, sourceLang?: string, targetLang: string }, options?: AiInvokeOptions) => Promise<AiInvokeResult<string>>
+    summarize: (payload: { text: string, maxLength?: number, style?: 'concise' | 'detailed' | 'bullet-points' }, options?: AiInvokeOptions) => Promise<AiInvokeResult<string>>
   }
 
   // Convenient embedding methods
@@ -112,7 +113,7 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
 
   async function sendChannelRequest<T>(
     eventName: string,
-    payload: any
+    payload: any,
   ): Promise<T> {
     const response = await channel.send<any, ChannelResponse<T>>(eventName, payload)
     if (!response?.ok) {
@@ -129,11 +130,13 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
     try {
       const result = await operation()
       return result
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       lastError.value = errorMessage
       throw error
-    } finally {
+    }
+    finally {
       isLoading.value = false
     }
   }
@@ -142,7 +145,7 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
     // Core invoke
     invoke: <T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions) =>
       withLoadingState(() =>
-        sendChannelRequest<AiInvokeResult<T>>('intelligence:invoke', { capabilityId, payload, options })
+        sendChannelRequest<AiInvokeResult<T>>('intelligence:invoke', { capabilityId, payload, options }),
       ),
 
     // Provider testing
@@ -153,16 +156,16 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
           message: string
           latency?: number
           timestamp: number
-        }>('intelligence:test-provider', { provider: config })
+        }>('intelligence:test-provider', { provider: config }),
       ),
 
     // Capability testing
-    testCapability: (params: { capabilityId: string; providerId?: string; userInput?: string; source?: any }) =>
+    testCapability: (params: { capabilityId: string, providerId?: string, userInput?: string, source?: any }) =>
       withLoadingState(() =>
         sendChannelRequest<{
           ok: boolean
           result: any
-        }>('intelligence:test-capability', params)
+        }>('intelligence:test-capability', params),
       ),
 
     // Get capability test metadata
@@ -179,27 +182,27 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
           sendChannelRequest<AiInvokeResult<string>>('intelligence:invoke', {
             capabilityId: 'text.chat',
             payload,
-            options
-          })
+            options,
+          }),
         ),
 
-      translate: (payload: { text: string; sourceLang?: string; targetLang: string }, options?: AiInvokeOptions) =>
+      translate: (payload: { text: string, sourceLang?: string, targetLang: string }, options?: AiInvokeOptions) =>
         withLoadingState(() =>
           sendChannelRequest<AiInvokeResult<string>>('intelligence:invoke', {
             capabilityId: 'text.translate',
             payload,
-            options
-          })
+            options,
+          }),
         ),
 
-      summarize: (payload: { text: string; maxLength?: number; style?: 'concise' | 'detailed' | 'bullet-points' }, options?: AiInvokeOptions) =>
+      summarize: (payload: { text: string, maxLength?: number, style?: 'concise' | 'detailed' | 'bullet-points' }, options?: AiInvokeOptions) =>
         withLoadingState(() =>
           sendChannelRequest<AiInvokeResult<string>>('intelligence:invoke', {
             capabilityId: 'text.summarize',
             payload,
-            options
-          })
-        )
+            options,
+          }),
+        ),
     },
 
     // Convenient embedding methods
@@ -209,9 +212,9 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
           sendChannelRequest<AiInvokeResult<number[]>>('intelligence:invoke', {
             capabilityId: 'embedding.generate',
             payload,
-            options
-          })
-        )
+            options,
+          }),
+        ),
     },
 
     // Convenient vision methods
@@ -221,13 +224,13 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
           sendChannelRequest<AiInvokeResult<AiVisionOcrResult>>('intelligence:invoke', {
             capabilityId: 'vision.ocr',
             payload,
-            options
-          })
-        )
+            options,
+          }),
+        ),
     },
 
     // Reactive state
     isLoading,
-    lastError
+    lastError,
   }
 }

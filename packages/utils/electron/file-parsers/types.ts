@@ -41,11 +41,11 @@ export interface FileParser {
   /** Higher priority parsers win when multiple support the same extension */
   readonly priority?: number
   readonly supportedExtensions: string[] | Set<string>
-  canParse?(context: FileParserContext): boolean | Promise<boolean>
-  parse(
+  canParse?: (context: FileParserContext) => boolean | Promise<boolean>
+  parse: (
     context: FileParserContext,
-    onProgress?: (progress: FileParserProgress) => void
-  ): Promise<FileParserResult>
+    onProgress?: (progress: FileParserProgress) => void,
+  ) => Promise<FileParserResult>
 }
 
 export interface FileParserSelectionOptions {

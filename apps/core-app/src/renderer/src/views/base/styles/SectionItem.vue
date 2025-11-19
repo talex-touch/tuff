@@ -1,3 +1,73 @@
+<script name="SectionItem" setup>
+import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { useRouter } from 'vue-router'
+
+const props = defineProps({
+  modelValue: {
+    type: String,
+    default: false,
+  },
+  title: {
+    type: String,
+    default: 'Section',
+  },
+  filter: {
+    type: String,
+    default: 'blur(0px)',
+  },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
+  tip: {
+    type: String,
+  },
+})
+
+const emits = defineEmits(['update:modelValue'])
+
+const router = useRouter()
+
+const mention = inject('mention')
+
+const value = useModelWrapper(props, emits)
+
+function handleClick() {
+  if (props.disabled)
+    return
+
+  value.value = props.title
+}
+
+function goRouter() {
+  router.push({
+    name: 'Theme',
+    query: {
+      theme: props.title,
+    },
+  })
+}
+
+function handleEnter() {
+  if (props.tip)
+    mention(`<span style='color: var(--el-color-warning)'>${props.tip}</span>`)
+
+  if (!props.disabled)
+    return
+
+  mention(
+    '<span style=\'color: var(--el-color-danger)\'>Your device doesn\'t support this feature yet.</span>',
+  )
+}
+
+function handleLeave() {
+  if (!props.disabled)
+    return
+
+  mention()
+}
+</script>
+
 <template>
   <div
     relative
@@ -8,8 +78,8 @@
     items-center
     justify-center
     :class="{ disabled, active: value === title }"
-    @click="handleClick"
     class="SectionItem-Container transition-cubic"
+    @click="handleClick"
     @mouseenter="handleEnter"
     @mouseleave="handleLeave"
   >
@@ -30,70 +100,6 @@
     </div>
   </div>
 </template>
-
-<script name="SectionItem" setup>
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-const props = defineProps({
-  modelValue: {
-    type: String,
-    default: false
-  },
-  title: {
-    type: String,
-    default: 'Section'
-  },
-  filter: {
-    type: String,
-    default: 'blur(0px)'
-  },
-  disabled: {
-    type: Boolean,
-    default: false
-  },
-  tip: {
-    type: String
-  }
-})
-const emits = defineEmits(['update:modelValue'])
-const mention = inject('mention')
-
-const value = useModelWrapper(props, emits)
-
-function handleClick() {
-  if (props.disabled) return
-
-  value.value = props.title
-}
-
-function goRouter() {
-  router.push({
-    name: 'Theme',
-    query: {
-      theme: props.title
-    }
-  })
-}
-
-function handleEnter() {
-  if (props.tip) mention("<span style='color: var(--el-color-warning)'>" + props.tip + '</span>')
-
-  if (!props.disabled) return
-
-  mention(
-    "<span style='color: var(--el-color-danger)'>Your device doesn't support this feature yet.</span>"
-  )
-}
-
-function handleLeave() {
-  if (!props.disabled) return
-
-  mention()
-}
-</script>
 
 <style lang="scss" scoped>
 .SectionItem-Display {

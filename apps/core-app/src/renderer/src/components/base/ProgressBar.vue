@@ -1,3 +1,25 @@
+<script lang="ts" name="ProgressBar" setup>
+defineProps({
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  error: {
+    type: Boolean,
+    default: false,
+  },
+  success: {
+    type: Boolean,
+    default: false,
+  },
+  message: {
+    type: String,
+    default: '',
+  },
+})
+// const props = defineProps(['loading', 'error', 'success', 'message'])
+</script>
+
 <template>
   <div class="ProgressBar-Wrapper">
     <div class="ProgressBar-Container" :class="{ loading, error, success }">
@@ -5,28 +27,6 @@
     </div>
   </div>
 </template>
-
-<script lang="ts" name="ProgressBar" setup>
-defineProps({
-  loading: {
-    type: Boolean,
-    default: false
-  },
-  error: {
-    type: Boolean,
-    default: false
-  },
-  success: {
-    type: Boolean,
-    default: false
-  },
-  message: {
-    type: String,
-    default: ''
-  }
-})
-// const props = defineProps(['loading', 'error', 'success', 'message'])
-</script>
 
 <style lang="scss" scoped>
 @keyframes loading {

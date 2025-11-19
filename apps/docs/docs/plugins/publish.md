@@ -257,16 +257,16 @@ Test your plugin extensively before publishing:
 // Example test structure
 describe('My Plugin', () => {
   test('should initialize correctly', async () => {
-    const plugin = new MyPlugin();
-    await plugin.init();
-    expect(plugin.initialized).toBe(true);
-  });
+    const plugin = new MyPlugin()
+    await plugin.init()
+    expect(plugin.initialized).toBe(true)
+  })
 
   test('should handle errors gracefully', async () => {
-    const plugin = new MyPlugin();
-    await expect(plugin.loadInvalidData()).rejects.toThrow();
-  });
-});
+    const plugin = new MyPlugin()
+    await expect(plugin.loadInvalidData()).rejects.toThrow()
+  })
+})
 ```
 
 ### 2. Clear Documentation
@@ -310,7 +310,7 @@ Provide support for your users:
 class MyPlugin {
   openSupport() {
     // Open a support page or contact form
-    window.open('https://github.com/yourusername/my-plugin/issues', '_blank');
+    window.open('https://github.com/yourusername/my-plugin/issues', '_blank')
   }
 }
 ```
@@ -389,23 +389,23 @@ hello-world-plugin/
 
 ```javascript
 // index.js
-import { toast } from '@polyglot-toolbox/plugin-sdk';
+import { toast } from '@polyglot-toolbox/plugin-sdk'
 
 class HelloWorldPlugin {
   constructor() {
-    this.init();
+    this.init()
   }
 
   init() {
     // Show a greeting message when the plugin is loaded
-    toast.info('Hello, World! Thanks for installing this plugin.');
+    toast.info('Hello, World! Thanks for installing this plugin.')
 
-    console.log('Hello World Plugin initialized');
+    console.log('Hello World Plugin initialized')
   }
 }
 
 // Initialize the plugin
-new HelloWorldPlugin();
+new HelloWorldPlugin()
 ```
 
 ### README File

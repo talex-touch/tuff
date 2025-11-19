@@ -1,6 +1,6 @@
 <script setup lang="ts" name="SettingStorage">
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 
 const router = useRouter()
@@ -8,7 +8,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <tuff-block-switch
+  <TuffBlockSwitch
     v-wave
     guidance
     :model-value="false"

@@ -1,7 +1,7 @@
-import { VNode } from 'vue';
+import type { VNode } from 'vue'
 
-type SlotSelector = string | string[] | ((name: string) => boolean);
-type VNodePredicate = (node: VNode) => boolean;
+type SlotSelector = string | string[] | ((name: string) => boolean)
+type VNodePredicate = (node: VNode) => boolean
 
 /**
  * Normalizes a slot input into a flat array of VNodes.
@@ -16,17 +16,18 @@ type VNodePredicate = (node: VNode) => boolean;
  * ```
  */
 export function normalizeSlot(input: unknown): VNode[] {
-  if (!input) return [];
+  if (!input)
+    return []
 
   if (typeof input === 'function') {
-    return normalizeSlot(input());
+    return normalizeSlot(input())
   }
 
   if (Array.isArray(input)) {
-    return input.flatMap(normalizeSlot);
+    return input.flatMap(normalizeSlot)
   }
 
-  return [input as VNode];
+  return [input as VNode]
 }
 
 /**
@@ -44,22 +45,24 @@ export function normalizeSlot(input: unknown): VNode[] {
  */
 export function flattenVNodes(
   nodes: VNode[],
-  predicate?: VNodePredicate
+  predicate?: VNodePredicate,
 ): VNode[] {
-  const result: VNode[] = [];
+  const result: VNode[] = []
 
   for (const node of nodes) {
-    if (!node) continue;
+    if (!node)
+      continue
 
     if (predicate?.(node)) {
-      result.push(node);
-    } else if (node.children) {
-      const children = normalizeSlot(node.children);
-      result.push(...flattenVNodes(children, predicate));
+      result.push(node)
+    }
+    else if (node.children) {
+      const children = normalizeSlot(node.children)
+      result.push(...flattenVNodes(children, predicate))
     }
   }
 
-  return result;
+  return result
 }
 
 /**
@@ -86,15 +89,15 @@ export function flattenVNodes(
 export function extractFromSlots(
   slots: Record<string, unknown>,
   slotSelector: SlotSelector = 'default',
-  predicate?: VNodePredicate
+  predicate?: VNodePredicate,
 ): VNode[] {
-  const selectedSlotNames = resolveSlotNames(slots, slotSelector);
+  const selectedSlotNames = resolveSlotNames(slots, slotSelector)
 
-  const vnodes = selectedSlotNames.flatMap((name) =>
-    normalizeSlot(slots[name])
-  );
+  const vnodes = selectedSlotNames.flatMap(name =>
+    normalizeSlot(slots[name]),
+  )
 
-  return flattenVNodes(vnodes, predicate);
+  return flattenVNodes(vnodes, predicate)
 }
 
 /**
@@ -106,19 +109,19 @@ export function extractFromSlots(
  */
 function resolveSlotNames(
   slots: Record<string, unknown>,
-  selector: SlotSelector
+  selector: SlotSelector,
 ): string[] {
   if (typeof selector === 'string') {
-    return slots[selector] ? [selector] : [];
+    return slots[selector] ? [selector] : []
   }
 
   if (Array.isArray(selector)) {
-    return selector.filter((name) => !!slots[name]);
+    return selector.filter(name => !!slots[name])
   }
 
   if (typeof selector === 'function') {
-    return Object.keys(slots).filter(selector);
+    return Object.keys(slots).filter(selector)
   }
 
-  return [];
+  return []
 }

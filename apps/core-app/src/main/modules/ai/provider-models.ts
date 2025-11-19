@@ -1,4 +1,5 @@
-import { AiProviderConfig, AiProviderType } from '@talex-touch/utils'
+import type { AiProviderConfig } from '@talex-touch/utils'
+import { AiProviderType } from '@talex-touch/utils'
 
 const DEFAULT_BASE_URLS: Partial<Record<AiProviderType, string>> = {
   [AiProviderType.OPENAI]: 'https://api.openai.com/v1',
@@ -6,7 +7,7 @@ const DEFAULT_BASE_URLS: Partial<Record<AiProviderType, string>> = {
   [AiProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
   [AiProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
   [AiProviderType.CUSTOM]: undefined,
-  [AiProviderType.LOCAL]: undefined
+  [AiProviderType.LOCAL]: undefined,
 }
 
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -36,13 +37,15 @@ function ensureApiKey(provider: AiProviderConfig): string {
 function normalizeModelEntries(entries: any[]): string[] {
   const normalized: string[] = []
   for (const entry of entries) {
-    if (!entry) continue
+    if (!entry)
+      continue
     if (typeof entry === 'string') {
       normalized.push(entry)
       continue
     }
     const id = entry.id ?? entry.name ?? entry.slug ?? entry.model
-    if (id) normalized.push(id)
+    if (id)
+      normalized.push(id)
   }
   return Array.from(new Set(normalized))
 }
@@ -50,7 +53,8 @@ function normalizeModelEntries(entries: any[]): string[] {
 async function parseJsonBody(response: Response): Promise<any> {
   try {
     return await response.json()
-  } catch {
+  }
+  catch {
     return null
   }
 }
@@ -62,20 +66,21 @@ export async function fetchProviderModels(provider: AiProviderConfig): Promise<s
 
   const baseUrl = resolveBaseUrl(provider)
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   }
 
   if (provider.type === AiProviderType.ANTHROPIC) {
     headers['x-api-key'] = ensureApiKey(provider)
     headers['anthropic-version'] = ANTHROPIC_VERSION
-  } else {
-    headers['Authorization'] = `Bearer ${ensureApiKey(provider)}`
+  }
+  else {
+    headers.Authorization = `Bearer ${ensureApiKey(provider)}`
   }
 
   const endpoint = joinUrl(baseUrl, 'models')
   const response = await fetch(endpoint, {
     method: 'GET',
-    headers
+    headers,
   })
 
   if (!response.ok) {

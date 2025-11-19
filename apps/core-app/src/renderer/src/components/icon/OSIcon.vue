@@ -2,8 +2,8 @@
 const props = defineProps({
   os: {
     type: String,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const _class = ref()
@@ -11,31 +11,41 @@ const _class = ref()
 watchEffect(() => {
   const { os } = props
   if (
-    os === 'Windows 10 Pro' ||
-    os === 'Windows 11 Pro' ||
-    os === 'win' ||
-    os.indexOf('Home China') !== -1
+    os === 'Windows 10 Pro'
+    || os === 'Windows 11 Pro'
+    || os === 'win'
+    || os.includes('Home China')
   ) {
     _class.value = 'Windows_11'
-  } else if (os.indexOf('Windows') !== -1) {
+  }
+  else if (os.includes('Windows')) {
     _class.value = 'i-ri-windows-line'
-  } else if (os.indexOf('Darwin') !== -1 || os === 'darwin') {
+  }
+  else if (os.includes('Darwin') || os === 'darwin') {
     _class.value = 'i-ri-apple-fill'
-  } else if (os.indexOf('OS X') !== -1) {
+  }
+  else if (os.includes('OS X')) {
     _class.value = 'i-ri-apple-line'
-  } else if (os.indexOf('Kali') !== -1) {
+  }
+  else if (os.includes('Kali')) {
     _class.value = 'i-simple-icons-kalilinux'
-  } else if (os.indexOf('Linux') !== -1 || os === 'linux') {
+  }
+  else if (os.includes('Linux') || os === 'linux') {
     _class.value = 'i-simple-icons-linux'
-  } else if (os.indexOf('Ubuntu') !== -1) {
+  }
+  else if (os.includes('Ubuntu')) {
     _class.value = 'i-simple-icons-ubuntu'
-  } else if (os.indexOf('Debian') !== -1) {
+  }
+  else if (os.includes('Debian')) {
     _class.value = 'i-simple-icons-debian'
-  } else if (os.indexOf('Fedora') !== -1) {
+  }
+  else if (os.includes('Fedora')) {
     _class.value = 'i-simple-icons-fedora'
-  } else if (os.indexOf('Arch') !== -1) {
+  }
+  else if (os.includes('Arch')) {
     _class.value = 'i-simple-icons-archlinux'
-  } else if (os.indexOf('Chromium') !== -1) {
+  }
+  else if (os.includes('Chromium')) {
     _class.value = 'i-ri-chrome-line'
   }
 })

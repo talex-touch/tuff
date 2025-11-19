@@ -1,5 +1,5 @@
-import { MaybePromise, ModuleFileConfig, ModuleKey } from "./base";
-import { ModuleCreateContext, ModuleDestroyContext, ModuleInitContext, ModuleStartContext, ModuleStopContext } from "./module-lifecycle";
+import type { MaybePromise, ModuleFileConfig, ModuleKey } from './base'
+import type { ModuleCreateContext, ModuleDestroyContext, ModuleInitContext, ModuleStartContext, ModuleStopContext } from './module-lifecycle'
 
 /**
  * Contract that every module must implement.
@@ -19,7 +19,7 @@ export interface IBaseModule<E = any> {
   /**
    * Unique module key. Prefer `Symbol.for("your-module")` for global uniqueness.
    */
-  name: ModuleKey;
+  name: ModuleKey
 
   /**
    * Optional custom module entry file path.
@@ -28,7 +28,7 @@ export interface IBaseModule<E = any> {
    * If omitted, the manager can resolve a default location (e.g., inside the module's directory
    * when one exists, or from an app-level modules root).
    */
-  filePath?: string;
+  filePath?: string
 
   /**
    * Declarative directory configuration for this module.
@@ -38,33 +38,33 @@ export interface IBaseModule<E = any> {
    *   expose a `ModuleDirectory` on all lifecycle contexts.
    * - If `file.create !== true`, no directory will be created and `context.directory` will be `undefined`.
    */
-  file?: ModuleFileConfig;
+  file?: ModuleFileConfig
 
   /**
    * Optional hook invoked after construction/registration and before `init`.
    * Use this for last-moment wiring that depends on resolved paths or file config.
    */
-  created?(ctx: ModuleCreateContext<E>): MaybePromise<void>;
+  created?: (ctx: ModuleCreateContext<E>) => MaybePromise<void>
 
   /**
    * Called to perform resource preparation and subscription wiring.
    */
-  init(ctx: ModuleInitContext<E>): MaybePromise<void>;
+  init: (ctx: ModuleInitContext<E>) => MaybePromise<void>
 
   /**
    * Called when the module should start its active work.
    */
-  start?(ctx: ModuleStartContext<E>): MaybePromise<void>;
+  start?: (ctx: ModuleStartContext<E>) => MaybePromise<void>
 
   /**
    * Called when the module should leave the active state but may still keep allocated resources.
    */
-  stop?(ctx: ModuleStopContext<E>): MaybePromise<void>;
+  stop?: (ctx: ModuleStopContext<E>) => MaybePromise<void>
 
   /**
    * Called to perform final teardown and resource release.
    */
-  destroy(ctx: ModuleDestroyContext<E>): MaybePromise<void>;
+  destroy: (ctx: ModuleDestroyContext<E>) => MaybePromise<void>
 }
 
 /**
@@ -81,19 +81,19 @@ export interface IBaseModule<E = any> {
  * @public
  */
 export interface ModuleCtor<T extends IBaseModule<E>, E = any> {
-  new (ctx: ModuleCreateContext<E>): T;
+  new (ctx: ModuleCreateContext<E>): T
 
   /**
    * Optional class-level unique key.
    * If omitted, the instance {@link IModule.name | name} must be used as the key.
    */
-  readonly key?: ModuleKey;
+  readonly key?: ModuleKey
 
   /**
    * Optional declarative dependencies expressed as other module keys.
    * Useful if the manager performs topological ordering.
    */
-  readonly requires?: readonly ModuleKey[];
+  readonly requires?: readonly ModuleKey[]
 }
 
 /**
@@ -107,6 +107,6 @@ export interface ModuleCtor<T extends IBaseModule<E>, E = any> {
  *
  * @public
  */
-export type ModuleRegistrant<T extends IBaseModule<E>, E = any> =
-  | T
-  | ModuleCtor<T, E>;
+export type ModuleRegistrant<T extends IBaseModule<E>, E = any>
+  = | T
+    | ModuleCtor<T, E>

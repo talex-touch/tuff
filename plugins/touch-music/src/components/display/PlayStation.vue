@@ -1,12 +1,38 @@
+<script>
+</script>
+
+<script setup>
+import IconButton from '@comp/button/IconButton.vue'
+import PlayPause from '@comp/icon/PlayPause.vue'
+import Singers from '@comp/music/song/Singers.vue'
+import { player } from '@modules/entity/play-manager'
+import { computed, ref, watch } from 'vue'
+
+export default {
+  name: 'PlayStation',
+}
+
+const song = computed(() => player.song)
+const playStatus = ref(false)
+
+watch(() => playStatus.value, (value) => {
+  if (value) {
+    player.play()
+  }
+  else {
+    player.pause()
+  }
+})
+</script>
+
 <template>
   <div class="PlayStation-Container" :style="`--img: url('${song?.album?.picUrl}')`" :class="{ active: song }">
-
     <div class="PlayStation-Music-Main">
-      <div class="PlayStation-Music-Image" v-if="song">
-        <img :alt="song.name" :src="song.album.picUrl" />
+      <div v-if="song" class="PlayStation-Music-Image">
+        <img :alt="song.name" :src="song.album.picUrl">
       </div>
 
-      <div class="PlayStation-Music-Main-Info" v-if="song">
+      <div v-if="song" class="PlayStation-Music-Main-Info">
         <span class="PlayStation-Music-Main-Info-Name">
           {{ song.name }}
           {{ song.duration }}
@@ -16,38 +42,12 @@
 
       <div class="Footer-Music-Action">
         <IconButton plain icon="arrow-left-s" />
-        <play-pause v-model="playStatus" />
+        <PlayPause v-model="playStatus" />
         <IconButton plain icon="arrow-right-s" />
       </div>
     </div>
-
   </div>
 </template>
-
-<script>
-export default {
-  name: "PlayStation"
-}
-</script>
-
-<script setup>
-import { ref, watch, reactive, computed } from 'vue'
-import Singers from "@comp/music/song/Singers.vue";
-import { player } from "@modules/entity/play-manager";
-import PlayPause from "@comp/icon/PlayPause.vue";
-import IconButton from "@comp/button/IconButton.vue";
-
-const song = computed(() => player.song)
-const playStatus = ref(false)
-
-watch(() => playStatus.value, (value) => {
-  if (value) {
-    player.play()
-  } else {
-    player.pause()
-  }
-})
-</script>
 
 <style lang="scss" scoped>
 .PlayStation-Music-Main {

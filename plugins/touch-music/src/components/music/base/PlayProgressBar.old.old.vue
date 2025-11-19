@@ -1,24 +1,16 @@
-<template>
-  <div ref="bar" class="PlayerProgressBar-Container" :style="`--progress: ${(current / max) * 100}%`">
-    <div class="PlayerProgressBar-Background"></div>
-  </div>
-<!--  <el-slider class="PlayerProgressBar-Container" @mouseenter="hover = true" @mouseleave="hover = false"
-             @input="handleProgressChange" @change="debounceFunction(handleProgressChange)"
-             v-model="value" :show-tooltip="false" />-->
-</template>
-
 <script>
-export default {
-  name: "PlayProgressBar"
-}
 </script>
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useModelWrapper } from '@modules/utils.ts'
+
+const props = defineProps(['current', 'max'])
 
 const emits = defineEmits(['change'])
-const props = defineProps(['current', 'max'])
+
+export default {
+  name: 'PlayProgressBar',
+}
 
 const bar = ref()
 
@@ -26,7 +18,6 @@ onMounted(() => {
   const el = bar.value
 
   el.addEventListener('mousedown', () => {
-
     function move(e) {
       const { width } = el.getBoundingClientRect()
       const { offsetX } = e
@@ -34,7 +25,7 @@ onMounted(() => {
       const percent = offsetX / width
       // const value = percent * props.max
 
-      console.log( offsetX, width, percent * 100, e )
+      console.log(offsetX, width, percent * 100, e)
       // emits.change(value)
     }
 
@@ -43,10 +34,18 @@ onMounted(() => {
     document.body.addEventListener('mouseup', () => {
       document.body.removeEventListener('mousemove', move)
     })
-
   })
 })
 </script>
+
+<template>
+  <div ref="bar" class="PlayerProgressBar-Container" :style="`--progress: ${(current / max) * 100}%`">
+    <div class="PlayerProgressBar-Background" />
+  </div>
+<!--  <el-slider class="PlayerProgressBar-Container" @mouseenter="hover = true" @mouseleave="hover = false"
+             @input="handleProgressChange" @change="debounceFunction(handleProgressChange)"
+             v-model="value" :show-tooltip="false" /> -->
+</template>
 
 <style lang="scss" scoped>
 .PlayerProgressBar-Container {

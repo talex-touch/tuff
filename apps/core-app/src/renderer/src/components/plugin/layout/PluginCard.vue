@@ -1,3 +1,18 @@
+<script>
+export default {
+  name: 'PluginCard',
+}
+</script>
+
+<script setup>
+const props = defineProps({
+  plugin: {
+    type: Object,
+    required: true,
+  },
+})
+</script>
+
 <template>
   <div class="PluginCard-Container">
     <p class="PluginCard-Header">
@@ -16,21 +31,6 @@
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  name: 'PluginCard'
-}
-</script>
-
-<script setup>
-const props = defineProps({
-  plugin: {
-    type: Object,
-    required: true
-  }
-})
-</script>
 
 <style lang="scss" scoped>
 .PluginCard-Button {

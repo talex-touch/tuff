@@ -1,51 +1,51 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { regService } from "@talex-touch/utils/plugin/sdk/service";
-import { ImageProtocolService } from "@talex-touch/utils/service/protocol";
-import ImageView from "./components/ImageView.vue";
+import { regService } from '@talex-touch/utils/plugin/sdk/service'
+import { ImageProtocolService } from '@talex-touch/utils/service/protocol'
+import { onMounted, ref } from 'vue'
+import ImageView from './components/ImageView.vue'
 
 const historyImgs = ref<string[]>(
-  JSON.parse(localStorage.getItem("historyImgs") || "[]")
-);
-const index = ref(historyImgs.value.length ? historyImgs.value.length : -1);
+  JSON.parse(localStorage.getItem('historyImgs') || '[]'),
+)
+const index = ref(historyImgs.value.length ? historyImgs.value.length : -1)
 
 function addImage(path: string) {
   if (historyImgs.value.includes(path)) {
-    const i = historyImgs.value.indexOf(path);
+    const i = historyImgs.value.indexOf(path)
 
-    return (index.value = i);
+    return (index.value = i)
   }
 
-  historyImgs.value.push(path);
+  historyImgs.value.push(path)
 
-  index.value = historyImgs.value.length - 1;
-  localStorage.setItem("historyImgs", JSON.stringify(historyImgs.value));
+  index.value = historyImgs.value.length - 1
+  localStorage.setItem('historyImgs', JSON.stringify(historyImgs.value))
 }
 
 onMounted(() => {
-  document.addEventListener("drop", (e) => {
-    e.preventDefault();
+  document.addEventListener('drop', (e) => {
+    e.preventDefault()
 
-    const files = e.dataTransfer!.files;
+    const files = e.dataTransfer!.files
 
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+      const file = files[i]
 
-      if (file.type.startsWith("image")) {
+      if (file.type.startsWith('image')) {
         // @ts-ignore
-        addImage(file.path);
+        addImage(file.path)
       }
     }
-  });
+  })
 
-  document.addEventListener("dragover", (e: Event) => {
-    e.preventDefault();
-  });
+  document.addEventListener('dragover', (e: Event) => {
+    e.preventDefault()
+  })
 
   regService(new ImageProtocolService(), (e: any) => {
-    addImage(e.path);
-  });
-});
+    addImage(e.path)
+  })
+})
 </script>
 
 <template>
@@ -56,12 +56,12 @@ onMounted(() => {
     <div class="App-Footer" :class="{ active: historyImgs.length }">
       <div class="App-Footer-Content">
         <div
-          class="App-Footer-Content-Item"
-          @mouseenter="index = i"
           v-for="(img, i) in historyImgs"
           :key="img"
+          class="App-Footer-Content-Item"
+          @mouseenter="index = i"
         >
-          <img :src="`atom:///${img}`" />
+          <img :src="`atom:///${img}`">
         </div>
       </div>
     </div>

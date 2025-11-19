@@ -1,41 +1,46 @@
-import {
+import type {
   IGatherController,
   IProviderActivate,
   ISearchEngine,
   ISearchProvider,
+  TalexTouch,
   TuffItem,
   TuffQuery,
   TuffSearchResult,
-  TuffInputType
 } from '@talex-touch/utils'
-import { Sorter } from './sort/sorter'
-import { tuffSorter } from './sort/tuff-sorter'
-import { appProvider } from '../addon/apps/app-provider'
-import { windowManager } from '../core-box/window'
-import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
-import { systemProvider } from '../addon/system/system-provider'
-import { TalexTouch, TuffFactory } from '@talex-touch/utils'
-import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
-import { createDbUtils, DbUtils } from '../../../db/utils'
-import crypto from 'crypto'
+import type { StandardChannelData } from '@talex-touch/utils/channel'
+import type { ModuleInitContext } from 'packages/utils/types/modules'
+import type { TouchApp } from '../../../core/touch-app'
+import type { DbUtils } from '../../../db/utils'
+import type { ProviderContext } from './types'
+import crypto from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import {
+  TuffFactory,
+  TuffInputType,
+} from '@talex-touch/utils'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
-import { ChannelType, DataCode, StandardChannelData } from '@talex-touch/utils/channel'
-import { TouchApp } from '../../../core/touch-app'
+import { createDbUtils } from '../../../db/utils'
 import { databaseModule } from '../../database'
-import { ModuleInitContext } from 'packages/utils/types/modules'
+import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
+import { getSentryService } from '../../sentry'
 import { storageModule } from '../../storage'
+import { appProvider } from '../addon/apps/app-provider'
 import { fileProvider } from '../addon/files/file-provider'
-import { ProviderContext } from './types'
+import { previewProvider } from '../addon/preview'
+import { systemProvider } from '../addon/system/system-provider'
+import { coreBoxManager } from '../core-box/manager' // Import coreBoxManager
+import { windowManager } from '../core-box/window'
+import { QueryCompletionService } from './query-completion-service'
 import { gatherAggregator } from './search-gather'
 import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
-import { getSentryService } from '../../sentry'
-import { performance } from 'perf_hooks'
-import { UsageSummaryService } from './usage-summary-service'
-import { QueryCompletionService } from './query-completion-service'
-import { UsageStatsCache, getUsageStatsBatchCached } from './usage-stats-cache'
+import { Sorter } from './sort/sorter'
+import { tuffSorter } from './sort/tuff-sorter'
+import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
-import { previewProvider } from '../addon/preview'
+import { UsageSummaryService } from './usage-summary-service'
 // import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
@@ -53,8 +58,7 @@ function getActivationKey(activation: IProviderActivate): string {
 }
 
 export class SearchEngineCore
-  implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents>
-{
+implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
   private static _instance: SearchEngineCore
 
   readonly name = Symbol('search-engine-core')
@@ -132,17 +136,18 @@ export class SearchEngineCore
         touchApp: this.touchApp,
         databaseManager: databaseModule,
         storageManager: storageModule,
-        searchIndex: this.searchIndexService
+        searchIndex: this.searchIndexService,
       })
       const duration = Date.now() - startTime
       console.log(
-        `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`
+        `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`,
       )
-    } catch (error) {
+    }
+    catch (error) {
       const duration = Date.now() - startTime
       console.error(
         `[SearchEngineCore] Failed to load provider '${provider.id}' after ${duration}ms.`,
-        error
+        error,
       )
     }
   }
@@ -171,10 +176,11 @@ export class SearchEngineCore
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Activate Providers',
-          `SET: ${this.activatedProviders ? JSON.stringify(Array.from(this.activatedProviders.values())) : 'null'}`
+          `SET: ${this.activatedProviders ? JSON.stringify(Array.from(this.activatedProviders.values())) : 'null'}`,
         )
       }
-    } else {
+    }
+    else {
       this.deactivateProviders()
     }
   }
@@ -195,7 +201,7 @@ export class SearchEngineCore
         if (searchLogger.isEnabled()) {
           searchLogger.logSearchPhase(
             'Exit UI Mode',
-            `PluginFeaturesAdapter deactivated for key: ${uniqueKey}`
+            `PluginFeaturesAdapter deactivated for key: ${uniqueKey}`,
           )
         }
         coreBoxManager.exitUIMode()
@@ -207,11 +213,12 @@ export class SearchEngineCore
           searchLogger.logSearchPhase('Deactivate Provider', 'All providers deactivated')
         }
       }
-    } else {
+    }
+    else {
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Deactivate Provider',
-          `Provider with key ${uniqueKey} not found`
+          `Provider with key ${uniqueKey} not found`,
         )
       }
     }
@@ -236,11 +243,11 @@ export class SearchEngineCore
     }
     // Get unique provider IDs from the activation keys
     const providerIds = new Set(
-      Array.from(this.activatedProviders.values()).map((activation) => activation.id)
+      Array.from(this.activatedProviders.values()).map(activation => activation.id),
     )
 
     return Array.from(providerIds)
-      .map((id) => this.providers.get(id))
+      .map(id => this.providers.get(id))
       .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
@@ -253,12 +260,12 @@ export class SearchEngineCore
 
   public getProvidersByIds(ids: string[]): ISearchProvider<ProviderContext>[] {
     return ids
-      .map((id) => this.providers.get(id))
+      .map(id => this.providers.get(id))
       .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
   private _updateActivationState(newResults: TuffSearchResult[]): void {
-    const allNewActivations = newResults.flatMap((res) => res.activate || [])
+    const allNewActivations = newResults.flatMap(res => res.activate || [])
 
     if (allNewActivations.length > 0) {
       const merged = new Map<string, IProviderActivate>(this.activatedProviders || [])
@@ -289,7 +296,7 @@ export class SearchEngineCore
           searchId,
           cancelled: true,
           activate: this.getActivationState() ?? undefined,
-          sources: []
+          sources: [],
         })
       }
     }
@@ -300,7 +307,7 @@ export class SearchEngineCore
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
       'Query Received',
-      `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`
+      `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`,
     )
     this.currentGatherController?.abort()
 
@@ -317,13 +324,13 @@ export class SearchEngineCore
 
       // Smart routing: filter providers based on query.inputs types
       if (query.inputs && query.inputs.length > 0) {
-        const inputTypes = query.inputs.map((i) => i.type)
-        const hasNonTextInput = inputTypes.some((t) => t !== TuffInputType.Text)
+        const inputTypes = query.inputs.map(i => i.type)
+        const hasNonTextInput = inputTypes.some(t => t !== TuffInputType.Text)
 
         if (hasNonTextInput) {
           searchLogger.logSearchPhase(
             'Provider Filtering',
-            `Non-text inputs detected: ${inputTypes.join(', ')}`
+            `Non-text inputs detected: ${inputTypes.join(', ')}`,
           )
 
           // Keep only providers that support these input types
@@ -340,24 +347,24 @@ export class SearchEngineCore
             }
 
             // Check if provider supports at least one of the input types
-            return inputTypes.some((type) => provider.supportedInputTypes?.includes(type))
+            return inputTypes.some(type => provider.supportedInputTypes?.includes(type))
           })
 
           searchLogger.logSearchPhase(
             'Provider Filtered',
-            `Active providers: ${providersToSearch.map((p) => p.id).join(', ')}`
+            `Active providers: ${providersToSearch.map(p => p.id).join(', ')}`,
           )
         }
       }
 
-      searchLogger.searchProviders(providersToSearch.map((p) => p.id))
+      searchLogger.searchProviders(providersToSearch.map(p => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
           this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-update', {
             items: itemsToSend,
-            searchId: sessionId
+            searchId: sessionId,
           })
         }
       }
@@ -378,19 +385,19 @@ export class SearchEngineCore
             this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
               searchId: sessionId,
               activate: finalActivationState,
-              sources: update.sourceStats
+              sources: update.sourceStats,
             })
           }
           searchLogger.logSearchPhase(
             'Search End',
-            `Final activation state: ${JSON.stringify(this.getActivationState())}`
+            `Final activation state: ${JSON.stringify(this.getActivationState())}`,
           )
           return
         }
 
         if (isFirstUpdate) {
           isFirstUpdate = false
-          const initialItems = update.newResults.flatMap((res) => res.items)
+          const initialItems = update.newResults.flatMap(res => res.items)
 
           // 批量获取使用统计并注入到 items 中
           await this._injectUsageStats(initialItems)
@@ -420,7 +427,7 @@ export class SearchEngineCore
             totalDuration,
             sortingDuration,
             sourceStats: update.sourceStats || [],
-            resultCount: sortedItems.length
+            resultCount: sortedItems.length,
           })
 
           // 异步记录搜索结果统计（不阻塞返回）
@@ -429,9 +436,10 @@ export class SearchEngineCore
           })
 
           resolve(initialResult)
-        } else if (update.newResults.length > 0) {
+        }
+        else if (update.newResults.length > 0) {
           // This is a subsequent update
-          const subsequentItems = update.newResults.flatMap((res) => res.items)
+          const subsequentItems = update.newResults.flatMap(res => res.items)
 
           // 批量获取使用统计并注入到 items 中
           await this._injectUsageStats(subsequentItems)
@@ -455,7 +463,8 @@ export class SearchEngineCore
   }
 
   private async _recordSearchUsage(sessionId: string, query: TuffQuery): Promise<void> {
-    if (!this.dbUtils) return
+    if (!this.dbUtils)
+      return
 
     try {
       await this.dbUtils.addUsageLog({
@@ -465,26 +474,28 @@ export class SearchEngineCore
         action: 'search',
         keyword: query.text,
         timestamp: new Date(),
-        context: JSON.stringify(query.context || {})
+        context: JSON.stringify(query.context || {}),
       })
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase('Usage Recording', `Recorded search session ${sessionId}`)
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[SearchEngineCore] Failed to record search usage.', error)
     }
   }
 
   /** Batch fetch usage stats and inject into items metadata before sorting */
   private async _injectUsageStats(items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0) return
+    if (!this.dbUtils || items.length === 0)
+      return
 
     const start = performance.now()
 
     try {
-      const keys = items.map((item) => ({
+      const keys = items.map(item => ({
         sourceId: item.source.id,
-        itemId: item.id
+        itemId: item.id,
       }))
 
       // Use cached batch query
@@ -492,7 +503,7 @@ export class SearchEngineCore
         ? await getUsageStatsBatchCached(this.dbUtils, this.usageStatsCache, keys)
         : await this.dbUtils.getUsageStatsBatch(keys)
 
-      const statsMap = new Map(stats.map((s) => [`${s.sourceId}:${s.itemId}`, s]))
+      const statsMap = new Map(stats.map(s => [`${s.sourceId}:${s.itemId}`, s]))
 
       let injectedCount = 0
       for (const item of items) {
@@ -500,14 +511,15 @@ export class SearchEngineCore
         const stat = statsMap.get(key)
 
         if (stat) {
-          if (!item.meta) item.meta = {}
+          if (!item.meta)
+            item.meta = {}
           item.meta.usageStats = {
             executeCount: stat.executeCount,
             searchCount: stat.searchCount,
             cancelCount: stat.cancelCount,
             lastExecuted: stat.lastExecuted ? stat.lastExecuted.toISOString() : null,
             lastSearched: stat.lastSearched ? stat.lastSearched.toISOString() : null,
-            lastCancelled: stat.lastCancelled ? stat.lastCancelled.toISOString() : null
+            lastCancelled: stat.lastCancelled ? stat.lastCancelled.toISOString() : null,
           }
           injectedCount++
         }
@@ -517,17 +529,19 @@ export class SearchEngineCore
         const duration = performance.now() - start
         searchLogger.logSearchPhase(
           'Usage Stats Injection',
-          `Injected ${injectedCount}/${items.length} stats in ${duration.toFixed(2)}ms`
+          `Injected ${injectedCount}/${items.length} stats in ${duration.toFixed(2)}ms`,
         )
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[SearchEngineCore] Failed to inject usage stats:', error)
     }
   }
 
   /** Record search result display stats for top 10 items */
   private async _recordSearchResults(sessionId: string, items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0) return
+    if (!this.dbUtils || items.length === 0)
+      return
 
     const start = performance.now()
 
@@ -539,21 +553,22 @@ export class SearchEngineCore
         for (const item of topItems) {
           this.usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'search')
         }
-      } else {
+      }
+      else {
         // Fallback to direct database calls if queue is not available
-        const updatePromises = topItems.map((item) =>
+        const updatePromises = topItems.map(item =>
           this.dbUtils!.incrementUsageStats(
             item.source.id,
             item.id,
             item.source.type,
-            'search'
+            'search',
           ).catch((error) => {
             console.error(
               `[SearchEngineCore] Failed to update search stats for item ${item.id}:`,
-              error
+              error,
             )
             return null
-          })
+          }),
         )
 
         await Promise.allSettled(updatePromises)
@@ -563,10 +578,11 @@ export class SearchEngineCore
         const duration = performance.now() - start
         searchLogger.logSearchPhase(
           'Usage Recording',
-          `Recorded ${topItems.length} items in ${duration.toFixed(2)}ms (session: ${sessionId})`
+          `Recorded ${topItems.length} items in ${duration.toFixed(2)}ms (session: ${sessionId})`,
         )
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[SearchEngineCore] Failed to record search results.', error)
     }
   }
@@ -580,13 +596,13 @@ export class SearchEngineCore
     totalDuration,
     sortingDuration,
     sourceStats,
-    resultCount
+    resultCount,
   }: {
     sessionId: string
     query: TuffQuery
     totalDuration: number
     sortingDuration: number
-    sourceStats: Array<{ providerId?: string; provider?: string; resultCount: number; duration?: number }>
+    sourceStats: Array<{ providerId?: string, provider?: string, resultCount: number, duration?: number }>
     resultCount: number
   }): void {
     try {
@@ -609,7 +625,7 @@ export class SearchEngineCore
 
       // Extract input types
       const inputTypes = query.inputs
-        ? query.inputs.map((input) => input.type).filter(Boolean)
+        ? query.inputs.map(input => input.type).filter(Boolean)
         : ['text']
 
       sentryService.recordSearchMetrics({
@@ -620,16 +636,18 @@ export class SearchEngineCore
         queryText: query.text || '',
         inputTypes,
         resultCount,
-        sessionId
+        sessionId,
       })
-    } catch (error) {
+    }
+    catch (error) {
       // Silently fail to not disrupt search flow
       console.debug('[SearchEngineCore] Failed to record search metrics for Sentry', error)
     }
   }
 
   public async recordExecute(sessionId: string, item: TuffItem): Promise<void> {
-    if (!this.dbUtils) return
+    if (!this.dbUtils)
+      return
 
     const itemId = this._getItemId(item)
 
@@ -642,8 +660,8 @@ export class SearchEngineCore
         keyword: '', // Keyword is not relevant for an execute action
         timestamp: new Date(),
         context: JSON.stringify({
-          scoring: item.scoring
-        })
+          scoring: item.scoring,
+        }),
       })
 
       // 保持原有的 usageSummary 更新（向后兼容）
@@ -652,13 +670,14 @@ export class SearchEngineCore
       // 新增：更新基于 source + id 的组合键统计（使用队列批量写入）
       if (this.usageStatsQueue) {
         this.usageStatsQueue.enqueue(item.source.id, itemId, item.source.type, 'execute')
-      } else {
+      }
+      else {
         // Fallback to direct database call
         await this.dbUtils.incrementUsageStats(
           item.source.id,
           itemId,
           item.source.type,
-          'execute'
+          'execute',
         )
       }
 
@@ -673,17 +692,18 @@ export class SearchEngineCore
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Usage Recording',
-          `Recorded execute for item ${itemId} (source: ${item.source.id}) in session ${sessionId}`
+          `Recorded execute for item ${itemId} (source: ${item.source.id}) in session ${sessionId}`,
         )
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`[SearchEngineCore] Failed to record execute usage for item ${itemId}.`, error)
     }
   }
 
   maintain(): void {
     console.log(
-      '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.'
+      '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.',
     )
     // TODO: The logic for refreshing indexes or caches should be handled
     // within the providers themselves, possibly triggered by a separate scheduler.
@@ -706,12 +726,12 @@ export class SearchEngineCore
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
       retentionDays: 30,
       autoCleanup: true,
-      summaryInterval: 24 * 60 * 60 * 1000 // 24 小时
+      summaryInterval: 24 * 60 * 60 * 1000, // 24 小时
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
       console.log('[SearchEngineCore] All modules loaded, starting provider initialization...')
-      instance.providersToLoad.forEach((provider) => instance.loadProvider(provider))
+      instance.providersToLoad.forEach(provider => instance.loadProvider(provider))
       instance.providersToLoad = []
 
       // 启动汇总服务
@@ -745,13 +765,14 @@ export class SearchEngineCore
           if (typeof activationResult === 'object') {
             // If the provider returns a full activation object, use it directly.
             activation = activationResult
-          } else {
+          }
+          else {
             // Otherwise, create a default activation object.
             activation = {
               id: provider.id,
               name: provider.name,
               icon: provider.icon,
-              meta: item.meta?.extension || {}
+              meta: item.meta?.extension || {},
             }
           }
           instance.activateProviders([activation])
@@ -762,7 +783,7 @@ export class SearchEngineCore
         }
 
         reply(DataCode.SUCCESS, instance.getActivationState())
-      }
+      },
     )
 
     channel.regChannel(ChannelType.MAIN, 'core-box:get-activated-providers', () => {
@@ -781,10 +802,10 @@ export class SearchEngineCore
 
     channel.regChannel(ChannelType.MAIN, 'core-box:get-provider-details', ({ data }) => {
       const providers = instance.getProvidersByIds(data.providerIds)
-      return providers.map((p) => ({
+      return providers.map(p => ({
         id: p.id,
         name: p.name,
-        icon: p.icon
+        icon: p.icon,
       }))
     })
   }
@@ -793,7 +814,7 @@ export class SearchEngineCore
     if (searchLogger.isEnabled()) {
       searchLogger.logSearchPhase(
         'Destroy',
-        'Destroying SearchEngineCore and aborting any ongoing search'
+        'Destroying SearchEngineCore and aborting any ongoing search',
       )
     }
     this.currentGatherController?.abort()

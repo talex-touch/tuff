@@ -1,3 +1,152 @@
+<script setup lang="ts">
+import type { DownloadTask } from '@talex-touch/utils'
+import { Folder, FolderOpened } from '@element-plus/icons-vue'
+import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+interface Props {
+  modelValue: boolean
+  task: DownloadTask | null
+}
+
+interface Emits {
+  (e: 'update:modelValue', value: boolean): void
+  (e: 'open-file', taskId: string): void
+  (e: 'show-in-folder', taskId: string): void
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
+const { t } = useI18n()
+
+const visible = computed({
+  get: () => props.modelValue,
+  set: value => emit('update:modelValue', value),
+})
+
+function handleClose() {
+  visible.value = false
+}
+
+function handleOpenFile() {
+  if (props.task) {
+    emit('open-file', props.task.id)
+  }
+}
+
+function handleShowInFolder() {
+  if (props.task) {
+    emit('show-in-folder', props.task.id)
+  }
+}
+
+function getStatusType(status: DownloadStatus): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  switch (status) {
+    case DownloadStatus.DOWNLOADING:
+      return 'primary'
+    case DownloadStatus.COMPLETED:
+      return 'success'
+    case DownloadStatus.FAILED:
+      return 'danger'
+    case DownloadStatus.PAUSED:
+      return 'warning'
+    default:
+      return 'info'
+  }
+}
+
+function getStatusText(status: DownloadStatus): string {
+  const statusMap = {
+    [DownloadStatus.PENDING]: t('download.status_pending'),
+    [DownloadStatus.DOWNLOADING]: t('download.status_downloading'),
+    [DownloadStatus.COMPLETED]: t('download.status_completed'),
+    [DownloadStatus.FAILED]: t('download.status_failed'),
+    [DownloadStatus.PAUSED]: t('download.status_paused'),
+    [DownloadStatus.CANCELLED]: t('download.status_cancelled'),
+  }
+  return statusMap[status] || status
+}
+
+function getModuleName(module: DownloadModule): string {
+  const moduleMap = {
+    [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
+    [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
+    [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
+    [DownloadModule.USER_MANUAL]: t('download.module_user_manual'),
+  }
+  return moduleMap[module] || module
+}
+
+function getPriorityType(priority: number): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  if (priority >= DownloadPriority.CRITICAL)
+    return 'danger'
+  if (priority >= DownloadPriority.HIGH)
+    return 'warning'
+  if (priority >= DownloadPriority.NORMAL)
+    return 'primary'
+  return 'info'
+}
+
+function getPriorityText(priority: number): string {
+  if (priority >= DownloadPriority.CRITICAL)
+    return t('download.priority_critical')
+  if (priority >= DownloadPriority.HIGH)
+    return t('download.priority_high')
+  if (priority >= DownloadPriority.NORMAL)
+    return t('download.priority_normal')
+  return t('download.priority_low')
+}
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  }
+  else if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
+  else if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(2)} KB`
+  }
+  else {
+    return `${bytes} B`
+  }
+}
+
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond >= 1024 * 1024) {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+  }
+  else if (bytesPerSecond >= 1024) {
+    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  }
+  else {
+    return `${bytesPerSecond.toFixed(0)} B/s`
+  }
+}
+
+function formatRemainingTime(seconds: number): string {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}${t('common.seconds')}`
+  }
+  else if (seconds < 3600) {
+    const minutes = Math.round(seconds / 60)
+    return `${minutes}${t('common.minutes')}`
+  }
+  else {
+    const hours = Math.round(seconds / 3600)
+    return `${hours}${t('common.hours')}`
+  }
+}
+
+function formatDate(date: Date | number | undefined): string {
+  if (!date)
+    return '-'
+  const d = typeof date === 'number' ? new Date(date) : date
+  return d.toLocaleString()
+}
+</script>
+
 <template>
   <el-dialog
     v-model="visible"
@@ -8,7 +157,9 @@
     <div v-if="task" class="task-details">
       <!-- 基本信息 -->
       <div class="detail-section">
-        <h3 class="section-title">{{ $t('download.basic_info') }}</h3>
+        <h3 class="section-title">
+          {{ $t('download.basic_info') }}
+        </h3>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.filename') }}:</span>
           <span class="detail-value">{{ task.filename }}</span>
@@ -33,7 +184,9 @@
 
       <!-- 进度信息 -->
       <div v-if="task.progress" class="detail-section">
-        <h3 class="section-title">{{ $t('download.progress_info') }}</h3>
+        <h3 class="section-title">
+          {{ $t('download.progress_info') }}
+        </h3>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.total_size') }}:</span>
           <span class="detail-value">{{ formatSize(task.progress.totalSize || 0) }}</span>
@@ -58,7 +211,9 @@
 
       <!-- 文件信息 -->
       <div class="detail-section">
-        <h3 class="section-title">{{ $t('download.file_info') }}</h3>
+        <h3 class="section-title">
+          {{ $t('download.file_info') }}
+        </h3>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.url') }}:</span>
           <span class="detail-value url-text" :title="task.url">{{ task.url }}</span>
@@ -71,7 +226,9 @@
 
       <!-- 时间信息 -->
       <div class="detail-section">
-        <h3 class="section-title">{{ $t('download.time_info') }}</h3>
+        <h3 class="section-title">
+          {{ $t('download.time_info') }}
+        </h3>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.created_at') }}:</span>
           <span class="detail-value">{{ formatDate(task.createdAt) }}</span>
@@ -84,13 +241,17 @@
 
       <!-- 错误信息 -->
       <div v-if="task.error" class="detail-section">
-        <h3 class="section-title error-title">{{ $t('download.error_info') }}</h3>
+        <h3 class="section-title error-title">
+          {{ $t('download.error_info') }}
+        </h3>
         <el-alert :title="task.error" type="error" :closable="false" show-icon />
       </div>
 
       <!-- 元数据 -->
       <div v-if="task.metadata && Object.keys(task.metadata).length > 0" class="detail-section">
-        <h3 class="section-title">{{ $t('download.metadata') }}</h3>
+        <h3 class="section-title">
+          {{ $t('download.metadata') }}
+        </h3>
         <div v-for="(value, key) in task.metadata" :key="key" class="detail-item">
           <span class="detail-label">{{ key }}:</span>
           <span class="detail-value">{{ value }}</span>
@@ -100,7 +261,9 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleClose">{{ $t('common.close') }}</el-button>
+        <el-button @click="handleClose">
+          {{ $t('common.close') }}
+        </el-button>
         <el-button
           v-if="task?.status === 'completed'"
           type="primary"
@@ -120,140 +283,6 @@
     </template>
   </el-dialog>
 </template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { FolderOpened, Folder } from '@element-plus/icons-vue'
-import { DownloadTask, DownloadStatus, DownloadModule, DownloadPriority } from '@talex-touch/utils'
-
-interface Props {
-  modelValue: boolean
-  task: DownloadTask | null
-}
-
-interface Emits {
-  (e: 'update:modelValue', value: boolean): void
-  (e: 'open-file', taskId: string): void
-  (e: 'show-in-folder', taskId: string): void
-}
-
-const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
-const { t } = useI18n()
-
-const visible = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
-})
-
-const handleClose = () => {
-  visible.value = false
-}
-
-const handleOpenFile = () => {
-  if (props.task) {
-    emit('open-file', props.task.id)
-  }
-}
-
-const handleShowInFolder = () => {
-  if (props.task) {
-    emit('show-in-folder', props.task.id)
-  }
-}
-
-const getStatusType = (status: DownloadStatus): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
-  switch (status) {
-    case DownloadStatus.DOWNLOADING:
-      return 'primary'
-    case DownloadStatus.COMPLETED:
-      return 'success'
-    case DownloadStatus.FAILED:
-      return 'danger'
-    case DownloadStatus.PAUSED:
-      return 'warning'
-    default:
-      return 'info'
-  }
-}
-
-const getStatusText = (status: DownloadStatus): string => {
-  const statusMap = {
-    [DownloadStatus.PENDING]: t('download.status_pending'),
-    [DownloadStatus.DOWNLOADING]: t('download.status_downloading'),
-    [DownloadStatus.COMPLETED]: t('download.status_completed'),
-    [DownloadStatus.FAILED]: t('download.status_failed'),
-    [DownloadStatus.PAUSED]: t('download.status_paused'),
-    [DownloadStatus.CANCELLED]: t('download.status_cancelled')
-  }
-  return statusMap[status] || status
-}
-
-const getModuleName = (module: DownloadModule): string => {
-  const moduleMap = {
-    [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
-    [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
-    [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
-    [DownloadModule.USER_MANUAL]: t('download.module_user_manual')
-  }
-  return moduleMap[module] || module
-}
-
-const getPriorityType = (priority: number): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
-  if (priority >= DownloadPriority.CRITICAL) return 'danger'
-  if (priority >= DownloadPriority.HIGH) return 'warning'
-  if (priority >= DownloadPriority.NORMAL) return 'primary'
-  return 'info'
-}
-
-const getPriorityText = (priority: number): string => {
-  if (priority >= DownloadPriority.CRITICAL) return t('download.priority_critical')
-  if (priority >= DownloadPriority.HIGH) return t('download.priority_high')
-  if (priority >= DownloadPriority.NORMAL) return t('download.priority_normal')
-  return t('download.priority_low')
-}
-
-const formatSize = (bytes: number): string => {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-  } else if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-  } else if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(2)} KB`
-  } else {
-    return `${bytes} B`
-  }
-}
-
-const formatSpeed = (bytesPerSecond: number): string => {
-  if (bytesPerSecond >= 1024 * 1024) {
-    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  } else if (bytesPerSecond >= 1024) {
-    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  } else {
-    return `${bytesPerSecond.toFixed(0)} B/s`
-  }
-}
-
-const formatRemainingTime = (seconds: number): string => {
-  if (seconds < 60) {
-    return `${Math.round(seconds)}${t('common.seconds')}`
-  } else if (seconds < 3600) {
-    const minutes = Math.round(seconds / 60)
-    return `${minutes}${t('common.minutes')}`
-  } else {
-    const hours = Math.round(seconds / 3600)
-    return `${hours}${t('common.hours')}`
-  }
-}
-
-const formatDate = (date: Date | number | undefined): string => {
-  if (!date) return '-'
-  const d = typeof date === 'number' ? new Date(date) : date
-  return d.toLocaleString()
-}
-</script>
 
 <style scoped>
 .task-details {

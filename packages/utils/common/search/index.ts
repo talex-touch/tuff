@@ -1,4 +1,4 @@
-import { ISearchProvider, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
+import type { ISearchProvider, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 
 export * from './gather'
 
@@ -30,7 +30,6 @@ export interface TuffUpdate {
   sourceStats?: TuffSearchResult['sources']
 }
 
-
 /**
  * Search Engine Interface (formerly ISearchEngine)
  *
@@ -41,13 +40,13 @@ export interface ISearchEngine<C> {
    * Registers a search provider with the engine.
    * @param provider - An instance of ISearchProvider.
    */
-  registerProvider(provider: ISearchProvider<C>): void
+  registerProvider: (provider: ISearchProvider<C>) => void
 
   /**
    * Unregisters a search provider by its unique ID.
    * @param providerId - The unique ID of the provider to remove.
    */
-  unregisterProvider(providerId: string): void
+  unregisterProvider: (providerId: string) => void
 
   /**
    * Executes a search across all registered and relevant providers.
@@ -57,11 +56,11 @@ export interface ISearchEngine<C> {
    * @returns A promise that resolves to a TuffSearchResult object,
    *          containing the ranked items and metadata about the search operation.
    */
-  search(query: TuffQuery): Promise<TuffSearchResult>
+  search: (query: TuffQuery) => Promise<TuffSearchResult>
 
   /**
    * Performs background maintenance tasks, such as pre-heating caches,
    * refreshing indexes, etc.
    */
-  maintain(): void
+  maintain: () => void
 }

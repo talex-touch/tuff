@@ -1,22 +1,21 @@
-import { app } from 'electron'
+import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type * as schema from '../../db/schema'
+
+import { readdir, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { readdir, stat } from 'node:fs/promises'
-
-import { BaseModule } from '../abstract-base-module'
-import { ModuleKey } from '@talex-touch/utils'
-import { genTouchChannel } from '../../core/channel-core'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { databaseModule } from '../database'
-import { fileProvider } from '../box-tool/addon/files/file-provider'
-import { activeAppService } from './active-app'
-import { ocrService } from '../ocr/ocr-service'
-import { config, scanProgress } from '../../db/schema'
-import type * as schema from '../../db/schema'
-import { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { desc, sql } from 'drizzle-orm'
-import type { ModuleInitContext, ModuleDestroyContext } from '@talex-touch/utils'
-import { TalexEvents } from '../../core/eventbus/touch-event'
+import { app } from 'electron'
+import { genTouchChannel } from '../../core/channel-core'
+import { config, scanProgress } from '../../db/schema'
+import { BaseModule } from '../abstract-base-module'
+import { fileProvider } from '../box-tool/addon/files/file-provider'
+import { databaseModule } from '../database'
+import { ocrService } from '../ocr/ocr-service'
+import { activeAppService } from './active-app'
 
 interface TuffDashboardOptions {
   limit?: number
@@ -31,7 +30,7 @@ export class TuffDashboardModule extends BaseModule {
   constructor() {
     super(TuffDashboardModule.key, {
       create: false,
-      dirName: 'system'
+      dirName: 'system',
     })
   }
 
@@ -45,13 +44,14 @@ export class TuffDashboardModule extends BaseModule {
         const snapshot = await this.buildSnapshot(limit)
         reply(DataCode.SUCCESS, {
           ok: true,
-          snapshot
+          snapshot,
         })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[TuffDashboard] Failed to build snapshot:', error)
         reply(DataCode.ERROR, {
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         })
       }
     })
@@ -64,7 +64,8 @@ export class TuffDashboardModule extends BaseModule {
   }
 
   private toIso(value: unknown): string | null {
-    if (!value) return null
+    if (!value)
+      return null
     if (typeof value === 'string') {
       const parsed = new Date(value)
       return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString()
@@ -84,7 +85,7 @@ export class TuffDashboardModule extends BaseModule {
       ocrService.getDashboardSnapshot(Math.min(limit, 100)),
       this.buildConfigOverview(Math.min(limit, 100)),
       this.buildLogOverview(Math.min(limit, 20)),
-      this.buildApplicationSection()
+      this.buildApplicationSection(),
     ])
 
     return {
@@ -95,7 +96,7 @@ export class TuffDashboardModule extends BaseModule {
       ocr,
       config: configOverview,
       logs,
-      applications
+      applications,
     }
   }
 
@@ -108,8 +109,8 @@ export class TuffDashboardModule extends BaseModule {
       uptime: os.uptime(),
       memory: {
         free: os.freemem(),
-        total: os.totalmem()
-      }
+        total: os.totalmem(),
+      },
     }
   }
 
@@ -118,22 +119,22 @@ export class TuffDashboardModule extends BaseModule {
     const metrics = app
       .getAppMetrics()
       .slice(0, 10)
-      .map((metric) => ({
+      .map(metric => ({
         pid: metric.pid,
         type: metric.type,
         cpu: metric.cpu?.percentCPUUsage ?? null,
         memory: metric.memory?.workingSetSize ?? null,
-        created: metric.creationTime ? this.toIso(metric.creationTime) : null
+        created: metric.creationTime ? this.toIso(metric.creationTime) : null,
       }))
 
     return {
       activeApp: activeApp
         ? {
             ...activeApp,
-            lastUpdated: this.toIso(activeApp.lastUpdated)
+            lastUpdated: this.toIso(activeApp.lastUpdated),
           }
         : null,
-      metrics
+      metrics,
     }
   }
 
@@ -144,31 +145,31 @@ export class TuffDashboardModule extends BaseModule {
       fileProvider.getIndexingProgress(),
       db
         ? db.select().from(scanProgress).orderBy(desc(scanProgress.lastScanned)).limit(limit)
-        : Promise.resolve([])
+        : Promise.resolve([]),
     ])
 
     const scanOverview = Array.isArray(scanRows)
-      ? scanRows.map((row) => ({
+      ? scanRows.map(row => ({
           path: row.path ?? '',
-          lastScanned: this.toIso(row.lastScanned)
+          lastScanned: this.toIso(row.lastScanned),
         }))
       : []
 
-    const entries = progress.entries.map((entry) => ({
+    const entries = progress.entries.map(entry => ({
       path: entry.path,
       status: entry.status,
       progress: entry.progress,
       processedBytes: entry.processedBytes,
       totalBytes: entry.totalBytes,
       updatedAt: this.toIso(entry.updatedAt),
-      lastError: entry.lastError
+      lastError: entry.lastError,
     }))
 
     return {
       summary: progress.summary,
       watchedPaths: fileProvider.getWatchedPaths(),
       entries,
-      scanProgress: scanOverview
+      scanProgress: scanOverview,
     }
   }
 
@@ -178,7 +179,7 @@ export class TuffDashboardModule extends BaseModule {
     if (!db) {
       return {
         total: 0,
-        entries: [] as Array<{ key: string; value: unknown }>
+        entries: [] as Array<{ key: string, value: unknown }>,
       }
     }
 
@@ -187,7 +188,7 @@ export class TuffDashboardModule extends BaseModule {
       db
         .select({ total: sql<number>`COUNT(*)` })
         .from(config)
-        .limit(1)
+        .limit(1),
     ])
 
     const entries = rows.map((row) => {
@@ -195,30 +196,31 @@ export class TuffDashboardModule extends BaseModule {
       if (typeof row.value === 'string') {
         try {
           parsed = JSON.parse(row.value)
-        } catch {
+        }
+        catch {
           parsed = row.value
         }
       }
       return {
         key: row.key ?? '',
-        value: parsed
+        value: parsed,
       }
     })
 
     return {
       total: totalRow.length > 0 ? Number(totalRow[0].total ?? 0) : entries.length,
-      entries
+      entries,
     }
   }
 
   private async buildLogOverview(limit: number) {
     const logsDir = app.getPath('logs')
     const userDataDir = app.getPath('userData')
-    let recentFiles: Array<{ name: string; size: number; updatedAt: string | null }> = []
+    let recentFiles: Array<{ name: string, size: number, updatedAt: string | null }> = []
 
     try {
       const dirents = await readdir(logsDir, { withFileTypes: true })
-      const files = dirents.filter((dirent) => dirent.isFile())
+      const files = dirents.filter(dirent => dirent.isFile())
       const detailed = await Promise.all(
         files.map(async (file) => {
           const fullPath = path.join(logsDir, file.name)
@@ -227,18 +229,19 @@ export class TuffDashboardModule extends BaseModule {
             return {
               name: file.name,
               size: stats.size,
-              updatedAt: this.toIso(stats.mtime)
+              updatedAt: this.toIso(stats.mtime),
             }
-          } catch (error) {
+          }
+          catch (error) {
             console.warn('[TuffDashboard] Failed to stat log file:', fullPath, error)
             return null
           }
-        })
+        }),
       )
       recentFiles = detailed
         .filter(
-          (entry): entry is { name: string; size: number; updatedAt: string | null } =>
-            entry !== null
+          (entry): entry is { name: string, size: number, updatedAt: string | null } =>
+            entry !== null,
         )
         .sort((a, b) => {
           const left = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
@@ -246,22 +249,25 @@ export class TuffDashboardModule extends BaseModule {
           return right - left
         })
         .slice(0, limit)
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('[TuffDashboard] Failed to read logs directory:', logsDir, error)
     }
 
     return {
       directory: logsDir,
       userDataDir,
-      recentFiles
+      recentFiles,
     }
   }
 
   private ensureDb(): LibSQLDatabase<typeof schema> | null {
-    if (this.db) return this.db
+    if (this.db)
+      return this.db
     try {
       this.db = databaseModule.getDb()
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('[TuffDashboard] Database not ready yet, returning partial snapshot.', error)
       return null
     }

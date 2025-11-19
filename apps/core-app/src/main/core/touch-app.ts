@@ -1,23 +1,24 @@
-import { TalexTouch } from '../types'
-import { ChannelType, ITouchChannel } from '@talex-touch/utils/channel'
-import { app, dialog, BrowserWindow } from 'electron'
-import path from 'path'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
+import path from 'node:path'
+import { ChannelType } from '@talex-touch/utils/channel'
+import { app, BrowserWindow, dialog } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
+import { getStartupAnalytics } from '../modules/analytics'
+import { TalexTouch } from '../types'
 import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-util'
+import { devProcessManager } from '../utils/dev-process-manager'
+import { mainLog } from '../utils/logger'
 import { genTouchChannel } from './channel-core'
 import {
   AppStartEvent,
   TalexEvents,
-  touchEventBus
+  touchEventBus,
 } from './eventbus/touch-event'
-import { devProcessManager } from '../utils/dev-process-manager'
-import { innerRootPath } from './precore'
-import { TouchWindow } from './touch-window'
-import { TouchConfig } from './touch-config'
 import { ModuleManager } from './module-manager'
-import { mainLog } from '../utils/logger'
-import { getStartupAnalytics } from '../modules/analytics'
+import { innerRootPath } from './precore'
+import { TouchConfig } from './touch-config'
+import { TouchWindow } from './touch-window'
 
 export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = innerRootPath
@@ -49,19 +50,19 @@ export class TouchApp implements TalexTouch.TouchApp {
       detail,
       buttons: ['OK'],
       defaultId: 0,
-      noLink: true
+      noLink: true,
     })
   }
 
   constructor(app: Electron.App) {
     mainLog.info('Running under application root', {
-      meta: { root: this.rootPath }
+      meta: { root: this.rootPath },
     })
     checkDirWithCreate(this.rootPath, true)
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
       ...MainWindowOption,
-      autoShow: true
+      autoShow: true,
     }
 
     this.app = app
@@ -95,7 +96,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
       mainLog.info('Booting packaged build', {
-        meta: { appPath: app.getAppPath() }
+        meta: { appPath: app.getAppPath() },
       })
 
       // Try multiple paths for index.html
@@ -106,16 +107,16 @@ export class TouchApp implements TalexTouch.TouchApp {
         ...(process.resourcesPath
           ? [
               path.join(process.resourcesPath, 'app', 'renderer', 'index.html'),
-              path.join(process.resourcesPath, 'renderer', 'index.html')
+              path.join(process.resourcesPath, 'renderer', 'index.html'),
             ]
           : []),
         // Additional macOS-specific paths
         ...(process.platform === 'darwin'
           ? [
               path.resolve(appPath, '..', '..', '..', 'Resources', 'app', 'renderer', 'index.html'),
-              path.resolve(__dirname, '..', '..', 'renderer', 'index.html')
+              path.resolve(__dirname, '..', '..', 'renderer', 'index.html'),
             ]
-          : [])
+          : []),
       ]
 
       mainLog.info('Checking for index.html', {
@@ -123,8 +124,8 @@ export class TouchApp implements TalexTouch.TouchApp {
           __dirname: String(__dirname),
           appPath,
           resourcesPath: process.resourcesPath || 'N/A',
-          possiblePaths: possiblePaths.join(', ')
-        }
+          possiblePaths: possiblePaths.join(', '),
+        },
       })
 
       let url = possiblePaths[0]
@@ -133,7 +134,7 @@ export class TouchApp implements TalexTouch.TouchApp {
       for (const testPath of possiblePaths) {
         const exists = fse.existsSync(testPath)
         mainLog.debug(`Checking path: ${testPath}`, {
-          meta: { exists }
+          meta: { exists },
         })
 
         if (exists) {
@@ -161,8 +162,8 @@ export class TouchApp implements TalexTouch.TouchApp {
             triedPaths: possiblePaths.join(', '),
             appPath: app.getAppPath(),
             __dirname: String(__dirname),
-            resourcesPath: process.resourcesPath || 'N/A'
-          }
+            resourcesPath: process.resourcesPath || 'N/A',
+          },
         })
 
         await this.showFileNotFoundDialog(url, possiblePaths)
@@ -171,46 +172,50 @@ export class TouchApp implements TalexTouch.TouchApp {
 
       if (!startSilent) {
         this.window.window.show()
-      } else {
+      }
+      else {
         mainLog.info('Starting in silent mode (hidden to tray)')
       }
       mainLog.info('Loading renderer from file', {
-        meta: { url }
+        meta: { url },
       })
 
       try {
         await this.window.loadFile(url, {
-          devtools: this.version === TalexTouch.AppVersion.DEV
+          devtools: this.version === TalexTouch.AppVersion.DEV,
         })
-      } catch (error) {
+      }
+      catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
         mainLog.error('Failed to load renderer file', {
-          meta: { url, error: errorMsg }
+          meta: { url, error: errorMsg },
         })
 
         await this.showFileNotFoundDialog(url, possiblePaths)
         throw error
       }
-    } else {
-      const url = process.env['ELECTRON_RENDERER_URL'] as string
+    }
+    else {
+      const url = process.env.ELECTRON_RENDERER_URL as string
       if (!url) {
         throw new Error('ELECTRON_RENDERER_URL is not set')
       }
 
       if (!startSilent) {
         this.window.window.show()
-      } else {
+      }
+      else {
         mainLog.info('Starting in silent mode (hidden to tray)')
       }
       mainLog.info('Loading renderer from dev server', {
-        meta: { url }
+        meta: { url },
       })
 
       await this.window.loadURL(url, { devtools: true })
     }
 
     renderTimer.end('Renderer ready', {
-      meta: { mode: app.isPackaged ? 'file' : 'dev-server' }
+      meta: { mode: app.isPackaged ? 'file' : 'dev-server' },
     })
 
     this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, data }) => {
@@ -229,7 +234,7 @@ export class TouchApp implements TalexTouch.TouchApp {
         readyTime: currentTime,
         domContentLoaded: undefined, // Will be set by renderer
         firstInteractive: undefined, // Will be set by renderer
-        loadEventEnd: undefined // Will be set by renderer
+        loadEventEnd: undefined, // Will be set by renderer
       })
 
       // Save metrics to history (async, don't wait)
@@ -248,7 +253,7 @@ export class TouchApp implements TalexTouch.TouchApp {
           exePath: app.getPath('exe'),
           modulePath: path.join(this.rootPath, 'modules'),
           configPath: path.join(this.rootPath, 'config'),
-          pluginPath: path.join(this.rootPath, 'plugins')
+          pluginPath: path.join(this.rootPath, 'plugins'),
         },
         isPackaged: app.isPackaged,
         isDev: this.version === TalexTouch.AppVersion.DEV,
@@ -261,8 +266,8 @@ export class TouchApp implements TalexTouch.TouchApp {
           s: rendererStart,
           e: currentTime,
           p: process.uptime(),
-          h: process.hrtime()
-        }
+          h: process.hrtime(),
+        },
       }
     })
   }

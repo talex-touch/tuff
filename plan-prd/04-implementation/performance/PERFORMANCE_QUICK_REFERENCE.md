@@ -127,7 +127,7 @@ const expensiveFn = memoize((input: string) => {
 ### Check Indexes
 ```sql
 -- In SQLite database
-SELECT name, sql FROM sqlite_master 
+SELECT name, sql FROM sqlite_master
 WHERE type='index' AND tbl_name LIKE 'download_%';
 ```
 

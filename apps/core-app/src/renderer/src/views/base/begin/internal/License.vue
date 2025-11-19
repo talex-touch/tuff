@@ -1,16 +1,16 @@
 <script setup lang="ts" name="License">
 import Protocol from '~/assets/docs/license.md?raw'
 import AgreementTemplate from '~/components/addon/AgreementTemplate.vue'
-import Forbidden from './Forbidden.vue'
 import AccountDo from './AccountDo.vue'
+import Forbidden from './Forbidden.vue'
 
-type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
+type StepFunction = (call: { comp: any, rect?: { width: number, height: number } }) => void
 
 const step: StepFunction = inject('step')!
 
 function handleAgree(val: boolean): void {
   step({
-    comp: val ? AccountDo : Forbidden
+    comp: val ? AccountDo : Forbidden,
   })
 }
 </script>

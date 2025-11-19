@@ -1,35 +1,30 @@
-<template>
-  <div class="WavingParticle-Container" ref="container">
-  </div>
-</template>
-
 <script>
-export default {
-  name: "WavingParticle"
-}
 </script>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import WaveSurfer from 'wavesurfer.js'
 
 const props = defineProps(['song'])
+
+export default {
+  name: 'WavingParticle',
+}
 
 const audio = ref()
 const container = ref()
 
 onBeforeUnmount(() => {
-  if( audio.value )
+  if (audio.value)
     audio.value.destroy()
 })
 
 onMounted(() => {
-
   watch(() => props.song.url.url, (value) => {
-    if( audio.value )
+    if (audio.value)
       audio.value.destroy()
 
-    console.log( props.song, value )
+    console.log(props.song, value)
 
     const progress = props.song.progress
 
@@ -38,7 +33,7 @@ onMounted(() => {
       container: container.value,
       waveColor: 'violet',
       progressColor: 'purple',
-      pixelRatio: 1
+      pixelRatio: 1,
     })
 
     audio.value.on('ready', () => {
@@ -46,18 +41,21 @@ onMounted(() => {
       audio.value.zoom(10)
       // audio.value.play(Math.round(progress.current))
       watch(() => props.song._flag, (flag) => {
-        if( flag === 2 ) audio.value.pause()
+        if (flag === 2)
+          audio.value.pause()
         else audio.value.play(Math.round(progress.current))
       }, { immediate: true })
     })
 
     audio.value.load(value)
-    //props.song.audio._sounds[0]._node.src
-
+    // props.song.audio._sounds[0]._node.src
   }, { immediate: true })
-
 })
 </script>
+
+<template>
+  <div ref="container" class="WavingParticle-Container" />
+</template>
 
 <style lang="scss" scoped>
 .WavingParticle-Container {

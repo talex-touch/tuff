@@ -1,18 +1,18 @@
-import chalk from 'chalk'
 import type {
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiStreamChunk,
+  AiAuditLog,
   AiChatPayload,
   AiEmbeddingPayload,
-  AiTranslatePayload,
-  AiSummarizePayload,
-  AiVisionOcrPayload,
+  AiInvokeOptions,
+  AiInvokeResult,
+  AiProviderConfig,
   AiSDKConfig,
-  AiAuditLog,
+  AiStreamChunk,
+  AiSummarizePayload,
+  AiTranslatePayload,
+  AiVisionOcrPayload,
   ProviderManagerAdapter,
-  AiProviderConfig
 } from '@talex-touch/utils'
+import chalk from 'chalk'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
 import { strategyManager } from './intelligence-strategy-manager'
 
@@ -41,11 +41,11 @@ export class AiSDK {
     defaultStrategy: 'adaptive-default',
     enableAudit: true,
     enableCache: false,
-    capabilities: {}
+    capabilities: {},
   }
 
   private auditLogs: AiAuditLog[] = []
-  private cache = new Map<string, { result: any; timestamp: number }>()
+  private cache = new Map<string, { result: any, timestamp: number }>()
 
   constructor(config?: Partial<AiSDKConfig>) {
     if (config) {
@@ -59,7 +59,7 @@ export class AiSDK {
     if (config.capabilities) {
       nextConfig.capabilities = {
         ...this.config.capabilities,
-        ...config.capabilities
+        ...config.capabilities,
       }
     }
 
@@ -69,7 +69,7 @@ export class AiSDK {
 
     this.config = {
       ...nextConfig,
-      defaultStrategy: normalizeStrategyId(nextConfig.defaultStrategy) || 'adaptive-default'
+      defaultStrategy: normalizeStrategyId(nextConfig.defaultStrategy) || 'adaptive-default',
     }
 
     if (config.providers) {
@@ -78,7 +78,8 @@ export class AiSDK {
       config.providers.forEach((providerConfig) => {
         try {
           manager.registerFromConfig(providerConfig)
-        } catch (error) {
+        }
+        catch (error) {
           logError(`Failed to register provider ${providerConfig.id}:`, error)
         }
       })
@@ -94,7 +95,7 @@ export class AiSDK {
   async invoke<T = any>(
     capabilityId: string,
     payload: any,
-    options: AiInvokeOptions = {}
+    options: AiInvokeOptions = {},
   ): Promise<AiInvokeResult<T>> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
@@ -104,8 +105,8 @@ export class AiSDK {
 
     const runtimeOptions: AiInvokeOptions = { ...options }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
-    const configuredProviders =
-      capabilityRouting?.providers
+    const configuredProviders
+      = capabilityRouting?.providers
         ?.filter(binding => binding.enabled !== false)
         .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
         .map(binding => binding.providerId) ?? []
@@ -136,11 +137,11 @@ export class AiSDK {
     const manager = ensureProviderManager()
 
     const enabledProviders = manager.getEnabled().map(p => p.getConfig())
-    const typeFilteredProviders = enabledProviders.filter(config => 
-      capability.supportedProviders.includes(config.type)
+    const typeFilteredProviders = enabledProviders.filter(config =>
+      capability.supportedProviders.includes(config.type),
     )
 
-    const availableProviders = typeFilteredProviders.filter(config => {
+    const availableProviders = typeFilteredProviders.filter((config) => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
         return true
       }
@@ -154,7 +155,7 @@ export class AiSDK {
     const strategyResult = await strategyManager.select({
       capabilityId,
       options: runtimeOptions,
-      availableProviders
+      availableProviders,
     })
 
     const provider = manager.get(strategyResult.selectedProvider.id)
@@ -197,13 +198,14 @@ export class AiSDK {
           model: result.model,
           usage: result.usage,
           latency: result.latency,
-          success: true
+          success: true,
         })
       }
 
       logInfo(`${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`)
       return result
-    } catch (error) {
+    }
+    catch (error) {
       logError(`Invoke error for ${capabilityId}`, error)
 
       if (this.config.enableAudit) {
@@ -216,7 +218,7 @@ export class AiSDK {
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
           latency: Date.now() - startTime,
           success: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         })
       }
 
@@ -224,7 +226,8 @@ export class AiSDK {
         logWarn(`Attempting fallback providers for ${capabilityId}`)
         for (const fallbackConfig of strategyResult.fallbackProviders) {
           const fallbackProvider = manager.get(fallbackConfig.id)
-          if (!fallbackProvider) continue
+          if (!fallbackProvider)
+            continue
 
           try {
             switch (capability.type) {
@@ -246,7 +249,8 @@ export class AiSDK {
 
             logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
             return result
-          } catch (fallbackError) {
+          }
+          catch (fallbackError) {
             logError(`Fallback provider ${fallbackConfig.id} failed`, fallbackError)
           }
         }
@@ -256,10 +260,10 @@ export class AiSDK {
     }
   }
 
-  async *invokeStream(
+  async* invokeStream(
     capabilityId: string,
     payload: any,
-    options: AiInvokeOptions = {}
+    options: AiInvokeOptions = {},
   ): AsyncGenerator<AiStreamChunk> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
@@ -268,8 +272,8 @@ export class AiSDK {
 
     const runtimeOptions: AiInvokeOptions = { ...options, stream: true }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
-    const configuredProviders =
-      capabilityRouting?.providers
+    const configuredProviders
+      = capabilityRouting?.providers
         ?.filter(binding => binding.enabled !== false)
         .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
         .map(binding => binding.providerId) ?? []
@@ -291,11 +295,11 @@ export class AiSDK {
     const manager = ensureProviderManager()
 
     const enabledProviders = manager.getEnabled().map(p => p.getConfig())
-    const typeFilteredProviders = enabledProviders.filter(config => 
-      capability.supportedProviders.includes(config.type)
+    const typeFilteredProviders = enabledProviders.filter(config =>
+      capability.supportedProviders.includes(config.type),
     )
 
-    const availableProviders = typeFilteredProviders.filter(config => {
+    const availableProviders = typeFilteredProviders.filter((config) => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
         return true
       }
@@ -309,7 +313,7 @@ export class AiSDK {
     const strategyResult = await strategyManager.select({
       capabilityId,
       options: runtimeOptions,
-      availableProviders
+      availableProviders,
     })
 
     const provider = manager.get(strategyResult.selectedProvider.id)
@@ -330,7 +334,8 @@ export class AiSDK {
 
   private getFromCache(key: string): any | null {
     const cached = this.cache.get(key)
-    if (!cached) return null
+    if (!cached)
+      return null
 
     const expiration = this.config.cacheExpiration || 1800
     if (Date.now() - cached.timestamp > expiration * 1000) {
@@ -344,7 +349,7 @@ export class AiSDK {
   private setToCache(key: string, result: any): void {
     this.cache.set(key, {
       result,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
   }
 
@@ -380,12 +385,12 @@ export class AiSDK {
       this.invoke<string>('text.translate', payload, options),
 
     summarize: (payload: AiSummarizePayload, options?: AiInvokeOptions) =>
-      this.invoke<string>('text.summarize', payload, options)
+      this.invoke<string>('text.summarize', payload, options),
   }
 
   embedding = {
     generate: (payload: AiEmbeddingPayload, options?: AiInvokeOptions) =>
-      this.invoke<number[]>('embedding.generate', payload, options)
+      this.invoke<number[]>('embedding.generate', payload, options),
   }
 
   /**
@@ -408,7 +413,7 @@ export class AiSDK {
         return {
           success: false,
           message: 'Provider is disabled',
-          timestamp
+          timestamp,
         }
       }
 
@@ -416,7 +421,7 @@ export class AiSDK {
         return {
           success: false,
           message: 'API key is required',
-          timestamp
+          timestamp,
         }
       }
 
@@ -429,10 +434,10 @@ export class AiSDK {
         messages: [
           {
             role: 'user',
-            content: 'Hello'
-          }
+            content: 'Hello',
+          },
         ],
-        maxTokens: 10
+        maxTokens: 10,
       }
 
       const timeout = providerConfig.timeout || 30000
@@ -441,8 +446,8 @@ export class AiSDK {
       const result = await Promise.race([
         provider.chat(testPayload, { timeout }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Request timeout')), timeout)
-        )
+          setTimeout(() => reject(new Error('Request timeout')), timeout),
+        ),
       ])
 
       const latency = Date.now() - startTime
@@ -451,9 +456,10 @@ export class AiSDK {
         success: true,
         message: `Connection successful. Model: ${result.model}`,
         latency,
-        timestamp
+        timestamp,
       }
-    } catch (error) {
+    }
+    catch (error) {
       const latency = Date.now() - startTime
       let message = 'Connection failed'
 
@@ -461,19 +467,26 @@ export class AiSDK {
         // Parse common error messages
         if (error.message.includes('timeout')) {
           message = 'Request timeout - check your network connection'
-        } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        }
+        else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
           message = 'Invalid API key'
-        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+        }
+        else if (error.message.includes('403') || error.message.includes('Forbidden')) {
           message = 'Access forbidden - check your API key permissions'
-        } else if (error.message.includes('404')) {
+        }
+        else if (error.message.includes('404')) {
           message = 'API endpoint not found - check your base URL'
-        } else if (error.message.includes('429')) {
+        }
+        else if (error.message.includes('429')) {
           message = 'Rate limit exceeded'
-        } else if (error.message.includes('500') || error.message.includes('502') || error.message.includes('503')) {
+        }
+        else if (error.message.includes('500') || error.message.includes('502') || error.message.includes('503')) {
           message = 'Provider service error - try again later'
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        }
+        else if (error.message.includes('network') || error.message.includes('fetch')) {
           message = 'Network error - check your internet connection'
-        } else {
+        }
+        else {
           message = error.message
         }
       }
@@ -482,7 +495,7 @@ export class AiSDK {
         success: false,
         message,
         latency,
-        timestamp
+        timestamp,
       }
     }
   }
@@ -491,8 +504,11 @@ export class AiSDK {
 export const ai = new AiSDK()
 
 function normalizeStrategyId(id?: string): string | undefined {
-  if (!id) return id
-  if (id === 'priority') return 'rule-based-default'
-  if (id === 'adaptive') return 'adaptive-default'
+  if (!id)
+    return id
+  if (id === 'priority')
+    return 'rule-based-default'
+  if (id === 'adaptive')
+    return 'adaptive-default'
   return id
 }

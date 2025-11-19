@@ -97,30 +97,30 @@ To register snippets in your plugin, use the `snippets` API provided by the plug
 
 ```javascript [Registering Snippets]
 // In your plugin's main file
-import { snippets } from '@polyglot-toolbox/plugin-sdk';
+import { snippets } from '@polyglot-toolbox/plugin-sdk'
 
 // Define your snippets
 const mySnippets = {
-  "log-message": {
-    "prefix": "log",
-    "body": [
-      "console.log('${1:message}');"
+  'log-message': {
+    prefix: 'log',
+    body: [
+      'console.log(\'${1:message}\');'
     ],
-    "description": "Insert a console.log statement"
+    description: 'Insert a console.log statement'
   },
-  "function-arrow": {
-    "prefix": "afn",
-    "body": [
-      "const ${1:functionName} = (${2:params}) => {",
-      "  ${3:// function body}",
-      "};"
+  'function-arrow': {
+    prefix: 'afn',
+    body: [
+      'const ${1:functionName} = (${2:params}) => {',
+      '  ${3:// function body}',
+      '};'
     ],
-    "description": "Create an arrow function"
+    description: 'Create an arrow function'
   }
-};
+}
 
 // Register the snippets
-snippets.register('my-plugin-snippets', mySnippets);
+snippets.register('my-plugin-snippets', mySnippets)
 ```
 
 :::
@@ -260,15 +260,15 @@ You can list all registered snippets:
 ::: code-group
 
 ```javascript [Listing Registered Snippets]
-import { snippets } from '@polyglot-toolbox/plugin-sdk';
+import { snippets } from '@polyglot-toolbox/plugin-sdk'
 
 // Get all snippets
-const allSnippets = snippets.list();
-console.log(allSnippets);
+const allSnippets = snippets.list()
+console.log(allSnippets)
 
 // Get snippets for a specific scope
-const htmlSnippets = snippets.list('html');
-console.log(htmlSnippets);
+const htmlSnippets = snippets.list('html')
+console.log(htmlSnippets)
 ```
 
 :::
@@ -280,10 +280,10 @@ If you need to remove snippets:
 ::: code-group
 
 ```javascript [Unregistering Snippets]
-import { snippets } from '@polyglot-toolbox/plugin-sdk';
+import { snippets } from '@polyglot-toolbox/plugin-sdk'
 
 // Unregister all snippets for your plugin
-snippets.unregister('my-plugin-snippets');
+snippets.unregister('my-plugin-snippets')
 ```
 
 :::
@@ -419,72 +419,72 @@ Here's a complete example of a plugin that provides snippets for a specific prog
 
 ```javascript [Language-Specific Snippet Plugin Example]
 // plugin.js
-import { snippets } from '@polyglot-toolbox/plugin-sdk';
+import { snippets } from '@polyglot-toolbox/plugin-sdk'
 
 class PythonSnippetsPlugin {
   constructor() {
-    this.registerSnippets();
+    this.registerSnippets()
   }
-  
+
   registerSnippets() {
     const pythonSnippets = {
-      "function-definition": {
-        "prefix": "def",
-        "body": [
-          "def ${1:function_name}(${2:params}):",
-          "    \"\"\"${3:Function description}\"\"\"",
-          "    ${4:pass}"
+      'function-definition': {
+        prefix: 'def',
+        body: [
+          'def ${1:function_name}(${2:params}):',
+          '    """${3:Function description}"""',
+          '    ${4:pass}'
         ],
-        "description": "Create a Python function definition"
+        description: 'Create a Python function definition'
       },
-      "class-definition": {
-        "prefix": "class",
-        "body": [
-          "class ${1:ClassName}(${2:object}):",
-          "    \"\"\"${3:Class description}\"\"\"",
-          "",
-          "    def __init__(self, ${4:params}):",
-          "        ${5:super(${1:ClassName}, self).__init__()}"
+      'class-definition': {
+        prefix: 'class',
+        body: [
+          'class ${1:ClassName}(${2:object}):',
+          '    """${3:Class description}"""',
+          '',
+          '    def __init__(self, ${4:params}):',
+          '        ${5:super(${1:ClassName}, self).__init__()}'
         ],
-        "description": "Create a Python class definition"
+        description: 'Create a Python class definition'
       },
-      "if-statement": {
-        "prefix": "if",
-        "body": [
-          "if ${1:condition}:",
-          "    ${2:pass}"
+      'if-statement': {
+        prefix: 'if',
+        body: [
+          'if ${1:condition}:',
+          '    ${2:pass}'
         ],
-        "description": "Create a Python if statement"
+        description: 'Create a Python if statement'
       },
-      "for-loop": {
-        "prefix": "for",
-        "body": [
-          "for ${1:item} in ${2:iterable}:",
-          "    ${3:pass}"
+      'for-loop': {
+        prefix: 'for',
+        body: [
+          'for ${1:item} in ${2:iterable}:',
+          '    ${3:pass}'
         ],
-        "description": "Create a Python for loop"
+        description: 'Create a Python for loop'
       },
-      "try-except": {
-        "prefix": "try",
-        "body": [
-          "try:",
-          "    ${1:pass}",
-          "except ${2:Exception} as ${3:e}:",
-          "    ${4:pass}"
+      'try-except': {
+        prefix: 'try',
+        body: [
+          'try:',
+          '    ${1:pass}',
+          'except ${2:Exception} as ${3:e}:',
+          '    ${4:pass}'
         ],
-        "description": "Create a Python try-except block"
+        description: 'Create a Python try-except block'
       }
-    };
-    
+    }
+
     // Register snippets for Python files
-    snippets.register('python-snippets', pythonSnippets, ['python']);
-    
-    console.log('Python snippets registered');
+    snippets.register('python-snippets', pythonSnippets, ['python'])
+
+    console.log('Python snippets registered')
   }
 }
 
 // Initialize the plugin
-new PythonSnippetsPlugin();
+new PythonSnippetsPlugin()
 ```
 
 :::

@@ -1,13 +1,11 @@
-import fse from 'fs-extra'
-import path from 'path'
-import url from 'url'
+import type { PluginInstallRequest, PluginInstallResult, PluginProvider, PluginProviderContext } from '@talex-touch/utils/plugin/providers'
+import path from 'node:path'
+import url from 'node:url'
 import {
+
   PluginProviderType,
-  type PluginInstallRequest,
-  type PluginInstallResult,
-  type PluginProvider,
-  type PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
+import fse from 'fs-extra'
 import { createProviderLogger } from './logger'
 
 function resolveLocalPath(source: string): string {
@@ -25,10 +23,11 @@ export class FilePluginProvider implements PluginProvider {
     try {
       const filePath = resolveLocalPath(request.source)
       return fse.pathExistsSync(filePath)
-    } catch (error) {
+    }
+    catch (error) {
       this.log.error('本地插件文件解析失败', {
         meta: { source: request.source },
-        error
+        error,
       })
       return false
     }
@@ -36,18 +35,18 @@ export class FilePluginProvider implements PluginProvider {
 
   async install(
     request: PluginInstallRequest,
-    context?: PluginProviderContext
+    context?: PluginProviderContext,
   ): Promise<PluginInstallResult> {
     const filePath = resolveLocalPath(request.source)
     this.log.info('尝试通过本地文件安装插件', {
-      meta: { source: request.source, filePath, tempDir: context?.tempDir }
+      meta: { source: request.source, filePath, tempDir: context?.tempDir },
     })
 
     try {
       const exists = await fse.pathExists(filePath)
       if (!exists) {
         this.log.error('本地插件文件不存在', {
-          meta: { filePath }
+          meta: { filePath },
         })
         throw new Error('指定的插件文件不存在')
       }
@@ -55,7 +54,7 @@ export class FilePluginProvider implements PluginProvider {
       const stats = await fse.stat(filePath)
 
       this.log.success('本地插件文件验证成功', {
-        meta: { filePath, size: String(stats.size) }
+        meta: { filePath, size: String(stats.size) },
       })
 
       return {
@@ -63,13 +62,14 @@ export class FilePluginProvider implements PluginProvider {
         official: false,
         filePath,
         metadata: {
-          size: stats.size
-        }
+          size: stats.size,
+        },
       }
-    } catch (error) {
+    }
+    catch (error) {
       this.log.error('本地插件安装失败', {
         meta: { filePath },
-        error
+        error,
       })
       throw error
     }

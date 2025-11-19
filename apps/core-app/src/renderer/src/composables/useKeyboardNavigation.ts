@@ -1,50 +1,51 @@
+import type { Ref } from 'vue'
 /**
  * Composable for keyboard navigation support
  * Provides arrow key navigation and other keyboard shortcuts
  */
-import { onMounted, onUnmounted, type Ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 
 interface KeyboardNavigationOptions {
   /**
    * Callback when user navigates up
    */
   onNavigateUp?: () => void
-  
+
   /**
    * Callback when user navigates down
    */
   onNavigateDown?: () => void
-  
+
   /**
    * Callback when user navigates left
    */
   onNavigateLeft?: () => void
-  
+
   /**
    * Callback when user navigates right
    */
   onNavigateRight?: () => void
-  
+
   /**
    * Callback when user presses Enter
    */
   onEnter?: () => void
-  
+
   /**
    * Callback when user presses Space
    */
   onSpace?: () => void
-  
+
   /**
    * Callback when user presses Escape
    */
   onEscape?: () => void
-  
+
   /**
    * Element to attach listeners to (defaults to document)
    */
   element?: Ref<HTMLElement | null>
-  
+
   /**
    * Whether navigation is enabled
    */
@@ -61,7 +62,7 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
     onSpace,
     onEscape,
     element,
-    enabled
+    enabled,
   } = options
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -73,9 +74,9 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
     // Don't interfere with input fields
     const target = event.target as HTMLElement
     if (
-      target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.isContentEditable
+      target.tagName === 'INPUT'
+      || target.tagName === 'TEXTAREA'
+      || target.isContentEditable
     ) {
       return
     }
@@ -121,6 +122,6 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
   })
 
   return {
-    handleKeyDown
+    handleKeyDown,
   }
 }

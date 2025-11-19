@@ -1,14 +1,15 @@
 import type { AiInvokeResult } from '@talex-touch/utils'
-import { BaseCapabilityTester, type CapabilityTestPayload } from './base-tester'
+import type { CapabilityTestPayload } from './base-tester'
+import { BaseCapabilityTester } from './base-tester'
 
 export class EmbeddingCapabilityTester extends BaseCapabilityTester {
   readonly capabilityType = 'embedding'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
     const text = input.userInput || '这是一个测试文本，用于生成向量嵌入。'
-    
+
     return {
-      text
+      text,
     }
   }
 
@@ -22,7 +23,7 @@ export class EmbeddingCapabilityTester extends BaseCapabilityTester {
       textPreview: preview,
       provider: result.provider,
       model: result.model,
-      latency: result.latency
+      latency: result.latency,
     }
   }
 

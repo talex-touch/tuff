@@ -1,15 +1,15 @@
-import { TuffFactory, TuffItemBuilder, TuffInputType } from '@talex-touch/utils'
 import type {
   IExecuteArgs,
+  ISearchProvider,
   PreviewAbilityResult,
   PreviewCardPayload,
-  TuffItem
+  TuffItem,
 } from '@talex-touch/utils'
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
-import type { ISearchProvider } from '@talex-touch/utils'
+import type { PreviewAbilityRegistry } from './preview-registry'
 import crypto from 'node:crypto'
-import { PreviewAbilityRegistry } from './preview-registry'
-import { performance } from 'perf_hooks'
+import { performance } from 'node:perf_hooks'
+import { TuffFactory, TuffInputType, TuffItemBuilder } from '@talex-touch/utils'
 import { clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
 
@@ -49,8 +49,8 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
           providerName: this.name ?? this.id,
           duration,
           resultCount: 1,
-          status: 'success'
-        }
+          status: 'success',
+        },
       ])
       .build()
   }
@@ -81,8 +81,8 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
           providerName: this.name ?? this.id,
           duration,
           resultCount: 0,
-          status: 'success'
-        }
+          status: 'success',
+        },
       ])
       .build()
   }
@@ -97,13 +97,13 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       .setKind('preview')
       .setCustomRender('vue', PREVIEW_COMPONENT_NAME, {
         ...abilityResult.payload,
-        confidence: abilityResult.confidence
+        confidence: abilityResult.confidence,
       })
       .setMeta({
         preview: {
           abilityId: abilityResult.abilityId,
-          confidence: abilityResult.confidence
-        }
+          confidence: abilityResult.confidence,
+        },
       })
       .setClassName('core-preview-card')
       .setFinalScore(1)
@@ -116,14 +116,17 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   }
 
   private extractPayload(item: TuffItem): PreviewCardPayload | undefined {
-    if (item.render?.mode !== 'custom') return undefined
+    if (item.render?.mode !== 'custom')
+      return undefined
     const custom = item.render.custom
-    if (custom?.type !== 'vue') return undefined
+    if (custom?.type !== 'vue')
+      return undefined
     return custom.data as PreviewCardPayload | undefined
   }
 
   private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
-    if (!payload?.primaryValue) return
+    if (!payload?.primaryValue)
+      return
     await clipboardModule.saveVirtualEntry({
       content: payload.primaryValue,
       rawContent: query.text ?? '',
@@ -131,8 +134,8 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       meta: {
         expression: query.text ?? '',
         abilityId: payload.abilityId,
-        payload
-      }
+        payload,
+      },
     })
   }
 }

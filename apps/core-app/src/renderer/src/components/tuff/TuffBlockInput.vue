@@ -1,7 +1,7 @@
 <script lang="ts" name="TuffBlockInput" setup>
-import { computed, ref } from 'vue'
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { computed, ref } from 'vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
@@ -20,8 +20,8 @@ const props = withDefaults(
     description: '',
     disabled: false,
     placeholder: '',
-    clearable: false
-  }
+    clearable: false,
+  },
 )
 
 const emits = defineEmits<{
@@ -35,7 +35,8 @@ const primitiveValue = computed(() => value.value as string | number)
 const focused = ref(false)
 
 const hasContent = computed(() => {
-  if (value.value === null || value.value === undefined) return false
+  if (value.value === null || value.value === undefined)
+    return false
   return String(value.value).trim().length > 0
 })
 

@@ -1,4 +1,4 @@
-import { TalexTouch } from '../types'
+import type { TalexTouch } from '../types'
 
 /**
  * Window animation controller return type
@@ -44,7 +44,7 @@ interface AnimationState {
  * Simple easing function for smooth animation
  */
 function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 }
 
 /**
@@ -58,7 +58,7 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
 
   const animationState: AnimationState = {
     intervalId: null,
-    completed: false
+    completed: false,
   }
 
   /**
@@ -67,9 +67,9 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
    */
   const isWindowValid = (): boolean => {
     return (
-      currentWindow !== null &&
-      currentWindow.window !== null &&
-      !currentWindow.window.isDestroyed()
+      currentWindow !== null
+      && currentWindow.window !== null
+      && !currentWindow.window.isDestroyed()
     )
   }
 
@@ -136,7 +136,8 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
           }
         }, 16) // ~60fps
       })
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Error in updateHeight:', error)
       return Promise.resolve(false)
     }
@@ -162,12 +163,14 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       if (targetVisible) {
         // Show window
         browserWindow.show()
-      } else {
+      }
+      else {
         // Hide window
         if (process.platform === 'darwin') {
           // On macOS, we can simply hide the window
           browserWindow.hide()
-        } else {
+        }
+        else {
           // On other platforms, move window far off-screen before hiding
           browserWindow.setPosition(-100000, -100000)
           browserWindow.hide()
@@ -175,7 +178,8 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       }
 
       return Promise.resolve(true)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Error in toggleWindow:', error)
       return Promise.resolve(false)
     }
@@ -196,7 +200,6 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
     updateHeight,
     cancel,
     toggleWindow,
-    changeWindow
+    changeWindow,
   }
 }
-

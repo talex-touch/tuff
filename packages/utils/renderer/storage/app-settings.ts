@@ -1,5 +1,6 @@
-import { TouchStorage, createStorageProxy } from '.';
-import { appSettingOriginData, StorageList, type AppSetting } from '../..';
+import type { AppSetting } from '../..'
+import { createStorageProxy, TouchStorage } from '.'
+import { appSettingOriginData, StorageList } from '../..'
 
 /**
  * Application settings storage manager
@@ -23,15 +24,15 @@ class AppSettingsStorage extends TouchStorage<AppSetting> {
    * Initializes a new instance of the AppSettingsStorage class
    */
   constructor() {
-    super(StorageList.APP_SETTING, JSON.parse(JSON.stringify(appSettingOriginData)));
-    this.setAutoSave(true);
+    super(StorageList.APP_SETTING, JSON.parse(JSON.stringify(appSettingOriginData)))
+    this.setAutoSave(true)
   }
 }
 
 /**
  * Global instance of the application settings
  */
-const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`;
+const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`
 
 /**
  * Lazy-initialized application settings.
@@ -39,5 +40,5 @@ const APP_SETTINGS_SINGLETON_KEY = `storage:${StorageList.APP_SETTING}`;
  */
 export const appSettings = createStorageProxy<AppSettingsStorage>(
   APP_SETTINGS_SINGLETON_KEY,
-  () => new AppSettingsStorage()
-);
+  () => new AppSettingsStorage(),
+)

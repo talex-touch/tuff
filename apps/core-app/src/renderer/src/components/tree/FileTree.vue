@@ -1,66 +1,25 @@
-<template>
-  <div class="FileTree-Wrapper">
-    <div class="FileTree-Toolbar">
-      <span class="FileTree-Title">
-        <remix-icon name="folder" />
-        <span>文件</span>
-        {{ options.select?.paths.join('/') }}{{ options.select?.name }}
-        <span v-if="options.select?.file">/</span>
-      </span>
-
-      <span class="FileTree-Func">
-        <IconButton small icon="refresh" @click="refresh" />
-      </span>
-    </div>
-    <el-scrollbar>
-      <!--      <div class="FileTree-Container">-->
-
-      <el-tree
-        ref="treeDom"
-        :props="{ label: 'name', children: 'children', isLeaf: 'leaf' }"
-        :load="loadNode"
-        lazy
-        show-checkbox
-        @current-change="currentChange"
-        @check-change="click"
-      >
-        <template #default="{ node, data }">
-          <span class="FileTree-Item">
-            <span class="File-Icon">
-              <remix-icon v-if="data.suffix.t === 'r'" :name="data.suffix.n" />
-              <span v-else-if="data.suffix.t === 'u'">{{ data.suffix }}</span>
-              <remix-icon v-else name="folder" />
-            </span>
-            <span>{{ node.label }}</span>
-          </span>
-        </template>
-      </el-tree>
-
-      <!--      </div>-->
-    </el-scrollbar>
-  </div>
-</template>
-
 <script name="FileTree" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import RemixIcon from '~/components/icon/RemixIcon.vue'
 import IconButton from '~/components/base/button/IconButton.vue'
+import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps(['fileAdpoter', 'modelValue'])
 const emit = defineEmits(['update:modelValue'])
 
 const treeDom = ref()
 const options = reactive({
-  select: null
+  select: null,
 })
 const files = useModelWrapper(props, emit)
 
 onMounted(() => {
   watchEffect(() => {
-    if (!treeDom.value) return
-    ;[...props.modelValue].forEach((item) => {
+    if (!treeDom.value) {
+      return
+    }[...props.modelValue].forEach((item) => {
       const node = treeDom.value.getNode(item)
-      if (node) treeDom.value.setChecked(node, true)
+      if (node)
+        treeDom.value.setChecked(node, true)
     })
   })
 })
@@ -71,7 +30,8 @@ function currentChange(val) {
 
 let _resolve, g_node
 async function refresh() {
-  if (!g_node || !_resolve) return
+  if (!g_node || !_resolve)
+    return
   console.log(treeDom.value)
 
   g_node.childNodes = []
@@ -99,7 +59,8 @@ async function loadNode(node, resolve) {
   const _p = []
   let _node = node
   while (_node.parent) {
-    if (_node.data.name) _p.push(_node.data.name)
+    if (_node.data.name)
+      _p.push(_node.data.name)
 
     _node = _node.parent
   }
@@ -108,7 +69,8 @@ async function loadNode(node, resolve) {
 }
 
 function suffix2Icon(suffix) {
-  if (!suffix || suffix.length < 2) return ''
+  if (!suffix || suffix.length < 2)
+    return ''
   const s = String(suffix.pop()).toLowerCase()
 
   const mapper = {
@@ -143,19 +105,20 @@ function suffix2Icon(suffix) {
     css: 'css3',
     less: 'css3',
     scss: 'css3',
-    sass: 'css3'
+    sass: 'css3',
   }
 
   const t = mapper[s] ? { t: 'r', n: mapper[s] } : { t: 'u' }
 
   return {
     s,
-    ...t
+    ...t,
   }
 }
 
 function item2Obj(array, paths = []) {
-  if (!array) return []
+  if (!array)
+    return []
   const t = []
 
   array.forEach((item) => {
@@ -164,13 +127,56 @@ function item2Obj(array, paths = []) {
       file: item[Symbol('type')] === 1,
       suffix: suffix2Icon(item.name.split('.')),
       children: [],
-      paths
+      paths,
     })
   })
 
   return t
 }
 </script>
+
+<template>
+  <div class="FileTree-Wrapper">
+    <div class="FileTree-Toolbar">
+      <span class="FileTree-Title">
+        <RemixIcon name="folder" />
+        <span>文件</span>
+        {{ options.select?.paths.join('/') }}{{ options.select?.name }}
+        <span v-if="options.select?.file">/</span>
+      </span>
+
+      <span class="FileTree-Func">
+        <IconButton small icon="refresh" @click="refresh" />
+      </span>
+    </div>
+    <el-scrollbar>
+      <!--      <div class="FileTree-Container"> -->
+
+      <el-tree
+        ref="treeDom"
+        :props="{ label: 'name', children: 'children', isLeaf: 'leaf' }"
+        :load="loadNode"
+        lazy
+        show-checkbox
+        @current-change="currentChange"
+        @check-change="click"
+      >
+        <template #default="{ node, data }">
+          <span class="FileTree-Item">
+            <span class="File-Icon">
+              <RemixIcon v-if="data.suffix.t === 'r'" :name="data.suffix.n" />
+              <span v-else-if="data.suffix.t === 'u'">{{ data.suffix }}</span>
+              <RemixIcon v-else name="folder" />
+            </span>
+            <span>{{ node.label }}</span>
+          </span>
+        </template>
+      </el-tree>
+
+      <!--      </div> -->
+    </el-scrollbar>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .FileTree-Wrapper {

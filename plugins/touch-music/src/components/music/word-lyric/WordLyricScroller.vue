@@ -1,24 +1,15 @@
-<template>
-  <div class="WordLyric-Container" :class="{ shine }" :style="`--theme-word-color: ${song.colors && song.colors[song.colors.length > 4 ? 1 : 0].color}`">
-    <el-scrollbar ref="scroll">
-      <WordLyricItem @index="handleIndex" :tlyric="tlyric[index]"
-                     :class="{ 'start': index === ind, 'far-away': index + 2 === ind || index - 2 === ind, 'far': index + 1 === ind || index - 1 === ind }"
-                     v-for="(item, index) in wordLyrics || []" :key="index" :index="index" :lyric="item" />
-    </el-scrollbar>
-  </div>
-</template>
-
 <script>
-export default {
-  name: "WordLyricScroller"
-}
 </script>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
 import WordLyricItem from '@comp/music/word-lyric/WordLyricItem.vue'
 import { musicManager } from '@modules/music'
-import { sleep, throttleRef } from '@modules/utils'
+import { throttleRef } from '@modules/utils'
+import { onMounted, ref, watch } from 'vue'
+
+export default {
+  name: 'WordLyricScroller',
+}
 
 const ind = ref(-1)
 const scroll = ref()
@@ -29,12 +20,12 @@ const shine = throttleRef(false, 2400)
 const song = musicManager.playManager.song
 
 onMounted(() => {
-
-  let draw;
+  let draw
 
   watch(() => song.value, () => {
     const lyric = song.value?._songManager?.wordLyric?.wordLyric
-    if( !lyric ) return
+    if (!lyric)
+      return
 
     wordLyrics.value = lyric.split('\n')
 
@@ -65,30 +56,37 @@ onMounted(() => {
 
     draw(analyser, dataArray)
   }, { immediate: true })
-
 })
 
-let lastTop = -1, task
+let lastTop = -1; let task
 
 async function handleIndex(i) {
   ind.value = i
 
   clearTimeout(task)
   task = setTimeout(async () => {
-
     const el = scroll.value.$el.children[0].children[0]
-    if ( !el ) return
+    if (!el)
+      return
     const target = el.children[i].offsetTop - 100
 
     lastTop = target
-    scroll.value.scrollTo( 0, target )
-
+    scroll.value.scrollTo(0, target)
   })
-
-
 }
-
 </script>
+
+<template>
+  <div class="WordLyric-Container" :class="{ shine }" :style="`--theme-word-color: ${song.colors && song.colors[song.colors.length > 4 ? 1 : 0].color}`">
+    <el-scrollbar ref="scroll">
+      <WordLyricItem
+        v-for="(item, index) in wordLyrics || []" :key="index"
+        :tlyric="tlyric[index]"
+        :class="{ 'start': index === ind, 'far-away': index + 2 === ind || index - 2 === ind, 'far': index + 1 === ind || index - 1 === ind }" :index="index" :lyric="item" @index="handleIndex"
+      />
+    </el-scrollbar>
+  </div>
+</template>
 
 <style lang="scss" scoped>
 .WordLyric-Container {

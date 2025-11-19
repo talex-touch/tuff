@@ -1,32 +1,32 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
+import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
+import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import ElementPlus from 'element-plus'
 
-import router from './base/router'
+import { createPinia } from 'pinia'
+import VWave from 'v-wave'
+import { createApp } from 'vue'
+import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import { baseNodeApi } from '~/modules/channel/main/node'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
-import { usePluginStore } from '~/stores/plugin'
 import { setupI18n } from '~/modules/lang'
-import ElementPlus from 'element-plus'
-import VWave from 'v-wave'
 
-import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
 import {
+  shouldShowPlatformWarning,
   showPlatformCompatibilityWarning,
-  shouldShowPlatformWarning
 } from '~/modules/mention/platform-warning'
-import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import { usePluginStore } from '~/stores/plugin'
+import App from './App.vue'
 
+import router from './base/router'
 import './assets/main.css'
 import '~/styles/element/index.scss'
 import '~/styles/index.scss'
 import '~/styles/accessibility.scss'
-import 'vue-sonner/style.css'
 
+import 'vue-sonner/style.css'
 import 'uno.css'
 import 'virtual:unocss-devtools'
-import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 
 window.$nodeApi = baseNodeApi
 window.$shortconApi = shortconApi
@@ -40,17 +40,14 @@ preloadLog('Bootstrapping Talex Touch renderer...')
 async function bootstrap() {
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
-    setupI18n({ locale: initialLanguage })
-  )
+    setupI18n({ locale: initialLanguage }))
   ;(window as any).$i18n = i18n
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () =>
-    createApp(App)
-  )
+    createApp(App))
 
   await runBootStep('Registering plugins and global modules', 0.05, () =>
-    registerCorePlugins(app, i18n)
-  )
+    registerCorePlugins(app, i18n))
 
   await runBootStep('Initializing plugin store', 0.05, () => maybeInitializePluginStore())
 
@@ -59,8 +56,7 @@ async function bootstrap() {
   })
 
   await runBootStep('Checking platform compatibility', 0.02, () =>
-    checkPlatformCompatibility()
-  )
+    checkPlatformCompatibility())
 
   preloadDebugStep('Renderer shell mounted', 0.02)
 }
@@ -71,7 +67,7 @@ async function bootstrap() {
 async function checkPlatformCompatibility() {
   try {
     // 等待应用准备就绪
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
     // 检查是否应该显示警告
     if (!shouldShowPlatformWarning()) {
@@ -84,7 +80,8 @@ async function checkPlatformCompatibility() {
     if (appInfo?.platformWarning) {
       await showPlatformCompatibilityWarning(appInfo.platformWarning)
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.warn('Failed to check platform compatibility:', error)
   }
 }
