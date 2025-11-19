@@ -3,9 +3,6 @@ import type {
   IProviderActivate,
   ISearchProvider,
   ITouchEvent,
-  TimingLogLevel,
-  TimingMeta,
-  TimingOptions,
   TuffQuery,
   TuffSearchResult,
 } from '@talex-touch/utils'
@@ -48,7 +45,6 @@ import {
 } from '@talex-touch/utils/electron/file-parsers'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
-// import PinyinMatch from 'pinyin-match'
 import extractFileIcon from 'extract-file-icon'
 import plist from 'plist'
 import {
@@ -70,6 +66,8 @@ import {
 } from '../../../../service/background-task-service'
 import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 import { fileProviderLog, formatDuration } from '../../../../utils/logger'
+import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
+import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
@@ -86,130 +84,6 @@ const ICON_META_EXTENSION_KEY = 'iconMeta'
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 
-type FileTimingMeta = TimingMeta & {
-  stage?: string
-  message?: string
-  files?: number
-  extensions?: number
-  status?: 'success' | 'failed'
-}
-
-const FILE_TIMING_STYLE: Record<TimingLogLevel, 'debug' | 'info' | 'warn' | 'error'> = {
-  none: 'debug',
-  info: 'debug',
-  warn: 'warn',
-  error: 'error',
-}
-
-const FILE_TIMING_BASE_OPTIONS: TimingOptions = {
-  storeHistory: false,
-  logThresholds: {
-    none: 50,
-    info: 250,
-    warn: 1000,
-  },
-  formatter: (entry) => {
-    const meta = (entry.meta ?? {}) as FileTimingMeta
-    const stage = meta.stage ?? entry.label.split(':').slice(1).join(':') ?? entry.label
-    const message = meta.message ?? stage
-    const durationText = formatDuration(entry.durationMs)
-    const details: string[] = []
-    if (typeof meta.files === 'number') {
-      details.push(`files=${meta.files}`)
-    }
-    if (typeof meta.extensions === 'number') {
-      details.push(`extensions=${meta.extensions}`)
-    }
-    if (meta.status && meta.status !== 'success') {
-      details.push(`status=${meta.status}`)
-    }
-    const suffix = details.length > 0 ? ` (${details.join(', ')})` : ''
-    return `[FileProvider] ${message} in ${durationText}${suffix}`
-  },
-  logger: (message, entry) => {
-    if (entry.logLevel === 'none') {
-      return
-    }
-    const level = FILE_TIMING_STYLE[entry.logLevel ?? 'info'] ?? 'debug'
-    if (level === 'warn') {
-      fileProviderLog.warn(message)
-    }
-    else if (level === 'error') {
-      fileProviderLog.error(message)
-    }
-    else if (level === 'info') {
-      fileProviderLog.info(message)
-    }
-    else {
-      fileProviderLog.debug(message)
-    }
-  },
-}
-
-const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
-  video: 'video',
-  videos: 'video',
-  movie: 'video',
-  movies: 'video',
-  视频: 'video',
-  影片: 'video',
-  audio: 'audio',
-  audios: 'audio',
-  music: 'audio',
-  song: 'audio',
-  songs: 'audio',
-  音频: 'audio',
-  音乐: 'audio',
-  document: 'document',
-  documents: 'document',
-  doc: 'document',
-  docs: 'document',
-  pdf: 'document',
-  text: 'text',
-  texts: 'text',
-  note: 'text',
-  notes: 'text',
-  image: 'image',
-  images: 'image',
-  picture: 'image',
-  pictures: 'image',
-  photo: 'image',
-  photos: 'image',
-  图片: 'image',
-  截图: 'image',
-  spreadsheet: 'spreadsheet',
-  spreadsheets: 'spreadsheet',
-  excel: 'spreadsheet',
-  sheet: 'spreadsheet',
-  sheets: 'spreadsheet',
-  table: 'spreadsheet',
-  tables: 'spreadsheet',
-  data: 'data',
-  dataset: 'data',
-  csv: 'data',
-  code: 'code',
-  codes: 'code',
-  source: 'code',
-  sources: 'code',
-  script: 'code',
-  scripts: 'code',
-  archive: 'archive',
-  archives: 'archive',
-  zip: 'archive',
-  zips: 'archive',
-  压缩包: 'archive',
-  installer: 'installer',
-  installers: 'installer',
-  setup: 'installer',
-  安装包: 'installer',
-  ebook: 'ebook',
-  ebooks: 'ebook',
-  book: 'ebook',
-  books: 'ebook',
-  design: 'design',
-  designs: 'design',
-  设计: 'design',
-}
 
 interface IconCacheMeta {
   mtime: number | null
