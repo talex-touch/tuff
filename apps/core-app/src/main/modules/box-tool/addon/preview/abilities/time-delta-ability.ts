@@ -134,6 +134,35 @@ function parseAbsoluteDate(text: string): dayjs.Dayjs | null {
   const normalized = text.trim()
   if (!normalized) return null
 
+  // 检查是否以 "date" 开头，如果是则移除前缀并降低限制
+  const lower = normalized.toLowerCase()
+  const hasDatePrefix = lower.startsWith('date ')
+  const dateText = hasDatePrefix ? normalized.slice(5).trim() : normalized
+
+  // 严格的日期格式验证（仅对非 date 前缀的输入）
+  if (!hasDatePrefix) {
+    // 只接受符合标准日期格式的输入
+    const datePattern = /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[\sT]\d{1,2}:\d{1,2}(?::\d{1,2})?)?$/
+    
+    // 检查自然语言映射
+    const naturalMap: Record<string, number> = {
+      tomorrow: 1,
+      'day after tomorrow': 2,
+      yesterday: -1,
+      今天: 0,
+      明天: 1,
+      后天: 2,
+      昨天: -1
+    }
+    
+    const isNaturalLanguage = lower in naturalMap
+    
+    // 如果既不是标准格式也不是自然语言，直接返回 null
+    if (!datePattern.test(normalized) && !isNaturalLanguage) {
+      return null
+    }
+  }
+
   const formats = [
     'YYYY-MM-DD',
     'YYYY/MM/DD',
@@ -146,11 +175,20 @@ function parseAbsoluteDate(text: string): dayjs.Dayjs | null {
     'YYYY.MM.DD HH:mm:ss'
   ]
 
+  // 尝试解析标准格式
+  const textToParse = hasDatePrefix ? dateText : normalized
   for (const format of formats) {
-    const parsed = dayjs(normalized, format, true)
+    const parsed = dayjs(textToParse, format, true)
     if (parsed.isValid()) return parsed
   }
 
+  // 如果有 date 前缀，使用宽松的 dayjs 解析
+  if (hasDatePrefix) {
+    const parsed = dayjs(dateText)
+    if (parsed.isValid()) return parsed
+  }
+
+  // 自然语言映射
   const naturalMap: Record<string, number> = {
     tomorrow: 1,
     'day after tomorrow': 2,
@@ -160,7 +198,7 @@ function parseAbsoluteDate(text: string): dayjs.Dayjs | null {
     后天: 2,
     昨天: -1
   }
-  const lower = normalized.toLowerCase()
+  
   if (lower in naturalMap) {
     return dayjs().add(naturalMap[lower], 'day')
   }
