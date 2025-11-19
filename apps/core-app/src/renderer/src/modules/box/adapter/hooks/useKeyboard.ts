@@ -19,7 +19,7 @@ export function useKeyboard(
   clipboardOptions: any,
   clearClipboard: () => void,
   activeActivations: Ref<any>,
-  handlePaste: (options?: { overrideDismissed?: boolean }) => void
+  itemRefs: Ref<any[]>
 ) {
   function onKeyDown(event: KeyboardEvent): void {
     if (!document.body.classList.contains('core-box')) {
@@ -122,20 +122,30 @@ export function useKeyboard(
       boxOptions.focus = res.value.length - 1
     }
 
-    const diff = Math.max(0, boxOptions.focus * 48)
+    // Dynamic scrolling logic
+    requestAnimationFrame(() => {
+      const activeItemComponent = itemRefs.value[boxOptions.focus]
+      const activeEl = activeItemComponent?.$el || activeItemComponent
+      const sb = scrollbar.value
 
-    const sb = scrollbar.value
+      if (activeEl && sb) {
+        const scrollInfo = sb.getScrollInfo()
+        const containerHeight = scrollInfo.clientHeight
+        const scrollTop = scrollInfo.scrollTop
 
-    if (lastFocus < boxOptions.focus) {
-      if (diff <= 48 * 8) return
+        const itemTop = activeEl.offsetTop
+        const itemHeight = activeEl.offsetHeight
 
-      sb.scrollTo(0, diff - 48 * 9 + 40)
-    } else {
-      const mod = boxOptions.focus / 9
-      if (!mod) return
-
-      sb.scrollTo(0, diff - 48 * 9 + 40)
-    }
+        // Check if item is above the visible area
+        if (itemTop < scrollTop) {
+          sb.scrollTo(0, itemTop)
+        }
+        // Check if item is below the visible area
+        else if (itemTop + itemHeight > scrollTop + containerHeight) {
+          sb.scrollTo(0, itemTop + itemHeight - containerHeight)
+        }
+      }
+    })
   }
 
   document.addEventListener('keydown', onKeyDown)
