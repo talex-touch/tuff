@@ -135,20 +135,23 @@ useVisibility(
   clearClipboard,
   boxInputRef
 )
-useKeyboard(
-  boxOptions,
-  res,
-  select,
-  scrollbar,
-  searchVal,
-  handleExecute,
-  handleExit,
-  computed(() => boxInputRef.value?.inputEl),
-  clipboardOptions,
-  clearClipboard,
-  activeActivations,
-  handlePaste
-)
+  const itemRefs = ref<HTMLElement[]>([])
+
+  useKeyboard(
+    boxOptions,
+    res,
+    select,
+    scrollbar,
+    searchVal,
+    handleExecute,
+    handleExit,
+    computed(() => boxInputRef.value?.inputEl),
+    clipboardOptions,
+    clearClipboard,
+    activeActivations,
+    handlePaste,
+    itemRefs
+  )
 useChannel(boxOptions, res)
 
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
@@ -446,6 +449,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
         <CoreBoxRender
           v-for="(item, index) in res"
           :key="index"
+          ref="itemRefs"
           :active="boxOptions.focus === index"
           :item="item"
           :index="index"
