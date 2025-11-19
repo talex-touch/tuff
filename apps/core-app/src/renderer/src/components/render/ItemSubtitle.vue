@@ -36,28 +36,28 @@ const fileInfo = computed(() => {
   return file
 })
 
-const FILE_TYPE_META: Record<FileType, { icon: string, key: string }> = {
-  [FileType.Image]: { icon: 'i-ri-image-2-line', key: 'coreBox.fileTypes.image' },
-  [FileType.Document]: { icon: 'i-ri-file-text-line', key: 'coreBox.fileTypes.document' },
-  [FileType.Audio]: { icon: 'i-ri-music-2-line', key: 'coreBox.fileTypes.audio' },
-  [FileType.Video]: { icon: 'i-ri-video-line', key: 'coreBox.fileTypes.video' },
-  [FileType.Archive]: { icon: 'i-ri-archive-line', key: 'coreBox.fileTypes.archive' },
-  [FileType.Code]: { icon: 'i-ri-code-line', key: 'coreBox.fileTypes.code' },
-  [FileType.Text]: { icon: 'i-ri-file-list-3-line', key: 'coreBox.fileTypes.text' },
-  [FileType.Design]: { icon: 'i-ri-palette-line', key: 'coreBox.fileTypes.design' },
-  [FileType.Model3D]: { icon: 'i-ri-cube-line', key: 'coreBox.fileTypes.model3D' },
-  [FileType.Font]: { icon: 'i-ri-english-input', key: 'coreBox.fileTypes.font' },
-  [FileType.Spreadsheet]: { icon: 'i-ri-table-line', key: 'coreBox.fileTypes.spreadsheet' },
-  [FileType.Presentation]: { icon: 'i-ri-slideshow-line', key: 'coreBox.fileTypes.presentation' },
-  [FileType.Ebook]: { icon: 'i-ri-book-3-line', key: 'coreBox.fileTypes.ebook' },
-  [FileType.Other]: { icon: 'i-ri-more-2-line', key: 'coreBox.fileTypes.other' },
+const FILE_TYPE_META: Record<string, { icon: string, key: string }> = {
+  'Image': { icon: 'i-ri-image-2-line', key: 'coreBox.fileTypes.image' },
+  'Document': { icon: 'i-ri-file-text-line', key: 'coreBox.fileTypes.document' },
+  'Audio': { icon: 'i-ri-music-2-line', key: 'coreBox.fileTypes.audio' },
+  'Video': { icon: 'i-ri-video-line', key: 'coreBox.fileTypes.video' },
+  'Archive': { icon: 'i-ri-archive-line', key: 'coreBox.fileTypes.archive' },
+  'Code': { icon: 'i-ri-code-line', key: 'coreBox.fileTypes.code' },
+  'Text': { icon: 'i-ri-file-list-3-line', key: 'coreBox.fileTypes.text' },
+  'Design': { icon: 'i-ri-palette-line', key: 'coreBox.fileTypes.design' },
+  '3D Model': { icon: 'i-ri-cube-line', key: 'coreBox.fileTypes.model3D' },
+  'Font': { icon: 'i-ri-english-input', key: 'coreBox.fileTypes.font' },
+  'Spreadsheet': { icon: 'i-ri-table-line', key: 'coreBox.fileTypes.spreadsheet' },
+  'Presentation': { icon: 'i-ri-slideshow-line', key: 'coreBox.fileTypes.presentation' },
+  'Ebook': { icon: 'i-ri-book-3-line', key: 'coreBox.fileTypes.ebook' },
+  'Other': { icon: 'i-ri-more-2-line', key: 'coreBox.fileTypes.other' },
 }
 
 const fileTypeMeta = computed(() => {
   if (!fileInfo.value)
     return null
   const type = getFileTypeFromPath(fileInfo.value.path) as FileType
-  const meta = FILE_TYPE_META[type] || FILE_TYPE_META[FileType.Other]
+  const meta = FILE_TYPE_META[type] || FILE_TYPE_META['Other']
   const translated = t(meta.key)
   const label = translated === meta.key ? type : translated
   return {
