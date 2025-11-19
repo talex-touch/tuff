@@ -220,8 +220,11 @@ function handleFocusInputEvent(): void {
 async function loadPreviewHistory(): Promise<void> {
   previewHistory.loading = true
   try {
-    const response = await touchChannel.send('preview-history:get', { limit: 20 })
-    previewHistory.items = response?.items ?? []
+    const response = await touchChannel.send('clipboard:query-by-source', { 
+      source: 'calculation',
+      limit: 20 
+    })
+    previewHistory.items = response?.data ?? []
     ensureHistorySelection()
   } catch (error) {
     console.error('[CoreBox] Failed to load calculation history:', error)
