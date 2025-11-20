@@ -42,6 +42,11 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>): DbUtils {
     async getFilesByType(type: string) {
       return db.select().from(schema.files).where(eq(schema.files.type, type))
     },
+    async getFilesByPaths(paths: string[]) {
+      if (paths.length === 0)
+        return []
+      return db.select().from(schema.files).where(inArray(schema.files.path, paths))
+    },
     async clearFilesByType(type: string) {
       return db.delete(schema.files).where(eq(schema.files.type, type))
     },
@@ -371,6 +376,7 @@ export interface DbUtils {
   removeFile: (path: string) => Promise<any>
   getAllFiles: () => Promise<any[]>
   getFilesByType: (type: string) => Promise<any[]>
+  getFilesByPaths: (paths: string[]) => Promise<any[]>
   clearFilesByType: (type: string) => Promise<any>
   addFileExtension: (fileId: number, key: string, value: string) => Promise<any>
   addFileExtensions: (extensions: { fileId: number, key: string, value: string }[]) => Promise<any>

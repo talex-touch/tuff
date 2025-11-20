@@ -24,6 +24,11 @@ const { t } = useI18n()
         {{ t('flatNavBar.main') }}
       </p>
       <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />
+      <TouchMenuItem
+        route="/intelligence"
+        :name="t('flatNavBar.intelligence')"
+        icon="i-carbon-ibm-webmethods-integration-server"
+      />
       <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
       <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
       <TouchMenuItem
@@ -33,11 +38,6 @@ const { t } = useI18n()
         icon="i-ri-dashboard-line"
       />
       <!-- <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" /> -->
-      <TouchMenuItem
-        route="/intelligence"
-        :name="t('flatNavBar.intelligence')"
-        icon="i-carbon-ibm-webmethods-integration-server"
-      />
       <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
     </TouchMenu>
   </ul>

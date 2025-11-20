@@ -32,11 +32,13 @@ import { previewProvider } from '../addon/preview'
 import { systemProvider } from '../addon/system/system-provider'
 import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
+import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
 import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
+import { TimeStatsAggregator } from './time-stats-aggregator'
 import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
@@ -73,6 +75,8 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
   private queryCompletionService: QueryCompletionService | null = null
   private usageStatsCache: UsageStatsCache | null = null
   private usageStatsQueue: UsageStatsQueue | null = null
+  private recommendationEngine: RecommendationEngine | null = null
+  private timeStatsAggregator: TimeStatsAggregator | null = null
 
   private touchApp: TouchApp | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
@@ -303,6 +307,33 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`,
     )
     this.currentGatherController?.abort()
+
+    // 空查询检测: 返回推荐结果
+    if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
+      if (this.recommendationEngine) {
+        try {
+          const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
+          searchLogger.logSearchPhase(
+            'Recommendation',
+            `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`,
+          )
+
+          // 将推荐结果转换为TuffItem格式（需要通过provider获取完整item数据）
+          // TODO: 实现从 sourceId + itemId 到 TuffItem 的转换
+          // 目前返回空结果，待实现完整的item重建逻辑
+          
+          return TuffFactory.createSearchResult(query)
+            .setItems([])
+            .setDuration(recommendationResult.duration)
+            .setSources([])
+            .build()
+        }
+        catch (error) {
+          console.error('[SearchEngineCore] Failed to generate recommendations:', error)
+          // 降级：继续执行正常搜索
+        }
+      }
+    }
 
     // 保存当前查询用于完成跟踪
     this.lastSearchQuery = query.text || ''
@@ -714,6 +745,8 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval
+    instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
+    instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
 
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
@@ -795,11 +828,60 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
     channel.regChannel(ChannelType.MAIN, 'core-box:get-provider-details', ({ data }) => {
       const providers = instance.getProvidersByIds(data.providerIds)
-      return providers.map(p => ({
-        id: p.id,
-        name: p.name,
-        icon: p.icon,
+      return providers.map(_p => ({
+        id: _p.id,
+        name: _p.name,
+        icon: _p.icon,
       }))
+    })
+
+    // 推荐系统IPC通道
+    channel.regChannel(ChannelType.MAIN, 'core-box:get-recommendations', async ({ data }) => {
+      if (!instance.recommendationEngine) {
+        return { items: [], duration: 0, fromCache: false }
+      }
+
+      try {
+        const options = {
+          limit: data?.limit || 10,
+          forceRefresh: data?.forceRefresh || false,
+        }
+        const result = await instance.recommendationEngine.recommend(options)
+        
+        // TODO: 将 ScoredItem 转换为完整的 TuffItem
+        // 目前返回基本信息
+        return {
+          items: result.items.map(item => ({
+            sourceId: item.sourceId,
+            itemId: item.itemId,
+            sourceType: item.sourceType,
+            score: item.score,
+            source: item.source,
+          })),
+          duration: result.duration,
+          fromCache: result.fromCache,
+        }
+      }
+      catch (error) {
+        console.error('[SearchEngineCore] Failed to get recommendations:', error)
+        return { items: [], duration: 0, fromCache: false, error: String(error) }
+      }
+    })
+
+    // 手动触发时间统计汇总
+    channel.regChannel(ChannelType.MAIN, 'core-box:aggregate-time-stats', async () => {
+      if (!instance.timeStatsAggregator) {
+        return { success: false, error: 'TimeStatsAggregator not initialized' }
+      }
+
+      try {
+        await instance.timeStatsAggregator.aggregateTimeStats()
+        return { success: true }
+      }
+      catch (error) {
+        console.error('[SearchEngineCore] Failed to aggregate time stats:', error)
+        return { success: false, error: String(error) }
+      }
     })
   }
 

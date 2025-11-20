@@ -899,4 +899,5 @@ export class ClipboardModule extends BaseModule {
 
 const clipboardModule = new ClipboardModule()
 
+export default clipboardModule
 export { clipboardModule }

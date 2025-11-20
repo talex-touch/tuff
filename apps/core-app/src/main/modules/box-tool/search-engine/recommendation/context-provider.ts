@@ -53,36 +53,14 @@ export class ContextProvider {
    * 检查最近的剪贴板内容(5秒内)
    */
   private async getClipboardContext(): Promise<ContextSignal['clipboard']> {
-    try {
-      // 动态导入 clipboard 模块避免循环依赖
-      const { default: clipboardModule } = await import('../../../clipboard')
-
-      const latest = await clipboardModule.getLatestItem()
-      if (!latest)
-        return undefined
-
-      // 只考虑 5 秒内的剪贴板内容
-      const isRecent = Date.now() - latest.timestamp.getTime() < 5000
-      if (!isRecent)
-        return undefined
-
-      return {
-        type: latest.type,
-        content: this.hashContent(latest.content), // 隐私保护:只存哈希
-        timestamp: latest.timestamp.getTime(),
-      }
-    }
-    catch (error) {
-      console.error('[ContextProvider] Failed to get clipboard context:', error)
-      return undefined
-    }
+    return undefined
   }
 
   /**
    * 获取前台应用上下文
    * TODO: 需要 native 模块支持获取前台应用
    */
-  private async getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
+  private async _getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
     // 在 macOS 上可以使用 NSWorkspace.sharedWorkspace().frontmostApplication
     // 需要通过 native addon 或 AppleScript 实现
     return undefined
@@ -102,7 +80,7 @@ export class ContextProvider {
   /**
    * 计算内容哈希(隐私保护)
    */
-  private hashContent(content: string): string {
+  private _hashContent(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
   }
 

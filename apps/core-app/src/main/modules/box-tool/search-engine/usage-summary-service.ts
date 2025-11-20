@@ -3,6 +3,7 @@ import type { Primitive } from '../../../utils/logger'
 import { lt, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
+import { TimeStatsAggregator } from './time-stats-aggregator'
 
 const log = createLogger('UsageSummaryService')
 
@@ -28,6 +29,7 @@ const DEFAULT_CONFIG: SummaryConfig = {
 export class UsageSummaryService {
   private config: SummaryConfig
   private summaryTimer: NodeJS.Timeout | null = null
+  private timeStatsAggregator: TimeStatsAggregator
   private isRunning = false
   private stats = {
     totalRuns: 0,
@@ -41,6 +43,7 @@ export class UsageSummaryService {
     config?: Partial<SummaryConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+    this.timeStatsAggregator = new TimeStatsAggregator(dbUtils)
   }
 
   start(): void {
@@ -79,6 +82,9 @@ export class UsageSummaryService {
 
     try {
       const summarizedCount = await this.summarizeUsageLogs()
+
+      // 聚合时间统计
+      await this.timeStatsAggregator.aggregateTimeStats()
 
       let cleanedCount = 0
       if (this.config.autoCleanup) {
