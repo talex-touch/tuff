@@ -61,9 +61,10 @@ export class StorageModule extends BaseModule {
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
-    console.info(
-      chalk.blue(`[StorageModule] Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`),
-    )
+    // Debug log - moved to debug level to reduce noise
+    // console.info(
+    //   chalk.blue(`[StorageModule] Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`),
+    // )
 
     this.pollingService.start()
     this.lruManager.startCleanup()

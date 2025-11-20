@@ -55,18 +55,20 @@ export class DatabaseModule extends BaseModule {
       const appPath = app.getAppPath()
       const migrationsPath = path.resolve(appPath, 'resources', 'db', 'migrations')
 
-      console.log(chalk.cyan(`[Database] Resolving migrations folder...`))
-      console.log(chalk.cyan(`[Database] app.getAppPath(): ${appPath}`))
-      console.log(chalk.cyan(`[Database] __dirname: ${__dirname}`))
-      console.log(chalk.cyan(`[Database] process.resourcesPath: ${process.resourcesPath || 'N/A'}`))
-      console.log(chalk.cyan(`[Database] Primary path: ${migrationsPath}`))
-      console.log(chalk.cyan(`[Database] Primary path exists: ${fse.existsSync(migrationsPath)}`))
+      // Debug logs - moved to debug level to reduce noise
+      // console.log(chalk.cyan(`[Database] Resolving migrations folder...`))
+      // console.log(chalk.cyan(`[Database] app.getAppPath(): ${appPath}`))
+      // console.log(chalk.cyan(`[Database] __dirname: ${__dirname}`))
+      // console.log(chalk.cyan(`[Database] process.resourcesPath: ${process.resourcesPath || 'N/A'}`))
+      // console.log(chalk.cyan(`[Database] Primary path: ${migrationsPath}`))
+      // console.log(chalk.cyan(`[Database] Primary path exists: ${fse.existsSync(migrationsPath)}`))
 
       // First check the expected path
       if (fse.existsSync(migrationsPath)) {
         const metaJournalPath = path.resolve(migrationsPath, 'meta', '_journal.json')
-        console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
-        console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
+        // Debug logs - moved to debug level to reduce noise
+        // console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
+        // console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
 
         if (fse.existsSync(metaJournalPath)) {
           console.log(chalk.green(`[Database] Using primary migrations path: ${migrationsPath}`))
@@ -99,13 +101,15 @@ export class DatabaseModule extends BaseModule {
       console.log(chalk.cyan(`[Database] Trying ${alternativePaths.length} alternative paths...`))
       for (let i = 0; i < alternativePaths.length; i++) {
         const altPath = alternativePaths[i]
-        console.log(chalk.cyan(`[Database] Alternative ${i + 1}: ${altPath}`))
-        console.log(chalk.cyan(`[Database] Alternative ${i + 1} exists: ${fse.existsSync(altPath)}`))
+        // Debug logs - moved to debug level to reduce noise
+        // console.log(chalk.cyan(`[Database] Alternative ${i + 1}: ${altPath}`))
+        // console.log(chalk.cyan(`[Database] Alternative ${i + 1} exists: ${fse.existsSync(altPath)}`))
 
         if (fse.existsSync(altPath)) {
           const metaJournalPath = path.resolve(altPath, 'meta', '_journal.json')
-          console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
-          console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
+          // Debug logs - moved to debug level to reduce noise
+          // console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
+          // console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
 
           if (fse.existsSync(metaJournalPath)) {
             console.log(chalk.yellow(`[Database] Using alternative migrations path: ${altPath}`))
@@ -134,7 +138,8 @@ export class DatabaseModule extends BaseModule {
     const migrationsFolder = this.resolveMigrationsFolder()
     const migrationsFolderResolved = path.resolve(migrationsFolder)
 
-    console.log(chalk.cyan(`[Database] Resolved migrations folder: ${migrationsFolderResolved}`))
+    // Debug logs - moved to debug level to reduce noise
+    // console.log(chalk.cyan(`[Database] Resolved migrations folder: ${migrationsFolderResolved}`))
 
     if (!fse.existsSync(migrationsFolderResolved)) {
       const error = new Error(`Migrations folder not found: ${migrationsFolderResolved}`)
@@ -146,12 +151,15 @@ export class DatabaseModule extends BaseModule {
       // List actual directory contents to help debug
       try {
         const appPath = app.getAppPath()
-        console.error(chalk.red('[Database] App path contents:'), fse.existsSync(appPath) ? fse.readdirSync(appPath) : 'N/A')
+        // Debug logs - moved to debug level to reduce noise
+        // console.error(chalk.red('[Database] App path contents:'), fse.existsSync(appPath) ? fse.readdirSync(appPath) : 'N/A')
         if (fse.existsSync(appPath)) {
           const resourcesInApp = path.join(appPath, 'resources')
-          console.error(chalk.red('[Database] resources in app exists:'), fse.existsSync(resourcesInApp))
+          // Debug logs - moved to debug level to reduce noise
+          // console.error(chalk.red('[Database] resources in app exists:'), fse.existsSync(resourcesInApp))
           if (fse.existsSync(resourcesInApp)) {
-            console.error(chalk.red('[Database] resources contents:'), fse.readdirSync(resourcesInApp))
+            // Debug logs - moved to debug level to reduce noise
+            // console.error(chalk.red('[Database] resources contents:'), fse.readdirSync(resourcesInApp))
           }
         }
       }
@@ -191,7 +199,8 @@ export class DatabaseModule extends BaseModule {
         chalk.red('[Database] Migrations folder exists:'),
         fse.existsSync(migrationsFolderResolved),
       )
-      console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
+      // Debug logs - moved to debug level to reduce noise
+      // console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
 
       const folderContents = fse.existsSync(migrationsFolderResolved)
         ? fse.readdirSync(migrationsFolderResolved).join(', ')
@@ -239,6 +248,7 @@ export class DatabaseModule extends BaseModule {
       })
 
       await this.ensureKeywordMappingsProviderColumn()
+      await this.ensureRecommendationTables()
 
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
@@ -290,6 +300,57 @@ export class DatabaseModule extends BaseModule {
     }
     catch (error) {
       console.warn('[Database] Failed to set up `provider_id` column pre-migration:', error)
+    }
+  }
+
+  private async ensureRecommendationTables(): Promise<void> {
+    if (!this.client)
+      return
+
+    try {
+      const checkTimeStats = await this.client.execute(
+        'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'item_time_stats\' LIMIT 1',
+      )
+      
+      if (checkTimeStats.rows.length === 0) {
+        console.log(chalk.yellow('[Database] Creating missing table `item_time_stats`'))
+        await this.client.execute(`
+          CREATE TABLE item_time_stats (
+            source_id text NOT NULL,
+            item_id text NOT NULL,
+            hour_distribution text NOT NULL,
+            day_of_week_distribution text NOT NULL,
+            time_slot_distribution text NOT NULL,
+            last_updated integer DEFAULT (strftime('%s', 'now')) NOT NULL,
+            PRIMARY KEY(source_id, item_id)
+          )
+        `)
+        await this.client.execute(
+          'CREATE INDEX idx_item_time_stats_updated ON item_time_stats (last_updated)',
+        )
+      }
+
+      const checkCache = await this.client.execute(
+        'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'recommendation_cache\' LIMIT 1',
+      )
+      
+      if (checkCache.rows.length === 0) {
+        console.log(chalk.yellow('[Database] Creating missing table `recommendation_cache`'))
+        await this.client.execute(`
+          CREATE TABLE recommendation_cache (
+            cache_key text PRIMARY KEY NOT NULL,
+            recommended_items text NOT NULL,
+            created_at integer DEFAULT (strftime('%s', 'now')) NOT NULL,
+            expires_at integer NOT NULL
+          )
+        `)
+        await this.client.execute(
+          'CREATE INDEX idx_recommendation_cache_expires ON recommendation_cache (expires_at)',
+        )
+      }
+    }
+    catch (error) {
+      console.warn('[Database] Failed to ensure recommendation tables:', error)
     }
   }
 
