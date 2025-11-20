@@ -196,7 +196,7 @@ async function handleCapabilityTest(
 
     // 使用格式化后的结果
     capabilityTests[capabilityId] = {
-      ...response,
+      ...(response as any),
       timestamp: Date.now(),
     }
   }
@@ -256,7 +256,7 @@ async function handleCapabilityTest(
           @update-models="onUpdateModels"
           @update-prompt="onUpdatePrompt"
           @reorder-providers="onReorderProviders"
-          @test="(params) => handleCapabilityTest(selectedCapability.id, params)"
+          @test="(params?: any) => handleCapabilityTest(selectedCapability!.id, params)"
         />
       </div>
     </template>

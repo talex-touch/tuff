@@ -115,7 +115,7 @@ export default defineComponent({
         const isActive = (): boolean => activeNodes[tabIndex] === vnode.props?.name
 
         return h(
-          TvTabItem,
+          TvTabItem as any,
           {
             active: isActive(),
             ...vnode.props,

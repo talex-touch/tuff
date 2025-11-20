@@ -234,14 +234,14 @@ export function useBoxItems(): UseBoxItemsReturn {
 
   onMounted(() => {
     // 注册所有事件监听器
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.CREATE, handleCreate)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.UPDATE, handleUpdate)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.UPSERT, handleUpsert)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.DELETE, handleDelete)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.BATCH_UPSERT, handleBatchUpsert)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.BATCH_DELETE, handleBatchDelete)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.CLEAR, handleClear)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.SYNC_RESPONSE, handleSyncResponse)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.CREATE, handleCreate as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.UPDATE, handleUpdate as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.UPSERT, handleUpsert as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.DELETE, handleDelete as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.BATCH_UPSERT, handleBatchUpsert as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.BATCH_DELETE, handleBatchDelete as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.CLEAR, handleClear as any)
+    touchChannel.regChannel(BOX_ITEM_CHANNELS.SYNC_RESPONSE, handleSyncResponse as any)
 
     // 请求初始同步
     sync()
@@ -262,7 +262,7 @@ export function useBoxItems(): UseBoxItemsReturn {
   // ==================== 返回 ====================
 
   return {
-    items: readonly(items),
+    items: readonly(items) as Readonly<Ref<TuffItem[]>>,
     create,
     update,
     upsert,

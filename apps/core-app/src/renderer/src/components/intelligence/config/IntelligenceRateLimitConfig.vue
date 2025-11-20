@@ -90,11 +90,6 @@ function handleRequestsPerMinuteBlur() {
   }
 }
 
-function handleRequestsPerMinuteClear() {
-  localRequestsPerMinute.value = undefined
-  emitUpdate()
-}
-
 function handleTokensPerMinuteBlur() {
   if (validateTokensPerMinute(localTokensPerMinute.value)) {
     emitUpdate()
@@ -103,11 +98,6 @@ function handleTokensPerMinuteBlur() {
     // Reset to previous valid value
     localTokensPerMinute.value = props.modelValue.rateLimit?.tokensPerMinute
   }
-}
-
-function handleTokensPerMinuteClear() {
-  localTokensPerMinute.value = undefined
-  emitUpdate()
 }
 
 function emitUpdate() {

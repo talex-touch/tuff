@@ -234,26 +234,7 @@ export function useSearch(
     }
   }
 
-  async function cancelSearch(): Promise<void> {
-    if (!loading.value || !currentSearchId.value)
-      return
 
-    try {
-      // Send cancellation request to main process
-      await touchChannel.send('core-box:cancel-search', { searchId: currentSearchId.value })
-
-      // Update UI state to reflect cancellation
-      loading.value = false
-      if (searchResults.value.length === 0) {
-        // If no results yet, reset search state entirely
-        searchResult.value = null
-        currentSearchId.value = null
-      }
-    }
-    catch (error) {
-      console.error('Failed to cancel search:', error)
-    }
-  }
 
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
@@ -373,18 +354,19 @@ export function useSearch(
     select.value = -1
   }
 
-  async function deactivateProvider(providerId?: string): Promise<void> {
+  async function deactivateProvider(providerId?: string): Promise<boolean> {
     if (!providerId) {
       // Deactivate all if no ID is provided
       const newState = await touchChannel.send('core-box:deactivate-providers')
       activeActivations.value = newState
       await handleSearch()
-      return
+      return true
     }
 
     const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
     activeActivations.value = newState
     await handleSearch()
+    return true
   }
 
   async function deactivateAllProviders(): Promise<void> {
@@ -555,6 +537,5 @@ export function useSearch(
     handleExit,
     handleSearchImmediate,
     deactivateProvider,
-    // cancelSearch
   }
 }

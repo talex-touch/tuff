@@ -75,7 +75,7 @@ async function checkPlatformCompatibility() {
     }
 
     // 获取平台信息
-    const appInfo = await window.$nodeApi.send('app-ready')
+    const appInfo = await (window.$nodeApi as any).send('app-ready')
 
     if (appInfo?.platformWarning) {
       await showPlatformCompatibilityWarning(appInfo.platformWarning)
