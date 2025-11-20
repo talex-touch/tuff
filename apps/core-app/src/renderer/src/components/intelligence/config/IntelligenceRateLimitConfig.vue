@@ -129,7 +129,7 @@ function emitUpdate() {
     <!-- Requests Per Minute -->
     <TuffBlockInput
       :model-value="localRequestsPerMinute ?? ''"
-      @update:model-value="val => localRequestsPerMinute.value = val !== '' ? Number(val) : undefined"
+      @update:model-value="val => localRequestsPerMinute = val !== '' ? Number(val) : undefined"
       :title="t('intelligence.config.rateLimit.requestsPerMinute')"
       :description="requestsPerMinuteError || t('intelligence.config.rateLimit.requestsPerMinuteHint')"
       :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
@@ -161,7 +161,7 @@ function emitUpdate() {
     <!-- Tokens Per Minute -->
     <TuffBlockInput
       :model-value="localTokensPerMinute ?? ''"
-      @update:model-value="val => localTokensPerMinute.value = val !== '' ? Number(val) : undefined"
+      @update:model-value="val => localTokensPerMinute = val !== '' ? Number(val) : undefined"
       :title="t('intelligence.config.rateLimit.tokensPerMinute')"
       :description="tokensPerMinuteError || t('intelligence.config.rateLimit.tokensPerMinuteHint')"
       :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"

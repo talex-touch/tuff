@@ -1,0 +1,77 @@
+{
+  "name": "division-box-example-plugin",
+  "version": "1.0.0",
+  "description": "DivisionBox 示例插件",
+  "author": "Your Name",
+  "main": "index.ts",
+  
+  "divisionBox": {
+    "defaultSize": "medium",
+    "keepAlive": true,
+    "header": {
+      "show": true,
+      "title": "示例工具",
+      "icon": "ri:tools-line",
+      "actions": [
+        {
+          "id": "refresh",
+          "label": "刷新",
+          "icon": "ri:refresh-line"
+        },
+        {
+          "id": "copy",
+          "label": "复制",
+          "icon": "ri:file-copy-line"
+        },
+        {
+          "id": "settings",
+          "label": "设置",
+          "icon": "ri:settings-3-line"
+        }
+      ]
+    },
+    "shortcuts": [
+      {
+        "key": "Cmd+Shift+D",
+        "description": "打开 DivisionBox 示例"
+      }
+    ],
+    "triggers": {
+      "command": true,
+      "flow": true
+    }
+  },
+
+  "features": [
+    {
+      "id": "basic-usage",
+      "name": "基础使用",
+      "description": "展示 DivisionBox 基础功能",
+      "icon": "ri:file-list-line"
+    },
+    {
+      "id": "keepalive-mode",
+      "name": "KeepAlive 模式",
+      "description": "展示缓存和快速恢复功能",
+      "icon": "ri:save-line"
+    },
+    {
+      "id": "custom-header",
+      "name": "自定义 Header",
+      "description": "展示自定义 Header 功能",
+      "icon": "ri:layout-top-line"
+    },
+    {
+      "id": "flow-integration",
+      "name": "Flow 集成",
+      "description": "展示 Flow 集成功能",
+      "icon": "ri:flow-chart"
+    }
+  ],
+
+  "permissions": [
+    "clipboard",
+    "storage",
+    "divisionBox"
+  ]
+}

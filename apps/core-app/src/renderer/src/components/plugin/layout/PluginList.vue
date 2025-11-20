@@ -59,12 +59,12 @@ watch(
       </div>
     </div>
 
-    <PluginListModule :model-value="target || undefined" @update:model-value="val => target = val" shrink="true" :plugins="filteredRunningPlugins">
+    <PluginListModule :model-value="target" @update:model-value="val => target = val" :shrink="true" :plugins="filteredRunningPlugins">
       <template #name>
         Running
       </template>
     </PluginListModule>
-    <PluginListModule :model-value="target || undefined" @update:model-value="val => target = val" :plugins="filteredAllPlugins">
+    <PluginListModule :model-value="target" @update:model-value="val => target = val" :shrink="false" :plugins="filteredAllPlugins">
       <template #name>
         All
       </template>

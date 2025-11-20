@@ -36,7 +36,11 @@ watch(
     // Find the new logs that were added
     const newEntries = newLogs.slice(oldLogs?.length ?? 0)
     newEntries.forEach((log) => {
-      term.writeln(log)
+      if (typeof log === 'string') {
+        term.writeln(log)
+      } else if (log instanceof Uint8Array) {
+        term.writeln(log)
+      }
     })
   },
   { deep: true },

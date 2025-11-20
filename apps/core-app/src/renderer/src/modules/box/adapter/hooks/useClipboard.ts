@@ -118,8 +118,8 @@ export function useClipboard(
       return
     }
 
-    // Handle text/HTML: short text to input query, long text as tag
-    if (data.type === 'text' || data.type === 'html') {
+    // Handle text: short text to input query, long text as tag
+    if (data.type === 'text') {
       const textContent = data.content || ''
       const textLength = textContent.length
 

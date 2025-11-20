@@ -4,7 +4,7 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import PluginItem from './PluginItem.vue'
 
 const props = defineProps<{
-  modelValue: ITouchPlugin
+  modelValue: ITouchPlugin | null
   plugins: ITouchPlugin[]
   shrink?: boolean
 }>()

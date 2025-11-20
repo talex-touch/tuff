@@ -15,36 +15,47 @@ export class ItemRebuilder {
       return []
 
     console.log(`[ItemRebuilder] Rebuilding ${scoredItems.length} scored items`)
-    const grouped = this.groupBySource(scoredItems)
+    const grouped = this.groupByNormalizedSource(scoredItems)
     
-    // 打印每个 source 的数量
     for (const [sourceId, items] of grouped.entries()) {
       console.log(`[ItemRebuilder]   - ${sourceId}: ${items.length} items`)
     }
     
-    // 并行重建所有支持的 provider
-    const [appItems, fileItems, pluginItems, systemItems] = await Promise.all([
+    const results = await Promise.all([
       this.rebuildAppItems(grouped.get('app-provider') || []),
       this.rebuildFileItems(grouped.get('file-provider') || []),
       this.rebuildPluginFeatureItems(grouped.get('plugin-features') || []),
       this.rebuildSystemItems(grouped.get('system-provider') || []),
+      this.rebuildClipboardItems(grouped.get('clipboard-history') || []),
     ])
 
-    console.log(`[ItemRebuilder] Rebuilt: apps=${appItems.length}, files=${fileItems.length}, plugins=${pluginItems.length}, system=${systemItems.length}`)
+    const allItems = results.flat()
+    console.log(`[ItemRebuilder] Rebuilt ${allItems.length} items total`)
 
-    const allItems = [...appItems, ...fileItems, ...pluginItems, ...systemItems]
     return this.mergeAndEnrichItems(allItems, scoredItems)
   }
 
-  private groupBySource(items: ScoredItem[]): Map<string, ScoredItem[]> {
+  private normalizeSourceId(sourceId: string): string {
+    const sourceIdMap: Record<string, string> = {
+      'application': 'app-provider',
+      'app': 'app-provider',
+      'file': 'file-provider',
+      'system': 'system-provider',
+      'clipboard': 'clipboard-history',
+    }
+    
+    return sourceIdMap[sourceId] || sourceId
+  }
+
+  private groupByNormalizedSource(items: ScoredItem[]): Map<string, ScoredItem[]> {
     const groups = new Map<string, ScoredItem[]>()
     
     for (const item of items) {
-      const key = item.sourceId
-      if (!groups.has(key)) {
-        groups.set(key, [])
+      const normalized = this.normalizeSourceId(item.sourceId)
+      if (!groups.has(normalized)) {
+        groups.set(normalized, [])
       }
-      groups.get(key)!.push(item)
+      groups.get(normalized)!.push(item)
     }
     
     return groups
@@ -159,9 +170,6 @@ export class ItemRebuilder {
     }
   }
 
-  /**
-   * 重建系统命令项
-   */
   private async rebuildSystemItems(items: ScoredItem[]): Promise<TuffItem[]> {
     if (items.length === 0)
       return []
@@ -171,17 +179,12 @@ export class ItemRebuilder {
       const rebuiltItems: TuffItem[] = []
 
       for (const item of items) {
-        // itemId 就是 systemActionId (如 'shutdown', 'restart')
         const actionId = item.itemId
-        
-        // 触发一次搜索以获取该 action 的完整信息
-        // 这里使用 action 的 name 或 keywords 触发匹配
         const searchResult = await systemProvider.onSearch(
           { text: actionId, inputs: [] },
           new AbortController().signal
         )
 
-        // 从搜索结果中找到匹配的 item
         const matchedItem = searchResult.items.find(resultItem => 
           resultItem.meta?.raw?.systemActionId === actionId
         )
@@ -197,6 +200,43 @@ export class ItemRebuilder {
     }
     catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild system items:', error)
+      return []
+    }
+  }
+
+  private async rebuildClipboardItems(items: ScoredItem[]): Promise<TuffItem[]> {
+    if (items.length === 0)
+      return []
+
+    try {
+      const db = this.dbUtils.getDb()
+      const { clipboardHistory } = await import('../../../../db/schema')
+      const { eq } = await import('drizzle-orm')
+      const rebuiltItems: TuffItem[] = []
+
+      for (const item of items) {
+        const clipboardId = Number.parseInt(item.itemId, 10)
+        if (Number.isNaN(clipboardId))
+          continue
+
+        const record = await db
+          .select()
+          .from(clipboardHistory)
+          .where(eq(clipboardHistory.id, clipboardId))
+          .get()
+
+        if (record) {
+          const { ClipboardProvider } = await import('../providers/clipboard')
+          const provider = new ClipboardProvider()
+          const tuffItem = (provider as any).transformToSearchItem(record)
+          rebuiltItems.push(tuffItem)
+        }
+      }
+
+      return rebuiltItems
+    }
+    catch (error) {
+      console.error('[ItemRebuilder] Failed to rebuild clipboard items:', error)
       return []
     }
   }
