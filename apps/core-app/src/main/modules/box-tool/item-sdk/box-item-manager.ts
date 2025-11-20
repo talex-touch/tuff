@@ -57,9 +57,7 @@ export class BoxItemManager {
 
     this.items.set(item.id, item)
     this.emitToRenderer<BoxItemCreateEvent>(BOX_ITEM_CHANNELS.CREATE, { item })
-    if (this.options.enableLogging) {
-      this.log(`Created item: ${item.id}`)
-    }
+    this.log(`Created item: ${item.id}`)
   }
 
   /**
@@ -83,9 +81,7 @@ export class BoxItemManager {
 
     this.items.set(id, updated)
     this.emitToRenderer<BoxItemUpdateEvent>(BOX_ITEM_CHANNELS.UPDATE, { id, updates })
-    if (this.options.enableLogging) {
-      this.log(`Updated item: ${id}`)
-    }
+    this.log(`Updated item: ${id}`)
   }
 
   /**
@@ -116,9 +112,7 @@ export class BoxItemManager {
     }
 
     this.emitToRenderer<BoxItemUpsertEvent>(BOX_ITEM_CHANNELS.UPSERT, { item: this.items.get(item.id)! })
-    if (this.options.enableLogging) {
-      this.log(`Upserted item: ${item.id} (${exists ? 'updated' : 'created'})`)
-    }
+    this.log(`Upserted item: ${item.id} (${exists ? 'updated' : 'created'})`)
   }
 
   /**
@@ -133,9 +127,7 @@ export class BoxItemManager {
 
     this.items.delete(id)
     this.emitToRenderer<BoxItemDeleteEvent>(BOX_ITEM_CHANNELS.DELETE, { id })
-    if (this.options.enableLogging) {
-      this.log(`Deleted item: ${id}`)
-    }
+    this.log(`Deleted item: ${id}`)
   }
 
   // ==================== 批量操作 ====================
@@ -179,10 +171,10 @@ export class BoxItemManager {
 
     this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_CHANNELS.BATCH_UPSERT, {
       items: validItems.map(item => this.items.get(item.id)!),
+    this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_CHANNELS.BATCH_UPSERT, {
+      items: validItems.map(item => this.items.get(item.id)!),
     })
-    if (this.options.enableLogging) {
-      this.log(`Batch upserted ${validItems.length} items`)
-    }
+    this.log(`Batch upserted ${validItems.length} items`)
   }
 
   /**

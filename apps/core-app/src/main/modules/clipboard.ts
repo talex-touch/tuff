@@ -251,6 +251,10 @@ export class ClipboardModule extends BaseModule {
     })
   }
 
+  public getLatestItem(): IClipboardItem | undefined {
+    return this.memoryCache[0]
+  }
+
   private parseFileList(content?: string | null): string[] {
     if (!content)
       return []

@@ -66,6 +66,28 @@ const fileTypeMeta = computed(() => {
     label,
   }
 })
+
+const recommendationBadge = computed(() => {
+  const meta = props.item.meta as any
+  return meta?.recommendation?.badge
+})
+
+const badgeStyle = computed(() => {
+  const variant = recommendationBadge.value?.variant
+  switch (variant) {
+    case 'frequent':
+      return 'bg-orange-500/10 text-orange-500'
+    case 'intelligent':
+      return 'bg-blue-500/10 text-blue-500'
+    case 'recent':
+      return 'bg-gray-500/10 text-gray-500'
+    case 'trending':
+      return 'bg-green-500/10 text-green-500'
+    default:
+      return 'bg-primary-500/10 text-primary-500'
+  }
+})
+
 </script>
 
 <template>
@@ -92,7 +114,19 @@ const fileTypeMeta = computed(() => {
       </div>
     </template>
     <template v-else>
-      {{ render.basic?.subtitle }}
+      <div class="flex items-center gap-2 w-full overflow-hidden">
+        <!-- 推荐徽章 -->
+        <div 
+          v-if="recommendationBadge"
+          class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
+          :class="badgeStyle"
+        >
+          <span v-if="recommendationBadge.icon">{{ recommendationBadge.icon }}</span>
+          <span>{{ recommendationBadge.text }}</span>
+        </div>
+
+        <span class="truncate">{{ render.basic?.subtitle }}</span>
+      </div>
     </template>
   </p>
 </template>

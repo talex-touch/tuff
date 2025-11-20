@@ -126,7 +126,7 @@ export function initAiSdkService(): void {
       const options = getCapabilityOptions(capabilityId)
       const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
 
-      // logInfo(`Testing capability ${capabilityId}`) // Remove to reduce noise
+      logInfo(`Testing capability ${capabilityId}`)
 
       // 使用测试器生成 payload
       const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
@@ -140,7 +140,7 @@ export function initAiSdkService(): void {
       // 格式化结果
       const formattedResult = tester.formatTestResult(result)
 
-      // logInfo(`Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`) // Remove to reduce noise
+      logInfo(`Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`)
 
       reply(DataCode.SUCCESS, {
         ok: true,
@@ -164,7 +164,7 @@ export function initAiSdkService(): void {
 
       const { provider } = data as { provider: AiProviderConfig }
       ensureAiConfigLoaded()
-      // logInfo(`Fetching models for provider ${provider.id}`) // Remove to reduce noise
+      logInfo(`Fetching models for provider ${provider.id}`)
       const models = await fetchProviderModels(provider)
       reply(DataCode.SUCCESS, {
         ok: true,
@@ -185,7 +185,7 @@ export function initAiSdkService(): void {
 
   channel.regChannel(ChannelType.MAIN, 'intelligence:reload-config', async ({ reply }) => {
     try {
-      // logInfo('Reloading config on demand') // Remove to reduce noise
+      logInfo('Reloading config on demand')
       ensureAiConfigLoaded(true)
       reply(DataCode.SUCCESS, { ok: true })
     }
