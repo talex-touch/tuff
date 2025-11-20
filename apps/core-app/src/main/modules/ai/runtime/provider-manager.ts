@@ -32,7 +32,10 @@ export class IntelligenceProviderManager implements ProviderManagerAdapter {
     }
     const provider = factory(config)
     this.register(provider)
-    providerManagerLog.info(`Registered provider ${config.id} (${config.type}), enabled: ${provider.isEnabled()}`)
+    // Only log if the provider is enabled to reduce noise
+    if (provider.isEnabled()) {
+      providerManagerLog.info(`Registered provider ${config.id} (${config.type})`)
+    }
     return provider
   }
 

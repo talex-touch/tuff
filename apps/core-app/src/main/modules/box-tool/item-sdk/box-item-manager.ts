@@ -30,7 +30,7 @@ export class BoxItemManager {
       maxItems: options.maxItems ?? 10000,
     }
 
-    this.log('BoxItemManager initialized')
+    // this.log('BoxItemManager initialized') // Remove initialization log to reduce noise
   }
 
   // ==================== CRUD 操作 ====================

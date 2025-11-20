@@ -62,12 +62,49 @@ export function useSearch(
   })
 
   const debouncedSearch = useDebounceFn(async () => {
-    if (!searchVal.value) {
-      if (!activeActivations.value?.length) {
-        searchResults.value.length = 0
+    // Allow empty queries to trigger recommendation search
+    if (!searchVal.value && !activeActivations.value?.length) {
+      // Empty query with no active providers: trigger recommendation search
+      boxOptions.focus = 0
+      loading.value = true
+      searchResults.value = [] // Clear previous results immediately
+
+      try {
+        const query: TuffQuery = {
+          text: '',
+          inputs: [],
+        }
+
+        // The initial call now returns the high-priority results directly.
+        const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+
+        // Store the session ID to track this specific search stream.
+        currentSearchId.value = initialResult.sessionId || null
+        searchResult.value = initialResult
+
+        // Immediately display the recommendation items.
+        searchResults.value = initialResult.items
+
+        // The initial activation state is set here.
+        if (initialResult.activate && initialResult.activate.length > 0) {
+          activeActivations.value = initialResult.activate
+        }
+      }
+      catch (error) {
+        console.error('Recommendation search failed:', error)
+        searchResults.value = []
+        searchResult.value = null
+        currentSearchId.value = null
+        loading.value = false
       }
       return
     }
+    
+    if (!searchVal.value) {
+      // Empty query with active providers: keep current state
+      return
+    }
+    
     boxOptions.focus = 0
     loading.value = true
     searchResults.value = [] // Clear previous results immediately
@@ -419,9 +456,11 @@ export function useSearch(
     if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
       boxOptions.mode = newSearchVal.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
     }
-    // If the input is cleared while a provider is active, also clear the results.
+    // If the input is cleared, also clear active providers to allow recommendations
     if (newSearchVal === '' && activeActivations.value && activeActivations.value.length > 0) {
+      activeActivations.value = null
       searchResults.value = []
+      // handleSearch will be triggered by the watch below and show recommendations
     }
   })
 
@@ -464,6 +503,9 @@ export function useSearch(
         activeActivations.value = providers
       }
     })
+    
+    // Trigger initial search to show recommendations when CoreBox opens
+    handleSearch()
   })
 
   // Listener for when the search stream is finished.

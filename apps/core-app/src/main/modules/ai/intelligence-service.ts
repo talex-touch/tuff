@@ -38,7 +38,7 @@ export function initAiSdkService(): void {
   manager.registerFactory(AiProviderType.LOCAL, config => new LocalProvider(config))
   manager.registerFactory(AiProviderType.ANTHROPIC, config => new AnthropicProvider(config))
   setIntelligenceProviderManager(manager)
-  logInfo('Provider factories registered')
+  // logInfo('Provider factories registered') // Remove to reduce noise
 
   // Setup config update listener to reload when frontend saves config
   setupConfigUpdateListener()
@@ -59,9 +59,9 @@ export function initAiSdkService(): void {
       }
 
       ensureAiConfigLoaded()
-      logInfo(`Invoking capability ${capabilityId}`)
+      // logInfo(`Invoking capability ${capabilityId}`) // Remove to reduce noise
       const result = await ai.invoke(capabilityId, payload, options)
-      logInfo(`Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`)
+      // logInfo(`Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`) // Remove to reduce noise
       reply(DataCode.SUCCESS, { ok: true, result })
     }
     catch (error) {
@@ -81,9 +81,9 @@ export function initAiSdkService(): void {
 
       const { provider } = data as { provider: AiProviderConfig }
       ensureAiConfigLoaded()
-      logInfo(`Testing provider ${provider.id}`)
+      // logInfo(`Testing provider ${provider.id}`) // Remove to reduce noise
       const result = await ai.testProvider(provider)
-      logInfo(`Provider ${provider.id} test success`)
+      // logInfo(`Provider ${provider.id} test success`) // Remove to reduce noise
 
       reply(DataCode.SUCCESS, {
         ok: true,
@@ -126,7 +126,7 @@ export function initAiSdkService(): void {
       const options = getCapabilityOptions(capabilityId)
       const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
 
-      logInfo(`Testing capability ${capabilityId}`)
+      // logInfo(`Testing capability ${capabilityId}`) // Remove to reduce noise
 
       // 使用测试器生成 payload
       const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
@@ -140,7 +140,7 @@ export function initAiSdkService(): void {
       // 格式化结果
       const formattedResult = tester.formatTestResult(result)
 
-      logInfo(`Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`)
+      // logInfo(`Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`) // Remove to reduce noise
 
       reply(DataCode.SUCCESS, {
         ok: true,
@@ -164,7 +164,7 @@ export function initAiSdkService(): void {
 
       const { provider } = data as { provider: AiProviderConfig }
       ensureAiConfigLoaded()
-      logInfo(`Fetching models for provider ${provider.id}`)
+      // logInfo(`Fetching models for provider ${provider.id}`) // Remove to reduce noise
       const models = await fetchProviderModels(provider)
       reply(DataCode.SUCCESS, {
         ok: true,
