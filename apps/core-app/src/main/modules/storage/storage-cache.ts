@@ -1,13 +1,12 @@
 /**
  * StorageCache - In-memory cache service for configuration data
- * 
+ *
  * Manages configuration cache with dirty tracking and LRU access timestamps
  */
 export class StorageCache {
   private cache = new Map<string, object>()
   private dirtySet = new Set<string>()
   private lastAccessTime = new Map<string, number>()
-
 
   /**
    * Get configuration from cache
@@ -36,7 +35,6 @@ export class StorageCache {
     this.cache.set(name, data)
     this.dirtySet.add(name)
     this.lastAccessTime.set(name, Date.now())
-
   }
 
   /**
@@ -108,4 +106,3 @@ export class StorageCache {
     return this.cache.size
   }
 }
-

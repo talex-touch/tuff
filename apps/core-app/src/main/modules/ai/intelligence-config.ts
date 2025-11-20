@@ -130,6 +130,6 @@ export function saveAiConfig(config: AiSDKPersistedConfig): void {
 export function debugPrintConfig(): void {
   const stored = getLatestConfig()
   if (!stored) {
-    return
+
   }
 }

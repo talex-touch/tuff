@@ -2,13 +2,13 @@ import chalk from 'chalk'
 
 /**
  * StorageFrequencyMonitor - Frequency monitoring service
- * 
+ *
  * Tracks storage operation frequency and warns on excessive usage
  */
 export class StorageFrequencyMonitor {
   private operationLog = new Map<string, { get: number[], save: number[] }>()
   private warningCooldown = new Map<string, { get?: number, save?: number }>()
-  
+
   private readonly THRESHOLD: number
   private readonly TIME_WINDOW: number
   private readonly COOLDOWN_PERIOD: number
@@ -41,26 +41,27 @@ export class StorageFrequencyMonitor {
 
   private track(name: string, operation: 'get' | 'save'): void {
     const now = Date.now()
-    
+
     if (!this.operationLog.has(name)) {
       this.operationLog.set(name, { get: [], save: [] })
     }
-    
+
     const log = this.operationLog.get(name)!
     log[operation].push(now)
-    
+
     this.cleanupOldRecords(name, operation)
   }
 
   private cleanupOldRecords(name: string, operation: 'get' | 'save'): void {
     const log = this.operationLog.get(name)
-    if (!log) return
-    
+    if (!log)
+      return
+
     const now = Date.now()
     const cutoff = now - this.TIME_WINDOW
-    
+
     log[operation] = log[operation].filter(timestamp => timestamp > cutoff)
-    
+
     if (log.get.length === 0 && log.save.length === 0) {
       this.operationLog.delete(name)
     }
@@ -68,23 +69,24 @@ export class StorageFrequencyMonitor {
 
   private checkFrequency(name: string, operation: 'get' | 'save'): void {
     const log = this.operationLog.get(name)
-    if (!log) return
-    
+    if (!log)
+      return
+
     const count = log[operation].length
-    
+
     if (count >= this.THRESHOLD) {
       if (this.isInCooldown(name, operation)) {
         return
       }
-      
+
       console.warn(
         chalk.yellow(
-          `[StorageFrequencyMonitor] Frequent ${operation.toUpperCase()} detected: ` +
-          `config "${chalk.bold(name)}" accessed ${chalk.bold(count)} times in ${this.TIME_WINDOW / 1000}s. ` +
-          `Consider optimizing to reduce overhead.`,
+          `[StorageFrequencyMonitor] Frequent ${operation.toUpperCase()} detected: `
+          + `config "${chalk.bold(name)}" accessed ${chalk.bold(count)} times in ${this.TIME_WINDOW / 1000}s. `
+          + `Consider optimizing to reduce overhead.`,
         ),
       )
-      
+
       this.setCooldown(name, operation)
       log[operation] = []
     }
@@ -92,11 +94,13 @@ export class StorageFrequencyMonitor {
 
   private isInCooldown(name: string, operation: 'get' | 'save'): boolean {
     const cooldown = this.warningCooldown.get(name)
-    if (!cooldown) return false
-    
+    if (!cooldown)
+      return false
+
     const lastWarning = cooldown[operation]
-    if (!lastWarning) return false
-    
+    if (!lastWarning)
+      return false
+
     return Date.now() - lastWarning < this.COOLDOWN_PERIOD
   }
 
@@ -104,7 +108,7 @@ export class StorageFrequencyMonitor {
     if (!this.warningCooldown.has(name)) {
       this.warningCooldown.set(name, {})
     }
-    
+
     const cooldown = this.warningCooldown.get(name)!
     cooldown[operation] = Date.now()
   }
@@ -114,8 +118,9 @@ export class StorageFrequencyMonitor {
    */
   getStats(name: string): { get: number, save: number } | null {
     const log = this.operationLog.get(name)
-    if (!log) return null
-    
+    if (!log)
+      return null
+
     return {
       get: log.get.length,
       save: log.save.length,
@@ -138,4 +143,3 @@ export class StorageFrequencyMonitor {
     this.warningCooldown.delete(name)
   }
 }
-

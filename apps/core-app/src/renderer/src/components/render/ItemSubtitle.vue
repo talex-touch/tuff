@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { getFileTypeFromPath } from '@talex-touch/utils'
 import type { FileType, TuffItem, TuffRender } from '@talex-touch/utils'
+import { getFileTypeFromPath } from '@talex-touch/utils'
 import dayjs from 'dayjs'
 import path from 'path-browserify'
 import { computed } from 'vue'
@@ -58,7 +58,7 @@ const fileTypeMeta = computed(() => {
   if (!fileInfo.value)
     return null
   const type = getFileTypeFromPath(fileInfo.value.path) as FileType
-  const meta = FILE_TYPE_META[type] || FILE_TYPE_META['Other']
+  const meta = FILE_TYPE_META[type] || FILE_TYPE_META.Other
   const translated = t(meta.key)
   const label = translated === meta.key ? type : translated
   return {

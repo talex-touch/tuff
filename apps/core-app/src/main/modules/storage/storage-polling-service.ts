@@ -1,9 +1,9 @@
-import chalk from 'chalk'
 import type { StorageCache } from './storage-cache'
+import chalk from 'chalk'
 
 /**
  * StoragePollingService - Periodic persistence service
- * 
+ *
  * Periodically saves dirty configs to disk
  */
 export class StoragePollingService {
@@ -35,7 +35,7 @@ export class StoragePollingService {
     console.info(
       chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`),
     )
-    
+
     this.pollingTimer = setInterval(async () => {
       await this.performSave()
     }, this.pollingInterval)
@@ -61,7 +61,7 @@ export class StoragePollingService {
 
   private async performSave(): Promise<void> {
     const dirtyConfigs = this.cache.getDirtyConfigs()
-    
+
     if (dirtyConfigs.length === 0) {
       return
     }
@@ -76,7 +76,7 @@ export class StoragePollingService {
       console.error(
         chalk.red(`[StoragePolling] ${failCount}/${dirtyConfigs.length} config(s) failed to save`),
       )
-      
+
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
           console.error(
@@ -103,7 +103,7 @@ export class StoragePollingService {
    */
   async forceSave(): Promise<void> {
     const dirtyConfigs = this.cache.getDirtyConfigs()
-    
+
     if (dirtyConfigs.length === 0) {
       return
     }
@@ -131,12 +131,12 @@ export class StoragePollingService {
    */
   setInterval(ms: number): void {
     this.pollingInterval = ms
-    
+
     if (this.isRunning) {
       if (this.pollingTimer) {
         clearInterval(this.pollingTimer)
       }
-      
+
       this.pollingTimer = setInterval(async () => {
         await this.performSave()
       }, this.pollingInterval)
@@ -158,4 +158,3 @@ export class StoragePollingService {
     }
   }
 }
-

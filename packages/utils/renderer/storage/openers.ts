@@ -1,6 +1,6 @@
 import type { OpenersMap } from '../..'
-import { createStorageProxy, TouchStorage } from './base-storage'
 import { openersOriginData, StorageList } from '../..'
+import { createStorageProxy, TouchStorage } from './base-storage'
 
 class OpenersStorage extends TouchStorage<OpenersMap> {
   constructor() {

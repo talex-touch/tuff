@@ -388,7 +388,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     // 使用 BoxItemSDK 统一管理
     const boxItemManager = getBoxItemManager()
     boxItemManager.upsert(item)
-    
+
     // 扩展 CoreBox 窗口
     coreBoxManager.expand({ forceMax: true })
   }

@@ -7,8 +7,8 @@ import 'xterm/css/xterm.css'
 const props = defineProps({
   logs: {
     type: Array,
-    required: true
-  }
+    required: true,
+  },
 })
 
 // Terminal.applyAddon(TerminalFit)
@@ -18,7 +18,7 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 12,
-  lineHeight: 1
+  lineHeight: 1,
 })
 
 watch(
@@ -39,7 +39,7 @@ watch(
       term.writeln(log)
     })
   },
-  { deep: true }
+  { deep: true },
 )
 
 onMounted(() => {

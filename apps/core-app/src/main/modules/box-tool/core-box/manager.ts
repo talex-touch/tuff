@@ -1,8 +1,9 @@
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-event'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
-import { ProviderDeactivatedEvent, TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getConfig } from '../../storage'
 import { SearchEngineCore } from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
@@ -34,11 +35,11 @@ export class CoreBoxManager {
     // Listen for provider deactivation events
     touchEventBus.on(TalexEvents.PROVIDER_DEACTIVATED, (event) => {
       const deactivationEvent = event as ProviderDeactivatedEvent
-      
+
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'CoreBoxManager Event',
-          `Provider deactivated: ${deactivationEvent.providerId}, isPluginFeature: ${deactivationEvent.isPluginFeature}, allDeactivated: ${deactivationEvent.allProvidersDeactivated}`
+          `Provider deactivated: ${deactivationEvent.providerId}, isPluginFeature: ${deactivationEvent.isPluginFeature}, allDeactivated: ${deactivationEvent.allProvidersDeactivated}`,
         )
       }
 

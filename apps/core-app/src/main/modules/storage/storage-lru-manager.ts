@@ -1,16 +1,16 @@
-import chalk from 'chalk'
 import type { StorageCache } from './storage-cache'
+import chalk from 'chalk'
 
 /**
  * StorageLRUManager - LRU management service
- * 
+ *
  * Manages automatic config eviction based on last access time
  */
 export class StorageLRUManager {
   private cache: StorageCache
   private cleanupTimer: NodeJS.Timeout | null = null
   private onEvict: (name: string) => Promise<void>
-  
+
   private readonly EVICTION_TIMEOUT: number
   private readonly CLEANUP_INTERVAL: number
 
@@ -47,7 +47,7 @@ export class StorageLRUManager {
     console.info(
       chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`),
     )
-    
+
     this.cleanupTimer = setInterval(async () => {
       await this.performCleanup()
     }, this.CLEANUP_INTERVAL)
@@ -70,7 +70,7 @@ export class StorageLRUManager {
 
     for (const name of names) {
       const lastAccess = this.cache.getLastAccessTime(name)
-      
+
       if (lastAccess && (now - lastAccess > this.EVICTION_TIMEOUT)) {
         try {
           await this.onEvict(name)
@@ -101,7 +101,7 @@ export class StorageLRUManager {
 
     for (const name of names) {
       const lastAccess = this.cache.getLastAccessTime(name)
-      
+
       if (lastAccess && (now - lastAccess > this.EVICTION_TIMEOUT)) {
         try {
           await this.onEvict(name)
@@ -155,4 +155,3 @@ export class StorageLRUManager {
     return pending.sort((a, b) => b.idleTime - a.idleTime)
   }
 }
-
