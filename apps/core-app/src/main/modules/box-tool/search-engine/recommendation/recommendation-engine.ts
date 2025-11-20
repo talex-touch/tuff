@@ -3,7 +3,7 @@ import type { DbUtils } from '../../../../db/utils'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
-import { TimeStatsAggregator, type ParsedItemTimeStats } from '../time-stats-aggregator'
+import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import * as schema from '../../../../db/schema'
 import { desc } from 'drizzle-orm'
 

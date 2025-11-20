@@ -2,6 +2,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
 import { performance } from 'node:perf_hooks'
 import { eq, sql } from 'drizzle-orm'
+import chalk from 'chalk'
 import * as schema from '../../../db/schema'
 import { searchLogger } from './search-logger'
 
