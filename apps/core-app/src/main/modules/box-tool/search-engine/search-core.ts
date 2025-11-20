@@ -80,6 +80,7 @@ export class SearchEngineCore
   private usageStatsQueue: UsageStatsQueue | null = null
   private recommendationEngine: RecommendationEngine | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
+  private latestSessionId: string | null = null // 跟踪最新的搜索 session，防止竞态条件
 
   private touchApp: TouchApp | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
@@ -286,6 +287,11 @@ export class SearchEngineCore
       }
       this.currentGatherController.abort()
       this.currentGatherController = null
+      
+      // 清理 latestSessionId，允许新搜索
+      if (this.latestSessionId === searchId) {
+        this.latestSessionId = null
+      }
 
       // Notify the frontend that the search was cancelled
       const coreBoxWindow = windowManager.current?.window
@@ -307,7 +313,13 @@ export class SearchEngineCore
       'Query Received',
       `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`
     )
+    
+    // 取消之前的搜索
     this.currentGatherController?.abort()
+    
+    // 标记这是最新的搜索 session
+    this.latestSessionId = sessionId
+    console.log(`[SearchCore] Starting search session ${sessionId}`)
 
     // 空查询检测: 返回推荐结果
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
@@ -328,6 +340,16 @@ export class SearchEngineCore
             'Recommendation',
             `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
           )
+
+          // 在返回前检查是否仍是最新搜索
+          if (this.latestSessionId !== sessionId) {
+            console.log(`[SearchCore] Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`)
+            return new TuffSearchResultBuilder(query)
+              .setItems([])
+              .setDuration(0)
+              .setSources([])
+              .build()
+          }
 
           const result = new TuffSearchResultBuilder(query)
             .setItems(recommendationResult.items)
@@ -482,6 +504,20 @@ export class SearchEngineCore
           this._recordSearchResults(sessionId, sortedItems).catch((error) => {
             console.error('[SearchEngineCore] Failed to record search results:', error)
           })
+
+          // 在返回前检查是否仍是最新搜索
+          if (this.latestSessionId !== sessionId) {
+            console.log(`[SearchCore] Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`)
+            // 返回空结果，前端会忽略旧的 sessionId
+            const staleResult = new TuffSearchResultBuilder(query)
+              .setItems([])
+              .setDuration(0)
+              .setSources([])
+              .build()
+            staleResult.sessionId = sessionId
+            resolve(staleResult)
+            return
+          }
 
           resolve(initialResult)
         } else if (update.newResults.length > 0) {

@@ -13,20 +13,18 @@ const logger = createLogger('DivisionBoxManifestParser')
 /**
  * Default values for DivisionBox manifest configuration
  */
-const DEFAULT_MANIFEST_CONFIG: Required<ManifestDivisionBoxConfig> = {
-  defaultSize: 'medium',
+const DEFAULT_MANIFEST_CONFIG = {
+  defaultSize: 'medium' as DivisionBoxSize,
   keepAlive: false,
   header: {
-    show: true,
-    title: undefined,
-    icon: undefined
+    show: true
   }
 }
 
 /**
  * Valid size values
  */
-const VALID_SIZES = ['compact', 'medium', 'expanded'] as const
+const VALID_SIZES: readonly DivisionBoxSize[] = ['compact', 'medium', 'expanded']
 
 /**
  * Validates if a value is a valid DivisionBoxSize
@@ -54,7 +52,7 @@ function isValidSize(size: any): size is DivisionBoxSize {
 export function parseManifestDivisionBoxConfig(
   manifestConfig: any,
   pluginName: string
-): Required<ManifestDivisionBoxConfig> {
+): ManifestDivisionBoxConfig {
   // If no config provided, return defaults
   if (!manifestConfig || typeof manifestConfig !== 'object') {
     if (manifestConfig !== undefined && manifestConfig !== null) {
@@ -65,10 +63,10 @@ export function parseManifestDivisionBoxConfig(
     return { ...DEFAULT_MANIFEST_CONFIG }
   }
 
-  const result: Required<ManifestDivisionBoxConfig> = {
+  const result: ManifestDivisionBoxConfig = {
     defaultSize: DEFAULT_MANIFEST_CONFIG.defaultSize,
     keepAlive: DEFAULT_MANIFEST_CONFIG.keepAlive,
-    header: { ...DEFAULT_MANIFEST_CONFIG.header }
+    header: { show: true }
   }
 
   // Parse and validate defaultSize
@@ -77,11 +75,10 @@ export function parseManifestDivisionBoxConfig(
       result.defaultSize = manifestConfig.defaultSize
     } else {
       logger.warn(
-        `[${pluginName}] Invalid defaultSize: "${manifestConfig.defaultSize}", using default "medium"`,
+        `[${pluginName}] Invalid defaultSize: "${manifestConfig.defaultSize}", using default "medium". Valid sizes: ${Array.from(VALID_SIZES).join(', ')}`,
         {
           meta: {
-            providedSize: manifestConfig.defaultSize,
-            validSizes: VALID_SIZES
+            providedSize: String(manifestConfig.defaultSize)
           }
         }
       )
@@ -111,7 +108,7 @@ export function parseManifestDivisionBoxConfig(
 
     // Validate header.show
     if ('show' in headerConfig) {
-      if (typeof headerConfig.show === 'boolean') {
+      if (typeof headerConfig.show === 'boolean' && result.header) {
         result.header.show = headerConfig.show
       } else {
         logger.warn(
@@ -128,7 +125,7 @@ export function parseManifestDivisionBoxConfig(
 
     // Validate header.title
     if ('title' in headerConfig) {
-      if (typeof headerConfig.title === 'string' && headerConfig.title.length > 0) {
+      if (typeof headerConfig.title === 'string' && headerConfig.title.length > 0 && result.header) {
         result.header.title = headerConfig.title
       } else if (headerConfig.title !== undefined && headerConfig.title !== null) {
         logger.warn(
@@ -145,7 +142,7 @@ export function parseManifestDivisionBoxConfig(
 
     // Validate header.icon
     if ('icon' in headerConfig) {
-      if (typeof headerConfig.icon === 'string' && headerConfig.icon.length > 0) {
+      if (typeof headerConfig.icon === 'string' && headerConfig.icon.length > 0 && result.header) {
         result.header.icon = headerConfig.icon
       } else if (headerConfig.icon !== undefined && headerConfig.icon !== null) {
         logger.warn(
@@ -172,9 +169,7 @@ export function parseManifestDivisionBoxConfig(
   }
 
   // Log successful parsing
-  logger.debug(`[${pluginName}] Parsed divisionBox configuration`, {
-    meta: { config: result }
-  })
+  logger.debug(`[${pluginName}] Parsed divisionBox configuration: size=${result.defaultSize}, keepAlive=${result.keepAlive}, headerShow=${result.header?.show}`)
 
   return result
 }
@@ -202,7 +197,7 @@ export function mergeManifestWithRuntimeConfig(
     size: runtimeConfig.size ?? manifestConfig.defaultSize,
     keepAlive: runtimeConfig.keepAlive ?? manifestConfig.keepAlive,
     header: runtimeConfig.header ?? {
-      show: manifestConfig.header.show,
+      show: manifestConfig.header.show ?? true,
       title: manifestConfig.header.title,
       icon: manifestConfig.header.icon
     },
@@ -215,6 +210,14 @@ export function mergeManifestWithRuntimeConfig(
  * 
  * @returns Default configuration object
  */
-export function getDefaultManifestConfig(): Required<ManifestDivisionBoxConfig> {
-  return { ...DEFAULT_MANIFEST_CONFIG }
+export function getDefaultManifestConfig(): ManifestDivisionBoxConfig {
+  return {
+    defaultSize: 'medium',
+    keepAlive: false,
+    header: {
+      show: true,
+      title: undefined,
+      icon: undefined
+    }
+  }
 }

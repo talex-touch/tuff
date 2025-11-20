@@ -14,3 +14,13 @@ export {
   mergeManifestWithRuntimeConfig,
   getDefaultManifestConfig 
 } from './manifest-parser'
+export { ShortcutTriggerManager, shortcutTriggerManager, type ShortcutMapping } from './shortcut-trigger'
+export { DivisionBoxCommandProvider, createDivisionBoxCommandProvider } from './command-provider'
+export { DivisionBoxModule, divisionBoxModule } from './module'
+export { 
+  FlowTriggerManager, 
+  flowTriggerManager, 
+  type FlowTargetConfig, 
+  type FlowPayload, 
+  type FlowPayloadType 
+} from './flow-trigger'

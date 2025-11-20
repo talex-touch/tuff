@@ -14,14 +14,26 @@ export class ItemRebuilder {
     if (scoredItems.length === 0)
       return []
 
+    console.log(`[ItemRebuilder] Rebuilding ${scoredItems.length} scored items`)
     const grouped = this.groupBySource(scoredItems)
     
-    const [appItems, fileItems] = await Promise.all([
+    // 打印每个 source 的数量
+    for (const [sourceId, items] of grouped.entries()) {
+      console.log(`[ItemRebuilder]   - ${sourceId}: ${items.length} items`)
+    }
+    
+    // 并行重建所有支持的 provider
+    const [appItems, fileItems, pluginItems, systemItems] = await Promise.all([
       this.rebuildAppItems(grouped.get('app-provider') || []),
       this.rebuildFileItems(grouped.get('file-provider') || []),
+      this.rebuildPluginFeatureItems(grouped.get('plugin-features') || []),
+      this.rebuildSystemItems(grouped.get('system-provider') || []),
     ])
 
-    return this.mergeAndEnrichItems([...appItems, ...fileItems], scoredItems)
+    console.log(`[ItemRebuilder] Rebuilt: apps=${appItems.length}, files=${fileItems.length}, plugins=${pluginItems.length}, system=${systemItems.length}`)
+
+    const allItems = [...appItems, ...fileItems, ...pluginItems, ...systemItems]
+    return this.mergeAndEnrichItems(allItems, scoredItems)
   }
 
   private groupBySource(items: ScoredItem[]): Map<string, ScoredItem[]> {
@@ -92,6 +104,99 @@ export class ItemRebuilder {
     }
     catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild file items:', error)
+      return []
+    }
+  }
+
+  /**
+   * 重建插件功能项
+   */
+  private async rebuildPluginFeatureItems(items: ScoredItem[]): Promise<TuffItem[]> {
+    if (items.length === 0)
+      return []
+
+    try {
+      const { pluginModule } = await import('../../../plugin/plugin-module')
+      const pluginManager = pluginModule.pluginManager
+      if (!pluginManager) {
+        console.warn('[ItemRebuilder] PluginManager not available')
+        return []
+      }
+
+      const rebuiltItems: TuffItem[] = []
+      
+      for (const item of items) {
+        // itemId 格式: "pluginName/featureId"
+        const [pluginName, featureId] = item.itemId.split('/')
+        if (!pluginName || !featureId) {
+          console.warn(`[ItemRebuilder] Invalid plugin feature itemId: ${item.itemId}`)
+          continue
+        }
+
+        const plugin = pluginManager.plugins.get(pluginName)
+        if (!plugin) {
+          console.debug(`[ItemRebuilder] Plugin not found: ${pluginName}`)
+          continue
+        }
+
+        const feature = plugin.getFeature(featureId)
+        if (!feature) {
+          console.debug(`[ItemRebuilder] Feature not found: ${featureId} in ${pluginName}`)
+          continue
+        }
+
+        // 使用 PluginFeaturesAdapter 的逻辑创建 TuffItem
+        const { default: adapter } = await import('../../../plugin/adapters/plugin-features-adapter')
+        const tuffItem = (adapter as any).createTuffItem(plugin, feature)
+        rebuiltItems.push(tuffItem)
+      }
+
+      return rebuiltItems
+    }
+    catch (error) {
+      console.error('[ItemRebuilder] Failed to rebuild plugin feature items:', error)
+      return []
+    }
+  }
+
+  /**
+   * 重建系统命令项
+   */
+  private async rebuildSystemItems(items: ScoredItem[]): Promise<TuffItem[]> {
+    if (items.length === 0)
+      return []
+
+    try {
+      const { systemProvider } = await import('../../addon/system/system-provider')
+      const rebuiltItems: TuffItem[] = []
+
+      for (const item of items) {
+        // itemId 就是 systemActionId (如 'shutdown', 'restart')
+        const actionId = item.itemId
+        
+        // 触发一次搜索以获取该 action 的完整信息
+        // 这里使用 action 的 name 或 keywords 触发匹配
+        const searchResult = await systemProvider.onSearch(
+          { text: actionId, inputs: [] },
+          new AbortController().signal
+        )
+
+        // 从搜索结果中找到匹配的 item
+        const matchedItem = searchResult.items.find(resultItem => 
+          resultItem.meta?.raw?.systemActionId === actionId
+        )
+
+        if (matchedItem) {
+          rebuiltItems.push(matchedItem)
+        } else {
+          console.debug(`[ItemRebuilder] System action not found: ${actionId}`)
+        }
+      }
+
+      return rebuiltItems
+    }
+    catch (error) {
+      console.error('[ItemRebuilder] Failed to rebuild system items:', error)
       return []
     }
   }
