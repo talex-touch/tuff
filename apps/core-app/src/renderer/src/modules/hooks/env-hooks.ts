@@ -36,15 +36,8 @@ interface NodeProcess {
   [key: string]: any
 }
 
-interface NodeApi {
-  getPackageJSON: () => PackageJson
-  getOS: () => OSInfo
-  // Add other NodeApi methods as needed
-}
-
 declare global {
   interface Window {
-    $nodeApi: NodeApi
     process: NodeProcess
   }
 }

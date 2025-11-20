@@ -28,8 +28,6 @@ export function useKeyboard(
       return
     }
 
-    const lastFocus = boxOptions.focus
-
     // Handle Cmd/Ctrl+V for manual paste
     if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
       handlePaste({ overrideDismissed: true })

@@ -213,7 +213,7 @@ export class AppUpdate {
     // 创建下载任务
     await addDownloadTask({
       url: (asset as any).url,
-      destination: window.$nodeApi.getPath('downloads'),
+      destination: (window.$nodeApi as any).getPath('downloads'),
       filename: (asset as any).name,
       priority: DownloadPriority.CRITICAL,
       module: DownloadModule.APP_UPDATE,
