@@ -118,7 +118,10 @@ export default {
   listeners: new Array<Function>(),
   touchChannel: undefined as any,
   modulePath: undefined as any,
-  init() {
+  init(ctx: any) {
+    this.touchChannel = ctx.app.channel
+    this.modulePath = ctx.file?.dirPath
+
     const touchChannel = this.touchChannel
 
     touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event: any) => {
