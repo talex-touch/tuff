@@ -310,28 +310,52 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
     // 空查询检测: 返回推荐结果
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
+      console.log('[SearchEngineCore] Empty query detected, generating recommendations...')
+      
       if (this.recommendationEngine) {
         try {
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
+          console.log(`[SearchEngineCore] Recommendation result:`, {
+            itemsCount: recommendationResult.items.length,
+            duration: recommendationResult.duration,
+            fromCache: recommendationResult.fromCache,
+            items: recommendationResult.items.map(item => ({ id: item.id, title: item.title }))
+          })
+          
           searchLogger.logSearchPhase(
             'Recommendation',
             `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`,
           )
 
-          // 将推荐结果转换为TuffItem格式（需要通过provider获取完整item数据）
-          // TODO: 实现从 sourceId + itemId 到 TuffItem 的转换
-          // 目前返回空结果，待实现完整的item重建逻辑
-          
-          return TuffFactory.createSearchResult(query)
+          const result = TuffFactory.createSearchResult(query)
             .setItems(recommendationResult.items)
             .setDuration(recommendationResult.duration)
             .setSources([])
             .build()
+          
+          result.sessionId = sessionId
+          
+          console.log('[SearchEngineCore] Returning recommendation result with', result.items.length, 'items')
+          return result
         }
         catch (error) {
           console.error('[SearchEngineCore] Failed to generate recommendations:', error)
-          // 降级：继续执行正常搜索
+          // 降级：返回空结果而不是继续搜索
+          return TuffFactory.createSearchResult(query)
+            .setItems([])
+            .setDuration(0)
+            .setSources([])
+            .build()
         }
+      }
+      else {
+        console.warn('[SearchEngineCore] RecommendationEngine not initialized')
+        // 返回空结果
+        return TuffFactory.createSearchResult(query)
+          .setItems([])
+          .setDuration(0)
+          .setSources([])
+          .build()
       }
     }
 
