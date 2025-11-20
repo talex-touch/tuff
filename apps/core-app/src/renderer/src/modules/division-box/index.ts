@@ -1,12 +1,21 @@
 /**
  * DivisionBox Module - Renderer Process
  * 
- * Entry point for the DivisionBox system in the renderer process.
- * Exports all public APIs, types, components, and composables.
+ * Main entry point for the DivisionBox module in the renderer process.
+ * Exports components, composables, store, and types.
  */
 
-export * from './types'
+// Components
+export { default as DivisionBoxShell } from './components/DivisionBoxShell.vue'
+export { default as DivisionBoxHeader } from './components/DivisionBoxHeader.vue'
+export { default as DockHint } from './components/DockHint.vue'
 
-// Store, components, and composables will be exported here once implemented
-// export { useDivisionBoxStore } from './store/division-box'
-// export { default as DivisionBoxShell } from './components/DivisionBoxShell.vue'
+// Composables
+export { useDrag } from './composables/useDrag'
+export { useResize } from './composables/useResize'
+
+// Store
+export { useDivisionBoxStore } from './store/division-box'
+
+// Types
+export * from './types'
