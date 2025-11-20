@@ -4,6 +4,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 
+// Utility function to normalize various timestamp formats
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
   if (value === null || value === undefined)
     return null
@@ -20,13 +21,28 @@ function normalizeTimestamp(value?: string | number | Date | null): number | nul
   return Number.isFinite(parsed) ? parsed : null
 }
 
+
+// Track auto-pasted timestamps to prevent duplicate auto-paste
+const autoPastedTimestamps = new Set<number>()
+
+// Periodically clean up old timestamps (older than 1 hour)
+function cleanupAutoPastedRecords(): void {
+  const oneHourAgo = Date.now() - 60 * 60 * 1000
+  for (const ts of autoPastedTimestamps) {
+    if (ts < oneHourAgo) {
+      autoPastedTimestamps.delete(ts)
+    }
+  }
+}
+
 export function useClipboard(
   boxOptions: IBoxOptions,
   clipboardOptions: IClipboardOptions,
   onPasteCallback?: () => void,
+  searchVal?: import('vue').Ref<string>,
 ): Omit<IClipboardHook, 'clipboardOptions'> {
   function canAutoPaste(): boolean {
-    if (!clipboardOptions.last || !clipboardOptions.detectedAt)
+    if (!clipboardOptions.last || !clipboardOptions.last.timestamp)
       return false
     if (!appSetting.tools.autoPaste.enable)
       return false
@@ -37,7 +53,20 @@ export function useClipboard(
     if (limit === 0)
       return true
 
-    return Date.now() - clipboardOptions.detectedAt <= limit * 1000
+    // Use database timestamp (real copy time) instead of detectedAt
+    const copiedTime = new Date(clipboardOptions.last.timestamp).getTime()
+    const now = Date.now()
+    const elapsed = now - copiedTime
+
+    console.debug('[Clipboard] AutoPaste time check', {
+      copiedAt: new Date(copiedTime).toISOString(),
+      now: new Date(now).toISOString(),
+      elapsed,
+      limit: limit * 1000,
+      canPaste: elapsed <= limit * 1000,
+    })
+
+    return elapsed <= limit * 1000
   }
 
   function handleAutoPaste(): void {
@@ -46,8 +75,24 @@ export function useClipboard(
     if (!canAutoPaste())
       return
 
+    const timestamp = new Date(clipboardOptions.last.timestamp).getTime()
+
+    // Check if already auto-pasted (prevent duplicate)
+    if (autoPastedTimestamps.has(timestamp)) {
+      console.debug('[Clipboard] Already auto-pasted, skipping', {
+        timestamp: new Date(timestamp).toISOString(),
+      })
+      return
+    }
+
     const data = clipboardOptions.last
 
+    // Clean up old records periodically
+    if (Math.random() < 0.1) {
+      cleanupAutoPastedRecords()
+    }
+
+    // Handle files: switch to FILE mode
     if (data.type === 'files') {
       try {
         const pathList = JSON.parse(data.content)
@@ -60,7 +105,12 @@ export function useClipboard(
           }
           boxOptions.mode = BoxMode.FILE
 
+          autoPastedTimestamps.add(timestamp)
           clearClipboard({ remember: true })
+
+          console.debug('[Clipboard] Files auto-pasted to FILE mode', {
+            fileCount: pathList.length,
+          })
         }
       }
       catch (error) {
@@ -69,11 +119,46 @@ export function useClipboard(
       return
     }
 
-    if (data.type === 'text' || data.type === 'image' || data.type === 'html') {
-      console.debug('[Clipboard] Auto-paste detected, content will be shown in tag', {
+    // Handle text/HTML: short text to input query, long text as tag
+    if (data.type === 'text' || data.type === 'html') {
+      const textContent = data.content || ''
+      const textLength = textContent.length
+
+      // Short text (≤25 chars): auto-paste to input query
+      if (textLength > 0 && textLength <= 25 && searchVal) {
+        searchVal.value = textContent
+        autoPastedTimestamps.add(timestamp)
+        clearClipboard({ remember: true })
+
+        console.debug('[Clipboard] Short text auto-pasted to input', {
+          length: textLength,
+          content: textContent.substring(0, 30),
+        })
+
+        if (onPasteCallback) {
+          onPasteCallback()
+        }
+        return
+      }
+
+      // Long text (>25 chars): show as tag
+      console.debug('[Clipboard] Long text shown as tag', {
         type: data.type,
-        length: data.type === 'text' ? data.content.length : undefined,
+        length: textLength,
       })
+
+      autoPastedTimestamps.add(timestamp)
+
+      if (onPasteCallback) {
+        onPasteCallback()
+      }
+      return
+    }
+
+    // Handle image: show as tag
+    if (data.type === 'image') {
+      console.debug('[Clipboard] Image shown as tag')
+      autoPastedTimestamps.add(timestamp)
 
       if (onPasteCallback) {
         onPasteCallback()

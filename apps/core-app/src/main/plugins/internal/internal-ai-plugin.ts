@@ -8,6 +8,7 @@ import { app } from 'electron'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { ensureAiConfigLoaded } from '../../modules/ai/intelligence-config'
 import { ai } from '../../modules/ai/intelligence-sdk'
+import { WindowManager } from '../../modules/box-tool/core-box/window'
 import { TouchPlugin } from '../../modules/plugin'
 import { normalizePrompt } from './internal-ai-utils'
 import { InternalPluginLogger } from './internal-plugin-logger'
@@ -162,6 +163,9 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
 
   return {
     onFeatureTriggered(_id, data) {
+      // Maximize CoreBox window when entering AI feature
+      WindowManager.getInstance().expand({ forceMax: true })
+
       const prompt = normalizePrompt(data)
 
       if (!prompt) {
@@ -182,11 +186,21 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
             ]
           }
 
-          const result = await ai.text.chat(payload)
-          const answerText = result?.result?.trim() ?? ''
-          await pushItems([
-            createAnswerItem(requestId, prompt, answerText, result?.model, result?.usage)
-          ])
+          let answerText = ''
+          let model: string | undefined
+          let usage: AiUsageInfo | undefined
+
+          const stream = ai.text.chatStream(payload)
+
+          for await (const chunk of stream) {
+            if (chunk.delta) {
+              answerText += chunk.delta
+            }
+            if (chunk.usage) usage = chunk.usage
+
+            // Update UI with streaming content
+            await pushItems([createAnswerItem(requestId, prompt, answerText, model, usage)])
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           await pushItems([createErrorItem(requestId, prompt, message)])

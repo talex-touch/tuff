@@ -1,8 +1,5 @@
-<script>
-</script>
-
-<script setup>
-import { onMounted, ref } from 'vue'
+<script lang="ts" name="LogTerminal" setup>
+import { onMounted, ref, watch } from 'vue'
 import { Terminal } from 'xterm'
 import * as TerminalFit from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
@@ -10,13 +7,9 @@ import 'xterm/css/xterm.css'
 const props = defineProps({
   logs: {
     type: Array,
-    required: true,
-  },
+    required: true
+  }
 })
-
-export default {
-  name: 'LogTerminal',
-}
 
 // Terminal.applyAddon(TerminalFit)
 
@@ -25,7 +18,7 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 12,
-  lineHeight: 1,
+  lineHeight: 1
 })
 
 watch(
@@ -46,7 +39,7 @@ watch(
       term.writeln(log)
     })
   },
-  { deep: true },
+  { deep: true }
 )
 
 onMounted(() => {
