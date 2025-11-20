@@ -141,4 +141,5 @@ readme.local.md
 .kiro/
 .serena/
 .spec-workflow/
+.qoder/
 apps/core-app/.spec-workflow/

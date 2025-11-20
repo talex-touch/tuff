@@ -63,7 +63,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     return {
       result: data.content?.[0]?.text || '',
       usage,
-      model: data.model,
+      model: data.model || '',
       latency,
       traceId,
       provider: this.type,

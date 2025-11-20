@@ -116,6 +116,8 @@ export default {
   name: Symbol('ServiceCenter'),
   filePath: 'services',
   listeners: new Array<Function>(),
+  touchChannel: undefined as any,
+  modulePath: undefined as any,
   init() {
     const touchChannel = this.touchChannel
 

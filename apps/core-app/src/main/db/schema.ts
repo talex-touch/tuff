@@ -414,3 +414,50 @@ export const downloadHistory = sqliteTable('download_history', {
   createdAtIdx: index('idx_history_created').on(table.createdAt),
   completedAtIdx: index('idx_history_completed').on(table.completedAt),
 }))
+
+
+// =============================================================================
+// 8. 智能推荐系统 (Intelligent Recommendation System)
+// =============================================================================
+
+/**
+ * 项目时间维度统计表
+ * 存储项目在不同时段的使用分布,用于时间上下文推荐
+ */
+export const itemTimeStats = sqliteTable(
+  'item_time_stats',
+  {
+    sourceId: text('source_id').notNull(), // 来源标识符 (source.id)
+    itemId: text('item_id').notNull(), // 项目标识符 (item.id)
+    hourDistribution: text('hour_distribution').notNull(), // JSON array[24]: 每小时使用次数
+    dayOfWeekDistribution: text('day_of_week_distribution').notNull(), // JSON array[7]: 每天使用次数
+    timeSlotDistribution: text('time_slot_distribution').notNull(), // JSON object: { morning, afternoon, evening, night }
+    lastUpdated: integer('last_updated', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
+    updatedIdx: index('idx_item_time_stats_updated').on(table.lastUpdated),
+  }),
+)
+
+/**
+ * 推荐缓存表
+ * 缓存推荐结果,避免高频重复计算
+ */
+export const recommendationCache = sqliteTable(
+  'recommendation_cache',
+  {
+    cacheKey: text('cache_key').primaryKey(), // 上下文哈希 (time_slot + day + context_hash)
+    recommendedItems: text('recommended_items').notNull(), // JSON array of { sourceId, itemId, score }
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(), // 过期时间
+  },
+  table => ({
+    expiresIdx: index('idx_recommendation_cache_expires').on(table.expiresAt),
+  }),
+)
+

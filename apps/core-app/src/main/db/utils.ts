@@ -253,6 +253,79 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>): DbUtils {
         .where(eq(schema.itemUsageStats.sourceId, sourceId))
     },
 
+    // Item Time Stats
+    async upsertItemTimeStats(stats: typeof schema.itemTimeStats.$inferInsert) {
+      return db
+        .insert(schema.itemTimeStats)
+        .values(stats)
+        .onConflictDoUpdate({
+          target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
+          set: {
+            hourDistribution: stats.hourDistribution,
+            dayOfWeekDistribution: stats.dayOfWeekDistribution,
+            timeSlotDistribution: stats.timeSlotDistribution,
+            lastUpdated: stats.lastUpdated || new Date(),
+          },
+        })
+    },
+
+    async getItemTimeStatsBatch(keys: Array<{ sourceId: string, itemId: string }>) {
+      if (keys.length === 0)
+        return []
+      
+      const sourceIds = keys.map(k => k.sourceId)
+      const itemIds = keys.map(k => k.itemId)
+
+      return db
+        .select()
+        .from(schema.itemTimeStats)
+        .where(
+          and(
+            inArray(schema.itemTimeStats.sourceId, sourceIds),
+            inArray(schema.itemTimeStats.itemId, itemIds),
+          ),
+        )
+    },
+
+    async getAllItemTimeStats() {
+      return db.select().from(schema.itemTimeStats)
+    },
+
+    // Recommendation Cache
+    async getRecommendationCache(cacheKey: string) {
+      return db
+        .select()
+        .from(schema.recommendationCache)
+        .where(eq(schema.recommendationCache.cacheKey, cacheKey))
+        .get()
+    },
+
+    async setRecommendationCache(cacheKey: string, items: any[], expiresAt: Date) {
+      return db
+        .insert(schema.recommendationCache)
+        .values({
+          cacheKey,
+          recommendedItems: JSON.stringify(items),
+          createdAt: new Date(),
+          expiresAt,
+        })
+        .onConflictDoUpdate({
+          target: schema.recommendationCache.cacheKey,
+          set: {
+            recommendedItems: JSON.stringify(items),
+            createdAt: new Date(),
+            expiresAt,
+          },
+        })
+    },
+
+    async cleanExpiredRecommendationCache() {
+      const now = new Date()
+      return db
+        .delete(schema.recommendationCache)
+        .where(sql`${schema.recommendationCache.expiresAt} < ${now.getTime()}`)
+    },
+
     // Plugin Data
     async getPluginData(pluginId: string, key: string) {
       return db
@@ -346,6 +419,14 @@ export interface DbUtils {
   getUsageStatsBySource: (
     sourceId: string,
   ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
+  upsertItemTimeStats: (stats: typeof schema.itemTimeStats.$inferInsert) => Promise<any>
+  getItemTimeStatsBatch: (
+    keys: Array<{ sourceId: string, itemId: string }>,
+  ) => Promise<(typeof schema.itemTimeStats.$inferSelect)[]>
+  getAllItemTimeStats: () => Promise<(typeof schema.itemTimeStats.$inferSelect)[]>
+  getRecommendationCache: (cacheKey: string) => Promise<typeof schema.recommendationCache.$inferSelect | undefined>
+  setRecommendationCache: (cacheKey: string, items: any[], expiresAt: Date) => Promise<any>
+  cleanExpiredRecommendationCache: () => Promise<any>
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>
   deletePluginData: (pluginId: string, key?: string) => Promise<any>

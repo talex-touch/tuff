@@ -27,7 +27,7 @@ function getLatestConfig(): AiSDKPersistedConfig | undefined {
   return stored
 }
 
-export function ensureAiConfigLoaded(): void {
+export function ensureAiConfigLoaded(_force?: boolean): void {
   // 每次都实时从 storage 读取最新配置
   const stored = getLatestConfig()
 
