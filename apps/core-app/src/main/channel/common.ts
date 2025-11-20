@@ -38,7 +38,7 @@ function getOSInformation(): any {
     type: os.type(),
     uptime: os.uptime(),
     userInfo: os.userInfo(),
-    version: os.version(),
+    version: os.version()
   }
 }
 
@@ -49,7 +49,7 @@ export class CommonChannelModule extends BaseModule {
   constructor() {
     super(CommonChannelModule.key, {
       create: false,
-      dirName: 'channel',
+      dirName: 'channel'
     })
   }
 
@@ -58,19 +58,22 @@ export class CommonChannelModule extends BaseModule {
 
     channel.regChannel(ChannelType.MAIN, 'close', () => closeApp(app as TalexTouch.TouchApp))
     channel.regChannel(ChannelType.MAIN, 'hide', () =>
-      (app as TalexTouch.TouchApp).window.window.hide())
+      (app as TalexTouch.TouchApp).window.window.hide()
+    )
 
     channel.regChannel(ChannelType.MAIN, 'minimize', () =>
-      (app as TalexTouch.TouchApp).window.minimize())
+      (app as TalexTouch.TouchApp).window.minimize()
+    )
     channel.regChannel(ChannelType.MAIN, 'dev-tools', () => {
-      console.log('[dev-tools] Open dev tools!')
+      console.debug('[dev-tools] Open dev tools!')
       ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'undocked' })
       ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'detach' })
       ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'right' })
     })
     channel.regChannel(ChannelType.MAIN, 'get-package', () => packageJson)
     channel.regChannel(ChannelType.MAIN, 'open-external', ({ data }) =>
-      shell.openExternal(data!.url))
+      shell.openExternal(data!.url)
+    )
 
     channel.regChannel(ChannelType.MAIN, 'get-os', () => getOSInformation())
     const systemGetActiveApp = async ({ data }: { data?: { forceRefresh?: boolean } }) =>
@@ -91,12 +94,12 @@ export class CommonChannelModule extends BaseModule {
         const modulePath = path.join(
           (app as TalexTouch.TouchApp).rootPath,
           'modules',
-          data?.name ? data.name : undefined,
+          data?.name ? data.name : undefined
         )
         shell.openPath(modulePath)
 
         console.debug(
-          `[Channel] Open path [${modulePath}] with module folder @${data?.name ?? 'defaults'}`,
+          `[Channel] Open path [${modulePath}] with module folder @${data?.name ?? 'defaults'}`
         )
       }
     })
@@ -110,8 +113,7 @@ export class CommonChannelModule extends BaseModule {
             return { success: false, error }
           }
           return { success: true }
-        }
-        catch (error) {
+        } catch (error) {
           console.error(`[CommonChannel] Error opening path: ${data.command}`, error)
           return { success: false, error: error instanceof Error ? error.message : String(error) }
         }
@@ -161,7 +163,7 @@ export class CommonChannelModule extends BaseModule {
 
     async function onOpenUrl(url: string) {
       const data = await channel.send(ChannelType.MAIN, 'url:open', url)
-      console.log('open url', url, data)
+      console.debug('open url', url, data)
 
       if (data.data) {
         shell.openExternal(url)
@@ -171,8 +173,8 @@ export class CommonChannelModule extends BaseModule {
     ;(app as TalexTouch.TouchApp).app.addListener('open-url', (event, url) => {
       event.preventDefault()
 
-      const regex
-        = /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
+      const regex =
+        /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
       if (regex.test(url) && url.includes('/#/')) {
         return
       }
@@ -180,7 +182,7 @@ export class CommonChannelModule extends BaseModule {
       onOpenUrl(url)
     })
 
-    touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, event => onOpenUrl(event.data))
+    touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => onOpenUrl(event.data))
 
     channel.regChannel(ChannelType.MAIN, 'build:get-verification-status', () => {
       try {
@@ -189,17 +191,16 @@ export class CommonChannelModule extends BaseModule {
           return {
             isOfficialBuild: status.isOfficialBuild,
             verificationFailed: status.verificationFailed,
-            hasOfficialKey: status.isOfficialBuild || status.verificationFailed,
+            hasOfficialKey: status.isOfficialBuild || status.verificationFailed
           }
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.warn('[CommonChannel] Failed to get build verification status:', error)
       }
       return {
         isOfficialBuild: false,
         verificationFailed: false,
-        hasOfficialKey: false,
+        hasOfficialKey: false
       }
     })
   }

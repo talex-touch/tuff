@@ -5,17 +5,18 @@ export class AiCapabilityRegistry {
 
   register(capability: AiCapabilityDescriptor): void {
     if (this.capabilities.has(capability.id)) {
-      console.warn(`[AiCapabilityRegistry] Capability ${capability.id} already registered, overwriting`)
+      console.warn(
+        `[AiCapabilityRegistry] Capability ${capability.id} already registered, overwriting`
+      )
     }
     this.capabilities.set(capability.id, capability)
-    console.log(`[AiCapabilityRegistry] Registered capability: ${capability.id}`)
+    console.debug(`[AiCapabilityRegistry] Registered capability: ${capability.id}`)
   }
 
   unregister(capabilityId: string): void {
     if (this.capabilities.delete(capabilityId)) {
-      console.log(`[AiCapabilityRegistry] Unregistered capability: ${capabilityId}`)
-    }
-    else {
+      console.debug(`[AiCapabilityRegistry] Unregistered capability: ${capabilityId}`)
+    } else {
       console.warn(`[AiCapabilityRegistry] Capability ${capabilityId} not found`)
     }
   }
@@ -25,7 +26,7 @@ export class AiCapabilityRegistry {
   }
 
   getByType(type: AiCapabilityType): AiCapabilityDescriptor[] {
-    return Array.from(this.capabilities.values()).filter(cap => cap.type === type)
+    return Array.from(this.capabilities.values()).filter((cap) => cap.type === type)
   }
 
   getAll(): AiCapabilityDescriptor[] {

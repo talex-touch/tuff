@@ -11,45 +11,44 @@ export class ItemRebuilder {
   constructor(private dbUtils: DbUtils) {}
 
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
-    if (scoredItems.length === 0)
-      return []
+    if (scoredItems.length === 0) return []
 
-    console.log(`[ItemRebuilder] Rebuilding ${scoredItems.length} scored items`)
+    console.debug(`[ItemRebuilder] Rebuilding ${scoredItems.length} scored items`)
     const grouped = this.groupByNormalizedSource(scoredItems)
-    
+
     for (const [sourceId, items] of grouped.entries()) {
-      console.log(`[ItemRebuilder]   - ${sourceId}: ${items.length} items`)
+      console.debug(`[ItemRebuilder]   - ${sourceId}: ${items.length} items`)
     }
-    
+
     const results = await Promise.all([
       this.rebuildAppItems(grouped.get('app-provider') || []),
       this.rebuildFileItems(grouped.get('file-provider') || []),
       this.rebuildPluginFeatureItems(grouped.get('plugin-features') || []),
       this.rebuildSystemItems(grouped.get('system-provider') || []),
-      this.rebuildClipboardItems(grouped.get('clipboard-history') || []),
+      this.rebuildClipboardItems(grouped.get('clipboard-history') || [])
     ])
 
     const allItems = results.flat()
-    console.log(`[ItemRebuilder] Rebuilt ${allItems.length} items total`)
+    console.debug(`[ItemRebuilder] Rebuilt ${allItems.length} items total`)
 
     return this.mergeAndEnrichItems(allItems, scoredItems)
   }
 
   private normalizeSourceId(sourceId: string): string {
     const sourceIdMap: Record<string, string> = {
-      'application': 'app-provider',
-      'app': 'app-provider',
-      'file': 'file-provider',
-      'system': 'system-provider',
-      'clipboard': 'clipboard-history',
+      application: 'app-provider',
+      app: 'app-provider',
+      file: 'file-provider',
+      system: 'system-provider',
+      clipboard: 'clipboard-history'
     }
-    
+
     return sourceIdMap[sourceId] || sourceId
   }
 
   private groupByNormalizedSource(items: ScoredItem[]): Map<string, ScoredItem[]> {
     const groups = new Map<string, ScoredItem[]>()
-    
+
     for (const item of items) {
       const normalized = this.normalizeSourceId(item.sourceId)
       if (!groups.has(normalized)) {
@@ -57,63 +56,88 @@ export class ItemRebuilder {
       }
       groups.get(normalized)!.push(item)
     }
-    
+
     return groups
   }
 
   private async rebuildAppItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0)
-      return []
+    if (items.length === 0) return []
 
     try {
-      const paths = items.map(item => item.itemId)
-      const apps = await this.dbUtils.getFilesByPaths(paths)
-      
-      if (apps.length === 0)
+      const pathItems = items.filter((item) => item.itemId.startsWith('/'))
+      const bundleIdItems = items.filter((item) => !item.itemId.startsWith('/'))
+
+      console.debug(
+        `[ItemRebuilder] Splitting ${items.length} items: ${pathItems.length} paths, ${bundleIdItems.length} bundle IDs`
+      )
+
+      const [appsByPath, appsByBundleId] = await Promise.all([
+        pathItems.length > 0
+          ? this.dbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
+          : Promise.resolve([]),
+        bundleIdItems.length > 0
+          ? this.dbUtils.getFilesByBundleIds(bundleIdItems.map((i) => i.itemId))
+          : Promise.resolve([])
+      ])
+
+      const apps = [...appsByPath, ...appsByBundleId]
+      console.debug(
+        `[ItemRebuilder] Database returned ${apps.length} apps (${appsByPath.length} by path, ${appsByBundleId.length} by bundle ID)`
+      )
+
+      if (apps.length === 0) {
+        console.warn('[ItemRebuilder] No apps found in database')
         return []
+      }
+
+      if (apps.length < items.length) {
+        console.warn(`[ItemRebuilder] Missing ${items.length - apps.length} apps`)
+      }
 
       const appsWithExtensions = await this.fetchExtensionsForApps(apps)
       const { processSearchResults } = await import('../../addon/apps/search-processing-service')
-      
+
       const dummyQuery: TuffQuery = { text: '' }
-      return processSearchResults(appsWithExtensions, dummyQuery, false, {})
-    }
-    catch (error) {
+      const result = await processSearchResults(appsWithExtensions, dummyQuery, false, {})
+      console.debug(`[ItemRebuilder] Processed ${result.length} app items`)
+
+      return result
+    } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild app items:', error)
       return []
     }
   }
 
   private async fetchExtensionsForApps(apps: any[]): Promise<any[]> {
-    const fileIds = apps.map(app => app.id)
+    const fileIds = apps.map((app) => app.id)
     const extensions = await this.dbUtils.getFileExtensionsByFileIds(fileIds)
-    
-    return apps.map(app => ({
+
+    return apps.map((app) => ({
       ...app,
       extensions: extensions
-        .filter(ext => ext.fileId === app.id)
-        .reduce((acc, ext) => {
-          acc[ext.key] = ext.value
-          return acc
-        }, {} as Record<string, string | null>),
+        .filter((ext) => ext.fileId === app.id)
+        .reduce(
+          (acc, ext) => {
+            acc[ext.key] = ext.value
+            return acc
+          },
+          {} as Record<string, string | null>
+        )
     }))
   }
 
   private async rebuildFileItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0)
-      return []
+    if (items.length === 0) return []
 
     try {
-      const paths = items.map(item => item.itemId)
+      const paths = items.map((item) => item.itemId)
       const files = await this.dbUtils.getFilesByPaths(paths)
-      
-      if (files.length === 0)
-        return []
+
+      if (files.length === 0) return []
 
       const { mapFileToTuffItem } = await import('../../addon/files/utils')
-      return files.map(file => mapFileToTuffItem(file, {}, 'file-provider', 'File Provider'))
-    }
-    catch (error) {
+      return files.map((file) => mapFileToTuffItem(file, {}, 'file-provider', 'File Provider'))
+    } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild file items:', error)
       return []
     }
@@ -123,8 +147,7 @@ export class ItemRebuilder {
    * 重建插件功能项
    */
   private async rebuildPluginFeatureItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0)
-      return []
+    if (items.length === 0) return []
 
     try {
       const { pluginModule } = await import('../../../plugin/plugin-module')
@@ -135,7 +158,7 @@ export class ItemRebuilder {
       }
 
       const rebuiltItems: TuffItem[] = []
-      
+
       for (const item of items) {
         // itemId 格式: "pluginName/featureId"
         const [pluginName, featureId] = item.itemId.split('/')
@@ -157,22 +180,22 @@ export class ItemRebuilder {
         }
 
         // 使用 PluginFeaturesAdapter 的逻辑创建 TuffItem
-        const { default: adapter } = await import('../../../plugin/adapters/plugin-features-adapter')
+        const { default: adapter } = await import(
+          '../../../plugin/adapters/plugin-features-adapter'
+        )
         const tuffItem = (adapter as any).createTuffItem(plugin, feature)
         rebuiltItems.push(tuffItem)
       }
 
       return rebuiltItems
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild plugin feature items:', error)
       return []
     }
   }
 
   private async rebuildSystemItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0)
-      return []
+    if (items.length === 0) return []
 
     try {
       const { systemProvider } = await import('../../addon/system/system-provider')
@@ -185,8 +208,8 @@ export class ItemRebuilder {
           new AbortController().signal
         )
 
-        const matchedItem = searchResult.items.find(resultItem => 
-          resultItem.meta?.raw?.systemActionId === actionId
+        const matchedItem = searchResult.items.find(
+          (resultItem) => resultItem.meta?.raw?.systemActionId === actionId
         )
 
         if (matchedItem) {
@@ -197,16 +220,14 @@ export class ItemRebuilder {
       }
 
       return rebuiltItems
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild system items:', error)
       return []
     }
   }
 
   private async rebuildClipboardItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0)
-      return []
+    if (items.length === 0) return []
 
     try {
       const db = this.dbUtils.getDb()
@@ -216,8 +237,7 @@ export class ItemRebuilder {
 
       for (const item of items) {
         const clipboardId = Number.parseInt(item.itemId, 10)
-        if (Number.isNaN(clipboardId))
-          continue
+        if (Number.isNaN(clipboardId)) continue
 
         const record = await db
           .select()
@@ -234,35 +254,30 @@ export class ItemRebuilder {
       }
 
       return rebuiltItems
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild clipboard items:', error)
       return []
     }
   }
 
-  private mergeAndEnrichItems(
-    items: TuffItem[],
-    scoredItems: ScoredItem[],
-  ): TuffItem[] {
-    const scoreMap = new Map(scoredItems.map(s => [s.itemId, s]))
-    
+  private mergeAndEnrichItems(items: TuffItem[], scoredItems: ScoredItem[]): TuffItem[] {
+    const scoreMap = new Map(scoredItems.map((s) => [s.itemId, s]))
+
     return items
       .map((item) => {
         const scored = scoreMap.get(item.id)
-        if (!scored)
-          return null
-        
+        if (!scored) return null
+
         const meta: any = item.meta || {}
         meta.recommendation = {
           score: scored.score,
           source: scored.source,
           reason: this.getReasonLabel(scored),
-          isIntelligent: true,              // 新增: 标识这是智能推荐
-          badge: this.generateBadge(scored),  // 新增: 徽章信息
+          isIntelligent: true, // 新增: 标识这是智能推荐
+          badge: this.generateBadge(scored) // 新增: 徽章信息
         }
         item.meta = meta
-        
+
         return item
       })
       .filter((item): item is TuffItem => item !== null)

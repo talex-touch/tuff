@@ -14,81 +14,85 @@ export class RecommendationEngine {
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
-    console.log('[DEBUG_REC_INIT] RecommendationEngine initialized')
+    console.debug('[DEBUG_REC_INIT] RecommendationEngine initialized')
   }
 
   /**
    * 生成推荐列表
    */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
-    console.log('[DEBUG_REC_INIT] Starting recommendation generation', options)
+    console.debug('[DEBUG_REC_INIT] Starting recommendation generation', options)
     const startTime = performance.now()
 
     const context = await this.contextProvider.getCurrentContext()
 
-    const cached = await this.getCachedRecommendations(context)
+    // TEMPORARY: Disable cache for testing - remove this line to re-enable cache
+    const forceRefresh = true
+    const cached = forceRefresh ? null : await this.getCachedRecommendations(context)
     if (cached && !options.forceRefresh) {
-      console.log('[RecommendationEngine] Using cached recommendations')
+      console.debug('[RecommendationEngine] Using cached recommendations')
       return {
         items: cached.items,
         context,
         duration: performance.now() - startTime,
-        fromCache: true,
+        fromCache: true
       }
     }
 
     const candidates = await this.getCandidates(context, options)
-    console.log(`[DEBUG_REC_INIT] Generated ${candidates.length} candidates`)
+    console.debug(`[DEBUG_REC_INIT] Generated ${candidates.length} candidates`)
 
     // Fallback: if no candidates, use simple usage count
     if (candidates.length === 0) {
-      console.log('[DEBUG_REC_INIT] No candidates found, using fallback strategy')
+      console.debug('[DEBUG_REC_INIT] No candidates found, using fallback strategy')
       const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
-      console.log(`[DEBUG_REC_INIT] Fallback generated ${fallbackItems.length} items`)
-      
+      console.debug(`[DEBUG_REC_INIT] Fallback generated ${fallbackItems.length} items`)
+
       const duration = performance.now() - startTime
       return {
         items: fallbackItems,
         context,
         duration,
-        fromCache: false,
+        fromCache: false
       }
     }
 
     const scored = await this.scoreAndRank(candidates, context)
-    console.log(`[DEBUG_REC_INIT] Scored ${scored.length} items`)
+    console.debug(`[DEBUG_REC_INIT] Scored ${scored.length} items`)
 
     const limit = options.limit || 10
     const diversified = this.applyDiversityFilter(scored, limit)
-    console.log(`[DEBUG_REC_INIT] After diversity filter: ${diversified.length} items`)
+    console.debug(`[DEBUG_REC_INIT] After diversity filter: ${diversified.length} items`)
 
     const items = await this.itemRebuilder.rebuildItems(diversified)
-    console.log(`[DEBUG_REC_INIT] Rebuilt ${items.length} items`)
+    console.debug(`[DEBUG_REC_INIT] Rebuilt ${items.length} items`)
 
     // Fallback check: if rebuilding failed, try fallback
     if (items.length === 0 && diversified.length > 0) {
-      console.log('[DEBUG_REC_INIT] Rebuilding failed, using fallback')
+      console.debug('[DEBUG_REC_INIT] Rebuilding failed, using fallback')
       const fallbackItems = await this.getFallbackRecommendations(limit)
-      
+
       const duration = performance.now() - startTime
       return {
         items: fallbackItems,
         context,
         duration,
-        fromCache: false,
+        fromCache: false
       }
     }
 
     await this.cacheRecommendations(context, items)
 
     const duration = performance.now() - startTime
-    console.log(`[RecommendationEngine] Generated ${items.length} recommendations in ${duration.toFixed(2)}ms`)
+    console.debug(
+      `[RecommendationEngine] Generated ${items.length} recommendations in ${duration.toFixed(2)}ms`
+    )
 
     return {
       items,
       context,
       duration,
-      fromCache: false,
+      fromCache: false
     }
   }
 
@@ -98,23 +102,22 @@ export class RecommendationEngine {
   private async getFallbackRecommendations(limit: number): Promise<TuffItem[]> {
     try {
       const frequentItems = await this.getFrequentItems(limit * 2) // Get more to ensure we have enough after rebuild
-      
+
       if (frequentItems.length === 0) {
-        console.log('[DEBUG_REC_INIT] No frequent items found in database')
+        console.debug('[DEBUG_REC_INIT] No frequent items found in database')
         return []
       }
 
       const items = await this.itemRebuilder.rebuildItems(
-        frequentItems.map(item => ({
+        frequentItems.map((item) => ({
           ...item,
           source: 'frequent' as const,
-          score: item.usageStats.executeCount,
+          score: item.usageStats.executeCount
         }))
       )
 
       return items.slice(0, limit)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[RecommendationEngine] Fallback recommendation failed:', error)
       return []
     }
@@ -125,56 +128,66 @@ export class RecommendationEngine {
    */
   private async getCandidates(
     context: ContextSignal,
-    _options: RecommendationOptions,
+    _options: RecommendationOptions
   ): Promise<CandidateItem[]> {
     const candidates: CandidateItem[] = []
 
     // 维度 1: 全局高频项目 (Top 30)
     const frequentItems = await this.getFrequentItems(30)
-    console.log(`[RecommendationEngine] Frequent items: ${frequentItems.length}`)
-    candidates.push(...frequentItems.map(item => ({ 
-      ...item, 
-      source: 'frequent' as const 
-    })))
+    console.debug(`[RecommendationEngine] Frequent items: ${frequentItems.length}`)
+    candidates.push(
+      ...frequentItems.map((item) => ({
+        ...item,
+        source: 'frequent' as const
+      }))
+    )
 
     // 维度 2: 最近使用 (Top 20)
     const recentItems = await this.getRecentItems(20)
-    console.log(`[RecommendationEngine] Recent items: ${recentItems.length}`)
-    candidates.push(...recentItems.map(item => ({ 
-      ...item, 
-      source: 'recent' as const 
-    })))
+    console.debug(`[RecommendationEngine] Recent items: ${recentItems.length}`)
+    candidates.push(
+      ...recentItems.map((item) => ({
+        ...item,
+        source: 'recent' as const
+      }))
+    )
 
     // 维度 3: 时段热门 (Top 20)
     const timeBasedItems = await this.getTimeBasedTopItems(context.time, 20)
-    console.log(`[RecommendationEngine] Time-based items: ${timeBasedItems.length}`)
-    candidates.push(...timeBasedItems.map(item => ({ 
-      ...item, 
-      source: 'time-based' as const 
-    })))
+    console.debug(`[RecommendationEngine] Time-based items: ${timeBasedItems.length}`)
+    candidates.push(
+      ...timeBasedItems.map((item) => ({
+        ...item,
+        source: 'time-based' as const
+      }))
+    )
 
     // 维度 4: 趋势项目 (Top 15)
     const trendingItems = await this.getTrendingItems(15)
-    console.log(`[RecommendationEngine] Trending items: ${trendingItems.length}`)
-    candidates.push(...trendingItems.map(item => ({ 
-      ...item, 
-      source: 'trending' as const 
-    })))
+    console.debug(`[RecommendationEngine] Trending items: ${trendingItems.length}`)
+    candidates.push(
+      ...trendingItems.map((item) => ({
+        ...item,
+        source: 'trending' as const
+      }))
+    )
 
-    console.log(`[RecommendationEngine] Total candidates before dedup: ${candidates.length}`)
-    
+    console.debug(`[RecommendationEngine] Total candidates before dedup: ${candidates.length}`)
+
     // 去重(同一 sourceId + itemId 只保留第一次出现)
     const deduplicated = this.deduplicateCandidates(candidates)
-    
+
     // 统计各 source 的分布
     const sourceDistribution = new Map<string, number>()
     for (const item of deduplicated) {
       const key = item.sourceId
       sourceDistribution.set(key, (sourceDistribution.get(key) || 0) + 1)
     }
-    console.log(`[RecommendationEngine] After dedup: ${deduplicated.length} items, distribution:`, 
-      Object.fromEntries(sourceDistribution))
-    
+    console.debug(
+      `[DEBUG_REC_INIT] After dedup: ${deduplicated.length} items, distribution:`,
+      Object.fromEntries(sourceDistribution)
+    )
+
     return deduplicated
   }
 
@@ -183,7 +196,7 @@ export class RecommendationEngine {
    */
   private async getFrequentItems(limit: number): Promise<ItemCandidate[]> {
     const db = this.dbUtils.getDb()
-    
+
     const stats = await db
       .select()
       .from(schema.itemUsageStats)
@@ -191,11 +204,11 @@ export class RecommendationEngine {
       .limit(limit)
       .all()
 
-    return stats.map(stat => ({
+    return stats.map((stat) => ({
       sourceId: stat.sourceId,
       itemId: stat.itemId,
       sourceType: stat.sourceType,
-      usageStats: stat,
+      usageStats: stat
     }))
   }
 
@@ -204,7 +217,7 @@ export class RecommendationEngine {
    */
   private async getRecentItems(limit: number): Promise<ItemCandidate[]> {
     const db = this.dbUtils.getDb()
-    
+
     const stats = await db
       .select()
       .from(schema.itemUsageStats)
@@ -212,12 +225,14 @@ export class RecommendationEngine {
       .limit(limit)
       .all()
 
-    return stats.filter(stat => stat.lastExecuted != null).map(stat => ({
-      sourceId: stat.sourceId,
-      itemId: stat.itemId,
-      sourceType: stat.sourceType,
-      usageStats: stat,
-    }))
+    return stats
+      .filter((stat) => stat.lastExecuted != null)
+      .map((stat) => ({
+        sourceId: stat.sourceId,
+        itemId: stat.itemId,
+        sourceType: stat.sourceType,
+        usageStats: stat
+      }))
   }
 
   /**
@@ -225,20 +240,21 @@ export class RecommendationEngine {
    */
   private async getTimeBasedTopItems(
     timePattern: TimePattern,
-    limit: number,
+    limit: number
   ): Promise<ItemCandidate[]> {
     const allTimeStats = await this.dbUtils.getAllItemTimeStats()
-    const scored: Array<{ item: ItemCandidate, score: number }> = []
+    const scored: Array<{ item: ItemCandidate; score: number }> = []
 
     // 获取对应的使用统计
-    const keys = allTimeStats.map(stat => ({
+    const keys = allTimeStats.map((stat) => ({
       sourceId: stat.sourceId,
-      itemId: stat.itemId,
+      itemId: stat.itemId
     }))
     const usageStatsMap = new Map(
-      (await this.dbUtils.getUsageStatsBatch(keys)).map(stat => 
-        [`${stat.sourceId}:${stat.itemId}`, stat]
-      )
+      (await this.dbUtils.getUsageStatsBatch(keys)).map((stat) => [
+        `${stat.sourceId}:${stat.itemId}`,
+        stat
+      ])
     )
 
     for (const raw of allTimeStats) {
@@ -248,7 +264,7 @@ export class RecommendationEngine {
         hourDistribution: JSON.parse(raw.hourDistribution),
         dayOfWeekDistribution: JSON.parse(raw.dayOfWeekDistribution),
         timeSlotDistribution: JSON.parse(raw.timeSlotDistribution),
-        lastUpdated: raw.lastUpdated,
+        lastUpdated: raw.lastUpdated
       }
 
       const timeScore = this.calculateTimeRelevance(parsed, timePattern)
@@ -263,9 +279,9 @@ export class RecommendationEngine {
               itemId: raw.itemId,
               sourceType: usageStats.sourceType,
               usageStats,
-              timeStats: parsed,
+              timeStats: parsed
             },
-            score: timeScore,
+            score: timeScore
           })
         }
       }
@@ -283,7 +299,7 @@ export class RecommendationEngine {
    */
   private async getTrendingItems(limit: number): Promise<ItemCandidate[]> {
     const db = this.dbUtils.getDb()
-    
+
     // 计算时间点
     const now = Date.now()
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)
@@ -296,7 +312,7 @@ export class RecommendationEngine {
       .where(sql`${schema.itemUsageStats.lastExecuted} IS NOT NULL`)
       .all()
 
-    const trending: Array<{ item: ItemCandidate, growthScore: number }> = []
+    const trending: Array<{ item: ItemCandidate; growthScore: number }> = []
 
     for (const stat of allStats) {
       // 计算最近 7 天的使用次数
@@ -304,10 +320,10 @@ export class RecommendationEngine {
         .select({ count: sql<number>`count(*)` })
         .from(schema.usageLogs)
         .where(
-          sql`${schema.usageLogs.source} = ${stat.sourceId} 
+          sql`${schema.usageLogs.source} = ${stat.sourceId}
               AND ${schema.usageLogs.itemId} = ${stat.itemId}
               AND ${schema.usageLogs.action} = 'execute'
-              AND ${schema.usageLogs.timestamp} >= ${sevenDaysAgo.getTime()}`,
+              AND ${schema.usageLogs.timestamp} >= ${sevenDaysAgo.getTime()}`
         )
         .get()
 
@@ -318,37 +334,37 @@ export class RecommendationEngine {
         .select({ count: sql<number>`count(*)` })
         .from(schema.usageLogs)
         .where(
-          sql`${schema.usageLogs.source} = ${stat.sourceId} 
+          sql`${schema.usageLogs.source} = ${stat.sourceId}
               AND ${schema.usageLogs.itemId} = ${stat.itemId}
               AND ${schema.usageLogs.action} = 'execute'
-              AND ${schema.usageLogs.timestamp} >= ${thirtyDaysAgo.getTime()}`,
+              AND ${schema.usageLogs.timestamp} >= ${thirtyDaysAgo.getTime()}`
         )
         .get()
 
       const historicalCount = historicalLogs?.count || 0
-     const avgWeeklyCount = historicalCount / 4 // 30天约4周
+      const avgWeeklyCount = historicalCount / 4 // 30天约4周
 
       // 计算增长率
       let growthScore = 0
       if (avgWeeklyCount === 0 && recentCount > 0) {
         // 新项目或重新使用的项目
         growthScore = recentCount * 10
-      }
-      else if (avgWeeklyCount > 0) {
+      } else if (avgWeeklyCount > 0) {
         const growthRate = (recentCount - avgWeeklyCount) / avgWeeklyCount
         growthScore = growthRate * 100
       }
 
       // 只保留有正增长的项目
-      if (growthScore > 0 && recentCount >= 2) { // 至少最近使用过2次
+      if (growthScore > 0 && recentCount >= 2) {
+        // 至少最近使用过2次
         trending.push({
           item: {
             sourceId: stat.sourceId,
             itemId: stat.itemId,
             sourceType: stat.sourceType,
-            usageStats: stat,
+            usageStats: stat
           },
-          growthScore,
+          growthScore
         })
       }
     }
@@ -364,22 +380,19 @@ export class RecommendationEngine {
    */
   private calculateTimeRelevance(
     itemTimeStats: ParsedItemTimeStats,
-    currentTime: TimePattern,
+    currentTime: TimePattern
   ): number {
     const slotUsage = itemTimeStats.timeSlotDistribution[currentTime.timeSlot]
-    const totalUsage = Object.values(itemTimeStats.timeSlotDistribution)
-      .reduce((a, b) => a + b, 0)
+    const totalUsage = Object.values(itemTimeStats.timeSlotDistribution).reduce((a, b) => a + b, 0)
 
-    if (totalUsage === 0)
-      return 0
+    if (totalUsage === 0) return 0
 
     // 当前时段的使用占比
     const slotRatio = slotUsage / totalUsage
 
     // 星期几的加权
     const dayUsage = itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek]
-    const avgDayUsage = itemTimeStats.dayOfWeekDistribution
-      .reduce((a, b) => a + b, 0) / 7
+    const avgDayUsage = itemTimeStats.dayOfWeekDistribution.reduce((a, b) => a + b, 0) / 7
     const dayFactor = dayUsage / (avgDayUsage || 1)
 
     return slotRatio * 100 * dayFactor
@@ -390,7 +403,7 @@ export class RecommendationEngine {
    */
   private async scoreAndRank(
     candidates: CandidateItem[],
-    context: ContextSignal,
+    context: ContextSignal
   ): Promise<ScoredItem[]> {
     const scored: ScoredItem[] = []
 
@@ -407,7 +420,7 @@ export class RecommendationEngine {
    */
   private async calculateRecommendationScore(
     candidate: CandidateItem,
-    context: ContextSignal,
+    context: ContextSignal
   ): Promise<number> {
     let score = 0
 
@@ -456,21 +469,21 @@ export class RecommendationEngine {
    */
   private matchClipboardContent(
     candidate: CandidateItem,
-    clipboard: NonNullable<ContextSignal['clipboard']>,
+    clipboard: NonNullable<ContextSignal['clipboard']>
   ): number {
     const { sourceType, itemId } = candidate
 
     // 文件类型匹配逻辑(最高优先级)
     if (clipboard.meta?.fileType === 'code' && clipboard.meta.language) {
       const language = clipboard.meta.language
-      
+
       // Java/Kotlin → JetBrains IDEA/Android Studio
       if (language === 'java' || language === 'kotlin') {
         if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['idea', 'android-studio'])) {
           return 100
         }
       }
-      
+
       // Python → PyCharm/VS Code
       if (language === 'python') {
         if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['pycharm'])) {
@@ -480,7 +493,7 @@ export class RecommendationEngine {
           return 90
         }
       }
-      
+
       // JavaScript/TypeScript → VS Code/WebStorm
       if (language === 'javascript' || language === 'typescript') {
         if (sourceType === 'app' && this.isVSCode(itemId)) {
@@ -490,20 +503,20 @@ export class RecommendationEngine {
           return 95
         }
       }
-      
+
       // 通用代码文件 → 任何 IDE
       if (sourceType === 'app' && this.isIDE(itemId)) {
         return 80
       }
     }
-    
+
     // 文本文件 → 文本编辑器
     if (clipboard.meta?.fileType === 'text') {
       if (sourceType === 'app' && this.isTextEditor(itemId)) {
         return 85
       }
     }
-    
+
     // 图像文件 → 图像编轑器
     if (clipboard.meta?.fileType === 'image') {
       if (sourceType === 'app' && this.isImageApp(itemId)) {
@@ -525,21 +538,18 @@ export class RecommendationEngine {
         if (itemId.includes('download') || itemId.includes('aria')) {
           return 80
         }
-      }
-      else {
+      } else {
         // 普通文本,推荐编辑器
         if (sourceType === 'app' && this.isEditorApp(itemId)) {
           return 70
         }
       }
-    }
-    else if (clipboard.type === 'image') {
+    } else if (clipboard.type === 'image') {
       // 图片剪贴板,推荐图片处理工具
       if (sourceType === 'app' && this.isImageApp(itemId)) {
         return 100
       }
-    }
-    else if (clipboard.type === 'files') {
+    } else if (clipboard.type === 'files') {
       // 文件剪贴板,推荐文件管理工具
       if (sourceType === 'app' && this.isFileManagerApp(itemId)) {
         return 80
@@ -554,7 +564,7 @@ export class RecommendationEngine {
    */
   private matchForegroundApp(
     candidate: CandidateItem,
-    foregroundApp: NonNullable<ContextSignal['foregroundApp']>,
+    foregroundApp: NonNullable<ContextSignal['foregroundApp']>
   ): number {
     const { sourceType, itemId } = candidate
 
@@ -570,7 +580,11 @@ export class RecommendationEngine {
     }
 
     // 浏览器 -> 开发工具
-    if (this.isBrowserApp(foregroundApp.bundleId) && sourceType === 'app' && this.isDeveloperTool(itemId)) {
+    if (
+      this.isBrowserApp(foregroundApp.bundleId) &&
+      sourceType === 'app' &&
+      this.isDeveloperTool(itemId)
+    ) {
       return 50
     }
 
@@ -587,9 +601,9 @@ export class RecommendationEngine {
       'org.mozilla.firefox',
       'com.microsoft.edgemac',
       'com.brave.Browser',
-      'com.operasoftware.Opera',
+      'com.operasoftware.Opera'
     ]
-    return browsers.some(browser => identifier.includes(browser))
+    return browsers.some((browser) => identifier.includes(browser))
   }
 
   /**
@@ -603,9 +617,9 @@ export class RecommendationEngine {
       'com.barebones.bbedit',
       'com.vim',
       'com.neovim',
-      'com.textmate',
+      'com.textmate'
     ]
-    return editors.some(editor => identifier.includes(editor))
+    return editors.some((editor) => identifier.includes(editor))
   }
 
   /**
@@ -621,13 +635,13 @@ export class RecommendationEngine {
       'com.pixelmatorteam.pixelmator',
       'com.apple.Preview',
       'com.gimp',
-      'com.serif.affinity.photo',     // Affinity Photo
-      'com.serif.affinity.designer',   // Affinity Designer
-      'com.krita',                     // Krita
-      'com.procreate',                 // Procreate
-      'com.canva',                     // Canva
+      'com.serif.affinity.photo', // Affinity Photo
+      'com.serif.affinity.designer', // Affinity Designer
+      'com.krita', // Krita
+      'com.procreate', // Procreate
+      'com.canva' // Canva
     ]
-    return imageApps.some(app => identifier.includes(app))
+    return imageApps.some((app) => identifier.includes(app))
   }
 
   /**
@@ -635,15 +649,15 @@ export class RecommendationEngine {
    */
   private isJetBrainsIDE(identifier: string, products: string[]): boolean {
     const jetbrainsApps: Record<string, string> = {
-      'idea': 'com.jetbrains.intellij',
-      'pycharm': 'com.jetbrains.pycharm',
-      'webstorm': 'com.jetbrains.webstorm',
+      idea: 'com.jetbrains.intellij',
+      pycharm: 'com.jetbrains.pycharm',
+      webstorm: 'com.jetbrains.webstorm',
       'android-studio': 'com.google.android.studio',
-      'goland': 'com.jetbrains.goland',
-      'rider': 'com.jetbrains.rider',
+      goland: 'com.jetbrains.goland',
+      rider: 'com.jetbrains.rider'
     }
-    
-    return products.some(product => {
+
+    return products.some((product) => {
       const bundleId = jetbrainsApps[product]
       return bundleId && identifier.includes(bundleId)
     })
@@ -653,8 +667,7 @@ export class RecommendationEngine {
    * 判断是否为 VS Code
    */
   private isVSCode(identifier: string): boolean {
-    return identifier.includes('com.microsoft.VSCode') || 
-           identifier.includes('VSCodium')
+    return identifier.includes('com.microsoft.VSCode') || identifier.includes('VSCodium')
   }
 
   /**
@@ -666,21 +679,17 @@ export class RecommendationEngine {
       'com.sublimetext',
       'com.barebones.bbedit',
       'com.coteditor.CotEditor',
-      'com.typora',
+      'com.typora'
     ]
-    return editors.some(editor => identifier.includes(editor))
+    return editors.some((editor) => identifier.includes(editor))
   }
 
   /**
    * 判断是否为文件管理工具
    */
   private isFileManagerApp(identifier: string): boolean {
-    const fileManagers = [
-      'com.apple.finder',
-      'com.coderforart.MWeb',
-      'com.agilebits',
-    ]
-    return fileManagers.some(fm => identifier.includes(fm))
+    const fileManagers = ['com.apple.finder', 'com.coderforart.MWeb', 'com.agilebits']
+    return fileManagers.some((fm) => identifier.includes(fm))
   }
 
   /**
@@ -691,9 +700,9 @@ export class RecommendationEngine {
       'com.microsoft.VSCode',
       'com.jetbrains',
       'com.apple.dt.Xcode',
-      'com.android.studio',
+      'com.android.studio'
     ]
-    return ides.some(ide => identifier.includes(ide))
+    return ides.some((ide) => identifier.includes(ide))
   }
 
   /**
@@ -705,9 +714,9 @@ export class RecommendationEngine {
       'com.googlecode.iterm2',
       'com.github.wez.wezterm',
       'io.alacritty',
-      'net.kovidgoyal.kitty',
+      'net.kovidgoyal.kitty'
     ]
-    return terminals.some(term => identifier.includes(term))
+    return terminals.some((term) => identifier.includes(term))
   }
 
   /**
@@ -715,10 +724,10 @@ export class RecommendationEngine {
    */
   private isDeveloperTool(identifier: string): boolean {
     return (
-      this.isIDE(identifier)
-      || this.isTerminalApp(identifier)
-      || identifier.includes('postman')
-      || identifier.includes('insomnia')
+      this.isIDE(identifier) ||
+      this.isTerminalApp(identifier) ||
+      identifier.includes('postman') ||
+      identifier.includes('insomnia')
     )
   }
 
@@ -733,21 +742,20 @@ export class RecommendationEngine {
     const lastInteraction = Math.max(
       stats.lastExecuted?.getTime() || 0,
       stats.lastSearched?.getTime() || 0,
-      stats.lastCancelled?.getTime() || 0,
+      stats.lastCancelled?.getTime() || 0
     )
 
     const daysSince = (Date.now() - lastInteraction) / (1000 * 60 * 60 * 24)
     const decayFactor = Math.exp(-0.1 * daysSince) // lambda = 0.1
 
-    return (executeCount * 1.0 + searchCount * 0.3 + cancelCount * (-0.5)) * decayFactor
+    return (executeCount * 1.0 + searchCount * 0.3 + cancelCount * -0.5) * decayFactor
   }
 
   /**
    * 计算最近使用加成
    */
   private calculateRecencyBoost(lastUsed: Date | null): number {
-    if (!lastUsed)
-      return 0
+    if (!lastUsed) return 0
 
     const hoursSince = (Date.now() - lastUsed.getTime()) / (1000 * 60 * 60)
 
@@ -765,8 +773,7 @@ export class RecommendationEngine {
     const typeCount = new Map<string, number>()
 
     for (const item of scored) {
-      if (result.length >= limit)
-        break
+      if (result.length >= limit) break
 
       const currentCount = typeCount.get(item.sourceType) || 0
 
@@ -804,22 +811,21 @@ export class RecommendationEngine {
   /**
    * 获取缓存的推荐
    */
-  private async getCachedRecommendations(context: ContextSignal): Promise<{ items: TuffItem[] } | null> {
+  private async getCachedRecommendations(
+    context: ContextSignal
+  ): Promise<{ items: TuffItem[] } | null> {
     const cacheKey = this.contextProvider.generateCacheKey(context)
     const cached = await this.dbUtils.getRecommendationCache(cacheKey)
 
-    if (!cached)
-      return null
+    if (!cached) return null
 
     // 检查是否过期
-    if (cached.expiresAt.getTime() < Date.now())
-      return null
+    if (cached.expiresAt.getTime() < Date.now()) return null
 
     try {
       const items = JSON.parse(cached.recommendedItems)
       return { items }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[RecommendationEngine] Failed to parse cached recommendations:', error)
       return null
     }

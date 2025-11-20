@@ -4,32 +4,22 @@ import type {
   IProviderActivate,
   ISearchProvider,
   TuffQuery,
-  TuffSearchResult,
+  TuffSearchResult
 } from '@talex-touch/utils/core-box'
 import type {
   SearchIndexItem,
   SearchIndexKeyword,
-  SearchIndexService,
+  SearchIndexService
 } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { is } from '@electron-toolkit/utils'
-import {
-  completeTiming,
-  createRetrier,
-  sleep,
-  startTiming,
-  timingLogger,
-
-} from '@talex-touch/utils'
+import { completeTiming, createRetrier, sleep, startTiming, timingLogger } from '@talex-touch/utils'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import {
-  TuffInputType,
-  TuffSearchResultBuilder,
-} from '@talex-touch/utils/core-box'
+import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
@@ -39,7 +29,7 @@ import {
   config as configSchema,
   fileExtensions,
   files as filesSchema,
-  keywordMappings,
+  keywordMappings
 } from '../../../../db/schema'
 
 import { createDbUtils } from '../../../../db/utils'
@@ -65,7 +55,7 @@ const APP_TIMING_STYLE_BY_LEVEL: Record<TimingLogLevel, keyof typeof LogStyle> =
   none: 'info',
   info: 'info',
   warn: 'warning',
-  error: 'error',
+  error: 'error'
 }
 
 const APP_TIMING_BASE_OPTIONS: TimingOptions = {
@@ -73,12 +63,12 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
   logThresholds: {
     none: 200,
     info: 1000,
-    warn: 3000,
+    warn: 3000
   },
   formatter: (entry) => {
     const meta = (entry.meta ?? {}) as AppTimingMeta
-    const stageLabel
-      = typeof meta.label === 'string'
+    const stageLabel =
+      typeof meta.label === 'string'
         ? meta.label
         : typeof meta.stage === 'string'
           ? meta.stage
@@ -86,79 +76,86 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
     const message = typeof meta.message === 'string' ? meta.message : `${stageLabel}`
     const unit = meta.unit ?? (entry.durationMs >= 1000 ? 's' : 'ms')
     const precision = meta.precision ?? (unit === 's' ? 2 : 0)
-    const value
-      = unit === 's'
+    const value =
+      unit === 's'
         ? `${(entry.durationMs / 1000).toFixed(precision)}s`
         : `${entry.durationMs.toFixed(precision)}ms`
     const durationText = chalk.cyan(value)
     const suffix = typeof meta.suffix === 'string' ? ` ${meta.suffix}` : ''
-    const styleKey
-      = (meta.style as keyof typeof LogStyle | undefined)
-        ?? APP_TIMING_STYLE_BY_LEVEL[entry.logLevel ?? 'info']
+    const styleKey =
+      (meta.style as keyof typeof LogStyle | undefined) ??
+      APP_TIMING_STYLE_BY_LEVEL[entry.logLevel ?? 'info']
     const styleFn = LogStyle[styleKey] ?? LogStyle.info
     return formatLog('AppProvider', `${message} in ${durationText}${suffix}`, styleFn)
-  },
+  }
 }
 
 function resolveAppTimingOptions(overrides?: TimingOptions): TimingOptions {
-  if (!overrides)
-    return APP_TIMING_BASE_OPTIONS
+  if (!overrides) return APP_TIMING_BASE_OPTIONS
 
   return {
     ...APP_TIMING_BASE_OPTIONS,
     ...overrides,
     logThresholds: {
       ...(APP_TIMING_BASE_OPTIONS.logThresholds ?? {}),
-      ...(overrides.logThresholds ?? {}),
+      ...(overrides.logThresholds ?? {})
     },
     formatter: overrides.formatter ?? APP_TIMING_BASE_OPTIONS.formatter,
-    logger: overrides.logger ?? APP_TIMING_BASE_OPTIONS.logger,
+    logger: overrides.logger ?? APP_TIMING_BASE_OPTIONS.logger
   }
 }
 
-function logAppDuration(stage: string, startedAt: number, meta: AppTimingMeta = {}, overrides?: TimingOptions): number {
+function logAppDuration(
+  stage: string,
+  startedAt: number,
+  meta: AppTimingMeta = {},
+  overrides?: TimingOptions
+): number {
   return completeTiming(
     `AppProvider:${stage}`,
     startedAt,
     { ...meta, stage },
-    resolveAppTimingOptions(overrides),
+    resolveAppTimingOptions(overrides)
   )
 }
 
-function logAppDurationMs(stage: string, durationMs: number, meta: AppTimingMeta = {}, overrides?: TimingOptions): number {
+function logAppDurationMs(
+  stage: string,
+  durationMs: number,
+  meta: AppTimingMeta = {},
+  overrides?: TimingOptions
+): number {
   return timingLogger.print(
     `AppProvider:${stage}`,
     durationMs,
     { ...meta, stage },
-    resolveAppTimingOptions(overrides),
+    resolveAppTimingOptions(overrides)
   )
 }
 
 function isSqliteBusyError(error: unknown): boolean {
-  if (!error || typeof error !== 'object')
-    return false
+  if (!error || typeof error !== 'object') return false
   const { code, rawCode, message } = error as {
     code?: string
     rawCode?: number
     message?: string
   }
-  if (code === 'SQLITE_BUSY' || rawCode === 5)
-    return true
+  if (code === 'SQLITE_BUSY' || rawCode === 5) return true
   return typeof message === 'string' && message.includes('SQLITE_BUSY')
 }
 
 const sqliteBusyRetrier = createRetrier({
   maxRetries: 3,
   timeoutMs: 2000,
-  shouldRetry: error => isSqliteBusyError(error),
-  onRetry: attempt =>
+  shouldRetry: (error) => isSqliteBusyError(error),
+  onRetry: (attempt) =>
     console.warn(
       formatLog(
         'AppProvider',
         `SQLITE_BUSY encountered while updating app display name, retrying attempt ${attempt + 1}`,
-        LogStyle.warning,
-      ),
-    ),
+        LogStyle.warning
+      )
+    )
 })
 
 function runWithSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
@@ -201,7 +198,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         label: 'Initial data load completed',
         style: 'success',
         unit: 's',
-        precision: 2,
+        precision: 2
       })
     }
 
@@ -211,13 +208,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this._scheduleMdlsUpdateScan()
 
     console.log(
-      formatLog('AppProvider', 'AppProvider service loaded successfully', LogStyle.success),
+      formatLog('AppProvider', 'AppProvider service loaded successfully', LogStyle.success)
     )
     logAppDuration('onLoad', loadStart, {
       label: 'onLoad finished',
       style: 'success',
       unit: 's',
-      precision: 2,
+      precision: 2
     })
   }
 
@@ -232,11 +229,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.aliases = aliases
 
     console.log(
-      formatLog('AppProvider', 'App aliases updated, resyncing all app keywords', LogStyle.info),
+      formatLog('AppProvider', 'App aliases updated, resyncing all app keywords', LogStyle.info)
     )
 
-    if (!this.dbUtils)
-      return
+    if (!this.dbUtils) return
 
     const allApps = await this.dbUtils.getFilesByType('app')
     const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
@@ -245,8 +241,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         `Resyncing keywords for ${chalk.cyan(appsWithExtensions.length)} apps...`,
-        LogStyle.process,
-      ),
+        LogStyle.process
+      )
     )
 
     await runAdaptiveTaskQueue(
@@ -260,8 +256,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             formatLog(
               'AppProvider',
               `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
-              LogStyle.info,
-            ),
+              LogStyle.info
+            )
           )
         }
       },
@@ -269,8 +265,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         estimatedTaskTimeMs: 5,
         yieldIntervalMs: 10,
         maxBatchSize: 10,
-        label: 'AppProvider::aliasKeywordSync',
-      },
+        label: 'AppProvider::aliasKeywordSync'
+      }
     )
 
     console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
@@ -285,7 +281,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       icon: app.extensions.icon || '',
       bundleId: app.extensions.bundleId || undefined,
       uniqueId: app.extensions.bundleId || app.path,
-      lastModified: app.mtime,
+      lastModified: app.mtime
     }
   }
 
@@ -293,22 +289,21 @@ class AppProvider implements ISearchProvider<ProviderContext> {
    * 为应用同步关键词
    */
   private async _syncKeywordsForApp(appInfo: any): Promise<void> {
-    if (!this.searchIndex)
-      return
+    if (!this.searchIndex) return
 
     const keywordsSet = await this._generateKeywordsForApp(appInfo)
     const itemId = appInfo.bundleId || appInfo.path
 
-    const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map(keyword => ({
+    const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
       value: keyword,
       priority:
-        this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1,
+        this._isAcronymForApp(keyword, appInfo) || this._isAliasForApp(keyword, appInfo) ? 1.5 : 1.1
     }))
 
     const aliasList = this._getAliasesForApp(appInfo)
-    const aliasEntries: SearchIndexKeyword[] = aliasList.map(alias => ({
+    const aliasEntries: SearchIndexKeyword[] = aliasList.map((alias) => ({
       value: alias,
-      priority: 1.5,
+      priority: 1.5
     }))
 
     const indexItem: SearchIndexItem = {
@@ -321,7 +316,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       extension: path.extname(appInfo.path).toLowerCase(),
       aliases: aliasEntries,
       keywords: keywordEntries,
-      tags: appInfo.bundleId ? [appInfo.bundleId] : undefined,
+      tags: appInfo.bundleId ? [appInfo.bundleId] : undefined
     }
 
     await this.searchIndex.indexItems([indexItem])
@@ -330,12 +325,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private _isAcronymForApp(keyword: string, appInfo: any): boolean {
     const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
     return names.some((name) => {
-      if (!name || !name.includes(' '))
-        return false
+      if (!name || !name.includes(' ')) return false
       const acronym = name
         .split(' ')
-        .filter(word => word)
-        .map(word => word.charAt(0))
+        .filter((word) => word)
+        .map((word) => word.charAt(0))
         .join('')
         .toLowerCase()
       return acronym === keyword
@@ -352,8 +346,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const uniqueId = appInfo.bundleId || appInfo.path
     const aliasesById = this.aliases[uniqueId] || []
     const aliasesByPath = this.aliases[appInfo.path] || []
-    return Array.from(new Set([...aliasesById, ...aliasesByPath])).map(alias =>
-      alias.toLowerCase(),
+    return Array.from(new Set([...aliasesById, ...aliasesByPath])).map((alias) =>
+      alias.toLowerCase()
     )
   }
 
@@ -369,13 +363,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       generatedKeywords.add(lowerCaseName.replace(/\s/g, ''))
 
       lowerCaseName.split(/[\s-]/).forEach((word) => {
-        if (word)
-          generatedKeywords.add(word)
+        if (word) generatedKeywords.add(word)
       })
 
       const acronym = this._generateAcronym(name)
-      if (acronym)
-        generatedKeywords.add(acronym)
+      if (acronym) generatedKeywords.add(acronym)
 
       if (CHINESE_REGEX.test(name)) {
         try {
@@ -384,13 +376,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           generatedKeywords.add(pinyinFull)
           const pinyinFirst = pinyin(name, { pattern: 'first', toneType: 'none' }).replace(
             /\s/g,
-            '',
+            ''
           )
           generatedKeywords.add(pinyinFirst)
-        }
-        catch {
+        } catch {
           console.warn(
-            formatLog('AppProvider', `Failed to get pinyin for: ${name}`, LogStyle.warning),
+            formatLog('AppProvider', `Failed to get pinyin for: ${name}`, LogStyle.warning)
           )
         }
       }
@@ -399,7 +390,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const uniqueId = appInfo.bundleId || appInfo.path
     const aliasList = this.aliases[uniqueId] || this.aliases[appInfo.path]
     if (aliasList) {
-      aliasList.forEach(alias => generatedKeywords.add(alias.toLowerCase()))
+      aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
     }
 
     const finalKeywords = new Set<string>()
@@ -418,8 +409,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
     return name
       .split(' ')
-      .filter(word => word)
-      .map(word => word.charAt(0))
+      .filter((word) => word)
+      .map((word) => word.charAt(0))
       .join('')
       .toLowerCase()
   }
@@ -434,27 +425,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
       style: 'info',
       unit: 's',
-      precision: 2,
+      precision: 2
     })
-    const scannedAppsMap = new Map(scannedApps.map(app => [app.uniqueId, app]))
+    const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
     // Log apps with missing icons only the first time we see them
     const knownMissingIconApps = await this._getKnownMissingIconApps()
     let missingIconConfigUpdated = false
     for (const app of scannedApps) {
-      if (app.icon)
-        continue
+      if (app.icon) continue
 
       const uniqueId = app.uniqueId || app.path
-      if (!uniqueId || knownMissingIconApps.has(uniqueId))
-        continue
+      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
 
       console.warn(
         formatLog(
           'AppProvider',
           `Icon not found for app: ${chalk.yellow(app.name)}`,
-          LogStyle.warning,
-        ),
+          LogStyle.warning
+        )
       )
       knownMissingIconApps.add(uniqueId)
       missingIconConfigUpdated = true
@@ -471,30 +460,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       label: `Loaded ${chalk.cyan(dbApps.length)} DB app records`,
       style: 'info',
       unit: 's',
-      precision: 2,
+      precision: 2
     })
     const dbAppsMap = new Map(
-      dbAppsWithExtensions.map(app => [app.extensions.bundleId || app.path, app]),
+      dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
     )
 
     const toAdd: any[] = []
-    const toUpdate: { fileId: any, app: any }[] = []
+    const toUpdate: { fileId: any; app: any }[] = []
     const toDeleteIds: any[] = []
 
     console.log(
       formatLog(
         'AppProvider',
         `Comparing ${chalk.cyan(scannedApps.length)} scanned apps with ${chalk.cyan(dbApps.length)} apps in DB`,
-        LogStyle.info,
-      ),
+        LogStyle.info
+      )
     )
 
     for (const [uniqueId, scannedApp] of scannedAppsMap.entries()) {
       const dbApp = dbAppsMap.get(uniqueId)
       if (!dbApp) {
         toAdd.push(scannedApp)
-      }
-      else {
+      } else {
         if (scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime()) {
           toUpdate.push({ fileId: dbApp.id, app: scannedApp })
         }
@@ -510,15 +498,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         `Found ${chalk.green(toAdd.length)} to add, ${chalk.yellow(toUpdate.length)} to update, ${chalk.red(toDeleteIds.length)} to delete`,
-        LogStyle.info,
-      ),
+        LogStyle.info
+      )
     )
 
     const db = this.dbUtils!.getDb()
 
     if (toAdd.length > 0) {
       console.log(
-        formatLog('AppProvider', `Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process),
+        formatLog('AppProvider', `Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process)
       )
       const addStartTime = startTiming()
 
@@ -533,27 +521,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               displayName: app.displayName,
               type: 'app' as const,
               mtime: app.lastModified,
-              ctime: new Date(),
+              ctime: new Date()
             })
             .onConflictDoUpdate({
               target: filesSchema.path,
               set: {
                 name: sql`excluded.name`,
                 displayName: sql`excluded.display_name`,
-                mtime: sql`excluded.mtime`,
-              },
+                mtime: sql`excluded.mtime`
+              }
             })
             .returning()
 
           if (insertedFile) {
-            const extensions: { fileId: number, key: string, value: any }[] = []
+            const extensions: { fileId: number; key: string; value: any }[] = []
             if (app.bundleId)
               extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
-            if (app.icon)
-              extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
+            if (app.icon) extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
 
-            if (extensions.length > 0)
-              await this.dbUtils!.addFileExtensions(extensions)
+            if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
             await this._syncKeywordsForApp(app)
           }
@@ -563,22 +549,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               formatLog(
                 'AppProvider',
                 `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
-                LogStyle.info,
-              ),
+                LogStyle.info
+              )
             )
           }
         },
         {
           estimatedTaskTimeMs: 12,
-          label: 'AppProvider::addApps',
-        },
+          label: 'AppProvider::addApps'
+        }
       )
 
       logAppDuration('AddApps', addStartTime, {
         label: 'New apps added',
         style: 'success',
         unit: 's',
-        precision: 1,
+        precision: 1
       })
     }
 
@@ -587,8 +573,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           `Updating ${chalk.cyan(toUpdate.length)} apps...`,
-          LogStyle.process,
-        ),
+          LogStyle.process
+        )
       )
       const updateStartTime = startTiming()
 
@@ -603,18 +589,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               mtime: app.lastModified,
               ...(!dbAppsMap.get(app.uniqueId)?.displayName && app.displayName
                 ? { displayName: app.displayName }
-                : {}),
+                : {})
             })
             .where(eq(filesSchema.id, fileId))
 
-          const extensions: { fileId: any, key: string, value: any }[] = []
-          if (app.bundleId)
-            extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
-          if (app.icon)
-            extensions.push({ fileId, key: 'icon', value: app.icon })
+          const extensions: { fileId: any; key: string; value: any }[] = []
+          if (app.bundleId) extensions.push({ fileId, key: 'bundleId', value: app.bundleId })
+          if (app.icon) extensions.push({ fileId, key: 'icon', value: app.icon })
 
-          if (extensions.length > 0)
-            await this.dbUtils!.addFileExtensions(extensions)
+          if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
 
           await this._syncKeywordsForApp(app)
 
@@ -624,8 +607,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               formatLog(
                 'AppProvider',
                 `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdate.length)} app updates`,
-                LogStyle.info,
-              ),
+                LogStyle.info
+              )
             )
           }
         },
@@ -633,15 +616,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           estimatedTaskTimeMs: 10,
           yieldIntervalMs: 10, // 每10ms让出控制权，避免阻塞
           maxBatchSize: 10, // 保持10个一组的批处理
-          label: 'AppProvider::updateApps',
-        },
+          label: 'AppProvider::updateApps'
+        }
       )
 
       logAppDuration('UpdateApps', updateStartTime, {
         label: 'Apps updated',
         style: 'success',
         unit: 's',
-        precision: 1,
+        precision: 1
       })
     }
 
@@ -650,8 +633,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           `Deleting ${chalk.cyan(toDeleteIds.length)} apps...`,
-          LogStyle.process,
-        ),
+          LogStyle.process
+        )
       )
 
       const deletedItemIds = (
@@ -660,10 +643,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           .from(filesSchema)
           .leftJoin(
             fileExtensions,
-            and(eq(filesSchema.id, fileExtensions.fileId), eq(fileExtensions.key, 'bundleId')),
+            and(eq(filesSchema.id, fileExtensions.fileId), eq(fileExtensions.key, 'bundleId'))
           )
           .where(inArray(filesSchema.id, toDeleteIds))
-      ).map(row => row.bundleId || row.path)
+      ).map((row) => row.bundleId || row.path)
 
       const deleteStart = startTiming()
       await db.transaction(async (tx) => {
@@ -679,7 +662,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         label: 'Apps deleted successfully',
         style: 'success',
         unit: 's',
-        precision: 1,
+        precision: 1
       })
     }
 
@@ -687,24 +670,21 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       label: 'App data initialization complete',
       style: 'success',
       unit: 's',
-      precision: 2,
+      precision: 2
     })
   }
 
   private handleItemAddedOrChanged = async (event: any): Promise<void> => {
-    if (!event || !event.filePath || this.processingPaths.has(event.filePath))
-      return
+    if (!event || !event.filePath || this.processingPaths.has(event.filePath)) return
 
     let appPath = event.filePath
     if (this.isMac) {
-      if (appPath.includes('.app/'))
-        appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
-      if (!appPath.endsWith('.app'))
-        return
+      if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
+      if (!appPath.endsWith('.app')) return
     }
 
     console.log(
-      formatLog('AppProvider', `App change detected: ${chalk.cyan(appPath)}`, LogStyle.info),
+      formatLog('AppProvider', `App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
     )
     this.processingPaths.add(appPath)
 
@@ -714,14 +694,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           formatLog(
             'AppProvider',
             `Item is unstable, skipping: ${chalk.yellow(appPath)}`,
-            LogStyle.warning,
-          ),
+            LogStyle.warning
+          )
         )
         return
       }
 
       console.log(
-        formatLog('AppProvider', `Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process),
+        formatLog('AppProvider', `Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process)
       )
       const appInfo = await appScanner.getAppInfoByPath(appPath)
       if (!appInfo) {
@@ -729,8 +709,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           formatLog(
             'AppProvider',
             `Could not get app info for: ${chalk.yellow(appPath)}`,
-            LogStyle.warning,
-          ),
+            LogStyle.warning
+          )
         )
         return
       }
@@ -742,13 +722,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           formatLog(
             'AppProvider',
             `Updating existing app: ${chalk.cyan(appInfo.name)}`,
-            LogStyle.process,
-          ),
+            LogStyle.process
+          )
         )
 
         const updateData: any = {
           name: appInfo.name,
-          mtime: appInfo.lastModified,
+          mtime: appInfo.lastModified
         }
 
         if (!existingFile.displayName && appInfo.displayName) {
@@ -759,7 +739,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
         await this.dbUtils!.addFileExtensions([
           { fileId: existingFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-          { fileId: existingFile.id, key: 'icon', value: appInfo.icon },
+          { fileId: existingFile.id, key: 'icon', value: appInfo.icon }
         ])
 
         await this._syncKeywordsForApp(appInfo)
@@ -767,13 +747,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           formatLog(
             'AppProvider',
             `App ${chalk.cyan(appInfo.name)} updated successfully`,
-            LogStyle.success,
-          ),
+            LogStyle.success
+          )
         )
-      }
-      else {
+      } else {
         console.log(
-          formatLog('AppProvider', `Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process),
+          formatLog('AppProvider', `Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
         )
 
         const [insertedFile] = await db
@@ -784,14 +763,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             displayName: appInfo.displayName,
             type: 'app' as const,
             mtime: appInfo.lastModified,
-            ctime: new Date(),
+            ctime: new Date()
           })
           .returning()
 
         if (insertedFile) {
           await this.dbUtils!.addFileExtensions([
             { fileId: insertedFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-            { fileId: insertedFile.id, key: 'icon', value: appInfo.icon },
+            { fileId: insertedFile.id, key: 'icon', value: appInfo.icon }
           ])
 
           await this._syncKeywordsForApp(appInfo)
@@ -799,40 +778,35 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             formatLog(
               'AppProvider',
               `New app ${chalk.cyan(appInfo.name)} added successfully`,
-              LogStyle.success,
-            ),
+              LogStyle.success
+            )
           )
         }
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error(
         formatLog(
           'AppProvider',
           `Error processing app change: ${chalk.red((error as Error).message)}`,
-          LogStyle.error,
-        ),
+          LogStyle.error
+        )
       )
-    }
-    finally {
+    } finally {
       this.processingPaths.delete(appPath)
     }
   }
 
   private handleItemUnlinked = async (event: any): Promise<void> => {
-    if (!event || !event.filePath || this.processingPaths.has(event.filePath))
-      return
+    if (!event || !event.filePath || this.processingPaths.has(event.filePath)) return
 
     let appPath = event.filePath
     if (this.isMac) {
-      if (appPath.includes('.app/'))
-        appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
-      if (!appPath.endsWith('.app'))
-        return
+      if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
+      if (!appPath.endsWith('.app')) return
     }
 
     console.log(
-      formatLog('AppProvider', `App deletion detected: ${chalk.cyan(appPath)}`, LogStyle.process),
+      formatLog('AppProvider', `App deletion detected: ${chalk.cyan(appPath)}`, LogStyle.process)
     )
     this.processingPaths.add(appPath)
 
@@ -840,7 +814,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const fileToDelete = await this.dbUtils!.getFileByPath(appPath)
       if (fileToDelete) {
         const extensions = await this.dbUtils!.getFileExtensions(fileToDelete.id)
-        const itemId = extensions.find(e => e.key === 'bundleId')?.value || fileToDelete.path
+        const itemId = extensions.find((e) => e.key === 'bundleId')?.value || fileToDelete.path
 
         await this.dbUtils!.getDb().transaction(async (tx) => {
           await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
@@ -853,41 +827,36 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           formatLog(
             'AppProvider',
             `App deleted from database: ${chalk.cyan(appPath)}`,
-            LogStyle.success,
-          ),
+            LogStyle.success
+          )
         )
-      }
-      else {
+      } else {
         console.log(
           formatLog(
             'AppProvider',
             `App to delete not found in database: ${chalk.yellow(appPath)}`,
-            LogStyle.warning,
-          ),
+            LogStyle.warning
+          )
         )
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error(
         formatLog(
           'AppProvider',
           `Error deleting app: ${chalk.red((error as Error).message)}`,
-          LogStyle.error,
-        ),
+          LogStyle.error
+        )
       )
-    }
-    finally {
+    } finally {
       this.processingPaths.delete(appPath)
     }
   }
 
   private async fetchExtensionsForFiles(files: any[]): Promise<any[]> {
-    if (!this.dbUtils)
-      return files.map(f => ({ ...f, extensions: {} }))
+    if (!this.dbUtils) return files.map((f) => ({ ...f, extensions: {} }))
 
-    const fileIds = files.map(f => f.id)
-    if (fileIds.length === 0)
-      return []
+    const fileIds = files.map((f) => f.id)
+    if (fileIds.length === 0) return []
 
     const db = this.dbUtils.getDb()
     const extensions = await db
@@ -905,12 +874,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
         return acc
       },
-      {} as Record<number, Record<string, string | null>>,
+      {} as Record<number, Record<string, string | null>>
     )
 
-    return files.map(file => ({
+    return files.map((file) => ({
       ...file,
-      extensions: extensionsByFileId[file.id] || {},
+      extensions: extensionsByFileId[file.id] || {}
     }))
   }
 
@@ -920,15 +889,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const sessionId = searchResult?.sessionId
     if (sessionId) {
       console.debug(
-        formatLog('AppProvider', `Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info),
+        formatLog('AppProvider', `Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
       )
       searchEngineCore.recordExecute(sessionId, item).catch((err) => {
         console.error(
           formatLog(
             'AppProvider',
             `Failed to record execution: ${chalk.red(err.message)}`,
-            LogStyle.error,
-          ),
+            LogStyle.error
+          )
         )
       })
     }
@@ -936,7 +905,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const appPath = item.meta?.app?.path
     if (!appPath) {
       console.error(
-        formatLog('AppProvider', `Execution failed: App path not found`, LogStyle.error),
+        formatLog('AppProvider', `Execution failed: App path not found`, LogStyle.error)
       )
       return null
     }
@@ -948,17 +917,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           `App opened successfully: ${chalk.green(appPath)}`,
-          LogStyle.success,
-        ),
+          LogStyle.success
+        )
       )
-    }
-    catch (err) {
+    } catch (err) {
       console.error(
         formatLog(
           'AppProvider',
           `Failed to open app: ${chalk.red((err as Error).message)}`,
-          LogStyle.error,
-        ),
+          LogStyle.error
+        )
       )
     }
 
@@ -968,7 +936,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const searchStart = startTiming()
     console.debug(
-      formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process),
+      formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
     )
 
     if (!this.dbUtils || !this.searchIndex) {
@@ -976,8 +944,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           'Search dependencies not ready, returning empty result',
-          LogStyle.warning,
-        ),
+          LogStyle.warning
+        )
       )
       return new TuffSearchResultBuilder(query).build()
     }
@@ -999,26 +967,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           `Executing precise query: ${chalk.cyan(terms.join(', '))}`,
-          LogStyle.info,
-        ),
+          LogStyle.info
+        )
       )
 
       const preciseResults = await Promise.all(
-        terms.map(term =>
+        terms.map((term) =>
           db
             .select({ itemId: keywordMappings.itemId })
             .from(keywordMappings)
             .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
-            .limit(200),
-        ),
+            .limit(200)
+        )
       )
 
-      const termMatches = preciseResults.map(rows => new Set(rows.map(entry => entry.itemId)))
+      const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
       if (termMatches.length > 0) {
         preciseMatchedItemIds = termMatches.reduce<Set<string> | null>((accumulator, current) => {
-          if (!accumulator)
-            return current
-          return new Set([...accumulator].filter(id => current.has(id)))
+          if (!accumulator) return current
+          return new Set([...accumulator].filter((id) => current.has(id)))
         }, null)
       }
       logAppDuration(
@@ -1029,9 +996,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           style: 'info',
           unit: 'ms',
           precision: 0,
-          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`,
+          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
         },
-        { logger: message => console.debug(message) },
+        { logger: (message) => console.debug(message) }
       )
     }
 
@@ -1042,12 +1009,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         .select({ itemId: keywordMappings.itemId })
         .from(keywordMappings)
         .where(
-          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id)),
+          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id))
         )
         .limit(200)
 
       if (phraseMatches.length > 0) {
-        const phraseSet = new Set(phraseMatches.map(entry => entry.itemId))
+        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
         preciseMatchedItemIds = preciseMatchedItemIds
           ? new Set([...preciseMatchedItemIds, ...phraseSet])
           : phraseSet
@@ -1060,9 +1027,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           style: 'info',
           unit: 'ms',
           precision: 0,
-          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} accumulated result(s)`,
+          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} accumulated result(s)`
         },
-        { logger: message => console.debug(message) },
+        { logger: (message) => console.debug(message) }
       )
     }
 
@@ -1078,9 +1045,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           style: 'info',
           unit: 'ms',
           precision: 0,
-          suffix: `(${chalk.cyan(ftsQuery)}) returned ${chalk.cyan(ftsMatches.length)} matches`,
+          suffix: `(${chalk.cyan(ftsQuery)}) returned ${chalk.cyan(ftsMatches.length)} matches`
         },
-        { logger: message => console.debug(message) },
+        { logger: (message) => console.debug(message) }
       )
     }
 
@@ -1089,8 +1056,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const candidateIds = new Set<string>(preciseCandidates)
 
     for (const match of ftsMatches) {
-      if (candidateIds.size >= maxCandidateCount)
-        break
+      if (candidateIds.size >= maxCandidateCount) break
       candidateIds.add(match.itemId)
     }
 
@@ -1099,8 +1065,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           'No candidates found for query, returning empty result',
-          LogStyle.info,
-        ),
+          LogStyle.info
+        )
       )
       return new TuffSearchResultBuilder(query).build()
     }
@@ -1118,8 +1084,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .where(
         and(
           eq(filesSchema.type, 'app'),
-          or(inArray(filesSchema.path, candidateList), inArray(filesSchema.id, subquery)),
-        ),
+          or(inArray(filesSchema.path, candidateList), inArray(filesSchema.id, subquery))
+        )
       )
 
     logAppDuration(
@@ -1129,9 +1095,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         label: `Loaded ${chalk.cyan(files.length)} candidate app rows`,
         style: 'info',
         unit: 'ms',
-        precision: 0,
+        precision: 0
       },
-      { logger: message => console.debug(message) },
+      { logger: (message) => console.debug(message) }
     )
 
     if (files.length === 0) {
@@ -1139,8 +1105,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           'Candidate mapping returned no rows, search result empty',
-          LogStyle.warning,
-        ),
+          LogStyle.warning
+        )
       )
       return new TuffSearchResultBuilder(query).build()
     }
@@ -1152,7 +1118,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       appsWithExtensions,
       query,
       isFuzzySearch,
-      this.aliases,
+      this.aliases
     )
 
     const sortedItems = processedResults.map((item) => {
@@ -1172,13 +1138,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           unit: 's',
           precision: 2,
           suffix: `returned ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
-            preciseMatchedItemIds?.size ?? 0,
-          )}, fts=${chalk.cyan(ftsMatches.length)})`,
+            preciseMatchedItemIds?.size ?? 0
+          )}, fts=${chalk.cyan(ftsMatches.length)})`
         },
         {
           logThresholds: { none: SLOW_SEARCH_THRESHOLD_MS, info: 1000, warn: 2500 },
-          logger: message => console.warn(message),
-        },
+          logger: (message) => console.warn(message)
+        }
       )
     }
 
@@ -1189,8 +1155,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const tokens: string[] = []
     for (const term of terms) {
       const cleaned = term.replace(/[^a-z0-9\u4E00-\u9FA5]+/gi, ' ').trim()
-      if (!cleaned)
-        continue
+      if (!cleaned) continue
       tokens.push(...cleaned.split(/\s+/))
     }
 
@@ -1199,7 +1164,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const limitedTokens = tokens.slice(0, 5)
-    return limitedTokens.map(token => `${token}*`).join(' AND ')
+    return limitedTokens.map((token) => `${token}*`).join(' AND ')
   }
 
   private _subscribeToFSEvents(): void {
@@ -1208,8 +1173,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.isMac) {
       touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
       touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
-    }
-    else {
+    } else {
       touchEventBus.on(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
       touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
     }
@@ -1233,8 +1197,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         `Registering watch paths: ${chalk.cyan(watchPaths.join(', '))}`,
-        LogStyle.info,
-      ),
+        LogStyle.info
+      )
     )
 
     for (const p of watchPaths) {
@@ -1248,40 +1212,38 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         `Waiting for item to stabilize: ${chalk.cyan(itemPath)}`,
-        LogStyle.info,
-      ),
+        LogStyle.info
+      )
     )
 
     for (let i = 0; i < retries; i++) {
       try {
         const size1 = (await fs.stat(itemPath)).size
-        await new Promise(resolve => setTimeout(resolve, delay))
+        await new Promise((resolve) => setTimeout(resolve, delay))
         const size2 = (await fs.stat(itemPath)).size
 
         if (size1 === size2) {
           console.log(
-            formatLog('AppProvider', `Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success),
+            formatLog('AppProvider', `Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success)
           )
           await sleep(1000)
           return true
-        }
-        else {
+        } else {
           console.log(
             formatLog(
               'AppProvider',
               `Item still changing: ${chalk.yellow(itemPath)}, retry ${i + 1}/${retries}`,
-              LogStyle.info,
-            ),
+              LogStyle.info
+            )
           )
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error(
           formatLog(
             'AppProvider',
             `Failed to check item stability: ${chalk.red((error as Error).message)}`,
-            LogStyle.error,
-          ),
+            LogStyle.error
+          )
         )
         return false
       }
@@ -1291,8 +1253,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         `Item did not stabilize: ${chalk.yellow(itemPath)}`,
-        LogStyle.warning,
-      ),
+        LogStyle.warning
+      )
     )
     return false
   }
@@ -1302,7 +1264,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (!this.dbUtils) {
       console.error(
-        formatLog('AppProvider', 'Database not initialized, cannot sync keywords', LogStyle.error),
+        formatLog('AppProvider', 'Database not initialized, cannot sync keywords', LogStyle.error)
       )
       return
     }
@@ -1318,8 +1280,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         `Syncing keywords for ${chalk.cyan(appsWithExtensions.length)} apps`,
-        LogStyle.process,
-      ),
+        LogStyle.process
+      )
     )
 
     await runAdaptiveTaskQueue(
@@ -1333,8 +1295,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             formatLog(
               'AppProvider',
               `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
-              LogStyle.info,
-            ),
+              LogStyle.info
+            )
           )
         }
       },
@@ -1342,8 +1304,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         estimatedTaskTimeMs: 5,
         yieldIntervalMs: 30,
         maxBatchSize: 25,
-        label: 'AppProvider::forceKeywordSync',
-      },
+        label: 'AppProvider::forceKeywordSync'
+      }
     )
 
     console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
@@ -1352,7 +1314,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private _scheduleMdlsUpdateScan(): void {
     if (process.platform !== 'darwin') {
       console.log(
-        formatLog('AppProvider', 'Not on macOS, skipping mdls scan scheduling', LogStyle.info),
+        formatLog('AppProvider', 'Not on macOS, skipping mdls scan scheduling', LogStyle.info)
       )
       return
     }
@@ -1368,8 +1330,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       formatLog(
         'AppProvider',
         'Registering mdls update polling service (10 min interval)',
-        LogStyle.info,
-      ),
+        LogStyle.info
+      )
     )
     pollingService.register(
       'app_provider_mdls_update_scan',
@@ -1382,26 +1344,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             formatLog(
               'AppProvider',
               'Over 1 hour since last scan, starting mdls scan',
-              LogStyle.info,
-            ),
+              LogStyle.info
+            )
           )
           await this._runMdlsUpdateScan()
-        }
-        else if (is.dev && !lastScanTimestamp) {
+        } else if (is.dev && !lastScanTimestamp) {
           console.log(formatLog('AppProvider', 'First scan in dev mode', LogStyle.info))
           await this._runMdlsUpdateScan()
-        }
-        else {
+        } else {
           console.debug(
             formatLog(
               'AppProvider',
               `${chalk.cyan(((now - lastScanTimestamp) / (60 * 1000)).toFixed(1))} minutes since last scan, skipping`,
-              LogStyle.info,
-            ),
+              LogStyle.info
+            )
           )
         }
       },
-      { interval: 10, unit: 'minutes' },
+      { interval: 10, unit: 'minutes' }
     )
   }
 
@@ -1410,7 +1370,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (!this.context || !this.dbUtils) {
       console.error(
-        formatLog('AppProvider', 'Context or DB not initialized, cannot rebuild', LogStyle.error),
+        formatLog('AppProvider', 'Context or DB not initialized, cannot rebuild', LogStyle.error)
       )
       return
     }
@@ -1430,8 +1390,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _getLastScanTime(): Promise<number | null> {
-    if (!this.dbUtils)
-      return null
+    if (!this.dbUtils) return null
 
     const db = this.dbUtils.getDb()
     const result = await db
@@ -1448,8 +1407,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _setLastScanTime(timestamp: number): Promise<void> {
-    if (!this.dbUtils)
-      return
+    if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
     await db
@@ -1457,13 +1415,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .values({ key: 'app_provider_last_mdls_scan', value: timestamp.toString() })
       .onConflictDoUpdate({
         target: configSchema.key,
-        set: { value: timestamp.toString() },
+        set: { value: timestamp.toString() }
       })
   }
 
   private async _getKnownMissingIconApps(): Promise<Set<string>> {
-    if (!this.dbUtils)
-      return new Set()
+    if (!this.dbUtils) return new Set()
 
     const db = this.dbUtils.getDb()
 
@@ -1475,34 +1432,30 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         .limit(1)
 
       const rawValue = result[0]?.value
-      if (!rawValue)
-        return new Set()
+      if (!rawValue) return new Set()
 
       const parsed = JSON.parse(rawValue)
-      if (!Array.isArray(parsed))
-        return new Set()
+      if (!Array.isArray(parsed)) return new Set()
 
       const ids = parsed.filter(
-        (item): item is string => typeof item === 'string' && item.length > 0,
+        (item): item is string => typeof item === 'string' && item.length > 0
       )
       return new Set(ids)
-    }
-    catch (error) {
+    } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.warn(
         formatLog(
           'AppProvider',
           `Failed to load missing icon config, continuing without cache: ${message}`,
-          LogStyle.warning,
-        ),
+          LogStyle.warning
+        )
       )
       return new Set()
     }
   }
 
   private async _saveKnownMissingIconApps(appIds: Set<string>): Promise<void> {
-    if (!this.dbUtils)
-      return
+    if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
     const serializedIds = JSON.stringify(Array.from(appIds))
@@ -1513,17 +1466,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         .values({ key: MISSING_ICON_CONFIG_KEY, value: serializedIds })
         .onConflictDoUpdate({
           target: configSchema.key,
-          set: { value: serializedIds },
+          set: { value: serializedIds }
         })
-    }
-    catch (error) {
+    } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.warn(
         formatLog(
           'AppProvider',
           `Failed to persist missing icon config: ${message}`,
-          LogStyle.warning,
-        ),
+          LogStyle.warning
+        )
       )
     }
   }
@@ -1536,7 +1488,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (!this.dbUtils) {
       console.error(
-        formatLog('AppProvider', 'Database not initialized, cannot run mdls scan', LogStyle.error),
+        formatLog('AppProvider', 'Database not initialized, cannot run mdls scan', LogStyle.error)
       )
       return
     }
@@ -1549,8 +1501,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    const { updatedApps, updatedCount, deletedApps }
-      = await appScanner.runMdlsUpdateScan(allDbApps)
+    const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(allDbApps)
 
     // 处理更新的 app
     if (updatedCount > 0 && updatedApps.length > 0) {
@@ -1561,14 +1512,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           db
             .update(filesSchema)
             .set({ displayName: app.displayName })
-            .where(eq(filesSchema.id, app.id)),
+            .where(eq(filesSchema.id, app.id))
         )
 
         const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
         if (appWithExtensions) {
           const appInfo = this._mapDbAppToScannedInfo({
             ...appWithExtensions,
-            displayName: app.displayName,
+            displayName: app.displayName
           })
 
           const itemId = appInfo.uniqueId
@@ -1585,14 +1536,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         formatLog(
           'AppProvider',
           `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
-          LogStyle.process,
-        ),
+          LogStyle.process
+        )
       )
 
       for (const app of deletedApps) {
         try {
           const extensions = await this.dbUtils.getFileExtensions(app.id)
-          const itemId = extensions.find(e => e.key === 'bundleId')?.value || app.path
+          const itemId = extensions.find((e) => e.key === 'bundleId')?.value || app.path
 
           await db.transaction(async (tx) => {
             await tx.delete(filesSchema).where(eq(filesSchema.id, app.id))
@@ -1605,19 +1556,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             formatLog(
               'AppProvider',
               `App deleted from database: ${chalk.cyan(app.path)}`,
-              LogStyle.success,
-            ),
+              LogStyle.success
+            )
           )
-        }
-        catch (error) {
+        } catch (error) {
           console.error(
             formatLog(
               'AppProvider',
               `Error deleting app ${chalk.red(app.path)}: ${
                 error instanceof Error ? error.message : String(error)
               }`,
-              LogStyle.error,
-            ),
+              LogStyle.error
+            )
           )
         }
       }
