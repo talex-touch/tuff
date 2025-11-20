@@ -67,7 +67,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     return {
       result: data.choices[0]?.message?.content || '',
       usage,
-      model: data.model,
+      model: data.model || '',
       latency,
       traceId,
       provider: this.type,
@@ -175,7 +175,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     return {
       result: data.data[0]?.embedding || [],
       usage,
-      model: data.model,
+      model: data.model || '',
       latency,
       traceId,
       provider: this.type,

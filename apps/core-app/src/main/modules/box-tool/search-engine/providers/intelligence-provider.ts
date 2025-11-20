@@ -36,7 +36,7 @@ const AI_PREFIX_PATTERNS = [
 
 type IntelligenceItemStatus = 'pending' | 'ready' | 'error'
 
-interface IntelligencePayload {
+interface IntelligencePayload extends Record<string, unknown> {
   requestId: string
   prompt: string
   status: IntelligenceItemStatus

@@ -18,10 +18,10 @@ export interface StrategyManager {
 }
 
 class DefaultStrategyManager implements StrategyManager {
-  private defaultStrategy = 'adaptive-default'
+  private _defaultStrategy = 'adaptive-default'
 
   setDefaultStrategy(strategyId: string): void {
-    this.defaultStrategy = strategyId
+    this._defaultStrategy = strategyId
     // Note: Strategy implementation can be extended here in the future
   }
 

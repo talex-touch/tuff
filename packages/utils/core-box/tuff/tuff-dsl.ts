@@ -1009,6 +1009,11 @@ export interface TuffMeta {
    * TuffIntelligence
    */
   intelligence?: any
+
+  /**
+   * Keep CoreBox open after action execution
+   */
+  keepCoreBoxOpen?: boolean
 }
 
 // ==================== 前端展示结构 ====================

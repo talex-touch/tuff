@@ -67,7 +67,7 @@ export class DeepSeekProvider extends IntelligenceProvider {
     return {
       result: data.choices[0]?.message?.content || '',
       usage,
-      model: data.model,
+      model: data.model || '',
       latency,
       traceId,
       provider: this.type,

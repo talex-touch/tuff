@@ -89,7 +89,7 @@ class OcrService {
     this.db = databaseModule.getDb()
 
     this.registerChannels()
-    ensureAiConfigLoaded(true)
+    ensureAiConfigLoaded()
 
     pollingService.register(
       this.pollTaskId,

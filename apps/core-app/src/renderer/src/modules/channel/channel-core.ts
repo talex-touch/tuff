@@ -98,6 +98,7 @@ class TouchChannel implements ITouchClientChannel {
             id: sync.id,
           },
       name: rawData.name,
+      plugin: rawData.plugin,
       header: {
         status: 'reply',
         type: rawData.header.type,

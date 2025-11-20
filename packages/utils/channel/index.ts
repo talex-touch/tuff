@@ -154,6 +154,7 @@ export interface RawChannelHeaderData {
   _originData?: any
   uniqueKey?: string
   event?: Electron.IpcMainEvent | Electron.IpcRendererEvent
+  plugin?: string
 }
 
 export interface RawChannelData {

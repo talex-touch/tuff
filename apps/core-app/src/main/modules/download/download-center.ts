@@ -1,4 +1,5 @@
-import type { defaultDownloadConfig, DownloadConfig, DownloadRequest, DownloadStatus, DownloadTask, ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { DownloadConfig, DownloadRequest, DownloadTask, ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { defaultDownloadConfig, DownloadStatus } from '@talex-touch/utils'
 import type { NotificationConfig } from './notification-service'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -50,15 +51,18 @@ export class DownloadCenterModule extends BaseModule {
   }
 
   // Core components
-  private taskQueue!: TaskQueue // Priority-based task queue
-  private downloadWorkers!: DownloadWorker[] // Worker pool for concurrent downloads
-  private chunkManager!: ChunkManager // Manages file chunking and merging
-  private networkMonitor!: NetworkMonitor // Monitors network status
-  private priorityCalculator!: PriorityCalculator // Calculates task priorities
-  private concurrencyAdjuster!: ConcurrencyAdjuster // Adjusts concurrency based on network
-  private notificationService!: NotificationService // System notifications
-  private errorLogger!: ErrorLogger // Error logging and tracking
-  private retryStrategy!: RetryStrategy // Retry logic with backoff
+  private taskQueue!: TaskQueue
+  private downloadWorkers!: DownloadWorker[]
+  private chunkManager!: ChunkManager
+  private networkMonitor!: NetworkMonitor
+  private priorityCalculator!: PriorityCalculator
+  private concurrencyAdjuster!: ConcurrencyAdjuster
+  private notificationService!: NotificationService
+  private errorLogger!: ErrorLogger
+  private retryStrategy!: RetryStrategy
+  private databaseService!: any
+  private migrationManager!: any
+  private migrationRunner!: any
 
   // Configuration and state
   private config!: DownloadConfig // Download configuration
@@ -1254,14 +1258,6 @@ export class DownloadCenterModule extends BaseModule {
 
   private broadcastTaskUpdated(task: DownloadTask): void {
     $app.channel.send(ChannelType.MAIN, 'download:task-updated', task)
-  }
-
-  private broadcastMigrationProgress(progress: MigrationProgress): void {
-    $app.channel.send(ChannelType.MAIN, 'download:migration-progress', progress)
-  }
-
-  private broadcastMigrationResult(result: MigrationResult): void {
-    $app.channel.send(ChannelType.MAIN, 'download:migration-result', result)
   }
 
   /**
