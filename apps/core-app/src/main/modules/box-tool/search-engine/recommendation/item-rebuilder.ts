@@ -113,6 +113,8 @@ export class ItemRebuilder {
           score: scored.score,
           source: scored.source,
           reason: this.getReasonLabel(scored),
+          isIntelligent: true,              // 新增: 标识这是智能推荐
+          badge: this.generateBadge(scored),  // 新增: 徽章信息
         }
         item.meta = meta
         
@@ -135,6 +137,30 @@ export class ItemRebuilder {
         return '✨ Smart Match'
       default:
         return '💡 Recommended'
+    }
+  }
+
+  /**
+   * 生成推荐徽章
+   */
+  private generateBadge(scored: ScoredItem): {
+    text: string
+    icon: string
+    variant: string
+  } {
+    switch (scored.source) {
+      case 'frequent':
+        return { text: '常用', icon: '🔥', variant: 'frequent' }
+      case 'time-based':
+        return { text: '推荐', icon: '🕐', variant: 'intelligent' }
+      case 'recent':
+        return { text: '最近', icon: '⏰', variant: 'recent' }
+      case 'trending':
+        return { text: '趋势', icon: '📈', variant: 'trending' }
+      case 'context':
+        return { text: '智能推荐', icon: '✨', variant: 'intelligent' }
+      default:
+        return { text: '推荐', icon: '💡', variant: 'intelligent' }
     }
   }
 }

@@ -38,7 +38,7 @@ export function initAiSdkService(): void {
   manager.registerFactory(AiProviderType.LOCAL, config => new LocalProvider(config))
   manager.registerFactory(AiProviderType.ANTHROPIC, config => new AnthropicProvider(config))
   setIntelligenceProviderManager(manager)
-  // logInfo('Provider factories registered') // Remove to reduce noise
+  logInfo('Provider factories registered')
 
   // Setup config update listener to reload when frontend saves config
   setupConfigUpdateListener()
@@ -59,9 +59,9 @@ export function initAiSdkService(): void {
       }
 
       ensureAiConfigLoaded()
-      // logInfo(`Invoking capability ${capabilityId}`) // Remove to reduce noise
+      logInfo(`Invoking capability ${capabilityId}`)
       const result = await ai.invoke(capabilityId, payload, options)
-      // logInfo(`Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`) // Remove to reduce noise
+      logInfo(`Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`)
       reply(DataCode.SUCCESS, { ok: true, result })
     }
     catch (error) {
@@ -83,7 +83,7 @@ export function initAiSdkService(): void {
       ensureAiConfigLoaded()
       // logInfo(`Testing provider ${provider.id}`) // Remove to reduce noise
       const result = await ai.testProvider(provider)
-      // logInfo(`Provider ${provider.id} test success`) // Remove to reduce noise
+      logInfo(`Provider ${provider.id} test success`)
 
       reply(DataCode.SUCCESS, {
         ok: true,

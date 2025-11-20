@@ -443,8 +443,59 @@ export class RecommendationEngine {
   ): number {
     const { sourceType, itemId } = candidate
 
+    // 文件类型匹配逻辑(最高优先级)
+    if (clipboard.meta?.fileType === 'code' && clipboard.meta.language) {
+      const language = clipboard.meta.language
+      
+      // Java/Kotlin → JetBrains IDEA/Android Studio
+      if (language === 'java' || language === 'kotlin') {
+        if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['idea', 'android-studio'])) {
+          return 100
+        }
+      }
+      
+      // Python → PyCharm/VS Code
+      if (language === 'python') {
+        if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['pycharm'])) {
+          return 100
+        }
+        if (sourceType === 'app' && this.isVSCode(itemId)) {
+          return 90
+        }
+      }
+      
+      // JavaScript/TypeScript → VS Code/WebStorm
+      if (language === 'javascript' || language === 'typescript') {
+        if (sourceType === 'app' && this.isVSCode(itemId)) {
+          return 100
+        }
+        if (sourceType === 'app' && this.isJetBrainsIDE(itemId, ['webstorm'])) {
+          return 95
+        }
+      }
+      
+      // 通用代码文件 → 任何 IDE
+      if (sourceType === 'app' && this.isIDE(itemId)) {
+        return 80
+      }
+    }
+    
+    // 文本文件 → 文本编辑器
+    if (clipboard.meta?.fileType === 'text') {
+      if (sourceType === 'app' && this.isTextEditor(itemId)) {
+        return 85
+      }
+    }
+    
+    // 图像文件 → 图像编轑器
+    if (clipboard.meta?.fileType === 'image') {
+      if (sourceType === 'app' && this.isImageApp(itemId)) {
+        return 100
+      }
+    }
+
     // URL/链接类型检测
-    const isUrl = this.detectContentType(clipboard.content) === 'url'
+    const isUrl = clipboard.contentType === 'url' || clipboard.meta?.isUrl === true
 
     if (clipboard.type === 'text') {
       // 文本剪贴板
@@ -510,17 +561,6 @@ export class RecommendationEngine {
   }
 
   /**
-   * 检测内容类型
-   */
-  private detectContentType(contentHash: string): 'url' | 'code' | 'text' {
-    // 注意: contentHash 是哈希值,无法直接检测类型
-    // 这里可以通过 clipboard module 的 meta 数据来判断
-    // 暂时返回 text
-    // TODO: 可以通过 clipboardModule 获取原始内容进行检测
-    return 'text'
-  }
-
-  /**
    * 判断是否为浏览器应用
    */
   private isBrowserApp(identifier: string): boolean {
@@ -557,13 +597,61 @@ export class RecommendationEngine {
   private isImageApp(identifier: string): boolean {
     const imageApps = [
       'com.adobe.Photoshop',
+      'com.adobe.illustrator',
+      'com.adobe.AfterEffects',
       'com.bohemiancoding.sketch',
       'com.figma.Desktop',
       'com.pixelmatorteam.pixelmator',
       'com.apple.Preview',
       'com.gimp',
+      'com.serif.affinity.photo',     // Affinity Photo
+      'com.serif.affinity.designer',   // Affinity Designer
+      'com.krita',                     // Krita
+      'com.procreate',                 // Procreate
+      'com.canva',                     // Canva
     ]
     return imageApps.some(app => identifier.includes(app))
+  }
+
+  /**
+   * 判断是否为 JetBrains IDE
+   */
+  private isJetBrainsIDE(identifier: string, products: string[]): boolean {
+    const jetbrainsApps: Record<string, string> = {
+      'idea': 'com.jetbrains.intellij',
+      'pycharm': 'com.jetbrains.pycharm',
+      'webstorm': 'com.jetbrains.webstorm',
+      'android-studio': 'com.google.android.studio',
+      'goland': 'com.jetbrains.goland',
+      'rider': 'com.jetbrains.rider',
+    }
+    
+    return products.some(product => {
+      const bundleId = jetbrainsApps[product]
+      return bundleId && identifier.includes(bundleId)
+    })
+  }
+
+  /**
+   * 判断是否为 VS Code
+   */
+  private isVSCode(identifier: string): boolean {
+    return identifier.includes('com.microsoft.VSCode') || 
+           identifier.includes('VSCodium')
+  }
+
+  /**
+   * 判断是否为文本编辑器
+   */
+  private isTextEditor(identifier: string): boolean {
+    const editors = [
+      'com.apple.TextEdit',
+      'com.sublimetext',
+      'com.barebones.bbedit',
+      'com.coteditor.CotEditor',
+      'com.typora',
+    ]
+    return editors.some(editor => identifier.includes(editor))
   }
 
   /**
