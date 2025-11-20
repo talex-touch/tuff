@@ -22,7 +22,10 @@ function isBetaVersion(version) {
 /**
  * Convert beta version to snapshot version format
  * @param {string} version - Beta version string (e.g., "2.4.3-beta.9" or "v2.4.3-beta.9")
- * @returns {string} Snapshot version (e.g., "SNAPSHOT-2.4.3-9")
+ * @returns {string} Snapshot version (e.g., "2.4.3-SNAPSHOT.9")
+ * 
+ * Note: Windows requires version numbers to start with a digit for FileVersion.
+ * Format: X.Y.Z-SNAPSHOT.N (starts with digit, compatible with Windows)
  */
 function convertBetaToSnapshotVersion(version) {
   if (!version) return version
@@ -33,7 +36,8 @@ function convertBetaToSnapshotVersion(version) {
   const betaMatch = normalizedVersion.match(/^(\d+\.\d+\.\d+)-beta\.(\d+)$/i)
   if (betaMatch) {
     const [, baseVersion, betaNumber] = betaMatch
-    return `SNAPSHOT-${baseVersion}-${betaNumber}`
+    // Windows-compatible format: starts with digit
+    return `${baseVersion}-SNAPSHOT.${betaNumber}`
   }
 
   // Fallback: try to extract base version and beta number
@@ -41,7 +45,8 @@ function convertBetaToSnapshotVersion(version) {
   if (parts.length === 2) {
     const baseVersion = parts[0]
     const betaNumber = parts[1]
-    return `SNAPSHOT-${baseVersion}-${betaNumber}`
+    // Windows-compatible format: starts with digit
+    return `${baseVersion}-SNAPSHOT.${betaNumber}`
   }
 
   // If pattern doesn't match, return original
