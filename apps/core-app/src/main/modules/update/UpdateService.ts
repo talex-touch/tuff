@@ -2,7 +2,7 @@ import type {
   GitHubRelease,
   UpdateSettings as SharedUpdateSettings,
   UpdateCheckResult,
-  UpdateFrequency,
+  UpdateFrequency
 } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import fs from 'node:fs'
@@ -54,13 +54,12 @@ class PollingService {
     this.intervalId = setInterval(async () => {
       try {
         await callback()
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[PollingService] Polling error:', error)
       }
     }, interval)
 
-        console.log(`[PollingService] Started with interval: ${interval}ms`)
+    console.log(`[PollingService] Started with interval: ${interval}ms`)
   }
 
   /**
@@ -104,7 +103,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
-    [AppPreviewChannel.SNAPSHOT]: 2,
+    [AppPreviewChannel.SNAPSHOT]: 2
   }
 
   constructor() {
@@ -130,11 +129,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         autoCheck: this.settings.enabled,
         checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
         ignoredVersions: this.settings.ignoredVersions,
-        updateChannel: this.settings.updateChannel,
+        updateChannel: this.settings.updateChannel
       })
       console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
-    }
-    else {
+    } else {
       console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
     }
 
@@ -187,12 +185,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       try {
         const result = await this.checkForUpdates(force)
         reply(DataCode.SUCCESS, { success: true, data: result })
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[UpdateService] Update check failed:', error)
         reply(DataCode.ERROR, {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     })
@@ -203,51 +200,46 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     })
 
     // Update settings
-    appChannel.regChannel(
-      ChannelType.MAIN,
-      'update:update-settings',
-      async ({ data, reply }) => {
-        const newSettings = data as Partial<UpdateSettings>
-        try {
-          const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
+    appChannel.regChannel(ChannelType.MAIN, 'update:update-settings', async ({ data, reply }) => {
+      const newSettings = data as Partial<UpdateSettings>
+      try {
+        const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
 
-          if ('updateChannel' in sanitizedSettings) {
-            sanitizedSettings.updateChannel = this.enforceChannelPreference(
-              sanitizedSettings.updateChannel,
-            )
-          }
-
-          if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
-            sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
-          }
-
-          if ('lastCheckedAt' in sanitizedSettings) {
-            delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
-          }
-
-          this.settings = { ...this.settings, ...sanitizedSettings }
-          this.saveSettings()
-
-          // Restart polling if settings changed
-          if (this.pollingService.isActive()) {
-            this.pollingService.stop()
-          }
-
-          if (this.settings.enabled) {
-            this.startPolling()
-          }
-
-          reply(DataCode.SUCCESS, { success: true })
+        if ('updateChannel' in sanitizedSettings) {
+          sanitizedSettings.updateChannel = this.enforceChannelPreference(
+            sanitizedSettings.updateChannel
+          )
         }
-        catch (error) {
-          console.error('[UpdateService] Failed to update settings:', error)
-          reply(DataCode.ERROR, {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
+
+        if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
+          sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
         }
-      },
-    )
+
+        if ('lastCheckedAt' in sanitizedSettings) {
+          delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
+        }
+
+        this.settings = { ...this.settings, ...sanitizedSettings }
+        this.saveSettings()
+
+        // Restart polling if settings changed
+        if (this.pollingService.isActive()) {
+          this.pollingService.stop()
+        }
+
+        if (this.settings.enabled) {
+          this.startPolling()
+        }
+
+        reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('[UpdateService] Failed to update settings:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
 
     // Get update status
     appChannel.regChannel(ChannelType.MAIN, 'update:get-status', async ({ reply }) => {
@@ -259,8 +251,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           source: this.settings.source,
           channel: this.getEffectiveChannel(),
           polling: this.pollingService.isActive(),
-          lastCheck: this.settings.lastCheckedAt ?? null,
-        },
+          lastCheck: this.settings.lastCheckedAt ?? null
+        }
       })
     })
 
@@ -269,12 +261,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       try {
         this.cache.clear()
         reply(DataCode.SUCCESS, { success: true })
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[UpdateService] Failed to clear cache:', error)
         reply(DataCode.ERROR, {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     })
@@ -288,12 +279,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const release = data as GitHubRelease
         const taskId = await this.updateSystem.downloadUpdate(release)
         reply(DataCode.SUCCESS, { success: true, taskId })
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[UpdateService] Failed to download update:', error)
         reply(DataCode.ERROR, {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     })
@@ -307,12 +297,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const taskId = data as string
         await this.updateSystem.installUpdate(taskId)
         reply(DataCode.SUCCESS, { success: true })
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[UpdateService] Failed to install update:', error)
         reply(DataCode.ERROR, {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     })
@@ -328,38 +317,32 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.settings.ignoredVersions.push(version)
         this.saveSettings()
         reply(DataCode.SUCCESS, { success: true })
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[UpdateService] Failed to ignore version:', error)
         reply(DataCode.ERROR, {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     })
 
     // Set auto download
-    appChannel.regChannel(
-      ChannelType.MAIN,
-      'update:set-auto-download',
-      async ({ data, reply }) => {
-        try {
-          if (!this.updateSystem) {
-            throw new Error('UpdateSystem not initialized')
-          }
-          const enabled = data as boolean
-          this.updateSystem.setAutoDownload(enabled)
-          reply(DataCode.SUCCESS, { success: true })
+    appChannel.regChannel(ChannelType.MAIN, 'update:set-auto-download', async ({ data, reply }) => {
+      try {
+        if (!this.updateSystem) {
+          throw new Error('UpdateSystem not initialized')
         }
-        catch (error) {
-          console.error('[UpdateService] Failed to set auto download:', error)
-          reply(DataCode.ERROR, {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
-        }
-      },
-    )
+        const enabled = data as boolean
+        this.updateSystem.setAutoDownload(enabled)
+        reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('[UpdateService] Failed to set auto download:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
 
     // Set auto check
     appChannel.regChannel(ChannelType.MAIN, 'update:set-auto-check', async ({ data, reply }) => {
@@ -381,12 +364,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
 
         reply(DataCode.SUCCESS, { success: true })
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[UpdateService] Failed to set auto check:', error)
         reply(DataCode.ERROR, {
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     })
@@ -399,18 +381,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const interval = this.getFrequencyIntervalMs(this.settings.frequency)
 
     if (!interval) {
-      console.log(
-        `[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`,
-      )
+      console.log(`[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`)
       return
     }
 
     this.pollingService.start(interval, async () => {
       await this.checkForUpdates()
     })
-    console.log(
-      `[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`,
-    )
+    console.log(`[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`)
   }
 
   /**
@@ -444,7 +422,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             const ignoredResult = {
               hasUpdate: false,
               error: 'Version ignored by user',
-              source: result.source,
+              source: result.source
             }
 
             if (this.settings.cacheEnabled) {
@@ -467,7 +445,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       const noUpdateResult: UpdateCheckResult = {
         hasUpdate: false,
         error: 'No update available',
-        source: result.source,
+        source: result.source
       }
 
       if (this.settings.cacheEnabled) {
@@ -475,8 +453,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
 
       return noUpdateResult
-    }
-    catch (error) {
+    } catch (error) {
       if (performedNetworkCheck) {
         this.recordCheckTimestamp()
       }
@@ -485,7 +462,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       const errorResult = {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        source: 'Unknown',
+        source: 'Unknown'
       }
 
       return errorResult
@@ -496,10 +473,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Notify renderer process about available update
    * @param result - Update check result
    */
-  private notifyRendererAboutUpdate(
-    result: UpdateCheckResult,
-    channel: AppPreviewChannel,
-  ): void {
+  private notifyRendererAboutUpdate(result: UpdateCheckResult, channel: AppPreviewChannel): void {
     if (!this.initContext) {
       console.warn('[UpdateService] Context not initialized, cannot notify renderer')
       return
@@ -511,37 +485,16 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       hasUpdate: true,
       release: result.release,
       source: result.source,
-      channel,
+      channel
     })
 
     // Emit event for other modules
     if (this.initContext?.events && result.release) {
       this.initContext.events.emit(
         TalexEvents.UPDATE_AVAILABLE,
-        new UpdateAvailableEvent(result.release.tag_name, channel),
+        new UpdateAvailableEvent(result.release.tag_name, channel)
       )
     }
-  }
-
-  /**
-   * Determine whether a scheduled check is allowed to hit the network.
-   */
-  private shouldPerformCheck(force: boolean): boolean {
-    if (force)
-      return true
-    if (!this.settings.enabled)
-      return false
-
-    const interval = this.getFrequencyIntervalMs(this.settings.frequency)
-    if (interval === null) {
-      return false
-    }
-
-    if (!this.settings.lastCheckedAt) {
-      return true
-    }
-
-    return Date.now() - this.settings.lastCheckedAt >= interval
   }
 
   /**
@@ -584,7 +537,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.cache.set(cacheKey, {
       data,
       timestamp: now,
-      ttl,
+      ttl
     })
   }
 
@@ -598,16 +551,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   /**
    * Fetch latest release from GitHub API
    */
-  private async fetchLatestRelease(
-    channel: AppPreviewChannel,
-  ): Promise<UpdateCheckResult> {
+  private async fetchLatestRelease(channel: AppPreviewChannel): Promise<UpdateCheckResult> {
     try {
       const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
         timeout: 8000,
         headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'TalexTouch-Updater/1.0',
-        },
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'TalexTouch-Updater/1.0'
+        }
       })
 
       const releases: GitHubRelease[] = response.data
@@ -616,7 +567,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         return {
           hasUpdate: false,
           error: 'Invalid response format from GitHub API',
-          source: 'GitHub',
+          source: 'GitHub'
         }
       }
 
@@ -630,7 +581,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         return {
           hasUpdate: false,
           error: `No releases found for channel: ${channel}`,
-          source: 'GitHub',
+          source: 'GitHub'
         }
       }
 
@@ -640,15 +591,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return {
         hasUpdate: true,
         release: latestRelease,
-        source: 'GitHub',
+        source: 'GitHub'
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateService] Failed to fetch latest release:', error)
       return {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        source: 'GitHub',
+        source: 'GitHub'
       }
     }
   }
@@ -697,7 +647,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       channel: this.parseChannelLabel(channelLabel),
       major: +versionNumArr[0],
       minor: Number.parseInt(versionNumArr[1]),
-      patch: Number.parseInt(versionNumArr[2]),
+      patch: Number.parseInt(versionNumArr[2])
     }
   }
 
@@ -740,8 +690,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     // Compare versions (prioritize: channel > major > minor > patch)
     if (currentVersion.channel !== newVersion.channel) {
       return (
-        this.getChannelPriority(newVersion.channel)
-        > this.getChannelPriority(currentVersion.channel)
+        this.getChannelPriority(newVersion.channel) >
+        this.getChannelPriority(currentVersion.channel)
       )
     }
 
@@ -749,16 +699,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       if (currentVersion.minor === newVersion.minor) {
         if (currentVersion.patch === newVersion.patch) {
           return false
-        }
-        else {
+        } else {
           return newVersion.patch > currentVersion.patch
         }
-      }
-      else {
+      } else {
         return newVersion.minor > currentVersion.minor
       }
-    }
-    else {
+    } else {
       return newVersion.major > currentVersion.major
     }
   }
@@ -829,7 +776,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         name: 'GitHub Releases',
         url: 'https://api.github.com/repos/talex-touch/tuff/releases',
         enabled: true,
-        priority: 1,
+        priority: 1
       },
       updateChannel: this.enforceChannelPreference(this.currentChannel),
       ignoredVersions: [],
@@ -839,7 +786,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       rateLimitEnabled: true,
       maxRetries: 3,
       retryDelay: 2000, // 2 seconds base retry delay
-      lastCheckedAt: null,
+      lastCheckedAt: null
     }
   }
 
@@ -862,8 +809,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       fs.writeFileSync(settingsFile, JSON.stringify(this.settings, null, 2))
       console.log('[UpdateService] Settings saved to:', settingsFile)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateService] Failed to save settings:', error)
     }
   }
@@ -872,7 +818,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Map UpdateFrequency to check frequency
    */
   private mapFrequencyToCheckFrequency(
-    frequency: UpdateFrequency,
+    frequency: UpdateFrequency
   ): 'startup' | 'daily' | 'weekly' | 'never' {
     switch (frequency) {
       case 'everyday':
@@ -906,19 +852,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.settings = {
           ...defaults,
           ...persisted,
-          updateChannel: this.enforceChannelPreference(persisted.updateChannel),
+          updateChannel: this.enforceChannelPreference(persisted.updateChannel)
         }
         this.settings.frequency = this.normalizeFrequency(this.settings.frequency)
         if (typeof this.settings.lastCheckedAt !== 'number') {
           this.settings.lastCheckedAt = defaults.lastCheckedAt
         }
         console.log('[UpdateService] Settings loaded from:', settingsFile)
-      }
-      else {
+      } else {
         this.settings = defaults
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateService] Failed to load settings:', error)
       this.settings = this.getDefaultSettings()
     }
