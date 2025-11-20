@@ -6,7 +6,7 @@ import type {
   TalexTouch,
   TuffItem,
   TuffQuery,
-  TuffSearchResult,
+  TuffSearchResult
 } from '@talex-touch/utils'
 import type { StandardChannelData } from '@talex-touch/utils/channel'
 import type { ModuleInitContext } from 'packages/utils/types/modules'
@@ -15,12 +15,13 @@ import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import {
-  TuffFactory,
-  TuffInputType,
-} from '@talex-touch/utils'
+import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { ProviderDeactivatedEvent, TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
+import {
+  ProviderDeactivatedEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../../core/eventbus/touch-event'
 import { createDbUtils } from '../../../db/utils'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
@@ -59,7 +60,8 @@ function getActivationKey(activation: IProviderActivate): string {
 }
 
 export class SearchEngineCore
-implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
+  implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents>
+{
   private static _instance: SearchEngineCore
 
   readonly name = Symbol('search-engine-core')
@@ -139,18 +141,17 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         touchApp: this.touchApp,
         databaseManager: databaseModule,
         storageManager: storageModule,
-        searchIndex: this.searchIndexService,
+        searchIndex: this.searchIndexService
       })
       const duration = Date.now() - startTime
-      // console.log(
-      //   `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`,
-      // ) // Remove to reduce noise
-    }
-    catch (error) {
+      console.log(
+        `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`
+      )
+    } catch (error) {
       const duration = Date.now() - startTime
       console.error(
         `[SearchEngineCore] Failed to load provider '${provider.id}' after ${duration}ms.`,
-        error,
+        error
       )
     }
   }
@@ -179,11 +180,10 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Activate Providers',
-          `SET: ${this.activatedProviders ? JSON.stringify(Array.from(this.activatedProviders.values())) : 'null'}`,
+          `SET: ${this.activatedProviders ? JSON.stringify(Array.from(this.activatedProviders.values())) : 'null'}`
         )
       }
-    }
-    else {
+    } else {
       this.deactivateProviders()
     }
   }
@@ -204,7 +204,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       const allProvidersDeactivated = this.activatedProviders.size === 0
       touchEventBus.emit(
         TalexEvents.PROVIDER_DEACTIVATED,
-        new ProviderDeactivatedEvent(uniqueKey, isPluginFeature, allProvidersDeactivated),
+        new ProviderDeactivatedEvent(uniqueKey, isPluginFeature, allProvidersDeactivated)
       )
 
       if (this.activatedProviders.size === 0) {
@@ -213,12 +213,11 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           searchLogger.logSearchPhase('Deactivate Provider', 'All providers deactivated')
         }
       }
-    }
-    else {
+    } else {
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Deactivate Provider',
-          `Provider with key ${uniqueKey} not found`,
+          `Provider with key ${uniqueKey} not found`
         )
       }
     }
@@ -230,7 +229,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     // Emit event to notify that all providers have been deactivated
     touchEventBus.emit(
       TalexEvents.PROVIDER_DEACTIVATED,
-      new ProviderDeactivatedEvent('*', false, true),
+      new ProviderDeactivatedEvent('*', false, true)
     )
   }
 
@@ -240,11 +239,11 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     }
     // Get unique provider IDs from the activation keys
     const providerIds = new Set(
-      Array.from(this.activatedProviders.values()).map(activation => activation.id),
+      Array.from(this.activatedProviders.values()).map((activation) => activation.id)
     )
 
     return Array.from(providerIds)
-      .map(id => this.providers.get(id))
+      .map((id) => this.providers.get(id))
       .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
@@ -257,12 +256,12 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
   public getProvidersByIds(ids: string[]): ISearchProvider<ProviderContext>[] {
     return ids
-      .map(id => this.providers.get(id))
+      .map((id) => this.providers.get(id))
       .filter((p): p is ISearchProvider<ProviderContext> => !!p)
   }
 
   private _updateActivationState(newResults: TuffSearchResult[]): void {
-    const allNewActivations = newResults.flatMap(res => res.activate || [])
+    const allNewActivations = newResults.flatMap((res) => res.activate || [])
 
     if (allNewActivations.length > 0) {
       const merged = new Map<string, IProviderActivate>(this.activatedProviders || [])
@@ -293,7 +292,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           searchId,
           cancelled: true,
           activate: this.getActivationState() ?? undefined,
-          sources: [],
+          sources: []
         })
       }
     }
@@ -304,7 +303,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
       'Query Received',
-      `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`,
+      `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`
     )
     this.currentGatherController?.abort()
 
@@ -312,7 +311,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
       console.log('[DEBUG_REC_INIT] Empty query detected, generating recommendations...')
       // console.log('[SearchEngineCore] Empty query detected, generating recommendations...') // Remove to reduce noise
-      
+
       if (this.recommendationEngine) {
         try {
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
@@ -322,10 +321,10 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           //   fromCache: recommendationResult.fromCache,
           //   firstItems: recommendationResult.items.slice(0, 3).map(item => item.id)
           // }) // Remove to reduce noise
-          
+
           searchLogger.logSearchPhase(
             'Recommendation',
-            `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`,
+            `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
           )
 
           const result = TuffFactory.createSearchResult(query)
@@ -333,13 +332,12 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
             .setDuration(recommendationResult.duration)
             .setSources([])
             .build()
-          
+
           result.sessionId = sessionId
-          
+
           // console.log('[SearchEngineCore] Returning recommendation result with', result.items.length, 'items') // Remove to reduce noise
           return result
-        }
-        catch (error) {
+        } catch (error) {
           console.error('[SearchEngineCore] Failed to generate recommendations:', error)
           // 降级：返回空结果而不是继续搜索
           return TuffFactory.createSearchResult(query)
@@ -348,8 +346,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
             .setSources([])
             .build()
         }
-      }
-      else {
+      } else {
         // console.warn('[SearchEngineCore] RecommendationEngine not initialized') // Remove to reduce noise
         // 返回空结果
         return TuffFactory.createSearchResult(query)
@@ -373,13 +370,13 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
       // Smart routing: filter providers based on query.inputs types
       if (query.inputs && query.inputs.length > 0) {
-        const inputTypes = query.inputs.map(i => i.type)
-        const hasNonTextInput = inputTypes.some(t => t !== TuffInputType.Text)
+        const inputTypes = query.inputs.map((i) => i.type)
+        const hasNonTextInput = inputTypes.some((t) => t !== TuffInputType.Text)
 
         if (hasNonTextInput) {
           searchLogger.logSearchPhase(
             'Provider Filtering',
-            `Non-text inputs detected: ${inputTypes.join(', ')}`,
+            `Non-text inputs detected: ${inputTypes.join(', ')}`
           )
 
           // Keep only providers that support these input types
@@ -396,24 +393,24 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
             }
 
             // Check if provider supports at least one of the input types
-            return inputTypes.some(type => provider.supportedInputTypes?.includes(type))
+            return inputTypes.some((type) => provider.supportedInputTypes?.includes(type))
           })
 
           searchLogger.logSearchPhase(
             'Provider Filtered',
-            `Active providers: ${providersToSearch.map(p => p.id).join(', ')}`,
+            `Active providers: ${providersToSearch.map((p) => p.id).join(', ')}`
           )
         }
       }
 
-      searchLogger.searchProviders(providersToSearch.map(p => p.id))
+      searchLogger.searchProviders(providersToSearch.map((p) => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
           this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-update', {
             items: itemsToSend,
-            searchId: sessionId,
+            searchId: sessionId
           })
         }
       }
@@ -434,19 +431,19 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
             this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
               searchId: sessionId,
               activate: finalActivationState,
-              sources: update.sourceStats,
+              sources: update.sourceStats
             })
           }
           searchLogger.logSearchPhase(
             'Search End',
-            `Final activation state: ${JSON.stringify(this.getActivationState())}`,
+            `Final activation state: ${JSON.stringify(this.getActivationState())}`
           )
           return
         }
 
         if (isFirstUpdate) {
           isFirstUpdate = false
-          const initialItems = update.newResults.flatMap(res => res.items)
+          const initialItems = update.newResults.flatMap((res) => res.items)
 
           // 批量获取使用统计并注入到 items 中
           await this._injectUsageStats(initialItems)
@@ -476,7 +473,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
             totalDuration,
             sortingDuration,
             sourceStats: update.sourceStats || [],
-            resultCount: sortedItems.length,
+            resultCount: sortedItems.length
           })
 
           // 异步记录搜索结果统计（不阻塞返回）
@@ -485,10 +482,9 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           })
 
           resolve(initialResult)
-        }
-        else if (update.newResults.length > 0) {
+        } else if (update.newResults.length > 0) {
           // This is a subsequent update
-          const subsequentItems = update.newResults.flatMap(res => res.items)
+          const subsequentItems = update.newResults.flatMap((res) => res.items)
 
           // 批量获取使用统计并注入到 items 中
           await this._injectUsageStats(subsequentItems)
@@ -512,8 +508,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
   }
 
   private async _recordSearchUsage(sessionId: string, query: TuffQuery): Promise<void> {
-    if (!this.dbUtils)
-      return
+    if (!this.dbUtils) return
 
     try {
       await this.dbUtils.addUsageLog({
@@ -523,28 +518,26 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         action: 'search',
         keyword: query.text,
         timestamp: new Date(),
-        context: JSON.stringify(query.context || {}),
+        context: JSON.stringify(query.context || {})
       })
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase('Usage Recording', `Recorded search session ${sessionId}`)
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[SearchEngineCore] Failed to record search usage.', error)
     }
   }
 
   /** Batch fetch usage stats and inject into items metadata before sorting */
   private async _injectUsageStats(items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0)
-      return
+    if (!this.dbUtils || items.length === 0) return
 
     const start = performance.now()
 
     try {
-      const keys = items.map(item => ({
+      const keys = items.map((item) => ({
         sourceId: item.source.id,
-        itemId: item.id,
+        itemId: item.id
       }))
 
       // Use cached batch query
@@ -552,7 +545,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         ? await getUsageStatsBatchCached(this.dbUtils, this.usageStatsCache, keys)
         : await this.dbUtils.getUsageStatsBatch(keys)
 
-      const statsMap = new Map(stats.map(s => [`${s.sourceId}:${s.itemId}`, s]))
+      const statsMap = new Map(stats.map((s) => [`${s.sourceId}:${s.itemId}`, s]))
 
       let injectedCount = 0
       for (const item of items) {
@@ -560,15 +553,14 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         const stat = statsMap.get(key)
 
         if (stat) {
-          if (!item.meta)
-            item.meta = {}
+          if (!item.meta) item.meta = {}
           item.meta.usageStats = {
             executeCount: stat.executeCount,
             searchCount: stat.searchCount,
             cancelCount: stat.cancelCount,
             lastExecuted: stat.lastExecuted ? stat.lastExecuted.toISOString() : null,
             lastSearched: stat.lastSearched ? stat.lastSearched.toISOString() : null,
-            lastCancelled: stat.lastCancelled ? stat.lastCancelled.toISOString() : null,
+            lastCancelled: stat.lastCancelled ? stat.lastCancelled.toISOString() : null
           }
           injectedCount++
         }
@@ -578,19 +570,17 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         const duration = performance.now() - start
         searchLogger.logSearchPhase(
           'Usage Stats Injection',
-          `Injected ${injectedCount}/${items.length} stats in ${duration.toFixed(2)}ms`,
+          `Injected ${injectedCount}/${items.length} stats in ${duration.toFixed(2)}ms`
         )
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[SearchEngineCore] Failed to inject usage stats:', error)
     }
   }
 
   /** Record search result display stats for top 10 items */
   private async _recordSearchResults(sessionId: string, items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0)
-      return
+    if (!this.dbUtils || items.length === 0) return
 
     const start = performance.now()
 
@@ -602,22 +592,21 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         for (const item of topItems) {
           this.usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'search')
         }
-      }
-      else {
+      } else {
         // Fallback to direct database calls if queue is not available
-        const updatePromises = topItems.map(item =>
+        const updatePromises = topItems.map((item) =>
           this.dbUtils!.incrementUsageStats(
             item.source.id,
             item.id,
             item.source.type,
-            'search',
+            'search'
           ).catch((error) => {
             console.error(
               `[SearchEngineCore] Failed to update search stats for item ${item.id}:`,
-              error,
+              error
             )
             return null
-          }),
+          })
         )
 
         await Promise.allSettled(updatePromises)
@@ -627,11 +616,10 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         const duration = performance.now() - start
         searchLogger.logSearchPhase(
           'Usage Recording',
-          `Recorded ${topItems.length} items in ${duration.toFixed(2)}ms (session: ${sessionId})`,
+          `Recorded ${topItems.length} items in ${duration.toFixed(2)}ms (session: ${sessionId})`
         )
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[SearchEngineCore] Failed to record search results.', error)
     }
   }
@@ -645,13 +633,18 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     totalDuration,
     sortingDuration,
     sourceStats,
-    resultCount,
+    resultCount
   }: {
     sessionId: string
     query: TuffQuery
     totalDuration: number
     sortingDuration: number
-    sourceStats: Array<{ providerId?: string, provider?: string, resultCount: number, duration?: number }>
+    sourceStats: Array<{
+      providerId?: string
+      provider?: string
+      resultCount: number
+      duration?: number
+    }>
     resultCount: number
   }): void {
     try {
@@ -674,7 +667,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
       // Extract input types
       const inputTypes = query.inputs
-        ? query.inputs.map(input => input.type).filter(Boolean)
+        ? query.inputs.map((input) => input.type).filter(Boolean)
         : ['text']
 
       sentryService.recordSearchMetrics({
@@ -685,18 +678,16 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         queryText: query.text || '',
         inputTypes,
         resultCount,
-        sessionId,
+        sessionId
       })
-    }
-    catch (error) {
+    } catch (error) {
       // Silently fail to not disrupt search flow
       console.debug('[SearchEngineCore] Failed to record search metrics for Sentry', error)
     }
   }
 
   public async recordExecute(sessionId: string, item: TuffItem): Promise<void> {
-    if (!this.dbUtils)
-      return
+    if (!this.dbUtils) return
 
     const itemId = this._getItemId(item)
 
@@ -709,8 +700,8 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         keyword: '', // Keyword is not relevant for an execute action
         timestamp: new Date(),
         context: JSON.stringify({
-          scoring: item.scoring,
-        }),
+          scoring: item.scoring
+        })
       })
 
       // 保持原有的 usageSummary 更新（向后兼容）
@@ -719,15 +710,9 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       // 新增：更新基于 source + id 的组合键统计（使用队列批量写入）
       if (this.usageStatsQueue) {
         this.usageStatsQueue.enqueue(item.source.id, itemId, item.source.type, 'execute')
-      }
-      else {
+      } else {
         // Fallback to direct database call
-        await this.dbUtils.incrementUsageStats(
-          item.source.id,
-          itemId,
-          item.source.type,
-          'execute',
-        )
+        await this.dbUtils.incrementUsageStats(item.source.id, itemId, item.source.type, 'execute')
       }
 
       // Invalidate cache for this item
@@ -741,11 +726,10 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Usage Recording',
-          `Recorded execute for item ${itemId} (source: ${item.source.id}) in session ${sessionId}`,
+          `Recorded execute for item ${itemId} (source: ${item.source.id}) in session ${sessionId}`
         )
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error(`[SearchEngineCore] Failed to record execute usage for item ${itemId}.`, error)
     }
   }
@@ -778,12 +762,12 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
       retentionDays: 30,
       autoCleanup: true,
-      summaryInterval: 24 * 60 * 60 * 1000, // 24 小时
+      summaryInterval: 24 * 60 * 60 * 1000 // 24 小时
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
       // console.log('[SearchEngineCore] All modules loaded, starting provider initialization...') // Remove to reduce noise
-      instance.providersToLoad.forEach(provider => instance.loadProvider(provider))
+      instance.providersToLoad.forEach((provider) => instance.loadProvider(provider))
       instance.providersToLoad = []
 
       // 启动汇总服务
@@ -817,14 +801,13 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           if (typeof activationResult === 'object') {
             // If the provider returns a full activation object, use it directly.
             activation = activationResult
-          }
-          else {
+          } else {
             // Otherwise, create a default activation object.
             activation = {
               id: provider.id,
               name: provider.name,
               icon: provider.icon,
-              meta: item.meta?.extension || {},
+              meta: item.meta?.extension || {}
             }
           }
           instance.activateProviders([activation])
@@ -835,7 +818,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         }
 
         reply(DataCode.SUCCESS, instance.getActivationState())
-      },
+      }
     )
 
     channel.regChannel(ChannelType.MAIN, 'core-box:get-activated-providers', () => {
@@ -854,10 +837,10 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
     channel.regChannel(ChannelType.MAIN, 'core-box:get-provider-details', ({ data }) => {
       const providers = instance.getProvidersByIds(data.providerIds)
-      return providers.map(_p => ({
+      return providers.map((_p) => ({
         id: _p.id,
         name: _p.name,
-        icon: _p.icon,
+        icon: _p.icon
       }))
     })
 
@@ -869,17 +852,16 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       try {
         const options = {
           limit: data?.limit || 10,
-          forceRefresh: data?.forceRefresh || false,
+          forceRefresh: data?.forceRefresh || false
         }
         const result = await instance.recommendationEngine.recommend(options)
-        
+
         return {
           items: result.items,
           duration: result.duration,
-          fromCache: result.fromCache,
+          fromCache: result.fromCache
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[SearchEngineCore] Failed to get recommendations:', error)
         return { items: [], duration: 0, fromCache: false, error: String(error) }
       }
@@ -894,8 +876,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       try {
         await instance.timeStatsAggregator.aggregateTimeStats()
         return { success: true }
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[SearchEngineCore] Failed to aggregate time stats:', error)
         return { success: false, error: String(error) }
       }
@@ -906,7 +887,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     if (searchLogger.isEnabled()) {
       searchLogger.logSearchPhase(
         'Destroy',
-        'Destroying SearchEngineCore and aborting any ongoing search',
+        'Destroying SearchEngineCore and aborting any ongoing search'
       )
     }
     this.currentGatherController?.abort()

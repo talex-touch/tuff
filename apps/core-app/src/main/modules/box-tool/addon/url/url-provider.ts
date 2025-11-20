@@ -1,7 +1,6 @@
 import type { ISearchProvider, TuffItem, TuffQuery } from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
-import { appProvider } from '../apps/app-provider'
 
 /**
  * URL Provider
@@ -18,17 +17,17 @@ class URLProvider implements ISearchProvider<ProviderContext> {
 
   async onSearch(query: TuffQuery): Promise<TuffItem[]> {
     const text = query.text.trim()
-    
+
     // 检测是否为URL
     if (!this.isURL(text)) {
       return []
     }
 
     const normalizedURL = this.normalizeURL(text)
-    
+
     // 获取所有已安装的浏览器
     const browsers = await this.getInstalledBrowsers()
-    
+
     if (browsers.length === 0) {
       return []
     }
@@ -102,7 +101,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
    */
   private normalizeURL(text: string): string {
     let url = text.trim()
-    
+
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       // 如果以www开头,添加https
       if (url.startsWith('www.')) {
@@ -113,7 +112,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
         url = `https://${url}`
       }
     }
-    
+
     return url
   }
 
@@ -142,7 +141,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     // 通过app-indexer获取已安装的应用
     const { appIndexer } = await import('../apps/app-indexer')
     await appIndexer.ensureIndexed()
-    
+
     const allApps = appIndexer.getAllApps()
     const installedBrowsers: Array<{
       id: string
