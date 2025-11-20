@@ -21,7 +21,6 @@ function normalizeTimestamp(value?: string | number | Date | null): number | nul
   return Number.isFinite(parsed) ? parsed : null
 }
 
-
 // Track auto-pasted timestamps to prevent duplicate auto-paste
 const autoPastedTimestamps = new Set<number>()
 

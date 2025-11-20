@@ -1,6 +1,6 @@
 import type { AppSetting } from '../..'
-import { createStorageProxy, TouchStorage } from './base-storage'
 import { appSettingOriginData, StorageList } from '../..'
+import { createStorageProxy, TouchStorage } from './base-storage'
 
 /**
  * Application settings storage manager

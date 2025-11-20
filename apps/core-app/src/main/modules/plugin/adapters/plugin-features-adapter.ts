@@ -1,5 +1,4 @@
 import type { IExecuteArgs, IProviderActivate, ISearchProvider, ITuffIcon, TuffIconType, TuffItem, TuffQuery, TuffSearchResult, TuffSourceType } from '@talex-touch/utils'
-import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 import type {
   IFeatureCommand,
   IPluginFeature,
@@ -7,6 +6,7 @@ import type {
 } from '@talex-touch/utils/plugin'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
+import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 import {
   PluginStatus,
 } from '@talex-touch/utils/plugin'

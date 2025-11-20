@@ -13,9 +13,9 @@ import {
 } from '@talex-touch/utils'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useBoxItems } from '~/modules/box/item-sdk'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
-import { useBoxItems } from '~/modules/box/item-sdk'
 import { BoxMode } from '..'
 
 export function useSearch(
@@ -24,34 +24,34 @@ export function useSearch(
 ): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
-  
+
   // 使用 BoxItemSDK 统一管理所有 items
   const { items: boxItems } = useBoxItems()
-  
+
   // 本地搜索结果（来自搜索引擎）
   const searchResults = ref<Array<TuffItem>>([])
-  
+
   // 合并搜索结果和 BoxItemSDK items
-  
+
   // 合并搜索结果和 BoxItemSDK items
   // 优先显示搜索结果，然后是 BoxItemSDK 推送的 items
   const res = computed<Array<TuffItem>>(() => {
     // 使用 Map 去重，searchResults 优先级更高
     const itemsMap = new Map<string, TuffItem>()
-    
+
     // 先添加 BoxItemSDK items
-    boxItems.value.forEach(item => {
+    boxItems.value.forEach((item) => {
       itemsMap.set(item.id, item)
     })
-    
+
     // 再添加搜索结果，覆盖同 id 的 items
-    searchResults.value.forEach(item => {
+    searchResults.value.forEach((item) => {
       itemsMap.set(item.id, item)
     })
-    
+
     return Array.from(itemsMap.values())
   })
-  
+
   const searchResult = ref<TuffSearchResult | null>(null)
   const loading = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)

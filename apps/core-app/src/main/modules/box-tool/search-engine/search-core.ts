@@ -200,7 +200,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       const allProvidersDeactivated = this.activatedProviders.size === 0
       touchEventBus.emit(
         TalexEvents.PROVIDER_DEACTIVATED,
-        new ProviderDeactivatedEvent(uniqueKey, isPluginFeature, allProvidersDeactivated)
+        new ProviderDeactivatedEvent(uniqueKey, isPluginFeature, allProvidersDeactivated),
       )
 
       if (this.activatedProviders.size === 0) {
@@ -226,7 +226,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     // Emit event to notify that all providers have been deactivated
     touchEventBus.emit(
       TalexEvents.PROVIDER_DEACTIVATED,
-      new ProviderDeactivatedEvent('*', false, true)
+      new ProviderDeactivatedEvent('*', false, true),
     )
   }
 

@@ -2,14 +2,14 @@ import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/ut
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
+import chalk from 'chalk'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
-import chalk from 'chalk'
 import { BaseModule } from '../abstract-base-module'
 import { StorageCache } from './storage-cache'
-import { StoragePollingService } from './storage-polling-service'
-import { StorageLRUManager } from './storage-lru-manager'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
+import { StorageLRUManager } from './storage-lru-manager'
+import { StoragePollingService } from './storage-polling-service'
 
 let pluginConfigPath: string
 
@@ -22,7 +22,7 @@ function broadcastUpdate(name: string) {
 
 /**
  * StorageModule - Main storage module with caching and auto-save
- * 
+ *
  * Features:
  * - In-memory caching to avoid direct file I/O
  * - Periodic persistence via polling service
@@ -49,12 +49,12 @@ export class StorageModule extends BaseModule {
 
     this.pollingService = new StoragePollingService(
       this.cache,
-      async (name) => await this.persistConfig(name),
+      async name => await this.persistConfig(name),
     )
 
     this.lruManager = new StorageLRUManager(
       this.cache,
-      async (name) => await this.evictConfig(name),
+      async name => await this.evictConfig(name),
     )
   }
 
@@ -104,7 +104,7 @@ export class StorageModule extends BaseModule {
 
     const filePath = path.resolve(this.filePath, name)
     const file = JSON.parse(fse.readFileSync(filePath, 'utf-8'))
-    
+
     this.cache.set(name, file)
     this.cache.clearDirty(name)
 
@@ -204,5 +204,3 @@ export { storageModule }
 
 export const getConfig = (name: string) => storageModule.getConfig(name)
 export const saveConfig = storageModule.saveConfig.bind(storageModule)
-
-

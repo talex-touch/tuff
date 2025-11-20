@@ -65,9 +65,9 @@ import {
   BackgroundTaskService,
 } from '../../../../service/background-task-service'
 import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
-import { fileProviderLog, formatDuration } from '../../../../utils/logger'
-import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
+import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
+import { fileProviderLog, formatDuration } from '../../../../utils/logger'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
@@ -83,7 +83,6 @@ const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
-
 
 interface IconCacheMeta {
   mtime: number | null
