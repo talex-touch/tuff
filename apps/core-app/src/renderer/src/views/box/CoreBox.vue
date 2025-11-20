@@ -73,6 +73,7 @@ const { handlePaste, handleAutoPaste, clearClipboard } = useClipboard(
   boxOptions,
   clipboardOptions,
   handleClipboardChange,
+  searchVal, // Pass searchVal for short text auto-paste
 )
 
 const completionDisplay = computed(() => {
