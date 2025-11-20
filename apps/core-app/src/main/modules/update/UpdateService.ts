@@ -46,8 +46,7 @@ class PollingService {
    */
   start(interval: number, callback: () => Promise<void>): void {
     if (this.isRunning) {
-      // Debug log - moved to debug level to reduce noise
-      // console.warn('[PollingService] Already running')
+      console.warn('[PollingService] Already running')
       return
     }
 
@@ -61,8 +60,7 @@ class PollingService {
       }
     }, interval)
 
-    // Debug log - moved to debug level to reduce noise
-    // console.log(`[PollingService] Started with interval: ${interval}ms`)
+        console.log(`[PollingService] Started with interval: ${interval}ms`)
   }
 
   /**
@@ -74,8 +72,7 @@ class PollingService {
       this.intervalId = null
     }
     this.isRunning = false
-    // Debug log - moved to debug level to reduce noise
-    // console.log('[PollingService] Stopped')
+    console.log('[PollingService] Stopped')
   }
 
   /**
@@ -123,8 +120,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.initContext = ctx
-    // Debug log - moved to debug level to reduce noise
-    // console.log('[UpdateService] Initializing update service')
+    console.log('[UpdateService] Initializing update service')
 
     // Initialize UpdateSystem with DownloadCenter integration
     const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
@@ -136,12 +132,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         ignoredVersions: this.settings.ignoredVersions,
         updateChannel: this.settings.updateChannel,
       })
-      // Debug log - moved to debug level to reduce noise
-      // console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
+      console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
     }
     else {
-      // Debug log - moved to debug level to reduce noise
-      // console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
+      console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
     }
 
     // Register IPC channels
@@ -166,8 +160,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Destroy update service
    */
   async onDestroy(): Promise<void> {
-    // Debug log - moved to debug level to reduce noise
-    // console.log('[UpdateService] Destroying update service')
+    console.log('[UpdateService] Destroying update service')
 
     // Stop polling service
     this.pollingService.stop()
@@ -406,20 +399,18 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const interval = this.getFrequencyIntervalMs(this.settings.frequency)
 
     if (!interval) {
-      // Debug log - moved to debug level to reduce noise
-      // console.log(
-      //   `[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`,
-      // )
+      console.log(
+        `[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`,
+      )
       return
     }
 
     this.pollingService.start(interval, async () => {
       await this.checkForUpdates()
     })
-    // Debug log - moved to debug level to reduce noise
-    // console.log(
-    //   `[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`,
-    // )
+    console.log(
+      `[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`,
+    )
   }
 
   /**
@@ -429,22 +420,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private async checkForUpdates(force = false): Promise<UpdateCheckResult> {
     const targetChannel = this.getEffectiveChannel()
-    const allowedBySchedule = this.shouldPerformCheck(force)
-
     if (!allowedBySchedule) {
-      const cachedResult = this.getCachedResult(targetChannel)
-      if (cachedResult) {
-        console.log('[UpdateService] Using cached result due to frequency settings')
-        return cachedResult
-      }
-
-      if (this.settings.frequency === 'never' && !force) {
-        return {
-          hasUpdate: false,
-          source: 'scheduler',
+        const cachedResult = this.getCachedResult(targetChannel)
+        if (cachedResult) {
+          console.log('[UpdateService] Using cached result due to frequency settings')
+          return cachedResult
         }
-      }
-    }
 
     let performedNetworkCheck = false
 

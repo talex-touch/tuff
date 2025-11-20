@@ -5,7 +5,7 @@ import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import * as schema from '../../../../db/schema'
-import { desc } from 'drizzle-orm'
+import { desc, sql } from 'drizzle-orm'
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -86,6 +86,13 @@ export class RecommendationEngine {
     candidates.push(...timeBasedItems.map(item => ({ 
       ...item, 
       source: 'time-based' as const 
+    })))
+
+    // 维度 4: 趋势项目 (Top 15)
+    const trendingItems = await this.getTrendingItems(15)
+    candidates.push(...trendingItems.map(item => ({ 
+      ...item, 
+      source: 'trending' as const 
     })))
 
     // 去重(同一 sourceId + itemId 只保留第一次出现)
@@ -192,6 +199,88 @@ export class RecommendationEngine {
   }
 
   /**
+   * 获取趋势上升的项目
+   * 比较最近 7 天 vs 过去 30 天的使用频率
+   */
+  private async getTrendingItems(limit: number): Promise<ItemCandidate[]> {
+    const db = this.dbUtils.getDb()
+    
+    // 计算时间点
+    const now = Date.now()
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000)
+
+    // 获取所有有执行记录的项目
+    const allStats = await db
+      .select()
+      .from(schema.itemUsageStats)
+      .where(sql`${schema.itemUsageStats.lastExecuted} IS NOT NULL`)
+      .all()
+
+    const trending: Array<{ item: ItemCandidate, growthScore: number }> = []
+
+    for (const stat of allStats) {
+      // 计算最近 7 天的使用次数
+      const recentLogs = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.usageLogs)
+        .where(
+          sql`${schema.usageLogs.source} = ${stat.sourceId} 
+              AND ${schema.usageLogs.itemId} = ${stat.itemId}
+              AND ${schema.usageLogs.action} = 'execute'
+              AND ${schema.usageLogs.timestamp} >= ${sevenDaysAgo.getTime()}`,
+        )
+        .get()
+
+      const recentCount = recentLogs?.count || 0
+
+      // 计算过去 30 天的平均每周使用次数
+      const historicalLogs = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.usageLogs)
+        .where(
+          sql`${schema.usageLogs.source} = ${stat.sourceId} 
+              AND ${schema.usageLogs.itemId} = ${stat.itemId}
+              AND ${schema.usageLogs.action} = 'execute'
+              AND ${schema.usageLogs.timestamp} >= ${thirtyDaysAgo.getTime()}`,
+        )
+        .get()
+
+      const historicalCount = historicalLogs?.count || 0
+     const avgWeeklyCount = historicalCount / 4 // 30天约4周
+
+      // 计算增长率
+      let growthScore = 0
+      if (avgWeeklyCount === 0 && recentCount > 0) {
+        // 新项目或重新使用的项目
+        growthScore = recentCount * 10
+      }
+      else if (avgWeeklyCount > 0) {
+        const growthRate = (recentCount - avgWeeklyCount) / avgWeeklyCount
+        growthScore = growthRate * 100
+      }
+
+      // 只保留有正增长的项目
+      if (growthScore > 0 && recentCount >= 2) { // 至少最近使用过2次
+        trending.push({
+          item: {
+            sourceId: stat.sourceId,
+            itemId: stat.itemId,
+            sourceType: stat.sourceType,
+            usageStats: stat,
+          },
+          growthScore,
+        })
+      }
+    }
+
+    return trending
+      .sort((a, b) => b.growthScore - a.growthScore)
+      .slice(0, limit)
+      .map(({ item }) => item)
+  }
+
+  /**
    * 计算时间相关性分数
    */
   private calculateTimeRelevance(
@@ -267,13 +356,203 @@ export class RecommendationEngine {
   /**
    * 计算上下文匹配度
    */
-  private calculateContextMatch(_candidate: CandidateItem, _context: ContextSignal): number {
+  private calculateContextMatch(candidate: CandidateItem, context: ContextSignal): number {
     let score = 0
 
-    // TODO: 实现剪贴板内容类型匹配
-    // TODO: 实现前台应用关联匹配
+    // 剪贴板内容类型匹配
+    if (context.clipboard) {
+      score += this.matchClipboardContent(candidate, context.clipboard)
+    }
+
+    // 前台应用关联匹配
+    if (context.foregroundApp) {
+      score += this.matchForegroundApp(candidate, context.foregroundApp)
+    }
 
     return score
+  }
+
+  /**
+   * 匹配剪贴板内容与候选项
+   */
+  private matchClipboardContent(
+    candidate: CandidateItem,
+    clipboard: NonNullable<ContextSignal['clipboard']>,
+  ): number {
+    const { sourceType, itemId } = candidate
+
+    // URL/链接类型检测
+    const isUrl = this.detectContentType(clipboard.content) === 'url'
+
+    if (clipboard.type === 'text') {
+      // 文本剪贴板
+      if (isUrl) {
+        // 如果是链接,推荐浏览器相关
+        if (sourceType === 'app' && this.isBrowserApp(itemId)) {
+          return 100 // 强相关
+        }
+        // 下载工具
+        if (itemId.includes('download') || itemId.includes('aria')) {
+          return 80
+        }
+      }
+      else {
+        // 普通文本,推荐编辑器
+        if (sourceType === 'app' && this.isEditorApp(itemId)) {
+          return 70
+        }
+      }
+    }
+    else if (clipboard.type === 'image') {
+      // 图片剪贴板,推荐图片处理工具
+      if (sourceType === 'app' && this.isImageApp(itemId)) {
+        return 100
+      }
+    }
+    else if (clipboard.type === 'files') {
+      // 文件剪贴板,推荐文件管理工具
+      if (sourceType === 'app' && this.isFileManagerApp(itemId)) {
+        return 80
+      }
+    }
+
+    return 0
+  }
+
+  /**
+   * 匹配前台应用与候选项
+   */
+  private matchForegroundApp(
+    candidate: CandidateItem,
+    foregroundApp: NonNullable<ContextSignal['foregroundApp']>,
+  ): number {
+    const { sourceType, itemId } = candidate
+
+    // 如果候选项就是当前前台应用,降低推荐权重(避免重复推荐已打开的应用)
+    if (sourceType === 'app' && itemId.includes(foregroundApp.bundleId)) {
+      return -50
+    }
+
+    // 根据前台应用推荐相关工具
+    // IDE -> Terminal
+    if (this.isIDE(foregroundApp.bundleId) && sourceType === 'app' && this.isTerminalApp(itemId)) {
+      return 60
+    }
+
+    // 浏览器 -> 开发工具
+    if (this.isBrowserApp(foregroundApp.bundleId) && sourceType === 'app' && this.isDeveloperTool(itemId)) {
+      return 50
+    }
+
+    return 0
+  }
+
+  /**
+   * 检测内容类型
+   */
+  private detectContentType(contentHash: string): 'url' | 'code' | 'text' {
+    // 注意: contentHash 是哈希值,无法直接检测类型
+    // 这里可以通过 clipboard module 的 meta 数据来判断
+    // 暂时返回 text
+    // TODO: 可以通过 clipboardModule 获取原始内容进行检测
+    return 'text'
+  }
+
+  /**
+   * 判断是否为浏览器应用
+   */
+  private isBrowserApp(identifier: string): boolean {
+    const browsers = [
+      'com.google.Chrome',
+      'com.apple.Safari',
+      'org.mozilla.firefox',
+      'com.microsoft.edgemac',
+      'com.brave.Browser',
+      'com.operasoftware.Opera',
+    ]
+    return browsers.some(browser => identifier.includes(browser))
+  }
+
+  /**
+   * 判断是否为编辑器应用
+   */
+  private isEditorApp(identifier: string): boolean {
+    const editors = [
+      'com.microsoft.VSCode',
+      'com.sublimetext',
+      'com.jetbrains',
+      'com.barebones.bbedit',
+      'com.vim',
+      'com.neovim',
+      'com.textmate',
+    ]
+    return editors.some(editor => identifier.includes(editor))
+  }
+
+  /**
+   * 判断是否为图片处理应用
+   */
+  private isImageApp(identifier: string): boolean {
+    const imageApps = [
+      'com.adobe.Photoshop',
+      'com.bohemiancoding.sketch',
+      'com.figma.Desktop',
+      'com.pixelmatorteam.pixelmator',
+      'com.apple.Preview',
+      'com.gimp',
+    ]
+    return imageApps.some(app => identifier.includes(app))
+  }
+
+  /**
+   * 判断是否为文件管理工具
+   */
+  private isFileManagerApp(identifier: string): boolean {
+    const fileManagers = [
+      'com.apple.finder',
+      'com.coderforart.MWeb',
+      'com.agilebits',
+    ]
+    return fileManagers.some(fm => identifier.includes(fm))
+  }
+
+  /**
+   * 判断是否为IDE
+   */
+  private isIDE(identifier: string): boolean {
+    const ides = [
+      'com.microsoft.VSCode',
+      'com.jetbrains',
+      'com.apple.dt.Xcode',
+      'com.android.studio',
+    ]
+    return ides.some(ide => identifier.includes(ide))
+  }
+
+  /**
+   * 判断是否为终端应用
+   */
+  private isTerminalApp(identifier: string): boolean {
+    const terminals = [
+      'com.apple.Terminal',
+      'com.googlecode.iterm2',
+      'com.github.wez.wezterm',
+      'io.alacritty',
+      'net.kovidgoyal.kitty',
+    ]
+    return terminals.some(term => identifier.includes(term))
+  }
+
+  /**
+   * 判断是否为开发工具
+   */
+  private isDeveloperTool(identifier: string): boolean {
+    return (
+      this.isIDE(identifier)
+      || this.isTerminalApp(identifier)
+      || identifier.includes('postman')
+      || identifier.includes('insomnia')
+    )
   }
 
   /**

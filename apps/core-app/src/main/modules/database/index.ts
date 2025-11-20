@@ -55,20 +55,18 @@ export class DatabaseModule extends BaseModule {
       const appPath = app.getAppPath()
       const migrationsPath = path.resolve(appPath, 'resources', 'db', 'migrations')
 
-      // Debug logs - moved to debug level to reduce noise
-      // console.log(chalk.cyan(`[Database] Resolving migrations folder...`))
-      // console.log(chalk.cyan(`[Database] app.getAppPath(): ${appPath}`))
-      // console.log(chalk.cyan(`[Database] __dirname: ${__dirname}`))
-      // console.log(chalk.cyan(`[Database] process.resourcesPath: ${process.resourcesPath || 'N/A'}`))
-      // console.log(chalk.cyan(`[Database] Primary path: ${migrationsPath}`))
-      // console.log(chalk.cyan(`[Database] Primary path exists: ${fse.existsSync(migrationsPath)}`))
+      console.log(chalk.cyan(`[Database] Resolving migrations folder...`))
+      console.log(chalk.cyan(`[Database] app.getAppPath(): ${appPath}`))
+      console.log(chalk.cyan(`[Database] __dirname: ${__dirname}`))
+      console.log(chalk.cyan(`[Database] process.resourcesPath: ${process.resourcesPath || 'N/A'}`))
+      console.log(chalk.cyan(`[Database] Primary path: ${migrationsPath}`))
+      console.log(chalk.cyan(`[Database] Primary path exists: ${fse.existsSync(migrationsPath)}`))
 
       // First check the expected path
       if (fse.existsSync(migrationsPath)) {
         const metaJournalPath = path.resolve(migrationsPath, 'meta', '_journal.json')
-        // Debug logs - moved to debug level to reduce noise
-        // console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
-        // console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
+        console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
+        console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
 
         if (fse.existsSync(metaJournalPath)) {
           console.log(chalk.green(`[Database] Using primary migrations path: ${migrationsPath}`))
@@ -101,15 +99,13 @@ export class DatabaseModule extends BaseModule {
       console.log(chalk.cyan(`[Database] Trying ${alternativePaths.length} alternative paths...`))
       for (let i = 0; i < alternativePaths.length; i++) {
         const altPath = alternativePaths[i]
-        // Debug logs - moved to debug level to reduce noise
-        // console.log(chalk.cyan(`[Database] Alternative ${i + 1}: ${altPath}`))
-        // console.log(chalk.cyan(`[Database] Alternative ${i + 1} exists: ${fse.existsSync(altPath)}`))
+        console.log(chalk.cyan(`[Database] Alternative ${i + 1}: ${altPath}`))
+        console.log(chalk.cyan(`[Database] Alternative ${i + 1} exists: ${fse.existsSync(altPath)}`))
 
         if (fse.existsSync(altPath)) {
           const metaJournalPath = path.resolve(altPath, 'meta', '_journal.json')
-          // Debug logs - moved to debug level to reduce noise
-          // console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
-          // console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
+          console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
+          console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
 
           if (fse.existsSync(metaJournalPath)) {
             console.log(chalk.yellow(`[Database] Using alternative migrations path: ${altPath}`))
@@ -138,8 +134,7 @@ export class DatabaseModule extends BaseModule {
     const migrationsFolder = this.resolveMigrationsFolder()
     const migrationsFolderResolved = path.resolve(migrationsFolder)
 
-    // Debug logs - moved to debug level to reduce noise
-    // console.log(chalk.cyan(`[Database] Resolved migrations folder: ${migrationsFolderResolved}`))
+    console.log(chalk.cyan(`[Database] Resolved migrations folder: ${migrationsFolderResolved}`))
 
     if (!fse.existsSync(migrationsFolderResolved)) {
       const error = new Error(`Migrations folder not found: ${migrationsFolderResolved}`)
@@ -151,15 +146,12 @@ export class DatabaseModule extends BaseModule {
       // List actual directory contents to help debug
       try {
         const appPath = app.getAppPath()
-        // Debug logs - moved to debug level to reduce noise
-        // console.error(chalk.red('[Database] App path contents:'), fse.existsSync(appPath) ? fse.readdirSync(appPath) : 'N/A')
+        console.error(chalk.red('[Database] App path contents:'), fse.existsSync(appPath) ? fse.readdirSync(appPath) : 'N/A')
         if (fse.existsSync(appPath)) {
           const resourcesInApp = path.join(appPath, 'resources')
-          // Debug logs - moved to debug level to reduce noise
-          // console.error(chalk.red('[Database] resources in app exists:'), fse.existsSync(resourcesInApp))
+          console.error(chalk.red('[Database] resources in app exists:'), fse.existsSync(resourcesInApp))
           if (fse.existsSync(resourcesInApp)) {
-            // Debug logs - moved to debug level to reduce noise
-            // console.error(chalk.red('[Database] resources contents:'), fse.readdirSync(resourcesInApp))
+            console.error(chalk.red('[Database] resources contents:'), fse.readdirSync(resourcesInApp))
           }
         }
       }
@@ -199,8 +191,7 @@ export class DatabaseModule extends BaseModule {
         chalk.red('[Database] Migrations folder exists:'),
         fse.existsSync(migrationsFolderResolved),
       )
-      // Debug logs - moved to debug level to reduce noise
-      // console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
+      console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
 
       const folderContents = fse.existsSync(migrationsFolderResolved)
         ? fse.readdirSync(migrationsFolderResolved).join(', ')

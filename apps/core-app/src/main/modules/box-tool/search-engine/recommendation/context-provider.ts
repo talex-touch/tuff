@@ -9,15 +9,16 @@ export class ContextProvider {
    * 获取完整的当前上下文
    */
   async getCurrentContext(): Promise<ContextSignal> {
-    const [clipboard, systemState] = await Promise.all([
+    const [clipboard, foregroundApp, systemState] = await Promise.all([
       this.getClipboardContext(),
+      this.getForegroundAppContext(),
       this.getSystemContext(),
     ])
 
     return {
       time: this.getTimeContext(),
       clipboard,
-      // foregroundApp: await this.getForegroundAppContext(), // TODO: 需要 native 模块支持
+      foregroundApp,
       systemState,
     }
   }
@@ -53,17 +54,62 @@ export class ContextProvider {
    * 检查最近的剪贴板内容(5秒内)
    */
   private async getClipboardContext(): Promise<ContextSignal['clipboard']> {
-    return undefined
+    try {
+      // 动态导入 clipboard module 避免循环依赖
+      const { clipboardModule } = await import('../../../clipboard')
+      
+      // 获取最新剪贴板项
+      const latest = clipboardModule['memoryCache']?.[0]
+      if (!latest || !latest.timestamp) {
+        return undefined
+      }
+
+      // 检查是否在5秒内
+      const isRecent = Date.now() - new Date(latest.timestamp).getTime() < 5000
+      if (!isRecent) {
+        return undefined
+      }
+
+      return {
+        type: latest.type,
+        content: this.hashContent(latest.content || ''), // 哈希保护隐私
+        timestamp: new Date(latest.timestamp).getTime(),
+      }
+    }
+    catch (error) {
+      console.debug('[ContextProvider] Failed to get clipboard context:', error)
+      return undefined
+    }
   }
 
   /**
    * 获取前台应用上下文
-   * TODO: 需要 native 模块支持获取前台应用
    */
-  private async _getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
-    // 在 macOS 上可以使用 NSWorkspace.sharedWorkspace().frontmostApplication
-    // 需要通过 native addon 或 AppleScript 实现
-    return undefined
+  private async getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
+    try {
+      const { activeAppService } = await import('../../../system/active-app')
+      const activeApp = await activeAppService.getActiveApp()
+
+      if (!activeApp || !activeApp.bundleId) {
+        return undefined
+      }
+
+      return {
+        bundleId: activeApp.bundleId,
+        name: activeApp.displayName || activeApp.identifier || '',
+      }
+    }
+    catch (error) {
+      console.debug('[ContextProvider] Failed to get foreground app context:', error)
+      return undefined
+    }
+  }
+
+  /**
+   * 计算内容哈希(隐私保护)
+   */
+  private hashContent(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
   }
 
   /**
@@ -75,13 +121,6 @@ export class ContextProvider {
       batteryLevel: 100, // TODO: 通过 Electron powerMonitor API
       isDNDEnabled: false, // TODO: 通过系统 API
     }
-  }
-
-  /**
-   * 计算内容哈希(隐私保护)
-   */
-  private _hashContent(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
   }
 
   /**

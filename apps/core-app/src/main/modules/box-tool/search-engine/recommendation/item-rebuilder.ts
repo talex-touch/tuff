@@ -129,6 +129,10 @@ export class ItemRebuilder {
         return '🕐 Popular Now'
       case 'recent':
         return '⏰ Recent'
+      case 'trending':
+        return '📈 Trending'
+      case 'context':
+        return '✨ Smart Match'
       default:
         return '💡 Recommended'
     }

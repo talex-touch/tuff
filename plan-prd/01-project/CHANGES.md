@@ -2,6 +2,110 @@
 
 > 记录项目的重大变更和改进
 
+## 2025-11-20
+
+### 完成: PRD清理与功能归档
+
+**变更类型**: 文档整理
+
+**已完成功能归档**:
+
+#### 1. 搜索排序系统优化 ✅
+- **来源**: `search-source-id-ranking-plan.md` + `search-optimization-implementation-summary.md`
+- **核心成果**:
+  - 实现 `source.id + item.id` 组合键统计
+  - 新增 `item_usage_stats` 表,支持 search/execute/cancel 三种行为计数
+  - 排序公式优化: `score = weight * 1e6 + match * 1e4 + recency * 1e2 + (executeCount*1 + searchCount*0.3 + cancelCount*(-0.5)) * exp(-0.1*days)`
+  - 添加索引 `idx_item_usage_source_type`, `idx_item_usage_updated`
+  - 实现 `QueryCompletionService` 查询补全系统
+  - 实现 `UsageSummaryService` 定期汇总与清理
+  - 批量查询优化,避免N+1问题
+- **性能提升**: 查询耗时 5-10ms (P95), 排序更智能, 命中率>70%
+- **迁移**: 0007_remarkable_silver_sable.sql
+
+#### 2. 使用数据记录与清理 ✅
+- **来源**: `USAGE_LOGGING_PLAN.md` + `TUFF_USAGE_TRACKING_PRD.md` + `search-usage-data-cleanup-plan.md`
+- **核心成果**:
+  - `usage_logs` 表记录所有搜索/执行行为
+  - 自动清理过期日志(默认30天)
+  - 定期汇总到 `item_usage_stats`
+  - 异步写入不阻塞搜索流程
+
+#### 3. 插件存储机制调研 ✅
+- **来源**: `plugin-storage-research.md`
+- **核心成果**:
+  - 调研 Raycast/uTools/HapiGo 存储方案
+  - 确定采用 JSON 文件 + 异步 Promise API
+  - 每插件10MB限制,自动隔离
+  - 实现 `StorageModule` 统一管理
+
+#### 4. 下载中心系统 ✅
+- **来源**: `DOWNLOAD_CENTER_API.md` + `UPDATE_SYSTEM.md` + `MIGRATION_GUIDE.md`
+- **核心成果**:
+  - 统一下载中心模块,支持切片下载、断点续传
+  - 智能优先级调度(P0-P10)
+  - 网络自适应并发控制(1-10)
+  - SHA256校验、错误重试、进度节流
+  - 完整的迁移系统,支持从旧系统无缝迁移
+  - 更新系统集成,自动下载应用更新
+- **性能优化**: 虚拟滚动(>50项)、数据库索引、任务缓存
+- **文件位置**: `apps/core-app/src/main/modules/download/`
+
+#### 5. 性能优化实施 ✅
+- **来源**: `PERFORMANCE_OPTIMIZATIONS.md`
+- **核心成果**:
+  - 数据库索引优化(status/created/priority)
+  - 虚拟滚动组件(VirtualTaskList.vue)
+  - 搜索防抖(300ms)
+  - 进度更新节流(1秒/任务)
+  - 性能监控器(PerformanceMonitor)
+- **性能提升**: 
+  - 500项列表渲染: 200ms → 20ms (10x)
+  - 搜索响应: 150ms → 30ms (5x)
+  - 数据库查询: 50-100ms → 5-10ms (5-10x)
+
+#### 6. 更新提示UI实现 ✅
+- **来源**: `UPDATE_PROMPT_IMPLEMENTATION.md` + `UPDATE_PROMPT_DIALOG.md`
+- **核心成果**:
+  - UpdatePromptDialog 组件
+  - 支持RELEASE/BETA/SNAPSHOT频道
+  - 自动下载、忽略版本、手动检查
+  - 集成下载中心显示进度
+
+#### 7. CoreBox Completion 分析 ✅
+- **来源**: `corebox-completion-analysis.md`
+- **核心成果**:
+  - 识别性能、准确性、安全性问题
+  - 提出缓存、智能权重、上下文感知改进方向
+  - XSS安全修复建议
+
+#### 8. 系统性架构分析 ✅
+- **来源**: `PROJECT_ANALYSIS.md`
+- **核心成果**:
+  - 识别优势: 模块化架构、插件系统、IPC通道、tfile://协议
+  - 识别不足: 插件加载死循环、日志混乱、托盘功能薄弱
+  - 技术债务清单与优先级建议
+  - 内容已整合到 `CLAUDE.md`
+
+**删除文件**:
+- `plan-prd/01-project/PROJECT_ANALYSIS.md`
+- `plan-prd/03-features/search/search-source-id-ranking-plan.md`
+- `plan-prd/03-features/search/search-optimization-implementation-summary.md`
+- `plan-prd/03-features/search/USAGE_LOGGING_PLAN.md`
+- `plan-prd/03-features/search/TUFF_USAGE_TRACKING_PRD.md`
+- `plan-prd/03-features/search/search-usage-data-cleanup-plan.md`
+- `plan-prd/03-features/plugin/plugin-storage-research.md`
+- `plan-prd/04-implementation/corebox-completion-analysis.md`
+- `plan-prd/04-implementation/components/UPDATE_PROMPT_*.md` (2个)
+- `plan-prd/05-archive/*` (README_ANALYSIS.md, PRD-CLEANUP-REPORT.md, plan.md)
+
+**影响**:
+- PRD文件从35个减少到23个
+- 已完成功能有明确历史记录
+- 聚焦未实现的核心功能规划
+
+---
+
 ## 2025-11-14
 
 ### 新增: 直接预览计算能力 PRD
