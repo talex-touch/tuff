@@ -68,7 +68,7 @@ function parseFile(file: File): any {
   return {
     lastModified: file.lastModified,
     name: file.name,
-    path: file.path,
+    // path: file.path,
     size: file.size,
     type: file.type,
   }

@@ -9,7 +9,7 @@ const props = withDefaults(
     searchId?: string
     searchable?: boolean
     clearLabel?: string
-    mainAriaLive?: string
+    mainAriaLive?: 'off' | 'polite' | 'assertive' | undefined
   }>(),
   {
     modelValue: '',

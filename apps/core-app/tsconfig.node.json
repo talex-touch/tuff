@@ -32,5 +32,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*", "../../examples"]
+  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*"]
 }
