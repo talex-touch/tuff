@@ -20,6 +20,9 @@ const beginner = ref(false)
 
 captureAppContext()
 
+/**
+ * Initialize renderer-only services once the lifecycle is ready.
+ */
 async function init(): Promise<void> {
   if (isCoreBox()) {
     return
@@ -32,9 +35,6 @@ async function init(): Promise<void> {
     console.error('[App] Failed to initialize language:', error)
   }
 
-  // clipBoardResolver()
-  // urlHooker()
-  // screenCapture()
   useDropperResolver()
 
   if (!appSetting?.beginner?.init)

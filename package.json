@@ -16,6 +16,7 @@
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
     "postinstall": "node scripts/sync-core-package.mjs",
+    "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
     "core:dev": "pnpm -F @talex-touch/core-app run dev",
     "core:build": "pnpm -F @talex-touch/core-app run build",

@@ -11,10 +11,6 @@ import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
 import { setupI18n } from '~/modules/lang'
 
-import {
-  shouldShowPlatformWarning,
-  showPlatformCompatibilityWarning,
-} from '~/modules/mention/platform-warning'
 import { usePluginStore } from '~/stores/plugin'
 import App from './App.vue'
 
@@ -37,6 +33,9 @@ registerDefaultCustomRenderers()
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')
 
+/**
+ * Orchestrate renderer initialization and mount the Vue root.
+ */
 async function bootstrap() {
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
@@ -55,39 +54,14 @@ async function bootstrap() {
     app.mount('#app')
   })
 
-  await runBootStep('Checking platform compatibility', 0.02, () =>
-    checkPlatformCompatibility())
-
   preloadDebugStep('Renderer shell mounted', 0.02)
-}
-
-/**
- * 检查平台兼容性并显示警告
- */
-async function checkPlatformCompatibility() {
-  try {
-    // 等待应用准备就绪
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // 检查是否应该显示警告
-    if (!shouldShowPlatformWarning()) {
-      return
-    }
-
-    // 获取平台信息
-    const appInfo = await (window.$nodeApi as any).send('app-ready')
-
-    if (appInfo?.platformWarning) {
-      await showPlatformCompatibilityWarning(appInfo.platformWarning)
-    }
-  }
-  catch (error) {
-    console.warn('Failed to check platform compatibility:', error)
-  }
 }
 
 const DEFAULT_LOCALE = 'zh-CN'
 
+/**
+ * Resolve the initial locale using persisted settings or sensible defaults.
+ */
 function resolveInitialLanguage() {
   const storedLanguage = localStorage.getItem('app-language')
   if (storedLanguage) {
@@ -109,10 +83,16 @@ function resolveInitialLanguage() {
   return DEFAULT_LOCALE
 }
 
+/**
+ * Register shared renderer plugins and global modules.
+ */
 function registerCorePlugins(app: ReturnType<typeof createApp>, i18n: any) {
   app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
 }
 
+/**
+ * Initialize the plugin store unless CoreBox mode is active.
+ */
 async function maybeInitializePluginStore() {
   if (isCoreBox()) {
     return
@@ -121,6 +101,9 @@ async function maybeInitializePluginStore() {
   await pluginStore.initialize()
 }
 
+/**
+ * Wrap a boot task and report its progress to the preload overlay.
+ */
 async function runBootStep<T>(message: string, progress: number, task: () => T | Promise<T>) {
   preloadDebugStep(message, progress)
   return await task()

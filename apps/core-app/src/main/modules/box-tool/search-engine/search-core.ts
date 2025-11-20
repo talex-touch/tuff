@@ -287,7 +287,7 @@ export class SearchEngineCore
       }
       this.currentGatherController.abort()
       this.currentGatherController = null
-      
+
       // 清理 latestSessionId，允许新搜索
       if (this.latestSessionId === searchId) {
         this.latestSessionId = null
@@ -313,17 +313,17 @@ export class SearchEngineCore
       'Query Received',
       `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`
     )
-    
+
     // 取消之前的搜索
     this.currentGatherController?.abort()
-    
+
     // 标记这是最新的搜索 session
     this.latestSessionId = sessionId
     console.log(`[SearchCore] Starting search session ${sessionId}`)
 
     // 空查询检测: 返回推荐结果
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
-      console.log('[DEBUG_REC_INIT] Empty query detected, generating recommendations...')
+      console.debug('[DEBUG_REC_INIT] Empty query detected, generating recommendations...')
       // console.log('[SearchEngineCore] Empty query detected, generating recommendations...') // Remove to reduce noise
 
       if (this.recommendationEngine) {
@@ -343,7 +343,9 @@ export class SearchEngineCore
 
           // 在返回前检查是否仍是最新搜索
           if (this.latestSessionId !== sessionId) {
-            console.log(`[SearchCore] Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`)
+            console.log(
+              `[SearchCore] Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`
+            )
             return new TuffSearchResultBuilder(query)
               .setItems([])
               .setDuration(0)
@@ -373,11 +375,7 @@ export class SearchEngineCore
       } else {
         // console.warn('[SearchEngineCore] RecommendationEngine not initialized') // Remove to reduce noise
         // 返回空结果
-        return new TuffSearchResultBuilder(query)
-          .setItems([])
-          .setDuration(0)
-          .setSources([])
-          .build()
+        return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
       }
     }
 
@@ -507,7 +505,9 @@ export class SearchEngineCore
 
           // 在返回前检查是否仍是最新搜索
           if (this.latestSessionId !== sessionId) {
-            console.log(`[SearchCore] Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`)
+            console.log(
+              `[SearchCore] Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`
+            )
             // 返回空结果，前端会忽略旧的 sessionId
             const staleResult = new TuffSearchResultBuilder(query)
               .setItems([])
@@ -792,7 +792,7 @@ export class SearchEngineCore
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval
-    console.log('[DEBUG_REC_INIT] SearchEngineCore initializing RecommendationEngine')
+    console.debug('[DEBUG_REC_INIT] SearchEngineCore initializing RecommendationEngine')
     instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
 
