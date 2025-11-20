@@ -398,8 +398,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private async checkForUpdates(force = false): Promise<UpdateCheckResult> {
     const targetChannel = this.getEffectiveChannel()
-    const allowedBySchedule = force || this.isCheckAllowedByFrequency()
-    if (!allowedBySchedule) {
+    if (!this.shouldPerformCheck(force)) {
       const cachedResult = this.getCachedResult(targetChannel)
       if (cachedResult) {
         console.log('[UpdateService] Using cached result due to frequency settings')
@@ -495,6 +494,25 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         new UpdateAvailableEvent(result.release.tag_name, channel)
       )
     }
+  }
+
+  /**
+   * Determine whether a scheduled check is allowed to hit the network.
+   */
+  private shouldPerformCheck(force: boolean): boolean {
+    if (force) return true
+    if (!this.settings.enabled) return false
+
+    const interval = this.getFrequencyIntervalMs(this.settings.frequency)
+    if (interval === null) {
+      return false
+    }
+
+    if (!this.settings.lastCheckedAt) {
+      return true
+    }
+
+    return Date.now() - this.settings.lastCheckedAt >= interval
   }
 
   /**
