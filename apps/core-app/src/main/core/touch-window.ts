@@ -43,7 +43,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   }
 
   openDevTools(options?: OpenDevToolsOptions): void {
-    console.log('[TouchWindow] Open DevTools', options)
+    console.debug('[TouchWindow] Open DevTools', options)
     this.window.webContents.openDevTools(options)
   }
 

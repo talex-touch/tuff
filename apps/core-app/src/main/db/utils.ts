@@ -47,6 +47,25 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>): DbUtils {
         return []
       return db.select().from(schema.files).where(inArray(schema.files.path, paths))
     },
+
+    async getFilesByBundleIds(bundleIds: string[]) {
+      if (bundleIds.length === 0)
+        return []
+      
+      const extensionRecords = await db
+        .select()
+        .from(schema.fileExtensions)
+        .where(and(
+          eq(schema.fileExtensions.key, 'bundleId'),
+          inArray(schema.fileExtensions.value, bundleIds)
+        ))
+      
+      if (extensionRecords.length === 0)
+        return []
+      
+      const fileIds = extensionRecords.map(ext => ext.fileId)
+      return db.select().from(schema.files).where(inArray(schema.files.id, fileIds))
+    },
     async clearFilesByType(type: string) {
       return db.delete(schema.files).where(eq(schema.files.type, type))
     },
@@ -377,6 +396,7 @@ export interface DbUtils {
   getAllFiles: () => Promise<any[]>
   getFilesByType: (type: string) => Promise<any[]>
   getFilesByPaths: (paths: string[]) => Promise<any[]>
+  getFilesByBundleIds: (bundleIds: string[]) => Promise<any[]>
   clearFilesByType: (type: string) => Promise<any>
   addFileExtension: (fileId: number, key: string, value: string) => Promise<any>
   addFileExtensions: (extensions: { fileId: number, key: string, value: string }[]) => Promise<any>
