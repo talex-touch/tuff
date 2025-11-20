@@ -77,7 +77,8 @@ function createAiFeature(): IPluginFeature {
 
 function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
   const featureUtil = plugin.getFeatureUtil()
-  const pushItems = featureUtil.pushItems
+  // 使用新的 BoxItemSDK API
+  const { push } = featureUtil.boxItems
 
   const buildBaseItem = (id: string): TuffItemBuilder => {
     return new TuffItemBuilder(id)
@@ -169,12 +170,13 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
       const prompt = normalizePrompt(data)
 
       if (!prompt) {
-        void pushItems([createPlaceholderItem()])
+        // 使用新的 BoxItemSDK API
+        push(createPlaceholderItem())
         return
       }
 
       const requestId = crypto.randomUUID()
-      void pushItems([createPendingItem(requestId, prompt)])
+      push(createPendingItem(requestId, prompt))
 
       void (async () => {
         try {
@@ -198,12 +200,12 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
             }
             if (chunk.usage) usage = chunk.usage
 
-            // Update UI with streaming content
-            await pushItems([createAnswerItem(requestId, prompt, answerText, model, usage)])
+            // 流式更新：使用 BoxItemSDK 的 push (upsert)
+            push(createAnswerItem(requestId, prompt, answerText, model, usage))
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          await pushItems([createErrorItem(requestId, prompt, message)])
+          push(createErrorItem(requestId, prompt, message))
         }
       })()
     }

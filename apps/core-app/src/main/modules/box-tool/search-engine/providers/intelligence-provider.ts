@@ -22,6 +22,7 @@ import { ai } from '../../../ai/intelligence-sdk'
 import { clipboardModule } from '../../../clipboard'
 import { coreBoxManager } from '../../core-box/manager'
 import { windowManager } from '../../core-box/window'
+import { getBoxItemManager } from '../../item-sdk'
 import searchEngineCore from '../search-core'
 
 const AI_SYSTEM_PROMPT
@@ -384,16 +385,11 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
   }
 
   private emitResultItem(item: TuffItem): void {
-    const app = genTouchApp()
-    const coreWindow = windowManager.current?.window
-    if (!coreWindow || coreWindow.isDestroyed()) {
-      return
-    }
-
-    void app.channel.sendTo(coreWindow, ChannelType.MAIN, 'core-box:intelligence:upsert-item', {
-      item,
-    })
-
+    // 使用 BoxItemSDK 统一管理
+    const boxItemManager = getBoxItemManager()
+    boxItemManager.upsert(item)
+    
+    // 扩展 CoreBox 窗口
     coreBoxManager.expand({ forceMax: true })
   }
 

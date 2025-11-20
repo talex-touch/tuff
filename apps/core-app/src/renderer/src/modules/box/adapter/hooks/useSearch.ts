@@ -15,6 +15,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
+import { useBoxItems } from '~/modules/box/item-sdk'
 import { BoxMode } from '..'
 
 export function useSearch(
@@ -23,7 +24,34 @@ export function useSearch(
 ): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
-  const res = ref<Array<TuffItem>>([])
+  
+  // 使用 BoxItemSDK 统一管理所有 items
+  const { items: boxItems } = useBoxItems()
+  
+  // 本地搜索结果（来自搜索引擎）
+  const searchResults = ref<Array<TuffItem>>([])
+  
+  // 合并搜索结果和 BoxItemSDK items
+  
+  // 合并搜索结果和 BoxItemSDK items
+  // 优先显示搜索结果，然后是 BoxItemSDK 推送的 items
+  const res = computed<Array<TuffItem>>(() => {
+    // 使用 Map 去重，searchResults 优先级更高
+    const itemsMap = new Map<string, TuffItem>()
+    
+    // 先添加 BoxItemSDK items
+    boxItems.value.forEach(item => {
+      itemsMap.set(item.id, item)
+    })
+    
+    // 再添加搜索结果，覆盖同 id 的 items
+    searchResults.value.forEach(item => {
+      itemsMap.set(item.id, item)
+    })
+    
+    return Array.from(itemsMap.values())
+  })
+  
   const searchResult = ref<TuffSearchResult | null>(null)
   const loading = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)
@@ -36,13 +64,13 @@ export function useSearch(
   const debouncedSearch = useDebounceFn(async () => {
     if (!searchVal.value) {
       if (!activeActivations.value?.length) {
-        res.value.length = 0
+        searchResults.value.length = 0
       }
       return
     }
     boxOptions.focus = 0
     loading.value = true
-    res.value = [] // Clear previous results immediately
+    searchResults.value = [] // Clear previous results immediately
 
     try {
       const query: TuffQuery = {
@@ -125,7 +153,7 @@ export function useSearch(
       searchResult.value = initialResult
 
       // Immediately display the high-priority items.
-      res.value = initialResult.items
+      searchResults.value = initialResult.items
 
       // The initial activation state is set here.
       if (initialResult.activate && initialResult.activate.length > 0) {
@@ -137,7 +165,7 @@ export function useSearch(
     }
     catch (error) {
       console.error('Search initiation failed:', error)
-      res.value = []
+      searchResults.value = []
       searchResult.value = null
       currentSearchId.value = null
       loading.value = false
@@ -156,7 +184,7 @@ export function useSearch(
   async function handleSearchImmediate(): Promise<void> {
     if (!searchVal.value) {
       if (!activeActivations.value?.length) {
-        res.value.length = 0
+        searchResults.value.length = 0
       }
       return
     }
@@ -179,7 +207,7 @@ export function useSearch(
 
       // Update UI state to reflect cancellation
       loading.value = false
-      if (res.value.length === 0) {
+      if (searchResults.value.length === 0) {
         // If no results yet, reset search state entirely
         searchResult.value = null
         currentSearchId.value = null
@@ -200,8 +228,8 @@ export function useSearch(
     const isPluginFeature
       = itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
     const keepCoreBoxOpen
-      = itemToExecute.meta?.keepCoreBoxOpen === true
-        || itemToExecute.meta?.intelligence?.keepCoreBoxOpen === true
+      = (itemToExecute.meta as any)?.keepCoreBoxOpen === true
+        || (itemToExecute.meta as any)?.intelligence?.keepCoreBoxOpen === true
     const shouldRestoreAfterExecute
       = isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
 
@@ -214,7 +242,7 @@ export function useSearch(
       boxOptions.mode = BoxMode.FEATURE
     }
 
-    res.value = []
+    searchResults.value = []
 
     const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
     const serializedSearchResult = searchResult.value
@@ -343,7 +371,7 @@ export function useSearch(
         if (boxOptions.data?.pushedItemIds && boxOptions.data.pushedItemIds.size > 0) {
           const pushedIds = boxOptions.data.pushedItemIds
 
-          res.value = res.value.filter((item: TuffItem) => {
+          searchResults.value = searchResults.value.filter((item: TuffItem) => {
             return (
               !item.meta?.extension?.pushedItemId
               || !pushedIds.has(item.meta?.extension?.pushedItemId)
@@ -393,7 +421,7 @@ export function useSearch(
     }
     // If the input is cleared while a provider is active, also clear the results.
     if (newSearchVal === '' && activeActivations.value && activeActivations.value.length > 0) {
-      res.value = []
+      searchResults.value = []
     }
   })
 
@@ -407,41 +435,22 @@ export function useSearch(
     if (data.searchId === currentSearchId.value) {
       // console.log('[useSearch] Received subsequent item batch:', data.items.length)
       // Subsequent batches are already sorted and should be appended.
-      res.value.push(...data.items)
+      searchResults.value.push(...data.items)
     }
     else {
       // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
 
+  // ⚠️ 已废弃：intelligence:upsert-item 监听器
+  // 现在所有 AI items 都通过 BoxItemSDK 统一管理
+  // Intelligence Provider 使用 boxItemManager.upsert() 推送
+  // 渲染层的 useBoxItems 会自动处理这些 items
+  /*
   touchChannel.regChannel('core-box:intelligence:upsert-item', ({ data }) => {
-    const incoming = (data?.item ?? null) as TuffItem | null
-    if (!incoming) {
-      return
-    }
-
-    const requestId = incoming.meta?.intelligence?.requestId
-    if (requestId) {
-      const existingIndex = res.value.findIndex(
-        entry => entry.meta?.intelligence?.requestId === requestId,
-      )
-      if (existingIndex >= 0) {
-        res.value.splice(existingIndex, 1, incoming)
-      }
-      else {
-        res.value.push(incoming)
-      }
-    }
-    else {
-      res.value.push(incoming)
-    }
-
-    if (res.value.length > 0 && boxOptions.focus === -1) {
-      boxOptions.focus = res.value.length - 1
-    }
-
-    loading.value = false
+    ... 旧逻辑已移除 ...
   })
+  */
 
   touchChannel.regChannel('core-box:set-query', ({ data }) => {
     const value = typeof data?.value === 'string' ? data.value : ''
@@ -476,35 +485,19 @@ export function useSearch(
     }
   })
 
-  // Listener for items pushed directly from an activated plugin feature.
+  // ⚠️ 已废弃：push-items 监听器
+  // 现在所有插件推送都通过 BoxItemSDK 统一管理
+  // Plugin SDK 的 boxItems.push() 使用 boxItemManager.upsert()
+  // 渲染层的 useBoxItems 会自动处理这些 items
+  /*
   touchChannel.regChannel('core-box:push-items', ({ data }) => {
-    // If a provider is active, allow incoming pushes regardless of searchVal.
-    // This ensures plugins can display items even when the user has cleared the input
-    // but the plugin is still active and pushing results.
-    if (activeActivations.value && activeActivations.value.length > 0) {
-      //
-    }
-    else if (searchVal.value === '') {
-      // If no provider is active and searchVal is empty, ignore pushed items.
-      return
-    }
-
-    //
-
-    // Use a Map to ensure uniqueness and efficient updates.
-    const itemsMap = new Map(res.value.map(item => [item.id, item]))
-    data.items.forEach((item: TuffItem) => {
-      itemsMap.set(item.id, item)
-    })
-
-    // Assign the updated list back to the reactive ref.
-    res.value = Array.from(itemsMap.values())
-    loading.value = false
+    ... 旧逻辑已移除 ...
   })
+  */
 
   // Listener for a plugin requesting to clear all items.
   touchChannel.regChannel('core-box:clear-items', () => {
-    res.value = []
+    searchResults.value = []
     searchResult.value = null
     loading.value = false
   })
@@ -512,16 +505,14 @@ export function useSearch(
   return {
     searchVal,
     select,
-    res,
+    res, // computed - 合并 searchResults 和 boxItems
     loading,
     activeItem,
     activeActivations,
-    handleSearch,
-    handleSearchImmediate,
     handleExecute,
     handleExit,
+    handleSearchImmediate,
     deactivateProvider,
-    deactivateAllProviders,
-    cancelSearch,
+    // cancelSearch
   }
 }
