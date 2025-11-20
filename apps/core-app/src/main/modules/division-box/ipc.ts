@@ -13,7 +13,6 @@ import {
   DivisionBoxError,
   DivisionBoxErrorCode,
   DivisionBoxIPCChannel,
-  DivisionBoxState,
   type DivisionBoxConfig,
   type CloseOptions,
   type IPCResponse,
@@ -217,11 +216,8 @@ export class DivisionBoxIPC {
         return
       }
 
-      // Create session
-      const session = await this.manager.createSession(config)
-
-      // Set up state change listener to broadcast events
-      session.onStateChange((event) => {
+      // Create session with state change broadcast callback
+      const session = await this.manager.createSession(config, (event) => {
         this.broadcastStateChanged(event)
       })
 

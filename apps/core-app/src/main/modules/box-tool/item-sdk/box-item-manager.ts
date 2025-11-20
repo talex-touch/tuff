@@ -171,10 +171,10 @@ export class BoxItemManager {
 
     this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_CHANNELS.BATCH_UPSERT, {
       items: validItems.map(item => this.items.get(item.id)!),
-    this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_CHANNELS.BATCH_UPSERT, {
-      items: validItems.map(item => this.items.get(item.id)!),
     })
-    this.log(`Batch upserted ${validItems.length} items`)
+    if (this.options.enableLogging) {
+      this.log(`Batch upserted ${validItems.length} items`)
+    }
   }
 
   /**
@@ -196,9 +196,7 @@ export class BoxItemManager {
     existingIds.forEach(id => this.items.delete(id))
 
     this.emitToRenderer<BoxItemBatchDeleteEvent>(BOX_ITEM_CHANNELS.BATCH_DELETE, { ids: existingIds })
-    if (this.options.enableLogging) {
-      this.log(`Batch deleted ${existingIds.length} items`)
-    }
+    this.log(`Batch deleted ${existingIds.length} items`)
   }
 
   // ==================== 查询操作 ====================
@@ -254,9 +252,7 @@ export class BoxItemManager {
       })
 
       toDelete.forEach(id => this.items.delete(id))
-      if (this.options.enableLogging) {
-        this.log(`Cleared ${toDelete.length} items from source: ${source}`)
-      }
+      this.log(`Cleared ${toDelete.length} items from source: ${source}`)
     }
     else {
       // 清空所有

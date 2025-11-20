@@ -761,7 +761,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
 
     logInfo('Internal plugin registered', pluginTag(pluginName))
   }
-  }
+
 
   const managerInstance: IPluginManager = {
     plugins,
