@@ -117,7 +117,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       return
     }
     this.providers.set(provider.id, provider)
-    // console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`) // Remove to reduce noise
+    console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`)
 
     if (provider.onLoad) {
       this.providersToLoad.push(provider)
@@ -163,7 +163,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     const provider = this.providers.get(providerId)
     provider?.onDeactivate?.()
     this.providers.delete(providerId)
-    // console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`) // Remove to reduce noise
+    console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`)
   }
 
   activateProviders(activations: IProviderActivate[] | null): void {

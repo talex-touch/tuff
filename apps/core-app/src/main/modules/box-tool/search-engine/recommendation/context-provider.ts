@@ -74,12 +74,126 @@ export class ContextProvider {
         type: latest.type,
         content: this.hashContent(latest.content || ''), // 哈希保护隐私
         timestamp: new Date(latest.timestamp).getTime(),
+        ...this.detectClipboardContentType(latest),
       }
     }
     catch (error) {
       console.debug('[ContextProvider] Failed to get clipboard context:', error)
       return undefined
     }
+  }
+
+  /**
+   * 检测剪贴板内容类型
+   */
+  private detectClipboardContentType(item: any): {
+    contentType?: 'url' | 'text' | 'code' | 'file'
+    meta?: Record<string, any>
+  } {
+    const meta: Record<string, any> = {}
+    let contentType: 'url' | 'text' | 'code' | 'file' = 'text'
+
+    // 文本内容检测
+    if (item.type === 'text') {
+      const content = item.content || ''
+      meta.textLength = content.length
+
+      // URL 检测
+      const urlPattern = /^https?:\/\//i
+      if (urlPattern.test(content.trim())) {
+        try {
+          const url = new URL(content.trim())
+          contentType = 'url'
+          meta.isUrl = true
+          meta.urlDomain = url.hostname
+          meta.protocol = url.protocol
+        }
+        catch {
+          // 不是有效的 URL
+        }
+      }
+
+      // 文件路径检测
+      if (contentType === 'text') {
+        const pathMatch = content.match(/\.([a-z0-9]+)$/i)
+        if (pathMatch) {
+          const ext = pathMatch[1].toLowerCase()
+          const fileTypeInfo = this.categorizeFileType(ext)
+          if (fileTypeInfo.fileType !== 'other') {
+            contentType = 'file'
+            meta.fileExtension = ext
+            meta.fileType = fileTypeInfo.fileType
+            meta.language = fileTypeInfo.language
+          }
+        }
+      }
+    }
+
+    // 文件类型检测
+    if (item.type === 'files') {
+      try {
+        const files = JSON.parse(item.content || '[]')
+        if (files.length > 0) {
+          const firstFile = files[0]
+          const extMatch = firstFile.match(/\.([a-z0-9]+)$/i)
+          if (extMatch) {
+            const ext = extMatch[1].toLowerCase()
+            const fileTypeInfo = this.categorizeFileType(ext)
+            contentType = 'file'
+            meta.fileExtension = ext
+            meta.fileType = fileTypeInfo.fileType
+            meta.language = fileTypeInfo.language
+          }
+        }
+      }
+      catch {}
+    }
+
+    return { contentType, meta }
+  }
+
+  /**
+   * 分类文件类型
+   */
+  private categorizeFileType(ext: string): {
+    fileType: 'code' | 'text' | 'image' | 'document' | 'other'
+    language?: string
+  } {
+    const codeExts = new Map([
+      ['js', 'javascript'],
+      ['jsx', 'javascript'],
+      ['ts', 'typescript'],
+      ['tsx', 'typescript'],
+      ['py', 'python'],
+      ['java', 'java'],
+      ['kt', 'kotlin'],
+      ['swift', 'swift'],
+      ['c', 'c'],
+      ['cpp', 'cpp'],
+      ['cs', 'csharp'],
+      ['go', 'go'],
+      ['rs', 'rust'],
+      ['php', 'php'],
+      ['rb', 'ruby'],
+      ['scala', 'scala'],
+      ['html', 'html'],
+      ['css', 'css'],
+      ['scss', 'scss'],
+      ['vue', 'vue'],
+      ['svelte', 'svelte'],
+    ])
+
+    const textExts = new Set(['txt', 'md', 'markdown', 'log', 'json', 'xml', 'yaml', 'yml'])
+    const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'psd', 'ai'])
+    const docExts = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'])
+
+    if (codeExts.has(ext)) {
+      return { fileType: 'code', language: codeExts.get(ext) }
+    }
+    if (textExts.has(ext)) return { fileType: 'text' }
+    if (imageExts.has(ext)) return { fileType: 'image' }
+    if (docExts.has(ext)) return { fileType: 'document' }
+    return { fileType: 'other' }
   }
 
   /**
@@ -163,6 +277,15 @@ export interface ContextSignal {
     type: string
     content: string // 哈希值,非原文
     timestamp: number
+    contentType?: 'url' | 'text' | 'code' | 'file' // 新增:检测到的内容类型
+    meta?: { // 新增:元数据
+      isUrl?: boolean
+      urlDomain?: string
+      textLength?: number
+      fileExtension?: string
+      fileType?: 'code' | 'text' | 'image' | 'document' | 'other'
+      language?: string
+    }
   }
   foregroundApp?: {
     bundleId: string

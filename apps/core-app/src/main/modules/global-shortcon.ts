@@ -160,7 +160,7 @@ export class ShortcutModule extends BaseModule {
       return
     this.isEnabled = true
     this.reregisterAllShortcuts()
-    // console.log('[GlobalShortcon] All global shortcuts enabled.') // Remove to reduce noise
+    console.log('[GlobalShortcon] All global shortcuts enabled.')
   }
 
   /**
@@ -170,7 +170,7 @@ export class ShortcutModule extends BaseModule {
     globalShortcut.unregisterAll()
 
     if (!this.isEnabled) {
-      // console.log('[GlobalShortcon] Shortcuts are globally disabled, skipping registration.') // Remove to reduce noise
+      console.log('[GlobalShortcon] Shortcuts are globally disabled, skipping registration.')
       return
     }
 
@@ -205,7 +205,7 @@ export class ShortcutModule extends BaseModule {
       }
     }
 
-    // console.log(`[GlobalShortcon] Successfully registered ${successCount} shortcuts.`) // Remove to reduce noise
+    console.log(`[GlobalShortcon] Successfully registered ${successCount} shortcuts.`)
   }
 
   /**
