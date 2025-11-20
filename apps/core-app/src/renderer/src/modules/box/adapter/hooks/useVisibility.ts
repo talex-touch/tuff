@@ -9,7 +9,7 @@ export function useVisibility(
   boxOptions: IBoxOptions,
   searchVal: Ref<string>,
   clipboardOptions: any,
-  handleAutoPaste: () => void,
+  handleAutoFill: () => void,
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   _clearClipboard: () => void,
   boxInputRef: Ref<any>,
@@ -61,7 +61,7 @@ export function useVisibility(
       handlePaste()
 
       if (clipboardOptions.last) {
-        handleAutoPaste()
+        handleAutoFill()
       }
     },
   )

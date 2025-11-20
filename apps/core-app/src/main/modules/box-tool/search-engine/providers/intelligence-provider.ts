@@ -221,10 +221,10 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       const content = `Q: ${prompt}\n\nA: ${answer}`
 
       // 保存到 clipboard 数据库
-      await clipboardModule.saveVirtualEntry({
+      await clipboardModule.saveCustomEntry({
         content,
         rawContent: null,
-        source: 'ai-intelligence',
+        category: 'ai-chat',
         meta: {
           requestId: meta.requestId,
           prompt,
@@ -251,12 +251,12 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
         return []
       }
 
-      // 使用通用查询接口按 source 筛选 AI 历史记录
+      // 使用统一查询接口按 category 筛选 AI 历史记录
       const response = await touchChannel.send(
         ChannelType.MAIN,
-        'clipboard:query-by-source',
+        'clipboard:query',
         {
-          source: 'ai-intelligence',
+          category: 'ai-chat',
           limit,
         },
       )

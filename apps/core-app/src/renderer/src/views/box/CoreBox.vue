@@ -69,11 +69,11 @@ function handleClipboardChange() {
   handleSearchImmediate()
 }
 
-const { handlePaste, handleAutoPaste, clearClipboard } = useClipboard(
+const { handlePaste, handleAutoFill, clearClipboard } = useClipboard(
   boxOptions,
   clipboardOptions,
   handleClipboardChange,
-  searchVal, // Pass searchVal for short text auto-paste
+  searchVal, // Pass searchVal for short text auto-fill
 )
 
 const completionDisplay = computed(() => {
@@ -138,7 +138,7 @@ useVisibility(
   boxOptions,
   searchVal,
   clipboardOptions,
-  handleAutoPaste,
+  handleAutoFill,
   handlePaste,
   clearClipboard,
   boxInputRef,
@@ -242,8 +242,8 @@ function handleFocusInputEvent(): void {
 async function loadPreviewHistory(): Promise<void> {
   previewHistory.loading = true
   try {
-    const response = await touchChannel.send('clipboard:query-by-source', {
-      source: 'calculation',
+    const response = await touchChannel.send('clipboard:query', {
+      category: 'preview',
       limit: 20,
     })
     previewHistory.items = response?.data ?? []
