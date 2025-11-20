@@ -97,7 +97,7 @@ export class CoreBoxModule extends BaseModule {
       }, 80)
     })
 
-    // console.log('[CoreBox] Core-box module initialized!') // Remove to reduce noise
+    console.log('[CoreBox] Core-box module initialized!')
   }
 
   async onDestroy(): Promise<void> {

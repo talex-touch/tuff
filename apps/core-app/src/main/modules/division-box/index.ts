@@ -6,7 +6,8 @@
  */
 
 export * from './types'
+export { DivisionBoxSession } from './session'
+export { LRUCache } from './lru-cache'
 
-// Manager and Session classes will be exported here once implemented
+// Manager class will be exported here once implemented
 // export { DivisionBoxManager } from './manager'
-// export { DivisionBoxSession } from './session'

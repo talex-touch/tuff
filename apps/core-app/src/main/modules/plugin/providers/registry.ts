@@ -40,7 +40,7 @@ export function registerProvider(provider: PluginProvider): void {
   }
 
   registeredProviders.set(provider.type, entry)
-  providerRegistryLog.debug('Registered plugin provider', {
+  providerRegistryLog.info('Registered plugin provider', {
     meta: { provider: provider.type },
   })
 }
