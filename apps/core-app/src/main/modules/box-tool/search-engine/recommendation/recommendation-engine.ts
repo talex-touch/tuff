@@ -1,22 +1,19 @@
-import type { TuffItem } from '../types'
+import type { TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { ContextProvider } from './context-provider'
+import { ItemRebuilder } from './item-rebuilder'
 import { TimeStatsAggregator, type ParsedItemTimeStats } from '../time-stats-aggregator'
 import * as schema from '../../../../db/schema'
 import { desc } from 'drizzle-orm'
 
-/**
- * 推荐引擎
- * 基于上下文和历史行为生成个性化推荐
- */
 export class RecommendationEngine {
   private contextProvider: ContextProvider
-  private timeStatsAggregator: TimeStatsAggregator
+  private itemRebuilder: ItemRebuilder
 
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
-    this.timeStatsAggregator = new TimeStatsAggregator(dbUtils)
+    this.itemRebuilder = new ItemRebuilder(dbUtils)
   }
 
   /**
@@ -25,10 +22,8 @@ export class RecommendationEngine {
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
     const startTime = performance.now()
 
-    // 1. 获取当前上下文
     const context = await this.contextProvider.getCurrentContext()
 
-    // 2. 检查缓存
     const cached = await this.getCachedRecommendations(context)
     if (cached && !options.forceRefresh) {
       console.log('[RecommendationEngine] Using cached recommendations')
@@ -40,25 +35,23 @@ export class RecommendationEngine {
       }
     }
 
-    // 3. 生成候选池
     const candidates = await this.getCandidates(context, options)
     console.log(`[RecommendationEngine] Generated ${candidates.length} candidates`)
 
-    // 4. 计算推荐分数
     const scored = await this.scoreAndRank(candidates, context)
 
-    // 5. 应用多样性过滤
     const limit = options.limit || 10
     const diversified = this.applyDiversityFilter(scored, limit)
 
-    // 6. 缓存结果
-    await this.cacheRecommendations(context, diversified)
+    const items = await this.itemRebuilder.rebuildItems(diversified)
+
+    await this.cacheRecommendations(context, items)
 
     const duration = performance.now() - startTime
-    console.log(`[RecommendationEngine] Generated ${diversified.length} recommendations in ${duration.toFixed(2)}ms`)
+    console.log(`[RecommendationEngine] Generated ${items.length} recommendations in ${duration.toFixed(2)}ms`)
 
     return {
-      items: diversified,
+      items,
       context,
       duration,
       fromCache: false,
@@ -70,7 +63,7 @@ export class RecommendationEngine {
    */
   private async getCandidates(
     context: ContextSignal,
-    options: RecommendationOptions,
+    _options: RecommendationOptions,
   ): Promise<CandidateItem[]> {
     const candidates: CandidateItem[] = []
 
@@ -274,7 +267,7 @@ export class RecommendationEngine {
   /**
    * 计算上下文匹配度
    */
-  private calculateContextMatch(candidate: CandidateItem, context: ContextSignal): number {
+  private calculateContextMatch(_candidate: CandidateItem, _context: ContextSignal): number {
     let score = 0
 
     // TODO: 实现剪贴板内容类型匹配
@@ -365,7 +358,7 @@ export class RecommendationEngine {
   /**
    * 获取缓存的推荐
    */
-  private async getCachedRecommendations(context: ContextSignal): Promise<{ items: ScoredItem[] } | null> {
+  private async getCachedRecommendations(context: ContextSignal): Promise<{ items: TuffItem[] } | null> {
     const cacheKey = this.contextProvider.generateCacheKey(context)
     const cached = await this.dbUtils.getRecommendationCache(cacheKey)
 
@@ -389,9 +382,9 @@ export class RecommendationEngine {
   /**
    * 缓存推荐结果
    */
-  private async cacheRecommendations(context: ContextSignal, items: ScoredItem[]): Promise<void> {
+  private async cacheRecommendations(context: ContextSignal, items: TuffItem[]): Promise<void> {
     const cacheKey = this.contextProvider.generateCacheKey(context)
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 分钟过期
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
 
     await this.dbUtils.setRecommendationCache(cacheKey, items, expiresAt)
   }
@@ -411,7 +404,7 @@ export interface RecommendationOptions {
  * 推荐结果
  */
 export interface RecommendationResult {
-  items: ScoredItem[]
+  items: TuffItem[]
   context: ContextSignal
   duration: number
   fromCache: boolean

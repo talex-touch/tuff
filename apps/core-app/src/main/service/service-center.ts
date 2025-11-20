@@ -226,4 +226,4 @@ export default {
 
     serviceCenter.save()
   },
-} as TalexTouch.IModule<TalexEvents>
+} as any as TalexTouch.IModule<TalexEvents>

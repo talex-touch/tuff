@@ -58,7 +58,7 @@ const openerLogo = computed(() => opener.value?.logo || '')
 const openerName = computed(() => opener.value?.name || '')
 const showOpenerLogo = computed(() => props.item.kind === 'file' && !!openerLogo.value)
 
-const clickCount = computed(() => props.item.meta?.usage?.clickCount ?? 0)
+const clickCount = computed(() => props.item.meta?.usageStats?.executeCount ?? 0)
 const showFrequency = computed(() => clickCount.value > 0)
 const frequencyLabel = computed(() => clickCount.value.toString())
 
