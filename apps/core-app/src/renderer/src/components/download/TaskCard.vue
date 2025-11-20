@@ -18,6 +18,7 @@ import {
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { appSetting } from '~/modules/channel/storage'
 import ProgressBar from './ProgressBar.vue'
 
 interface Props {
@@ -233,7 +234,7 @@ function formatSize(bytes: number): string {
     </div>
 
     <!-- 错误信息 -->
-    <div v-if="task.error && viewMode === 'detailed'" class="task-error">
+    <div v-if="task.error && appSetting.searchEngine.logsEnabled" class="task-error">
       <el-alert :title="task.error" type="error" :closable="false" show-icon />
     </div>
   </div>
