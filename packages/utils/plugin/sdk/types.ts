@@ -178,6 +178,12 @@ export interface IPluginUtils {
   $event: IEventManager
 
   /**
+   * DivisionBox manager for creating floating window containers
+   * @see {@link DivisionBoxSDK}
+   */
+  divisionBox: import('./division-box').DivisionBoxSDK
+
+  /**
    * Opens a URL in the default browser
    * @param url - The URL to open
    */

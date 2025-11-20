@@ -74,6 +74,15 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   logger: IPluginLogger<any>
   features: IPluginFeature[]
   issues: PluginIssue[]
+  divisionBoxConfig?: {
+    defaultSize: 'compact' | 'medium' | 'expanded'
+    keepAlive: boolean
+    header: {
+      show: boolean
+      title?: string
+      icon?: string
+    }
+  }
 
   addFeature: (feature: IPluginFeature) => boolean
   delFeature: (featureId: string) => boolean

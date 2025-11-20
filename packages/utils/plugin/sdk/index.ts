@@ -10,6 +10,7 @@ export interface ITouchSDK {
 export * from './channel'
 export * from './clipboard'
 export * from './core-box'
+export * from './division-box'
 export { createFeaturesManager, useFeatures } from './features'
 
 export * from './hooks/index'

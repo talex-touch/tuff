@@ -17,6 +17,7 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import {
   createClipboardManager,
+  createDivisionBoxSDK,
   PluginStatus,
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
@@ -97,6 +98,17 @@ export class TouchPlugin implements ITouchPlugin {
   _searchItems: TuffItem[] = []
   _lastSearchQuery: string = ''
   _searchTimestamp: number = 0
+
+  /** DivisionBox configuration from manifest */
+  divisionBoxConfig?: {
+    defaultSize: 'compact' | 'medium' | 'expanded'
+    keepAlive: boolean
+    header: {
+      show: boolean
+      title?: string
+      icon?: string
+    }
+  }
 
   /**
    * Serialize plugin to JSON object
@@ -994,6 +1006,7 @@ export class TouchPlugin implements ITouchPlugin {
       storage,
       clipboard: clipboardUtil,
       channel: channelBridge,
+      divisionBox: createDivisionBoxSDK(channelBridge),
       // 新的 BoxItemSDK API
       boxItems,
       // 向后兼容：保留旧 API

@@ -5,26 +5,26 @@ import TuffItemTemplate from './TuffItemTemplate.vue'
 const selectedId = ref('item-1')
 
 const listItems = [
-  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: { type: 'class', value: 'i-simple-icons-openai' }, enabled: true },
+  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: { type: 'class' as const, value: 'i-simple-icons-openai' }, enabled: true },
   {
     id: 'item-2',
     name: 'Anthropic',
     type: 'anthropic',
-    icon: { type: 'class', value: 'i-simple-icons-anthropic' },
+    icon: { type: 'class' as const, value: 'i-simple-icons-anthropic' },
     enabled: true,
   },
   {
     id: 'item-3',
     name: 'DeepSeek',
     type: 'deepseek',
-    icon: { type: 'class', value: 'i-carbon-search-advanced' },
+    icon: { type: 'class' as const, value: 'i-carbon-search-advanced' },
     enabled: false,
   },
   {
     id: 'item-4',
     name: 'Local Model',
     type: 'local',
-    icon: { type: 'class', value: 'i-carbon-bare-metal-server' },
+    icon: { type: 'class' as const, value: 'i-carbon-bare-metal-server' },
     enabled: true,
   },
 ]

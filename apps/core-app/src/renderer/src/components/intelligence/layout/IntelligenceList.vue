@@ -92,7 +92,7 @@ const listGroups = computed(() => [
     badgeText: String(filteredEnabledProviders.value.length),
     items: filteredEnabledProviders.value,
     collapsible: false,
-    badgeVariant: 'success',
+    badgeVariant: 'success' as const,
     itemKey: (provider: AiProviderConfig) => provider.id,
   },
   {
@@ -103,7 +103,7 @@ const listGroups = computed(() => [
     items: filteredDisabledProviders.value,
     collapsible: true,
     collapsed: false,
-    badgeVariant: 'info',
+    badgeVariant: 'info' as const,
     itemKey: (provider: AiProviderConfig) => provider.id,
   },
 ])

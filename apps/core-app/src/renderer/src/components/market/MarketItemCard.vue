@@ -13,7 +13,7 @@ import FlatButton from '~/components/base/button/FlatButton.vue'
 interface MarketItem {
   id?: string
   name: string
-  description: string
+  description?: string
   version?: string
   author?: string
   downloads?: string
@@ -180,8 +180,11 @@ function handleOpen(): void {
             {{ t('market.officialBadge') }}
           </span>
         </div>
-        <p class="market-item-description">
-          {{ item.description || 'No description available' }}
+        <p v-if="item.description" class="market-item-description">
+          {{ item.description }}
+        </p>
+        <p v-else class="market-item-description placeholder">
+          {{ t('market.noDescription') }}
         </p>
 
         <!-- Stats section -->

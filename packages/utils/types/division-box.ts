@@ -223,3 +223,26 @@ export interface IPCResponse<T = any> {
     message: string
   }
 }
+
+/**
+ * DivisionBox configuration in plugin manifest
+ * This configuration is declared in the plugin's manifest.json file
+ * and provides default settings for DivisionBox instances created by the plugin.
+ */
+export interface ManifestDivisionBoxConfig {
+  /** Default size preset for DivisionBox instances */
+  defaultSize?: DivisionBoxSize
+  
+  /** Enable keepAlive caching mode by default */
+  keepAlive?: boolean
+  
+  /** Default header configuration */
+  header?: {
+    /** Whether to show the header by default */
+    show?: boolean
+    /** Default title (can be overridden at runtime) */
+    title?: string
+    /** Default icon (can be overridden at runtime) */
+    icon?: string
+  }
+}
