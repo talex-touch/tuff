@@ -5,7 +5,7 @@
  * Handles session creation, lifecycle management, resource limits, and LRU caching.
  */
 
-import { app } from 'electron'
+// app import removed - not currently used
 import { DivisionBoxSession } from './session'
 import { LRUCache } from './lru-cache'
 import {
@@ -159,10 +159,14 @@ export class DivisionBoxManager {
    * creates DivisionBoxSession instance, and registers it.
    * 
    * @param config - Configuration for the new DivisionBox
+   * @param stateChangeCallback - Optional callback for state changes (used by IPC layer for broadcasting)
    * @returns The created DivisionBoxSession
    * @throws {DivisionBoxError} If resource limits are exceeded or configuration is invalid
    */
-  async createSession(config: DivisionBoxConfig): Promise<DivisionBoxSession> {
+  async createSession(
+    config: DivisionBoxConfig,
+    stateChangeCallback?: (event: import('./types').StateChangeEvent) => void
+  ): Promise<DivisionBoxSession> {
     // Check global session limit
     if (this.sessions.size >= RESOURCE_LIMITS.MAX_ACTIVE_SESSIONS) {
       throw new DivisionBoxError(
@@ -182,6 +186,11 @@ export class DivisionBoxManager {
 
     // Register session
     this.sessions.set(sessionId, session)
+
+    // Register state change callback if provided (for IPC broadcasting)
+    if (stateChangeCallback) {
+      session.onStateChange(stateChangeCallback)
+    }
 
     // If keepAlive is enabled, add to LRU cache when it becomes inactive
     if (validatedConfig.keepAlive) {

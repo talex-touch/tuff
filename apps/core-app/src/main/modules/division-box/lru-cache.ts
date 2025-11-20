@@ -6,7 +6,7 @@
  */
 
 import type { DivisionBoxSession } from './session'
-import { DivisionBoxState } from './types'
+// DivisionBoxState import removed - not needed for LRU cache logic
 
 /**
  * LRU Cache for managing keepAlive DivisionBox sessions
