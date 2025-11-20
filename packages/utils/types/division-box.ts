@@ -1,11 +1,9 @@
 /**
- * DivisionBox Core Type Definitions
+ * DivisionBox Type Definitions
  * 
- * This file contains all core type interfaces for the DivisionBox system,
- * including configuration, state management, and error handling types.
+ * Shared types for DivisionBox system across main and renderer processes.
+ * These types define the contract for inter-process communication and state management.
  */
-
-import type { WebPreferences } from 'electron'
 
 /**
  * DivisionBox lifecycle states
@@ -120,8 +118,8 @@ export interface DivisionBoxConfig {
   /** Header configuration */
   header?: HeaderConfig
   
-  /** WebContentsView preferences */
-  webPreferences?: WebPreferences
+  /** WebContentsView preferences (main process only) */
+  webPreferences?: any
 }
 
 /**

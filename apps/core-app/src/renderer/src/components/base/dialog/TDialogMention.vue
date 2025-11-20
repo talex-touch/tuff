@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { ITuffIcon } from '@talex-touch/utils'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import Loading from '~/components/icon/LoadingIcon.vue'
@@ -46,9 +47,9 @@ interface Props {
   /** Close callback function */
   close: () => void
   /** Array of buttons */
-  btns: Button[]
-  /** Icon name or object */
-  icon?: string | object
+  btns?: Button[]
+  /** Icon object or string */
+  icon?: ITuffIcon | string
   /** Loading state */
   loading?: boolean
 }
@@ -62,7 +63,7 @@ const props = withDefaults(defineProps<Props>(), {
   stay: 0,
   btns: () => [],
   icon: '',
-  loading: false,
+  loading: false
 })
 
 // Refs
@@ -84,12 +85,12 @@ watchEffect(() => {
       content: btn.content,
       type: btn.type,
       onClick: btn.onClick,
-      loading: false, // Initialize loading as false
+      loading: false // Initialize loading as false
     }
 
     // Create reactive object
     const obj = {
-      value: buttonState,
+      value: buttonState
     }
 
     // Handle loading callback
@@ -112,7 +113,7 @@ watchEffect(() => {
  */
 function listener(): void {
   window.scrollTo({
-    top: 0,
+    top: 0
   })
 }
 
@@ -174,8 +175,7 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
 
   await sleep(200)
 
-  if (await btn.value.onClick())
-    forClose()
+  if (await btn.value.onClick()) forClose()
 
   btn.value.loading = false
 }
@@ -227,7 +227,7 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
               'warn-tip': btn.value?.type === 'warning',
               'error-tip': btn.value?.type === 'error',
               'success-tip': btn.value?.type === 'success',
-              'loading-tip': btn.value.loading,
+              'loading-tip': btn.value.loading
             }"
             class="TDialogTip-Btn-Item"
             role="button"
@@ -248,9 +248,9 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
 
       <!-- Dialog icon display -->
       <div class="TDialogTip-Icon">
-        <PluginIcon v-if="icon instanceof Object" :icon="icon" />
+        <PluginIcon v-if="icon instanceof Object" :icon="icon" :alt="title || 'Plugin'" />
         <RemixIcon v-else-if="icon && icon.at(0) === '#'" :name="icon.substring(1)" />
-        <img v-else-if="icon" :src="icon" :alt="title">
+        <img v-else-if="icon" :src="icon" :alt="title" />
         <span v-else class="tip-icon" v-text="`Tip`" />
       </div>
     </div>

@@ -240,7 +240,7 @@ async function handleUninstallPlugin(): Promise<void> {
     </div>
 
     <!-- Status Section -->
-    <PluginStatus :plugin="plugin" />
+    <PluginStatus :plugin="plugin" :shrink="false" />
 
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">

@@ -101,7 +101,7 @@ function getProviderIcon(type: string): ITuffIcon {
   return {
     type: 'class',
     value: iconClass,
-    status: 'success',
+    status: 'normal' as const,
   }
 }
 

@@ -1,33 +1,11 @@
 /**
  * DivisionBox Types - Renderer Process
  * 
- * Type definitions for the renderer process, including UI state and store types.
- * Re-exports common types from main process for consistency.
+ * UI-specific type definitions for the renderer process.
+ * For shared types, import directly from '@talex-touch/utils'.
  */
 
-/**
- * Re-export core types that are shared between main and renderer processes
- */
-export type {
-  DivisionBoxConfig,
-  SessionInfo,
-  SessionMeta,
-  DivisionBoxBounds,
-  CloseOptions,
-  HeaderConfig,
-  HeaderAction,
-  StateChangeEvent,
-  IPCResponse
-} from '../../../main/modules/division-box/types'
-
-export {
-  DivisionBoxState,
-  DivisionBoxErrorCode,
-  DivisionBoxError,
-  DivisionBoxIPCChannel
-} from '../../../main/modules/division-box/types'
-
-export type { DivisionBoxSize } from '../../../main/modules/division-box/types'
+import type { SessionInfo } from '@talex-touch/utils'
 
 /**
  * UI-specific state for DivisionBox in renderer process

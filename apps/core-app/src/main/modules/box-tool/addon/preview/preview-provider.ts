@@ -9,7 +9,7 @@ import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-
 import type { PreviewAbilityRegistry } from './preview-registry'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import { TuffFactory, TuffInputType, TuffItemBuilder } from '@talex-touch/utils'
+import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
 
@@ -40,7 +40,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     void this.recordHistory(result.payload, query)
     const duration = performance.now() - startedAt
 
-    return TuffFactory.createSearchResult(query)
+    return new TuffSearchResultBuilder(query)
       .setItems([item])
       .setDuration(duration)
       .setSources([
@@ -73,7 +73,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
 
   private createEmptyResult(query: TuffQuery, startedAt: number): TuffSearchResult {
     const duration = performance.now() - startedAt
-    return TuffFactory.createSearchResult(query)
+    return new TuffSearchResultBuilder(query)
       .setDuration(duration)
       .setSources([
         {

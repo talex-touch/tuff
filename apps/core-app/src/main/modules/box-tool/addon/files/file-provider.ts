@@ -35,8 +35,8 @@ import { promisify } from 'node:util'
 import {
   timingLogger,
 
-  TuffFactory,
   TuffInputType,
+  TuffSearchResultBuilder,
 } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
@@ -2083,12 +2083,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     typeFilters: Set<FileTypeTag>,
   ): Promise<TuffSearchResult> {
     if (!this.dbUtils) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const extensions = this.resolveExtensionsForTypeFilters(typeFilters)
     if (extensions.length === 0) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const db = this.dbUtils.getDb()
@@ -2140,7 +2140,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return tuffItem
     })
 
-    return TuffFactory.createSearchResult(query).setItems(items).build()
+    return new TuffSearchResultBuilder(query).setItems(items).build()
   }
 
   public async getIndexingProgress(paths?: string[]): Promise<{
@@ -2215,7 +2215,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
       searchLogger.fileSearchNotInitialized()
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const searchStart = performance.now()
@@ -2230,7 +2230,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     searchLogger.logKeywordAnalysis(searchText, logTerms, typeFilters.size)
 
     if (!searchText && typeFilters.size === 0) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     if (!searchText && typeFilters.size > 0) {
@@ -2319,7 +2319,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (candidateIds.size === 0) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const candidatePaths = Array.from(candidateIds).slice(0, maxCandidateCount)
@@ -2361,7 +2361,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (filesMap.size === 0) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     if (typeFilters.size > 0) {
@@ -2481,7 +2481,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
       .slice(0, 50)
 
-    const result = TuffFactory.createSearchResult(query).setItems(scoredItems).build()
+    const result = new TuffSearchResultBuilder(query).setItems(scoredItems).build()
     this.logDebug('Search completed', {
       query: rawText,
       items: scoredItems.length,

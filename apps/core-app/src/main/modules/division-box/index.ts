@@ -5,7 +5,7 @@
  * Exports all public APIs, types, and utilities.
  */
 
-export * from './types'
+export * from '@talex-touch/utils' // Re-export shared types
 export { DivisionBoxSession } from './session'
 export { LRUCache } from './lru-cache'
 export { DivisionBoxManager } from './manager'

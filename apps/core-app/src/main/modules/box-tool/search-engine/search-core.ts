@@ -15,7 +15,7 @@ import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import { TuffFactory, TuffInputType } from '@talex-touch/utils'
+import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import {
   ProviderDeactivatedEvent,
@@ -31,6 +31,7 @@ import { appProvider } from '../addon/apps/app-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
 import { systemProvider } from '../addon/system/system-provider'
+import { urlProvider } from '../addon/url/url-provider'
 import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
@@ -102,6 +103,7 @@ export class SearchEngineCore
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)
+    this.registerProvider(urlProvider)
     // Removed intelligenceSearchProvider - AI功能现在由 internal-ai-plugin 提供
   }
 
@@ -327,7 +329,7 @@ export class SearchEngineCore
             `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
           )
 
-          const result = TuffFactory.createSearchResult(query)
+          const result = new TuffSearchResultBuilder(query)
             .setItems(recommendationResult.items)
             .setDuration(recommendationResult.duration)
             .setSources([])
@@ -340,7 +342,7 @@ export class SearchEngineCore
         } catch (error) {
           console.error('[SearchEngineCore] Failed to generate recommendations:', error)
           // 降级：返回空结果而不是继续搜索
-          return TuffFactory.createSearchResult(query)
+          return new TuffSearchResultBuilder(query)
             .setItems([])
             .setDuration(0)
             .setSources([])
@@ -349,7 +351,7 @@ export class SearchEngineCore
       } else {
         // console.warn('[SearchEngineCore] RecommendationEngine not initialized') // Remove to reduce noise
         // 返回空结果
-        return TuffFactory.createSearchResult(query)
+        return new TuffSearchResultBuilder(query)
           .setItems([])
           .setDuration(0)
           .setSources([])
@@ -458,7 +460,7 @@ export class SearchEngineCore
           this._updateActivationState(update.newResults)
 
           const totalDuration = Date.now() - startTime
-          const initialResult = TuffFactory.createSearchResult(query)
+          const initialResult = new TuffSearchResultBuilder(query)
             .setItems(sortedItems)
             .setDuration(totalDuration)
             .setSources(update.sourceStats || [])

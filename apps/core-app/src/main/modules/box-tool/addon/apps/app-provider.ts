@@ -27,8 +27,8 @@ import {
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import {
-  TuffFactory,
   TuffInputType,
+  TuffSearchResultBuilder,
 } from '@talex-touch/utils/core-box'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -979,12 +979,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           LogStyle.warning,
         ),
       )
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const rawText = query.text.trim()
     if (!rawText) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const db = this.dbUtils.getDb()
@@ -1102,7 +1102,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           LogStyle.info,
         ),
       )
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const candidateList = Array.from(candidateIds)
@@ -1142,7 +1142,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           LogStyle.warning,
         ),
       )
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const appsWithExtensions = await this.fetchExtensionsForFiles(files)
@@ -1182,7 +1182,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
-    return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
+    return new TuffSearchResultBuilder(query).setItems(sortedItems).build()
   }
 
   private buildFtsQuery(terms: string[]): string {

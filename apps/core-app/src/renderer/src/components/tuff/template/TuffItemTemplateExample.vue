@@ -5,26 +5,26 @@ import TuffItemTemplate from './TuffItemTemplate.vue'
 const selectedId = ref('item-1')
 
 const listItems = [
-  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: 'i-simple-icons-openai', enabled: true },
+  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: { type: 'class', value: 'i-simple-icons-openai' }, enabled: true },
   {
     id: 'item-2',
     name: 'Anthropic',
     type: 'anthropic',
-    icon: 'i-simple-icons-anthropic',
+    icon: { type: 'class', value: 'i-simple-icons-anthropic' },
     enabled: true,
   },
   {
     id: 'item-3',
     name: 'DeepSeek',
     type: 'deepseek',
-    icon: 'i-carbon-search-advanced',
+    icon: { type: 'class', value: 'i-carbon-search-advanced' },
     enabled: false,
   },
   {
     id: 'item-4',
     name: 'Local Model',
     type: 'local',
-    icon: 'i-carbon-bare-metal-server',
+    icon: { type: 'class', value: 'i-carbon-bare-metal-server' },
     enabled: true,
   },
 ]
@@ -43,7 +43,7 @@ function handleClick(type: string) {
       <TuffItemTemplate
         title="OpenAI Provider"
         subtitle="openai"
-        icon="i-simple-icons-openai"
+        :icon="{ type: 'class', value: 'i-simple-icons-openai' }"
         :clickable="true"
         @click="handleClick('basic')"
       />
@@ -54,7 +54,7 @@ function handleClick(type: string) {
       <TuffItemTemplate
         title="Active Service"
         subtitle="Running on port 3000"
-        icon="i-carbon-server"
+        :icon="{ type: 'class', value: 'i-carbon-server' }"
         :status-dot="{ class: 'is-active', label: 'Service is running' }"
         :selected="true"
       />
@@ -65,7 +65,7 @@ function handleClick(type: string) {
       <TuffItemTemplate
         title="Anthropic Provider"
         subtitle="anthropic"
-        icon="i-simple-icons-anthropic"
+        :icon="{ type: 'class', value: 'i-simple-icons-anthropic' }"
         :top-badge="{ text: 'Error', status: 'danger', icon: 'i-carbon-warning' }"
         :has-error="true"
       />
@@ -76,7 +76,7 @@ function handleClick(type: string) {
       <TuffItemTemplate
         title="DeepSeek Provider"
         subtitle="deepseek"
-        icon="i-carbon-search-advanced"
+        :icon="{ type: 'class', value: 'i-carbon-search-advanced' }"
         :bottom-badge="{ text: 'Beta', status: 'warning' }"
       />
     </section>
@@ -86,7 +86,7 @@ function handleClick(type: string) {
       <TuffItemTemplate
         title="Custom Provider"
         subtitle="custom-api"
-        icon="i-carbon-settings"
+        :icon="{ type: 'class', value: 'i-carbon-settings' }"
         :top-badge="{ text: 'New', status: 'info' }"
         :bottom-badge="{ text: 'v2.0', status: 'success' }"
         :status-dot="{ class: 'is-active' }"
@@ -98,7 +98,7 @@ function handleClick(type: string) {
       <TuffItemTemplate
         title="Disabled Provider"
         subtitle="Not available"
-        icon="i-carbon-close-outline"
+        :icon="{ type: 'class', value: 'i-carbon-close-outline' }"
         :disabled="true"
         :status-dot="{ class: 'is-inactive', label: 'Disabled' }"
       />
@@ -110,19 +110,19 @@ function handleClick(type: string) {
         <TuffItemTemplate
           title="Small Size"
           subtitle="size='sm'"
-          icon="i-carbon-cube"
+          :icon="{ type: 'class', value: 'i-carbon-cube' }"
           size="sm"
         />
         <TuffItemTemplate
           title="Medium Size (Default)"
           subtitle="size='md'"
-          icon="i-carbon-cube"
+          :icon="{ type: 'class', value: 'i-carbon-cube' }"
           size="md"
         />
         <TuffItemTemplate
           title="Large Size"
           subtitle="size='lg'"
-          icon="i-carbon-cube"
+          :icon="{ type: 'class', value: 'i-carbon-cube' }"
           size="lg"
         />
       </div>
@@ -130,7 +130,7 @@ function handleClick(type: string) {
 
     <section class="example-section">
       <h3>自定义插槽</h3>
-      <TuffItemTemplate icon="i-carbon-user">
+      <TuffItemTemplate :icon="{ type: 'class', value: 'i-carbon-user' }">
         <template #title>
           <span style="color: var(--el-color-primary)">Custom Title</span>
           <el-tag size="small" type="success">

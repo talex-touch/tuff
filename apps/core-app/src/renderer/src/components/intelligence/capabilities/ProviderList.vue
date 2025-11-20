@@ -143,7 +143,7 @@ function handleRemoveProvider(providerId: string): void {
         v-for="binding in enabledBindings"
         :key="binding.providerId"
         closable
-        :type="focusedProviderId === binding.providerId ? 'primary' : ''"
+        :type="(focusedProviderId === binding.providerId ? 'primary' : undefined) as any"
         @close="handleRemoveProvider(binding.providerId)"
         @click="$emit('select', binding.providerId)"
       >

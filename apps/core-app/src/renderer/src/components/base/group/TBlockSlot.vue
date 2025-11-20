@@ -1,4 +1,7 @@
-<script>
+<script name="TBlockSlot">
+export default {
+  name: 'TBlockSlot',
+}
 </script>
 
 <script setup>
@@ -22,10 +25,6 @@ const props = defineProps({
     required: true,
   },
 })
-
-export default {
-  name: 'TBlockSlot',
-}
 </script>
 
 <template>

@@ -1,16 +1,16 @@
-<script>
+<script name="FlatCodeInput">
 import FlatButton from '~/components/base/button//FlatButton.vue'
+
+export default {
+  name: 'FlatCodeInput',
+  components: { FlatButton },
+}
 </script>
 
 <script setup>
 import { reactive, watch } from 'vue'
 
 const emits = defineEmits(['input'])
-
-export default {
-  name: 'FlatCodeInput',
-  components: { FlatButton },
-}
 
 const codes = reactive([])
 

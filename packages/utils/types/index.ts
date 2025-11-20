@@ -1,3 +1,4 @@
+export * from './division-box'
 export * from './intelligence'
 export * from './modules'
 export * from './storage'

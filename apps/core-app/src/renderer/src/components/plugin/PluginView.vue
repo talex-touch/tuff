@@ -1,4 +1,7 @@
-<script>
+<script name="PluginView">
+export default {
+  name: 'PluginView',
+}
 </script>
 
 <script setup>
@@ -16,10 +19,6 @@ const props = defineProps({
     required: true,
   },
 })
-
-export default {
-  name: 'PluginView',
-}
 
 const loadDone = ref(false)
 const status = computed(() => props.plugin?.status || 0)

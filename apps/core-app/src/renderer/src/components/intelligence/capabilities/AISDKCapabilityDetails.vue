@@ -42,7 +42,7 @@ const showModelDrawer = ref(false)
 const showPromptDrawer = ref(false)
 const showTestDialog = ref(false)
 const testMeta = ref({ requiresUserInput: false, inputHint: '' })
-let promptTimer: ReturnType<typeof setTimeout> | null = null
+let promptTimer: number | null = null
 let syncingFromProps = false
 
 const providerMetaMap = computed(

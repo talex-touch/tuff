@@ -8,7 +8,6 @@
 import { BrowserWindow } from 'electron'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import type { ITouchChannel, StandardChannelData } from '@talex-touch/utils/channel'
-import { DivisionBoxManager } from './manager'
 import {
   DivisionBoxError,
   DivisionBoxErrorCode,
@@ -18,7 +17,8 @@ import {
   type IPCResponse,
   type SessionInfo,
   type StateChangeEvent
-} from './types'
+} from '@talex-touch/utils'
+import { DivisionBoxManager } from './manager'
 
 /**
  * Validates DivisionBoxConfig format

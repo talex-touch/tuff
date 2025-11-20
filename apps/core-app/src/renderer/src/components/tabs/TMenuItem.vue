@@ -1,4 +1,7 @@
-<script>
+<script name="TMenuItem">
+export default {
+  name: 'TMenuItem',
+}
 </script>
 
 <script setup>
@@ -33,10 +36,6 @@ const props = defineProps({
     default: false,
   },
 })
-
-export default {
-  name: 'TMenuItem',
-}
 
 const router = useRouter()
 

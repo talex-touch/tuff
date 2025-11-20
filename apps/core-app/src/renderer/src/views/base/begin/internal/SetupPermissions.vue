@@ -9,7 +9,10 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage/index'
 import Done from './Done.vue'
 
-type StepFunction = (call: { comp: any, rect?: { width: number, height: number } }, dataAction?: () => void) => void
+type StepFunction = (
+  call: { comp: any; rect?: { width: number; height: number } },
+  dataAction?: () => void
+) => void
 
 const { t } = useI18n()
 const step: StepFunction = inject('step')!
@@ -23,30 +26,30 @@ const permissions = ref({
   fileAccess: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
     checked: false,
-    required: true, // File access is required
+    required: true // File access is required
   },
   accessibility: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
     checked: false,
-    required: false, // Optional
+    required: false // Optional
   },
   notifications: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
     checked: false,
-    required: false, // Optional
+    required: false // Optional
   },
   adminPrivileges: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
     checked: false,
-    required: false, // Optional
-  },
+    required: false // Optional
+  }
 })
 
 // Settings
 const settings = ref({
   autoStart: false,
   showTray: true,
-  hideDock: false,
+  hideDock: false
 })
 
 const isLoading = ref(false)
@@ -61,7 +64,7 @@ if (!appSetting.setup) {
     adminPrivileges: false,
     hideDock: false,
     runAsAdmin: false,
-    customDesktop: false,
+    customDesktop: false
   }
 }
 
@@ -80,88 +83,83 @@ async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
   try {
     // Check file access permission (required)
-    const fileAccessResult = await Promise.race([
+    const fileAccessResult = (await Promise.race([
       touchChannel.send('system:permission:check', 'fileAccess' as any),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
-    ]) as any
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+    ])) as any
 
     if (fileAccessResult && fileAccessResult.status) {
       permissions.value.fileAccess = {
         status: fileAccessResult.status,
         checked: true,
-        required: true,
+        required: true
       }
     }
 
     // Check accessibility permission (macOS, optional)
     if (isMacOS.value) {
       try {
-        const accResult = await Promise.race([
+        const accResult = (await Promise.race([
           touchChannel.send('system:permission:check', 'accessibility' as any),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
-        ]) as any
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ])) as any
 
         if (accResult && accResult.status) {
           permissions.value.accessibility = {
             status: accResult.status,
             checked: true,
-            required: false,
+            required: false
           }
           appSetting.setup.accessibility = accResult.status === 'granted'
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.warn('[SetupPermissions] Failed to check accessibility permission:', error)
       }
     }
 
     // Check notification permission (optional)
     try {
-      const notifResult = await Promise.race([
+      const notifResult = (await Promise.race([
         touchChannel.send('system:permission:check', 'notifications' as any),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
-      ]) as any
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ])) as any
 
       if (notifResult && notifResult.status) {
         permissions.value.notifications = {
           status: notifResult.status,
           checked: true,
-          required: false,
+          required: false
         }
         appSetting.setup.notifications = notifResult.status === 'granted'
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.warn('[SetupPermissions] Failed to check notification permission:', error)
     }
 
     // Check admin privileges (Windows, optional)
     if (isWindows.value) {
       try {
-        const adminResult = await Promise.race([
+        const adminResult = (await Promise.race([
           touchChannel.send('system:permission:check', 'adminPrivileges' as any),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
-        ]) as any
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ])) as any
 
         if (adminResult && adminResult.status) {
           permissions.value.adminPrivileges = {
             status: adminResult.status,
             checked: true,
-            required: false,
+            required: false
           }
           appSetting.setup.adminPrivileges = adminResult.status === 'granted'
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.warn('[SetupPermissions] Failed to check admin privileges:', error)
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SetupPermissions] Failed to check permissions:', error)
     toast.error(t('setupPermissions.checkFailed'))
-  }
-  finally {
+  } finally {
     isLoading.value = false
   }
 }
@@ -189,8 +187,7 @@ async function requestPermission(type: string): Promise<void> {
     setTimeout(async () => {
       await checkAllPermissions()
     }, 2000)
-  }
-  catch (error) {
+  } catch (error) {
     console.error(`[SetupPermissions] Failed to request permission ${type}:`, error)
     toast.error(t('setupPermissions.requestFailed'))
   }
@@ -203,11 +200,10 @@ async function updateAutoStart(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     await touchChannel.send('tray:autostart:update', value)
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SetupPermissions] Failed to update autoStart:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -220,11 +216,10 @@ function updateShowTray(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.setup.showTray',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     touchChannel.send('tray:show:set', value)
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SetupPermissions] Failed to update showTray:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -254,7 +249,7 @@ async function handleContinue(): Promise<void> {
 
   step(
     {
-      comp: Done,
+      comp: Done
     },
     () => {
       // Save all settings before proceeding
@@ -266,9 +261,9 @@ async function handleContinue(): Promise<void> {
         adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
         hideDock: settings.value.hideDock ?? false,
         runAsAdmin: appSetting.setup.runAsAdmin ?? false,
-        customDesktop: appSetting.setup.customDesktop ?? false,
+        customDesktop: appSetting.setup.customDesktop ?? false
       }
-    },
+    }
   )
 }
 
@@ -305,7 +300,7 @@ function getPermissionIcon(type: string): string {
     fileAccess: 'folder-open',
     accessibility: 'keyboard',
     notifications: 'notification-3',
-    adminPrivileges: 'shield-user',
+    adminPrivileges: 'shield-user'
   }
   return icons[type] || 'settings'
 }
@@ -340,20 +335,31 @@ function getStatusIcon(status: string): string {
         :shrink="false"
       >
         <!-- File Access Permission (Required) -->
-        <div class="PermissionItem TBlockSelection fake-background index-fix" :class="{ required: permissions.fileAccess.required }">
+        <div
+          class="PermissionItem TBlockSelection fake-background index-fix"
+          :class="{ required: permissions.fileAccess.required }"
+        >
           <div class="PermissionItem-Content TBlockSelection-Content">
             <RemixIcon :name="getPermissionIcon('fileAccess')" style="line" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>
                 {{ t('setupPermissions.fileAccess') }}
-                <span v-if="permissions.fileAccess.required" class="required-badge">{{ t('setupPermissions.required') }}</span>
+                <span v-if="permissions.fileAccess.required" class="required-badge">{{
+                  t('setupPermissions.required')
+                }}</span>
               </h3>
               <p>{{ t('setupPermissions.fileAccessDesc') }}</p>
             </div>
           </div>
           <div class="PermissionItem-Action TBlockSelection-Func">
-            <div class="StatusBadge" :style="{ color: getStatusColor(permissions.fileAccess.status) }">
-              <RemixIcon :name="getStatusIcon(permissions.fileAccess.status)" :style="permissions.fileAccess.status === 'granted' ? 'fill' : 'line'" />
+            <div
+              class="StatusBadge"
+              :style="{ color: getStatusColor(permissions.fileAccess.status) }"
+            >
+              <RemixIcon
+                :name="getStatusIcon(permissions.fileAccess.status)"
+                :style="permissions.fileAccess.status === 'granted' ? 'fill' : 'line'"
+              />
               <span>{{ getStatusText(permissions.fileAccess.status) }}</span>
             </div>
             <el-button size="small" :loading="isLoading" @click="checkAllPermissions">
@@ -372,8 +378,14 @@ function getStatusIcon(status: string): string {
             </div>
           </div>
           <div class="PermissionItem-Action TBlockSelection-Func">
-            <div class="StatusBadge" :style="{ color: getStatusColor(permissions.accessibility.status) }">
-              <RemixIcon :name="getStatusIcon(permissions.accessibility.status)" :style="permissions.accessibility.status === 'granted' ? 'fill' : 'line'" />
+            <div
+              class="StatusBadge"
+              :style="{ color: getStatusColor(permissions.accessibility.status) }"
+            >
+              <RemixIcon
+                :name="getStatusIcon(permissions.accessibility.status)"
+                :style="permissions.accessibility.status === 'granted' ? 'fill' : 'line'"
+              />
               <span>{{ getStatusText(permissions.accessibility.status) }}</span>
             </div>
             <el-button
@@ -397,8 +409,14 @@ function getStatusIcon(status: string): string {
             </div>
           </div>
           <div class="PermissionItem-Action TBlockSelection-Func">
-            <div class="StatusBadge" :style="{ color: getStatusColor(permissions.adminPrivileges.status) }">
-              <RemixIcon :name="getStatusIcon(permissions.adminPrivileges.status)" :style="permissions.adminPrivileges.status === 'granted' ? 'fill' : 'line'" />
+            <div
+              class="StatusBadge"
+              :style="{ color: getStatusColor(permissions.adminPrivileges.status) }"
+            >
+              <RemixIcon
+                :name="getStatusIcon(permissions.adminPrivileges.status)"
+                :style="permissions.adminPrivileges.status === 'granted' ? 'fill' : 'line'"
+              />
               <span>{{ getStatusText(permissions.adminPrivileges.status) }}</span>
             </div>
             <el-button
@@ -422,8 +440,14 @@ function getStatusIcon(status: string): string {
             </div>
           </div>
           <div class="PermissionItem-Action TBlockSelection-Func">
-            <div class="StatusBadge" :style="{ color: getStatusColor(permissions.notifications.status) }">
-              <RemixIcon :name="getStatusIcon(permissions.notifications.status)" :style="permissions.notifications.status === 'granted' ? 'fill' : 'line'" />
+            <div
+              class="StatusBadge"
+              :style="{ color: getStatusColor(permissions.notifications.status) }"
+            >
+              <RemixIcon
+                :name="getStatusIcon(permissions.notifications.status)"
+                :style="permissions.notifications.status === 'granted' ? 'fill' : 'line'"
+              />
               <span>{{ getStatusText(permissions.notifications.status) }}</span>
             </div>
             <el-button
