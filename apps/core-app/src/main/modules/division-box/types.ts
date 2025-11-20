@@ -35,6 +35,20 @@ export enum DivisionBoxErrorCode {
 }
 
 /**
+ * Error messages for each error code
+ */
+export const ERROR_MESSAGES: Record<DivisionBoxErrorCode, string> = {
+  [DivisionBoxErrorCode.RESOURCE_ERROR]: 'Resource allocation or management failed',
+  [DivisionBoxErrorCode.STATE_ERROR]: 'Invalid state or state operation',
+  [DivisionBoxErrorCode.IPC_ERROR]: 'Inter-process communication failed',
+  [DivisionBoxErrorCode.PERMISSION_DENIED]: 'Permission denied for requested operation',
+  [DivisionBoxErrorCode.CONFIG_ERROR]: 'Invalid configuration provided',
+  [DivisionBoxErrorCode.INVALID_TRANSITION]: 'Invalid state transition attempted',
+  [DivisionBoxErrorCode.SESSION_NOT_FOUND]: 'Session not found',
+  [DivisionBoxErrorCode.LIMIT_EXCEEDED]: 'Resource limit exceeded'
+}
+
+/**
  * Custom error class for DivisionBox operations
  */
 export class DivisionBoxError extends Error {
@@ -47,6 +61,13 @@ export class DivisionBoxError extends Error {
     super(message)
     this.name = 'DivisionBoxError'
     Error.captureStackTrace(this, DivisionBoxError)
+  }
+  
+  /**
+   * Gets a user-friendly error message
+   */
+  getUserMessage(): string {
+    return ERROR_MESSAGES[this.code] || 'An unknown error occurred'
   }
 }
 
