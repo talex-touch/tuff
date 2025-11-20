@@ -34,6 +34,7 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
+import { getBoxItemManager } from '../box-tool/item-sdk'
 import { loadPluginFeatureContext, loadPluginFeatureContextFromContent, PluginFeature } from './plugin-feature'
 import { PluginViewLoader } from './view/plugin-view-loader'
 
@@ -288,6 +289,23 @@ export class TouchPlugin implements ITouchPlugin {
       console.warn(
         `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`,
       )
+    }
+  }
+
+  /**
+   * 为 item 自动注入插件源信息
+   * @param item - 原始 item
+   * @returns 注入源信息后的 item
+   */
+  private enrichItemWithSource(item: TuffItem): TuffItem {
+    return {
+      ...item,
+      source: {
+        type: 'plugin' as const,
+        id: this.name,
+        name: this.name,
+        version: this.version,
+      },
     }
   }
 
@@ -572,8 +590,65 @@ export class TouchPlugin implements ITouchPlugin {
       raw: appChannel,
     }
 
+    const boxItemManager = getBoxItemManager({ enableLogging: !app.isPackaged })
+
+    // BoxItem SDK 工具对象
+    const boxItems = {
+      /**
+       * 推送单个 item（创建或更新）
+       * @param item - 要推送的 item
+       */
+      push: (item: TuffItem) => {
+        const enriched = this.enrichItemWithSource(item)
+        boxItemManager.upsert(enriched)
+      },
+
+      /**
+       * 批量推送 items
+       * @param items - 要推送的 items 数组
+       */
+      pushItems: (items: TuffItem[]) => {
+        const enriched = items.map(item => this.enrichItemWithSource(item))
+        boxItemManager.batchUpsert(enriched)
+      },
+
+      /**
+       * 更新指定 item 的部分字段
+       * @param id - item id
+       * @param updates - 要更新的字段
+       */
+      update: (id: string, updates: Partial<TuffItem>) => {
+        boxItemManager.update(id, updates)
+      },
+
+      /**
+       * 删除指定 item
+       * @param id - item id
+       */
+      remove: (id: string) => {
+        boxItemManager.delete(id)
+      },
+
+      /**
+       * 清空该插件的所有 items
+       */
+      clear: () => {
+        boxItemManager.clear(this.name)
+      },
+
+      /**
+       * 获取该插件的所有 items
+       * @returns items 数组
+       */
+      getItems: (): TuffItem[] => {
+        return boxItemManager.getBySource(this.name)
+      },
+    }
+
+    // 向后兼容：保留旧的 searchManager
     const searchManager = {
       /**
+       * @deprecated 使用 boxItems.pushItems() 替代
        * Pushes search items directly to the CoreBox window
        * @param items - Array of search items to display
        */
@@ -668,14 +743,18 @@ export class TouchPlugin implements ITouchPlugin {
       },
 
       /**
+       * @deprecated 使用 boxItems.clear() 替代
        * Clears search items from the CoreBox window
        */
       clearItems: () => {
-        this.clearCoreBoxItems()
+        boxItems.clear()
       },
 
+      /**
+       * @deprecated 使用 boxItems.getItems() 替代
+       */
       getItems: (): TuffItem[] => {
-        return [...this._searchItems]
+        return boxItems.getItems()
       },
 
       updateQuery: (query: string) => {
@@ -915,6 +994,9 @@ export class TouchPlugin implements ITouchPlugin {
       storage,
       clipboard: clipboardUtil,
       channel: channelBridge,
+      // 新的 BoxItemSDK API
+      boxItems,
+      // 向后兼容：保留旧 API
       clearItems: searchManager.clearItems,
       pushItems: searchManager.pushItems,
       getItems: searchManager.getItems,
