@@ -185,7 +185,7 @@ export function initAiSdkService(): void {
 
   channel.regChannel(ChannelType.MAIN, 'intelligence:reload-config', async ({ reply }) => {
     try {
-      logInfo('Reloading config on demand')
+      // logInfo('Reloading config on demand') // Remove to reduce noise
       ensureAiConfigLoaded(true)
       reply(DataCode.SUCCESS, { ok: true })
     }

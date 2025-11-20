@@ -30,7 +30,7 @@ export class BoxItemManager {
       maxItems: options.maxItems ?? 10000,
     }
 
-    // this.log('BoxItemManager initialized') // Remove initialization log to reduce noise
+    this.log('BoxItemManager initialized')
   }
 
   // ==================== CRUD 操作 ====================
@@ -57,7 +57,9 @@ export class BoxItemManager {
 
     this.items.set(item.id, item)
     this.emitToRenderer<BoxItemCreateEvent>(BOX_ITEM_CHANNELS.CREATE, { item })
-    this.log(`Created item: ${item.id}`)
+    if (this.options.enableLogging) {
+      this.log(`Created item: ${item.id}`)
+    }
   }
 
   /**
@@ -81,7 +83,9 @@ export class BoxItemManager {
 
     this.items.set(id, updated)
     this.emitToRenderer<BoxItemUpdateEvent>(BOX_ITEM_CHANNELS.UPDATE, { id, updates })
-    this.log(`Updated item: ${id}`)
+    if (this.options.enableLogging) {
+      this.log(`Updated item: ${id}`)
+    }
   }
 
   /**
@@ -112,7 +116,9 @@ export class BoxItemManager {
     }
 
     this.emitToRenderer<BoxItemUpsertEvent>(BOX_ITEM_CHANNELS.UPSERT, { item: this.items.get(item.id)! })
-    this.log(`Upserted item: ${item.id} (${exists ? 'updated' : 'created'})`)
+    if (this.options.enableLogging) {
+      this.log(`Upserted item: ${item.id} (${exists ? 'updated' : 'created'})`)
+    }
   }
 
   /**
@@ -127,7 +133,9 @@ export class BoxItemManager {
 
     this.items.delete(id)
     this.emitToRenderer<BoxItemDeleteEvent>(BOX_ITEM_CHANNELS.DELETE, { id })
-    this.log(`Deleted item: ${id}`)
+    if (this.options.enableLogging) {
+      this.log(`Deleted item: ${id}`)
+    }
   }
 
   // ==================== 批量操作 ====================
@@ -172,7 +180,9 @@ export class BoxItemManager {
     this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_CHANNELS.BATCH_UPSERT, {
       items: validItems.map(item => this.items.get(item.id)!),
     })
-    this.log(`Batch upserted ${validItems.length} items`)
+    if (this.options.enableLogging) {
+      this.log(`Batch upserted ${validItems.length} items`)
+    }
   }
 
   /**
@@ -194,7 +204,9 @@ export class BoxItemManager {
     existingIds.forEach(id => this.items.delete(id))
 
     this.emitToRenderer<BoxItemBatchDeleteEvent>(BOX_ITEM_CHANNELS.BATCH_DELETE, { ids: existingIds })
-    this.log(`Batch deleted ${existingIds.length} items`)
+    if (this.options.enableLogging) {
+      this.log(`Batch deleted ${existingIds.length} items`)
+    }
   }
 
   // ==================== 查询操作 ====================
@@ -250,7 +262,9 @@ export class BoxItemManager {
       })
 
       toDelete.forEach(id => this.items.delete(id))
-      this.log(`Cleared ${toDelete.length} items from source: ${source}`)
+      if (this.options.enableLogging) {
+        this.log(`Cleared ${toDelete.length} items from source: ${source}`)
+      }
     }
     else {
       // 清空所有

@@ -124,7 +124,7 @@ export class ShortcutModule extends BaseModule {
       })
     }
 
-    // console.log(`[GlobalShortcon] Main shortcut registered: ${id} (${defaultAccelerator})`) // Remove to reduce noise
+    console.log(`[GlobalShortcon] Main shortcut registered: ${id} (${defaultAccelerator})`)
 
     this.reregisterAllShortcuts()
     return true
@@ -149,7 +149,7 @@ export class ShortcutModule extends BaseModule {
       return
     globalShortcut.unregisterAll()
     this.isEnabled = false
-    // console.log('[GlobalShortcon] All global shortcuts disabled.') // Remove to reduce noise
+    console.log('[GlobalShortcon] All global shortcuts disabled.')
   }
 
   /**

@@ -1,0 +1,232 @@
+# AGENTS.md
+
+This file provides guidance to Qoder (qoder.com) when working with code in this repository.
+
+## 常用开发命令
+
+### 核心应用开发
+- `pnpm core:dev` - 启动 Electron 应用开发服务器
+- `pnpm core:build` - 生产环境构建
+- `pnpm core:build:snapshot` - 构建快照版本
+- `pnpm core:build:release` - 构建发布版本
+
+### 平台特定构建
+- `pnpm core:build:snapshot:win` - Windows 快照构建
+- `pnpm core:build:snapshot:mac` - macOS 快照构建
+- `pnpm core:build:snapshot:linux` - Linux 快照构建
+
+### 类型检查（在 apps/core-app/ 目录下执行）
+- `npm run typecheck` - 完整类型检查（主进程 + 渲染进程）
+- `npm run typecheck:node` - 仅主进程类型检查
+- `npm run typecheck:web` - 仅渲染进程类型检查
+
+### 数据库操作（在 apps/core-app/ 目录下执行）
+- `npm run db:generate` - 生成 Drizzle ORM 迁移文件
+- `npm run db:migrate` - 执行数据库迁移
+
+### 代码质量
+- `pnpm lint` - 运行 ESLint 检查
+- `pnpm lint:fix` - 运行 ESLint 并自动修复
+- `pnpm utils:test` - 运行工具包测试
+
+### 文档
+- `pnpm docs:dev` - 启动文档开发服务器
+- `pnpm docs:build` - 构建文档
+
+### 发布
+- `pnpm utils:publish` - 发布 @talex-touch/utils 包到 npm
+
+## 架构概述
+
+### Monorepo 结构
+这是一个基于 pnpm workspace 的 monorepo 项目：
+- `apps/core-app/` - 主应用程序（Electron + Vue 3）
+- `packages/` - 共享工具包（@talex-touch/utils）
+- `plugins/` - 插件示例
+- `apps/docs/` - 文档站点
+
+### 技术栈
+- **运行时**: Electron 37.2.4+, Node.js 22.16.0+ (Volta 强制)
+- **前端**: Vue 3.5.18+, Vue Router 4.5.1, Pinia 3.0.3
+- **构建**: Electron-Vite 4.0.0, Vite 7.0.6, TypeScript 5.8.3
+- **UI**: Element Plus 2.10.4, UnoCSS 66.3.3, SASS 1.89.2
+- **数据**: Drizzle ORM 0.44.4 + LibSQL 0.15.10
+- **工具**: VueUse 13.6.0, Tesseract.js 5.0.6 (OCR), XTerm 5.3.0, log4js 6.9.1
+
+## 核心架构概念
+
+### 主进程架构 (apps/core-app/src/main/)
+
+**核心类**:
+- `TouchCore` - 应用入口点，初始化整个应用和模块加载流程
+- `TouchApp` - 核心应用类，管理窗口、模块和配置
+- `TouchWindow` - BrowserWindow 包装器，提供平台特定增强（macOS Vibrancy / Windows Mica）
+- `ModuleManager` - 模块生命周期管理器，支持热重载
+
+**模块加载顺序**（Electron ready 后按序启动）:
+1. DatabaseModule → 2. StorageModule → 3. ShortcutModule → 4. ExtensionLoaderModule → 5. CommonChannelModule → 6. PluginModule → 7. PluginLogModule → 8. CoreBoxModule → 9. TrayHolderModule → 10. AddonOpenerModule → 11. ClipboardModule → 12. TuffDashboardModule → 13. FileSystemWatcher → 14. FileProtocolModule → 15. TerminalModule
+
+**模块生命周期**:
+```typescript
+abstract class BaseModule {
+  created?(ctx: ModuleCreateContext)      // 可选：模块实例化
+  abstract onInit(ctx: ModuleInitContext) // 必需：初始化（目录已创建）
+  start?(ctx: ModuleStartContext)         // 可选：启动激活
+  stop?(ctx: ModuleStopContext)           // 可选：停止
+  abstract onDestroy(ctx: ModuleDestroyContext) // 必需：清理资源
+}
+```
+
+**关键模块**:
+- `CoreBox` (box-tool/core-box.ts) - 搜索/启动器主界面，全局快捷键 Cmd/Ctrl+E
+- `PluginManager` (plugin/plugin-provider.ts) - 插件加载、生命周期、功能注册
+- `Storage` (storage/) - 配置持久化，每插件 10MB 限制
+- `Channel System` (core/channel-core.ts) - 主进程/渲染进程/插件进程的 IPC 通信抽象
+- `Database` (database/) - Drizzle ORM + LibSQL 结构化数据存储
+
+### 渲染进程架构 (apps/core-app/src/renderer/)
+- Vue 3 + TypeScript + Pinia 状态管理
+- 组件：`src/components/`
+- 视图：`src/views/`
+- 状态管理：Pinia stores + composables (`src/modules/hooks/`)
+
+### 插件系统
+
+**核心特性**:
+- 插件从用户数据目录运行时加载（不打包到应用）
+- Manifest 驱动：`manifest.json` 定义功能、元数据、权限
+- 通过 CoreBox 搜索界面触发功能
+- 支持开发模式热重载（`dev.enable: true`）
+- 隔离存储（每插件 10MB 限制）
+
+**Clipboard 支持**:
+- 插件可声明接受的输入类型：`acceptedInputTypes: ["text", "image", "files", "html"]`
+- 系统自动检测剪贴板内容并通过 `query` 参数传递
+- 查询参数可以是字符串（向后兼容）或 `TuffQuery` 对象（包含 `inputs` 数组）
+
+**处理剪贴板数据示例**:
+```typescript
+import { TuffInputType } from '@talex-touch/utils'
+
+onFeatureTriggered(featureId, query, feature) {
+  if (typeof query === 'string') {
+    // 向后兼容：纯文本查询
+    return
+  }
+  
+  const textQuery = query.text
+  const inputs = query.inputs || []
+  
+  // 图片输入（data URL）
+  const imageInput = inputs.find(i => i.type === TuffInputType.Image)
+  
+  // 文件输入（JSON 字符串数组）
+  const filesInput = inputs.find(i => i.type === TuffInputType.Files)
+  
+  // HTML 输入（富文本）
+  const htmlInput = inputs.find(i => i.type === TuffInputType.Html)
+}
+```
+
+### Channel 通信系统
+
+**Channel 类型**:
+- `ChannelType.MAIN` - 主进程 ↔ 渲染进程
+- `ChannelType.PLUGIN` - 插件特定隔离通信
+
+**关键 API**:
+```typescript
+// 注册处理器
+regChannel(type: ChannelType, eventName: string, callback): () => void
+
+// 发送消息
+send(eventName: string, arg?: any): Promise<any>
+sendTo(window: BrowserWindow, eventName: string, arg?: any): Promise<any>
+sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any>
+```
+
+**实现细节**:
+- 基于 IPC 监听器：`@main-process-message` 和 `@plugin-process-message`
+- 插件通道使用加密密钥以增强安全性和隔离
+
+### 存储架构
+
+**应用配置**:
+- JSON 文件持久化：`<root>/config/`
+- IPC 通道：`storage:get`, `storage:save`, `storage:delete`
+
+**插件配置**:
+- 隔离存储：`<root>/config/plugins/`
+- 10MB 大小限制
+- 安全文件名清理（防止路径遍历攻击）
+- 广播更新系统，保持多窗口 UI 同步
+- IPC 通道：`plugin:storage:get-item`, `plugin:storage:set-item`
+
+### 事件系统
+
+**TouchEventBus** 应用级事件分发:
+```typescript
+enum TalexEvents {
+  APP_READY, APP_START, APP_SECONDARY_LAUNCH,
+  ALL_MODULES_LOADED, BEFORE_APP_QUIT, WILL_QUIT,
+  WINDOW_ALL_CLOSED, PLUGIN_STORAGE_UPDATED
+}
+```
+
+### 窗口管理
+
+- **Main Window**: 主界面，带 Vibrancy (macOS) 或 Mica (Windows) 效果
+- **CoreBox Windows**: 弹出搜索/启动器窗口，基于光标屏幕定位（多显示器支持）
+- **Plugin Windows**: 插件动态创建，注入插件 API
+- **TouchWindow**: 两阶段设置（创建 vs 渲染，`autoShow` 选项）
+
+### 共享工具包
+
+**`@talex-touch/utils`** (npm v1.0.23) 提供共享类型和工具:
+```
+packages/utils/
+├── base/              # 基础类型和枚举
+├── channel/           # IPC 通道接口
+├── core-box/          # CoreBox SDK（结果构建器、搜索格式）
+├── eventbus/          # 事件系统接口
+├── plugin/            # 插件 SDK 和接口
+│   ├── log/           # 插件日志
+│   ├── providers/     # 插件发现提供者
+│   └── sdk/           # 插件运行时 SDK
+├── renderer/          # 渲染进程 composables
+│   ├── hooks/         # Vue composables
+│   └── storage/       # 存储客户端
+└── types/             # TypeScript 定义
+```
+
+## 非显而易见的架构概念
+
+1. **模块目录模式**: 每个模块请求隔离目录用于持久化存储，无需知道根路径
+2. **插件隔离加密**: 插件通道使用加密密钥而非直接名称以增强安全性
+3. **存储更新广播**: 存储模块向所有窗口广播更新，保持多渲染器实例 UI 同步
+4. **安全插件配置命名**: 插件配置文件使用清理后的名称防止路径遍历攻击
+5. **屏幕感知窗口定位**: CoreBox 记住打开时的屏幕并相应重新定位
+6. **两阶段窗口设置**: TouchWindow 分离创建和渲染（`autoShow` 选项）
+7. **开发模式优雅关闭**: DevProcessManager 在开发时阻止应用退出事件，允许自定义清理
+8. **结构化日志命名空间**: Logger 提供彩色命名空间、时间戳和元数据以便调试
+
+## 关键文件位置
+
+- 主入口: apps/core-app/src/main/index.ts
+- 核心应用逻辑: apps/core-app/src/main/core/touch-core.ts
+- 模块管理器: apps/core-app/src/main/core/module-manager.ts
+- 插件系统: apps/core-app/src/main/modules/plugin/plugin-provider.ts
+- CoreBox 启动器: apps/core-app/src/main/modules/box-tool/core-box.ts
+- Channel 系统: apps/core-app/src/main/core/channel-core.ts
+- 存储模块: apps/core-app/src/main/modules/storage/storage-provider.ts
+- 渲染器入口: apps/core-app/src/renderer/src/main.ts
+- 共享工具: packages/utils/
+
+## 开发注意事项
+
+- Node.js 版本: 22.16.0+ (pnpm preinstall hook 和 Volta 强制)
+- 开发时支持热重载，通过 DevProcessManager 进行进程清理
+- 插件开发支持 manifest.json 或主文件变更时的实时重载
+- CoreBox 定位支持屏幕感知，适应多显示器设置
+- 数据库使用 Drizzle ORM + LibSQL 进行类型安全查询
+- 使用 log4js 进行结构化日志记录，带命名空间、时间戳和彩色输出
