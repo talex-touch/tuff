@@ -19,6 +19,7 @@ import {
   type StateChangeEvent
 } from '@talex-touch/utils'
 import { DivisionBoxManager } from './manager'
+import { flowTriggerManager, type FlowPayload } from './flow-trigger'
 
 /**
  * Validates DivisionBoxConfig format
@@ -185,6 +186,14 @@ export class DivisionBoxIPC {
       this.handleGetActiveSessions.bind(this)
     )
     this.unregisterFunctions.push(unregGetActiveSessions)
+
+    // Register division-box:flow-trigger handler
+    const unregFlowTrigger = this.channel.regChannel(
+      ChannelType.MAIN,
+      'division-box:flow-trigger',
+      this.handleFlowTrigger.bind(this)
+    )
+    this.unregisterFunctions.push(unregFlowTrigger)
 
     console.log('[DivisionBoxIPC] All IPC handlers registered')
   }
@@ -376,6 +385,42 @@ export class DivisionBoxIPC {
       data.reply(DataCode.SUCCESS, createSuccessResponse(sessions))
     } catch (error) {
       console.error('[DivisionBoxIPC] Error in handleGetActiveSessions:', error)
+      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
+    }
+  }
+
+  /**
+   * Handles division-box:flow-trigger IPC message
+   * 
+   * Handles an incoming Flow payload and opens a DivisionBox.
+   * 
+   * @param data - Channel data containing targetId and payload
+   */
+  private async handleFlowTrigger(data: StandardChannelData): Promise<void> {
+    try {
+      const { targetId, payload } = data.data as {
+        targetId: string
+        payload: FlowPayload
+      }
+
+      // Validate targetId
+      if (!targetId || typeof targetId !== 'string') {
+        data.reply(DataCode.ERROR, createErrorResponse('Invalid or missing targetId'))
+        return
+      }
+
+      // Validate payload
+      if (!payload || typeof payload !== 'object' || !payload.type || !payload.data) {
+        data.reply(DataCode.ERROR, createErrorResponse('Invalid or missing payload'))
+        return
+      }
+
+      // Handle the flow
+      const sessionId = await flowTriggerManager.handleFlow(targetId, payload)
+
+      data.reply(DataCode.SUCCESS, createSuccessResponse({ sessionId }))
+    } catch (error) {
+      console.error('[DivisionBoxIPC] Error in handleFlowTrigger:', error)
       data.reply(DataCode.ERROR, createErrorResponse(error as Error))
     }
   }

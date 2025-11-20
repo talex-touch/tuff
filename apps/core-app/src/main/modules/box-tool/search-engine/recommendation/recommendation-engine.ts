@@ -131,6 +131,7 @@ export class RecommendationEngine {
 
     // 维度 1: 全局高频项目 (Top 30)
     const frequentItems = await this.getFrequentItems(30)
+    console.log(`[RecommendationEngine] Frequent items: ${frequentItems.length}`)
     candidates.push(...frequentItems.map(item => ({ 
       ...item, 
       source: 'frequent' as const 
@@ -138,6 +139,7 @@ export class RecommendationEngine {
 
     // 维度 2: 最近使用 (Top 20)
     const recentItems = await this.getRecentItems(20)
+    console.log(`[RecommendationEngine] Recent items: ${recentItems.length}`)
     candidates.push(...recentItems.map(item => ({ 
       ...item, 
       source: 'recent' as const 
@@ -145,6 +147,7 @@ export class RecommendationEngine {
 
     // 维度 3: 时段热门 (Top 20)
     const timeBasedItems = await this.getTimeBasedTopItems(context.time, 20)
+    console.log(`[RecommendationEngine] Time-based items: ${timeBasedItems.length}`)
     candidates.push(...timeBasedItems.map(item => ({ 
       ...item, 
       source: 'time-based' as const 
@@ -152,13 +155,27 @@ export class RecommendationEngine {
 
     // 维度 4: 趋势项目 (Top 15)
     const trendingItems = await this.getTrendingItems(15)
+    console.log(`[RecommendationEngine] Trending items: ${trendingItems.length}`)
     candidates.push(...trendingItems.map(item => ({ 
       ...item, 
       source: 'trending' as const 
     })))
 
+    console.log(`[RecommendationEngine] Total candidates before dedup: ${candidates.length}`)
+    
     // 去重(同一 sourceId + itemId 只保留第一次出现)
-    return this.deduplicateCandidates(candidates)
+    const deduplicated = this.deduplicateCandidates(candidates)
+    
+    // 统计各 source 的分布
+    const sourceDistribution = new Map<string, number>()
+    for (const item of deduplicated) {
+      const key = item.sourceId
+      sourceDistribution.set(key, (sourceDistribution.get(key) || 0) + 1)
+    }
+    console.log(`[RecommendationEngine] After dedup: ${deduplicated.length} items, distribution:`, 
+      Object.fromEntries(sourceDistribution))
+    
+    return deduplicated
   }
 
   /**

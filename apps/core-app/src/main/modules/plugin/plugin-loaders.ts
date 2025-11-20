@@ -2,6 +2,7 @@ import type { IPluginDev, IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TuffIconType } from '@talex-touch/utils/types/icon'
 import path from 'node:path'
 import axios from 'axios'
+import type { ManifestDivisionBoxConfig } from '@talex-touch/utils'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
@@ -22,15 +23,7 @@ interface PluginManifest {
   dev?: IPluginDev
   platforms?: Record<string, boolean>
   features?: IPluginFeature[]
-  divisionBox?: {
-    defaultSize?: 'compact' | 'medium' | 'expanded'
-    keepAlive?: boolean
-    header?: {
-      show?: boolean
-      title?: string
-      icon?: string
-    }
-  }
+  divisionBox?: ManifestDivisionBoxConfig
 }
 
 /**

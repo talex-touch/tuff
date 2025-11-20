@@ -100,15 +100,7 @@ export class TouchPlugin implements ITouchPlugin {
   _searchTimestamp: number = 0
 
   /** DivisionBox configuration from manifest */
-  divisionBoxConfig?: {
-    defaultSize: 'compact' | 'medium' | 'expanded'
-    keepAlive: boolean
-    header: {
-      show: boolean
-      title?: string
-      icon?: string
-    }
-  }
+  divisionBoxConfig?: import('@talex-touch/utils').ManifestDivisionBoxConfig
 
   /**
    * Serialize plugin to JSON object
