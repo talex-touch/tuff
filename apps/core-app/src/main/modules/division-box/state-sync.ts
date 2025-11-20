@@ -6,8 +6,8 @@
  */
 
 import { BrowserWindow } from 'electron'
+import { DivisionBoxErrorCode, type StateChangeEvent } from '@talex-touch/utils'
 import { errorLogger } from './error-logger'
-import { DivisionBoxErrorCode, type StateChangeEvent } from './types'
 
 /**
  * Retry configuration

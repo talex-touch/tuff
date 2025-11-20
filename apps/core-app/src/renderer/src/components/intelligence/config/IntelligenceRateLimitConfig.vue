@@ -135,13 +135,12 @@ function emitUpdate() {
       default-icon="i-carbon-request-quote"
       active-icon="i-carbon-request-quote"
       :disabled="disabled"
-      clearable
       @blur="handleRequestsPerMinuteBlur"
     >
       <template #control="{ modelValue, update, focus, blur }">
         <div class="flex items-center gap-2">
           <input
-            :value="modelValue || ''"
+            :value="modelValue ?? ''"
             type="number"
             min="0"
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
@@ -167,13 +166,12 @@ function emitUpdate() {
       default-icon="i-carbon-data-1"
       active-icon="i-carbon-data-1"
       :disabled="disabled"
-      clearable
       @blur="handleTokensPerMinuteBlur"
     >
       <template #control="{ modelValue, update, focus, blur }">
         <div class="flex items-center gap-2">
           <input
-            :value="modelValue || ''"
+            :value="modelValue ?? ''"
             type="number"
             min="0"
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"

@@ -6,7 +6,7 @@
  */
 
 import { createLogger } from '../../utils/logger'
-import type { DivisionBoxError, DivisionBoxErrorCode } from './types'
+import type { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
 
 /**
  * Error log entry structure

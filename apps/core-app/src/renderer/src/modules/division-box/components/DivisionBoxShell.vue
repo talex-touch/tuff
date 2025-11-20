@@ -24,15 +24,20 @@
       class="division-box-content"
     >
       <!-- Loading indicator -->
-      <div v-if="isLoading" class="state-indicator loading-indicator">
-        <div class="loading-spinner" />
-        <span>Loading...</span>
-      </div>
+      <Transition name="fade">
+        <div v-if="showLoadingIndicator" class="state-indicator loading-indicator">
+          <div class="loading-spinner" />
+          <span>{{ getLoadingText() }}</span>
+        </div>
+      </Transition>
       
       <!-- State badge -->
-      <div v-if="stateBadge" class="state-badge" :class="`state-${stateBadge}`">
-        {{ stateBadge }}
-      </div>
+      <Transition name="fade">
+        <div v-if="stateBadge" class="state-badge" :class="`state-${stateBadge}`">
+          <span class="state-badge-icon">{{ getStateBadgeIcon(stateBadge) }}</span>
+          <span class="state-badge-text">{{ stateBadge }}</span>
+        </div>
+      </Transition>
       
       <!-- WebContentsView 将被挂载到这里 -->
     </div>
@@ -61,7 +66,7 @@ import DockHint from './DockHint.vue'
 import { useDrag } from '../composables/useDrag'
 import { useResize } from '../composables/useResize'
 import { useDivisionBoxStore } from '../store/division-box'
-import type { DivisionBoxSize } from '../types'
+import type { DivisionBoxSize } from '@talex-touch/utils'
 import { SIZE_PRESETS } from '../types'
 
 /**
@@ -100,7 +105,7 @@ const shellRef = ref<HTMLElement>()
 const contentRef = ref<HTMLElement>()
 const isVisible = ref(true)
 const isLoading = ref(false)
-const currentState = ref<string>('active')
+const currentState = ref<string>('prepare')
 
 // Store
 const store = useDivisionBoxStore()
@@ -143,6 +148,11 @@ const stateBadge = computed(() => {
   return currentState.value
 })
 
+const showLoadingIndicator = computed(() => {
+  // Show loading during prepare and attach states
+  return isLoading.value || currentState.value === 'prepare' || currentState.value === 'attach'
+})
+
 // Resize handles (8 directions)
 const resizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
 
@@ -169,31 +179,92 @@ const handlePin = () => {
   store.togglePin(props.sessionId)
 }
 
+const getLoadingText = () => {
+  switch (currentState.value) {
+    case 'prepare':
+      return 'Preparing...'
+    case 'attach':
+      return 'Attaching view...'
+    default:
+      return 'Loading...'
+  }
+}
+
+const getStateBadgeIcon = (state: string) => {
+  switch (state) {
+    case 'prepare':
+      return '⚙️'
+    case 'attach':
+      return '🔗'
+    case 'inactive':
+      return '💤'
+    case 'detach':
+      return '🔌'
+    case 'destroy':
+      return '🗑️'
+    default:
+      return '•'
+  }
+}
+
+// State change listener cleanup
+let stateChangeCleanup: (() => void) | null = null
+
 // Lifecycle
 onMounted(() => {
   // Component mounted, ready for WebContentsView attachment
   isLoading.value = true
   
-  // Listen for state changes
-  window.electron.ipcRenderer.on('division-box:state-changed', (_event: any, data: any) => {
+  // Listen for state changes from main process
+  const handleStateChange = (_event: any, data: any) => {
     if (data.sessionId === props.sessionId) {
+      const oldState = currentState.value
       currentState.value = data.newState
       
-      // Hide loading when active
+      console.log(`[DivisionBox ${props.sessionId}] State changed: ${oldState} -> ${data.newState}`)
+      
+      // Update loading state based on new state
       if (data.newState === 'active') {
         isLoading.value = false
+      } else if (data.newState === 'prepare' || data.newState === 'attach') {
+        isLoading.value = true
+      }
+      
+      // Hide component when destroyed
+      if (data.newState === 'destroy') {
+        isVisible.value = false
       }
     }
-  })
+  }
   
-  // Simulate initial load completion
-  setTimeout(() => {
-    isLoading.value = false
-  }, 500)
+  window.electron.ipcRenderer.on('division-box:state-changed', handleStateChange)
+  
+  // Store cleanup function
+  stateChangeCleanup = () => {
+    window.electron.ipcRenderer.removeListener('division-box:state-changed', handleStateChange)
+  }
+  
+  // Request initial state from main process
+  window.electron.ipcRenderer.invoke('division-box:get-state', props.sessionId)
+    .then((state: string | null) => {
+      if (state) {
+        currentState.value = state
+        if (state === 'active') {
+          isLoading.value = false
+        }
+      }
+    })
+    .catch((error: Error) => {
+      console.error(`[DivisionBox ${props.sessionId}] Failed to get initial state:`, error)
+    })
 })
 
 onUnmounted(() => {
-  // Cleanup if needed
+  // Cleanup state change listener
+  if (stateChangeCleanup) {
+    stateChangeCleanup()
+    stateChangeCleanup = null
+  }
 })
 </script>
 
@@ -245,11 +316,14 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   z-index: 100;
+  pointer-events: none;
 }
 
 .loading-indicator {
   color: var(--el-text-color-secondary);
   font-size: 14px;
+  font-weight: 500;
+  text-align: center;
 }
 
 .loading-spinner {
@@ -271,37 +345,69 @@ onUnmounted(() => {
   position: absolute;
   top: 8px;
   right: 8px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  
+  .state-badge-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+  
+  .state-badge-text {
+    line-height: 1;
+  }
   
   &.state-prepare {
-    background: var(--el-color-info-light-9);
+    background: rgba(144, 147, 153, 0.15);
     color: var(--el-color-info);
+    border: 1px solid rgba(144, 147, 153, 0.3);
   }
   
   &.state-attach {
-    background: var(--el-color-warning-light-9);
+    background: rgba(230, 162, 60, 0.15);
     color: var(--el-color-warning);
+    border: 1px solid rgba(230, 162, 60, 0.3);
   }
   
   &.state-inactive {
-    background: var(--el-color-info-light-9);
+    background: rgba(144, 147, 153, 0.15);
     color: var(--el-color-info);
+    border: 1px solid rgba(144, 147, 153, 0.3);
   }
   
   &.state-detach {
-    background: var(--el-color-warning-light-9);
+    background: rgba(230, 162, 60, 0.15);
     color: var(--el-color-warning);
+    border: 1px solid rgba(230, 162, 60, 0.3);
   }
   
   &.state-destroy {
-    background: var(--el-color-danger-light-9);
+    background: rgba(245, 108, 108, 0.15);
     color: var(--el-color-danger);
+    border: 1px solid rgba(245, 108, 108, 0.3);
   }
+}
+
+// Fade transition for state indicators
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 // Resize handles

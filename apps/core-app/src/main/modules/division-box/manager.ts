@@ -6,8 +6,6 @@
  */
 
 // app import removed - not currently used
-import { DivisionBoxSession } from './session'
-import { LRUCache } from './lru-cache'
 import {
   DivisionBoxError,
   DivisionBoxErrorCode,
@@ -15,7 +13,9 @@ import {
   type DivisionBoxConfig,
   type SessionInfo,
   type CloseOptions
-} from './types'
+} from '@talex-touch/utils'
+import { DivisionBoxSession } from './session'
+import { LRUCache } from './lru-cache'
 
 /**
  * Resource limits for DivisionBox system
@@ -165,7 +165,7 @@ export class DivisionBoxManager {
    */
   async createSession(
     config: DivisionBoxConfig,
-    stateChangeCallback?: (event: import('./types').StateChangeEvent) => void
+    stateChangeCallback?: (event: import('@talex-touch/utils').StateChangeEvent) => void
   ): Promise<DivisionBoxSession> {
     // Check global session limit
     if (this.sessions.size >= RESOURCE_LIMITS.MAX_ACTIVE_SESSIONS) {

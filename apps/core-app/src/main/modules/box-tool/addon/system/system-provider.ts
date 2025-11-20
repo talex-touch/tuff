@@ -10,8 +10,8 @@ import type { ProviderContext } from '../../search-engine/types'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import {
-  TuffFactory,
   TuffInputType,
+  TuffSearchResultBuilder,
 } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { dialog, shell } from 'electron'
@@ -263,7 +263,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
     const searchText = (query.text || '').toLowerCase().trim()
     if (!searchText) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const matchedActions = this.actions.filter((action) => {
@@ -296,7 +296,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         .build()
     })
 
-    return TuffFactory.createSearchResult(query).setItems(items).build()
+    return new TuffSearchResultBuilder(query).setItems(items).build()
   }
 
   async onExecute({ item }: IExecuteArgs): Promise<IProviderActivate | null> {

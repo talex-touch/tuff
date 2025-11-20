@@ -9,12 +9,12 @@
 
 import { defineStore } from 'pinia'
 import type {
-  DivisionBoxStoreState,
   SessionInfo,
   DivisionBoxConfig,
   CloseOptions,
   DivisionBoxIPCChannel
-} from '../types'
+} from '@talex-touch/utils'
+import type { DivisionBoxStoreState } from '../types'
 
 export const useDivisionBoxStore = defineStore('divisionBox', {
   state: (): DivisionBoxStoreState => ({

@@ -249,9 +249,9 @@ async function fetchAvailableModels(provider: any) {
       clearable
       @blur="handleBaseUrlBlur"
     >
-      <template #control="{ modelValue, update, focus, blur }">
+      <template #control="{ modelValue, update, focus }">
         <FlatInput
-          :model-value="modelValue"
+          :model-value="String(modelValue)"
           :placeholder="t('intelligence.config.api.baseUrlPlaceholder')"
           @update:model-value="update"
           @focus="focus"

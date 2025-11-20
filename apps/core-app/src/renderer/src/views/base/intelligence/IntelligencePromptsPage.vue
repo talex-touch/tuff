@@ -433,7 +433,7 @@ onBeforeUnmount(() => {
           v-model:selected-id="selectedPromptId"
           :items="promptListItems"
           :empty-text="t('settings.intelligence.promptListEmpty')"
-          @select="handleSelectPrompt"
+          @select="(id) => handleSelectPrompt(id as string)"
         />
       </template>
 

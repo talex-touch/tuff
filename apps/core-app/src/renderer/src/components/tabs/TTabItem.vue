@@ -1,4 +1,7 @@
-<script>
+<script name="TTabItem">
+export default {
+  name: 'TTabItem',
+}
 </script>
 
 <script setup>
@@ -29,10 +32,6 @@ const props = defineProps({
     default: false,
   },
 })
-
-export default {
-  name: 'TTabItem',
-}
 
 const active = ref(false)
 watchEffect(() => {

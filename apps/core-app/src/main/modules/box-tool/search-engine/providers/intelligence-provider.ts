@@ -11,8 +11,8 @@ import type {
 import type { ProviderContext } from '../types'
 import crypto from 'node:crypto'
 import {
-  TuffFactory,
   TuffInputType,
+  TuffSearchResultBuilder,
 } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
@@ -68,7 +68,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     const parsedPrompt = this.extractPrompt(normalized)
 
     if (!isAiActive && !parsedPrompt) {
-      return TuffFactory.createSearchResult(query).build()
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const prompt = isAiActive ? normalized : parsedPrompt?.prompt ?? ''
@@ -87,7 +87,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       items.push(this.createActionItem(prompt))
     }
 
-    return TuffFactory.createSearchResult(query).setItems(items).build()
+    return new TuffSearchResultBuilder(query).setItems(items).build()
   }
 
   async onExecute({ item }: IExecuteArgs): Promise<IProviderActivate | null> {

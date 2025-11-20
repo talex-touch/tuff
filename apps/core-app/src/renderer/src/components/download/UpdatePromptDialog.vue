@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DownloadStatus, GitHubRelease } from '@talex-touch/utils'
+import { DownloadStatus, type GitHubRelease } from '@talex-touch/utils'
 import {
   Calendar,
   Close,

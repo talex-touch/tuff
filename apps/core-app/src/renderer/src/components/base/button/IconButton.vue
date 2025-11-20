@@ -67,7 +67,7 @@ function handleClick() {
   >
     <div class="IconButton-Icon">
       <slot :hover="hover" :select="_select" :style="_select || hover ? 'fill' : 'line'">
-        <RemixIcon :name="icon" :style="_select || hover ? 'fill' : 'line'" />
+        <RemixIcon :name="icon ?? ''" :style="_select || hover ? 'fill' : 'line'" />
       </slot>
     </div>
   </div>

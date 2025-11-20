@@ -14,7 +14,7 @@ import {
   type DivisionBoxConfig,
   type SessionMeta,
   type StateChangeEvent
-} from './types'
+} from '@talex-touch/utils'
 
 /**
  * Type for state change listener callback

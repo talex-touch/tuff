@@ -1,6 +1,7 @@
-import type { ISearchProvider, TuffItem, TuffQuery } from '@talex-touch/utils'
+import type { IExecuteArgs, IProviderActivate, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
-import { TuffFactory, TuffInputType } from '@talex-touch/utils'
+import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { appScanner } from '../apps/app-scanner'
 
 /**
  * URL Provider
@@ -9,18 +10,19 @@ import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 class URLProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'url-provider'
   readonly name = 'URL Actions'
+  readonly type = 'system' as const
   readonly icon = '🔗'
   readonly description = 'Open URLs with installed browsers'
   readonly supportedInputTypes = [TuffInputType.Text]
 
   private readonly URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i
 
-  async onSearch(query: TuffQuery): Promise<TuffItem[]> {
+  async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const text = query.text.trim()
 
     // 检测是否为URL
     if (!this.isURL(text)) {
-      return []
+      return new TuffSearchResultBuilder(query).build()
     }
 
     const normalizedURL = this.normalizeURL(text)
@@ -29,44 +31,50 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     const browsers = await this.getInstalledBrowsers()
 
     if (browsers.length === 0) {
-      return []
+      return new TuffSearchResultBuilder(query).build()
     }
 
     // 为每个浏览器创建一个打开链接的action
     const items: TuffItem[] = browsers.map((browser, index) => {
-      return TuffFactory.createItem()
-        .setId(`${this.id}:${browser.id}:${normalizedURL}`)
+      return new TuffItemBuilder(`${this.id}:${browser.id}:${normalizedURL}`)
         .setTitle(`用 ${browser.name} 打开`)
         .setSubtitle(normalizedURL)
-        .setIcon(browser.icon || '🌐')
-        .setSource({ id: this.id, type: 'url_action', name: this.name })
+        .setIcon({ type: 'emoji', value: browser.icon || '🌐' })
+        .setSource(this.type, this.id, this.name)
         .setMeta({
-          url: normalizedURL,
-          browserBundleId: browser.bundleId,
-          browserPath: browser.path,
-          actionType: 'open_url',
+          web: {
+            url: normalizedURL,
+          },
+          app: {
+            path: browser.path,
+            // bundleId: browser.bundleId, // TuffMeta.app might not have bundleId, check definition if needed, but path is standard
+          },
+          raw: {
+            browserBundleId: browser.bundleId,
+            actionType: 'open_url',
+          },
         })
         .setScoring({
-          score: 1000 - index, // 按顺序降权,确保浏览器聚合在前
-          reasons: ['URL detected'],
+          final: 1000 - index, // 按顺序降权,确保浏览器聚合在前
+          match: 1000 - index,
+          base: 0,
+          recency: 0,
+          frequency: 0,
         })
         .build()
     })
 
-    return items
+    return new TuffSearchResultBuilder(query).setItems(items).build()
   }
 
-  async onExecute(params: { item: TuffItem }): Promise<void> {
-    const { item } = params
-    const { url, browserPath } = item.meta as {
-      url: string
-      browserBundleId: string
-      browserPath: string
-    }
+  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+    const { item } = args
+    const url = item.meta?.web?.url
+    const browserPath = item.meta?.app?.path
 
     if (!url || !browserPath) {
       console.error('[URLProvider] Missing URL or browser path')
-      return
+      return null
     }
 
     // 使用child_process打开URL
@@ -80,6 +88,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     catch (error) {
       console.error('[URLProvider] Failed to open URL:', error)
     }
+    return null
   }
 
   /**
@@ -138,11 +147,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
       { id: 'arc', name: 'Arc', bundleId: 'company.thebrowser.Browser', icon: '🌈' },
     ]
 
-    // 通过app-indexer获取已安装的应用
-    const { appIndexer } = await import('../apps/app-indexer')
-    await appIndexer.ensureIndexed()
-
-    const allApps = appIndexer.getAllApps()
+    const allApps = await appScanner.getApps()
     const installedBrowsers: Array<{
       id: string
       name: string
@@ -153,7 +158,8 @@ class URLProvider implements ISearchProvider<ProviderContext> {
 
     for (const browser of knownBrowsers) {
       // 检查该浏览器是否已安装
-      const app = allApps.find(a => a.bundleId === browser.bundleId)
+      // Assuming appScanner.getApps() returns objects with bundleId
+      const app = allApps.find((a: any) => a.bundleId === browser.bundleId)
       if (app) {
         installedBrowsers.push({
           id: browser.id,
