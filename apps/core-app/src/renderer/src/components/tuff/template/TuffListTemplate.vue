@@ -55,7 +55,7 @@ function setGroupCollapsed(groupId: string, collapsed: boolean): void {
   collapsedState[group.id] = collapsed
 }
 
-const variantTitleColorMap: Record<TuffListGroup<any>['badgeVariant'], string> = {
+const variantTitleColorMap: Record<NonNullable<TuffListGroup<any>['badgeVariant']>, string> = {
   info: 'var(--el-color-info)',
   success: 'var(--el-color-success)',
   warning: 'var(--el-color-warning)',

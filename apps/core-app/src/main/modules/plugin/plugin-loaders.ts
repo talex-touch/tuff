@@ -4,6 +4,7 @@ import path from 'node:path'
 import axios from 'axios'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
+import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
 
@@ -21,6 +22,15 @@ interface PluginManifest {
   dev?: IPluginDev
   platforms?: Record<string, boolean>
   features?: IPluginFeature[]
+  divisionBox?: {
+    defaultSize?: 'compact' | 'medium' | 'expanded'
+    keepAlive?: boolean
+    header?: {
+      show?: boolean
+      title?: string
+      icon?: string
+    }
+  }
 }
 
 /**
@@ -74,6 +84,14 @@ abstract class BasePluginLoader {
     this.touchPlugin.desc = pluginInfo.description || 'No description.'
     this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
     this.touchPlugin.platforms = pluginInfo.platforms || {}
+
+    // Parse and store DivisionBox configuration from manifest
+    if (pluginInfo.divisionBox) {
+      this.touchPlugin.divisionBoxConfig = parseManifestDivisionBoxConfig(
+        pluginInfo.divisionBox,
+        this.pluginName
+      )
+    }
 
     // README loading is handled by specific loader implementations (LocalPluginLoader or DevPluginLoader)
 

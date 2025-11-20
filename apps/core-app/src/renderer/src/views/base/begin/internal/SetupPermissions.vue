@@ -340,7 +340,7 @@ function getStatusIcon(status: string): string {
           :class="{ required: permissions.fileAccess.required }"
         >
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('fileAccess')" style="line" />
+            <RemixIcon :name="getPermissionIcon('fileAccess')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>
                 {{ t('setupPermissions.fileAccess') }}
@@ -371,7 +371,7 @@ function getStatusIcon(status: string): string {
         <!-- Accessibility Permission (macOS, Optional) -->
         <div v-if="isMacOS" class="PermissionItem TBlockSelection fake-background index-fix">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('accessibility')" style="line" />
+            <RemixIcon :name="getPermissionIcon('accessibility')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>{{ t('setupPermissions.accessibility') }}</h3>
               <p>{{ t('setupPermissions.accessibilityDesc') }}</p>
@@ -402,7 +402,7 @@ function getStatusIcon(status: string): string {
         <!-- Admin Privileges (Windows) -->
         <div v-if="isWindows" class="PermissionItem TBlockSelection fake-background index-fix">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('adminPrivileges')" style="line" />
+            <RemixIcon :name="getPermissionIcon('adminPrivileges')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>{{ t('setupPermissions.adminPrivileges') }}</h3>
               <p>{{ t('setupPermissions.adminPrivilegesDesc') }}</p>
@@ -433,7 +433,7 @@ function getStatusIcon(status: string): string {
         <!-- Notification Permission -->
         <div class="PermissionItem TBlockSelection fake-background index-fix">
           <div class="PermissionItem-Content TBlockSelection-Content">
-            <RemixIcon :name="getPermissionIcon('notifications')" style="line" />
+            <RemixIcon :name="getPermissionIcon('notifications')" :style="'line'" />
             <div class="PermissionItem-Label TBlockSelection-Label">
               <h3>{{ t('setupPermissions.notifications') }}</h3>
               <p>{{ t('setupPermissions.notificationsDesc') }}</p>

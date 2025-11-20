@@ -29,7 +29,7 @@ const promptDraft = reactive({
 })
 const autoSaveStatus = ref<'idle' | 'pending' | 'saving' | 'saved'>('idle')
 let isApplyingDraft = false
-let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+let autoSaveTimer: number | null = null
 
 const filterOptions = computed(() => [
   { value: 'all', label: t('settings.intelligence.promptFilterAll') },
@@ -382,17 +382,17 @@ function handleExportPrompts(): void {
   toast.success(t('settings.intelligence.promptExportSuccess', { count: data.length }))
 }
 
-function formatTimestamp(value?: number): string {
-  if (!value)
-    return t('settings.intelligence.promptTimestampUnknown')
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(value)
-}
+// function formatTimestamp(value?: number): string {
+//   if (!value)
+//     return t('settings.intelligence.promptTimestampUnknown')
+//   return new Intl.DateTimeFormat(undefined, {
+//     year: 'numeric',
+//     month: '2-digit',
+//     day: '2-digit',
+//     hour: '2-digit',
+//     minute: '2-digit',
+//   }).format(value)
+// }
 
 onBeforeUnmount(() => {
   flushPendingPromptChanges()
@@ -422,7 +422,7 @@ onBeforeUnmount(() => {
               type="button"
               role="tab"
               :class="{ 'is-active': filterMode === option.value }"
-              @click="filterMode = option.value"
+              @click="filterMode = option.value as FilterMode"
             >
               {{ option.label }}
             </button>

@@ -128,7 +128,8 @@ function emitUpdate() {
   <div class="aisdk-ratelimit-config">
     <!-- Requests Per Minute -->
     <TuffBlockInput
-      v-model="localRequestsPerMinute"
+      :model-value="localRequestsPerMinute ?? ''"
+      @update:model-value="val => localRequestsPerMinute.value = val !== '' ? Number(val) : undefined"
       :title="t('intelligence.config.rateLimit.requestsPerMinute')"
       :description="requestsPerMinuteError || t('intelligence.config.rateLimit.requestsPerMinuteHint')"
       :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
@@ -146,7 +147,7 @@ function emitUpdate() {
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="update(($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : undefined)"
+            @input="update(($event.target as HTMLInputElement).value !== '' ? Number(($event.target as HTMLInputElement).value) : '')"
             @focus="focus"
             @blur="blur(); handleRequestsPerMinuteBlur()"
           >
@@ -159,7 +160,8 @@ function emitUpdate() {
 
     <!-- Tokens Per Minute -->
     <TuffBlockInput
-      v-model="localTokensPerMinute"
+      :model-value="localTokensPerMinute ?? ''"
+      @update:model-value="val => localTokensPerMinute.value = val !== '' ? Number(val) : undefined"
       :title="t('intelligence.config.rateLimit.tokensPerMinute')"
       :description="tokensPerMinuteError || t('intelligence.config.rateLimit.tokensPerMinuteHint')"
       :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
@@ -177,7 +179,7 @@ function emitUpdate() {
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="update(($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : undefined)"
+            @input="update(($event.target as HTMLInputElement).value !== '' ? Number(($event.target as HTMLInputElement).value) : '')"
             @focus="focus"
             @blur="blur(); handleTokensPerMinuteBlur()"
           >

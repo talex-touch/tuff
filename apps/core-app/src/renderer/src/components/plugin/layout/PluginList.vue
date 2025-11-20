@@ -6,7 +6,7 @@ const props = defineProps<{
   plugins: ITouchPlugin[]
 }>()
 const emits = defineEmits(['select', 'add-plugin'])
-const target = ref(-1)
+const target = ref<ITouchPlugin | null>(null)
 const searchQuery = ref('')
 
 const runningPlugins = computed(() =>
@@ -59,12 +59,12 @@ watch(
       </div>
     </div>
 
-    <PluginListModule v-model="target" shrink="true" :plugins="filteredRunningPlugins">
+    <PluginListModule :model-value="target || undefined" @update:model-value="val => target = val" shrink="true" :plugins="filteredRunningPlugins">
       <template #name>
         Running
       </template>
     </PluginListModule>
-    <PluginListModule v-model="target" :plugins="filteredAllPlugins">
+    <PluginListModule :model-value="target || undefined" @update:model-value="val => target = val" :plugins="filteredAllPlugins">
       <template #name>
         All
       </template>

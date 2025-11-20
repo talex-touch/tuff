@@ -37,7 +37,7 @@ function onKeyDown(e) {
   >
     <span v-if="$slots.default" class="FlatInput-Prefix">
       <slot>
-        <RemixIcon :name="icon || ''" style="line" />
+        <RemixIcon :name="icon || ''" :style="'line'" />
       </slot>
     </span>
     <textarea v-if="area" v-model="value" resize="false" :placeholder="placeholder" relative />
