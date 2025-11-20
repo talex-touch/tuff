@@ -117,7 +117,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       return
     }
     this.providers.set(provider.id, provider)
-    console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`)
+    // console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`) // Remove to reduce noise
 
     if (provider.onLoad) {
       this.providersToLoad.push(provider)
@@ -142,9 +142,9 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         searchIndex: this.searchIndexService,
       })
       const duration = Date.now() - startTime
-      console.log(
-        `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`,
-      )
+      // console.log(
+      //   `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`,
+      // ) // Remove to reduce noise
     }
     catch (error) {
       const duration = Date.now() - startTime
@@ -163,7 +163,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     const provider = this.providers.get(providerId)
     provider?.onDeactivate?.()
     this.providers.delete(providerId)
-    console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`)
+    // console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`) // Remove to reduce noise
   }
 
   activateProviders(activations: IProviderActivate[] | null): void {
@@ -310,17 +310,18 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
 
     // 空查询检测: 返回推荐结果
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
-      console.log('[SearchEngineCore] Empty query detected, generating recommendations...')
+      console.log('[DEBUG_REC_INIT] Empty query detected, generating recommendations...')
+      // console.log('[SearchEngineCore] Empty query detected, generating recommendations...') // Remove to reduce noise
       
       if (this.recommendationEngine) {
         try {
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
-          console.log(`[SearchEngineCore] Recommendation result:`, {
-            itemsCount: recommendationResult.items.length,
-            duration: recommendationResult.duration,
-            fromCache: recommendationResult.fromCache,
-            items: recommendationResult.items.map(item => ({ id: item.id, title: item.title }))
-          })
+          // console.log(`[SearchEngineCore] Recommendation result:`, {
+          //   itemsCount: recommendationResult.items.length,
+          //   duration: recommendationResult.duration,
+          //   fromCache: recommendationResult.fromCache,
+          //   firstItems: recommendationResult.items.slice(0, 3).map(item => item.id)
+          // }) // Remove to reduce noise
           
           searchLogger.logSearchPhase(
             'Recommendation',
@@ -335,7 +336,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           
           result.sessionId = sessionId
           
-          console.log('[SearchEngineCore] Returning recommendation result with', result.items.length, 'items')
+          // console.log('[SearchEngineCore] Returning recommendation result with', result.items.length, 'items') // Remove to reduce noise
           return result
         }
         catch (error) {
@@ -349,7 +350,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         }
       }
       else {
-        console.warn('[SearchEngineCore] RecommendationEngine not initialized')
+        // console.warn('[SearchEngineCore] RecommendationEngine not initialized') // Remove to reduce noise
         // 返回空结果
         return TuffFactory.createSearchResult(query)
           .setItems([])
@@ -750,9 +751,9 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
   }
 
   maintain(): void {
-    console.log(
-      '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.',
-    )
+    // console.log(
+    //   '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.',
+    // ) // Remove to reduce noise
     // TODO: The logic for refreshing indexes or caches should be handled
     // within the providers themselves, possibly triggered by a separate scheduler.
   }
@@ -769,6 +770,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval
+    console.log('[DEBUG_REC_INIT] SearchEngineCore initializing RecommendationEngine')
     instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
 
@@ -780,7 +782,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
-      console.log('[SearchEngineCore] All modules loaded, starting provider initialization...')
+      // console.log('[SearchEngineCore] All modules loaded, starting provider initialization...') // Remove to reduce noise
       instance.providersToLoad.forEach(provider => instance.loadProvider(provider))
       instance.providersToLoad = []
 

@@ -43,6 +43,9 @@ onMounted(() => {
       <template #icon>
         <slot name="icon" />
       </template>
+      <template #navbar>
+        <slot name="navbar" />
+      </template>
     </DynamicLayout>
   </div>
 </template>

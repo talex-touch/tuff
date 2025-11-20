@@ -1,45 +1,8 @@
-<script lang="ts" name="SimpleNavBar" setup>
-/**
- * Simple Navigation Bar Component
- *
- * This component provides a navigation bar for the Simple layout.
- * It includes main navigation items and dynamically loaded plugin items.
- *
- * Features:
- * - Main navigation items (Dashboard, Market, Plugin, Application, Style, Setting)
- */
-import { useI18n } from 'vue-i18n'
-import TouchMenu from '~/components/menu/TouchMenu.vue'
-
-import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
-import { appSetting } from '~/modules/channel/storage'
-
-const { t } = useI18n()
-</script>
+<script lang="ts" name="SimpleNavBar" setup></script>
 
 <template>
   <ul class="SimpleNavBar-Home">
-    <TouchMenu>
-      <p class="SimpleNavBar-Title">
-        {{ t('flatNavBar.main') }}
-      </p>
-      <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />
-      <TouchMenuItem
-        route="/intelligence"
-        :name="t('flatNavBar.intelligence')"
-        icon="i-carbon-ibm-webmethods-integration-server"
-      />
-      <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
-      <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
-      <TouchMenuItem
-        v-if="appSetting.dashboard.enable"
-        route="/details"
-        :name="t('flatNavBar.details')"
-        icon="i-ri-dashboard-line"
-      />
-      <!-- <TouchMenuItem route="/application" name="Application" icon="i-ri-apps-2-line" /> -->
-      <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
-    </TouchMenu>
+    <slot />
   </ul>
 </template>
 

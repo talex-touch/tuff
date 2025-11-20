@@ -27,6 +27,9 @@ const { layoutComponent, isLoading, currentLayoutName } = useDynamicTuffLayout()
         <template #icon>
           <slot name="icon" />
         </template>
+        <template #navbar>
+          <slot name="navbar" />
+        </template>
       </component>
     </transition>
   </div>

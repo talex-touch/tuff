@@ -124,7 +124,7 @@ export class ShortcutModule extends BaseModule {
       })
     }
 
-    console.log(`[GlobalShortcon] Main shortcut registered: ${id} (${defaultAccelerator})`)
+    // console.log(`[GlobalShortcon] Main shortcut registered: ${id} (${defaultAccelerator})`) // Remove to reduce noise
 
     this.reregisterAllShortcuts()
     return true
@@ -149,7 +149,7 @@ export class ShortcutModule extends BaseModule {
       return
     globalShortcut.unregisterAll()
     this.isEnabled = false
-    console.log('[GlobalShortcon] All global shortcuts disabled.')
+    // console.log('[GlobalShortcon] All global shortcuts disabled.') // Remove to reduce noise
   }
 
   /**
@@ -160,7 +160,7 @@ export class ShortcutModule extends BaseModule {
       return
     this.isEnabled = true
     this.reregisterAllShortcuts()
-    console.log('[GlobalShortcon] All global shortcuts enabled.')
+    // console.log('[GlobalShortcon] All global shortcuts enabled.') // Remove to reduce noise
   }
 
   /**
@@ -170,7 +170,7 @@ export class ShortcutModule extends BaseModule {
     globalShortcut.unregisterAll()
 
     if (!this.isEnabled) {
-      console.log('[GlobalShortcon] Shortcuts are globally disabled, skipping registration.')
+      // console.log('[GlobalShortcon] Shortcuts are globally disabled, skipping registration.') // Remove to reduce noise
       return
     }
 
@@ -205,7 +205,7 @@ export class ShortcutModule extends BaseModule {
       }
     }
 
-    console.log(`[GlobalShortcon] Successfully registered ${successCount} shortcuts.`)
+    // console.log(`[GlobalShortcon] Successfully registered ${successCount} shortcuts.`) // Remove to reduce noise
   }
 
   /**

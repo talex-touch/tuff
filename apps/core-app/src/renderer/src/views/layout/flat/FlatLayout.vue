@@ -40,7 +40,9 @@ const isDisplayMode = computed(() => props.display)
     </div>
     <div class="AppLayout-Main">
       <div class="AppLayout-Aside fake-background">
-        <FlatNavBar />
+        <FlatNavBar>
+          <slot name="navbar" />
+        </FlatNavBar>
 
         <div class="AppLayout-IconFooter">
           <slot v-if="!isDisplayMode" name="icon" />

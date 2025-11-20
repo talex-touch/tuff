@@ -14,12 +14,14 @@ export class RecommendationEngine {
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
+    console.log('[DEBUG_REC_INIT] RecommendationEngine initialized')
   }
 
   /**
    * 生成推荐列表
    */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
+    console.log('[DEBUG_REC_INIT] Starting recommendation generation', options)
     const startTime = performance.now()
 
     const context = await this.contextProvider.getCurrentContext()
@@ -36,14 +38,46 @@ export class RecommendationEngine {
     }
 
     const candidates = await this.getCandidates(context, options)
-    console.log(`[RecommendationEngine] Generated ${candidates.length} candidates`)
+    console.log(`[DEBUG_REC_INIT] Generated ${candidates.length} candidates`)
+
+    // Fallback: if no candidates, use simple usage count
+    if (candidates.length === 0) {
+      console.log('[DEBUG_REC_INIT] No candidates found, using fallback strategy')
+      const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
+      console.log(`[DEBUG_REC_INIT] Fallback generated ${fallbackItems.length} items`)
+      
+      const duration = performance.now() - startTime
+      return {
+        items: fallbackItems,
+        context,
+        duration,
+        fromCache: false,
+      }
+    }
 
     const scored = await this.scoreAndRank(candidates, context)
+    console.log(`[DEBUG_REC_INIT] Scored ${scored.length} items`)
 
     const limit = options.limit || 10
     const diversified = this.applyDiversityFilter(scored, limit)
+    console.log(`[DEBUG_REC_INIT] After diversity filter: ${diversified.length} items`)
 
     const items = await this.itemRebuilder.rebuildItems(diversified)
+    console.log(`[DEBUG_REC_INIT] Rebuilt ${items.length} items`)
+
+    // Fallback check: if rebuilding failed, try fallback
+    if (items.length === 0 && diversified.length > 0) {
+      console.log('[DEBUG_REC_INIT] Rebuilding failed, using fallback')
+      const fallbackItems = await this.getFallbackRecommendations(limit)
+      
+      const duration = performance.now() - startTime
+      return {
+        items: fallbackItems,
+        context,
+        duration,
+        fromCache: false,
+      }
+    }
 
     await this.cacheRecommendations(context, items)
 
@@ -55,6 +89,34 @@ export class RecommendationEngine {
       context,
       duration,
       fromCache: false,
+    }
+  }
+
+  /**
+   * Fallback recommendation strategy: simple usage count ordering
+   */
+  private async getFallbackRecommendations(limit: number): Promise<TuffItem[]> {
+    try {
+      const frequentItems = await this.getFrequentItems(limit * 2) // Get more to ensure we have enough after rebuild
+      
+      if (frequentItems.length === 0) {
+        console.log('[DEBUG_REC_INIT] No frequent items found in database')
+        return []
+      }
+
+      const items = await this.itemRebuilder.rebuildItems(
+        frequentItems.map(item => ({
+          ...item,
+          source: 'frequent' as const,
+          score: item.usageStats.executeCount,
+        }))
+      )
+
+      return items.slice(0, limit)
+    }
+    catch (error) {
+      console.error('[RecommendationEngine] Fallback recommendation failed:', error)
+      return []
     }
   }
 
