@@ -1,7 +1,9 @@
+import type { StartupInfo } from '../shared/types/startup-info'
 import type { LoadingEvent, LoadingMode, PreloadAPI } from '@talex-touch/utils/preload'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { electronAPI } from '@electron-toolkit/preload'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import {
 
   PRELOAD_LOADING_CHANNEL,
@@ -9,7 +11,13 @@ import {
 } from '@talex-touch/utils/preload'
 import { isCoreBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
 // import appIconAsset from '../../public/favicon.ico?asset'
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
+
+declare global {
+  interface Window {
+    $startupInfo?: StartupInfo
+  }
+}
 import appLogoAsset from '../../public/logo.png?asset'
 
 function resolveAssetSource(asset: string): string {
@@ -46,8 +54,42 @@ function resolveAssetSource(asset: string): string {
   return asset
 }
 
+interface StartupHandshakePayload {
+  rendererStartTime: number
+}
+
+/**
+ * Request startup information from the main process before the renderer runs.
+ */
+function requestStartupInfo(): StartupInfo | undefined {
+  try {
+    const response = ipcRenderer.sendSync('@main-process-message', {
+      code: DataCode.SUCCESS,
+      data: { rendererStartTime: performance.timeOrigin } satisfies StartupHandshakePayload,
+      name: 'app-ready',
+      header: {
+        status: 'request',
+        type: ChannelType.MAIN,
+      },
+    })
+
+    if (response?.header?.status === 'reply' && response.data) {
+      return response.data as StartupInfo
+    }
+  }
+  catch (error) {
+    console.warn('[preload] Failed to request startup info', error)
+  }
+
+  return undefined
+}
+
 const appLogo = resolveAssetSource(appLogoAsset)
 // const appIcon = resolveAssetSource(appIconAsset)
+const startupInfo = requestStartupInfo()
+if (startupInfo && typeof startupInfo.appUpdate === 'undefined') {
+  startupInfo.appUpdate = false
+}
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 
@@ -64,6 +106,9 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
+    if (startupInfo) {
+      contextBridge.exposeInMainWorld('$startupInfo', startupInfo)
+    }
   }
   catch (error) {
     console.error(error)
@@ -74,6 +119,9 @@ else {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.api = api
+  if (startupInfo) {
+    window.$startupInfo = startupInfo
+  }
 }
 
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']): Promise<boolean> {

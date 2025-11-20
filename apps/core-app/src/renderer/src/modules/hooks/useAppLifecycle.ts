@@ -7,6 +7,10 @@ import {
 import { initStorageChannel, isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage/index'
+import {
+  shouldShowPlatformWarning,
+  showPlatformCompatibilityWarning,
+} from '~/modules/mention/platform-warning'
 import { useCoreBox } from './core-box'
 import { useApplicationUpgrade } from './useUpdate'
 
@@ -57,13 +61,17 @@ export function useAppLifecycle() {
    */
   async function entry(onReady: () => Promise<void>): Promise<void> {
     try {
-      preloadDebugStep('Requesting startup handshake...', 0.05)
-      const res: IStartupInfo = touchChannel.sendSync('app-ready', {
-        rendererStartTime: performance.timeOrigin,
-      })
-      preloadDebugStep('Startup handshake acknowledged', 0.05)
-
-      window.$startupInfo = res
+      if (!window.$startupInfo) {
+        preloadDebugStep('Requesting startup handshake...', 0.05)
+        const res: IStartupInfo = touchChannel.sendSync('app-ready', {
+          rendererStartTime: performance.timeOrigin,
+        })
+        preloadDebugStep('Startup handshake acknowledged', 0.05)
+        window.$startupInfo = res
+      }
+      else {
+        preloadDebugStep('Using cached startup metadata', 0.02)
+      }
 
       preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
       useTouchSDK({ channel: touchChannel })
@@ -88,6 +96,8 @@ export function useAppLifecycle() {
       preloadLog('Tuff is ready.')
       preloadRemoveOverlay()
 
+      await maybeShowPlatformWarning()
+
       await start()
     }
     catch (error) {
@@ -101,5 +111,26 @@ export function useAppLifecycle() {
     start,
     executeMainTask,
     executeCoreboxTask,
+  }
+}
+
+/**
+ * Display platform warning dialog if startup info requires it.
+ */
+async function maybeShowPlatformWarning(): Promise<void> {
+  if (!shouldShowPlatformWarning()) {
+    return
+  }
+
+  const warningMessage = window.$startupInfo?.platformWarning
+  if (!warningMessage) {
+    return
+  }
+
+  try {
+    await showPlatformCompatibilityWarning(warningMessage)
+  }
+  catch (error) {
+    console.warn('[useAppLifecycle] Failed to display platform warning', error)
   }
 }

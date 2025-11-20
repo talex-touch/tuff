@@ -4,6 +4,7 @@ import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import type { IArgMapperOptions } from '@talex-touch/utils/electron'
 import type { PreloadAPI } from '@talex-touch/utils/preload'
 import type { I18n } from 'vue-i18n'
+import type { StartupInfo } from '../../shared/types/startup-info'
 import type { ShortconApi } from './modules/channel/main/shortcon'
 import type { StorageManager } from './modules/channel/storage'
 import type { BaseNodeApi } from '~/modules/channel/main/node'
@@ -16,35 +17,7 @@ declare module '*.vue' {
 }
 
 declare global {
-  export interface IStartupInfo {
-    id: number
-    isDev: boolean
-    isPackaged: boolean
-    isRelease: boolean
-    path: {
-      appDataPath: string
-      appPath: string
-      configPath: string
-      exePath: string
-      homePath: string
-      modulePath: string
-      pluginPath: string
-      rootPath: string
-      tempPath: string
-      userDataPath: string
-    }
-    t: {
-      _s: number // Process creation time (from process.getCreationTime())
-      s: number // Renderer process start time (performance.timeOrigin)
-      e: number // Time when app-ready received
-      p: number // Process uptime
-      h: number[] // Process hrtime
-    }
-    platform: string
-    arch: string
-    version: string
-    appUpdate: boolean
-  }
+  export interface IStartupInfo extends StartupInfo {}
 
   export interface Window {
     $argMapper: IArgMapperOptions
