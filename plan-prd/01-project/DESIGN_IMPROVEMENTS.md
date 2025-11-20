@@ -12,230 +12,9 @@
 
 ---
 
-## 🔴 紧急改进 (必须立即处理)
-
-### 1. 插件加载死循环问题 🚨
-
-#### 问题描述
-**严重度**: 🔴 Critical
-**影响范围**: 所有插件开发者
-
-**现象**:
-- 两个目录 (`touch-translation`, `quicker-open`) 都有 `manifest.json`,但 `name` 字段相同
-- 同名检测在 `plugin-module.ts:333` 标记 `LOAD_FAILED`,但仍继续写入 manifest
-- 写入触发 `LocalPluginProvider` 文件监听 → 再次加载 → 死循环
-
-**根本原因**:
-```typescript
-// 当前逻辑问题
-if (this.plugins.has(manifest.name)) {
-  this.issues.add({ code: 'DUPLICATE_PLUGIN_NAME' })
-  // ❌ 问题: 没有 return,继续执行后续写入
-}
-
-// 继续执行 → 写入 manifest → 触发文件监听 → 循环
-await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
-```
-
-#### 改进方案 A (推荐): 早期阻断
-
-```typescript
-// 在加载前检查是否正在加载
-private loadingPlugins = new Set<string>()
-
-async function loadPlugin(path: string) {
-  const pluginId = path.split('/').pop()!
-
-  // 防止重复加载
-  if (this.loadingPlugins.has(pluginId)) {
-    logger.warn('插件正在加载中,跳过重复触发', { pluginId })
-    return
-  }
-
-  this.loadingPlugins.add(pluginId)
-
-  try {
-    const manifest = await this.parseManifest(path)
-
-    // 同名检测: 直接返回,不继续
-    if (this.plugins.has(manifest.name)) {
-      this.issues.add({
-        code: 'DUPLICATE_PLUGIN_NAME',
-        message: `插件名称 "${manifest.name}" 已存在`,
-        suggestion: `请修改 ${path}/manifest.json 中的 name 字段`,
-        timestamp: Date.now()
-      })
-      return // ✅ 阻断后续流程
-    }
-
-    // 后续正常加载...
-  } finally {
-    this.loadingPlugins.delete(pluginId)
-  }
-}
-```
-
-#### 改进方案 B: Dev 模式区分 manifest 来源
-
-```typescript
-// DevPluginLoader 应该明确区分
-class DevPluginLoader {
-  async load(config: DevConfig): Promise<Plugin> {
-    if (config.path) {
-      // 有路径: 使用本地 manifest,支持监听
-      return this.loadFromPath(config.path)
-    }
-    else {
-      // 无路径: 仅 manifest 文本,不支持热更新
-      throw new Error('Dev 模式无路径时无法热更新,请手动 reload')
-    }
-  }
-
-  private async loadFromPath(path: string): Promise<Plugin> {
-    // LocalPluginProvider 仅在此模式监听
-    // 且仅在 dev.source !== true 时监听
-  }
-}
-```
-
-#### 改进方案 C: Source 模式单独处理
-
-```typescript
-// Source 模式不应监听本地文件
-class LocalPluginProvider {
-  watch(path: string, plugin: Plugin) {
-    // 如果是 Source 模式,不监听
-    if (plugin.dev?.source === true) {
-      logger.info('Source 模式不监听本地文件变更')
-      return
-    }
-
-    // 正常监听逻辑
-    const watcher = chokidar.watch(path, { ... })
-    // ...
-  }
-}
-```
-
-#### 验收标准
-- [ ] 同名插件不再触发加载循环
-- [ ] Dev 模式 manifest 变更不自触发
-- [ ] Source 模式仅依赖心跳检测
-- [ ] 日志清晰显示 "正在加载中,跳过重复触发"
-
----
-
-### 2. 日志系统碎片化问题 📝
-
-#### 问题描述
-**严重度**: 🟡 High
-**影响范围**: 开发调试、生产环境性能
-
-**现状问题**:
-- 各模块直接使用 `console.log/debug/warn/error`
-- 生产环境无法关闭 debug 日志,影响性能
-- `SearchLogger` 有独立开关,但其他模块无法控制
-- 缺乏统一格式、颜色编码
-
-#### 改进方案: 统一 ModuleLogger 系统
-
-**核心设计**:
-```typescript
-// 1. 统一的 LogLevel
-enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  NONE = 4
-}
-
-// 2. ModuleLogger 类
-class ModuleLogger {
-  constructor(private module: string, private enabled: boolean, private level: LogLevel) {}
-
-  debug(message: string, ...args: any[]): void {
-    if (!this.enabled || this.level > LogLevel.DEBUG)
-      return
-    this._output('DEBUG', message, args)
-  }
-
-  // 性能优化: 早期退出,避免参数求值
-  private _output(level: string, message: string, args: any[]): void {
-    const timestamp = dayjs().format('HH:mm:ss.SSS')
-    const coloredLevel = chalk[levelColors[level]](level)
-    const coloredModule = chalk[this.color](this.module)
-    console.log(`[${timestamp}] [${coloredModule}] ${coloredLevel} ${message}`, ...args)
-  }
-}
-
-// 3. LoggerManager 单例
-class LoggerManager {
-  private loggers = new Map<string, ModuleLogger>()
-
-  getLogger(module: string, options?: Partial<ModuleLoggerOptions>): ModuleLogger {
-    if (!this.loggers.has(module)) {
-      this.loggers.set(module, new ModuleLogger(module, options))
-    }
-    return this.loggers.get(module)!
-  }
-
-  // 全局控制
-  setGlobalEnabled(enabled: boolean): void
-  setGlobalLevel(level: LogLevel): void
-}
-```
-
-**使用示例**:
-```typescript
-// 模块中使用
-import { loggerManager, LogLevel } from '@talex-touch/utils/common/logger'
-
-const logger = loggerManager.getLogger('search-engine', {
-  color: 'blue',
-  enabled: true,
-  level: LogLevel.DEBUG
-})
-
-logger.debug('开始搜索', { query: 'test' })
-logger.info('搜索完成', { results: 10, duration: 150 })
-```
-
-**配置持久化**:
-```json
-// app-setting.ini 中
-{
-  "logging": {
-    "enabled": true,
-    "globalLevel": "debug",
-    "modules": {
-      "search-engine": { "enabled": true, "level": "debug" },
-      "file-provider": { "enabled": false, "level": "debug" },
-      "plugin-system": { "enabled": true, "level": "info" }
-    }
-  }
-}
-```
-
-#### 优势
-- ✅ 统一接口,易于维护
-- ✅ 按模块独立控制
-- ✅ 性能优化 (禁用时零开销)
-- ✅ 持久化配置
-- ✅ 类型安全
-
-#### 迁移策略
-1. Phase 1: 实现核心 Logger 系统
-2. Phase 2: 迁移 SearchEngine 模块 (保留 SearchLogger 作为包装器)
-3. Phase 3: 迁移 Provider 模块
-4. Phase 4: 迁移核心模块
-5. Phase 5: 提供 UI 配置界面
-
----
-
 ## 🟡 重要改进 (近期实施)
 
-### 3. 托盘系统功能薄弱 🖱️
+### 1. 托盘系统功能薄弱 🖱️
 
 #### 问题描述
 **严重度**: 🟡 Medium
@@ -287,170 +66,9 @@ mainWindow.on('close', (event) => {
 // - 退出应用
 ```
 
-**托盘图标点击行为**:
-```typescript
-tray.on('click', () => {
-  if (mainWindow.isVisible()) {
-    if (mainWindow.isFocused()) {
-      mainWindow.hide() // 已聚焦 → 隐藏
-    }
-    else {
-      mainWindow.focus() // 可见但未聚焦 → 聚焦
-    }
-  }
-  else {
-    mainWindow.show()
-    mainWindow.focus() // 隐藏 → 显示并聚焦
-  }
-})
-```
-
-#### 优势
-- ✅ 用户体验大幅提升
-- ✅ 快捷访问常用功能
-- ✅ 本地资源加载快
-- ✅ 符合用户习惯 (最小化到托盘)
-
 ---
 
-### 4. 更新系统过于简单 🔄
-
-#### 问题描述
-**严重度**: 🟡 Medium
-**影响范围**: 国内用户、用户体验
-
-**现状问题**:
-- 完全依赖 GitHub API,国内用户无法使用
-- 仅跳转链接,无应用内下载
-- 单一更新源,无扩展性
-- 错误处理不足
-
-#### 改进方案: OOP 策略模式 + 多更新源
-
-**策略模式抽象**:
-```typescript
-// 抽象基类
-abstract class UpdateProvider {
-  abstract readonly name: string
-  abstract readonly type: UpdateProviderType
-
-  abstract fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease>
-  abstract getDownloadAssets(release: GitHubRelease): DownloadAsset[]
-
-  async healthCheck?(): Promise<boolean>
-}
-
-// 具体实现
-class GithubUpdateProvider extends UpdateProvider {
-  readonly name = 'GitHub Releases'
-  readonly type = UpdateProviderType.GITHUB
-
-  async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
-    const url = 'https://api.github.com/repos/talex-touch/tuff/releases'
-    const response = await axios.get(url, { timeout: 8000 })
-    // 过滤并返回最新版本
-  }
-
-  async healthCheck(): Promise<boolean> {
-    try {
-      await axios.get('https://api.github.com', { timeout: 5000 })
-      return true
-    }
-    catch {
-      return false
-    }
-  }
-}
-
-// 官方源 (预留接口)
-class OfficialUpdateProvider extends UpdateProvider {
-  readonly name = 'Official Website'
-  readonly type = UpdateProviderType.OFFICIAL
-
-  async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
-    // TODO: 等待官方服务端实现
-    throw new Error('Official update server is not ready yet')
-  }
-}
-
-// 自定义源
-class CustomUpdateProvider extends UpdateProvider {
-  constructor(private config: CustomUpdateConfig) {}
-
-  async fetchLatestRelease(channel: AppPreviewChannel): Promise<GitHubRelease> {
-    // 使用自定义 API (需兼容 GitHub API 格式)
-  }
-}
-```
-
-**管理器**:
-```typescript
-class UpdateProviderManager {
-  private providers: UpdateProvider[] = []
-  private activeProvider: UpdateProvider | null = null
-
-  registerProvider(provider: UpdateProvider): void {
-    this.providers.push(provider)
-  }
-
-  selectProvider(config: UpdateSourceConfig): UpdateProvider | null {
-    // 根据用户配置选择 Provider
-  }
-
-  async checkUpdate(): Promise<GitHubRelease | null> {
-    const provider = this.activeProvider
-    if (!provider)
-      return null
-
-    try {
-      const release = await provider.fetchLatestRelease(currentChannel)
-      return release
-    }
-    catch (error) {
-      if (error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT') {
-        // 显示网络错误提示
-        showNetworkErrorDialog()
-        return null
-      }
-      throw error
-    }
-  }
-}
-```
-
-**集成下载中心**:
-```typescript
-// 更新弹窗新增按钮
-<el-button @click="handleDownload">
-  {{ t('update.download') }}
-</el-button>
-
-async function handleDownload() {
-  const assets = updateProvider.getDownloadAssets(latestRelease)
-  const asset = selectAssetForPlatform(assets, process.platform, process.arch)
-
-  // 通过下载中心下载
-  await downloadCenter.addTask({
-    url: asset.url,
-    savePath: path.join(app.getPath('downloads'), asset.name),
-    priority: Priority.P0, // 最高优先级
-    checksum: asset.checksum
-  })
-
-  // 跳转到下载中心
-  router.push('/downloads')
-}
-```
-
-#### 优势
-- ✅ 多更新源支持 (GitHub/官方/自定义)
-- ✅ 应用内下载
-- ✅ 降级策略与错误处理
-- ✅ 扩展性强
-
----
-
-### 5. 废弃 extract-icon API ♻️
+### 2. 废弃 extract-icon API ♻️
 
 #### 问题描述
 **严重度**: 🟢 Low (但影响性能)
@@ -499,17 +117,11 @@ const iconUrl = computed(() => `tfile://${filePath}`)
 | 浏览器缓存 | 不支持 | 自动支持 |
 | 加载延迟 | 50-100ms | <10ms |
 
-#### 优势
-- ✅ 代码简化 70%+
-- ✅ 性能提升 70%+
-- ✅ 符合 Web 标准
-- ✅ 向后兼容
-
 ---
 
 ## 🟢 增强改进 (中长期规划)
 
-### 6. 能力抽象碎片化 🧩
+### 3. 能力抽象碎片化 🧩
 
 #### 问题描述
 **严重度**: 🟢 Low (但影响长期架构)
@@ -577,15 +189,11 @@ await sdk.platform.invoke('system.notification.show', 'notify', {
 })
 ```
 
-#### 优势
-- ✅ 统一能力注册与调用
-- ✅ 权限管理与审计
-- ✅ 能力版本化
-- ✅ 可观测性
+**参考**: `plan-prd/02-architecture/platform-capabilities-prd.md`
 
 ---
 
-### 7. AI 能力接入混乱 🤖
+### 4. AI 能力接入混乱 🤖
 
 #### 问题描述
 **严重度**: 🟢 Low (规划阶段)
@@ -631,26 +239,7 @@ await ai.embedding.create({ text: 'Hello' })
 await ai.tts.synthesize({ text: 'Hello', voice: 'alloy' })
 ```
 
-**策略路由**:
-```typescript
-class StrategyManager {
-  selectProvider(capabilityId: string, options: InvokeOptions): Provider {
-    // 根据用户设置 + 成本 + 延迟 + 质量选择
-    if (options.modelPreference) {
-      return this.getPreferredProvider(options.modelPreference)
-    }
-
-    // 默认策略: 优先 gpt-4o-mini, 回退 deepseek-chat
-    return this.getDefaultProvider(capabilityId)
-  }
-}
-```
-
-#### 优势
-- ✅ 统一接口,简化接入
-- ✅ 多模型策略路由
-- ✅ 成本控制与统计
-- ✅ 可扩展性强
+**参考**: `plan-prd/02-architecture/ai-power-generic-api-prd.md`
 
 ---
 
@@ -658,10 +247,7 @@ class StrategyManager {
 
 | 改进项 | 严重度 | 工期 | 影响范围 | 优先级 |
 |--------|--------|------|----------|--------|
-| 插件加载死循环 | 🔴 Critical | 3-5 天 | 所有插件开发者 | P0 |
-| 日志系统碎片化 | 🟡 High | 5-7 天 | 开发调试、生产性能 | P0 |
 | 托盘系统薄弱 | 🟡 Medium | 5-7 天 | 用户体验 | P1 |
-| 更新系统简单 | 🟡 Medium | 7-10 天 | 国内用户 | P1 |
 | 废弃 extract-icon | 🟢 Low | 1-2 天 | 性能优化 | P1 |
 | 能力抽象碎片化 | 🟢 Low | 20-30 天 | 插件开发体验 | P3 |
 | AI 能力混乱 | 🟢 Low | 15-20 天 | AI 功能扩展 | P3 |
@@ -670,42 +256,34 @@ class StrategyManager {
 
 ## 🎯 实施建议
 
-### 立即行动 (Week 1-2)
-1. **插件加载死循环** - 核心团队 2 人,全力修复
-2. **日志系统 Phase 1-2** - 核心团队 1 人,并行实施
-
-### 近期规划 (Week 3-6)
-3. **托盘系统优化** - UI 团队 1 人
-4. **更新系统重构** - 核心团队 1 人
-5. **废弃 extract-icon** - 核心团队 0.5 人
+### 近期规划 (Week 1-4)
+1. **托盘系统优化** - UI 团队 1 人
+2. **废弃 extract-icon** - 核心团队 0.5 人
 
 ### 中长期规划 (Q1 2026)
-6. **平台能力体系** - 架构团队 2-3 人
-7. **AI 能力接口** - AI 团队 1-2 人
+3. **平台能力体系** - 架构团队 2-3 人
+4. **AI 能力接口** - AI 团队 1-2 人
 
 ---
 
 ## 📝 附录
 
-### A. 技术债务清单
+### 技术债务清单
 
 | 债务项 | 严重度 | 建议处理时间 |
 |--------|--------|-------------|
 | 缺少自动化测试 | 🟡 High | Week 5-8 |
 | API 文档不完整 | 🟢 Low | Week 8-12 |
 | 性能监控缺失 | 🟢 Low | Q1 2026 |
-| 内存泄漏检测手动 | 🟡 Medium | Week 10-12 |
 
-### B. 参考资料
+### 参考资料
 
-- `PROJECT_ANALYSIS.md` - 系统性分析报告
 - `CHANGES.md` - 已完成功能清单
 - `CALENDAR-PRD.md` - 开发排期计划
 - `plan-prd/*.md` - 各项 PRD 文档
 
 ---
 
-**文档版本**: v1.0
-**生成时间**: 2025-10-30
+**文档版本**: v2.0 (精简版)
+**生成时间**: 2025-11-20
 **负责人**: Architecture Team
-**下次更新**: 根据实施进度
