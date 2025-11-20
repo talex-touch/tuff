@@ -323,7 +323,7 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
           // 目前返回空结果，待实现完整的item重建逻辑
           
           return TuffFactory.createSearchResult(query)
-            .setItems([])
+            .setItems(recommendationResult.items)
             .setDuration(recommendationResult.duration)
             .setSources([])
             .build()
@@ -835,7 +835,6 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
       }))
     })
 
-    // 推荐系统IPC通道
     channel.regChannel(ChannelType.MAIN, 'core-box:get-recommendations', async ({ data }) => {
       if (!instance.recommendationEngine) {
         return { items: [], duration: 0, fromCache: false }
@@ -848,16 +847,8 @@ implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents> {
         }
         const result = await instance.recommendationEngine.recommend(options)
         
-        // TODO: 将 ScoredItem 转换为完整的 TuffItem
-        // 目前返回基本信息
         return {
-          items: result.items.map(item => ({
-            sourceId: item.sourceId,
-            itemId: item.itemId,
-            sourceType: item.sourceType,
-            score: item.score,
-            source: item.source,
-          })),
+          items: result.items,
           duration: result.duration,
           fromCache: result.fromCache,
         }

@@ -88,7 +88,7 @@ export class ItemRebuilder {
         return []
 
       const { mapFileToTuffItem } = await import('../../addon/files/utils')
-      return files.map(file => mapFileToTuffItem(file, {}, undefined, undefined))
+      return files.map(file => mapFileToTuffItem(file, {}, 'file-provider', 'File Provider'))
     }
     catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild file items:', error)
@@ -108,14 +108,13 @@ export class ItemRebuilder {
         if (!scored)
           return null
         
-        if (!item.meta)
-          item.meta = {}
-        
-        (item.meta as any).recommendation = {
+        const meta: any = item.meta || {}
+        meta.recommendation = {
           score: scored.score,
           source: scored.source,
           reason: this.getReasonLabel(scored),
         }
+        item.meta = meta
         
         return item
       })
