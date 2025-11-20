@@ -485,21 +485,29 @@ export class ClipboardModule extends BaseModule {
     await this.db.insert(clipboardHistoryMeta).values(values)
   }
 
-  public async saveVirtualEntry({
+  /**
+   * Save custom (non-clipboard) entry to clipboard history
+   * Used by AI chat, preview, and other features
+   * @param category - Entry category: 'ai-chat' | 'preview' | 'custom'
+   */
+  public async saveCustomEntry({
     content,
     rawContent,
-    source = 'virtual',
+    category = 'custom',
     meta,
   }: {
     content: string
     rawContent?: string | null
-    source?: string
+    category?: 'ai-chat' | 'preview' | 'custom'
     meta?: Record<string, unknown>
   }): Promise<IClipboardItem | null> {
     if (!this.db)
       return null
 
-    const metaEntries: ClipboardMetaEntry[] = [{ key: 'source', value: source }]
+    const metaEntries: ClipboardMetaEntry[] = [
+      { key: 'source', value: 'custom' },
+      { key: 'category', value: category }
+    ]
     if (meta) {
       for (const [key, value] of Object.entries(meta)) {
         metaEntries.push({ key, value })
@@ -784,75 +792,73 @@ export class ClipboardModule extends BaseModule {
         }
       })
 
-      // 通用查询接口：按 source 筛选 clipboard 记录
-      touchChannel.regChannel(type, 'clipboard:query-by-source', async ({ data, reply }) => {
+      // 统一查询接口：支持按 source、category 或其他 meta 筛选
+      touchChannel.regChannel(type, 'clipboard:query', async ({ data, reply }) => {
         if (!this.db) {
           reply(DataCode.ERROR, null)
           return
         }
 
-        const { source, limit: requestedLimit } = data ?? {}
-        if (!source) {
-          reply(DataCode.ERROR, { error: 'source parameter is required' })
+        const { source, category, metaFilter, limit: requestedLimit } = data ?? {}
+        const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
+
+        // 如果没有任何筛选条件，返回最近的记录
+        if (!source && !category && !metaFilter) {
+          const rows = await this.db
+            .select()
+            .from(clipboardHistory)
+            .orderBy(desc(clipboardHistory.timestamp))
+            .limit(limit)
+          const history = await this.hydrateWithMeta(rows)
+          reply(DataCode.SUCCESS, history)
           return
         }
 
-        const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
-
-        const idRows = await this.db
-          .select({ clipboardId: clipboardHistoryMeta.clipboardId })
-          .from(clipboardHistoryMeta)
-          .where(
+        // 构建 WHERE 条件
+        const conditions: ReturnType<typeof and>[] = []
+        
+        if (source) {
+          conditions.push(
             and(
               eq(clipboardHistoryMeta.key, 'source'),
-              eq(clipboardHistoryMeta.value, JSON.stringify(source)),
-            ),
+              eq(clipboardHistoryMeta.value, JSON.stringify('custom'))
+            )!
           )
-          .orderBy(desc(clipboardHistoryMeta.createdAt))
-          .limit(limit)
+        }
+        
+        if (category) {
+          conditions.push(
+            and(
+              eq(clipboardHistoryMeta.key, 'category'),
+              eq(clipboardHistoryMeta.value, JSON.stringify(category))
+            )!
+          )
+        }
+        
+        if (metaFilter) {
+          const { key, value } = metaFilter
+          if (key) {
+            const condition = value !== undefined
+              ? and(
+                  eq(clipboardHistoryMeta.key, key),
+                  eq(clipboardHistoryMeta.value, JSON.stringify(value))
+                )
+              : and(eq(clipboardHistoryMeta.key, key))
+            if (condition) conditions.push(condition)
+          }
+        }
 
-        const ids = idRows.map(row => row.clipboardId).filter((id): id is number => !!id)
-        if (ids.length === 0) {
+        if (conditions.length === 0) {
           reply(DataCode.SUCCESS, [])
           return
         }
 
-        const rows = await this.db
-          .select()
-          .from(clipboardHistory)
-          .where(inArray(clipboardHistory.id, ids))
-          .orderBy(desc(clipboardHistory.timestamp))
-
-        const history = await this.hydrateWithMeta(rows)
-        reply(DataCode.SUCCESS, history)
-      })
-
-      // 通用查询接口：按 meta key-value 筛选 clipboard 记录
-      touchChannel.regChannel(type, 'clipboard:query-by-meta', async ({ data, reply }) => {
-        if (!this.db) {
-          reply(DataCode.ERROR, null)
-          return
-        }
-
-        const { key, value, limit: requestedLimit } = data ?? {}
-        if (!key) {
-          reply(DataCode.ERROR, { error: 'key parameter is required' })
-          return
-        }
-
-        const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
-
-        const whereConditions = value !== undefined
-          ? and(
-              eq(clipboardHistoryMeta.key, key),
-              eq(clipboardHistoryMeta.value, JSON.stringify(value)),
-            )
-          : eq(clipboardHistoryMeta.key, key)
-
+        // 查询匹配的 clipboard IDs
+        const { or } = await import('drizzle-orm')
         const idRows = await this.db
           .select({ clipboardId: clipboardHistoryMeta.clipboardId })
           .from(clipboardHistoryMeta)
-          .where(whereConditions)
+          .where(conditions.length === 1 ? conditions[0] : or(...conditions))
           .orderBy(desc(clipboardHistoryMeta.createdAt))
           .limit(limit)
 

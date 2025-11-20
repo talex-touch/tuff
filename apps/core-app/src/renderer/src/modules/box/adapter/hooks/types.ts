@@ -37,14 +37,9 @@ export interface IClipboardOptions {
  * Clipboard hook return interface
  */
 export interface IClipboardHook {
-  /** Reactive clipboard state */
   clipboardOptions: IClipboardOptions
-  /** Manually refresh clipboard from system */
   handlePaste: (options?: { overrideDismissed?: boolean }) => void
-  /** Auto-paste logic (switch to FILE mode for files) */
-  handleAutoPaste: () => void
-  /** Apply clipboard item to active application */
+  handleAutoFill: () => void
   applyToActiveApp: (item?: IClipboardItem) => Promise<boolean>
-  /** Clear clipboard state */
   clearClipboard: (options?: { remember?: boolean }) => void
 }

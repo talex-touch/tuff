@@ -68,7 +68,17 @@ export function useClipboard(
     return elapsed <= limit * 1000
   }
 
-  function handleAutoPaste(): void {
+  /**
+   * 自动填充剪贴板内容到 CoreBox UI
+   * - 短文本 (≤25字符): 填充到搜索输入框
+   * - 长文本: 显示为 Tag
+   * - 图片: 显示为 Tag
+   * - 文件: 切换到 FILE 模式
+   * 
+   * 注意: 这不是真正的粘贴操作，只是 UI 状态更新
+   * 真正的粘贴功能见主进程的 applyToActiveApp
+   */
+  function handleAutoFill(): void {
     if (!clipboardOptions.last)
       return
     if (!canAutoPaste())
@@ -78,7 +88,7 @@ export function useClipboard(
 
     // Check if already auto-pasted (prevent duplicate)
     if (autoPastedTimestamps.has(timestamp)) {
-      console.debug('[Clipboard] Already auto-pasted, skipping', {
+      console.debug('[Clipboard] Already auto-filled, skipping', {
         timestamp: new Date(timestamp).toISOString(),
       })
       return
@@ -107,7 +117,7 @@ export function useClipboard(
           autoPastedTimestamps.add(timestamp)
           clearClipboard({ remember: true })
 
-          console.debug('[Clipboard] Files auto-pasted to FILE mode', {
+          console.debug('[Clipboard] Files auto-filled to FILE mode', {
             fileCount: pathList.length,
           })
         }
@@ -123,13 +133,13 @@ export function useClipboard(
       const textContent = data.content || ''
       const textLength = textContent.length
 
-      // Short text (≤25 chars): auto-paste to input query
+      // Short text (≤25 chars): auto-fill to input query
       if (textLength > 0 && textLength <= 25 && searchVal) {
         searchVal.value = textContent
         autoPastedTimestamps.add(timestamp)
         clearClipboard({ remember: true })
 
-        console.debug('[Clipboard] Short text auto-pasted to input', {
+        console.debug('[Clipboard] Short text auto-filled to input', {
           length: textLength,
           content: textContent.substring(0, 30),
         })
@@ -211,7 +221,7 @@ export function useClipboard(
       }
     }
 
-    handleAutoPaste()
+    handleAutoFill()
   }
 
   async function applyToActiveApp(item?: IClipboardItem): Promise<boolean> {
@@ -280,7 +290,7 @@ export function useClipboard(
 
   return {
     handlePaste,
-    handleAutoPaste,
+    handleAutoFill,
     applyToActiveApp,
     clearClipboard,
   }

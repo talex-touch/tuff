@@ -127,10 +127,10 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
     if (!payload?.primaryValue)
       return
-    await clipboardModule.saveVirtualEntry({
+    await clipboardModule.saveCustomEntry({
       content: payload.primaryValue,
       rawContent: query.text ?? '',
-      source: 'calculation',
+      category: 'preview',
       meta: {
         expression: query.text ?? '',
         abilityId: payload.abilityId,

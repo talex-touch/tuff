@@ -1,4 +1,4 @@
-import type { TuffItem, TuffQuery } from '@talex-touch/utils'
+import type { TuffItem, TuffQuery, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
 
@@ -246,9 +246,125 @@ export class ItemRebuilder {
           .get()
 
         if (record) {
-          const { ClipboardProvider } = await import('../providers/clipboard')
-          const provider = new ClipboardProvider()
-          const tuffItem = (provider as any).transformToSearchItem(record)
+          // 直接转换逻辑（原来在 ClipboardProvider.transformToSearchItem 中）
+          const render: TuffRender = {
+            mode: 'default',
+            basic: {
+              title: '',
+            },
+          }
+
+          let kind: TuffItem['kind'] = 'document'
+
+          if (record.type === 'text') {
+            kind = 'document'
+            if (render.basic) {
+              render.basic.title =
+                record.content.length > 100
+                  ? `${record.content.substring(0, 97)}...`
+                  : record.content
+              render.basic.subtitle = `Text from ${record.sourceApp || 'Unknown'}`
+              render.basic.icon = {
+                type: 'emoji',
+                value: '📄',
+              }
+            }
+            render.preview = {
+              type: 'panel',
+              content: record.content,
+            }
+          } else if (record.type === 'image') {
+            kind = 'image'
+            if (render.basic) {
+              render.basic.title = `Image from ${record.sourceApp || 'Unknown'}`
+              render.basic.icon = record.thumbnail
+                ? {
+                    type: 'url',
+                    value: record.thumbnail,
+                  }
+                : {
+                    type: 'emoji',
+                    value: '🖼️',
+                  }
+            }
+            render.preview = {
+              type: 'panel',
+              image: record.content,
+            }
+          } else if (record.type === 'files') {
+            kind = 'file'
+            if (render.basic) {
+        try {
+                const files = JSON.parse(record.content)
+                if (files.length === 1) {
+                  const filePath = files[0]
+                  render.basic.title =
+                    typeof filePath === 'string'
+                      ? filePath.split(/[\\/]/).pop() || 'File'
+                      : 'File'
+                } else {
+                  render.basic.title = `${files.length} files`
+                }
+              } catch {
+                render.basic.title = 'Files from clipboard'
+              }
+              render.basic.icon = {
+                type: 'emoji',
+                value: '📁',
+              }
+            }
+          }
+
+          // 处理 OCR 元数据
+          let metadata: Record<string, unknown> | null = null
+          if (record.metadata) {
+            try {
+              metadata = JSON.parse(record.metadata)
+            } catch {
+              metadata = null
+            }
+          }
+
+          if (
+            metadata?.ocr_excerpt &&
+            typeof metadata.ocr_excerpt === 'string' &&
+            metadata.ocr_excerpt.trim() &&
+            render.basic
+          ) {
+            const snippet = metadata.ocr_excerpt.trim()
+            render.basic.subtitle = render.basic.subtitle
+              ? `${render.basic.subtitle} · ${snippet}`
+              : snippet
+          }
+
+          const tuffItem: TuffItem = {
+            id: `clipboard-${record.id}`,
+            source: {
+              id: 'clipboard-history',
+              type: 'history',
+              name: 'Clipboard History',
+            },
+            kind,
+            render,
+            actions: [
+              {
+                id: 'paste',
+                type: 'execute',
+                label: 'Paste',
+                shortcut: 'Enter',
+              },
+              {
+                id: 'copy',
+                type: 'copy',
+                label: 'Copy',
+                shortcut: 'CmdOrCtrl+C',
+              },
+            ],
+            meta: {
+              raw: record,
+            },
+          }
+
           rebuiltItems.push(tuffItem)
         }
       }
@@ -259,6 +375,7 @@ export class ItemRebuilder {
       return []
     }
   }
+
 
   private mergeAndEnrichItems(items: TuffItem[], scoredItems: ScoredItem[]): TuffItem[] {
     const scoreMap = new Map(scoredItems.map((s) => [s.itemId, s]))
