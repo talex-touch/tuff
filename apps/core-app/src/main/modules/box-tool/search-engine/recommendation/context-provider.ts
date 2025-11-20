@@ -59,7 +59,7 @@ export class ContextProvider {
       const { clipboardModule } = await import('../../../clipboard')
       
       // 获取最新剪贴板项
-      const latest = clipboardModule['memoryCache']?.[0]
+      const latest = clipboardModule.getLatestItem()
       if (!latest || !latest.timestamp) {
         return undefined
       }
