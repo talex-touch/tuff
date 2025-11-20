@@ -153,7 +153,7 @@ export interface RawChannelHeaderData {
   type: ChannelType
   _originData?: any
   uniqueKey?: string
-  event?: Electron.IpcMainEvent | Electron.IpcRendererEvent
+  event?: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent | Electron.IpcRendererEvent
   plugin?: string
 }
 

@@ -32,9 +32,10 @@ export class StoragePollingService {
     }
 
     this.isRunning = true
-    console.info(
-      chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`),
-    )
+    // Debug log - moved to debug level to reduce noise
+    // console.info(
+    //   chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`),
+    // )
 
     this.pollingTimer = setInterval(async () => {
       await this.performSave()

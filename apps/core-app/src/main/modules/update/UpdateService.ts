@@ -46,7 +46,8 @@ class PollingService {
    */
   start(interval: number, callback: () => Promise<void>): void {
     if (this.isRunning) {
-      console.warn('[PollingService] Already running')
+      // Debug log - moved to debug level to reduce noise
+      // console.warn('[PollingService] Already running')
       return
     }
 
@@ -60,7 +61,8 @@ class PollingService {
       }
     }, interval)
 
-    console.log(`[PollingService] Started with interval: ${interval}ms`)
+    // Debug log - moved to debug level to reduce noise
+    // console.log(`[PollingService] Started with interval: ${interval}ms`)
   }
 
   /**
@@ -72,7 +74,8 @@ class PollingService {
       this.intervalId = null
     }
     this.isRunning = false
-    console.log('[PollingService] Stopped')
+    // Debug log - moved to debug level to reduce noise
+    // console.log('[PollingService] Stopped')
   }
 
   /**
@@ -120,7 +123,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.initContext = ctx
-    console.log('[UpdateService] Initializing update service')
+    // Debug log - moved to debug level to reduce noise
+    // console.log('[UpdateService] Initializing update service')
 
     // Initialize UpdateSystem with DownloadCenter integration
     const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
@@ -132,10 +136,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         ignoredVersions: this.settings.ignoredVersions,
         updateChannel: this.settings.updateChannel,
       })
-      console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
+      // Debug log - moved to debug level to reduce noise
+      // console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
     }
     else {
-      console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
+      // Debug log - moved to debug level to reduce noise
+      // console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
     }
 
     // Register IPC channels
@@ -160,7 +166,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Destroy update service
    */
   async onDestroy(): Promise<void> {
-    console.log('[UpdateService] Destroying update service')
+    // Debug log - moved to debug level to reduce noise
+    // console.log('[UpdateService] Destroying update service')
 
     // Stop polling service
     this.pollingService.stop()
@@ -399,18 +406,20 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const interval = this.getFrequencyIntervalMs(this.settings.frequency)
 
     if (!interval) {
-      console.log(
-        `[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`,
-      )
+      // Debug log - moved to debug level to reduce noise
+      // console.log(
+      //   `[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`,
+      // )
       return
     }
 
     this.pollingService.start(interval, async () => {
       await this.checkForUpdates()
     })
-    console.log(
-      `[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`,
-    )
+    // Debug log - moved to debug level to reduce noise
+    // console.log(
+    //   `[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`,
+    // )
   }
 
   /**

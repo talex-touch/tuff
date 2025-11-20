@@ -296,11 +296,11 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     const moduleName = key.description ?? key.toString()
 
-    moduleLog.info('Loading module', {
+    moduleLog.debug('Loading module', {
       meta: { module: moduleName },
     })
 
-    const timer = moduleLog.time('Module ready', 'success')
+    const timer = moduleLog.time(`Module ${moduleName} ready`, 'success')
 
     const fileCfg = this.resolveFileConfig(instance)
     const directory = await this.ensureDirectoryIfNeeded(fileCfg)
@@ -321,7 +321,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     this.modules.set(key, instance)
 
-    timer.end('Module loaded', {
+    timer.end(`Module ${moduleName} loaded`, {
       meta: { module: moduleName },
     })
 

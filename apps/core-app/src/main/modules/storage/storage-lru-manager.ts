@@ -44,9 +44,10 @@ export class StorageLRUManager {
       return
     }
 
-    console.info(
-      chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`),
-    )
+    // Debug log - moved to debug level to reduce noise
+    // console.info(
+    //   chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`),
+    // )
 
     this.cleanupTimer = setInterval(async () => {
       await this.performCleanup()
