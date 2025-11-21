@@ -314,14 +314,12 @@ export class SearchEngineCore
       `Text: "${query.text}", Inputs: ${query.inputs?.length || 0}`
     )
 
-    // 取消之前的搜索
     this.currentGatherController?.abort()
 
-    // 标记这是最新的搜索 session
     this.latestSessionId = sessionId
-    console.log(`[SearchCore] Starting search session ${sessionId}`)
+    console.debug(`[SearchCore] Starting search session ${sessionId}`)
 
-    // 空查询检测: 返回推荐结果
+    // Empty query detection: return recommendations
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
       console.debug('[DEBUG_REC_INIT] Empty query detected, generating recommendations...')
       // console.log('[SearchEngineCore] Empty query detected, generating recommendations...') // Remove to reduce noise
@@ -341,9 +339,8 @@ export class SearchEngineCore
             `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
           )
 
-          // 在返回前检查是否仍是最新搜索
           if (this.latestSessionId !== sessionId) {
-            console.log(
+            console.debug(
               `[SearchCore] Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`
             )
             return new TuffSearchResultBuilder(query)
@@ -379,7 +376,6 @@ export class SearchEngineCore
       }
     }
 
-    // 保存当前查询用于完成跟踪
     this.lastSearchQuery = query.text || ''
 
     const startTime = Date.now()

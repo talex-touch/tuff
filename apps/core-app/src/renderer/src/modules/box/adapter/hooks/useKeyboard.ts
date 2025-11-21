@@ -18,7 +18,7 @@ export function useKeyboard(
   handleExit: () => void,
   inputEl: Ref<HTMLInputElement | undefined>,
   clipboardOptions: any,
-  clearClipboard: () => void,
+  clearClipboard: (options?: { remember?: boolean }) => void,
   activeActivations: Ref<any>,
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   itemRefs: Ref<any[]>,
@@ -111,9 +111,13 @@ export function useKeyboard(
         return
       }
 
-      // 2. If there's clipboard data, clear it
+      /**
+       * 2. If there's clipboard data, clear it with remember=true
+       * This ensures dismissed clipboard won't reappear on next CoreBox open
+       * Fixes Bug: ESC cancellation state not persisting across sessions
+       */
       if (clipboardOptions.last) {
-        clearClipboard()
+        clearClipboard({ remember: true })
         event.preventDefault()
         return
       }

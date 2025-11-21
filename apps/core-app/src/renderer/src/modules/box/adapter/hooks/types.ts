@@ -42,4 +42,6 @@ export interface IClipboardHook {
   handleAutoFill: () => void
   applyToActiveApp: (item?: IClipboardItem) => Promise<boolean>
   clearClipboard: (options?: { remember?: boolean }) => void
+  /** Resets autopaste state for new CoreBox session */
+  resetAutoPasteState: () => void
 }

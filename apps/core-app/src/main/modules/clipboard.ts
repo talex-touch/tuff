@@ -88,25 +88,172 @@ const execFileAsync = promisify(execFile)
 
 class ClipboardHelper {
   private lastText: string = clipboard.readText()
+  public lastFormats: string[] = []
+  public lastChangeHash: string = ''
   private lastImageHash: string = clipboard.readImage().toDataURL()
   private lastFiles: string[] = this.readClipboardFiles()
 
+  /**
+   * Read file paths from clipboard
+   * 
+   * @remarks
+   * Tries multiple clipboard formats in priority order:
+   * 1. public.file-url - Standard macOS file URLs
+   * 2. NSFilenamesPboardType - Legacy macOS format
+   * 3. text/uri-list - Cross-platform format
+   * 
+   * Filters out invalid entries like file IDs, placeholders, or malformed URLs
+   * 
+   * Special handling: When file IDs are detected (e.g., for large video files),
+   * attempts to read the actual file path from clipboard text as a fallback
+   */
   public readClipboardFiles(): string[] {
-    const raw = clipboard.read('public.file-url').toString()
-    if (!raw)
-      return []
-    return raw
-      .split(/\r\n|\n|\r/)
-      .filter(Boolean)
-      .map((url) => {
-        try {
-          return decodeURI(new URL(url).pathname)
+    // Try multiple formats in priority order
+    const formats = [
+      'public.file-url',
+      'NSFilenamesPboardType',
+      'text/uri-list',
+    ]
+
+    let hasFileIDPlaceholder = false
+
+    for (const format of formats) {
+      try {
+        const raw = clipboard.read(format).toString()
+        if (!raw)
+          continue
+
+        console.debug(`[Clipboard] Raw clipboard data from ${format}:`, raw.substring(0, 200))
+
+        // Special handling: Check if this is plist XML format (macOS clipboard)
+        if (raw.includes('<?xml') && raw.includes('<plist') && raw.includes('<string>')) {
+          console.debug('[Clipboard] Detected plist XML format, parsing...')
+          const stringMatches = raw.match(/<string>([^<]+)<\/string>/g)
+          if (stringMatches && stringMatches.length > 0) {
+            const paths = stringMatches
+              .map(match => {
+                const path = match.replace(/<string>|<\/string>/g, '').trim()
+                // Validate it's a file path
+                if ((path.startsWith('/') || path.includes(':\\')) && !path.includes('/id=')) {
+                  console.debug('[Clipboard] Extracted file path from plist:', path)
+                  return path
+                }
+                return null
+              })
+              .filter((p): p is string => p !== null)
+            
+            if (paths.length > 0) {
+              console.log(`[Clipboard] Read ${paths.length} file(s) from plist XML`)
+              return paths
+            }
+          }
+          console.debug('[Clipboard] No valid paths found in plist XML')
+          continue
         }
-        catch {
-          return ''
+
+        // Regular URL format processing
+        const paths = raw
+          .split(/\r\n|\n|\r/)
+          .filter(Boolean)
+          .map((url) => {
+            try {
+              // Skip entries that look like file IDs or placeholders
+              // e.g., "file/id=65713367.75131581"
+              if (url.includes('file/id=') || url.includes('/.file/id=')) {
+                console.debug('[Clipboard] Detected file ID placeholder:', url)
+                hasFileIDPlaceholder = true
+                return ''
+              }
+
+              // Try to parse as URL
+              const parsedUrl = new URL(url)
+              const pathname = decodeURI(parsedUrl.pathname)
+
+              // Validate it's an actual file path
+              if (!pathname || pathname === '/' || pathname.includes('/id=')) {
+                console.debug('[Clipboard] Invalid file path from URL:', url)
+                return ''
+              }
+
+              console.debug('[Clipboard] Extracted file path:', pathname)
+              return pathname
+            }
+            catch {
+              // If not a URL, treat as direct file path
+              const trimmed = url.trim()
+              // Accept paths that start with / (Unix) or contain :\ (Windows)
+              const looksLikePath = trimmed.startsWith('/') || trimmed.includes(':\\')
+              const isNotID = !trimmed.includes('/id=')
+              
+              if (looksLikePath && isNotID) {
+                console.debug('[Clipboard] Using direct path:', trimmed)
+                return trimmed
+              }
+              
+              console.debug('[Clipboard] Rejected as not a valid path:', trimmed)
+              return ''
+            }
+          })
+          .filter(Boolean)
+
+        if (paths.length > 0) {
+          console.log(`[Clipboard] Read ${paths.length} file(s) from format: ${format}`)
+          return paths
         }
-      })
-      .filter(Boolean)
+        else if (hasFileIDPlaceholder) {
+          console.debug(`[Clipboard] File ID placeholders detected but no valid paths - files may still be preparing`)
+        }
+        else {
+          console.debug(`[Clipboard] No valid paths extracted from ${format}`)
+        }
+      }
+      catch (error) {
+        console.debug(`[Clipboard] Failed to read format ${format}:`, error)
+      }
+    }
+
+    // Fallback: If file IDs detected, try to read file path from text
+    if (hasFileIDPlaceholder) {
+      console.debug('[Clipboard] Attempting to read file path from clipboard text as fallback')
+      try {
+        const text = clipboard.readText().trim()
+        if (text && text.length > 0 && text.length < 10000) {
+          // Check if text looks like a direct file path
+          if (text.startsWith('/') && !text.includes('<')) {
+            console.log('[Clipboard] Found file path in fallback text')
+            return [text]
+          }
+          
+          // Check if text is plist XML format (macOS clipboard format)
+          if (text.includes('<plist') && text.includes('<string>')) {
+            console.debug('[Clipboard] Detected plist XML in fallback text, parsing...')
+            const stringMatches = text.match(/<string>([^<]+)<\/string>/g)
+            if (stringMatches && stringMatches.length > 0) {
+              const paths = stringMatches
+                .map(match => {
+                  const path = match.replace(/<string>|<\/string>/g, '').trim()
+                  // Validate it's a file path
+                  if (path.startsWith('/') || path.includes(':\\')) {
+                    return path
+                  }
+                  return null
+                })
+                .filter((p): p is string => p !== null)
+              
+              if (paths.length > 0) {
+                console.log('[Clipboard] Extracted file paths from fallback plist')
+                return paths
+              }
+            }
+          }
+        }
+      }
+      catch (error) {
+        console.debug('[Clipboard] Failed to read fallback text:', error)
+      }
+      console.log('[Clipboard] Files contain ID placeholders - skipping to avoid treating as text')
+    }
+    return []
   }
 
   public didFilesChange(nextFiles: string[]): boolean {
@@ -574,43 +721,45 @@ export class ClipboardModule extends BaseModule {
       return
     }
 
+    // Fast-path change detection: Skip processing if nothing changed
+    const formatsKey = formats.sort().join(',')
+    if (helper.lastFormats.length > 0 && helper.lastFormats.sort().join(',') === formatsKey) {
+      // Formats haven't changed, do a quick sanity check on text/files
+      const quickText = clipboard.readText()
+      const quickHash = `${formatsKey}:${quickText.substring(0, 100)}`
+      
+      if (helper.lastChangeHash === quickHash) {
+        // Nothing changed, skip processing
+        return
+      }
+      helper.lastChangeHash = quickHash
+    }
+    else {
+      // Formats changed, update and continue
+      helper.lastFormats = formats
+      helper.lastChangeHash = `${formatsKey}:${clipboard.readText().substring(0, 100)}`
+    }
+
     const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
     let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
 
-    // Priority: IMAGE -> FILES -> TEXT
-    // Check for standalone image first
-    if (includesAny(formats, IMAGE_FORMATS)) {
-      const image = clipboard.readImage()
-      if (helper.didImageChange(image)) {
-        if (includesAny(formats, FILE_URL_FORMATS)) {
-          const files = helper.readClipboardFiles()
-          helper.primeFiles(files)
-        }
-        helper.markText('')
-        const size = image.getSize()
-        metaEntries.push({ key: 'image_size', value: size })
-        item = {
-          type: 'image',
-          content: image.toDataURL(),
-          thumbnail: image.resize({ width: 128 }).toDataURL(),
-        }
-      }
-    }
-
-    // Then check for files (only if no image detected)
-    if (!item && includesAny(formats, FILE_URL_FORMATS)) {
+    // Priority: FILES (with image) > IMAGE > FILES (no image) > TEXT
+    // Check for files first to handle video files with thumbnails correctly
+    if (includesAny(formats, FILE_URL_FORMATS)) {
       const files = helper.readClipboardFiles()
       if (helper.didFilesChange(files)) {
         const serialized = JSON.stringify(files)
         let thumbnail: string | undefined
         let imageSize: { width: number, height: number } | undefined
 
+        // Check if there's an associated image (e.g., video thumbnail)
         if (includesAny(formats, IMAGE_FORMATS)) {
           const image = clipboard.readImage()
           if (!image.isEmpty()) {
             helper.primeImage(image)
             imageSize = image.getSize()
             thumbnail = image.resize({ width: 128 }).toDataURL()
+            console.log('[Clipboard] File with thumbnail detected', { width: imageSize.width, height: imageSize.height })
           }
           else {
             helper.primeImage(null)
@@ -630,6 +779,21 @@ export class ClipboardModule extends BaseModule {
           type: 'files',
           content: serialized,
           thumbnail,
+        }
+      }
+    }
+
+    // Check for standalone image (only if no files detected)
+    if (!item && includesAny(formats, IMAGE_FORMATS)) {
+      const image = clipboard.readImage()
+      if (helper.didImageChange(image)) {
+        helper.markText('')
+        const size = image.getSize()
+        metaEntries.push({ key: 'image_size', value: size })
+        item = {
+          type: 'image',
+          content: image.toDataURL(),
+          thumbnail: image.resize({ width: 128 }).toDataURL(),
         }
       }
     }

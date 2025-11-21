@@ -3,24 +3,24 @@ import chalk from 'chalk'
 const levelStyles = {
   info: {
     label: 'INFO',
-    color: chalk.cyanBright,
+    color: chalk.cyanBright
   },
   warn: {
     label: 'WARN',
-    color: chalk.yellowBright,
+    color: chalk.yellowBright
   },
   error: {
     label: 'ERROR',
-    color: chalk.redBright,
+    color: chalk.redBright
   },
   debug: {
     label: 'DEBUG',
-    color: chalk.gray,
+    color: chalk.gray
   },
   success: {
     label: 'DONE',
-    color: chalk.greenBright,
-  },
+    color: chalk.greenBright
+  }
 } as const
 
 export type LogLevel = keyof typeof levelStyles
@@ -36,21 +36,21 @@ const namespacePalette = [
   chalk.magentaBright,
   chalk.blueBright,
   chalk.greenBright,
-  chalk.yellowBright,
+  chalk.yellowBright
 ]
 
 // 特殊命名空间的固定颜色
 const namespaceColorOverrides = new Map<string, typeof chalk.gray>([
-  ['Intelligence', chalk.hex('#b388ff').bold],
+  ['Intelligence', chalk.hex('#b388ff').bold]
 ])
 
 const namespaceColorCache = new Map<string, typeof chalk.gray>()
 
-const debugEnabled
-  = typeof process !== 'undefined'
-    && (process.env.DEBUG === 'true'
-      || process.env.NODE_ENV === 'development'
-      || process.env.NODE_ENV === 'test')
+const debugEnabled =
+  typeof process !== 'undefined' &&
+  (process.env.DEBUG === 'true' ||
+    process.env.NODE_ENV === 'development' ||
+    process.env.NODE_ENV === 'test')
 
 function formatTimestamp(date = new Date()): string {
   const hours = String(date.getHours()).padStart(2, '0')
@@ -62,12 +62,10 @@ function formatTimestamp(date = new Date()): string {
 
 function pickNamespaceColor(namespace: string): typeof chalk.gray {
   const override = namespaceColorOverrides.get(namespace)
-  if (override)
-    return override
+  if (override) return override
 
   const cached = namespaceColorCache.get(namespace)
-  if (cached)
-    return cached
+  if (cached) return cached
 
   const seed = namespace.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
   const color = namespacePalette[seed % namespacePalette.length]
@@ -76,52 +74,39 @@ function pickNamespaceColor(namespace: string): typeof chalk.gray {
 }
 
 function summarize(value: Primitive): string {
-  if (value === null)
-    return 'null'
-  if (value === undefined)
-    return 'undefined'
-  if (typeof value === 'boolean')
-    return value ? 'true' : 'false'
-  if (typeof value === 'number')
-    return Number.isFinite(value) ? value.toString() : 'NaN'
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'number') return Number.isFinite(value) ? value.toString() : 'NaN'
   return String(value)
 }
 
 function formatMeta(meta?: Record<string, Primitive>): string {
-  if (!meta)
-    return ''
+  if (!meta) return ''
   const entries = Object.entries(meta).filter(([_, value]) => value !== undefined)
-  if (!entries.length)
-    return ''
+  if (!entries.length) return ''
   return entries
     .map(([key, value]) => `${chalk.gray(key)}=${chalk.cyan(summarize(value))}`)
     .join(' ')
 }
 
 export function formatDuration(durationMs: number): string {
-  const formatted
-    = durationMs >= 1000
+  const formatted =
+    durationMs >= 1000
       ? `${(durationMs / 1000).toFixed(durationMs >= 10000 ? 0 : 1)}s`
       : `${durationMs.toFixed(0)}ms`
 
-  if (durationMs < 80)
-    return chalk.gray(formatted)
-  if (durationMs < 500)
-    return chalk.greenBright(formatted)
-  if (durationMs < 2000)
-    return chalk.yellowBright(formatted)
+  if (durationMs < 80) return chalk.gray(formatted)
+  if (durationMs < 500) return chalk.greenBright(formatted)
+  if (durationMs < 2000) return chalk.yellowBright(formatted)
   return chalk.bgRed.white(formatted)
 }
 
 function ensureString(message: unknown): string {
-  if (typeof message === 'string')
-    return message
-  if (message === null || message === undefined)
-    return ''
-  if (message instanceof Error)
-    return message.message
-  if (typeof message === 'object')
-    return JSON.stringify(message)
+  if (typeof message === 'string') return message
+  if (message === null || message === undefined) return ''
+  if (message instanceof Error) return message.message
+  if (typeof message === 'object') return JSON.stringify(message)
   return String(message)
 }
 
@@ -144,8 +129,7 @@ export interface Logger {
 }
 
 function output(level: LogLevel, namespace: string, message: unknown, options?: LogOptions): void {
-  if (level === 'debug' && !debugEnabled)
-    return
+  if (level === 'debug' && !debugEnabled) return
 
   const timestamp = chalk.gray(`[${formatTimestamp()}]`)
   const levelConfig = levelStyles[level]
@@ -158,8 +142,14 @@ function output(level: LogLevel, namespace: string, message: unknown, options?: 
     ? `${timestamp} ${levelLabel} ${namespaceLabel} ${formattedMessage} ${chalk.gray(meta)}`
     : `${timestamp} ${levelLabel} ${namespaceLabel} ${formattedMessage}`
 
-  const consoleMethod
-    = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log
+  const consoleMethod =
+    level === 'error'
+      ? console.error
+      : level === 'warn'
+        ? console.warn
+        : level === 'debug'
+          ? console.debug
+          : console.log
   consoleMethod(line)
 
   if (level === 'error' && options?.error) {
@@ -205,9 +195,9 @@ export function createLogger(namespace: string): Logger {
         split(message: string, options?: LogOptions & { level?: TimerLevel }) {
           const level = options?.level ?? defaultLevel
           report(message, level, options)
-        },
+        }
       }
-    },
+    }
   }
 }
 
@@ -219,7 +209,7 @@ export function logDuration(
   namespace: string,
   message: string,
   startedAt: number,
-  level: TimerLevel = 'info',
+  level: TimerLevel = 'info'
 ) {
   const duration = performance.now() - startedAt
   output(level, namespace, `${message} ${formatDuration(duration)}`)

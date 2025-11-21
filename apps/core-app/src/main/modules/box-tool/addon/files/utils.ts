@@ -49,7 +49,7 @@ export async function scanDirectory(
 
 export function mapFileToTuffItem(
   file: typeof filesSchema.$inferSelect,
-  extensions: Record<string, string>,
+  _extensions: Record<string, string>,
   providerId: string,
   providerName: string,
 ): TuffItem {
@@ -67,8 +67,8 @@ export function mapFileToTuffItem(
         title: file.name,
         subtitle: file.path,
         icon: {
-          type: 'url',
-          value: extensions.icon ?? '',
+          type: 'file',
+          value: file.path,
         },
       },
     },

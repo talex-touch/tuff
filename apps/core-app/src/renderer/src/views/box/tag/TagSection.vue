@@ -3,9 +3,8 @@ import type { IBoxOptions } from '../../../modules/box/adapter'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BoxMode } from '../../../modules/box/adapter'
-import ClipboardFileTag from './ClipboardFileTag.vue'
 import ClipboardImageTag from './ClipboardImageTag.vue'
-import FileTag from './FileTag.vue'
+import UnifiedFileTag from './UnifiedFileTag.vue'
 
 const props = defineProps<{
   boxOptions: IBoxOptions
@@ -16,8 +15,7 @@ const { t } = useI18n()
 
 // Truncate clipboard content for display (text only)
 const clipboardPreview = computed(() => {
-  if (!props.clipboardOptions.last)
-    return ''
+  if (!props.clipboardOptions.last) return ''
 
   const data = props.clipboardOptions.last
   let preview = ''
@@ -26,14 +24,12 @@ const clipboardPreview = computed(() => {
   if (data.type === 'text') {
     preview = data.content || ''
     totalLength = preview.length
-  }
-  else if (data.type === 'html') {
+  } else if (data.type === 'html') {
     preview = data.content || '' // Plain text version
     totalLength = preview.length
   }
 
-  if (!preview)
-    return ''
+  if (!preview) return ''
 
   // If text is too long, truncate and show character count
   const maxLength = 30
@@ -44,29 +40,34 @@ const clipboardPreview = computed(() => {
 })
 
 // Determine which tag to show based on priority: image > file > text
-// This matches the logic in useSearch.ts for building TuffQuery
 const activeTag = computed(() => {
   // Priority 1: Image (clipboard image)
   if (props.clipboardOptions.last?.type === 'image') {
     return { type: 'clipboard-image', data: props.clipboardOptions.last }
   }
 
-  // Priority 2: File (FILE mode or clipboard files)
+  // Priority 2: Files (FILE mode or clipboard files - unified)
   if (props.boxOptions.mode === BoxMode.FILE && props.boxOptions.file?.paths?.length > 0) {
     return {
       type: 'file',
       iconPath: props.boxOptions.file.iconPath,
       paths: props.boxOptions.file.paths,
+      clipboardData: null
     }
   }
   if (props.clipboardOptions.last?.type === 'files') {
-    return { type: 'clipboard-files', data: props.clipboardOptions.last }
+    return {
+      type: 'file',
+      iconPath: null,
+      paths: null,
+      clipboardData: props.clipboardOptions.last
+    }
   }
 
   // Priority 3: Text (clipboard text/html)
   if (
-    props.clipboardOptions.last?.type === 'text'
-    || props.clipboardOptions.last?.type === 'html'
+    props.clipboardOptions.last?.type === 'text' ||
+    props.clipboardOptions.last?.type === 'html'
   ) {
     return { type: 'clipboard-text', data: props.clipboardOptions.last }
   }
@@ -84,27 +85,19 @@ const activeTag = computed(() => {
   <!-- Tag section (shown when not in FEATURE mode) -->
   <div v-if="boxOptions.mode !== BoxMode.FEATURE && activeTag" class="CoreBox-Tag">
     <!-- Image clipboard (highest priority) -->
-    <ClipboardImageTag
-      v-if="activeTag && activeTag.type === 'clipboard-image'"
-      :data="activeTag.data"
-    />
+    <ClipboardImageTag v-if="activeTag.type === 'clipboard-image'" :data="activeTag.data" />
 
-    <!-- File tag (FILE mode) -->
-    <FileTag
-      v-else-if="activeTag && activeTag.type === 'file'"
+    <!-- Unified file tag (FILE mode + clipboard files) -->
+    <UnifiedFileTag
+      v-else-if="activeTag.type === 'file'"
       :icon-path="activeTag.iconPath"
-      :paths="activeTag.paths || []"
-    />
-
-    <!-- Files clipboard -->
-    <ClipboardFileTag
-      v-else-if="activeTag && activeTag.type === 'clipboard-files'"
-      :data="activeTag.data"
+      :paths="activeTag.paths"
+      :clipboard-data="activeTag.clipboardData"
     />
 
     <!-- Text/HTML clipboard -->
     <span
-      v-else-if="activeTag && activeTag.type === 'clipboard-text'"
+      v-else-if="activeTag.type === 'clipboard-text'"
       class="fake-background dotted"
       :title="activeTag.data?.content"
     >
@@ -114,7 +107,7 @@ const activeTag = computed(() => {
     </span>
 
     <!-- Command tag -->
-    <span v-else-if="activeTag && activeTag.type === 'command'" class="fake-background">
+    <span v-else-if="activeTag.type === 'command'" class="fake-background">
       {{ t('tagSection.command') }}
     </span>
   </div>

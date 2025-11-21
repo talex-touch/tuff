@@ -3,14 +3,12 @@ import type {
   TuffItem,
   TuffQuery,
   TuffQueryInput,
-  TuffSearchResult,
+  TuffSearchResult
 } from '@talex-touch/utils'
 import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
-import {
-  TuffInputType,
-} from '@talex-touch/utils'
+import { TuffInputType } from '@talex-touch/utils'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
@@ -20,7 +18,7 @@ import { BoxMode } from '..'
 
 export function useSearch(
   boxOptions: IBoxOptions,
-  clipboardOptions?: IClipboardOptions,
+  clipboardOptions?: IClipboardOptions
 ): IUseSearch {
   const searchVal = ref('')
   const select = ref(-1)
@@ -72,7 +70,7 @@ export function useSearch(
       try {
         const query: TuffQuery = {
           text: '',
-          inputs: [],
+          inputs: []
         }
 
         // The initial call now returns the high-priority results directly.
@@ -89,8 +87,7 @@ export function useSearch(
         if (initialResult.activate && initialResult.activate.length > 0) {
           activeActivations.value = initialResult.activate
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error('Recommendation search failed:', error)
         searchResults.value = []
         searchResult.value = null
@@ -99,12 +96,12 @@ export function useSearch(
       }
       return
     }
-    
+
     if (!searchVal.value) {
       // Empty query with active providers: keep current state
       return
     }
-    
+
     boxOptions.focus = 0
     loading.value = true
     searchResults.value = [] // Clear previous results immediately
@@ -112,68 +109,63 @@ export function useSearch(
     try {
       const query: TuffQuery = {
         text: searchVal.value,
-        inputs: [],
+        inputs: []
       }
 
       const inputs: TuffQueryInput[] = []
 
-      // Priority-based input selection (matches TagSection display logic):
+      // Priority-based input selection (matches TagSection display logic)
       // Priority 1: Image (clipboard image)
       // Priority 2: File (FILE mode or clipboard files)
       // Priority 3: Text (clipboard text/html)
       // Only one input should be added to match what's displayed in the tag
 
+      /**
+       * CRITICAL: Use clipboardOptions.last directly instead of re-fetching from main process
+       * This ensures UI (TagSection) and data (TuffQuery) use the same source
+       * Fixes Bug: Suffix tags not displayed but TuffQuery contains data
+       */
+
       // Priority 1: Image (clipboard image)
       if (clipboardOptions?.last?.type === 'image') {
-        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
-        if (clipboardData && clipboardData.type === 'image') {
-          inputs.push({
-            type: TuffInputType.Image,
-            content: clipboardData.content,
-            thumbnail: clipboardData.thumbnail,
-            metadata: clipboardData.meta,
-          })
-        }
+        inputs.push({
+          type: TuffInputType.Image,
+          content: clipboardOptions.last.content,
+          thumbnail: clipboardOptions.last.thumbnail,
+          metadata: clipboardOptions.last.meta ?? undefined
+        })
       }
       // Priority 2: File (FILE mode or clipboard files)
       else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
         inputs.push({
           type: TuffInputType.Files,
           content: JSON.stringify(boxOptions.file.paths),
-          metadata: undefined,
+          metadata: undefined
         })
-      }
-      else if (clipboardOptions?.last?.type === 'files') {
-        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
-        if (clipboardData && clipboardData.type === 'files') {
-          inputs.push({
-            type: TuffInputType.Files,
-            content: clipboardData.content,
-            metadata: clipboardData.meta,
-          })
-        }
+      } else if (clipboardOptions?.last?.type === 'files') {
+        inputs.push({
+          type: TuffInputType.Files,
+          content: clipboardOptions.last.content,
+          metadata: clipboardOptions.last.meta ?? undefined
+        })
       }
       // Priority 3: Text (clipboard text/html)
       else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
-        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
-        if (clipboardData && (clipboardData.type === 'text' || clipboardData.type === 'html')) {
-          if (clipboardData.rawContent) {
-            // 富文本：同时保存纯文本和 HTML
-            inputs.push({
-              type: TuffInputType.Html,
-              content: clipboardData.content, // 纯文本版本
-              rawContent: clipboardData.rawContent, // HTML 版本
-              metadata: clipboardData.meta,
-            })
-          }
-          else {
-            // 纯文本：只有纯文本
-            inputs.push({
-              type: TuffInputType.Text,
-              content: clipboardData.content,
-              metadata: clipboardData.meta,
-            })
-          }
+        if (clipboardOptions.last.rawContent) {
+          // Rich text: preserve both plain text and HTML
+          inputs.push({
+            type: TuffInputType.Html,
+            content: clipboardOptions.last.content, // Plain text version
+            rawContent: clipboardOptions.last.rawContent, // HTML version
+            metadata: clipboardOptions.last.meta ?? undefined
+          })
+        } else {
+          // Plain text: text only
+          inputs.push({
+            type: TuffInputType.Text,
+            content: clipboardOptions.last.content,
+            metadata: clipboardOptions.last.meta ?? undefined
+          })
         }
       }
 
@@ -199,8 +191,7 @@ export function useSearch(
       // Removed else block to prevent premature clearing of activeActivations
       // Subsequent items will arrive via `search-update` events.
       // The loading state will be managed by `search-end`.
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Search initiation failed:', error)
       searchResults.value = []
       searchResult.value = null
@@ -234,8 +225,6 @@ export function useSearch(
     }
   }
 
-
-
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
     if (!itemToExecute) {
@@ -243,13 +232,13 @@ export function useSearch(
       return
     }
 
-    const isPluginFeature
-      = itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
-    const keepCoreBoxOpen
-      = (itemToExecute.meta as any)?.keepCoreBoxOpen === true
-        || (itemToExecute.meta as any)?.intelligence?.keepCoreBoxOpen === true
-    const shouldRestoreAfterExecute
-      = isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
+    const isPluginFeature =
+      itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
+    const keepCoreBoxOpen =
+      (itemToExecute.meta as any)?.keepCoreBoxOpen === true ||
+      (itemToExecute.meta as any)?.intelligence?.keepCoreBoxOpen === true
+    const shouldRestoreAfterExecute =
+      isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
       touchChannel.sendSync('core-box:hide')
@@ -282,23 +271,21 @@ export function useSearch(
               type: TuffInputType.Image,
               content: clipboardData.content,
               thumbnail: clipboardData.thumbnail,
-              metadata: clipboardData.meta,
+              metadata: clipboardData.meta ?? undefined
             })
-          }
-          else if (clipboardData.type === 'files') {
+          } else if (clipboardData.type === 'files') {
             inputs.push({
               type: TuffInputType.Files,
               content: clipboardData.content, // Already JSON serialized
-              metadata: clipboardData.meta,
+              metadata: clipboardData.meta ?? undefined
             })
-          }
-          else if (clipboardData.type === 'text' && clipboardData.rawContent) {
+          } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
             // Has HTML content
             inputs.push({
               type: TuffInputType.Html,
               content: clipboardData.content,
               rawContent: clipboardData.rawContent,
-              metadata: clipboardData.meta,
+              metadata: clipboardData.meta ?? undefined
             })
           }
 
@@ -306,8 +293,7 @@ export function useSearch(
             serializedSearchResult.query.inputs = inputs
           }
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.debug('[useSearch] Failed to auto-detect clipboard:', error)
         // Continue execution even if clipboard detection fails
       }
@@ -321,11 +307,11 @@ export function useSearch(
         serializedSearchResult
           ? {
               item: serializedItem,
-              searchResult: serializedSearchResult,
+              searchResult: serializedSearchResult
             }
           : {
-              item: serializedItem,
-            },
+              item: serializedItem
+            }
       )
 
       activeActivations.value = newActivationState
@@ -339,11 +325,9 @@ export function useSearch(
         clipboardOptions.last = null
         clipboardOptions.detectedAt = null
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Execute failed:', error)
-    }
-    finally {
+    } finally {
       loading.value = false
 
       if (shouldRestoreAfterExecute) {
@@ -378,7 +362,7 @@ export function useSearch(
   function handleExit(): void {
     if (activeActivations.value && activeActivations.value.length > 0) {
       console.log(
-        '[useSearch] handleExit: activeActivations exist, calling deactivateAllProviders.',
+        '[useSearch] handleExit: activeActivations exist, calling deactivateAllProviders.'
       )
       deactivateAllProviders()
       searchVal.value = '' // Clear search value to reset state
@@ -392,15 +376,15 @@ export function useSearch(
 
           searchResults.value = searchResults.value.filter((item: TuffItem) => {
             return (
-              !item.meta?.extension?.pushedItemId
-              || !pushedIds.has(item.meta?.extension?.pushedItemId)
+              !item.meta?.extension?.pushedItemId ||
+              !pushedIds.has(item.meta?.extension?.pushedItemId)
             )
           })
         }
 
         if (boxOptions.data?.plugin) {
           touchChannel.send('trigger-plugin-feature-exit', {
-            plugin: boxOptions.data.plugin,
+            plugin: boxOptions.data.plugin
           })
         }
         boxOptions.data.feature = undefined
@@ -408,18 +392,16 @@ export function useSearch(
 
       boxOptions.mode = searchVal.value.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
       boxOptions.data = {}
-    }
-    else if (searchVal.value) {
+    } else if (searchVal.value) {
       searchVal.value = ''
-    }
-    else {
+    } else {
       touchChannel.sendSync('core-box:hide')
     }
   }
 
   const debouncedResize = useDebounceFn(() => {
     touchChannel.sendSync('core-box:expand', {
-      mode: res.value.length > 0 ? 'max' : 'collapse',
+      mode: res.value.length > 0 ? 'max' : 'collapse'
     })
   }, 10)
 
@@ -431,7 +413,7 @@ export function useSearch(
       }
       debouncedResize()
     },
-    { deep: true },
+    { deep: true }
   )
 
   watch(searchVal, (newSearchVal) => {
@@ -457,8 +439,7 @@ export function useSearch(
       // console.log('[useSearch] Received subsequent item batch:', data.items.length)
       // Subsequent batches are already sorted and should be appended.
       searchResults.value.push(...data.items)
-    }
-    else {
+    } else {
       // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
@@ -485,7 +466,7 @@ export function useSearch(
         activeActivations.value = providers
       }
     })
-    
+
     // Trigger initial search to show recommendations when CoreBox opens
     handleSearch()
   })
@@ -536,6 +517,6 @@ export function useSearch(
     handleExecute,
     handleExit,
     handleSearchImmediate,
-    deactivateProvider,
+    deactivateProvider
   }
 }
