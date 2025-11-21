@@ -146,6 +146,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null
+  private initializationFailed: boolean = false
+  private initializationError: Error | null = null
+  private initializationContext: ProviderContext | null = null
   private readonly WATCH_PATHS: string[]
   private readonly normalizedWatchPaths: string[]
   private databaseFilePath: string | null = null
@@ -465,25 +468,49 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
+    this.initializationContext = context  // 保存 context 用于重建
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
+
+    // 🔍 DEBUG: 确认 onLoad 被调用
+    this.logInfo('[DEBUG] FileProvider.onLoad called', {
+      watchPathsCount: this.WATCH_PATHS.length,
+      watchPaths: JSON.stringify(this.WATCH_PATHS.slice(0, 3))
+    })
 
     this.initializeBackgroundTaskService()
 
     // 启动异步后台索引任务，不阻塞onLoad
     if (!this.isInitializing) {
       this.logInfo('onLoad: starting background index task...')
+      // 重置状态
+      this.isInitializing = null
+      this.initializationFailed = false
+      this.initializationError = null
+      
       // 不等待初始化完成，让它在后台运行
-      this.isInitializing = this._initialize().catch((error) => {
-        this.logError('Background index task failed', error)
-        this.emitIndexingProgress('idle', 0, 0)
-      })
+      this.isInitializing = this._initialize()
+        .then(() => {
+          this.initializationFailed = false
+          this.logInfo('File indexing initialization completed successfully')
+        })
+        .catch((error) => {
+          this.initializationFailed = true
+          this.initializationError = error
+          this.logError('Background index task failed', error)
+          this.emitIndexingProgress('idle', 0, 0)
+          // 通知前端索引失败
+          this.notifyIndexingFailure(error)
+        })
+    } else {
+      this.logInfo('[DEBUG] Skipping initialization - already in progress')
     }
 
     // 只等待文件系统监听器设置完成，不等待索引完成
     await this.ensureFileSystemWatchers()
     this.registerOpenersChannel(context)
+    this.registerIndexingChannels(context)  // 注册索引管理通道
     const loadDuration = performance.now() - loadStart
     this.logInfo('Provider onLoad completed (indexing continues in background)', {
       duration: formatDuration(loadDuration)
@@ -552,6 +579,86 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
 
     this.openersChannelRegistered = true
+  }
+
+  /**
+   * 通知前端索引初始化失败
+   */
+  private notifyIndexingFailure(error: Error): void {
+    if (!this.touchApp) {
+      this.logWarn('TouchApp not available, cannot send failure notification')
+      return
+    }
+
+    this.touchApp.channel
+      .send(ChannelType.MAIN, 'file-index:failed', {
+        error: error.message,
+        stack: error.stack,
+        timestamp: Date.now()
+      })
+      .catch((err) => {
+        this.logError('Failed to send indexing failure notification', err)
+      })
+  }
+
+  /**
+   * 获取索引状态
+   */
+  public getIndexingStatus() {
+    return {
+      isInitializing: this.isInitializing !== null,
+      initializationFailed: this.initializationFailed,
+      error: this.initializationError?.message || null,
+      progress: { ...this.indexingProgress }
+    }
+  }
+
+  /**
+   * 手动触发重建索引（清空 scan_progress 强制全量扫描）
+   */
+  public async rebuildIndex(): Promise<void> {
+    if (this.isInitializing) {
+      throw new Error('Indexing is already in progress')
+    }
+
+    if (!this.initializationContext) {
+      throw new Error('Cannot rebuild: initialization context not available')
+    }
+
+    this.logInfo('Manual index rebuild triggered')
+
+    // 清空 scan_progress 表，强制全量扫描
+    if (this.dbUtils) {
+      const db = this.dbUtils.getDb()
+      await db.delete(scanProgress)
+      this.logInfo('Cleared scan_progress table for full rescan')
+    }
+
+    // 重新初始化
+    await this.onLoad(this.initializationContext)
+  }
+
+  /**
+   * 注册索引管理相关的 IPC 通道
+   */
+  private registerIndexingChannels(context: ProviderContext): void {
+    const channel = context.touchApp.channel
+
+    // 查询索引状态
+    channel.regChannel(ChannelType.MAIN, 'file-index:status', () => {
+      return this.getIndexingStatus()
+    })
+
+    // 手动触发重建
+    channel.regChannel(ChannelType.MAIN, 'file-index:rebuild', async () => {
+      try {
+        await this.rebuildIndex()
+        return { success: true, message: 'Index rebuild started' }
+      } catch (error: any) {
+        this.logError('Failed to trigger index rebuild', error)
+        return { success: false, error: error.message }
+      }
+    })
   }
 
   private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
@@ -1098,7 +1205,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const db = this.dbUtils.getDb()
     const indexEnsuredStart = performance.now()
     await this.ensureKeywordIndexes(db)
-    await this.ensureIndexingSupportTables(db)
+    // file_index_progress 表由数据库迁移自动创建，无需手动创建
     this.logInfo('Keyword indexes ensured', {
       duration: formatDuration(performance.now() - indexEnsuredStart)
     })
@@ -1140,6 +1247,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const newPathsToScan = this.WATCH_PATHS.filter((p) => !completedScanPaths.has(p))
     const reconciliationPaths = this.WATCH_PATHS.filter((p) => completedScanPaths.has(p))
 
+    // 🔍 DEBUG: 详细输出扫描策略信息
+    this.logInfo('[DEBUG] File indexing scan strategy', {
+      totalWatchPaths: this.WATCH_PATHS.length,
+      watchPaths: JSON.stringify(this.WATCH_PATHS),
+      completedScansCount: completedScans.length,
+      completedPaths: JSON.stringify(Array.from(completedScanPaths)),
+      newPathsCount: newPathsToScan.length,
+      newPaths: JSON.stringify(newPathsToScan),
+      reconciliationCount: reconciliationPaths.length,
+      reconciliationPaths: JSON.stringify(reconciliationPaths)
+    })
+    
     this.logInfo('Scan strategy prepared', {
       newPaths: newPathsToScan.length,
       reconciliationPaths: reconciliationPaths.length,
@@ -2418,20 +2537,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async ensureIndexingSupportTables(db: LibSQLDatabase<typeof schema>): Promise<void> {
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS file_index_progress (
-        file_id INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
-        status TEXT NOT NULL DEFAULT 'pending',
-        progress INTEGER NOT NULL DEFAULT 0,
-        processed_bytes INTEGER,
-        total_bytes INTEGER,
-        last_error TEXT,
-        started_at INTEGER,
-        updated_at INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-  }
+
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const filePath = args.item.meta?.file?.path
