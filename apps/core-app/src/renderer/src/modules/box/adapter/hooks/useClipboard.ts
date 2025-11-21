@@ -24,7 +24,13 @@ function normalizeTimestamp(value?: string | number | Date | null): number | nul
 // Track auto-pasted timestamps to prevent duplicate auto-paste
 const autoPastedTimestamps = new Set<number>()
 
-// Periodically clean up old timestamps (older than 1 hour)
+/**
+ * Cleans up old autopaste records (older than 1 hour)
+ *
+ * @remarks
+ * This function is called periodically to prevent memory leaks
+ * from accumulating old timestamps in the Set.
+ */
 function cleanupAutoPastedRecords(): void {
   const oneHourAgo = Date.now() - 60 * 60 * 1000
   for (const ts of autoPastedTimestamps) {
@@ -32,6 +38,24 @@ function cleanupAutoPastedRecords(): void {
       autoPastedTimestamps.delete(ts)
     }
   }
+}
+
+/**
+ * Resets the autopaste state for a new CoreBox session
+ *
+ * @remarks
+ * Should be called when CoreBox opens to clear stale autopaste records
+ * from previous sessions. This ensures consistent behavior across sessions
+ * and prevents dismissed clipboard items from affecting future sessions.
+ *
+ * Also performs cleanup of old records (>1 hour) to prevent memory leaks.
+ */
+function resetAutoPasteState(): void {
+  // Clear all autopaste records from previous session
+  autoPastedTimestamps.clear()
+
+  // Also perform cleanup of any stale records (defensive)
+  cleanupAutoPastedRecords()
 }
 
 export function useClipboard(
@@ -242,11 +266,34 @@ export function useClipboard(
     }
   }
 
+  /**
+   * Clears the current clipboard state from UI
+   *
+   * @param options - Clear options
+   * @param options.remember - If true, marks this clipboard item as dismissed
+   *                          to prevent it from reappearing on next CoreBox open.
+   *                          Also adds to autoPastedTimestamps to prevent auto-fill.
+   *
+   * @remarks
+   * This function manages two separate state synchronization mechanisms:
+   * 1. lastClearedTimestamp: Prevents dismissed clipboard from `handlePaste()`
+   * 2. autoPastedTimestamps: Prevents dismissed clipboard from `handleAutoFill()`
+   *
+   * Both must be updated when user explicitly dismisses (ESC key) to ensure
+   * consistent behavior across CoreBox sessions.
+   */
   function clearClipboard(options?: { remember?: boolean }): void {
     const remember = options?.remember ?? false
 
     if (remember && clipboardOptions.last?.timestamp) {
       clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+
+      // CRITICAL: Also add to autoPastedTimestamps to prevent auto-fill
+      // This ensures dismissed clipboard won't auto-fill on next open
+      const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
+      if (timestamp !== null) {
+        autoPastedTimestamps.add(timestamp)
+      }
     }
     else if (!remember) {
       clipboardOptions.lastClearedTimestamp = null
@@ -293,5 +340,6 @@ export function useClipboard(
     handleAutoFill,
     applyToActiveApp,
     clearClipboard,
+    resetAutoPasteState,
   }
 }

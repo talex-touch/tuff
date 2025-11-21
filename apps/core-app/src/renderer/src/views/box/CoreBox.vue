@@ -38,14 +38,14 @@ const boxOptions = reactive<IBoxOptions>({
   mode: BoxMode.INPUT,
   focus: 0,
   file: { buffer: null, paths: [] },
-  data: {},
+  data: {}
 })
 
 // Create shared clipboard state
 const clipboardOptions = reactive<any>({
   last: null,
   detectedAt: null,
-  lastClearedTimestamp: null,
+  lastClearedTimestamp: null
 })
 
 const { t } = useI18n()
@@ -60,7 +60,7 @@ const {
   handleExecute,
   handleExit,
   handleSearchImmediate,
-  deactivateProvider,
+  deactivateProvider
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
@@ -69,25 +69,25 @@ function handleClipboardChange() {
   handleSearchImmediate()
 }
 
-const { handlePaste, handleAutoFill, clearClipboard } = useClipboard(
+const { handlePaste, handleAutoFill, clearClipboard, resetAutoPasteState } = useClipboard(
   boxOptions,
   clipboardOptions,
   handleClipboardChange,
-  searchVal, // Pass searchVal for short text auto-fill
+  searchVal // Pass searchVal for short text auto-fill
 )
 
 const completionDisplay = computed(() => {
   if (
-    !searchVal.value.trim()
-    || !activeItem.value
-    || boxOptions.mode === BoxMode.FEATURE
-    || !activeItem.value.render
+    !searchVal.value.trim() ||
+    !activeItem.value ||
+    boxOptions.mode === BoxMode.FEATURE ||
+    !activeItem.value.render
   ) {
     return ''
   }
 
-  const completion
-    = activeItem.value.render.completion ?? activeItem.value.render.basic?.title ?? ''
+  const completion =
+    activeItem.value.render.completion ?? activeItem.value.render.basic?.title ?? ''
 
   if (completion.startsWith(searchVal.value)) {
     return completion.substring(searchVal.value.length)
@@ -97,21 +97,15 @@ const completionDisplay = computed(() => {
 })
 
 const shouldShowAiSuggestion = computed(() => {
-  if (loading.value)
-    return false
-  if (res.value.length > 0)
-    return false
-  if (boxOptions.mode !== BoxMode.INPUT && boxOptions.mode !== BoxMode.COMMAND)
-    return false
-  if (activeActivations.value && activeActivations.value.length > 0)
-    return false
+  if (loading.value) return false
+  if (res.value.length > 0) return false
+  if (boxOptions.mode !== BoxMode.INPUT && boxOptions.mode !== BoxMode.COMMAND) return false
+  if (activeActivations.value && activeActivations.value.length > 0) return false
 
   const trimmed = searchVal.value.trim()
-  if (!trimmed.length)
-    return false
+  if (!trimmed.length) return false
   const lower = trimmed.toLowerCase()
-  if (lower === 'ai' || lower.startsWith('ai '))
-    return false
+  if (lower === 'ai' || lower.startsWith('ai ')) return false
 
   return true
 })
@@ -126,8 +120,7 @@ function handleAskAiSuggestion(): void {
 
   if (searchVal.value !== suggestion) {
     searchVal.value = suggestion
-  }
-  else {
+  } else {
     void handleSearchImmediate()
   }
 
@@ -141,7 +134,7 @@ useVisibility(
   handleAutoFill,
   handlePaste,
   clearClipboard,
-  boxInputRef,
+  boxInputRef
 )
 const itemRefs = ref<HTMLElement[]>([])
 
@@ -168,7 +161,7 @@ useKeyboard(
   clearClipboard,
   activeActivations,
   handlePaste,
-  itemRefs,
+  itemRefs
 )
 useChannel(boxOptions, res)
 
@@ -182,15 +175,15 @@ const previewHistory = reactive<{
 }>({
   visible: false,
   loading: false,
-  items: [],
+  items: []
 })
 
 function broadcastHistoryVisibility(visible: boolean): void {
   window.__coreboxHistoryVisible = visible
   window.dispatchEvent(
     new CustomEvent('corebox:history-visibility-change', {
-      detail: { visible },
-    }),
+      detail: { visible }
+    })
   )
 }
 
@@ -216,19 +209,18 @@ watch(
     broadcastHistoryVisibility(visible)
     if (!visible) {
       historyActiveIndex.value = -1
-    }
-    else {
+    } else {
       ensureHistorySelection(true)
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(
   () => previewHistory.items.length,
   () => {
     ensureHistorySelection()
-  },
+  }
 )
 
 function focusMainInput(): void {
@@ -244,16 +236,14 @@ async function loadPreviewHistory(): Promise<void> {
   try {
     const response = await touchChannel.send('clipboard:query', {
       category: 'preview',
-      limit: 20,
+      limit: 20
     })
     previewHistory.items = response?.data ?? []
     ensureHistorySelection()
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[CoreBox] Failed to load calculation history:', error)
     toast.error('加载最近处理失败')
-  }
-  finally {
+  } finally {
     previewHistory.loading = false
   }
 }
@@ -266,8 +256,7 @@ function openPreviewHistory(): void {
 }
 
 function shrinkPreviewHistory(options?: { focusInput?: boolean }): void {
-  if (!previewHistory.visible)
-    return
+  if (!previewHistory.visible) return
   previewHistory.visible = false
   historyActiveIndex.value = -1
   if (options?.focusInput ?? true) {
@@ -277,16 +266,14 @@ function shrinkPreviewHistory(options?: { focusInput?: boolean }): void {
 
 function applyPreviewHistory(entry: CalculationHistoryEntry): void {
   const expression = entry.meta?.expression ?? entry.meta?.payload?.title ?? entry.content ?? ''
-  if (!expression)
-    return
+  if (!expression) return
   searchVal.value = expression
   shrinkPreviewHistory({ focusInput: false })
   focusMainInput()
 }
 
 function applyHistorySelection(): void {
-  if (historyActiveIndex.value < 0)
-    return
+  if (historyActiveIndex.value < 0) return
   const entry = previewHistory.items[historyActiveIndex.value]
   if (entry) {
     applyPreviewHistory(entry)
@@ -304,8 +291,7 @@ function handleHistoryHideEvent(): void {
 function handleCopyPreviewEvent(event: Event): void {
   const detail = (event as CustomEvent<{ value: string }>).detail
   const value = detail?.value
-  if (!value)
-    return
+  if (!value) return
   touchChannel
     .send('clipboard:write-text', { text: value })
     .then(() => {
@@ -323,20 +309,15 @@ function isClickInsideHistory(target: EventTarget | null): boolean {
 }
 
 function handleGlobalMouseDown(event: MouseEvent): void {
-  if (event.button !== 0 || !previewHistory.visible)
-    return
-  if (!document.body.classList.contains('core-box'))
-    return
-  if (isClickInsideHistory(event.target))
-    return
+  if (event.button !== 0 || !previewHistory.visible) return
+  if (!document.body.classList.contains('core-box')) return
+  if (isClickInsideHistory(event.target)) return
   shrinkPreviewHistory()
 }
 
 function handleHistoryKeydown(event: KeyboardEvent): void {
-  if (!previewHistory.visible)
-    return
-  if (!document.body.classList.contains('core-box'))
-    return
+  if (!previewHistory.visible) return
+  if (!document.body.classList.contains('core-box')) return
 
   const key = event.key
   if (key === 'Escape') {
@@ -350,8 +331,7 @@ function handleHistoryKeydown(event: KeyboardEvent): void {
     if (previewHistory.items.length) {
       if (historyActiveIndex.value < 0) {
         historyActiveIndex.value = 0
-      }
-      else if (historyActiveIndex.value < previewHistory.items.length - 1) {
+      } else if (historyActiveIndex.value < previewHistory.items.length - 1) {
         historyActiveIndex.value += 1
       }
     }
@@ -364,8 +344,7 @@ function handleHistoryKeydown(event: KeyboardEvent): void {
     if (previewHistory.items.length) {
       if (historyActiveIndex.value === -1) {
         historyActiveIndex.value = previewHistory.items.length - 1
-      }
-      else if (historyActiveIndex.value > 0) {
+      } else if (historyActiveIndex.value > 0) {
         historyActiveIndex.value -= 1
       }
     }
@@ -384,15 +363,19 @@ function handleHistoryKeydown(event: KeyboardEvent): void {
 }
 
 function handleHistoryContextMenu(event: MouseEvent): void {
-  if (!document.body.classList.contains('core-box'))
-    return
-  if (previewHistory.visible)
-    return
+  if (!document.body.classList.contains('core-box')) return
+  if (previewHistory.visible) return
   event.preventDefault()
   openPreviewHistory()
 }
 
 onMounted(() => {
+  /**
+   * Reset autopaste state on CoreBox open
+   * Prevents clipboard items from previous sessions affecting current session
+   */
+  resetAutoPasteState()
+
   window.addEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.addEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.addEventListener('corebox:copy-preview', handleCopyPreviewEvent)
@@ -426,8 +409,7 @@ function handleItemTrigger(index: number, item: TuffItem): void {
 }
 
 const addon = computed(() => {
-  if (!activeItem.value)
-    return undefined
+  if (!activeItem.value) return undefined
 
   const item = activeItem.value
 
@@ -441,7 +423,7 @@ const addon = computed(() => {
 const pinIcon = computed<ITuffIcon>(() => ({
   type: 'class',
   value: appSetting.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
-  status: 'normal',
+  status: 'normal'
 }))
 </script>
 
@@ -459,21 +441,13 @@ const pinIcon = computed<ITuffIcon>(() => ({
 
     <BoxInput ref="boxInputRef" v-model="searchVal" :box-options="boxOptions">
       <template #completion>
-        <div v-html="completionDisplay" />
+        <div class="text-sm truncate" v-html="completionDisplay" />
       </template>
     </BoxInput>
 
     <TagSection :box-options="boxOptions" :clipboard-options="clipboardOptions" />
 
     <div class="CoreBox-Configure">
-      <!-- <RemixIcon
-        v-if="loading"
-        style="line"
-        name="close-circle"
-        class="cancel-button"
-        @click="cancelSearch"
-        title="取消搜索"
-      /> -->
       <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
     </div>
   </div>
@@ -490,13 +464,10 @@ const pinIcon = computed<ITuffIcon>(() => ({
           :index="index"
           @trigger="handleItemTrigger(index, item)"
         />
-        <!-- @mousemove="boxOptions.focus = index" -->
       </TouchScroll>
       <div v-if="shouldShowAiSuggestion" class="CoreBoxRes-Empty CoreBoxRes-AI">
         <div class="AiSuggestion">
-          <div class="AiSuggestion-Icon">
-            🤖
-          </div>
+          <div class="AiSuggestion-Icon">🤖</div>
           <div class="AiSuggestion-Body">
             <h3 class="AiSuggestion-Title">
               {{ aiSuggestionTitle }}
@@ -674,7 +645,9 @@ div.CoreBoxRes {
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
 
     &:hover {
       transform: translateY(-1px);
