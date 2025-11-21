@@ -3,6 +3,7 @@ import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 // import SettingStorage from './SettingStorage.vue'
 import SettingAbout from './SettingAbout.vue'
 import SettingDownload from './SettingDownload.vue'
+import SettingFileIndex from './SettingFileIndex.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
 import SettingSetup from './SettingSetup.vue'
@@ -23,6 +24,8 @@ import SettingUser from './SettingUser.vue'
       <SettingSetup />
 
       <SettingTools />
+
+      <SettingFileIndex />
 
       <SettingDownload />
 
