@@ -1,5 +1,5 @@
 import type { TimingLogLevel, TimingMeta, TimingOptions } from '@talex-touch/utils'
-import { formatDuration } from './logger'
+import { fileProviderLog, formatDuration } from './logger'
 
 /**
  * Extended timing metadata for file provider operations
@@ -55,7 +55,6 @@ export const FILE_TIMING_BASE_OPTIONS: TimingOptions = {
       return
     }
     const level = FILE_TIMING_STYLE[entry.logLevel ?? 'info'] ?? 'debug'
-    const { fileProviderLog } = require('./logger')
     if (level === 'warn') {
       fileProviderLog.warn(message)
     }

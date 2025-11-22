@@ -11,6 +11,7 @@ import {
   DownloadModule,
   DownloadPriority,
 } from '@talex-touch/utils'
+import { app, shell } from 'electron'
 import axios from 'axios'
 import { getAppVersionSafe } from '../../utils/version-util'
 
@@ -524,10 +525,8 @@ export class UpdateSystem {
    * Get update download path
    */
   private async getUpdateDownloadPath(): Promise<string> {
-    const { app } = await import('electron')
     const downloadPath = path.join(app.getPath('downloads'), 'tuff-updates')
 
-    // Ensure directory exists
     try {
       await fs.mkdir(downloadPath, { recursive: true })
     }
@@ -561,14 +560,7 @@ export class UpdateSystem {
    */
   private async triggerInstallation(destination: string, filename: string): Promise<void> {
     const filePath = path.join(destination, filename)
-    const { shell } = await import('electron')
-
-    // Open the installer file
-    // On macOS, this will open the DMG or PKG
-    // On Windows, this will run the installer
-    // On Linux, this will open the AppImage or DEB/RPM
     await shell.openPath(filePath)
-
     console.log(`[UpdateSystem] Opened installer: ${filePath}`)
   }
 }

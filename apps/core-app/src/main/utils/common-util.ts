@@ -1,4 +1,5 @@
 import path from 'node:path'
+import os from 'node:os'
 import fse from 'fs-extra'
 
 export enum Platform {
@@ -77,7 +78,6 @@ export function getMacOSVersion(): number | null {
   }
 
   try {
-    const os = require('node:os')
     const release = os.release()
     // macOS version format: 23.0.0 (corresponds to macOS 14.0)
     // Version mapping: 20.x = macOS 11, 21.x = macOS 12, 22.x = macOS 13, 23.x = macOS 14
