@@ -196,6 +196,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     total: 0,
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
   }
+  
+  private indexingStartTime: number | null = null
+  private indexingStats = {
+    processedItems: 0,
+    startTime: 0,
+    lastUpdateTime: 0,
+    averageItemsPerSecond: 0
+  }
 
   private readonly enableFileIconExtraction =
     (process.env.TALEX_FILE_PROVIDER_EXTRACT_ICONS ?? 'true').toLowerCase() !== 'false'
@@ -605,11 +613,73 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * 获取索引状态
    */
   public getIndexingStatus() {
+    const now = Date.now()
+    const isIndexing = this.isInitializing !== null
+    let estimatedCompletion: number | null = null
+    let estimatedRemainingMs: number | null = null
+    
+    if (isIndexing && this.indexingStartTime && this.indexingProgress.total > 0) {
+      const elapsed = now - this.indexingStartTime
+      const progress = this.indexingProgress.current / this.indexingProgress.total
+      
+      if (progress > 0.01) { // Only estimate if we have at least 1% progress
+        const estimatedTotalTime = elapsed / progress
+        estimatedRemainingMs = estimatedTotalTime - elapsed
+        estimatedCompletion = now + estimatedRemainingMs
+      }
+    }
+    
     return {
-      isInitializing: this.isInitializing !== null,
+      isInitializing: isIndexing,
       initializationFailed: this.initializationFailed,
       error: this.initializationError?.message || null,
-      progress: { ...this.indexingProgress }
+      progress: { ...this.indexingProgress },
+      startTime: this.indexingStartTime,
+      estimatedCompletion,
+      estimatedRemainingMs,
+      averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
+    }
+  }
+  
+  /**
+   * Get battery level and charging status
+   */
+  public async getBatteryLevel(): Promise<{ level: number; charging: boolean } | null> {
+    try {
+      const { powerMonitor } = await import('electron')
+      
+      // Check if we're on AC power
+      const onBattery = powerMonitor.onBatteryPower ?? false
+      
+      // For macOS, we can get more detailed battery info
+      if (process.platform === 'darwin') {
+        const { execFile } = await import('child_process')
+        const { promisify } = await import('util')
+        const execFileAsync = promisify(execFile)
+        
+        try {
+          const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
+          const match = /\d+%/.exec(stdout)
+          if (match) {
+            const level = parseInt(match[0].replace('%', ''), 10)
+            return {
+              level,
+              charging: !onBattery
+            }
+          }
+        } catch (error) {
+          this.logWarn('Failed to get battery level from pmset', error)
+        }
+      }
+      
+      // Fallback: assume full battery if on AC power
+      return {
+        level: onBattery ? 50 : 100,
+        charging: !onBattery
+      }
+    } catch (error) {
+      this.logError('Failed to check battery status', error)
+      return null
     }
   }
 
@@ -657,6 +727,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       } catch (error: any) {
         this.logError('Failed to trigger index rebuild', error)
         return { success: false, error: error.message }
+      }
+    })
+    
+    // 查询电池状态
+    channel.regChannel(ChannelType.MAIN, 'file-index:battery-level', async () => {
+      try {
+        const batteryStatus = await this.getBatteryLevel()
+        return batteryStatus
+      } catch (error: any) {
+        this.logError('Failed to get battery level', error)
+        return null
       }
     })
   }
@@ -1182,14 +1263,60 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     current: number,
     total: number
   ): void {
+    const now = Date.now()
+    
+    // Track start time when indexing begins
+    if (stage !== 'idle' && stage !== 'completed' && !this.indexingStartTime) {
+      this.indexingStartTime = now
+      this.indexingStats.startTime = now
+      this.indexingStats.processedItems = 0
+      this.indexingStats.lastUpdateTime = now
+    }
+    
+    // Update stats
+    if (this.indexingStartTime && stage !== 'idle' && stage !== 'completed') {
+      const elapsed = (now - this.indexingStats.startTime) / 1000 // seconds
+      if (elapsed > 0 && current > 0) {
+        this.indexingStats.averageItemsPerSecond = current / elapsed
+      }
+      this.indexingStats.processedItems = current
+      this.indexingStats.lastUpdateTime = now
+    }
+    
+    // Reset on completion or idle
+    if (stage === 'completed' || stage === 'idle') {
+      this.indexingStartTime = null
+      this.indexingStats = {
+        processedItems: 0,
+        startTime: 0,
+        lastUpdateTime: 0,
+        averageItemsPerSecond: 0
+      }
+    }
+    
     this.indexingProgress = { stage, current, total }
+    
     if (this.touchApp) {
+      // Calculate estimated completion
+      let estimatedRemainingMs: number | null = null
+      if (this.indexingStartTime && total > 0 && current > 0) {
+        const elapsed = now - this.indexingStartTime
+        const progress = current / total
+        if (progress > 0.01) {
+          const estimatedTotalTime = elapsed / progress
+          estimatedRemainingMs = estimatedTotalTime - elapsed
+        }
+      }
+      
       this.touchApp.channel
         .send(ChannelType.MAIN, 'file-index:progress', {
           stage,
           current,
           total,
-          progress: total > 0 ? Math.round((current / total) * 100) : 0
+          progress: total > 0 ? Math.round((current / total) * 100) : 0,
+          startTime: this.indexingStartTime,
+          estimatedRemainingMs,
+          averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
         })
         .catch((error) => {
           console.warn('[FileProvider] Failed to emit indexing progress:', error)

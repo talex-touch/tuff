@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingUpdate">
-import type { UpdateSettings } from '@talex-touch/utils'
+import type { CachedUpdateRecord, UpdateSettings } from '@talex-touch/utils'
 import { AppPreviewChannel } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -25,6 +25,7 @@ const {
   updateSettings,
   clearUpdateCache,
   getUpdateStatus,
+  getCachedRelease,
 } = useApplicationUpgrade()
 
 const settings = ref<UpdateSettings | null>(null)
@@ -32,6 +33,7 @@ const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
 const autoDownloadEnabled = ref<boolean>(false)
 const lastCheck = ref<number | null>(null)
+const cachedRelease = ref<CachedUpdateRecord | null>(null)
 
 const fetching = ref(false)
 const channelSaving = ref(false)
@@ -97,6 +99,7 @@ async function loadSettings(): Promise<void> {
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = (fetched as any).autoDownload ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
+    await refreshCachedRelease(selectedChannel.value)
   }
   catch (error) {
     console.error('[SettingUpdate] Failed to load settings:', error)
@@ -117,6 +120,16 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
+async function refreshCachedRelease(channel: AppPreviewChannel = selectedChannel.value): Promise<void> {
+  try {
+    cachedRelease.value = await getCachedRelease(channel)
+  }
+  catch (error) {
+    console.warn('[SettingUpdate] Failed to refresh cached release:', error)
+    cachedRelease.value = null
+  }
+}
+
 async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
   if (!settings.value || channelSaving.value)
     return
@@ -128,6 +141,7 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
     await updateSettings({ updateChannel: value })
     settings.value.updateChannel = value
     toast.success(t('settings.settingUpdate.messages.channelSaved'))
+    await refreshCachedRelease(value)
   }
   catch (error) {
     console.error('[SettingUpdate] Failed to update channel:', error)
@@ -188,6 +202,7 @@ async function handleManualCheck(): Promise<void> {
   try {
     const result = await checkApplicationUpgrade(true)
     await refreshStatus()
+    await refreshCachedRelease()
     updateLastResultMessage(result)
     if (result?.hasUpdate && result.release) {
       toast.success(
@@ -221,6 +236,7 @@ async function handleClearCache(): Promise<void> {
   try {
     await clearUpdateCache()
     toast.success(t('settings.settingUpdate.messages.cacheCleared'))
+    cachedRelease.value = null
   }
   catch (error) {
     console.error('[SettingUpdate] Failed to clear cache:', error)
@@ -343,6 +359,9 @@ function updateLastResultMessage(result?: Awaited<ReturnType<typeof checkApplica
       </div>
       <div v-if="lastResultMessage" class="status-message">
         {{ lastResultMessage }}
+      </div>
+      <div v-if="cachedRelease?.release" class="status-message">
+        {{ t('settings.settingUpdate.status.cachedRelease', { version: cachedRelease.release.tag_name }) }}
       </div>
     </TuffBlockSlot>
 

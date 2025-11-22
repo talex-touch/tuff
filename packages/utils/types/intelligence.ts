@@ -382,7 +382,7 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
   },
   'embedding.generate': {
     id: 'embedding.generate',
-    label: 'Embedding',
+    label: 'Embedding / 向量生成',
     description: '为向量检索/摘要生成 embedding',
     providers: [
       {
@@ -391,11 +391,17 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
         priority: 1,
         enabled: true,
       },
+      {
+        providerId: 'openai-default',
+        models: ['text-embedding-3-small', 'text-embedding-3-large'],
+        priority: 2,
+        enabled: false,
+      },
     ],
   },
   'vision.ocr': {
     id: 'vision.ocr',
-    label: '图像 OCR',
+    label: '图像 OCR / Image Recognition',
     description: '识别截图、图片中的文字并生成关键词',
     promptTemplate:
       '你是 OCR 助手，识别图片所有文本，生成 keywords 数组（5 个以内）辅助搜索。',
@@ -403,10 +409,198 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
     providers: [
       {
         providerId: 'siliconflow-default',
-        models: ['deepseek-ai/DeepSeek-OCR', 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'],
+        models: ['deepseek-ai/DeepSeek-OCR', 'THUDM/GLM-4.1V-9B-Thinking'],
         priority: 1,
         enabled: true,
-        metadata: { defaultVisionModel: 'deepseek-ai/DeepSeek-OCR' },
+      },
+      {
+        providerId: 'openai-default',
+        models: ['gpt-4o', 'gpt-4o-mini'],
+        priority: 2,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        models: ['claude-3-5-sonnet-20241022'],
+        priority: 3,
+        enabled: false,
+      },
+    ],
+  },
+  'text.translate': {
+    id: 'text.translate',
+    label: '翻译 / Translation',
+    description: '多语言文本翻译',
+    promptTemplate: '你是专业翻译助手。请将以下文本翻译成 {{targetLang}}，只返回译文，不要解释。',
+    providers: [
+      { providerId: 'deepseek-default', priority: 1, enabled: true },
+      { providerId: 'openai-default', priority: 2, enabled: false },
+      { providerId: 'anthropic-default', priority: 3, enabled: false },
+    ],
+  },
+  'text.summarize': {
+    id: 'text.summarize',
+    label: '摘要 / Summarization',
+    description: '生成文本内容的简洁摘要',
+    promptTemplate: '请用简洁的语言总结以下内容的核心要点，不超过 {{maxLength}} 字。',
+    providers: [
+      { providerId: 'deepseek-default', priority: 1, enabled: true },
+      { providerId: 'openai-default', priority: 2, enabled: false },
+      { providerId: 'anthropic-default', priority: 3, enabled: false },
+    ],
+  },
+  'intent.detect': {
+    id: 'intent.detect',
+    label: '意图识别 / Intent Detection',
+    description: '识别用户查询的意图类型（搜索、打开、计算等）',
+    promptTemplate: '分析用户输入的意图，返回 JSON 格式：{intent: string, confidence: number, entities: string[]}',
+    providers: [
+      { providerId: 'deepseek-default', priority: 1, enabled: true },
+      { providerId: 'openai-default', priority: 2, enabled: false },
+    ],
+  },
+  'code.generate': {
+    id: 'code.generate',
+    label: '代码生成 / Code Generation',
+    description: '根据需求生成代码片段',
+    promptTemplate: '你是编程助手。根据需求生成 {{language}} 代码，包含注释说明。',
+    providers: [
+      { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 1, enabled: true },
+      { providerId: 'openai-default', models: ['gpt-4o'], priority: 2, enabled: false },
+    ],
+  },
+  'code.explain': {
+    id: 'code.explain',
+    label: '代码解释 / Code Explanation',
+    description: '解释代码的功能和逻辑',
+    promptTemplate: '你是编程导师。用通俗易懂的语言解释这段代码的功能、逻辑和关键点。',
+    providers: [
+      { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 1, enabled: true },
+      { providerId: 'anthropic-default', priority: 2, enabled: false },
+    ],
+  },
+  'content.extract': {
+    id: 'content.extract',
+    label: '内容提取 / Content Extraction',
+    description: '从文本中提取关键信息（日期、人名、地点等）',
+    promptTemplate: '从文本中提取关键信息，返回 JSON 格式：{dates: [], people: [], locations: [], keywords: []}',
+    providers: [
+      { providerId: 'deepseek-default', priority: 1, enabled: true },
+      { providerId: 'openai-default', priority: 2, enabled: false },
+    ],
+  },
+  'sentiment.analyze': {
+    id: 'sentiment.analyze',
+    label: '情感分析 / Sentiment Analysis',
+    description: '分析文本的情感倾向（积极/消极/中性）',
+    promptTemplate: '分析文本情感倾向，返回 JSON：{sentiment: "positive"|"negative"|"neutral", score: 0-1, keywords: []}',
+    providers: [
+      { providerId: 'deepseek-default', priority: 1, enabled: true },
+      { providerId: 'openai-default', priority: 2, enabled: false },
+    ],
+  },
+  'code.review': {
+    id: 'code.review',
+    label: '代码审查 / Code Review',
+    description: '审查代码，发现潜在问题、最佳实践和改进建议',
+    promptTemplate: '作为资深代码审查员，审查以下代码。关注：1) 潜在bug 2) 性能问题 3) 安全隐患 4) 最佳实践 5) 可读性',
+    providers: [
+      { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 1, enabled: true },
+      { providerId: 'anthropic-default', priority: 2, enabled: false },
+      { providerId: 'openai-default', models: ['gpt-4o'], priority: 3, enabled: false },
+    ],
+  },
+  'keywords.extract': {
+    id: 'keywords.extract',
+    label: '关键词提取 / Keyword Extraction',
+    description: '从文本中提取关键词和短语',
+    promptTemplate: '从文本中提取最重要的关键词，返回 JSON 数组：{keywords: [{term: string, relevance: number}]}',
+    providers: [
+      { providerId: 'deepseek-default', priority: 1, enabled: true },
+      { providerId: 'openai-default', priority: 2, enabled: false },
+    ],
+  },
+  'audio.transcribe': {
+    id: 'audio.transcribe',
+    label: '音频转录 / Audio Transcription',
+    description: '将语音转换为文字（支持多语言）',
+    providers: [
+      {
+        providerId: 'openai-default',
+        models: ['whisper-1'],
+        priority: 1,
+        enabled: false,
+      },
+      {
+        providerId: 'siliconflow-default',
+        models: ['TeleAI/TeleSpeechASR'],
+        priority: 2,
+        enabled: true,
+      },
+    ],
+  },
+  'audio.tts': {
+    id: 'audio.tts',
+    label: '语音合成 / Text-to-Speech',
+    description: '将文字转换为自然语音',
+    providers: [
+      {
+        providerId: 'openai-default',
+        models: ['tts-1', 'tts-1-hd'],
+        priority: 1,
+        enabled: false,
+      },
+    ],
+  },
+  'image.caption': {
+    id: 'image.caption',
+    label: '图像标题 / Image Captioning',
+    description: '为图片生成描述性标题',
+    promptTemplate: '生成简洁准确的图片描述（中英文），捕捉主要内容和氛围。',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        models: ['THUDM/GLM-4.1V-9B-Thinking'],
+        priority: 1,
+        enabled: true,
+      },
+      {
+        providerId: 'openai-default',
+        models: ['gpt-4o', 'gpt-4o-mini'],
+        priority: 2,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        models: ['claude-3-5-sonnet-20241022'],
+        priority: 3,
+        enabled: false,
+      },
+    ],
+  },
+  'image.analyze': {
+    id: 'image.analyze',
+    label: '图像分析 / Image Analysis',
+    description: '深度分析图像内容、物体、场景和上下文',
+    promptTemplate: '详细分析图片，包括：物体识别、场景理解、颜色分析、构图评估。返回结构化结果。',
+    providers: [
+      {
+        providerId: 'siliconflow-default',
+        models: ['THUDM/GLM-4.1V-9B-Thinking'],
+        priority: 1,
+        enabled: true,
+      },
+      {
+        providerId: 'openai-default',
+        models: ['gpt-4o'],
+        priority: 2,
+        enabled: false,
+      },
+      {
+        providerId: 'anthropic-default',
+        models: ['claude-3-5-sonnet-20241022'],
+        priority: 3,
+        enabled: false,
       },
     ],
   },

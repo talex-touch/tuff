@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { CapabilityTestResult } from './types'
-import { computed } from 'vue'
+import type { AiProviderConfig } from '@talex-touch/utils/types/intelligence'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 
@@ -8,88 +9,135 @@ const props = defineProps<{
   providerName: string
   modelName: string
   isTesting: boolean
-  disabled?: boolean
+  disabled: boolean
   testResult?: CapabilityTestResult | null
+  enabledBindings?: Array<{ providerId: string, provider?: AiProviderConfig, models?: string[] }>
 }>()
 
-defineEmits<{
-  test: []
+const emits = defineEmits<{
+  test: [options?: { providerId?: string, model?: string }]
 }>()
 
 const { t } = useI18n()
 
-const testSummary = computed(() => {
-  if (!props.testResult)
-    return ''
-  const pieces: string[] = []
-  if (props.testResult.provider)
-    pieces.push(props.testResult.provider)
-  if (props.testResult.model)
-    pieces.push(props.testResult.model)
-  if (props.testResult.latency)
-    pieces.push(`${props.testResult.latency}ms`)
-  return pieces.join(' · ')
+// Provider and model selection
+const selectedProviderId = ref<string>('')
+const selectedModel = ref<string>('')
+
+const availableProviders = computed(() => {
+  return props.enabledBindings || []
 })
+
+const availableModels = computed(() => {
+  if (!selectedProviderId.value) return []
+  const binding = availableProviders.value.find(b => b.providerId === selectedProviderId.value)
+  return binding?.models || []
+})
+
+const canTest = computed(() => {
+  return !props.disabled && !props.isTesting && selectedProviderId.value
+})
+
+const testButtonText = computed(() => {
+  if (props.isTesting) {
+    return t('settings.intelligence.testing')
+  }
+  return t('settings.intelligence.testCapability')
+})
+
+const resultIcon = computed(() => {
+  if (!props.testResult) return null
+  return props.testResult.success
+    ? 'i-carbon-checkmark-filled'
+    : 'i-carbon-warning-filled'
+})
+
+const resultClass = computed(() => {
+  if (!props.testResult) return ''
+  return props.testResult.success ? 'test-result--success' : 'test-result--error'
+})
+
+function handleTest(): void {
+  if (!canTest.value) return
+  emits('test', {
+    providerId: selectedProviderId.value,
+    model: selectedModel.value || undefined,
+  })
+}
+
+// Auto-select first provider
+if (availableProviders.value.length > 0) {
+  selectedProviderId.value = availableProviders.value[0].providerId
+  if (availableModels.value.length > 0) {
+    selectedModel.value = availableModels.value[0]
+  }
+}
 </script>
 
 <template>
   <div class="test-section">
-    <div class="test-section__info">
-      <div class="test-section__item">
-        <span class="test-section__label">{{ t('settings.intelligence.testProvider') }}</span>
-        <span class="test-section__value">{{ providerName }}</span>
+    <div class="test-section__config">
+      <div class="test-section__field">
+        <label class="test-section__label">{{ t('settings.intelligence.selectProvider') }}</label>
+        <select
+          v-model="selectedProviderId"
+          class="test-section__select"
+          :disabled="disabled || isTesting"
+        >
+          <option
+            v-for="binding in availableProviders"
+            :key="binding.providerId"
+            :value="binding.providerId"
+          >
+            {{ binding.provider?.name || binding.providerId }}
+          </option>
+        </select>
       </div>
-      <div class="test-section__item">
-        <span class="test-section__label">{{ t('settings.intelligence.testModel') }}</span>
-        <span class="test-section__value">{{ modelName }}</span>
+
+      <div v-if="availableModels.length > 0" class="test-section__field">
+        <label class="test-section__label">{{ t('settings.intelligence.selectModel') }}</label>
+        <select
+          v-model="selectedModel"
+          class="test-section__select"
+          :disabled="disabled || isTesting"
+        >
+          <option value="">{{ t('settings.intelligence.defaultModel') }}</option>
+          <option
+            v-for="model in availableModels"
+            :key="model"
+            :value="model"
+          >
+            {{ model }}
+          </option>
+        </select>
       </div>
     </div>
 
     <div class="test-section__actions">
       <FlatButton
         primary
-        block
-        :disabled="isTesting || disabled"
-        :aria-busy="isTesting"
-        @click="$emit('test')"
+        :disabled="!canTest"
+        :loading="isTesting"
+        @click="handleTest"
       >
-        <i
-          :class="isTesting ? 'i-carbon-renew animate-spin' : 'i-carbon-flash'"
-          aria-hidden="true"
-        />
-        <span>{{
-          isTesting ? t('settings.intelligence.testing') : t('settings.intelligence.runTest')
-        }}</span>
+        <i v-if="!isTesting" class="i-carbon-play-filled" aria-hidden="true" />
+        <i v-else class="i-carbon-circle-dash animate-spin" aria-hidden="true" />
+        <span>{{ testButtonText }}</span>
       </FlatButton>
     </div>
 
-    <div
-      v-if="testResult"
-      class="test-result"
-      :class="testResult.success ? 'test-result--success' : 'test-result--fail'"
-    >
+    <div v-if="testResult" class="test-result" :class="resultClass">
       <div class="test-result__header">
-        <i
-          :class="
-            testResult.success ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'
-          "
-        />
-        <p class="test-result__title">
-          {{
-            testResult.success
-              ? t('settings.intelligence.testSuccess')
-              : t('settings.intelligence.testFailed')
-          }}
-        </p>
+        <i :class="resultIcon" class="test-result__icon" />
+        <span class="test-result__title">
+          {{ testResult.success ? t('settings.intelligence.testSuccess') : t('settings.intelligence.testFailed') }}
+        </span>
       </div>
-      <p class="test-result__message">
+      <p v-if="testResult.message" class="test-result__message">
         {{ testResult.message }}
       </p>
-      <div v-if="testSummary" class="test-result__meta">
-        {{ testSummary }}
-      </div>
-      <p v-if="testResult.textPreview" class="test-result__preview">
-        {{ testResult.textPreview }}
+      <p v-if="testResult.latency" class="test-result__latency">
+        {{ t('settings.intelligence.latency') }}: {{ testResult.latency }}ms
       </p>
     </div>
   </div>
@@ -102,32 +150,47 @@ const testSummary = computed(() => {
   gap: 1rem;
 }
 
-.test-section__info {
+.test-section__config {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
-  padding: 1rem;
-  background: var(--el-fill-color-blank);
-  border-radius: 0.75rem;
-  border: 1px solid var(--el-border-color-lighter);
 }
 
-.test-section__item {
+.test-section__field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 .test-section__label {
-  font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  font-size: 0.8125rem;
   font-weight: 500;
+  color: var(--el-text-color-regular);
 }
 
-.test-section__value {
-  font-size: 0.9rem;
+.test-section__select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--el-border-color);
+  border-radius: 0.5rem;
+  background: var(--el-fill-color-blank);
   color: var(--el-text-color-primary);
-  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    border-color: var(--el-color-primary-light-5);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--el-color-primary);
+    box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .test-section__actions {
@@ -136,19 +199,20 @@ const testSummary = computed(() => {
 }
 
 .test-result {
-  border-radius: 0.875rem;
-  padding: 1.25rem;
-  border: 1px solid transparent;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid;
+  animation: slideIn 0.3s ease-out;
+}
 
-  &--success {
-    border-color: rgba(34, 197, 94, 0.3);
-    background: rgba(34, 197, 94, 0.08);
-  }
+.test-result--success {
+  background: var(--el-color-success-light-9);
+  border-color: var(--el-color-success-light-5);
+}
 
-  &--fail {
-    border-color: rgba(248, 113, 113, 0.3);
-    background: rgba(248, 113, 113, 0.06);
-  }
+.test-result--error {
+  background: var(--el-color-error-light-9);
+  border-color: var(--el-color-error-light-5);
 }
 
 .test-result__header {
@@ -156,37 +220,56 @@ const testSummary = computed(() => {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
 
-  i {
-    font-size: 1.25rem;
-  }
+.test-result__icon {
+  font-size: 1.25rem;
+}
+
+.test-result--success .test-result__icon {
+  color: var(--el-color-success);
+}
+
+.test-result--error .test-result__icon {
+  color: var(--el-color-error);
 }
 
 .test-result__title {
   font-weight: 600;
-  font-size: 1rem;
-  margin: 0;
+  font-size: 0.9375rem;
 }
 
 .test-result__message {
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
   color: var(--el-text-color-regular);
+  line-height: 1.6;
 }
 
-.test-result__meta {
-  font-size: 0.8rem;
-  color: var(--el-text-color-secondary);
-  margin-top: 0.5rem;
-}
-
-.test-result__preview {
-  margin: 0.75rem 0 0 0;
-  font-size: 0.8rem;
+.test-result__latency {
+  margin: 0;
+  font-size: 0.8125rem;
   color: var(--el-text-color-secondary);
   font-family: monospace;
-  padding: 0.5rem;
-  background: var(--el-fill-color-light);
-  border-radius: 0.5rem;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>

@@ -5,9 +5,12 @@ import { genTouchApp } from '../../../core'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
 import { getConfig } from '../../storage'
+import { createLogger } from '../../../utils/logger'
 import SearchEngineCore from '../search-engine/search-core'
 import { coreBoxManager } from './manager'
 import { windowManager } from './window'
+
+const coreBoxLog = createLogger('CoreBox')
 
 export { getCoreBoxWindow } from './window'
 
@@ -33,7 +36,7 @@ export class CoreBoxModule extends BaseModule {
       try {
         const appSetting = getConfig(StorageList.APP_SETTING) as any
         if (!appSetting?.beginner?.init) {
-          console.warn('[CoreBox] Initialization not complete, CoreBox is disabled')
+          coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
           // Optionally show a notification or dialog to user
           const mainWindow = $app.window.window
           if (mainWindow && !mainWindow.isDestroyed()) {
@@ -44,7 +47,7 @@ export class CoreBoxModule extends BaseModule {
         }
       }
       catch (error) {
-        console.error('[CoreBox] Failed to check initialization status:', error)
+        coreBoxLog.error('Failed to check initialization status', { error })
         // If we can't check, allow CoreBox to open (fail-open approach)
       }
 
@@ -61,7 +64,7 @@ export class CoreBoxModule extends BaseModule {
             lastScreenId = curScreen.id
           }
           else {
-            console.error('[CoreBox] No current window available')
+            coreBoxLog.error('No current window available')
           }
         }
       }
@@ -92,12 +95,12 @@ export class CoreBoxModule extends BaseModule {
         touchApp.channel
           .sendTo(targetWindow, ChannelType.MAIN, 'core-box:set-query', { value: 'ai ' })
           .catch((error) => {
-            console.error('[CoreBox] Failed to set AI quick call query:', error)
+            coreBoxLog.error('Failed to set AI quick call query', { error })
           })
       }, 80)
     })
 
-    console.log('[CoreBox] Core-box module initialized!')
+    coreBoxLog.success('Core-box module initialized')
   }
 
   async onDestroy(): Promise<void> {

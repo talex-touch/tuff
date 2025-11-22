@@ -869,6 +869,43 @@
       "cacheExpiration": "Cache Expiration",
       "cacheExpirationDesc": "How long to keep cached responses"
     },
+    "settingFileIndex": {
+      "groupTitle": "File Index",
+      "groupDesc": "Manage the file search index",
+      "statusTitle": "Index Status",
+      "statusDesc": "Current running state of the file index",
+      "progressTitle": "Index Progress",
+      "errorTitle": "Error Details",
+      "errorDesc": "Reason for index failure",
+      "rebuildTitle": "Rebuild Index",
+      "rebuildDesc": "Clear the index and rescan all files",
+      "rebuilding": "Rebuilding...",
+      "rebuildNow": "Rebuild Now",
+      "lastCheckedTitle": "Last Checked",
+      "lastCheckedDesc": "Last time a status check was performed",
+      "statusChecking": "Checking...",
+      "statusRebuilding": "Rebuilding",
+      "statusInitializing": "Initializing",
+      "statusFailed": "Failed",
+      "statusNormal": "Healthy",
+      "estimatedSoon": "Should finish shortly",
+      "estimatedSeconds": "Expected to finish in {seconds} seconds",
+      "estimatedMinutes": "Expected to finish in {minutes} minutes",
+      "estimatedHours": "Expected to finish in {hours} hours",
+      "estimatedHoursMinutes": "Expected to finish in {hours} hours {minutes} minutes",
+      "warningAlert": "⚠️ Rebuilding the file index will have the following effects:",
+      "warningSearch": "• Search functionality may be temporarily impacted",
+      "warningPerformance": "• The system might slow down during indexing",
+      "warningIdle": "• Recommended to rebuild when the system is idle",
+      "warningBattery": "• Requires at least 20% battery{hint}",
+      "warningConfirm": "Confirm you want to rebuild the file index? This may take several minutes.",
+      "batteryStatus": " (current {level}%)",
+      "alertRebuilding": "Index rebuild already in progress, please wait...",
+      "alertInitPending": "Index is initializing, wait for completion before rebuilding.",
+      "alertBatteryLow": "Battery too low ({level}%), charge above 20% or plug in before rebuilding.",
+      "alertRebuildStarted": "Index rebuild has started, please wait a moment...",
+      "alertRebuildFailed": "Rebuild failed: {error}"
+    },
     "intelligence": {
       "pageTitle": "TaTa Intelligence",
       "pageDesc": "With TaTa Intelligence, command every channel and tailor capabilities—all from one refined interface.",
@@ -1128,7 +1165,8 @@
         "never": "Never checked for updates",
         "lastChecked": "Last check: {time}",
         "updateAvailable": "A new version is available. See the popup dialog.",
-        "upToDate": "You are already on the latest version."
+        "upToDate": "You are already on the latest version.",
+        "cachedRelease": "Cached release: {version}"
       },
       "actionsTitle": "Actions",
       "actionsDesc": "Trigger update checks or maintenance tasks.",
@@ -1154,8 +1192,9 @@
     "updateModal": {
       "title": "New Version Available",
       "publishedAt": "Published at: {time}",
-      "notNow": "Not now",
-      "update": "Update"
+      "skip": "Skip this version",
+      "remindLater": "Remind me later",
+      "updateNow": "Update now"
     },
     "download": {
       "title": "Download Settings",
@@ -1222,6 +1261,7 @@
         "settings": "Settings"
       },
       "indexingStage": {
+        "idle": "Idle",
         "cleanup": "Cleaning up",
         "scanning": "Scanning",
         "indexing": "Indexing",

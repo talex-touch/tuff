@@ -30,7 +30,7 @@ const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
   updatePrompt: [prompt: string]
-  test: []
+  test: [options?: { providerId?: string, model?: string }]
   reorderProviders: [bindings: AiCapabilityProviderBinding[]]
 }>()
 
@@ -256,10 +256,10 @@ function openPromptDrawer(): void {
   showPromptDrawer.value = true
 }
 
-function handleTest(): void {
+function handleTest(options?: { providerId?: string, model?: string }): void {
   if (props.isTesting)
     return
-  emits('test')
+  emits('test', options)
 }
 
 watch(
@@ -378,6 +378,7 @@ onBeforeUnmount(() => {
             :is-testing="isTesting"
             :disabled="activeBindingCount === 0"
             :test-result="testResult"
+            :enabled-bindings="enabledBindings"
             @test="handleTest"
           />
         </template>

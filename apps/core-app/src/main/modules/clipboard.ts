@@ -18,6 +18,9 @@ import { windowManager } from './box-tool/core-box/window'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { activeAppService } from './system/active-app'
+import { createLogger } from '../utils/logger'
+
+const clipboardLog = createLogger('Clipboard')
 
 const FILE_URL_FORMATS = new Set([
   'public.file-url',
@@ -123,11 +126,13 @@ class ClipboardHelper {
         if (!raw)
           continue
 
-        console.debug(`[Clipboard] Raw clipboard data from ${format}:`, raw.substring(0, 200))
+        clipboardLog.debug(`Raw clipboard data from ${format}`, {
+          meta: { sample: raw.substring(0, 200) }
+        })
 
         // Special handling: Check if this is plist XML format (macOS clipboard)
         if (raw.includes('<?xml') && raw.includes('<plist') && raw.includes('<string>')) {
-          console.debug('[Clipboard] Detected plist XML format, parsing...')
+          clipboardLog.debug('Detected plist XML format, parsing')
           const stringMatches = raw.match(/<string>([^<]+)<\/string>/g)
           if (stringMatches && stringMatches.length > 0) {
             const paths = stringMatches
@@ -135,7 +140,7 @@ class ClipboardHelper {
                 const path = match.replace(/<string>|<\/string>/g, '').trim()
                 // Validate it's a file path
                 if ((path.startsWith('/') || path.includes(':\\')) && !path.includes('/id=')) {
-                  console.debug('[Clipboard] Extracted file path from plist:', path)
+                  clipboardLog.debug('Extracted file path from plist', { meta: { path } })
                   return path
                 }
                 return null
@@ -143,11 +148,11 @@ class ClipboardHelper {
               .filter((p): p is string => p !== null)
             
             if (paths.length > 0) {
-              console.log(`[Clipboard] Read ${paths.length} file(s) from plist XML`)
+              clipboardLog.info(`Read ${paths.length} file(s) from plist XML`)
               return paths
             }
           }
-          console.debug('[Clipboard] No valid paths found in plist XML')
+          clipboardLog.debug('No valid paths found in plist XML')
           continue
         }
 
@@ -160,7 +165,7 @@ class ClipboardHelper {
               // Skip entries that look like file IDs or placeholders
               // e.g., "file/id=65713367.75131581"
               if (url.includes('file/id=') || url.includes('/.file/id=')) {
-                console.debug('[Clipboard] Detected file ID placeholder:', url)
+                clipboardLog.debug('Detected file ID placeholder', { meta: { url } })
                 hasFileIDPlaceholder = true
                 return ''
               }
@@ -171,11 +176,11 @@ class ClipboardHelper {
 
               // Validate it's an actual file path
               if (!pathname || pathname === '/' || pathname.includes('/id=')) {
-                console.debug('[Clipboard] Invalid file path from URL:', url)
+                clipboardLog.debug('Invalid file path from URL', { meta: { url } })
                 return ''
               }
 
-              console.debug('[Clipboard] Extracted file path:', pathname)
+              clipboardLog.debug('Extracted file path', { meta: { pathname } })
               return pathname
             }
             catch {
@@ -186,47 +191,47 @@ class ClipboardHelper {
               const isNotID = !trimmed.includes('/id=')
               
               if (looksLikePath && isNotID) {
-                console.debug('[Clipboard] Using direct path:', trimmed)
+                clipboardLog.debug('Using direct path', { meta: { path: trimmed } })
                 return trimmed
               }
               
-              console.debug('[Clipboard] Rejected as not a valid path:', trimmed)
+              clipboardLog.debug('Rejected as not a valid path', { meta: { value: trimmed } })
               return ''
             }
           })
           .filter(Boolean)
 
         if (paths.length > 0) {
-          console.log(`[Clipboard] Read ${paths.length} file(s) from format: ${format}`)
+          clipboardLog.info(`Read ${paths.length} file(s) from format: ${format}`)
           return paths
         }
         else if (hasFileIDPlaceholder) {
-          console.debug(`[Clipboard] File ID placeholders detected but no valid paths - files may still be preparing`)
+          clipboardLog.debug('File ID placeholders detected but no valid paths - files may still be preparing')
         }
         else {
-          console.debug(`[Clipboard] No valid paths extracted from ${format}`)
+          clipboardLog.debug(`No valid paths extracted from ${format}`)
         }
       }
       catch (error) {
-        console.debug(`[Clipboard] Failed to read format ${format}:`, error)
+        clipboardLog.debug(`Failed to read format ${format}`, { error })
       }
     }
 
     // Fallback: If file IDs detected, try to read file path from text
     if (hasFileIDPlaceholder) {
-      console.debug('[Clipboard] Attempting to read file path from clipboard text as fallback')
+      clipboardLog.debug('Attempting to read file path from clipboard text as fallback')
       try {
         const text = clipboard.readText().trim()
         if (text && text.length > 0 && text.length < 10000) {
           // Check if text looks like a direct file path
           if (text.startsWith('/') && !text.includes('<')) {
-            console.log('[Clipboard] Found file path in fallback text')
+            clipboardLog.info('Found file path in fallback text')
             return [text]
           }
           
           // Check if text is plist XML format (macOS clipboard format)
           if (text.includes('<plist') && text.includes('<string>')) {
-            console.debug('[Clipboard] Detected plist XML in fallback text, parsing...')
+            clipboardLog.debug('Detected plist XML in fallback text, parsing')
             const stringMatches = text.match(/<string>([^<]+)<\/string>/g)
             if (stringMatches && stringMatches.length > 0) {
               const paths = stringMatches
@@ -241,7 +246,7 @@ class ClipboardHelper {
                 .filter((p): p is string => p !== null)
               
               if (paths.length > 0) {
-                console.log('[Clipboard] Extracted file paths from fallback plist')
+                clipboardLog.info('Extracted file paths from fallback plist')
                 return paths
               }
             }
@@ -249,9 +254,9 @@ class ClipboardHelper {
         }
       }
       catch (error) {
-        console.debug('[Clipboard] Failed to read fallback text:', error)
+        clipboardLog.debug('Failed to read fallback text', { error })
       }
-      console.log('[Clipboard] Files contain ID placeholders - skipping to avoid treating as text')
+      clipboardLog.info('Files contain ID placeholders - skipping to avoid treating as text')
     }
     return []
   }
@@ -414,7 +419,7 @@ export class ClipboardModule extends BaseModule {
       }
     }
     catch (error) {
-      console.debug('[Clipboard] Failed to parse file list from clipboard item:', error)
+      clipboardLog.debug('Failed to parse file list from clipboard item', { error })
     }
     return []
   }
@@ -516,7 +521,7 @@ export class ClipboardModule extends BaseModule {
       }
     }
     catch (error) {
-      console.warn('[Clipboard] Failed to populate file clipboard formats:', error)
+      clipboardLog.warn('Failed to populate file clipboard formats', { error })
     }
 
     // Ensure at least the path text is available as a fallback.
@@ -555,7 +560,7 @@ export class ClipboardModule extends BaseModule {
       throw new Error(`Auto paste is not supported on platform: ${process.platform}`)
     }
     catch (error) {
-      console.error('[Clipboard] Failed to simulate paste command:', error)
+      clipboardLog.error('Failed to simulate paste command', { error })
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -570,7 +575,7 @@ export class ClipboardModule extends BaseModule {
         coreBoxManager.trigger(false)
       }
       catch (error) {
-        console.debug('[Clipboard] Failed to hide CoreBox before auto paste:', error)
+        clipboardLog.debug('Failed to hide CoreBox before auto paste', { error })
       }
     }
 
@@ -759,7 +764,9 @@ export class ClipboardModule extends BaseModule {
             helper.primeImage(image)
             imageSize = image.getSize()
             thumbnail = image.resize({ width: 128 }).toDataURL()
-            console.log('[Clipboard] File with thumbnail detected', { width: imageSize.width, height: imageSize.height })
+            clipboardLog.info('File with thumbnail detected', {
+              meta: { width: imageSize.width, height: imageSize.height }
+            })
           }
           else {
             helper.primeImage(null)
@@ -841,7 +848,7 @@ export class ClipboardModule extends BaseModule {
       }
     }
     catch (error) {
-      console.error('[Clipboard] Failed to resolve active app info:', error)
+      clipboardLog.error('Failed to resolve active app info', { error })
     }
 
     const metaObject: Record<string, unknown> = {}
@@ -889,7 +896,7 @@ export class ClipboardModule extends BaseModule {
       touchChannel
         .sendToPlugin(activePlugin.name, 'core-box:clipboard-change', { item: persisted })
         .catch((error) => {
-          console.warn('[Clipboard] Failed to notify plugin UI view about clipboard change:', error)
+          clipboardLog.warn('Failed to notify plugin UI view about clipboard change', { error })
         })
     }
   }

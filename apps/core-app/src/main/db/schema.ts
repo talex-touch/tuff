@@ -461,3 +461,30 @@ export const recommendationCache = sqliteTable(
   }),
 )
 
+// =============================================================================
+// 9. 应用更新记录 (App Update Records)
+// =============================================================================
+
+export const appUpdateRecords = sqliteTable(
+  'app_update_records',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    tag: text('tag').notNull().unique(),
+    channel: text('channel').notNull(),
+    name: text('name'),
+    source: text('source').notNull().default('github'),
+    publishedAt: integer('published_at'),
+    fetchedAt: integer('fetched_at').notNull(),
+    payload: text('payload').notNull(),
+    status: text('status', {
+      enum: ['pending', 'skipped', 'snoozed', 'acknowledged'],
+    })
+      .notNull()
+      .default('pending'),
+    snoozeUntil: integer('snooze_until'),
+    lastActionAt: integer('last_action_at'),
+  },
+  table => ({
+    channelIdx: index('idx_app_update_records_channel').on(table.channel, table.fetchedAt),
+  }),
+)

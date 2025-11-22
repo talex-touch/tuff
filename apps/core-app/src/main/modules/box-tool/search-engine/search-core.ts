@@ -23,6 +23,7 @@ import {
   touchEventBus
 } from '../../../core/eventbus/touch-event'
 import { createDbUtils } from '../../../db/utils'
+import { createLogger } from '../../../utils/logger'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
@@ -44,6 +45,8 @@ import { TimeStatsAggregator } from './time-stats-aggregator'
 import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
+
+const searchEngineLog = createLogger('SearchEngineCore')
 // import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
@@ -118,11 +121,11 @@ export class SearchEngineCore
 
   registerProvider(provider: ISearchProvider<ProviderContext>): void {
     if (this.providers.has(provider.id)) {
-      console.warn(`[SearchEngineCore] Search provider '${provider.id}' is already registered.`)
+      searchEngineLog.warn(`Search provider '${provider.id}' is already registered`)
       return
     }
     this.providers.set(provider.id, provider)
-    console.log(`[SearchEngineCore] Search provider '${provider.id}' registered.`)
+    searchEngineLog.success(`Search provider '${provider.id}' registered`)
 
     if (provider.onLoad) {
       this.providersToLoad.push(provider)
@@ -131,11 +134,11 @@ export class SearchEngineCore
 
   private async loadProvider(provider: ISearchProvider<ProviderContext>): Promise<void> {
     if (!this.touchApp) {
-      console.error('[SearchEngineCore] Core modules not available to load provider.')
+      searchEngineLog.error('Core modules not available to load provider')
       return
     }
     if (!this.searchIndexService) {
-      console.error('[SearchEngineCore] SearchIndexService not initialized.')
+      searchEngineLog.error('SearchIndexService not initialized')
       return
     }
     const startTime = Date.now()
@@ -147,27 +150,24 @@ export class SearchEngineCore
         searchIndex: this.searchIndexService
       })
       const duration = Date.now() - startTime
-      console.log(
-        `[SearchEngineCore] Provider '${provider.id}' loaded successfully in ${duration}ms.`
-      )
+      searchEngineLog.success(`Provider '${provider.id}' loaded in ${duration}ms`)
     } catch (error) {
       const duration = Date.now() - startTime
-      console.error(
-        `[SearchEngineCore] Failed to load provider '${provider.id}' after ${duration}ms.`,
+      searchEngineLog.error(`Failed to load provider '${provider.id}' after ${duration}ms`, {
         error
-      )
+      })
     }
   }
 
   unregisterProvider(providerId: string): void {
     if (!this.providers.has(providerId)) {
-      console.warn(`[SearchEngineCore] Search provider '${providerId}' is not registered.`)
+      searchEngineLog.warn(`Search provider '${providerId}' is not registered`)
       return
     }
     const provider = this.providers.get(providerId)
     provider?.onDeactivate?.()
     this.providers.delete(providerId)
-    console.log(`[SearchEngineCore] Search provider '${providerId}' unregistered.`)
+    searchEngineLog.info(`Search provider '${providerId}' unregistered`)
   }
 
   activateProviders(activations: IProviderActivate[] | null): void {
@@ -317,11 +317,11 @@ export class SearchEngineCore
     this.currentGatherController?.abort()
 
     this.latestSessionId = sessionId
-    console.debug(`[SearchCore] Starting search session ${sessionId}`)
+    searchEngineLog.debug(`Starting search session ${sessionId}`)
 
     // Empty query detection: return recommendations
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
-      console.debug('[DEBUG_REC_INIT] Empty query detected, generating recommendations...')
+      searchEngineLog.debug('Empty query detected, generating recommendations')
       // console.log('[SearchEngineCore] Empty query detected, generating recommendations...') // Remove to reduce noise
 
       if (this.recommendationEngine) {
@@ -340,8 +340,8 @@ export class SearchEngineCore
           )
 
           if (this.latestSessionId !== sessionId) {
-            console.debug(
-              `[SearchCore] Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`
+            searchEngineLog.debug(
+              `Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`
             )
             return new TuffSearchResultBuilder(query)
               .setItems([])
@@ -361,7 +361,7 @@ export class SearchEngineCore
           // console.log('[SearchEngineCore] Returning recommendation result with', result.items.length, 'items') // Remove to reduce noise
           return result
         } catch (error) {
-          console.error('[SearchEngineCore] Failed to generate recommendations:', error)
+          searchEngineLog.error('Failed to generate recommendations', { error })
           // 降级：返回空结果而不是继续搜索
           return new TuffSearchResultBuilder(query)
             .setItems([])
@@ -496,13 +496,13 @@ export class SearchEngineCore
 
           // 异步记录搜索结果统计（不阻塞返回）
           this._recordSearchResults(sessionId, sortedItems).catch((error) => {
-            console.error('[SearchEngineCore] Failed to record search results:', error)
+            searchEngineLog.error('Failed to record search results', { error })
           })
 
           // 在返回前检查是否仍是最新搜索
           if (this.latestSessionId !== sessionId) {
-            console.log(
-              `[SearchCore] Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`
+            searchEngineLog.debug(
+              `Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`
             )
             // 返回空结果，前端会忽略旧的 sessionId
             const staleResult = new TuffSearchResultBuilder(query)
@@ -535,7 +535,7 @@ export class SearchEngineCore
 
   private _getItemId(item: TuffItem): string {
     if (!item.id) {
-      console.error('[SearchEngineCore] Item is missing a required `id` for usage tracking.', item)
+      searchEngineLog.error('Item is missing a required `id` for usage tracking.', { error: item })
       throw new Error('Item is missing a required `id` for usage tracking.')
     }
     return item.id
@@ -558,7 +558,7 @@ export class SearchEngineCore
         searchLogger.logSearchPhase('Usage Recording', `Recorded search session ${sessionId}`)
       }
     } catch (error) {
-      console.error('[SearchEngineCore] Failed to record search usage.', error)
+      searchEngineLog.error('Failed to record search usage', { error })
     }
   }
 
@@ -608,7 +608,7 @@ export class SearchEngineCore
         )
       }
     } catch (error) {
-      console.error('[SearchEngineCore] Failed to inject usage stats:', error)
+      searchEngineLog.error('Failed to inject usage stats', { error })
     }
   }
 
@@ -635,10 +635,9 @@ export class SearchEngineCore
             item.source.type,
             'search'
           ).catch((error) => {
-            console.error(
-              `[SearchEngineCore] Failed to update search stats for item ${item.id}:`,
+            searchEngineLog.error(`Failed to update search stats for item ${item.id}`, {
               error
-            )
+            })
             return null
           })
         )
@@ -654,7 +653,7 @@ export class SearchEngineCore
         )
       }
     } catch (error) {
-      console.error('[SearchEngineCore] Failed to record search results.', error)
+      searchEngineLog.error('Failed to record search results', { error })
     }
   }
 
@@ -716,7 +715,7 @@ export class SearchEngineCore
       })
     } catch (error) {
       // Silently fail to not disrupt search flow
-      console.debug('[SearchEngineCore] Failed to record search metrics for Sentry', error)
+      searchEngineLog.debug('Failed to record search metrics for Sentry', { error })
     }
   }
 
@@ -764,7 +763,7 @@ export class SearchEngineCore
         )
       }
     } catch (error) {
-      console.error(`[SearchEngineCore] Failed to record execute usage for item ${itemId}.`, error)
+      searchEngineLog.error(`Failed to record execute usage for item ${itemId}`, { error })
     }
   }
 
@@ -788,7 +787,7 @@ export class SearchEngineCore
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval
-    console.debug('[DEBUG_REC_INIT] SearchEngineCore initializing RecommendationEngine')
+    searchEngineLog.debug('Initializing RecommendationEngine')
     instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
 
@@ -896,7 +895,7 @@ export class SearchEngineCore
           fromCache: result.fromCache
         }
       } catch (error) {
-        console.error('[SearchEngineCore] Failed to get recommendations:', error)
+        searchEngineLog.error('Failed to get recommendations', { error })
         return { items: [], duration: 0, fromCache: false, error: String(error) }
       }
     })
@@ -911,7 +910,7 @@ export class SearchEngineCore
         await instance.timeStatsAggregator.aggregateTimeStats()
         return { success: true }
       } catch (error) {
-        console.error('[SearchEngineCore] Failed to aggregate time stats:', error)
+        searchEngineLog.error('Failed to aggregate time stats', { error })
         return { success: false, error: String(error) }
       }
     })
@@ -931,7 +930,7 @@ export class SearchEngineCore
 
     // 强制刷新队列
     this.usageStatsQueue?.forceFlush().catch((error) => {
-      console.error('[SearchEngineCore] Failed to flush usage stats queue on destroy:', error)
+      searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
     })
   }
 }

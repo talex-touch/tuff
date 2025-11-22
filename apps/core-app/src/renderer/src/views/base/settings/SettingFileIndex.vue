@@ -1,95 +1,138 @@
-<!--
-  SettingFileIndex Component
-  
-  Displays file indexing status and allows manual rebuild in settings page.
--->
 <script setup lang="ts" name="SettingFileIndex">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
+import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 
-const { getIndexStatus, handleRebuild } = useFileIndexMonitor()
+const { getIndexStatus, getBatteryLevel, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
+const { t, te } = useI18n()
 
 const indexStatus = ref<any>(null)
 const isRebuilding = ref(false)
 const lastChecked = ref<Date | null>(null)
+const estimatedTimeRemaining = ref<number | null>(null)
+const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
 
-// 检查索引状态
 const checkStatus = async () => {
   try {
     indexStatus.value = await getIndexStatus()
     lastChecked.value = new Date()
+    estimatedTimeRemaining.value = indexStatus.value?.estimatedRemainingMs ?? null
   } catch (error) {
     console.error('[SettingFileIndex] Failed to get status:', error)
   }
 }
 
-// 状态显示文本
-const statusText = computed(() => {
-  if (!indexStatus.value) return '检查中...'
-  
-  if (isRebuilding.value) return '重建中'
-  if (indexStatus.value.isInitializing) return '初始化中'
-  if (indexStatus.value.initializationFailed) return '失败'
-  
-  return '正常'
+let unsubscribeProgress: (() => void) | null = null
+let statusCheckInterval: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  checkStatus()
+
+  unsubscribeProgress = onProgressUpdate((progress) => {
+    estimatedTimeRemaining.value = progress?.estimatedRemainingMs ?? null
+    checkStatus()
+  })
+
+  statusCheckInterval = setInterval(checkStatus, 30000)
 })
 
-// 状态颜色
+onUnmounted(() => {
+  unsubscribeProgress?.()
+  unsubscribeProgress = null
+
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval)
+    statusCheckInterval = null
+  }
+})
+
+const statusText = computed(() => {
+  if (!indexStatus.value) return t('settings.settingFileIndex.statusChecking')
+  if (isRebuilding.value) return t('settings.settingFileIndex.statusRebuilding')
+  if (indexStatus.value.isInitializing) return t('settings.settingFileIndex.statusInitializing')
+  if (indexStatus.value.initializationFailed) return t('settings.settingFileIndex.statusFailed')
+  return t('settings.settingFileIndex.statusNormal')
+})
+
 const statusColor = computed(() => {
   if (!indexStatus.value || indexStatus.value.isInitializing || isRebuilding.value) {
-    return '#007aff' // 蓝色 - 进行中
+    return '#007aff'
   }
   if (indexStatus.value.initializationFailed) {
-    return '#ff3b30' // 红色 - 失败
+    return '#ff3b30'
   }
-  return '#34c759' // 绿色 - 正常
+  return '#34c759'
 })
 
-// 显示错误信息
-const showError = computed(() => {
-  return indexStatus.value?.initializationFailed && indexStatus.value?.error
+const showError = computed(() => indexStatus.value?.initializationFailed && indexStatus.value?.error)
+
+const isIndexing = computed(() => indexStatus.value?.isInitializing || isRebuilding.value)
+
+const progressText = computed(() => {
+  const progress = indexStatus.value?.progress
+  if (!progress) return ''
+
+  const { current, total, stage } = progress
+  const stageKey = stage ? `settings.setup.indexingStage.${stage}` : ''
+  const stageLabel = stage && te(stageKey) ? t(stageKey) : stage || ''
+
+  if (total > 0) {
+    const percentage = Math.round((current / total) * 100)
+    return `${stageLabel} (${current}/${total}) ${percentage}%`
+  }
+
+  return stageLabel
 })
 
-// 手动重建
 const triggerRebuild = async () => {
   if (isRebuilding.value) {
-    alert('索引正在重建中，请稍候...')
+    alert(t('settings.settingFileIndex.alertRebuilding'))
     return
   }
-  
-  // 先检查当前状态
+
   await checkStatus()
-  
-  // 如果已经在初始化，提示用户
+
   if (indexStatus.value?.isInitializing) {
-    const shouldWait = confirm('索引正在初始化中，是否等待完成后再重建？')
-    if (!shouldWait) return
-    
-    // 等待初始化完成（最多等30秒）
-    let waited = 0
-    while (indexStatus.value?.isInitializing && waited < 30) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      await checkStatus()
-      waited++
-    }
-    
-    if (indexStatus.value?.isInitializing) {
-      alert('索引初始化超时，请稍后再试')
-      return
-    }
-  }
-  
-  if (!confirm('确定要重新建立文件索引吗？这可能需要几分钟时间。')) {
+    alert(t('settings.settingFileIndex.alertInitPending'))
     return
   }
-  
+
+  const battery = await getBatteryLevel()
+  if (battery && !battery.charging && battery.level < 20) {
+    alert(
+      t('settings.settingFileIndex.alertBatteryLow', {
+        level: battery.level
+      })
+    )
+    return
+  }
+
+  const batteryHint = battery
+    ? t('settings.settingFileIndex.batteryStatus', { level: battery.level })
+    : ''
+
+  const warningMessage = [
+    t('settings.settingFileIndex.warningAlert'),
+    '',
+    t('settings.settingFileIndex.warningSearch'),
+    t('settings.settingFileIndex.warningPerformance'),
+    t('settings.settingFileIndex.warningIdle'),
+    t('settings.settingFileIndex.warningBattery', { hint: batteryHint }),
+    '',
+    t('settings.settingFileIndex.warningConfirm')
+  ].join('\n')
+
+  if (!confirm(warningMessage)) {
+    return
+  }
+
   isRebuilding.value = true
   try {
     await handleRebuild()
-    alert('索引重建已开始，请稍等片刻...')
-    // 等待一会儿再检查状态
+    alert(t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false
@@ -97,50 +140,54 @@ const triggerRebuild = async () => {
   } catch (error: any) {
     console.error('[SettingFileIndex] Rebuild failed:', error)
     isRebuilding.value = false
-    
-    // 更友好的错误提示
     const errorMsg = error?.message || String(error)
-    if (errorMsg.includes('already in progress')) {
-      alert('索引正在重建中，请稍后再试')
-    } else {
-      alert('重建失败：' + errorMsg)
-    }
+    alert(
+      t('settings.settingFileIndex.alertRebuildFailed', {
+        error: errorMsg
+      })
+    )
   }
 }
-
-// 组件挂载时检查状态
-onMounted(() => {
-  checkStatus()
-  // 每30秒自动检查一次
-  setInterval(checkStatus, 30000)
-})
 </script>
 
 <template>
   <TuffGroupBlock
-    name="文件索引"
-    description="管理文件搜索索引"
+    :name="t('settings.settingFileIndex.groupTitle')"
+    :description="t('settings.settingFileIndex.groupDesc')"
     default-icon="i-carbon-document-tasks"
     active-icon="i-carbon-document-tasks"
     memory-name="setting-file-index"
   >
-    <!-- 索引状态显示 -->
     <TuffBlockSlot
-      title="索引状态"
-      description="当前文件索引的运行状态"
-      default-icon="i-carbon-status"
-      active-icon="i-carbon-status"
+      :title="t('settings.settingFileIndex.statusTitle')"
+      :description="t('settings.settingFileIndex.statusDesc')"
+      :active="isIndexing"
+      default-icon="i-carbon-ai-status"
+      active-icon="i-carbon-ai-status-in-progress"
     >
       <div class="status-badge" :style="{ '--status-color': statusColor }">
-        {{  statusText }}
+        {{ statusText }}
       </div>
     </TuffBlockSlot>
 
-    <!-- 错误信息显示（仅失败时） -->
+    <TuffBlockSlot
+      v-if="isIndexing"
+      :title="t('settings.settingFileIndex.progressTitle')"
+      :description="progressText"
+      default-icon="i-carbon-in-progress"
+      active-icon="i-carbon-in-progress"
+    >
+      <div class="progress-container">
+        <div v-if="estimatedTimeLabel" class="estimated-time">
+          {{ estimatedTimeLabel }}
+        </div>
+      </div>
+    </TuffBlockSlot>
+
     <TuffBlockSlot
       v-if="showError"
-      title="错误详情"
-      description="索引失败的原因"
+      :title="t('settings.settingFileIndex.errorTitle')"
+      :description="t('settings.settingFileIndex.errorDesc')"
       default-icon="i-carbon-warning-alt"
       active-icon="i-carbon-warning-alt"
     >
@@ -149,27 +196,22 @@ onMounted(() => {
       </div>
     </TuffBlockSlot>
 
-    <!-- 重建按钮 -->
     <TuffBlockSlot
-      title="重建索引"
-      description="清空索引并重新扫描所有文件"
+      v-if="!isIndexing"
+      :title="t('settings.settingFileIndex.rebuildTitle')"
+      :description="t('settings.settingFileIndex.rebuildDesc')"
       default-icon="i-carbon-reset"
       active-icon="i-carbon-reset"
     >
-      <button 
-        class="rebuild-button"
-        :disabled="isRebuilding"
-        @click="triggerRebuild"
-      >
-        {{ isRebuilding ? '重建中...' : '立即重建' }}
+      <button class="rebuild-button" :disabled="isRebuilding" @click="triggerRebuild">
+        {{ isRebuilding ? t('settings.settingFileIndex.rebuilding') : t('settings.settingFileIndex.rebuildNow') }}
       </button>
     </TuffBlockSlot>
 
-    <!-- 最后检查时间 -->
     <TuffBlockSlot
       v-if="lastChecked"
-      title="最后检查"
-      description="最后一次状态检查的时间"
+      :title="t('settings.settingFileIndex.lastCheckedTitle')"
+      :description="t('settings.settingFileIndex.lastCheckedDesc')"
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
@@ -191,6 +233,18 @@ onMounted(() => {
   background: color-mix(in srgb, var(--status-color) 15%, transparent);
   color: var(--status-color);
   border: 1px solid color-mix(in srgb, var(--status-color) 30%, transparent);
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.estimated-time {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
 }
 
 .error-text {
@@ -230,7 +284,8 @@ onMounted(() => {
 
 .time-text {
   font-size: 13px;
-  color: var(--text-secondary, #666);
+  color: rgba(255, 255, 255, 0.7);
   font-family: monospace;
+  font-weight: 500;
 }
 </style>

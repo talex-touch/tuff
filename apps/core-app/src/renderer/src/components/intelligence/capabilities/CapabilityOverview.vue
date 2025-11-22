@@ -42,32 +42,47 @@ const { t } = useI18n()
 
 <style lang="scss" scoped>
 .capability-overview {
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .overview-card {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--el-fill-color-blank);
-  border-radius: 0.875rem;
+  gap: 0.875rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--el-fill-color-blank) 0%, var(--el-fill-color) 100%);
+  border-radius: 1rem;
   border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .overview-card__item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: var(--el-fill-color);
-  border-radius: 0.75rem;
+  gap: 0.875rem;
+  padding: 1rem 1.125rem;
+  background: var(--el-fill-color-blank);
+  border-radius: 0.875rem;
+  border: 1px solid var(--el-border-color-lighter);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  }
 }
 
 .overview-card__icon {
-  font-size: 1.5rem;
-  color: var(--el-color-primary);
+  font-size: 1.75rem;
   flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, var(--el-color-primary-light-8) 0%, var(--el-color-primary-light-9) 100%);
+  color: var(--el-color-primary);
 }
 
 .overview-card__content {
@@ -80,11 +95,13 @@ const { t } = useI18n()
   font-size: 0.75rem;
   color: var(--el-text-color-secondary);
   font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .overview-card__value {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--el-text-color-primary);
+  line-height: 1;
 }
 </style>

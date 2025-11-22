@@ -18,8 +18,11 @@ import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getConfig } from '../../storage'
+import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from './manager'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
+
+const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 
 const windowAnimation = useWindowAnimation()
 
@@ -101,7 +104,7 @@ export class WindowManager {
     windowAnimation.changeWindow(window)
 
     setTimeout(async () => {
-      console.debug('[CoreBox] NewBox created, injecting development tools.')
+      coreBoxWindowLog.debug('NewBox created, injecting development tools')
 
       try {
         if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {
@@ -124,13 +127,13 @@ export class WindowManager {
         window.window.hide()
       }
       catch (error) {
-        console.error('[CoreBox] Failed to load content in new box window:', error)
+        coreBoxWindowLog.error('Failed to load content in new box window', { error })
       }
     }, 200)
 
     window.window.webContents.addListener('dom-ready', () => {
-      console.debug(
-        `[CoreBox] BoxWindow ${window.window.webContents.id} dom loaded, registering ...`,
+      coreBoxWindowLog.debug(
+        `BoxWindow ${window.window.webContents.id} dom loaded, registering ...`,
       )
 
       this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
@@ -141,7 +144,7 @@ export class WindowManager {
 
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter(w => w !== window)
-      console.debug('[CoreBox] BoxWindow closed!')
+      coreBoxWindowLog.debug('BoxWindow closed')
     })
 
     // window.window.on('blur', () => {
@@ -180,7 +183,7 @@ export class WindowManager {
       }
     })
 
-    console.log('[CoreBox] NewBox created, WebContents loaded!')
+    coreBoxWindowLog.info('NewBox created, WebContents loaded')
 
     this.windows.push(window)
 
@@ -195,7 +198,7 @@ export class WindowManager {
       curScreen = this.getCurScreen()
     }
     if (!curScreen || !curScreen.bounds) {
-      console.error('[CoreBox] Invalid screen object:', curScreen)
+      coreBoxWindowLog.error('Invalid screen object', { meta: { screenId: curScreen?.id } })
       return
     }
 
@@ -207,7 +210,14 @@ export class WindowManager {
       || typeof bounds.width !== 'number'
       || typeof bounds.height !== 'number'
     ) {
-      console.error('[CoreBox] Invalid bounds properties:', bounds)
+      coreBoxWindowLog.error('Invalid screen bounds received', {
+        meta: {
+          width: bounds.width,
+          height: bounds.height,
+          x: bounds.x,
+          y: bounds.y,
+        },
+      })
       return
     }
 
@@ -215,7 +225,9 @@ export class WindowManager {
     const top = Math.round(bounds.y + bounds.height * 0.25)
 
     if (isNaN(left) || isNaN(top)) {
-      console.error('[CoreBox] Invalid position calculation:', { left, top, bounds })
+      coreBoxWindowLog.error('Invalid position calculation', {
+        meta: { left, top }
+      })
       return
     }
 
@@ -223,7 +235,7 @@ export class WindowManager {
       window.window.setPosition(left, top)
     }
     catch (error) {
-      console.error('[CoreBox] Failed to set window position:', error)
+      coreBoxWindowLog.error('Failed to set window position', { error })
     }
   }
 
@@ -277,15 +289,15 @@ export class WindowManager {
       }
     }
     else {
-      console.error('[CoreBox] No current window available for expansion')
+      coreBoxWindowLog.error('No current window available for expansion')
     }
 
-    console.debug('[CoreBox] Expanded.')
+    coreBoxWindowLog.debug('Expanded window constraints updated')
   }
 
   public shrink(): void {
     if (this.uiView) {
-      console.debug('[CoreBox] Cannot shrink window while UI view is attached.')
+      coreBoxWindowLog.debug('Cannot shrink window while UI view is attached')
       return
     }
     this.detachUIView()
@@ -296,9 +308,9 @@ export class WindowManager {
       currentWindow.window.setSize(900, 60, false)
     }
     else {
-      console.error('[CoreBox] No current window available for shrinking')
+      coreBoxWindowLog.error('No current window available for shrinking')
     }
-    console.debug('[CoreBox] Shrunk.')
+    coreBoxWindowLog.debug('Shrunk window to compact mode')
   }
 
   public getCurScreen(): Electron.Display {
@@ -307,14 +319,14 @@ export class WindowManager {
       const curScreen = screen.getDisplayNearestPoint(cursorPoint)
 
       if (!curScreen) {
-        console.warn('[CoreBox] No screen found for cursor point, using primary display')
+        coreBoxWindowLog.warn('No screen found for cursor point, using primary display')
         return screen.getPrimaryDisplay()
       }
 
       return curScreen
     }
     catch (error) {
-      console.error('[CoreBox] Error getting current screen:', error)
+      coreBoxWindowLog.error('Error getting current screen', { error })
 
       return screen.getPrimaryDisplay()
     }
@@ -372,7 +384,9 @@ export class WindowManager {
       return content.trim().length > 0 ? content : defaultCss
     }
     catch (error) {
-      console.error('[CoreBox] Failed to prepare theme stylesheet, falling back to default.', error)
+      coreBoxWindowLog.error('Failed to prepare theme stylesheet, falling back to default', {
+        error,
+      })
       return defaultCss
     }
   }
@@ -383,7 +397,7 @@ export class WindowManager {
 
     if (!view.webContents.isDestroyed()) {
       void view.webContents.insertCSS(css).catch((error) => {
-        console.error('[CoreBox] Failed to inject theme variables into UI view:', error)
+        coreBoxWindowLog.error('Failed to inject theme variables into UI view', { error })
       })
     }
 
@@ -417,7 +431,7 @@ export class WindowManager {
     const themeLabel = isDark
       ? chalk.bgHex('#0f172a').white.bold(' DARK ')
       : chalk.bgHex('#f8fafc').black.bold(' LIGHT ')
-    console.log(`${chalk.gray('[CoreBox]')} ${chalk.magenta('Apply UI theme')} ${themeLabel}`)
+    coreBoxWindowLog.info(`${chalk.magenta('Apply UI theme')} ${themeLabel}`)
 
     const script = `
       (() => {
@@ -428,7 +442,7 @@ export class WindowManager {
     `
 
     void view.webContents.executeJavaScript(script).catch((error) => {
-      console.error('[CoreBox] Failed to update UI view theme class:', error)
+      coreBoxWindowLog.error('Failed to update UI view theme class', { error })
     })
   }
 
@@ -440,7 +454,7 @@ export class WindowManager {
     const themeLabel = this.currentThemeIsDark
       ? chalk.bgHex('#0b1120').white.bold(' DARK ')
       : chalk.bgHex('#f1f5f9').black.bold(' LIGHT ')
-    console.log(`${chalk.gray('[CoreBox]')} ${chalk.blue('Sync UI theme')} ${themeLabel}`)
+    coreBoxWindowLog.info(`${chalk.blue('Sync UI theme')} ${themeLabel}`)
 
     const script = `
       (() => {
@@ -459,7 +473,7 @@ export class WindowManager {
     `
 
     void this.uiView.webContents.executeJavaScript(script).catch((error) => {
-      console.error('[CoreBox] Failed to synchronize UI view theme:', error)
+      coreBoxWindowLog.error('Failed to synchronize UI view theme', { error })
     })
   }
 
@@ -468,7 +482,7 @@ export class WindowManager {
     const themeLabel = isDark
       ? chalk.bgHex('#1f2937').white.bold(' DARK ')
       : chalk.bgHex('#e5e7eb').black.bold(' LIGHT ')
-    console.log(`${chalk.gray('[CoreBox]')} ${chalk.cyan('Theme ready')} ${themeLabel}`)
+    coreBoxWindowLog.info(`${chalk.cyan('Theme ready')} ${themeLabel}`)
     const payload = { dark: isDark }
 
     const currentWindow = this.current
@@ -489,14 +503,14 @@ export class WindowManager {
   public attachUIView(url: string, plugin?: TouchPlugin): void {
     const currentWindow = this.current
     if (!currentWindow) {
-      console.error('[CoreBox] Cannot attach UI view: no window available.')
+      coreBoxWindowLog.error('Cannot attach UI view: no window available')
       return
     }
 
-    console.log(`[CoreBox] AttachUIView - Loading: ${url}`)
+    coreBoxWindowLog.info(`AttachUIView - loading ${url}`)
 
     if (this.uiView) {
-      console.warn('[CoreBox] UI view already attached, skipping re-attachment.')
+      coreBoxWindowLog.warn('UI view already attached, skipping re-attachment')
       return
     }
 
@@ -516,7 +530,9 @@ export class WindowManager {
           originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
         }
         catch (error) {
-          console.warn(`[CoreBox] Failed to read original preload: ${injections._.preload}`, error)
+          coreBoxWindowLog.warn(`Failed to read original preload: ${injections._.preload}`, {
+            error,
+          })
         }
       }
 
@@ -704,10 +720,12 @@ export class WindowManager {
       try {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
         preloadPath = path.resolve(tempPreloadPath)
-        console.log(`[CoreBox] Created dynamic preload script: ${preloadPath}`)
+        coreBoxWindowLog.info(`Created dynamic preload script: ${preloadPath}`)
       }
       catch (error) {
-        console.error(`[CoreBox] Failed to create preload script: ${tempPreloadPath}`, error)
+        coreBoxWindowLog.error(`Failed to create preload script: ${tempPreloadPath}`, {
+          error,
+        })
         preloadPath = injections._.preload
       }
     }
@@ -757,7 +775,7 @@ export class WindowManager {
           pluginModule.pluginManager.setActivePlugin(plugin.name)
         }
         else {
-          console.warn('[CoreBox] Plugin manager not available, cannot set plugin active')
+          coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
         }
       }
     })
@@ -798,9 +816,7 @@ export class WindowManager {
         currentWindow.window.contentView.removeChildView(this.uiView)
       }
       else {
-        console.warn(
-          '[WindowManager] Cannot remove child view: current window is null or destroyed.',
-        )
+        coreBoxWindowLog.warn('Cannot remove child view: current window is null or destroyed')
       }
       // The WebContents are automatically destroyed when the WebContentsView is removed.
       // Explicitly destroying them here is unnecessary and causes a type error.

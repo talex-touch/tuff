@@ -51,6 +51,18 @@ export interface UpdateCheckResult {
   source: string
 }
 
+export type UpdateUserAction = 'update-now' | 'skip' | 'remind-later'
+
+export interface CachedUpdateRecord {
+  release: GitHubRelease
+  channel: AppPreviewChannel
+  status: 'pending' | 'skipped' | 'snoozed' | 'acknowledged'
+  fetchedAt: number
+  snoozeUntil?: number | null
+  tag: string
+  source: string
+}
+
 /**
  * Custom provider definition used to extend the updater beyond the built-ins.
  */

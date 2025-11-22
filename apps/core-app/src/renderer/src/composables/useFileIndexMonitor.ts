@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 /**
@@ -6,6 +7,8 @@ import { touchChannel } from '~/modules/channel/channel-core'
  */
 export function useFileIndexMonitor() {
   const channel = touchChannel
+  
+  const indexProgress = ref<any>(null)
   
   /**
    * 查询当前索引状态
@@ -16,6 +19,19 @@ export function useFileIndexMonitor() {
       return status
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to get index status:', error)
+      return null
+    }
+  }
+  
+  /**
+   * 查询电池电量
+   */
+  const getBatteryLevel = async () => {
+    try {
+      const battery = await channel.send('file-index:battery-level', {})
+      return battery
+    } catch (error) {
+      console.error('[FileIndexMonitor] Failed to get battery level:', error)
       return null
     }
   }
@@ -41,8 +57,28 @@ export function useFileIndexMonitor() {
     }
   }
   
+  /**
+   * 订阅索引进度更新
+   * 返回取消订阅的函数
+   */
+  const onProgressUpdate = (callback: (progress: any) => void) => {
+    const handler = (data: any) => {
+      indexProgress.value = data.data
+      callback(data.data)
+    }
+    
+    // 使用 regChannel 注册监听器,它会返回取消函数
+    const unsubscribe = channel.regChannel('file-index:progress', handler)
+    
+    // 返回取消订阅函数
+    return unsubscribe
+  }
+  
   return {
     getIndexStatus,
-    handleRebuild
+    getBatteryLevel,
+    handleRebuild,
+    onProgressUpdate,
+    indexProgress
   }
 }

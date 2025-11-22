@@ -85,6 +85,13 @@
       "when": 1732084800000,
       "tag": "0011_add_recommendation_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1763818804199,
+      "tag": "0012_app_update_records",
+      "breakpoints": true
     }
   ]
 }
