@@ -2,6 +2,10 @@ import * as path from 'node:path'
 import { app, nativeImage } from 'electron'
 import * as fse from 'fs-extra'
 
+import { createLogger } from '../../utils/logger'
+
+const trayLog = createLogger('TrayIconProvider')
+
 /**
  * Tray icon provider
  *
@@ -83,14 +87,14 @@ export class TrayIconProvider {
 
       if (!iconPath) {
         iconPath = path.resolve(__dirname, '../../../../apps/core-app/resources/tray_icon.png')
-        console.warn('[TrayIconProvider] Using fallback path:', iconPath)
+        trayLog.warn('Using fallback tray icon path', { meta: { iconPath } })
       }
     }
 
     if (!iconPath || !fse.existsSync(iconPath)) {
-      console.error('[TrayIconProvider] Icon file not found at:', iconPath)
-      console.log('[TrayIconProvider] __dirname:', __dirname)
-      console.log('[TrayIconProvider] process.cwd():', process.cwd())
+      trayLog.error('Icon file not found', { meta: { iconPath } })
+      trayLog.debug('__dirname resolved', { meta: { dirname: __dirname } })
+      trayLog.debug('process cwd resolved', { meta: { cwd: process.cwd() } })
       return nativeImage.createEmpty()
     }
 
@@ -98,8 +102,8 @@ export class TrayIconProvider {
       const image = nativeImage.createFromPath(iconPath)
 
       if (image.isEmpty()) {
-        console.error('[TrayIconProvider] Loaded icon is empty:', iconPath)
-        console.error('[TrayIconProvider] This will prevent tray icon from displaying')
+        trayLog.error('Loaded icon is empty', { meta: { iconPath } })
+        trayLog.error('Empty icon prevents tray display')
         return nativeImage.createEmpty()
       }
 
@@ -111,55 +115,51 @@ export class TrayIconProvider {
         if (isTemplateFile) {
           const retinaPath = iconPath.replace('Template.png', 'Template@2x.png')
           if (!fse.existsSync(retinaPath)) {
-            console.warn('[TrayIconProvider] Retina version not found:', retinaPath)
-            console.warn('[TrayIconProvider] Tray icon may appear blurry on Retina displays')
-            console.warn(
-              '[TrayIconProvider] Recommended: Create TrayIconTemplate@2x.png (44x44 pixels)',
-            )
+            trayLog.warn('Retina tray icon missing', { meta: { retinaPath } })
+            trayLog.warn('Tray icon may appear blurry on Retina displays')
+            trayLog.warn('Recommended: create TrayIconTemplate@2x.png (44x44 pixels)')
           }
         }
         else {
-          console.warn('[TrayIconProvider] Icon filename does not end with Template.png')
-          console.warn(
-            '[TrayIconProvider] For macOS tray icons, filename MUST end with Template.png',
-          )
-          console.warn(
-            '[TrayIconProvider] Example: TrayIconTemplate.png (and TrayIconTemplate@2x.png for Retina)',
-          )
+          trayLog.warn('Icon filename does not end with Template.png')
+          trayLog.warn('macOS tray icons MUST use Template.png suffix')
+          trayLog.warn('Example: TrayIconTemplate.png + TrayIconTemplate@2x.png')
         }
 
         // Auto-resize to 22x22 if size is not optimal for macOS
         if (size.width !== 22 || size.height !== 22) {
           if (size.width !== 16 && size.height !== 16) {
-            console.warn('[TrayIconProvider] Icon size not optimal for macOS:', size)
-            console.warn('[TrayIconProvider] Recommended sizes: 22x22 or 16x16 pixels')
-            console.log('[TrayIconProvider] Attempting to resize to 22x22 for optimal display')
+            trayLog.warn('Icon size not optimal for macOS', {
+              meta: { width: size.width, height: size.height }
+            })
+            trayLog.warn('Recommended tray icon sizes: 22x22 or 16x16 pixels')
+            trayLog.info('Attempting to resize to 22x22 for optimal display')
 
             try {
               const resized = image.resize({ width: 22, height: 22, quality: 'best' })
               if (!resized.isEmpty()) {
-                console.log('[TrayIconProvider] Successfully resized icon to 22x22')
+                trayLog.success('Successfully resized tray icon to 22x22')
                 return resized
               }
               else {
-                console.warn('[TrayIconProvider] Failed to resize icon, using original')
+                trayLog.warn('Failed to resize icon, using original size')
               }
             }
             catch (resizeError) {
-              console.warn('[TrayIconProvider] Error resizing icon:', resizeError)
-              console.warn('[TrayIconProvider] Using original icon size')
+              trayLog.warn('Error resizing icon', { error: resizeError })
+              trayLog.warn('Using original icon size')
             }
           }
         }
         else {
-          console.log('[TrayIconProvider] Icon size is optimal (22x22) for macOS')
+          trayLog.success('Icon size is optimal (22x22) for macOS')
         }
       }
 
       return image
     }
     catch (error) {
-      console.error('[TrayIconProvider] Failed to load tray icon from path:', iconPath, error)
+      trayLog.error('Failed to load tray icon', { meta: { iconPath }, error })
       return nativeImage.createEmpty()
     }
   }
@@ -238,7 +238,7 @@ export class TrayIconProvider {
 
       if (!iconPath) {
         iconPath = path.resolve(__dirname, '../../../../apps/core-app/resources/tray_icon.png')
-        console.warn('[TrayIconProvider] Using fallback path:', iconPath)
+        trayLog.warn('Using fallback tray icon path', { meta: { iconPath } })
       }
     }
 

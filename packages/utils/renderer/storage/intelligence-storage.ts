@@ -18,7 +18,7 @@ const defaultIntelligenceData: AISDKStorageData = {
   providers: [...DEFAULT_PROVIDERS],
   globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
   capabilities: { ...DEFAULT_CAPABILITIES },
-  version: 1,
+  version: 2,
 }
 
 const INTELLIGENCE_STORAGE_KEY = `storage:${StorageList.IntelligenceConfig}`
@@ -145,8 +145,9 @@ export async function migrateIntelligenceSettings(): Promise<void> {
   console.log('[Intelligence Storage] Starting migration check...')
   const currentData = intelligenceStorage.data
 
-  if (!currentData.version || currentData.version < 1) {
-    console.log('[Intelligence Storage] Migrating settings to version 1')
+  // Version 2: Force update capabilities to include all new ones
+  if (!currentData.version || currentData.version < 2) {
+    console.log('[Intelligence Storage] Migrating settings to version 2')
 
     const migratedProviders = currentData.providers.map(provider => ({
       ...provider,
@@ -169,24 +170,26 @@ export async function migrateIntelligenceSettings(): Promise<void> {
       cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600,
     }
 
-    const migratedCapabilities = currentData.capabilities ?? { ...DEFAULT_CAPABILITIES }
-
+    // Force update to latest DEFAULT_CAPABILITIES (version 2)
+    console.log('[Intelligence Storage] Updating capabilities to latest defaults')
+    
     intelligenceStorage.applyData({
       providers: migratedProviders,
       globalConfig: migratedGlobalConfig,
-      capabilities: migratedCapabilities,
-      version: 1,
+      capabilities: { ...DEFAULT_CAPABILITIES },
+      version: 2,
     })
 
     await intelligenceStorage.saveToRemote({ force: true })
 
-    console.log('[Intelligence Storage] Migration complete')
+    console.log('[Intelligence Storage] Migration to v2 complete, capabilities count:', Object.keys(DEFAULT_CAPABILITIES).length)
   }
   else {
     console.log('[Intelligence Storage] No migration needed, current version:', currentData.version)
   }
 
   console.log('[Intelligence Storage] Final providers count:', intelligenceStorage.data.providers.length)
+  console.log('[Intelligence Storage] Final capabilities count:', Object.keys(intelligenceStorage.data.capabilities).length)
 }
 
 /**
@@ -201,7 +204,7 @@ export async function resetIntelligenceConfig(): Promise<void> {
     providers: [...DEFAULT_PROVIDERS],
     globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
     capabilities: { ...DEFAULT_CAPABILITIES },
-    version: 1,
+    version: 2,
   })
 
   await intelligenceStorage.saveToRemote({ force: true })

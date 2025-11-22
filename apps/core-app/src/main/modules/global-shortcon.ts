@@ -7,6 +7,9 @@ import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
 import { BrowserWindow, globalShortcut } from 'electron'
 import { BaseModule } from './abstract-base-module'
 import { storageModule } from './storage'
+import { createLogger } from '../utils/logger'
+
+const shortconLog = createLogger('GlobalShortcon')
 
 // A runtime map to hold callbacks for 'main' type shortcuts
 const mainCallbackRegistry = new Map<string, () => void>()
@@ -104,7 +107,7 @@ export class ShortcutModule extends BaseModule {
    */
   registerMainShortcut(id: string, defaultAccelerator: string, callback: () => void): boolean {
     if (mainCallbackRegistry.has(id)) {
-      console.warn(`Main shortcut with ID ${id} is already registered.`)
+      shortconLog.warn(`Main shortcut with ID ${id} is already registered.`)
       return false
     }
 
@@ -124,7 +127,7 @@ export class ShortcutModule extends BaseModule {
       })
     }
 
-    console.log(`[GlobalShortcon] Main shortcut registered: ${id} (${defaultAccelerator})`)
+    shortconLog.success(`Main shortcut registered: ${id} (${defaultAccelerator})`)
 
     this.reregisterAllShortcuts()
     return true
@@ -149,7 +152,7 @@ export class ShortcutModule extends BaseModule {
       return
     globalShortcut.unregisterAll()
     this.isEnabled = false
-    console.log('[GlobalShortcon] All global shortcuts disabled.')
+    shortconLog.info('All global shortcuts disabled')
   }
 
   /**
@@ -160,7 +163,7 @@ export class ShortcutModule extends BaseModule {
       return
     this.isEnabled = true
     this.reregisterAllShortcuts()
-    console.log('[GlobalShortcon] All global shortcuts enabled.')
+    shortconLog.info('All global shortcuts enabled')
   }
 
   /**
@@ -170,7 +173,7 @@ export class ShortcutModule extends BaseModule {
     globalShortcut.unregisterAll()
 
     if (!this.isEnabled) {
-      console.log('[GlobalShortcon] Shortcuts are globally disabled, skipping registration.')
+      shortconLog.debug('Shortcuts globally disabled, skip registration')
       return
     }
 
@@ -179,8 +182,8 @@ export class ShortcutModule extends BaseModule {
     for (const shortcut of allShortcuts) {
       const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
       if (!normalizedAccelerator) {
-        console.error(
-          `[GlobalShortcon] Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`,
+        shortconLog.error(
+          `Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`,
         )
         continue
       }
@@ -192,20 +195,20 @@ export class ShortcutModule extends BaseModule {
 
       try {
         globalShortcut.register(normalizedAccelerator, () => {
-          console.debug(`[GlobalShortcon] Shortcut triggered: ${shortcut.id}`)
+          shortconLog.debug(`Shortcut triggered: ${shortcut.id}`)
           this.handleTrigger(shortcut)
         })
         successCount++
       }
       catch (error) {
-        console.error(
-          `[GlobalShortcon] Failed to register shortcut: ${shortcut.id} (${normalizedAccelerator})`,
-          error,
+        shortconLog.error(
+          `Failed to register shortcut: ${shortcut.id} (${normalizedAccelerator})`,
+          { error },
         )
       }
     }
 
-    console.log(`[GlobalShortcon] Successfully registered ${successCount} shortcuts.`)
+    shortconLog.success(`Successfully registered ${successCount} shortcuts`)
   }
 
   /**
@@ -219,9 +222,7 @@ export class ShortcutModule extends BaseModule {
           callback()
         }
         else {
-          console.error(
-            `[GlobalShortcon] No main-process callback found for shortcut ID: ${shortcut.id}`,
-          )
+          shortconLog.error(`No main-process callback found for shortcut ID: ${shortcut.id}`)
         }
         break
       }
@@ -230,9 +231,7 @@ export class ShortcutModule extends BaseModule {
         for (const win of allWindows) {
           $app.channel.sendTo(win, ChannelType.MAIN, 'shortcon:trigger', { id: shortcut.id })
         }
-        console.log(
-          `[GlobalShortcon] Forwarding trigger for '${shortcut.id}' to all renderer processes.`,
-        )
+        shortconLog.debug(`Forwarded trigger '${shortcut.id}' to all renderer processes`)
         break
       }
     }

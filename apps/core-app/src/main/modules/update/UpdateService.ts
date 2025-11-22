@@ -2,7 +2,8 @@ import type {
   GitHubRelease,
   UpdateSettings as SharedUpdateSettings,
   UpdateCheckResult,
-  UpdateFrequency
+  UpdateFrequency,
+  UpdateUserAction
 } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import fs from 'node:fs'
@@ -15,10 +16,13 @@ import { getAppVersionSafe } from '../../utils/version-util'
  * Update service for checking application updates in main process
  */
 import { BaseModule } from '../abstract-base-module'
+import { databaseModule } from '../database'
 import { UpdateSystem } from './update-system'
+import { UpdateRecordStatus, UpdateRepository, type UpdateRecordRow } from './update-repository'
 
 const HALF_DAY_IN_MS = 12 * 60 * 60 * 1000
 const DAY_IN_MS = 24 * 60 * 60 * 1000
+const REMIND_LATER_INTERVAL = 8 * 60 * 60 * 1000
 
 /**
  * Update settings interface
@@ -100,6 +104,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private cache: Map<string, any> = new Map()
   private initContext?: ModuleInitContext<TalexEvents>
   private updateSystem?: UpdateSystem
+  private updateRepository: UpdateRepository | null = null
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
@@ -134,6 +139,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
     } else {
       console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
+    }
+
+    try {
+      this.updateRepository = new UpdateRepository(databaseModule.getDb())
+      console.log('[UpdateService] UpdateRepository initialized')
+    } catch (error) {
+      console.warn('[UpdateService] Failed to initialize UpdateRepository:', error)
     }
 
     // Register IPC channels
@@ -270,6 +282,56 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
     })
 
+    appChannel.regChannel(ChannelType.MAIN, 'update:get-cached-release', async ({ data, reply }) => {
+      try {
+        const requestedChannel = data?.channel as AppPreviewChannel | undefined
+        const targetChannel = requestedChannel ?? this.getEffectiveChannel()
+        const record = this.updateRepository ? await this.updateRepository.getLatestRecord(targetChannel) : null
+        if (record) {
+          const release = this.deserializeRelease(record.payload)
+          reply(DataCode.SUCCESS, {
+            success: true,
+            data: release
+              ? {
+                  release,
+                  status: record.status,
+                  snoozeUntil: record.snoozeUntil ?? null,
+                  fetchedAt: record.fetchedAt,
+                  channel: record.channel,
+                  tag: record.tag,
+                  source: record.source
+                }
+              : null
+          })
+        } else {
+          reply(DataCode.SUCCESS, { success: true, data: null })
+        }
+      } catch (error) {
+        console.error('[UpdateService] Failed to get cached release:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
+    appChannel.regChannel(ChannelType.MAIN, 'update:record-action', async ({ data, reply }) => {
+      try {
+        const actionPayload = data as { tag: string; action: UpdateUserAction }
+        if (!actionPayload?.tag || !actionPayload?.action) {
+          throw new Error('Invalid action payload')
+        }
+        await this.handleUserAction(actionPayload.tag, actionPayload.action)
+        reply(DataCode.SUCCESS, { success: true })
+      } catch (error) {
+        console.error('[UpdateService] Failed to record update action:', error)
+        reply(DataCode.ERROR, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    })
+
     // Download update
     appChannel.regChannel(ChannelType.MAIN, 'update:download', async ({ data, reply }) => {
       try {
@@ -398,11 +460,38 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private async checkForUpdates(force = false): Promise<UpdateCheckResult> {
     const targetChannel = this.getEffectiveChannel()
+    const ttlMs = this.settings.cacheTTL * 60 * 1000
+    const now = Date.now()
+
+    let persistedRecord: UpdateRecordRow | null = null
+    let persistedResult: UpdateCheckResult | null = null
+
+    if (this.updateRepository) {
+      persistedRecord = await this.updateRepository.getLatestRecord(targetChannel)
+      if (persistedRecord) {
+        persistedResult = await this.buildResultFromRecord(persistedRecord)
+        if (
+          persistedResult &&
+          !force &&
+          persistedRecord.fetchedAt &&
+          now - persistedRecord.fetchedAt <= ttlMs
+        ) {
+          console.log('[UpdateService] Using persisted update record for channel', targetChannel)
+          return persistedResult
+        }
+      }
+    }
+
     if (!this.shouldPerformCheck(force)) {
       const cachedResult = this.getCachedResult(targetChannel)
       if (cachedResult) {
         console.log('[UpdateService] Using cached result due to frequency settings')
         return cachedResult
+      }
+
+      if (persistedResult) {
+        console.log('[UpdateService] Using persisted record due to frequency throttle')
+        return persistedResult
       }
     }
 
@@ -414,6 +503,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       this.recordCheckTimestamp()
 
       if (result.hasUpdate && result.release) {
+        await this.persistRelease(targetChannel, result.release, result.source)
+        if (this.updateRepository) {
+          const persistedForRelease = await this.updateRepository.getRecordByTag(result.release.tag_name)
+          const persistedDecision = await this.buildResultFromRecord(persistedForRelease)
+          if (persistedDecision && !persistedDecision.hasUpdate) {
+            if (this.settings.cacheEnabled) {
+              this.setCachedResult(targetChannel, persistedDecision)
+            }
+            return persistedDecision
+          }
+        }
         const newVersion = this.parseVersion(result.release.tag_name)
 
         if (this.isUpdateNeeded(newVersion)) {
@@ -566,6 +666,33 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     return `releases:talex-touch/tuff:${channel}`
   }
 
+  private async handleUserAction(tag: string, action: UpdateUserAction): Promise<void> {
+    if (!this.updateRepository) {
+      return
+    }
+
+    switch (action) {
+      case 'skip': {
+        await this.updateRepository.markStatus(tag, UpdateRecordStatus.SKIPPED)
+        if (!this.settings.ignoredVersions.includes(tag)) {
+          this.settings.ignoredVersions.push(tag)
+          this.saveSettings()
+        }
+        this.updateSystem?.ignoreVersion(tag)
+        break
+      }
+      case 'remind-later':
+        await this.updateRepository.markStatus(tag, UpdateRecordStatus.SNOOZED, {
+          snoozeUntil: Date.now() + REMIND_LATER_INTERVAL
+        })
+        break
+      case 'update-now':
+      default:
+        await this.updateRepository.markStatus(tag, UpdateRecordStatus.ACKNOWLEDGED)
+        break
+    }
+  }
+
   /**
    * Fetch latest release from GitHub API
    */
@@ -618,6 +745,63 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         error: error instanceof Error ? error.message : 'Unknown error',
         source: 'GitHub'
       }
+    }
+  }
+
+  private async persistRelease(
+    channel: AppPreviewChannel,
+    release: GitHubRelease,
+    source: string
+  ): Promise<void> {
+    if (!this.updateRepository) {
+      return
+    }
+    try {
+      await this.updateRepository.saveRelease(release, channel, source)
+    } catch (error) {
+      console.warn('[UpdateService] Failed to persist release record:', error)
+    }
+  }
+
+  private async buildResultFromRecord(record: UpdateRecordRow | null): Promise<UpdateCheckResult | null> {
+    if (!record) {
+      return null
+    }
+    const release = this.deserializeRelease(record.payload)
+    if (!release) {
+      return null
+    }
+
+    if (record.status === UpdateRecordStatus.SKIPPED) {
+      return {
+        hasUpdate: false,
+        source: record.source
+      }
+    }
+
+    if (record.status === UpdateRecordStatus.SNOOZED) {
+      if (record.snoozeUntil && record.snoozeUntil > Date.now()) {
+        return {
+          hasUpdate: false,
+          source: record.source
+        }
+      }
+      await this.updateRepository?.markStatus(record.tag, UpdateRecordStatus.PENDING)
+    }
+
+    return {
+      hasUpdate: true,
+      release,
+      source: record.source
+    }
+  }
+
+  private deserializeRelease(payload: string): GitHubRelease | null {
+    try {
+      return JSON.parse(payload) as GitHubRelease
+    } catch (error) {
+      console.warn('[UpdateService] Failed to parse release payload:', error)
+      return null
     }
   }
 
@@ -675,13 +859,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private parseChannelLabel(label?: string): AppPreviewChannel {
     const normalized = (label || '').toUpperCase()
 
-    if (normalized === AppPreviewChannel.SNAPSHOT) {
+    if (normalized.startsWith(AppPreviewChannel.SNAPSHOT)) {
       return AppPreviewChannel.SNAPSHOT
     }
-    if (normalized === AppPreviewChannel.BETA) {
+    if (normalized.startsWith(AppPreviewChannel.BETA)) {
       return AppPreviewChannel.BETA
     }
-    if (normalized === 'MASTER') {
+    if (normalized === 'MASTER' || normalized.startsWith(AppPreviewChannel.RELEASE)) {
       return AppPreviewChannel.RELEASE
     }
 

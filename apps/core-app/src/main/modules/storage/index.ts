@@ -90,7 +90,21 @@ export class StorageModule extends BaseModule {
     }
 
     const p = path.resolve(this.filePath!, name)
-    const file = fse.existsSync(p) ? JSON.parse(fse.readFileSync(p, 'utf-8')) : {}
+    let file = {}
+
+    if (fse.existsSync(p)) {
+      try {
+        const content = fse.readFileSync(p, 'utf-8')
+        // 只有当内容不是空字符串时才解析
+        if (content.length > 0) {
+          file = JSON.parse(content)
+        }
+      }
+      catch (error) {
+        console.error(chalk.red(`[StorageModule] Failed to parse config ${name}:`), error)
+        // 继续使用空对象
+      }
+    }
 
     this.cache.set(name, file)
     this.cache.clearDirty(name)
@@ -103,7 +117,17 @@ export class StorageModule extends BaseModule {
       throw new Error(`Config ${name} not found`)
 
     const filePath = path.resolve(this.filePath, name)
-    const file = JSON.parse(fse.readFileSync(filePath, 'utf-8'))
+    let file = {}
+
+    try {
+      const content = fse.readFileSync(filePath, 'utf-8')
+      if (content.length > 0) {
+        file = JSON.parse(content)
+      }
+    }
+    catch (error) {
+      console.error(chalk.red(`[StorageModule] Failed to reload config ${name}:`), error)
+    }
 
     this.cache.set(name, file)
     this.cache.clearDirty(name)

@@ -11,8 +11,9 @@ const props = defineProps({
   },
 })
 
-const close = inject('destroy')
+const close = inject<() => void>('destroy')
 const { t } = useI18n()
+const emit = defineEmits(['updateNow', 'skipVersion', 'remindLater'])
 
 /**
  * 打开更新页面的外部链接
@@ -21,6 +22,21 @@ const { t } = useI18n()
  */
 function upgrade(): void {
   window.$nodeApi.openExternal(props.release.html_url)
+}
+
+function handleUpdateNow(): void {
+  emit('updateNow')
+  upgrade()
+}
+
+function handleSkip(): void {
+  emit('skipVersion')
+  close?.()
+}
+
+function handleRemindLater(): void {
+  emit('remindLater')
+  close?.()
 }
 
 /**
@@ -49,11 +65,14 @@ const publishedAt = computed<string>(() => {
     </div>
 
     <div class="AppUpgradation-Content">
-      <FlatButton @click="close">
-        {{ t('updateModal.notNow') }}
+      <FlatButton @click="handleSkip">
+        {{ t('updateModal.skip') }}
       </FlatButton>
-      <FlatButton :primary="true" @click="upgrade">
-        {{ t('updateModal.update') }}
+      <FlatButton @click="handleRemindLater">
+        {{ t('updateModal.remindLater') }}
+      </FlatButton>
+      <FlatButton :primary="true" @click="handleUpdateNow">
+        {{ t('updateModal.updateNow') }}
       </FlatButton>
     </div>
   </div>

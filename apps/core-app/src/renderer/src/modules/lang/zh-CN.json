@@ -869,6 +869,43 @@
       "cacheExpiration": "缓存过期时间",
       "cacheExpirationDesc": "缓存响应的保留时间"
     },
+    "settingFileIndex": {
+      "groupTitle": "文件索引",
+      "groupDesc": "管理文件搜索索引",
+      "statusTitle": "索引状态",
+      "statusDesc": "当前文件索引的运行状态",
+      "progressTitle": "索引进度",
+      "errorTitle": "错误详情",
+      "errorDesc": "索引失败的原因",
+      "rebuildTitle": "重建索引",
+      "rebuildDesc": "清空索引并重新扫描所有文件",
+      "rebuilding": "重建中...",
+      "rebuildNow": "立即重建",
+      "lastCheckedTitle": "最后检查",
+      "lastCheckedDesc": "最后一次状态检查的时间",
+      "statusChecking": "检查中...",
+      "statusRebuilding": "重建中",
+      "statusInitializing": "初始化中",
+      "statusFailed": "失败",
+      "statusNormal": "正常",
+      "estimatedSoon": "将很快完成",
+      "estimatedSeconds": "预计 {seconds} 秒后完成",
+      "estimatedMinutes": "预计 {minutes} 分钟后完成",
+      "estimatedHours": "预计 {hours} 小时后完成",
+      "estimatedHoursMinutes": "预计 {hours} 小时 {minutes} 分钟后完成",
+      "warningAlert": "⚠️ 重建文件索引会产生以下影响：",
+      "warningSearch": "• 会暂时影响文件搜索功能",
+      "warningPerformance": "• 索引过程中系统可能会变慢",
+      "warningIdle": "• 建议在空闲时进行重建",
+      "warningBattery": "• 需要至少 20% 电量{hint}",
+      "warningConfirm": "确定要重新建立文件索引吗？这可能需要几分钟时间。",
+      "batteryStatus": "（当前 {level}%）",
+      "alertRebuilding": "索引正在重建中，请稍候...",
+      "alertInitPending": "索引正在初始化中，请等待完成后再重建。",
+      "alertBatteryLow": "电池电量不足（当前 {level}%），请充电至 20% 以上或连接电源后再执行重建操作。",
+      "alertRebuildStarted": "索引重建已开始，请稍等片刻...",
+      "alertRebuildFailed": "重建失败：{error}"
+    },
     "intelligence": {
       "pageTitle": "塔塔智能",
       "pageDesc": "通过塔塔智能，你可以优雅调度每条渠道，编排专属能力，并在一块打磨精致的控制面板中掌控全程。",
@@ -1120,7 +1157,8 @@
         "never": "尚未检查过更新",
         "lastChecked": "上次检查：{time}",
         "updateAvailable": "发现新版本，请关注弹出的更新提示。",
-        "upToDate": "当前已是最新版本。"
+        "upToDate": "当前已是最新版本。",
+        "cachedRelease": "缓存更新：{version}"
       },
       "actionsTitle": "操作",
       "actionsDesc": "手动触发更新检查或维护任务。",
@@ -1146,8 +1184,9 @@
     "updateModal": {
       "title": "发现新版本",
       "publishedAt": "发布时间：{time}",
-      "notNow": "暂不更新",
-      "update": "立即更新"
+      "skip": "跳过当前版本",
+      "remindLater": "下次提醒我",
+      "updateNow": "立即更新"
     },
     "download": {
       "title": "下载设置",
@@ -1214,6 +1253,7 @@
         "settings": "设置"
       },
       "indexingStage": {
+        "idle": "空闲",
         "cleanup": "清理中",
         "scanning": "扫描中",
         "indexing": "索引中",

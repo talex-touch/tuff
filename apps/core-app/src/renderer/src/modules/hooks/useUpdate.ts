@@ -1,7 +1,9 @@
 import type {
+  CachedUpdateRecord,
   GitHubRelease,
   UpdateCheckResult,
   UpdateSettings,
+  UpdateUserAction,
 } from '@talex-touch/utils'
 import {
   AppPreviewChannel,
@@ -100,10 +102,10 @@ export class AppUpdate {
   private normalizeChannelLabel(label?: string): AppPreviewChannel {
     const normalized = (label || '').toUpperCase()
 
-    if (normalized === AppPreviewChannel.SNAPSHOT) {
+    if (normalized.startsWith(AppPreviewChannel.SNAPSHOT)) {
       return AppPreviewChannel.SNAPSHOT
     }
-    if (normalized === AppPreviewChannel.BETA) {
+    if (normalized.startsWith(AppPreviewChannel.BETA)) {
       return AppPreviewChannel.BETA
     }
     if (normalized === 'MASTER') {
@@ -349,6 +351,33 @@ export class AppUpdate {
     }
   }
 
+  public async getCachedRelease(channel?: AppPreviewChannel): Promise<CachedUpdateRecord | null> {
+    try {
+      const response = await this.sendRequest('update:get-cached-release', { channel })
+      if (response.success) {
+        return (response.data as CachedUpdateRecord) || null
+      }
+      return null
+    }
+    catch (error) {
+      console.error('[AppUpdate] Failed to get cached release:', error)
+      return null
+    }
+  }
+
+  public async recordAction(tag: string, action: UpdateUserAction): Promise<void> {
+    try {
+      const response = await this.sendRequest('update:record-action', { tag, action })
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to record action')
+      }
+    }
+    catch (error) {
+      console.error('[AppUpdate] Failed to record action:', error)
+      throw error
+    }
+  }
+
   private async sendRequest(channel: string, payload?: unknown): Promise<any> {
     if (!this.touchSDK || !this.touchSDK.rawChannel) {
       throw new Error('TouchSDK not initialized')
@@ -402,9 +431,13 @@ export function useApplicationUpgrade() {
         clearUpdateErrorMessage()
 
         if (result.release) {
+          const currentRelease = result.release
           await blowMention('New Version Available', () => {
             return h(AppUpdateView, {
-              release: result.release as unknown as Record<string, unknown>,
+              release: currentRelease as unknown as Record<string, unknown>,
+              onUpdateNow: () => handleUpdateAcknowledged(currentRelease),
+              onSkipVersion: () => handleIgnoreVersion(currentRelease),
+              onRemindLater: () => handleRemindLaterSelection(currentRelease),
             })
           })
         }
@@ -450,6 +483,32 @@ export function useApplicationUpgrade() {
     }
   }
 
+  async function handleUpdateAcknowledged(release: GitHubRelease): Promise<void> {
+    try {
+      await appUpdate.recordAction(release.tag_name, 'update-now')
+      appStates.hasUpdate = false
+      appStates.noUpdateAvailable = false
+      clearUpdateErrorMessage()
+    }
+    catch (err) {
+      console.warn('[useApplicationUpgrade] Failed to acknowledge update:', err)
+    }
+  }
+
+  async function handleRemindLaterSelection(release: GitHubRelease): Promise<void> {
+    try {
+      await appUpdate.recordAction(release.tag_name, 'remind-later')
+      toast.success('已为您延后提醒，8小时后再次提示')
+      appStates.hasUpdate = false
+      appStates.noUpdateAvailable = true
+      clearUpdateErrorMessage()
+    }
+    catch (err) {
+      console.error('[useApplicationUpgrade] Failed to set remind later:', err)
+      toast.error('设置稍后提醒失败，请稍后重试')
+    }
+  }
+
   /**
    * Handle ignore version
    * @param release - GitHub release information
@@ -457,11 +516,17 @@ export function useApplicationUpgrade() {
   async function handleIgnoreVersion(release: GitHubRelease): Promise<void> {
     try {
       const settings = await appUpdate.getSettings()
+      let updatedList = false
       if (!settings.ignoredVersions.includes(release.tag_name)) {
         settings.ignoredVersions.push(release.tag_name)
         await appUpdate.updateSettings({ ignoredVersions: settings.ignoredVersions })
-        toast.success('已忽略此版本')
+        updatedList = true
       }
+      await appUpdate.recordAction(release.tag_name, 'skip')
+      toast.success(updatedList ? '已忽略此版本' : '已跳过此版本')
+      appStates.hasUpdate = false
+      appStates.noUpdateAvailable = true
+      clearUpdateErrorMessage()
     }
     catch (err) {
       console.error('[useApplicationUpgrade] Failed to ignore version:', err)
@@ -537,6 +602,10 @@ export function useApplicationUpgrade() {
     return await appUpdate.getStatus()
   }
 
+  async function getCachedRelease(channel?: AppPreviewChannel): Promise<CachedUpdateRecord | null> {
+    return await appUpdate.getCachedRelease(channel)
+  }
+
   /**
    * Listen for update notifications from main process
    * This should be called after TouchSDK is initialized
@@ -572,6 +641,7 @@ export function useApplicationUpgrade() {
     updateSettings,
     clearUpdateCache,
     getUpdateStatus,
+    getCachedRelease,
     setupUpdateListener,
     loading,
     error,

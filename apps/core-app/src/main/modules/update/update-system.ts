@@ -421,13 +421,13 @@ export class UpdateSystem {
   private parseChannelLabel(label?: string): AppPreviewChannel {
     const normalized = (label || '').toUpperCase()
 
-    if (normalized === AppPreviewChannel.SNAPSHOT) {
+    if (normalized.startsWith(AppPreviewChannel.SNAPSHOT)) {
       return AppPreviewChannel.SNAPSHOT
     }
-    if (normalized === AppPreviewChannel.BETA) {
+    if (normalized.startsWith(AppPreviewChannel.BETA)) {
       return AppPreviewChannel.BETA
     }
-    if (normalized === 'MASTER') {
+    if (normalized === 'MASTER' || normalized.startsWith(AppPreviewChannel.RELEASE)) {
       return AppPreviewChannel.RELEASE
     }
 

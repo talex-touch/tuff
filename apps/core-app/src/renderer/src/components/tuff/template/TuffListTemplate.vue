@@ -83,12 +83,12 @@ defineExpose({
   getGroupItems,
 })
 
-// function getItemKey(group: TuffListGroup<any>, item: any, index: number): string {
-//   if (group.itemKey) {
-//     return group.itemKey(item, index)
-//   }
-//   return `${group.id}-item-${index}`
-// }
+function getItemKey(group: TuffListGroup<any>, item: any, index: number): string {
+  if (group.itemKey) {
+    return group.itemKey(item, index)
+  }
+  return `${group.id}-item-${index}`
+}
 </script>
 
 <template>
