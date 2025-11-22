@@ -1,5 +1,7 @@
 import type { IExecuteArgs, IProviderActivate, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { appScanner } from '../apps/app-scanner'
 
@@ -78,8 +80,6 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     }
 
     // 使用child_process打开URL
-    const { exec } = await import('node:child_process')
-    const { promisify } = await import('node:util')
     const execAsync = promisify(exec)
 
     try {

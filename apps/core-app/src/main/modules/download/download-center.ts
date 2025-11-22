@@ -2,7 +2,9 @@ import type { DownloadConfig, DownloadRequest, DownloadTask, ModuleDestroyContex
 import { defaultDownloadConfig, DownloadStatus } from '@talex-touch/utils'
 import type { NotificationConfig } from './notification-service'
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
 import path from 'node:path'
+import { shell } from 'electron'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { eq } from 'drizzle-orm'
 import { downloadTasks } from '../../db/schema'
@@ -387,7 +389,6 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const filePath = path.join(task.destination, task.filename)
-    const { shell } = await import('electron')
     await shell.openPath(filePath)
   }
 
@@ -403,7 +404,6 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const filePath = path.join(task.destination, task.filename)
-    const { shell } = await import('electron')
     shell.showItemInFolder(filePath)
   }
 
@@ -419,28 +419,20 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const filePath = path.join(task.destination, task.filename)
-    const fs = await import('node:fs/promises')
     await fs.unlink(filePath)
 
-    // 从数据库中删除任务
     await this.databaseService.deleteTask(taskId)
-
-    // 从队列中移除
     this.taskQueue.remove(taskId)
-
     this.broadcastTaskUpdated(task)
   }
 
   // 清理临时文件
   async cleanupTempFiles(): Promise<void> {
-    const fs = await import('node:fs/promises')
     const tempDir = this.config.storage.tempDir
 
     try {
-      // 确保临时目录存在
       await fs.mkdir(tempDir, { recursive: true })
 
-      // 获取所有任务
       const allTasks = this.getAllTasks()
       const activeTaskIds = new Set(
         allTasks
@@ -453,24 +445,21 @@ export class DownloadCenterModule extends BaseModule {
           .map(task => task.id),
       )
 
-      // 读取临时目录
       const entries = await fs.readdir(tempDir, { withFileTypes: true })
       let cleanedCount = 0
       let cleanedSize = 0
 
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          // 检查是否是孤立的任务目录
           if (!activeTaskIds.has(entry.name)) {
             const dirPath = path.join(tempDir, entry.name)
 
-            // 计算目录大小
             try {
               const size = await this.getDirectorySize(dirPath)
               cleanedSize += size
             }
             catch (error) {
-              // 忽略大小计算错误
+              // Ignore size calculation errors
             }
 
             await fs.rm(dirPath, { recursive: true, force: true })
@@ -479,7 +468,6 @@ export class DownloadCenterModule extends BaseModule {
           }
         }
         else if (entry.isFile()) {
-          // 清理孤立的临时文件（不在任何任务目录中）
           const filePath = path.join(tempDir, entry.name)
           try {
             const stats = await fs.stat(filePath)
@@ -507,7 +495,6 @@ export class DownloadCenterModule extends BaseModule {
 
   // 计算目录大小
   private async getDirectorySize(dirPath: string): Promise<number> {
-    const fs = await import('node:fs/promises')
     let totalSize = 0
 
     try {
@@ -526,7 +513,7 @@ export class DownloadCenterModule extends BaseModule {
       }
     }
     catch (error) {
-      // 忽略错误，返回当前计算的大小
+      // Ignore errors, return current size
     }
 
     return totalSize

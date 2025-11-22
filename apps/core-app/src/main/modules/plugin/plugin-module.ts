@@ -5,8 +5,9 @@ import type {
   PluginInstallSummary,
 } from '@talex-touch/utils/plugin/providers'
 import type { FSWatcher } from 'chokidar'
+import { exec } from 'node:child_process'
 import path from 'node:path'
-import util from 'node:util'
+import * as util from 'node:util'
 import { sleep } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { PluginStatus } from '@talex-touch/utils/plugin'
@@ -1645,7 +1646,6 @@ export class PluginModule extends BaseModule {
           }
 
           const configPath = plugin.getConfigPath()
-          const { shell } = await import('electron')
           await shell.openPath(configPath)
           return reply(DataCode.SUCCESS, { success: true })
         }
@@ -1673,7 +1673,6 @@ export class PluginModule extends BaseModule {
           }
 
           const configPath = plugin.getConfigPath()
-          const { shell } = await import('electron')
           await shell.openPath(configPath)
           return reply(DataCode.SUCCESS, { success: true })
         }
@@ -1702,22 +1701,12 @@ export class PluginModule extends BaseModule {
           }
 
           const configPath = plugin.getConfigPath()
-          const { shell } = await import('electron')
-
-          // Try to open with default editor (VS Code, Sublime, etc.)
-          // On macOS, use 'open -a "Visual Studio Code"' or just 'open' for default
-          // On Windows, use 'code' or 'start'
-          // On Linux, use 'code' or 'xdg-open'
-          const { exec } = await import('node:child_process')
-          const { promisify } = await import('node:util')
-          const execAsync = promisify(exec)
+          const execAsync = util.promisify(exec)
 
           try {
-            // Try VS Code first (most common)
             await execAsync(`code "${configPath}"`)
           }
           catch {
-            // Fallback to system default
             await shell.openPath(configPath)
           }
 

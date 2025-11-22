@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { DataCode } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
 import { genTouchChannel } from '../core/channel-core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
@@ -1018,7 +1018,6 @@ export class ClipboardModule extends BaseModule {
         }
 
         // 查询匹配的 clipboard IDs
-        const { or } = await import('drizzle-orm')
         const idRows = await this.db
           .select({ clipboardId: clipboardHistoryMeta.clipboardId })
           .from(clipboardHistoryMeta)
