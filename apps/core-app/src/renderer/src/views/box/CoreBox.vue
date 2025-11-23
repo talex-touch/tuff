@@ -163,7 +163,7 @@ useKeyboard(
   handlePaste,
   itemRefs
 )
-useChannel(boxOptions, res)
+useChannel(boxOptions, res, searchVal)
 
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
 const historyActiveIndex = ref(-1)

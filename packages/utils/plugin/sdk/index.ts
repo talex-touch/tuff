@@ -7,10 +7,12 @@ export interface ITouchSDK {
 
 // Note: Window.$touchSDK is declared in ../preload.ts to avoid duplicate declarations
 
+export * from './box-sdk'
 export * from './channel'
 export * from './clipboard'
 export * from './core-box'
 export * from './division-box'
+export * from './feature-sdk'
 export { createFeaturesManager, useFeatures } from './features'
 
 export * from './hooks/index'

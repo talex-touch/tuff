@@ -431,6 +431,18 @@ export function useSearch(
   // 2. Watch for searchVal or mode changes to trigger the search
   watch([searchVal], handleSearch)
 
+  // 3. Watch for searchVal changes to broadcast to plugins (debounced for performance)
+  const debouncedInputBroadcast = useDebounceFn((newVal: string) => {
+    // 广播输入变化到主进程，主进程会转发给插件
+    touchChannel.send('core-box:input-changed', { input: newVal }).catch((error) => {
+      console.error('[useSearch] Failed to broadcast input change:', error)
+    })
+  }, 150) // 150ms 防抖，避免频繁广播
+
+  watch(searchVal, (newVal) => {
+    debouncedInputBroadcast(newVal)
+  })
+
   const activeItem = computed(() => res.value[boxOptions.focus])
 
   // Listener for incremental search result updates.

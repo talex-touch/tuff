@@ -359,9 +359,8 @@ export class BoxItemManager {
    * @returns CoreBox 窗口或 null
    */
   private getCoreBoxWindow(): BrowserWindow | null {
-    // 这里需要从 CoreBoxManager 获取窗口
-    // 暂时返回 null，稍后集成
-    const { getCoreBoxWindow } = require('../../core-box/manager')
+    // 从 core-box 模块获取窗口
+    const { getCoreBoxWindow } = require('../core-box')
     const coreBoxWindow = getCoreBoxWindow()
     return coreBoxWindow?.window || null
   }
