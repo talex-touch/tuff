@@ -11,7 +11,6 @@ import { useMarketCategories } from '~/composables/market/useMarketCategories'
 import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
-import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { pluginSettings } from '~/modules/storage/plugin-settings'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -19,13 +18,13 @@ import FlatButton from '~/components/base/button/FlatButton.vue'
 const { t } = useI18n()
 
 // Market data management
-const { officialPlugins, loading, errorMessage, lastUpdated, loadOfficialPlugins } = useMarketData()
+const { officialPlugins, loading, loadOfficialPlugins } = useMarketData()
 
 // Category management
 const { tags, tagInd, selectedTag, updateCategoryTags } = useMarketCategories(officialPlugins)
 
 // Installation management
-const { getInstallTask, isPluginInstalling, handleInstall } = useMarketInstall()
+const { handleInstall } = useMarketInstall()
 
 // UI state
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
@@ -73,19 +72,6 @@ const displayedPlugins = computed(() => {
       plugin.id.toLowerCase().includes(normalizedKey)
     )
   })
-})
-
-const lastUpdatedLabel = computed(() => {
-  if (!lastUpdated.value) return ''
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    }).format(new Date(lastUpdated.value))
-  } catch (error) {
-    console.warn('[Market] Failed to format last updated timestamp', error)
-    return new Date(lastUpdated.value).toLocaleString()
-  }
 })
 
 const detailUpdatedLabel = computed(() => {
@@ -320,19 +306,10 @@ onBeforeUnmount(() => {
                 <FlatButton
                   :primary="true"
                   class="detail-install"
-                  :disabled="(this as any).isPluginInstalling(activePlugin.id)"
                   @click="onInstall(activePlugin)"
                 >
-                  <i
-                    v-if="(this as any).isPluginInstalling(activePlugin.id)"
-                    class="i-ri-loader-4-line animate-spin"
-                  />
                   <span>
-                    {{
-                      (this as any).isPluginInstalling(activePlugin.id)
-                        ? t('market.installing')
-                        : t('market.install')
-                    }}
+                    {{ t('market.install') }}
                   </span>
                 </FlatButton>
               </div>

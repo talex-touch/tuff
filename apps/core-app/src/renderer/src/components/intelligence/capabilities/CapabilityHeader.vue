@@ -11,7 +11,7 @@ defineProps<{
     <div class="capability-header__content">
       <div class="capability-header__meta">
         <span class="capability-header__id">{{ capability.id }}</span>
-        <span class="capability-header__type-badge">{{ capability.type || 'capability' }}</span>
+        <span class="capability-header__type-badge">{{ (capability as any).type || 'capability' }}</span>
       </div>
       <h1 class="capability-header__title">
         {{ capability.label || capability.id }}

@@ -7,7 +7,7 @@ interface CategoryTag {
   label?: string
 }
 
-const props = defineProps<{
+defineProps<{
   categories: CategoryTag[]
   selectedIndex: number
 }>()

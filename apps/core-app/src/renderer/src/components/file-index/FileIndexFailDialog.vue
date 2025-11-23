@@ -1,5 +1,5 @@
 <template>
-  <TBottomDialog v-model="visible" title="文件索引初始化失败" class="file-index-fail-dialog">
+  <TBottomDialog v-model="visible" title="文件索引初始化失败" class="file-index-fail-dialog" :close="handleLater">
     <div class="dialog-content">
       <div class="error-icon">⚠️</div>
       

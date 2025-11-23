@@ -76,19 +76,21 @@ function getGroupItems(groupId: string) {
   return props.groups.find(group => group.id === groupId)?.items ?? []
 }
 
-defineExpose({
-  toggleGroup,
-  setGroupCollapsed,
-  isGroupCollapsed,
-  getGroupItems,
-})
-
+// Used in template v-for :key binding
+// @ts-ignore - Used in template
 function getItemKey(group: TuffListGroup<any>, item: any, index: number): string {
   if (group.itemKey) {
     return group.itemKey(item, index)
   }
   return `${group.id}-item-${index}`
 }
+
+defineExpose({
+  toggleGroup,
+  setGroupCollapsed,
+  isGroupCollapsed,
+  getGroupItems,
+})
 </script>
 
 <template>
