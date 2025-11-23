@@ -11,6 +11,12 @@ import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
 import { setupI18n } from '~/modules/lang'
 
+import {
+  createSharedElementDirective,
+  SharedElementRouteGuard,
+  SharedElementDirective
+} from 'v-shared-element'
+
 import { usePluginStore } from '~/stores/plugin'
 import App from './App.vue'
 
@@ -28,10 +34,11 @@ window.$nodeApi = baseNodeApi
 window.$shortconApi = shortconApi
 window.$storage = storageManager
 
-registerDefaultCustomRenderers()
-
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')
+
+registerDefaultCustomRenderers()
+router.beforeEach(SharedElementRouteGuard)
 
 /**
  * Orchestrate renderer initialization and mount the Vue root.
@@ -39,14 +46,15 @@ preloadLog('Bootstrapping Talex Touch renderer...')
 async function bootstrap() {
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
-    setupI18n({ locale: initialLanguage }))
+    setupI18n({ locale: initialLanguage })
+  )
   ;(window as any).$i18n = i18n
 
-  const app = await runBootStep('Creating Vue application instance', 0.05, () =>
-    createApp(App))
+  const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
 
   await runBootStep('Registering plugins and global modules', 0.05, () =>
-    registerCorePlugins(app, i18n))
+    registerCorePlugins(app, i18n)
+  )
 
   await runBootStep('Initializing plugin store', 0.05, () => maybeInitializePluginStore())
 
@@ -87,7 +95,13 @@ function resolveInitialLanguage() {
  * Register shared renderer plugins and global modules.
  */
 function registerCorePlugins(app: ReturnType<typeof createApp>, i18n: any) {
-  app.use(router).use(ElementPlus).use(createPinia()).use(VWave, {}).use(i18n)
+  app
+    .use(router)
+    .use(ElementPlus)
+    .use(createPinia())
+    .use(VWave, {})
+    .use(i18n)
+    .use(createSharedElementDirective())
 }
 
 /**
