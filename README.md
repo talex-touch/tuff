@@ -20,6 +20,8 @@
 
 Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with ai-native. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
 
+> Due to developer schedule reasons, it will no longer be actively compatible with Linux, and the Windows version testing will be delayed by two months compared to macos. (Sorry!!!)
+
 ### Search all apps on device.
 
 ![SearchApplication](./shots/SearchApp.gif)

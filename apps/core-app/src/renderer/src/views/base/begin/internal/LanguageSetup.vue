@@ -5,20 +5,37 @@ import { useI18n } from 'vue-i18n'
 import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
 import Greeting from './Greeting.vue'
 
-type StepFunction = (call: { comp: any, rect?: { width: number, height: number } }) => void
+type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
 const step = inject<StepFunction>('step')!
 const { t } = useI18n()
-const { currentLanguage, followSystemLanguage, switchLanguage, setFollowSystemLanguage, getSystemLanguage }
-  = useLanguage()
+const {
+  currentLanguage,
+  followSystemLanguage,
+  switchLanguage,
+  setFollowSystemLanguage,
+  getSystemLanguage
+} = useLanguage()
 
 const selectedLanguage = ref<SupportedLanguage>(currentLanguage.value)
 const followSystem = ref<boolean>(followSystemLanguage.value)
 
 const systemLanguage = computed(() => getSystemLanguage())
 const systemLanguageName = computed(
-  () => SUPPORTED_LANGUAGES.find(lang => lang.key === systemLanguage.value)?.name ?? systemLanguage.value,
+  () =>
+    SUPPORTED_LANGUAGES.find((lang) => lang.key === systemLanguage.value)?.name ??
+    systemLanguage.value
 )
+
+async function handleSelectLang(lang: any) {
+  selectedLanguage.value = lang.key
+
+  await setFollowSystemLanguage(followSystem.value)
+
+  if (!followSystem.value && selectedLanguage.value !== currentLanguage.value) {
+    await switchLanguage(selectedLanguage.value)
+  }
+}
 
 watch(currentLanguage, (lang) => {
   if (!followSystem.value) {
@@ -47,7 +64,7 @@ async function handleNext(): Promise<void> {
   }
 
   step({
-    comp: Greeting,
+    comp: Greeting
   })
 }
 </script>
@@ -61,7 +78,7 @@ async function handleNext(): Promise<void> {
 
     <div class="LanguageSetup-System fake-background">
       <label class="LanguageSetup-SystemToggle">
-        <input v-model="followSystem" type="checkbox">
+        <input v-model="followSystem" type="checkbox" />
         <span>{{ t('beginner.language.followSystem') }}</span>
       </label>
       <p class="LanguageSetup-SystemDetected">
@@ -76,7 +93,7 @@ async function handleNext(): Promise<void> {
         :disabled="followSystem"
         :class="{ active: selectedLanguage === lang.key }"
         type="button"
-        @click="selectedLanguage = lang.key"
+        @click="handleSelectLang(lang)"
       >
         <span>{{ lang.name }}</span>
         <small v-if="systemLanguage === lang.key">

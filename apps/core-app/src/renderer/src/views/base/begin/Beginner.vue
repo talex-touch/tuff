@@ -11,16 +11,15 @@ const last_component: Ref<Component | null> = ref(null)
 
 if (!appSetting.beginner) {
   appSetting.beginner = {
-    init: false,
+    init: false
   }
 }
 
 async function step(
-  call: { comp: Component | null, rect?: { width: number, height: number } },
-  dataAction?: (storage: unknown) => void,
+  call: { comp: Component | null; rect?: { width: number; height: number } },
+  dataAction?: (storage: unknown) => void
 ): Promise<void> {
-  if (!content.value)
-    return
+  if (!content.value) return
 
   content.value.style.opacity = '0'
   await sleep(300)
@@ -41,7 +40,7 @@ async function step(
   if (rect && main.value) {
     Object.assign(main.value.style, {
       width: `${rect.width}px`,
-      height: `${rect.height}px`,
+      height: `${rect.height}px`
     })
     await sleep(300)
   }
@@ -58,7 +57,7 @@ async function step(
 provide('step', step)
 provide('back', () => {
   step({
-    comp: last_component.value,
+    comp: last_component.value
   })
 })
 
@@ -66,7 +65,7 @@ onMounted(async () => {
   await sleep(100)
 
   step({
-    comp: LanguageSetup,
+    comp: LanguageSetup
   })
 })
 </script>

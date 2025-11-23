@@ -934,7 +934,12 @@
       "alertInitPending": "Index is initializing, wait for completion before rebuilding.",
       "alertBatteryLow": "Battery too low ({level}%), charge above 20% or plug in before rebuilding.",
       "alertRebuildStarted": "Index rebuild has started, please wait a moment...",
-      "alertRebuildFailed": "Rebuild failed: {error}"
+      "alertRebuildFailed": "Rebuild failed: {error}",
+      "statsTitle": "Index Statistics",
+      "statsDesc": "Detailed statistics of file indexing",
+      "totalFiles": "Files Indexed",
+      "failedFiles": "Failed",
+      "skippedFiles": "Skipped"
     },
     "intelligence": {
       "pageTitle": "TaTa Intelligence",

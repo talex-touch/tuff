@@ -2,15 +2,16 @@
 import HelloData from '~/assets/lotties/hello.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 // import Protocol from './Protocol.vue'
-import AccountDo from './AccountDo.vue'
+// import AccountDo from './AccountDo.vue'
+import SetupPermissions from './SetupPermissions.vue'
 
-type StepFunction = (call: { comp: any, rect?: { width: number, height: number } }) => void
+type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
 const step: StepFunction = inject('step')!
 
 function goon(): void {
   step({
-    comp: AccountDo,
+    comp: SetupPermissions
     // Protocol
   })
 }
@@ -21,9 +22,7 @@ function goon(): void {
     <LottieFrame :loop="true" :data="HelloData" />
     <div class="Greeting-Content">
       <p>Welcome to Tuff</p>
-      <FlatButton primary @click="goon">
-        Get Started
-      </FlatButton>
+      <FlatButton primary @click="goon"> Get Started </FlatButton>
     </div>
   </div>
 </template>

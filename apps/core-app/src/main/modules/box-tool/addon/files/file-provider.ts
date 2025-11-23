@@ -501,11 +501,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.isInitializing = this._initialize()
         .then(() => {
           this.initializationFailed = false
+          this.isInitializing = null // 重置状态，确保前端能正确显示"已完成"
           this.logInfo('File indexing initialization completed successfully')
         })
         .catch((error) => {
           this.initializationFailed = true
           this.initializationError = error
+          this.isInitializing = null // 即使失败也重置状态
           this.logError('Background index task failed', error)
           this.emitIndexingProgress('idle', 0, 0)
           // 通知前端索引失败
@@ -645,6 +647,49 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+
+  /**
+   * 获取索引统计信息
+   */
+  public async getIndexStats(): Promise<{
+    totalFiles: number
+    failedFiles: number
+    skippedFiles: number
+  }> {
+    if (!this.dbUtils) {
+      return { totalFiles: 0, failedFiles: 0, skippedFiles: 0 }
+    }
+
+    const db = this.dbUtils.getDb()
+
+    // 查询总文件数
+    const totalFilesResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(filesSchema)
+      .where(eq(filesSchema.type, 'file'))
+
+    const totalFiles = totalFilesResult[0]?.count ?? 0
+
+    // 查询失败的文件数
+    const failedFilesResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(fileIndexProgress)
+      .where(eq(fileIndexProgress.status, 'failed'))
+
+    const failedFiles = failedFilesResult[0]?.count ?? 0
+
+    // 查询跳过的文件数
+    const skippedFilesResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(fileIndexProgress)
+      .where(eq(fileIndexProgress.status, 'skipped'))
+
+    const skippedFiles = skippedFilesResult[0]?.count ?? 0
+
+    return { totalFiles, failedFiles, skippedFiles }
+  }
+
+
   /**
    * Get battery level and charging status
    */
@@ -742,6 +787,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       } catch (error: any) {
         this.logError('Failed to get battery level', error)
         return null
+      }
+    })
+
+    // 查询索引统计信息
+    channel.regChannel(ChannelType.MAIN, 'file-index:stats', async () => {
+      try {
+        return await this.getIndexStats()
+      } catch (error: any) {
+        this.logError('Failed to get index stats', error)
+        return { totalFiles: 0, failedFiles: 0, skippedFiles: 0 }
       }
     })
   }
