@@ -227,6 +227,17 @@
     "installing": "安装中...",
     "officialBadge": "官方",
     "lastUpdated": "上次更新 {time}",
+    "categories": {
+      "title": "分类",
+      "all": "全部",
+      "productivity": "生产力",
+      "development": "开发",
+      "utilities": "实用工具",
+      "design": "设计",
+      "media": "媒体",
+      "writing": "写作",
+      "dev": "开发"
+    },
     "tags": {
       "all": "全部",
       "feature": "功能",
@@ -235,6 +246,14 @@
       "enhancement": "增强",
       "tools": "工具",
       "productivity": "生产力"
+    },
+    "detailDialog": {
+      "author": "作者",
+      "version": "版本",
+      "updateTime": "更新时间",
+      "pluginId": "插件标识",
+      "download": "下载源文件",
+      "viewDocs": "查看文档"
     },
     "error": {
       "loadFailed": "官方插件列表加载失败。"

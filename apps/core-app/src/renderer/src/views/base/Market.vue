@@ -1,107 +1,60 @@
 <script lang="ts" name="Market" setup>
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { useToggle } from '@vueuse/core'
-import gsap from 'gsap'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
+import MarketCategoryList from '~/components/market/MarketCategoryList.vue'
+import MarketGridView from '~/components/market/MarketGridView.vue'
+import MarketHeader from '~/components/market/MarketHeader.vue'
 import MarketItemCard from '~/components/market/MarketItemCard.vue'
-import { useInstallManager } from '~/modules/install/install-manager'
+import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
+import { useMarketCategories } from '~/composables/market/useMarketCategories'
+import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
+import { useMarketData } from '~/composables/market/useMarketData'
+import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { pluginSettings } from '~/modules/storage/plugin-settings'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
-
-interface OfficialManifestVersionEntry {
-  version: string
-  path: string
-  timestamp?: string
-}
-
-interface OfficialManifestEntry {
-  id: string
-  name: string
-  author?: string
-  version: string
-  category?: string
-  description?: string
-  path: string
-  timestamp?: string
-  metadata?: {
-    readme_path?: string
-    [key: string]: unknown
-  }
-  versions?: OfficialManifestVersionEntry[]
-}
-
-interface CategoryTag {
-  tag: string
-  filter: string
-  label?: string
-}
-
-interface OfficialPluginListItem {
-  id: string
-  name: string
-  author?: string
-  version: string
-  category?: string
-  description?: string
-  downloadUrl: string
-  readmeUrl?: string
-  official: boolean
-  icon?: string
-  metadata?: Record<string, unknown>
-  timestamp?: string
-}
+import FlatButton from '~/components/base/button/FlatButton.vue'
 
 const { t } = useI18n()
 
-const MANIFEST_URL
-  = 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json'
-const MANIFEST_BASE_URL
-  = 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
+// Market data management
+const { officialPlugins, loading, errorMessage, lastUpdated, loadOfficialPlugins } = useMarketData()
 
-const orderType = ref<'grid' | 'list'>('grid')
+// Category management
+const { tags, tagInd, selectedTag, updateCategoryTags } = useMarketCategories(officialPlugins)
+
+// Installation management
+const { getInstallTask, isPluginInstalling, handleInstall } = useMarketInstall()
+
+// UI state
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
-const tagInd = ref(0)
-const tags = ref<CategoryTag[]>([{ tag: 'market.tags.all', filter: '' }])
-
-const loading = ref(false)
-const errorMessage = ref('')
-const lastUpdated = ref<number | null>(null)
+const viewType = ref<'grid' | 'list'>('grid')
 const searchKey = ref('')
-
 const detailVisible = ref(false)
 const activePlugin = ref<OfficialPluginListItem | null>(null)
 
-const officialPlugins = ref<OfficialPluginListItem[]>([])
+// Renderer channel
 let rendererChannel: ITouchClientChannel | undefined
 let channelLoadFailed = false
 
-const installManager = useInstallManager()
+async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
+  if (rendererChannel) return rendererChannel
+  if (channelLoadFailed || typeof window === 'undefined' || !window.process?.type) return undefined
 
-const getInstallTask = (pluginId?: string) => installManager.getTaskByPluginId(pluginId)
-
-function isPluginInstalling(pluginId?: string) {
-  return installManager.isActiveStage(getInstallTask(pluginId)?.stage)
-}
-
-function suggestionFetch(key = ''): string[] {
-  const normalized = key.trim()
-  searchKey.value = normalized
-
-  if (!normalized) {
-    return officialPlugins.value.slice(0, 6).map(plugin => plugin.name)
+  try {
+    const module = await import('~/modules/channel/channel-core')
+    rendererChannel = module.touchChannel as ITouchClientChannel
+    return rendererChannel
+  } catch (error) {
+    channelLoadFailed = true
+    console.warn('[Market] Failed to load channel-core module:', error)
+    return undefined
   }
-
-  const lower = normalized.toLowerCase()
-  return officialPlugins.value
-    .filter(plugin => plugin.name.toLowerCase().includes(lower))
-    .map(plugin => plugin.name)
 }
 
-const selectedTag = computed(() => tags.value[tagInd.value] ?? tags.value[0])
-
+// Filtered plugins based on category and search
 const displayedPlugins = computed(() => {
   const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
   const normalizedKey = searchKey.value.trim().toLowerCase()
@@ -110,31 +63,27 @@ const displayedPlugins = computed(() => {
     const pluginCategory = plugin.category?.toLowerCase() ?? ''
     const matchesCategory = !categoryFilter || pluginCategory === categoryFilter
 
-    if (!matchesCategory)
-      return false
+    if (!matchesCategory) return false
 
-    if (!normalizedKey)
-      return true
+    if (!normalizedKey) return true
 
     return (
-      plugin.name.toLowerCase().includes(normalizedKey)
-      || (plugin.description ?? '').toLowerCase().includes(normalizedKey)
-      || (plugin.author ?? '').toLowerCase().includes(normalizedKey)
-      || plugin.id.toLowerCase().includes(normalizedKey)
+      plugin.name.toLowerCase().includes(normalizedKey) ||
+      (plugin.description ?? '').toLowerCase().includes(normalizedKey) ||
+      (plugin.author ?? '').toLowerCase().includes(normalizedKey) ||
+      plugin.id.toLowerCase().includes(normalizedKey)
     )
   })
 })
 
 const lastUpdatedLabel = computed(() => {
-  if (!lastUpdated.value)
-    return ''
+  if (!lastUpdated.value) return ''
   try {
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short',
+      timeStyle: 'short'
     }).format(new Date(lastUpdated.value))
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[Market] Failed to format last updated timestamp', error)
     return new Date(lastUpdated.value).toLocaleString()
   }
@@ -142,20 +91,17 @@ const lastUpdatedLabel = computed(() => {
 
 const detailUpdatedLabel = computed(() => {
   const timestamp = activePlugin.value?.timestamp
-  if (!timestamp)
-    return ''
+  if (!timestamp) return ''
 
-  let date: Date | null = null
+  let date: Date  | null = null
 
   if (typeof timestamp === 'number') {
     date = new Date(timestamp)
-  }
-  else {
+  } else {
     const numeric = Number(timestamp)
     if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
       date = new Date(numeric)
-    }
-    else {
+    } else {
       const parsed = Date.parse(timestamp)
       if (!Number.isNaN(parsed)) {
         date = new Date(parsed)
@@ -163,16 +109,14 @@ const detailUpdatedLabel = computed(() => {
     }
   }
 
-  if (!date)
-    return ''
+  if (!date) return ''
 
   try {
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
-      timeStyle: 'short',
+      timeStyle: 'short'
     }).format(date)
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[Market] Failed to format detail timestamp', error)
     return date.toLocaleString()
   }
@@ -180,41 +124,45 @@ const detailUpdatedLabel = computed(() => {
 
 const detailMeta = computed(() => {
   const plugin = activePlugin.value
-  if (!plugin)
-    return [] as Array<{ icon: string, label: string, value: string }>
+  if (!plugin) return [] as Array<{ icon: string; label: string; value: string }>
 
-  const meta: Array<{ icon: string, label: string, value: string }> = []
+  const meta: Array<{ icon: string; label: string; value: string }> = []
 
   if (plugin.author) {
-    meta.push({ icon: 'i-ri-user-line', label: '作者', value: plugin.author })
+    meta.push({ icon: 'i-ri-user-line', label: t('market.detailDialog.author'), value: plugin.author })
   }
 
   if (plugin.version) {
-    meta.push({ icon: 'i-ri-price-tag-3-line', label: '版本', value: `v${plugin.version}` })
+    meta.push({
+      icon: 'i-ri-price-tag-3-line',
+      label: t('market.detailDialog.version'),
+      value: `v${plugin.version}`
+    })
   }
 
   if (detailUpdatedLabel.value) {
-    meta.push({ icon: 'i-ri-time-line', label: '更新时间', value: detailUpdatedLabel.value })
+    meta.push({
+      icon: 'i-ri-time-line',
+      label: t('market.detailDialog.updateTime'),
+      value: detailUpdatedLabel.value
+    })
   }
 
-  meta.push({ icon: 'i-ri-barcode-line', label: '插件标识', value: plugin.id })
+  meta.push({ icon: 'i-ri-barcode-line', label: t('market.detailDialog.pluginId'), value: plugin.id })
 
   return meta
 })
 
 const detailIconClass = computed(() => {
   const plugin = activePlugin.value
-  if (!plugin)
-    return ''
+  if (!plugin) return ''
 
   const metadata = plugin.metadata ?? {}
   const iconClass = typeof metadata?.icon_class === 'string' ? metadata.icon_class.trim() : ''
-  if (iconClass)
-    return iconClass
+  if (iconClass) return iconClass
 
   const metaIcon = typeof metadata?.icon === 'string' ? metadata.icon.trim() : ''
-  if (metaIcon)
-    return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
+  if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
 
   const pluginIcon = (plugin as any).icon
   if (typeof pluginIcon === 'string' && pluginIcon.trim().length > 0) {
@@ -225,226 +173,13 @@ const detailIconClass = computed(() => {
   return ''
 })
 
-function updateCategoryTags(): void {
-  const categories = Array.from(
-    new Set(
-      officialPlugins.value
-        .map(plugin => plugin.category)
-        .filter(
-          (category): category is string =>
-            typeof category === 'string' && category.trim().length > 0,
-        ),
-    ),
-  )
-
-  const base: CategoryTag[] = [{ tag: 'market.tags.all', filter: '' }]
-
-  for (const category of categories) {
-    const lower = category.toLowerCase()
-    if (lower === 'tools') {
-      base.push({ tag: 'market.tags.tools', filter: lower })
-      continue
-    }
-
-    base.push({
-      tag: '',
-      filter: lower,
-      label: category,
-    })
-  }
-
-  tags.value = base
-  if (tagInd.value >= tags.value.length)
-    tagInd.value = 0
+function handleSearch(query: string): void {
+  searchKey.value = query
 }
 
-function mapManifestEntry(entry: OfficialManifestEntry): OfficialPluginListItem {
-  const normalizedPath = entry.path.replace(/^\//, '')
-  const downloadUrl = new URL(normalizedPath, MANIFEST_BASE_URL).toString()
-
-  let readmeUrl: string | undefined
-  const readmePath = entry.metadata?.readme_path
-  if (readmePath && readmePath.trim().length > 0) {
-    readmeUrl = new URL(readmePath.replace(/^\//, ''), MANIFEST_BASE_URL).toString()
-  }
-
-  const metadata = entry.metadata ?? {}
-  let icon: string | undefined
-  if (typeof metadata.icon_class === 'string' && metadata.icon_class.trim().length > 0) {
-    icon = metadata.icon_class.trim()
-  }
-  else if (typeof metadata.icon === 'string' && metadata.icon.trim().length > 0) {
-    const trimmed = metadata.icon.trim()
-    icon = trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
-  }
-
-  return {
-    id: entry.id,
-    name: entry.name,
-    author: entry.author,
-    version: entry.version,
-    category: entry.category,
-    description: entry.description,
-    downloadUrl,
-    readmeUrl,
-    official: true,
-    icon,
-    metadata: entry.metadata,
-    timestamp: entry.timestamp,
-  }
-}
-
-async function fetchManifestDirect(): Promise<{
-  plugins: OfficialPluginListItem[]
-  fetchedAt: number
-}> {
-  const response = await fetch(MANIFEST_URL, {
-    headers: {
-      Accept: 'application/json',
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`OFFICIAL_PLUGIN_HTTP_${response.status}`)
-  }
-
-  const body = await response.json()
-  if (!Array.isArray(body)) {
-    throw new TypeError('OFFICIAL_PLUGIN_INVALID_MANIFEST')
-  }
-
-  const plugins = body.map((entry: OfficialManifestEntry) => mapManifestEntry(entry))
-  return { plugins, fetchedAt: Date.now() }
-}
-
-function isElectronRenderer(): boolean {
-  return Boolean(typeof window !== 'undefined' && window.process?.type === 'renderer')
-}
-
-async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
-  if (rendererChannel)
-    return rendererChannel
-  if (channelLoadFailed || !isElectronRenderer())
-    return undefined
-
-  try {
-    const module = await import('~/modules/channel/channel-core')
-    rendererChannel = module.touchChannel as ITouchClientChannel
-    return rendererChannel
-  }
-  catch (error) {
-    channelLoadFailed = true
-    console.warn('[Market] Failed to load channel-core module:', error)
-    return undefined
-  }
-}
-
-async function loadOfficialPlugins(force = false): Promise<void> {
-  if (loading.value)
-    return
-
-  loading.value = true
-  errorMessage.value = ''
-
-  try {
-    let result: { plugins: OfficialPluginListItem[], fetchedAt: number } | null = null
-
-    const channel = await getRendererChannel()
-    if (channel) {
-      try {
-        const response: any = await channel.send('plugin:official-list', { force })
-
-        if (!response || !Array.isArray(response.plugins)) {
-          throw new Error(response?.error || 'OFFICIAL_PLUGIN_FETCH_FAILED')
-        }
-
-        result = {
-          plugins: response.plugins as OfficialPluginListItem[],
-          fetchedAt: typeof response.fetchedAt === 'number' ? response.fetchedAt : Date.now(),
-        }
-      }
-      catch (error) {
-        console.warn('[Market] Failed to load official plugins via IPC, fallback to HTTP:', error)
-      }
-    }
-
-    if (!result) {
-      result = await fetchManifestDirect()
-    }
-
-    officialPlugins.value = result.plugins
-    lastUpdated.value = result.fetchedAt
-
-    updateCategoryTags()
-  }
-  catch (error: any) {
-    console.error('[Market] Failed to load official plugins:', error)
-    const reason
-      = typeof error?.message === 'string' && error.message.trim().length > 0
-        ? error.message.trim()
-        : ''
-    const shouldExposeReason
-      = reason && !reason.startsWith('OFFICIAL_PLUGIN_') && reason !== 'OFFICIAL_PLUGIN_FETCH_FAILED'
-
-    errorMessage.value = shouldExposeReason ? reason : t('market.error.loadFailed')
-  }
-  finally {
-    loading.value = false
-  }
-}
-
-async function handleInstall(plugin: OfficialPluginListItem): Promise<void> {
-  if (isPluginInstalling(plugin.id))
-    return
-
+async function onInstall(plugin: OfficialPluginListItem): Promise<void> {
   const channel = await getRendererChannel()
-
-  if (!channel) {
-    await forTouchTip(
-      t('market.installation.failureTitle'),
-      t('market.installation.browserNotSupported'),
-    )
-    return
-  }
-
-  try {
-    const payload: Record<string, unknown> = {
-      source: plugin.downloadUrl,
-      metadata: {
-        officialId: plugin.id,
-        officialVersion: plugin.version,
-        officialSource: 'talex-touch/tuff-official-plugins',
-        official: plugin.official === true,
-      },
-      clientMetadata: {
-        pluginId: plugin.id,
-        pluginName: plugin.name,
-      },
-    }
-
-    const result: any = await channel.send('plugin:install-source', payload)
-
-    if (result?.status === 'success') {
-      await forTouchTip(
-        t('market.installation.successTitle'),
-        t('market.installation.successMessage', { name: plugin.name }),
-      )
-    }
-    else {
-      const reason = result?.message || 'INSTALL_FAILED'
-      throw new Error(reason)
-    }
-  }
-  catch (error: any) {
-    console.error('[Market] Plugin install failed:', error)
-    await forTouchTip(
-      t('market.installation.failureTitle'),
-      t('market.installation.failureMessage', {
-        name: plugin.name,
-        reason: error?.message || 'UNKNOWN_ERROR',
-      }),
-    )
-  }
+  await handleInstall(plugin, channel)
 }
 
 function openPluginDetail(plugin: OfficialPluginListItem): void {
@@ -453,8 +188,7 @@ function openPluginDetail(plugin: OfficialPluginListItem): void {
 }
 
 function closePluginDetail(): void {
-  if (!detailVisible.value)
-    return
+  if (!detailVisible.value) return
   detailVisible.value = false
 }
 
@@ -473,24 +207,21 @@ watch(
   () => {
     updateCategoryTags()
   },
-  { deep: true },
+  { deep: true }
 )
 
 watch(
   () => detailVisible.value,
   (visible) => {
-    if (typeof document === 'undefined')
-      return
+    if (typeof document === 'undefined') return
     const body = document.body
-    if (!body)
-      return
+    if (!body) return
     if (visible) {
       body.classList.add('market-detail-open')
-    }
-    else {
+    } else {
       body.classList.remove('market-detail-open')
     }
-  },
+  }
 )
 
 onMounted(() => {
@@ -510,254 +241,147 @@ onBeforeUnmount(() => {
     document.body.classList.remove('market-detail-open')
   }
 })
-
-// Smooth animation functions using GSAP
-function onBeforeEnter(el) {
-  gsap.set(el, {
-    opacity: 0,
-    y: 30,
-    scale: 0.9,
-    rotateX: -15,
-  })
-}
-
-function onEnter(el, done) {
-  const index = Number.parseInt(el.dataset.index) || 0
-
-  gsap.to(el, {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    rotateX: 0,
-    duration: 0.6,
-    delay: index * 0.1,
-    ease: 'back.out(1.2)',
-    onComplete: done,
-  })
-}
-
-function onLeave(el, done) {
-  const index = Number.parseInt(el.dataset.index) || 0
-
-  gsap.to(el, {
-    opacity: 0,
-    y: -20,
-    scale: 0.95,
-    duration: 0.4,
-    delay: index * 0.05,
-    ease: 'power2.in',
-    onComplete: done,
-  })
-}
 </script>
 
 <template>
   <div class="market-container">
-    <!-- Header Section -->
-    <div class="market-header">
-      <div class="market-header-title">
-        <h2>{{ t('market.title') }}</h2>
-        <span class="market-subtitle">{{ t('market.subtitle') }}</span>
-        <span v-if="lastUpdatedLabel" class="market-last-updated">
-          {{ t('market.lastUpdated', { time: lastUpdatedLabel }) }}
-        </span>
-      </div>
+    <TuffAsideTemplate :searchable="false">
+      <template #aside-header>
+        <MarketCategoryList v-model:selected-index="tagInd" :categories="tags" />
+      </template>
 
-      <div class="market-header-search">
-        <FlatCompletion :fetch="suggestionFetch" :placeholder="t('market.searchPlaceholder')" />
-        <div
-          :class="{ _disabled: sourceEditorShow }"
-          class="market-sources"
-          flex
-          items-center
-          gap-2
-        >
-          <FlatButton mini @click="toggleSourceEditorShow()">
-            <div class="i-carbon-list" />
-          </FlatButton>
-          <span class="source-count">{{ pluginSettings.source.list.length }} {{ t('market.sources') }}</span>
-        </div>
-      </div>
-
-      <div class="market-header-controls">
-        <div class="market-tags">
-          <button
-            v-for="(item, index) in tags"
-            :key="item.tag || item.label || index"
-            :class="{ active: tagInd === index }"
-            class="tag-button"
-            @click="tagInd = index"
-          >
-            {{ item.label ?? t(item.tag) }}
-          </button>
-        </div>
-        <div class="market-view-toggle">
-          <TLabelSelect v-model="orderType">
-            <TLabelSelectItem value="grid" icon="i-carbon-table-split" />
-            <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
-          </TLabelSelect>
-          <FlatButton
-            mini
-            class="refresh-button"
-            :disabled="loading"
-            @click="loadOfficialPlugins(true)"
-          >
-            <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" />
-            <span>{{ loading ? t('market.loading') : t('market.refresh') }}</span>
-          </FlatButton>
-        </div>
-      </div>
-    </div>
-
-    <!-- Market Items Grid -->
-    <div class="market-content">
-      <div v-if="loading" class="market-loading">
-        <i class="i-ri-loader-4-line animate-spin" />
-        <span>{{ t('market.loading') }}</span>
-      </div>
-      <template v-else>
-        <transition-group
-          name="market-items"
-          tag="div"
-          class="market-grid" :class="[{ 'list-view': orderType === 'list' }]"
-          @before-enter="onBeforeEnter"
-          @enter="onEnter"
-          @leave="onLeave"
-        >
-          <MarketItemCard
-            v-for="(item, index) in displayedPlugins"
-            :key="item.id || item.name || index"
-            :item="item"
-            :index="index"
-            :installing="isPluginInstalling(item.id)"
-            :install-task="getInstallTask(item.id)"
-            :data-index="index"
-            class="market-grid-item"
-            @install="handleInstall(item)"
-            @open="openPluginDetail(item)"
+      <template #main>
+        <div class="market-main">
+          <MarketHeader
+            v-model:view-type="viewType"
+            :loading="loading"
+            :sources-count="pluginSettings.source.list.length"
+            @refresh="loadOfficialPlugins(true)"
+            @open-source-editor="toggleSourceEditorShow()"
+            @search="handleSearch"
           />
-        </transition-group>
 
-        <!-- Empty State -->
-        <div v-if="!displayedPlugins.length" class="market-empty">
-          <div class="empty-icon">
-            <i class="i-ri-search-line" />
-          </div>
-          <h3>{{ t('market.empty.title') }}</h3>
-          <p>{{ errorMessage || t('market.empty.subtitle') }}</p>
+          <MarketGridView
+            :plugins="displayedPlugins"
+            :view-type="viewType"
+            :loading="loading"
+            @install="onInstall"
+            @open-detail="openPluginDetail"
+          />
         </div>
       </template>
-    </div>
-  </div>
+    </TuffAsideTemplate>
 
-  <Transition name="market-detail-overlay" @after-leave="onDetailAfterLeave">
-    <div
-      v-if="detailVisible && activePlugin"
-      class="market-detail-overlay"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div class="market-detail-backdrop" @click="closePluginDetail" />
+    <!-- Detail Dialog (unchanged) -->
+    <Transition name="market-detail-overlay" @after-leave="onDetailAfterLeave">
+      <div
+        v-if="detailVisible && activePlugin"
+        class="market-detail-overlay"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="market-detail-backdrop" @click="closePluginDetail" />
 
-      <div class="market-detail-shell">
-        <div :key="activePlugin.id" class="market-detail-panel" @click.stop>
-          <button class="detail-close" type="button" @click="closePluginDetail">
-            <i class="i-ri-close-line" />
-          </button>
+        <div class="market-detail-shell">
+          <div :key="activePlugin.id" class="market-detail-panel" @click.stop>
+            <button class="detail-close" type="button" @click="closePluginDetail">
+              <i class="i-ri-close-line" />
+            </button>
 
-          <div class="detail-header">
-            <div class="detail-icon">
-              <i v-if="detailIconClass" :class="detailIconClass" />
-              <i v-else class="i-ri-puzzle-line" />
-            </div>
-
-            <div class="detail-heading">
-              <div class="detail-title-row">
-                <h3>{{ activePlugin.name }}</h3>
-                <span v-if="activePlugin.official" class="official-detail-badge">
-                  <i class="i-ri-shield-check-fill" />
-                  {{ t('market.officialBadge') }}
-                </span>
+            <div class="detail-header">
+              <div class="detail-icon">
+                <i v-if="detailIconClass" :class="detailIconClass" />
+                <i v-else class="i-ri-puzzle-line" />
               </div>
-              <div v-if="activePlugin.version || activePlugin.category" class="detail-subline">
-                <span v-if="activePlugin.version" class="detail-chip">
-                  <i class="i-ri-price-tag-3-line" />
-                  v{{ activePlugin.version }}
-                </span>
-                <span v-if="activePlugin.category" class="detail-chip">
-                  <i class="i-ri-folder-3-line" />
-                  {{ activePlugin.category }}
-                </span>
-              </div>
-              <p v-if="activePlugin.description" class="detail-description">
-                {{ activePlugin.description }}
-              </p>
-            </div>
 
-            <div class="detail-actions">
-              <FlatButton
-                :primary="true"
-                class="detail-install"
-                :disabled="(this as any).isInstalling(activePlugin.id)"
-                @click="handleInstall(activePlugin)"
-              >
-                <i
-                  v-if="(this as any).isInstalling(activePlugin.id)"
-                  class="i-ri-loader-4-line animate-spin"
-                />
-                <span>
-                  {{
-                    (this as any).isInstalling(activePlugin.id)
-                      ? t('market.installing')
-                      : t('market.install')
-                  }}
-                </span>
-              </FlatButton>
-            </div>
-          </div>
-
-          <div class="detail-body">
-            <div class="detail-meta-grid">
-              <div v-for="meta in detailMeta" :key="meta.label" class="detail-meta-item">
-                <div class="meta-icon">
-                  <i :class="meta.icon" />
+              <div class="detail-heading">
+                <div class="detail-title-row">
+                  <h3>{{ activePlugin.name }}</h3>
+                  <span v-if="activePlugin.official" class="official-detail-badge">
+                    <i class="i-ri-shield-check-fill" />
+                    {{ t('market.officialBadge') }}
+                  </span>
                 </div>
-                <div class="meta-content">
-                  <span class="meta-label">{{ meta.label }}</span>
-                  <span class="meta-value" :title="meta.value">{{ meta.value }}</span>
+                <div v-if="activePlugin.version || activePlugin.category" class="detail-subline">
+                  <span v-if="activePlugin.version" class="detail-chip">
+                    <i class="i-ri-price-tag-3-line" />
+                    v{{ activePlugin.version }}
+                  </span>
+                  <span v-if="activePlugin.category" class="detail-chip">
+                    <i class="i-ri-folder-3-line" />
+                    {{ activePlugin.category }}
+                  </span>
                 </div>
+                <p v-if="activePlugin.description" class="detail-description">
+                  {{ activePlugin.description }}
+                </p>
+              </div>
+
+              <div class="detail-actions">
+                <FlatButton
+                  :primary="true"
+                  class="detail-install"
+                  :disabled="(this as any).isPluginInstalling(activePlugin.id)"
+                  @click="onInstall(activePlugin)"
+                >
+                  <i
+                    v-if="(this as any).isPluginInstalling(activePlugin.id)"
+                    class="i-ri-loader-4-line animate-spin"
+                  />
+                  <span>
+                    {{
+                      (this as any).isPluginInstalling(activePlugin.id)
+                        ? t('market.installing')
+                        : t('market.install')
+                    }}
+                  </span>
+                </FlatButton>
               </div>
             </div>
 
-            <div v-if="activePlugin.readmeUrl || activePlugin.downloadUrl" class="detail-links">
-              <a
-                v-if="activePlugin.downloadUrl"
-                class="detail-link"
-                :href="activePlugin.downloadUrl"
-                target="_blank"
-                rel="noopener"
-              >
-                <i class="i-ri-download-cloud-2-line" />
-                下载源文件
-              </a>
-              <a
-                v-if="activePlugin.readmeUrl"
-                class="detail-link"
-                :href="activePlugin.readmeUrl"
-                target="_blank"
-                rel="noopener"
-              >
-                <i class="i-ri-book-open-line" />
-                查看文档
-              </a>
+            <div class="detail-body">
+              <div class="detail-meta-grid">
+                <div v-for="meta in detailMeta" :key="meta.label" class="detail-meta-item">
+                  <div class="meta-icon">
+                    <i :class="meta.icon" />
+                  </div>
+                  <div class="meta-content">
+                    <span class="meta-label">{{ meta.label }}</span>
+                    <span class="meta-value" :title="meta.value">{{ meta.value }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="activePlugin.readmeUrl || activePlugin.downloadUrl" class="detail-links">
+                <a
+                  v-if="activePlugin.downloadUrl"
+                  class="detail-link"
+                  :href="activePlugin.downloadUrl"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <i class="i-ri-download-cloud-2-line" />
+                  {{ t('market.detailDialog.download') }}
+                </a>
+                <a
+                  v-if="activePlugin.readmeUrl"
+                  class="detail-link"
+                  :href="activePlugin.readmeUrl"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <i class="i-ri-book-open-line" />
+                  {{ t('market.detailDialog.viewDocs') }}
+                </a>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
 
-  <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
+    <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
+  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -770,185 +394,14 @@ function onLeave(el, done) {
   background: var(--el-bg-color);
 }
 
-/* Header Styles */
-.market-header {
-  position: relative;
-  padding: 2rem 2.5rem 1.5rem;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-extra-light);
-}
-
-.market-header-title {
-  margin-bottom: 2rem;
+.market-main {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-
-  h2 {
-    margin: 0 0 0.5rem 0;
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--el-text-color-primary);
-    letter-spacing: -0.025em;
-  }
-
-  .market-subtitle {
-    font-size: 1rem;
-    color: var(--el-text-color-regular);
-    opacity: 0.8;
-  }
-
-  .market-last-updated {
-    font-size: 0.8rem;
-    color: var(--el-text-color-secondary);
-    opacity: 0.85;
-  }
+  height: 100%;
+  overflow: hidden;
 }
 
-.market-header-search {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-
-  :deep(.FlatInput-Container) {
-    flex: 1;
-    max-width: 500px;
-    margin: 0;
-  }
-
-  .market-sources {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    transition: opacity 0.3s ease;
-
-    &._disabled {
-      opacity: 0.5;
-      pointer-events: none;
-    }
-
-    .source-count {
-      font-size: 0.875rem;
-      color: var(--el-text-color-regular);
-      opacity: 0.7;
-    }
-  }
-}
-
-.market-header-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-}
-
-.market-tags {
-  display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-
-.tag-button {
-  position: relative;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: 1px solid var(--el-border-color);
-  border-radius: 20px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--el-text-color-regular);
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    border-color: var(--el-color-primary-light-5);
-    color: var(--el-color-primary);
-    transform: translateY(-1px);
-  }
-
-  &.active {
-    background: var(--el-color-primary);
-    border-color: var(--el-color-primary);
-    color: white;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.3);
-  }
-}
-
-.market-view-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-
-  .refresh-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-
-    :deep(.FlatButton-Container) {
-      min-width: 0;
-      padding: 0 0.75rem;
-    }
-
-    i {
-      font-size: 1rem;
-    }
-  }
-}
-
-/* Content Styles */
-.market-content {
-  flex: 1;
-  overflow: auto;
-  padding: 2rem 2.5rem;
-}
-
-.market-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 4rem 0;
-  color: var(--el-text-color-secondary);
-
-  i {
-    font-size: 2rem;
-    color: var(--el-color-primary);
-  }
-}
-
-.market-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.5rem;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  @media (min-width: 1400px) {
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 2rem;
-  }
-
-  &.list-view {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-
-    .market-grid-item {
-      height: 100px;
-    }
-  }
-}
-
-.market-grid-item {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Detail Overlay */
+/* Detail Overlay (unchanged styles) */
 .market-detail-overlay {
   position: fixed;
   inset: 0;
@@ -1274,28 +727,6 @@ function onLeave(el, done) {
   overflow: hidden;
 }
 
-/* Transition Animations */
-.market-items-move,
-.market-items-enter-active,
-.market-items-leave-active {
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.market-items-enter-from {
-  opacity: 0;
-  transform: translateY(30px) scale(0.9);
-}
-
-.market-items-leave-to {
-  opacity: 0;
-  transform: translateY(-20px) scale(0.95);
-}
-
-.market-items-leave-active {
-  position: absolute;
-  width: 100%;
-}
-
 .animate-spin {
   animation: spin 1s linear infinite;
 }
@@ -1306,93 +737,6 @@ function onLeave(el, done) {
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-/* Empty State */
-.market-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
-  text-align: center;
-
-  .empty-icon {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: var(--el-fill-color-light);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 1.5rem;
-
-    i {
-      font-size: 2rem;
-      color: var(--el-text-color-placeholder);
-    }
-  }
-
-  h3 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-  }
-
-  p {
-    margin: 0;
-    color: var(--el-text-color-regular);
-    opacity: 0.8;
-    max-width: 400px;
-  }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .market-header {
-    padding: 1.5rem 1rem;
-  }
-
-  .market-content {
-    padding: 1.5rem 1rem;
-  }
-
-  .market-header-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1rem;
-  }
-
-  .market-tags {
-    order: 2;
-  }
-
-  .market-view-toggle {
-    order: 1;
-    justify-content: flex-end;
-  }
-
-  .market-detail-overlay {
-    padding: 1.5rem;
-  }
-
-  .market-detail-panel {
-    width: calc(100vw - 32px);
-    height: calc(100vh - 32px);
-    border-radius: 20px;
-    padding: 2rem;
-  }
-
-  .detail-header {
-    grid-template-columns: 1fr;
-    justify-items: flex-start;
-  }
-
-  .detail-actions {
-    width: 100%;
-    justify-content: flex-start;
   }
 }
 </style>
