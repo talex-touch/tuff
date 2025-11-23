@@ -1061,6 +1061,64 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return ''
   }
 
+  private readonly pendingIconExtractions = new Set<number>()
+
+  private async ensureFileIcon(
+    fileId: number,
+    filePath: string,
+    file?: typeof filesSchema.$inferSelect
+  ): Promise<void> {
+    if (this.pendingIconExtractions.has(fileId)) {
+      return
+    }
+
+    this.pendingIconExtractions.add(fileId)
+    try {
+      const icon = extractFileIcon(filePath)
+      const iconValue = `data:image/png;base64,${icon.toString('base64')}`
+
+      const meta: IconCacheMeta = {
+        mtime: file ? this.toTimestamp(file.mtime) : Date.now(),
+        size: file && typeof file.size === 'number' ? file.size : null
+      }
+
+      if (this.dbUtils) {
+        const db = this.dbUtils.getDb()
+        await db.transaction(async (tx) => {
+          // Insert icon
+          await tx
+            .insert(fileExtensions)
+            .values({
+              fileId,
+              key: 'icon',
+              value: iconValue
+            })
+            .onConflictDoUpdate({
+              target: [fileExtensions.fileId, fileExtensions.key],
+              set: { value: iconValue }
+            })
+
+          // Insert meta
+          await tx
+            .insert(fileExtensions)
+            .values({
+              fileId,
+              key: ICON_META_EXTENSION_KEY,
+              value: JSON.stringify(meta)
+            })
+            .onConflictDoUpdate({
+              target: [fileExtensions.fileId, fileExtensions.key],
+              set: { value: JSON.stringify(meta) }
+            })
+        })
+      }
+    } catch (error) {
+      this.logWarn('Failed to extract icon', error, { path: filePath })
+    } finally {
+      this.pendingIconExtractions.delete(fileId)
+    }
+  }
+
   private getWatchDepthForPath(watchPath: string): number {
     const lower = watchPath.toLowerCase()
     if (process.platform === 'darwin') {
@@ -1856,23 +1914,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             const cached = iconCache.get(fileId)
             if (this.needsIconExtraction(file, cached)) {
               try {
-                const icon = extractFileIcon(file.path)
-                const meta: IconCacheMeta = {
-                  mtime: this.toTimestamp(file.mtime),
-                  size: typeof file.size === 'number' ? file.size : null
-                }
-                const iconValue = `data:image/png;base64,${icon.toString('base64')}`
-                extensionsToAdd.push({
-                  fileId,
-                  key: 'icon',
-                  value: iconValue
-                })
-                extensionsToAdd.push({
-                  fileId,
-                  key: ICON_META_EXTENSION_KEY,
-                  value: JSON.stringify(meta)
-                })
-                iconCache.set(fileId, { icon: iconValue, meta })
+                await this.ensureFileIcon(fileId, file.path, file)
               } catch {
                 /* ignore icon failures */
               }
@@ -2353,7 +2395,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
-      const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name)
+      const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
+        if (typeof file.id === 'number') {
+          this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+            this.logWarn('Failed to lazy load icon', error, { path: file.path })
+          })
+        }
+      })
       tuffItem.scoring = {
         final: 0.4,
         match: 0.4,
@@ -2656,7 +2704,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           weights.lastModified * lastModifiedScore +
           (typeFilters.size > 0 ? 0.15 * typeScore : 0)
 
-        const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name)
+        const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
+          if (typeof file.id === 'number') {
+            this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+              this.logWarn('Failed to lazy load icon', error, { path: file.path })
+            })
+          }
+        })
         const matchScore = Math.max(keywordScore, ftsScore)
         tuffItem.scoring = {
           final: finalScore,

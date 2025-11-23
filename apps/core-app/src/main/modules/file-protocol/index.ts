@@ -21,7 +21,7 @@ class FileProtocolModule extends BaseModule {
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
       console.debug('tfile request:', request.url)
       const filePath = decodeURIComponent(request.url.slice(FILE_SCHEMA.length + 3))
-      const fileUrl = url.pathToFileURL(filePath).toString()
+      const fileUrl = url.pathToFileURL('/' + filePath).toString()
       console.debug('tfile resolved path:', fileUrl)
 
       try {
