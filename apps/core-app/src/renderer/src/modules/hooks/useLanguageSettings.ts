@@ -20,63 +20,54 @@ export function useLanguageSettings() {
           options.lang.followSystem = value
         }
         await setFollowSystemLanguage(value)
-        console.log('[useLanguageSettings] FollowSystem updated successfully')
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[useLanguageSettings] Failed to update followSystem:', error)
       }
-    },
+    }
   })
 
   const selectedLanguage = computed({
     get: () => {
-      console.log('[useLanguageSettings] Getting selectedLanguage:', currentLanguage.value)
+      console.debug('[useLanguageSettings] Getting selectedLanguage:', currentLanguage.value)
       return currentLanguage.value
     },
     set: async (value: string) => {
       console.log('[useLanguageSettings] Setting selectedLanguage to:', value)
       try {
         await switchLanguage(value as SupportedLanguage)
-        console.log('[useLanguageSettings] SelectedLanguage updated successfully')
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[useLanguageSettings] Failed to update selectedLanguage:', error)
       }
-    },
+    }
   })
 
   const handleLanguageChange = async (lang: string) => {
     try {
       await switchLanguage(lang as SupportedLanguage)
-      console.log(`[useLanguageSettings] Language changed to: ${lang}`)
-    }
-    catch (error) {
+      console.debug(`[useLanguageSettings] Language changed to: ${lang}`)
+    } catch (error) {
       console.error('[useLanguageSettings] Failed to change language:', error)
     }
   }
 
-  // 处理跟随系统语言切换
   const handleFollowSystemChange = async (follow: boolean) => {
     try {
       await setFollowSystemLanguage(follow)
-      console.log(`[useLanguageSettings] Follow system language: ${follow}`)
-    }
-    catch (error) {
+      console.debug(`[useLanguageSettings] Follow system language: ${follow}`)
+    } catch (error) {
       console.error('[useLanguageSettings] Failed to change follow system setting:', error)
     }
   }
 
   return {
-    // 状态
     currentLanguage,
     followSystem,
     selectedLanguage,
     supportedLanguages: SUPPORTED_LANGUAGES,
 
-    // 方法
     handleLanguageChange,
     handleFollowSystemChange,
     switchLanguage,
-    setFollowSystemLanguage,
+    setFollowSystemLanguage
   }
 }
