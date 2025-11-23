@@ -64,7 +64,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     :description="t('layoutSection.tip')"
     class="LayoutSection-Wrapper"
   >
-    <div class="LayoutSection-List">
+    <div class="LayoutSection-List p-2">
       <button
         v-for="(layout, key) in availableLayouts"
         :key="key"
