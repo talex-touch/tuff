@@ -16,6 +16,9 @@ import { fileProvider } from '../box-tool/addon/files/file-provider'
 import { databaseModule } from '../database'
 import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
+import { createLogger } from '../../utils/logger'
+
+const dashboardLog = createLogger('TuffDashboard')
 
 interface TuffDashboardOptions {
   limit?: number
@@ -48,7 +51,7 @@ export class TuffDashboardModule extends BaseModule {
         })
       }
       catch (error) {
-        console.error('[TuffDashboard] Failed to build snapshot:', error)
+        dashboardLog.error('Failed to build snapshot', { error })
         reply(DataCode.ERROR, {
           ok: false,
           error: error instanceof Error ? error.message : String(error),
@@ -56,7 +59,7 @@ export class TuffDashboardModule extends BaseModule {
       }
     })
 
-    console.log('[TuffDashboard] Channel handler registered successfully.')
+    dashboardLog.success('Channel handler registered successfully')
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {
@@ -233,7 +236,7 @@ export class TuffDashboardModule extends BaseModule {
             }
           }
           catch (error) {
-            console.warn('[TuffDashboard] Failed to stat log file:', fullPath, error)
+            dashboardLog.warn('Failed to stat log file', { error, meta: { path: fullPath } })
             return null
           }
         }),
@@ -251,7 +254,7 @@ export class TuffDashboardModule extends BaseModule {
         .slice(0, limit)
     }
     catch (error) {
-      console.warn('[TuffDashboard] Failed to read logs directory:', logsDir, error)
+      dashboardLog.warn('Failed to read logs directory', { error, meta: { dir: logsDir } })
     }
 
     return {
@@ -268,7 +271,7 @@ export class TuffDashboardModule extends BaseModule {
       this.db = databaseModule.getDb()
     }
     catch (error) {
-      console.warn('[TuffDashboard] Database not ready yet, returning partial snapshot.', error)
+      dashboardLog.warn('Database not ready yet, returning partial snapshot', { error })
       return null
     }
     return this.db

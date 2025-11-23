@@ -11,7 +11,11 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
-const text = computed(() => props.label || t('settings.platformTags.windowsOnly', 'Windows Only'))
+const text = computed(() => {
+  const label = props.label ?? ''
+  const fallback = t('settings.platformTags.windowsOnly', 'Windows Only')
+  return label || fallback || 'Windows Only'
+})
 </script>
 
 <template>

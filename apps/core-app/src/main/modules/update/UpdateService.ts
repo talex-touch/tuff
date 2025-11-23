@@ -12,6 +12,7 @@ import { AppPreviewChannel, ChannelType, DataCode, UpdateProviderType } from '@t
 import axios from 'axios'
 import { TalexEvents, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { getAppVersionSafe } from '../../utils/version-util'
+import { createLogger } from '../../utils/logger'
 /**
  * Update service for checking application updates in main process
  */
@@ -19,6 +20,9 @@ import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { UpdateSystem } from './update-system'
 import { UpdateRecordStatus, UpdateRepository, type UpdateRecordRow } from './update-repository'
+
+const updateLog = createLogger('UpdateService')
+const pollingLog = updateLog.child('Polling')
 
 const HALF_DAY_IN_MS = 12 * 60 * 60 * 1000
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -50,7 +54,7 @@ class PollingService {
    */
   start(interval: number, callback: () => Promise<void>): void {
     if (this.isRunning) {
-      console.warn('[PollingService] Already running')
+      pollingLog.warn('Already running')
       return
     }
 
@@ -59,11 +63,11 @@ class PollingService {
       try {
         await callback()
       } catch (error) {
-        console.error('[PollingService] Polling error:', error)
+        pollingLog.error('Polling error', { error })
       }
     }, interval)
 
-    console.log(`[PollingService] Started with interval: ${interval}ms`)
+    pollingLog.info(`Started with interval: ${interval}ms`)
   }
 
   /**
@@ -75,7 +79,7 @@ class PollingService {
       this.intervalId = null
     }
     this.isRunning = false
-    console.log('[PollingService] Stopped')
+    pollingLog.info('Stopped')
   }
 
   /**
@@ -124,29 +128,29 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.initContext = ctx
-    console.log('[UpdateService] Initializing update service')
+    updateLog.info('Initializing update service')
 
     // Initialize UpdateSystem with DownloadCenter integration
     const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
-    if (downloadCenterModule) {
-      this.updateSystem = new UpdateSystem(downloadCenterModule, {
-        autoDownload: false,
-        autoCheck: this.settings.enabled,
-        checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
-        ignoredVersions: this.settings.ignoredVersions,
-        updateChannel: this.settings.updateChannel
-      })
-      console.log('[UpdateService] UpdateSystem initialized with DownloadCenter integration')
-    } else {
-      console.warn('[UpdateService] DownloadCenter module not found, UpdateSystem not initialized')
-    }
+      if (downloadCenterModule) {
+        this.updateSystem = new UpdateSystem(downloadCenterModule, {
+          autoDownload: false,
+          autoCheck: this.settings.enabled,
+          checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
+          ignoredVersions: this.settings.ignoredVersions,
+          updateChannel: this.settings.updateChannel
+        })
+        updateLog.success('UpdateSystem initialized with DownloadCenter integration')
+      } else {
+        updateLog.warn('DownloadCenter module not found, UpdateSystem not initialized')
+      }
 
-    try {
-      this.updateRepository = new UpdateRepository(databaseModule.getDb())
-      console.log('[UpdateService] UpdateRepository initialized')
-    } catch (error) {
-      console.warn('[UpdateService] Failed to initialize UpdateRepository:', error)
-    }
+      try {
+        this.updateRepository = new UpdateRepository(databaseModule.getDb())
+        updateLog.success('UpdateRepository initialized')
+      } catch (error) {
+        updateLog.warn('Failed to initialize UpdateRepository', { error })
+      }
 
     // Register IPC channels
     this.registerIpcChannels()
@@ -170,7 +174,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Destroy update service
    */
   async onDestroy(): Promise<void> {
-    console.log('[UpdateService] Destroying update service')
+    updateLog.info('Destroying update service')
 
     // Stop polling service
     this.pollingService.stop()
@@ -198,7 +202,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const result = await this.checkForUpdates(force)
         reply(DataCode.SUCCESS, { success: true, data: result })
       } catch (error) {
-        console.error('[UpdateService] Update check failed:', error)
+        updateLog.error('Update check failed', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -245,7 +249,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to update settings:', error)
+        updateLog.error('Failed to update settings', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -274,7 +278,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.cache.clear()
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to clear cache:', error)
+        updateLog.error('Failed to clear cache', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -307,7 +311,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           reply(DataCode.SUCCESS, { success: true, data: null })
         }
       } catch (error) {
-        console.error('[UpdateService] Failed to get cached release:', error)
+        updateLog.error('Failed to get cached release', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -324,7 +328,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         await this.handleUserAction(actionPayload.tag, actionPayload.action)
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to record update action:', error)
+        updateLog.error('Failed to record update action', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -342,7 +346,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const taskId = await this.updateSystem.downloadUpdate(release)
         reply(DataCode.SUCCESS, { success: true, taskId })
       } catch (error) {
-        console.error('[UpdateService] Failed to download update:', error)
+        updateLog.error('Failed to download update', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -360,7 +364,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         await this.updateSystem.installUpdate(taskId)
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to install update:', error)
+        updateLog.error('Failed to install update', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -380,7 +384,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.saveSettings()
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to ignore version:', error)
+        updateLog.error('Failed to ignore version', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -398,7 +402,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.updateSystem.setAutoDownload(enabled)
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to set auto download:', error)
+        updateLog.error('Failed to set auto download', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -427,7 +431,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
         reply(DataCode.SUCCESS, { success: true })
       } catch (error) {
-        console.error('[UpdateService] Failed to set auto check:', error)
+        updateLog.error('Failed to set auto check', { error })
         reply(DataCode.ERROR, {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -443,14 +447,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     const interval = this.getFrequencyIntervalMs(this.settings.frequency)
 
     if (!interval) {
-      console.log(`[UpdateService] Polling disabled for frequency: ${this.settings.frequency}`)
+      updateLog.info(`Polling disabled for frequency: ${this.settings.frequency}`)
       return
     }
 
     this.pollingService.start(interval, async () => {
       await this.checkForUpdates()
     })
-    console.log(`[UpdateService] Started polling with interval: ${interval / (60 * 60 * 1000)}h`)
+    updateLog.info(`Started polling with interval: ${interval / (60 * 60 * 1000)}h`)
   }
 
   /**
@@ -476,7 +480,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           persistedRecord.fetchedAt &&
           now - persistedRecord.fetchedAt <= ttlMs
         ) {
-          console.log('[UpdateService] Using persisted update record for channel', targetChannel)
+          updateLog.debug(`Using persisted update record for channel ${targetChannel}`)
           return persistedResult
         }
       }
@@ -485,12 +489,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (!this.shouldPerformCheck(force)) {
       const cachedResult = this.getCachedResult(targetChannel)
       if (cachedResult) {
-        console.log('[UpdateService] Using cached result due to frequency settings')
+        updateLog.debug('Using cached result due to frequency settings')
         return cachedResult
       }
 
       if (persistedResult) {
-        console.log('[UpdateService] Using persisted record due to frequency throttle')
+        updateLog.debug('Using persisted record due to frequency throttle')
         return persistedResult
       }
     }
@@ -556,7 +560,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       if (performedNetworkCheck) {
         this.recordCheckTimestamp()
       }
-      console.error('[UpdateService] Update check failed:', error)
+      updateLog.error('Update check failed', { error })
 
       const errorResult = {
         hasUpdate: false,
@@ -574,7 +578,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private notifyRendererAboutUpdate(result: UpdateCheckResult, channel: AppPreviewChannel): void {
     if (!this.initContext) {
-      console.warn('[UpdateService] Context not initialized, cannot notify renderer')
+      updateLog.warn('Context not initialized, cannot notify renderer')
       return
     }
     // Send update notification to all renderer windows
@@ -739,7 +743,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         source: 'GitHub'
       }
     } catch (error) {
-      console.error('[UpdateService] Failed to fetch latest release:', error)
+      updateLog.error('Failed to fetch latest release', { error })
       return {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -759,7 +763,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     try {
       await this.updateRepository.saveRelease(release, channel, source)
     } catch (error) {
-      console.warn('[UpdateService] Failed to persist release record:', error)
+      updateLog.warn('Failed to persist release record', { error })
     }
   }
 
@@ -800,7 +804,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     try {
       return JSON.parse(payload) as GitHubRelease
     } catch (error) {
-      console.warn('[UpdateService] Failed to parse release payload:', error)
+      updateLog.warn('Failed to parse release payload', { error })
       return null
     }
   }
@@ -997,7 +1001,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private saveSettings(): void {
     if (!this.initContext) {
-      console.warn('[UpdateService] Context not initialized, cannot save settings')
+      updateLog.warn('Context not initialized, cannot save settings')
       return
     }
     try {
@@ -1010,9 +1014,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
 
       fs.writeFileSync(settingsFile, JSON.stringify(this.settings, null, 2))
-      console.log('[UpdateService] Settings saved to:', settingsFile)
+      updateLog.success(`Settings saved to: ${settingsFile}`)
     } catch (error) {
-      console.error('[UpdateService] Failed to save settings:', error)
+      updateLog.error('Failed to save settings', { error })
     }
   }
 
@@ -1040,7 +1044,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private loadSettings(): void {
     if (!this.initContext) {
-      console.warn('[UpdateService] Context not initialized, using default settings')
+      updateLog.warn('Context not initialized, using default settings')
       return
     }
     try {
@@ -1060,12 +1064,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         if (typeof this.settings.lastCheckedAt !== 'number') {
           this.settings.lastCheckedAt = defaults.lastCheckedAt
         }
-        console.log('[UpdateService] Settings loaded from:', settingsFile)
+        updateLog.info(`Settings loaded from: ${settingsFile}`)
       } else {
         this.settings = defaults
       }
     } catch (error) {
-      console.error('[UpdateService] Failed to load settings:', error)
+      updateLog.error('Failed to load settings', { error })
       this.settings = this.getDefaultSettings()
     }
   }

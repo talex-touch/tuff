@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @module polling
  * A high-precision, efficient, singleton polling service for scheduling periodic tasks.
@@ -75,7 +76,7 @@ export class PollingService {
       nextRunMs,
     })
 
-    console.log(`[PollingService] Task '${id}' registered to run every ${options.interval} ${options.unit}.`)
+    console.debug(`[PollingService] Task '${id}' registered to run every ${options.interval} ${options.unit}.`)
 
     if (this.isRunning) {
       this._reschedule()
