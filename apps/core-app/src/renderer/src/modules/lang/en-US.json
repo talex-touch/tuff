@@ -227,6 +227,17 @@
     "installing": "Installing...",
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
+    "categories": {
+      "title": "Categories",
+      "all": "All",
+      "productivity": "Productivity",
+      "development": "Development",
+      "utilities": "Utilities",
+      "design": "Design",
+      "media": "Media",
+      "writing": "Writing",
+      "dev": "Dev"
+    },
     "tags": {
       "all": "All",
       "feature": "Feature",
@@ -235,6 +246,14 @@
       "enhancement": "Enhancement",
       "tools": "Tools",
       "productivity": "Productivity"
+    },
+    "detailDialog": {
+      "author": "Author",
+      "version": " Version",
+      "updateTime": "Update Time",
+      "pluginId": "Plugin ID",
+      "download": "Download Source",
+      "viewDocs": "View Documentation"
     },
     "error": {
       "loadFailed": "Failed to load official plugin list."

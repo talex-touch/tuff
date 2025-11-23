@@ -6,6 +6,8 @@ export const APP_FOLDER_NAME = 'tuff'
 
 export const APP_SCHEMA = 'tuff'
 
+export const FILE_SCHEMA = 'tfile'
+
 export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: AppName,
   minWidth: 1280,
@@ -19,7 +21,7 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   titleBarOverlay: {
     color: 'rgba(0,0,0,0)',
     height: 35,
-    symbolColor: 'white',
+    symbolColor: 'white'
   },
   webPreferences: {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
@@ -30,8 +32,8 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
     contextIsolation: false,
     sandbox: false,
     webviewTag: true,
-    additionalArguments: ['--touch-type=main'],
-  },
+    additionalArguments: ['--touch-type=main']
+  }
 }
 
 export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -55,6 +57,6 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
     sandbox: false,
     webviewTag: true,
     scrollBounce: true,
-    additionalArguments: ['--touch-type=core-box'],
-  },
+    additionalArguments: ['--touch-type=core-box']
+  }
 }

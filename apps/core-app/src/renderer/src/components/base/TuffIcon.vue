@@ -17,10 +17,11 @@ const error = computed(() => props.icon.status === 'error')
 const addressable = computed(() => props.icon.type === 'url' || props.icon.type === 'file')
 
 const url = computed(() => {
-  console.log('TuffIcon: file icon', props)
   if (props.icon.type === 'file') {
+    const targetPath = `tfile://${props.icon.value}`
+    console.log("fileable", props, props.icon.value, '=', targetPath)
     // File paths are absolute (e.g., "/Users/..."), so tfile://${path} gives tfile:///Users/...
-    return `tfile://${props.icon.value}?icon=true`
+    return targetPath
   }
 
   return props.icon.value
