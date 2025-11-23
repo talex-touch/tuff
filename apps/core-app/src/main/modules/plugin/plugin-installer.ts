@@ -13,18 +13,18 @@ function createDialogRiskPrompt(): RiskPromptHandler {
     if (input.level === 'trusted')
       return true
 
-    // TODO(@talex-touch): 后续在此接入 TouchID 等更高级的验证手段
+    // TODO(@talex-touch): Integrate more advanced verification methods like TouchID here later
     const window = BrowserWindow.getFocusedWindow()
     const { response } = await dialog.showMessageBox(window as any, {
       type: 'warning',
-      buttons: ['继续安装', '取消'],
+      buttons: ['Continue Installation', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
-      title: '插件安装风险确认',
-      message: '检测到来自非官方来源的插件',
+      title: 'Plugin Installation Risk Confirmation',
+      message: 'Detected plugin from unofficial source',
       detail:
         input.description
-        ?? `来源类型: ${input.sourceType}\n来源标识: ${input.sourceId}\n请确认你信任该来源后再继续安装。`,
+        ?? `Source Type: ${input.sourceType}\nSource ID: ${input.sourceId}\nPlease confirm you trust this source before continuing.`,
       noLink: true,
     })
 
@@ -36,6 +36,12 @@ function isRemoteSource(source: string): boolean {
   return /^https?:\/\//i.test(source)
 }
 
+/**
+ * Resolves and validates plugin manifest.
+ * 
+ * @remarks
+ * Dynamic import prevents circular dependency with plugin-resolver module.
+ */
 async function runResolver(
   filePath: string,
   whole: boolean,
@@ -112,7 +118,7 @@ export class PluginInstaller {
     })
 
     if (!providerResult) {
-      throw new Error('没有找到可处理该来源的插件提供器')
+      throw new Error('No provider found to handle this source')
     }
 
     const manifest = providerResult.manifest
@@ -160,7 +166,7 @@ export class PluginInstaller {
       return await runResolver(filePath, false)
     }
     catch (error) {
-      console.warn('[PluginInstaller] 预览插件清单失败:', error)
+      console.warn('[PluginInstaller] Failed to preview plugin manifest:', error)
       return {}
     }
   }
@@ -174,7 +180,7 @@ export class PluginInstaller {
         await fse.remove(normalized)
       }
       catch (error) {
-        console.warn(`[PluginInstaller] 清理临时文件失败: ${normalized}`, error)
+        console.warn(`[PluginInstaller] Failed to cleanup temp file: ${normalized}`, error)
       }
     }
   }

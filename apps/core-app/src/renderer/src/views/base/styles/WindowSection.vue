@@ -1,14 +1,17 @@
 <script lang="ts" name="WindowsSection" setup>
 import { useI18n } from 'vue-i18n'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <div ref="wrapperRef" class="WindowSection-Wrapper fake-background">
-    <p mb-2 ml-2 font-600 text-lg>
-      {{ t('windowSection.title') }}
-    </p>
+  <TuffGroupBlock
+    ref="wrapperRef"
+    :name="t('windowSection.title')"
+    :description="t('windowSection.description')"
+    class="WindowSection-Wrapper"
+  >
     <div
       gap-4
       box-border
@@ -17,24 +20,14 @@ const { t } = useI18n()
       flex
       items-center
       justify-center
-      class="WindowsSection-Container"
+      class="WindowsSection-Container p-2"
     >
       <slot />
     </div>
-  </div>
+  </TuffGroupBlock>
 </template>
 
 <style lang="scss" scoped>
-.WindowSection-Wrapper {
-  padding: 0.5rem;
-
-  border: 1px solid var(--el-border-color);
-
-  --fake-inner-opacity: 0.5;
-  --fake-radius: 18px;
-  --fake-color: var(--el-fill-color-dark);
-}
-
 .WindowsSection-Container {
   height: 12rem;
 }

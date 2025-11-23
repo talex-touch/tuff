@@ -167,8 +167,19 @@
     "themeHelp": "Theme Help",
     "themeHelpDesc": "Find help in the official Github Discussions"
   },
+  "layoutSection": {
+    "title": "Layouts",
+    "tip": "Choose a layout style that suits your workflow.",
+    "currentTag": "Current",
+    "switchError": "Failed to switch layout",
+    "layouts": {
+      "simple": "Simple Layout",
+      "flat": "Flat Layout"
+    }
+  },
   "windowSection": {
-    "title": "Window Preference"
+    "title": "Window Preference",
+    "description": "Select the window effect that feels comfortable to you."
   },
   "base": {
     "last_step": "Last Step",

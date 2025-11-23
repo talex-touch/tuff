@@ -5,3 +5,4 @@ export * from './preview/index'
  * Search box core functionality package
  */
 export * from './tuff/index'
+export * from './recommendation'

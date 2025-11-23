@@ -22,8 +22,8 @@ const props = withDefaults(
     iconSize: 22,
     collapsible: true,
     collapsed: false,
-    defaultExpand: true,
-  },
+    defaultExpand: true
+  }
 )
 
 const emits = defineEmits<{
@@ -33,14 +33,12 @@ const emits = defineEmits<{
 const STORAGE_PREFIX = 'tuff-block-storage-'
 
 function resolveDefaultExpand(): boolean {
-  if (typeof props.defaultExpand === 'boolean')
-    return props.defaultExpand
+  if (typeof props.defaultExpand === 'boolean') return props.defaultExpand
   return !props.collapsed
 }
 
 function toIcon(icon?: IconValue): ITuffIcon | null {
-  if (!icon)
-    return null
+  if (!icon) return null
   if (typeof icon === 'string') {
     return { type: 'class', value: icon }
   }
@@ -51,17 +49,13 @@ const defaultIcon = computed(() => toIcon(props.defaultIcon))
 const activeIcon = computed(() => toIcon(props.activeIcon))
 
 function readStoredExpand(): boolean | null {
-  if (typeof window === 'undefined' || !props.memoryName)
-    return null
+  if (typeof window === 'undefined' || !props.memoryName) return null
   try {
     const raw = localStorage.getItem(`${STORAGE_PREFIX}${props.memoryName}`)
-    if (!raw)
-      return null
+    if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (typeof parsed?.expand === 'boolean')
-      return parsed.expand
-  }
-  catch (error) {
+    if (typeof parsed?.expand === 'boolean') return parsed.expand
+  } catch (error) {
     console.warn('[TuffGroupBlock] Failed to read stored expand state', error)
   }
   return null
@@ -81,31 +75,24 @@ const headerIcon = computed(() => {
 })
 
 function persistState(state: boolean) {
-  if (typeof window === 'undefined' || !props.memoryName)
-    return
+  if (typeof window === 'undefined' || !props.memoryName) return
   try {
-    localStorage.setItem(
-      `${STORAGE_PREFIX}${props.memoryName}`,
-      JSON.stringify({ expand: state }),
-    )
+    localStorage.setItem(`${STORAGE_PREFIX}${props.memoryName}`, JSON.stringify({ expand: state }))
     storedExpand.value = state
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[TuffGroupBlock] Failed to persist expand state', error)
   }
 }
 
 function applyImmediate(state: boolean) {
   const el = contentRef.value
-  if (!el)
-    return
+  if (!el) return
   gsap.killTweensOf(el)
   if (state) {
     el.style.display = 'block'
     el.style.height = 'auto'
     el.style.opacity = '1'
-  }
-  else {
+  } else {
     el.style.display = 'none'
     el.style.height = '0px'
     el.style.opacity = '0'
@@ -114,8 +101,7 @@ function applyImmediate(state: boolean) {
 
 function animateContent(state: boolean) {
   const el = contentRef.value
-  if (!el)
-    return
+  if (!el) return
 
   gsap.killTweensOf(el)
 
@@ -132,11 +118,10 @@ function animateContent(state: boolean) {
         ease: 'power3.out',
         onComplete: () => {
           el.style.height = 'auto'
-        },
-      },
+        }
+      }
     )
-  }
-  else {
+  } else {
     const current = el.scrollHeight || el.offsetHeight || 0
     gsap.fromTo(
       el,
@@ -148,15 +133,14 @@ function animateContent(state: boolean) {
         ease: 'power2.inOut',
         onComplete: () => {
           el.style.display = 'none'
-        },
-      },
+        }
+      }
     )
   }
 }
 
 function toggle() {
-  if (!props.collapsible)
-    return
+  if (!props.collapsible) return
   expanded.value = !expanded.value
   hasUserInteracted.value = true
   persistState(expanded.value)
@@ -166,31 +150,28 @@ function toggle() {
 watch(
   () => props.collapsed,
   (value) => {
-    if (storedExpand.value !== null || hasUserInteracted.value)
-      return
+    if (storedExpand.value !== null || hasUserInteracted.value) return
     expanded.value = !value
-  },
+  }
 )
 
 watch(
   () => props.defaultExpand,
   (value) => {
-    if (storedExpand.value !== null || hasUserInteracted.value)
-      return
+    if (storedExpand.value !== null || hasUserInteracted.value) return
     if (typeof value === 'boolean') {
       expanded.value = value
     }
-  },
+  }
 )
 
 watch(
   expanded,
   (value) => {
-    if (!isMounted.value)
-      return
+    if (!isMounted.value) return
     animateContent(value)
   },
-  { flush: 'post' },
+  { flush: 'post' }
 )
 
 onMounted(() => {
