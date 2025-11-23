@@ -1,21 +1,13 @@
-<!--
-  ThemeStyle Component Template
-
-  Displays theme and style settings in the settings page.
-  Allows users to customize window styles, color themes, and other visual preferences.
--->
 <script name="ThemeStyle" lang="ts" setup>
 import { onMounted, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
-// Import UI components
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-// Import utility functions
-import { useEnv } from '~/modules/hooks/env-hooks'
+
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
@@ -25,16 +17,12 @@ import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
 
-// Reactive references
-const os = ref()
 const styleValue = ref(0)
 const homeBgSource = ref(0)
-// Watch for theme style changes and update the style value accordingly
+
 watchEffect(() => {
-  if (themeStyle.value.theme.style.auto)
-    styleValue.value = 2
-  else if (themeStyle.value.theme.style.dark)
-    styleValue.value = 1
+  if (themeStyle.value.theme.style.auto) styleValue.value = 2
+  else if (themeStyle.value.theme.style.dark) styleValue.value = 1
   else styleValue.value = 0
 })
 
@@ -48,38 +36,18 @@ watchEffect(() => {
 function handleThemeChange(value: string | number, event?: Event): void {
   if (event instanceof MouseEvent) {
     triggerThemeTransition([event.x, event.y], value as any)
-  }
-  else {
+  } else {
     triggerThemeTransition([0, 0], value as any)
   }
 }
-
-// Lifecycle hook to initialize component
-onMounted(async () => {
-  os.value = useEnv().os
-})
 </script>
 
-<!--
-  ThemeStyle Component Script
-
-  Handles theme and style settings logic including theme changes and environment detection.
--->
 <template>
   <ViewTemplate :name="t('themeStyle.styles')">
-    <WindowSectionVue tip="">
-      <SectionItem
-        v-model="themeStyle.theme.window"
-        :tip="t('themeStyle.defaultTip')"
-        title="Default"
-      />
-      <SectionItem v-model="themeStyle.theme.window" :tip="t('themeStyle.micaTip')" title="Mica" />
-      <SectionItem
-        v-model="themeStyle.theme.window"
-        :tip="t('themeStyle.filterTip')"
-        title="Filter"
-        :disabled="true"
-      />
+    <WindowSectionVue>
+      <SectionItem v-model="themeStyle.theme.window" title="Default" />
+      <SectionItem v-model="themeStyle.theme.window" title="Mica" />
+      <SectionItem v-model="themeStyle.theme.window" title="Filter" :disabled="true" />
     </WindowSectionVue>
 
     <LayoutSection />

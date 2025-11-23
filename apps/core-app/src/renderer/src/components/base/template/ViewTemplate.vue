@@ -1,6 +1,6 @@
 <script lang="ts" name="View" setup>
 import { useRoute, useRouter } from 'vue-router'
-// import TouchScroll from '../TouchScroll.vue'
+import TouchScroll from '../TouchScroll.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -9,8 +9,8 @@ const props = withDefaults(
   }>(),
   {
     title: 'ViewTemplate',
-    len: 1,
-  },
+    len: 1
+  }
 )
 
 const route = useRoute()
@@ -24,11 +24,11 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
       :class="{ blur: subRouterMode }"
       class="ViewTemplate-Wrapper transition-cubic absolute w-full h-full"
     >
-      <el-scrollbar>
-        <div class="View-Container py-2 pl-2 pr-3">
+      <TouchScroll>
+        <div class="View-Container">
           <slot />
         </div>
-      </el-scrollbar>
+      </TouchScroll>
     </div>
 
     <div

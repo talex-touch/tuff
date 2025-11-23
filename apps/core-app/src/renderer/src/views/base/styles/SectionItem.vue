@@ -1,40 +1,18 @@
-<script name="SectionItem" setup>
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+<script lang="ts" name="SectionItem" setup>
 import { useRouter } from 'vue-router'
 
-const props = defineProps({
-  modelValue: {
-    type: String,
-    default: false,
-  },
-  title: {
-    type: String,
-    default: 'Section',
-  },
-  filter: {
-    type: String,
-    default: 'blur(0px)',
-  },
-  disabled: {
-    type: Boolean,
-    default: false,
-  },
-  tip: {
-    type: String,
-  },
-})
+const props = defineProps<{
+  title: string
+  disabled?: boolean
+  tip?: string
+}>()
 
-const emits = defineEmits(['update:modelValue'])
+const value = defineModel<string>('modelValue')
 
 const router = useRouter()
 
-const mention = inject('mention')
-
-const value = useModelWrapper(props, emits)
-
 function handleClick() {
-  if (props.disabled)
-    return
+  if (props.disabled) return
 
   value.value = props.title
 }
@@ -43,28 +21,9 @@ function goRouter() {
   router.push({
     name: 'Theme',
     query: {
-      theme: props.title,
-    },
+      theme: props.title
+    }
   })
-}
-
-function handleEnter() {
-  if (props.tip)
-    mention(`<span style='color: var(--el-color-warning)'>${props.tip}</span>`)
-
-  if (!props.disabled)
-    return
-
-  mention(
-    '<span style=\'color: var(--el-color-danger)\'>Your device doesn\'t support this feature yet.</span>',
-  )
-}
-
-function handleLeave() {
-  if (!props.disabled)
-    return
-
-  mention()
 }
 </script>
 
@@ -73,27 +32,18 @@ function handleLeave() {
     relative
     cursor-pointer
     h-full
-    border-rounded
     flex
     items-center
     justify-center
     :class="{ disabled, active: value === title }"
     class="SectionItem-Container transition-cubic"
     @click="handleClick"
-    @mouseenter="handleEnter"
-    @mouseleave="handleLeave"
   >
-    <div class="SectionItem-Display" :class="title">
-      <div v-shared-element:[`theme-preference-${title}-img`] :style="`filter: ${filter}`" />
+    <div class="SectionItem-Display fake-background" :class="title">
+      <div v-shared-element:[`theme-preference-${title}-img`] />
     </div>
-    <div
-      flex
-      items-center
-      cursor-pointer
-      justify-center
-      class="SectionItem-Bar fake-background"
-      @click="goRouter"
-    >
+    <div class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2" @click="goRouter">
+      <div w-3 h-3 rounded-full class="bg-[var(--section-active-color)]" />
       <span v-shared-element:[`theme-preference-${title}`]>
         {{ title }}
       </span>
@@ -108,6 +58,10 @@ function handleLeave() {
   width: 100%;
   height: 100%;
 
+  &::before {
+    z-index: 1;
+  }
+
   div {
     position: relative;
 
@@ -120,21 +74,24 @@ function handleLeave() {
 }
 
 .SectionItem-Container {
-  // &:hover {
-  //   border: 2px solid var(--el-color-primary);
-  // }
+  &:hover {
+    border: 2px solid var(--el-color-primary-light-3);
+  }
 
   &.active {
     cursor: default;
     box-shadow: 0 0 8px 0 var(--el-color-primary-light-5);
-    // border: 2px solid var(--el-color-primary);
+    border: 2px solid var(--el-color-primary);
+
+    --section-active-color: var(--el-color-primary);
   }
 
   &.disabled {
-    opacity: 0.25;
-    filter: blur(1px);
+    &-Display {
+      opacity: 0.25;
+    }
     cursor: not-allowed;
-    border: 2px solid var(--el-color-danger);
+    border: 2px solid var(--el-color-danger-light-3);
   }
 
   flex: 1;
@@ -142,8 +99,11 @@ function handleLeave() {
   width: 100%;
   height: 100%;
 
+  overflow: hidden;
   user-select: none;
+  border-radius: 18px;
   border: 2px solid var(--el-border-color);
+  --section-active-color: var(--el-color-info);
 }
 
 .SectionItem-Bar {
@@ -154,7 +114,5 @@ function handleLeave() {
 
   height: 2rem;
   width: 100%;
-
-  --fake-radius: 8px 8px 0 0;
 }
 </style>
