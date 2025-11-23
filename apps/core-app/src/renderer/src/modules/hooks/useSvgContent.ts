@@ -4,7 +4,7 @@ import { createRetrier } from '@talex-touch/utils'
 export function useSvgContent(
   tempUrl: string = '',
   autoFetch = true,
-  retrierOptions?: RetrierOptions,
+  retrierOptions?: RetrierOptions
 ) {
   const url = ref(tempUrl ?? '')
   const content = ref<string | null>(null)
@@ -14,8 +14,8 @@ export function useSvgContent(
   const retrier = createRetrier(
     retrierOptions ?? {
       maxRetries: 2,
-      timeoutMs: 5000,
-    },
+      timeoutMs: 5000
+    }
   )
 
   if (autoFetch && url.value) {
@@ -24,8 +24,13 @@ export function useSvgContent(
 
   async function doFetch(): Promise<string> {
     let targetUrl = url.value
-    if (!targetUrl.startsWith('tfile://')) {
-      targetUrl = `tfile://${targetUrl}`
+
+    try {
+      const _parsedUrl = new URL(targetUrl)
+    } catch (_e) {
+      if (!targetUrl.startsWith('tfile://')) {
+        targetUrl = `tfile://${targetUrl}`
+      }
     }
 
     const response = await fetch(targetUrl)
@@ -41,12 +46,10 @@ export function useSvgContent(
     try {
       const text = await fetchWithRetry()
       content.value = text
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err as Error
       console.error('fetchSvgContent failed after retries', url.value, err)
-    }
-    finally {
+    } finally {
       loading.value = false
     }
   }

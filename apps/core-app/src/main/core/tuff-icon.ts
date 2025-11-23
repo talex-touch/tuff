@@ -27,25 +27,30 @@ export class TuffIconImpl implements ITuffIcon {
    *
    * @description
    * For file type, checks if file exists and resolves to absolute path
+   * For other types (emoji, url, class), no processing is needed
    */
   async init(): Promise<void> {
-    if (this.type === 'file') {
-      if (this.value.includes('..')) {
-        this.status = 'error'
-        this.value = ''
-        return
-      }
+    // Only process file type icons
+    if (this.type !== 'file') {
+      return
+    }
 
-      const iconPath = path.resolve(this.rootPath, this.value)
+    // Security check: prevent path traversal
+    if (this.value.includes('..')) {
+      this.status = 'error'
+      this.value = ''
+      return
+    }
 
-      if (!(await fse.pathExists(iconPath))) {
-        this.status = 'error'
-        this.value = ''
-      }
-      else {
-        this.value = iconPath
-        this.status = 'normal'
-      }
+    const iconPath = path.resolve(this.rootPath, this.value)
+
+    if (!(await fse.pathExists(iconPath))) {
+      this.status = 'error'
+      this.value = ''
+    }
+    else {
+      this.value = iconPath
+      this.status = 'normal'
     }
   }
 }

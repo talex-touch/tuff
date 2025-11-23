@@ -12,16 +12,22 @@ import { WindowManager } from '../../modules/box-tool/core-box/window'
 import { TouchPlugin } from '../../modules/plugin'
 import { normalizePrompt } from './internal-ai-utils'
 import { InternalPluginLogger } from './internal-plugin-logger'
+import { pluginModule } from '../../modules/plugin/plugin-module'
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
 
+const INTERNAL_AI_ICON = new TuffIconImpl(
+  pluginModule.filePath!,
+  'url',
+  'https://api.iconify.design/majesticons:sparkles.svg'
+)
+
 export function createInternalAiPlugin(): TouchPlugin {
   const pluginPath = path.join(app.getPath('userData'), '__internal_ai__')
-  const icon = new TuffIconImpl(pluginPath, 'emoji', '🤖')
   const aiPlugin = new TouchPlugin(
     'internal-ai',
-    icon,
+    INTERNAL_AI_ICON,
     '1.0.0',
     'Internal AI integration plugin',
     '',
@@ -52,15 +58,11 @@ export function createInternalAiPlugin(): TouchPlugin {
 
 function createAiFeature(): IPluginFeature {
   return {
-    id: 'internal-ai-ask', // 移除点号，使用连字符
+    id: 'internal-ai-ask',
     name: 'AI 助手',
     desc: 'Talex Touch 内置 AI 智能助手',
-    icon: {
-      type: 'emoji',
-      value: '🤖',
-      status: 'normal'
-    } as any, // 传入普通对象，让 PluginFeature 构造函数创建 TuffIconImpl
-    push: true, // Push mode: 主动推送 AI 回答
+    icon: INTERNAL_AI_ICON,
+    push: true,
     platform: {},
     commands: [
       {
@@ -77,15 +79,13 @@ function createAiFeature(): IPluginFeature {
 
 function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
   const featureUtil = plugin.getFeatureUtil()
-  // 使用新的 BoxItemSDK API
   const { push } = featureUtil.boxItems
 
   const buildBaseItem = (id: string): TuffItemBuilder => {
     return new TuffItemBuilder(id)
       .setSource('plugin', plugin.name, plugin.name)
       .setKind('command')
-      .setIcon({ type: 'emoji', value: '🤖', status: 'normal' })
-      .setMeta({ keepCoreBoxOpen: true } as any)
+      .setIcon(INTERNAL_AI_ICON)
   }
 
   const createPlaceholderItem = (): TuffItem => {
@@ -164,13 +164,12 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
 
   return {
     onFeatureTriggered(_id, data) {
-      // Maximize CoreBox window when entering AI feature
       WindowManager.getInstance().expand({ forceMax: true })
+      console.log('force to set max')
 
       const prompt = normalizePrompt(data)
 
       if (!prompt) {
-        // 使用新的 BoxItemSDK API
         push(createPlaceholderItem())
         return
       }
@@ -200,7 +199,6 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
             }
             if (chunk.usage) usage = chunk.usage
 
-            // 流式更新：使用 BoxItemSDK 的 push (upsert)
             push(createAnswerItem(requestId, prompt, answerText, model, usage))
           }
         } catch (error) {
