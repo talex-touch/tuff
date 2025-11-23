@@ -30,15 +30,13 @@ async function init(): Promise<void> {
 
   try {
     await initializeLanguage()
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[App] Failed to initialize language:', error)
   }
 
   useDropperResolver()
 
-  if (!appSetting?.beginner?.init)
-    beginner.value = true
+  if (!appSetting?.beginner?.init) beginner.value = true
 }
 </script>
 
@@ -50,20 +48,29 @@ async function init(): Promise<void> {
         <span
           style="--fake-radius: 4px"
           class="px-[3px] py-[1px] rounded-md text-xs version fake-background"
-        >{{ packageJson.version }}</span>
+          >{{ packageJson.version }}</span
+        >
       </template>
       <template #navbar>
         <TouchMenu>
           <p class="NavBar-Title">
             {{ t('flatNavBar.main') }}
           </p>
-          <TouchMenuItem route="/setting" :name="t('flatNavBar.setting')" icon="i-ri-settings-6-line" />
+          <TouchMenuItem
+            route="/setting"
+            :name="t('flatNavBar.setting')"
+            icon="i-ri-settings-6-line"
+          />
           <TouchMenuItem
             route="/intelligence"
             :name="t('flatNavBar.intelligence')"
             icon="i-carbon-ibm-webmethods-integration-server"
           />
-          <TouchMenuItem route="/market" :name="t('flatNavBar.market')" icon="i-ri-quill-pen-line" />
+          <TouchMenuItem
+            route="/market"
+            :name="t('flatNavBar.market')"
+            icon="i-ri-quill-pen-line"
+          />
           <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
           <TouchMenuItem
             v-if="appSetting.dashboard.enable"

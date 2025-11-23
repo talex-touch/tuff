@@ -22,7 +22,7 @@ export class CoreBoxModule extends BaseModule {
 
   constructor() {
     super(CoreBoxModule.key, {
-      create: false,
+      create: false
     })
   }
 
@@ -45,8 +45,7 @@ export class CoreBoxModule extends BaseModule {
           }
           return
         }
-      }
-      catch (error) {
+      } catch (error) {
         coreBoxLog.error('Failed to check initialization status', { error })
         // If we can't check, allow CoreBox to open (fail-open approach)
       }
@@ -56,19 +55,16 @@ export class CoreBoxModule extends BaseModule {
       if (coreBoxManager.showCoreBox) {
         if (lastScreenId === curScreen.id) {
           coreBoxManager.trigger(false)
-        }
-        else {
+        } else {
           const currentWindow = windowManager.current
           if (currentWindow) {
             windowManager.updatePosition(currentWindow, curScreen)
             lastScreenId = curScreen.id
-          }
-          else {
+          } else {
             coreBoxLog.error('No current window available')
           }
         }
-      }
-      else {
+      } else {
         coreBoxManager.trigger(true)
         lastScreenId = curScreen.id
       }

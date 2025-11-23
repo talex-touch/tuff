@@ -14,12 +14,18 @@ const isRebuilding = ref(false)
 const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
 const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
+const indexStats = ref<{ totalFiles: number; failedFiles: number; skippedFiles: number } | null>(null)
 
 const checkStatus = async () => {
   try {
     indexStatus.value = await getIndexStatus()
     lastChecked.value = new Date()
     estimatedTimeRemaining.value = indexStatus.value?.estimatedRemainingMs ?? null
+    // 获取统计信息
+    const stats = await window.api.channel.call('file-index:stats')
+    if (stats) {
+      indexStats.value = stats
+    }
   } catch (error) {
     console.error('[SettingFileIndex] Failed to get status:', error)
   }
@@ -208,6 +214,30 @@ const triggerRebuild = async () => {
       </button>
     </TuffBlockSlot>
 
+    <!-- 统计信息 -->
+    <TuffBlockSlot
+      v-if="indexStats"
+      :title="t('settings.settingFileIndex.statsTitle')"
+      :description="t('settings.settingFileIndex.statsDesc')"
+      default-icon="i-carbon-document-multiple-01"
+      active-icon="i-carbon-document-multiple-01"
+    >
+      <div class="stats-container">
+        <div class="stat-item">
+          <span class="stat-label">{{ t('settings.settingFileIndex.totalFiles') }}</span>
+          <span class="stat-value">{{ indexStats.totalFiles }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">{{ t('settings.settingFileIndex.failedFiles') }}</span>
+          <span class="stat-value failed">{{ indexStats.failedFiles }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">{{ t('settings.settingFileIndex.skippedFiles') }}</span>
+          <span class="stat-value skipped">{{ indexStats.skippedFiles }}</span>
+        </div>
+      </div>
+    </TuffBlockSlot>
+
     <TuffBlockSlot
       v-if="lastChecked"
       :title="t('settings.settingFileIndex.lastCheckedTitle')"
@@ -245,6 +275,45 @@ const triggerRebuild = async () => {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.75);
   font-weight: 500;
+}
+
+.stats-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 400;
+}
+
+.stat-value {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-value.failed {
+  color: #ff3b30;
+}
+
+.stat-value.skipped {
+  color: #ff9500;
 }
 
 .error-text {
