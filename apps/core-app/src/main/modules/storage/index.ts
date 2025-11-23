@@ -85,10 +85,18 @@ export class StorageModule extends BaseModule {
 
     this.frequencyMonitor.trackGet(name)
 
+    // Check if cache is invalidated, force reload if so
+    if (this.cache.isInvalidated(name)) {
+      this.cache.evict(name)
+      this.cache.clearInvalidated(name)
+    }
+
+    // Return cached data if available (deep copy handled by StorageCache.get)
     if (this.cache.has(name)) {
       return this.cache.get(name)!
     }
 
+    // Load from disk
     const p = path.resolve(this.filePath!, name)
     let file = {}
 
@@ -109,7 +117,8 @@ export class StorageModule extends BaseModule {
     this.cache.set(name, file)
     this.cache.clearDirty(name)
 
-    return file
+    // Return through cache.get() to ensure deep copy protection
+    return this.cache.get(name)!
   }
 
   reloadConfig(name: string): object {
@@ -131,8 +140,22 @@ export class StorageModule extends BaseModule {
 
     this.cache.set(name, file)
     this.cache.clearDirty(name)
+    this.cache.clearInvalidated(name)
 
     return file
+  }
+
+  /**
+   * Invalidate cache for a specific config
+   * Next getConfig call will reload from disk
+   * Broadcasts update to all renderer processes
+   */
+  invalidateCache(name: string): void {
+    this.cache.invalidate(name)
+    // Notify all windows that cache was invalidated
+    setImmediate(() => {
+      broadcastUpdate(name)
+    })
   }
 
   saveConfig(name: string, content?: string, clear?: boolean): boolean {
@@ -149,8 +172,11 @@ export class StorageModule extends BaseModule {
     else {
       const parsed = JSON.parse(configData)
       this.cache.set(name, parsed)
+      // Mark as dirty to trigger persist
+      this.cache.markDirty(name)
     }
 
+    // Broadcast update to all windows
     setImmediate(() => {
       broadcastUpdate(name)
     })
