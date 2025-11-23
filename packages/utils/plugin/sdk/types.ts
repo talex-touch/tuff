@@ -184,27 +184,40 @@ export interface IPluginUtils {
   divisionBox: import('./division-box').DivisionBoxSDK
 
   /**
+   * Box SDK for controlling CoreBox window behavior
+   * @see {@link BoxSDK}
+   */
+  box: import('./box-sdk').BoxSDK
+
+  /**
+   * Feature SDK for managing search result items
+   * @see {@link FeatureSDK}
+   */
+  feature: import('./feature-sdk').FeatureSDK
+
+  /**
    * Opens a URL in the default browser
    * @param url - The URL to open
    */
   openUrl: (url: string) => void
 
   /**
-   * Pushes search result items to the search interface
-   * @param items - Array of search result items to add
+   * @deprecated Use plugin.feature.pushItems() instead
+   * @throws Error indicating the API is deprecated
    */
-  pushItems: (items: any[]) => void
+  pushItems: (items: any[]) => never
 
   /**
-   * Clears all current search results
+   * @deprecated Use plugin.feature.clearItems() instead
+   * @throws Error indicating the API is deprecated
    */
-  clearItems: () => void
+  clearItems: () => never
 
   /**
-   * Gets all current search result items
-   * @returns Array of current search result items
+   * @deprecated Use plugin.feature.getItems() instead
+   * @throws Error indicating the API is deprecated
    */
-  getItems: () => any[]
+  getItems: () => never
 
   /**
    * Features manager for dynamic feature management

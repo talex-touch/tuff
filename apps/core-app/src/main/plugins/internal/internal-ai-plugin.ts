@@ -12,13 +12,12 @@ import { WindowManager } from '../../modules/box-tool/core-box/window'
 import { TouchPlugin } from '../../modules/plugin'
 import { normalizePrompt } from './internal-ai-utils'
 import { InternalPluginLogger } from './internal-plugin-logger'
-import { pluginModule } from '../../modules/plugin/plugin-module'
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
 
 const INTERNAL_AI_ICON = new TuffIconImpl(
-  pluginModule.filePath!,
+  '',
   'url',
   'https://api.iconify.design/majesticons:sparkles.svg'
 )

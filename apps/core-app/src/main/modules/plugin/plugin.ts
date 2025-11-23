@@ -16,8 +16,10 @@ import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import {
+  createBoxSDK,
   createClipboardManager,
   createDivisionBoxSDK,
+  createFeatureSDK,
   PluginStatus,
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
@@ -999,22 +1001,30 @@ export class TouchPlugin implements ITouchPlugin {
       clipboard: clipboardUtil,
       channel: channelBridge,
       divisionBox: createDivisionBoxSDK(channelBridge),
+      box: createBoxSDK(channelBridge),
+      feature: createFeatureSDK(boxItems, channelBridge),
       // 新的 BoxItemSDK API
       boxItems,
-      // 向后兼容：保留旧 API
-      clearItems: searchManager.clearItems,
-      pushItems: searchManager.pushItems,
-      getItems: searchManager.getItems,
+      // 废弃的 API - 直接抛出错误
+      clearItems: () => {
+        throw new Error('[Plugin API] clearItems() is deprecated. Use plugin.feature.clearItems() instead.')
+      },
+      pushItems: () => {
+        throw new Error('[Plugin API] pushItems() is deprecated. Use plugin.feature.pushItems() instead.')
+      },
+      getItems: () => {
+        throw new Error('[Plugin API] getItems() is deprecated. Use plugin.feature.getItems() instead.')
+      },
       search: searchManager,
       features: featuresManager,
       plugin: pluginInfo,
       plugins: pluginsAPI,
       $box: {
         hide() {
-          CoreBoxManager.getInstance().trigger(false)
+          throw new Error('[Plugin API] $box.hide() is deprecated. Use plugin.box.hide() instead.')
         },
         show() {
-          CoreBoxManager.getInstance().trigger(true)
+          throw new Error('[Plugin API] $box.show() is deprecated. Use plugin.box.show() instead.')
         },
       },
       TuffItemBuilder,

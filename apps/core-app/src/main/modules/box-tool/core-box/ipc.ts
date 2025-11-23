@@ -5,6 +5,7 @@ import { genTouchApp } from '../../../core'
 import { pluginModule } from '../../plugin/plugin-module'
 import searchEngineCore from '../search-engine/search-core'
 import { coreBoxManager } from './manager'
+import { getCoreBoxWindow } from './window'
 
 /**
  * @class IpcManager
@@ -142,6 +143,85 @@ export class IpcManager {
 
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:exit-ui-mode', () => {
       coreBoxManager.exitUIMode()
+    })
+
+    // 新增：隐藏输入框
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide-input', ({ reply }) => {
+      const coreBoxWindow = getCoreBoxWindow()
+      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+        reply(DataCode.ERROR, { error: 'CoreBox window not available' })
+        return
+      }
+      
+      this.touchApp.channel.sendTo(
+        coreBoxWindow.window,
+        ChannelType.MAIN,
+        'core-box:set-input-visibility',
+        { visible: false }
+      ).then(() => {
+        reply(DataCode.SUCCESS, { hidden: true })
+      }).catch((error) => {
+        reply(DataCode.ERROR, { error: error.message })
+      })
+    })
+
+    // 新增：显示输入框
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show-input', ({ reply }) => {
+      const coreBoxWindow = getCoreBoxWindow()
+      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+        reply(DataCode.ERROR, { error: 'CoreBox window not available' })
+        return
+      }
+      
+      this.touchApp.channel.sendTo(
+        coreBoxWindow.window,
+        ChannelType.MAIN,
+        'core-box:set-input-visibility',
+        { visible: true }
+      ).then(() => {
+        reply(DataCode.SUCCESS, { shown: true })
+      }).catch((error) => {
+        reply(DataCode.ERROR, { error: error.message })
+      })
+    })
+
+    // 新增：获取当前输入
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:get-input', async ({ reply }) => {
+      try {
+        const coreBoxWindow = getCoreBoxWindow()
+        if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+          reply(DataCode.ERROR, { error: 'CoreBox window not available' })
+          return
+        }
+        
+        const result = await this.touchApp.channel.sendTo(
+          coreBoxWindow.window,
+          ChannelType.MAIN,
+          'core-box:request-input-value',
+          {}
+        )
+        reply(DataCode.SUCCESS, { input: result?.data?.input || result?.input || '' })
+      } catch (error: any) {
+        reply(DataCode.ERROR, { error: error.message })
+      }
+    })
+
+    // 新增：接收渲染进程的输入变化，广播给所有插件
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:input-changed', ({ data }) => {
+      const { input } = data
+      // 广播给所有插件
+      if (!pluginModule.pluginManager) {
+        return
+      }
+      
+      pluginModule.pluginManager.plugins.forEach((plugin) => {
+        // PluginStatus.ENABLED = 1
+        if (plugin.status === 1) {
+          this.touchApp.channel.sendPlugin(plugin.name, 'core-box:input-changed', { input }).catch((error) => {
+            console.error(`[CoreBox IPC] Failed to broadcast input change to plugin ${plugin.name}:`, error)
+          })
+        }
+      })
     })
 
     this.touchApp.channel.regChannel(
