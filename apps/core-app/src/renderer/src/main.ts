@@ -13,8 +13,7 @@ import { setupI18n } from '~/modules/lang'
 
 import {
   createSharedElementDirective,
-  SharedElementRouteGuard,
-  SharedElementDirective
+  SharedElementRouteGuard
 } from 'v-shared-element'
 
 import { usePluginStore } from '~/stores/plugin'

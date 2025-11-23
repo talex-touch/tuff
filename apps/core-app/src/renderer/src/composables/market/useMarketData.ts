@@ -1,4 +1,3 @@
-import type { Ref } from 'vue'
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { ref } from 'vue'
 

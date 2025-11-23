@@ -131,7 +131,7 @@ export function useSearch(
         inputs.push({
           type: TuffInputType.Image,
           content: clipboardOptions.last.content,
-          thumbnail: clipboardOptions.last.thumbnail,
+          thumbnail: clipboardOptions.last.thumbnail ?? undefined,
           metadata: clipboardOptions.last.meta ?? undefined
         })
       }
