@@ -1068,7 +1068,7 @@ export class ClipboardModule extends BaseModule {
     this.loadInitialCache()
     ocrService
       .start()
-      .catch(error => console.error('[Clipboard] Failed to start OCR service:', error))
+      .catch(error => clipboardLog.error('Failed to start OCR service', { error }))
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
   }
 
