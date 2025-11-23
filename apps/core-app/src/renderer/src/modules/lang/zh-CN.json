@@ -167,8 +167,19 @@
     "themeHelp": "主题帮助",
     "themeHelpDesc": "在官方 Github Discussions 中寻求帮助"
   },
+  "layoutSection": {
+    "title": "布局样式",
+    "tip": "选择一个适合你的界面布局。",
+    "currentTag": "当前使用",
+    "switchError": "切换布局失败",
+    "layouts": {
+      "simple": "简洁布局",
+      "flat": "扁平布局"
+    }
+  },
   "windowSection": {
-    "title": "窗口偏好"
+    "title": "窗口偏好",
+    "description": "选择你喜欢的窗口效果。"
   },
   "base": {
     "last_step": "上一步",

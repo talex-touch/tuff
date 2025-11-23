@@ -539,7 +539,7 @@ export class WindowManager {
       const channelScript = `
 (function() {
   const uniqueKey = "${plugin._uniqueChannelKey}";
-  const electron = require('electron')
+  const { ipcRenderer } = require('electron')
   const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
 

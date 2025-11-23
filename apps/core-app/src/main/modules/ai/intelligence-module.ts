@@ -21,11 +21,11 @@ import { IntelligenceProviderManager } from './runtime/provider-manager'
 const intelligenceLog = createLogger('Intelligence')
 
 /**
- * Intelligence Module - 管理 AI 能力和提供商
+ * Intelligence Module - Manages AI capabilities and providers.
  *
- * 支持两种 Provider 类型：
- * 1. Builtin Providers - 内置支持的提供商（OpenAI, Anthropic, DeepSeek 等）
- * 2. Custom Providers - OpenAI-compatible 兼容的自定义提供商
+ * Supports two provider types:
+ * 1. Builtin Providers - Natively supported (OpenAI, Anthropic, DeepSeek, etc.)
+ * 2. Custom Providers - OpenAI-compatible custom endpoints
  */
 export class IntelligenceModule extends BaseModule<TalexEvents> {
   static readonly key: symbol = Symbol.for('Intelligence')

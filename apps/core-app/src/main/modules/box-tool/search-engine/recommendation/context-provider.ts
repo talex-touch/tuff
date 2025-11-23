@@ -1,12 +1,17 @@
 import * as crypto from 'node:crypto'
+import type { ContextSignal, TimePattern } from '@talex-touch/utils/core-box'
 
 /**
- * 上下文提供器
- * 负责获取当前的时间、剪贴板、前台应用等上下文信息
+ * Context provider for recommendation engine.
+ * Gathers temporal, clipboard, and foreground app state for intelligent matching.
+ * 
+ * @remarks
+ * Uses dynamic imports to avoid circular dependencies with clipboard and activeApp modules.
+ * This is intentional - see plan.prd for future refactoring.
  */
 export class ContextProvider {
   /**
-   * 获取完整的当前上下文
+   * Retrieves complete current context signal.
    */
   async getCurrentContext(): Promise<ContextSignal> {
     const [clipboard, foregroundApp, systemState] = await Promise.all([
@@ -24,7 +29,7 @@ export class ContextProvider {
   }
 
   /**
-   * 获取时间上下文
+   * Determines current time pattern for time-based recommendations.
    */
   getTimeContext(): TimePattern {
     const now = new Date()
@@ -50,21 +55,20 @@ export class ContextProvider {
   }
 
   /**
-   * 获取剪贴板上下文
-   * 检查最近的剪贴板内容(5秒内)
+   * Retrieves clipboard context if content is recent (within 5 seconds).
+   * 
+   * @remarks
+   * Dynamic import prevents circular dependency with clipboard module.
    */
   private async getClipboardContext(): Promise<ContextSignal['clipboard']> {
     try {
-      // 动态导入 clipboard module 避免循环依赖
       const { clipboardModule } = await import('../../../clipboard')
       
-      // 获取最新剪贴板项
       const latest = clipboardModule.getLatestItem()
       if (!latest || !latest.timestamp) {
         return undefined
       }
 
-      // 检查是否在5秒内
       const isRecent = Date.now() - new Date(latest.timestamp).getTime() < 5000
       if (!isRecent) {
         return undefined
@@ -72,7 +76,7 @@ export class ContextProvider {
 
       return {
         type: latest.type,
-        content: this.hashContent(latest.content || ''), // 哈希保护隐私
+        content: this.hashContent(latest.content || ''),
         timestamp: new Date(latest.timestamp).getTime(),
         ...this.detectClipboardContentType(latest),
       }
@@ -84,7 +88,7 @@ export class ContextProvider {
   }
 
   /**
-   * 检测剪贴板内容类型
+   * Detects semantic type of clipboard content.
    */
   private detectClipboardContentType(item: any): {
     contentType?: 'url' | 'text' | 'code' | 'file'
@@ -93,12 +97,10 @@ export class ContextProvider {
     const meta: Record<string, any> = {}
     let contentType: 'url' | 'text' | 'code' | 'file' = 'text'
 
-    // 文本内容检测
     if (item.type === 'text') {
       const content = item.content || ''
       meta.textLength = content.length
 
-      // URL 检测
       const urlPattern = /^https?:\/\//i
       if (urlPattern.test(content.trim())) {
         try {
@@ -109,11 +111,10 @@ export class ContextProvider {
           meta.protocol = url.protocol
         }
         catch {
-          // 不是有效的 URL
+          // Not a valid URL
         }
       }
 
-      // 文件路径检测
       if (contentType === 'text') {
         const pathMatch = content.match(/\.([a-z0-9]+)$/i)
         if (pathMatch) {
@@ -129,7 +130,6 @@ export class ContextProvider {
       }
     }
 
-    // 文件类型检测
     if (item.type === 'files') {
       try {
         const files = JSON.parse(item.content || '[]')
@@ -153,7 +153,7 @@ export class ContextProvider {
   }
 
   /**
-   * 分类文件类型
+   * Categorizes file extension into broad types.
    */
   private categorizeFileType(ext: string): {
     fileType: 'code' | 'text' | 'image' | 'document' | 'other'
@@ -197,7 +197,10 @@ export class ContextProvider {
   }
 
   /**
-   * 获取前台应用上下文
+   * Retrieves foreground application context.
+   * 
+   * @remarks
+   * Dynamic import prevents circular dependency with activeApp module.
    */
   private async getForegroundAppContext(): Promise<ContextSignal['foregroundApp']> {
     try {
@@ -220,25 +223,28 @@ export class ContextProvider {
   }
 
   /**
-   * 计算内容哈希(隐私保护)
+   * Generates privacy-safe hash of content.
    */
   private hashContent(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
   }
 
   /**
-   * 获取系统状态上下文
+   * Retrieves system state context.
+   * 
+   * @remarks
+   * Placeholder implementation - see plan.prd for future enhancement.
    */
   private async getSystemContext(): Promise<ContextSignal['systemState']> {
     return {
-      isOnline: true, // TODO: 通过网络检测
-      batteryLevel: 100, // TODO: 通过 Electron powerMonitor API
-      isDNDEnabled: false, // TODO: 通过系统 API
+      isOnline: true,
+      batteryLevel: 100,
+      isDNDEnabled: false,
     }
   }
 
   /**
-   * 生成上下文缓存键
+   * Generates cache key from context signal.
    */
   generateCacheKey(context: ContextSignal): string {
     const parts: string[] = [
@@ -258,42 +264,4 @@ export class ContextProvider {
   }
 }
 
-/**
- * 时间模式接口
- */
-export interface TimePattern {
-  hourOfDay: number // 0-23
-  dayOfWeek: number // 0-6 (0=Sunday)
-  isWorkingHours: boolean // 9:00-18:00 工作日
-  timeSlot: 'morning' | 'afternoon' | 'evening' | 'night'
-}
-
-/**
- * 完整的上下文信号接口
- */
-export interface ContextSignal {
-  time: TimePattern
-  clipboard?: {
-    type: string
-    content: string // 哈希值,非原文
-    timestamp: number
-    contentType?: 'url' | 'text' | 'code' | 'file' // 新增:检测到的内容类型
-    meta?: { // 新增:元数据
-      isUrl?: boolean
-      urlDomain?: string
-      textLength?: number
-      fileExtension?: string
-      fileType?: 'code' | 'text' | 'image' | 'document' | 'other'
-      language?: string
-    }
-  }
-  foregroundApp?: {
-    bundleId: string
-    name: string
-  }
-  systemState?: {
-    isOnline: boolean
-    batteryLevel: number
-    isDNDEnabled: boolean
-  }
-}
+export { TimePattern, ContextSignal }
