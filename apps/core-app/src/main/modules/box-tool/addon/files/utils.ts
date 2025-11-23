@@ -9,6 +9,17 @@ import {
 } from '@talex-touch/utils/common/file-scan-utils'
 import { WHITELISTED_EXTENSIONS } from './constants'
 
+const DIRECT_IMAGE_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'svg',
+  'gif',
+  'bmp',
+  'webp',
+  'ico',
+])
+
 export function isIndexableFile(
   fullPath: string,
   extension: string,
@@ -52,7 +63,36 @@ export function mapFileToTuffItem(
   _extensions: Record<string, string>,
   providerId: string,
   providerName: string,
+  onMissingIcon?: (file: typeof filesSchema.$inferSelect) => void,
 ): TuffItem {
+  const extension = (file.extension || path.extname(file.name) || '')
+    .replace(/^\./, '')
+    .toLowerCase()
+
+  let icon: { type: 'file' | 'url' | 'class' | 'emoji', value: string }
+
+  if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
+    icon = {
+      type: 'file',
+      value: file.path,
+    }
+  }
+  else if (_extensions.icon) {
+    icon = {
+      type: 'url',
+      value: _extensions.icon,
+    }
+  }
+  else {
+    // Trigger lazy load if callback provided
+    onMissingIcon?.(file)
+    // Return default/empty icon while loading
+    icon = {
+      type: 'class',
+      value: 'i-ri-file-line', // Default file icon
+    }
+  }
+
   return {
     id: file.path,
     source: {
@@ -66,10 +106,7 @@ export function mapFileToTuffItem(
       basic: {
         title: file.name,
         subtitle: file.path,
-        icon: {
-          type: 'file',
-          value: file.path,
-        },
+        icon,
       },
     },
     actions: [
