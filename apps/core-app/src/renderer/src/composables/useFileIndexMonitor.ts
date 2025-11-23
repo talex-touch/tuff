@@ -35,6 +35,19 @@ export function useFileIndexMonitor() {
       return null
     }
   }
+
+  /**
+   * 查询索引统计信息
+   */
+  const getIndexStats = async () => {
+    try {
+      const stats = await channel.send('file-index:stats', {})
+      return stats
+    } catch (error) {
+      console.error('[FileIndexMonitor] Failed to get index stats:', error)
+      return null
+    }
+  }
   
   /**
    * 手动触发重建索引
@@ -77,6 +90,7 @@ export function useFileIndexMonitor() {
   return {
     getIndexStatus,
     getBatteryLevel,
+    getIndexStats,
     handleRebuild,
     onProgressUpdate,
     indexProgress
