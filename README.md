@@ -52,29 +52,11 @@ The design style of Tuff is inspired by TDesignS, which is simple and elegant. T
 
 ### The best than ever UI design
 
-![CoreBox](https://files.catbox.moe/a2tbvh.png)
-
-![HomePage](https://files.catbox.moe/ig0ipw.png)
-
 ![Plugins](https://files.catbox.moe/8ltyn1.png)
 
 ![Application Empty](https://files.catbox.moe/ih8nj9.png)
 
 ![Application Select.png](https://files.catbox.moe/fh19zg.png)
-
-### The fantastic animation design
-
-> Some animations have been removed in the latest version.
-
-#### New but not the latest
-
-![New Home Page](https://files.catbox.moe/3dylgz.gif)
-
-#### Out of date
-
-![Brief Animation](https://files.catbox.moe/e19hr1.gif)
-
-![New Plugin](https://files.catbox.moe/xksrfv.gif)
 
 ## 🗻 Rich Functionality
 

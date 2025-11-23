@@ -2,8 +2,8 @@
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
-import TLabelSelect from '~/components/tuff/label-select/TLabelSelect.vue'
-import TLabelSelectItem from '~/components/tuff/label-select/TLabelSelectItem.vue'
+import TLabelSelect from '~/components/base/select/TLabelSelect.vue'
+import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
 
 defineProps<{
   loading: boolean

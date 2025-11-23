@@ -1,12 +1,14 @@
 <script setup lang="ts" name="SettingFileIndex">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 
-const { getIndexStatus, getBatteryLevel, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
+const { getIndexStatus, getBatteryLevel, getIndexStats, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
 const { t, te } = useI18n()
 
 const indexStatus = ref<any>(null)
@@ -22,7 +24,7 @@ const checkStatus = async () => {
     lastChecked.value = new Date()
     estimatedTimeRemaining.value = indexStatus.value?.estimatedRemainingMs ?? null
     // 获取统计信息
-    const stats = await window.api.channel.call('file-index:stats')
+    const stats = await getIndexStats()
     if (stats) {
       indexStats.value = stats
     }
@@ -95,20 +97,20 @@ const progressText = computed(() => {
 
 const triggerRebuild = async () => {
   if (isRebuilding.value) {
-    alert(t('settings.settingFileIndex.alertRebuilding'))
+    ElMessage.warning(t('settings.settingFileIndex.alertRebuilding'))
     return
   }
 
   await checkStatus()
 
   if (indexStatus.value?.isInitializing) {
-    alert(t('settings.settingFileIndex.alertInitPending'))
+    ElMessage.warning(t('settings.settingFileIndex.alertInitPending'))
     return
   }
 
   const battery = await getBatteryLevel()
   if (battery && !battery.charging && battery.level < 20) {
-    alert(
+    ElMessage.warning(
       t('settings.settingFileIndex.alertBatteryLow', {
         level: battery.level
       })
@@ -131,14 +133,21 @@ const triggerRebuild = async () => {
     t('settings.settingFileIndex.warningConfirm')
   ].join('\n')
 
-  if (!confirm(warningMessage)) {
+  try {
+    await ElMessageBox.confirm(warningMessage, t('settings.settingFileIndex.rebuildTitle'), {
+      confirmButtonText: t('settings.settingFileIndex.rebuildNow'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning',
+      customStyle: { whiteSpace: 'pre-line' }
+    })
+  } catch {
     return
   }
 
   isRebuilding.value = true
   try {
     await handleRebuild()
-    alert(t('settings.settingFileIndex.alertRebuildStarted'))
+    ElMessage.success(t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false
@@ -147,7 +156,7 @@ const triggerRebuild = async () => {
     console.error('[SettingFileIndex] Rebuild failed:', error)
     isRebuilding.value = false
     const errorMsg = error?.message || String(error)
-    alert(
+    ElMessage.error(
       t('settings.settingFileIndex.alertRebuildFailed', {
         error: errorMsg
       })
@@ -209,9 +218,9 @@ const triggerRebuild = async () => {
       default-icon="i-carbon-reset"
       active-icon="i-carbon-reset"
     >
-      <button class="rebuild-button" :disabled="isRebuilding" @click="triggerRebuild">
+      <FlatButton primary @click="triggerRebuild">
         {{ isRebuilding ? t('settings.settingFileIndex.rebuilding') : t('settings.settingFileIndex.rebuildNow') }}
-      </button>
+      </FlatButton>
     </TuffBlockSlot>
 
     <!-- 统计信息 -->
@@ -326,29 +335,6 @@ const triggerRebuild = async () => {
   font-family: monospace;
   word-break: break-all;
   max-width: 400px;
-}
-
-.rebuild-button {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #007aff, #0051d5);
-  color: white;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.rebuild-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-}
-
-.rebuild-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
 }
 
 .time-text {
