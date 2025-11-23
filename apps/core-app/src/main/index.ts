@@ -32,7 +32,7 @@ import { updateServiceModule } from './modules/update/UpdateService'
 // import ServiceCenter from './service/service-center'
 import { pluginLogModule } from './service/plugin-log.service'
 
-import { mainLog } from './utils/logger'
+import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
 import './core/precore'
 
@@ -48,6 +48,8 @@ protocol.registerSchemesAsPrivileged([
       secure: true,
       supportFetchAPI: true,
       stream: true,
+      bypassCSP: true,
+      corsEnabled: true,
     },
   },
 ])
@@ -112,6 +114,18 @@ app.whenReady().then(async () => {
     })
 
     analytics.trackModuleLoad(moduleName, moduleLoadTime, i)
+
+    if (moduleCtor === storageModule) {
+      try {
+        const appSettings = storageModule.getConfig('app-setting.ini') as any
+        if (appSettings && appSettings.logger) {
+          loggerManager.setConfig(appSettings.logger)
+          mainLog.info('Logger configuration loaded from app-setting.ini')
+        }
+      } catch (error) {
+        mainLog.warn('Failed to load logger configuration', { error })
+      }
+    }
   }
 
   const totalModulesLoadTime = Date.now() - modulesStartTime

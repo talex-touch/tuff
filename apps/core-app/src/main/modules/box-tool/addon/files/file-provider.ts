@@ -196,7 +196,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     total: 0,
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
   }
-  
+
   private indexingStartTime: number | null = null
   private indexingStats = {
     processedItems: 0,
@@ -476,7 +476,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
-    this.initializationContext = context  // 保存 context 用于重建
+    this.initializationContext = context // 保存 context 用于重建
     // Store the database file path to exclude it from scanning
     // Assuming the database file is named 'database.db' and located in the user data directory.
     this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
@@ -496,7 +496,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.isInitializing = null
       this.initializationFailed = false
       this.initializationError = null
-      
+
       // 不等待初始化完成，让它在后台运行
       this.isInitializing = this._initialize()
         .then(() => {
@@ -518,7 +518,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // 只等待文件系统监听器设置完成，不等待索引完成
     await this.ensureFileSystemWatchers()
     this.registerOpenersChannel(context)
-    this.registerIndexingChannels(context)  // 注册索引管理通道
+    this.registerIndexingChannels(context) // 注册索引管理通道
     const loadDuration = performance.now() - loadStart
     this.logInfo('Provider onLoad completed (indexing continues in background)', {
       duration: formatDuration(loadDuration)
@@ -617,18 +617,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const isIndexing = this.isInitializing !== null
     let estimatedCompletion: number | null = null
     let estimatedRemainingMs: number | null = null
-    
+
     if (isIndexing && this.indexingStartTime && this.indexingProgress.total > 0) {
       const elapsed = now - this.indexingStartTime
       const progress = this.indexingProgress.current / this.indexingProgress.total
-      
-      if (progress > 0.01) { // Only estimate if we have at least 1% progress
+
+      if (progress > 0.01) {
+        // Only estimate if we have at least 1% progress
         const estimatedTotalTime = elapsed / progress
-        estimatedRemainingMs = estimatedTotalTime - elapsed
+        estimatedRemainingMs = Math.max(0, estimatedTotalTime - elapsed)
         estimatedCompletion = now + estimatedRemainingMs
       }
+    } else if (!isIndexing) {
+      // Indexing is complete, set to 0 instead of null
+      estimatedRemainingMs = 0
     }
-    
+
     return {
       isInitializing: isIndexing,
       initializationFailed: this.initializationFailed,
@@ -640,23 +644,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
     }
   }
-  
+
   /**
    * Get battery level and charging status
    */
   public async getBatteryLevel(): Promise<{ level: number; charging: boolean } | null> {
     try {
       const { powerMonitor } = await import('electron')
-      
+
       // Check if we're on AC power
       const onBattery = powerMonitor.onBatteryPower ?? false
-      
+
       // For macOS, we can get more detailed battery info
       if (process.platform === 'darwin') {
         const { execFile } = await import('child_process')
         const { promisify } = await import('util')
         const execFileAsync = promisify(execFile)
-        
+
         try {
           const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
           const match = /\d+%/.exec(stdout)
@@ -671,7 +675,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.logWarn('Failed to get battery level from pmset', error)
         }
       }
-      
+
       // Fallback: assume full battery if on AC power
       return {
         level: onBattery ? 50 : 100,
@@ -729,7 +733,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return { success: false, error: error.message }
       }
     })
-    
+
     // 查询电池状态
     channel.regChannel(ChannelType.MAIN, 'file-index:battery-level', async () => {
       try {
@@ -992,7 +996,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const buffer = extractFileIcon(appPath)
       if (buffer && buffer.length > 0) {
-        return buffer.toString('base64')
+        return `data:image/png;base64,${buffer.toString('base64')}`
       }
     } catch (error) {
       this.logWarn('Failed to extract icon', error, {
@@ -1264,7 +1268,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     total: number
   ): void {
     const now = Date.now()
-    
+
     // Track start time when indexing begins
     if (stage !== 'idle' && stage !== 'completed' && !this.indexingStartTime) {
       this.indexingStartTime = now
@@ -1272,7 +1276,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.indexingStats.processedItems = 0
       this.indexingStats.lastUpdateTime = now
     }
-    
+
     // Update stats
     if (this.indexingStartTime && stage !== 'idle' && stage !== 'completed') {
       const elapsed = (now - this.indexingStats.startTime) / 1000 // seconds
@@ -1282,7 +1286,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.indexingStats.processedItems = current
       this.indexingStats.lastUpdateTime = now
     }
-    
+
     // Reset on completion or idle
     if (stage === 'completed' || stage === 'idle') {
       this.indexingStartTime = null
@@ -1293,9 +1297,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         averageItemsPerSecond: 0
       }
     }
-    
+
     this.indexingProgress = { stage, current, total }
-    
+
     if (this.touchApp) {
       // Calculate estimated completion
       let estimatedRemainingMs: number | null = null
@@ -1307,7 +1311,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           estimatedRemainingMs = estimatedTotalTime - elapsed
         }
       }
-      
+
       this.touchApp.channel
         .send(ChannelType.MAIN, 'file-index:progress', {
           stage,
@@ -1385,7 +1389,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       reconciliationCount: reconciliationPaths.length,
       reconciliationPaths: JSON.stringify(reconciliationPaths)
     })
-    
+
     this.logInfo('Scan strategy prepared', {
       newPaths: newPathsToScan.length,
       reconciliationPaths: reconciliationPaths.length,
@@ -1802,7 +1806,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                   mtime: this.toTimestamp(file.mtime),
                   size: typeof file.size === 'number' ? file.size : null
                 }
-                const iconValue = icon.toString('base64')
+                const iconValue = `data:image/png;base64,${icon.toString('base64')}`
                 extensionsToAdd.push({
                   fileId,
                   key: 'icon',
@@ -2663,8 +2667,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`
     )
   }
-
-
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const filePath = args.item.meta?.file?.path

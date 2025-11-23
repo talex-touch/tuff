@@ -22,6 +22,7 @@ import { internalPlugins } from '../../plugins/internal'
 import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { createLogger } from '../../utils/logger'
+import { debounce } from '../../utils/common-util'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { DevServerHealthMonitor } from './dev-server-monitor'
@@ -105,7 +106,7 @@ class DevPluginWatcher {
       },
     })
 
-    this.watcher.on('change', async (filePath) => {
+    this.watcher.on('change', debounce(async (filePath) => {
       const pluginName = Array.from(this.devPlugins.values()).find(
         p =>
           !p.dev.source
@@ -125,7 +126,7 @@ class DevPluginWatcher {
 
         await this.manager.reloadPlugin(pluginName)
       }
-    })
+    }, 300))
 
     devWatcherLog.info('Started watching for dev plugin changes', {
       meta: { plugins: this.devPlugins.size },
