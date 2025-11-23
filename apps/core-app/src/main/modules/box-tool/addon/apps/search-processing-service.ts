@@ -140,13 +140,15 @@ export async function processSearchResults(
     }
 
     // --- 2. 结果组装 ---
+    const iconValue = app.extensions.icon ?? ''
     const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
       .setKind('app')
       .setTitle(displayName)
       .setSubtitle(app.path)
       .setIcon({
-        type: 'url',
-        value: app.extensions.icon ?? '',
+        // 根据实际内容动态选择类型：base64 Data URI 用 'url'，文件路径用 'file'
+        type: iconValue.startsWith('data:') ? 'url' : 'file',
+        value: iconValue,
       })
       .setActions([
         {

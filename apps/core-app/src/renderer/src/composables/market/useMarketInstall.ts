@@ -1,6 +1,6 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { useI18n } from 'vue-i18n'
-import { useInstallManager } from '~/modules/hooks/useInstallManager'
+import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import type { OfficialPluginListItem } from './useMarketData'
 

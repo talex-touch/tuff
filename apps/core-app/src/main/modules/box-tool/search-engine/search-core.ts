@@ -108,7 +108,6 @@ export class SearchEngineCore
     this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)
     this.registerProvider(urlProvider)
-    // Removed intelligenceSearchProvider - AI功能现在由 internal-ai-plugin 提供
   }
 
   static getInstance(): SearchEngineCore {
@@ -322,17 +321,10 @@ export class SearchEngineCore
     // Empty query detection: return recommendations
     if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
       searchEngineLog.debug('Empty query detected, generating recommendations')
-      // console.log('[SearchEngineCore] Empty query detected, generating recommendations...') // Remove to reduce noise
 
       if (this.recommendationEngine) {
         try {
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
-          // console.log(`[SearchEngineCore] Recommendation result:`, {
-          //   itemsCount: recommendationResult.items.length,
-          //   duration: recommendationResult.duration,
-          //   fromCache: recommendationResult.fromCache,
-          //   firstItems: recommendationResult.items.slice(0, 3).map(item => item.id)
-          // }) // Remove to reduce noise
 
           searchLogger.logSearchPhase(
             'Recommendation',
@@ -358,11 +350,11 @@ export class SearchEngineCore
 
           result.sessionId = sessionId
 
-          // console.log('[SearchEngineCore] Returning recommendation result with', result.items.length, 'items') // Remove to reduce noise
           return result
         } catch (error) {
           searchEngineLog.error('Failed to generate recommendations', { error })
-          // 降级：返回空结果而不是继续搜索
+
+          // fallback to empty result
           return new TuffSearchResultBuilder(query)
             .setItems([])
             .setDuration(0)
@@ -370,8 +362,6 @@ export class SearchEngineCore
             .build()
         }
       } else {
-        // console.warn('[SearchEngineCore] RecommendationEngine not initialized') // Remove to reduce noise
-        // 返回空结果
         return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
       }
     }

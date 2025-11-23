@@ -34,42 +34,7 @@ export class IpcManager {
   }
 
   public register(): void {
-    /**
-     * @deprecated Use tfile:// protocol instead. Will be removed in future version.
-     * @example
-     * // Old way (deprecated):
-     * const buffer = await touchChannel.send('file:extract-icon', { path: '/path/to/file' })
-     *
-     * // New way (recommended):
-     * <img src="tfile:///path/to/file" />
-     *
-     * The tfile:// protocol provides:
-     * - No IPC overhead
-     * - Browser-native image loading
-     * - Automatic caching
-     * - Simpler code
-     */
-    this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
-      'file:extract-icon',
-      async ({ data, reply }) => {
-        try {
-          const { path } = data as { path: string }
-          const fileIcon = (await import('extract-file-icon')).default
-          if (typeof fileIcon !== 'function') {
-            return
-          }
 
-          const buffer = fileIcon(path, 32)
-          reply(DataCode.SUCCESS, {
-            buffer,
-          })
-        }
-        catch (error) {
-          console.log('Cannot find target file icon:', data.path, error)
-        }
-      },
-    )
 
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () =>
       coreBoxManager.trigger(false))

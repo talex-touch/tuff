@@ -19,9 +19,16 @@ const addressable = computed(() => props.icon.type === 'url' || props.icon.type 
 const url = computed(() => {
   if (props.icon.type === 'file') {
     const targetPath = `tfile://${props.icon.value}`
-    console.log("fileable", props, props.icon.value, '=', targetPath)
+    // console.log('fileable', props, props.icon.value, '=', targetPath)
     // File paths are absolute (e.g., "/Users/..."), so tfile://${path} gives tfile:///Users/...
     return targetPath
+  }
+
+  if (props.icon.type === 'url') {
+    const urlPath = props.icon.value
+    if (urlPath.startsWith('/')) {
+      return `tfile://${urlPath}`
+    }
   }
 
   return props.icon.value
@@ -32,7 +39,7 @@ const {
   // loading: svgLoading,
   // error: svgError,
   fetchSvgContent,
-  setUrl,
+  setUrl
 } = useSvgContent()
 
 const isSvg = computed(() => url.value?.endsWith('.svg'))
@@ -49,7 +56,7 @@ watch(
       fetchSvgContent()
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 </script>
 
@@ -65,7 +72,7 @@ watch(
   >
     <span v-if="!icon?.value" class="TuffIcon-Empty">
       <slot name="empty">
-        <img v-if="empty" :alt="alt" :src="empty">
+        <img v-if="empty" :alt="alt" :src="empty" />
       </slot>
     </span>
 
@@ -97,7 +104,7 @@ watch(
         />
       </template>
       <template v-else>
-        <img :alt="alt" :src="url">
+        <img :alt="alt" :src="url" />
       </template>
     </template>
   </span>

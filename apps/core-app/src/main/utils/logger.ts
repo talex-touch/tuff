@@ -128,8 +128,51 @@ export interface Logger {
   time: (label: string, level?: TimerLevel) => LoggerTimer
 }
 
+export interface LoggerConfig {
+  levels: Record<string, LogLevel>
+  defaultLevel: LogLevel
+}
+
+class LoggerManager {
+  private static instance: LoggerManager
+  private config: LoggerConfig = {
+    levels: {},
+    defaultLevel: debugEnabled ? 'debug' : 'info'
+  }
+
+  private constructor() {}
+
+  static getInstance(): LoggerManager {
+    if (!LoggerManager.instance) {
+      LoggerManager.instance = new LoggerManager()
+    }
+    return LoggerManager.instance
+  }
+
+  setConfig(config: Partial<LoggerConfig>) {
+    this.config = {
+      ...this.config,
+      ...config
+    }
+  }
+
+  shouldLog(namespace: string, level: LogLevel): boolean {
+    const configLevel = this.config.levels[namespace] || this.config.defaultLevel
+    const levels: LogLevel[] = ['debug', 'info', 'success', 'warn', 'error']
+    const levelIndex = levels.indexOf(level)
+    const configLevelIndex = levels.indexOf(configLevel)
+    
+    // If level is not found (should not happen), allow it
+    if (levelIndex === -1) return true
+    
+    return levelIndex >= configLevelIndex
+  }
+}
+
+export const loggerManager = LoggerManager.getInstance()
+
 function output(level: LogLevel, namespace: string, message: unknown, options?: LogOptions): void {
-  if (level === 'debug' && !debugEnabled) return
+  if (!loggerManager.shouldLog(namespace, level)) return
 
   const timestamp = chalk.gray(`[${formatTimestamp()}]`)
   const levelConfig = levelStyles[level]
