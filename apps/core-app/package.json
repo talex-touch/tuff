@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.4.7-beta.1",
+  "version": "2.4.7-beta.3",
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
   "license": "MPL-2.0 license",
@@ -37,7 +37,9 @@
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.2.0",
     "@talex-touch/utils": "workspace:^",
+    "@vue/compiler-sfc": "^3.5.24",
     "@types/yauzl": "^2.10.3",
+    "esbuild": "^0.25.12",
     "chokidar": "^4.0.3",
     "commander": "^14.0.2",
     "compressing": "^2.0.0",

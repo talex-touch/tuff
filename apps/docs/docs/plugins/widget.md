@@ -150,8 +150,8 @@ widget.register(ClockWidget)
 You can provide additional options when registering a widget:
 
 ```javascript
-widget.register(ClockWidget, {
-  // Specify where the widget can be placed
+  widget.register(ClockWidget, {
+    // Specify where the widget can be placed
   placement: ['sidebar', 'dashboard'],
 
   // Set default configuration
@@ -162,8 +162,31 @@ widget.register(ClockWidget, {
 
   // Provide tags for categorization
   tags: ['time', 'utility', 'display']
-})
+  })
 ```
+
+## Plugin Widget 渲染绑定
+
+插件通过 `appbox` 提供的 `TuffItemBuilder` 发送结果时需要手动指定自定义模板名称，否则 CoreBox 无法匹配动态注册的组件。使用 `@talex-touch/utils/plugin/widget` 中暴露的 `makeWidgetId` 来生成唯一名称：
+
+```ts
+import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
+import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+
+const widgetId = makeWidgetId(pluginContext.name, feature.id)
+
+const item = new TuffItemBuilder(`widget:${feature.id}`)
+  .setTitle('自定义 Widget')
+  .setCustomRender('vue', widgetId, {
+    requestId,
+    prompt,
+  })
+  .build()
+
+boxItemManager.upsert(item)
+```
+
+CoreBox 启动后会在主进程通过 `WidgetManager` 编译并向渲染进程发送 `plugin:widget:register` 事件，在渲染器中注册完成后，`CoreBoxRender` 才能识别 `widgetId` 并加载对应组件。务必保证 `custom.content` 使用与 `WidgetManager` 生成的 `widgetId` 完全一致（即 `pluginName::featureId`），否则组件不会渲染。
 
 ## Widget Configuration
 

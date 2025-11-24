@@ -3,6 +3,7 @@ import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { IFeatureLifeCycle, IPluginFeature } from '@talex-touch/utils/plugin'
 import crypto from 'node:crypto'
 import path from 'node:path'
+import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { app } from 'electron'
 import { TuffIconImpl } from '../../core/tuff-icon'
@@ -120,7 +121,7 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
     return buildBaseItem(`internal-ai:answer:${requestId}`)
       .setTitle(prompt || 'Talex AI')
       .setSubtitle('AI 回答已就绪')
-      .setCustomRender('vue', 'core-intelligence-answer', {
+      .setCustomRender('vue', DEFAULT_WIDGET_RENDERERS.CORE_INTELLIGENCE_ANSWER, {
         requestId,
         prompt,
         status: 'ready',

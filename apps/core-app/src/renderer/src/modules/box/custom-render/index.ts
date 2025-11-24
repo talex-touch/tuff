@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import CoreIntelligenceAnswer from '~/components/render/custom/CoreIntelligenceAnswer.vue'
 import PreviewResultCard from '~/components/render/custom/PreviewResultCard.vue'
 
@@ -13,11 +14,15 @@ export function getCustomRenderer(name: string): Component | undefined {
   return registry.get(name)
 }
 
+export function unregisterCustomRenderer(name: string): void {
+  registry.delete(name)
+}
+
 export function registerDefaultCustomRenderers(): void {
   if (defaultsRegistered)
     return
   defaultsRegistered = true
 
-  registerCustomRenderer('core-preview-card', PreviewResultCard)
-  registerCustomRenderer('core-intelligence-answer', CoreIntelligenceAnswer)
+  registerCustomRenderer(DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD, PreviewResultCard)
+  registerCustomRenderer(DEFAULT_WIDGET_RENDERERS.CORE_INTELLIGENCE_ANSWER, CoreIntelligenceAnswer)
 }

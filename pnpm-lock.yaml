@@ -70,6 +70,9 @@ importers:
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
+      '@vue/compiler-sfc':
+        specifier: ^3.5.24
+        version: 3.5.24
       '@types/yauzl':
         specifier: ^2.10.3
         version: 2.10.3
@@ -112,6 +115,9 @@ importers:
       iconv-lite:
         specifier: ^0.7.0
         version: 0.7.0
+      esbuild:
+        specifier: ^0.25.12
+        version: 0.25.12
       js-md5:
         specifier: ^0.8.3
         version: 0.8.3

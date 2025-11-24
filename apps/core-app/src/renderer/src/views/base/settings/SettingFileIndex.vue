@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingFileIndex">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, h } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -7,6 +7,8 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
+import { popperMention } from '~/modules/mention/dialog-mention'
+import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 
 const { getIndexStatus, getBatteryLevel, getIndexStats, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
 const { t, te } = useI18n()
@@ -108,37 +110,15 @@ const triggerRebuild = async () => {
     return
   }
 
-  const battery = await getBatteryLevel()
-  if (battery && !battery.charging && battery.level < 20) {
-    ElMessage.warning(
-      t('settings.settingFileIndex.alertBatteryLow', {
-        level: battery.level
-      })
-    )
-    return
-  }
-
-  const batteryHint = battery
-    ? t('settings.settingFileIndex.batteryStatus', { level: battery.level })
-    : ''
-
-  const warningMessage = [
-    t('settings.settingFileIndex.warningAlert'),
-    '',
-    t('settings.settingFileIndex.warningSearch'),
-    t('settings.settingFileIndex.warningPerformance'),
-    t('settings.settingFileIndex.warningIdle'),
-    t('settings.settingFileIndex.warningBattery', { hint: batteryHint }),
-    '',
-    t('settings.settingFileIndex.warningConfirm')
-  ].join('\n')
-
   try {
-    await ElMessageBox.confirm(warningMessage, t('settings.settingFileIndex.rebuildTitle'), {
-      confirmButtonText: t('settings.settingFileIndex.rebuildNow'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning',
-      customStyle: { whiteSpace: 'pre-line' }
+    await new Promise<void>((resolve, reject) => {
+      popperMention(
+        t('settings.settingFileIndex.rebuildTitle'),
+        () => h(RebuildConfirmDialog, {
+          onConfirm: () => resolve(),
+          onCancel: () => reject(new Error('Cancelled'))
+        })
+      )
     })
   } catch {
     return

@@ -10,10 +10,11 @@ import type { PreviewAbilityRegistry } from './preview-registry'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
 
-const PREVIEW_COMPONENT_NAME = 'core-preview-card'
+const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
 const SOURCE_ID = 'preview-provider'
 
 export class PreviewProvider implements ISearchProvider<ProviderContext> {
