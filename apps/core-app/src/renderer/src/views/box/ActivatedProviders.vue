@@ -2,6 +2,7 @@
 import type { IProviderActivate } from '@talex-touch/utils'
 import type { IUseSearch } from '~/modules/box/adapter/types'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
+import TuffIcon from '~/components/base/TuffIcon.vue';
 
 defineProps<{
   providers: IUseSearch['activeActivations']['value']
@@ -31,15 +32,15 @@ function getUniqueKey(provider: IProviderActivate): string {
           :icon="provider.icon || provider.meta?.pluginIcon"
           :alt="provider.name || provider.meta?.pluginName"
         />
-        <span class="Activated-Provider-PillMajor-Label truncate">{{
+        <span class="Activated-Provider-PillMajor-Label text-sm truncate">{{
           provider.name || provider.meta?.pluginName || provider.id
         }}</span>
       </div>
       <div class="Activated-Provider-PillVice">
         <span v-if="provider.meta?.feature">{{ provider.meta.feature.render?.basic?.title }}</span>
-        <RemixIcon
+        <div
           cursor-pointer
-          name="close-line"
+          i-carbon-close
           @click="emit('deactivate-provider', getUniqueKey(provider))"
         />
       </div>

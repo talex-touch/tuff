@@ -37,8 +37,9 @@ export function useSearch(
     // 使用 Map 去重，searchResults 优先级更高
     const itemsMap = new Map<string, TuffItem>()
 
-    // 先添加 BoxItemSDK items
-    boxItems.value.forEach((item) => {
+    // 先添加 BoxItemSDK items（最新的在最前）
+    const prioritizedBoxItems = [...boxItems.value].reverse()
+    prioritizedBoxItems.forEach((item) => {
       itemsMap.set(item.id, item)
     })
 
@@ -55,8 +56,9 @@ export function useSearch(
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
+  const BASE_DEBOUNCE = 200
   const debounceMs = computed(() => {
-    return activeActivations.value && activeActivations.value.length > 0 ? 350 : 100
+    return activeActivations.value && activeActivations.value.length > 0 ? 350 : BASE_DEBOUNCE
   })
 
   const debouncedSearch = useDebounceFn(async () => {
@@ -343,12 +345,19 @@ export function useSearch(
       // Deactivate all if no ID is provided
       const newState = await touchChannel.send('core-box:deactivate-providers')
       activeActivations.value = newState
+      searchVal.value = '' // Clear search input to clear item list
       await handleSearch()
       return true
     }
 
     const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
     activeActivations.value = newState
+    
+    // If all providers are deactivated, clear search input
+    if (!newState || newState.length === 0) {
+      searchVal.value = ''
+    }
+    
     await handleSearch()
     return true
   }
@@ -356,6 +365,7 @@ export function useSearch(
   async function deactivateAllProviders(): Promise<void> {
     const newState = await touchChannel.send('core-box:deactivate-providers')
     activeActivations.value = newState
+    searchVal.value = '' // Clear search input to clear item list
     await handleSearch()
   }
 
@@ -437,7 +447,7 @@ export function useSearch(
     touchChannel.send('core-box:input-changed', { input: newVal }).catch((error) => {
       console.error('[useSearch] Failed to broadcast input change:', error)
     })
-  }, 150) // 150ms 防抖，避免频繁广播
+  }, BASE_DEBOUNCE) // 防抖，避免频繁广播
 
   watch(searchVal, (newVal) => {
     debouncedInputBroadcast(newVal)
@@ -488,8 +498,11 @@ export function useSearch(
     if (data.searchId === currentSearchId.value) {
       if (data.cancelled) {
         console.log('[useSearch] Search was cancelled')
+        searchResults.value = []
+        searchResult.value = null
+        activeActivations.value = null
+        currentSearchId.value = null
         loading.value = false
-        // Don't update activeActivations or other states - keep the current results
         return
       }
 
@@ -529,6 +542,7 @@ export function useSearch(
     handleExecute,
     handleExit,
     handleSearchImmediate,
-    deactivateProvider
+    deactivateProvider,
+    deactivateAllProviders
   }
 }

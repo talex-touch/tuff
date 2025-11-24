@@ -13,6 +13,7 @@ import type {
 } from './types'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../../core/channel-core'
+import { getCoreBoxWindow } from '../core-box'
 import { BOX_ITEM_CHANNELS } from './channels'
 
 /**
@@ -359,8 +360,6 @@ export class BoxItemManager {
    * @returns CoreBox 窗口或 null
    */
   private getCoreBoxWindow(): BrowserWindow | null {
-    // 从 core-box 模块获取窗口
-    const { getCoreBoxWindow } = require('../core-box')
     const coreBoxWindow = getCoreBoxWindow()
     return coreBoxWindow?.window || null
   }

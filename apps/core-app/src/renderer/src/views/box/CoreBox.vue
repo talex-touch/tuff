@@ -60,7 +60,8 @@ const {
   handleExecute,
   handleExit,
   handleSearchImmediate,
-  deactivateProvider
+  deactivateProvider,
+  deactivateAllProviders
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
@@ -134,7 +135,8 @@ useVisibility(
   handleAutoFill,
   handlePaste,
   clearClipboard,
-  boxInputRef
+  boxInputRef,
+  deactivateAllProviders
 )
 const itemRefs = ref<HTMLElement[]>([])
 
