@@ -188,7 +188,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
       name: string
       bundleId: string
       path: string
-      icon?: string
+      icon: string
     }> = []
 
     for (const browser of knownBrowsers) {

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { IProviderActivate } from '@talex-touch/utils'
 import type { IUseSearch } from '~/modules/box/adapter/types'
-import RemixIcon from '~/components/icon/RemixIcon.vue'
-import TuffIcon from '~/components/base/TuffIcon.vue';
 
 defineProps<{
   providers: IUseSearch['activeActivations']['value']

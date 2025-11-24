@@ -1,5 +1,6 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
+import type { FSWatcher } from 'chokidar'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../../core/channel-core'
 import chokidar from 'chokidar'
@@ -11,7 +12,7 @@ type WidgetEvent = 'plugin:widget:register' | 'plugin:widget:update'
 
 export class WidgetManager {
   private readonly cache = new Map<string, WidgetRegistrationPayload>()
-  private readonly watchers = new Map<string, chokidar.FSWatcher>()
+  private readonly watchers = new Map<string, FSWatcher>()
 
   private get channel(): ITouchChannel {
     return genTouchChannel()
@@ -39,7 +40,7 @@ export class WidgetManager {
       compiled = await compileWidgetSource(source)
     }
     catch (error) {
-      plugin.logger.error('[WidgetManager] 编译 widget 失败：', error)
+      plugin.logger.error('[WidgetManager] 编译 widget 失败：', error as Error)
       this.pushIssue(plugin, feature, 'WIDGET_COMPILE_FAILED', `${(error as Error).message ?? 'unknown error'}`)
       return null
     }
@@ -61,7 +62,7 @@ export class WidgetManager {
       )
     }
     catch (error) {
-      plugin.logger.error('[WidgetManager] 发送 widget 注册事件失败：', error)
+      plugin.logger.error('[WidgetManager] 发送 widget 注册事件失败：', error as Error)
       this.pushIssue(plugin, feature, 'WIDGET_REGISTER_FAILED', `${(error as Error).message ?? 'send failed'}`)
       return null
     }

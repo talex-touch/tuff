@@ -29,14 +29,14 @@ onUnmounted(() => {
   }
 })
 
-const handleClose = () => {
-  props.onCancel?.()
-  destroy?.()
-}
-
 const handleConfirm = () => {
   if (countdown.value > 0) return
   props.onConfirm()
+  destroy?.()
+}
+
+const close = () => {
+  props.onCancel?.()
   destroy?.()
 }
 </script>

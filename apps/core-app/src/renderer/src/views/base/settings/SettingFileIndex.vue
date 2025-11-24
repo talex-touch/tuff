@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SettingFileIndex">
 import { computed, onMounted, onUnmounted, ref, h } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -10,7 +10,7 @@ import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompleti
 import { popperMention } from '~/modules/mention/dialog-mention'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 
-const { getIndexStatus, getBatteryLevel, getIndexStats, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
+const { getIndexStatus, getIndexStats, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
 const { t, te } = useI18n()
 
 const indexStatus = ref<any>(null)

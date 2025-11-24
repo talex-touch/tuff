@@ -26,7 +26,7 @@ export function useSvgContent(
     let targetUrl = url.value
 
     try {
-      const _parsedUrl = new URL(targetUrl)
+      new URL(targetUrl)
     } catch (_e) {
       if (!targetUrl.startsWith('tfile://')) {
         targetUrl = `tfile://${targetUrl}`
