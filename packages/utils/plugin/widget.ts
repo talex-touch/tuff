@@ -7,7 +7,7 @@ const values = Object.values(DEFAULT_WIDGET_RENDERERS)
 export const DEFAULT_WIDGET_RENDERER_IDS = new Set<string>(values)
 
 export function isDefaultWidgetRenderer(id: string | undefined): boolean {
-  return Boolean(id) && DEFAULT_WIDGET_RENDERER_IDS.has(id)
+  return Boolean(id) && DEFAULT_WIDGET_RENDERER_IDS.has(id!)
 }
 
 export interface WidgetRegistrationPayload {
