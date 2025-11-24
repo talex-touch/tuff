@@ -10,6 +10,7 @@ import { baseNodeApi } from '~/modules/channel/main/node'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
 import { setupI18n } from '~/modules/lang'
+import '~/modules/plugin/widget-registry'
 
 import {
   createSharedElementDirective,

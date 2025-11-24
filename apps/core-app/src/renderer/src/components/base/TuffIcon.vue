@@ -100,7 +100,7 @@ watch(
           :class="{ colorful }"
           class="TuffIcon-Svg"
           :alt="alt"
-          :style="{ '--un-icon': `url(${dataurl})` }"
+          :style="{ '--un-icon': `url('${dataurl}')` }"
         />
       </template>
       <template v-else>

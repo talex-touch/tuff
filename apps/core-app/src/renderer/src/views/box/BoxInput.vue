@@ -61,7 +61,7 @@ const placeholder = computed(() => {
     />
     <div class="BoxInput-Display">
       <span class="opacity-0">{{ modelValue }}</span>
-      <div v-show="slots.completion" class="BoxInput-Display-Completion fake-background">
+      <div v-show="slots.completion" class="BoxInput-Display-Completion ml-2 fake-background">
         <slot name="completion" />
       </div>
     </div>

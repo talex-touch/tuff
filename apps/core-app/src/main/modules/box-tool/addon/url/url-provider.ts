@@ -1,4 +1,11 @@
-import type { IExecuteArgs, IProviderActivate, ISearchProvider, TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
+import type {
+  IExecuteArgs,
+  IProviderActivate,
+  ISearchProvider,
+  TuffItem,
+  TuffQuery,
+  TuffSearchResult
+} from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -41,27 +48,27 @@ class URLProvider implements ISearchProvider<ProviderContext> {
       return new TuffItemBuilder(`${this.id}:${browser.id}:${normalizedURL}`)
         .setTitle(`用 ${browser.name} 打开`)
         .setSubtitle(normalizedURL)
-        .setIcon({ type: 'emoji', value: browser.icon || '🌐' })
+        .setIcon({ type: 'url', value: browser.icon })
         .setSource(this.type, this.id, this.name)
         .setMeta({
           web: {
-            url: normalizedURL,
+            url: normalizedURL
           },
           app: {
-            path: browser.path,
+            path: browser.path
             // bundleId: browser.bundleId, // TuffMeta.app might not have bundleId, check definition if needed, but path is standard
           },
           raw: {
             browserBundleId: browser.bundleId,
-            actionType: 'open_url',
-          },
+            actionType: 'open_url'
+          }
         })
         .setScoring({
           final: 1000 - index, // 按顺序降权,确保浏览器聚合在前
           match: 1000 - index,
           base: 0,
           recency: 0,
-          frequency: 0,
+          frequency: 0
         })
         .build()
     })
@@ -84,8 +91,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
 
     try {
       await execAsync(`open -a "${browserPath}" "${url}"`)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[URLProvider] Failed to open URL:', error)
     }
     return null
@@ -97,11 +103,11 @@ class URLProvider implements ISearchProvider<ProviderContext> {
   private isURL(text: string): boolean {
     // 简单的URL检测
     return (
-      this.URL_REGEX.test(text)
-      || text.startsWith('http://')
-      || text.startsWith('https://')
-      || text.startsWith('www.')
-      || text.includes('.')
+      this.URL_REGEX.test(text) ||
+      text.startsWith('http://') ||
+      text.startsWith('https://') ||
+      text.startsWith('www.') ||
+      text.includes('.')
     )
   }
 
@@ -134,17 +140,46 @@ class URLProvider implements ISearchProvider<ProviderContext> {
       name: string
       bundleId: string
       path: string
-      icon?: string
+      icon: string
     }>
   > {
     const knownBrowsers = [
-      { id: 'chrome', name: 'Chrome', bundleId: 'com.google.Chrome', icon: '🟡' },
-      { id: 'safari', name: 'Safari', bundleId: 'com.apple.Safari', icon: '🧭' },
-      { id: 'firefox', name: 'Firefox', bundleId: 'org.mozilla.firefox', icon: '🦊' },
-      { id: 'edge', name: 'Edge', bundleId: 'com.microsoft.edgemac', icon: '🌊' },
-      { id: 'brave', name: 'Brave', bundleId: 'com.brave.Browser', icon: '🦁' },
-      { id: 'opera', name: 'Opera', bundleId: 'com.operasoftware.Opera', icon: '🔴' },
-      { id: 'arc', name: 'Arc', bundleId: 'company.thebrowser.Browser', icon: '🌈' },
+      {
+        id: 'chrome',
+        name: 'Chrome',
+        bundleId: 'com.google.Chrome',
+        icon: 'https://api.iconify.design/logos:chrome.svg'
+      },
+      {
+        id: 'safari',
+        name: 'Safari',
+        bundleId: 'com.apple.Safari',
+        icon: 'https://api.iconify.design/devicon:safari.svg'
+      },
+      {
+        id: 'firefox',
+        name: 'Firefox',
+        bundleId: 'org.mozilla.firefox',
+        icon: 'https://api.iconify.design/logos:firefox.svg'
+      },
+      {
+        id: 'edge',
+        name: 'Edge',
+        bundleId: 'com.microsoft.edgemac',
+        icon: 'https://api.iconify.design/logos:microsoft-edge.svg'
+      },
+      {
+        id: 'brave',
+        name: 'Brave',
+        bundleId: 'com.brave.Browser',
+        icon: 'https://api.iconify.design/logos:brave.svg'
+      },
+      {
+        id: 'opera',
+        name: 'Opera',
+        bundleId: 'com.operasoftware.Opera',
+        icon: 'https://api.iconify.design/devicon:opera.svg'
+      }
     ]
 
     const allApps = await appScanner.getApps()
@@ -157,8 +192,6 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     }> = []
 
     for (const browser of knownBrowsers) {
-      // 检查该浏览器是否已安装
-      // Assuming appScanner.getApps() returns objects with bundleId
       const app = allApps.find((a: any) => a.bundleId === browser.bundleId)
       if (app) {
         installedBrowsers.push({
@@ -166,7 +199,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
           name: browser.name,
           bundleId: browser.bundleId,
           path: app.path,
-          icon: browser.icon,
+          icon: browser.icon
         })
       }
     }
