@@ -13,6 +13,7 @@ export function useVisibility(
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   _clearClipboard: () => void,
   boxInputRef: Ref<any>,
+  deactivateAllProviders: () => Promise<void>
 ) {
   const visibility = useDocumentVisibility()
 
@@ -22,6 +23,17 @@ export function useVisibility(
       if (!val) {
         boxOptions.lastHidden = Date.now()
         console.debug('[Visibility] CoreBox hidden, timestamp saved:', boxOptions.lastHidden)
+        
+        // Clear search input to trigger item list clearing
+        searchVal.value = ''
+        console.debug('[Visibility] Cleared search input')
+        
+        // Clear activated providers when widget is hidden
+        console.debug('[Visibility] Clearing activated providers on hide')
+        deactivateAllProviders().catch((error) => {
+          console.error('[Visibility] Failed to deactivate providers on hide:', error)
+        })
+        
         // Don't clear clipboard, preserve state for expiration check on next open
         return
       }

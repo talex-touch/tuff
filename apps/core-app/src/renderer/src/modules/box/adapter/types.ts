@@ -33,6 +33,7 @@ export interface IUseSearch {
   handleExecute: (item?: TuffItem) => Promise<void>
   handleExit: () => void
   handleSearchImmediate: () => Promise<void>
-  deactivateProvider: (providerId?: string) => Promise<boolean>
-  // 已移除: handleSearch, deactivateAllProviders, cancelSearch
+  deactivateProvider: (id?: string) => Promise<boolean>
+  deactivateAllProviders: () => Promise<void>
+  // 已移除: handleSearch, cancelSearch
 }

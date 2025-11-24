@@ -11,7 +11,6 @@ import type {
   ITouchPlugin,
   PluginIssue,
 } from '@talex-touch/utils/plugin'
-import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
 import type { TouchWindow } from '../../core/touch-window'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
@@ -246,56 +245,22 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     if (feature.interaction?.type === 'widget') {
-      const registration = await widgetManager.registerWidget(this, feature)
-      if (!registration) {
-        this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
-        return false
+      const needsRegistration = Boolean(feature.interaction.path)
+      if (needsRegistration) {
+        const registration = await widgetManager.registerWidget(this, feature)
+        if (!registration) {
+          this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
+          return false
+        }
+        this.logger.info(
+          `Widget interaction ready for feature: ${feature.id} (id=${registration.widgetId}, file=${registration.filePath})`,
+        )
       }
-      this.logger.info(
-        `Widget interaction ready for feature: ${feature.id} (id=${registration.widgetId}, file=${registration.filePath})`,
-      )
-      this.renderWidgetFeature(feature, registration, query)
-      return true
     }
 
     const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature, controller.signal)
     this._featureEvent.get(feature.id)?.forEach(fn => fn.onLaunch?.(feature))
     return result
-  }
-
-  private renderWidgetFeature(
-    feature: IPluginFeature,
-    registration: WidgetRegistrationPayload,
-    query: any,
-  ): void {
-    const { boxItems } = this.getFeatureUtil()
-
-    const itemId = `${this.name}:widget:${feature.id}`
-    const builder = new TuffItemBuilder(itemId)
-      .setSource('plugin', this.name, this.name)
-      .setKind('widget')
-      .setTitle(feature.name)
-      .setSubtitle(feature.desc || '')
-      .setCustomRender('vue', registration.widgetId, {
-        plugin: this.name,
-        featureId: feature.id,
-        query,
-        timestamp: Date.now(),
-      })
-      .setMeta({
-        keepCoreBoxOpen: true,
-        widget: {
-          plugin: this.name,
-          featureId: feature.id,
-        },
-      })
-
-    if (feature.icon) {
-      builder.setIcon(feature.icon)
-    }
-
-    boxItems.clear()
-    boxItems.push(builder.build())
   }
 
   triggerInputChanged(feature: IPluginFeature, query: any): void {

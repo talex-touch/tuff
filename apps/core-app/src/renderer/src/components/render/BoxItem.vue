@@ -24,7 +24,7 @@ const displayIcon = computed(() => {
   const defaultIcon = {
     type: 'url',
     value: '',
-    status: 'normal',
+    status: 'normal'
   } as ITuffIcon
 
   if (typeof icon === 'string') {
@@ -41,11 +41,9 @@ const displayIcon = computed(() => {
 })
 
 const fileExtension = computed(() => {
-  if (props.item.kind !== 'file')
-    return null
+  if (props.item.kind !== 'file') return null
   const metaExt = props.item.meta?.file?.extension
-  if (metaExt)
-    return metaExt
+  if (metaExt) return metaExt
   const pathValue = props.item.meta?.file?.path || props.render.basic?.subtitle || ''
   const match = /\.([^.\\/]+)$/.exec(pathValue)
   return match ? match[1].toLowerCase() : null
@@ -65,7 +63,10 @@ const frequencyLabel = computed(() => clickCount.value.toString())
 const quickKeyLabel = computed(() => props.quickKey || '')
 const showQuickKey = computed(() => quickKeyLabel.value.length > 0)
 
-interface Range { start: number, end: number }
+interface Range {
+  start: number
+  end: number
+}
 
 function getHighlightedHTML(
   text: string,
@@ -74,10 +75,9 @@ function getHighlightedHTML(
     className?: string
     base?: 0 | 1 // 起始基：0 基或 1 基，默认 0 基
     inclusiveEnd?: boolean // 右端是否包含，默认不包含 (右开)
-  } = {},
+  } = {}
 ): string {
-  if (!matchedIndices?.length)
-    return text
+  if (!matchedIndices?.length) return text
 
   const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
 
@@ -92,25 +92,26 @@ function getHighlightedHTML(
   s0 = Math.max(0, Math.min(s0, n))
   eExclusive = Math.max(s0, Math.min(eExclusive, n))
 
-  if (s0 >= eExclusive)
-    return text
+  if (s0 >= eExclusive) return text
 
-  return (
-    `${text.slice(0, s0)
-    }<span class="${className}">${
-      text.slice(s0, eExclusive)
-    }</span>${
-      text.slice(eExclusive)}`
-  )
+  return `${text.slice(0, s0)}<span class="${className}">${text.slice(
+    s0,
+    eExclusive
+  )}</span>${text.slice(eExclusive)}`
 }
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
+const recommendation = computed(() => props.item.meta?.recommendation)
 </script>
 
 <template>
   <div
     class="BoxItem hover:bg-[var(--el-fill-color-lighter)] group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
-    :class="{ 'is-active': active, '!bg-[var(--el-bg-color)]': active }"
+    :class="{
+      'is-active': active,
+      '!bg-[var(--el-bg-color)]': active,
+      recommendation
+    }"
   >
     <div class="relative w-32px h-32px">
       <TuffIcon
@@ -136,7 +137,7 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
           :src="openerLogo"
           :alt="openerName || 'Opener'"
           class="w-[10px] h-[10px] object-contain"
-        >
+        />
       </div>
     </div>
 
@@ -188,4 +189,7 @@ const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
   gap: 4px;
   letter-spacing: 0.4px;
 }
+
+// .BoxItem.recommendation {
+// }
 </style>
