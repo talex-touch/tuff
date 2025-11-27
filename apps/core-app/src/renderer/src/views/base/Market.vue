@@ -78,7 +78,7 @@ const detailUpdatedLabel = computed(() => {
   const timestamp = activePlugin.value?.timestamp
   if (!timestamp) return ''
 
-  let date: Date  | null = null
+  let date: Date | null = null
 
   if (typeof timestamp === 'number') {
     date = new Date(timestamp)
@@ -114,7 +114,11 @@ const detailMeta = computed(() => {
   const meta: Array<{ icon: string; label: string; value: string }> = []
 
   if (plugin.author) {
-    meta.push({ icon: 'i-ri-user-line', label: t('market.detailDialog.author'), value: plugin.author })
+    meta.push({
+      icon: 'i-ri-user-line',
+      label: t('market.detailDialog.author'),
+      value: plugin.author
+    })
   }
 
   if (plugin.version) {
@@ -133,7 +137,11 @@ const detailMeta = computed(() => {
     })
   }
 
-  meta.push({ icon: 'i-ri-barcode-line', label: t('market.detailDialog.pluginId'), value: plugin.id })
+  meta.push({
+    icon: 'i-ri-barcode-line',
+    label: t('market.detailDialog.pluginId'),
+    value: plugin.id
+  })
 
   return meta
 })
@@ -229,147 +237,132 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="market-container">
-    <TuffAsideTemplate :searchable="false">
-      <template #aside-header>
-        <MarketCategoryList v-model:selected-index="tagInd" :categories="tags" />
-      </template>
+  <TuffAsideTemplate :searchable="false">
+    <template #aside>
+      <MarketCategoryList v-model:selected-index="tagInd" :categories="tags" />
+    </template>
 
-      <template #main>
-        <div class="market-main">
-          <MarketHeader
-            v-model:view-type="viewType"
-            :loading="loading"
-            :sources-count="pluginSettings.source.list.length"
-            @refresh="loadOfficialPlugins(true)"
-            @open-source-editor="toggleSourceEditorShow()"
-            @search="handleSearch"
-          />
+    <template #main>
+      <div class="market-main">
+        <MarketHeader
+          v-model:view-type="viewType"
+          :loading="loading"
+          :sources-count="pluginSettings.source.list.length"
+          @refresh="loadOfficialPlugins(true)"
+          @open-source-editor="toggleSourceEditorShow()"
+          @search="handleSearch"
+        />
 
-          <MarketGridView
-            :plugins="displayedPlugins"
-            :view-type="viewType"
-            :loading="loading"
-            @install="onInstall"
-            @open-detail="openPluginDetail"
-          />
-        </div>
-      </template>
-    </TuffAsideTemplate>
+        <MarketGridView
+          :plugins="displayedPlugins"
+          :view-type="viewType"
+          :loading="loading"
+          @install="onInstall"
+          @open-detail="openPluginDetail"
+        />
+      </div>
+    </template>
+  </TuffAsideTemplate>
 
-    <!-- Detail Dialog (unchanged) -->
-    <Transition name="market-detail-overlay" @after-leave="onDetailAfterLeave">
-      <div
-        v-if="detailVisible && activePlugin"
-        class="market-detail-overlay"
-        role="dialog"
-        aria-modal="true"
-      >
-        <div class="market-detail-backdrop" @click="closePluginDetail" />
+  <!-- Detail Dialog (unchanged) -->
+  <Transition name="market-detail-overlay" @after-leave="onDetailAfterLeave">
+    <div
+      v-if="detailVisible && activePlugin"
+      class="market-detail-overlay"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="market-detail-backdrop" @click="closePluginDetail" />
 
-        <div class="market-detail-shell">
-          <div :key="activePlugin.id" class="market-detail-panel" @click.stop>
-            <button class="detail-close" type="button" @click="closePluginDetail">
-              <i class="i-ri-close-line" />
-            </button>
+      <div class="market-detail-shell">
+        <div :key="activePlugin.id" class="market-detail-panel" @click.stop>
+          <button class="detail-close" type="button" @click="closePluginDetail">
+            <i class="i-ri-close-line" />
+          </button>
 
-            <div class="detail-header">
-              <div class="detail-icon">
-                <i v-if="detailIconClass" :class="detailIconClass" />
-                <i v-else class="i-ri-puzzle-line" />
+          <div class="detail-header">
+            <div class="detail-icon">
+              <i v-if="detailIconClass" :class="detailIconClass" />
+              <i v-else class="i-ri-puzzle-line" />
+            </div>
+
+            <div class="detail-heading">
+              <div class="detail-title-row">
+                <h3>{{ activePlugin.name }}</h3>
+                <span v-if="activePlugin.official" class="official-detail-badge">
+                  <i class="i-ri-shield-check-fill" />
+                  {{ t('market.officialBadge') }}
+                </span>
               </div>
-
-              <div class="detail-heading">
-                <div class="detail-title-row">
-                  <h3>{{ activePlugin.name }}</h3>
-                  <span v-if="activePlugin.official" class="official-detail-badge">
-                    <i class="i-ri-shield-check-fill" />
-                    {{ t('market.officialBadge') }}
-                  </span>
-                </div>
-                <div v-if="activePlugin.version || activePlugin.category" class="detail-subline">
-                  <span v-if="activePlugin.version" class="detail-chip">
-                    <i class="i-ri-price-tag-3-line" />
-                    v{{ activePlugin.version }}
-                  </span>
-                  <span v-if="activePlugin.category" class="detail-chip">
-                    <i class="i-ri-folder-3-line" />
-                    {{ activePlugin.category }}
-                  </span>
-                </div>
-                <p v-if="activePlugin.description" class="detail-description">
-                  {{ activePlugin.description }}
-                </p>
+              <div v-if="activePlugin.version || activePlugin.category" class="detail-subline">
+                <span v-if="activePlugin.version" class="detail-chip">
+                  <i class="i-ri-price-tag-3-line" />
+                  v{{ activePlugin.version }}
+                </span>
+                <span v-if="activePlugin.category" class="detail-chip">
+                  <i class="i-ri-folder-3-line" />
+                  {{ activePlugin.category }}
+                </span>
               </div>
+              <p v-if="activePlugin.description" class="detail-description">
+                {{ activePlugin.description }}
+              </p>
+            </div>
 
-              <div class="detail-actions">
-                <FlatButton
-                  :primary="true"
-                  class="detail-install"
-                  @click="onInstall(activePlugin)"
-                >
-                  <span>
-                    {{ t('market.install') }}
-                  </span>
-                </FlatButton>
+            <div class="detail-actions">
+              <FlatButton :primary="true" class="detail-install" @click="onInstall(activePlugin)">
+                <span>
+                  {{ t('market.install') }}
+                </span>
+              </FlatButton>
+            </div>
+          </div>
+
+          <div class="detail-body">
+            <div class="detail-meta-grid">
+              <div v-for="meta in detailMeta" :key="meta.label" class="detail-meta-item">
+                <div class="meta-icon">
+                  <i :class="meta.icon" />
+                </div>
+                <div class="meta-content">
+                  <span class="meta-label">{{ meta.label }}</span>
+                  <span class="meta-value" :title="meta.value">{{ meta.value }}</span>
+                </div>
               </div>
             </div>
 
-            <div class="detail-body">
-              <div class="detail-meta-grid">
-                <div v-for="meta in detailMeta" :key="meta.label" class="detail-meta-item">
-                  <div class="meta-icon">
-                    <i :class="meta.icon" />
-                  </div>
-                  <div class="meta-content">
-                    <span class="meta-label">{{ meta.label }}</span>
-                    <span class="meta-value" :title="meta.value">{{ meta.value }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="activePlugin.readmeUrl || activePlugin.downloadUrl" class="detail-links">
-                <a
-                  v-if="activePlugin.downloadUrl"
-                  class="detail-link"
-                  :href="activePlugin.downloadUrl"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  <i class="i-ri-download-cloud-2-line" />
-                  {{ t('market.detailDialog.download') }}
-                </a>
-                <a
-                  v-if="activePlugin.readmeUrl"
-                  class="detail-link"
-                  :href="activePlugin.readmeUrl"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  <i class="i-ri-book-open-line" />
-                  {{ t('market.detailDialog.viewDocs') }}
-                </a>
-              </div>
+            <div v-if="activePlugin.readmeUrl || activePlugin.downloadUrl" class="detail-links">
+              <a
+                v-if="activePlugin.downloadUrl"
+                class="detail-link"
+                :href="activePlugin.downloadUrl"
+                target="_blank"
+                rel="noopener"
+              >
+                <i class="i-ri-download-cloud-2-line" />
+                {{ t('market.detailDialog.download') }}
+              </a>
+              <a
+                v-if="activePlugin.readmeUrl"
+                class="detail-link"
+                :href="activePlugin.readmeUrl"
+                target="_blank"
+                rel="noopener"
+              >
+                <i class="i-ri-book-open-line" />
+                {{ t('market.detailDialog.viewDocs') }}
+              </a>
             </div>
           </div>
         </div>
       </div>
-    </Transition>
+    </div>
+  </Transition>
 
-    <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
-  </div>
+  <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
 </template>
 
 <style lang="scss" scoped>
-.market-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--el-bg-color);
-}
-
 .market-main {
   display: flex;
   flex-direction: column;

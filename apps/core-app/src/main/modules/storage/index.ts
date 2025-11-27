@@ -37,6 +37,8 @@ export class StorageModule extends BaseModule {
   private pollingService: StoragePollingService
   private lruManager: StorageLRUManager
   private frequencyMonitor = new StorageFrequencyMonitor()
+  private subscribers = new Map<string, Set<(data: object) => void>>()
+ private hotConfigs = new Set<string>(['app-setting.ini'])
 
   pluginConfigs = new Map<string, object>()
   PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
@@ -55,6 +57,9 @@ export class StorageModule extends BaseModule {
     this.lruManager = new StorageLRUManager(
       this.cache,
       async name => await this.evictConfig(name),
+      60000, // evictionTimeout
+      30000, // cleanupInterval
+      this.hotConfigs, // Pass hot configs to LRU manager
     )
   }
 
@@ -85,8 +90,11 @@ export class StorageModule extends BaseModule {
 
     this.frequencyMonitor.trackGet(name)
 
-    // Check if cache is invalidated, force reload if so
-    if (this.cache.isInvalidated(name)) {
+    // Hot configs skip invalidation check and always stay in cache
+    const isHot = this.hotConfigs.has(name)
+
+    // Check if cache is invalidated, force reload if so (skip for hot configs)
+    if (!isHot && this.cache.isInvalidated(name)) {
       this.cache.evict(name)
       this.cache.clearInvalidated(name)
     }
@@ -156,9 +164,12 @@ export class StorageModule extends BaseModule {
     setImmediate(() => {
       broadcastUpdate(name)
     })
+
+    // Notify local subscribers
+    this.notifySubscribers(name)
   }
 
-  saveConfig(name: string, content?: string, clear?: boolean): boolean {
+  saveConfig(name: string, content?: string, clear?: boolean, force?: boolean): boolean {
     if (!this.filePath)
       throw new Error(`Config ${name} not found`)
 
@@ -171,6 +182,16 @@ export class StorageModule extends BaseModule {
     }
     else {
       const parsed = JSON.parse(configData)
+      
+      // Smart deduplication: check if content actually changed (unless force=true)
+      if (!force) {
+        const cachedData = this.cache.get(name)
+        if (cachedData && JSON.stringify(cachedData) === JSON.stringify(parsed)) {
+          // Content hasn't changed, skip save
+          return true
+        }
+      }
+
       this.cache.set(name, parsed)
       // Mark as dirty to trigger persist
       this.cache.markDirty(name)
@@ -180,6 +201,9 @@ export class StorageModule extends BaseModule {
     setImmediate(() => {
       broadcastUpdate(name)
     })
+
+    // Notify local subscribers
+    this.notifySubscribers(name)
 
     return true
   }
@@ -214,6 +238,86 @@ export class StorageModule extends BaseModule {
       await this.persistConfig(name)
       this.cache.clearDirty(name)
     }
+  }
+
+  /**
+   * Subscribe to configuration changes
+   * @param name Configuration file name
+   * @param callback Callback function that receives the updated configuration data
+   * @returns Unsubscribe function
+   * 
+   * @example
+   * ```typescript
+   * const unsubscribe = storageModule.subscribe('app-setting.ini', (data) => {
+   *   console.log('Config updated:', data)
+   * })
+   * 
+   * // Later, to unsubscribe:
+   * unsubscribe()
+   * ```
+   */
+  subscribe(name: string, callback: (data: object) => void): () => void {
+    if (!this.subscribers.has(name)) {
+      this.subscribers.set(name, new Set())
+    }
+
+    this.subscribers.get(name)!.add(callback)
+
+    // Immediately call callback with current data
+    const currentData = this.cache.get(name)
+    if (currentData) {
+      try {
+        callback(currentData)
+      }
+      catch (error) {
+        console.error(chalk.red(`[StorageModule] Subscriber callback error for "${name}":`), error)
+      }
+    }
+
+    // Return unsubscribe function
+    return () => {
+      this.unsubscribe(name, callback)
+    }
+  }
+
+  /**
+   * Unsubscribe from configuration changes
+   * @param name Configuration file name
+   * @param callback The same callback function used in subscribe
+   */
+  unsubscribe(name: string, callback: (data: object) => void): void {
+    const callbacks = this.subscribers.get(name)
+    if (callbacks) {
+      callbacks.delete(callback)
+      if (callbacks.size === 0) {
+        this.subscribers.delete(name)
+      }
+    }
+  }
+
+  /**
+   * Notify all subscribers of a configuration change
+   * @private
+   */
+  private notifySubscribers(name: string): void {
+    const callbacks = this.subscribers.get(name)
+    if (!callbacks || callbacks.size === 0) {
+      return
+    }
+
+    const data = this.cache.get(name)
+    if (!data) {
+      return
+    }
+
+    callbacks.forEach((callback) => {
+      try {
+        callback(data)
+      }
+      catch (error) {
+        console.error(chalk.red(`[StorageModule] Subscriber callback error for "${name}":`), error)
+      }
+    })
   }
 
   setupListeners() {

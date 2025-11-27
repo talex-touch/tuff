@@ -14,7 +14,7 @@ export class StorageFrequencyMonitor {
   private readonly COOLDOWN_PERIOD: number
 
   constructor(
-    threshold: number = 10,
+    threshold: number = 20, // Increased from 10 to 20
     timeWindow: number = 10000,
     cooldownPeriod: number = 30000,
   ) {

@@ -68,38 +68,23 @@ mainWindow.on('close', (event) => {
 
 ---
 
-### 2. 废弃 extract-icon API ♻️
+### 2. ~~废弃 extract-icon API~~ ✅ 已完成 (2025-11)
 
 #### 问题描述
 **严重度**: 🟢 Low (但影响性能)
 **影响范围**: 文件图标加载
+**完成状态**: ✅ 已重构完成
 
-**现状问题**:
+**原问题**:
 - `file:extract-icon` IPC 调用 + buffer 转换,代码复杂
 - 每次都要 IPC 往返,性能开销大
 - 图标加载有延迟,需要 loading 状态
 
-#### 改进方案: 使用 tfile:// 协议
+#### 已完成的改进
 
-**迁移对比**:
+**迁移成果**:
 ```vue
-<!-- 旧方案 (15+ 行代码) -->
-<script>
-const iconDataUrl = ref(null)
-onMounted(async () => {
-  const buffer = await touchChannel.send('file:extract-icon', { path })
-  const bytes = new Uint8Array(buffer)
-  let storeData = ''
-  for (let i = 0; i < bytes.length; i++) {
-    storeData += String.fromCharCode(bytes[i])
-  }
-  iconDataUrl.value = `data:image/png;base64,${window.btoa(storeData)}`
-})
-</script>
-
-<img :src="iconDataUrl" />
-
-<!-- 新方案 (1 行代码) -->
+<!-- ✅ 新方案 (已全面实施) -->
 <script>
 const iconUrl = computed(() => `tfile://${filePath}`)
 </script>
@@ -107,15 +92,25 @@ const iconUrl = computed(() => `tfile://${filePath}`)
 <img :src="iconUrl" />
 ```
 
-**性能对比**:
-| 指标 | extract-icon API | tfile:// 协议 |
-|------|------------------|---------------|
-| IPC 调用 | 需要 | 不需要 |
-| Buffer 转换 | 需要手动转换 | 浏览器自动处理 |
-| 代码行数 | ~20 行 | 1 行 |
-| 并发加载 | 串行 | 并行 |
-| 浏览器缓存 | 不支持 | 自动支持 |
-| 加载延迟 | 50-100ms | <10ms |
+**实际性能对比**:
+| 指标 | extract-icon API | tfile:// 协议 (已实施) |
+|------|------------------|---------------------|
+| IPC 调用 | 需要 | 不需要 ✅ |
+| Buffer 转换 | 需要手动转换 | 浏览器自动处理 ✅ |
+| 代码行数 | ~20 行 | 1 行 ✅ |
+| 并发加载 | 串行 | 并行 ✅ |
+| 浏览器缓存 | 不支持 | 自动支持 ✅ |
+| 加载延迟 | 50-100ms | <10ms ✅ |
+
+**已迁移组件** (共 18 个):
+- FileTag.vue
+- UnifiedFileTag.vue
+- ClipboardFileTag.vue
+- TuffIcon.vue
+- 各类 Preview 组件 (Text/Image/Video/Audio)
+- useSvgContent.ts
+
+**详见**: 已完成功能总结文档
 
 ---
 

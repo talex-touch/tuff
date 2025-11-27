@@ -2,72 +2,41 @@ import type { MenuItemConstructorOptions } from 'electron'
 import type { TrayState } from './tray-state-manager'
 import path from 'node:path'
 import { app, Menu, shell } from 'electron'
-
-// TODO: 导入 i18n 函数
-function t(key: string, params?: Record<string, any>): string {
-  // 临时实现，后续集成 i18n
-  const translations: Record<string, string> = {
-    'tray.showWindow': '显示主窗口',
-    'tray.hideWindow': '隐藏主窗口',
-    'tray.openCoreBox': '打开 CoreBox',
-    'tray.downloadCenter': '下载中心',
-    'tray.downloadCenterWithCount': '下载中心 ({count} 个任务)',
-    'tray.clipboardHistory': '剪贴板历史',
-    'tray.terminal': '终端',
-    'tray.settings': '设置',
-    'tray.about': '关于 Talex Touch',
-    'tray.version': '版本 {version}',
-    'tray.checkUpdate': '检查更新',
-    'tray.checkUpdateAvailable': '检查更新 • 有新版本',
-    'tray.viewLogs': '查看日志',
-    'tray.openDataDir': '打开数据目录',
-    'tray.visitWebsite': '访问官网',
-    'tray.restart': '重启应用',
-    'tray.quit': '退出 Talex Touch',
-    'tray.tooltip': 'Talex Touch',
-  }
-
-  let result = translations[key] || key
-
-  if (params) {
-    Object.entries(params).forEach(([paramKey, paramValue]) => {
-      result = result.replace(`{${paramKey}}`, String(paramValue))
-    })
-  }
-
-  return result
-}
+import { t } from '../../utils/i18n-helper'
 
 /**
- * TrayMenuBuilder - 托盘菜单构建器
- *
- * 负责构建托盘右键菜单，支持动态状态和国际化
+ * TrayMenuBuilder - Tray menu builder
+ * 
+ * Responsible for building the system tray context menu with dynamic state and i18n support.
+ * 
+ * @example
+ * ```ts
+ * const builder = new TrayMenuBuilder()
+ * const menu = builder.buildMenu(currentState)
+ * tray.setContextMenu(menu)
+ * ```
  */
 export class TrayMenuBuilder {
   /**
-   * 构建托盘菜单
-   * @param state 当前托盘状态
-   * @returns 构建好的菜单
+   * Builds the complete tray menu
+   * 
+   * @param state - Current tray state containing window visibility, download count, etc.
+   * @returns Electron Menu instance ready to be set on the tray
    */
   buildMenu(state: TrayState): Menu {
     const template: MenuItemConstructorOptions[] = [
-      // 窗口控制组
       this.buildWindowControlGroup(state),
       { type: 'separator' },
 
-      // 快捷功能组
       ...this.buildQuickActionsGroup(state),
       { type: 'separator' },
 
-      // 工具功能组
       ...this.buildToolsGroup(),
       { type: 'separator' },
 
-      // 关于信息组
       this.buildAboutGroup(state),
       { type: 'separator' },
 
-      // 应用控制组
       ...this.buildAppControlGroup(),
     ]
 
@@ -75,9 +44,10 @@ export class TrayMenuBuilder {
   }
 
   /**
-   * 构建窗口控制组
-   * @param state 当前状态
-   * @returns 窗口控制菜单项
+   * Builds window control menu item (show/hide main window)
+   * 
+   * @param state - Current tray state
+   * @returns Menu item for toggling window visibility
    */
   private buildWindowControlGroup(state: TrayState): MenuItemConstructorOptions {
     return {
@@ -96,9 +66,10 @@ export class TrayMenuBuilder {
   }
 
   /**
-   * 构建快捷功能组
-   * @param state 当前状态
-   * @returns 快捷功能菜单项数组
+   * Builds quick action menu items (CoreBox, Download Center)
+   * 
+   * @param state - Current tray state
+   * @returns Array of quick action menu items
    */
   private buildQuickActionsGroup(state: TrayState): MenuItemConstructorOptions[] {
     return [
@@ -106,8 +77,7 @@ export class TrayMenuBuilder {
         label: t('tray.openCoreBox'),
         accelerator: process.platform === 'darwin' ? 'Cmd+E' : 'Ctrl+E',
         click: () => {
-          // TODO: 触发 CoreBox 模块的显示方法
-          // coreBoxModule.show()
+          // TODO(P2): Integrate with CoreBox module
           console.log('[TrayMenu] Open CoreBox requested')
         },
       },
@@ -126,8 +96,9 @@ export class TrayMenuBuilder {
   }
 
   /**
-   * 构建工具功能组
-   * @returns 工具功能菜单项数组
+   * Builds tool menu items (Clipboard History, Terminal, Settings)
+   * 
+   * @returns Array of tool menu items
    */
   private buildToolsGroup(): MenuItemConstructorOptions[] {
     return [
@@ -142,8 +113,7 @@ export class TrayMenuBuilder {
       {
         label: t('tray.terminal'),
         click: () => {
-          // TODO: 打开终端模块
-          // terminalModule.createWindow()
+          // TODO(P2): Integrate with Terminal module
           console.log('[TrayMenu] Open Terminal requested')
         },
       },
@@ -159,9 +129,10 @@ export class TrayMenuBuilder {
   }
 
   /**
-   * 构建关于信息组
-   * @param state 当前状态
-   * @returns 关于信息菜单项
+   * Builds about submenu (Version, Update Check, Logs, Data Directory, Website)
+   * 
+   * @param state - Current tray state
+   * @returns Menu item with about submenu
    */
   private buildAboutGroup(state: TrayState): MenuItemConstructorOptions {
     return {
@@ -202,8 +173,9 @@ export class TrayMenuBuilder {
   }
 
   /**
-   * 构建应用控制组
-   * @returns 应用控制菜单项数组
+   * Builds application control menu items (Restart, Quit)
+   * 
+   * @returns Array of app control menu items
    */
   private buildAppControlGroup(): MenuItemConstructorOptions[] {
     return [

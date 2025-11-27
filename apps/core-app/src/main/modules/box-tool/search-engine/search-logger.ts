@@ -13,6 +13,7 @@ export class SearchLogger {
   // private currentSession: string | null = null
   private searchStartTime: number = 0
   private searchSteps: Array<{ step: string, timestamp: number, duration?: number }> = []
+  private unsubscribe?: () => void
 
   private constructor() {
     this.loadSettings()
@@ -20,23 +21,17 @@ export class SearchLogger {
   }
 
   /**
-   * Setup watcher for settings changes
+   * Setup watcher for settings changes using subscription
    */
   private setupSettingsWatcher(): void {
-    // Watch for app settings changes
-    setInterval(async () => {
-      try {
-        // Check if storageModule is initialized
-        if (!storageModule.filePath) {
-          return
-        }
+    // Subscribe to app settings changes instead of polling
+    try {
+      // Subscribe to configuration changes
+      this.unsubscribe = storageModule.subscribe('app-setting.ini', (data) => {
+        try {
+          const settings = data as any
+          const newEnabled = settings.searchEngine?.logsEnabled === true
 
-        const appSettingsData = (await storageModule.getConfig(
-          'app-setting.ini',
-        )) as unknown as string
-        if (appSettingsData) {
-          const parsed = JSON.parse(appSettingsData as unknown as string)
-          const newEnabled = parsed.searchEngine?.logsEnabled === true
           if (newEnabled !== this.enabled) {
             this.enabled = newEnabled
             console.log(
@@ -44,11 +39,17 @@ export class SearchLogger {
             )
           }
         }
-      }
-      catch (error) {
-        // Ignore errors during periodic checks
-      }
-    }, 1000) // Check every second
+        catch (error) {
+          // Ignore parsing errors
+          console.error('[SearchLogger] Error processing settings update:', error)
+        }
+      })
+    }
+    catch (error) {
+      console.error('[SearchLogger] Failed to setup settings watcher:', error)
+      // Fallback to disabled state
+      this.enabled = false
+    }
   }
 
   static getInstance(): SearchLogger {
