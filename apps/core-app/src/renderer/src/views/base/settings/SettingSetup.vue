@@ -35,16 +35,16 @@ const isLinux = computed(() => platform.value === 'linux')
 const permissions = ref({
   accessibility: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false,
+    checked: false
   },
   notifications: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false,
+    checked: false
   },
   adminPrivileges: {
     status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
-    checked: false,
-  },
+    checked: false
+  }
 })
 
 // Settings
@@ -54,31 +54,17 @@ const settings = ref({
   hideDock: false,
   startSilent: false,
   runAsAdmin: false,
-  customDesktop: false,
+  customDesktop: false
 })
 
 const isLoading = ref(false)
-
-// File indexing progress
-type IndexingStage = 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
-
-interface IndexingProgress {
-  stage: IndexingStage
-  current: number
-  total: number
-  progress: number
-}
-
-const indexingProgress = ref<IndexingProgress | null>(null)
-
-let progressUnsubscribe: (() => void) | null = null
 
 function ensureWindowSettings(): void {
   if (!appSetting.window) {
     appSetting.window = {
       closeToTray: true,
       startMinimized: false,
-      startSilent: false,
+      startSilent: false
     }
     return
   }
@@ -104,7 +90,7 @@ if (!appSetting.setup) {
     adminPrivileges: false,
     hideDock: false,
     runAsAdmin: false,
-    customDesktop: false,
+    customDesktop: false
   }
 }
 
@@ -119,52 +105,7 @@ if (appSetting.setup.customDesktop === undefined) {
 onMounted(async () => {
   await checkAllPermissions()
   loadSettings()
-  setupIndexingProgressListener()
 })
-
-onUnmounted(() => {
-  if (progressUnsubscribe) {
-    progressUnsubscribe()
-    progressUnsubscribe = null
-  }
-})
-
-function setupIndexingProgressListener(): void {
-  progressUnsubscribe = touchChannel.regChannel('file-index:progress', (data) => {
-    const progressData = data.data as IndexingProgress | null
-    if (progressData) {
-      indexingProgress.value = {
-        stage: progressData.stage,
-        current: progressData.current,
-        total: progressData.total,
-        progress: progressData.progress,
-      }
-      // Reset to null when completed
-      if (progressData.stage === 'completed') {
-        setTimeout(() => {
-          indexingProgress.value = null
-        }, 2000)
-      }
-    }
-  })
-}
-
-function getStageText(stage: string): string {
-  switch (stage) {
-    case 'cleanup':
-      return t('settings.setup.indexingStage.cleanup')
-    case 'scanning':
-      return t('settings.setup.indexingStage.scanning')
-    case 'indexing':
-      return t('settings.setup.indexingStage.indexing')
-    case 'reconciliation':
-      return t('settings.setup.indexingStage.reconciliation')
-    case 'completed':
-      return t('settings.setup.indexingStage.completed')
-    default:
-      return ''
-  }
-}
 
 async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
@@ -174,7 +115,7 @@ async function checkAllPermissions(): Promise<void> {
       const accResult = await touchChannel.send('system:permission:check', 'accessibility' as any)
       permissions.value.accessibility = {
         status: accResult.status,
-        checked: true,
+        checked: true
       }
       appSetting.setup.accessibility = accResult.status === 'granted'
     }
@@ -183,7 +124,7 @@ async function checkAllPermissions(): Promise<void> {
     const notifResult = await touchChannel.send('system:permission:check', 'notifications' as any)
     permissions.value.notifications = {
       status: notifResult.status,
-      checked: true,
+      checked: true
     }
     appSetting.setup.notifications = notifResult.status === 'granted'
 
@@ -191,20 +132,18 @@ async function checkAllPermissions(): Promise<void> {
     if (isWindows.value) {
       const adminResult = await touchChannel.send(
         'system:permission:check',
-        'adminPrivileges' as any,
+        'adminPrivileges' as any
       )
       permissions.value.adminPrivileges = {
         status: adminResult.status,
-        checked: true,
+        checked: true
       }
       appSetting.setup.adminPrivileges = adminResult.status === 'granted'
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to check permissions:', error)
     toast.error(t('setupPermissions.checkFailed'))
-  }
-  finally {
+  } finally {
     isLoading.value = false
   }
 }
@@ -226,8 +165,7 @@ function loadSettings(): void {
     if (autoStartResult !== null) {
       settings.value.autoStart = autoStartResult as boolean
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to load autoStart:', error)
   }
 
@@ -236,15 +174,13 @@ function loadSettings(): void {
     const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
     if (startSilentResult !== null && startSilentResult !== undefined) {
       settings.value.startSilent = startSilentResult as boolean
-    }
-    else {
+    } else {
       const windowSettings = appSetting.window
       if (windowSettings && windowSettings.startSilent !== undefined) {
         settings.value.startSilent = windowSettings.startSilent
       }
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to load startSilent:', error)
   }
 }
@@ -259,8 +195,7 @@ async function requestPermission(type: string): Promise<void> {
     setTimeout(async () => {
       await checkAllPermissions()
     }, 2000)
-  }
-  catch (error) {
+  } catch (error) {
     console.error(`[SettingSetup] Failed to request permission ${type}:`, error)
     toast.error(t('setupPermissions.requestFailed'))
   }
@@ -273,12 +208,11 @@ async function updateAutoStart(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.autoStart',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     await touchChannel.send('tray:autostart:update', value)
     toast.success(t('common.success'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to update autoStart:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -291,12 +225,11 @@ function updateShowTray(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.setup.showTray',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     touchChannel.send('tray:show:set', value)
     toast.success(t('common.success'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to update showTray:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -309,12 +242,11 @@ function updateHideDock(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.setup.hideDock',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     touchChannel.send('tray:hidedock:set', value)
     toast.success(t('common.success'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to update hideDock:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -328,13 +260,12 @@ function updateStartSilent(value: boolean): void {
     touchChannel.send('storage:save', {
       key: 'app.window.startSilent',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     // Update auto-start setting to apply the change
     touchChannel.send('tray:autostart:update', settings.value.autoStart)
     toast.success(t('common.success'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -347,11 +278,10 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.setup.runAsAdmin',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     toast.success(t('common.success'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to update runAsAdmin:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -364,11 +294,10 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
     await touchChannel.send('storage:save', {
       key: 'app.setup.customDesktop',
       content: JSON.stringify(value),
-      clear: false,
+      clear: false
     })
     toast.success(t('common.success'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingSetup] Failed to update customDesktop:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
@@ -568,25 +497,6 @@ function getStatusIconClass(status: string): string {
         <TuffBetaTag />
       </template>
     </TuffBlockSwitch>
-
-    <!-- File Indexing Progress -->
-    <div v-if="indexingProgress && indexingProgress.stage !== 'idle'" class="IndexingProgress">
-      <div class="IndexingProgress-Header">
-        <i class="i-carbon-search text-lg text-[var(--el-text-color-secondary)]" />
-        <div class="IndexingProgress-Info">
-          <h3>{{ t('settings.setup.fileIndexing') }}</h3>
-          <p>
-            {{ getStageText(indexingProgress.stage) }}
-            <span v-if="indexingProgress.total > 0">
-              ({{ indexingProgress.current }} / {{ indexingProgress.total }})
-            </span>
-          </p>
-        </div>
-      </div>
-      <div class="IndexingProgress-Bar">
-        <span :style="{ width: `${Math.min(indexingProgress.progress, 100)}%` }" />
-      </div>
-    </div>
   </TuffGroupBlock>
 </template>
 
@@ -607,60 +517,5 @@ function getStatusIconClass(status: string): string {
 .PermissionActions .FlatButton-Container.is-loading {
   opacity: 0.6;
   pointer-events: none;
-}
-
-.IndexingProgress {
-  position: relative;
-  margin: 16px;
-  margin-top: 0;
-  padding: 16px;
-  border-radius: 12px;
-  background: var(--el-fill-color-lighter);
-  border: 1px solid var(--el-border-color);
-
-  .IndexingProgress-Header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 12px;
-    gap: 12px;
-
-    .IndexingProgress-Info {
-      flex: 1;
-
-      h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--el-text-color-primary);
-      }
-
-      p {
-        margin: 4px 0 0 0;
-        font-size: 12px;
-        color: var(--el-text-color-regular);
-        opacity: 0.8;
-      }
-    }
-  }
-}
-
-.IndexingProgress-Bar {
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--el-fill-color);
-  overflow: hidden;
-
-  span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(
-      90deg,
-      var(--el-color-primary-light-5),
-      var(--el-color-primary)
-    );
-    transition: width 0.3s ease;
-  }
 }
 </style>

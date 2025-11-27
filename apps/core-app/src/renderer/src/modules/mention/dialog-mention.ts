@@ -5,6 +5,7 @@ import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
 import TDialogMention from '~/components/base/dialog/TDialogMention.vue'
 import TouchTip from '~/components/base/dialog/TouchTip.vue'
 import TPopperDialog from '~/components/base/dialog/TPopperDialog.vue'
+import { useDialogManager } from './dialog-manager'
 
 /**
  * Type definition for dialog button click handler
@@ -66,7 +67,22 @@ export function captureAppContext(): void {
 }
 
 /**
- * 渲染 Vue 组件到 DOM 节点
+ * Counter for generating unique dialog IDs
+ */
+let dialogIdCounter = 0
+
+/**
+ * Generate a unique dialog ID
+ *
+ * @param prefix - ID prefix
+ * @returns Unique dialog ID
+ */
+function generateDialogId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${dialogIdCounter++}`
+}
+
+/**
+ * 渲染 Vue 组件到 DOM 节点并注册到 DialogManager
  *
  * 优先使用当前组件实例的 appContext（如果在 Vue 上下文中调用）。
  * 如果不在 Vue 上下文中，则使用之前通过 captureAppContext() 捕获的全局上下文。
@@ -74,17 +90,19 @@ export function captureAppContext(): void {
  * @param component - Vue 组件
  * @param props - 组件属性
  * @param container - 挂载容器
- * @returns 清理函数
+ * @param dialogId - Dialog ID for manager registration
+ * @param allowInCoreBox - Whether dialog can show in CoreBox window
+ * @returns Object with cleanup function and dialog ID
  * @throws {Error} 如果既不在 Vue 上下文中，也没有捕获过全局上下文
  *
  * @example
  * ```ts
  * // 在 Vue 组件中
- * const cleanup = renderComponent(MyDialog, { title: 'Hello' }, container)
+ * const { cleanup, id } = renderComponent(MyDialog, { title: 'Hello' }, container, 'my-dialog', true)
  *
  * // 在 DOM 事件监听器中（需要先调用 captureAppContext）
  * document.addEventListener('drop', () => {
- *   const cleanup = renderComponent(MyDialog, { title: 'Dropped!' }, container)
+ *   const { cleanup, id } = renderComponent(MyDialog, { title: 'Dropped!' }, container, 'drop-dialog', true)
  * })
  * ```
  */
@@ -92,7 +110,9 @@ function renderComponent(
   component: Component,
   props: Record<string, unknown>,
   container: HTMLElement,
-): () => void {
+  dialogId: string,
+  allowInCoreBox = true,
+): { cleanup: () => void, id: string } {
   const vnode = createVNode(component, props)
 
   // 尝试获取当前组件实例的上下文（如果在 Vue 组件中调用）
@@ -111,9 +131,22 @@ function renderComponent(
 
   render(vnode, container)
 
-  return () => {
+  const cleanup = () => {
     render(null, container)
   }
+
+  // Register with dialog manager
+  const dialogManager = useDialogManager()
+  dialogManager.register({
+    id: dialogId,
+    component,
+    props,
+    container,
+    cleanup,
+    allowInCoreBox,
+  })
+
+  return { cleanup, id: dialogId }
 }
 
 /**
@@ -131,30 +164,30 @@ export async function forTouchTip(
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')
+    const dialogId = generateDialogId('touch-tip')
+    const dialogManager = useDialogManager()
 
-    let index = 0
-    while (document.getElementById(`new-touch-tip-${index}`)) {
-      index++
-    }
-
-    root.id = `new-touch-tip-${index}`
-    root.style.zIndex = `${100000 + index}`
+    root.id = dialogId
+    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
 
     document.body.appendChild(root)
 
-    const cleanup = renderComponent(
+    const { cleanup, id } = renderComponent(
       TouchTip,
       {
         message,
         title,
         buttons,
         close: async () => {
+          dialogManager.unregister(id)
           cleanup()
           document.body.removeChild(root)
           resolve()
         },
       },
       root,
+      dialogId,
+      true,
     )
   })
 }
@@ -176,33 +209,33 @@ export async function forDialogMention(
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')
+    const dialogId = generateDialogId('dialog-mention')
+    const dialogManager = useDialogManager()
 
-    let index = 0
-    while (document.getElementById(`touch-dialog-tip-${index}`)) {
-      index++
-    }
-
-    root.id = `touch-dialog-tip-${index}`
-    root.style.zIndex = `${10000 + index}`
+    root.id = dialogId
+    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
 
     document.body.appendChild(root)
 
-    const cleanup = renderComponent(
+    const { cleanup, id } = renderComponent(
       TDialogMention,
       {
         message,
-        index,
+        index: dialogManager.getStackSize(),
         title,
         btns,
         icon,
         loading: false,
         close: async () => {
+          dialogManager.unregister(id)
           cleanup()
           document.body.removeChild(root)
           resolve()
         },
       },
       root,
+      dialogId,
+      true,
     )
   })
 }
@@ -220,29 +253,29 @@ export async function forApplyMention(
   btns: BottomDialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true, time: 0 }],
 ): Promise<void> {
   const root = document.createElement('div')
+  const dialogId = generateDialogId('bottom-dialog')
+  const dialogManager = useDialogManager()
 
-  let index = 0
-  while (document.getElementById(`touch-bottom-dialog-tip-${index}`)) {
-    index++
-  }
-
-  root.id = `touch-bottom-dialog-tip-${index}`
+  root.id = dialogId
 
   document.body.appendChild(root)
 
-  const cleanup = renderComponent(
+  const { cleanup, id } = renderComponent(
     TBottomDialog,
     {
       message,
-      index,
+      index: dialogManager.getStackSize(),
       title,
       btns,
       close: async () => {
+        dialogManager.unregister(id)
         cleanup()
         document.body.removeChild(root)
       },
     },
     root,
+    dialogId,
+    true,
   )
 }
 
@@ -259,12 +292,10 @@ export async function blowMention(
 ): Promise<string> {
   return new Promise((resolve) => {
     const root = document.createElement('div')
+    const dialogId = generateDialogId('blow-dialog')
+    const dialogManager = useDialogManager()
 
-    if (document.getElementById('touch-blow-dialog-tip')) {
-      return
-    }
-
-    root.id = 'touch-blow-dialog-tip'
+    root.id = dialogId
 
     const propName
       = message instanceof String || typeof message === 'string'
@@ -275,18 +306,21 @@ export async function blowMention(
 
     document.body.appendChild(root)
 
-    const cleanup = renderComponent(
+    const { cleanup, id } = renderComponent(
       TBlowDialog,
       {
         [propName]: message,
         title,
         close: async () => {
           resolve(propName)
+          dialogManager.unregister(id)
           cleanup()
           document.body.removeChild(root)
         },
       },
       root,
+      dialogId,
+      true,
     )
   })
 }
@@ -302,12 +336,10 @@ export async function popperMention(
   message: string | Component | DialogButtonClickHandler,
 ): Promise<void> {
   const root = document.createElement('div')
+  const dialogId = generateDialogId('popper-dialog')
+  const dialogManager = useDialogManager()
 
-  if (document.getElementById('touch-popper-dialog-tip')) {
-    return
-  }
-
-  root.id = 'touch-popper-dialog-tip'
+  root.id = dialogId
 
   const propName
     = message instanceof String || typeof message === 'string'
@@ -318,16 +350,19 @@ export async function popperMention(
 
   document.body.appendChild(root)
 
-  const cleanup = renderComponent(
+  const { cleanup, id } = renderComponent(
     TPopperDialog,
     {
       [propName]: message,
       title,
       close: async () => {
+        dialogManager.unregister(id)
         cleanup()
         document.body.removeChild(root)
       },
     },
     root,
+    dialogId,
+    true,
   )
 }

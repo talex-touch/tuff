@@ -56,10 +56,13 @@ export function useSearch(
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
-  const BASE_DEBOUNCE = 200
+  const BASE_DEBOUNCE = 35 // Optimized from 200ms to 35ms for faster response
   const debounceMs = computed(() => {
-    return activeActivations.value && activeActivations.value.length > 0 ? 350 : BASE_DEBOUNCE
+    return activeActivations.value && activeActivations.value.length > 0 ? 100 : BASE_DEBOUNCE
   })
+
+  // Request sequence tracking to ensure only the latest search results are displayed
+  let searchSequence = 0
 
   const debouncedSearch = useDebounceFn(async () => {
     // Allow empty queries to trigger recommendation search

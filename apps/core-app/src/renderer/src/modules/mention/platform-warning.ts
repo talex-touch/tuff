@@ -1,7 +1,45 @@
-import type { App } from 'vue'
-import VWave from 'v-wave'
-import { createApp } from 'vue'
+import { isCoreBox } from '@talex-touch/utils/renderer'
+import type { Component } from 'vue'
+import { createVNode, getCurrentInstance, render } from 'vue'
 import PlatformCompatibilityWarning from '~/components/base/dialog/PlatformCompatibilityWarning.vue'
+import { useDialogManager } from './dialog-manager'
+
+/**
+ * 全局应用上下文缓存（从 App.vue 捕获）
+ */
+let globalAppContext: any = null
+
+/**
+ * 捕获全局应用上下文
+ * 必须在 App.vue 中调用
+ */
+export function capturePlatformWarningContext(): void {
+  const instance = getCurrentInstance()
+  if (instance) {
+    globalAppContext = instance.appContext
+  }
+}
+
+/**
+ * 渲染组件到 DOM（使用全局 context）
+ */
+function renderWithGlobalContext(
+  component: Component,
+  props: Record<string, any>,
+  container: HTMLElement,
+): () => void {
+  const vnode = createVNode(component, props)
+  
+  if (globalAppContext) {
+    vnode.appContext = globalAppContext
+  }
+  
+  render(vnode, container)
+  
+  return () => {
+    render(null, container)
+  }
+}
 
 /**
  * 显示平台兼容性警告对话框
@@ -9,36 +47,53 @@ import PlatformCompatibilityWarning from '~/components/base/dialog/PlatformCompa
  * @returns Promise，当对话框关闭时解析
  */
 export async function showPlatformCompatibilityWarning(warningMessage: string): Promise<void> {
+  // 在 CoreBox 中不显示
+  if (isCoreBox()) {
+    console.warn('[PlatformWarning] CoreBox 窗口不显示平台兼容性警告')
+    return
+  }
+
   return new Promise<void>((resolve) => {
     const root: HTMLDivElement = document.createElement('div')
+    const dialogId = `platform-warning-${Date.now()}`
+    const dialogManager = useDialogManager()
 
-    let index: number = 0
-    while (document.getElementById(`platform-warning-${index}`)) {
-      index++
-    }
+    root.id = dialogId
+    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
 
-    root.id = `platform-warning-${index}`
-    root.style.zIndex = `${100000 + index}`
-
-    const app: App<Element> = createApp(PlatformCompatibilityWarning, {
-      warningMessage,
-      onContinue: () => {
-        app.unmount()
-        document.body.removeChild(root)
-        resolve()
+    const cleanup = renderWithGlobalContext(
+      PlatformCompatibilityWarning,
+      {
+        warningMessage,
+        onContinue: () => {
+          dialogManager.unregister(dialogId)
+          cleanup()
+          document.body.removeChild(root)
+          resolve()
+        },
+        onDontShowAgain: () => {
+          // 保存用户选择，不再显示此警告
+          localStorage.setItem('platform-warning-dismissed', 'true')
+          dialogManager.unregister(dialogId)
+          cleanup()
+          document.body.removeChild(root)
+          resolve()
+        },
       },
-      onDontShowAgain: () => {
-        // 保存用户选择，不再显示此警告
-        localStorage.setItem('platform-warning-dismissed', 'true')
-        app.unmount()
-        document.body.removeChild(root)
-        resolve()
-      },
-    })
+      root,
+    )
 
     document.body.appendChild(root)
-    app.use(VWave, {})
-    app.mount(root)
+
+    // 注册到 dialog manager
+    dialogManager.register({
+      id: dialogId,
+      component: PlatformCompatibilityWarning,
+      props: { warningMessage },
+      container: root,
+      cleanup,
+      allowInCoreBox: false,
+    })
   })
 }
 
