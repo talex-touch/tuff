@@ -66,8 +66,13 @@ export class StoragePollingService {
       return
     }
 
+    // Use Promise.all for concurrent saves instead of sequential
     const results = await Promise.allSettled(
-      dirtyConfigs.map(name => this.saveConfig(name)),
+      dirtyConfigs.map(async (name) => {
+        await this.saveFn(name)
+        this.cache.clearDirty(name)
+        return name
+      }),
     )
 
     const failCount = results.filter(r => r.status === 'rejected').length

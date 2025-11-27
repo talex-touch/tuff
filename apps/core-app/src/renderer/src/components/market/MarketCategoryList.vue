@@ -1,5 +1,6 @@
 <script setup lang="ts" name="MarketCategoryList">
 import { useI18n } from 'vue-i18n'
+import TuffItemTemplate from '../tuff/template/TuffItemTemplate.vue'
 
 interface CategoryTag {
   tag: string
@@ -26,65 +27,51 @@ function getCategoryIcon(category: CategoryTag): string {
   const filter = category.filter
   const iconMap: Record<string, string> = {
     '': 'i-carbon-apps',
-    'productivity': 'i-carbon-rocket',
-    'development': 'i-carbon-code',
-    'tools': 'i-carbon-tools',
-    'utilities': 'i-carbon-tools-alt',
-    'design': 'i-carbon-paint-brush',
-    'media': 'i-carbon-image',
-    'writing': 'i-carbon-pen',
-    'dev': 'i-carbon-terminal'
+    productivity: 'i-carbon-rocket',
+    development: 'i-carbon-code',
+    tools: 'i-carbon-tools',
+    utilities: 'i-carbon-tools-alt',
+    design: 'i-carbon-paint-brush',
+    media: 'i-carbon-image',
+    writing: 'i-carbon-pen',
+    dev: 'i-carbon-terminal'
   }
   return iconMap[filter] || 'i-carbon-folder'
 }
 </script>
 
 <template>
-  <div class="market-category-list">
-    <div class="category-header">
+  <div class="flex flex-col gap-2 h-full p-2">
+    <div class="category-header py-1">
       <h3>{{ t('market.categories.title') }}</h3>
     </div>
     <div class="category-items">
-      <button
+      <TuffItemTemplate
         v-for="(category, index) in categories"
         :key="category.tag || category.label || index"
         :class="{ active: selectedIndex === index }"
         class="category-item"
+        :icon="{
+          type: 'class',
+          value: getCategoryIcon(category)
+        }"
         @click="handleSelect(index)"
       >
-        <i :class="getCategoryIcon(category)" class="category-icon" />
         <span class="category-label">{{ category.label ?? t(category.tag) }}</span>
-      </button>
+      </TuffItemTemplate>
     </div>
   </div>
 </template>
 
 <style scoped lang="scss">
-.market-category-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  height: 100%;
-}
-
-.category-header {
-  padding: 0 1rem;
-
-  h3 {
-    margin: 0;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--el-text-color-secondary);
-    opacity: 0.7;
-  }
-}
-
-.category-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.category-header h3 {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--el-text-color-secondary);
+  opacity: 0.7;
 }
 
 .category-item {

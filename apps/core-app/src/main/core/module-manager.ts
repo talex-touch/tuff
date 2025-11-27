@@ -231,7 +231,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   }
 
   /**
-   * Retrieves a loaded module instance by its constructor.
+   * Overload: Retrieves a loaded module instance by its constructor.
    * This method provides a type-safe way to access registered modules.
    *
    * @typeParam T - The specific module type that extends `IBaseModule<TalexEvents>`.
@@ -240,11 +240,37 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    * @returns The loaded module instance if it exists, otherwise `undefined`.
    * @throws `Error` if the provided constructor does not define a static `key` property, preventing module key resolution.
    */
-  get<T extends IBaseModule<TalexEvents>>(ctor: ModuleCtor<T, TalexEvents>): T | undefined {
-    const key = (ctor as any).key as ModuleKey | undefined
+  get<T extends IBaseModule<TalexEvents>>(ctor: ModuleCtor<T, TalexEvents>): T | undefined
+
+  /**
+   * Overload: Retrieves a loaded module instance by its ModuleKey (Symbol).
+   * This allows direct access without importing the module constructor.
+   *
+   * @typeParam T - The specific module type that extends `IBaseModule<TalexEvents>`.
+   * @param key - The unique ModuleKey (Symbol) of the module.
+   * @returns The loaded module instance if it exists, otherwise `undefined`.
+   *
+   * @example
+   * ```typescript
+   * const storage = moduleManager.get(Symbol.for('Storage'))
+   * ```
+   */
+  get<T extends IBaseModule<TalexEvents> = IBaseModule<TalexEvents>>(key: ModuleKey): T | undefined
+
+  /**
+   * Implementation: Retrieves a loaded module instance by constructor or ModuleKey.
+   */
+  get<T extends IBaseModule<TalexEvents>>(ctorOrKey: ModuleCtor<T, TalexEvents> | ModuleKey): T | undefined {
+    // If it's a Symbol (ModuleKey), use it directly
+    if (typeof ctorOrKey === 'symbol') {
+      return this.modules.get(ctorOrKey) as T | undefined
+    }
+
+    // If it's a constructor, extract the key
+    const key = (ctorOrKey as any).key as ModuleKey | undefined
     if (!key) {
       throw new Error(
-        `[ModuleManager] Could not resolve key for ${ctor.name}. Did you forget to define "static key: ModuleKey"?`,
+        `[ModuleManager] Could not resolve key for ${(ctorOrKey as any).name}. Did you forget to define "static key: ModuleKey"?`,
       )
     }
     return this.modules.get(key) as T | undefined

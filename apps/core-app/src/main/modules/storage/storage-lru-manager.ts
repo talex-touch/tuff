@@ -10,6 +10,7 @@ export class StorageLRUManager {
   private cache: StorageCache
   private cleanupTimer: NodeJS.Timeout | null = null
   private onEvict: (name: string) => Promise<void>
+  private hotConfigs: Set<string>
 
   private readonly EVICTION_TIMEOUT: number
   private readonly CLEANUP_INTERVAL: number
@@ -19,11 +20,13 @@ export class StorageLRUManager {
     onEvict: (name: string) => Promise<void>,
     evictionTimeout: number = 60000,
     cleanupInterval: number = 30000,
+    hotConfigs: Set<string> = new Set(),
   ) {
     this.cache = cache
     this.onEvict = onEvict
     this.EVICTION_TIMEOUT = evictionTimeout
     this.CLEANUP_INTERVAL = cleanupInterval
+    this.hotConfigs = hotConfigs
   }
 
   /**
@@ -69,6 +72,11 @@ export class StorageLRUManager {
     const evicted: string[] = []
 
     for (const name of names) {
+      // Skip hot configs - they should never be evicted
+      if (this.hotConfigs.has(name)) {
+        continue
+      }
+
       const lastAccess = this.cache.getLastAccessTime(name)
 
       if (lastAccess && (now - lastAccess > this.EVICTION_TIMEOUT)) {

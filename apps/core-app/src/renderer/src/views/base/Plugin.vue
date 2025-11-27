@@ -17,21 +17,18 @@ const drawerVisible = ref(false)
 const touchSdk = useTouchSDK()
 
 const loadingStates = ref({
-  openFolder: false,
+  openFolder: false
 })
 
 async function handleOpenPluginFolder(): Promise<void> {
-  if (loadingStates.value.openFolder)
-    return
+  if (loadingStates.value.openFolder) return
 
   loadingStates.value.openFolder = true
   try {
     await touchSdk.openModuleFolder('plugins')
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to open plugin folder:', error)
-  }
-  finally {
+  } finally {
     loadingStates.value.openFolder = false
   }
 }
