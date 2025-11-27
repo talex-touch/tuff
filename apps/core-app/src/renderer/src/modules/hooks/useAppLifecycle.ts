@@ -115,9 +115,13 @@ export function useAppLifecycle() {
 }
 
 /**
- * Display platform warning dialog if startup info requires it.
+ * 如果启动信息需要，则显示平台警告对话框
  */
 async function maybeShowPlatformWarning(): Promise<void> {
+  if (isCoreBox()) {
+    return
+  }
+
   if (!shouldShowPlatformWarning()) {
     return
   }
@@ -131,6 +135,6 @@ async function maybeShowPlatformWarning(): Promise<void> {
     await showPlatformCompatibilityWarning(warningMessage)
   }
   catch (error) {
-    console.warn('[useAppLifecycle] Failed to display platform warning', error)
+    console.warn('[useAppLifecycle] 显示平台警告失败', error)
   }
 }

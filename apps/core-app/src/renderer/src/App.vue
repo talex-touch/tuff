@@ -7,6 +7,7 @@ import { appSetting } from '~/modules/channel/storage/index'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
 import { useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
+import { capturePlatformWarningContext } from '~/modules/mention/platform-warning'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
@@ -19,6 +20,7 @@ const packageJson = window.$nodeApi.getPackageJSON()
 const beginner = ref(false)
 
 captureAppContext()
+capturePlatformWarningContext()
 
 /**
  * Initialize renderer-only services once the lifecycle is ready.

@@ -33,10 +33,9 @@ onMounted(async () => {
 })
 
 async function updateShortcut(id: string, newAccelerator: string): Promise<void> {
-  if (!id || !newAccelerator)
-    return
+  if (!id || !newAccelerator) return
   const shortcutList = shortcuts.value
-  const target = shortcutList?.find(item => item.id === id)
+  const target = shortcutList?.find((item) => item.id === id)
   const previousValue = target?.accelerator
 
   if (target) {
@@ -111,27 +110,13 @@ function getShortcutLabel(id: string): string {
       <TSelectItem :model-value="0">
         {{ t('settingTools.noLimit') }}
       </TSelectItem>
-      <TSelectItem :model-value="15">
-        15 {{ t('settingTools.sec') }}
-      </TSelectItem>
-      <TSelectItem :model-value="30">
-        30 {{ t('settingTools.sec') }}
-      </TSelectItem>
-      <TSelectItem :model-value="60">
-        1 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="180">
-        3 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="300">
-        5 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="600">
-        10 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="750">
-        15 {{ t('settingTools.min') }}
-      </TSelectItem>
+      <TSelectItem :model-value="15"> 15 {{ t('settingTools.sec') }} </TSelectItem>
+      <TSelectItem :model-value="30"> 30 {{ t('settingTools.sec') }} </TSelectItem>
+      <TSelectItem :model-value="60"> 1 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="180"> 3 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="300"> 5 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="600"> 10 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="750"> 15 {{ t('settingTools.min') }} </TSelectItem>
     </TuffBlockSelect>
 
     <!-- Auto clear time selection -->
@@ -148,27 +133,13 @@ function getShortcutLabel(id: string): string {
       <TSelectItem :model-value="0">
         {{ t('settingTools.noLimit') }}
       </TSelectItem>
-      <TSelectItem :model-value="15">
-        15 {{ t('settingTools.sec') }}
-      </TSelectItem>
-      <TSelectItem :model-value="30">
-        30 {{ t('settingTools.sec') }}
-      </TSelectItem>
-      <TSelectItem :model-value="60">
-        1 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="180">
-        3 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="300">
-        5 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="600">
-        10 {{ t('settingTools.min') }}
-      </TSelectItem>
-      <TSelectItem :model-value="750">
-        15 {{ t('settingTools.min') }}
-      </TSelectItem>
+      <TSelectItem :model-value="15"> 15 {{ t('settingTools.sec') }} </TSelectItem>
+      <TSelectItem :model-value="30"> 30 {{ t('settingTools.sec') }} </TSelectItem>
+      <TSelectItem :model-value="60"> 1 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="180"> 3 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="300"> 5 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="600"> 10 {{ t('settingTools.min') }} </TSelectItem>
+      <TSelectItem :model-value="750"> 15 {{ t('settingTools.min') }} </TSelectItem>
     </TuffBlockSelect>
 
     <!-- Auto hide switch -->
