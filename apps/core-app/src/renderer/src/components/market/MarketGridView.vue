@@ -1,10 +1,11 @@
 <script setup lang="ts" name="MarketGridView">
 import gsap from 'gsap'
+import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
 import MarketItemCard from './MarketItemCard.vue'
 
-defineProps<{
+const props = defineProps<{
   plugins: OfficialPluginListItem[]
   viewType: 'grid' | 'list'
   loading: boolean
@@ -16,6 +17,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const gridRef = ref<HTMLElement | null>(null)
+const isTransitioning = ref(false)
 
 // Smooth animation functions using GSAP
 function onBeforeEnter(el: Element) {
@@ -55,6 +58,57 @@ function onLeave(el: Element, done: () => void) {
     onComplete: done
   })
 }
+
+// FLIP animation for grid/list view transition
+watch(
+  () => props.viewType,
+  async (newType, oldType) => {
+    if (!gridRef.value || isTransitioning.value) return
+
+    isTransitioning.value = true
+    const items = Array.from(gridRef.value.children) as HTMLElement[]
+
+    // First: capture initial positions
+    const firstPositions = items.map((item) => ({
+      element: item,
+      rect: item.getBoundingClientRect()
+    }))
+
+    // Last: wait for DOM to update to new layout
+    await nextTick()
+
+    // Invert & Play: calculate differences and animate
+    firstPositions.forEach(({ element, rect: first }) => {
+      const last = element.getBoundingClientRect()
+      const deltaX = first.left - last.left
+      const deltaY = first.top - last.top
+      const deltaW = first.width / last.width
+      const deltaH = first.height / last.height
+
+      // Set initial transform (invert)
+      gsap.set(element, {
+        x: deltaX,
+        y: deltaY,
+        scaleX: deltaW,
+        scaleY: deltaH,
+        transformOrigin: 'top left'
+      })
+
+      // Animate to final position (play)
+      gsap.to(element, {
+        x: 0,
+        y: 0,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 0.5,
+        ease: 'power2.out',
+        onComplete: () => {
+          isTransitioning.value = false
+        }
+      })
+    })
+  }
+)
 </script>
 
 <template>
@@ -66,6 +120,7 @@ function onLeave(el: Element, done: () => void) {
 
     <TransitionGroup
       v-else-if="plugins.length > 0"
+      ref="gridRef"
       name="market-items"
       tag="div"
       class="market-grid"
@@ -100,7 +155,7 @@ function onLeave(el: Element, done: () => void) {
 .market-grid-view {
   flex: 1;
   overflow: auto;
-  padding: 1.5rem;
+  padding: 0.5rem 0;
 }
 
 .market-loading {
@@ -121,7 +176,7 @@ function onLeave(el: Element, done: () => void) {
 .market-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.5rem;
+  gap: 1rem;
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;

@@ -31,6 +31,15 @@ const routes: any = [
     }
   },
   {
+    path: '/market/:id',
+    name: 'Market Detail',
+    component: () => import('../views/base/MarketDetail.vue'),
+    meta: {
+      index: 2,
+      parentRoute: '/market'
+    }
+  },
+  {
     path: '/plugin',
     name: 'Plugin',
     component: () => import('../views/base/Plugin.vue'),

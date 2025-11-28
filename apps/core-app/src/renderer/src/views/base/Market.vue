@@ -3,10 +3,9 @@ import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { useToggle } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import MarketCategoryList from '~/components/market/MarketCategoryList.vue'
+import { useRouter } from 'vue-router'
 import MarketGridView from '~/components/market/MarketGridView.vue'
 import MarketHeader from '~/components/market/MarketHeader.vue'
-import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { useMarketCategories } from '~/composables/market/useMarketCategories'
 import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
@@ -16,6 +15,7 @@ import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 // Market data management
 const { officialPlugins, loading, loadOfficialPlugins } = useMarketData()
@@ -176,8 +176,8 @@ async function onInstall(plugin: OfficialPluginListItem): Promise<void> {
 }
 
 function openPluginDetail(plugin: OfficialPluginListItem): void {
-  activePlugin.value = plugin
-  detailVisible.value = true
+  // Navigate to detail page with shared element transition
+  router.push(`/market/${plugin.id}`)
 }
 
 function closePluginDetail(): void {
@@ -237,34 +237,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <TuffAsideTemplate :searchable="false">
-    <template #aside>
-      <MarketCategoryList v-model:selected-index="tagInd" :categories="tags" />
-    </template>
+  <div class="market-container">
+    <MarketHeader
+      v-model:view-type="viewType"
+      :loading="loading"
+      :sources-count="pluginSettings.source.list.length"
+      @refresh="loadOfficialPlugins(true)"
+      @open-source-editor="toggleSourceEditorShow()"
+      @search="handleSearch"
+    />
 
-    <template #main>
-      <div class="market-main">
-        <MarketHeader
-          v-model:view-type="viewType"
-          :loading="loading"
-          :sources-count="pluginSettings.source.list.length"
-          @refresh="loadOfficialPlugins(true)"
-          @open-source-editor="toggleSourceEditorShow()"
-          @search="handleSearch"
-        />
+    <MarketGridView
+      :plugins="displayedPlugins"
+      :view-type="viewType"
+      :loading="loading"
+      @install="onInstall"
+      @open-detail="openPluginDetail"
+    />
+  </div>
 
-        <MarketGridView
-          :plugins="displayedPlugins"
-          :view-type="viewType"
-          :loading="loading"
-          @install="onInstall"
-          @open-detail="openPluginDetail"
-        />
-      </div>
-    </template>
-  </TuffAsideTemplate>
-
-  <!-- Detail Dialog (unchanged) -->
   <Transition name="market-detail-overlay" @after-leave="onDetailAfterLeave">
     <div
       v-if="detailVisible && activePlugin"
@@ -363,11 +354,13 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
-.market-main {
+.market-container {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  padding: 1.5rem;
+  background: var(--el-bg-color);
 }
 
 /* Detail Overlay (unchanged styles) */

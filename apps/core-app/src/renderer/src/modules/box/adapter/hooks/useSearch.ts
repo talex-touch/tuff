@@ -30,16 +30,13 @@ export function useSearch(
   const searchResults = ref<Array<TuffItem>>([])
 
   // 合并搜索结果和 BoxItemSDK items
-
-  // 合并搜索结果和 BoxItemSDK items
   // 优先显示搜索结果，然后是 BoxItemSDK 推送的 items
   const res = computed<Array<TuffItem>>(() => {
     // 使用 Map 去重，searchResults 优先级更高
     const itemsMap = new Map<string, TuffItem>()
 
-    // 先添加 BoxItemSDK items（最新的在最前）
-    const prioritizedBoxItems = [...boxItems.value].reverse()
-    prioritizedBoxItems.forEach((item) => {
+    // 先添加 BoxItemSDK items（保持原始顺序，不做 reverse）
+    boxItems.value.forEach((item) => {
       itemsMap.set(item.id, item)
     })
 
@@ -65,6 +62,9 @@ export function useSearch(
   let searchSequence = 0
 
   const debouncedSearch = useDebounceFn(async () => {
+    // Increment and capture the current search sequence
+    const currentSequence = ++searchSequence
+    
     // Allow empty queries to trigger recommendation search
     if (!searchVal.value && !activeActivations.value?.length) {
       // Empty query with no active providers: trigger recommendation search
@@ -80,6 +80,11 @@ export function useSearch(
 
         // The initial call now returns the high-priority results directly.
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+
+        // Validate sequence: only process if this is still the latest search
+        if (currentSequence !== searchSequence) {
+          return // Discard outdated results
+        }
 
         // Store the session ID to track this specific search stream.
         currentSearchId.value = initialResult.sessionId || null
@@ -181,6 +186,11 @@ export function useSearch(
 
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+
+      // Validate sequence: only process if this is still the latest search
+      if (currentSequence !== searchSequence) {
+        return // Discard outdated results
+      }
 
       // Store the session ID to track this specific search stream.
       currentSearchId.value = initialResult.sessionId || null
