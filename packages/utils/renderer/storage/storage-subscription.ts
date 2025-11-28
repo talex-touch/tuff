@@ -13,6 +13,7 @@ class StorageSubscriptionManager {
   private channel: IStorageChannel | null = null
   private subscribers = new Map<string, Set<StorageSubscriptionCallback>>()
   private channelListenerRegistered = false
+  private pendingUpdates = new Map<string, NodeJS.Timeout>()
 
   /**
    * Initialize the subscription manager with a channel
@@ -101,21 +102,34 @@ class StorageSubscriptionManager {
       return
     }
 
-    // Fetch latest data
-    const data = await this.channel.send('storage:get', configName)
-    if (!data) {
-      return
+    // Debounce updates to avoid excessive IPC and callback invocations
+    const existing = this.pendingUpdates.get(configName)
+    if (existing) {
+      clearTimeout(existing)
     }
 
-    // Notify all subscribers
-    callbacks.forEach((callback) => {
-      try {
-        callback(data)
+    const timer = setTimeout(async () => {
+      // Fetch latest data
+      const data = await this.channel!.send('storage:get', configName)
+      if (!data) {
+        this.pendingUpdates.delete(configName)
+        return
       }
-      catch (error) {
-        console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
-      }
-    })
+
+      // Notify all subscribers
+      callbacks.forEach((callback) => {
+        try {
+          callback(data)
+        }
+        catch (error) {
+          console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
+        }
+      })
+
+      this.pendingUpdates.delete(configName)
+    }, 50) // 50ms debounce window
+
+    this.pendingUpdates.set(configName, timer)
   }
 
   /**

@@ -45,17 +45,16 @@ const activeStages = new Set<PluginInstallProgressEvent['stage']>([
   'queued',
   'downloading',
   'awaiting-confirmation',
-  'installing',
+  'installing'
 ])
 
 const installStage = computed<PluginInstallProgressEvent['stage'] | null>(() => {
-  if (props.installTask?.stage)
-    return props.installTask.stage
+  if (props.installTask?.stage) return props.installTask.stage
   return isInstalling.value ? 'installing' : null
 })
 
 const isActiveStage = computed(() =>
-  installStage.value ? activeStages.has(installStage.value) : false,
+  installStage.value ? activeStages.has(installStage.value) : false
 )
 
 const progressValue = computed(() => {
@@ -63,23 +62,22 @@ const progressValue = computed(() => {
     const normalized = Math.round(props.installTask.progress)
     return Math.max(0, Math.min(100, normalized))
   }
-  if (installStage.value === 'installing')
-    return 100
+  if (installStage.value === 'installing') return 100
   return null
 })
 
 const showProgressCircle = computed(
-  () => installStage.value === 'downloading' && progressValue.value !== null,
+  () => installStage.value === 'downloading' && progressValue.value !== null
 )
 
 const progressCircleStyle = computed(() =>
   showProgressCircle.value
     ? ({ '--progress': `${progressValue.value}%` } as Record<string, string>)
-    : {},
+    : {}
 )
 
 const progressDisplay = computed(() =>
-  progressValue.value !== null ? `${progressValue.value}` : '',
+  progressValue.value !== null ? `${progressValue.value}` : ''
 )
 
 const showSpinner = computed(() => installStage.value === 'installing' && !showProgressCircle.value)
@@ -125,8 +123,7 @@ const buttonLabel = computed(() => {
 const disableInstall = computed(() => isActiveStage.value)
 
 const iconClass = computed(() => {
-  if (!props.item)
-    return ''
+  if (!props.item) return ''
 
   const fromProp = typeof props.item.icon === 'string' ? props.item.icon.trim() : ''
   if (fromProp) {
@@ -136,12 +133,10 @@ const iconClass = computed(() => {
   const metadata = props.item.metadata as Record<string, unknown> | undefined
   if (metadata) {
     const metaIconClass = typeof metadata.icon_class === 'string' ? metadata.icon_class.trim() : ''
-    if (metaIconClass)
-      return metaIconClass
+    if (metaIconClass) return metaIconClass
 
     const metaIcon = typeof metadata.icon === 'string' ? metadata.icon.trim() : ''
-    if (metaIcon)
-      return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
+    if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
   }
 
   return ''
@@ -153,8 +148,7 @@ function handleInstall(event: MouseEvent): void {
 }
 
 function handleOpen(): void {
-  if (isInstalling.value)
-    return
+  if (isInstalling.value) return
   emits('open')
 }
 </script>
@@ -164,7 +158,7 @@ function handleOpen(): void {
     <!-- Card content -->
     <div class="market-item-content">
       <!-- Icon section -->
-      <div class="market-item-icon">
+      <div class="market-item-icon" :style="{ viewTransitionName: `market-icon-${item.id}` }">
         <i v-if="iconClass" :class="iconClass" />
         <i v-else class="i-ri-puzzle-line" />
       </div>
@@ -172,7 +166,7 @@ function handleOpen(): void {
       <!-- Info section -->
       <div class="market-item-info">
         <div class="market-item-header">
-          <h3 class="market-item-title">
+          <h3 class="market-item-title" :style="{ viewTransitionName: `market-title-${item.id}` }">
             {{ item.name || 'Unnamed Plugin' }}
           </h3>
           <span v-if="item.official" class="official-badge">
@@ -180,7 +174,11 @@ function handleOpen(): void {
             {{ t('market.officialBadge') }}
           </span>
         </div>
-        <p v-if="item.description" class="market-item-description">
+        <p
+          v-if="item.description"
+          class="market-item-description"
+          :style="{ viewTransitionName: `market-description-${item.id}` }"
+        >
           {{ item.description }}
         </p>
         <p v-else class="market-item-description placeholder">
@@ -234,9 +232,9 @@ function handleOpen(): void {
 <style lang="scss" scoped>
 .market-item-card {
   position: relative;
-  min-height: 140px;
+  min-height: 110px;
   background: var(--el-bg-color-overlay);
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid transparent;
   cursor: pointer;
   overflow: hidden;
@@ -256,16 +254,16 @@ function handleOpen(): void {
   z-index: 2;
   display: flex;
   align-items: flex-start;
-  gap: 1.25rem;
-  padding: 1.4rem 1.5rem;
-  min-height: 140px;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  min-height: 110px;
   box-sizing: border-box;
 }
 
 .market-item-icon {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,12 +272,12 @@ function handleOpen(): void {
     rgba(var(--el-color-primary-rgb), 0.18),
     rgba(var(--el-color-primary-rgb), 0.05)
   );
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(var(--el-color-primary-rgb), 0.15);
   transition: all 0.25s ease;
 
   i {
-    font-size: 26px;
+    font-size: 22px;
     color: var(--el-color-primary);
     transition: color 0.25s ease;
   }
@@ -304,7 +302,7 @@ function handleOpen(): void {
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .market-item-header {
@@ -316,7 +314,7 @@ function handleOpen(): void {
 
 .market-item-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--el-text-color-primary);
   line-height: 1.3;
@@ -343,10 +341,10 @@ function handleOpen(): void {
 
 .market-item-description {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--el-text-color-regular);
   opacity: 0.85;
-  line-height: 1.5;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

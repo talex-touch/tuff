@@ -12,6 +12,7 @@ export class StoragePollingService {
   private pollingTimer: NodeJS.Timeout | null = null
   private isRunning = false
   private pollingInterval: number
+  private pendingWidgetCalls = new Map<string, NodeJS.Timeout>()
 
   constructor(
     cache: StorageCache,
@@ -161,5 +162,25 @@ export class StoragePollingService {
       pollingInterval: this.pollingInterval,
       dirtyCount: this.cache.getDirtyConfigs().length,
     }
+  }
+
+  /**
+   * Schedule a widget update with deduplication
+   * Short-interval calls to the same widget only execute the last one
+   */
+  scheduleWidgetUpdate(widgetId: string, callback: () => void): void {
+    // Cancel previous pending call for this widget
+    const existing = this.pendingWidgetCalls.get(widgetId)
+    if (existing) {
+      clearTimeout(existing)
+    }
+
+    // Delay execution to allow deduplication
+    const timer = setTimeout(() => {
+      callback()
+      this.pendingWidgetCalls.delete(widgetId)
+    }, 100) // 100ms deduplication window
+
+    this.pendingWidgetCalls.set(widgetId, timer)
   }
 }

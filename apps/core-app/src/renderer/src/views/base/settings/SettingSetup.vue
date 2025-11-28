@@ -5,7 +5,6 @@
   Allows users to configure permissions, auto-start, and tray visibility
 -->
 <script setup lang="ts" name="SettingSetup">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 

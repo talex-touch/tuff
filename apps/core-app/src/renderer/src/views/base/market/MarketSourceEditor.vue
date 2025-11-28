@@ -11,15 +11,14 @@ const props = defineProps<{
 const editor = ref()
 onMounted(() => {
   onClickOutside(editor, () => {
-    if (props.show)
-      props.toggle()
+    if (props.show) props.toggle()
   })
 })
 
 const newSource = reactive({
   name: '',
   url: '',
-  adapter: '',
+  adapter: ''
 })
 
 function deleteSource(ind: number) {
@@ -28,32 +27,27 @@ function deleteSource(ind: number) {
 
 function handleAdd() {
   // validate newSource
-  if (!newSource.name || !newSource.url || !newSource.adapter)
-    return
+  if (!newSource.name || !newSource.url || !newSource.adapter) return
 
   pluginSettings.value.source.list.push({
     url: newSource.url,
     name: newSource.name,
-    adapter: newSource.adapter,
+    adapter: newSource.adapter
   })
 }
 </script>
 
 <template>
   <div ref="editor" :class="{ show }" class="transition-cubic MarketSourceEditor">
-    <h2 text-xl my-2 font-bold>
-      Source
-    </h2>
-    <p op-75 text-lg>
-      Edit plugin market source.
-    </p>
+    <h2 text-xl my-2 font-bold>Source</h2>
+    <p op-75 text-lg>Edit plugin market source.</p>
 
     <div class="MarketSourceEditor-Container">
       <el-scrollbar>
         <div
           v-draggable="[
             pluginSettings.source.list,
-            { animation: 150, handle: '.handle', ghostClass: 'ghost' },
+            { animation: 150, handle: '.handle', ghostClass: 'ghost' }
           ]"
           class="MarketSourceEditor-Content"
         >
@@ -101,9 +95,7 @@ function handleAdd() {
               <div mt-2 class="Item-Desc">
                 <FlatInput v-model="newSource.url" placeholder="Source url" />
               </div>
-              <FlatButton mt-2 @click="handleAdd">
-                Add
-              </FlatButton>
+              <FlatButton mt-2 @click="handleAdd"> Add </FlatButton>
             </div>
           </div>
         </div>
@@ -262,7 +254,7 @@ function handleAdd() {
   &.show {
     transform: translate(-50%, -50%);
   }
-  z-index: 1;
+  z-index: 100;
   position: absolute;
   padding: 1rem;
 

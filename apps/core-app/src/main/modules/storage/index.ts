@@ -13,11 +13,26 @@ import { StoragePollingService } from './storage-polling-service'
 
 let pluginConfigPath: string
 
+// Debounced broadcast mechanism to batch updates
+const pendingBroadcasts = new Map<string, NodeJS.Timeout>()
+
 function broadcastUpdate(name: string) {
-  const windows = BrowserWindow.getAllWindows()
-  for (const win of windows) {
-    $app.channel?.sendTo(win, ChannelType.MAIN, 'storage:update', { name })
+  // Cancel previous broadcast for this config
+  const existing = pendingBroadcasts.get(name)
+  if (existing) {
+    clearTimeout(existing)
   }
+
+  // Debounce broadcasts to reduce IPC overhead
+  const timer = setTimeout(() => {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      $app.channel?.sendTo(win, ChannelType.MAIN, 'storage:update', { name })
+    }
+    pendingBroadcasts.delete(name)
+  }, 50) // 50ms debounce window
+
+  pendingBroadcasts.set(name, timer)
 }
 
 /**
