@@ -14,7 +14,7 @@ onMounted(() => {
 
 const chromeVersion = computed(() => processInfo.value?.versions?.chrome || '')
 const nodeVersion = computed(() => processInfo.value?.versions?.node || '')
-const vueVersion = computed(() => packageJson.value?.dependencies?.vue || '')
+const vueVersion = computed(() => packageJson.value?.devDependencies?.vue || '')
 </script>
 
 <template>

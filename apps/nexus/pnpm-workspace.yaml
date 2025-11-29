@@ -58,6 +58,7 @@ catalogs:
     '@iconify-json/twemoji': ^1.2.2
 
 onlyBuiltDependencies:
+  - '@clerk/shared'
   - '@parcel/watcher'
   - '@sentry/cli'
   - esbuild
