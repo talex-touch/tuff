@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
+import { BoxMode } from '..'
 import { onBeforeUnmount } from 'vue'
 
 declare global {
@@ -23,12 +24,15 @@ export function useKeyboard(
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   itemRefs: Ref<any[]>,
 ) {
+  /**
+   * Global keyboard event handler for CoreBox window
+   * @param event - KeyboardEvent from user interaction
+   */
   function onKeyDown(event: KeyboardEvent): void {
     if (!document.body.classList.contains('core-box')) {
       return
     }
 
-    // Handle Cmd/Ctrl+V for manual paste
     if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
       handlePaste({ overrideDismissed: true })
       event.preventDefault()
@@ -104,25 +108,39 @@ export function useKeyboard(
       event.preventDefault()
     }
     else if (event.key === 'Escape') {
-      // Priority: activeProvider → clipboard → mode/search → hide
-      // 1. If there's an active provider, exit it first
-      if (activeActivations.value && activeActivations.value.length > 0) {
-        handleExit() // This will deactivate providers
-        return
-      }
-
       /**
-       * 2. If there's clipboard data, clear it with remember=true
-       * This ensures dismissed clipboard won't reappear on next CoreBox open
-       * Fixes Bug: ESC cancellation state not persisting across sessions
+       * ESC key strict sequential handling:
+       * 1. Deactivate active providers
+       * 2. Clear clipboard/file attachments
+       * 3. Clear input query
+       * 4. Handle mode transitions
+       * 5. Hide CoreBox window
        */
-      if (clipboardOptions.last) {
-        clearClipboard({ remember: true })
+      
+      if (activeActivations.value?.length > 0) {
+        handleExit()
         event.preventDefault()
         return
       }
 
-      // 3. Handle other exits (mode, searchVal, hide)
+      if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
+        if (clipboardOptions.last) {
+          clearClipboard({ remember: true })
+        }
+        if (boxOptions.mode === BoxMode.FILE) {
+          boxOptions.mode = BoxMode.INPUT
+          boxOptions.file = { buffer: null, paths: [] }
+        }
+        event.preventDefault()
+        return
+      }
+
+      if (searchVal.value) {
+        searchVal.value = ''
+        event.preventDefault()
+        return
+      }
+
       handleExit()
     }
 
@@ -133,9 +151,7 @@ export function useKeyboard(
       boxOptions.focus = res.value.length - 1
     }
 
-    // Dynamic scrolling logic
     requestAnimationFrame(() => {
-      // Safety check: ensure focus index is valid
       if (boxOptions.focus < 0 || boxOptions.focus >= itemRefs.value.length) {
         return
       }
@@ -156,11 +172,9 @@ export function useKeyboard(
         const itemTop = activeEl.offsetTop
         const itemHeight = activeEl.offsetHeight
 
-        // Check if item is above the visible area
         if (itemTop < scrollTop) {
           sb.scrollTo(0, itemTop)
         }
-        // Check if item is below the visible area
         else if (itemTop + itemHeight > scrollTop + containerHeight) {
           sb.scrollTo(0, itemTop + itemHeight - containerHeight)
         }
