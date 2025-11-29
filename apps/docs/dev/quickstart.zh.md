@@ -1,12 +1,12 @@
 # 快速上手
 
-## 1. 创建插件脚手架
+## 1. 创建插件骨架
 ```bash
-pnpm dlx create-tuff-plugin my-plugin
+npx degit talex-touch/tuff-plugin-template my-plugin
 cd my-plugin
 pnpm install
 ```
-脚手架会生成 Manifest、`init/index.ts`、`preload/index.ts` 与示例组件。
+模板内置 Manifest、`init/index.ts`、`preload/index.ts` 以及使用 `@talex-touch/utils` 的示例组件。
 
 ## 2. Manifest
 在 `manifest.json` 中填写：
