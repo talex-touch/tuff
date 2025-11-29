@@ -37,7 +37,7 @@ const tuffIcon = computed<ITuffIcon>(() => {
   return {
     type: 'class',
     value: icon,
-    status: 'loaded'
+    status: 'normal'
   }
 })
 </script>
