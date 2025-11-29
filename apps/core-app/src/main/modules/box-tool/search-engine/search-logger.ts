@@ -80,7 +80,7 @@ export class SearchLogger {
       // Fallback to legacy setting
       const settings = await storageModule.getConfig('search-engine-logs-enabled')
       this.enabled = (settings as unknown as string) === 'true'
-    } catch (error) {
+    } catch {
       // Silently fail if storage is not ready yet
       this.enabled = false
     }
