@@ -1,0 +1,33 @@
+# Toast Extension
+
+## Overview
+Toast surfaces plugin updates inside the system notification lane with the same calm tone as the OS.
+
+## API
+```ts
+ctx.toast.show({
+  title: 'Sync Complete',
+  message: 'Task Capsule updated 3 tasks',
+  action: {
+    label: 'View',
+    run: () => ctx.corebox.open('task.list')
+  },
+  duration: 4500
+})
+```
+
+## Design Notes
+- Keep titles between 12–16 characters, body under two lines.
+- One action button max.
+- Coalesce bursts into summaries instead of spamming.
+
+## Status Types
+| Type | Use |
+| --- | --- |
+| `info` | Default |
+| `success` | Positive confirmation |
+| `warning` | Gentle nudge |
+| `error` | Requires attention |
+
+## Debug
+Call `ctx.toast.disable()` during development to silence repeated notifications.

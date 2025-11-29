@@ -1,0 +1,37 @@
+# 开发概览
+
+## 插件模型
+- **BaseModule**：主程序模块生命周期：`created → onInit → start → stop → onDestroy`。
+- **Plugin Capsule**：每个插件对应独立进程，使用 Manifest 描述元数据与入口。
+- **Channel System**：通过 `ChannelType.MAIN` 与 `ChannelType.PLUGIN` 实现 IPC。
+
+## 目录结构
+```
+apps/core-app/
+├── src/main/           # 主进程、模块、通道
+├── src/renderer/       # 渲染进程（Vue 3）
+└── ...
+plugins/
+└── my-plugin/
+    ├── manifest.json
+    ├── init/
+    │   └── index.ts
+    ├── preload/
+    └── src/
+```
+
+## 生命周期
+1. **加载**：Manifest 被解析，注册入口脚本。
+2. **初始化**：`init/index.ts` 执行，注入上下文（日志、存储、Channel）。
+3. **运行**：插件监听事件、渲染 UI 或提供后台服务。
+4. **销毁**：停用或卸载时触发 `onDestroy`，清理资源。
+
+## 沙箱策略
+- 文件访问限制在插件私有目录。
+- 网络请求默认允许 HTTPS，敏感域名需在 Manifest 中声明。
+- 插件可使用 Storage API（每插件 10MB）保存配置。
+
+## 开发体验
+- `pnpm core:dev`：启动 Electron + 插件热重载。
+- `pnpm utils:test`：运行工具包测试，保证 SDK 行为一致。
+- 使用 `pnpm core:build:snapshot` 检查发布包完整性。

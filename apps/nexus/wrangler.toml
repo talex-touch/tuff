@@ -1,0 +1,19 @@
+name = "tuff-nexus"
+compatibility_date = "2024-08-14"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tuff-nexus-prod"
+database_id = "ebdeb7fc-74a4-4963-9bca-310a9aa0e4d6"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "tuff-nexus-imgable-prod"
+preview_bucket_name = "tuff-nexus-imgable-dev"
+
+[vars]
+NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_bmVhcmJ5LW1lZXJrYXQtMS5jbGVyay5hY2NvdW50cy5kZXYk"
+NUXT_PUBLIC_CLERK_SIGN_IN_URL = "/sign-in"
+NUXT_PUBLIC_CLERK_SIGN_UP_URL = "/sign-up"
+NUXT_PUBLIC_CLERK_PRICING_TABLE_ID = "free_user"
