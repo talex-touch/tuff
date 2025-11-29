@@ -119,7 +119,7 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
         :icon="displayIcon"
         :alt="render.basic?.title || 'Tuff Item'"
         :size="32"
-        colorful
+        :colorful="render?.basic?.icon?.colorful ?? true"
         style="--icon-color: var(--el-text-color-primary)"
       />
       <span
