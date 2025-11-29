@@ -122,7 +122,9 @@ export class SearchLogger {
    * Log search session start with clear separators
    */
   searchSessionStart(query: string, sessionId: string): void {
-    if (!this.enabled) return
+    if (!this.enabled) {
+      return
+    }
 
     // this.currentSession = sessionId
     this.searchStartTime = Date.now()
