@@ -79,7 +79,10 @@ watch(
 
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return ''
-  const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(Number(timestamp) || Date.parse(timestamp))
+  const date =
+    typeof timestamp === 'number'
+      ? new Date(timestamp)
+      : new Date(Number(timestamp) || Date.parse(timestamp))
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
   } catch {
@@ -92,13 +95,28 @@ const detailMeta = computed(() => {
   if (!plugin) return []
 
   const meta = []
-  if (plugin.author) meta.push({ icon: 'i-ri-user-line', label: t('market.detailDialog.author'), value: plugin.author })
-  if (plugin.version) meta.push({ icon: 'i-ri-price-tag-3-line', label: t('market.detailDialog.version'), value: `v${plugin.version}` })
-  
+  if (plugin.author)
+    meta.push({
+      icon: 'i-ri-user-line',
+      label: t('market.detailDialog.author'),
+      value: plugin.author
+    })
+  if (plugin.version)
+    meta.push({
+      icon: 'i-ri-price-tag-3-line',
+      label: t('market.detailDialog.version'),
+      value: `v${plugin.version}`
+    })
+
   const time = formatTimestamp(plugin.timestamp)
-  if (time) meta.push({ icon: 'i-ri-time-line', label: t('market.detailDialog.updateTime'), value: time })
-  
-  meta.push({ icon: 'i-ri-barcode-line', label: t('market.detailDialog.pluginId'), value: plugin.id })
+  if (time)
+    meta.push({ icon: 'i-ri-time-line', label: t('market.detailDialog.updateTime'), value: time })
+
+  meta.push({
+    icon: 'i-ri-barcode-line',
+    label: t('market.detailDialog.pluginId'),
+    value: plugin.id
+  })
   return meta
 })
 
@@ -167,15 +185,23 @@ onBeforeUnmount(() => {
       <!-- Header -->
       <div class="detail-header">
         <div class="flex items-center gap-3 flex-1 min-w-0">
-          <div class="plugin-icon" :style="{ viewTransitionName: `market-icon-${activePlugin.id}` }">
+          <div
+            v-shared-element:plugin-market-icon
+            class="plugin-icon"
+            :style="{ viewTransitionName: `market-icon-${activePlugin.id}` }"
+          >
             <i :class="detailIconClass || 'i-ri-puzzle-line'" />
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <h3 :style="{ viewTransitionName: `market-title-${activePlugin.id}` }">{{ activePlugin.name }}</h3>
+              <h3 :style="{ viewTransitionName: `market-title-${activePlugin.id}` }">
+                {{ activePlugin.name }}
+              </h3>
               <i v-if="activePlugin.official" class="i-ri-shield-check-fill text-primary" />
             </div>
-            <p v-if="activePlugin.description" class="text-sm opacity-70 mt-1">{{ activePlugin.description }}</p>
+            <p v-if="activePlugin.description" class="text-sm opacity-70 mt-1">
+              {{ activePlugin.description }}
+            </p>
           </div>
         </div>
         <FlatButton :primary="true" @click="onInstall">
@@ -218,7 +244,12 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <a v-if="activePlugin.downloadUrl" :href="activePlugin.downloadUrl" class="download-btn" target="_blank">
+          <a
+            v-if="activePlugin.downloadUrl"
+            :href="activePlugin.downloadUrl"
+            class="download-btn"
+            target="_blank"
+          >
             <i class="i-ri-download-cloud-2-line" />
             <span>{{ t('market.detailDialog.download') }}</span>
           </a>
@@ -271,7 +302,11 @@ onBeforeUnmount(() => {
   height: 48px;
   flex-shrink: 0;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(var(--el-color-primary-rgb), 0.2), rgba(var(--el-color-primary-rgb), 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(var(--el-color-primary-rgb), 0.2),
+    rgba(var(--el-color-primary-rgb), 0.08)
+  );
   border: 1px solid rgba(var(--el-color-primary-rgb), 0.18);
   display: flex;
   align-items: center;
@@ -308,8 +343,10 @@ onBeforeUnmount(() => {
   padding: 3rem;
   opacity: 0.6;
 
-  i { font-size: 2rem; }
-  
+  i {
+    font-size: 2rem;
+  }
+
   &.error {
     color: var(--el-color-danger);
     opacity: 1;
@@ -319,17 +356,32 @@ onBeforeUnmount(() => {
 .readme-content {
   line-height: 1.6;
 
-  :deep(h1), :deep(h2), :deep(h3), :deep(h4) {
+  :deep(h1),
+  :deep(h2),
+  :deep(h3),
+  :deep(h4) {
     margin: 1.5rem 0 0.75rem;
     font-weight: 600;
-    &:first-child { margin-top: 0; }
+    &:first-child {
+      margin-top: 0;
+    }
   }
-  :deep(h1) { font-size: 2rem; }
-  :deep(h2) { font-size: 1.5rem; }
-  :deep(h3) { font-size: 1.25rem; }
-  :deep(h4) { font-size: 1.1rem; }
+  :deep(h1) {
+    font-size: 2rem;
+  }
+  :deep(h2) {
+    font-size: 1.5rem;
+  }
+  :deep(h3) {
+    font-size: 1.25rem;
+  }
+  :deep(h4) {
+    font-size: 1.1rem;
+  }
 
-  :deep(p) { margin: 0.75rem 0; }
+  :deep(p) {
+    margin: 0.75rem 0;
+  }
 
   :deep(code) {
     padding: 0.2rem 0.4rem;
@@ -344,10 +396,14 @@ onBeforeUnmount(() => {
     border-radius: 8px;
     overflow-x: auto;
     margin: 1rem 0;
-    code { padding: 0; background: none; }
+    code {
+      padding: 0;
+      background: none;
+    }
   }
 
-  :deep(ul), :deep(ol) {
+  :deep(ul),
+  :deep(ol) {
     margin: 0.75rem 0;
     padding-left: 2rem;
   }
@@ -355,7 +411,9 @@ onBeforeUnmount(() => {
   :deep(a) {
     color: var(--el-color-primary);
     text-decoration: none;
-    &:hover { text-decoration: underline; }
+    &:hover {
+      text-decoration: underline;
+    }
   }
 
   :deep(img) {
@@ -406,7 +464,9 @@ onBeforeUnmount(() => {
     opacity: 0.6;
     margin-bottom: 0.25rem;
 
-    i { font-size: 0.85rem; }
+    i {
+      font-size: 0.85rem;
+    }
   }
 
   .meta-value {
@@ -442,8 +502,11 @@ onBeforeUnmount(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
-
