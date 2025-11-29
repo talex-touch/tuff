@@ -1,0 +1,52 @@
+/**
+ * Shared NavBar base styles for Flat and Simple layouts
+ */
+
+/// Programs section (unused but defined in both NavBar variants)
+.NavBar-Programs {
+  position: relative;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  --fake-radius: 8px;
+  --fake-opacity: 0;
+  -webkit-app-region: no-drag;
+
+  :deep(.scale-upper.active) {
+    .IconButton-Container {
+      transform: scale(0.75);
+    }
+  }
+
+  :deep(.IconButton-Container) {
+    --fake-opacity: 0;
+    --fake-inner-opacity: 0;
+    --fake-radius: 8px;
+    transform: scale(0.85);
+  }
+}
+
+/// NavBar container base styles
+@mixin navbar-container {
+  position: relative;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
+
+  * {
+    -webkit-app-region: no-drag;
+  }
+}
+
+/// NavBar title base styles
+@mixin navbar-title {
+  opacity: 0.25;
+  font-size: 12px;
+  font-weight: 600;
+}
