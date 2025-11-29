@@ -2,11 +2,11 @@
 
 ## 1. Scaffold
 ```bash
-pnpm dlx create-tuff-plugin my-plugin
+npx degit talex-touch/tuff-plugin-template my-plugin
 cd my-plugin
 pnpm install
 ```
-The CLI generates the manifest, `init/index.ts`, `preload/index.ts`, and a sample component.
+The template ships with the manifest, `init/index.ts`, `preload/index.ts`, and sample Vue components powered by `@talex-touch/utils`.
 
 ## 2. Manifest
 `manifest.json`
