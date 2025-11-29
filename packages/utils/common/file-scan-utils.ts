@@ -8,7 +8,6 @@
  */
 
 import type { FileScanOptions } from './file-scan-constants'
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 import {
   BASE_BLACKLISTED_DIRS,
   BLACKLISTED_EXTENSIONS,
