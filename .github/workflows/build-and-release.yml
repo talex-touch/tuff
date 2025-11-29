@@ -295,20 +295,20 @@ jobs:
           if [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows snapshot..."
-              echo "Running: pnpm core:build:snapshot:win"
-              pnpm core:build:snapshot:win || {
+              echo "Running: pnpm build:snapshot:win"
+              pnpm build:snapshot:win || {
                 BUILD_FAILED=true
                 echo "ERROR: Windows snapshot build failed with exit code $?"
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS snapshot..."
-              SKIP_INSTALL_APP_DEPS=true pnpm core:build:snapshot:mac || {
+              SKIP_INSTALL_APP_DEPS=true pnpm build:snapshot:mac || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS snapshot build failed with exit code $?"
               }
             else
               echo "Building Linux snapshot..."
-              pnpm core:build:snapshot:linux || {
+              pnpm build:snapshot:linux || {
                 BUILD_FAILED=true
                 echo "ERROR: Linux snapshot build failed with exit code $?"
               }
@@ -317,19 +317,19 @@ jobs:
             echo "Building release version..."
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows release..."
-              pnpm core:build:release:win || {
+              pnpm build:release:win || {
                 BUILD_FAILED=true
                 echo "ERROR: Windows release build failed with exit code $?"
               }
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS release..."
-              SKIP_INSTALL_APP_DEPS=true pnpm core:build:release:mac || {
+              SKIP_INSTALL_APP_DEPS=true pnpm build:release:mac || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS release build failed with exit code $?"
               }
             else
               echo "Building Linux release..."
-              pnpm core:build:release:linux || {
+              pnpm build:release:linux || {
                 BUILD_FAILED=true
                 echo "ERROR: Linux release build failed with exit code $?"
               }
