@@ -1,12 +1,16 @@
 <script lang="ts" name="MarketDetail" setup>
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import MarketIcon from '~/components/market/MarketIcon.vue'
+import MarketDetailSkeleton from '~/components/market/MarketDetailSkeleton.vue'
 import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
+import { useMarketDetail } from '~/composables/market/useMarketDetail'
+import { useMarketReadme } from '~/composables/market/useMarketReadme'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -22,10 +26,9 @@ const activePlugin = computed<OfficialPluginListItem | null>(() => {
 
 const notFound = computed(() => !activePlugin.value && officialPlugins.value.length > 0)
 
-// README state
-const readmeContent = ref('')
-const readmeLoading = ref(false)
-const readmeError = ref('')
+const { detailMeta } = useMarketDetail(activePlugin, t)
+const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
+const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
 
 let rendererChannel: ITouchClientChannel | undefined
 let channelLoadFailed = false
@@ -45,98 +48,6 @@ async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
   }
 }
 
-async function fetchReadme(url: string): Promise<void> {
-  if (!url) return
-
-  readmeLoading.value = true
-  readmeError.value = ''
-  readmeContent.value = ''
-
-  try {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`Failed to fetch README: ${response.status}`)
-    readmeContent.value = await response.text()
-  } catch (error) {
-    console.error('[MarketDetail] Failed to load README:', error)
-    readmeError.value = t('market.detailDialog.readmeError') || 'Failed to load README'
-  } finally {
-    readmeLoading.value = false
-  }
-}
-
-watch(
-  () => activePlugin.value?.readmeUrl,
-  (newUrl) => {
-    if (newUrl) {
-      void fetchReadme(newUrl)
-    } else {
-      readmeContent.value = ''
-      readmeError.value = ''
-    }
-  },
-  { immediate: true }
-)
-
-const formatTimestamp = (timestamp: any): string => {
-  if (!timestamp) return ''
-  const date =
-    typeof timestamp === 'number'
-      ? new Date(timestamp)
-      : new Date(Number(timestamp) || Date.parse(timestamp))
-  try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
-  } catch {
-    return ''
-  }
-}
-
-const detailMeta = computed(() => {
-  const plugin = activePlugin.value
-  if (!plugin) return []
-
-  const meta = []
-  if (plugin.author)
-    meta.push({
-      icon: 'i-ri-user-line',
-      label: t('market.detailDialog.author'),
-      value: plugin.author
-    })
-  if (plugin.version)
-    meta.push({
-      icon: 'i-ri-price-tag-3-line',
-      label: t('market.detailDialog.version'),
-      value: `v${plugin.version}`
-    })
-
-  const time = formatTimestamp(plugin.timestamp)
-  if (time)
-    meta.push({ icon: 'i-ri-time-line', label: t('market.detailDialog.updateTime'), value: time })
-
-  meta.push({
-    icon: 'i-ri-barcode-line',
-    label: t('market.detailDialog.pluginId'),
-    value: plugin.id
-  })
-  return meta
-})
-
-const detailIconClass = computed(() => {
-  const plugin = activePlugin.value
-  if (!plugin) return ''
-
-  const metadata = plugin.metadata ?? {}
-  const iconClass = metadata?.icon_class?.trim?.()
-  if (iconClass) return iconClass
-
-  const metaIcon = metadata?.icon?.trim?.()
-  if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
-
-  const pluginIcon = (plugin as any).icon?.trim?.()
-  if (pluginIcon) return pluginIcon.startsWith('i-') ? pluginIcon : `i-${pluginIcon}`
-
-  return ''
-})
-
 async function onInstall(): Promise<void> {
   if (!activePlugin.value) return
   const channel = await getRendererChannel()
@@ -151,6 +62,10 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') goBack()
 }
 
+watch(notFound, (isNotFound) => {
+  if (isNotFound) goBack()
+})
+
 onMounted(() => {
   window?.addEventListener('keydown', handleKeydown)
   void loadOfficialPlugins()
@@ -163,35 +78,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div flex="~ col" class="h-full overflow-hidden">
-    <!-- Loading -->
-    <div v-if="loading" class="center-state">
-      <i class="i-ri-loader-4-line animate-spin text-4xl text-primary" />
-      <p>{{ t('market.loading') }}</p>
-    </div>
+    <MarketDetailSkeleton v-if="loading" />
 
-    <!-- Not found -->
-    <div v-else-if="notFound" class="center-state">
-      <i class="i-ri-error-warning-line text-5xl text-warning" />
-      <h2>{{ t('market.detailDialog.notFound') }}</h2>
-      <p>{{ t('market.detailDialog.notFoundDesc') }}</p>
-      <FlatButton :primary="true" @click="goBack">
-        <i class="i-ri-arrow-left-line" />
-        <span>{{ t('market.detailDialog.backToMarket') }}</span>
-      </FlatButton>
-    </div>
-
-    <!-- Plugin detail -->
     <div v-else-if="activePlugin" class="h-full flex flex-col gap-4 p-4">
-      <!-- Header -->
       <div class="detail-header">
         <div class="flex items-center gap-3 flex-1 min-w-0">
-          <div
+          <MarketIcon
             v-shared-element:plugin-market-icon
-            class="plugin-icon"
-            :style="{ viewTransitionName: `market-icon-${activePlugin.id}` }"
-          >
-            <i :class="detailIconClass || 'i-ri-puzzle-line'" />
-          </div>
+            :item="activePlugin"
+            :view-transition-name="`market-icon-${activePlugin.id}`"
+          />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <h3 :style="{ viewTransitionName: `market-title-${activePlugin.id}` }">
@@ -210,9 +106,7 @@ onBeforeUnmount(() => {
         </FlatButton>
       </div>
 
-      <!-- Content -->
       <div class="detail-content">
-        <!-- README -->
         <div class="readme-section">
           <div v-if="readmeLoading" class="readme-state">
             <i class="i-ri-loader-4-line animate-spin" />
@@ -229,7 +123,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Sidebar -->
         <div class="sidebar">
           <div class="sidebar-card">
             <h4>{{ t('market.detailDialog.information') }}</h4>
@@ -243,16 +136,6 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-
-          <a
-            v-if="activePlugin.downloadUrl"
-            :href="activePlugin.downloadUrl"
-            class="download-btn"
-            target="_blank"
-          >
-            <i class="i-ri-download-cloud-2-line" />
-            <span>{{ t('market.detailDialog.download') }}</span>
-          </a>
         </div>
       </div>
     </div>
@@ -260,61 +143,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
-.center-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 1rem;
-  text-align: center;
-
-  h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0;
-    opacity: 0.7;
-  }
-}
-
 .detail-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem;
+  background: var(--el-bg-color-overlay);
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
 
   h3 {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-  }
-}
-
-.plugin-icon {
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  border-radius: 12px;
-  background: linear-gradient(
-    135deg,
-    rgba(var(--el-color-primary-rgb), 0.2),
-    rgba(var(--el-color-primary-rgb), 0.08)
-  );
-  border: 1px solid rgba(var(--el-color-primary-rgb), 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  i {
-    font-size: 24px;
-    color: var(--el-color-primary);
   }
 }
 
@@ -331,7 +172,6 @@ onBeforeUnmount(() => {
   overflow: auto;
   background: var(--el-bg-color-overlay);
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
   padding: 1.5rem;
 }
 
@@ -429,12 +269,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .sidebar-card {
   background: var(--el-bg-color-overlay);
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
   padding: 1rem;
 
   h4 {
@@ -475,25 +316,6 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-}
-
-.download-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: var(--el-color-primary);
-  color: white;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s;
-
-  &:hover {
-    background: var(--el-color-primary-dark-2);
-    box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.3);
   }
 }
 

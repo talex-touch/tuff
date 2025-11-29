@@ -253,7 +253,12 @@
       "updateTime": "更新时间",
       "pluginId": "插件标识",
       "download": "下载源文件",
-      "viewDocs": "查看文档"
+      "viewDocs": "查看文档",
+      "information": "插件信息",
+      "readmeError": "加载 README 失败",
+      "notFound": "未找到插件",
+      "notFoundDesc": "请检查插件 ID 或返回市场",
+      "backToMarket": "返回市场"
     },
     "error": {
       "loadFailed": "官方插件列表加载失败。"

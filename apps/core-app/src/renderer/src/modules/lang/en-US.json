@@ -253,7 +253,12 @@
       "updateTime": "Update Time",
       "pluginId": "Plugin ID",
       "download": "Download Source",
-      "viewDocs": "View Documentation"
+      "viewDocs": "View Documentation",
+      "information": "Information",
+      "readmeError": "Failed to load README",
+      "notFound": "Plugin Not Found",
+      "notFoundDesc": "Check the plugin ID or return to market",
+      "backToMarket": "Back to Market"
     },
     "error": {
       "loadFailed": "Failed to load official plugin list."
