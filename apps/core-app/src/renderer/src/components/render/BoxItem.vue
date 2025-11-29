@@ -102,8 +102,6 @@ function getHighlightedHTML(
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
 const recommendation = computed(() => (props.item.meta as any)?.recommendation)
-
-console.log(props)
 </script>
 
 <template>
